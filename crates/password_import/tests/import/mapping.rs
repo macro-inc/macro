@@ -1,7 +1,7 @@
 //! Mapping rules that the golden snapshots don't single out.
-use password_import::{Limits, SourceFormat, parse};
+use password_import::{DroppedPart, Limits, ParsedExport, SkipReason, SourceFormat, detect, parse};
 
-use super::support::zip;
+use super::support::{bitwarden_zip, fixture, zip};
 
 fn pux(export_data: &str) -> Vec<u8> {
     zip(&[("export.data", export_data.as_bytes().to_vec())])
@@ -260,4 +260,158 @@ fn a_null_after_a_full_list_does_not_overflow_it() {
 
     assert!(export.skipped.is_empty());
     assert_eq!(export.items.len(), 1);
+}
+
+/// `(source key, part, count)` for every dropped part, in export order.
+fn dropped(export: &ParsedExport) -> Vec<(&str, DroppedPart, usize)> {
+    export
+        .dropped
+        .iter()
+        .map(|dropped| (dropped.source_key.as_str(), dropped.what, dropped.count))
+        .collect()
+}
+
+#[test]
+fn a_bitwarden_zip_is_read_from_data_json_and_reports_attachments() {
+    let archive = bitwarden_zip();
+
+    assert_eq!(
+        detect(&archive, &Limits::default()),
+        Ok(SourceFormat::BitwardenZip)
+    );
+    let export = parse(&archive, SourceFormat::BitwardenZip, &Limits::default()).expect("parses");
+
+    // The archived item's attachments (one of them named `data.json`) are
+    // not reported: the item itself is skipped.
+    let skipped: Vec<(Option<&str>, SkipReason)> = export
+        .skipped
+        .iter()
+        .map(|skipped| {
+            (
+                skipped.source_key.as_ref().map(|key| key.as_str()),
+                skipped.reason,
+            )
+        })
+        .collect();
+    assert_eq!(
+        skipped,
+        vec![(
+            Some("b1000000-0000-4000-8000-000000000003"),
+            SkipReason::Archived
+        )]
+    );
+    let attachments: Vec<(&str, usize)> = dropped(&export)
+        .into_iter()
+        .filter(|(_, what, _)| *what == DroppedPart::Attachment)
+        .map(|(key, _, count)| (key, count))
+        .collect();
+    assert_eq!(
+        attachments,
+        vec![
+            ("b1000000-0000-4000-8000-000000000001", 1),
+            ("b1000000-0000-4000-8000-000000000002", 1),
+            ("b1000000-0000-4000-8000-000000000006", 1),
+        ]
+    );
+}
+
+#[test]
+fn bitwarden_json_reports_reprompt_match_rules_and_empty_fields() {
+    let export = parse(
+        &fixture("bitwarden_zip_data.json"),
+        SourceFormat::BitwardenJson,
+        &Limits::default(),
+    )
+    .expect("parses");
+
+    assert_eq!(
+        dropped(&export),
+        vec![
+            // Exact and host matches; the third URL has the default rule.
+            (
+                "b1000000-0000-4000-8000-000000000001",
+                DroppedPart::UriMatchType,
+                2
+            ),
+            (
+                "b1000000-0000-4000-8000-000000000002",
+                DroppedPart::Reprompt,
+                1
+            ),
+            (
+                "b1000000-0000-4000-8000-000000000004",
+                DroppedPart::EmptyField,
+                2
+            ),
+            (
+                "b1000000-0000-4000-8000-000000000004",
+                DroppedPart::ExtraField,
+                2
+            ),
+            // An explicit domain match is the default; two exact matches aren't.
+            (
+                "b1000000-0000-4000-8000-000000000005",
+                DroppedPart::UriMatchType,
+                2
+            ),
+            (
+                "b1000000-0000-4000-8000-000000000005",
+                DroppedPart::Reprompt,
+                1
+            ),
+        ]
+    );
+}
+
+#[test]
+fn bitwarden_csv_null_fields_are_dropped_and_reported() {
+    let export = parse(
+        &fixture("bitwarden_vaultwarden.csv"),
+        SourceFormat::BitwardenCsv,
+        &Limits::default(),
+    )
+    .expect("parses");
+
+    // `bw` writes a field without a value, linked ones included, as `name: null`.
+    let all_fields = export
+        .items
+        .iter()
+        .find(|item| item.name == "All custom field types")
+        .expect("imported");
+    let labels: Vec<&str> = all_fields
+        .fields
+        .iter()
+        .filter(|field| field.value.expose_secret() == "null")
+        .map(|field| field.label.as_str())
+        .collect();
+    assert_eq!(labels, Vec::<&str>::new());
+
+    assert_eq!(
+        dropped(&export),
+        vec![
+            ("row:1", DroppedPart::EmptyField, 4),
+            ("row:5", DroppedPart::Reprompt, 1),
+        ]
+    );
+}
+
+#[test]
+fn an_unreadable_reprompt_or_match_rule_still_imports_the_item() {
+    let json = r#"{"encrypted":false,"folders":[],"items":[
+        {"id":"b2000000-0000-4000-8000-000000000001","type":1,"name":"Odd codes","reprompt":true,
+         "login":{"username":"user@example.com","password":"synthetic-password",
+                  "uris":[{"uri":"https://one.example.com","match":"0"},
+                          {"uri":"https://two.example.com","match":-1},
+                          {"uri":"https://three.example.com","match":[1,2]}]}}]}"#;
+
+    let export = parse(
+        json.as_bytes(),
+        SourceFormat::BitwardenJson,
+        &Limits::default(),
+    )
+    .expect("parses");
+
+    let item = export.items.first().expect("imported");
+    assert_eq!(item.password.expose_secret(), "synthetic-password");
+    assert_eq!(dropped(&export), vec![]);
 }

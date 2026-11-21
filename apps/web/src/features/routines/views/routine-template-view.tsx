@@ -15,6 +15,7 @@ import type { TemplateReference } from '../primitives/template-activation';
  */
 export function RoutineTemplateView(props: {
   template: RoutineTemplate;
+  mobile?: boolean;
   authorName: string;
   /** False for the template's author, who already has the routine. */
   canActivate: boolean;
@@ -61,26 +62,28 @@ export function RoutineTemplateView(props: {
         )}
       </ViewBreadcrumbs.Item>
       <div class="flex size-full min-h-0 min-w-0 flex-col text-ink">
-        <ViewShell.TopBar
-          class="touch:flex"
-          aria-label="Routine template toolbar"
-        >
-          <ViewBreadcrumbs.Outlet
-            aria-label="Routine template location"
-            class="min-w-0"
-          />
-          <Show when={props.canActivate}>
-            <Button
-              variant="primary"
-              size="md"
-              class="ml-auto shrink-0"
-              onClick={() => props.onActivate()}
-            >
-              <PlayIcon class="size-4" />
-              Activate for me
-            </Button>
-          </Show>
-        </ViewShell.TopBar>
+        <Show when={!props.mobile}>
+          <ViewShell.TopBar
+            class="touch:flex"
+            aria-label="Routine template toolbar"
+          >
+            <ViewBreadcrumbs.Outlet
+              aria-label="Routine template location"
+              class="min-w-0"
+            />
+            <Show when={props.canActivate}>
+              <Button
+                variant="primary"
+                size="md"
+                class="ml-auto shrink-0"
+                onClick={() => props.onActivate()}
+              >
+                <PlayIcon class="size-4" />
+                Activate for me
+              </Button>
+            </Show>
+          </ViewShell.TopBar>
+        </Show>
         <div class="min-h-0 flex-1 overflow-y-auto px-6 pb-8 pt-12 touch:pt-6">
           <div class="mx-auto flex max-w-3xl flex-col gap-6">
             <div>

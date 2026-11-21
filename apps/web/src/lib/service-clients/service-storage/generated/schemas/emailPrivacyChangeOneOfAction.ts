@@ -10,5 +10,5 @@ export type EmailPrivacyChangeOneOfAction =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const EmailPrivacyChangeOneOfAction = {
-  set_consent: 'set_consent',
+  set_thread_exclusion: 'set_thread_exclusion',
 } as const;

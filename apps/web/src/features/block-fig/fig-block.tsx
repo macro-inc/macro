@@ -1,4 +1,3 @@
-import { reloadApp } from '@app/observability/reload';
 /**
  * The `.fig` block: app chrome (header, file menu, sharing) around the
  * viewer, wired to the worker engine and document storage.
@@ -6,29 +5,16 @@ import { reloadApp } from '@app/observability/reload';
 
 import { CommandState } from '@app/features/command';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
-import {
-  ResponsiveBlockToolbar,
-  ResponsivePermissionsBadge,
-} from '@components/app/ResponsiveBlockToolbar';
-import {
-  SplitHeaderLeft,
-  SplitHeaderRight,
-} from '@components/app/split-layout/components/SplitHeader';
-import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
+import { reloadApp } from '@app/observability/reload';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
-import { FileTypeChip } from '@core/component/FileTypeChip';
-import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  getShareDrawerRecipientInput,
-  ShareTrigger,
-} from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { IS_MAC } from '@core/constant/isMac';
 import { useUserId } from '@core/context/user';
 import type { FigEngine } from '@core/fig-engine/client';
 import { blockDataSignal } from '@core/internal/BlockLoader';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { blockMetadataSignal } from '@core/signal/load';
 import {
   useCanComment,
@@ -44,7 +30,6 @@ import {
 import { fireAndForget } from '@core/util/fireAndForget';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { downloadFile } from '@filesystem/download';
-import IconShared from '@icon/share.svg';
 import DownloadSimple from '@icon/system/regular/download-simple.svg';
 import { Button } from '@ui/components/Button';
 import type { LoroDoc } from 'loro-crdt';
@@ -77,8 +62,10 @@ import {
 } from './queries/fig-sync';
 import { createFontSource } from './queries/font-source';
 import { openFigEngine, prepareFigEngine } from './queries/prepare-engine';
+import { FigHeader } from './views/fig-header';
 import { FigViewer } from './views/fig-viewer';
 import { useMacroComments } from './views/macro-comments';
+import { MobileFigHeader } from './views/mobile/fig-header';
 
 /**
  * ⌘K on a design opens the command menu, which then offers the design
@@ -388,40 +375,12 @@ export default function FigBlock(props: { share?: string; present?: string }) {
     <div class="size-full border-edge-frame border-t">
       <DocumentBlockContainer loadingFallback={<FigOpening />}>
         <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-          <SplitHeaderLeft>
-            <BlockItemSplitLabel badges={<FileTypeChip />} />
-          </SplitHeaderLeft>
-          <SplitHeaderRight>
-            <BlockLiveIndicators />
-          </SplitHeaderRight>
-          <ResponsivePermissionsBadge />
-          <ResponsiveBlockToolbar
-            id={documentId}
-            itemType="document"
-            name={name()}
-            ops={[
-              { op: 'rename' },
-              { op: 'copy' },
-              { op: 'moveToProject' },
-              {
-                group: 'file',
-                label: 'Download',
-                icon: DownloadSimple,
-                action: () => fireAndForget(download(), 'fig-viewer'),
-              },
-              { op: 'delete' },
-            ]}
-            tools={[
-              {
-                group: 'sharing',
-                label: 'Share',
-                icon: IconShared,
-                action: openShare,
-                buttonComponent: () => <ShareTrigger onClick={openShare} />,
-                focusTarget: getShareDrawerRecipientInput,
-              },
-            ]}
-          />
+          <Show
+            when={isTouchDevice()}
+            fallback={<FigHeader openShare={openShare} download={download} />}
+          >
+            <MobileFigHeader openShare={openShare} download={download} />
+          </Show>
           <div class="min-h-0 flex-1">
             <Show when={data()} keyed>
               {(d) => (

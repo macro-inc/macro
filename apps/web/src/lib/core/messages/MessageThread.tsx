@@ -11,6 +11,7 @@ import { useUserId } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode } from '@core/util/result';
+import { MessageNotificationIndexProvider } from '@notifications/components/MessageNotificationIndexProvider';
 import {
   useDeleteMessageMutation,
   usePatchMessageMutation,
@@ -244,59 +245,64 @@ export function MessageThread(
         class="relative isolate outline-none"
       >
         <confirm.ConfirmationDialog />
-        <ChannelThread
-          data={() => props.data}
-          replies={props.replies ? () => props.replies ?? [] : undefined}
-          parent={() => props.data.parent}
-          getMessageActions={(message) => {
-            const value = actions(message);
-            return props.hideReplyInput && !props.onReply
-              ? { ...value, onReply: undefined }
-              : value;
-          }}
-          messageEditor={props.canWrite ? editor : undefined}
-          isExpanded={() => expanded() || !!props.targetId}
-          setIsExpanded={setExpanded}
-          isReplying={() =>
-            props.canWrite && !props.hideReplyInput && replying()
-          }
-          setIsReplying={setReplying}
-          replyInputState={draft}
-          setReplyInputState={setDraft}
-          replyInputHandle={handle}
-          setReplyInputHandle={setHandle}
-          replyInputFocusRequest={focus}
-          isFindBarOpen={() => false}
-          monorail={props.monorail}
-          hideRail={props.hideRail}
-          messageListScopeId={scopeId}
-          selectedMessageId={() => (props.targetId ? props.data.id : undefined)}
-          targetNavigation={{
-            requestKey: () => props.targetRequestKey,
-            targetThreadId: () => (props.targetId ? props.data.id : undefined),
-            targetMessageId: () => props.targetId ?? undefined,
-            targetReplyId: () =>
-              props.targetId && props.targetId !== props.data.id
-                ? props.targetId
-                : undefined,
-            activeTargetReplyId: () =>
-              props.targetId && props.targetId !== props.data.id
-                ? props.targetId
-                : undefined,
-            positionTarget: (_row, target) => {
-              target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              return true;
-            },
-            onTargetMessageScrolled: () => {},
-            onTargetReplyScrolled: () => {},
-            onClearTarget: () => {
-              // The link expanded the thread; releasing its highlight keeps
-              // the thread open rather than collapsing the replies in view.
-              setExpanded(true);
-              props.onClearTarget?.();
-            },
-          }}
-        />
+        <MessageNotificationIndexProvider parent={props.data.parent}>
+          <ChannelThread
+            data={() => props.data}
+            replies={props.replies ? () => props.replies ?? [] : undefined}
+            parent={() => props.data.parent}
+            getMessageActions={(message) => {
+              const value = actions(message);
+              return props.hideReplyInput && !props.onReply
+                ? { ...value, onReply: undefined }
+                : value;
+            }}
+            messageEditor={props.canWrite ? editor : undefined}
+            isExpanded={() => expanded() || !!props.targetId}
+            setIsExpanded={setExpanded}
+            isReplying={() =>
+              props.canWrite && !props.hideReplyInput && replying()
+            }
+            setIsReplying={setReplying}
+            replyInputState={draft}
+            setReplyInputState={setDraft}
+            replyInputHandle={handle}
+            setReplyInputHandle={setHandle}
+            replyInputFocusRequest={focus}
+            isFindBarOpen={() => false}
+            monorail={props.monorail}
+            hideRail={props.hideRail}
+            messageListScopeId={scopeId}
+            selectedMessageId={() =>
+              props.targetId ? props.data.id : undefined
+            }
+            targetNavigation={{
+              requestKey: () => props.targetRequestKey,
+              targetThreadId: () =>
+                props.targetId ? props.data.id : undefined,
+              targetMessageId: () => props.targetId ?? undefined,
+              targetReplyId: () =>
+                props.targetId && props.targetId !== props.data.id
+                  ? props.targetId
+                  : undefined,
+              activeTargetReplyId: () =>
+                props.targetId && props.targetId !== props.data.id
+                  ? props.targetId
+                  : undefined,
+              positionTarget: (_row, target) => {
+                target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return true;
+              },
+              onTargetMessageScrolled: () => {},
+              onTargetReplyScrolled: () => {},
+              onClearTarget: () => {
+                // The link expanded the thread; releasing its highlight keeps
+                // the thread open rather than collapsing the replies in view.
+                setExpanded(true);
+                props.onClearTarget?.();
+              },
+            }}
+          />
+        </MessageNotificationIndexProvider>
       </div>
     </MaybeMessageActionDrawerManager>
   );

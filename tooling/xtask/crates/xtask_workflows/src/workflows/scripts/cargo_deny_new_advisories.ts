@@ -1,0 +1,112 @@
+// Runs `cargo deny check advisories` on a PR and fails only on advisories
+// against packages the PR adds to Cargo.lock: a name and version the base's
+// lockfile (at `BASE_REV`) doesn't have. An advisory against a package the
+// base already has was published after that package landed, so it would fail
+// every PR alike; the daily run on main (`cargo_deny_advisories.yml`) fails
+// on it instead. An error that names no package fails the PR too.
+
+import { execFileSync, spawnSync } from 'node:child_process';
+
+export type Diagnostic = {
+  severity: string;
+  code?: string;
+  message: string;
+  advisory?: { id: string };
+  graphs?: { Krate: { name: string; version: string } }[];
+};
+
+const MAX_OUTPUT = 256 * 1024 * 1024;
+
+function env(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`${name} is not set`);
+  }
+  return value;
+}
+
+/// `name@version` of every package in a Cargo.lock.
+export function lockedPackages(lockfile: string): Set<string> {
+  const packages = new Set<string>();
+  for (const entry of lockfile.split('[[package]]').slice(1)) {
+    const name = /^name = "(.+)"$/m.exec(entry)?.[1];
+    const version = /^version = "(.+)"$/m.exec(entry)?.[1];
+    if (name && version) {
+      packages.add(`${name}@${version}`);
+    }
+  }
+  return packages;
+}
+
+/// The errors in cargo-deny's `--format json` output: one JSON object per line.
+export function errors(output: string): Diagnostic[] {
+  return output
+    .split('\n')
+    .filter((line) => line.startsWith('{'))
+    .map((line) => JSON.parse(line))
+    .filter((line) => line.type === 'diagnostic' && line.fields.severity === 'error')
+    .map((line) => line.fields as Diagnostic);
+}
+
+/// The packages an error is against.
+export function packages(diagnostic: Diagnostic): string[] {
+  return (diagnostic.graphs ?? []).map(({ Krate }) => `${Krate.name}@${Krate.version}`);
+}
+
+/// Whether an error fails the PR: it names no package, or one the base lacks.
+export function addedByPr(diagnostic: Diagnostic, base: Set<string>): boolean {
+  const named = packages(diagnostic);
+  return named.length === 0 || named.some((pkg) => !base.has(pkg));
+}
+
+function describe(diagnostic: Diagnostic): string {
+  const id = diagnostic.advisory?.id ?? diagnostic.code ?? 'error';
+  const named = packages(diagnostic).join(', ') || 'no package';
+  return `${id} (${named}): ${diagnostic.message}`;
+}
+
+export async function main() {
+  const base = lockedPackages(
+    execFileSync('git', ['show', `${env('BASE_REV')}:Cargo.lock`], {
+      encoding: 'utf8',
+      maxBuffer: MAX_OUTPUT,
+    }),
+  );
+  const args = ['--format', 'json', ...env('DENY_ARGS').split(/\s+/), 'check', 'advisories'];
+  console.log(`cargo-deny ${args.join(' ')}`);
+  const deny = spawnSync('cargo-deny', args, {
+    encoding: 'utf8',
+    maxBuffer: MAX_OUTPUT,
+    stdio: ['ignore', 'inherit', 'pipe'],
+  });
+  if (deny.error) {
+    throw deny.error;
+  }
+  if (deny.status === 0) {
+    console.log('No advisories.');
+    return;
+  }
+
+  const found = errors(deny.stderr);
+  if (found.length === 0) {
+    console.error(deny.stderr);
+    throw new Error(`cargo-deny exited ${deny.status} without reporting an error`);
+  }
+  const failing = found.filter((diagnostic) => addedByPr(diagnostic, base));
+  for (const diagnostic of found) {
+    const verdict = failing.includes(diagnostic) ? 'added by this PR' : 'already on the base';
+    console.log(`${verdict}: ${describe(diagnostic)}`);
+  }
+  if (failing.length > 0) {
+    console.log(
+      'Update the crate, or ignore the advisory in deny.toml with a reason. ' +
+        `Run \`cargo deny ${env('DENY_ARGS')} check advisories\` locally for the full report.`,
+    );
+    process.exitCode = 1;
+  } else {
+    console.log(
+      "Every advisory is against a package the base already has, so it doesn't fail this PR; " +
+        'the daily cargo deny advisories run on main reports it.',
+    );
+  }
+}

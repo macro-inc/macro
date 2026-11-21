@@ -60,6 +60,12 @@ fn a_view_of_every_widget_decodes() {
                 }]
             },
             {
+                "type": "botCredential",
+                "botId": "bot-1",
+                "label": "github-webhook",
+                "expiresAt": "2027-01-01T00:00:00Z"
+            },
+            {
                 "type": "container",
                 "direction": "row",
                 "gap": 8,
@@ -163,7 +169,7 @@ fn fields_the_types_do_not_name_are_dropped() {
 /// where the problem is.
 #[test]
 fn what_the_renderer_cannot_draw_is_named_by_its_place() {
-    let widget_types = "`md`, `timeline`, `list`, `channelMessage`, `events`, `cards`, `tags`, `agentUpdates`, `container`";
+    let widget_types = "`md`, `timeline`, `list`, `channelMessage`, `events`, `cards`, `tags`, `agentUpdates`, `botCredential`, `container`";
     let cases = [
         (
             json!({ "widgets": [{ "type": "markdown", "markdown": "### Routines" }] }),

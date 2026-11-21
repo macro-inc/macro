@@ -101,6 +101,14 @@ pub trait BotRepo: Send + Sync + 'static {
         bot_ids: &[BotId],
     ) -> impl Future<Output = Result<HashMap<BotId, BotOwnerProfile>, Self::Err>> + Send;
 
+    /// Users who see the bot's name and picture: its owner, its team's
+    /// members, and the people in the channels it takes part in. For a
+    /// deleted bot, those channels are the ones its deletion removed it from.
+    fn bot_audience(
+        &self,
+        bot_id: BotId,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Self::Err>> + Send;
+
     /// Get an active persisted agent by bot id. Its channels are the ones it
     /// was put in, without the direct agent conversations it takes part in.
     fn get_agent(
@@ -453,12 +461,13 @@ pub trait BotService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<AuthenticatedBot, BotError>> + Send;
 }
 
-/// Whether a Pipedream app slug is one an agent may pin.
+/// Whether a connector catalog slug is one an agent may pin.
 ///
-/// The directory is Pipedream's. `Ok(false)` is a definite miss. `Err` means
-/// the directory could not be asked, and the slug must not be stored.
+/// The catalog is Pipedream's app directory plus the apps overlaid onto the
+/// native MCP stack. `Ok(false)` is a definite miss. `Err` means the catalog
+/// could not be asked, and the slug must not be stored.
 pub trait McpAppCatalog: Send + Sync + 'static {
-    /// `true` when `slug` is a connectable Pipedream app.
+    /// `true` when `slug` is a connectable catalog app.
     fn is_connectable_app(&self, slug: &str)
     -> impl Future<Output = Result<bool, BotError>> + Send;
 }
@@ -474,6 +483,17 @@ pub trait TeamBotRoster: Send + Sync + 'static {
         &self,
         team_id: Uuid,
     ) -> impl Future<Output = Result<Vec<BotId>, Report>> + Send;
+}
+
+/// Pushes a bot's current profile to the people who see it, so their open
+/// views show its new name and picture without a reload.
+pub trait BotProfilePublisher: Send + Sync + 'static {
+    /// Send `profile` to every user in `recipients`.
+    fn publish_profile(
+        &self,
+        profile: BotOwnerProfile,
+        recipients: Vec<MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
 /// The harness an agent was being bound to was deleted first, e.g. by its

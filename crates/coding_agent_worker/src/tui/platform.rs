@@ -1,4 +1,4 @@
-pub(crate) const BYO_AGENT_URL: &str = "https://docs.macro.com/AI/bring-your-own";
+pub(crate) const BYO_AGENT_URL: &str = "https://macro.com/docs/AI/bring-your-own";
 
 pub(crate) enum BrowserTarget {
     Pairing(String),

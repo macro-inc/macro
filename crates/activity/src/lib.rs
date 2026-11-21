@@ -39,7 +39,9 @@ pub use domain::overview::{
     EntityRank, MAX_ACTIVITY_WINDOW_DAYS, TOP_ENTITY_LIMIT, trailing_year,
 };
 pub use domain::ports::{ActivityAudienceExpander, ActivityRealtimePublisher};
-pub use domain::ports::{ActivityFeedPage, ActivityRange, ActivityReads, EntityActivityMap};
+pub use domain::ports::{
+    ActivityFeedPage, ActivityRange, ActivityReads, EntityActivityMap, SubjectActivityPresence,
+};
 #[cfg(feature = "realtime")]
 pub use domain::realtime::{
     ActivityRealtimeConsumerService, ActivitySubscription, ActivitySubscriptionExit,

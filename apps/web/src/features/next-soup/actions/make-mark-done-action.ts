@@ -1,19 +1,11 @@
 import type { ListView } from '@app/constants/list-views';
 import {
-  applyEntitiesDoneOptimistic,
-  executeMarkEntitiesDone,
-  executeMarkEntitiesUndone,
-  type MarkEntitiesDoneContext,
   resolveMarkEntitiesDoneVariables,
   restoreSoupFocus,
 } from '@app/features/next-soup/utils';
 import { t } from '@app/lib/i18n';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  enableGraphqlSoup,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import type { HotkeyGroup } from '@core/hotkey/types';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
@@ -80,18 +72,16 @@ type MakeMarkDoneOptions = {
   delegate?: () => MarkDoneDelegate | undefined;
 };
 
+type GraphqlDoneOperation = ReturnType<typeof createGraphqlDoneOperation>;
+
 type MarkDoneVariables = {
-  /** Snapshot the transport when this action starts, not when its reply lands. */
-  earlyUndo: boolean;
-  operation?: ReturnType<typeof createGraphqlDoneOperation>;
+  operation?: GraphqlDoneOperation;
   entities: EntityData[];
   emailIds: string[];
-  /** Locally known IDs used only for the immediate optimistic cache patch. */
-  optimisticNotificationIds: string[];
   notificationIdsByEntity: ReadonlyMap<DoneEntityKey, string[]>;
   scopeChannelThreads: boolean;
-  /** Exact IDs used by undo/redo; entity mutation results are appended here. */
-  exactNotificationIds: { current: string[] };
+  /** ID-scoped targets for channel rows the entity endpoint cannot express. */
+  notificationIds: string[];
   /** Entity-wide targets used only by the initial committed mark-done. */
   notificationEntities: NotificationEntityRef[];
   restoreFocus?: () => void;
@@ -187,10 +177,10 @@ function delegatedDoneUndoLifecycle(
 /** Says what was saved: rows that stayed open, or only their notifications. */
 function markDoneToastMessage(
   total: number,
-  operation: ReturnType<typeof createGraphqlDoneOperation> | undefined
+  operation: GraphqlDoneOperation
 ): string {
-  const completed = operation?.completedCount() ?? 0;
-  if (operation?.hasFailures()) {
+  const completed = operation.completedCount();
+  if (operation.hasFailures()) {
     if (completed === total)
       return t('entityActions.toastMarkedDoneNotificationsUnsaved', {
         count: total,
@@ -200,7 +190,7 @@ function markDoneToastMessage(
       count: total,
     });
   }
-  if (operation?.hasNoopRows())
+  if (operation.hasNoopRows())
     return t('entityActions.toastMarkedDonePartial', {
       completed: String(completed),
       count: total,
@@ -224,9 +214,9 @@ function createPendingDoneUndo(): PendingDoneUndo {
   return { requested: false, result, finish };
 }
 
-type MarkDoneContext = MarkEntitiesDoneContext & {
-  operation?: ReturnType<typeof createGraphqlDoneOperation>;
-  pendingUndo?: PendingDoneUndo;
+type MarkDoneContext = {
+  operation: GraphqlDoneOperation;
+  pendingUndo: PendingDoneUndo;
   registration?: {
     handle: UndoHandle;
     dismiss: () => void;
@@ -274,8 +264,8 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     const showToast = () => {
       if (variables.silent || disposed) return;
       const total = variables.entities.length;
-      const failed = context.operation?.hasFailures();
-      const partial = failed || context.operation?.hasNoopRows();
+      const failed = context.operation.hasFailures();
+      const partial = failed || context.operation.hasNoopRows();
       const message = markDoneToastMessage(total, context.operation);
       toastId = (partial ? toast.alert : toast.success)(message, {
         dismissStyle: 'icon',
@@ -303,50 +293,17 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     const stackHandle = pushUndo({
       label: 'Mark Done',
       undo: async () => {
-        if (context.pendingUndo) context.pendingUndo.requested = true;
-        context.applyUndone();
-        if (context.pendingUndo) {
-          // Display and focus reverse now; the write must wait for exact IDs.
-          restoreFocus();
-          if (!(await context.pendingUndo.result)) return;
-        }
-        try {
-          if (context.operation) await context.operation.undo();
-          else {
-            await executeMarkEntitiesUndone({
-              emailIds: variables.emailIds,
-              notificationIds: variables.exactNotificationIds.current,
-            });
-            context.settle(variables.exactNotificationIds.current);
-          }
-        } catch (err) {
-          if (!context.operation) {
-            context.reapply();
-            context.releaseGraphql();
-          }
-          throw err;
-        }
+        context.pendingUndo.requested = true;
+        context.operation.applyUndone();
+        // Display and focus reverse now; the write must wait for exact IDs.
+        restoreFocus();
+        if (!(await context.pendingUndo.result)) return;
+        await context.operation.undo();
       },
       redo: async () => {
-        context.reapply();
-        try {
-          if (context.operation) await context.operation.redo();
-          else {
-            await executeMarkEntitiesDone({
-              emailIds: variables.emailIds,
-              notificationIds: variables.exactNotificationIds.current,
-            });
-            context.settle(variables.exactNotificationIds.current);
-          }
-        } catch (err) {
-          if (!context.operation) {
-            context.applyUndone();
-            context.releaseGraphql();
-          }
-          throw err;
-        }
+        context.operation.reapply();
+        await context.operation.redo();
       },
-      onUndone: context.pendingUndo ? undefined : restoreFocus,
       onRedone: showToast,
     });
     const handle: UndoHandle = {
@@ -366,74 +323,43 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
   const mutation = useMutation<void, Error, MarkDoneVariables, MarkDoneContext>(
     () => ({
       onMutate: (variables) => {
-        const operation = variables.earlyUndo
-          ? createGraphqlDoneOperation({
-              ...variables,
-              notificationIds: variables.exactNotificationIds.current,
-            })
-          : undefined;
+        const operation = createGraphqlDoneOperation(variables);
         variables.operation = operation;
         const context: MarkDoneContext = {
-          ...(operation ??
-            applyEntitiesDoneOptimistic({
-              entityIds: variables.entities.map((entity) => entity.id),
-              emailIds: variables.emailIds,
-              notificationIds: variables.optimisticNotificationIds,
-              scopeChannelThreads: variables.scopeChannelThreads,
-            })),
           operation,
-          pendingUndo: variables.earlyUndo
-            ? createPendingDoneUndo()
-            : undefined,
+          pendingUndo: createPendingDoneUndo(),
         };
-        if (context.pendingUndo) registerUndo(variables, context);
+        registerUndo(variables, context);
         return context;
       },
       mutationFn: async (variables) => {
-        if (variables.operation) return variables.operation.execute();
-        const authoritativeNotificationIds = await executeMarkEntitiesDone({
-          emailIds: variables.emailIds,
-          notificationIds: variables.exactNotificationIds.current,
-          notificationEntities: variables.notificationEntities,
-        });
-        variables.exactNotificationIds.current = [
-          ...new Set([
-            ...variables.exactNotificationIds.current,
-            ...authoritativeNotificationIds,
-          ]),
-        ];
+        await variables.operation?.execute();
       },
-      onSuccess: (_data, variables, context) => {
+      onSuccess: (_data, _variables, context) => {
         if (!context) return;
+        const { operation, pendingUndo, registration } = context;
         // A late Done acknowledgement must not settle the newer Undo display
         // intent before its reversal has written anything.
-        if (!context.pendingUndo?.requested) {
-          context.settle(variables.exactNotificationIds.current);
-        }
-        if (context.pendingUndo) {
-          const accepted = context.operation?.hasAccepted() ?? false;
-          if (!accepted) {
-            context.registration?.handle.dispose();
-            context.registration?.dismiss();
-          } else if (
-            context.operation?.hasFailures() ||
-            context.operation?.hasNoopRows()
-          ) {
-            context.registration?.dismiss();
-            if (!context.pendingUndo.requested)
-              context.registration?.showToast();
-            else if (context.operation?.hasFailures()) {
-              toast.alert(t('entityActions.toastMarkDoneUnsaved'));
-            }
+        if (!pendingUndo.requested) operation.settle();
+
+        const accepted = operation.hasAccepted();
+        if (!accepted) {
+          registration?.handle.dispose();
+          registration?.dismiss();
+        } else if (operation.hasFailures() || operation.hasNoopRows()) {
+          registration?.dismiss();
+          if (!pendingUndo.requested) registration?.showToast();
+          else if (operation.hasFailures()) {
+            toast.alert(t('entityActions.toastMarkDoneUnsaved'));
           }
-          context.pendingUndo.finish(accepted);
-        } else registerUndo(variables, context);
+        }
+        pendingUndo.finish(accepted);
       },
       onError: (_err, _variables, context) => {
         context?.registration?.handle.dispose();
         context?.registration?.dismiss();
-        context?.rollback();
-        context?.pendingUndo?.finish(false);
+        context?.operation.rollback();
+        context?.pendingUndo.finish(false);
         toast.failure(t('entityActions.toastMarkDoneFailed'));
       },
     })
@@ -513,15 +439,13 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
   ): Promise<void> => {
     // Skip already-done emails so a mixed selection (e.g. done + not-done rows
     // in mail "All") doesn't re-archive the done ones or overcount the toast.
-    const useEntityMutations = isFeatureEnabled(enableGraphqlSoup);
-    const eligible = entities.filter(isMarkDoneTarget);
-    const targets = useEntityMutations
-      ? [
-          ...new Map(
-            eligible.map((entity) => [doneEntityKey(entity), entity])
-          ).values(),
-        ]
-      : eligible;
+    const targets = [
+      ...new Map(
+        entities
+          .filter(isMarkDoneTarget)
+          .map((entity) => [doneEntityKey(entity), entity])
+      ).values(),
+    ];
     if (targets.length === 0) return;
 
     const prepared = options.delegate?.()?.prepare(targets);
@@ -540,11 +464,6 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
 
     const source = notificationSource();
     const scopeChannelNotifications = scopeChannelNotificationsToEntity();
-    const resolved = resolveMarkEntitiesDoneVariables({
-      entities: targets,
-      notificationSource: source,
-      scopeChannelNotificationsToEntity: scopeChannelNotifications,
-    });
 
     // A whole-channel row in the new inbox intentionally excludes notification
     // stacks rendered as separate thread rows. The entity endpoint cannot
@@ -552,10 +471,9 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     // an initial ID-scoped write. Channel-thread rows can use their canonical
     // message entity because reply notifications point back to it as their
     // secondary entity.
-    const selectiveChannelEntities: EntityData[] =
-      useEntityMutations && scopeChannelNotifications
-        ? targets.filter((entity) => entity.type === 'channel')
-        : [];
+    const selectiveChannelEntities: EntityData[] = scopeChannelNotifications
+      ? targets.filter((entity) => entity.type === 'channel')
+      : [];
     const selectiveChannelIds =
       selectiveChannelEntities.length === 0
         ? []
@@ -565,40 +483,32 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
             scopeChannelNotificationsToEntity: true,
           }).notificationIds;
 
-    const notificationEntities: NotificationEntityRef[] = useEntityMutations
-      ? targets.flatMap((entity) => {
-          if (selectiveChannelEntities.includes(entity)) return [];
-          const entityRef = toNotificationEntityRef(entity);
-          return entityRef ? [entityRef] : [];
-        })
-      : [];
-
-    const exactNotificationIds = useEntityMutations
-      ? selectiveChannelIds
-      : resolved.notificationIds;
+    const notificationEntities = targets.flatMap((entity) => {
+      if (selectiveChannelEntities.includes(entity)) return [];
+      const entityRef = toNotificationEntityRef(entity);
+      return entityRef ? [entityRef] : [];
+    });
 
     const notificationIdsByEntity = new Map<DoneEntityKey, string[]>();
-    if (useEntityMutations) {
-      for (const entity of targets) {
-        notificationIdsByEntity.set(
-          doneEntityKey(entity),
-          resolveMarkEntitiesDoneVariables({
-            entities: [entity],
-            notificationSource: source,
-            scopeChannelNotificationsToEntity: scopeChannelNotifications,
-          }).notificationIds
-        );
-      }
+    for (const entity of targets) {
+      notificationIdsByEntity.set(
+        doneEntityKey(entity),
+        resolveMarkEntitiesDoneVariables({
+          entities: [entity],
+          notificationSource: source,
+          scopeChannelNotificationsToEntity: scopeChannelNotifications,
+        }).notificationIds
+      );
     }
 
     await mutation.mutateAsync({
-      earlyUndo: useEntityMutations,
       entities: targets,
-      emailIds: resolved.emailIds,
-      optimisticNotificationIds: resolved.notificationIds,
+      emailIds: targets
+        .filter((entity) => entity.type === 'email')
+        .map((entity) => entity.id),
       notificationIdsByEntity,
       scopeChannelThreads: scopeChannelNotifications,
-      exactNotificationIds: { current: exactNotificationIds },
+      notificationIds: selectiveChannelIds,
       notificationEntities,
       restoreFocus,
       silent: opts?.silent,
@@ -651,10 +561,12 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       ? (soup.items.get(opts.nextEntityId) ?? fallbackNextRow)
       : fallbackNextRow;
 
+    let folded = false;
     if (soup.collapseEntity.shouldCollapse()) {
       const collapse = soup.collapseEntity.callback();
       if (collapse) {
         await Promise.all(targets.map((entity) => collapse(entity.id)));
+        folded = true;
       }
     }
 
@@ -690,8 +602,38 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
             })
         : undefined);
 
-    await execute(targets, restoreFocus, { ...opts, navigateBack });
+    try {
+      await execute(targets, restoreFocus, { ...opts, navigateBack });
+    } finally {
+      // Only a delegating list keeps rows on purpose; elsewhere a row still
+      // listed now is about to leave with the next read.
+      const kept = targets.filter(
+        (entity) => options.delegate?.()?.canComplete(entity) !== undefined
+      );
+      if (folded) unfoldKeptRows(soup, kept);
+    }
   };
 
   return { canExecute, execute, executeWithSoup };
 };
+
+/**
+ * Unfolds the rows a done folded away that the list still shows once the done
+ * settles: own work the feed keeps in place, or rows a failed done restored.
+ * Lists key swipe rows their own way, so `expandEntity` takes entity ids.
+ */
+function unfoldKeptRows(
+  soup: EntityActionListState,
+  entities: readonly EntityData[]
+) {
+  const expand = soup.expandEntity?.callback();
+  if (!expand) return;
+  const listed = new Set<string>();
+  for (let index = 0; index < soup.items.count(); index++) {
+    const row = soup.items.at(index);
+    if (row) listed.add(row.original.id);
+  }
+  for (const entity of entities) {
+    if (listed.has(entity.id)) expand(entity.id);
+  }
+}

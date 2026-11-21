@@ -11,8 +11,8 @@ use uuid::Uuid;
 mod notion_run;
 mod notion_sharing;
 pub use notion_run::{
-    AdoptedRun, NotionJob, ReviewedRun, RunReview, TEAMMATE_STOPPED, TeamClaim, WrittenKind,
-    WrittenObject,
+    AdoptedRun, NotionJob, ReviewedRun, RunReview, TEAMMATE_STOPPED, TaskImportNotice,
+    TaskImportNoticeCount, TaskImportNoticeReason, TeamClaim, WrittenKind, WrittenObject,
 };
 
 pub use notion_sharing::{
@@ -898,6 +898,9 @@ pub struct ImportRun {
     /// presented while it is still `running`; rows staged after that take it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub review_id: Option<Uuid>,
+    /// The agent session presenting that review.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub review_session_id: Option<Uuid>,
 }
 
 /// What a planning run has found in the source so far.

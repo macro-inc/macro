@@ -261,6 +261,7 @@ impl AgentPromptComposer for PromptComposerMock {
         &self,
         prompt_markdown: &str,
         instructions: Option<&str>,
+        _agent: Option<&agent_session::domain::model::SessionBot>,
         people: Option<&PromptPeople>,
         context: Option<&TriggerContext>,
     ) -> crate::domain::error::Result<String> {
@@ -307,6 +308,8 @@ type TestHarness = AgentHarnessService<
 #[derive(Clone, Default)]
 struct MirrorBindings {
     facts: Arc<Mutex<Option<crate::domain::model::RuntimeAccessFacts>>>,
+    /// Listed sessions resolved as dormant.
+    dormant: Vec<AgentSessionId>,
 }
 
 impl crate::domain::ports::HarnessBindings for MirrorBindings {
@@ -327,11 +330,15 @@ impl crate::domain::ports::HarnessBindings for MirrorBindings {
         &self,
         _harness: harness_id::HarnessId,
         acp_sessions: &[agent_client_protocol::schema::v1::SessionId],
-    ) -> anyhow::Result<Vec<AgentSessionId>> {
-        Ok(acp_sessions
+    ) -> anyhow::Result<crate::domain::model::ListedSessions> {
+        let (dormant, live): (Vec<AgentSessionId>, Vec<AgentSessionId>) = acp_sessions
             .iter()
             .filter_map(|acp| acp.to_string().parse().ok())
-            .collect())
+            .partition(|session| self.dormant.contains(session));
+        Ok(crate::domain::model::ListedSessions {
+            live,
+            dormant: dormant.len(),
+        })
     }
 }
 
@@ -1980,6 +1987,7 @@ async fn changing_the_model_persists_it_and_tells_the_running_agent() {
                 actor: Some(sender()),
                 context: None,
                 client: None,
+                prompter: agent_session::domain::model::PrompterKind::User,
             },
         )
         .await
@@ -2036,6 +2044,7 @@ async fn a_prompt_through_control_reaches_the_agent_without_announcing() {
             actor: Some(sender()),
             context: None,
             client: None,
+            prompter: agent_session::domain::model::PrompterKind::User,
         },
     );
     let agent = container.agent();
@@ -2084,6 +2093,7 @@ async fn a_non_staff_control_event_cannot_drive_a_sandboxed_coder_session() {
                 actor: Some(sender()),
                 context: None,
                 client: None,
+                prompter: agent_session::domain::model::PrompterKind::User,
             },
         )
         .await
@@ -2156,6 +2166,7 @@ async fn an_external_bots_permission_request_waits_for_a_users_answer() {
                 actor: Some(sender()),
                 context: None,
                 client: None,
+                prompter: agent_session::domain::model::PrompterKind::User,
             },
         )
         .await
@@ -2192,6 +2203,7 @@ async fn a_harness_principal_cannot_answer_a_permission_request() {
                 actor: None,
                 context: None,
                 client: None,
+                prompter: agent_session::domain::model::PrompterKind::User,
             },
         )
         .await
@@ -2234,6 +2246,7 @@ async fn answering_a_disconnected_session_does_not_wake_its_sandbox() {
                 actor: Some(staff_sender()),
                 context: None,
                 client: None,
+                prompter: agent_session::domain::model::PrompterKind::User,
             },
         )
         .await
@@ -2262,6 +2275,7 @@ async fn an_archived_session_rejects_new_controls() {
                 actor: Some(staff_sender()),
                 context: None,
                 client: None,
+                prompter: agent_session::domain::model::PrompterKind::User,
             },
         )
         .await
@@ -2298,6 +2312,7 @@ async fn a_staff_control_event_can_drive_a_sandboxed_coder_session() {
                 actor: Some(staff_sender()),
                 context: None,
                 client: None,
+                prompter: agent_session::domain::model::PrompterKind::User,
             },
         )
         .await
@@ -2351,6 +2366,7 @@ async fn a_prompt_during_a_running_turn_queues_and_dispatches_when_it_ends() {
                 actor: Some(sender()),
                 context: None,
                 client: None,
+                prompter: agent_session::domain::model::PrompterKind::User,
             },
         )
         .await
@@ -2401,6 +2417,7 @@ async fn a_queued_prompt_survives_a_replica_restart() {
                 actor: Some(sender()),
                 context: None,
                 client: None,
+                prompter: agent_session::domain::model::PrompterKind::User,
             },
         )
         .await
@@ -2441,6 +2458,7 @@ async fn a_resume_restores_the_persisted_queue() {
             announced_message_id: None,
             context: None,
             client: None,
+            prompter: agent_session::domain::model::PrompterKind::User,
         }],
     )
     .await
@@ -2454,6 +2472,7 @@ async fn a_resume_restores_the_persisted_queue() {
             actor: Some(staff_sender()),
             context: None,
             client: None,
+            prompter: agent_session::domain::model::PrompterKind::User,
         },
     );
     let drive_resume = async {
@@ -2504,6 +2523,7 @@ async fn archiving_drops_prompts_queued_behind_a_running_turn() {
                 actor: Some(sender()),
                 context: None,
                 client: None,
+                prompter: agent_session::domain::model::PrompterKind::User,
             },
         )
         .await
@@ -2540,6 +2560,7 @@ async fn a_stop_cancels_the_turn_and_the_queue_keeps_draining() {
                 actor: Some(sender()),
                 context: None,
                 client: None,
+                prompter: agent_session::domain::model::PrompterKind::User,
             },
         )
         .await
@@ -2559,6 +2580,7 @@ async fn a_stop_cancels_the_turn_and_the_queue_keeps_draining() {
                 actor: Some(sender()),
                 context: None,
                 client: None,
+                prompter: agent_session::domain::model::PrompterKind::User,
             },
         )
         .await
@@ -2616,6 +2638,7 @@ async fn a_channel_follow_up_stops_the_running_turn_announces_and_flushes() {
                 actor: Some(staff_sender()),
                 context: None,
                 client: None,
+                prompter: agent_session::domain::model::PrompterKind::User,
             },
         )
         .await
@@ -2741,6 +2764,7 @@ async fn queued_prompts_are_editable_and_removable_until_dispatch() {
         actor: Some(sender()),
         context: None,
         client: None,
+        prompter: agent_session::domain::model::PrompterKind::User,
     };
     let second = service.control_event(id, prompt("second")).await.unwrap();
     let third = service.control_event(id, prompt("third")).await.unwrap();
@@ -2751,6 +2775,7 @@ async fn queued_prompts_are_editable_and_removable_until_dispatch() {
             second.action_id,
             "second, rewritten".to_owned(),
             Some(staff_sender()),
+            agent_session::domain::model::PrompterKind::User,
         )
         .await
         .expect("a waiting prompt is editable");
@@ -2784,7 +2809,13 @@ async fn queued_prompts_are_editable_and_removable_until_dispatch() {
         .expect_err("a dispatched prompt is not removable");
     assert!(matches!(error, AgentSessionError::QueuedControlNotFound));
     let error = service
-        .edit_queued_control(id, third.action_id, "resurrect".to_owned(), Some(sender()))
+        .edit_queued_control(
+            id,
+            third.action_id,
+            "resurrect".to_owned(),
+            Some(sender()),
+            agent_session::domain::model::PrompterKind::User,
+        )
         .await
         .expect_err("a removed prompt is gone");
     assert!(matches!(error, AgentSessionError::QueuedControlNotFound));
@@ -2804,6 +2835,7 @@ async fn steering_a_later_queued_prompt_runs_it_ahead_of_earlier_ones() {
         actor: Some(sender()),
         context: None,
         client: None,
+        prompter: agent_session::domain::model::PrompterKind::User,
     };
     let first = service
         .control_event(id, prompt("first waiting"))
@@ -2867,6 +2899,7 @@ async fn a_model_change_bypasses_the_running_turn() {
                 actor: Some(sender()),
                 context: None,
                 client: None,
+                prompter: agent_session::domain::model::PrompterKind::User,
             },
         )
         .await
@@ -2904,6 +2937,7 @@ async fn a_control_event_is_accepted_under_the_callers_own_action_id() {
                 actor: Some(sender()),
                 context: None,
                 client: None,
+                prompter: agent_session::domain::model::PrompterKind::User,
             },
         )
         .await
@@ -2941,6 +2975,7 @@ async fn a_control_event_without_an_action_id_is_given_a_fresh_one() {
         actor: Some(sender()),
         context: None,
         client: None,
+        prompter: agent_session::domain::model::PrompterKind::User,
     };
     let first = service.control_event(id, unnamed("first")).await.unwrap();
     let second = service.control_event(id, unnamed("second")).await.unwrap();
@@ -2977,6 +3012,7 @@ async fn re_sending_a_waiting_action_id_does_not_queue_it_twice() {
         actor: Some(sender()),
         context: None,
         client: None,
+        prompter: agent_session::domain::model::PrompterKind::User,
     };
     let first = service.control_event(id, retried()).await.unwrap();
     let again = service.control_event(id, retried()).await.unwrap();
@@ -3008,6 +3044,7 @@ async fn compact_through_control_reaches_opencode_as_a_slash_command() {
             actor: Some(sender()),
             context: None,
             client: None,
+            prompter: agent_session::domain::model::PrompterKind::User,
         },
     );
     let agent = container.agent();
@@ -3040,6 +3077,7 @@ async fn a_prompt_through_control_resumes_a_disconnected_session() {
             actor: Some(staff_sender()),
             context: None,
             client: None,
+            prompter: agent_session::domain::model::PrompterKind::User,
         },
     );
     let drive_resume = async {
@@ -3415,6 +3453,7 @@ async fn a_managed_session_resumes_its_sandbox_rather_than_a_dialed_in_runtime()
             actor: Some(staff_sender()),
             context: None,
             client: None,
+            prompter: agent_session::domain::model::PrompterKind::User,
         },
     );
     let drive_resume = async {
@@ -4325,6 +4364,7 @@ mod lifecycle_events {
             actor: Some(staff_sender()),
             context: None,
             client: None,
+            prompter: agent_session::domain::model::PrompterKind::User,
         };
         service
             .control_event(id, prompt("first"))
@@ -4414,6 +4454,7 @@ mod lifecycle_events {
                     actor: Some(staff_sender()),
                     context: None,
                     client: None,
+                    prompter: agent_session::domain::model::PrompterKind::User,
                 })),
             )
             .await
@@ -4612,6 +4653,7 @@ async fn a_managed_open_delivers_its_first_prompt_under_the_callers_id() {
             prompt: "inspect".to_owned(),
             attachments: Vec::new(),
             client: Some(tab),
+            prompter: agent_session::domain::model::PrompterKind::User,
         }),
         profile: Some(agent_session::domain::ports::SelectedManagedPersona {
             bot_id: bot_id::CODEX_BOT_ID,
@@ -5177,6 +5219,7 @@ async fn a_non_staff_session_editor_can_approve_a_managed_session_request() {
                 actor: Some(sender()),
                 context: None,
                 client: None,
+                prompter: agent_session::domain::model::PrompterKind::User,
             },
         )
         .await

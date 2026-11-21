@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT ids.id AS \"id!\"\n        FROM unnest($1::uuid[]) AS ids(id)\n        CROSS JOIN LATERAL (\n            SELECT t.link_id, t.is_read, t.inbox_visible, t.has_calendar_attachment,\n                   t.latest_outbound_message_ts IS NOT NULL AS sent\n            FROM email_threads t\n            WHERE t.id = ids.id\n            OFFSET 0\n        ) t\n        WHERE ($2::bool IS NULL OR t.is_read = $2)\n          AND ($3::bool IS NULL OR t.inbox_visible = $3)\n          AND (NOT $4 OR t.has_calendar_attachment)\n          AND (NOT $7 OR t.sent)\n          AND (\n              NOT $8\n              OR EXISTS (\n                  SELECT 1\n                  FROM email_messages d\n                  WHERE d.link_id = t.link_id\n                    AND d.thread_id = ids.id\n                    AND d.is_draft\n                    AND EXISTS (\n                        SELECT 1\n                        FROM email_message_mailbox_facts mf\n                        WHERE mf.id = d.id AND mf.is_present AND NOT mf.in_trash\n                    )\n                  OFFSET 0\n              )\n          )\n          AND (\n              cardinality($9::text[]) = 0\n              OR EXISTS (\n                  SELECT 1\n                  FROM email_messages m\n                  CROSS JOIN LATERAL (\n                      SELECT 1\n                      FROM email_attachments a\n                      WHERE a.message_id = m.id\n                        AND a.mime_type LIKE ANY($9::text[])\n                      LIMIT 1\n                  ) a\n                  WHERE m.thread_id = ids.id\n                  OFFSET 0\n              )\n          )\n          AND (\n              cardinality($5::text[]) = 0\n              OR EXISTS (\n                  SELECT 1\n                  FROM notification n\n                  CROSS JOIN LATERAL (\n                      SELECT un.user_id, un.state, un.deleted_at\n                      FROM user_notification un\n                      WHERE un.notification_id = n.id\n                      OFFSET 0\n                  ) un\n                  WHERE n.event_item_type = 'email_thread'\n                    AND n.event_item_id = ids.id::text\n                    AND un.user_id = $6\n                    AND un.deleted_at IS NULL\n                    AND un.state = ANY($5::text[]::notification_state[])\n                  OFFSET 0\n              )\n          )\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Bool",
+        "Bool",
+        "Bool",
+        "TextArray",
+        "Text",
+        "Bool",
+        "Bool",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "c7ba3cc8ea3fb82aa7f7d3a2a4c9c9fbf5a41edb8dfbc42a54a33eaf04fc4ff7"
+}

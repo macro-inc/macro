@@ -978,6 +978,7 @@ where
                     hydratable,
                     crm: legs.crm.is_some(),
                     only: req.only.as_deref(),
+                    assume_attention: req.assume_attention,
                 })
                 .await
                 .map_err(anyhow::Error::from)?;
@@ -1076,13 +1077,14 @@ where
         let mut crm_contact_ids = Vec::new();
         for entity in entities {
             match entity.entity_type {
-                // Calendar events, agent sessions and runtimes ride the main
-                // by-ids query in both soup types.
+                // Calendar events, agent sessions, runtimes and teams ride the
+                // main by-ids query in both soup types.
                 EntityType::Document
                 | EntityType::Chat
                 | EntityType::CalendarEvent
                 | EntityType::AgentSession
                 | EntityType::Harness
+                | EntityType::Team
                 | EntityType::Initiative => main_entities.push(entity.copied()),
                 // Same split as the touched feed: the expanded by-ids query
                 // omits project rows, so they hydrate unexpanded separately.
@@ -2299,5 +2301,18 @@ where
         team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
     ) -> Result<AttentionSoupPage, SoupErr> {
         self.handle_attention_request(req, team_receipt).await
+    }
+
+    async fn get_attention_unread_entities(
+        &self,
+        user: MacroUserIdStr<'static>,
+        types: Vec<EntityType>,
+        limit: u16,
+    ) -> Result<Vec<Entity<'static>>, SoupErr> {
+        Ok(self
+            .soup_storage
+            .attention_unread_entities(user.copied(), &types, limit)
+            .await
+            .map_err(anyhow::Error::from)?)
     }
 }

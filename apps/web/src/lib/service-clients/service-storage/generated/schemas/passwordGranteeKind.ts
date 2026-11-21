@@ -6,7 +6,8 @@
  */
 
 /**
- * Future principals can extend this without exposing agent controls in v1.
+ * Grant recipient category. Agent grants are managed only through the agent
+access routes and never appear in, or count toward, human sharing.
  */
 export type PasswordGranteeKind =
   (typeof PasswordGranteeKind)[keyof typeof PasswordGranteeKind];
@@ -15,4 +16,5 @@ export type PasswordGranteeKind =
 export const PasswordGranteeKind = {
   user: 'user',
   team: 'team',
+  agent: 'agent',
 } as const;

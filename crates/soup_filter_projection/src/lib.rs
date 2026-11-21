@@ -371,7 +371,8 @@ pub fn project_soup_item<T>(
         | SoupItem::AgentSession(_)
         | SoupItem::Initiative(_)
         | SoupItem::DatabaseRow(_)
-        | SoupItem::Harness(_) => Ok(None),
+        | SoupItem::Harness(_)
+        | SoupItem::Team(_) => Ok(None),
     }
 }
 

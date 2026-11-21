@@ -1044,6 +1044,9 @@ export const Booking = z.object({
   rescheduledAt: z
     .union([z.string().datetime({ offset: true }), z.null()])
     .optional(),
+  abandonedAt: z
+    .union([z.string().datetime({ offset: true }), z.null()])
+    .optional(),
   location: z.string(),
   answers: z.record(z.string()),
   questionLabels: z.record(z.string()).optional(),
@@ -2781,6 +2784,7 @@ export const CreateForm = z.object({
                                 const schemas = [
                                   z.object({ type: z.literal('text') }),
                                   z.object({ type: z.literal('number') }),
+                                  z.object({ type: z.literal('percentage') }),
                                   z.object({ type: z.literal('boolean') }),
                                   z.object({ type: z.literal('date') }),
                                   z.object({ type: z.literal('date_range') }),
@@ -5060,6 +5064,7 @@ export const MutationResult = z.object({
               const schemas = [
                 z.object({ type: z.literal('text') }),
                 z.object({ type: z.literal('number') }),
+                z.object({ type: z.literal('percentage') }),
                 z.object({ type: z.literal('boolean') }),
                 z.object({ type: z.literal('date') }),
                 z.object({ type: z.literal('date_range') }),
@@ -5918,6 +5923,7 @@ export const ToolDatabaseSchema = z.object({
             const schemas = [
               z.literal('text'),
               z.literal('number'),
+              z.literal('percentage'),
               z.literal('boolean'),
               z.literal('date'),
               z.literal('date_range'),
@@ -7922,6 +7928,7 @@ export const EditForm = z.object({
             const schemas = [
               z.object({ type: z.literal('text') }),
               z.object({ type: z.literal('number') }),
+              z.object({ type: z.literal('percentage') }),
               z.object({ type: z.literal('boolean') }),
               z.object({ type: z.literal('date') }),
               z.object({ type: z.literal('date_range') }),
@@ -12171,6 +12178,9 @@ export const BookingsResult = z.object({
         .optional(),
       rescheduleCount: z.number().int().gte(0).lte(65535).optional(),
       rescheduledAt: z
+        .union([z.string().datetime({ offset: true }), z.null()])
+        .optional(),
+      abandonedAt: z
         .union([z.string().datetime({ offset: true }), z.null()])
         .optional(),
       location: z.string(),
@@ -16800,6 +16810,7 @@ export const ReadResult = z.any().superRefine((x, ctx) => {
               const schemas = [
                 z.object({ type: z.literal('text') }),
                 z.object({ type: z.literal('number') }),
+                z.object({ type: z.literal('percentage') }),
                 z.object({ type: z.literal('boolean') }),
                 z.object({ type: z.literal('date') }),
                 z.object({ type: z.literal('date_range') }),
@@ -17095,6 +17106,7 @@ export const ReadResult = z.any().superRefine((x, ctx) => {
                       const schemas = [
                         z.object({ type: z.literal('text') }),
                         z.object({ type: z.literal('number') }),
+                        z.object({ type: z.literal('percentage') }),
                         z.object({ type: z.literal('boolean') }),
                         z.object({ type: z.literal('date') }),
                         z.object({ type: z.literal('date_range') }),
@@ -19122,6 +19134,7 @@ export const SendChannelMessage = z.object({
       })
     )
     .optional(),
+  silent: z.boolean().optional(),
 });
 
 export const SendChannelMessageResponse = z.object({

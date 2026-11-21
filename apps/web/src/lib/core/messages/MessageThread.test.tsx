@@ -1,11 +1,16 @@
 import { useMessageActionDrawer } from '@channel/Mobile/message-action-drawer-context';
 import type { ThreadProps } from '@channel/Thread/types';
+import { GlobalAppStateProvider } from '@components/app/GlobalAppState';
+import type { BlockOrchestrator } from '@core/orchestrator';
+import { MessageNotificationIndexContext } from '@notifications/components/MarkMessageNotifications';
+import type { NotificationSource } from '@notifications/notification-source';
+import type { UnifiedNotification } from '@notifications/types';
 import type {
   MessageListItem,
   MessageThread as ThreadData,
 } from '@service-storage/messages';
 import { cleanup, fireEvent, render, waitFor } from '@solidjs/testing-library';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, Show, useContext } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MessageThread, threadListItem } from './MessageThread';
 import {
@@ -20,9 +25,16 @@ const mocks = vi.hoisted(() => ({
   clipboard: vi.fn().mockResolvedValue(undefined),
   confirmDelete: vi.fn(),
   toastFailure: vi.fn(),
+  unseenNotifications: vi.fn(),
 }));
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track: vi.fn() }),
+}));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: true, loading: false }),
+}));
+vi.mock('@queries/notification/graphql/entity-unseen-notifications', () => ({
+  useEntityUnseenNotifications: mocks.unseenNotifications,
 }));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { success: vi.fn(), failure: mocks.toastFailure },
@@ -82,10 +94,18 @@ vi.mock('@queries/messages/thread-replies', () => ({}));
 vi.mock('@channel/Thread/ChannelThread', () => ({
   ChannelThread: (props: ThreadProps) => {
     const drawer = useMessageActionDrawer();
+    const notificationIndex = useContext(MessageNotificationIndexContext);
     return (
       <>
         <p>
           thread of {props.parent().type} {props.parent().id}
+        </p>
+        <p>
+          unread on {props.data().id}:{' '}
+          {notificationIndex?.()
+            ?.get(props.data().id)
+            ?.map(({ id }) => id)
+            .join(', ')}
         </p>
         <Show when={props.isReplying()}>
           <textarea aria-label="Reply composer" />
@@ -493,4 +513,35 @@ it('does not offer deletion of another sender’s bot message outside a channel'
   openActions(view);
   expect(view.queryByRole('button', { name: 'Delete' })).toBeNull();
   expect(view.getByRole('button', { name: 'Reply' })).toBeTruthy();
+});
+
+it("indexes its messages' notifications from one read of its parent, not the notification feed", () => {
+  mocks.unseenNotifications.mockReturnValue(() => [
+    {
+      id: 'comment-notification',
+      entity_type: 'document',
+      entity_id: 'document',
+      state: 'unseen',
+      notification_metadata: { content: { commentId: 'root' } },
+    } as UnifiedNotification,
+  ]);
+  const source = {
+    isEnabled: () => true,
+    notificationsByEntity: vi.fn(() => ({})),
+  } as unknown as NotificationSource;
+  const view = render(() => (
+    <GlobalAppStateProvider
+      notificationSource={source}
+      blockOrchestrator={{} as BlockOrchestrator}
+    >
+      <MessageThread data={message} canWrite />
+    </GlobalAppStateProvider>
+  ));
+  expect(view.getByText('unread on root: comment-notification')).toBeTruthy();
+  expect(mocks.unseenNotifications).toHaveBeenCalledOnce();
+  expect(mocks.unseenNotifications.mock.calls[0].slice(0, 2)).toEqual([
+    'DOCUMENT',
+    'document',
+  ]);
+  expect(source.notificationsByEntity).not.toHaveBeenCalled();
 });

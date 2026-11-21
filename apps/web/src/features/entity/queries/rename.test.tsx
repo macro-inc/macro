@@ -25,25 +25,19 @@ const mocks = vi.hoisted(() => ({
   soup: vi.fn(),
   toast: vi.fn(),
   renameDatabase: vi.fn(),
-  renameItem: vi.fn(),
-  graphqlEnabled: vi.fn(() => true),
+  renameAgentSession: vi.fn(),
 }));
 vi.mock('@block-database/queries/rename-database', () => ({
   renameDatabase: mocks.renameDatabase,
-}));
-vi.mock('@core/component/FileList/itemOperations', () => ({
-  renameItem: mocks.renameItem,
 }));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: mocks.toast },
 }));
 vi.mock('@core/constant/featureFlags', () => ({
   ENABLE_BEARER_TOKEN_AUTH: false,
-  enableGraphqlSoup: {},
-  isFeatureEnabled: mocks.graphqlEnabled,
 }));
 vi.mock('@queries/agent-session/entity-mutations', () => ({
-  renameAgentSession: vi.fn(),
+  renameAgentSession: mocks.renameAgentSession,
 }));
 vi.mock('@queries/client', () => ({
   get queryClient() {
@@ -86,7 +80,6 @@ afterEach(() => {
   dispose?.();
   cache.clear();
   vi.clearAllMocks();
-  mocks.graphqlEnabled.mockReturnValue(true);
 });
 
 it.each(['channel', 'call'] as const)(
@@ -226,7 +219,7 @@ it.each(['After', 'Before', ' Before '])(
 );
 
 it.each([true, false])(
-  'rolls back only a failed document after a database rename (document success=%s)',
+  'rolls back only a failed agent session after a database rename (agent session success=%s)',
   async (success) => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     cache = new QueryClient({
@@ -236,11 +229,11 @@ it.each([true, false])(
       id: 'viewer',
       authenticated: true,
     });
-    mocks.graphqlEnabled.mockReturnValue(false);
     mocks.renameDatabase.mockResolvedValue(
       success ? err({ kind: 'unreachable' }) : ok(undefined)
     );
-    mocks.renameItem.mockResolvedValue(success);
+    if (success) mocks.renameAgentSession.mockResolvedValue(undefined);
+    else mocks.renameAgentSession.mockRejectedValue(new Error('rename failed'));
     const rollback = vi.fn();
     mocks.soup.mockReturnValue({ rollback });
     let mutation!: ReturnType<typeof createBulkRenameDssEntityMutation>;
@@ -267,8 +260,8 @@ it.each([true, false])(
           newName: 'Database after',
         },
         {
-          entity: { id: 'doc-1', type: 'document', name: 'Document before' },
-          newName: 'Document after',
+          entity: { id: 'session-1', type: 'agent_session', name: 'Before' },
+          newName: 'After',
         },
       ])
     ).toEqual([{ success: !success }, { success }]);
@@ -276,9 +269,9 @@ it.each([true, false])(
     else {
       expect(rollback).toHaveBeenCalledOnce();
       expect(mocks.preview).toHaveBeenLastCalledWith({
-        itemId: 'doc-1',
-        itemType: 'document',
-        name: 'Document before',
+        itemId: 'session-1',
+        itemType: 'agent_session',
+        name: 'Before',
       });
     }
     vi.restoreAllMocks();

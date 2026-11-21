@@ -13,6 +13,17 @@ favorites, last use, and activity. Its domain service owns human membership, gra
 requests; PostgreSQL and OpenBao implement repository and secret-provider ports.
 The provider boundary allows future 1Password and Bitwarden implementations.
 
+Favorites are private per-user preferences, available to anyone with current
+human view access. PUT/DELETE `/passwords/teams/{team}/items/{item}/favorite`
+changes only that preference: no credential lease, revision/version change or
+shared Activity entry. List, detail and import matching project the viewer's
+flag with a bounded bulk lookup. Create/import seeds the creator's initial flag
+atomically with item insertion; retries and subsequent saves never reseed it.
+Membership and physical item deletion cascade; soft deletion clears preferences.
+Existing true metadata flags are copied to creators who remain members, in
+independently committed keyset pages. The legacy JSON flag remains for rollback;
+removing it is a follow-up after older writers are retired.
+
 Document storage hosts the routes because it already owns the authenticated
 content API, database pool, and browser transport. A separate deployable service
 would add configuration and operational overhead without changing the security
@@ -214,7 +225,8 @@ require separate review.
 The browser parses supported unencrypted exports locally and submits normalized
 items to `POST /passwords/teams/{team}/imports/{import_id}/items`. The UUIDv7
 `import_id` stays stable across batches and retries. Requests include `format`
-(`one_password_pux`, `one_password_csv`, `bitwarden_json`, or `bitwarden_csv`), a
+(`one_password_pux`, `one_password_csv`, `bitwarden_json`, `bitwarden_csv`, or
+`bitwarden_zip`), a
 `target` (`new` with a name, `existing` with `folderId`, or `root`), `private`,
 source `folders`, and `items`. The server requires the same human session,
 per-user rollout, current team membership, CSRF header and private no-store
@@ -244,11 +256,24 @@ that preserves an already enrolled seed. A TOTP failure retains the created item
 retrying with the same source key finishes enrollment without writing the item
 again. Other item failures do not abort the batch.
 
+One admitted team lease covers folder setup and the bounded item futures. Each
+item checks current membership when it starts, then completes create and TOTP in
+order. Concurrency is capped by the measured `IMPORT_CONCURRENCY` and the
+repository's pool capacity minus the lease connection. Completed results are
+restored to input order before counts and audit are recorded. The futures are
+not detached: cancellation or panic drops them and the guard. Normal completion
+awaits lease release before the counts-only audit. Other writers receive `busy`
+for this continuous batch window; the measured concurrent window is shorter
+than the sequential batch's total lease hold time. The team lock still protects
+the same team-wide invariants.
+
 `password_import_activity` stores counts and format for each completed batch
 attempt, including attempts without successful items. Its team foreign key
 cascades on deletion, and explicit vault purge removes its rows after namespace
 erasure. No item names, URLs, source keys or secret values enter this audit.
 The `passwords.import.batch` span records team/import ids, item, folder and
-outcome counts, and an `audit_failed` boolean. Batch audit failure preserves the
+outcome counts, effective concurrency, and an `audit_failed` boolean. Item spans
+are direct children of the batch; `passwords.lease.hold` records the actual
+guard lifetime. Batch audit failure preserves the
 per-item results; the team foreign key removes audit rows racing team deletion.
 Import request types have no Debug implementation, and all errors have fixed text.

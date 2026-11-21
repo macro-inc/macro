@@ -3,9 +3,10 @@ import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const testState = vi.hoisted(() => ({
-  graphqlEnabled: false,
   restPending: false,
   restNextPageError: false,
+  restPlaceholder: false,
+  restData: undefined as SoupAstItemsData | undefined,
 }));
 const restRefetch = vi.hoisted(() => vi.fn(async () => undefined));
 const fetchSoup = vi.hoisted(() => vi.fn());
@@ -24,6 +25,7 @@ function makeGraphqlQuery(enabled: boolean) {
     isFetchNextPageError: vi.fn(() => false),
     isPlaceholderData: vi.fn(() => false),
     hasNextPage: vi.fn(() => false),
+    hasPageData: vi.fn(() => false),
     fetchNextPage: vi.fn(async () => undefined),
     resetToInitialPage: vi.fn(),
     refresh: vi.fn(async () => undefined),
@@ -32,12 +34,6 @@ function makeGraphqlQuery(enabled: boolean) {
 
 vi.mock('@app/features/next-soup/filters/query-filters', () => ({
   filterSoupItemByRequestBody: vi.fn(() => true),
-}));
-vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: vi.fn(() => () => ({ enabled: testState.graphqlEnabled })),
-}));
-vi.mock('@core/constant/featureFlags', () => ({
-  enableGraphqlSoup: { key: 'enable-graphql-soup' },
 }));
 vi.mock('@core/util/result', () => ({
   throwOnErr: vi.fn(async (run: () => Promise<unknown>) => await run()),
@@ -69,14 +65,18 @@ vi.mock('@service-storage/client', () => ({
 vi.mock('@tanstack/solid-query', () => ({
   infiniteQueryOptions: vi.fn((options: unknown) => options),
   useInfiniteQuery: vi.fn(() => ({
-    data: undefined,
+    get data() {
+      return testState.restData;
+    },
     error: null,
     get isPending() {
       return testState.restPending;
     },
     isLoading: false,
     isFetching: false,
-    isPlaceholderData: false,
+    get isPlaceholderData() {
+      return testState.restPlaceholder;
+    },
     isFetchingNextPage: false,
     get isFetchNextPageError() {
       return testState.restNextPageError;
@@ -110,7 +110,10 @@ import {
 
 let disposeRoot: (() => void) | undefined;
 
-function mountAutoTransportQuery(networkPaused = false): SoupAstItemsQuery {
+function mountGroupedQuery(
+  networkPaused = false,
+  transport?: 'rest'
+): SoupAstItemsQuery {
   let query: SoupAstItemsQuery | undefined;
   createRoot((dispose) => {
     disposeRoot = dispose;
@@ -123,6 +126,7 @@ function mountAutoTransportQuery(networkPaused = false): SoupAstItemsQuery {
           propertyDefinitionId: 'priority',
           entityType: 'TASK',
         },
+        transport,
       }),
       () => ({ networkPaused })
     );
@@ -132,9 +136,10 @@ function mountAutoTransportQuery(networkPaused = false): SoupAstItemsQuery {
 
 describe('Soup refetch transport selection', () => {
   beforeEach(() => {
-    testState.graphqlEnabled = false;
     testState.restPending = false;
     testState.restNextPageError = false;
+    testState.restPlaceholder = false;
+    testState.restData = undefined;
     vi.clearAllMocks();
   });
 
@@ -145,20 +150,28 @@ describe('Soup refetch transport selection', () => {
 
   it('exposes paused REST requests as pending even when they are not loading', () => {
     testState.restPending = true;
-    const query = mountAutoTransportQuery();
+    const query = mountGroupedQuery(false, 'rest');
     expect(query.isLoading).toBe(false);
     expect(query.isPending).toBe(true);
   });
 
+  it('does not treat REST placeholder data as a resolved current page', () => {
+    testState.restData = { entities: [], groups: undefined };
+    testState.restPlaceholder = true;
+    const query = mountGroupedQuery(false, 'rest');
+    expect(query.hasPageData).toBe(false);
+    testState.restPlaceholder = false;
+    expect(query.hasPageData).toBe(true);
+  });
+
   it('reports continuation-page failures from the selected transport', () => {
-    const rest = mountAutoTransportQuery();
+    const rest = mountGroupedQuery(false, 'rest');
     expect(rest.isFetchNextPageError).toBe(false);
     testState.restNextPageError = true;
     expect(rest.isFetchNextPageError).toBe(true);
     disposeRoot?.();
 
-    testState.graphqlEnabled = true;
-    const graphql = mountAutoTransportQuery();
+    const graphql = mountGroupedQuery();
     expect(graphql.transport).toBe('graphql');
     groupedQuery.isFetchNextPageError.mockReturnValueOnce(true);
     expect(graphql.isFetchNextPageError).toBe(true);
@@ -166,8 +179,7 @@ describe('Soup refetch transport selection', () => {
   });
 
   it('keeps paused GraphQL requests pending until data or an error arrives, unless disabled', () => {
-    testState.graphqlEnabled = true;
-    const query = mountAutoTransportQuery(true);
+    const query = mountGroupedQuery(true);
     expect(query.transport).toBe('graphql');
     expect(query.isLoading).toBe(false);
     expect(query.isPending).toBe(true);
@@ -251,8 +263,8 @@ describe('Soup refetch transport selection', () => {
     );
   });
 
-  it('uses REST refetch and skips mutation-driven GraphQL refresh when the flag is off', async () => {
-    const query = mountAutoTransportQuery();
+  it('uses REST refetch and skips mutation-driven GraphQL refresh when REST is requested', async () => {
+    const query = mountGroupedQuery(false, 'rest');
 
     expect(query.transport).toBe('rest');
     await query.refetch();
@@ -265,7 +277,6 @@ describe('Soup refetch transport selection', () => {
   it.each(['inbox', 'drafts', 'sent', 'all'] as const)(
     'keeps grouped %s mail on REST even when GraphQL is explicitly requested and cached mail exists',
     async (emailView) => {
-      testState.graphqlEnabled = true;
       vi.mocked(createGraphqlGroupedSoupAstItemsQuery).mockImplementationOnce(
         (args) => ({
           ...groupedQuery,
@@ -306,9 +317,8 @@ describe('Soup refetch transport selection', () => {
     }
   );
 
-  it('uses GraphQL refetch and mutation-driven refresh when the flag is on', async () => {
-    testState.graphqlEnabled = true;
-    const query = mountAutoTransportQuery();
+  it('uses GraphQL refetch and mutation-driven refresh by default', async () => {
+    const query = mountGroupedQuery();
 
     expect(query.transport).toBe('graphql');
     await query.refetch();

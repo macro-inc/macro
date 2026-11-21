@@ -104,7 +104,6 @@ export default {
     close: 'Stäng',
     delete: 'Ta bort',
     rename: 'Byt namn',
-    more: 'Mer',
     search: 'Sök',
     settings: 'Inställningar',
   },
@@ -518,6 +517,10 @@ export default {
       other: '{{count}} objekt borttagna',
     },
     toastDeleteFailed: 'Det gick inte att ta bort',
+    toastPropertySet: {
+      one: '{{property}} har angetts',
+      other: '{{property}} har angetts för {{count}} objekt',
+    },
     toastAddedToFavorites: 'Tillagt i favoriter',
     toastAddedCountToFavorites: {
       one: '{{count}} objekt tillagt i favoriter',
@@ -589,10 +592,6 @@ export default {
       other: '{{accepted}} av {{count}} objekt markerade som inte klara',
     },
     toastMarkNotDoneFailed: 'Det gick inte att markera som inte klart',
-    toastThreadStaysDone:
-      'Tråden har inga mottagna meddelanden, så den förblir klar',
-    toastThreadsStayDone:
-      'Trådarna har inga mottagna meddelanden, så de förblir klara',
     toastCountNotRestored: {
       one: '{{count}} kunde inte återställas.',
       other: '{{count}} kunde inte återställas.',
@@ -692,8 +691,6 @@ export default {
     create: 'Skapa',
     getMobileApp: 'Hämta mobilappen',
     signedInAs: 'Inloggad som {{name}}',
-    commandMenu: 'Kommandomeny',
-    searchEverything: 'Sök i allt',
     customizeSidebar: 'Anpassa sidofältet',
     customizeSidebarDescription:
       'Välj vilka appar som visas i sidofältet och dra för att ändra ordningen. Hem ligger alltid först.',

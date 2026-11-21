@@ -1,0 +1,56 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT o.team_id, o.user_id, o.traceparent, o.link_id, o.consent_incarnation,\n                      o.policy_version, o.work_id FROM crm_email_backfill_outbox o\n               WHERE o.requested_at <= now()\n               ORDER BY o.requested_at, o.team_id, o.user_id\n               FOR UPDATE OF o SKIP LOCKED LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "traceparent",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "consent_incarnation",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "policy_version",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "work_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "9f06838af4f8a965a76969d9709270cf2cede5cf7f66ffb723ab31c77b9b9508"
+}

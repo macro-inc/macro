@@ -54,5 +54,115 @@ for (const size of SIZES) {
         fullPage: true,
       });
     });
+
+    for (const operation of ['done', 'seen', 'undo']) {
+      test(`notification ${operation} preserves its dispatch generation across startup`, async ({
+        page,
+      }) => {
+        await page.route('**/*', (route) => {
+          const url = new URL(route.request().url());
+          if (
+            ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) &&
+            !url.pathname.startsWith('/__macro_dev/')
+          )
+            return route.continue();
+          return route.abort('blockedbyclient');
+        });
+        await page.goto(`${PAGE}?generation=${operation}`);
+        await expect(page.getByTestId('generation-row')).toContainText(
+          '2 notifications',
+          { timeout: 180_000 }
+        );
+        await page.getByRole('button', { name: 'Start mutation' }).click();
+        await expect(page.getByTestId('generation-phase')).toHaveText(
+          'pending'
+        );
+        const dispatched = await page
+          .getByTestId('generation-dispatched')
+          .innerText();
+        expect(dispatched).not.toBe('');
+
+        await page
+          .getByRole('button', { name: 'Learn owner baseline' })
+          .click();
+        await expect(page.getByTestId('generation-baseline')).not.toHaveText(
+          ''
+        );
+        await expect(page.getByTestId('generation-baseline')).not.toHaveText(
+          dispatched
+        );
+        await page.getByRole('button', { name: 'Release response' }).click();
+
+        await expect(page.getByTestId('generation-phase')).toHaveText(
+          'settled'
+        );
+        await expect(page.getByTestId('generation-error')).toHaveText('');
+        await expect(page.getByTestId('generation-written')).toHaveText(
+          dispatched
+        );
+        await expect(page.getByTestId('generation-revision')).toHaveText(
+          'confirmed'
+        );
+        await expect(page.getByTestId('generation-row')).toContainText(
+          operation === 'done' ? '1 notifications' : '2 notifications'
+        );
+        if (operation === 'seen')
+          await expect(page.getByTestId('generation-row')).toContainText(
+            '2 notifications, seen'
+          );
+      });
+    }
   });
 }
+
+test('Team request cards follow current vault visibility and pass their row to the opener', async ({
+  page,
+}) => {
+  // The context providers remain real; their unrelated reads use empty synthetic data.
+  await page.route('**/*', async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+    if (loopback && request.method() === 'GET') {
+      const responses: Record<string, object> = {
+        '/__macro_dev/gateway/dss/comms/channels': {
+          items: [],
+          next_cursor: null,
+        },
+        '/__macro_dev/gateway/dss/channels/activity': [],
+        '/__macro_dev/gateway/email/email/links': { links: [] },
+      };
+      const response = responses[url.pathname];
+      if (response)
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(response),
+        });
+    }
+    if (
+      (!loopback && !['data:', 'blob:'].includes(url.protocol)) ||
+      url.pathname.startsWith('/__macro_dev/')
+    )
+      return route.abort('blockedbyclient');
+    return route.continue();
+  });
+  await page.goto(`${PAGE}?passwordRequests=1`);
+  const row = page.getByTestId('vault-request');
+  await expect(row).toBeVisible({ timeout: 180_000 });
+  await expect(row).toContainText('Synthetic login');
+  await expect(page.getByTestId('invalid-vault-request')).toHaveCount(0);
+  await row.locator('[data-notification-row]').click();
+  await expect(page.locator('body')).toHaveAttribute(
+    'data-opened-inbox-row',
+    'vault-request'
+  );
+  await page.getByRole('button', { name: 'Toggle vault visibility' }).click();
+  await expect(row).toHaveCount(0);
+  await expect(page.getByTestId('dm')).toBeVisible();
+  await page.getByRole('button', { name: 'Toggle vault visibility' }).click();
+  await expect(row).toBeVisible();
+  await page.getByRole('button', { name: 'Change current team' }).click();
+  await expect(row).toHaveCount(0);
+  await expect(page.getByTestId('dm')).toBeVisible();
+});

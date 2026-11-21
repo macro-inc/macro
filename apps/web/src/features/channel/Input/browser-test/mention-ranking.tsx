@@ -32,6 +32,7 @@ const CHANNEL_ID = 'mention-fixture-channel';
 // Render the stored chip without a backend preview or app navigation host.
 setDecorator(DocumentMentionNode, DocumentMentionStatic);
 const CRM_SCENARIO = new URLSearchParams(location.search).has('crm');
+const PEOPLE_SCENARIO = new URLSearchParams(location.search).has('people');
 const ITEMS: EntityItem[] = CRM_SCENARIO
   ? [
       {
@@ -245,6 +246,26 @@ function Fixture() {
                           discussion && !scoped
                             ? undefined
                             : () => {
+                                if (PEOPLE_SCENARIO)
+                                  return [
+                                    {
+                                      id: 'macro|alina@example.com',
+                                      name: 'Alina Ellis',
+                                      email: 'alina@example.com',
+                                      lastInteraction: new Date(),
+                                    },
+                                    {
+                                      id: 'macro|caleb@example.com',
+                                      name: 'Caleb Knox',
+                                      email: 'caleb@example.com',
+                                      lastInteraction: new Date(),
+                                    },
+                                    {
+                                      id: 'macro|alex@example.com',
+                                      name: 'Alex Rowan',
+                                      email: 'alex@example.com',
+                                    },
+                                  ];
                                 if (CRM_SCENARIO)
                                   return [
                                     {

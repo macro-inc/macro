@@ -3,7 +3,6 @@ import { refreshSharedAccess } from '@queries/access-requests/requests';
 import { calendarKeys } from '@queries/calendar/keys';
 import { queryClient } from '@queries/client';
 import { computerKeys } from '@queries/computers/keys';
-import { emailKeys } from '@queries/email/keys';
 import { invalidateEmailLinks } from '@queries/email/link';
 import { harnessKeys } from '@queries/harnesses/keys';
 import { messageKeys } from '@queries/messages/keys';
@@ -17,6 +16,7 @@ import { teamKeys } from '@queries/team/keys';
 import { onCleanup } from 'solid-js';
 import { match, P } from 'ts-pattern';
 import { shareEntity } from '../access-requests/core/types';
+import { passwordKeys } from '../passwords/queries/keys';
 import { scheduledActionKeys } from '../routines/queries/keys';
 import type { NotificationSource } from './notification-source';
 import type { UnifiedNotification } from './types';
@@ -55,9 +55,6 @@ function refreshEmailThread(notification: UnifiedNotification) {
     'notifications'
   );
   invalidateSoupEntity(notification.entity_id);
-  queryClient.invalidateQueries({
-    queryKey: emailKeys.threadMessages(notification.entity_id).queryKey,
-  });
 }
 
 async function refreshDeliveredEmailReminder(threadId: string) {
@@ -126,6 +123,12 @@ export function handleNotificationUpdate(notification: UnifiedNotification) {
     .with({ tag: 'calendar_event_join_request' }, ({ content }) => {
       queryClient.invalidateQueries({
         queryKey: calendarKeys.joinRequests(content.eventId).queryKey,
+      });
+    })
+    // An open item's pane lists the new agent request.
+    .with({ tag: 'password_access_requested' }, () => {
+      queryClient.invalidateQueries({
+        queryKey: passwordKeys.agentRequests._def,
       });
     })
     .with({ tag: 'crm_discussion' }, () => {

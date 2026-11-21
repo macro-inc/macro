@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE \"Document\" d\n        SET \"deletedAt\" = NOW()\n        FROM unnest($1::text[]) AS trashed(id)\n        WHERE d.id = trashed.id\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "54b5f15acf52b61accaf6b66563869557ab0aef02bcefa3567e9c859a0c983ad"
+}

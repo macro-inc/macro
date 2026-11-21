@@ -1,25 +1,19 @@
 import { SidePanel } from '@components/app/side-panel';
-import type { Entity as EntityRef } from '@core/types';
 import { compareDateDesc } from '@core/util/date';
 import { NotificationRow } from '@entity';
-import type { NotificationSource } from '@notifications';
+import type { UnifiedNotification } from '@notifications/types';
 import { createMemo, For, Show } from 'solid-js';
 
 type NotificationsProps = {
-  entity: EntityRef;
-  notificationSource: NotificationSource;
+  notifications: UnifiedNotification[];
 };
 
 export function Notifications(props: NotificationsProps) {
-  const notifications = createMemo(() => {
-    const entityNotifications =
-      props.notificationSource.notificationsByEntity()[
-        `${props.entity.type}@${props.entity.id}`
-      ] ?? [];
-    return [...entityNotifications].sort((a, b) =>
+  const notifications = createMemo(() =>
+    [...props.notifications].sort((a, b) =>
       compareDateDesc(a.created_at, b.created_at)
-    );
-  });
+    )
+  );
 
   return (
     <Show

@@ -19,7 +19,10 @@ const specs: [string, Spec, string][] = [
   name,
   JSON.parse(
     readFileSync(
-      new URL(`../nixos/${SPECS[name].file}`, import.meta.url),
+      new URL(
+        `../nixos/grafana-provisioning/${SPECS[name].file}`,
+        import.meta.url
+      ),
       'utf8'
     )
   ),

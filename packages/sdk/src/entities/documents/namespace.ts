@@ -42,6 +42,9 @@ function toBlob(content: FileContent): Blob {
  * Change the text of an existing Markdown document or task body in place, with `document.edit(instructions)` in code or the `EditDocument` tool where code isn't available. Never recreate the document or upload its Markdown to change its text. PDF, Word and other uploaded files can't be edited this way.
  *
  * When a program already holds the exact new Markdown, as an integration syncing from another system does, read `document.contentWithRevision()` and write with `document.setContent(markdown, {expectedRevision})`: the write lands only if nobody changed the document since the read, and throws `DocumentChangedError` otherwise, so read again and reapply instead of overwriting.
+ *
+ * `document.content()`, `contentWithRevision()` and `initiative.description()` return Macro's lossless Markdown: people, documents, dates and other chips, tables, images and equations are `<m-*>` tags with a JSON body, such as `<m-user-mention>{"userId":"…"}</m-user-mention>` for a person and `<m-table>` for a table. To write text back, take it and its revision from one `contentWithRevision()` read, and copy every tag you are not changing exactly as you read it: an edited tag changes its chip, and a dropped one deletes it.
+ *
  * ## Uploaded Office and design files
  *
  * Edit an uploaded Word file with `readWord()` then `editWord(operations)`, and a PowerPoint deck with `readPresentation()` then `editPresentation(operations)` (or `copyPresentation()` for a new deck): both address paragraphs, slides and shapes by the ids the read reports. Read Figma, Photoshop and Illustrator files with `readDesign()`, `readPhotoshop()` and `readIllustrator()`; they can't be edited. Never rebuild these files from `bytes()`.
@@ -396,7 +399,7 @@ export class DocumentNamespace {
   }
 
   /**
-   * Search documents by name and content, most relevant first, auto-paginated.
+   * Search documents by name and content, most relevant first, auto-paginated; `maxItems` caps the total.
    *
    * @readonly
    */
@@ -405,23 +408,37 @@ export class DocumentNamespace {
   }
 
   /**
-   * The user's recent documents, most recent first, auto-paginated.
+   * The user's recent documents, most recent first, auto-paginated; `maxItems` caps the total.
    *
    * @readonly
    */
   recent(opts?: {
     pageSize?: number;
     fileType?: string;
+    maxItems?: number;
   }): AsyncGenerator<Document> {
     return Document.recent(this.client, opts);
   }
 
   /**
-   * The user's recently soft-deleted documents.
+   * The documents among the user's 100 most recently trashed items; page
+   * through the whole trash with `trashed()`.
    *
    * @readonly
    */
   recentlyDeleted(): Promise<Document[]> {
     return Document.recentlyDeleted(this.client);
+  }
+
+  /**
+   * The user's trashed documents, most recently trashed first, auto-paginated; `maxItems` caps the total.
+   *
+   * @readonly
+   */
+  trashed(opts?: {
+    pageSize?: number;
+    maxItems?: number;
+  }): AsyncGenerator<Document> {
+    return Document.trashed(this.client, opts);
   }
 }

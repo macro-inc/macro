@@ -1,8 +1,4 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import {
-  ENABLE_GRAPHQL_BACKFILL,
-  enableGraphqlSoup,
-} from '@core/constant/featureFlags';
+import { ENABLE_GRAPHQL_BACKFILL } from '@core/constant/featureFlags';
 import { createTabLeaderSignal } from '@core/cross-tab/tab-leader';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { Telemetry } from '@macro-inc/observability';
@@ -25,6 +21,7 @@ import * as Fiber from 'effect/Fiber';
 import * as Schedule from 'effect/Schedule';
 import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
 import { useContactBackfill } from '../contacts/backfill';
+import { useContactTopUp } from '../contacts/top-up';
 import { useContactContextPublisher } from '../contacts/use-context-publisher';
 import { useMailAccountsQuery } from '../email/mail-accounts';
 
@@ -749,26 +746,22 @@ const waitForGraphqlSoupCacheHost = Effect.suspend(() => {
  */
 /** Runs the signed-in user's soup backfills; waits while `userId` is unknown. */
 export function useSoupBackfills(userId: Accessor<string | undefined>): void {
-  const graphqlSoupFlag = useFeatureFlag(enableGraphqlSoup);
   const isLeader = createTabLeaderSignal(
     `graphql-soup-backfill:v${BACKFILL_VERSION}:coordinator`
   );
   // Sender metadata must be durable before the first composer is opened.
   // This small catalog runs alongside the paged backfill, never behind it.
   useMailAccountsQuery(
-    () =>
-      ENABLE_GRAPHQL_BACKFILL &&
-      graphqlSoupFlag().enabled &&
-      isLeader() &&
-      !!userId()
+    () => ENABLE_GRAPHQL_BACKFILL && isLeader() && !!userId()
   );
   const [cacheHost, setCacheHost] = createSignal<CacheHost>();
   const [cacheGeneration, setCacheGeneration] = createSignal(0);
   useContactBackfill(userId, cacheHost, cacheGeneration);
+  useContactTopUp(userId, cacheHost, cacheGeneration);
   useContactContextPublisher(cacheHost, cacheGeneration);
 
   createEffect(() => {
-    if (!ENABLE_GRAPHQL_BACKFILL || !graphqlSoupFlag().enabled || !isLeader()) {
+    if (!ENABLE_GRAPHQL_BACKFILL || !isLeader()) {
       setCacheHost(undefined);
       return;
     }

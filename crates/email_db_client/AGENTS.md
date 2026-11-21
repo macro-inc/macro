@@ -58,6 +58,9 @@ Parsed message responses expose the draft generation captured in the same SQL sn
   Attachment email filters. Call `threads::update::sync_thread_attachment_flags`
   wherever a message's attachments change or a message is deleted; the MIME
   prefixes in `threads/update.rs` mirror the web client's attachment filters.
+  Search reads attachment kinds per page from `email_attachments` with the
+  same prefixes (`threads::search_filters`), since the kind flags are not
+  backfilled everywhere.
 - Undated provider drafts use creation time for All Mail eligibility; spam/junk
   and trash remain excluded, including the timestamp override for synced Macro
   drafts. Keep ingestion, recomputation, and cached projections aligned.
@@ -106,7 +109,23 @@ Parsed message responses expose the draft generation captured in the same SQL sn
 - A query that claims rows (`upload_claimed_at`) must return every row it
   claims: read optional columns such as the sender through a `LEFT JOIN`. A
   claimed attachment the caller never sees is never uploaded, and the Outlook
-  projection waits on its claim forever.
+  projection waits on its claim forever. An abandoned attachment
+  (`upload_abandoned_at`) keeps its claim on purpose, so claims skip it; a
+  query that waits on, releases or reclaims claims (`oldest_pending_upload_claim`,
+  `release_upload_claim`, the projection's stale-claim release) must leave it out.
+  The new-mail claims return each claim's `upload_claimed_at` from the claiming
+  statement (`ClaimedAttachment`); a write that must apply only while that claim
+  holds compares the column with it.
+- The document auto-import (`attachments/provider/upload.rs`: the new-mail
+  claims and both backfill queries) skips drafts. A draft's row is deleted
+  when it is saved again, sent or discarded, and `document_email` cascades
+  with it, so an imported draft attachment would stay in Drive as a plain
+  file. Media uploads to static files still include drafts.
+- The message and contact inserts write provider strings through
+  `parse::service_to_db`, which clamps them to their `varchar` widths
+  (`column_limits`) and removes NUL characters (`nul_characters`), which no
+  `text`, `varchar` or `jsonb` value can hold. Route a new provider string
+  column of theirs through both.
 - Quote and alias camelCase columns to Rust field names; check
   `crates/macro_db_client/migrations/` for real column spelling, don't guess.
 - A Macro draft (no provider id, or a live `email_mailbox_drafts` row) puts its

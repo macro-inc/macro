@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT record,agent_user_id,agent_action FROM password_write_intents WHERE operation_id=$1 AND team_id=$2 AND item_id=$3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "record",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "agent_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "agent_action",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "de3a66f14ca0520bd992eb06fa3e07332ab9fa8348e37408ced998750d25d061"
+}

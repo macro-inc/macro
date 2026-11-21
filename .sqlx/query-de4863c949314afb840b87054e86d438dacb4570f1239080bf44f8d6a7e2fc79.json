@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                (\n                    SELECT COUNT(*)\n                    FROM (SELECT 1 FROM released_email_attachment_documents LIMIT $1) waiting\n                ) AS \"depth!\",\n                (\n                    SELECT EXTRACT(EPOCH FROM now() - MIN(released_at))::bigint\n                    FROM released_email_attachment_documents\n                ) AS \"oldest_age_seconds\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "depth!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "oldest_age_seconds",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "de4863c949314afb840b87054e86d438dacb4570f1239080bf44f8d6a7e2fc79"
+}

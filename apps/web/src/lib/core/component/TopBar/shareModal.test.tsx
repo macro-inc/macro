@@ -1,3 +1,4 @@
+import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { AppProviders } from '@components/app/AppProviders';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { createBlockOrchestrator } from '@core/orchestrator';
@@ -7,6 +8,16 @@ import { createSignal, Show } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { Permissions } from '../SharePermissions';
 import { openShareModal, useShareModal } from './shareModal';
+
+// The real flag provider owns its normal context; only its transport is inert here.
+vi.mock('@app/lib/analytics/analytics-context', () => ({
+  useAnalytics: () => ({
+    posthog: {
+      featureFlags: { getFlags: () => [] },
+      onFeatureFlags: () => () => {},
+    },
+  }),
+}));
 
 let observedOrchestrator:
   | ReturnType<typeof useGlobalBlockOrchestrator>
@@ -55,9 +66,6 @@ vi.mock('@app/signal/splitLayout', () => ({
 }));
 vi.mock('@components/app/useReactiveFavicon', () => ({
   useReactiveFavicon: () => {},
-}));
-vi.mock('@core/component/AI/signal/globalAttachments', () => ({
-  useGlobalAttachableHistory: () => {},
 }));
 vi.mock('@core/context/team', () => ({
   TeamContextProvider: (props: { children: unknown }) => props.children,
@@ -213,11 +221,13 @@ describe('useShareModal', () => {
 
     const view = render(() => (
       <Show when={showApp()}>
-        <AppProviders>
-          <Show when={showMenu()}>
-            <Menu />
-          </Show>
-        </AppProviders>
+        <PosthogProvider>
+          <AppProviders>
+            <Show when={showMenu()}>
+              <Menu />
+            </Show>
+          </AppProviders>
+        </PosthogProvider>
       </Show>
     ));
 

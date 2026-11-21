@@ -61,6 +61,7 @@ impl JwtValidator for ValidToken {
             identity: ValidatedIdentity {
                 agent_id,
                 agent_via: None,
+                routine_id: None,
                 user_id: USER.to_string(),
                 fusion_user_id: "fusion-ops-router".to_string(),
                 organization_id: None,

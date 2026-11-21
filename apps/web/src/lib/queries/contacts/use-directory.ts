@@ -1,9 +1,8 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableGraphqlSoup } from '@core/constant/featureFlags';
 import { tryMacroId } from '@core/user/macroId';
 import { getGraphqlSoupCacheHost } from '@service-storage/graphql-soup';
 import { type Accessor, createMemo } from 'solid-js';
 import { useQueryAccount } from '../auth/use-query-account';
+import { useTeammateIds } from '../team/roster';
 import { createContactDirectoryWindow } from './directory-query';
 import {
   type ContactFilterSourceFactory,
@@ -16,20 +15,24 @@ import { createContactResolution } from './lookup-query';
 /** Production account/cache composition, separate from the bounded window. */
 export function useContactDirectoryScope() {
   const account = useQueryAccount();
-  const flag = useFeatureFlag(enableGraphqlSoup);
-  return createMemo(() => {
-    flag();
-    return {
-      userId: account()?.userId,
-      host: getGraphqlSoupCacheHost(),
-    };
-  });
+  return createMemo(() => ({
+    userId: account()?.userId,
+    host: getGraphqlSoupCacheHost(),
+  }));
 }
 
 export const useContactFilterSource: ContactFilterSourceFactory = (
   selected,
   enabled
-) => createContactFilterSource(useContactDirectoryScope(), selected, enabled);
+) =>
+  createContactFilterSource(
+    useContactDirectoryScope(),
+    selected,
+    enabled,
+    undefined,
+    undefined,
+    useTeammateIds(enabled)
+  );
 
 export function useContactIdFilterSource(
   selected: Accessor<readonly string[]>,
@@ -38,7 +41,10 @@ export function useContactIdFilterSource(
   return createContactIdFilterSource(
     useContactDirectoryScope(),
     selected,
-    enabled
+    enabled,
+    undefined,
+    undefined,
+    useTeammateIds(enabled)
   );
 }
 

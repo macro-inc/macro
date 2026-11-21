@@ -19,8 +19,8 @@ import {
 import { DriveLocationMenu } from '../drive-location-menu';
 
 /**
- * The sidebar tree is unreachable on touch (its toggle is hidden and the
- * narrow aside starts closed). The Folders overview then shows that tree.
+ * When navigation is collapsed on touch, the Folders overview also exposes
+ * the tree in the list pane.
  */
 export function useDriveFolderHierarchyVisible() {
   const { state } = useDriveView();
@@ -130,18 +130,19 @@ export function DriveFolderHierarchy() {
 
   return (
     <div class="flex size-full min-h-0 min-w-0 flex-col">
-      <div class="shrink-0 px-(--mobile-chrome-gutter) pb-2">
-        <SearchBar
-          label="Search folders"
-          placeholder="Search folders"
-          value={folderSearch()}
-          onValueChange={setFolderSearch}
-        />
-      </div>
       <div
         ref={setViewport}
         class="min-h-0 flex-1 overflow-auto overscroll-none px-2 pb-[calc(var(--mobile-content-inset-bottom,0px)+0.75rem)]"
       >
+        <div aria-hidden class="h-(--mobile-content-inset-top)" />
+        <div class="shrink-0 px-(--mobile-chrome-gutter) pb-2">
+          <SearchBar
+            label="Search folders"
+            placeholder="Search folders"
+            value={folderSearch()}
+            onValueChange={setFolderSearch}
+          />
+        </div>
         <Show
           when={!sidebar.foldersLoading()}
           fallback={

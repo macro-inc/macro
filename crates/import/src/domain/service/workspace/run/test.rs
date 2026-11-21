@@ -54,7 +54,10 @@ fn page_times(id: &NotionId) -> Option<(DateTime<Utc>, DateTime<Utc>)> {
 }
 
 /// A workspace of plain pages, each with a body.
-struct Pages;
+#[derive(Default)]
+struct Pages {
+    after_replacement: Option<Arc<Notify>>,
+}
 
 impl NotionApi for Pages {
     async fn search(
@@ -80,6 +83,19 @@ impl NotionApi for Pages {
     }
 
     async fn page_markdown(&self, id: &NotionId) -> std::result::Result<PageMarkdown, NotionError> {
+        if *id == page_id('f')
+            && let Some(ready) = &self.after_replacement
+        {
+            ready.notified().await;
+            return Ok(PageMarkdown {
+                markdown: format!(
+                    "See [Wiki]({}) and [Live]({})",
+                    page_id('e').url(),
+                    page_id('a').url()
+                ),
+                unknown_block_ids: Vec::new(),
+            });
+        }
         Ok(PageMarkdown {
             markdown: format!("Body of {id}"),
             unknown_block_ids: Vec::new(),
@@ -88,9 +104,16 @@ impl NotionApi for Pages {
 
     async fn data_source(
         &self,
-        _: &NotionId,
+        id: &NotionId,
     ) -> std::result::Result<NotionDataSource, NotionError> {
-        unimplemented!("only pages here")
+        Ok(NotionDataSource {
+            id: id.clone(),
+            database_id: page_id('d'),
+            title: "Rows".into(),
+            database_parent: import_notion::domain::model::NotionParent::Workspace,
+            in_trash: false,
+            properties: Vec::new(),
+        })
     }
 
     async fn database_sources(
@@ -105,7 +128,10 @@ impl NotionApi for Pages {
         _: &NotionId,
         _: Option<String>,
     ) -> std::result::Result<RowsPage, NotionError> {
-        unimplemented!("only pages here")
+        Ok(RowsPage {
+            rows: vec![self.page(&page_id('f')).await?],
+            next: import_notion::domain::model::RowsNext::End,
+        })
     }
 
     async fn users(
@@ -128,197 +154,27 @@ impl NotionConnections for Connected {
         &self,
         _: &MacroUserIdStr<'static>,
     ) -> std::result::Result<Option<Pages>, NotionError> {
-        Ok(Some(Pages))
+        Ok(Some(Pages::default()))
     }
 }
 
-/// Records the documents and folders a write makes. With `hold` set, a
-/// document write waits until the process is shutting down and then fails,
-/// as a write cut off by a deploy does.
-#[derive(Default)]
-struct Writer {
-    folders: Mutex<Vec<String>>,
-    documents: Mutex<Vec<(Uuid, String, NotionLinks)>>,
-    shares: Mutex<Vec<SharedEntity>>,
-    hold: Option<(Arc<Notify>, tokio_util::sync::CancellationToken)>,
-    tracker_tasks: Mutex<Vec<Uuid>>,
-    tracker_task_sharing: Mutex<Vec<bool>>,
-    tracker_projects: Mutex<Vec<Uuid>>,
-    tracker_links: Mutex<Vec<Uuid>>,
-    reject_tracker_links: std::sync::atomic::AtomicBool,
-    reject_tracker_projects: std::sync::atomic::AtomicBool,
-    /// Each document written with the source dates it was given.
-    document_dates: Mutex<Vec<(Uuid, Option<SourceDates>)>>,
-}
+struct AfterReplacement(Arc<Notify>);
 
-impl WorkspaceWriter for Writer {
-    async fn create_tracker_project(
+impl NotionConnections for AfterReplacement {
+    type Api = Pages;
+
+    async fn for_user(
         &self,
         _: &MacroUserIdStr<'static>,
-        id: Uuid,
-        _: &str,
-        _: &str,
-        _: bool,
-    ) -> anyhow::Result<Uuid> {
-        if self
-            .reject_tracker_projects
-            .load(std::sync::atomic::Ordering::SeqCst)
-        {
-            anyhow::bail!("temporary project failure");
-        }
-        let mut projects = self.tracker_projects.lock().unwrap();
-        if !projects.contains(&id) {
-            projects.push(id);
-        }
-        Ok(id)
-    }
-    async fn create_tracker_task(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        id: Uuid,
-        _: &str,
-        _: &str,
-        _: &ImportedTaskProperties,
-        shared: bool,
-    ) -> anyhow::Result<String> {
-        self.tracker_task_sharing.lock().unwrap().push(shared);
-        let mut tasks = self.tracker_tasks.lock().unwrap();
-        if !tasks.contains(&id) {
-            tasks.push(id);
-        }
-        Ok(id.to_string())
-    }
-    async fn link_tracker_task(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        id: Uuid,
-        _: &crate::domain::ports::TrackerTaskRelations,
-    ) -> anyhow::Result<()> {
-        if self
-            .reject_tracker_links
-            .load(std::sync::atomic::Ordering::SeqCst)
-        {
-            anyhow::bail!("temporary property failure");
-        }
-        self.tracker_links.lock().unwrap().push(id);
-        Ok(())
-    }
-
-    async fn create_folder(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        name: &str,
-        _: Option<Uuid>,
-    ) -> anyhow::Result<Uuid> {
-        self.folders.lock().unwrap().push(name.to_string());
-        Ok(Uuid::now_v7())
-    }
-
-    async fn folder_exists(&self, _: &MacroUserIdStr<'static>, _: Uuid) -> anyhow::Result<bool> {
-        Ok(true)
-    }
-
-    async fn share_with_team(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        entity: SharedEntity,
-    ) -> anyhow::Result<()> {
-        self.shares.lock().unwrap().push(entity);
-        Ok(())
-    }
-
-    async fn create_document(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        id: Uuid,
-        name: &str,
-        _: &str,
-        links: &NotionLinks,
-        _: &ImportedDocumentProperties,
-        _: Option<Uuid>,
-        dates: Option<SourceDates>,
-    ) -> anyhow::Result<String> {
-        self.document_dates.lock().unwrap().push((id, dates));
-        if let Some((entered, shutdown)) = &self.hold {
-            entered.notify_one();
-            shutdown.cancelled().await;
-            anyhow::bail!("the process stopped");
-        }
-        self.documents
-            .lock()
-            .unwrap()
-            .push((id, name.to_string(), links.clone()));
-        Ok(id.to_string())
-    }
-
-    async fn create_task(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        _: Uuid,
-        _: &str,
-        _: &str,
-        _: &NotionLinks,
-        _: &ImportedTaskProperties,
-        _: Option<Uuid>,
-        _: Option<SourceDates>,
-    ) -> anyhow::Result<String> {
-        unimplemented!("only pages here")
-    }
-
-    async fn create_database(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        _: &str,
-    ) -> anyhow::Result<NewDatabase> {
-        unimplemented!("only pages here")
-    }
-
-    async fn apply_database_ops(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        _: Uuid,
-        _: Vec<models_databases::DatabaseOp>,
-    ) -> anyhow::Result<Vec<models_databases::OpResult>> {
-        unimplemented!("only pages here")
-    }
-
-    async fn team_members(&self, _: &MacroUserIdStr<'static>) -> anyhow::Result<Vec<TeamMember>> {
-        Ok(Vec::new())
+    ) -> std::result::Result<Option<Pages>, NotionError> {
+        Ok(Some(Pages {
+            after_replacement: Some(Arc::clone(&self.0)),
+        }))
     }
 }
 
-impl EntityCreator for Writer {
-    async fn create_task(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        _: &str,
-        _: &str,
-        _: &ImportedTaskProperties,
-    ) -> anyhow::Result<String> {
-        unimplemented!("workspace imports write through WorkspaceWriter")
-    }
-
-    async fn create_notion_document(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        _: &str,
-        _: &str,
-        _: &NotionLinks,
-        _: &ImportedDocumentProperties,
-    ) -> anyhow::Result<String> {
-        unimplemented!("workspace imports write through WorkspaceWriter")
-    }
-
-    async fn create_channel(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        _: &str,
-        _: &ImportTargetReservation,
-        _: &[String],
-    ) -> anyhow::Result<Uuid> {
-        unimplemented!("workspace imports write no channels")
-    }
-}
+mod writer;
+use writer::Writer;
 
 type Service = ImportServiceImpl<
     PgImportRepo,
@@ -722,6 +578,21 @@ async fn a_write_shares_what_the_plan_shares_and_keeps_the_rest_with_the_owner(p
         [SharedEntity::Document(write::document_id(rows[0]))],
         "only the Wiki is shared"
     );
+    assert_eq!(
+        *writer.folder_visibilities.lock().unwrap(),
+        vec![(
+            "Notion".to_string(),
+            crate::domain::ports::ImportVisibility::Personal
+        )],
+    );
+    let policies = writer.visibilities.lock().unwrap();
+    for (row, expected) in [
+        (rows[0], crate::domain::ports::ImportVisibility::Shared),
+        (rows[1], crate::domain::ports::ImportVisibility::Personal),
+        (rows[2], crate::domain::ports::ImportVisibility::Personal),
+    ] {
+        assert!(policies.contains(&(write::document_id(row), expected)));
+    }
     let wiki = repo.get(&owner, rows[0]).await.unwrap().unwrap();
     assert_eq!(wiki.status, ImportStatus::Imported);
     assert_eq!(wiki.team_id, Some(team), "the team's copy of the Wiki");
@@ -1015,55 +886,11 @@ async fn a_plan_presented_while_planning_fills_in_batch_by_batch_and_restages_on
     }
 }
 
-/// The session events the import produces, in order.
 mod events;
+mod reimport;
+/// The session events the import produces, in order.
+mod root;
 mod tracker;
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn written_pages_keep_their_notion_dates(pool: PgPool) {
-    let owner = user("dates");
-    let mut spec = page('f', "Spec");
-    spec.parent_foreign_id = Some(page_id('e').as_str().to_string());
-    let (review, rows) = approved(&pool, &owner, &[page('e', "Wiki"), spec]).await;
-    let repo = PgImportRepo::new(pool.clone());
-    planned(&repo, &owner).await;
-    let tracker = TaskTracker::new();
-    let writer = Arc::new(Writer::default());
-    let service = ImportServiceImpl::new(
-        PgImportRepo::new(pool.clone()),
-        Arc::new(NoConnector),
-        Arc::clone(&writer),
-        Arc::new(ai_usage::NoOpUsageRecorder),
-    )
-    .with_notion_connections(Arc::new(Connected))
-    .with_job_shutdown(tokio_util::sync::CancellationToken::new(), tracker.clone());
-
-    service
-        .start_notion_write(&owner, review, NotionWriteChoices::default())
-        .await
-        .unwrap();
-    tracker.close();
-    tracker.wait().await;
-
-    let at = |month| Utc.with_ymd_and_hms(2024, month, 1, 0, 0, 0).unwrap();
-    let mut documents = writer.document_dates.lock().unwrap().clone();
-    documents.sort_by_key(|(id, _)| *id);
-    let mut expected = vec![
-        (
-            write::document_id(rows[0]),
-            Some(SourceDates {
-                created: at(1),
-                last_edited: at(3),
-            }),
-        ),
-        (
-            write::document_id(rows[1]),
-            Some(SourceDates {
-                created: at(2),
-                last_edited: at(6),
-            }),
-        ),
-    ];
-    expected.sort_by_key(|(id, _)| *id);
-    assert_eq!(documents, expected, "each page keeps its own dates");
-}
+mod dates;
+mod folders;

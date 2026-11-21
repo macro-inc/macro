@@ -180,7 +180,7 @@ pub fn replay_speed(frames: &[Message]) -> agent::ModelSpeed {
         options
             .iter()
             .find_map(|option| {
-                if option.id.to_string() != "speed" {
+                if option.id.to_string() != crate::domain::model_options::SPEED_CONFIG_ID {
                     return None;
                 }
                 let SessionConfigKind::Select(select) = &option.kind else {

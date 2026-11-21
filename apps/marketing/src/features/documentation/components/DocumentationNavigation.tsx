@@ -175,7 +175,7 @@ const mainBenefits = guideNavigation.filter(
   (entry) => typeof entry !== 'string' && entry.group === 'Main benefits'
 );
 const agentGuides = guideNavigation.filter(
-  (entry) => typeof entry !== 'string' && entry.group === 'Agents'
+  (entry) => typeof entry !== 'string' && entry.group === 'Agent setup'
 );
 const moreLinks = [
   { href: '/pricing', title: 'Pricing' },

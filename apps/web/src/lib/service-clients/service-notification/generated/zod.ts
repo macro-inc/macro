@@ -16,11 +16,410 @@ export const healthHandlerResponse = zod
   );
 
 /**
+ * @summary List the authenticated user's channels that have notification settings.
+ */
+export const listChannelNotificationSettingsResponse = zod.object({
+  channels: zod
+    .array(
+      zod
+        .object({
+          channelId: zod.uuid(),
+          enabled: zod
+            .array(
+              zod
+                .enum([
+                  'channel_message_send',
+                  'channel_message_reply',
+                  'channel_mention',
+                  'channel_message_reaction',
+                  'call_started',
+                  'channel_access_requested',
+                ])
+                .describe(
+                  'A channel notification a user can turn off for one channel.\n\nEach kind is one notification event type, which is also its wire form.\nA message that mentions a document follows the kind of its message: a\ntop-level message outside a thread, a thread reply inside one (its\nproducer says which, see [`crate::domain::models::request`]). Channel\ninvites are not here: they reach people as they join, before they could\nhave chosen anything.'
+                )
+            )
+            .nullable()
+            .describe(
+              "The channel's own settings: exactly the kinds it notifies for,\nwhatever its sections say. `null` follows the sections."
+            ),
+          overridesSectionMute: zod
+            .boolean()
+            .describe(
+              'The channel notifies even when the sections holding it are muted.'
+            ),
+        })
+        .describe("One channel's own notification settings.")
+    )
+    .describe(
+      'Every channel with settings; any other channel follows its sections.'
+    ),
+});
+
+/**
+ * @summary Remove the authenticated user's settings for one channel, including a
+legacy mentions-only preference, so it follows its sections again.
+ */
+export const resetChannelNotificationSettingsParams = zod.object({
+  channel_id: zod.uuid().describe('The channel the settings apply to.'),
+});
+
+export const resetChannelNotificationSettingsResponse = zod
+  .object({})
+  .describe(
+    'Empty response is required due to custom fetch forcing `response.json()`'
+  );
+
+/**
+ * @summary Change the authenticated user's notification settings for one channel.
+ */
+export const updateChannelNotificationSettingsParams = zod.object({
+  channel_id: zod.uuid().describe('The channel the settings apply to.'),
+});
+
+export const updateChannelNotificationSettingsBody = zod
+  .object({
+    enabled: zod
+      .array(
+        zod
+          .enum([
+            'channel_message_send',
+            'channel_message_reply',
+            'channel_mention',
+            'channel_message_reaction',
+            'call_started',
+            'channel_access_requested',
+          ])
+          .describe(
+            'A channel notification a user can turn off for one channel.\n\nEach kind is one notification event type, which is also its wire form.\nA message that mentions a document follows the kind of its message: a\ntop-level message outside a thread, a thread reply inside one (its\nproducer says which, see [`crate::domain::models::request`]). Channel\ninvites are not here: they reach people as they join, before they could\nhave chosen anything.'
+          )
+      )
+      .nullish()
+      .describe(
+        'Give the channel its own settings: exactly these kinds notify,\nwhatever its sections say. Omit to keep the current kinds.'
+      ),
+    inherit: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Drop the channel's own kinds so it follows its sections again. Can't\nbe combined with `enabled`."
+      ),
+    overridesSectionMute: zod
+      .boolean()
+      .nullish()
+      .describe(
+        'Keep notifying while the sections holding the channel are muted.\nOmit to keep the current value.'
+      ),
+  })
+  .describe(
+    "A change to one channel's settings. A channel either follows its sections\nfor every kind or has its own setting for all of them."
+  );
+
+export const updateChannelNotificationSettingsResponse = zod
+  .object({
+    channelId: zod.uuid(),
+    enabled: zod
+      .array(
+        zod
+          .enum([
+            'channel_message_send',
+            'channel_message_reply',
+            'channel_mention',
+            'channel_message_reaction',
+            'call_started',
+            'channel_access_requested',
+          ])
+          .describe(
+            'A channel notification a user can turn off for one channel.\n\nEach kind is one notification event type, which is also its wire form.\nA message that mentions a document follows the kind of its message: a\ntop-level message outside a thread, a thread reply inside one (its\nproducer says which, see [`crate::domain::models::request`]). Channel\ninvites are not here: they reach people as they join, before they could\nhave chosen anything.'
+          )
+      )
+      .nullable()
+      .describe(
+        "The channel's own settings: exactly the kinds it notifies for,\nwhatever its sections say. `null` follows the sections."
+      ),
+    overridesSectionMute: zod
+      .boolean()
+      .describe(
+        'The channel notifies even when the sections holding it are muted.'
+      ),
+  })
+  .describe("One channel's own notification settings.");
+
+/**
+ * @summary List the authenticated user's Chat sections that have notification settings.
+ */
+export const listSectionNotificationSettingsResponse = zod.object({
+  sections: zod
+    .array(
+      zod
+        .object({
+          disabled: zod
+            .array(
+              zod
+                .enum([
+                  'channel_message_send',
+                  'channel_message_reply',
+                  'channel_mention',
+                  'channel_message_reaction',
+                  'call_started',
+                  'channel_access_requested',
+                ])
+                .describe(
+                  'A channel notification a user can turn off for one channel.\n\nEach kind is one notification event type, which is also its wire form.\nA message that mentions a document follows the kind of its message: a\ntop-level message outside a thread, a thread reply inside one (its\nproducer says which, see [`crate::domain::models::request`]). Channel\ninvites are not here: they reach people as they join, before they could\nhave chosen anything.'
+                )
+            )
+            .describe('Kinds the section does not allow.'),
+          mute: zod
+            .union([
+              zod
+                .object({
+                  state: zod.enum(['unmuted']),
+                })
+                .describe("The section's channels notify."),
+              zod
+                .object({
+                  state: zod.enum(['muted']),
+                })
+                .describe('Muted until the user unmutes it.'),
+              zod
+                .object({
+                  state: zod.enum(['snoozed']),
+                  until: zod.iso
+                    .datetime({})
+                    .describe('When the section notifies again.'),
+                })
+                .describe('Muted until a deadline.'),
+            ])
+            .describe('Whether a section is muted.'),
+          section: zod
+            .union([
+              zod
+                .object({
+                  labelId: zod
+                    .uuid()
+                    .describe("The section's `channel_label` id."),
+                  type: zod.enum(['label']),
+                })
+                .describe(
+                  'A custom section, team-shared or personal, manual or rule-based.'
+                ),
+              zod
+                .object({
+                  type: zod.enum(['favorites']),
+                })
+                .describe("The user's favorite channels."),
+              zod
+                .object({
+                  type: zod.enum(['direct_messages']),
+                })
+                .describe('Direct messages and group chats.'),
+              zod
+                .object({
+                  type: zod.enum(['team_channels']),
+                })
+                .describe(
+                  "Team channels in none of the user's custom sections."
+                ),
+            ])
+            .describe(
+              'A Chat sidebar section a user can set notifications for. The catch-all\n\"All channels\" section has no settings and is not one of these.'
+            ),
+        })
+        .describe(
+          "One section's settings. They apply to every channel the section holds for\nthe user: a channel notifies for a kind when any of its sections allows\nit, and its sections mute it only when all of them are muted."
+        )
+    )
+    .describe(
+      'Every section with settings; any other section allows everything and\nis unmuted.'
+    ),
+});
+
+/**
+ * @summary Change the authenticated user's notification settings for one Chat section.
+ */
+export const updateSectionNotificationSettingsBody = zod
+  .object({
+    disable: zod
+      .array(
+        zod
+          .enum([
+            'channel_message_send',
+            'channel_message_reply',
+            'channel_mention',
+            'channel_message_reaction',
+            'call_started',
+            'channel_access_requested',
+          ])
+          .describe(
+            'A channel notification a user can turn off for one channel.\n\nEach kind is one notification event type, which is also its wire form.\nA message that mentions a document follows the kind of its message: a\ntop-level message outside a thread, a thread reply inside one (its\nproducer says which, see [`crate::domain::models::request`]). Channel\ninvites are not here: they reach people as they join, before they could\nhave chosen anything.'
+          )
+      )
+      .optional()
+      .describe('Kinds to stop allowing.'),
+    enable: zod
+      .array(
+        zod
+          .enum([
+            'channel_message_send',
+            'channel_message_reply',
+            'channel_mention',
+            'channel_message_reaction',
+            'call_started',
+            'channel_access_requested',
+          ])
+          .describe(
+            'A channel notification a user can turn off for one channel.\n\nEach kind is one notification event type, which is also its wire form.\nA message that mentions a document follows the kind of its message: a\ntop-level message outside a thread, a thread reply inside one (its\nproducer says which, see [`crate::domain::models::request`]). Channel\ninvites are not here: they reach people as they join, before they could\nhave chosen anything.'
+          )
+      )
+      .optional()
+      .describe('Kinds to allow.'),
+    mute: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                state: zod.enum(['unmuted']),
+              })
+              .describe("The section's channels notify."),
+            zod
+              .object({
+                state: zod.enum(['muted']),
+              })
+              .describe('Muted until the user unmutes it.'),
+            zod
+              .object({
+                state: zod.enum(['snoozed']),
+                until: zod.iso
+                  .datetime({})
+                  .describe('When the section notifies again.'),
+              })
+              .describe('Muted until a deadline.'),
+          ])
+          .describe('Whether a section is muted.'),
+      ])
+      .optional(),
+    section: zod
+      .union([
+        zod
+          .object({
+            labelId: zod.uuid().describe("The section's `channel_label` id."),
+            type: zod.enum(['label']),
+          })
+          .describe(
+            'A custom section, team-shared or personal, manual or rule-based.'
+          ),
+        zod
+          .object({
+            type: zod.enum(['favorites']),
+          })
+          .describe("The user's favorite channels."),
+        zod
+          .object({
+            type: zod.enum(['direct_messages']),
+          })
+          .describe('Direct messages and group chats.'),
+        zod
+          .object({
+            type: zod.enum(['team_channels']),
+          })
+          .describe("Team channels in none of the user's custom sections."),
+      ])
+      .describe(
+        'A Chat sidebar section a user can set notifications for. The catch-all\n\"All channels\" section has no settings and is not one of these.'
+      ),
+  })
+  .describe(
+    "A change to one section's settings. Kinds the change does not name keep\ntheir setting."
+  );
+
+export const updateSectionNotificationSettingsResponse = zod
+  .object({
+    disabled: zod
+      .array(
+        zod
+          .enum([
+            'channel_message_send',
+            'channel_message_reply',
+            'channel_mention',
+            'channel_message_reaction',
+            'call_started',
+            'channel_access_requested',
+          ])
+          .describe(
+            'A channel notification a user can turn off for one channel.\n\nEach kind is one notification event type, which is also its wire form.\nA message that mentions a document follows the kind of its message: a\ntop-level message outside a thread, a thread reply inside one (its\nproducer says which, see [`crate::domain::models::request`]). Channel\ninvites are not here: they reach people as they join, before they could\nhave chosen anything.'
+          )
+      )
+      .describe('Kinds the section does not allow.'),
+    mute: zod
+      .union([
+        zod
+          .object({
+            state: zod.enum(['unmuted']),
+          })
+          .describe("The section's channels notify."),
+        zod
+          .object({
+            state: zod.enum(['muted']),
+          })
+          .describe('Muted until the user unmutes it.'),
+        zod
+          .object({
+            state: zod.enum(['snoozed']),
+            until: zod.iso
+              .datetime({})
+              .describe('When the section notifies again.'),
+          })
+          .describe('Muted until a deadline.'),
+      ])
+      .describe('Whether a section is muted.'),
+    section: zod
+      .union([
+        zod
+          .object({
+            labelId: zod.uuid().describe("The section's `channel_label` id."),
+            type: zod.enum(['label']),
+          })
+          .describe(
+            'A custom section, team-shared or personal, manual or rule-based.'
+          ),
+        zod
+          .object({
+            type: zod.enum(['favorites']),
+          })
+          .describe("The user's favorite channels."),
+        zod
+          .object({
+            type: zod.enum(['direct_messages']),
+          })
+          .describe('Direct messages and group chats.'),
+        zod
+          .object({
+            type: zod.enum(['team_channels']),
+          })
+          .describe("Team channels in none of the user's custom sections."),
+      ])
+      .describe(
+        'A Chat sidebar section a user can set notifications for. The catch-all\n\"All channels\" section has no settings and is not one of these.'
+      ),
+  })
+  .describe(
+    "One section's settings. They apply to every channel the section holds for\nthe user: a channel notifies for a kind when any of its sections allows\nit, and its sections mute it only when all of them are muted."
+  );
+
+/**
  * @summary Gets the users unsubscribe items.
  */
 export const getUnsubscribesResponseItem = zod.object({
   item_id: zod.string().describe('The item id'),
   item_type: zod.string().describe('The item type'),
+  mentions_only: zod
+    .boolean()
+    .optional()
+    .describe(
+      'The item still notifies the user when a message @mentions them directly.'
+    ),
   snoozed_until: zod.iso
     .datetime({})
     .nullish()
@@ -40,7 +439,8 @@ export const unsubscribeEmailResponse = zod
   );
 
 /**
- * @summary Unsubscribes a user from a given item for notifications.
+ * @summary Unsubscribes a user from a given item for notifications, or, with
+`mentions_only`, from everything on a channel but their direct mentions.
  */
 export const unsubscribeItemParams = zod.object({
   item_type: zod.enum([
@@ -78,6 +478,12 @@ export const unsubscribeItemQueryParams = zod.object({
     .datetime({})
     .nullish()
     .describe('A future resume time. Omit to mute indefinitely.'),
+  mentions_only: zod
+    .boolean()
+    .optional()
+    .describe(
+      'Keep notifying for messages that @mention the user directly and silence\nthe rest. Channels only; cannot be combined with `snoozed_until`.'
+    ),
 });
 
 export const unsubscribeItemResponse = zod
@@ -2276,6 +2682,29 @@ export const listTypedNotificationsResponse = zod
                     .object({
                       content: zod
                         .object({
+                          itemId: zod.uuid().describe('Requested item.'),
+                          itemName: zod
+                            .string()
+                            .describe(
+                              'Item display name when the request was made.'
+                            ),
+                          requestId: zod
+                            .uuid()
+                            .describe('Request under review.'),
+                          teamId: zod.uuid().describe('Team owning the item.'),
+                        })
+                        .describe(
+                          "An agent asked for access to a team vault item. Sent to the item's current\nhuman creator and the team's current administrators, with the agent as\nsender. Carries the item name and opaque ids only, never values."
+                        ),
+                      tag: zod.enum(['password_access_requested']),
+                    })
+                    .describe(
+                      'An agent asked for access to a vault item the user manages.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
                           outcome: zod
                             .enum(['succeeded', 'failed'])
                             .describe(
@@ -2389,6 +2818,12 @@ export const listTypedNotificationsResponse = zod
                                       "Why, in the words the computer's status shows."
                                     ),
                                   kind: zod.enum(['failed']),
+                                  released: zod
+                                    .boolean()
+                                    .optional()
+                                    .describe(
+                                      'Setup gave up a second time, so the computer was released and its\npurchase refunded (and an agent teammate taken back): there is\nnothing to retry.'
+                                    ),
                                 })
                                 .describe(
                                   'Setup gave up before the computer was ready.'
@@ -2403,6 +2838,69 @@ export const listTypedNotificationsResponse = zod
                     })
                     .describe(
                       'A Macro computer the user bought finished first-time setup, or\ncould not be set up.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          agent: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  avatarUrl: zod
+                                    .string()
+                                    .nullish()
+                                    .describe("The agent's avatar."),
+                                  id: zod
+                                    .string()
+                                    .describe(
+                                      'A string on the wire: system bots have fixed ids that are not RFC 4122\nuuids.'
+                                    ),
+                                  name: zod
+                                    .string()
+                                    .describe("The agent's display name."),
+                                })
+                                .describe(
+                                  'The agent a ping reads as being from, as it was when sent.'
+                                ),
+                            ])
+                            .optional(),
+                          body: zod.string().describe('What the sender wrote.'),
+                          entityName: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              "The linked entity's name when it was sent, for a push to show under\nwho sent it. Absent when it has none that reads the same to every\nrecipient, such as a direct message."
+                            ),
+                          message: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  messageId: zod
+                                    .uuid()
+                                    .describe('The message.'),
+                                  threadId: zod
+                                    .uuid()
+                                    .nullish()
+                                    .describe(
+                                      'The top-level message it replies to; absent when it is top-level\nitself.'
+                                    ),
+                                })
+                                .describe(
+                                  'The channel message a ping points at.'
+                                ),
+                            ])
+                            .optional(),
+                        })
+                        .describe(
+                          "A notification written by its sender: their words, and the entity it\nopens. The sender is the notification's `sender_id`, or nobody when people\nnotify themselves. One about a channel message is filed under the\nmessage's channel and names the message."
+                        ),
+                      tag: zod.enum(['ping']),
+                    })
+                    .describe(
+                      'Someone, usually agent code through the SDK, sent the user a\nnotification they wrote.'
                     ),
                   zod
                     .object({
@@ -4562,6 +5060,29 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .object({
                       content: zod
                         .object({
+                          itemId: zod.uuid().describe('Requested item.'),
+                          itemName: zod
+                            .string()
+                            .describe(
+                              'Item display name when the request was made.'
+                            ),
+                          requestId: zod
+                            .uuid()
+                            .describe('Request under review.'),
+                          teamId: zod.uuid().describe('Team owning the item.'),
+                        })
+                        .describe(
+                          "An agent asked for access to a team vault item. Sent to the item's current\nhuman creator and the team's current administrators, with the agent as\nsender. Carries the item name and opaque ids only, never values."
+                        ),
+                      tag: zod.enum(['password_access_requested']),
+                    })
+                    .describe(
+                      'An agent asked for access to a vault item the user manages.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
                           outcome: zod
                             .enum(['succeeded', 'failed'])
                             .describe(
@@ -4675,6 +5196,12 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                                       "Why, in the words the computer's status shows."
                                     ),
                                   kind: zod.enum(['failed']),
+                                  released: zod
+                                    .boolean()
+                                    .optional()
+                                    .describe(
+                                      'Setup gave up a second time, so the computer was released and its\npurchase refunded (and an agent teammate taken back): there is\nnothing to retry.'
+                                    ),
                                 })
                                 .describe(
                                   'Setup gave up before the computer was ready.'
@@ -4689,6 +5216,69 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     })
                     .describe(
                       'A Macro computer the user bought finished first-time setup, or\ncould not be set up.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          agent: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  avatarUrl: zod
+                                    .string()
+                                    .nullish()
+                                    .describe("The agent's avatar."),
+                                  id: zod
+                                    .string()
+                                    .describe(
+                                      'A string on the wire: system bots have fixed ids that are not RFC 4122\nuuids.'
+                                    ),
+                                  name: zod
+                                    .string()
+                                    .describe("The agent's display name."),
+                                })
+                                .describe(
+                                  'The agent a ping reads as being from, as it was when sent.'
+                                ),
+                            ])
+                            .optional(),
+                          body: zod.string().describe('What the sender wrote.'),
+                          entityName: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              "The linked entity's name when it was sent, for a push to show under\nwho sent it. Absent when it has none that reads the same to every\nrecipient, such as a direct message."
+                            ),
+                          message: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  messageId: zod
+                                    .uuid()
+                                    .describe('The message.'),
+                                  threadId: zod
+                                    .uuid()
+                                    .nullish()
+                                    .describe(
+                                      'The top-level message it replies to; absent when it is top-level\nitself.'
+                                    ),
+                                })
+                                .describe(
+                                  'The channel message a ping points at.'
+                                ),
+                            ])
+                            .optional(),
+                        })
+                        .describe(
+                          "A notification written by its sender: their words, and the entity it\nopens. The sender is the notification's `sender_id`, or nobody when people\nnotify themselves. One about a channel message is filed under the\nmessage's channel and names the message."
+                        ),
+                      tag: zod.enum(['ping']),
+                    })
+                    .describe(
+                      'Someone, usually agent code through the SDK, sent the user a\nnotification they wrote.'
                     ),
                   zod
                     .object({
@@ -6798,6 +7388,29 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     .object({
                       content: zod
                         .object({
+                          itemId: zod.uuid().describe('Requested item.'),
+                          itemName: zod
+                            .string()
+                            .describe(
+                              'Item display name when the request was made.'
+                            ),
+                          requestId: zod
+                            .uuid()
+                            .describe('Request under review.'),
+                          teamId: zod.uuid().describe('Team owning the item.'),
+                        })
+                        .describe(
+                          "An agent asked for access to a team vault item. Sent to the item's current\nhuman creator and the team's current administrators, with the agent as\nsender. Carries the item name and opaque ids only, never values."
+                        ),
+                      tag: zod.enum(['password_access_requested']),
+                    })
+                    .describe(
+                      'An agent asked for access to a vault item the user manages.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
                           outcome: zod
                             .enum(['succeeded', 'failed'])
                             .describe(
@@ -6911,6 +7524,12 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                                       "Why, in the words the computer's status shows."
                                     ),
                                   kind: zod.enum(['failed']),
+                                  released: zod
+                                    .boolean()
+                                    .optional()
+                                    .describe(
+                                      'Setup gave up a second time, so the computer was released and its\npurchase refunded (and an agent teammate taken back): there is\nnothing to retry.'
+                                    ),
                                 })
                                 .describe(
                                   'Setup gave up before the computer was ready.'
@@ -6925,6 +7544,69 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     })
                     .describe(
                       'A Macro computer the user bought finished first-time setup, or\ncould not be set up.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          agent: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  avatarUrl: zod
+                                    .string()
+                                    .nullish()
+                                    .describe("The agent's avatar."),
+                                  id: zod
+                                    .string()
+                                    .describe(
+                                      'A string on the wire: system bots have fixed ids that are not RFC 4122\nuuids.'
+                                    ),
+                                  name: zod
+                                    .string()
+                                    .describe("The agent's display name."),
+                                })
+                                .describe(
+                                  'The agent a ping reads as being from, as it was when sent.'
+                                ),
+                            ])
+                            .optional(),
+                          body: zod.string().describe('What the sender wrote.'),
+                          entityName: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              "The linked entity's name when it was sent, for a push to show under\nwho sent it. Absent when it has none that reads the same to every\nrecipient, such as a direct message."
+                            ),
+                          message: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  messageId: zod
+                                    .uuid()
+                                    .describe('The message.'),
+                                  threadId: zod
+                                    .uuid()
+                                    .nullish()
+                                    .describe(
+                                      'The top-level message it replies to; absent when it is top-level\nitself.'
+                                    ),
+                                })
+                                .describe(
+                                  'The channel message a ping points at.'
+                                ),
+                            ])
+                            .optional(),
+                        })
+                        .describe(
+                          "A notification written by its sender: their words, and the entity it\nopens. The sender is the notification's `sender_id`, or nobody when people\nnotify themselves. One about a channel message is filed under the\nmessage's channel and names the message."
+                        ),
+                      tag: zod.enum(['ping']),
+                    })
+                    .describe(
+                      'Someone, usually agent code through the SDK, sent the user a\nnotification they wrote.'
                     ),
                   zod
                     .object({
@@ -7025,6 +7707,91 @@ export const enableNotificationTypeParams = zod.object({
     .string()
     .describe('The notification event type to enable'),
 });
+
+/**
+ * @summary Send a notification the caller wrote about an entity, to themselves or to
+people who can already see that entity. Recipients who cannot see it,
+whose inbox would not list it, or who have received 60 from others this
+hour are skipped and returned. Delivered like any other notification and
+subject to each recipient's notification preferences. The same notification
+sent again in the same ten-minute window of the clock is delivered once; a
+repeat that falls in the next window is delivered again. A sender can
+notify at most 1000 recipients an hour. Refused with 403 while the
+`enable-agent-notifications` flag is off for the caller.
+ */
+export const sendPingBody = zod
+  .object({
+    body: zod
+      .string()
+      .describe(
+        'What to tell them, at most 280 characters once trimmed: one or two\nsentences, since `link` holds the detail.'
+      ),
+    link: zod
+      .object({
+        entityId: zod.string().describe("The entity's id."),
+        entityType: zod
+          .enum([
+            'user',
+            'chat',
+            'channel',
+            'channel_message',
+            'document',
+            'project',
+            'email_thread',
+            'calendar_event',
+            'team',
+            'call',
+            'foreign_entity',
+            'static_file',
+            'crm_company',
+            'crm_contact',
+            'crm_pipeline',
+            'reminder',
+            'harness',
+            'skill',
+            'agent_session',
+            'scheduled_action',
+            'initiative',
+            'database',
+            'database_row',
+            'form',
+            'external_chat',
+          ])
+          .describe('The type of an entity in Macro'),
+      })
+      .describe('What a ping opens.'),
+    recipientIds: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        'Who gets it, at most 100; the caller when omitted or empty. Anyone\nwho cannot already see `link`, or whose inbox would not list it, is\nskipped, never given access.'
+      ),
+  })
+  .describe('A notification written by the caller.');
+
+export const sendPingResponse = zod
+  .object({
+    notified: zod
+      .array(zod.string())
+      .describe(
+        'The recipients it was queued for, in the order they were named.'
+      ),
+    skipped: zod
+      .array(
+        zod
+          .object({
+            reason: zod
+              .enum(['no_access', 'not_listed', 'recipient_limit'])
+              .describe('Why a recipient was left out of a ping.'),
+            userId: zod.string().describe('The recipient.'),
+          })
+          .describe('A recipient a ping was not sent to.')
+      )
+      .describe('The recipients it was not sent to.'),
+  })
+  .describe(
+    "Who a ping was sent to. A notified recipient's own\npreferences can still keep it from them; that is theirs to know."
+  );
 
 /**
  * @summary Typed wrapper for getting a single notification by ID.
@@ -8878,6 +9645,25 @@ export const getTypedNotificationByIdResponse = zod
             .object({
               content: zod
                 .object({
+                  itemId: zod.uuid().describe('Requested item.'),
+                  itemName: zod
+                    .string()
+                    .describe('Item display name when the request was made.'),
+                  requestId: zod.uuid().describe('Request under review.'),
+                  teamId: zod.uuid().describe('Team owning the item.'),
+                })
+                .describe(
+                  "An agent asked for access to a team vault item. Sent to the item's current\nhuman creator and the team's current administrators, with the agent as\nsender. Carries the item name and opaque ids only, never values."
+                ),
+              tag: zod.enum(['password_access_requested']),
+            })
+            .describe(
+              'An agent asked for access to a vault item the user manages.'
+            ),
+          zod
+            .object({
+              content: zod
+                .object({
                   outcome: zod
                     .enum(['succeeded', 'failed'])
                     .describe(
@@ -8983,6 +9769,12 @@ export const getTypedNotificationByIdResponse = zod
                               "Why, in the words the computer's status shows."
                             ),
                           kind: zod.enum(['failed']),
+                          released: zod
+                            .boolean()
+                            .optional()
+                            .describe(
+                              'Setup gave up a second time, so the computer was released and its\npurchase refunded (and an agent teammate taken back): there is\nnothing to retry.'
+                            ),
                         })
                         .describe(
                           'Setup gave up before the computer was ready.'
@@ -8997,6 +9789,65 @@ export const getTypedNotificationByIdResponse = zod
             })
             .describe(
               'A Macro computer the user bought finished first-time setup, or\ncould not be set up.'
+            ),
+          zod
+            .object({
+              content: zod
+                .object({
+                  agent: zod
+                    .union([
+                      zod.null(),
+                      zod
+                        .object({
+                          avatarUrl: zod
+                            .string()
+                            .nullish()
+                            .describe("The agent's avatar."),
+                          id: zod
+                            .string()
+                            .describe(
+                              'A string on the wire: system bots have fixed ids that are not RFC 4122\nuuids.'
+                            ),
+                          name: zod
+                            .string()
+                            .describe("The agent's display name."),
+                        })
+                        .describe(
+                          'The agent a ping reads as being from, as it was when sent.'
+                        ),
+                    ])
+                    .optional(),
+                  body: zod.string().describe('What the sender wrote.'),
+                  entityName: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      "The linked entity's name when it was sent, for a push to show under\nwho sent it. Absent when it has none that reads the same to every\nrecipient, such as a direct message."
+                    ),
+                  message: zod
+                    .union([
+                      zod.null(),
+                      zod
+                        .object({
+                          messageId: zod.uuid().describe('The message.'),
+                          threadId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'The top-level message it replies to; absent when it is top-level\nitself.'
+                            ),
+                        })
+                        .describe('The channel message a ping points at.'),
+                    ])
+                    .optional(),
+                })
+                .describe(
+                  "A notification written by its sender: their words, and the entity it\nopens. The sender is the notification's `sender_id`, or nobody when people\nnotify themselves. One about a channel message is filed under the\nmessage's channel and names the message."
+                ),
+              tag: zod.enum(['ping']),
+            })
+            .describe(
+              'Someone, usually agent code through the SDK, sent the user a\nnotification they wrote.'
             ),
           zod
             .object({

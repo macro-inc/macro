@@ -10,7 +10,8 @@ use crm::domain::{
     auth::{CrmCompanyReceipt, CrmContactReceipt, CrmTeamReceipt},
     companies_repo::{CrmCompanyListSort, CrmCompanySoupCursor},
     email_privacy::{
-        EmailContributionMailbox, EmailPrivacyChange, EmailPrivacyService, EmailPrivacySettings,
+        EmailContributionConsent, EmailContributionMailbox, EmailPrivacyChange,
+        EmailPrivacyService, EmailPrivacySettings,
     },
     model::{
         CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmContactDetail, CrmError,
@@ -61,6 +62,22 @@ const ACTIVITY_EDGES: [(PropertyEntityType, Uuid); 4] = [
 ];
 
 impl EmailPrivacyService for FakeCrm {
+    async fn email_consent(
+        &self,
+        _: &CrmTeamReceipt<MemberTeamRole>,
+    ) -> Result<EmailContributionConsent, CrmError> {
+        panic!("unexpected email_consent call")
+    }
+
+    async fn excluded_email_threads(
+        &self,
+        _: &CrmTeamReceipt<MemberTeamRole>,
+        _: Option<Uuid>,
+        _: Option<Uuid>,
+    ) -> Result<crm::domain::email_privacy::ExcludedEmailThreads, CrmError> {
+        panic!("unexpected excluded_email_threads call")
+    }
+
     async fn contribution_mailbox(
         &self,
         _: Uuid,
@@ -376,6 +393,14 @@ impl CrmService for FakeCrm {
         unimplemented!("FakeCrm.get_contact_by_email")
     }
 
+    async fn get_company_by_domain(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+        _domain: &str,
+    ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
+        unimplemented!("FakeCrm.get_company_by_domain")
+    }
+
     async fn get_company_for_team(
         &self,
         _access: &CrmCompanyReceipt<ViewAccessLevel>,
@@ -556,11 +581,11 @@ fn document_ids(expr: &Expr<DocumentLiteral>) -> Vec<Uuid> {
 async fn company_scope_matches_properties_and_references_of_its_contacts() {
     let comms = ReferencingComms::default();
     let mut repo = MockSoupRepo::new();
-    repo.expect_crm_property_edges()
-        .times(1)
-        .returning(|companies, contacts| {
+    repo.expect_crm_property_edges().times(1).returning(
+        |companies, contacts, custom_task_properties| {
             assert_eq!(companies, [COMPANY]);
             assert_eq!(contacts, [CONTACT, SIBLING_CONTACT]);
+            assert!(custom_task_properties);
             // A contact-only task: Contacts property without Companies.
             Box::pin(async {
                 Ok(vec![
@@ -574,7 +599,8 @@ async fn company_scope_matches_properties_and_references_of_its_contacts() {
                     },
                 ])
             })
-        });
+        },
+    );
     repo.expect_expanded_generic_cursor_soup()
         .times(1)
         .returning(|request| {
@@ -631,13 +657,14 @@ async fn company_scope_matches_properties_and_references_of_its_contacts() {
 async fn contact_scope_excludes_company_only_and_sibling_items() {
     let comms = ReferencingComms::default();
     let mut repo = MockSoupRepo::new();
-    repo.expect_crm_property_edges()
-        .times(1)
-        .returning(|companies, contacts| {
+    repo.expect_crm_property_edges().times(1).returning(
+        |companies, contacts, custom_task_properties| {
             assert!(companies.is_empty());
             assert_eq!(contacts, [CONTACT]);
+            assert!(custom_task_properties);
             Box::pin(async { Ok(Vec::new()) })
-        });
+        },
+    );
     repo.expect_expanded_generic_cursor_soup()
         .times(1)
         .returning(|request| {
@@ -850,12 +877,14 @@ async fn activity_with_database_rows_takes_the_record_path() {
     )));
     let crm = FakeCrm::default();
     let mut repo = MockSoupRepo::new();
-    repo.expect_crm_property_edges()
-        .times(1)
-        .returning(|companies, contacts| {
+    repo.expect_crm_property_edges().times(1).returning(
+        |companies, contacts, custom_task_properties| {
             assert!(companies.is_empty() && contacts.is_empty());
+            // The activity scope matches the built-in properties only.
+            assert!(!custom_task_properties);
             Box::pin(async { Ok(Vec::new()) })
-        });
+        },
+    );
     repo.expect_expanded_generic_cursor_soup()
         .times(1)
         .returning(|_| Box::pin(async { Ok(Vec::new()) }));

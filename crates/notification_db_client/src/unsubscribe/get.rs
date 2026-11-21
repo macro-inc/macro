@@ -12,7 +12,8 @@ pub async fn get_user_unsubscribes(
             'item' as unsubscribe_type,
             unsubscribe_item.item_id  as "item_id!",
             unsubscribe_item.item_type as "item_type!",
-            unsubscribe_item.snoozed_until
+            unsubscribe_item.snoozed_until,
+            unsubscribe_item.mentions_only
         FROM
             user_notification_item_unsubscribe unsubscribe_item
         WHERE
@@ -25,6 +26,7 @@ pub async fn get_user_unsubscribes(
         item_id: row.item_id,
         item_type: row.item_type,
         snoozed_until: row.snoozed_until,
+        mentions_only: row.mentions_only,
     })
     .fetch_all(db)
     .await?;

@@ -1,7 +1,3 @@
-import {
-  enableGraphqlSoup,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { emailClient } from '@service-email/client';
@@ -32,30 +28,28 @@ export type EmailArchiveDisposition = 'committed' | 'queued';
  * `inboxVisible` and the committed record update every list the cache
  * maintains (FE-58); only the others, such as grouped lists, are read again
  * when the write commits, including on a replay after reload. */
-export async function archiveEmailThread(
-  ...args: Parameters<typeof emailClient.flagArchived>
-): Promise<EmailArchiveDisposition> {
-  if (isFeatureEnabled(enableGraphqlSoup)) {
-    const [{ id, value }] = args;
-    const disposition = await setGraphqlEmailThreadArchived(
-      getGraphqlSoupClient(),
-      id,
-      value,
-      getUnmaintainedGraphqlSoupRevalidations()
-    );
-    if (disposition === 'committed') {
-      if (!graphqlCacheEnabled()) {
-        await refreshActiveGraphqlSoupQueries({
-          target: { kind: 'email-archive', threadId: id },
-        });
-      }
-      fireAndForget(invalidateEmailReminderCollection(), 'email-reminders');
+export async function archiveEmailThread({
+  id,
+  value,
+}: {
+  id: string;
+  value: boolean;
+}): Promise<EmailArchiveDisposition> {
+  const disposition = await setGraphqlEmailThreadArchived(
+    getGraphqlSoupClient(),
+    id,
+    value,
+    getUnmaintainedGraphqlSoupRevalidations()
+  );
+  if (disposition === 'committed') {
+    if (!graphqlCacheEnabled()) {
+      await refreshActiveGraphqlSoupQueries({
+        target: { kind: 'email-archive', threadId: id },
+      });
     }
-    return disposition;
+    fireAndForget(invalidateEmailReminderCollection(), 'email-reminders');
   }
-  await throwOnErr(() => emailClient.flagArchived(...args));
-  fireAndForget(invalidateEmailReminderCollection(), 'email-reminders');
-  return 'committed';
+  return disposition;
 }
 
 /** The email service's per-request cap (`MAX_BULK_ARCHIVE_THREADS`). */
@@ -102,31 +96,25 @@ async function archiveThreadsRequest(
           : { status: 'fulfilled', value: 'committed' }
     );
   try {
-    if (isFeatureEnabled(enableGraphqlSoup)) {
-      const result = await setGraphqlEmailThreadsArchived(
-        getGraphqlSoupClient(),
-        ids,
-        value,
-        getUnmaintainedGraphqlSoupRevalidations()
-      );
-      if (result.kind === 'queued')
-        return ids.map(() => ({ status: 'fulfilled', value: 'queued' }));
-      if (!graphqlCacheEnabled())
-        await Promise.all(
-          ids
-            .filter((threadId) => !result.failedThreadIds.has(threadId))
-            .map((threadId) =>
-              refreshActiveGraphqlSoupQueries({
-                target: { kind: 'email-archive', threadId },
-              })
-            )
-        );
-      return settle(result.failedThreadIds);
-    }
-    const response = await throwOnErr(() =>
-      emailClient.flagArchivedBatch({ thread_ids: ids, value })
+    const result = await setGraphqlEmailThreadsArchived(
+      getGraphqlSoupClient(),
+      ids,
+      value,
+      getUnmaintainedGraphqlSoupRevalidations()
     );
-    return settle(new Set(response.failed_thread_ids));
+    if (result.kind === 'queued' || result.kind === 'committed-without-content')
+      return ids.map(() => ({ status: 'fulfilled', value: 'queued' }));
+    if (!graphqlCacheEnabled())
+      await Promise.all(
+        ids
+          .filter((threadId) => !result.failedThreadIds.has(threadId))
+          .map((threadId) =>
+            refreshActiveGraphqlSoupQueries({
+              target: { kind: 'email-archive', threadId },
+            })
+          )
+      );
+    return settle(result.failedThreadIds);
   } catch (reason) {
     return ids.map(() => ({ status: 'rejected', reason }));
   }
@@ -153,14 +141,8 @@ export async function ensureEmailAttachmentPublic(attachmentId: string) {
     permissions.value.linkShareAccessLevel === 'view'
   )
     return undefined;
-  if (isFeatureEnabled(enableGraphqlSoup)) {
-    return updateEntitySharePolicy('document', attachmentId, {
-      linkShare: 'PUBLIC',
-      linkShareAccessLevel: 'view',
-    });
-  }
-  return storageServiceClient.editDocument({
-    documentId: attachmentId,
-    sharePermission: { linkShare: 'PUBLIC', linkShareAccessLevel: 'view' },
+  return updateEntitySharePolicy('document', attachmentId, {
+    linkShare: 'PUBLIC',
+    linkShareAccessLevel: 'view',
   });
 }

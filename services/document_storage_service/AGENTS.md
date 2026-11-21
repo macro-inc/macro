@@ -17,13 +17,16 @@ threads, pins, recents, notifications, folders, activity.
   `folders_query`, `graphql_soup`, `threads`, `annotations`, `history`,
   `pins`, `recents`, `notification`, `instructions`, `internal`.
 - `/databases/query` mounts the `databases_sql` HTTP adapter, sharing the database/access services and the primary Soup reader; SQL authorization stays in its domain service. Browser people SQL executes separately in local Turso; there is no dedicated `/databases/read` endpoint or deployment prerequisite for browser execution.
+- `src/service/task_templates.rs`: composes task-template policy with primary-backed Teams roles; `src/api/task_templates.rs` exposes versioned REST routes, including replay-safe client creation IDs. See `docs/guides/task-templates.md`.
 - `/channel-labels` retains legacy participant-only label semantics; additive `/channel-sections` mounts `channel_labels` with `for_sections` services for exclusive manual or name-rule membership and visible unjoined team channels.
-- `src/service/saved_views.rs`: composes saved-view storage with the primary-backed Teams repository, reusing `get_user_teams` and `get_all_team_members`. REST and GraphQL share its owner-only domain policy. `src/api/saved_views/definitions.rs` is the SDK's REST adapter over the same `SavedViewApi` as GraphQL (kinds, revisions, sharing, order); the legacy `/saved_views` routes beside it share the CRM configuration-kind permission gate. All three use the one `ApiContext::saved_views` service built in `server.rs`, whose `outbound/saved_view_changes.rs` notifier pushes `saved_views_changed` through the gateway on `event_broker_tracker`, resolving team members off the request path.
+- `src/service/saved_views.rs`: composes saved-view storage with the primary-backed Teams repository, reusing `get_user_teams` and `get_all_team_members`. REST and GraphQL share its owner-only domain policy. `PUT /saved_views/definitions/{id}/appearance` changes shared icon/color metadata without advancing the filter revision or timestamp, and creation accepts optional initial appearance. `src/api/saved_views/definitions.rs` is the SDK's REST adapter over the same `SavedViewApi` as GraphQL (kinds, revisions, sharing, order); the legacy `/saved_views` routes beside it share the CRM configuration-kind permission gate. All three use the one `ApiContext::saved_views` service built in `server.rs`, whose `outbound/saved_view_changes.rs` notifier pushes `saved_views_changed` through the gateway on `event_broker_tracker`, resolving team members off the request path.
 - Personal contact pages use `graphql_contacts` and the contacts directory service.
   Compose primary-backed graph and name readers in `server.rs`, and insert the
   context through the shared GraphQL HTTP/websocket request-data function.
-- `src/api/graphql_soup.rs`: the `/soup/graphql` (+ `/soup/graphql/ws`
-  subscriptions) GraphQL API — the frontend's main read path for Home/Recent/
+- `src/api/graphql_soup.rs`: the `/items/soup/graphql` (+
+  `/items/soup/graphql/ws` subscriptions; mounted under `ITEMS_PATH`, and
+  `no_scope_reaches_graphql_where_it_is_mounted` holds `agent_correlation`'s
+  `ANY_WRITE` to that mount) GraphQL API — the frontend's main read path for Home/Recent/
   search ("Soup" items); see `crates/graphql_soup` for resolvers/loaders.
 - `src/server.rs`: composition root, including access-request routes and the
   tracked delivery dispatcher; `src/outbound/access_requests.rs` composes the
@@ -50,21 +53,32 @@ threads, pins, recents, notifications, folders, activity.
   them partway; duplication copies documents and chats through
   `entity_mutation/project_contents.rs`, the projects domain's
   `ProjectContentCopier` port.
+- `GET /threads/{thread_id}/channel-shares` lists explicit grants for an
+  authenticated thread owner. The read checks current membership in each
+  returned channel and sends the channel metadata needed by the roster.
 - `src/outbound/docx_export.rs`: primary-database parts and immutable DOCX export
   objects keyed by part paths/hashes. The export route maps the documents domain's
   pending result to 409 with `Retry-After`; never reuse document-id-only archives.
   Location and export URLs share signing helpers in `src/service/cloudfront.rs`.
-- `src/outbound/calendar_refresh.rs`: the `refresh_calendar` nudge for a new
-  request to join a calendar event, which this service hosts while answers
-  belong to `calendar_service`. It finds delegates by `link_id` alone, as the
-  request list admits them; `get_primaries_for_link` also filters on the child,
-  which a promoted shared mailbox's older events do not carry as their owner.
-  Nudges follow a committed write, so they share `event_broker_tracker`'s
-  bounded shutdown drain with event broker publishes.
+- The `refresh_calendar` nudge for a new request to join a calendar event,
+  which this service hosts while answers belong to `calendar_service`, is
+  `calendar_events`' `GatewayCalendarRefresh`, composed in `server.rs`. It
+  finds delegates by `link_id` alone, as the request list admits them;
+  `get_primaries_for_link` also filters on the child, which a promoted shared
+  mailbox's older events do not carry as their owner. Nudges follow a
+  committed write, so they share `event_broker_tracker`'s bounded shutdown
+  drain with event broker publishes.
 - `src/service/delete_document_worker.rs`: background worker handling document
   deletion side effects (feature-gated: `delete_document_worker`).
+- `src/released_attachments.rs`: drains `released_email_attachment_documents`
+  on LISTEN `email_attachment_documents_released` and a one-minute sweep,
+  through the documents domain's `ReleasedAttachmentService`, which trashes
+  email attachments whose mail is gone. Runs on the consumer tracker.
 - `src/service/conn_gateway.rs`: pushes realtime updates through
   `connection_gateway` (feature-gated: `connection_gateway`).
+- `src/server.rs` also runs `bots::inbound::profile_consumer`, which pushes a
+  changed bot's current profile to the people who see it (see
+  `crates/bots/README.md`).
 - `README.md`: local setup (`just run_dbs`, `.env` from `.env.sample`).
 
 ## Scope
@@ -96,13 +110,32 @@ threads, pins, recents, notifications, folders, activity.
 
 ## Gotchas
 
+- Both `/search` mounts share `ApiContext::search_lanes`, one per process, so a
+  caller's unified searches queue in one lane (`search_service`'s
+  `domain::search_lanes`) whichever mount they reach.
+  `ApiContext::api_key_search_buckets` is the Redis token bucket behind the
+  API-key search allowance, shared by every process. It holds one lazy
+  `ConnectionManager` built at startup, so a burst of draws shares one
+  connection; it connects on the first draw and adds no startup dependency of
+  its own (startup still awaits Redis for `RedisLogStreamConsumer::connect`).
+- The REST `/items` routes and `/search` hide Macro's own sign-in emails from a program (`hide_sign_in_emails_from_programs` in `src/api.rs`), so a code-mode run cannot read a sign-in code from workspace previews or search hits. GraphQL (`/items/soup/graphql` and its websocket) refuses programs outright: a query picks its own fields, so no rewrite can find the email. Nothing program-side calls it.
+- Inject the shared PostHog client into CRM's thread-exclusion gate; missing or
+  failed `enable-crm-thread-exclusions` evaluation must refuse API writes.
+- Inject the same client into CRM's selective contribution gate. The owner-only
+  policy API stays default-off for grants; GET never initializes identity,
+  including when the flag is on. Keep its OpenAPI contract and generated storage
+  SDK current; public wrappers live in `macro.crm.emailPrivacy`.
+  Inject CRM rule discovery into both primary and replica EmailPgRepo instances;
+  CRM-scoped reads still select the primary and retain typed resource errors.
+  Keep the email-policy enum closure modifier in `api/swagger/email_policy.rs`
+  until schema generation propagates `deny_unknown_fields` to variant objects.
+
 - Register add-only contact email and personal-provider company setters with required request fields in OpenAPI together;
   the CRM domain owns authorization, normalization and relation invariants.
 
-- Provision required `POSTHOG_API_KEY` before startup; `enable-call-channel-thread`
-  evaluation has a 300 ms timeout and keeps the call's own chat on failure.
-- The same flag client evaluates `enable-programmatic-calls` per caller for the
-  explicit call start, join, and leave routes; failures disable those routes.
+- Provision required `POSTHOG_API_KEY` before startup; the flag client
+  evaluates `enable-programmatic-calls` per caller for the explicit call start,
+  join, and leave routes; failures disable those routes.
 
 - Compose Soup without a separate property-definition reader; REST and GraphQL validate DATE range inputs before calling the service.
 
@@ -166,6 +199,8 @@ Cleanup, reconciliation and internal team purge do not evaluate rollout flags.
 The session-only `/passwords/teams/{team}/imports/{import_id}/items` route accepts
 normalized import batches up to 4 MiB; its domain service reuses ordinary creation
 and TOTP enrollment and records counts-only batch activity.
+Session-only PUT/DELETE `items/{item}/favorite` changes a viewer's private
+preference with view access; it bypasses credential leases and version guards.
 Postgres stores metadata; values stay in OpenBao. Admission checks current human
 account classification and membership, including session-shaped agent accounts.
 

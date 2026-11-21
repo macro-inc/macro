@@ -74,7 +74,8 @@ fn subscribes_to_all_ingestion_topics() {
             "macro.webhooks",
             "macro.agent_sessions",
             "macro.agent_session_lifecycle",
-            "macro.users"
+            "macro.users",
+            "macro.passwords"
         ]
     );
 }
@@ -115,6 +116,7 @@ fn decodes_channel_events() {
         channel_id: Uuid::nil(),
         actor: ChannelSender::try_from("macro|owner@example.com".to_string())
             .expect("valid channel sender"),
+        participant_user_ids: Vec::new(),
     }));
     let payload = serde_json::to_vec(&event).expect("serializable");
 
@@ -237,6 +239,13 @@ impl WebhookEventIngestionService for FlakyIngestionService {
     async fn ingest_user_event(
         &self,
         _event: Event<user_events::UserTopicEvent>,
+    ) -> Result<(), WebhookEventIngestionError> {
+        self.ingest()
+    }
+
+    async fn ingest_password_event(
+        &self,
+        _event: Event<password_events::PasswordTopicEvent>,
     ) -> Result<(), WebhookEventIngestionError> {
         self.ingest()
     }

@@ -260,6 +260,7 @@ pub async fn handler(
                     metadata: NewDocumentMetadata::builder(task.name).id(id).build(),
                     markdown: fill(task.template),
                     subtype: MarkdownSubtype::Task {
+                        pinned_property_definition_ids: None,
                         // Providing properties replaces the task defaults, so include
                         // the normal assignee and status alongside the initial priority.
                         property_values: Some(vec![

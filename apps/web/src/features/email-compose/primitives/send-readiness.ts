@@ -15,6 +15,7 @@ import type { DraftFormAttachment } from './email-form-state';
 
 /** Durable sends accept local handles; attachment uploads must already be complete. */
 export type SendRefusal =
+  | 'nothing-to-send'
   | 'offline'
   | 'offline-attachments'
   | 'media-not-uploaded'
@@ -24,6 +25,7 @@ export type SendRefusal =
   | 'files-uploading';
 
 const SEND_REFUSAL_SUBTEXT: Record<SendRefusal, string> = {
+  'nothing-to-send': 'Write a message before sending.',
   offline: "You're offline",
   'offline-attachments': 'Reconnect to send this email.',
   'media-not-uploaded':
@@ -60,9 +62,10 @@ export function sendRefusalBeforeSave(
 }
 
 /**
- * After the pre-send save. A legacy REST send needs the server to hold the
- * latest save: a latched (rejected) save or a queued-only handle cannot be
- * addressed over REST. An outbox send carries the saved local copy under the
+ * After the pre-send save. A draft with no identity had nothing to save, and
+ * every send is addressed by its draft's ids. A legacy REST send needs the
+ * server to hold the latest save: a latched (rejected) save or a queued-only
+ * handle cannot be addressed over REST. An outbox send carries the saved local copy under the
  * draft's handles and the server validates it, so a failed or pending draft
  * sync never blocks it. A local attachment without a record did not upload
  * (its upload already reported itself). A standalone compose may still send a
@@ -76,6 +79,8 @@ export function sendRefusalAfterSave(input: {
   queueActive?: boolean;
 }): SendRefusal | undefined {
   const { identity } = input;
+  if (identity.kind === 'none') return 'nothing-to-send';
+
   if (!input.queueActive) {
     if (!input.autosaveAllowed) return 'draft-not-confirmed';
     if (identity.kind === 'server' && identity.queued)

@@ -12,13 +12,15 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use super::db_types::{AttachmentDbRow, LabelDbRow, ThreadPreviewCursorDbRow};
+use super::{PreviewReadError, RuleDiscoveryPort};
 
-#[tracing::instrument(err, skip(pool, query), fields(link_count = query.link_ids.len(), view = %query.view))]
+#[tracing::instrument(err, skip(pool, query, user_id, discovery), fields(link_count = query.link_ids.len(), view = query.view.span_value()))]
 pub(super) async fn previews_for_view_cursor(
     pool: &PgPool,
     query: PreviewCursorQuery,
     user_id: MacroUserIdStr<'static>,
-) -> Result<Vec<EmailThreadPreview>, sqlx::Error> {
+    discovery: Option<&RuleDiscoveryPort>,
+) -> Result<Vec<EmailThreadPreview>, PreviewReadError> {
     let PreviewCursorQuery {
         view,
         link_ids,
@@ -31,7 +33,7 @@ pub(super) async fn previews_for_view_cursor(
 
     Ok(match (view, query) {
         (view, Either::Right(dynamic_query)) => {
-            super::dynamic::dynamic_email_thread_cursor(
+            super::dynamic::dynamic_email_thread_cursor_with_discovery(
                 pool,
                 &link_ids,
                 limit,
@@ -39,6 +41,7 @@ pub(super) async fn previews_for_view_cursor(
                 dynamic_query,
                 user_id.as_ref(),
                 team_id,
+                discovery,
             )
             .await?
         }
@@ -61,7 +64,7 @@ pub(super) async fn previews_for_view_cursor(
             // CalendarOnly(false) is the documented no-op literal.
             let query =
                 query.map_filter(|()| Arc::new(Expr::Literal(EmailLiteral::CalendarOnly(false))));
-            super::dynamic::dynamic_email_thread_cursor(
+            super::dynamic::dynamic_email_thread_cursor_with_discovery(
                 pool,
                 &link_ids,
                 limit,
@@ -69,6 +72,7 @@ pub(super) async fn previews_for_view_cursor(
                 query,
                 user_id.as_ref(),
                 team_id,
+                discovery,
             )
             .await?
         }

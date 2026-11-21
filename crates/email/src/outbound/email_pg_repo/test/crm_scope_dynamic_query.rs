@@ -20,6 +20,8 @@
 //! `email_contacts` row for `outsider@acme.example.com` and its own TRASH label
 //! UUID — both of which the new ANY-based resolution must cover.
 
+mod thread_exclusions;
+
 use super::*;
 use macro_user_id::cowlike::CowLike;
 

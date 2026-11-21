@@ -31,7 +31,7 @@ import { KIND_ICONS } from './kind-icon';
 
 false && fileDrop;
 
-const ACCEPTED_EXTENSIONS = ['1pux', 'csv', 'json'];
+const ACCEPTED_EXTENSIONS = ['1pux', 'csv', 'json', 'zip'];
 /** Rows shown before a list says how many more there are. */
 const LIST_LIMIT = 50;
 
@@ -488,6 +488,7 @@ const FAILURE_LINES = [
   ['server_error', 'passwords.importFailureServerError'],
   ['busy', 'passwords.importFailureBusy'],
   ['folder_missing', 'passwords.importFailureFolderMissing'],
+  ['not_provisioned', 'passwords.importFailureNotProvisioned'],
   ['invalid', 'passwords.importFailureInvalid'],
   ['refused', 'passwords.importFailureRefused'],
   ['no_answer', 'passwords.importFailureNoAnswer'],

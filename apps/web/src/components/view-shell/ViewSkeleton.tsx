@@ -83,14 +83,12 @@ function Sidebar(props: {
       <Show
         when={props.createLabel}
         fallback={
-          <Show when={!isTouchDevice()}>
-            <ViewSidebar.Header search={search()}>
-              <div class="flex min-w-0 items-center gap-1">
-                <ViewSidebar.CloseButton class="shrink-0" />
-                <ViewSidebar.Title>{props.title}</ViewSidebar.Title>
-              </div>
-            </ViewSidebar.Header>
-          </Show>
+          <ViewSidebar.Header search={search()}>
+            <div class="flex min-w-0 items-center gap-1">
+              <ViewSidebar.CloseButton class="shrink-0" />
+              <ViewSidebar.Title>{props.title}</ViewSidebar.Title>
+            </div>
+          </ViewSidebar.Header>
         }
       >
         {(label) => (

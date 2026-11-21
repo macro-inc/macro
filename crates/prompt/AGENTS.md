@@ -55,7 +55,7 @@ A form for a channel is a poll (one required select question, tally visible),
 posted once as `<m-document-card>` with `blockName: "form"`; the card's message
 reference grants the channel View, so no second message or link is needed.
 
-- `src/privacy.rs` supplies generation/judge privacy policy; `compose` joins runtime memory sections without static lifetimes.
+- `src/privacy.rs` supplies the memory generation privacy policy (the memory judge asks its rules as Jev questions); `compose` joins runtime memory sections without static lifetimes.
 
 ## Checks
 

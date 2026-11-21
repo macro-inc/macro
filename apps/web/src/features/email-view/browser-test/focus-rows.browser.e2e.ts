@@ -143,6 +143,33 @@ for (const size of WIDTHS) {
       expect(horizontalOverflow).toBe(false);
     });
 
+    test('a preview cut short ends in an ellipsis', async ({ page }) => {
+      await open(page);
+      // The box that clips each preview. An ellipsis only draws when that box
+      // lays out its text as lines: a flex container just cuts it off.
+      const clips = await page
+        .getByText(/^Here is the latest/)
+        .evaluateAll((previews) =>
+          previews.map((preview) => {
+            let box = preview as HTMLElement;
+            while (getComputedStyle(box).overflowX === 'visible')
+              box = box.parentElement as HTMLElement;
+            const style = getComputedStyle(box);
+            return {
+              // A box squeezed to nothing shows no text, cut or not.
+              cut: box.clientWidth > 0 && box.scrollWidth > box.clientWidth,
+              ellipsis:
+                style.textOverflow === 'ellipsis' &&
+                !style.display.includes('flex') &&
+                !style.display.includes('grid'),
+            };
+          })
+        );
+      expect(clips.filter(({ cut }) => cut).length).toBeGreaterThan(0);
+      for (const clip of clips.filter(({ cut }) => cut))
+        expect(clip).toEqual({ cut: true, ellipsis: true });
+    });
+
     test('a due date shows beside the reason', async ({ page }) => {
       await open(page);
       const pill = (id: string, label: string | RegExp) =>

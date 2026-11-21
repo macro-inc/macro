@@ -10,6 +10,7 @@ import wasm from 'vite-plugin-wasm';
 import tsconfigpaths from 'vite-tsconfig-paths';
 // @ts-ignore
 import { browserslist, version } from './package.json';
+import { unexpectedCostlySelectors } from './scripts/costly-selectors';
 import { devCompression } from './scripts/dev-compression';
 import { devHttps } from './scripts/dev-https';
 import { devExternalSourcemaps } from './scripts/dev-sourcemaps';
@@ -103,6 +104,25 @@ function pureGeneratedZodSchemas(): Plugin {
 }
 
 /**
+ * Vite writes imported videos to `web-hosted/` instead of `assets/`. The web
+ * deploy publishes that directory with the rest of `dist`, but every native
+ * bundle deletes it (`build-tauri`, the OTA archive in `infra/stacks/web-app`,
+ * the desktop derivation in `nix/tauri-desktop.nix`): the tutorial videos
+ * alone added 105 MB to each app binary and OTA download. The apps load these
+ * files from the web origin instead (`webHostedUrl`).
+ */
+const WEB_HOSTED_FILE = /\.(mp4|webm|mov)$/i;
+
+// Hosted names keep their hash even in NO_MINIFY builds: a native bundle
+// always loads the web deploy's copy, which is hashed.
+function assetFileNames(bundledPattern: string) {
+  return (asset: Rolldown.PreRenderedAsset) =>
+    asset.names.some((name) => WEB_HOSTED_FILE.test(name))
+      ? 'web-hosted/[name]-[hash][extname]'
+      : `assets/${bundledPattern}`;
+}
+
+/**
  * CloudFront compresses responses of at most 10,000,000 bytes and serves
  * anything larger raw. The entry chunk once crossed that limit and every
  * visitor downloaded 11.9 MB uncompressed instead of ~3 MB, so fail the build
@@ -174,6 +194,37 @@ function posthogSourceMapLimit(): Plugin {
       if (problems.length === 0) return;
       this.error(
         `PostHog cannot symbolicate these chunks (source maps are required and must be at most ${limitBytes} bytes): ${problems.join(', ')}. Split the chunk behind lazy() boundaries or in startupChunks().`
+      );
+    },
+  };
+}
+
+/**
+ * Every whole-page restyle (a custom property written on <html>, a theme
+ * switch) tests each element against Chrome's universal rules, and some of
+ * those cost every element real work: `:root ::selection` and
+ * `:where(.a, .b) *` once made a restyle three times slower. Fail the build
+ * on a new one; `scripts/costly-selectors.ts` says what counts and how to
+ * scope it.
+ */
+function costlySelectorBudget(): Plugin {
+  return {
+    name: 'costly-selector-budget',
+    apply: 'build',
+    generateBundle(_options, bundle) {
+      const problems = Object.values(bundle).flatMap((file) => {
+        if (file.type !== 'asset' || !file.fileName.endsWith('.css')) return [];
+        const css =
+          typeof file.source === 'string'
+            ? file.source
+            : Buffer.from(file.source).toString('utf8');
+        return unexpectedCostlySelectors(css, file.fileName).map(
+          (selector) => `${selector} (${file.fileName})`
+        );
+      });
+      if (problems.length === 0) return;
+      this.error(
+        `These selectors make Chrome do work for every element on each whole-page restyle: ${problems.join(', ')}. Give the walk an ancestor class outside :is()/:where() (\`.x *\`, \`:where(.x) *\`), set a ::selection on the subtree root, or add the selector to ALLOWED_COSTLY_SELECTORS in scripts/costly-selectors.ts with why it must reach every element.`
       );
     },
   };
@@ -639,6 +690,7 @@ export const createAppViteConfig = (): UserConfigFn => {
         gitBranchHmrPlugin(),
         cloudFrontCompressionLimit(),
         posthogSourceMapLimit(),
+        costlySelectorBudget(),
         acyclicStartupChunks(),
       ],
       define: defineEnv(ENV_MODE, command),
@@ -684,13 +736,14 @@ export const createAppViteConfig = (): UserConfigFn => {
                 // https://github.com/vitejs/vite/issues/378
                 entryFileNames: `assets/[name].js`,
                 chunkFileNames: `assets/[name].js`,
-                assetFileNames: `assets/[name].[ext]`,
+                assetFileNames: assetFileNames('[name].[ext]'),
                 codeSplitting: startupChunks(HTML_ENTRIES),
               }
             : {
                 format: 'es',
                 chunkFileNames: '[name]-[hash].js',
                 entryFileNames: '[name]-[hash].js',
+                assetFileNames: assetFileNames('[name]-[hash][extname]'),
                 codeSplitting: startupChunks(HTML_ENTRIES),
               },
         },

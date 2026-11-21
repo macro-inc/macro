@@ -9,7 +9,7 @@ import { SplitFileMenu } from '@components/app/split-layout/components/SplitFile
 import { Permissions } from '@core/component/SharePermissions';
 import type { ProjectEntity } from '@entity';
 import ShareIcon from '@icon/share.svg';
-import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
+import SplitIcon from '@icon/system/regular/columns.svg';
 import { For, Show } from 'solid-js';
 import type { DriveLocationBreadcrumb } from '../core/breadcrumbs';
 import type { DriveFolder } from '../core/types';
@@ -35,7 +35,7 @@ function FolderBreadcrumbMenu(props: {
       ? [
           {
             label: 'Open in new split',
-            icon: ArrowSquareOutIcon,
+            icon: SplitIcon,
             action: () => props.onOpenInNewSplit?.(entity()),
           },
         ]

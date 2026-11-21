@@ -13,6 +13,7 @@ const RESUME_SCHEMA = z.object({
     'one_password_csv',
     'bitwarden_json',
     'bitwarden_csv',
+    'bitwarden_zip',
   ]),
   startedAt: z.iso.datetime(),
   destination: z.union([

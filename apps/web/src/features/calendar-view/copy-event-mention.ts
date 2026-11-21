@@ -59,17 +59,19 @@ export function calendarEventDeepLink(target: {
  * deep link fallback (plain flavor). Must be called from a user gesture.
  */
 export async function copyCalendarEventMentionTarget(
-  target: CalendarMentionTarget
+  target: CalendarMentionTarget,
+  options: { silent?: boolean } = {}
 ) {
   const written = await writeClipboardData({
     'text/html': mentionHtml(target),
     'text/plain': calendarEventDeepLink(target),
   });
   if (written) {
-    toast.success('Copied event to clipboard');
+    if (!options.silent) toast.success('Copied event to clipboard');
   } else {
     toast.failure('Failed to copy event');
   }
+  return written;
 }
 
 /** Copy a calendar-grid event, pinning the instance when it repeats. */

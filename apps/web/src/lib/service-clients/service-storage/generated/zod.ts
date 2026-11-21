@@ -7066,6 +7066,12 @@ export const postChannelBotWebhookHeader = zod.object({
 export const postChannelBotWebhookBody = zod
   .object({
     content: zod.string().describe('Message body.'),
+    notification_policy: zod
+      .enum(['Default', 'MentionsOnly', 'Silent'])
+      .optional()
+      .describe(
+        'Who hears about a posted message. A caller may choose it for its own\nchannel message, since every choice only narrows who is notified.'
+      ),
   })
   .describe('Request to post a channel webhook message.');
 
@@ -7438,17 +7444,17 @@ export const listCrmBlockedDomainsResponse = zod.array(
 );
 
 /**
- * @summary Block a domain: email sync stops creating or updating CRM records for
-it, and the company and contacts the CRM holds for it are hidden.
-Idempotent. Requires an admin/owner team role (403).
+ * @summary Block a domain and its subdomains from email contributions, preserving records.
+Refuses a domain covering any member's connected primary mailbox (400).
+Idempotent for permitted domains. Requires an admin/owner team role (403).
  */
 export const blockCrmDomainParams = zod.object({
   domain: zod.string().describe('A bare domain like acme.com'),
 });
 
 /**
- * @summary Unblock a domain: email sync resumes for it, and what blocking hid is
-shown again. Idempotent. Requires an admin/owner team role (403).
+ * @summary Remove a team domain exclusion and schedule eligible email backfill,
+preserving record visibility. Idempotent. Requires an admin/owner role (403).
  */
 export const unblockCrmDomainParams = zod.object({
   domain: zod.string().describe('A bare domain like acme.com'),
@@ -7601,6 +7607,163 @@ export const createCrmCompanyResponse = zod
   .describe(
     "A CRM company as returned by `GET \/crm\/companies\/{company_id}`.\nMirrors the soup-listed `crmCompany` shape (`name` \/ `description`\nresolved from the primary domain's `crm_domain_directory` entry). It\nembeds the company's contacts unless the caller asks it not to\n(`includeContacts=false`)."
   );
+
+/**
+ * @summary Look up the CRM company that owns a domain in the caller's team, as
+`GET /crm/companies/{company_id}` reads it, without its contacts. Returns
+a null `company` when the team tracks no company at the domain. A team
+member with CRM access gets a visible company; admins and owners also get
+a hidden one.
+ */
+export const getCompanyByDomainQueryParams = zod.object({
+  domain: zod
+    .string()
+    .describe(
+      "The company domain to resolve within the caller's team, such as\n`acme.com`."
+    ),
+});
+
+export const getCompanyByDomainResponse = zod
+  .object({
+    company: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            contacts: zod
+              .array(
+                zod
+                  .object({
+                    companyDomain: zod
+                      .boolean()
+                      .optional()
+                      .describe(
+                        "Whether the contact has an address on one of its company's domains.\nSuch a contact cannot be unlinked from the company or moved to another.\nOlder servers omit this classification; clients must then keep it read-only."
+                      ),
+                    companyDomainEmails: zod
+                      .array(zod.string())
+                      .optional()
+                      .describe(
+                        "The addresses on one of the company's domains. The last one cannot be\nremoved while the contact is linked to the company."
+                      ),
+                    companyId: zod
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        'The id of the company the contact belongs to; absent for a\ncontact without a company.'
+                      ),
+                    createdAt: zod.iso
+                      .datetime({})
+                      .describe('When the contact record was created.'),
+                    email: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "The contact's primary email address; absent for contacts added by\nname alone."
+                      ),
+                    emails: zod
+                      .array(zod.string())
+                      .optional()
+                      .describe(
+                        'Every address the contact is known by: the primary first, then the\nrest oldest first. Older servers omit it; clients then show `email`.'
+                      ),
+                    firstInteraction: zod.iso
+                      .datetime({})
+                      .describe(
+                        'Earliest known interaction with this contact.'
+                      ),
+                    hidden: zod
+                      .boolean()
+                      .describe(
+                        'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
+                      ),
+                    id: zod.uuid().describe('The id of the contact record.'),
+                    lastInteraction: zod.iso
+                      .datetime({})
+                      .describe(
+                        'Most recent known interaction with this contact.'
+                      ),
+                    name: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Display name observed for the contact, if any.'
+                      ),
+                    personalEmail: zod
+                      .boolean()
+                      .optional()
+                      .describe(
+                        'Whether the primary address uses a known personal provider. Linking\nor switching the company needs this and `companyDomain = false`.\nOlder servers omit this classification; clients must then keep it read-only.'
+                      ),
+                    updatedAt: zod.iso
+                      .datetime({})
+                      .describe('When the contact record was last updated.'),
+                  })
+                  .describe(
+                    'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+                  )
+              )
+              .describe(
+                'Contacts attached to this company. Hidden contacts are filtered\nout for non-admin viewers. Empty when the request set\n`includeContacts=false`.'
+              ),
+            createdAt: zod.iso
+              .datetime({})
+              .describe('Earliest known interaction with this company.'),
+            description: zod
+              .string()
+              .nullish()
+              .describe(
+                "Display description from the primary domain's directory entry."
+              ),
+            domains: zod
+              .array(
+                zod
+                  .object({
+                    companyId: zod
+                      .uuid()
+                      .describe('The id of the company the domain belongs to.'),
+                    createdAt: zod.iso
+                      .datetime({})
+                      .describe('When the domain record was created.'),
+                    domain: zod
+                      .string()
+                      .describe('The domain (e.g. \"acme.com\").'),
+                    id: zod.uuid().describe('The id of the domain record.'),
+                  })
+                  .describe('A CRM domain associated with a company.')
+              )
+              .describe(
+                'All domains associated with this company, ordered by creation\ntime ascending (primary first).'
+              ),
+            emailSync: zod
+              .boolean()
+              .describe('Whether email sync is enabled for this company.'),
+            hidden: zod
+              .boolean()
+              .describe(
+                'Whether the company is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint 404s for them); admin\/owner callers see\nhidden companies so they can render the right toggle state.'
+              ),
+            id: zod.uuid().describe('The id of the company.'),
+            name: zod
+              .string()
+              .nullish()
+              .describe(
+                "Display name from the primary domain's directory entry, or\n`None` when unresolved."
+              ),
+            teamId: zod
+              .uuid()
+              .describe('The id of the team that owns this company record.'),
+            updatedAt: zod.iso
+              .datetime({})
+              .describe('Most recent known interaction with this company.'),
+          })
+          .describe(
+            "A CRM company as returned by `GET \/crm\/companies\/{company_id}`.\nMirrors the soup-listed `crmCompany` shape (`name` \/ `description`\nresolved from the primary domain's `crm_domain_directory` entry). It\nembeds the company's contacts unless the caller asks it not to\n(`includeContacts=false`)."
+          ),
+      ])
+      .optional(),
+  })
+  .describe('Response from looking up a CRM company by domain.');
 
 /**
  * @summary Create the companies a CSV lists, and put its Stage, Owner and Revenue
@@ -8346,10 +8509,15 @@ export const searchContactsResponse = zod
   .describe('Response from searching CRM contacts.');
 
 /**
- * @summary Manually create a contact without a company for the caller's team.
-Any team member may create one. The team must not already have a
-company-less contact with the email (409), and the team's CRM
-killswitch must be on (403).
+ * @summary Manually create a contact for the caller's team without naming a company.
+An email at a company's own domain files the contact under the team's
+company for that domain, creating the company when the team has none; a
+personal or generic provider address, a domain the team blocks, or a
+hidden company leaves the contact without a company. Any team member with
+CRM access may create one. A contact filed under a company is refused when
+that company, or a contact without a company, already has the email as its
+primary address, and one left without a company when another such contact
+has it (409). The team's CRM killswitch must be on (403).
  */
 export const createCrmTeamContactBody = zod
   .object({
@@ -8357,7 +8525,7 @@ export const createCrmTeamContactBody = zod
       .string()
       .nullish()
       .describe(
-        "The contact's email address, of any domain. Optional: omit it to\nadd the contact by name only."
+        "The contact's email address, of any domain. A company-domain address\nalso links the contact to that domain's company, unless the team\nblocks the domain or the company is hidden. Optional: omit it to add\nthe contact by name only."
       ),
     name: zod.string().describe('Display name for the contact.'),
   })
@@ -8638,7 +8806,9 @@ export const setCrmContactCompanyBody = zod
   .object({
     companyId: zod.uuid().describe('Destination company in the same team.'),
   })
-  .describe('Link or switch a contact with a known personal-provider email.');
+  .describe(
+    "Link a contact without a company, or switch the company of a contact\nwhose primary email is at a known personal provider. A contact with an\naddress on its current company's domain cannot switch."
+  );
 
 export const setCrmContactCompanyResponse = zod
   .object({
@@ -9074,44 +9244,119 @@ export const setCrmContactNameBody = zod
 /**
  * @summary Read the caller's mailbox consent and both exclusion lists.
  */
+export const getCrmEmailPrivacyQueryParams = zod.object({
+  consent_only: zod
+    .boolean()
+    .optional()
+    .describe(
+      'Return only consent and mailbox fields, without querying domain lists.'
+    ),
+});
+
 export const getCrmEmailPrivacyResponse = zod
-  .object({
-    can_remove_team_domains: zod
-      .boolean()
-      .describe('Whether the caller can remove a team exclusion.'),
-    enabled: zod
-      .boolean()
+  .union([
+    zod
+      .object({
+        can_remove_team_domains: zod
+          .boolean()
+          .describe('Whether the caller can remove a team exclusion.'),
+        enabled: zod
+          .boolean()
+          .describe(
+            'Whether this exact mailbox has explicit contribution consent.'
+          ),
+        mailbox_email: zod
+          .string()
+          .nullish()
+          .describe(
+            'The primary mailbox that would contribute; absent before email connection.'
+          ),
+        mailbox_link_id: zod
+          .uuid()
+          .nullish()
+          .describe(
+            'Exact current primary connection; clients bind opt-in to this identifier.'
+          ),
+        personal_domain_warnings: zod
+          .record(
+            zod.string(),
+            zod
+              .enum(['company', 'personal_provider'])
+              .describe(
+                "Why a domain exclusion would hide an affected mailbox's entire history."
+              )
+          )
+          .describe(
+            "Existing personal exclusions that cover the caller's whole mailbox."
+          ),
+        personal_domains: zod
+          .array(zod.string())
+          .describe("Domains excluded only for the caller's contributions."),
+        team_domain_warnings: zod
+          .record(
+            zod.string(),
+            zod
+              .enum(['company', 'personal_provider'])
+              .describe(
+                "Why a domain exclusion would hide an affected mailbox's entire history."
+              )
+          )
+          .describe(
+            "Existing team exclusions that cover a connected member's whole mailbox."
+          ),
+        team_domains: zod
+          .array(zod.string())
+          .describe(
+            'Domains excluded across the team, including legacy company exclusions.'
+          ),
+      })
+      .describe('Current consent and exclusions, readable by any team member.'),
+    zod
+      .object({
+        enabled: zod
+          .boolean()
+          .describe(
+            'Whether this exact mailbox has explicit contribution consent.'
+          ),
+        mailbox_email: zod
+          .string()
+          .nullish()
+          .describe('The primary mailbox that would contribute, if connected.'),
+        mailbox_link_id: zod
+          .uuid()
+          .nullish()
+          .describe('Exact current primary mailbox connection.'),
+      })
       .describe(
-        'Whether this exact mailbox has explicit contribution consent.'
+        'Current mailbox consent without loading domain exclusion lists.'
       ),
-    mailbox_email: zod
-      .string()
-      .nullish()
-      .describe(
-        'The primary mailbox that would contribute; absent before email connection.'
-      ),
-    mailbox_link_id: zod
-      .uuid()
-      .nullish()
-      .describe(
-        'Exact current primary connection; clients bind opt-in to this identifier.'
-      ),
-    personal_domains: zod
-      .array(zod.string())
-      .describe("Domains excluded only for the caller's contributions."),
-    team_domains: zod
-      .array(zod.string())
-      .describe(
-        'Domains excluded across the team, including legacy company exclusions.'
-      ),
-  })
-  .describe('Current consent and exclusions, readable by any team member.');
+  ])
+  .describe(
+    'Full settings by default, or mailbox consent when explicitly requested.'
+  );
 
 /**
- * @summary Apply one consent or domain-exclusion change as the authenticated member.
+ * @summary Apply one consent, domain, or thread exclusion change as the member.
  */
 export const updateCrmEmailPrivacyBody = zod
   .union([
+    zod
+      .object({
+        action: zod.enum(['set_thread_exclusion']),
+        excluded: zod
+          .boolean()
+          .describe(
+            'False removes this exception; consent and other exclusions still apply.'
+          ),
+        thread_id: zod
+          .uuid()
+          .describe(
+            'Must belong to a mailbox owned by the authenticated member.'
+          ),
+      })
+      .describe(
+        "Hold back or restore only the caller's contribution of one thread."
+      ),
     zod
       .object({
         action: zod.enum(['set_consent']),
@@ -9175,9 +9420,33 @@ export const updateCrmEmailPrivacyResponse = zod
       .describe(
         'Exact current primary connection; clients bind opt-in to this identifier.'
       ),
+    personal_domain_warnings: zod
+      .record(
+        zod.string(),
+        zod
+          .enum(['company', 'personal_provider'])
+          .describe(
+            "Why a domain exclusion would hide an affected mailbox's entire history."
+          )
+      )
+      .describe(
+        "Existing personal exclusions that cover the caller's whole mailbox."
+      ),
     personal_domains: zod
       .array(zod.string())
       .describe("Domains excluded only for the caller's contributions."),
+    team_domain_warnings: zod
+      .record(
+        zod.string(),
+        zod
+          .enum(['company', 'personal_provider'])
+          .describe(
+            "Why a domain exclusion would hide an affected mailbox's entire history."
+          )
+      )
+      .describe(
+        "Existing team exclusions that cover a connected member's whole mailbox."
+      ),
     team_domains: zod
       .array(zod.string())
       .describe(
@@ -9185,6 +9454,1172 @@ export const updateCrmEmailPrivacyResponse = zod
       ),
   })
   .describe('Current consent and exclusions, readable by any team member.');
+
+/**
+ * @summary Read sharing state without initializing consent or scheduling work.
+ */
+export const getCrmEmailPolicyResponseRulesSchemaVersionMin = 0;
+
+export const getCrmEmailPolicyResponse = zod
+  .object({
+    authoring_available: zod
+      .boolean()
+      .describe('Whether new rule authoring is available for this caller.'),
+    effect: zod
+      .string()
+      .describe(
+        'Explain whole-thread sharing, live targets and overriding exclusions.'
+      ),
+    enabled: zod.boolean().describe('Current effective grant.'),
+    link_id: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Exact mailbox represented by the consent or prospective first grant.'
+      ),
+    mailbox_email: zod
+      .string()
+      .nullish()
+      .describe("The caller's mailbox address."),
+    mode: zod
+      .enum(['all', 'selected'])
+      .describe('The scope of an explicitly granted mailbox contribution.'),
+    revision: zod
+      .number()
+      .nullish()
+      .describe('Active immutable definition revision.'),
+    rules: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            include: zod
+              .array(
+                zod
+                  .union([
+                    zod
+                      .object({
+                        kind: zod.enum(['thread']),
+                        thread_id: zod
+                          .uuid()
+                          .describe(
+                            'Internal thread ID, never a provider thread ID.'
+                          ),
+                      })
+                      .describe(
+                        'A mailbox-local thread owned by the contributor.'
+                      ),
+                    zod
+                      .object({
+                        address: zod
+                          .string()
+                          .describe(
+                            'Address to normalize and validate before activation.'
+                          ),
+                        kind: zod.enum(['address']),
+                      })
+                      .describe(
+                        'An exact sender or recipient address, without alias inference.'
+                      ),
+                    zod
+                      .object({
+                        contact_id: zod
+                          .uuid()
+                          .describe(
+                            'Stable contact ID, resolved live rather than expanded on activation.'
+                          ),
+                        kind: zod.enum(['contact']),
+                      })
+                      .describe(
+                        'All current addresses of an authorized contact in the same team.'
+                      ),
+                    zod
+                      .object({
+                        domain: zod
+                          .string()
+                          .describe(
+                            'Bare domain to normalize and validate before activation.'
+                          ),
+                        kind: zod.enum(['domain']),
+                      })
+                      .describe('A domain and its dot-boundary subdomains.'),
+                    zod
+                      .object({
+                        company_id: zod
+                          .uuid()
+                          .describe(
+                            'Stable company ID, resolved live rather than expanded on activation.'
+                          ),
+                        kind: zod.enum(['company']),
+                      })
+                      .describe(
+                        'All current domains of an authorized company in the same team.'
+                      ),
+                  ])
+                  .describe(
+                    'One positive whole-thread selector; denials always take precedence.'
+                  )
+              )
+              .describe(
+                'OR-combined positive selectors over all non-draft thread participants.'
+              ),
+            schema_version: zod
+              .number()
+              .min(getCrmEmailPolicyResponseRulesSchemaVersionMin)
+              .describe(
+                'Wire-format version, not a contribution grant or revision number.'
+              ),
+          })
+          .describe(
+            'A complete replacement definition; an empty list selects no mail.\nContact\/company edits affect matching without rewriting this definition.'
+          ),
+      ])
+      .optional(),
+    token: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                fingerprint: zod
+                  .string()
+                  .describe(
+                    'Opaque observation; the first write compares it before initialization.'
+                  ),
+                kind: zod.enum(['legacy']),
+              })
+              .describe(
+                'A read-only fingerprint of legacy consent, mailbox and membership.'
+              ),
+            zod
+              .object({
+                authority_fingerprint: zod
+                  .string()
+                  .describe(
+                    'Explicit mailbox and membership authority, excluding sync state.'
+                  ),
+                consent_incarnation: zod
+                  .uuid()
+                  .describe(
+                    'Never reused after deletion and recreation of consent.'
+                  ),
+                kind: zod.enum(['policy']),
+                policy_version: zod
+                  .number()
+                  .describe('Database-owned version observed by the caller.'),
+              })
+              .describe(
+                'Identity and version of an initialized consent lifetime.'
+              ),
+          ])
+          .describe(
+            'An observed consent state, not an authorization credential. Never refresh\nthis token automatically after a conflict and replay a sharing command.'
+          ),
+      ])
+      .optional(),
+  })
+  .describe(
+    'Owner-only view. GET never initializes identity or transfers historical work.'
+  );
+
+/**
+ * @summary Direct member/agent activation with CAS, idempotency and verified audit.
+ */
+export const updateCrmEmailPolicyBodyChangeRulesSchemaVersionMin = 0;
+
+export const updateCrmEmailPolicyBody = zod
+  .object({
+    change: zod
+      .union([
+        zod
+          .object({
+            action: zod.enum(['replace_rules']),
+            rules: zod
+              .object({
+                include: zod
+                  .array(
+                    zod
+                      .union([
+                        zod
+                          .object({
+                            kind: zod.enum(['thread']),
+                            thread_id: zod
+                              .uuid()
+                              .describe(
+                                'Internal thread ID, never a provider thread ID.'
+                              ),
+                          })
+                          .describe(
+                            'A mailbox-local thread owned by the contributor.'
+                          ),
+                        zod
+                          .object({
+                            address: zod
+                              .string()
+                              .describe(
+                                'Address to normalize and validate before activation.'
+                              ),
+                            kind: zod.enum(['address']),
+                          })
+                          .describe(
+                            'An exact sender or recipient address, without alias inference.'
+                          ),
+                        zod
+                          .object({
+                            contact_id: zod
+                              .uuid()
+                              .describe(
+                                'Stable contact ID, resolved live rather than expanded on activation.'
+                              ),
+                            kind: zod.enum(['contact']),
+                          })
+                          .describe(
+                            'All current addresses of an authorized contact in the same team.'
+                          ),
+                        zod
+                          .object({
+                            domain: zod
+                              .string()
+                              .describe(
+                                'Bare domain to normalize and validate before activation.'
+                              ),
+                            kind: zod.enum(['domain']),
+                          })
+                          .describe(
+                            'A domain and its dot-boundary subdomains.'
+                          ),
+                        zod
+                          .object({
+                            company_id: zod
+                              .uuid()
+                              .describe(
+                                'Stable company ID, resolved live rather than expanded on activation.'
+                              ),
+                            kind: zod.enum(['company']),
+                          })
+                          .describe(
+                            'All current domains of an authorized company in the same team.'
+                          ),
+                      ])
+                      .describe(
+                        'One positive whole-thread selector; denials always take precedence.'
+                      )
+                  )
+                  .describe(
+                    'OR-combined positive selectors over all non-draft thread participants.'
+                  ),
+                schema_version: zod
+                  .number()
+                  .min(updateCrmEmailPolicyBodyChangeRulesSchemaVersionMin)
+                  .describe(
+                    'Wire-format version, not a contribution grant or revision number.'
+                  ),
+              })
+              .describe(
+                'A complete replacement definition; an empty list selects no mail.\nContact\/company edits affect matching without rewriting this definition.'
+              ),
+          })
+          .describe(
+            'Directly activate a full replacement, including an empty rule list.'
+          ),
+        zod
+          .object({
+            action: zod.enum(['enable_all']),
+          })
+          .describe('Explicitly share all eligible past and future mail.'),
+        zod
+          .object({
+            action: zod.enum(['withdraw']),
+          })
+          .describe(
+            'Withdraw contribution, retaining CRM records and interaction dates.'
+          ),
+      ])
+      .describe(
+        'One explicit sharing command; member and team never come from the body.'
+      ),
+    if_policy: zod
+      .union([
+        zod
+          .object({
+            fingerprint: zod
+              .string()
+              .describe(
+                'Opaque observation; the first write compares it before initialization.'
+              ),
+            kind: zod.enum(['legacy']),
+          })
+          .describe(
+            'A read-only fingerprint of legacy consent, mailbox and membership.'
+          ),
+        zod
+          .object({
+            authority_fingerprint: zod
+              .string()
+              .describe(
+                'Explicit mailbox and membership authority, excluding sync state.'
+              ),
+            consent_incarnation: zod
+              .uuid()
+              .describe(
+                'Never reused after deletion and recreation of consent.'
+              ),
+            kind: zod.enum(['policy']),
+            policy_version: zod
+              .number()
+              .describe('Database-owned version observed by the caller.'),
+          })
+          .describe('Identity and version of an initialized consent lifetime.'),
+      ])
+      .describe(
+        'An observed consent state, not an authorization credential. Never refresh\nthis token automatically after a conflict and replay a sharing command.'
+      ),
+    request_id: zod
+      .uuid()
+      .describe(
+        'One UUID per intended operation, reused only for its retries.'
+      ),
+  })
+  .describe('Retry-safe command with the exact state observed by the caller.');
+
+export const updateCrmEmailPolicyResponse = zod
+  .object({
+    audit_event_id: zod
+      .uuid()
+      .describe('Owner history entry identifying this operation.'),
+    effect: zod
+      .string()
+      .describe('Sharing and retention effects of the committed operation.'),
+    enabled: zod
+      .boolean()
+      .describe('Whether this commit granted contribution.'),
+    mode: zod
+      .enum(['all', 'selected'])
+      .describe('The scope of an explicitly granted mailbox contribution.'),
+    replayed: zod
+      .boolean()
+      .describe(
+        'True means the stored result was returned without repeating any effects.'
+      ),
+    revision: zod
+      .number()
+      .nullish()
+      .describe('Committed definition revision, if selected.'),
+    token: zod
+      .union([
+        zod
+          .object({
+            fingerprint: zod
+              .string()
+              .describe(
+                'Opaque observation; the first write compares it before initialization.'
+              ),
+            kind: zod.enum(['legacy']),
+          })
+          .describe(
+            'A read-only fingerprint of legacy consent, mailbox and membership.'
+          ),
+        zod
+          .object({
+            authority_fingerprint: zod
+              .string()
+              .describe(
+                'Explicit mailbox and membership authority, excluding sync state.'
+              ),
+            consent_incarnation: zod
+              .uuid()
+              .describe(
+                'Never reused after deletion and recreation of consent.'
+              ),
+            kind: zod.enum(['policy']),
+            policy_version: zod
+              .number()
+              .describe('Database-owned version observed by the caller.'),
+          })
+          .describe('Identity and version of an initialized consent lifetime.'),
+      ])
+      .describe(
+        'An observed consent state, not an authorization credential. Never refresh\nthis token automatically after a conflict and replay a sharing command.'
+      ),
+  })
+  .describe(
+    'Recorded outcome. A replay describes the original commit, not current state.'
+  );
+
+/**
+ * @summary Read only the acting member's audit history.
+ */
+export const listCrmEmailPolicyHistoryQueryParams = zod.object({
+  before: zod
+    .uuid()
+    .nullish()
+    .describe(
+      'Exclusive audit event cursor; pages contain at most fifty events.'
+    ),
+});
+
+export const listCrmEmailPolicyHistoryResponse = zod
+  .object({
+    events: zod
+      .array(
+        zod
+          .object({
+            consent_incarnation: zod
+              .uuid()
+              .nullish()
+              .describe('Absent only for a legacy audit row.'),
+            created_at: zod.iso
+              .datetime({})
+              .describe("Database commit transaction's creation time."),
+            entry: zod
+              .object({
+                action: zod
+                  .enum([
+                    'rules_activated',
+                    'all_mail_enabled',
+                    'withdrawn',
+                    'mailbox_revoked',
+                    'live_targets_changed',
+                  ])
+                  .describe(
+                    'Events in the member-only policy history; records never contain mail content.'
+                  ),
+                actor_kind: zod
+                  .enum(['member', 'agent', 'api', 'system'])
+                  .describe(
+                    'Provenance established by authenticated credentials, never a request field.'
+                  ),
+                agent_id: zod
+                  .uuid()
+                  .nullish()
+                  .describe('Verified agent identity, if available.'),
+                agent_session_id: zod
+                  .uuid()
+                  .nullish()
+                  .describe(
+                    'Verified session identity, if available; never inferred from a request.'
+                  ),
+                details: zod
+                  .unknown()
+                  .describe(
+                    'Bounded metadata, never email IDs, addresses, subjects or bodies.'
+                  ),
+                event_id: zod
+                  .uuid()
+                  .describe(
+                    'Server-generated UUIDv7, stable for a retried system event.'
+                  ),
+                next_revision: zod
+                  .number()
+                  .nullish()
+                  .describe('New immutable definition.'),
+                previous_revision: zod
+                  .number()
+                  .nullish()
+                  .describe('Previous immutable definition.'),
+              })
+              .describe(
+                'Audit data supplied by the authorized use case, without mail content.'
+              ),
+            link_id: zod
+              .uuid()
+              .describe('Exact mailbox at the time of the event.'),
+            policy_version: zod
+              .number()
+              .describe(
+                'Committed policy version within the recorded lifetime.'
+              ),
+          })
+          .describe('An audit record may predate incarnation-aware writers.')
+      )
+      .describe(
+        'Audit entries without mailbox contents or expanded source identities.'
+      ),
+    next_cursor: zod
+      .uuid()
+      .nullish()
+      .describe('Exclusive UUID cursor for the next page.'),
+  })
+  .describe('Owner history has a fixed fifty-event page.');
+
+/**
+ * @summary Inspect the owner's current count preview; no email content is returned.
+ */
+export const getCrmEmailRulePreviewResponseCountsAddedDefault = 0;
+export const getCrmEmailRulePreviewResponseCountsAddedMin = 0;
+
+export const getCrmEmailRulePreviewResponseCountsCurrentDefault = 0;
+export const getCrmEmailRulePreviewResponseCountsCurrentMin = 0;
+
+export const getCrmEmailRulePreviewResponseCountsDeniedDefault = 0;
+export const getCrmEmailRulePreviewResponseCountsDeniedMin = 0;
+
+export const getCrmEmailRulePreviewResponseCountsProposedDefault = 0;
+export const getCrmEmailRulePreviewResponseCountsProposedMin = 0;
+
+export const getCrmEmailRulePreviewResponseCountsRemovedDefault = 0;
+export const getCrmEmailRulePreviewResponseCountsRemovedMin = 0;
+
+export const getCrmEmailRulePreviewResponseCountsRetainedDefault = 0;
+export const getCrmEmailRulePreviewResponseCountsRetainedMin = 0;
+
+export const getCrmEmailRulePreviewResponse = zod.union([
+  zod.null(),
+  zod
+    .object({
+      as_of: zod.iso
+        .datetime({})
+        .nullish()
+        .describe('Time of the stable read snapshot, once a worker starts.'),
+      context_id: zod
+        .uuid()
+        .describe(
+          'A new worker attempt gets a new context; old completions cannot overwrite it.'
+        ),
+      counts: zod
+        .object({
+          added: zod
+            .number()
+            .min(getCrmEmailRulePreviewResponseCountsAddedMin)
+            .optional()
+            .describe('Threads newly included by the proposal.'),
+          current: zod
+            .number()
+            .min(getCrmEmailRulePreviewResponseCountsCurrentMin)
+            .optional()
+            .describe('Currently included threads encountered so far.'),
+          denied: zod
+            .number()
+            .min(getCrmEmailRulePreviewResponseCountsDeniedMin)
+            .optional()
+            .describe('Matching threads vetoed by other privacy settings.'),
+          proposed: zod
+            .number()
+            .min(getCrmEmailRulePreviewResponseCountsProposedMin)
+            .optional()
+            .describe('Proposed included threads encountered so far.'),
+          removed: zod
+            .number()
+            .min(getCrmEmailRulePreviewResponseCountsRemovedMin)
+            .optional()
+            .describe('Threads held back by the proposal.'),
+          retained: zod
+            .number()
+            .min(getCrmEmailRulePreviewResponseCountsRetainedMin)
+            .optional()
+            .describe('Threads included by both policies.'),
+        })
+        .describe(
+          'Count-only preview output; no mailbox contents or target identities.'
+        ),
+      created_at: zod.iso
+        .datetime({})
+        .describe('Enqueue time, used to explain queue delay.'),
+      expires_at: zod.iso
+        .datetime({})
+        .describe(
+          'Five-minute work deadline; results remain inspectable after the deadline.'
+        ),
+      preview_id: zod
+        .uuid()
+        .describe("The member's current preview slot occupant."),
+      scanned_threads: zod
+        .number()
+        .describe(
+          'Progress counts contain no identities, subjects, participants or bodies.'
+        ),
+      status: zod
+        .enum([
+          'pending',
+          'running',
+          'complete',
+          'partial',
+          'cancelled',
+          'stale',
+        ])
+        .describe('Preview state is independent of the contribution grant.'),
+    })
+    .describe(
+      'Count-only result. Complete counts describe one stable snapshot; every other\nstatus is incomplete and must not be presented as the total mailbox count.'
+    ),
+]);
+
+/**
+ * @summary Start optional count-only work; this never initializes or activates consent.
+ */
+export const previewCrmEmailRulesBodyRulesSchemaVersionMin = 0;
+
+export const previewCrmEmailRulesBody = zod
+  .object({
+    if_policy: zod
+      .union([
+        zod
+          .object({
+            fingerprint: zod
+              .string()
+              .describe(
+                'Opaque observation; the first write compares it before initialization.'
+              ),
+            kind: zod.enum(['legacy']),
+          })
+          .describe(
+            'A read-only fingerprint of legacy consent, mailbox and membership.'
+          ),
+        zod
+          .object({
+            authority_fingerprint: zod
+              .string()
+              .describe(
+                'Explicit mailbox and membership authority, excluding sync state.'
+              ),
+            consent_incarnation: zod
+              .uuid()
+              .describe(
+                'Never reused after deletion and recreation of consent.'
+              ),
+            kind: zod.enum(['policy']),
+            policy_version: zod
+              .number()
+              .describe('Database-owned version observed by the caller.'),
+          })
+          .describe('Identity and version of an initialized consent lifetime.'),
+      ])
+      .describe(
+        'An observed consent state, not an authorization credential. Never refresh\nthis token automatically after a conflict and replay a sharing command.'
+      ),
+    if_preview_id: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Current preview ID from inspection, or null before the first preview.'
+      ),
+    rules: zod
+      .object({
+        include: zod
+          .array(
+            zod
+              .union([
+                zod
+                  .object({
+                    kind: zod.enum(['thread']),
+                    thread_id: zod
+                      .uuid()
+                      .describe(
+                        'Internal thread ID, never a provider thread ID.'
+                      ),
+                  })
+                  .describe('A mailbox-local thread owned by the contributor.'),
+                zod
+                  .object({
+                    address: zod
+                      .string()
+                      .describe(
+                        'Address to normalize and validate before activation.'
+                      ),
+                    kind: zod.enum(['address']),
+                  })
+                  .describe(
+                    'An exact sender or recipient address, without alias inference.'
+                  ),
+                zod
+                  .object({
+                    contact_id: zod
+                      .uuid()
+                      .describe(
+                        'Stable contact ID, resolved live rather than expanded on activation.'
+                      ),
+                    kind: zod.enum(['contact']),
+                  })
+                  .describe(
+                    'All current addresses of an authorized contact in the same team.'
+                  ),
+                zod
+                  .object({
+                    domain: zod
+                      .string()
+                      .describe(
+                        'Bare domain to normalize and validate before activation.'
+                      ),
+                    kind: zod.enum(['domain']),
+                  })
+                  .describe('A domain and its dot-boundary subdomains.'),
+                zod
+                  .object({
+                    company_id: zod
+                      .uuid()
+                      .describe(
+                        'Stable company ID, resolved live rather than expanded on activation.'
+                      ),
+                    kind: zod.enum(['company']),
+                  })
+                  .describe(
+                    'All current domains of an authorized company in the same team.'
+                  ),
+              ])
+              .describe(
+                'One positive whole-thread selector; denials always take precedence.'
+              )
+          )
+          .describe(
+            'OR-combined positive selectors over all non-draft thread participants.'
+          ),
+        schema_version: zod
+          .number()
+          .min(previewCrmEmailRulesBodyRulesSchemaVersionMin)
+          .describe(
+            'Wire-format version, not a contribution grant or revision number.'
+          ),
+      })
+      .describe(
+        'A complete replacement definition; an empty list selects no mail.\nContact\/company edits affect matching without rewriting this definition.'
+      ),
+  })
+  .describe(
+    'A bounded preview request. The slot token fences delayed starts after replacement.'
+  );
+
+export const previewCrmEmailRulesResponseCountsAddedDefault = 0;
+export const previewCrmEmailRulesResponseCountsAddedMin = 0;
+
+export const previewCrmEmailRulesResponseCountsCurrentDefault = 0;
+export const previewCrmEmailRulesResponseCountsCurrentMin = 0;
+
+export const previewCrmEmailRulesResponseCountsDeniedDefault = 0;
+export const previewCrmEmailRulesResponseCountsDeniedMin = 0;
+
+export const previewCrmEmailRulesResponseCountsProposedDefault = 0;
+export const previewCrmEmailRulesResponseCountsProposedMin = 0;
+
+export const previewCrmEmailRulesResponseCountsRemovedDefault = 0;
+export const previewCrmEmailRulesResponseCountsRemovedMin = 0;
+
+export const previewCrmEmailRulesResponseCountsRetainedDefault = 0;
+export const previewCrmEmailRulesResponseCountsRetainedMin = 0;
+
+export const previewCrmEmailRulesResponse = zod
+  .object({
+    as_of: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Time of the stable read snapshot, once a worker starts.'),
+    context_id: zod
+      .uuid()
+      .describe(
+        'A new worker attempt gets a new context; old completions cannot overwrite it.'
+      ),
+    counts: zod
+      .object({
+        added: zod
+          .number()
+          .min(previewCrmEmailRulesResponseCountsAddedMin)
+          .optional()
+          .describe('Threads newly included by the proposal.'),
+        current: zod
+          .number()
+          .min(previewCrmEmailRulesResponseCountsCurrentMin)
+          .optional()
+          .describe('Currently included threads encountered so far.'),
+        denied: zod
+          .number()
+          .min(previewCrmEmailRulesResponseCountsDeniedMin)
+          .optional()
+          .describe('Matching threads vetoed by other privacy settings.'),
+        proposed: zod
+          .number()
+          .min(previewCrmEmailRulesResponseCountsProposedMin)
+          .optional()
+          .describe('Proposed included threads encountered so far.'),
+        removed: zod
+          .number()
+          .min(previewCrmEmailRulesResponseCountsRemovedMin)
+          .optional()
+          .describe('Threads held back by the proposal.'),
+        retained: zod
+          .number()
+          .min(previewCrmEmailRulesResponseCountsRetainedMin)
+          .optional()
+          .describe('Threads included by both policies.'),
+      })
+      .describe(
+        'Count-only preview output; no mailbox contents or target identities.'
+      ),
+    created_at: zod.iso
+      .datetime({})
+      .describe('Enqueue time, used to explain queue delay.'),
+    expires_at: zod.iso
+      .datetime({})
+      .describe(
+        'Five-minute work deadline; results remain inspectable after the deadline.'
+      ),
+    preview_id: zod
+      .uuid()
+      .describe("The member's current preview slot occupant."),
+    scanned_threads: zod
+      .number()
+      .describe(
+        'Progress counts contain no identities, subjects, participants or bodies.'
+      ),
+    status: zod
+      .enum(['pending', 'running', 'complete', 'partial', 'cancelled', 'stale'])
+      .describe('Preview state is independent of the contribution grant.'),
+  })
+  .describe(
+    'Count-only result. Complete counts describe one stable snapshot; every other\nstatus is incomplete and must not be presented as the total mailbox count.'
+  );
+
+/**
+ * @summary Cancel the owner's current named preview, including while rollout is off.
+ */
+export const cancelCrmEmailRulePreviewParams = zod.object({
+  preview_id: zod.uuid(),
+});
+
+/**
+ * @summary Fetch one saved definition, independently of live CRM viewing permission.
+ */
+export const getCrmEmailRuleRevisionParams = zod.object({
+  revision: zod.number(),
+});
+
+export const getCrmEmailRuleRevisionResponseRulesSchemaVersionMin = 0;
+
+export const getCrmEmailRuleRevisionResponse = zod.union([
+  zod.null(),
+  zod
+    .object({
+      created_at: zod.iso
+        .datetime({})
+        .describe('Time this definition was committed.'),
+      link_id: zod.uuid().describe('Mailbox the saved definition refers to.'),
+      revision: zod
+        .number()
+        .describe("Revision in this member's rule history."),
+      rules: zod
+        .object({
+          include: zod
+            .array(
+              zod
+                .union([
+                  zod
+                    .object({
+                      kind: zod.enum(['thread']),
+                      thread_id: zod
+                        .uuid()
+                        .describe(
+                          'Internal thread ID, never a provider thread ID.'
+                        ),
+                    })
+                    .describe(
+                      'A mailbox-local thread owned by the contributor.'
+                    ),
+                  zod
+                    .object({
+                      address: zod
+                        .string()
+                        .describe(
+                          'Address to normalize and validate before activation.'
+                        ),
+                      kind: zod.enum(['address']),
+                    })
+                    .describe(
+                      'An exact sender or recipient address, without alias inference.'
+                    ),
+                  zod
+                    .object({
+                      contact_id: zod
+                        .uuid()
+                        .describe(
+                          'Stable contact ID, resolved live rather than expanded on activation.'
+                        ),
+                      kind: zod.enum(['contact']),
+                    })
+                    .describe(
+                      'All current addresses of an authorized contact in the same team.'
+                    ),
+                  zod
+                    .object({
+                      domain: zod
+                        .string()
+                        .describe(
+                          'Bare domain to normalize and validate before activation.'
+                        ),
+                      kind: zod.enum(['domain']),
+                    })
+                    .describe('A domain and its dot-boundary subdomains.'),
+                  zod
+                    .object({
+                      company_id: zod
+                        .uuid()
+                        .describe(
+                          'Stable company ID, resolved live rather than expanded on activation.'
+                        ),
+                      kind: zod.enum(['company']),
+                    })
+                    .describe(
+                      'All current domains of an authorized company in the same team.'
+                    ),
+                ])
+                .describe(
+                  'One positive whole-thread selector; denials always take precedence.'
+                )
+            )
+            .describe(
+              'OR-combined positive selectors over all non-draft thread participants.'
+            ),
+          schema_version: zod
+            .number()
+            .min(getCrmEmailRuleRevisionResponseRulesSchemaVersionMin)
+            .describe(
+              'Wire-format version, not a contribution grant or revision number.'
+            ),
+        })
+        .describe(
+          'A complete replacement definition; an empty list selects no mail.\nContact\/company edits affect matching without rewriting this definition.'
+        ),
+    })
+    .describe(
+      'One immutable owner-only definition, fetched separately from history pages.'
+    ),
+]);
+
+/**
+ * @summary Canonicalize and authorize a definition without sharing mail.
+ */
+export const validateCrmEmailRulesBodySchemaVersionMin = 0;
+
+export const validateCrmEmailRulesBody = zod
+  .object({
+    include: zod
+      .array(
+        zod
+          .union([
+            zod
+              .object({
+                kind: zod.enum(['thread']),
+                thread_id: zod
+                  .uuid()
+                  .describe('Internal thread ID, never a provider thread ID.'),
+              })
+              .describe('A mailbox-local thread owned by the contributor.'),
+            zod
+              .object({
+                address: zod
+                  .string()
+                  .describe(
+                    'Address to normalize and validate before activation.'
+                  ),
+                kind: zod.enum(['address']),
+              })
+              .describe(
+                'An exact sender or recipient address, without alias inference.'
+              ),
+            zod
+              .object({
+                contact_id: zod
+                  .uuid()
+                  .describe(
+                    'Stable contact ID, resolved live rather than expanded on activation.'
+                  ),
+                kind: zod.enum(['contact']),
+              })
+              .describe(
+                'All current addresses of an authorized contact in the same team.'
+              ),
+            zod
+              .object({
+                domain: zod
+                  .string()
+                  .describe(
+                    'Bare domain to normalize and validate before activation.'
+                  ),
+                kind: zod.enum(['domain']),
+              })
+              .describe('A domain and its dot-boundary subdomains.'),
+            zod
+              .object({
+                company_id: zod
+                  .uuid()
+                  .describe(
+                    'Stable company ID, resolved live rather than expanded on activation.'
+                  ),
+                kind: zod.enum(['company']),
+              })
+              .describe(
+                'All current domains of an authorized company in the same team.'
+              ),
+          ])
+          .describe(
+            'One positive whole-thread selector; denials always take precedence.'
+          )
+      )
+      .describe(
+        'OR-combined positive selectors over all non-draft thread participants.'
+      ),
+    schema_version: zod
+      .number()
+      .min(validateCrmEmailRulesBodySchemaVersionMin)
+      .describe(
+        'Wire-format version, not a contribution grant or revision number.'
+      ),
+  })
+  .describe(
+    'A complete replacement definition; an empty list selects no mail.\nContact\/company edits affect matching without rewriting this definition.'
+  );
+
+export const validateCrmEmailRulesResponseBroadRuleIndicesItemMin = 0;
+
+export const validateCrmEmailRulesResponseInactiveRuleIndicesItemMin = 0;
+
+export const validateCrmEmailRulesResponseRulesSchemaVersionMin = 0;
+
+export const validateCrmEmailRulesResponse = zod
+  .object({
+    broad_rule_indices: zod
+      .array(
+        zod.number().min(validateCrmEmailRulesResponseBroadRuleIndicesItemMin)
+      )
+      .describe(
+        'Indices that may select most mail because they match the owner or domain.'
+      ),
+    effect: zod
+      .string()
+      .describe(
+        'Human-readable effect to show before an agent changes sharing.'
+      ),
+    inactive_rule_indices: zod
+      .array(
+        zod
+          .number()
+          .min(validateCrmEmailRulesResponseInactiveRuleIndicesItemMin)
+      )
+      .describe(
+        'Indices into the canonical list that currently have no live targets.'
+      ),
+    rules: zod
+      .object({
+        include: zod
+          .array(
+            zod
+              .union([
+                zod
+                  .object({
+                    kind: zod.enum(['thread']),
+                    thread_id: zod
+                      .uuid()
+                      .describe(
+                        'Internal thread ID, never a provider thread ID.'
+                      ),
+                  })
+                  .describe('A mailbox-local thread owned by the contributor.'),
+                zod
+                  .object({
+                    address: zod
+                      .string()
+                      .describe(
+                        'Address to normalize and validate before activation.'
+                      ),
+                    kind: zod.enum(['address']),
+                  })
+                  .describe(
+                    'An exact sender or recipient address, without alias inference.'
+                  ),
+                zod
+                  .object({
+                    contact_id: zod
+                      .uuid()
+                      .describe(
+                        'Stable contact ID, resolved live rather than expanded on activation.'
+                      ),
+                    kind: zod.enum(['contact']),
+                  })
+                  .describe(
+                    'All current addresses of an authorized contact in the same team.'
+                  ),
+                zod
+                  .object({
+                    domain: zod
+                      .string()
+                      .describe(
+                        'Bare domain to normalize and validate before activation.'
+                      ),
+                    kind: zod.enum(['domain']),
+                  })
+                  .describe('A domain and its dot-boundary subdomains.'),
+                zod
+                  .object({
+                    company_id: zod
+                      .uuid()
+                      .describe(
+                        'Stable company ID, resolved live rather than expanded on activation.'
+                      ),
+                    kind: zod.enum(['company']),
+                  })
+                  .describe(
+                    'All current domains of an authorized company in the same team.'
+                  ),
+              ])
+              .describe(
+                'One positive whole-thread selector; denials always take precedence.'
+              )
+          )
+          .describe(
+            'OR-combined positive selectors over all non-draft thread participants.'
+          ),
+        schema_version: zod
+          .number()
+          .min(validateCrmEmailRulesResponseRulesSchemaVersionMin)
+          .describe(
+            'Wire-format version, not a contribution grant or revision number.'
+          ),
+      })
+      .describe(
+        'A complete replacement definition; an empty list selects no mail.\nContact\/company edits affect matching without rewriting this definition.'
+      ),
+  })
+  .describe(
+    'Canonical rules and bounded warnings; validation does not grant contribution.'
+  );
+
+/**
+ * @summary List only the authenticated member's thread exclusions.
+ */
+export const listCrmExcludedEmailThreadsQueryParams = zod.object({
+  after: zod.uuid().nullish().describe('Read entries after this thread ID.'),
+  thread_id: zod
+    .uuid()
+    .nullish()
+    .describe(
+      'Look up one thread instead of paging. Cannot be combined with `after`.'
+    ),
+});
+
+export const listCrmExcludedEmailThreadsResponse = zod
+  .object({
+    next_cursor: zod
+      .uuid()
+      .nullish()
+      .describe('Pass as `after` to read the next page.'),
+    threads: zod
+      .array(
+        zod
+          .object({
+            link_id: zod.uuid().describe('Exact mailbox containing this copy.'),
+            subject: zod
+              .string()
+              .nullish()
+              .describe("Current subject, for the owner's privacy settings."),
+            thread_id: zod.uuid().describe('Mailbox-local thread identity.'),
+          })
+          .describe(
+            "One private thread from the caller's own mailbox, never a teammate's copy."
+          )
+      )
+      .describe('At most fifty exclusions.'),
+  })
+  .describe(
+    "A bounded page of the caller's private threads, ordered by thread ID."
+  );
 
 /**
  * @summary Read fresh authority without requiring CRM access.
@@ -11884,6 +13319,13 @@ export const applyCrmPipelineOpsBody = zod
                                       .describe('A number.'),
                                     zod
                                       .object({
+                                        type: zod.enum(['percentage']),
+                                      })
+                                      .describe(
+                                        'A number shown as a percent: 0.25 displays as 25%.'
+                                      ),
+                                    zod
+                                      .object({
                                         type: zod.enum(['boolean']),
                                       })
                                       .describe('A checkbox.'),
@@ -12087,6 +13529,13 @@ export const applyCrmPipelineOpsBody = zod
                                 type: zod.enum(['number']),
                               })
                               .describe('A number.'),
+                            zod
+                              .object({
+                                type: zod.enum(['percentage']),
+                              })
+                              .describe(
+                                'A number shown as a percent: 0.25 displays as 25%.'
+                              ),
                             zod
                               .object({
                                 type: zod.enum(['boolean']),
@@ -16026,9 +17475,22 @@ export const getCrmPipelineTableResponse = zod
                             ])
                             .describe("An expression over one row's cells."),
                           kind: zod.enum(['derived']),
+                          percentage: zod
+                            .boolean()
+                            .optional()
+                            .describe(
+                              'Whether a number formula is shown as a percent.'
+                            ),
                         })
                         .describe(
                           "A derived column: its cells are computed from the row's others, and\nits definition, a number or date one, never holds a value."
+                        ),
+                      zod
+                        .object({
+                          kind: zod.enum(['percentage']),
+                        })
+                        .describe(
+                          'A number shown as a percent: 0.25 displays as 25%.'
                         ),
                     ])
                     .describe(
@@ -17793,9 +19255,22 @@ export const getDatabaseResponse = zod
                                       "An expression over one row's cells."
                                     ),
                                   kind: zod.enum(['derived']),
+                                  percentage: zod
+                                    .boolean()
+                                    .optional()
+                                    .describe(
+                                      'Whether a number formula is shown as a percent.'
+                                    ),
                                 })
                                 .describe(
                                   "A derived column: its cells are computed from the row's others, and\nits definition, a number or date one, never holds a value."
+                                ),
+                              zod
+                                .object({
+                                  kind: zod.enum(['percentage']),
+                                })
+                                .describe(
+                                  'A number shown as a percent: 0.25 displays as 25%.'
                                 ),
                             ])
                             .describe(
@@ -18966,6 +20441,13 @@ export const applyDatabaseOpsBody = zod
                                       .describe('A number.'),
                                     zod
                                       .object({
+                                        type: zod.enum(['percentage']),
+                                      })
+                                      .describe(
+                                        'A number shown as a percent: 0.25 displays as 25%.'
+                                      ),
+                                    zod
+                                      .object({
                                         type: zod.enum(['boolean']),
                                       })
                                       .describe('A checkbox.'),
@@ -19169,6 +20651,13 @@ export const applyDatabaseOpsBody = zod
                                 type: zod.enum(['number']),
                               })
                               .describe('A number.'),
+                            zod
+                              .object({
+                                type: zod.enum(['percentage']),
+                              })
+                              .describe(
+                                'A number shown as a percent: 0.25 displays as 25%.'
+                              ),
                             zod
                               .object({
                                 type: zod.enum(['boolean']),
@@ -22488,6 +23977,10 @@ export const listDatabaseColumnCastsResponseItem = zod
     is_multi_select: zod
       .boolean()
       .describe('Whether the target holds several values.'),
+    percentage: zod
+      .boolean()
+      .optional()
+      .describe('Whether the target shows a number as a percent.'),
     reason: zod
       .string()
       .nullable()
@@ -22558,6 +24051,11 @@ export const convertDatabaseColumnBody = zod
             type: zod.enum(['number']),
           })
           .describe('A number.'),
+        zod
+          .object({
+            type: zod.enum(['percentage']),
+          })
+          .describe('A number shown as a percent: 0.25 displays as 25%.'),
         zod
           .object({
             type: zod.enum(['boolean']),
@@ -22941,9 +24439,22 @@ export const inferDatabaseColumnTypeResponse = zod
                         ])
                         .describe("An expression over one row's cells."),
                       kind: zod.enum(['derived']),
+                      percentage: zod
+                        .boolean()
+                        .optional()
+                        .describe(
+                          'Whether a number formula is shown as a percent.'
+                        ),
                     })
                     .describe(
                       "A derived column: its cells are computed from the row's others, and\nits definition, a number or date one, never holds a value."
+                    ),
+                  zod
+                    .object({
+                      kind: zod.enum(['percentage']),
+                    })
+                    .describe(
+                      'A number shown as a percent: 0.25 displays as 25%.'
                     ),
                 ])
                 .describe(
@@ -24573,6 +26084,12 @@ export const createTaskHandlerBody = zod
       .string()
       .nullish()
       .describe('Markdown source text. Defaults to an empty task document.'),
+    pinnedPropertyDefinitionIds: zod
+      .array(zod.string())
+      .nullish()
+      .describe(
+        'Property definition IDs to pin in the first task snapshot. Omission keeps implicit defaults.'
+      ),
     projectId: zod
       .uuid()
       .nullish()
@@ -25440,7 +26957,15 @@ export const getDocumentByTeamSlugResponse = zod.object({
             }),
           ])
         )
-        .describe('The items returned from the call'),
+        .describe(
+          'The items returned from the call, most recently trashed first'
+        ),
+      next_cursor: zod
+        .string()
+        .nullish()
+        .describe(
+          'Pass as `cursor` to get the next page; absent on the last page'
+        ),
     })
     .describe('Data to be returned'),
   error: zod.boolean().describe('Indicates if an error occurred'),
@@ -40598,6 +42123,12 @@ export const externalChatDeliveryResponseItem = zod
           .uuid()
           .nullish()
           .describe('Message being quoted, within this chat.'),
+        userConfirmation: zod
+          .string()
+          .nullish()
+          .describe(
+            "The user's own reply approving this send, quoted verbatim. Required\nfrom an agent's program; never the request that asked for the message.\nNot part of the send's intent: it is neither stored nor compared on a\nretry."
+          ),
       })
       .describe(
         'Explicit send action from a person. Only deliberate sends reach WhatsApp.'
@@ -41834,6 +43365,12 @@ export const externalChatSendsResponseItem = zod
           .uuid()
           .nullish()
           .describe('Message being quoted, within this chat.'),
+        userConfirmation: zod
+          .string()
+          .nullish()
+          .describe(
+            "The user's own reply approving this send, quoted verbatim. Required\nfrom an agent's program; never the request that asked for the message.\nNot part of the send's intent: it is neither stored nor compared on a\nretry."
+          ),
       })
       .describe(
         'Explicit send action from a person. Only deliberate sends reach WhatsApp.'
@@ -41919,6 +43456,12 @@ export const externalChatSendBody = zod
       .uuid()
       .nullish()
       .describe('Message being quoted, within this chat.'),
+    userConfirmation: zod
+      .string()
+      .nullish()
+      .describe(
+        "The user's own reply approving this send, quoted verbatim. Required\nfrom an agent's program; never the request that asked for the message.\nNot part of the send's intent: it is neither stored nor compared on a\nretry."
+      ),
   })
   .describe(
     'Explicit send action from a person. Only deliberate sends reach WhatsApp.'
@@ -41996,6 +43539,12 @@ export const externalChatSendResponse = zod
           .uuid()
           .nullish()
           .describe('Message being quoted, within this chat.'),
+        userConfirmation: zod
+          .string()
+          .nullish()
+          .describe(
+            "The user's own reply approving this send, quoted verbatim. Required\nfrom an agent's program; never the request that asked for the message.\nNot part of the send's intent: it is neither stored nor compared on a\nretry."
+          ),
       })
       .describe(
         'Explicit send action from a person. Only deliberate sends reach WhatsApp.'
@@ -43027,6 +44576,13 @@ export const getFormResponse = zod
                                 type: zod.enum(['number']),
                               })
                               .describe('A number.'),
+                            zod
+                              .object({
+                                type: zod.enum(['percentage']),
+                              })
+                              .describe(
+                                'A number shown as a percent: 0.25 displays as 25%.'
+                              ),
                             zod
                               .object({
                                 type: zod.enum(['boolean']),
@@ -44178,6 +45734,13 @@ export const collaborateFormResponse = zod
                                     type: zod.enum(['number']),
                                   })
                                   .describe('A number.'),
+                                zod
+                                  .object({
+                                    type: zod.enum(['percentage']),
+                                  })
+                                  .describe(
+                                    'A number shown as a percent: 0.25 displays as 25%.'
+                                  ),
                                 zod
                                   .object({
                                     type: zod.enum(['boolean']),
@@ -45621,6 +47184,13 @@ export const putFormLayoutResponse = zod
                                     type: zod.enum(['number']),
                                   })
                                   .describe('A number.'),
+                                zod
+                                  .object({
+                                    type: zod.enum(['percentage']),
+                                  })
+                                  .describe(
+                                    'A number shown as a percent: 0.25 displays as 25%.'
+                                  ),
                                 zod
                                   .object({
                                     type: zod.enum(['boolean']),
@@ -49755,7 +51325,7 @@ export const getInitiativeDescriptionResponse = zod
     markdown: zod
       .string()
       .describe(
-        'GitHub-flavored markdown; empty while no one has opened or written it.'
+        'Internal markdown, chips as XML tags such as `<m-user-mention>`; empty while no one has opened or written it.'
       ),
   })
   .describe("An initiative's description.");
@@ -54185,6 +55755,20 @@ export const getItemsSoupResponse = zod
               tag: zod.enum(['harness']),
             })
             .describe('Paired runtime, listed only by attention feeds.'),
+          zod
+            .object({
+              data: zod
+                .object({
+                  id: zod.uuid().describe('The team uuid.'),
+                  name: zod.string().describe("The team's display name."),
+                  ownerId: zod.string().describe('The user who owns the team.'),
+                })
+                .describe(
+                  'A team, listed only by attention feeds: team-scoped notifications (a\nvault access request) are filed under it, and it has no page of its own.\nTeams carry no timestamps; attention feeds order by attention time.'
+                ),
+              tag: zod.enum(['team']),
+            })
+            .describe('Team, listed only by attention feeds.'),
         ])
         .describe('A single item in the Soup feed.')
         .and(
@@ -54580,6 +56164,18 @@ export const postItemsSoupBody = zod
       ),
     email_filters: zod
       .object({
+        attachments: zod
+          .array(
+            zod
+              .enum(['pdf', 'image', 'document'])
+              .describe(
+                "A kind of attachment a thread's messages carry, by MIME type."
+              )
+          )
+          .optional()
+          .describe(
+            'Only threads with at least one attachment of one of these kinds, by\nMIME type, on any of their messages. Empty applies no constraint.'
+          ),
         bcc: zod
           .array(zod.string())
           .optional()
@@ -54602,13 +56198,19 @@ export const postItemsSoupBody = zod
           .array(zod.string())
           .optional()
           .describe(
-            "CRM-scoped address filter. When non-empty, expands visibility to every\nteammate's mailbox and restricts to threads involving any of these\nfully-qualified addresses. Each address is authorized against\n`crm_contacts` + `crm_companies` (contact must not be hidden, company\nmust not be hidden, `email_sync` must be true).\nMutually exclusive with `crm_domains`."
+            "CRM-scoped address filter. When non-empty, expands visibility to every\nteammate's mailbox and restricts to threads involving any of these\nfully-qualified addresses. Each address is authorized against\n`crm_contacts` + `crm_companies` (contact must not be hidden, company\nmust not be hidden, `email_sync` must be true).\nMutually exclusive with `crm_domains`. Listing email only: search\nrejects a request that sets it with a 400."
           ),
         crm_domains: zod
           .array(zod.string())
           .optional()
           .describe(
-            "CRM-scoped domain filter. When non-empty, expands visibility to every\nteammate's mailbox and restricts to threads involving any of these\ndomains (in any of sender\/cc\/bcc\/recipient). Each domain is authorized\nagainst `crm_domains` + `crm_companies` (must exist for the caller's\nteam, company must not be hidden, `email_sync` must be true).\nMutually exclusive with `crm_addresses`."
+            "CRM-scoped domain filter. When non-empty, expands visibility to every\nteammate's mailbox and restricts to threads involving any of these\ndomains (in any of sender\/cc\/bcc\/recipient). Each domain is authorized\nagainst `crm_domains` + `crm_companies` (must exist for the caller's\nteam, company must not be hidden, `email_sync` must be true).\nMutually exclusive with `crm_addresses`. Listing email only: search\nrejects a request that sets it with a 400."
+          ),
+        done: zod
+          .boolean()
+          .nullish()
+          .describe(
+            "Filter by whether the thread is done: true for threads out of the\ninbox (archived), false for threads still in it. This is the mailbox\nstate the Email view's Done filter uses, independent of notifications."
           ),
         email_thread_ids: zod
           .array(zod.string())
@@ -54667,7 +56269,7 @@ export const postItemsSoupBody = zod
           .array(zod.string())
           .optional()
           .describe(
-            'A list of project ids to search within. Empty to ignore project filtering.'
+            "Drive folder (project) ids to search within: threads filed in any of\nthese folders. Besides the caller's own threads, it reaches every\nthread in a folder shared with the caller, whoever's inbox holds it,\nas the folder's list does. Search takes at most 50 folders and\nrejects more with a 400, and matches the query against at most 10,000\nof their threads in all; threads past that are not searched, unless\n`email_thread_ids` names them, and at most 10,000 named threads are\nsearched in all. Empty to ignore project filtering."
           ),
         recipients: zod
           .array(zod.string())
@@ -54687,6 +56289,16 @@ export const postItemsSoupBody = zod
           .describe(
             'Controls whether shared email threads are included in results.'
           ),
+        view: zod
+          .union([
+            zod.null(),
+            zod
+              .enum(['sent', 'drafts'])
+              .describe(
+                'A mailbox view the Email list scopes a search to, as its tabs do.'
+              ),
+          ])
+          .optional(),
       })
       .optional()
       .describe(
@@ -59347,6 +60959,20 @@ export const postItemsSoupResponse = zod
               tag: zod.enum(['harness']),
             })
             .describe('Paired runtime, listed only by attention feeds.'),
+          zod
+            .object({
+              data: zod
+                .object({
+                  id: zod.uuid().describe('The team uuid.'),
+                  name: zod.string().describe("The team's display name."),
+                  ownerId: zod.string().describe('The user who owns the team.'),
+                })
+                .describe(
+                  'A team, listed only by attention feeds: team-scoped notifications (a\nvault access request) are filed under it, and it has no page of its own.\nTeams carry no timestamps; attention feeds order by attention time.'
+                ),
+              tag: zod.enum(['team']),
+            })
+            .describe('Team, listed only by attention feeds.'),
         ])
         .describe('A single item in the Soup feed.')
         .and(
@@ -63950,6 +65576,20 @@ export const postItemsSoupAstResponse = zod
               tag: zod.enum(['harness']),
             })
             .describe('Paired runtime, listed only by attention feeds.'),
+          zod
+            .object({
+              data: zod
+                .object({
+                  id: zod.uuid().describe('The team uuid.'),
+                  name: zod.string().describe("The team's display name."),
+                  ownerId: zod.string().describe('The user who owns the team.'),
+                })
+                .describe(
+                  'A team, listed only by attention feeds: team-scoped notifications (a\nvault access request) are filed under it, and it has no page of its own.\nTeams carry no timestamps; attention feeds order by attention time.'
+                ),
+              tag: zod.enum(['team']),
+            })
+            .describe('Team, listed only by attention feeds.'),
         ])
         .describe('A single item in the Soup feed.')
         .and(
@@ -69141,6 +70781,22 @@ export const postItemsSoupAstGroupedResponse = zod
                     tag: zod.enum(['harness']),
                   })
                   .describe('Paired runtime, listed only by attention feeds.'),
+                zod
+                  .object({
+                    data: zod
+                      .object({
+                        id: zod.uuid().describe('The team uuid.'),
+                        name: zod.string().describe("The team's display name."),
+                        ownerId: zod
+                          .string()
+                          .describe('The user who owns the team.'),
+                      })
+                      .describe(
+                        'A team, listed only by attention feeds: team-scoped notifications (a\nvault access request) are filed under it, and it has no page of its own.\nTeams carry no timestamps; attention feeds order by attention time.'
+                      ),
+                    tag: zod.enum(['team']),
+                  })
+                  .describe('Team, listed only by attention feeds.'),
               ])
               .describe('A single item in the Soup feed.')
               .and(
@@ -73714,6 +75370,22 @@ export const postItemsSoupAstGroupedResponse = zod
                     tag: zod.enum(['harness']),
                   })
                   .describe('Paired runtime, listed only by attention feeds.'),
+                zod
+                  .object({
+                    data: zod
+                      .object({
+                        id: zod.uuid().describe('The team uuid.'),
+                        name: zod.string().describe("The team's display name."),
+                        ownerId: zod
+                          .string()
+                          .describe('The user who owns the team.'),
+                      })
+                      .describe(
+                        'A team, listed only by attention feeds: team-scoped notifications (a\nvault access request) are filed under it, and it has no page of its own.\nTeams carry no timestamps; attention feeds order by attention time.'
+                      ),
+                    tag: zod.enum(['team']),
+                  })
+                  .describe('Team, listed only by attention feeds.'),
               ])
               .describe('A single item in the Soup feed.')
               .and(
@@ -74535,6 +76207,12 @@ export const entityMessageCreateBody = zod
       .string()
       .nullish()
       .describe('Client nonce for optimistic reconciliation.'),
+    notification_policy: zod
+      .enum(['Default', 'MentionsOnly', 'Silent'])
+      .optional()
+      .describe(
+        'Who hears about a posted message. A caller may choose it for its own\nchannel message, since every choice only narrows who is notified.'
+      ),
     thread_id: zod
       .uuid()
       .nullish()
@@ -77913,12 +79591,832 @@ export const entityMessageTypingBody = zod
   .describe('Transient typing update.');
 
 /**
+ * @summary Search the agent's catalog: metadata and current access only.
+ */
+export const passwordsAgentSearchParams = zod.object({
+  team: zod.uuid(),
+});
+
+export const passwordsAgentSearchQueryParams = zod.object({
+  q: zod
+    .string()
+    .nullish()
+    .describe('Metadata search text; never a value search.'),
+  limit: zod.string().nullish().describe('Page size, 1 to 100; default 50.'),
+  cursor: zod.string().nullish().describe('Cursor from the previous page.'),
+});
+
+export const passwordsAgentSearchHeader = zod.object({
+  'X-Macro-Agent-Session-Id': zod.string().describe('Wake UUIDv7'),
+});
+
+export const passwordsAgentSearchResponse = zod
+  .object({
+    items: zod
+      .array(
+        zod
+          .object({
+            access: zod
+              .object({
+                canSetTotp: zod
+                  .boolean()
+                  .describe(
+                    'Whether the agent may enroll a verification-code seed.'
+                  ),
+                canUpdate: zod
+                  .boolean()
+                  .describe(
+                    'Whether the agent may update values and metadata.'
+                  ),
+                grantPermission: zod
+                  .union([
+                    zod.null(),
+                    zod.enum(['view', 'edit']).describe('Grant capability.'),
+                  ])
+                  .optional(),
+                pendingRequestId: zod
+                  .uuid()
+                  .nullish()
+                  .describe('Live request awaiting review.'),
+                permissionRevision: zod
+                  .number()
+                  .describe(
+                    "Revision of this agent's grant\/approval on the item."
+                  ),
+                status: zod
+                  .enum(['usable', 'request_access', 'pending'])
+                  .describe('Whether the agent can use an item now.'),
+                useBasis: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .enum(['creator_grant', 'approved_grant'])
+                      .describe('Why a usable item is usable.'),
+                  ])
+                  .optional(),
+              })
+              .describe(
+                'Current agent access to one item, recomputed on every use.'
+              ),
+            id: zod
+              .uuid()
+              .describe('Vault item identity, UUIDv7 for new items.'),
+            kind: zod
+              .enum([
+                'login',
+                'card',
+                'note',
+                'identity',
+                'api',
+                'verification_code',
+              ])
+              .describe(
+                'Product template. Values use the same protected representation for every template.'
+              ),
+            name: zod.string().describe('Display name.'),
+            url: zod.string().nullish().describe('Website URL.'),
+            version: zod.number().describe('Committed positive version.'),
+          })
+          .describe(
+            'Metadata-only search hit; never values, usernames, notes or custom fields.'
+          )
+      )
+      .describe('Hits, newest first.'),
+    nextCursor: zod
+      .string()
+      .nullish()
+      .describe('Opaque cursor of the next page.'),
+  })
+  .describe('One search page.');
+
+/**
+ * @summary Create a login or API item attributed to this agent.
+ */
+export const passwordsAgentCreateParams = zod.object({
+  team: zod.uuid(),
+});
+
+export const passwordsAgentCreateHeader = zod.object({
+  'X-Macro-Agent-Session-Id': zod.string().describe('Wake UUIDv7'),
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsAgentCreateBody = zod
+  .object({
+    name: zod.string().describe('Display name.'),
+    operationId: zod
+      .uuid()
+      .describe('UUIDv7, stable across retries; becomes the item id.'),
+    secret: zod
+      .union([
+        zod
+          .object({
+            kind: zod.enum(['login']),
+            password: zod
+              .string()
+              .describe(
+                'Owned sensitive text. Deliberately does not implement Debug or Display.'
+              ),
+            username: zod
+              .union([
+                zod.null(),
+                zod
+                  .string()
+                  .describe(
+                    'Owned sensitive text. Deliberately does not implement Debug or Display.'
+                  ),
+              ])
+              .optional(),
+          })
+          .describe('A website or application login.'),
+        zod
+          .object({
+            key: zod
+              .union([
+                zod.null(),
+                zod
+                  .string()
+                  .describe(
+                    'Owned sensitive text. Deliberately does not implement Debug or Display.'
+                  ),
+              ])
+              .optional(),
+            kind: zod.enum(['api']),
+            secret: zod
+              .string()
+              .describe(
+                'Owned sensitive text. Deliberately does not implement Debug or Display.'
+              ),
+          })
+          .describe('An API credential.'),
+      ])
+      .describe('New item values; the item kind is this tag.'),
+    url: zod
+      .union([
+        zod.null(),
+        zod
+          .string()
+          .describe(
+            'A public HTTP(S) login URL; credentials and userinfo are rejected before indexing.'
+          ),
+      ])
+      .optional(),
+  })
+  .describe("Agent item creation; the kind is the secret's tag.");
+
+export const passwordsAgentCreateResponse = zod
+  .object({
+    item: zod
+      .object({
+        access: zod
+          .object({
+            canSetTotp: zod
+              .boolean()
+              .describe(
+                'Whether the agent may enroll a verification-code seed.'
+              ),
+            canUpdate: zod
+              .boolean()
+              .describe('Whether the agent may update values and metadata.'),
+            grantPermission: zod
+              .union([
+                zod.null(),
+                zod.enum(['view', 'edit']).describe('Grant capability.'),
+              ])
+              .optional(),
+            pendingRequestId: zod
+              .uuid()
+              .nullish()
+              .describe('Live request awaiting review.'),
+            permissionRevision: zod
+              .number()
+              .describe(
+                "Revision of this agent's grant\/approval on the item."
+              ),
+            status: zod
+              .enum(['usable', 'request_access', 'pending'])
+              .describe('Whether the agent can use an item now.'),
+            useBasis: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum(['creator_grant', 'approved_grant'])
+                  .describe('Why a usable item is usable.'),
+              ])
+              .optional(),
+          })
+          .describe(
+            'Current agent access to one item, recomputed on every use.'
+          ),
+        id: zod.uuid().describe('Vault item identity, UUIDv7 for new items.'),
+        kind: zod
+          .enum([
+            'login',
+            'card',
+            'note',
+            'identity',
+            'api',
+            'verification_code',
+          ])
+          .describe(
+            'Product template. Values use the same protected representation for every template.'
+          ),
+        name: zod.string().describe('Display name.'),
+        url: zod.string().nullish().describe('Website URL.'),
+        version: zod.number().describe('Committed positive version.'),
+      })
+      .describe(
+        'Metadata-only search hit; never values, usernames, notes or custom fields.'
+      ),
+    version: zod.number().describe('Committed version.'),
+  })
+  .describe('Created or updated item.');
+
+/**
+ * @summary Replace supplied fields of a login or API item.
+ */
+export const passwordsAgentUpdateParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsAgentUpdateHeader = zod.object({
+  'X-Macro-Agent-Session-Id': zod.string().describe('Wake UUIDv7'),
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsAgentUpdateBody = zod
+  .object({
+    expectedVersion: zod
+      .number()
+      .describe('Committed version the update applies to.'),
+    metadataPatch: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            name: zod.string().nullish().describe('New display name.'),
+            url: zod
+              .string()
+              .nullish()
+              .describe('New URL; null clears it, absent keeps it.'),
+          })
+          .describe('Agent-editable display fields.'),
+      ])
+      .optional(),
+    operationId: zod
+      .uuid()
+      .describe('UUIDv7, stable across retries of this one update.'),
+    secretPatch: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                kind: zod.enum(['login']),
+                password: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .string()
+                      .describe(
+                        'Owned sensitive text. Deliberately does not implement Debug or Display.'
+                      ),
+                  ])
+                  .optional(),
+                username: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .string()
+                      .describe(
+                        'Owned sensitive text. Deliberately does not implement Debug or Display.'
+                      ),
+                  ])
+                  .optional(),
+              })
+              .describe('Login slots to replace.'),
+            zod
+              .object({
+                key: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .string()
+                      .describe(
+                        'Owned sensitive text. Deliberately does not implement Debug or Display.'
+                      ),
+                  ])
+                  .optional(),
+                kind: zod.enum(['api']),
+                secret: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .string()
+                      .describe(
+                        'Owned sensitive text. Deliberately does not implement Debug or Display.'
+                      ),
+                  ])
+                  .optional(),
+              })
+              .describe('API credential slots to replace.'),
+          ])
+          .describe(
+            'Replacement of supplied slots; absent slots keep their stored value.'
+          ),
+      ])
+      .optional(),
+  })
+  .describe('Agent item update.');
+
+export const passwordsAgentUpdateResponse = zod
+  .object({
+    item: zod
+      .object({
+        access: zod
+          .object({
+            canSetTotp: zod
+              .boolean()
+              .describe(
+                'Whether the agent may enroll a verification-code seed.'
+              ),
+            canUpdate: zod
+              .boolean()
+              .describe('Whether the agent may update values and metadata.'),
+            grantPermission: zod
+              .union([
+                zod.null(),
+                zod.enum(['view', 'edit']).describe('Grant capability.'),
+              ])
+              .optional(),
+            pendingRequestId: zod
+              .uuid()
+              .nullish()
+              .describe('Live request awaiting review.'),
+            permissionRevision: zod
+              .number()
+              .describe(
+                "Revision of this agent's grant\/approval on the item."
+              ),
+            status: zod
+              .enum(['usable', 'request_access', 'pending'])
+              .describe('Whether the agent can use an item now.'),
+            useBasis: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum(['creator_grant', 'approved_grant'])
+                  .describe('Why a usable item is usable.'),
+              ])
+              .optional(),
+          })
+          .describe(
+            'Current agent access to one item, recomputed on every use.'
+          ),
+        id: zod.uuid().describe('Vault item identity, UUIDv7 for new items.'),
+        kind: zod
+          .enum([
+            'login',
+            'card',
+            'note',
+            'identity',
+            'api',
+            'verification_code',
+          ])
+          .describe(
+            'Product template. Values use the same protected representation for every template.'
+          ),
+        name: zod.string().describe('Display name.'),
+        url: zod.string().nullish().describe('Website URL.'),
+        version: zod.number().describe('Committed positive version.'),
+      })
+      .describe(
+        'Metadata-only search hit; never values, usernames, notes or custom fields.'
+      ),
+    version: zod.number().describe('Committed version.'),
+  })
+  .describe('Created or updated item.');
+
+/**
+ * @summary Ask authorized humans for access to an item.
+ */
+export const passwordsAgentRequestAccessParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsAgentRequestAccessHeader = zod.object({
+  'X-Macro-Agent-Session-Id': zod.string().describe('Wake UUIDv7'),
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsAgentRequestAccessBody = zod
+  .object({
+    permission: zod.enum(['view', 'edit']).describe('Grant capability.'),
+  })
+  .describe('Access request body.');
+
+export const passwordsAgentRequestAccessResponse = zod
+  .object({
+    access: zod
+      .object({
+        canSetTotp: zod
+          .boolean()
+          .describe('Whether the agent may enroll a verification-code seed.'),
+        canUpdate: zod
+          .boolean()
+          .describe('Whether the agent may update values and metadata.'),
+        grantPermission: zod
+          .union([
+            zod.null(),
+            zod.enum(['view', 'edit']).describe('Grant capability.'),
+          ])
+          .optional(),
+        pendingRequestId: zod
+          .uuid()
+          .nullish()
+          .describe('Live request awaiting review.'),
+        permissionRevision: zod
+          .number()
+          .describe("Revision of this agent's grant\/approval on the item."),
+        status: zod
+          .enum(['usable', 'request_access', 'pending'])
+          .describe('Whether the agent can use an item now.'),
+        useBasis: zod
+          .union([
+            zod.null(),
+            zod
+              .enum(['creator_grant', 'approved_grant'])
+              .describe('Why a usable item is usable.'),
+          ])
+          .optional(),
+      })
+      .describe('Current agent access to one item, recomputed on every use.'),
+    agentAccountId: zod.string().describe('Agent account.'),
+    itemId: zod.uuid().describe('Vault item identity, UUIDv7 for new items.'),
+    permission: zod
+      .union([
+        zod.null(),
+        zod.enum(['view', 'edit']).describe('Grant capability.'),
+      ])
+      .optional(),
+    requestId: zod
+      .uuid()
+      .nullish()
+      .describe('Request id; null when none exists.'),
+    revision: zod.number().describe('Request revision; 0 when none exists.'),
+    status: zod
+      .enum(['none', 'pending', 'approved', 'denied', 'revoked'])
+      .describe('Wire request status.'),
+    updatedAt: zod.iso.datetime({}).nullish().describe('Last transition.'),
+  })
+  .describe("An agent's request state.");
+
+/**
+ * @summary This agent's own request state for the item.
+ */
+export const passwordsAgentMyRequestParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsAgentMyRequestHeader = zod.object({
+  'X-Macro-Agent-Session-Id': zod.string().describe('Wake UUIDv7'),
+});
+
+export const passwordsAgentMyRequestResponse = zod
+  .object({
+    access: zod
+      .object({
+        canSetTotp: zod
+          .boolean()
+          .describe('Whether the agent may enroll a verification-code seed.'),
+        canUpdate: zod
+          .boolean()
+          .describe('Whether the agent may update values and metadata.'),
+        grantPermission: zod
+          .union([
+            zod.null(),
+            zod.enum(['view', 'edit']).describe('Grant capability.'),
+          ])
+          .optional(),
+        pendingRequestId: zod
+          .uuid()
+          .nullish()
+          .describe('Live request awaiting review.'),
+        permissionRevision: zod
+          .number()
+          .describe("Revision of this agent's grant\/approval on the item."),
+        status: zod
+          .enum(['usable', 'request_access', 'pending'])
+          .describe('Whether the agent can use an item now.'),
+        useBasis: zod
+          .union([
+            zod.null(),
+            zod
+              .enum(['creator_grant', 'approved_grant'])
+              .describe('Why a usable item is usable.'),
+          ])
+          .optional(),
+      })
+      .describe('Current agent access to one item, recomputed on every use.'),
+    agentAccountId: zod.string().describe('Agent account.'),
+    itemId: zod.uuid().describe('Vault item identity, UUIDv7 for new items.'),
+    permission: zod
+      .union([
+        zod.null(),
+        zod.enum(['view', 'edit']).describe('Grant capability.'),
+      ])
+      .optional(),
+    requestId: zod
+      .uuid()
+      .nullish()
+      .describe('Request id; null when none exists.'),
+    revision: zod.number().describe('Request revision; 0 when none exists.'),
+    status: zod
+      .enum(['none', 'pending', 'approved', 'denied', 'revoked'])
+      .describe('Wire request status.'),
+    updatedAt: zod.iso.datetime({}).nullish().describe('Last transition.'),
+  })
+  .describe("An agent's request state.");
+
+/**
+ * @summary Disclose one selected field to the agent's capability.
+ */
+export const passwordsAgentDiscloseParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsAgentDiscloseHeader = zod.object({
+  'X-Macro-Agent-Session-Id': zod.string().describe('Wake UUIDv7'),
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsAgentDiscloseBody = zod
+  .object({
+    expectedVersion: zod
+      .number()
+      .nullish()
+      .describe('When given, the committed version must match.'),
+    purpose: zod
+      .enum(['copy'])
+      .describe(
+        'Accepted disclosure intent. Typing is a later additive value.'
+      ),
+    selector: zod
+      .union([
+        zod
+          .object({
+            field: zod
+              .enum(['username', 'password'])
+              .describe('Login item fields an agent may select.'),
+            kind: zod.enum(['login']),
+          })
+          .describe('A login item field.'),
+        zod
+          .object({
+            field: zod
+              .enum(['key', 'secret'])
+              .describe('API credential fields an agent may select.'),
+            kind: zod.enum(['api']),
+          })
+          .describe('An API credential field.'),
+      ])
+      .describe(
+        'Closed kind-aware selector of exactly one stored slot. Notes, custom fields\nand TOTP seeds are never selectable.'
+      ),
+  })
+  .describe('One-field disclosure request.');
+
+export const passwordsAgentDiscloseResponse = zod
+  .object({
+    selector: zod
+      .union([
+        zod
+          .object({
+            field: zod
+              .enum(['username', 'password'])
+              .describe('Login item fields an agent may select.'),
+            kind: zod.enum(['login']),
+          })
+          .describe('A login item field.'),
+        zod
+          .object({
+            field: zod
+              .enum(['key', 'secret'])
+              .describe('API credential fields an agent may select.'),
+            kind: zod.enum(['api']),
+          })
+          .describe('An API credential field.'),
+      ])
+      .describe(
+        'Closed kind-aware selector of exactly one stored slot. Notes, custom fields\nand TOTP seeds are never selectable.'
+      ),
+    value: zod
+      .string()
+      .describe(
+        'Owned sensitive text. Deliberately does not implement Debug or Display.'
+      ),
+    version: zod.number().describe('Committed version it was read from.'),
+  })
+  .describe('One disclosed field.');
+
+/**
+ * @summary Enroll a verification-code seed on an item this agent created.
+ */
+export const passwordsAgentSetTotpParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsAgentSetTotpHeader = zod.object({
+  'X-Macro-Agent-Session-Id': zod.string().describe('Wake UUIDv7'),
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsAgentSetTotpBody = zod
+  .object({
+    expectedVersion: zod
+      .number()
+      .describe('Committed version the setup applies to.'),
+    operationId: zod
+      .uuid()
+      .describe(
+        'UUIDv7, stable across retries; identifies the enrollment generation.'
+      ),
+    seed: zod
+      .string()
+      .describe(
+        'Owned sensitive text. Deliberately does not implement Debug or Display.'
+      ),
+  })
+  .describe('Verification-code seed setup for an item the agent created.');
+
+/**
+ * @summary The current verification code of a login or verification-code item.
+ */
+export const passwordsAgentTotpCodeParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsAgentTotpCodeHeader = zod.object({
+  'X-Macro-Agent-Session-Id': zod.string().describe('Wake UUIDv7'),
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsAgentTotpCodeBody = zod
+  .object({
+    purpose: zod
+      .enum(['copy'])
+      .describe(
+        'Accepted disclosure intent. Typing is a later additive value.'
+      ),
+  })
+  .describe('Verification-code request.');
+
+export const passwordsAgentTotpCodeResponsePeriodSecondsMin = 0;
+
+export const passwordsAgentTotpCodeResponseValidForMsMin = 0;
+
+export const passwordsAgentTotpCodeResponse = zod
+  .object({
+    code: zod
+      .string()
+      .describe(
+        'Owned sensitive text. Deliberately does not implement Debug or Display.'
+      ),
+    expiresAt: zod.iso
+      .datetime({})
+      .describe(
+        'Conservative usable-until time under the documented provider clock bound;\nnot an observed generation instant.'
+      ),
+    periodSeconds: zod
+      .number()
+      .min(passwordsAgentTotpCodeResponsePeriodSecondsMin)
+      .describe('Code period in seconds.'),
+    validForMs: zod
+      .number()
+      .min(passwordsAgentTotpCodeResponseValidForMsMin)
+      .describe(
+        "Whole milliseconds from the server's final check until `expiresAt`."
+      ),
+  })
+  .describe(
+    'A verification code with a conservative server-computed lifetime.'
+  );
+
+/**
  * @summary List current teams available to the authenticated human.
  */
 export const passwordsTeamsResponseItem = zod
   .uuid()
   .describe('Team isolation boundary.');
 export const passwordsTeamsResponse = zod.array(passwordsTeamsResponseItem);
+
+/**
+ * @summary Pending agent requests on items the caller may manage.
+ */
+export const passwordsAgentAccessRequestsParams = zod.object({
+  team: zod.uuid(),
+});
+
+export const passwordsAgentAccessRequestsQueryParams = zod.object({
+  itemId: zod
+    .string()
+    .nullish()
+    .describe(
+      "Managed item: list every agent's access to it instead of the pending queue."
+    ),
+  limit: zod.string().nullish().describe('Page size, 1 to 100; default 50.'),
+  cursor: zod.string().nullish().describe('Cursor from the previous page.'),
+});
+
+export const passwordsAgentAccessRequestsResponse = zod
+  .object({
+    nextCursor: zod
+      .string()
+      .nullish()
+      .describe('Opaque cursor of the next page.'),
+    requests: zod
+      .array(
+        zod
+          .object({
+            access: zod
+              .object({
+                canSetTotp: zod
+                  .boolean()
+                  .describe(
+                    'Whether the agent may enroll a verification-code seed.'
+                  ),
+                canUpdate: zod
+                  .boolean()
+                  .describe(
+                    'Whether the agent may update values and metadata.'
+                  ),
+                grantPermission: zod
+                  .union([
+                    zod.null(),
+                    zod.enum(['view', 'edit']).describe('Grant capability.'),
+                  ])
+                  .optional(),
+                pendingRequestId: zod
+                  .uuid()
+                  .nullish()
+                  .describe('Live request awaiting review.'),
+                permissionRevision: zod
+                  .number()
+                  .describe(
+                    "Revision of this agent's grant\/approval on the item."
+                  ),
+                status: zod
+                  .enum(['usable', 'request_access', 'pending'])
+                  .describe('Whether the agent can use an item now.'),
+                useBasis: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .enum(['creator_grant', 'approved_grant'])
+                      .describe('Why a usable item is usable.'),
+                  ])
+                  .optional(),
+              })
+              .describe(
+                'Current agent access to one item, recomputed on every use.'
+              ),
+            agentAccountId: zod.string().describe('Agent account.'),
+            itemId: zod
+              .uuid()
+              .describe('Vault item identity, UUIDv7 for new items.'),
+            permission: zod
+              .union([
+                zod.null(),
+                zod.enum(['view', 'edit']).describe('Grant capability.'),
+              ])
+              .optional(),
+            requestId: zod
+              .uuid()
+              .nullish()
+              .describe('Request id; null when none exists.'),
+            revision: zod
+              .number()
+              .describe('Request revision; 0 when none exists.'),
+            status: zod
+              .enum(['none', 'pending', 'approved', 'denied', 'revoked'])
+              .describe('Wire request status.'),
+            updatedAt: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('Last transition.'),
+          })
+          .describe("An agent's request state.")
+      )
+      .describe('Pending requests on items the caller may manage.'),
+  })
+  .describe('A page of requests for human review.');
 
 /**
  * @summary List the authenticated team’s folders.
@@ -78114,6 +80612,7 @@ export const passwordsImportBatchBody = zod
         'one_password_csv',
         'bitwarden_json',
         'bitwarden_csv',
+        'bitwarden_zip',
       ])
       .describe(
         'Recognized client-side source parser; contains no export contents.'
@@ -78285,6 +80784,7 @@ export const passwordsImportBatchResponse = zod
                     'folder_missing',
                     'busy',
                     'vault_unavailable',
+                    'vault_not_provisioned',
                   ])
                   .describe('Closed, sanitized per-item failure categories.'),
               ])
@@ -78341,7 +80841,9 @@ export const passwordsListResponseItem = zod
     createdAt: zod.iso.datetime({}).describe('Resource creation timestamp.'),
     favorite: zod
       .boolean()
-      .describe('Whether the item is marked as a favorite.'),
+      .describe(
+        "The current viewer's private favorite in responses; legacy initial flag in storage."
+      ),
     folderId: zod
       .uuid()
       .nullish()
@@ -78431,7 +80933,9 @@ export const passwordsCreateBody = zod
       .describe('Version observed by the editor; absent only for creation.'),
     favorite: zod
       .boolean()
-      .describe('Whether the item is marked as a favorite.'),
+      .describe(
+        'Initial creator preference on create; ignored on update. Use the favorite endpoint afterward.'
+      ),
     folderId: zod
       .uuid()
       .nullish()
@@ -78514,7 +81018,9 @@ export const passwordsCreateResponse = zod
     createdAt: zod.iso.datetime({}).describe('Resource creation timestamp.'),
     favorite: zod
       .boolean()
-      .describe('Whether the item is marked as a favorite.'),
+      .describe(
+        "The current viewer's private favorite in responses; legacy initial flag in storage."
+      ),
     folderId: zod
       .uuid()
       .nullish()
@@ -78615,7 +81121,9 @@ export const passwordsMatchResponseItem = zod
     createdAt: zod.iso.datetime({}).describe('Resource creation timestamp.'),
     favorite: zod
       .boolean()
-      .describe('Whether the item is marked as a favorite.'),
+      .describe(
+        "The current viewer's private favorite in responses; legacy initial flag in storage."
+      ),
     folderId: zod
       .uuid()
       .nullish()
@@ -78701,7 +81209,9 @@ export const passwordsDetailResponse = zod
     createdAt: zod.iso.datetime({}).describe('Resource creation timestamp.'),
     favorite: zod
       .boolean()
-      .describe('Whether the item is marked as a favorite.'),
+      .describe(
+        "The current viewer's private favorite in responses; legacy initial flag in storage."
+      ),
     folderId: zod
       .uuid()
       .nullish()
@@ -78791,7 +81301,9 @@ export const passwordsUpdateBody = zod
       .describe('Version observed by the editor; absent only for creation.'),
     favorite: zod
       .boolean()
-      .describe('Whether the item is marked as a favorite.'),
+      .describe(
+        'Initial creator preference on create; ignored on update. Use the favorite endpoint afterward.'
+      ),
     folderId: zod
       .uuid()
       .nullish()
@@ -78874,7 +81386,9 @@ export const passwordsUpdateResponse = zod
     createdAt: zod.iso.datetime({}).describe('Resource creation timestamp.'),
     favorite: zod
       .boolean()
-      .describe('Whether the item is marked as a favorite.'),
+      .describe(
+        "The current viewer's private favorite in responses; legacy initial flag in storage."
+      ),
     folderId: zod
       .uuid()
       .nullish()
@@ -78975,7 +81489,9 @@ export const passwordsPatchBody = zod
       .describe('Version observed by the editor; absent only for creation.'),
     favorite: zod
       .boolean()
-      .describe('Whether the item is marked as a favorite.'),
+      .describe(
+        'Legacy accepted field, ignored; change private preferences through the favorite endpoint.'
+      ),
     folderId: zod
       .uuid()
       .nullish()
@@ -79008,7 +81524,9 @@ export const passwordsPatchResponse = zod
     createdAt: zod.iso.datetime({}).describe('Resource creation timestamp.'),
     favorite: zod
       .boolean()
-      .describe('Whether the item is marked as a favorite.'),
+      .describe(
+        "The current viewer's private favorite in responses; legacy initial flag in storage."
+      ),
     folderId: zod
       .uuid()
       .nullish()
@@ -79118,6 +81636,156 @@ export const passwordsActivityResponse = zod.array(
 );
 
 /**
+ * @summary Approve or deny a pending agent request.
+ */
+export const passwordsAgentResolveRequestParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+  request: zod.uuid(),
+});
+
+export const passwordsAgentResolveRequestHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsAgentResolveRequestBody = zod
+  .union([
+    zod
+      .object({
+        decision: zod.enum(['approve']),
+        permission: zod.enum(['view', 'edit']).describe('Grant capability.'),
+        revision: zod
+          .number()
+          .describe('Request revision observed by the reviewer.'),
+      })
+      .describe('Grant the permission and standing approval together.'),
+    zod
+      .object({
+        decision: zod.enum(['deny']),
+        revision: zod
+          .number()
+          .describe('Request revision observed by the reviewer.'),
+      })
+      .describe('Deny the request.'),
+  ])
+  .describe('Human decision on a pending request.');
+
+export const passwordsAgentResolveRequestResponse = zod
+  .object({
+    access: zod
+      .object({
+        canSetTotp: zod
+          .boolean()
+          .describe('Whether the agent may enroll a verification-code seed.'),
+        canUpdate: zod
+          .boolean()
+          .describe('Whether the agent may update values and metadata.'),
+        grantPermission: zod
+          .union([
+            zod.null(),
+            zod.enum(['view', 'edit']).describe('Grant capability.'),
+          ])
+          .optional(),
+        pendingRequestId: zod
+          .uuid()
+          .nullish()
+          .describe('Live request awaiting review.'),
+        permissionRevision: zod
+          .number()
+          .describe("Revision of this agent's grant\/approval on the item."),
+        status: zod
+          .enum(['usable', 'request_access', 'pending'])
+          .describe('Whether the agent can use an item now.'),
+        useBasis: zod
+          .union([
+            zod.null(),
+            zod
+              .enum(['creator_grant', 'approved_grant'])
+              .describe('Why a usable item is usable.'),
+          ])
+          .optional(),
+      })
+      .describe('Current agent access to one item, recomputed on every use.'),
+    agentAccountId: zod.string().describe('Agent account.'),
+    itemId: zod.uuid().describe('Vault item identity, UUIDv7 for new items.'),
+    permission: zod
+      .union([
+        zod.null(),
+        zod.enum(['view', 'edit']).describe('Grant capability.'),
+      ])
+      .optional(),
+    requestId: zod
+      .uuid()
+      .nullish()
+      .describe('Request id; null when none exists.'),
+    revision: zod.number().describe('Request revision; 0 when none exists.'),
+    status: zod
+      .enum(['none', 'pending', 'approved', 'denied', 'revoked'])
+      .describe('Wire request status.'),
+    updatedAt: zod.iso.datetime({}).nullish().describe('Last transition.'),
+  })
+  .describe("An agent's request state.");
+
+/**
+ * @summary Revoke an agent's standing approval, or its grant and approval.
+ */
+export const passwordsAgentRevokeParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+  agent: zod.string(),
+});
+
+export const passwordsAgentRevokeHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsAgentRevokeBody = zod
+  .object({
+    expectedPermissionRevision: zod
+      .number()
+      .describe('Permission revision observed by the reviewer.'),
+    scope: zod
+      .enum(['approval', 'grant_and_approval'])
+      .describe('What a revocation removes.'),
+  })
+  .describe('Human revocation of agent access.');
+
+export const passwordsAgentRevokeResponse = zod
+  .object({
+    canSetTotp: zod
+      .boolean()
+      .describe('Whether the agent may enroll a verification-code seed.'),
+    canUpdate: zod
+      .boolean()
+      .describe('Whether the agent may update values and metadata.'),
+    grantPermission: zod
+      .union([
+        zod.null(),
+        zod.enum(['view', 'edit']).describe('Grant capability.'),
+      ])
+      .optional(),
+    pendingRequestId: zod
+      .uuid()
+      .nullish()
+      .describe('Live request awaiting review.'),
+    permissionRevision: zod
+      .number()
+      .describe("Revision of this agent's grant\/approval on the item."),
+    status: zod
+      .enum(['usable', 'request_access', 'pending'])
+      .describe('Whether the agent can use an item now.'),
+    useBasis: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['creator_grant', 'approved_grant'])
+          .describe('Why a usable item is usable.'),
+      ])
+      .optional(),
+  })
+  .describe('Current agent access to one item, recomputed on every use.');
+
+/**
  * @summary Disclose values for an explicitly audited clipboard action.
  */
 export const passwordsCopyParams = zod.object({
@@ -79184,6 +81852,30 @@ export const passwordsCopyResponse = zod
     version: zod.number().describe('Committed provider value version.'),
   })
   .describe('Secret response used only by explicit reveal\/copy routes.');
+
+/**
+ * @summary Change only the authenticated viewer's private preference.
+ */
+export const passwordsSetFavoriteParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsSetFavoriteHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+/**
+ * @summary Change only the authenticated viewer's private preference.
+ */
+export const passwordsRemoveFavoriteParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsRemoveFavoriteHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
 
 /**
  * @summary List protected-value version metadata.
@@ -79281,9 +81973,9 @@ export const passwordsGrantsResponseItem = zod
   .object({
     id: zod.string().describe('Identity of this resource within its team.'),
     kind: zod
-      .enum(['user', 'team'])
+      .enum(['user', 'team', 'agent'])
       .describe(
-        'Future principals can extend this without exposing agent controls in v1.'
+        'Grant recipient category. Agent grants are managed only through the agent\naccess routes and never appear in, or count toward, human sharing.'
       ),
     permission: zod.enum(['view', 'edit']).describe('Grant capability.'),
   })
@@ -79312,9 +82004,9 @@ export const passwordsShareBody = zod
               .string()
               .describe('Identity of this resource within its team.'),
             kind: zod
-              .enum(['user', 'team'])
+              .enum(['user', 'team', 'agent'])
               .describe(
-                'Future principals can extend this without exposing agent controls in v1.'
+                'Grant recipient category. Agent grants are managed only through the agent\naccess routes and never appear in, or count toward, human sharing.'
               ),
             permission: zod
               .enum(['view', 'edit'])
@@ -81337,8 +84029,20 @@ export const revertDeleteProjectResponse = zod.object({
 });
 
 /**
- * @summary Gets the users recently deleted items.
+ * @summary Gets one page of the user's trashed documents, chats and folders, most
+recently trashed first.
  */
+export const recentlyDeletedQueryLimitMin = 0;
+
+export const recentlyDeletedQueryParams = zod.object({
+  limit: zod
+    .number()
+    .min(recentlyDeletedQueryLimitMin)
+    .optional()
+    .describe('Page size (1-500, default 100)'),
+  cursor: zod.string().optional().describe("The previous page's next_cursor"),
+});
+
 export const recentlyDeletedResponse = zod.object({
   data: zod
     .object({
@@ -81493,7 +84197,15 @@ export const recentlyDeletedResponse = zod.object({
             }),
           ])
         )
-        .describe('The items returned from the call'),
+        .describe(
+          'The items returned from the call, most recently trashed first'
+        ),
+      next_cursor: zod
+        .string()
+        .nullish()
+        .describe(
+          'Pass as `cursor` to get the next page; absent on the last page'
+        ),
     })
     .describe('Data to be returned'),
   error: zod.boolean().describe('Indicates if an error occurred'),
@@ -81746,6 +84458,73 @@ export const getViewsHandlerResponse = zod.object({
   ),
   views: zod.array(
     zod.object({
+      appearance: zod
+        .union([
+          zod.null(),
+          zod
+            .object({
+              color: zod
+                .union([
+                  zod.null(),
+                  zod
+                    .enum([
+                      'gray',
+                      'red',
+                      'tomato',
+                      'orange',
+                      'amber',
+                      'yellow',
+                      'green',
+                      'teal',
+                      'blue',
+                      'indigo',
+                      'purple',
+                      'pink',
+                    ])
+                    .describe(
+                      'Named tint keys from the shared tag color palette.'
+                    ),
+                ])
+                .optional(),
+              icon: zod
+                .union([
+                  zod.null(),
+                  zod
+                    .union([
+                      zod
+                        .object({
+                          kind: zod.enum(['macro']),
+                          name: zod
+                            .string()
+                            .describe(
+                              'Catalog name without the SVG extension.'
+                            ),
+                        })
+                        .describe(
+                          "A stable name from Macro's original, distinct icon catalog."
+                        ),
+                      zod
+                        .object({
+                          kind: zod.enum(['emoji']),
+                          value: zod
+                            .string()
+                            .describe(
+                              'Unicode emoji text, not markup or a URL.'
+                            ),
+                        })
+                        .describe(
+                          'A single native emoji, including skin-tone and joined sequences.'
+                        ),
+                    ])
+                    .describe("The source of an entity's custom icon."),
+                ])
+                .optional(),
+            })
+            .describe(
+              "An entity's optional icon and tint overrides; absent values retain type defaults."
+            ),
+        ])
+        .optional(),
       config: zod
         .unknown()
         .describe(
@@ -81766,6 +84545,67 @@ export const createViewHandlerBody = zod.object({
 });
 
 export const createViewHandlerResponse = zod.object({
+  appearance: zod
+    .union([
+      zod.null(),
+      zod
+        .object({
+          color: zod
+            .union([
+              zod.null(),
+              zod
+                .enum([
+                  'gray',
+                  'red',
+                  'tomato',
+                  'orange',
+                  'amber',
+                  'yellow',
+                  'green',
+                  'teal',
+                  'blue',
+                  'indigo',
+                  'purple',
+                  'pink',
+                ])
+                .describe('Named tint keys from the shared tag color palette.'),
+            ])
+            .optional(),
+          icon: zod
+            .union([
+              zod.null(),
+              zod
+                .union([
+                  zod
+                    .object({
+                      kind: zod.enum(['macro']),
+                      name: zod
+                        .string()
+                        .describe('Catalog name without the SVG extension.'),
+                    })
+                    .describe(
+                      "A stable name from Macro's original, distinct icon catalog."
+                    ),
+                  zod
+                    .object({
+                      kind: zod.enum(['emoji']),
+                      value: zod
+                        .string()
+                        .describe('Unicode emoji text, not markup or a URL.'),
+                    })
+                    .describe(
+                      'A single native emoji, including skin-tone and joined sequences.'
+                    ),
+                ])
+                .describe("The source of an entity's custom icon."),
+            ])
+            .optional(),
+        })
+        .describe(
+          "An entity's optional icon and tint overrides; absent values retain type defaults."
+        ),
+    ])
+    .optional(),
   config: zod
     .unknown()
     .describe(
@@ -81808,6 +84648,73 @@ export const listSavedViewDefinitionsResponse = zod
       .array(
         zod
           .object({
+            appearance: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    color: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'gray',
+                            'red',
+                            'tomato',
+                            'orange',
+                            'amber',
+                            'yellow',
+                            'green',
+                            'teal',
+                            'blue',
+                            'indigo',
+                            'purple',
+                            'pink',
+                          ])
+                          .describe(
+                            'Named tint keys from the shared tag color palette.'
+                          ),
+                      ])
+                      .optional(),
+                    icon: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .union([
+                            zod
+                              .object({
+                                kind: zod.enum(['macro']),
+                                name: zod
+                                  .string()
+                                  .describe(
+                                    'Catalog name without the SVG extension.'
+                                  ),
+                              })
+                              .describe(
+                                "A stable name from Macro's original, distinct icon catalog."
+                              ),
+                            zod
+                              .object({
+                                kind: zod.enum(['emoji']),
+                                value: zod
+                                  .string()
+                                  .describe(
+                                    'Unicode emoji text, not markup or a URL.'
+                                  ),
+                              })
+                              .describe(
+                                'A single native emoji, including skin-tone and joined sequences.'
+                              ),
+                          ])
+                          .describe("The source of an entity's custom icon."),
+                      ])
+                      .optional(),
+                  })
+                  .describe(
+                    "An entity's optional icon and tint overrides; absent values retain type defaults."
+                  ),
+              ])
+              .optional(),
             config: zod
               .object({})
               .describe(
@@ -81839,6 +84746,67 @@ export const listSavedViewDefinitionsResponse = zod
   .describe("A page in the viewer's own order, then by creation time and ID.");
 
 export const createSavedViewDefinitionBody = zod.object({
+  appearance: zod
+    .union([
+      zod.null(),
+      zod
+        .object({
+          color: zod
+            .union([
+              zod.null(),
+              zod
+                .enum([
+                  'gray',
+                  'red',
+                  'tomato',
+                  'orange',
+                  'amber',
+                  'yellow',
+                  'green',
+                  'teal',
+                  'blue',
+                  'indigo',
+                  'purple',
+                  'pink',
+                ])
+                .describe('Named tint keys from the shared tag color palette.'),
+            ])
+            .optional(),
+          icon: zod
+            .union([
+              zod.null(),
+              zod
+                .union([
+                  zod
+                    .object({
+                      kind: zod.enum(['macro']),
+                      name: zod
+                        .string()
+                        .describe('Catalog name without the SVG extension.'),
+                    })
+                    .describe(
+                      "A stable name from Macro's original, distinct icon catalog."
+                    ),
+                  zod
+                    .object({
+                      kind: zod.enum(['emoji']),
+                      value: zod
+                        .string()
+                        .describe('Unicode emoji text, not markup or a URL.'),
+                    })
+                    .describe(
+                      'A single native emoji, including skin-tone and joined sequences.'
+                    ),
+                ])
+                .describe("The source of an entity's custom icon."),
+            ])
+            .optional(),
+        })
+        .describe(
+          "An entity's optional icon and tint overrides; absent values retain type defaults."
+        ),
+    ])
+    .optional(),
   config: zod
     .object({})
     .describe(
@@ -81870,6 +84838,69 @@ export const reorderSavedViewDefinitionsBody = zod.object({
 
 export const reorderSavedViewDefinitionsResponseItem = zod
   .object({
+    appearance: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            color: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum([
+                    'gray',
+                    'red',
+                    'tomato',
+                    'orange',
+                    'amber',
+                    'yellow',
+                    'green',
+                    'teal',
+                    'blue',
+                    'indigo',
+                    'purple',
+                    'pink',
+                  ])
+                  .describe(
+                    'Named tint keys from the shared tag color palette.'
+                  ),
+              ])
+              .optional(),
+            icon: zod
+              .union([
+                zod.null(),
+                zod
+                  .union([
+                    zod
+                      .object({
+                        kind: zod.enum(['macro']),
+                        name: zod
+                          .string()
+                          .describe('Catalog name without the SVG extension.'),
+                      })
+                      .describe(
+                        "A stable name from Macro's original, distinct icon catalog."
+                      ),
+                    zod
+                      .object({
+                        kind: zod.enum(['emoji']),
+                        value: zod
+                          .string()
+                          .describe('Unicode emoji text, not markup or a URL.'),
+                      })
+                      .describe(
+                        'A single native emoji, including skin-tone and joined sequences.'
+                      ),
+                  ])
+                  .describe("The source of an entity's custom icon."),
+              ])
+              .optional(),
+          })
+          .describe(
+            "An entity's optional icon and tint overrides; absent values retain type defaults."
+          ),
+      ])
+      .optional(),
     config: zod
       .object({})
       .describe(
@@ -81901,6 +84932,69 @@ export const getSavedViewDefinitionParams = zod.object({
 
 export const getSavedViewDefinitionResponse = zod
   .object({
+    appearance: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            color: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum([
+                    'gray',
+                    'red',
+                    'tomato',
+                    'orange',
+                    'amber',
+                    'yellow',
+                    'green',
+                    'teal',
+                    'blue',
+                    'indigo',
+                    'purple',
+                    'pink',
+                  ])
+                  .describe(
+                    'Named tint keys from the shared tag color palette.'
+                  ),
+              ])
+              .optional(),
+            icon: zod
+              .union([
+                zod.null(),
+                zod
+                  .union([
+                    zod
+                      .object({
+                        kind: zod.enum(['macro']),
+                        name: zod
+                          .string()
+                          .describe('Catalog name without the SVG extension.'),
+                      })
+                      .describe(
+                        "A stable name from Macro's original, distinct icon catalog."
+                      ),
+                    zod
+                      .object({
+                        kind: zod.enum(['emoji']),
+                        value: zod
+                          .string()
+                          .describe('Unicode emoji text, not markup or a URL.'),
+                      })
+                      .describe(
+                        'A single native emoji, including skin-tone and joined sequences.'
+                      ),
+                  ])
+                  .describe("The source of an entity's custom icon."),
+              ])
+              .optional(),
+          })
+          .describe(
+            "An entity's optional icon and tint overrides; absent values retain type defaults."
+          ),
+      ])
+      .optional(),
     config: zod
       .object({})
       .describe(
@@ -81967,6 +85061,217 @@ export const updateSavedViewDefinitionBody = zod.object({
 
 export const updateSavedViewDefinitionResponse = zod
   .object({
+    appearance: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            color: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum([
+                    'gray',
+                    'red',
+                    'tomato',
+                    'orange',
+                    'amber',
+                    'yellow',
+                    'green',
+                    'teal',
+                    'blue',
+                    'indigo',
+                    'purple',
+                    'pink',
+                  ])
+                  .describe(
+                    'Named tint keys from the shared tag color palette.'
+                  ),
+              ])
+              .optional(),
+            icon: zod
+              .union([
+                zod.null(),
+                zod
+                  .union([
+                    zod
+                      .object({
+                        kind: zod.enum(['macro']),
+                        name: zod
+                          .string()
+                          .describe('Catalog name without the SVG extension.'),
+                      })
+                      .describe(
+                        "A stable name from Macro's original, distinct icon catalog."
+                      ),
+                    zod
+                      .object({
+                        kind: zod.enum(['emoji']),
+                        value: zod
+                          .string()
+                          .describe('Unicode emoji text, not markup or a URL.'),
+                      })
+                      .describe(
+                        'A single native emoji, including skin-tone and joined sequences.'
+                      ),
+                  ])
+                  .describe("The source of an entity's custom icon."),
+              ])
+              .optional(),
+          })
+          .describe(
+            "An entity's optional icon and tint overrides; absent values retain type defaults."
+          ),
+      ])
+      .optional(),
+    config: zod
+      .object({})
+      .describe(
+        'Versioned configuration interpreted by the consuming feature, with its\n`kind` (such as `email` or `task`) and `version`.'
+      ),
+    createdAt: zod.iso.datetime({}),
+    id: zod.uuid().describe('Stable identity of this definition.'),
+    name: zod.string().describe('Display name chosen by the owner.'),
+    ownerId: zod
+      .string()
+      .describe('User who owns and can edit this definition.'),
+    revision: zod
+      .number()
+      .describe('Current revision, required by updates and deletion.'),
+    sharedTeamId: zod
+      .uuid()
+      .nullish()
+      .describe('Team with access, or absent when the definition is private.'),
+    updatedAt: zod.iso.datetime({}),
+  })
+  .describe('A saved filter definition, not a snapshot of matching entities.');
+
+export const setSavedViewAppearanceParams = zod.object({
+  saved_view_id: zod.uuid().describe('The saved view to edit'),
+});
+
+export const setSavedViewAppearanceBody = zod
+  .object({
+    color: zod
+      .union([
+        zod.null(),
+        zod
+          .enum([
+            'gray',
+            'red',
+            'tomato',
+            'orange',
+            'amber',
+            'yellow',
+            'green',
+            'teal',
+            'blue',
+            'indigo',
+            'purple',
+            'pink',
+          ])
+          .describe('Named tint keys from the shared tag color palette.'),
+      ])
+      .optional(),
+    icon: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                kind: zod.enum(['macro']),
+                name: zod
+                  .string()
+                  .describe('Catalog name without the SVG extension.'),
+              })
+              .describe(
+                "A stable name from Macro's original, distinct icon catalog."
+              ),
+            zod
+              .object({
+                kind: zod.enum(['emoji']),
+                value: zod
+                  .string()
+                  .describe('Unicode emoji text, not markup or a URL.'),
+              })
+              .describe(
+                'A single native emoji, including skin-tone and joined sequences.'
+              ),
+          ])
+          .describe("The source of an entity's custom icon."),
+      ])
+      .optional(),
+  })
+  .describe(
+    "An entity's optional icon and tint overrides; absent values retain type defaults."
+  );
+
+export const setSavedViewAppearanceResponse = zod
+  .object({
+    appearance: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            color: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum([
+                    'gray',
+                    'red',
+                    'tomato',
+                    'orange',
+                    'amber',
+                    'yellow',
+                    'green',
+                    'teal',
+                    'blue',
+                    'indigo',
+                    'purple',
+                    'pink',
+                  ])
+                  .describe(
+                    'Named tint keys from the shared tag color palette.'
+                  ),
+              ])
+              .optional(),
+            icon: zod
+              .union([
+                zod.null(),
+                zod
+                  .union([
+                    zod
+                      .object({
+                        kind: zod.enum(['macro']),
+                        name: zod
+                          .string()
+                          .describe('Catalog name without the SVG extension.'),
+                      })
+                      .describe(
+                        "A stable name from Macro's original, distinct icon catalog."
+                      ),
+                    zod
+                      .object({
+                        kind: zod.enum(['emoji']),
+                        value: zod
+                          .string()
+                          .describe('Unicode emoji text, not markup or a URL.'),
+                      })
+                      .describe(
+                        'A single native emoji, including skin-tone and joined sequences.'
+                      ),
+                  ])
+                  .describe("The source of an entity's custom icon."),
+              ])
+              .optional(),
+          })
+          .describe(
+            "An entity's optional icon and tint overrides; absent values retain type defaults."
+          ),
+      ])
+      .optional(),
     config: zod
       .object({})
       .describe(
@@ -84593,6 +87898,1140 @@ export const bulkWakeupSyncServiceDocumentsBody = zod.object({
   document_ids: zod.array(zod.string()),
 });
 
+export const listTaskTemplatesQueryParams = zod.object({
+  teamId: zod.uuid().optional(),
+});
+
+export const listTaskTemplatesResponseItem = zod
+  .object({
+    canManage: zod
+      .boolean()
+      .describe(
+        'Whether the current viewer can update or delete the template.'
+      ),
+    configuration: zod
+      .object({
+        defaults: zod
+          .array(
+            zod
+              .object({
+                propertyId: zod
+                  .uuid()
+                  .describe('Definition that receives the default.'),
+                value: zod
+                  .union([
+                    zod
+                      .object({
+                        type: zod.enum(['boolean']),
+                        value: zod.boolean(),
+                      })
+                      .describe('Boolean true\/false value'),
+                    zod
+                      .object({
+                        type: zod.enum(['date']),
+                        value: zod.iso.datetime({}),
+                      })
+                      .describe('Date and time value'),
+                    zod
+                      .object({
+                        type: zod.enum(['date_range']),
+                        value: zod
+                          .object({
+                            end: zod.iso
+                              .datetime({})
+                              .describe(
+                                'Where it ends; never before the start.'
+                              ),
+                            start: zod.iso
+                              .datetime({})
+                              .describe('Where it starts.'),
+                          })
+                          .describe(
+                            'A span of time from `start` to `end`, both included. A write whose end\ncomes before its start is refused.'
+                          ),
+                      })
+                      .describe('Date range value'),
+                    zod
+                      .object({
+                        type: zod.enum(['number']),
+                        value: zod.number(),
+                      })
+                      .describe('Numeric value'),
+                    zod
+                      .object({
+                        type: zod.enum(['string']),
+                        value: zod.string(),
+                      })
+                      .describe('String\/text value'),
+                    zod
+                      .object({
+                        option_id: zod.uuid(),
+                        type: zod.enum(['select_option']),
+                      })
+                      .describe(
+                        'Select option by ID (for select-type properties)'
+                      ),
+                    zod
+                      .object({
+                        option_ids: zod.array(zod.uuid()),
+                        type: zod.enum(['multi_select_option']),
+                      })
+                      .describe(
+                        'Multiple select options by ID (for multi-select properties)'
+                      ),
+                    zod
+                      .object({
+                        reference: zod
+                          .object({
+                            entity_id: zod.string(),
+                            entity_type: zod
+                              .enum([
+                                'CALENDAR_EVENT',
+                                'CALL_RECORD',
+                                'CHANNEL',
+                                'CHAT',
+                                'COMPANY',
+                                'DATABASE_ROW',
+                                'CONTACT',
+                                'DOCUMENT',
+                                'INITIATIVE',
+                                'PROJECT',
+                                'TASK',
+                                'THREAD',
+                                'USER',
+                              ])
+                              .describe(
+                                'Type of entity that can be referenced by entity properties.'
+                              ),
+                            specific_message_id: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                              ),
+                          })
+                          .describe(
+                            'Entity reference for entity-type property values.'
+                          ),
+                        type: zod.enum(['entity_reference']),
+                      })
+                      .describe('Entity reference'),
+                    zod
+                      .object({
+                        references: zod.array(
+                          zod
+                            .object({
+                              entity_id: zod.string(),
+                              entity_type: zod
+                                .enum([
+                                  'CALENDAR_EVENT',
+                                  'CALL_RECORD',
+                                  'CHANNEL',
+                                  'CHAT',
+                                  'COMPANY',
+                                  'DATABASE_ROW',
+                                  'CONTACT',
+                                  'DOCUMENT',
+                                  'INITIATIVE',
+                                  'PROJECT',
+                                  'TASK',
+                                  'THREAD',
+                                  'USER',
+                                ])
+                                .describe(
+                                  'Type of entity that can be referenced by entity properties.'
+                                ),
+                              specific_message_id: zod
+                                .uuid()
+                                .nullish()
+                                .describe(
+                                  'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                                ),
+                            })
+                            .describe(
+                              'Entity reference for entity-type property values.'
+                            )
+                        ),
+                        type: zod.enum(['multi_entity_reference']),
+                      })
+                      .describe(
+                        'Multiple entity references (for multi-select entity properties)'
+                      ),
+                    zod
+                      .object({
+                        type: zod.enum(['link']),
+                        url: zod.string(),
+                      })
+                      .describe('Link value'),
+                    zod
+                      .object({
+                        type: zod.enum(['multi_link']),
+                        urls: zod.array(zod.string()),
+                      })
+                      .describe(
+                        'Multiple link values (for multi-select link properties)'
+                      ),
+                  ])
+                  .describe(
+                    'Type-safe enum for setting entity property values - provides compile-time validation.'
+                  ),
+              })
+              .describe(
+                "A reusable default using the task creation property's existing value contract."
+              )
+          )
+          .optional()
+          .describe('Defaults for selected fields only.'),
+        descriptionMarkdown: zod
+          .string()
+          .describe(
+            'Markdown inserted only when the current description is blank.'
+          ),
+        propertyIds: zod
+          .array(zod.uuid())
+          .describe(
+            'Visible definition IDs, including fields without a default value.'
+          ),
+        shareWithTeam: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'Default task sharing, independent of template ownership; absence preserves the current choice.'
+          ),
+        title: zod
+          .string()
+          .nullish()
+          .describe(
+            'Default task title, separate from the template name; absence leaves the task untitled.'
+          ),
+      })
+      .describe(
+        'Selected fields, optional task title and sharing defaults, and description Markdown.'
+      ),
+    createdAt: zod.iso.datetime({}).describe('Creation time.'),
+    creatorId: zod
+      .string()
+      .nullish()
+      .describe('Original creator; cleared when that account is deleted.'),
+    id: zod.uuid().describe('Stable template ID.'),
+    name: zod.string().describe('User-supplied template name.'),
+    revision: zod
+      .number()
+      .describe('Positive revision used for conditional updates and deletes.'),
+    teamId: zod
+      .uuid()
+      .nullish()
+      .describe('Owning team; absent for personal templates.'),
+    updatedAt: zod.iso.datetime({}).describe('Last content update time.'),
+    userId: zod
+      .string()
+      .nullish()
+      .describe('Personal owner; absent for team-owned templates.'),
+  })
+  .describe(
+    'A personal or team-owned template with viewer-specific management capability.'
+  );
+export const listTaskTemplatesResponse = zod.array(
+  listTaskTemplatesResponseItem
+);
+
+export const createTaskTemplateBody = zod
+  .object({
+    configuration: zod
+      .object({
+        defaults: zod
+          .array(
+            zod
+              .object({
+                propertyId: zod
+                  .uuid()
+                  .describe('Definition that receives the default.'),
+                value: zod
+                  .union([
+                    zod
+                      .object({
+                        type: zod.enum(['boolean']),
+                        value: zod.boolean(),
+                      })
+                      .describe('Boolean true\/false value'),
+                    zod
+                      .object({
+                        type: zod.enum(['date']),
+                        value: zod.iso.datetime({}),
+                      })
+                      .describe('Date and time value'),
+                    zod
+                      .object({
+                        type: zod.enum(['date_range']),
+                        value: zod
+                          .object({
+                            end: zod.iso
+                              .datetime({})
+                              .describe(
+                                'Where it ends; never before the start.'
+                              ),
+                            start: zod.iso
+                              .datetime({})
+                              .describe('Where it starts.'),
+                          })
+                          .describe(
+                            'A span of time from `start` to `end`, both included. A write whose end\ncomes before its start is refused.'
+                          ),
+                      })
+                      .describe('Date range value'),
+                    zod
+                      .object({
+                        type: zod.enum(['number']),
+                        value: zod.number(),
+                      })
+                      .describe('Numeric value'),
+                    zod
+                      .object({
+                        type: zod.enum(['string']),
+                        value: zod.string(),
+                      })
+                      .describe('String\/text value'),
+                    zod
+                      .object({
+                        option_id: zod.uuid(),
+                        type: zod.enum(['select_option']),
+                      })
+                      .describe(
+                        'Select option by ID (for select-type properties)'
+                      ),
+                    zod
+                      .object({
+                        option_ids: zod.array(zod.uuid()),
+                        type: zod.enum(['multi_select_option']),
+                      })
+                      .describe(
+                        'Multiple select options by ID (for multi-select properties)'
+                      ),
+                    zod
+                      .object({
+                        reference: zod
+                          .object({
+                            entity_id: zod.string(),
+                            entity_type: zod
+                              .enum([
+                                'CALENDAR_EVENT',
+                                'CALL_RECORD',
+                                'CHANNEL',
+                                'CHAT',
+                                'COMPANY',
+                                'DATABASE_ROW',
+                                'CONTACT',
+                                'DOCUMENT',
+                                'INITIATIVE',
+                                'PROJECT',
+                                'TASK',
+                                'THREAD',
+                                'USER',
+                              ])
+                              .describe(
+                                'Type of entity that can be referenced by entity properties.'
+                              ),
+                            specific_message_id: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                              ),
+                          })
+                          .describe(
+                            'Entity reference for entity-type property values.'
+                          ),
+                        type: zod.enum(['entity_reference']),
+                      })
+                      .describe('Entity reference'),
+                    zod
+                      .object({
+                        references: zod.array(
+                          zod
+                            .object({
+                              entity_id: zod.string(),
+                              entity_type: zod
+                                .enum([
+                                  'CALENDAR_EVENT',
+                                  'CALL_RECORD',
+                                  'CHANNEL',
+                                  'CHAT',
+                                  'COMPANY',
+                                  'DATABASE_ROW',
+                                  'CONTACT',
+                                  'DOCUMENT',
+                                  'INITIATIVE',
+                                  'PROJECT',
+                                  'TASK',
+                                  'THREAD',
+                                  'USER',
+                                ])
+                                .describe(
+                                  'Type of entity that can be referenced by entity properties.'
+                                ),
+                              specific_message_id: zod
+                                .uuid()
+                                .nullish()
+                                .describe(
+                                  'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                                ),
+                            })
+                            .describe(
+                              'Entity reference for entity-type property values.'
+                            )
+                        ),
+                        type: zod.enum(['multi_entity_reference']),
+                      })
+                      .describe(
+                        'Multiple entity references (for multi-select entity properties)'
+                      ),
+                    zod
+                      .object({
+                        type: zod.enum(['link']),
+                        url: zod.string(),
+                      })
+                      .describe('Link value'),
+                    zod
+                      .object({
+                        type: zod.enum(['multi_link']),
+                        urls: zod.array(zod.string()),
+                      })
+                      .describe(
+                        'Multiple link values (for multi-select link properties)'
+                      ),
+                  ])
+                  .describe(
+                    'Type-safe enum for setting entity property values - provides compile-time validation.'
+                  ),
+              })
+              .describe(
+                "A reusable default using the task creation property's existing value contract."
+              )
+          )
+          .optional()
+          .describe('Defaults for selected fields only.'),
+        descriptionMarkdown: zod
+          .string()
+          .describe(
+            'Markdown inserted only when the current description is blank.'
+          ),
+        propertyIds: zod
+          .array(zod.uuid())
+          .describe(
+            'Visible definition IDs, including fields without a default value.'
+          ),
+        shareWithTeam: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'Default task sharing, independent of template ownership; absence preserves the current choice.'
+          ),
+        title: zod
+          .string()
+          .nullish()
+          .describe(
+            'Default task title, separate from the template name; absence leaves the task untitled.'
+          ),
+      })
+      .describe(
+        'Selected fields, optional task title and sharing defaults, and description Markdown.'
+      ),
+    id: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Client-generated creation identity; reuse the same ID and input when retrying.'
+      ),
+    name: zod.string().describe('Template name.'),
+    teamId: zod
+      .uuid()
+      .nullish()
+      .describe('Owning team; omission creates a personal template.'),
+  })
+  .describe('Create a personal template or one owned by a current team.');
+
+export const getTaskTemplateParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const getTaskTemplateResponse = zod
+  .object({
+    canManage: zod
+      .boolean()
+      .describe(
+        'Whether the current viewer can update or delete the template.'
+      ),
+    configuration: zod
+      .object({
+        defaults: zod
+          .array(
+            zod
+              .object({
+                propertyId: zod
+                  .uuid()
+                  .describe('Definition that receives the default.'),
+                value: zod
+                  .union([
+                    zod
+                      .object({
+                        type: zod.enum(['boolean']),
+                        value: zod.boolean(),
+                      })
+                      .describe('Boolean true\/false value'),
+                    zod
+                      .object({
+                        type: zod.enum(['date']),
+                        value: zod.iso.datetime({}),
+                      })
+                      .describe('Date and time value'),
+                    zod
+                      .object({
+                        type: zod.enum(['date_range']),
+                        value: zod
+                          .object({
+                            end: zod.iso
+                              .datetime({})
+                              .describe(
+                                'Where it ends; never before the start.'
+                              ),
+                            start: zod.iso
+                              .datetime({})
+                              .describe('Where it starts.'),
+                          })
+                          .describe(
+                            'A span of time from `start` to `end`, both included. A write whose end\ncomes before its start is refused.'
+                          ),
+                      })
+                      .describe('Date range value'),
+                    zod
+                      .object({
+                        type: zod.enum(['number']),
+                        value: zod.number(),
+                      })
+                      .describe('Numeric value'),
+                    zod
+                      .object({
+                        type: zod.enum(['string']),
+                        value: zod.string(),
+                      })
+                      .describe('String\/text value'),
+                    zod
+                      .object({
+                        option_id: zod.uuid(),
+                        type: zod.enum(['select_option']),
+                      })
+                      .describe(
+                        'Select option by ID (for select-type properties)'
+                      ),
+                    zod
+                      .object({
+                        option_ids: zod.array(zod.uuid()),
+                        type: zod.enum(['multi_select_option']),
+                      })
+                      .describe(
+                        'Multiple select options by ID (for multi-select properties)'
+                      ),
+                    zod
+                      .object({
+                        reference: zod
+                          .object({
+                            entity_id: zod.string(),
+                            entity_type: zod
+                              .enum([
+                                'CALENDAR_EVENT',
+                                'CALL_RECORD',
+                                'CHANNEL',
+                                'CHAT',
+                                'COMPANY',
+                                'DATABASE_ROW',
+                                'CONTACT',
+                                'DOCUMENT',
+                                'INITIATIVE',
+                                'PROJECT',
+                                'TASK',
+                                'THREAD',
+                                'USER',
+                              ])
+                              .describe(
+                                'Type of entity that can be referenced by entity properties.'
+                              ),
+                            specific_message_id: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                              ),
+                          })
+                          .describe(
+                            'Entity reference for entity-type property values.'
+                          ),
+                        type: zod.enum(['entity_reference']),
+                      })
+                      .describe('Entity reference'),
+                    zod
+                      .object({
+                        references: zod.array(
+                          zod
+                            .object({
+                              entity_id: zod.string(),
+                              entity_type: zod
+                                .enum([
+                                  'CALENDAR_EVENT',
+                                  'CALL_RECORD',
+                                  'CHANNEL',
+                                  'CHAT',
+                                  'COMPANY',
+                                  'DATABASE_ROW',
+                                  'CONTACT',
+                                  'DOCUMENT',
+                                  'INITIATIVE',
+                                  'PROJECT',
+                                  'TASK',
+                                  'THREAD',
+                                  'USER',
+                                ])
+                                .describe(
+                                  'Type of entity that can be referenced by entity properties.'
+                                ),
+                              specific_message_id: zod
+                                .uuid()
+                                .nullish()
+                                .describe(
+                                  'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                                ),
+                            })
+                            .describe(
+                              'Entity reference for entity-type property values.'
+                            )
+                        ),
+                        type: zod.enum(['multi_entity_reference']),
+                      })
+                      .describe(
+                        'Multiple entity references (for multi-select entity properties)'
+                      ),
+                    zod
+                      .object({
+                        type: zod.enum(['link']),
+                        url: zod.string(),
+                      })
+                      .describe('Link value'),
+                    zod
+                      .object({
+                        type: zod.enum(['multi_link']),
+                        urls: zod.array(zod.string()),
+                      })
+                      .describe(
+                        'Multiple link values (for multi-select link properties)'
+                      ),
+                  ])
+                  .describe(
+                    'Type-safe enum for setting entity property values - provides compile-time validation.'
+                  ),
+              })
+              .describe(
+                "A reusable default using the task creation property's existing value contract."
+              )
+          )
+          .optional()
+          .describe('Defaults for selected fields only.'),
+        descriptionMarkdown: zod
+          .string()
+          .describe(
+            'Markdown inserted only when the current description is blank.'
+          ),
+        propertyIds: zod
+          .array(zod.uuid())
+          .describe(
+            'Visible definition IDs, including fields without a default value.'
+          ),
+        shareWithTeam: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'Default task sharing, independent of template ownership; absence preserves the current choice.'
+          ),
+        title: zod
+          .string()
+          .nullish()
+          .describe(
+            'Default task title, separate from the template name; absence leaves the task untitled.'
+          ),
+      })
+      .describe(
+        'Selected fields, optional task title and sharing defaults, and description Markdown.'
+      ),
+    createdAt: zod.iso.datetime({}).describe('Creation time.'),
+    creatorId: zod
+      .string()
+      .nullish()
+      .describe('Original creator; cleared when that account is deleted.'),
+    id: zod.uuid().describe('Stable template ID.'),
+    name: zod.string().describe('User-supplied template name.'),
+    revision: zod
+      .number()
+      .describe('Positive revision used for conditional updates and deletes.'),
+    teamId: zod
+      .uuid()
+      .nullish()
+      .describe('Owning team; absent for personal templates.'),
+    updatedAt: zod.iso.datetime({}).describe('Last content update time.'),
+    userId: zod
+      .string()
+      .nullish()
+      .describe('Personal owner; absent for team-owned templates.'),
+  })
+  .describe(
+    'A personal or team-owned template with viewer-specific management capability.'
+  );
+
+export const updateTaskTemplateParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const updateTaskTemplateBody = zod
+  .object({
+    configuration: zod
+      .object({
+        defaults: zod
+          .array(
+            zod
+              .object({
+                propertyId: zod
+                  .uuid()
+                  .describe('Definition that receives the default.'),
+                value: zod
+                  .union([
+                    zod
+                      .object({
+                        type: zod.enum(['boolean']),
+                        value: zod.boolean(),
+                      })
+                      .describe('Boolean true\/false value'),
+                    zod
+                      .object({
+                        type: zod.enum(['date']),
+                        value: zod.iso.datetime({}),
+                      })
+                      .describe('Date and time value'),
+                    zod
+                      .object({
+                        type: zod.enum(['date_range']),
+                        value: zod
+                          .object({
+                            end: zod.iso
+                              .datetime({})
+                              .describe(
+                                'Where it ends; never before the start.'
+                              ),
+                            start: zod.iso
+                              .datetime({})
+                              .describe('Where it starts.'),
+                          })
+                          .describe(
+                            'A span of time from `start` to `end`, both included. A write whose end\ncomes before its start is refused.'
+                          ),
+                      })
+                      .describe('Date range value'),
+                    zod
+                      .object({
+                        type: zod.enum(['number']),
+                        value: zod.number(),
+                      })
+                      .describe('Numeric value'),
+                    zod
+                      .object({
+                        type: zod.enum(['string']),
+                        value: zod.string(),
+                      })
+                      .describe('String\/text value'),
+                    zod
+                      .object({
+                        option_id: zod.uuid(),
+                        type: zod.enum(['select_option']),
+                      })
+                      .describe(
+                        'Select option by ID (for select-type properties)'
+                      ),
+                    zod
+                      .object({
+                        option_ids: zod.array(zod.uuid()),
+                        type: zod.enum(['multi_select_option']),
+                      })
+                      .describe(
+                        'Multiple select options by ID (for multi-select properties)'
+                      ),
+                    zod
+                      .object({
+                        reference: zod
+                          .object({
+                            entity_id: zod.string(),
+                            entity_type: zod
+                              .enum([
+                                'CALENDAR_EVENT',
+                                'CALL_RECORD',
+                                'CHANNEL',
+                                'CHAT',
+                                'COMPANY',
+                                'DATABASE_ROW',
+                                'CONTACT',
+                                'DOCUMENT',
+                                'INITIATIVE',
+                                'PROJECT',
+                                'TASK',
+                                'THREAD',
+                                'USER',
+                              ])
+                              .describe(
+                                'Type of entity that can be referenced by entity properties.'
+                              ),
+                            specific_message_id: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                              ),
+                          })
+                          .describe(
+                            'Entity reference for entity-type property values.'
+                          ),
+                        type: zod.enum(['entity_reference']),
+                      })
+                      .describe('Entity reference'),
+                    zod
+                      .object({
+                        references: zod.array(
+                          zod
+                            .object({
+                              entity_id: zod.string(),
+                              entity_type: zod
+                                .enum([
+                                  'CALENDAR_EVENT',
+                                  'CALL_RECORD',
+                                  'CHANNEL',
+                                  'CHAT',
+                                  'COMPANY',
+                                  'DATABASE_ROW',
+                                  'CONTACT',
+                                  'DOCUMENT',
+                                  'INITIATIVE',
+                                  'PROJECT',
+                                  'TASK',
+                                  'THREAD',
+                                  'USER',
+                                ])
+                                .describe(
+                                  'Type of entity that can be referenced by entity properties.'
+                                ),
+                              specific_message_id: zod
+                                .uuid()
+                                .nullish()
+                                .describe(
+                                  'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                                ),
+                            })
+                            .describe(
+                              'Entity reference for entity-type property values.'
+                            )
+                        ),
+                        type: zod.enum(['multi_entity_reference']),
+                      })
+                      .describe(
+                        'Multiple entity references (for multi-select entity properties)'
+                      ),
+                    zod
+                      .object({
+                        type: zod.enum(['link']),
+                        url: zod.string(),
+                      })
+                      .describe('Link value'),
+                    zod
+                      .object({
+                        type: zod.enum(['multi_link']),
+                        urls: zod.array(zod.string()),
+                      })
+                      .describe(
+                        'Multiple link values (for multi-select link properties)'
+                      ),
+                  ])
+                  .describe(
+                    'Type-safe enum for setting entity property values - provides compile-time validation.'
+                  ),
+              })
+              .describe(
+                "A reusable default using the task creation property's existing value contract."
+              )
+          )
+          .optional()
+          .describe('Defaults for selected fields only.'),
+        descriptionMarkdown: zod
+          .string()
+          .describe(
+            'Markdown inserted only when the current description is blank.'
+          ),
+        propertyIds: zod
+          .array(zod.uuid())
+          .describe(
+            'Visible definition IDs, including fields without a default value.'
+          ),
+        shareWithTeam: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'Default task sharing, independent of template ownership; absence preserves the current choice.'
+          ),
+        title: zod
+          .string()
+          .nullish()
+          .describe(
+            'Default task title, separate from the template name; absence leaves the task untitled.'
+          ),
+      })
+      .describe(
+        'Selected fields, optional task title and sharing defaults, and description Markdown.'
+      ),
+    name: zod.string().describe('Replacement name.'),
+    revision: zod.number().describe('Revision observed when editing began.'),
+  })
+  .describe('Replace content without changing ownership.');
+
+export const updateTaskTemplateResponse = zod
+  .object({
+    canManage: zod
+      .boolean()
+      .describe(
+        'Whether the current viewer can update or delete the template.'
+      ),
+    configuration: zod
+      .object({
+        defaults: zod
+          .array(
+            zod
+              .object({
+                propertyId: zod
+                  .uuid()
+                  .describe('Definition that receives the default.'),
+                value: zod
+                  .union([
+                    zod
+                      .object({
+                        type: zod.enum(['boolean']),
+                        value: zod.boolean(),
+                      })
+                      .describe('Boolean true\/false value'),
+                    zod
+                      .object({
+                        type: zod.enum(['date']),
+                        value: zod.iso.datetime({}),
+                      })
+                      .describe('Date and time value'),
+                    zod
+                      .object({
+                        type: zod.enum(['date_range']),
+                        value: zod
+                          .object({
+                            end: zod.iso
+                              .datetime({})
+                              .describe(
+                                'Where it ends; never before the start.'
+                              ),
+                            start: zod.iso
+                              .datetime({})
+                              .describe('Where it starts.'),
+                          })
+                          .describe(
+                            'A span of time from `start` to `end`, both included. A write whose end\ncomes before its start is refused.'
+                          ),
+                      })
+                      .describe('Date range value'),
+                    zod
+                      .object({
+                        type: zod.enum(['number']),
+                        value: zod.number(),
+                      })
+                      .describe('Numeric value'),
+                    zod
+                      .object({
+                        type: zod.enum(['string']),
+                        value: zod.string(),
+                      })
+                      .describe('String\/text value'),
+                    zod
+                      .object({
+                        option_id: zod.uuid(),
+                        type: zod.enum(['select_option']),
+                      })
+                      .describe(
+                        'Select option by ID (for select-type properties)'
+                      ),
+                    zod
+                      .object({
+                        option_ids: zod.array(zod.uuid()),
+                        type: zod.enum(['multi_select_option']),
+                      })
+                      .describe(
+                        'Multiple select options by ID (for multi-select properties)'
+                      ),
+                    zod
+                      .object({
+                        reference: zod
+                          .object({
+                            entity_id: zod.string(),
+                            entity_type: zod
+                              .enum([
+                                'CALENDAR_EVENT',
+                                'CALL_RECORD',
+                                'CHANNEL',
+                                'CHAT',
+                                'COMPANY',
+                                'DATABASE_ROW',
+                                'CONTACT',
+                                'DOCUMENT',
+                                'INITIATIVE',
+                                'PROJECT',
+                                'TASK',
+                                'THREAD',
+                                'USER',
+                              ])
+                              .describe(
+                                'Type of entity that can be referenced by entity properties.'
+                              ),
+                            specific_message_id: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                              ),
+                          })
+                          .describe(
+                            'Entity reference for entity-type property values.'
+                          ),
+                        type: zod.enum(['entity_reference']),
+                      })
+                      .describe('Entity reference'),
+                    zod
+                      .object({
+                        references: zod.array(
+                          zod
+                            .object({
+                              entity_id: zod.string(),
+                              entity_type: zod
+                                .enum([
+                                  'CALENDAR_EVENT',
+                                  'CALL_RECORD',
+                                  'CHANNEL',
+                                  'CHAT',
+                                  'COMPANY',
+                                  'DATABASE_ROW',
+                                  'CONTACT',
+                                  'DOCUMENT',
+                                  'INITIATIVE',
+                                  'PROJECT',
+                                  'TASK',
+                                  'THREAD',
+                                  'USER',
+                                ])
+                                .describe(
+                                  'Type of entity that can be referenced by entity properties.'
+                                ),
+                              specific_message_id: zod
+                                .uuid()
+                                .nullish()
+                                .describe(
+                                  'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                                ),
+                            })
+                            .describe(
+                              'Entity reference for entity-type property values.'
+                            )
+                        ),
+                        type: zod.enum(['multi_entity_reference']),
+                      })
+                      .describe(
+                        'Multiple entity references (for multi-select entity properties)'
+                      ),
+                    zod
+                      .object({
+                        type: zod.enum(['link']),
+                        url: zod.string(),
+                      })
+                      .describe('Link value'),
+                    zod
+                      .object({
+                        type: zod.enum(['multi_link']),
+                        urls: zod.array(zod.string()),
+                      })
+                      .describe(
+                        'Multiple link values (for multi-select link properties)'
+                      ),
+                  ])
+                  .describe(
+                    'Type-safe enum for setting entity property values - provides compile-time validation.'
+                  ),
+              })
+              .describe(
+                "A reusable default using the task creation property's existing value contract."
+              )
+          )
+          .optional()
+          .describe('Defaults for selected fields only.'),
+        descriptionMarkdown: zod
+          .string()
+          .describe(
+            'Markdown inserted only when the current description is blank.'
+          ),
+        propertyIds: zod
+          .array(zod.uuid())
+          .describe(
+            'Visible definition IDs, including fields without a default value.'
+          ),
+        shareWithTeam: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'Default task sharing, independent of template ownership; absence preserves the current choice.'
+          ),
+        title: zod
+          .string()
+          .nullish()
+          .describe(
+            'Default task title, separate from the template name; absence leaves the task untitled.'
+          ),
+      })
+      .describe(
+        'Selected fields, optional task title and sharing defaults, and description Markdown.'
+      ),
+    createdAt: zod.iso.datetime({}).describe('Creation time.'),
+    creatorId: zod
+      .string()
+      .nullish()
+      .describe('Original creator; cleared when that account is deleted.'),
+    id: zod.uuid().describe('Stable template ID.'),
+    name: zod.string().describe('User-supplied template name.'),
+    revision: zod
+      .number()
+      .describe('Positive revision used for conditional updates and deletes.'),
+    teamId: zod
+      .uuid()
+      .nullish()
+      .describe('Owning team; absent for personal templates.'),
+    updatedAt: zod.iso.datetime({}).describe('Last content update time.'),
+    userId: zod
+      .string()
+      .nullish()
+      .describe('Personal owner; absent for team-owned templates.'),
+  })
+  .describe(
+    'A personal or team-owned template with viewer-specific management capability.'
+  );
+
+export const deleteTaskTemplateParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const deleteTaskTemplateQueryParams = zod.object({
+  revision: zod.number(),
+});
+
 /**
  * @summary Edits the share permissions of a thread.
  */
@@ -84667,6 +89106,32 @@ export const editThreadV2Response = zod.object({
   }),
   error: zod.boolean().describe('Indicates if an error occurred'),
 });
+
+/**
+ * @summary List a thread owner's grants to channels they participate in.
+ */
+export const getThreadChannelSharesParams = zod.object({
+  thread_id: zod.string().describe('Thread ID'),
+});
+
+export const getThreadChannelSharesResponseItem = zod
+  .object({
+    access_level: zod
+      .enum(['view', 'comment', 'edit', 'owner'])
+      .describe('Ordered from least to most access top -> bottom'),
+    channel_id: zod.uuid().describe('The channel with access to the thread.'),
+    channel_name: zod
+      .string()
+      .nullish()
+      .describe("The channel's configured name, if it has one."),
+    channel_type: zod
+      .enum(['public', 'private', 'direct_message', 'team'])
+      .describe('Type of channel.'),
+  })
+  .describe('A channel grant the thread owner can see in the sharing roster.');
+export const getThreadChannelSharesResponse = zod.array(
+  getThreadChannelSharesResponseItem
+);
 
 /**
  * @summary List the caller's API keys.

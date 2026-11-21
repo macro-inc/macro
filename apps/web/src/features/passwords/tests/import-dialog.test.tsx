@@ -137,6 +137,7 @@ function mount(
         recipientsLoading: () => false,
         recipientsError: () => false,
         writeClipboard: async () => {},
+        displayName: (accountId) => accountId.replace(/^macro\|/, ''),
         parseExport: async () => reply,
         importResume,
       }}
@@ -371,6 +372,7 @@ it('finishes a verification code an earlier run could not set up, even beside a 
           recipientsLoading: () => false,
           recipientsError: () => false,
           writeClipboard: async () => {},
+          displayName: (accountId) => accountId.replace(/^macro\|/, ''),
           parseExport: async () => reply,
           importResume: resume,
         }}
@@ -594,6 +596,7 @@ it('returns to the file picker when the file cannot be read at all', async () =>
         recipientsError: () => false,
         writeClipboard: async () => {},
         // As when the parser module fails to load.
+        displayName: (accountId) => accountId.replace(/^macro\|/, ''),
         parseExport: () => Promise.reject(new Error('chunk load failed')),
         importResume: createMemoryImportResume(),
       }}
@@ -634,6 +637,7 @@ it('matches names in the vault while its list is unavailable', async () => {
         recipientsLoading: () => false,
         recipientsError: () => false,
         writeClipboard: async () => {},
+        displayName: (accountId) => accountId.replace(/^macro\|/, ''),
         parseExport: async () => PARSED,
         importResume: createMemoryImportResume(),
       }}
@@ -665,6 +669,7 @@ it('says duplicates went unchecked when the vault could not be asked', async () 
         recipientsLoading: () => false,
         recipientsError: () => false,
         writeClipboard: async () => {},
+        displayName: (accountId) => accountId.replace(/^macro\|/, ''),
         parseExport: async () => PARSED,
         importResume: createMemoryImportResume(),
       }}
@@ -751,6 +756,20 @@ it('says the server could not be reached when no batch got through', async () =>
   fireEvent.click(screen.getByRole('button', { name: 'Import 2 items' }));
   await screen.findByText('2 failed', undefined, { timeout: 5000 });
   expect(screen.getByText("Couldn't reach the server (2)")).toBeTruthy();
+});
+
+it("groups the failures of a team whose vault isn't set up under that reason", async () => {
+  const source = createFakePasswordSource([], { notProvisioned: true });
+  mount(source, PARSED, createMemoryImportResume());
+  chooseFileOnClick(new File(['{}'], 'export.json'));
+  fireEvent.click(screen.getByRole('button', { name: 'Choose file' }));
+  await screen.findByText('Bitwarden JSON');
+  fireEvent.click(screen.getByRole('button', { name: 'Import 2 items' }));
+  await screen.findByText('2 failed', undefined, { timeout: 5000 });
+  expect(
+    screen.getByText("This team's vault isn't set up yet (2)")
+  ).toBeTruthy();
+  expect(screen.queryByText(/couldn't save to the vault/)).toBeNull();
 });
 
 it('puts skipped file items and dropped attachments on one Not carried over line', async () => {

@@ -3,7 +3,7 @@ import type { FileOperation } from '@components/app/split-layout/components/Spli
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { openExternalUrl } from '@core/util/url';
-import GithubIcon from '@icon/mcp-github.svg';
+import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import GitBranch from '@icon/system/regular/git-branch.svg';
 import Link from '@icon/system/regular/link.svg';
 import type { Accessor } from 'solid-js';
@@ -55,7 +55,7 @@ export function usePrFileOperations(
       {
         group: 'sharing',
         label: t('entityActions.openOnGitHub'),
-        icon: GithubIcon,
+        icon: ArrowSquareOutIcon,
         action: () => openExternalUrl(githubUrl),
       }
     );

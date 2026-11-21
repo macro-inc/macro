@@ -10,10 +10,13 @@ import {
   type ParsedDuration,
   parsedDurationToMilliseconds,
 } from './dateSearch/dateParser';
-import { fuzzyScoreCommaSpaceSeparated } from './fuzzy';
+import {
+  ANY_SCRIPT_FUZZY_OPTIONS,
+  fuzzyScoreCommaSpaceSeparated,
+} from './fuzzy';
 import { nameMatchQuality, normalizeNameText } from './name-match-score';
 
-const fuzzyEligibility = new uFuzzy({});
+const fuzzyEligibility = new uFuzzy(ANY_SCRIPT_FUZZY_OPTIONS);
 
 interface FuzzyFilterResult<T> {
   original: T;
@@ -195,6 +198,9 @@ function containsEveryTerm(normalizedText: string, term: string): boolean {
     .every((word) => normalizedText.includes(word));
 }
 
+/** The `nameMatchRank` of a name that starts with the query; higher ranks match more closely. */
+export const NAME_STARTS_WITH_QUERY_RANK = 1;
+
 function calculateNameMatchRank(
   normalizedName: string,
   term: string,
@@ -207,7 +213,7 @@ function calculateNameMatchRank(
   const namesOnePerson = isPerson && !normalizedName.includes(',');
   if (namesOnePerson && normalizedName.split(/\s+/)[0] === term) return 3;
 
-  if (normalizedName.startsWith(term)) return 1;
+  if (normalizedName.startsWith(term)) return NAME_STARTS_WITH_QUERY_RANK;
   return 0;
 }
 

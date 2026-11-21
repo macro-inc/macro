@@ -54,7 +54,7 @@ event contract (schema, sanitization, delivery semantics).
   (`finish_in_flight_locked`): Stripe runs a key at most once, answers a
   finished request with its saved result and a running one with 409. Only a
   409 or other unknown answer refuses with `ItemChangeInFlight`. Callers
-  keep one key per intent across retries (e.g. `computer-remove:{effect}:{n}`
+  keep one key per intent across retries (e.g. `computer-remove:{computer}:{effect}:{n}`; keys must be unique across every environment sharing the Stripe account, so they carry a computer or other global id, never only a per-database sequence number
   moves to `n+1` only once `n` definitely did not apply), so a retry replays
   its own change rather than being refused by it. A trialing subscription never
   gains a computer item (`SubscriptionTrialing`); its own replay sends the stored endpoint and exact
@@ -63,8 +63,25 @@ event contract (schema, sanitization, delivery semantics).
   way. Removing a computer's item archives its own price. Retain
   receipts after subscription/team deletion to prevent delayed duplicate charges.
   Seat prices passed here change seat items too.
+  `team_payment_terms` (terms, the customer's credit balance, and the card:
+  subscription default, else the customer's invoice default; `None` for a
+  non-card method) and
+  `preview_item_prorations` (one `invoices/upcoming/lines` with
+  `always_invoice`; a price with no proration line is an error, never 0) serve
+  the buy dialog only (`customer_repo/payment_terms.rs`).
+  Catalog prices are cached per process (`customer_repo/stripe_calls.rs`;
+  their amount, currency and interval never change); wrap each Stripe call in
+  `traced(stripe_span!("stripe.<object>.<verb>", <object>_id = …), …)`.
 - `src/inbound/axum_router.rs` / `src/inbound/toolset.rs`: HTTP routes and AI
   tool surface.
+- `src/domain/contacts_enqueuer.rs` (`ContactsEnqueuer`, adapter
+  `outbound/contacts_enqueuer.rs`): the contacts side effects of membership,
+  best-effort after the change commits. A join also enqueues legacy edges
+  joiner ↔ teammates. Joins and removals send `directory_changed` both ways
+  (the roster re-reads the member; the member re-reads the roster), and team
+  deletion sends every member the whole roster. Teammates are computed from the
+  roster, so nothing is written; a roster over 500 is sent as unknown.
+  `authentication_service` wires it through the `contacts-list-writes` gate.
 - `src/outbound/team_repo.rs`: the Postgres repository; reads use the supplied pool.
 - `src/domain/team_repo.rs`: reuse `get_user_teams` for viewer teams and `get_all_team_members` for team membership, including owners.
 
@@ -94,6 +111,7 @@ event contract (schema, sanitization, delivery semantics).
 
 ## Gotchas
 
+- Inviting, creating an invite link, patching the team (roles, CRM access, default share scope), changing a member's plan, and the auto-join-domain and non-admin-invite toggles refuse an agent's program or a bot (`refuse_programs` in `inbound/axum_router.rs`, `macro_authorization::is_program_run`, 403). A person does those in Settings, Team; an agent account's own key counts as a person.
 - Carry async-stripe's `stripe::PriceId` through generic item changes; validate
   once at configuration/provider boundaries.
 

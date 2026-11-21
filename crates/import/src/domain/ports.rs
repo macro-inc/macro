@@ -58,6 +58,15 @@ pub enum ImportError {
     /// The import is not in a state that allows this; the message says why.
     #[error("{0}")]
     NotReady(&'static str),
+    /// The caller cannot see the Macro entity they asked to record as an import.
+    #[error("you cannot access entity {0}, so it cannot be recorded as imported")]
+    EntityNotAccessible(String),
+    /// A running import holds the ledger row; recording now would overwrite its work.
+    #[error("a running import is copying this item; wait for it to finish")]
+    ImportRunning,
+    /// The entity-access check itself failed, so access is unknown.
+    #[error("could not check access to the entity")]
+    AccessCheck(#[source] anyhow::Error),
     /// Anything else.
     #[error(transparent)]
     Other(#[from] anyhow::Error),
@@ -499,11 +508,23 @@ pub struct NotionUserLink {
     pub email: String,
 }
 
-/// Creates the Macro entities imports become. Implemented by the host
-/// service against its real document/channel services; the fixed
+/// Creates the Macro entities imports become, and checks the caller can see
+/// an existing one before it is recorded as an import. Implemented by the
+/// host service against its real document/channel and entity-access
+/// services; the fixed
 /// source → entity-type mapping is enforced by the import service, which
 /// only ever calls the creator matching the row's source.
 pub trait EntityCreator: Send + Sync + 'static {
+    /// Whether `user` can view `entity_id`, an entity of `source`'s fixed
+    /// type, before it is recorded as that source's import. Recording an
+    /// entity grants nothing, so an entity the user cannot see is refused.
+    fn can_view(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        entity_id: &str,
+    ) -> impl Future<Output = anyhow::Result<bool>> + Send;
+
     /// Create a task document, applying `properties` best-effort once the
     /// task exists. Returns the new entity id.
     fn create_task(
@@ -571,13 +592,106 @@ pub struct TeamMember {
     pub email: String,
 }
 
-/// Creates the Macro side of a workspace import: folders mirroring the
-/// source's tree, documents and tasks inside them, and databases.
-///
-/// Every entity is created as `user`, through the same services the app
-/// uses, so permissions, search and sync behave as for anything the user
-/// made by hand.
-pub trait WorkspaceWriter: Send + Sync + 'static {
+/// Approved visibility of an entity written by a reviewed workspace import.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImportVisibility {
+    /// Disable link sharing and omit explicit team grants.
+    Personal,
+    /// Retain entity/team link defaults and allow explicit team sharing.
+    Shared,
+}
+
+impl ImportVisibility {
+    /// Convert the reviewed sharing decision into the writer's visibility contract.
+    pub fn from_shared(shared: bool) -> Self {
+        match shared {
+            true => Self::Shared,
+            false => Self::Personal,
+        }
+    }
+}
+
+pub use super::models::{TaskImportNotice, TaskImportNoticeCount, TaskImportNoticeReason};
+
+/// The task created by the writer and any permission-preserving omission.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CreatedImportTask {
+    /// The created or resumed document's id.
+    pub id: String,
+    /// A notice the import must persist before recording the task as complete.
+    pub notice: Option<TaskImportNoticeReason>,
+}
+
+/// Why a new structural folder is separate from an existing branch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum FolderSeparation {
+    /// Keep Personal contents apart from a Shared branch.
+    #[serde(rename = "shared_branch")]
+    PersonalFromShared,
+    /// Avoid granting access to earlier Personal contents.
+    #[serde(rename = "personal_contents")]
+    SharedFromPersonal,
+    /// Preserve the user's removal of a Shared branch's team grant.
+    #[serde(rename = "sharing_removed")]
+    SharedAfterGrantRemoval,
+}
+
+impl ImportVisibility {
+    /// Assignment grants are allowed only by a Shared verdict or to the owner.
+    pub fn task_assignee_notice(
+        self,
+        owner: &MacroUserIdStr<'_>,
+        assignee: &MacroUserIdStr<'_>,
+    ) -> Option<TaskImportNoticeReason> {
+        match self {
+            Self::Personal if owner != assignee => {
+                Some(TaskImportNoticeReason::PersonalAssigneeOmitted)
+            }
+            _ => None,
+        }
+    }
+}
+
+/// The physical app entity recorded by an import generation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImportedTarget {
+    /// A folder outside trash.
+    Folder(Uuid),
+    /// A document or task outside trash.
+    Document(Uuid),
+    /// A database app entity outside trash.
+    Database(Uuid),
+    /// A tracker project; initiatives support permanent deletion.
+    Initiative(Uuid),
+}
+
+impl ImportedTarget {
+    /// Interpret a recognized ledger entity type and validated UUID.
+    pub fn from_entity(id: &str, kind: &str) -> Option<Self> {
+        let id = id.parse().ok()?;
+        match kind {
+            "md" | "task" => Some(Self::Document(id)),
+            "project" => Some(Self::Folder(id)),
+            "database" => Some(Self::Database(id)),
+            "initiative" => Some(Self::Initiative(id)),
+            _ => None,
+        }
+    }
+}
+
+/// Reads lifecycle state through the imported entity's owning domain.
+pub trait ImportedTargetReader: Send + Sync + 'static {
+    /// Whether an imported target exists outside trash, independently of
+    /// viewer permissions. Transient read failures must be returned.
+    fn target_exists(
+        &self,
+        target: ImportedTarget,
+    ) -> impl Future<Output = anyhow::Result<bool>> + Send;
+}
+
+/// Creates workspace folders, documents, tasks and databases through their
+/// owning services, with the same permissions, search and sync as ordinary writes.
+pub trait WorkspaceWriter: ImportedTargetReader {
     /// Idempotently create a Macro project (initiative) with the ledger's
     /// stable id and the approved visibility, using attributed creation.
     fn create_tracker_project(
@@ -586,11 +700,13 @@ pub trait WorkspaceWriter: Send + Sync + 'static {
         id: Uuid,
         name: &str,
         markdown: &str,
-        shared: bool,
+        visibility: ImportVisibility,
     ) -> impl Future<Output = anyhow::Result<Uuid>> + Send;
 
     /// Idempotently create a task from ordinary markdown, applying normalized
-    /// task properties and approved visibility. Never uses Notion conversion.
+    /// task properties and approved visibility. Explicit team grants are deferred
+    /// until relationship enrichment succeeds. Persist any returned omission notice.
+    /// Never uses Notion conversion.
     fn create_tracker_task(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -598,8 +714,8 @@ pub trait WorkspaceWriter: Send + Sync + 'static {
         name: &str,
         markdown: &str,
         properties: &ImportedTaskProperties,
-        shared: bool,
-    ) -> impl Future<Output = anyhow::Result<String>> + Send;
+        visibility: ImportVisibility,
+    ) -> impl Future<Output = anyhow::Result<CreatedImportTask>> + Send;
 
     /// Apply project, parent/subtask relationships and labels after all tasks
     /// exist. Safe to repeat; never points at a failed or excluded row.
@@ -617,7 +733,23 @@ pub trait WorkspaceWriter: Send + Sync + 'static {
         user: &MacroUserIdStr<'static>,
         name: &str,
         parent: Option<Uuid>,
+        visibility: ImportVisibility,
     ) -> impl Future<Output = anyhow::Result<Uuid>> + Send;
+
+    /// Whether `folder` or an ancestor has an explicit grant beyond its owner.
+    /// Link permissions alone do not grant access to descendants.
+    fn folder_has_explicit_grant(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        folder: Uuid,
+    ) -> impl Future<Output = anyhow::Result<bool>> + Send;
+
+    /// Whether the owner's current team already has a direct explicit Edit grant.
+    fn folder_has_team_edit_grant(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        folder: Uuid,
+    ) -> impl Future<Output = anyhow::Result<bool>> + Send;
 
     /// Whether `folder` still exists and `user` can create inside it.
     fn folder_exists(
@@ -643,12 +775,23 @@ pub trait WorkspaceWriter: Send + Sync + 'static {
         properties: &ImportedDocumentProperties,
         folder: Option<Uuid>,
         dates: Option<SourceDates>,
+        visibility: ImportVisibility,
     ) -> impl Future<Output = anyhow::Result<String>> + Send;
+
+    /// Reapply a marked task's assignee under its current reviewed visibility.
+    /// Preserve its content and other properties; return property-write failures.
+    fn reapply_task_assignee(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        id: Uuid,
+        email: &str,
+        visibility: ImportVisibility,
+    ) -> impl Future<Output = anyhow::Result<Option<TaskImportNoticeReason>>> + Send;
 
     /// Create task `id` from a Notion page (as for [`Self::create_document`],
     /// and as safe to repeat) inside `folder` when given, applying
     /// `properties` best-effort and keeping the page's `dates`. Returns the
-    /// task id.
+    /// task and any omission notice, which the caller must persist.
     #[expect(
         clippy::too_many_arguments,
         reason = "a task carries its id, content, links, properties, folder and dates"
@@ -663,7 +806,8 @@ pub trait WorkspaceWriter: Send + Sync + 'static {
         properties: &ImportedTaskProperties,
         folder: Option<Uuid>,
         dates: Option<SourceDates>,
-    ) -> impl Future<Output = anyhow::Result<String>> + Send;
+        visibility: ImportVisibility,
+    ) -> impl Future<Output = anyhow::Result<CreatedImportTask>> + Send;
 
     /// Create an empty database named `name`.
     fn create_database(
@@ -724,6 +868,43 @@ pub struct PlanRow {
 
 /// Ledger operations a workspace import needs beyond single-row staging.
 pub trait NotionPlanRepo: Send + Sync + 'static {
+    /// Stop a writing object whose reviewed link no longer determines its
+    /// shape. Leave it staged for a fresh plan, releasing its claim/waiters.
+    fn require_replan(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+        reason: &str,
+    ) -> impl Future<Output = Result<bool>> + Send;
+
+    /// Before writing a replacement, remove a reviewed link's obsolete target
+    /// without changing its reviewed verdict. CAS on the writing row.
+    fn clear_stale_link(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+    ) -> impl Future<Output = Result<bool>> + Send;
+
+    /// Replace a finished, deleted target's ledger generation after the domain
+    /// checked its liveness. CAS on the row and target id; never reset an
+    /// importing row. Preserve children; clear old written markers, claims
+    /// and obsolete reviewed link pointers.
+    /// The caller must own the row or belong to the holder's team. Recheck
+    /// physical deletion through `still_deleted` after locking that generation.
+    /// A restored target or transient read error preserves it. `reason` reports
+    /// a deleted finished object skipped while the rest of a write continues.
+    fn renew_deleted_copy<F, Fut>(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+        entity_id: &str,
+        reason: Option<&str>,
+        still_deleted: F,
+    ) -> impl Future<Output = Result<bool>> + Send
+    where
+        F: FnOnce() -> Fut + Send,
+        Fut: Future<Output = Result<bool>> + Send;
+
     /// Replace `user`'s current plan for `source`: drop the staged rows of the
     /// previous plan, then stage `rows` in order (parents before children),
     /// linking each to its parent row and to the review the `running` run
@@ -910,6 +1091,59 @@ pub trait NotionRunRepo: Send + Sync + 'static {
         user: &MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<Option<Uuid>>> + Send;
 
+    /// The user's persistent owner-only mirror root.
+    fn personal_root_folder(
+        &self,
+        user: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Option<Uuid>>> + Send;
+
+    /// Replace the mirror root and clear its old path identities.
+    fn set_personal_root_folder(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        folder: Uuid,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// The folder recorded for a source path in the current personal mirror.
+    fn personal_folder(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        path: &[String],
+    ) -> impl Future<Output = Result<Option<Uuid>>> + Send;
+
+    /// Record a personal subfolder's path identity.
+    fn set_personal_folder(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        path: &[String],
+        folder: Uuid,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Record a destination relocation for the item's import report.
+    fn record_personal_relocation(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+        folder: Uuid,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Persist a newly created shared branch, replacing an unshared old branch's pointer.
+    fn set_shared_folder(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+        folder: Uuid,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Explain a new folder kept separate from an existing visibility branch.
+    fn record_separate_folder(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+        folder: Uuid,
+        reason: FolderSeparation,
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// Record `folder` as the user's "Notion" folder.
     fn set_root_folder(
         &self,
@@ -931,6 +1165,29 @@ pub trait NotionRunRepo: Send + Sync + 'static {
 /// What workspace writes created for each ledger row, recorded as they go so
 /// a resumed write reuses it instead of creating it again.
 pub trait WrittenObjects: Send + Sync + 'static {
+    /// Persist a task notice once by task id, so resumed writes do not inflate report counts.
+    fn record_task_notice(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+        task_id: Uuid,
+        reason: TaskImportNoticeReason,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Count valid typed notices only for these owned ledger items; malformed payloads fail.
+    fn task_notice_counts(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<TaskImportNoticeCount>>> + Send;
+
+    /// Clear only this owned source's notice records after a Shared re-review.
+    fn clear_task_notices(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// Everything recorded for the user's ledger rows `import_ids`.
     fn written(
         &self,

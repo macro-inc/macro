@@ -213,6 +213,7 @@ describe('retaining recent builds', () => {
           'app/index.html',
           'app/app-archive.zip',
           'app/assets/cache_wasm_bg-hash.wasm',
+          'app/web-hosted/tutorial-old.mp4',
           'app/assets/orphan-hash.js',
         ],
       },
@@ -220,6 +221,7 @@ describe('retaining recent builds', () => {
     );
 
     // The archive is its own resource and the cache WASM has its own prune.
+    // Native bundles that can no longer update still load web-hosted videos.
     expect(deleted).toEqual(['app/assets/orphan-hash.js']);
   });
 

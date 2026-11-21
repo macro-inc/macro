@@ -296,4 +296,5 @@ const client = createClient({
   url: '/fixture/work',
   exchanges: [fetchExchange],
 });
-export const useWorkClient = () => () => client;
+export const getGraphqlSoupClient = () => client;
+export const subscribeGraphqlSoupReconnected = () => () => undefined;

@@ -22,7 +22,7 @@ const mocks = vi.hoisted(() => ({
   otherSplit: false,
   canGoBack: false,
   updateCurrentEntry: vi.fn(),
-  goBack: vi.fn(),
+  goBackTo: vi.fn(),
   activateSplit: vi.fn(),
   removeSplit: vi.fn(),
   openWithSplit: vi.fn(),
@@ -54,8 +54,10 @@ vi.mock('@app/signal/splitLayout', () => ({
     activeSplitId: () => undefined,
     getSplit: () => ({
       updateCurrentEntry: mocks.updateCurrentEntry,
-      canGoBack: () => mocks.canGoBack,
-      goBack: mocks.goBack,
+      goBackTo: () => {
+        mocks.goBackTo();
+        return mocks.canGoBack;
+      },
     }),
   }),
 }));
@@ -314,7 +316,8 @@ describe('settings entry points', () => {
 
     mocks.canGoBack = true;
     state.closeSettings();
-    expect(mocks.goBack).toHaveBeenCalledTimes(1);
+    expect(mocks.goBackTo).toHaveBeenCalledTimes(1);
+    expect(mocks.navigate).not.toHaveBeenCalled();
 
     mocks.canGoBack = false;
     state.closeSettings();
@@ -325,7 +328,7 @@ describe('settings entry points', () => {
     mocks.otherSplit = true;
     state.closeSettings();
     expect(mocks.removeSplit).toHaveBeenCalledWith('settings-split');
-    expect(mocks.goBack).toHaveBeenCalledTimes(1);
+    expect(mocks.goBackTo).toHaveBeenCalledTimes(2);
   });
 
   it('restores mobile deep links by closing the pane or using Inbox alone', () => {

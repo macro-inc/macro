@@ -339,7 +339,7 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
-     * Read activity using the same visibility capability as the session transcript.
+     * Read session-visible activity after filtering CRM rows for the requester.
      */
     public getAgentSessionActivity<ThrowOnError extends boolean = false>(options: Options<GetAgentSessionActivityData, ThrowOnError>): RequestResult<GetAgentSessionActivityResponses, GetAgentSessionActivityErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetAgentSessionActivityResponses, GetAgentSessionActivityErrors, ThrowOnError>({ url: '/agent-sessions/{session_id}/activity', ...options });
@@ -711,7 +711,7 @@ export class Sdk extends HeyApiClient {
     /**
      * Answer a tool call the agent made in a turn somebody other than the
      * session's owner prompted. Approve and deny are the owner's; cancel is
-     * anyone's with edit access.
+     * anyone's with edit access. Agent runs may deny or cancel, but never approve.
      */
     public answerAgentSessionToolApproval<ThrowOnError extends boolean = false>(options: Options<AnswerAgentSessionToolApprovalData, ThrowOnError>): RequestResult<AnswerAgentSessionToolApprovalResponses, AnswerAgentSessionToolApprovalErrors, ThrowOnError> {
         return (options.client ?? this.client).post<AnswerAgentSessionToolApprovalResponses, AnswerAgentSessionToolApprovalErrors, ThrowOnError>({

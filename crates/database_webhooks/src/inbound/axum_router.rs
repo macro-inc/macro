@@ -94,6 +94,10 @@ where
     Authorization: MacroAuthorizationService,
     RouterState: Send + Sync + 'static,
 {
+    let people_only = axum::middleware::from_fn_with_state(
+        state.authorization_state.clone(),
+        refuse_programs::<Authorization>,
+    );
     Router::new()
         // Static segments win over `/{id}`, so this never reads as a database.
         .route(
@@ -103,6 +107,7 @@ where
         .route(
             "/{id}/webhooks",
             post(create_webhook_handler::<Service, EntityAccess, Authorization>)
+                .layer(people_only)
                 .get(list_webhooks_handler::<Service, EntityAccess, Authorization>),
         )
         .route(
@@ -110,6 +115,50 @@ where
             delete(delete_webhook_handler::<Service, EntityAccess, Authorization>),
         )
         .with_state(state)
+}
+
+/// A webhook's URL is a lasting secret that writes rows as its creator, so
+/// an agent's program (a credential signed for an agent or a routine run, or
+/// the code-mode header) must not mint one it could return to the model, nor
+/// a bot acting for the user. A credential that does not verify is rejected
+/// here, so a failed check cannot let the request through.
+async fn refuse_programs<Authorization: MacroAuthorizationService>(
+    State(authorization): State<MacroAuthorizationState<Authorization>>,
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    use axum::extract::FromRequestParts as _;
+    let (mut parts, body) = request.into_parts();
+    let principal = match macro_authorization::OptionalMacroAuthorizationExtractor::<
+        Authorization,
+        macro_authorization::AnyPrincipal,
+    >::from_request_parts(&mut parts, &authorization)
+    .await
+    {
+        Ok(extractor) => extractor.authorization,
+        Err(rejection) => return rejection.into_response(),
+    };
+    let program = match &principal {
+        Some(macro_authorization::MacroAuthorization::User(user)) => {
+            macro_authorization::is_program_run(user.attribution(), &parts.headers)
+        }
+        Some(macro_authorization::MacroAuthorization::Bot(_)) => true,
+        _ => parts
+            .headers
+            .contains_key(macro_authorization::CODE_EXECUTION_HEADER),
+    };
+    if program {
+        tracing::warn!("refused creating a database webhook to a program");
+        return (
+            StatusCode::FORBIDDEN,
+            Json(ErrorResponse {
+                message: "An agent's program cannot create a database webhook: its URL is a lasting secret. Tell the user to create one in the database's settings in Macro.".into(),
+            }),
+        )
+            .into_response();
+    }
+    next.run(axum::extract::Request::from_parts(parts, body))
+        .await
 }
 
 /// A webhook of a database. Its token is never shown again after creation.

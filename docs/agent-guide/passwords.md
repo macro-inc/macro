@@ -17,7 +17,8 @@ items. Drag a folder onto another folder to nest it, or onto Passwords to
 move it to the root; a folder cannot move into itself or its descendants. Item
 rows drag onto a folder (or Passwords to unfile). Escape or switching away
 cancels a drag. Right-click a
-folder, or open the "…" folder actions beside New in the list header, for New
+folder, or open the "…" folder actions beside New in the list header (no
+tooltip, so it never covers the menu), for New
 subfolder, Rename (inline), Move to folder (an inline destination list), and
 Delete folder. Delete confirms in place and says how many items move to All
 items and how many subfolders go too; it never deletes items or their values.
@@ -27,6 +28,16 @@ On a phone, the header pills are All, Favorites, Recent, Shared and Folders;
 Folders shows the same tree, and the floating New button opens the item kinds.
 Create folders from the Folders section's "+" on desktop or in the phone's
 Folders tab. A failed create offers Retry with the original name and parent.
+
+The list header filters and groups by type with the Tasks header's menus:
+Filter items (funnel; a Type submenu of the six kinds, a count on the button
+while any apply, and Clear filters) and Group by (None or Type; Type adds a
+section header with the kind's icon and count per kind, in the New menu's
+order). On a phone they live in the filter drawer at the start of the header
+pills, as in Tasks. The type filter combines with the collection, folder and
+search; with a type filter on, an empty list shows "No passwords here yet"
+instead of the empty-vault buttons. Like Tasks, both are kept with the split's
+history entry, so going back restores them.
 
 New opens a menu to pick the kind first: Login, Card, Secure note, Identity,
 API credential, or Verification code. Each kind's form and detail label
@@ -57,8 +68,22 @@ Show verification code loads the current code with a countdown ring and reloads
 it when it expires; a failed load offers Retry.
 
 The detail header shows the logo tile, name, folder path and kind, then
-Favorite, Share, Edit and "…" (Activity, Delete item). Usernames load with a
-Copy action and never reveal the password. Any signed-in team member with
+Favorite, Share, Edit and "…" (Activity, Delete item). The star is personal:
+anyone who can view an item can add or remove it from their own Favorites,
+including a viewer without edit rights. It updates immediately and rolls back
+with an error if saving fails. Starring never edits the credential or adds a
+shared Activity entry. The Favorite checkbox sets the initial creator preference
+on creation; after creation, use the detail star instead of the credential edit
+form.
+
+Usernames load with a Copy action and never reveal the password. An empty account
+identifier or API Key shows a dash; lookup failures stay visible. When Macro does
+not answer (offline, or a gateway returning 502 or 504) the banner, the username
+row and a notice above the list read "Can't reach Macro. Check your connection.";
+when the service answers 503 they read "Passwords is temporarily unavailable.
+Try again in a minute." Either notice's Retry reloads the list and the selected
+username. Missing provider username slots read as
+empty without requiring a re-import. Any signed-in team member with
 access can reveal and copy the password, notes and verification code; there is
 no separate re-sign-in step. Revealed values and codes clear on Lock
 Passwords (a client-side conceal only), after a minute, when the window loses
@@ -67,14 +92,33 @@ reveals an explicitly selected version. The generator
 picks a length (12–128) and character classes; every selected class is always
 present, and characters are drawn uniformly with rejection sampling.
 
+When an agent asks to use an item, the item's human creator and the team's
+admins get an inbox row, "<agent> requested access to <item>", grouped under
+the current team while Passwords is enabled. Opening the row or a notification
+in its stack selects the requested item in Passwords; teams have no separate
+inbox page, and requests for another team are hidden. In the detail pane,
+people who can manage the item see Agent access: a pending request offers Allow
+view, Allow edit and Deny, and an agent that can use the item or still holds a
+grant offers Remove access ("Remove approval" also appears for an approved
+shared grant). Remove approval keeps the grant: the row then reads "<agent>
+requires approval to use this item" and keeps Remove access, also while a later
+request is pending or after it is denied. Once the grant is removed, the row
+disappears unless a request is pending. A request
+that changed meanwhile shows the latest state with a notice after a successful
+refresh. The section loads inside the item pane using a local skeleton; a
+failed read offers Retry, and obsolete actions stay hidden until that retry
+succeeds. The section is
+hidden when the agent vault is off or the viewer can't review, and ordinary
+sharing never lists agents.
+
 ## Importing from 1Password or Bitwarden
 
 The New menu (desktop sidebar and list header) and the phone's floating New end
 with Import…, which opens the import dialog (a full-screen sheet on phones).
 An empty vault (All, no search) shows "No passwords yet" with New login and
 Import buttons; Import opens the same dialog.
-Drop or choose a 1Password `.1pux` or CSV, or a Bitwarden unencrypted JSON or
-CSV export. The file is parsed on the device: `crates/password_import`
+Drop or choose a 1Password `.1pux` or CSV, or a Bitwarden unencrypted JSON,
+CSV or `.zip` export (its attachments are counted, not imported). The file is parsed on the device: `crates/password_import`
 compiled to wasm (`crates/password_import_wasm`, built by
 `just ensure-password-import-wasm`) runs in a worker started for that file and
 terminated after it answers; the raw file is never uploaded or stored. An
@@ -109,7 +153,7 @@ estimate from the rate so far, and a note to keep the page open (or import
 the same file again in this tab to finish) show, and leaving the page asks
 first. The result counts imported, already present, skipped and failed items,
 lists the failed ones by reason (couldn't reach the server, which includes a
-gateway's 502-504, server error, busy, folder deleted, not accepted, not
+gateway's 502 or 504, server error (including a service 503), busy, folder deleted, not accepted, not
 allowed, no answer, account changed) and offers Open folder. The import id is
 kept in sessionStorage under a hash of the viewer and the file's contents
 (hashed in the worker), with the destination, privacy and the source keys of
@@ -139,3 +183,4 @@ Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to the Nix Chrome binary when required
 Its import case uses the real wasm parser: run `just ensure-password-import-wasm`
 in `apps/web` first.
 The fixture suite complements authenticated local-stack verification.
+

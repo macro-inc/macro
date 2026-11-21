@@ -20,7 +20,8 @@ pub(crate) struct Part {
     pub(crate) mime_type: String,
     pub(crate) filename: String,
     pub(crate) headers: Vec<(String, String)>,
-    /// The decoded body. Empty for a multipart container.
+    /// The decoded body. Empty for a multipart container and for a part
+    /// that wraps another message.
     pub(crate) body: Vec<u8>,
     /// Gmail returns an attachment's body by id, not inline.
     pub(crate) is_attachment: bool,
@@ -255,18 +256,32 @@ fn part(mail: &ParsedMail<'_>, part_id: String) -> Part {
     let is_attachment = !is_multipart
         && (disposition.disposition == DispositionType::Attachment || !filename.is_empty());
 
-    let parts = mail
+    let child_id = |index: usize| match part_id.as_str() {
+        "" => index.to_string(),
+        parent => format!("{parent}.{index}"),
+    };
+    let mut parts: Vec<Part> = mail
         .subparts
         .iter()
         .enumerate()
-        .map(|(index, child)| {
-            let child_id = match part_id.as_str() {
-                "" => index.to_string(),
-                parent => format!("{parent}.{index}"),
-            };
-            part(child, child_id)
-        })
+        .map(|(index, child)| part(child, child_id(index)))
         .collect();
+    // Gmail lists the message a `message/rfc822` part wraps, such as the
+    // original a bounce returns, as that part's one child.
+    let wrapped = match mime_type == "message/rfc822" && !is_attachment {
+        true => mail
+            .get_body_raw()
+            .ok()
+            .filter(|raw| !raw.trim_ascii().is_empty()),
+        false => None,
+    };
+    if let Some(inner) = wrapped
+        .as_deref()
+        .and_then(|raw| mailparse::parse_mail(raw).ok())
+    {
+        parts.push(part(&inner, child_id(0)));
+    }
+    let is_container = is_multipart || !parts.is_empty();
 
     Part {
         part_id,
@@ -277,7 +292,7 @@ fn part(mail: &ParsedMail<'_>, part_id: String) -> Part {
             .iter()
             .map(|header| (header.get_key(), header.get_value()))
             .collect(),
-        body: match is_multipart {
+        body: match is_container {
             true => Vec::new(),
             false => mail.get_body_raw().unwrap_or_default(),
         },
@@ -300,6 +315,11 @@ fn collect_text(
         html.push(String::from_utf8_lossy(&part.body).into_owned());
     }
 
+    // The snippet, search text and attachment mark are the message's own,
+    // not those of a message it wraps.
+    if part.mime_type == "message/rfc822" {
+        return;
+    }
     for child in &part.parts {
         collect_text(child, texts, html, has_attachment);
     }

@@ -284,9 +284,9 @@ impl From<AccessLevel> for ToolGrant {
 
 /// The value type of a column, as the model names it.
 ///
-/// A deliberate mirror of [`DataType`] rather than a re-export: the property
-/// system's names are internal, and the tool vocabulary has to stay stable
-/// independently of them.
+/// Mirrors [`DataType`] plus `percentage`, a number displayed as a percent.
+/// The property system's names are internal, and the tool vocabulary has to
+/// stay stable independently of them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ColumnType {
@@ -294,6 +294,8 @@ pub enum ColumnType {
     Text,
     /// A number.
     Number,
+    /// A number shown as a percent: 0.25 is 25%.
+    Percentage,
     /// True/false.
     Boolean,
     /// An ISO-8601 date-time.
@@ -317,7 +319,7 @@ impl From<ColumnType> for DataType {
     fn from(value: ColumnType) -> Self {
         match value {
             ColumnType::Text => DataType::String,
-            ColumnType::Number => DataType::Number,
+            ColumnType::Number | ColumnType::Percentage => DataType::Number,
             ColumnType::Boolean => DataType::Boolean,
             ColumnType::Date => DataType::Date,
             ColumnType::DateRange => DataType::DateRange,
@@ -551,6 +553,14 @@ impl From<ColumnDetail> for ToolColumn {
     fn from(column: ColumnDetail) -> Self {
         // A derived column's type follows its formula.
         let (safe_types, checked_types) = match column.column.formula() {
+            Some(_) if column.definition.definition.data_type == DataType::Number => {
+                let other = if column.column.is_percentage() {
+                    models_databases::ColumnKind::Number
+                } else {
+                    models_databases::ColumnKind::Percentage
+                };
+                (vec![other], Vec::new())
+            }
             Some(_) => (Vec::new(), Vec::new()),
             None => cast_targets(&column.column, &column.definition),
         };
@@ -559,7 +569,11 @@ impl From<ColumnDetail> for ToolColumn {
             checked_types: checked_types.into_iter().map(SpelledColumnType).collect(),
             id: column.column.id,
             name: column.name().to_string(),
-            data_type: column.definition.definition.data_type.into(),
+            data_type: if column.column.is_percentage() {
+                ColumnType::Percentage
+            } else {
+                column.definition.definition.data_type.into()
+            },
             specific_entity_type: column.entity_type(),
             is_multi_select: column.is_multi_valued(),
             writable: column.writable && column.column.formula().is_none(),

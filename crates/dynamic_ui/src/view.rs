@@ -91,6 +91,22 @@ pub enum Widget {
     /// items macro.agentSessions.updates() returned, unchanged, whenever it
     /// returns any: these cards are the only place the user can answer them.
     AgentUpdates { items: Vec<AgentUpdateItem> },
+    /// A card on which the user mints a new token for a bot they manage and
+    /// sees its secret, which never reaches you. Present it whenever the user
+    /// asks for a bot token or credential.
+    #[serde(rename_all = "camelCase")]
+    BotCredential {
+        /// The bot's id.
+        bot_id: String,
+        /// Where the token will be used, such as "github-webhook".
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[specta(optional, type = String)]
+        label: Option<String>,
+        /// RFC 3339 expiry; omit for a token that does not expire.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[specta(optional, type = String)]
+        expires_at: Option<String>,
+    },
     /// A nestable flex container of widgets.
     Container {
         #[serde(default, skip_serializing_if = "Option::is_none")]

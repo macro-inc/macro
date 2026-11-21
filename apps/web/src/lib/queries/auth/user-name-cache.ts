@@ -504,10 +504,36 @@ export function createUserNameCache(options: {
     }
     entry.revision();
     trim();
+    const own = value.name === undefined && value.error ? ownName(id) : null;
+    if (own) return { ...value, name: own, loading: false };
     return {
       ...value,
       loading: value.name === undefined && (entry.wanted || entry.running),
     };
+  }
+  /** The viewer's own label when its lookup failed (e.g. an offline relaunch):
+   * the identity query is restored from durable storage, the name batch isn't. */
+  function ownName(id: string): UserName | null {
+    if (!account || normalizeUserNameQueryId(account.userId) !== id)
+      return null;
+    authRevision();
+    const identity = client.getQueryData<{ id?: unknown; name?: unknown }>(
+      authKeys.userInfo.queryKey
+    );
+    if (
+      typeof identity?.name !== 'string' ||
+      typeof identity.id !== 'string' ||
+      normalizeUserNameQueryId(identity.id) !== id
+    )
+      return null;
+    const [first, ...rest] = identity.name.trim().split(/\s+/);
+    if (!first) return null;
+    return (
+      boundedName(
+        { id, first_name: first, last_name: rest.join(' ') || null },
+        id
+      ) ?? null
+    );
   }
   function control(rawId: string) {
     synchronize();

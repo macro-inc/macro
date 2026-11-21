@@ -89,6 +89,14 @@ impl CanonicalImportRepo for Harness {
 }
 
 impl EntityCreator for Harness {
+    async fn can_view(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: crate::domain::models::ImportSource,
+        _: &str,
+    ) -> anyhow::Result<bool> {
+        Ok(true)
+    }
     async fn create_task(
         &self,
         _: &MacroUserIdStr<'static>,

@@ -1,3 +1,5 @@
+import type { CalendarReplacementChanges } from '@service-calendar/generated/schemas';
+
 /** The immutable details reviewed before cancellation and reinvitation. */
 export type EventReplacementPreview = {
   operationId: string;
@@ -18,4 +20,9 @@ export type EventReplacementTarget = {
   eventId: string;
   calendarId?: string;
   recurrenceId?: string;
+};
+/** The event a replacement replaces and the unsaved edits it carries instead of the saved values. */
+export type EventReplacementRequest = {
+  target: EventReplacementTarget;
+  changes: CalendarReplacementChanges;
 };

@@ -5,6 +5,7 @@ import type {
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
 import type { CacheHost } from '@graphql-cache/host/types';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { setDoneOverride } from '@notifications/notification-source';
 import { createLiveAttentionFeed } from '@queries/attention-feed/live-attention-feed';
 import {
@@ -170,11 +171,12 @@ export function createWorkFeed(options: WorkFeedOptions) {
         fireAndForget(options.revalidateNotifications?.(client), 'home');
         return {
           undo: async () => {
+            const generation = cacheSessionGeneration.capture();
             const patches: WorkFeedPatchFieldsFragment[] =
               await undoWorkFeedItemsDone(client, undoToken, scope);
             fireAndForget(options.revalidateNotifications?.(client), 'home');
             // The restored places land now rather than with the stream.
-            live.applyPatches(patches);
+            live.applyPatches(patches, generation);
           },
         };
       },

@@ -1,8 +1,9 @@
 import { t } from '@app/lib/i18n';
+import { makePersistedState } from '@app/lib/persistence';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { catchToResult } from '@core/util/result';
 import { type Span, Telemetry } from '@macro-inc/observability';
-import { useQuery } from '@tanstack/solid-query';
+import { useQuery, useQueryClient } from '@tanstack/solid-query';
 import { createSignal, onCleanup } from 'solid-js';
 import { createStore, produce } from 'solid-js/store';
 import { v7 as uuidv7 } from 'uuid';
@@ -10,7 +11,7 @@ import {
   type PasswordFailure,
   usePasswords,
 } from '../context/passwords-context';
-import { KIND_LAYOUTS } from '../core/kinds';
+import { KIND_LAYOUTS, PASSWORD_KINDS } from '../core/kinds';
 import {
   filterItems,
   folderSubtree,
@@ -18,13 +19,21 @@ import {
   type PasswordDraft,
   type PasswordFilter,
   type PasswordGrant,
+  type PasswordGroupBy,
   type PasswordItem,
   type PasswordKind,
   type PasswordValues,
   type PasswordVersion,
   validateDraft,
 } from '../core/types';
+import {
+  createPasswordListViewStorage,
+  defaultPasswordListView,
+  type PasswordListView,
+  type PasswordListViewEntry,
+} from '../persistence';
 import { passwordKeys } from '../queries/keys';
+import { isServiceUnavailable, isUnreachable } from '../queries/source';
 
 /**
  * An unsaved new item or an in-place edit of an existing one. Drafts live only
@@ -43,6 +52,11 @@ export type VaultDraft = {
   busy: boolean;
 };
 
+/** Why the list on screen may be out of date. */
+export type ConnectionProblem = Extract<
+  PasswordFailure,
+  'unreachable' | 'serviceUnavailable'
+>;
 export type VaultSelection =
   | { kind: 'item'; id: string }
   | { kind: 'draft'; key: string };
@@ -64,8 +78,13 @@ const REVEAL_WINDOW_MS = 60_000;
 
 const editKey = (itemId: string) => `edit:${itemId}`;
 
-export function createVault() {
+/** `entry` keeps the list's type filter and grouping with a split history entry. */
+export function createVault(options: { entry?: PasswordListViewEntry } = {}) {
   const { scope, source, writeClipboard } = usePasswords();
+  const queryClient = useQueryClient();
+  const [favoritePending, setFavoritePending] = createSignal<
+    ReadonlySet<string>
+  >(new Set());
   /** False once the viewer's account or session changed under this vault. */
   const stale = () => !scope.isCurrent();
   const items = useQuery(() => ({
@@ -86,6 +105,25 @@ export function createVault() {
   const [selection, setSelection] = createSignal<VaultSelection>();
   const [filter, setFilter] = createSignal<PasswordFilter>('all');
   const [search, setSearch] = createSignal('');
+  const [listView, setListView] = makePersistedState(
+    createStore<PasswordListView>(defaultPasswordListView()),
+    {
+      storages: options.entry
+        ? [createPasswordListViewStorage(options.entry)]
+        : [],
+    }
+  );
+  /** Add or remove one type from the list's type filter. */
+  const setKindSelected = (kind: PasswordKind, selected: boolean) =>
+    setListView('kinds', (kinds) =>
+      selected
+        ? kinds.includes(kind)
+          ? kinds
+          : PASSWORD_KINDS.filter(
+              (each) => each === kind || kinds.includes(each)
+            )
+        : kinds.filter((each) => each !== kind)
+    );
   const [state, setState] = createStore<DraftState>({ drafts: {}, order: [] });
   const bookkeeping = new Map<string, DraftBookkeeping>();
   const [values, setValues] = createSignal<PasswordValues>();
@@ -168,6 +206,26 @@ export function createVault() {
     setSelection(item ? { kind: 'item', id: item.id } : undefined);
     if (item?.kind !== 'note' && item)
       fireAndForget(loadUsername(item), 'passwords');
+  }
+  /**
+   * No answer from Macro, or a service that answered it can't serve the vault
+   * right now: the last request for the selected item, or the latest list
+   * reload. The list on screen may be out of date until it answers.
+   */
+  const connectionProblem = (): ConnectionProblem | undefined => {
+    const last = failure();
+    if (last === 'unreachable' || last === 'serviceUnavailable') return last;
+    if (!items.isError) return undefined;
+    if (isUnreachable(items.error)) return 'unreachable';
+    if (isServiceUnavailable(items.error)) return 'serviceUnavailable';
+    return undefined;
+  };
+  /** Ask again: reload the list and folders, and the selected item's username. */
+  function retryConnection() {
+    fireAndForget(items.refetch(), 'passwords');
+    fireAndForget(folders.refetch(), 'passwords');
+    const current = selection();
+    if (current?.kind === 'item') select(selected());
   }
   function selectDraft(key: string) {
     resetDetail();
@@ -506,16 +564,36 @@ export function createVault() {
     await items.refetch();
   }
   async function toggleFavorite(item: PasswordItem) {
-    const response = await source.move(
-      { ...item, favorite: !item.favorite },
-      item.folderId
-    );
-    if (stale()) return;
-    if (response.isErr()) {
-      setFailure(response.error);
-      return;
+    const id = item.id;
+    if (stale() || favoritePending().has(id)) return;
+    const previous = item.favorite;
+    const favorite = !previous;
+    const key = passwordKeys.items(scope.key).queryKey;
+    const update = (value: boolean) =>
+      queryClient.setQueryData<PasswordItem[]>(key, (current) =>
+        current?.map((entry) =>
+          entry.id === id ? { ...entry, favorite: value } : entry
+        )
+      );
+    setFavoritePending((current) => new Set([...current, id]));
+    setFailure(undefined);
+    try {
+      await queryClient.cancelQueries({ queryKey: key });
+      if (stale()) return;
+      update(favorite);
+      const response = await source.setFavorite(id, favorite);
+      if (stale()) return;
+      if (response.isErr()) {
+        update(previous);
+        setFailure(response.error);
+        return;
+      }
+      await items.refetch();
+    } finally {
+      setFavoritePending(
+        (current) => new Set([...current].filter((pending) => pending !== id))
+      );
     }
-    await items.refetch();
   }
   async function share(grants: PasswordGrant[]) {
     const item = selected();
@@ -662,6 +740,11 @@ export function createVault() {
     setFilter,
     search,
     setSearch,
+    kinds: () => listView.kinds,
+    setKindSelected,
+    clearKinds: () => setListView('kinds', []),
+    groupBy: () => listView.groupBy,
+    setGroupBy: (groupBy: PasswordGroupBy) => setListView('groupBy', groupBy),
     drafts: () => state.order.map((key) => state.drafts[key]),
     draft: (key: string): VaultDraft | undefined => state.drafts[key],
     activeDraft,
@@ -678,6 +761,8 @@ export function createVault() {
     usernameLoading,
     usernameCopied,
     failure,
+    connectionProblem,
+    retryConnection,
     reveal,
     copy: copyPassword,
     copyUsername,
@@ -693,6 +778,7 @@ export function createVault() {
     share,
     move,
     toggleFavorite,
+    favoritePending: (id: string) => favoritePending().has(id),
     createFolder,
     renameFolder,
     moveFolder,
@@ -703,7 +789,13 @@ export function createVault() {
     loadCode,
     setTotp,
     visibleItems: () =>
-      filterItems(loadedItems(), filter(), search(), loadedFolders()),
+      filterItems(
+        loadedItems(),
+        filter(),
+        search(),
+        loadedFolders(),
+        listView.kinds
+      ),
   };
 }
 export type VaultController = ReturnType<typeof createVault>;

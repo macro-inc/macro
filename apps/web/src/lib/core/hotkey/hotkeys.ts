@@ -49,6 +49,9 @@ import {
   runCommand,
 } from './utils';
 
+/** Commands that dispose with their reactive owner; see registerHotkey. */
+const ownerBoundCommands = new WeakSet<HotkeyCommand>();
+
 /**
  * Registers a keyboard shortcut to a particular, existing scope.
  *
@@ -255,14 +258,21 @@ export function registerHotkey(
   };
 
   // An override re-registration of the same logical command — same token in
-  // this scope — replaces the old registration outright instead of stacking:
-  // persistent commands (disposeWithOwner: false) re-register on every mount
-  // of their view and must not accumulate eclipsed copies.
+  // this scope — replaces an old persistent registration outright instead of
+  // stacking: persistent commands (disposeWithOwner: false) re-register on
+  // every mount of their view and must not accumulate eclipsed copies. A
+  // registration that disposes with its owner is only eclipsed, so a second
+  // live registrant (a view's loading skeleton shown while the view suspends)
+  // hands the key back when it unmounts.
   if (registrationType === 'override' && hotkeyToken) {
     const replaced: HotkeyCommand[] = [];
     for (let i = scopeNode.commands.length - 1; i >= 0; i--) {
       const existingCommand = scopeNode.commands[i];
-      if (existingCommand && existingCommand.hotkeyToken === hotkeyToken) {
+      if (
+        existingCommand &&
+        existingCommand.hotkeyToken === hotkeyToken &&
+        !ownerBoundCommands.has(existingCommand)
+      ) {
         replaced.push(existingCommand);
         scopeNode.commands.splice(i, 1);
       }
@@ -337,6 +347,7 @@ export function registerHotkey(
   // over unmounted state. `disposeWithOwner: false` opts out for commands
   // meant to persist past their registrant (see HotkeyRegistrationOptions).
   if (disposeWithOwner !== false && getOwner()) {
+    ownerBoundCommands.add(command);
     onCleanup(() => disposer.dispose());
   }
 

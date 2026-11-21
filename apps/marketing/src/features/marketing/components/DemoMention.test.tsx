@@ -1,7 +1,9 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { emailSharingMentions } from '../core/demo-mentions';
 import { DemoMentionText, serializeDemoEditor } from './DemoMention';
 import { DemoMentionMenu } from './DemoMentionMenu';
+import type { ChannelComposerHandle } from './email/frozen/ChannelComposer';
 import { ChannelComposer } from './email/frozen/ChannelComposer';
 
 beforeEach(() => {
@@ -127,4 +129,31 @@ it('renders Claude and Cursor as person mentions in both editors and sent messag
   ));
   expect(result.container.textContent).toBe('@Claude @Cursor ');
   expect(result.container.querySelector('.demo-mention-icon')).toBeNull();
+});
+
+it('sends multiple scripted entity references without losing their types and clears the draft', () => {
+  const onSend = vi.fn();
+  let composer: ChannelComposerHandle | undefined;
+  render(() => (
+    <ChannelComposer
+      richMentions
+      onReady={(handle) => {
+        composer = handle;
+      }}
+      onSend={onSend}
+    />
+  ));
+  const { email, contact } = emailSharingMentions;
+  composer?.setContent(['Read ', email, ' with ', contact]);
+  const editor = screen.getByRole('textbox');
+  expect(editor.querySelectorAll('[contenteditable="false"]')).toHaveLength(2);
+  expect(editor.querySelector('.mention-email')).toBeTruthy();
+  expect(editor.querySelector('.mention-contact')).toBeTruthy();
+  composer?.send();
+  expect(onSend).toHaveBeenCalledExactlyOnceWith(
+    `Read @[${email.label}](demo-mention:${email.id}) with @[${contact.label}](demo-mention:${contact.id})`
+  );
+  expect(editor.textContent).toBe('');
+  composer?.send();
+  expect(onSend).toHaveBeenCalledTimes(1);
 });

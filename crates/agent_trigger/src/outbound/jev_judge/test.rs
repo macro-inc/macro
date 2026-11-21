@@ -86,7 +86,7 @@ async fn a_non_user_sender_is_not_replaced_with_system_billing_identity() {
 
     assert_eq!(
         judge
-            .addressee_probabilities(&posted, "", 1)
+            .addressee_probabilities(&posted, "", "someone", 1)
             .await
             .expect("judge"),
         vec![0.0]
@@ -100,7 +100,12 @@ async fn asks_one_question_per_agent_about_the_thread_and_message() {
     let judge = JevTriggerJudge::new(classifier.clone(), UnexpectedCaptioner);
 
     let probabilities = judge
-        .addressee_probabilities(&posted(user_sender()), "[agent 2] on it\n", 2)
+        .addressee_probabilities(
+            &posted(user_sender()),
+            "[agent 2 (pickle)] on it\n",
+            "Ada Lovelace",
+            2,
+        )
         .await
         .expect("judge");
 
@@ -112,7 +117,8 @@ async fn asks_one_question_per_agent_about_the_thread_and_message() {
         .clone()
         .expect("classifier was asked");
     assert_eq!(questions, 2);
-    assert_eq!(input["thread"], "[agent 2] on it\n");
+    assert_eq!(input["thread"], "[agent 2 (pickle)] on it\n");
+    assert_eq!(input["author"], "Ada Lovelace");
     assert_eq!(input["message"], "can you also fix the tests");
 }
 
@@ -123,7 +129,7 @@ async fn a_classifier_failure_is_an_error() {
 
     assert!(
         judge
-            .addressee_probabilities(&posted(user_sender()), "", 1)
+            .addressee_probabilities(&posted(user_sender()), "", "someone", 1)
             .await
             .is_err()
     );
@@ -146,7 +152,7 @@ fn the_judge_is_told_what_an_image_blurb_means() {
 
 #[test]
 fn an_image_blurb_is_part_of_the_message_being_judged() {
-    let input = judge_input("", "see this\n<this is an image of a frog>");
+    let input = judge_input("", "someone", "see this\n<this is an image of a frog>");
 
     assert_eq!(input["message"], "see this\n<this is an image of a frog>");
     assert_eq!(input["thread"], "");

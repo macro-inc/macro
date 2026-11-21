@@ -96,26 +96,7 @@ verified removals disappear from local SQL, while delayed older hydration cannot
 restore them. A later successful positive lookup/backfill can add them again.
 ## Feature flag
 
-Databases is behind the `enable-databases` PostHog flag. A deployed app reads it
-at runtime, and a fresh `/app/database/<uuid>` link waits up to three seconds for
-PostHog before deciding. `VITE_ENABLE_DATABASES=true|false` overrides it at build
-time; `bun run dev` defaults it on, and a local stack's static build defers to
-PostHog unless the variable was set when it was built. With the flag off:
-
-- `/app/database/<uuid>` and a `~/database/<uuid>` split show the 404 view. The
-  database block's code is never fetched and no database request is made.
-- **Create → Database**, its **C → L** shortcut, the command palette entry and
-  the slash menu's **Database** and **Query** actions are absent, and no starter database is
-  created.
-- The sidebar, mentions, search and Quick Access list no databases; Activity
-  and `macro.activity.mine()` leave out database rows.
-- A document's database answer shows its title (or "Database answer") as a
-  plain label, keeps the node unchanged, and never loads the SQL engine.
-- Database tool calls in a chat render as a muted "Database tool" line.
-- The SQL engine's wasm and the database bundles are only fetched once a
-  database surface mounts with the flag on.
-
-`showDatabaseSql` (`VITE_SHOW_DATABASE_SQL`) is separate and only hides SQL.
+`showDatabaseSql` (`VITE_SHOW_DATABASE_SQL`) shows the SQL behind database answers.
 
 The table selector matches the inset project/channel navigation. In narrow panes,
 scroll its tabs horizontally with a trackpad, mouse wheel, or the arrow buttons.
@@ -214,13 +195,14 @@ must use.
 The current type has a checkmark in **Change type**; selecting it leaves the column unchanged. Types that cannot convert any existing values are omitted, while empty columns can still choose a new type.
 
 The header arrow menu groups schema and view actions. **Change type** checks the
-column's values against Text, Number, Select, Multi-select, Date, Time range,
+column's values against Text, Number, Percentage, Select, Multi-select, Date, Time range,
 Checkbox, URL, People, Documents, Tasks, and relations to tables in this database
 (**Related table**) or in any other database you can see (**Other databases**, one
 submenu per database, by name), showing
 "Checking values…" meanwhile, then lists only the types the column can become (a
 checkbox can only become text; only an empty column can become People or a
-relation). A type some values would not survive shows how many, such
+relation). Number and Percentage share the same stored values: 0.25 as a number
+is 25% as a percentage, with no rescaling when the type changes. A type some values would not survive shows how many, such
 as "3 values aren't numbers · Converts into a new column"; it never changes the
 column in place. Choosing it opens a confirmation listing a few of those values,
 and **Convert into a new column** adds a column of that type right after this
@@ -246,7 +228,8 @@ by a number.`); **Save** stays disabled until it does, and Enter saves. Names wi
 spaces go in braces. Numbers added to a date count days; a date minus a date is
 the days between them. An empty number counts as 0 unless every input is empty.
 Formula columns show an ƒ icon, their cells are read-only, and their header menu
-has **Edit formula** instead of **Change type**. Values follow edits to their inputs
+has **Edit formula**. A number formula also offers **Change type** between Number
+and Percentage. Values follow edits to their inputs
 at once, and sort and filter like numbers or dates. Deleting a column a formula uses
 is refused ("Total's formula uses Quantity; change that formula first").
 **Delete column** opens a confirmation;
@@ -362,6 +345,11 @@ rounded value. **Enter a valid number** appears in an opaque, focus-only hint. L
 the field hides the hint but keeps the draft and outline; other fields remain
 editable, including through Tab or Shift+Tab. Correct the value or press Escape to
 cancel. Signed decimals and scientific notation remain supported.
+Percentage cells store a fraction and display it with a percent sign (`0.25` shows
+as `25%`). The editor shows percentage points without the sign, so typing `25`
+stores `0.25`. A trailing `%` is accepted. Changing Number to Percentage does not
+rescale existing values. Filters and column totals use the displayed percent, not
+the stored fraction.
 
 Date cells open Macro's date selector (the one tasks use): type a date or phrase
 such as `tomorrow`, `3d`, or `feb 17` and press Enter, or pick **Custom date...**
@@ -841,7 +829,8 @@ below shows each webhook's token prefix and a delete button. Deleting the last
 webhook does not create a replacement until the dialog is reopened. POSTing a JSON object to the URL inserts one row (an array inserts
 one per object, up to 100). Keys name columns, ignoring case; `null` leaves a
 cell empty; unknown keys or values that do not fit refuse the whole call with a
-400 listing every problem. The row is written as the webhook's creator, and the
+400 listing every problem. Number and percentage columns take the stored
+number (0.25 is 25%); a trailing `%` is not accepted. The row is written as the webhook's creator, and the
 webhook stops working if they lose edit access.
 
 Browser examples: [desktop](media/database-webhooks/desktop.png) and

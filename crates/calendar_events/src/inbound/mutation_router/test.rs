@@ -235,12 +235,88 @@ fn a_program_cannot_create_an_event_the_user_has_not_seen() {
     );
     let browser = axum::http::HeaderMap::new();
 
-    let refusal = refuse_program_create(false, &program).unwrap_err();
+    let refusal = refuse_program_create(CredentialAttribution::Person, &program).unwrap_err();
     assert_eq!(refusal.status, StatusCode::FORBIDDEN);
     assert_eq!(
         refusal.code,
         CalendarMutationErrorCode::ConfirmationRequired
     );
-    assert!(refuse_program_create(true, &browser).is_err());
-    assert!(refuse_program_create(false, &browser).is_ok());
+    assert!(refuse_program_create(CredentialAttribution::Agent, &browser).is_err());
+    assert!(refuse_program_create(CredentialAttribution::Person, &browser).is_ok());
+}
+
+#[test]
+fn an_owner_routine_code_step_creates_events_but_an_agent_program_does_not() {
+    let mut code_step = axum::http::HeaderMap::new();
+    code_step.insert(
+        macro_authorization::CODE_EXECUTION_HEADER,
+        "1".parse().unwrap(),
+    );
+    // The runtime marks every code step's request; the signed owner routine
+    // claim decides.
+    assert!(refuse_program_create(CredentialAttribution::Routine, &code_step).is_ok());
+    assert!(refuse_program_create(CredentialAttribution::Agent, &code_step).is_err());
+}
+
+/// Two inboxes hold the meeting, so a request that names no copy is refused.
+struct TwoCopies;
+
+impl CalendarCopyConfirmation for TwoCopies {
+    async fn confirm_copy(
+        &self,
+        _: &str,
+        event_id: Uuid,
+        inbox: Option<&str>,
+        change: CopyChange,
+    ) -> Result<Option<CopyRefusal>, CalendarMutationError> {
+        use crate::domain::copies::check_copy;
+        use crate::domain::models::MeetingCopy;
+        let copies = vec![
+            MeetingCopy {
+                event_id,
+                inbox: "owner@example.com".to_string(),
+                organizes: true,
+                attends: false,
+            },
+            MeetingCopy {
+                event_id: Uuid::from_u128(2),
+                inbox: "guest@example.com".to_string(),
+                organizes: false,
+                attends: true,
+            },
+        ];
+        Ok(check_copy(&copies, event_id, inbox, change))
+    }
+}
+
+#[tokio::test]
+async fn every_program_names_the_copy_it_changes_even_an_owner_routine() {
+    let owner_step = macro_authorization::is_program_run(
+        CredentialAttribution::Routine,
+        &axum::http::HeaderMap::new(),
+    );
+    let refused = confirm_copy(
+        &TwoCopies,
+        "macro|owner@example.com",
+        owner_step,
+        Uuid::from_u128(1),
+        None,
+        CopyChange::Delete,
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(refused.code, CalendarMutationErrorCode::CopyChoiceRequired);
+    // A person in the app picks a copy by opening it.
+    assert!(
+        confirm_copy(
+            &TwoCopies,
+            "macro|owner@example.com",
+            false,
+            Uuid::from_u128(1),
+            None,
+            CopyChange::Delete,
+        )
+        .await
+        .is_ok()
+    );
 }

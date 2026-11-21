@@ -16,15 +16,21 @@ import type {
 } from '../core/types';
 import { createVault, type VaultController } from '../primitives/vault';
 import { passwordKeys } from '../queries/keys';
+import { createFocusSelection, type PasswordsFocus } from '../views/vault-view';
 import { createFakePasswordSource } from './fake-source';
 import { createFixtureScope, FIXTURE_SCOPE, noImport } from './fixture-scope';
 
 afterEach(cleanup);
 
-function mountVault(source: PasswordSource, clipboard = async () => {}) {
+function mountVault(
+  source: PasswordSource,
+  clipboard = async () => {},
+  focus?: () => PasswordsFocus | undefined
+) {
   let controller: VaultController | undefined;
   function Probe() {
     controller = createVault();
+    if (focus) createFocusSelection(controller, focus);
     return null;
   }
   render(() => (
@@ -41,6 +47,7 @@ function mountVault(source: PasswordSource, clipboard = async () => {}) {
           recipientsLoading: () => false,
           recipientsError: () => false,
           writeClipboard: clipboard,
+          displayName: (accountId) => accountId.replace(/^macro\|/, ''),
           ...noImport(),
         }}
       >
@@ -207,6 +214,56 @@ it('creates, renames, nests and deletes folders, unfiling items without deleting
   expect(vault.draft(draft)?.draft.folderId).toBeNull();
 });
 
+it('narrows the list to the chosen types within the search, and clears back to every type', async () => {
+  const source = createFakePasswordSource();
+  const card = await source.save(
+    undefined,
+    undefined,
+    { ...LOGIN, name: 'Account card', kind: 'card' },
+    '019a0000-0000-7000-8000-000000000013'
+  );
+  const login = await source.save(
+    undefined,
+    undefined,
+    LOGIN,
+    '019a0000-0000-7000-8000-000000000014'
+  );
+  const note = await source.save(
+    undefined,
+    undefined,
+    { ...LOGIN, name: 'Recovery', kind: 'note' },
+    '019a0000-0000-7000-8000-000000000015'
+  );
+  if (card.isErr() || login.isErr() || note.isErr())
+    throw new Error('Fixture save failed');
+  const vault = mountVault(source);
+  await waitFor(() => expect(vault.loadedItems()).toHaveLength(3));
+  const visible = () =>
+    vault
+      .visibleItems()
+      .map((item) => item.id)
+      .sort();
+
+  vault.setKindSelected('card', true);
+  vault.setKindSelected('note', true);
+  expect(vault.kinds()).toEqual(['card', 'note']);
+  expect(visible()).toEqual([card.value.id, note.value.id].sort());
+
+  vault.setSearch('account');
+  expect(visible()).toEqual([card.value.id]);
+
+  vault.setKindSelected('card', false);
+  expect(visible()).toEqual([]);
+
+  vault.setSearch('');
+  vault.clearKinds();
+  expect(vault.kinds()).toEqual([]);
+  expect(visible()).toHaveLength(3);
+
+  vault.setGroupBy('kind');
+  expect(vault.groupBy()).toBe('kind');
+});
+
 it('generates uniformly over the selected classes and always includes each one', () => {
   for (const classes of [
     ['uppercase', 'lowercase', 'digits', 'symbols'],
@@ -303,6 +360,7 @@ it('discards a reveal that completes after the vault locks', async () => {
           recipientsLoading: () => false,
           recipientsError: () => false,
           writeClipboard: async () => {},
+          displayName: (accountId) => accountId.replace(/^macro\|/, ''),
           ...noImport(),
         }}
       >
@@ -380,6 +438,7 @@ it('does not copy a late response for a credential that is no longer selected', 
           recipientsLoading: () => false,
           recipientsError: () => false,
           writeClipboard: clipboard,
+          displayName: (accountId) => accountId.replace(/^macro\|/, ''),
           ...noImport(),
         }}
       >
@@ -467,6 +526,7 @@ it.each(['reveal', 'copy'] as const)(
             recipientsLoading: () => false,
             recipientsError: () => false,
             writeClipboard: async () => {},
+            displayName: (accountId) => accountId.replace(/^macro\|/, ''),
             ...noImport(),
           }}
         >
@@ -551,6 +611,7 @@ it.each(['reveal', 'copy'] as const)(
             recipientsLoading: () => false,
             recipientsError: () => false,
             writeClipboard: async () => {},
+            displayName: (accountId) => accountId.replace(/^macro\|/, ''),
             ...noImport(),
           }}
         >
@@ -613,6 +674,7 @@ it('drops a reveal, copy and clipboard write that finish after the viewer change
           recipientsLoading: () => false,
           recipientsError: () => false,
           writeClipboard: clipboard,
+          displayName: (accountId) => accountId.replace(/^macro\|/, ''),
           ...noImport(),
         }}
       >
@@ -663,6 +725,7 @@ it('never carries a dirty draft into another account or sign-in session', async 
               recipientsLoading: () => false,
               recipientsError: () => false,
               writeClipboard: async () => {},
+              displayName: (accountId) => accountId.replace(/^macro\|/, ''),
               ...noImport(),
             }}
           >
@@ -748,4 +811,85 @@ it('a folder the vault fails to create reports false and leaves no item failure 
   expect(await vault.createFolder('Engineering', null)).toBe(false);
   expect(vault.failure()).toBeUndefined();
   expect(vault.loadedFolders()).toEqual([]);
+});
+
+it("selects a notification's item once a failed item load is retried", async () => {
+  const source = createFakePasswordSource();
+  const saved = await source.save(
+    undefined,
+    undefined,
+    LOGIN,
+    '019a0000-0000-7000-8000-000000000020'
+  );
+  if (saved.isErr()) throw new Error('Fixture save failed');
+  const list = source.list;
+  let failing = true;
+  source.list = () => (failing ? Promise.reject(new Error('offline')) : list());
+  const vault = mountVault(
+    source,
+    async () => {},
+    () => ({
+      itemId: saved.value.id,
+      focusRequestId: 1,
+    })
+  );
+  await waitFor(() => expect(vault.items.isError).toBe(true));
+  expect(vault.selected()).toBeUndefined();
+
+  failing = false;
+  await vault.items.refetch();
+
+  await waitFor(() => expect(vault.selected()?.id).toBe(saved.value.id));
+});
+
+it('keeps a viewer star optimistic across an older refresh and rolls back a failed request', async () => {
+  let finish: ((value: Awaited<PasswordResult<void>>) => void) | undefined;
+  const pending = new Promise<Awaited<PasswordResult<void>>>((resolve) => {
+    finish = resolve;
+  });
+  const source = {
+    ...createFakePasswordSource(),
+    setFavorite: vi.fn(() => pending),
+  };
+  const saved = await source.save(
+    undefined,
+    undefined,
+    LOGIN,
+    '019a0000-0000-7000-8000-000000000099'
+  );
+  if (saved.isErr()) throw new Error('Fixture save failed');
+  let refresh: Promise<PasswordItem[]> | undefined;
+  let startRefresh: (() => void) | undefined;
+  source.list = async () => {
+    startRefresh?.();
+    return refresh ?? [{ ...saved.value, canEdit: false, canManage: false }];
+  };
+  const move = vi.spyOn(source, 'move');
+  const vault = mountVault(source);
+  await waitFor(() => expect(vault.loadedItems()).toHaveLength(1));
+  let finishRefresh: ((items: PasswordItem[]) => void) | undefined;
+  const refreshStarted = new Promise<void>((resolve) => {
+    startRefresh = resolve;
+  });
+  refresh = new Promise((resolve) => {
+    finishRefresh = resolve;
+  });
+  const refreshing = vault.items.refetch();
+  await refreshStarted;
+  const changing = vault.toggleFavorite(vault.loadedItems()[0]);
+  await waitFor(() =>
+    expect(source.setFavorite).toHaveBeenCalledWith(saved.value.id, true)
+  );
+  await waitFor(() => expect(vault.loadedItems()[0].favorite).toBe(true));
+  await vault.toggleFavorite(vault.loadedItems()[0]);
+  expect(source.setFavorite).toHaveBeenCalledTimes(1);
+  finishRefresh?.([{ ...saved.value, canEdit: false, canManage: false }]);
+  await refreshing;
+  await waitFor(() => expect(vault.items.isFetching).toBe(false));
+  expect(vault.loadedItems()[0].favorite).toBe(true);
+  expect(move).not.toHaveBeenCalled();
+  finish?.(err('failed'));
+  await changing;
+  await waitFor(() => expect(vault.loadedItems()[0].favorite).toBe(false));
+  expect(vault.failure()).toBe('failed');
 });

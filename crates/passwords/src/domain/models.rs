@@ -6,7 +6,7 @@ use uuid::Uuid;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 /// Vault item identity, UUIDv7 for new items.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(transparent)]
 #[schema(as=PasswordItemId)]
 pub struct ItemId(
@@ -31,7 +31,7 @@ pub struct Actor {
 }
 
 /// Owned sensitive text. Deliberately does not implement Debug or Display.
-#[derive(Clone, Serialize, Deserialize, Zeroize, ZeroizeOnDrop, utoipa::ToSchema)]
+#[derive(Clone, Default, Serialize, Deserialize, Zeroize, ZeroizeOnDrop, utoipa::ToSchema)]
 #[serde(transparent)]
 #[schema(as=PasswordSecretString)]
 pub struct SecretString(
@@ -101,7 +101,7 @@ pub struct ItemMetadata {
     pub url: Option<LoginUrl>,
     /// Optional folder belonging to this same team.
     pub folder_id: Option<Uuid>,
-    /// Whether the item is marked as a favorite.
+    /// The current viewer's private favorite in responses; legacy initial flag in storage.
     pub favorite: bool,
     /// Committed provider value version.
     pub version: i32,
@@ -158,7 +158,7 @@ pub struct WriteItem {
     pub url: Option<LoginUrl>,
     /// Optional folder belonging to this same team.
     pub folder_id: Option<Uuid>,
-    /// Whether the item is marked as a favorite.
+    /// Initial creator preference on create; ignored on update. Use the favorite endpoint afterward.
     pub favorite: bool,
     /// Create without the default team edit grant. Updates preserve existing grants.
     #[serde(default)]
@@ -207,7 +207,8 @@ pub struct Grant {
     /// Maximum capability granted to the named recipient.
     pub permission: Permission,
 }
-/// Future principals can extend this without exposing agent controls in v1.
+/// Grant recipient category. Agent grants are managed only through the agent
+/// access routes and never appear in, or count toward, human sharing.
 #[derive(Clone, Debug, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 #[schema(as=PasswordGranteeKind)]
@@ -216,6 +217,8 @@ pub enum GranteeKind {
     User,
     /// All current members of the vault team.
     Team,
+    /// One directory-admitted agent account; never matches human access.
+    Agent,
 }
 /// Grant capability.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
@@ -338,7 +341,7 @@ pub struct TotpCode {
     pub period: u32,
 }
 /// Sanitized domain failures. Provider messages may contain secrets, so are discarded.
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
     #[error("vault item not found")]
     /// Resource absent or hidden by its authorization boundary.
@@ -361,6 +364,9 @@ pub enum Error {
     #[error("vault provider unavailable")]
     /// Provider, metadata storage, or rollout evaluation is unavailable.
     Unavailable,
+    #[error("team vault is not provisioned")]
+    /// The team's provider namespace does not exist yet; retrying cannot help.
+    NotProvisioned,
 }
 
 /// A metadata-only change never reads or writes a secret value.
@@ -376,7 +382,7 @@ pub struct PatchItem {
     pub url: Option<LoginUrl>,
     /// Optional folder belonging to this same team.
     pub folder_id: Option<Uuid>,
-    /// Whether the item is marked as a favorite.
+    /// Legacy accepted field, ignored; change private preferences through the favorite endpoint.
     pub favorite: bool,
     /// Version observed by the editor; absent only for creation.
     pub expected_version: i32,

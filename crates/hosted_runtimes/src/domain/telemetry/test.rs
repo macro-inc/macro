@@ -87,9 +87,27 @@ fn setup_waits_export_recorded_times_under_the_purchase_trace() {
             .unwrap()
     };
     let mut setup = SetupTimeline::started(at(0));
-    let mut finished = setup.advance(&Phase::Provisioning { start: true }, false, false, at(5));
-    finished.extend(setup.advance(&Phase::Booting, false, false, at(20)));
-    finished.extend(setup.advance(&Phase::Running, true, false, at(80)));
+    let mut finished = setup.advance(
+        &Phase::Provisioning { start: true },
+        false,
+        false,
+        crate::domain::setup::PaymentProgress::Settled,
+        at(5),
+    );
+    finished.extend(setup.advance(
+        &Phase::Booting,
+        false,
+        false,
+        crate::domain::setup::PaymentProgress::Settled,
+        at(20),
+    ));
+    finished.extend(setup.advance(
+        &Phase::Running,
+        true,
+        false,
+        crate::domain::setup::PaymentProgress::Settled,
+        at(80),
+    ));
 
     setup_waits(
         &provider.tracer("test"),
@@ -133,7 +151,50 @@ fn setup_waits_export_recorded_times_under_the_purchase_trace() {
 }
 
 #[test]
-fn work_joins_the_purchase_trace_only_while_setup_runs() {
+fn effect_queued_spans_the_wait_from_queue_to_start_under_the_purchase_trace() {
+    use chrono::TimeZone;
+
+    global::set_text_map_propagator(opentelemetry_sdk::propagation::TraceContextPropagator::new());
+    let exporter = InMemorySpanExporter::default();
+    let provider = SdkTracerProvider::builder()
+        .with_simple_exporter(exporter.clone())
+        .build();
+    let queued_at = chrono::Utc.timestamp_opt(1_800_000_000, 0).unwrap();
+    let started_at = chrono::Utc.timestamp_opt(1_800_000_002, 0).unwrap();
+
+    effect_queued(
+        &provider.tracer("test"),
+        Some("00-11111111111111111111111111111111-2222222222222222-01"),
+        &EffectQueued {
+            effect_id: 40,
+            computer_id: "00000000-0000-4000-8000-000000000001".to_owned(),
+            phase: "create",
+            queued_at,
+            started_at,
+        },
+    );
+
+    provider.force_flush().expect("flush spans");
+    let spans = exporter.get_finished_spans().expect("read spans");
+    assert_eq!(spans.len(), 1);
+    let span = &spans[0];
+    assert_eq!(span.name, "computer.effect.queued");
+    assert_eq!(
+        span.span_context.trace_id().to_string(),
+        "11111111111111111111111111111111"
+    );
+    assert_eq!(span.parent_span_id.to_string(), "2222222222222222");
+    assert_eq!(span.start_time, std::time::SystemTime::from(queued_at));
+    assert_eq!(span.end_time, std::time::SystemTime::from(started_at));
+    assert!(
+        span.attributes
+            .iter()
+            .any(|value| value.key.as_str() == "effect" && value.value.as_str() == "create")
+    );
+}
+
+#[test]
+fn work_joins_the_purchase_trace_only_during_the_first_start() {
     use crate::domain::ids::HostId;
     use crate::domain::lifecycle::{Billing, BillingPolicy, Context, Phase, provision};
 
@@ -152,6 +213,7 @@ fn work_joins_the_purchase_trace_only_while_setup_runs() {
         },
         crate::domain::setup::SetupTimeline::started(now),
         None,
+        false,
         Context {
             host,
             enrollment_generation: Default::default(),
@@ -170,7 +232,20 @@ fn work_joins_the_purchase_trace_only_while_setup_runs() {
             .setup
             .as_mut()
             .expect("provisioned computers time setup");
-        setup.advance(&Phase::Running, true, false, now);
+        setup.advance(
+            &Phase::Running,
+            true,
+            false,
+            crate::domain::setup::PaymentProgress::Settled,
+            now,
+        );
+        // macrod connected, but the agent teammate hasn't reported online:
+        // handing it over is still part of the first start.
+        state.awaiting_agent = true;
+        let awaiting_agent = tracing::info_span!("awaiting_agent");
+        adopt(&awaiting_agent, &state);
+        drop(awaiting_agent.enter());
+        state.awaiting_agent = false;
         let after = tracing::info_span!("after");
         adopt(&after, &state);
         drop(after.enter());
@@ -180,6 +255,14 @@ fn work_joins_the_purchase_trace_only_while_setup_runs() {
     let during = spans.iter().find(|span| span.name == "during").unwrap();
     assert_eq!(
         during.span_context.trace_id().to_string(),
+        "11111111111111111111111111111111"
+    );
+    let awaiting_agent = spans
+        .iter()
+        .find(|span| span.name == "awaiting_agent")
+        .unwrap();
+    assert_eq!(
+        awaiting_agent.span_context.trace_id().to_string(),
         "11111111111111111111111111111111"
     );
     let after = spans.iter().find(|span| span.name == "after").unwrap();
@@ -217,7 +300,7 @@ fn capacity_gauges_each_host_and_the_fleet_sum() {
         .build();
     let host = |n: u128, name: &str, awake: u32, sold: u32| crate::domain::models::Host {
         id: crate::domain::lifecycle::HostId::new(uuid::Uuid::from_u128(n)),
-        name: name.to_owned(),
+        name: crate::domain::models::HostName::try_new(name).unwrap(),
         awake_capacity_units: awake,
         sold_capacity_units: sold,
     };

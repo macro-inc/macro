@@ -4,16 +4,15 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { AgentSignInExpiryMetadata } from './agentSignInExpiryMetadata';
+
 import type { NotifEventOneOfSixnineTag } from './notifEventOneOfSixnineTag';
+import type { RoutineRunFinishedMetadata } from './routineRunFinishedMetadata';
 
 /**
- * An agent's sign-in on one of the team's Macro computers is about
-to expire, expired, or was rejected.
+ * One of the user's routines finished a run, successfully or not.
  */
 export type NotifEventOneOfSixnine = {
-  /** An agent's sign-in on one of the team's Macro computers is about
-to expire, expired, or was rejected. */
-  content: AgentSignInExpiryMetadata;
+  /** One of the user's routines finished a run, successfully or not. */
+  content: RoutineRunFinishedMetadata;
   tag: NotifEventOneOfSixnineTag;
 };

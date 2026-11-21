@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { modelLabel } from './model-label';
+import { catalogModelLabel, modelLabel } from './model-label';
 
 describe('modelLabel', () => {
   it('prefers the house name for models the app routes itself', () => {
@@ -50,5 +50,37 @@ describe('modelLabel', () => {
 
   it('falls back to a placeholder before a model is known', () => {
     expect(modelLabel(undefined)).toBe('Model');
+  });
+
+  it("names the model a runtime's default choice resolves to", () => {
+    // Claude Code ACP names the resolved model in the description.
+    expect(modelLabel('default', 'Default (recommended)', 'Opus 4.8')).toBe(
+      'Opus 4.8 (default)'
+    );
+    expect(modelLabel('default', 'Default', 'claude-opus-4-8')).toBe(
+      'Opus 4.8 (default)'
+    );
+    expect(
+      modelLabel(
+        'default',
+        'Default (recommended)',
+        'Use the default model (currently Sonnet 4.5) · $3/$15 per Mtok'
+      )
+    ).toBe('Sonnet 4.5 (default)');
+    // Without a resolved model there is nothing better to say.
+    expect(modelLabel('default', 'Default')).toBe('Default');
+    expect(modelLabel('default')).toBe('Default');
+    // A default the runtime named itself keeps its name (Cursor's Auto).
+    expect(modelLabel('default', 'Auto', 'Picks a model for you')).toBe('Auto');
+  });
+
+  it("reads a catalog option's name and description", () => {
+    const options = [
+      { id: 'default', name: 'Default (recommended)', description: 'Opus 4.8' },
+      { id: 'sonnet', name: 'Sonnet', description: 'Sonnet 4.6' },
+    ];
+    expect(catalogModelLabel('default', options)).toBe('Opus 4.8 (default)');
+    expect(catalogModelLabel('sonnet', options)).toBe('Sonnet');
+    expect(catalogModelLabel('default', [])).toBe('Default');
   });
 });

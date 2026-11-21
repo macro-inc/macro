@@ -1,27 +1,11 @@
-import { ChatWithAgentButton } from '@app/features/chat/ChatWithAgentButton';
-import { t } from '@app/lib/i18n';
-import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
-import {
-  ResponsiveBlockToolbar,
-  ResponsivePermissionsBadge,
-} from '@components/app/ResponsiveBlockToolbar';
-import {
-  SplitHeaderLeft,
-  SplitHeaderRight,
-} from '@components/app/split-layout/components/SplitHeader';
-import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
-import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  getShareDrawerRecipientInput,
-  ShareTrigger,
-} from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { useUserId } from '@core/context/user';
 import { blockDataSignal } from '@core/internal/BlockLoader';
 import { EntityDiscussion } from '@core/messages/EntityDiscussion';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { blockMetadataSignal } from '@core/signal/load';
 import {
   useCanComment,
@@ -32,10 +16,7 @@ import {
 import { getDisplayName, tryMacroId } from '@core/user';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { fireAndForget } from '@core/util/fireAndForget';
-import IconShared from '@icon/share.svg';
-import DownloadSimple from '@icon/system/regular/download-simple.svg';
 import { useMessageRootsQuery } from '@queries/messages/document-messages';
-import { Badge } from '@ui';
 import { createMemo, Match, onCleanup, onMount, Show, Switch } from 'solid-js';
 import type { DocxBlockData } from './definition';
 import { createDocxDownload } from './primitives/create-docx-download';
@@ -49,6 +30,8 @@ import {
 import { createDocxSession } from './queries/docx-session';
 import { DocxCommentMargin, DocxDetachedComments } from './views/DocxComments';
 import { DocxEditorView } from './views/DocxEditorView';
+import { DocxHeader } from './views/docx-header';
+import { MobileDocxHeader } from './views/mobile/docx-header';
 
 function displayName(userId: string | undefined) {
   return getDisplayName(tryMacroId(userId ?? ''), {
@@ -107,65 +90,24 @@ export default function DocxBlock(props: { share?: string }) {
   return (
     <DocumentBlockContainer>
       <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-        <SplitHeaderLeft>
-          <BlockItemSplitLabel
-            trailingBadges={
-              <Badge variant="outline" size="xs">
-                Beta
-              </Badge>
-            }
+        <Show
+          when={isTouchDevice()}
+          fallback={
+            <DocxHeader
+              documentId={documentId}
+              name={name}
+              openShare={openShare}
+              download={docxDownload.download}
+            />
+          }
+        >
+          <MobileDocxHeader
+            documentId={documentId}
+            name={name}
+            openShare={openShare}
+            download={docxDownload.download}
           />
-        </SplitHeaderLeft>
-        <SplitHeaderRight>
-          <BlockLiveIndicators />
-        </SplitHeaderRight>
-        <SplitHeaderRight>
-          <div class="order-[999] flex items-center">
-            <HeaderActionGroup label="Document actions">
-              <ChatWithAgentButton
-                grouped
-                label="Ask Macro"
-                entity={{
-                  type: 'document',
-                  id: documentId,
-                  name: name(),
-                  fileType: 'docx',
-                }}
-              />
-            </HeaderActionGroup>
-          </div>
-        </SplitHeaderRight>
-        <ResponsivePermissionsBadge />
-        <ResponsiveBlockToolbar
-          id={documentId}
-          itemType="document"
-          name={name()}
-          ops={[
-            { op: 'rename' },
-            { op: 'copy' },
-            { op: 'moveToProject' },
-            {
-              group: 'file',
-              get label() {
-                return t('entityActions.downloadDocx');
-              },
-              icon: DownloadSimple,
-              action: () =>
-                fireAndForget(docxDownload.download(), 'docx-download'),
-            },
-            { op: 'delete' },
-          ]}
-          tools={[
-            {
-              group: 'sharing',
-              label: 'Share',
-              icon: IconShared,
-              action: openShare,
-              buttonComponent: () => <ShareTrigger onClick={openShare} />,
-              focusTarget: getShareDrawerRecipientInput,
-            },
-          ]}
-        />
+        </Show>
         <Show when={data()} keyed>
           {(loaded) => {
             const session = createDocxSession({

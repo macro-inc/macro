@@ -1,6 +1,8 @@
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
+import { triggerFocusNewElement } from '@core/directive/focusInput';
 import { lazyNamed } from '@core/util/lazyNamed';
+import { RENAME_FIELD_SELECTOR } from '@entity/utils/rename-field-focus';
 import { type ManagedDialogProps, openDialog } from '@ui';
 import { ErrorBoundary, Suspense } from 'solid-js';
 import type {
@@ -53,5 +55,7 @@ export function openProjectEntityAction(
   action: ProjectEntityAction,
   options?: ProjectEntityActionOptions
 ) {
+  if (action.kind === 'rename')
+    triggerFocusNewElement(RENAME_FIELD_SELECTOR, { touchOnly: true });
   return openDialog(LoadedProjectEntityActionDialog, { action, options });
 }

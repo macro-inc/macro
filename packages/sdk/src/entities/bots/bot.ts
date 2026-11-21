@@ -224,9 +224,12 @@ export class Bot extends MacroEntity<BotRecord> {
   }
 
   /**
-   * Mint a bearer token for the bot's webhooks and API. The secret is returned
-   * once and cannot be read again; never write it into chat, documents or
-   * results. To hand a user a token, have them mint it in bot settings.
+   * Mint a bearer token for the bot's webhooks and API; refused to an agent's
+   * program (ExecuteCode, a routine), so there present a card that mints it,
+   * `execution.views.present({widgets: [{type: 'botCredential', botId}]})` in
+   * an agent session, or have the user mint it in bot settings. The secret is
+   * returned once and cannot be read again; never write it into chat,
+   * documents or results.
    *
    * @write
    */

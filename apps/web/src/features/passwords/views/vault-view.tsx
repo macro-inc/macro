@@ -14,6 +14,7 @@ import { usePending } from '@app/observability/flow';
 import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { MobileCreateMenu } from '@components/app/mobile/MobileCreateMenu';
 import { type PillTabItem, PillTabs } from '@components/app/mobile/PillTabs';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -34,11 +35,17 @@ import {
   Switch,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { FailureNotice } from '../components/failure-notice';
+import { FolderActionsMenu } from '../components/folder-actions-menu';
 import { FavoriteToggle, ItemDetailBody } from '../components/item-detail';
 import { ItemForm } from '../components/item-form';
 import { ItemList } from '../components/item-list';
 import { ItemLogo } from '../components/item-logo';
 import { KIND_ICONS } from '../components/kind-icon';
+import {
+  PasswordTypeControls,
+  PasswordTypeDrawer,
+} from '../components/list-controls';
 import { NewItemMenu } from '../components/new-item-menu';
 import { ShareMenu } from '../components/share-menu';
 import {
@@ -46,7 +53,6 @@ import {
   VaultEmptyState,
 } from '../components/vault-empty-state';
 import {
-  FolderActionItems,
   type FolderCommands,
   type FolderEditing,
   VaultSidebar,
@@ -62,7 +68,9 @@ import {
 } from '../core/types';
 import { createPasswordFolderDrag } from '../primitives/folder-drag';
 import { createVault, type VaultController } from '../primitives/vault';
+import type { AgentRequestSource } from '../queries/agent-requests';
 import { ImportDialog } from './import-dialog';
+import { ItemAgentRequests } from './item-agent-requests';
 
 type MobileTab = 'all' | 'favorites' | 'recent' | 'shared' | 'folders';
 
@@ -83,7 +91,7 @@ function destinationFolder(filter: PasswordFilter) {
 function emptyReason(vault: VaultController): VaultEmptyReason {
   if (vault.search().trim()) return 'search';
   if (vault.filter().startsWith('folder:')) return 'folder';
-  if (vault.filter() === 'all') return 'vault';
+  if (vault.filter() === 'all' && vault.kinds().length === 0) return 'vault';
   return 'filter';
 }
 
@@ -108,6 +116,7 @@ function ItemPane(props: {
   vault: VaultController;
   item: PasswordItem;
   now: number;
+  agentRequests?: AgentRequestSource;
   onBack: () => void;
 }) {
   const { source, recipients, recipientsLoading, recipientsError } =
@@ -153,6 +162,7 @@ function ItemPane(props: {
             >
               <FavoriteToggle
                 favorite={props.item.favorite}
+                pending={props.vault.favoritePending(props.item.id)}
                 onToggle={() =>
                   fireAndForget(
                     props.vault.toggleFavorite(props.item),
@@ -244,10 +254,15 @@ function ItemPane(props: {
           when={editEntry()}
           fallback={
             <>
-              <Show when={props.vault.failure() === 'failed'}>
-                <p role="alert" class="pt-3 text-sm text-failure-ink">
-                  {t('passwords.failed')}
-                </p>
+              <Show
+                when={
+                  props.vault.failure() === 'failed' ||
+                  props.vault.failure() === 'unreachable' ||
+                  props.vault.failure() === 'serviceUnavailable' ||
+                  props.vault.failure() === 'notProvisioned'
+                }
+              >
+                <FailureNotice failure={props.vault.failure()} class="pt-3" />
               </Show>
               <ItemDetailBody
                 item={props.item}
@@ -280,6 +295,11 @@ function ItemPane(props: {
                     fireAndForget(props.vault.loadHistory(), 'passwords'),
                 }}
               />
+              <Show when={props.item.canManage && props.agentRequests}>
+                {(source) => (
+                  <ItemAgentRequests source={source()} itemId={props.item.id} />
+                )}
+              </Show>
             </>
           }
         >
@@ -333,23 +353,7 @@ function DraftEditor(props: { vault: VaultController; draftKey: string }) {
     <Show when={entry()}>
       {(current) => (
         <div class="flex flex-col gap-4 pt-4">
-          <Switch>
-            <Match when={current().failure === 'totp'}>
-              <p role="alert" class="text-sm text-failure-ink">
-                {t('passwords.totpFailed')}
-              </p>
-            </Match>
-            <Match when={current().failure === 'folderMissing'}>
-              <p role="alert" class="text-sm text-failure-ink">
-                {t('passwords.folderMissing')}
-              </p>
-            </Match>
-            <Match when={current().failure}>
-              <p role="alert" class="text-sm text-failure-ink">
-                {t('passwords.failed')}
-              </p>
-            </Match>
-          </Switch>
+          <FailureNotice failure={current().failure} />
           <ItemForm
             idPrefix={`passwords-${props.draftKey}`}
             draft={current().draft}
@@ -489,10 +493,59 @@ function LeavePrompt(props: {
   );
 }
 
+/** An item to open, from a notification; `focusRequestId` makes each request distinct. */
+export type PasswordsFocus = {
+  itemId: string;
+  focusRequestId: number;
+};
+
+/**
+ * The item a notification's split params point at, when it belongs to the
+ * viewer's current team; any other team opens the vault without a selection.
+ */
+export function focusFromParams(
+  params: Record<string, unknown> | undefined,
+  teamId: string | undefined,
+  focusRequestId: number
+): PasswordsFocus | undefined {
+  if (
+    !params ||
+    typeof params.itemId !== 'string' ||
+    params.teamId !== teamId ||
+    teamId === undefined
+  )
+    return;
+  return { itemId: params.itemId, focusRequestId };
+}
+
+/**
+ * Each focus request selects its item once, after the list loads; a failed
+ * load keeps it waiting for a retry. An item the viewer cannot see is never
+ * selected.
+ */
+export function createFocusSelection(
+  vault: VaultController,
+  focus: () => PasswordsFocus | undefined
+) {
+  let handledFocus: number | undefined;
+  createEffect(() => {
+    const current = focus();
+    if (!current || current.focusRequestId === handledFocus) return;
+    if (!vault.items.isSuccess) return;
+    handledFocus = current.focusRequestId;
+    const item = vault.loadedItems().find(({ id }) => id === current.itemId);
+    if (item) vault.select(item);
+  });
+}
+
 export function VaultView(props: {
   onGuard?: (guard: () => Promise<boolean>) => void;
+  /** Absent when the agent vault is off: no agent controls render. */
+  agentRequests?: AgentRequestSource;
+  focus?: PasswordsFocus;
 }) {
-  const vault = createVault();
+  const vault = createVault({ entry: useSplitPanel()?.handle });
+  createFocusSelection(vault, () => props.focus);
   const { source, scope } = usePasswords();
   let root: HTMLDivElement | undefined;
   const logo = loadLogo(source);
@@ -510,6 +563,13 @@ export function VaultView(props: {
   const editing = editingFolder;
   /** A name field chosen in the header menu, opened when the menu closes. */
   let headerEditor: FolderEditing | undefined;
+  const typeControls = () => ({
+    kinds: vault.kinds(),
+    groupBy: vault.groupBy(),
+    onKindChange: vault.setKindSelected,
+    onClearKinds: vault.clearKinds,
+    onGroupByChange: vault.setGroupBy,
+  });
   const [mobileFolders, setMobileFolders] = createSignal(false);
   const [importing, setImporting] = createSignal(false);
   const openImport = () => setImporting(true);
@@ -701,63 +761,36 @@ export function VaultView(props: {
                   </ViewSidebar.Title>
                 }
               >
+                <PasswordTypeControls {...typeControls()} />
                 <Show when={currentFolder()}>
                   {(folder) => (
-                    <Dropdown placement="bottom-end">
-                      <Dropdown.Trigger
-                        variant="secondary"
-                        size="icon-md"
-                        aria-label={t('passwords.folderActions', {
-                          name: folder().name,
-                        })}
-                        tooltip={t('passwords.folderActions', {
-                          name: folder().name,
-                        })}
-                      >
-                        <DotsThreeIcon class="size-4" />
-                      </Dropdown.Trigger>
-                      <Dropdown.Content
-                        class="min-w-48 max-w-[calc(100vw-2rem)]"
-                        onCloseAutoFocus={(event) => {
-                          // A name field opens only once the menu's focus trap
-                          // has gone, so it keeps the focus it takes on mount.
-                          const editor = headerEditor;
-                          headerEditor = undefined;
-                          if (!editor) return;
-                          event.preventDefault();
-                          setEditing(editor);
-                        }}
-                      >
-                        <FolderActionItems
-                          onSubfolder={() => {
-                            headerEditor = {
-                              kind: 'create',
-                              parentId: folder().id,
-                            };
-                          }}
-                          onRename={() => {
-                            headerEditor = { kind: 'rename', id: folder().id };
-                          }}
-                          onMove={() =>
-                            setEditing({ kind: 'move', id: folder().id })
-                          }
-                          onDelete={() =>
-                            setEditing({ kind: 'delete', id: folder().id })
-                          }
-                          item={(item) => (
-                            <Dropdown.Item onSelect={item.onSelect}>
-                              <span
-                                class={
-                                  item.danger ? 'text-failure-ink' : undefined
-                                }
-                              >
-                                {item.text}
-                              </span>
-                            </Dropdown.Item>
-                          )}
-                        />
-                      </Dropdown.Content>
-                    </Dropdown>
+                    <FolderActionsMenu
+                      name={folder().name}
+                      onCloseAutoFocus={(event) => {
+                        // A name field opens only once the menu's focus trap
+                        // has gone, so it keeps the focus it takes on mount.
+                        const editor = headerEditor;
+                        headerEditor = undefined;
+                        if (!editor) return;
+                        event.preventDefault();
+                        setEditing(editor);
+                      }}
+                      onSubfolder={() => {
+                        headerEditor = {
+                          kind: 'create',
+                          parentId: folder().id,
+                        };
+                      }}
+                      onRename={() => {
+                        headerEditor = { kind: 'rename', id: folder().id };
+                      }}
+                      onMove={() =>
+                        setEditing({ kind: 'move', id: folder().id })
+                      }
+                      onDelete={() =>
+                        setEditing({ kind: 'delete', id: folder().id })
+                      }
+                    />
                   )}
                 </Show>
                 <NewItemMenu
@@ -786,10 +819,10 @@ export function VaultView(props: {
             <ListChrome>
               <ViewShell.Header>
                 <div class="flex min-w-0 flex-col gap-1">
-                  <div class="h-10 min-w-0 flex-1">
+                  <div class="flex h-10 min-w-0 flex-1 items-center gap-2">
                     <PillTabs
                       scrollable
-                      class="-ml-(--mobile-chrome-gutter) w-[calc(100%+2*var(--mobile-chrome-gutter))] max-w-none flex-none"
+                      class="-ml-(--mobile-chrome-gutter) min-w-0 flex-1"
                       contentClass="px-(--mobile-chrome-gutter)"
                       items={mobileTabs()}
                       value={mobileTab()}
@@ -799,6 +832,7 @@ export function VaultView(props: {
                           : selectFilter(tab)
                       }
                     />
+                    <PasswordTypeDrawer {...typeControls()} />
                   </div>
                 </div>
               </ViewShell.Header>
@@ -841,6 +875,27 @@ export function VaultView(props: {
                   </div>
                 </Match>
                 <Match when={true}>
+                  <Show when={vault.connectionProblem()}>
+                    {(problem) => (
+                      <div class="flex items-center gap-2 px-4 py-2">
+                        <p
+                          role="status"
+                          class="min-w-0 flex-1 text-sm text-ink-muted"
+                        >
+                          {problem() === 'unreachable'
+                            ? t('passwords.unreachable')
+                            : t('passwords.serviceUnavailable')}
+                        </p>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => vault.retryConnection()}
+                        >
+                          {t('passwords.retry')}
+                        </Button>
+                      </div>
+                    )}
+                  </Show>
                   <ItemList
                     items={vault.visibleItems()}
                     drafts={vault.drafts()}
@@ -850,6 +905,7 @@ export function VaultView(props: {
                     onSelectDraft={vault.selectDraft}
                     loadLogo={logo}
                     drag={drag}
+                    groupBy={vault.groupBy()}
                   />
                   <Show
                     when={
@@ -887,6 +943,7 @@ export function VaultView(props: {
                   vault={vault}
                   item={item}
                   now={now()}
+                  agentRequests={props.agentRequests}
                   onBack={() => vault.select(undefined)}
                 />
               )}

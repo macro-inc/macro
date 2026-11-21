@@ -219,6 +219,26 @@ impl FakeAgent {
             .expect("fake agent frame history should remain open");
     }
 
+    /// Wait until the harness has sent at least `count` requests of `method`.
+    pub async fn wait_for_method_requests(&self, method: &str, count: usize) {
+        let mut received = self.received.subscribe();
+        received
+            .wait_for(|frames| {
+                frames
+                    .iter()
+                    .filter(|frame| {
+                        matches!(
+                            frame,
+                            RawJsonRpcMessage::Request(request) if request.method.as_ref() == method
+                        )
+                    })
+                    .count()
+                    >= count
+            })
+            .await
+            .expect("fake agent frame history should remain open");
+    }
+
     /// Wait until the harness has answered at least `count` of this agent's
     /// own requests.
     pub async fn wait_for_responses(&self, count: usize) {

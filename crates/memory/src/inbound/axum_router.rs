@@ -188,6 +188,7 @@ pub async fn get_explicit_memory_handler<T: MemoryService, Auth: MacroAuthorizat
         (status = 409, description = "The revision is stale", body = MemoryErrorBody),
         (status = 422, description = "Rejected by privacy review", body = MemoryErrorBody),
         (status = 500, description = "Internal server error", body = MemoryErrorBody),
+        (status = 503, description = "Privacy review is unavailable; nothing was saved", body = MemoryErrorBody),
     ),
     tag = "memory"
 )]
@@ -266,6 +267,7 @@ fn memory_error_response(error: MemoryError) -> Response {
         }
         MemoryError::Forbidden => StatusCode::FORBIDDEN,
         MemoryError::Rejected(_) => StatusCode::UNPROCESSABLE_ENTITY,
+        MemoryError::ReviewUnavailable => StatusCode::SERVICE_UNAVAILABLE,
         MemoryError::AgentError(_)
         | MemoryError::NoGeneration
         | MemoryError::Db(_)

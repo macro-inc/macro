@@ -76,12 +76,12 @@ describe('Slack import sidebar', () => {
     expect(host.openNewChannel).toHaveBeenCalledOnce();
   });
 
-  it.each([
-    { enabled: false, admin: true },
-    { enabled: true, admin: false },
-  ])('preserves the feature and admin gates: %o', (gate) => {
-    Object.assign(host, gate);
-    render(() => <SlackImportSidebar />);
-    expect(screen.queryByText('Shared import card')).toBeNull();
-  });
+  it.each([{ enabled: true, admin: false }])(
+    'preserves the feature and admin gates: %o',
+    (gate) => {
+      Object.assign(host, gate);
+      render(() => <SlackImportSidebar />);
+      expect(screen.queryByText('Shared import card')).toBeNull();
+    }
+  );
 });

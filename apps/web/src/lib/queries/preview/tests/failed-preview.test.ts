@@ -3,18 +3,14 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import type { PreviewItem } from '../types';
 
 const fetchPreviewBatch = vi.hoisted(() => vi.fn());
-const graphqlSoup = vi.hoisted(() => ({ enabled: false }));
+const graphqlItem = vi.hoisted(() => ({ value: false }));
 
-vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({
-    enabled: graphqlSoup.enabled,
-    loading: false,
-  }),
+vi.mock('@service-storage/crm-access-authority', () => ({
+  crmAccessAllowed: () => true,
 }));
 
 vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
-  isFeatureEnabled: () => graphqlSoup.enabled,
   LOCAL_ONLY: false,
 }));
 
@@ -37,7 +33,7 @@ vi.mock('../graphql', () => ({
   canWriteGraphqlPreviewCache: () => false,
   createGraphqlItemPreviewQuery: vi.fn(),
   getGraphqlItemPreview: async () => undefined,
-  isGraphqlPreviewItem: () => true,
+  isGraphqlPreviewItem: () => graphqlItem.value,
   setGraphqlPreviewFileType: vi.fn(),
   setGraphqlPreviewName: vi.fn(),
   setGraphqlPreviewOnCreate: vi.fn(),
@@ -74,7 +70,7 @@ beforeEach(() => {
 });
 
 it('caches no answer for a chip whose request failed, and asks again on the next read', async () => {
-  graphqlSoup.enabled = false;
+  graphqlItem.value = false;
 
   await expect(
     getItemPreview({ id: COMPANY, type: 'crm_company' })
@@ -90,7 +86,7 @@ it('caches no answer for a chip whose request failed, and asks again on the next
 });
 
 it('throws for a failed request on the GraphQL fallback, rather than answering "No Access"', async () => {
-  graphqlSoup.enabled = true;
+  graphqlItem.value = true;
 
   await expect(
     getItemPreview({ id: COMPANY, type: 'crm_company' })

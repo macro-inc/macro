@@ -49,9 +49,6 @@ vi.mock('@core/component/AI/context', () => ({
 vi.mock('../home-agent-composer', () => ({
   HomeAgentComposer: () => <div data-testid="home-agent-composer" />,
 }));
-vi.mock('./home-recommended-actions', () => ({
-  HomeRecommendedActions: () => <div data-testid="home-suggestions" />,
-}));
 
 beforeEach(() => {
   mocks.asideCollapsed = false;
@@ -61,7 +58,9 @@ beforeEach(() => {
 afterEach(cleanup);
 
 function renderHome() {
-  return render(() => <HomeChatStart />);
+  return render(() => (
+    <HomeChatStart title="Home" onStartedSession={() => {}} />
+  ));
 }
 
 describe('Home agent composer alignment', () => {
@@ -91,18 +90,16 @@ describe('Home agent composer alignment', () => {
 });
 
 describe('Home below the composer', () => {
-  it('keeps the recommended actions while suggestions are off', () => {
+  it('leaves the space empty while suggestions are off', () => {
     renderHome();
 
-    expect(screen.getByTestId('home-suggestions')).toBeTruthy();
     expect(screen.queryByTestId('home-today')).toBeNull();
   });
 
-  it('shows today and the top priorities in their place when suggestions are on', async () => {
+  it('shows today and the top priorities when suggestions are on', async () => {
     mocks.suggestionsEnabled = true;
     renderHome();
 
     expect(await screen.findByTestId('home-today')).toBeTruthy();
-    expect(screen.queryByTestId('home-suggestions')).toBeNull();
   });
 });

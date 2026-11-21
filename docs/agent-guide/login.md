@@ -26,6 +26,10 @@ completion without submitting that consumed code again. Queued edits stay preser
 and the app opens only after cleanup succeeds. Changing the email, going back or
 requesting another code starts a new attempt that must verify with the server.
 
+The iOS picker includes **Continue with Apple**. Google and Apple glyphs scale
+into their 20px slots without cropping; the phone browser regression checks the
+Apple drawing stays within its viewport.
+
 ## Google sign-in on a local stack
 
 A local stack without real Google keys runs the Gmail emulator in Google's
@@ -99,6 +103,18 @@ permissions. Check that opening consent alone does not report an account
 connected, that returning from consent shows the second account, and that
 canceling leaves the app usable and says nothing was connected. iOS and Android
 continue to use their native authentication sessions.
+
+The deep link reaches the callback route through the split router, which mounts
+it a task before Solid Router's location shows it, so the callback reads
+`link_id` only once the location has landed on the route. The route's
+`view.inbox-link-callback` span records the wait
+(`email.link.callback.location.waited`), whether `link_id` and `token` arrived
+(never the token's value), the link id, the consent error or notice code, and
+the reported outcome (`email.link.callback.outcome`), with provisioning as an
+`email.link.callback.init` child. Without an installed desktop app,
+`src/features/auth/tests/inbox-link-deep-link.test.tsx` in `apps/web` drives the
+bridge's `navigate` payload through Solid Router, the split router and the
+callback; OS delivery of the `macro://` URL still needs a real desktop build.
 
 Every callback outcome is announced on web, desktop, and native. Init also
 succeeds when the provider's account chooser returns an account that is already

@@ -165,17 +165,35 @@ export function muteItemFallbackIconType(
     .otherwise(() => 'default' as const);
 }
 
-export function isMutedItem(
-  muted: readonly UserUnsubscribe[],
+/** The live preference stored for this item, if any. */
+function activePreference(
+  preferences: readonly UserUnsubscribe[],
   item: UserUnsubscribe
-): boolean {
+): UserUnsubscribe | undefined {
   const type = normalizeMuteItemType(item.item_type);
-  return muted.some(
+  return preferences.find(
     (entry) =>
       entry.item_id === item.item_id &&
       normalizeMuteItemType(entry.item_type) === type &&
       (!entry.snoozed_until || Date.parse(entry.snoozed_until) > Date.now())
   );
+}
+
+/** Fully silenced. A mentions-only item still notifies, so it is not muted. */
+export function isMutedItem(
+  muted: readonly UserUnsubscribe[],
+  item: UserUnsubscribe
+): boolean {
+  const preference = activePreference(muted, item);
+  return preference !== undefined && !preference.mentions_only;
+}
+
+/** Silenced except for messages that @mention the viewer directly. */
+export function isMentionsOnlyItem(
+  preferences: readonly UserUnsubscribe[],
+  item: UserUnsubscribe
+): boolean {
+  return activePreference(preferences, item)?.mentions_only === true;
 }
 
 export function entityIsMuted(
@@ -184,6 +202,14 @@ export function entityIsMuted(
 ): boolean {
   const item = muteItemForEntity(entity);
   return item !== undefined && isMutedItem(muted, item);
+}
+
+export function entityIsMentionsOnly(
+  preferences: readonly UserUnsubscribe[],
+  entity: EntityData
+): boolean {
+  const item = muteItemForEntity(entity);
+  return item !== undefined && isMentionsOnlyItem(preferences, item);
 }
 
 /**
@@ -276,6 +302,7 @@ export function getNotificationActionText(n: Notification): string {
     .with('reminder', () => 'reminder')
     .with('calendar_event_reminder', () => 'starting soon')
     .with('calendar_event_join_request', () => 'asked to join')
+    .with('password_access_requested', () => 'requested access to')
     .with('inbox_reauth_required', () => 'needs reconnection')
     .with('agent_session_settled', () => 'finished')
     .with('agent_session_waiting_for_input', () => 'asked')
@@ -301,6 +328,7 @@ export function getNotificationActionText(n: Notification): string {
         ? 'failed'
         : 'ready';
     })
+    .with('ping', () => 'pinged')
     .exhaustive(() => 'notified');
 }
 
@@ -382,6 +410,7 @@ export function extractMessageContent(notification: Notification): string {
     .with({ tag: 'reminder' }, (m) => m.content.description)
     .with({ tag: 'calendar_event_reminder' }, (m) => m.content.title || '')
     .with({ tag: 'calendar_event_join_request' }, (m) => m.content.title || '')
+    .with({ tag: 'password_access_requested' }, (m) => m.content.itemName)
     .with({ tag: 'inbox_reauth_required' }, (m) => m.content.emailAddress || '')
     .with(
       { tag: 'agent_session_settled' },
@@ -395,6 +424,7 @@ export function extractMessageContent(notification: Notification): string {
       { tag: 'computer_setup' },
       (m) => m.content.agent?.name ?? m.content.computerName
     )
+    .with({ tag: 'ping' }, (m) => m.content.body)
     .exhaustive(() => '');
 }
 

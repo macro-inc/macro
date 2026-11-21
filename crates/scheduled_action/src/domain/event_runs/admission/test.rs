@@ -7,7 +7,12 @@ async fn pages_all_candidates_and_redelivery_deduplicates_using_owner_not_actor(
     let repo = Arc::new(Repo::default());
     repo.0.lock().unwrap().configurations = (0..5).map(|_| configuration()).collect();
     let access = Arc::new(Access::default());
-    let service = EventAdmissionService::new(repo.clone(), access.clone(), 2.try_into().unwrap());
+    let service = EventAdmissionService::new(
+        repo.clone(),
+        access.clone(),
+        Arc::new(Delegates::default()),
+        2.try_into().unwrap(),
+    );
     let event = incoming();
     assert_eq!(
         service.ingest(&event).await.unwrap(),
@@ -37,6 +42,7 @@ async fn partial_fanout_failure_is_not_acknowledged_and_replay_is_safe() {
     let service = EventAdmissionService::new(
         repo.clone(),
         Arc::new(Access::default()),
+        Arc::new(Delegates::default()),
         1.try_into().unwrap(),
     );
     let event = incoming();
@@ -62,7 +68,12 @@ async fn coarse_candidates_are_rechecked_before_access_or_admission() {
         Owner::from_principal_str("bot|01900000-0000-7000-8000-000000000004").unwrap();
     repo.0.lock().unwrap().configurations = configs;
     let access = Arc::new(Access::default());
-    let service = EventAdmissionService::new(repo, access.clone(), 100.try_into().unwrap());
+    let service = EventAdmissionService::new(
+        repo,
+        access.clone(),
+        Arc::new(Delegates::default()),
+        100.try_into().unwrap(),
+    );
     assert_eq!(
         service.ingest(&incoming()).await.unwrap(),
         EventIngestionResult::Admitted { inserted: 0 }
@@ -76,6 +87,7 @@ async fn permanent_rejections_do_not_query_candidates() {
     let service = EventAdmissionService::new(
         repo.clone(),
         Arc::new(Access::default()),
+        Arc::new(Delegates::default()),
         10.try_into().unwrap(),
     );
     let mut event = incoming();
@@ -107,7 +119,12 @@ async fn denied_and_mismatched_receipts_skip_but_unavailable_access_defers_intak
     let repo = Arc::new(Repo::default());
     repo.0.lock().unwrap().configurations.push(configuration());
     let access = Arc::new(Access::default());
-    let service = EventAdmissionService::new(repo.clone(), access.clone(), 10.try_into().unwrap());
+    let service = EventAdmissionService::new(
+        repo.clone(),
+        access.clone(),
+        Arc::new(Delegates::default()),
+        10.try_into().unwrap(),
+    );
     *access.denied.lock().unwrap() = true;
     assert_eq!(
         service.ingest(&incoming()).await.unwrap(),
@@ -149,8 +166,12 @@ async fn mentions_mail_and_calls_only_admit_their_recipient_even_when_others_hav
             .configurations
             .sort_by_key(|c| c.action_id);
         let access = Arc::new(Access::default());
-        let service =
-            EventAdmissionService::new(repo.clone(), access.clone(), 10.try_into().unwrap());
+        let service = EventAdmissionService::new(
+            repo.clone(),
+            access.clone(),
+            Arc::new(Delegates::default()),
+            10.try_into().unwrap(),
+        );
         let id = generate_uuid_v7();
         let payload = match name {
             "email.message_received" => EventPayload::Email(serde_json::from_value(json!({
@@ -252,6 +273,7 @@ async fn github_deliveries_run_routines_whose_selector_and_payload_match() {
     let service = EventAdmissionService::new(
         repo.clone(),
         Arc::new(Access::default()),
+        Arc::new(Delegates::default()),
         10.try_into().unwrap(),
     );
 
@@ -278,7 +300,12 @@ async fn github_deliveries_need_a_claim_to_the_installation() {
     repo.0.lock().unwrap().configurations = vec![failed_ci_routine()];
     let access = Arc::new(Access::default());
     *access.denied.lock().unwrap() = true;
-    let service = EventAdmissionService::new(repo.clone(), access, 10.try_into().unwrap());
+    let service = EventAdmissionService::new(
+        repo.clone(),
+        access,
+        Arc::new(Delegates::default()),
+        10.try_into().unwrap(),
+    );
 
     assert_eq!(
         service
@@ -306,8 +333,12 @@ async fn subscribed_github_events_admit_once_and_keep_the_payload_for_the_agent(
             ..configuration()
         }];
         let access = Arc::new(Access::default());
-        let service =
-            EventAdmissionService::new(repo.clone(), access.clone(), 10.try_into().unwrap());
+        let service = EventAdmissionService::new(
+            repo.clone(),
+            access.clone(),
+            Arc::new(Delegates::default()),
+            10.try_into().unwrap(),
+        );
         let delivery = github::domain::models::GithubWebhookReceived::from_delivery(
             Some(format!("delivery-{name}")),
             name.to_owned(),
@@ -354,4 +385,162 @@ async fn subscribed_github_events_admit_once_and_keep_the_payload_for_the_agent(
                     && delivery.payload.as_ref().unwrap()["ref"] == "refs/heads/main"
         ));
     }
+}
+
+fn received(owner: &MacroUserIdStr<'static>, link_id: Uuid) -> IncomingEvent {
+    let id = generate_uuid_v7();
+    IncomingEvent {
+        event_id: generate_uuid_v7(),
+        schema_version: 1,
+        routine_id: None,
+        payload: crate::domain::event_trigger::EventPayload::Email(
+            serde_json::from_value(json!({
+                "event_type":"email.message_received", "metadata": {
+                    "link_id": link_id, "owner": owner, "message_id": id, "thread_id": id,
+                    "provider_message_id": "message", "provider_thread_id": "thread",
+                    "is_new_thread": true, "to_emails": [], "attachment_count": 0,
+                    "is_spam_or_trash": false
+                }
+            }))
+            .unwrap(),
+        ),
+    }
+}
+
+fn mail_routine(owner: &MacroUserIdStr<'static>) -> EventActionConfiguration {
+    EventActionConfiguration {
+        owner: Owner::User(owner.clone()),
+        filters: serde_json::from_value(json!([{"events":["email.message_received"]}])).unwrap(),
+        ..configuration()
+    }
+}
+
+fn account(email: &str) -> MacroUserIdStr<'static> {
+    MacroUserIdStr::try_from_email(email).unwrap()
+}
+
+#[tokio::test]
+async fn mail_into_a_delegated_inbox_reaches_the_routines_of_who_reads_it() {
+    let team_inbox = account("team-inbox@macro.com");
+    let reader = account("reader@macro.com");
+    let stranger = account("stranger@macro.com");
+    let (shared, private) = (generate_uuid_v7(), generate_uuid_v7());
+    let routines = [
+        mail_routine(&reader),
+        mail_routine(&stranger),
+        mail_routine(&team_inbox),
+    ];
+    let repo = Arc::new(Repo::default());
+    repo.0.lock().unwrap().configurations = routines.to_vec();
+    let access = Arc::new(Access::default());
+    let delegates = Arc::new(Delegates::default());
+    delegates
+        .edges
+        .lock()
+        .unwrap()
+        .push((team_inbox.clone(), shared, reader.clone()));
+    let service = EventAdmissionService::new(
+        repo.clone(),
+        access.clone(),
+        delegates.clone(),
+        1.try_into().unwrap(),
+    );
+
+    // The reader's routine runs on the team inbox's mail, as the owner's does.
+    let into_shared = received(&team_inbox, shared);
+    assert_eq!(
+        service.ingest(&into_shared).await.unwrap(),
+        EventIngestionResult::Admitted { inserted: 2 }
+    );
+    // Candidates page in id order, and v7 ids made in one millisecond aren't
+    // ordered: compare as sets.
+    let mut admitted: Vec<_> = repo
+        .0
+        .lock()
+        .unwrap()
+        .pending
+        .iter()
+        .map(|run| run.action_id)
+        .collect();
+    admitted.sort();
+    let mut expected = vec![routines[0].action_id, routines[2].action_id];
+    expected.sort();
+    assert_eq!(admitted, expected);
+    // A delegation is never an access grant: the reader is still checked.
+    let mut checked = access.calls.lock().unwrap().clone();
+    checked.sort_by(|a, b| a.as_ref().cmp(b.as_ref()));
+    assert_eq!(checked, vec![reader.clone(), team_inbox.clone()]);
+    // One lookup per event, however many candidates page through.
+    assert_eq!(
+        *delegates.calls.lock().unwrap(),
+        vec![(team_inbox.clone(), shared)]
+    );
+
+    // Delegation is per inbox: the account's other inbox stays its own.
+    assert_eq!(
+        service
+            .ingest(&received(&team_inbox, private))
+            .await
+            .unwrap(),
+        EventIngestionResult::Admitted { inserted: 1 }
+    );
+    assert_eq!(repo.0.lock().unwrap().pending.len(), 3);
+}
+
+#[tokio::test]
+async fn delegations_are_read_only_for_mail_another_owner_could_receive() {
+    let owner = user();
+    let repo = Arc::new(Repo::default());
+    repo.0.lock().unwrap().configurations = vec![mail_routine(&owner)];
+    let delegates = Arc::new(Delegates::default());
+    let service = EventAdmissionService::new(
+        repo.clone(),
+        Arc::new(Access::default()),
+        delegates.clone(),
+        10.try_into().unwrap(),
+    );
+    // The owner's own mail needs no lookup, nor does any other event.
+    assert_eq!(
+        service
+            .ingest(&received(&owner, generate_uuid_v7()))
+            .await
+            .unwrap(),
+        EventIngestionResult::Admitted { inserted: 1 }
+    );
+    repo.0.lock().unwrap().configurations = vec![configuration()];
+    assert_eq!(
+        service.ingest(&incoming()).await.unwrap(),
+        EventIngestionResult::Admitted { inserted: 1 }
+    );
+    assert!(delegates.calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn unreadable_delegations_defer_intake_until_redelivery() {
+    let team_inbox = account("team-inbox@macro.com");
+    let reader = user();
+    let link = generate_uuid_v7();
+    let repo = Arc::new(Repo::default());
+    repo.0.lock().unwrap().configurations = vec![mail_routine(&reader)];
+    let delegates = Arc::new(Delegates::default());
+    delegates
+        .edges
+        .lock()
+        .unwrap()
+        .push((team_inbox.clone(), link, reader.clone()));
+    *delegates.unavailable.lock().unwrap() = true;
+    let service = EventAdmissionService::new(
+        repo.clone(),
+        Arc::new(Access::default()),
+        delegates.clone(),
+        10.try_into().unwrap(),
+    );
+    let event = received(&team_inbox, link);
+    assert!(service.ingest(&event).await.is_err());
+    assert!(repo.0.lock().unwrap().pending.is_empty());
+    *delegates.unavailable.lock().unwrap() = false;
+    assert_eq!(
+        service.ingest(&event).await.unwrap(),
+        EventIngestionResult::Admitted { inserted: 1 }
+    );
 }

@@ -66,6 +66,7 @@ impl JwtValidator for FakeJwtValidator {
                 identity: ValidatedIdentity {
                     agent_id: None,
                     agent_via: None,
+                    routine_id: None,
                     user_id: USER_ID.to_string(),
                     fusion_user_id: "test-fusion-user".to_string(),
                     organization_id: None,
@@ -235,6 +236,23 @@ impl EntityAccessService for FakeEntityAccessService {
 struct FakeCrmService;
 
 impl crate::domain::email_privacy::EmailPrivacyService for FakeCrmService {
+    async fn email_consent(
+        &self,
+        _: &CrmTeamReceipt<MemberTeamRole>,
+    ) -> Result<crate::domain::email_privacy::EmailContributionConsent, CrmError> {
+        panic!("unexpected email_consent call")
+    }
+
+    async fn excluded_email_threads(
+        &self,
+        _: &crate::domain::auth::CrmTeamReceipt<entity_access::domain::models::MemberTeamRole>,
+        _: Option<uuid::Uuid>,
+        _: Option<uuid::Uuid>,
+    ) -> Result<crate::domain::email_privacy::ExcludedEmailThreads, crate::domain::model::CrmError>
+    {
+        panic!("unexpected excluded_email_threads call")
+    }
+
     async fn contribution_mailbox(
         &self,
         _: Uuid,
@@ -509,6 +527,14 @@ impl CrmService for FakeCrmService {
         _email: &str,
     ) -> Result<Option<CrmContact>, CrmError> {
         panic!("unexpected get_contact_by_email call")
+    }
+
+    async fn get_company_by_domain(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+        _domain: &str,
+    ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
+        panic!("unexpected get_company_by_domain call")
     }
 
     async fn get_company_for_team(
@@ -924,17 +950,6 @@ async fn contact_mutation_http_contract_covers_addresses_and_company_links(
         );
     }
     assert_eq!(
-        edit.clone()
-            .oneshot(request(
-                contact.id,
-                "company",
-                json!({"companyId": company.company.id})
-            ))
-            .await?
-            .status(),
-        StatusCode::BAD_REQUEST
-    );
-    assert_eq!(
         router(AccessLevel::View)
             .oneshot(request(
                 contact.id,
@@ -1014,23 +1029,33 @@ async fn contact_mutation_http_contract_covers_addresses_and_company_links(
             .status(),
         StatusCode::UNAUTHORIZED
     );
-    assert_eq!(
-        edit.clone()
-            .oneshot(request(
-                contact.id,
-                "company",
-                json!({"companyId": company.company.id})
-            ))
-            .await?
-            .status(),
-        StatusCode::BAD_REQUEST
-    );
+    // A work address without a company takes a first company, and cannot
+    // then switch to another.
+    let other = repo
+        .create_company_for_team(&team, None, "Other company", Utc::now())
+        .await?;
+    for (destination, status) in [
+        (company.company.id, StatusCode::OK),
+        (other.company.id, StatusCode::BAD_REQUEST),
+    ] {
+        assert_eq!(
+            edit.clone()
+                .oneshot(request(
+                    contact.id,
+                    "company",
+                    json!({"companyId": destination})
+                ))
+                .await?
+                .status(),
+            status
+        );
+    }
     let persisted = repo
         .get_contact_for_team(&team, &contact.id, true)
         .await?
         .unwrap();
     assert_eq!(persisted.email.as_deref(), Some("contact@example.com"));
-    assert_eq!(persisted.company_id, None);
+    assert_eq!(persisted.company_id, Some(company.company.id));
     let blank = repo
         .create_contact_for_team(&team, None, "Second", Utc::now())
         .await?;

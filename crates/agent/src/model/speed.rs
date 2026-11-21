@@ -10,6 +10,8 @@ pub enum ModelSpeed {
     /// Use the model's standard processing tier.
     #[default]
     Standard,
+    /// Use OpenAI's priority processing tier (also called Fast mode).
+    Priority,
     /// Use Anthropic's faster Opus inference.
     ///
     /// Withheld until Anthropic approves the account for Claude fast mode.
@@ -26,6 +28,7 @@ impl ModelSpeed {
     pub fn supported(self, model: &str) -> bool {
         match self {
             Self::Standard => true,
+            Self::Priority => matches!(model, "openai/gpt-6-astra" | "openai/gpt-6.1-sol"),
             Self::Fast => ANTHROPIC_FAST_MODE_ENABLED && model == "anthropic/claude-opus-5-5",
             Self::Ultrafast => matches!(model, "openai/gpt-6-astra" | "openai/gpt-6.1-sol"),
         }
@@ -47,10 +50,19 @@ impl ModelSpeed {
         )
     }
 
+    /// Every speed a caller may request for `model`, slowest first.
+    pub fn offered(model: &str) -> Vec<Self> {
+        [Self::Standard, Self::Priority, Self::Fast, Self::Ultrafast]
+            .into_iter()
+            .filter(|speed| speed.supported(model))
+            .collect()
+    }
+
     /// Stable serialized value used by native session configuration.
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Standard => "standard",
+            Self::Priority => "priority",
             Self::Fast => "fast",
             Self::Ultrafast => "ultrafast",
         }
@@ -60,6 +72,7 @@ impl ModelSpeed {
     pub fn parse(value: &str) -> Option<Self> {
         match value {
             "standard" => Some(Self::Standard),
+            "priority" => Some(Self::Priority),
             "fast" => Some(Self::Fast),
             "ultrafast" => Some(Self::Ultrafast),
             _ => None,
@@ -76,6 +89,7 @@ impl ModelSpeed {
                 params["service_tier"] = "default".into()
             }
             Self::Standard => {}
+            Self::Priority => params["service_tier"] = "priority".into(),
             Self::Fast => params["speed"] = "fast".into(),
             Self::Ultrafast => params["service_tier"] = "ultrafast".into(),
         }

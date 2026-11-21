@@ -20,6 +20,7 @@ import {
   wrapXml,
 } from '../../mentions';
 import {
+  iterate,
   MacroApiError,
   MacroError,
   mapConcurrently,
@@ -352,43 +353,81 @@ export class Document
     return new Document(client, documentId);
   }
 
-  /** The user's recent documents, most recent first, auto-paginated. */
+  /** The user's recent documents, most recent first, auto-paginated; `maxItems` caps the total. */
   static recent(
     client: MacroClient,
-    opts?: { pageSize?: number; fileType?: string },
+    opts?: { pageSize?: number; fileType?: string; maxItems?: number },
   ): AsyncGenerator<Document> {
     const limit = opts?.pageSize ?? 50;
-    return paginate(async (cursor) => {
-      const page = unwrap(
-        await client.storage.getUserDocumentsHandler({
-          query: {
-            limit,
-            offset: cursor ? Number(cursor) : 0,
-            ...(opts?.fileType !== undefined
-              ? { file_type: opts.fileType }
-              : {}),
-          } as GetUserDocumentsHandlerData['query'],
+    return iterate(
+      'documents.recent',
+      opts,
+      { pageSize: true, fileType: true },
+      () =>
+        paginate(async (cursor) => {
+          const page = unwrap(
+            await client.storage.getUserDocumentsHandler({
+              query: {
+                limit,
+                offset: cursor ? Number(cursor) : 0,
+                ...(opts?.fileType !== undefined
+                  ? { file_type: opts.fileType }
+                  : {}),
+              } as GetUserDocumentsHandlerData['query'],
+            }),
+          );
+          const next = page.data?.next_offset;
+          return {
+            items: (page.data?.documents ?? []).map((d) =>
+              new Document(client, d.documentId).withListed(d),
+            ),
+            nextCursor: next != null ? String(next) : null,
+          };
         }),
-      );
-      const next = page.data?.next_offset;
-      return {
-        items: (page.data?.documents ?? []).map(
-          (d) => new Document(client, d.documentId),
-        ),
-        nextCursor: next != null ? String(next) : null,
-      };
-    });
+    );
   }
 
   /**
-   * The user's recently soft-deleted documents. The underlying endpoint also
-   * returns deleted chats and projects; those are filtered out here.
+   * The documents among the user's most recently trashed items: the first
+   * page of the trash (100 items, newest first), not all of it. The
+   * underlying endpoint also returns trashed chats and projects; those are
+   * filtered out here. Page through the whole trash with
+   * {@link Document.trashed}.
    */
   static async recentlyDeleted(client: MacroClient): Promise<Document[]> {
     const { data } = unwrap(await client.storage.recentlyDeleted({}));
     return data.items
       .filter((i) => i.type === 'document')
       .map((d) => new Document(client, d.id));
+  }
+
+  /**
+   * The user's trashed documents, most recently trashed first,
+   * auto-paginated; `maxItems` caps the total. `pageSize` counts trashed chats and projects too, which
+   * are filtered out, so a page can yield fewer documents.
+   */
+  static trashed(
+    client: MacroClient,
+    opts?: { pageSize?: number; maxItems?: number },
+  ): AsyncGenerator<Document> {
+    return iterate('documents.trashed', opts, { pageSize: true }, () =>
+      paginate(async (cursor) => {
+        const { data } = unwrap(
+          await client.storage.recentlyDeleted({
+            query: {
+              ...(opts?.pageSize !== undefined ? { limit: opts.pageSize } : {}),
+              ...(cursor !== undefined ? { cursor } : {}),
+            },
+          }),
+        );
+        return {
+          items: data.items
+            .filter((i) => i.type === 'document')
+            .map((d) => new Document(client, d.id)),
+          nextCursor: data.next_cursor ?? null,
+        };
+      }),
+    );
   }
 
   /** Favorites identify documents as `document`. */
@@ -459,7 +498,10 @@ export class Document
 
   /**
    * Current Markdown for native documents, extracted text for PDF/Word,
-   * or raw file content for other formats. Native reads include live edits.
+   * or raw file content for other formats. Native reads include live edits
+   * and are the same lossless Markdown as `contentWithRevision()`: chips,
+   * tables and other rich content are `<m-*>` tags. To write the text back,
+   * read it with `contentWithRevision()` so the revision matches it.
    *
    * @readonly
    */
@@ -1173,7 +1215,8 @@ export class Document
    * @readonly
    */
   webUrl(): string {
-    const fileType = this.detail.peek()?.fileType;
+    const fileType =
+      this.detail.peek()?.fileType ?? this.detail.listedField('fileType');
     const route = fileType && NATIVE_FILE_TYPES.has(fileType) ? fileType : 'md';
     return `${this.client.webAppUrl}/app/${route}/${this.id}`;
   }
@@ -1183,7 +1226,7 @@ export class Document
     return { ...super.toJSON(), url: this.webUrl() };
   }
 
-  /** Search documents by name and content, most relevant first, auto-paginated. */
+  /** Search documents by name and content, most relevant first, auto-paginated; `maxItems` caps the total. */
   static search = entitySearch({
     filters: { document_filters: {} },
     type: 'document',
@@ -1200,8 +1243,10 @@ export class Document
     return {
       tag: wrapXml('m-document-mention', {
         documentId: this.id,
-        documentName: loaded?.documentName ?? '',
-        blockName: loaded?.fileType ?? 'md',
+        documentName:
+          loaded?.documentName ?? this.detail.listedField('documentName') ?? '',
+        blockName:
+          loaded?.fileType ?? this.detail.listedField('fileType') ?? 'md',
       }),
       mention: { entity_type: 'document', entity_id: this.id },
     };

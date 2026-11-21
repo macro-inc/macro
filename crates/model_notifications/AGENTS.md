@@ -10,6 +10,7 @@ types.
 
 - `src/lib.rs`: `NotificationTemporalData` and the full re-export list of
   metadata types — the fastest way to see every notification kind that exists.
+  `NotifEvent::EVENT_TYPES` lists each variant's stored event type name.
 - `src/metadata.rs` + `src/metadata/`: one metadata struct per notification
   kind (channel, CRM discussion, initiative discussion, GitHub PR, reminder, …).
 - `src/metadata/channel_push.rs`: channel push destinations, including the known

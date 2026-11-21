@@ -1,0 +1,32 @@
+id: email-link-lock-transactions-time-out
+language: rust
+severity: error
+message: Open transactions in the email_pg_repo files whose writes lock an inbox's link row with email_pg_repo::begin, which sets the lock timeout.
+note: |-
+  These user writes (draft save and send admission, attachments, discard,
+  resolution, transfer, scheduling, Undo send, mailbox actions, sender policy)
+  lock the inbox's `email_links` row, which the mailbox workers and a
+  disconnect hold exclusively and a CRM population share-locks for its whole
+  transaction. `begin` sets a 5 s `lock_timeout`, so a request queued behind
+  a long lock holder answers a retryable `EmailErr::Contended` instead of
+  holding a pooled connection. A transaction in these files that takes no
+  link lock says so above an `ast-grep-ignore` comment. Tests are exempt.
+files:
+  - crates/email/src/outbound/email_pg_repo/draft.rs
+  - crates/email/src/outbound/email_pg_repo/draft_attachments.rs
+  - crates/email/src/outbound/email_pg_repo/draft_resolution.rs
+  - crates/email/src/outbound/email_pg_repo/draft_transfer.rs
+  - crates/email/src/outbound/email_pg_repo/mailbox_action.rs
+  - crates/email/src/outbound/email_pg_repo/message.rs
+  - crates/email/src/outbound/email_pg_repo/scheduled.rs
+  - crates/email/src/outbound/email_pg_repo/send_attempt.rs
+  - crates/email/src/outbound/email_pg_repo/sender_policy.rs
+ignores:
+  - '**/test.rs'
+  - '**/tests.rs'
+  - '**/test/**'
+  - '**/tests/**'
+rule:
+  any:
+    - pattern: pool.begin()
+    - pattern: self.pool.begin()

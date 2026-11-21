@@ -1,8 +1,11 @@
 import { DocumentTitleHoverCard } from '@app/components/entity-detail/DocumentTitleHoverCard';
+import type { EntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import { t } from '@app/lib/i18n';
 import { isInBlock, useBlockAliasedName } from '@core/block';
 import {
   ContextMenuContent,
+  CopyMenuItem,
+  dismissContextMenu,
   MenuItem,
   MenuSeparator,
   SubTrigger,
@@ -21,10 +24,13 @@ import {
   useIsDocumentOwner,
 } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
+import type { DateValue } from '@core/util/date';
 import type { BuildEntityDataArgs } from '@entity';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { NotificationMuteMenu } from '@notifications/components/NotificationMuteMenu';
+import { NotificationSettingsMenu } from '@notifications/components/NotificationSettingsMenu';
+import { Key } from '@solid-primitives/keyed';
 import { cn, Tooltip } from '@ui';
 import {
   type Accessor,
@@ -32,13 +38,14 @@ import {
   children,
   createMemo,
   createSignal,
-  For,
   type JSX,
+  Match,
   onCleanup,
   type ParentProps,
   Show,
+  Switch,
 } from 'solid-js';
-import { Portal } from 'solid-js/web';
+import { Dynamic, Portal } from 'solid-js/web';
 import {
   getSplitFileMenuActionSections,
   type SplitFileMenuAction,
@@ -53,6 +60,7 @@ export function StaticSplitLabel(props: {
   icon?: JSX.Element;
   badges?: JSX.Element;
   class?: string;
+  weight?: 'normal' | 'semibold';
   colorIcon?: boolean;
   /** Enables double-click renaming while retaining the split title/menu
    * chrome. */
@@ -102,7 +110,12 @@ export function StaticSplitLabel(props: {
             <Show
               when={props.onRename}
               fallback={
-                <span class="inline-block truncate text-sm font-semibold">
+                <span
+                  class={cn(
+                    'inline-block truncate text-sm',
+                    props.weight === 'normal' ? 'font-normal' : 'font-semibold'
+                  )}
+                >
                   {props.label}
                 </span>
               }
@@ -112,7 +125,12 @@ export function StaticSplitLabel(props: {
                   when={renaming()}
                   fallback={
                     <span
-                      class="inline-block truncate text-sm font-semibold"
+                      class={cn(
+                        'inline-block truncate text-sm',
+                        props.weight === 'normal'
+                          ? 'font-normal'
+                          : 'font-semibold'
+                      )}
                       onDblClick={startRename}
                       onClick={(event) => {
                         if (isTouchDevice()) startRename(event);
@@ -204,35 +222,64 @@ export function SplitHeaderBadge(props: { text: string; tooltip?: string }) {
   );
 }
 
-export function SplitPermissionsBadge() {
-  const canEdit = useCanEdit();
-  const canComment = useCanComment();
-  const canView = useCanView();
-  const showBadge = () => !canEdit();
-
+/** Access the viewer lacks to edit, shown beside a document's title. */
+export function AccessBadge(props: {
+  canEdit: boolean;
+  canComment: boolean;
+  canView: boolean;
+}) {
   const tooltip = () => {
-    if (!canView()) return t('splitMenu.noAccess');
-    if (canComment()) return t('splitMenu.commentOnly');
+    if (!props.canView) return t('splitMenu.noAccess');
+    if (props.canComment) return t('splitMenu.commentOnly');
     return t('splitMenu.viewOnly');
   };
 
   const text = () => {
-    if (!canView()) return t('splitMenu.badgeNoAccess');
-    if (canComment()) return t('splitMenu.badgeCommentOnly');
+    if (!props.canView) return t('splitMenu.badgeNoAccess');
+    if (props.canComment) return t('splitMenu.badgeCommentOnly');
     return t('splitMenu.badgeViewer');
   };
 
   return (
-    <Show when={showBadge()}>
+    <Show when={!props.canEdit}>
       <SplitHeaderBadge text={text()} tooltip={tooltip()} />
     </Show>
   );
 }
 
-export function BlockItemSplitLabel(props: {
+/** Reads access from the enclosing legacy Block. */
+export function SplitPermissionsBadge() {
+  const canEdit = useCanEdit();
+  const canComment = useCanComment();
+  const canView = useCanView();
+  return (
+    <AccessBadge
+      canEdit={canEdit()}
+      canComment={canComment()}
+      canView={canView()}
+    />
+  );
+}
+
+/** What a document title's hover card shows. */
+export type SplitLabelDocument = {
+  documentId: string;
+  ownerId?: string;
+  createdAt?: DateValue | null;
+  updatedAt?: DateValue | null;
+};
+
+/**
+ * A split's title island: icon, name, and the title file menu. On touch the
+ * island opens that menu. Block-free; {@link BlockItemSplitLabel} adapts it.
+ */
+export function EntitySplitLabel(props: {
+  targetType: EntityIconSelector;
+  /** The entity's own icon and color, when it has chosen one. */
+  appearance?: EntityAppearance | null;
+  name: string;
+  document?: SplitLabelDocument;
   icon?: JSX.Element;
-  fallbackName?: string;
-  name?: Accessor<string | undefined>;
   lockRename?: boolean;
   badges?: JSX.Element;
   /** Rendered after the file name. */
@@ -241,29 +288,8 @@ export function BlockItemSplitLabel(props: {
   title?: JSX.Element;
 }) {
   const panel = useSplitPanelOrThrow();
-  if (!isInBlock())
-    throw new Error('<BlockItemSplitLabel> must be used within a Block');
-
-  const fileName = useBlockDocumentName(props.fallbackName);
-  const displayName = () => props.name?.() ?? fileName();
-  const blockName = useBlockAliasedName();
-  const isOwner = useIsDocumentOwner();
   const suppliedIcon = children(() => props.icon);
-  const appearance = () => {
-    const metadata = blockMetadataSignal();
-    return (blockName === 'md' || blockName === 'snippet') && metadata
-      ? metadata.appearance
-      : undefined;
-  };
-
-  const targetType = () => {
-    if (blockName === 'unknown') {
-      return blockMetadataSignal()?.fileType ?? blockName;
-    }
-    return blockName;
-  };
-
-  useSplitDisplayName(displayName);
+  useSplitDisplayName(() => props.name);
 
   const openTitleFileMenu = (e: MouseEvent) => {
     if (!isTouchDevice()) return;
@@ -283,8 +309,8 @@ export function BlockItemSplitLabel(props: {
             fallback={
               <EntityIcon
                 class="shrink-0"
-                targetType={targetType()}
-                appearance={appearance()}
+                targetType={props.targetType}
+                appearance={props.appearance}
                 size="xs"
               />
             }
@@ -296,25 +322,25 @@ export function BlockItemSplitLabel(props: {
             when={props.title}
             fallback={
               <Show
-                when={blockMetadataSignal()}
+                when={props.document}
                 fallback={
                   <SplitLabel
-                    label={displayName() ?? ''}
-                    lockRename={!isOwner() || props.lockRename}
+                    label={props.name}
+                    lockRename={props.lockRename}
                   />
                 }
               >
-                {(metadata) => (
+                {(document) => (
                   <DocumentTitleHoverCard
-                    documentId={metadata().documentId}
-                    name={displayName() ?? ''}
-                    ownerId={metadata().owner}
-                    createdAt={metadata().createdAt}
-                    updatedAt={metadata().updatedAt}
+                    documentId={document().documentId}
+                    name={props.name}
+                    ownerId={document().ownerId}
+                    createdAt={document().createdAt}
+                    updatedAt={document().updatedAt}
                   >
                     <SplitLabel
-                      label={displayName() ?? ''}
-                      lockRename={!isOwner() || props.lockRename}
+                      label={props.name}
+                      lockRename={props.lockRename}
                     />
                   </DocumentTitleHoverCard>
                 )}
@@ -334,7 +360,66 @@ export function BlockItemSplitLabel(props: {
   );
 }
 
+/** Reads the title, icon, owner, and hover-card metadata from the legacy Block. */
+export function BlockItemSplitLabel(props: {
+  icon?: JSX.Element;
+  fallbackName?: string;
+  name?: Accessor<string | undefined>;
+  lockRename?: boolean;
+  badges?: JSX.Element;
+  /** Rendered after the file name. */
+  trailingBadges?: JSX.Element;
+  /** Replaces the static name, e.g. with an inline title editor. */
+  title?: JSX.Element;
+}) {
+  if (!isInBlock())
+    throw new Error('<BlockItemSplitLabel> must be used within a Block');
+
+  const fileName = useBlockDocumentName(props.fallbackName);
+  const displayName = () => props.name?.() ?? fileName();
+  const blockName = useBlockAliasedName();
+  const isOwner = useIsDocumentOwner();
+
+  const targetType = () => {
+    if (blockName === 'unknown') {
+      return blockMetadataSignal()?.fileType ?? blockName;
+    }
+    return blockName;
+  };
+  const appearance = () => {
+    const metadata = blockMetadataSignal();
+    return (blockName === 'md' || blockName === 'snippet') && metadata
+      ? metadata.appearance
+      : undefined;
+  };
+  const document = (): SplitLabelDocument | undefined => {
+    const metadata = blockMetadataSignal();
+    if (!metadata) return;
+    return {
+      documentId: metadata.documentId,
+      ownerId: metadata.owner,
+      createdAt: metadata.createdAt,
+      updatedAt: metadata.updatedAt,
+    };
+  };
+
+  return (
+    <EntitySplitLabel
+      targetType={targetType()}
+      appearance={appearance()}
+      name={displayName() ?? ''}
+      document={document()}
+      icon={props.icon}
+      lockRename={!isOwner() || props.lockRename}
+      badges={props.badges}
+      trailingBadges={props.trailingBadges}
+      title={props.title}
+    />
+  );
+}
+
 function SplitLabelContextMenu(props: ParentProps) {
+  const [open, setOpen] = createSignal(false);
   const panel = useSplitPanelOrThrow();
   const actions = () => panel.titleFileMenuActions();
   const sections = createMemo(() => {
@@ -343,32 +428,80 @@ function SplitLabelContextMenu(props: ParentProps) {
   });
   const hasActions = createMemo(() => sections().length > 0);
 
-  const item = (action: SplitFileMenuAction) => {
-    if (action.muteMenu) return <NotificationMuteMenu {...action.muteMenu} />;
-    const children = () => action.children?.filter(Boolean) ?? [];
-
+  const item = (action: () => SplitFileMenuAction) => {
+    const label = () => (
+      <>
+        {action().label}
+        <Show when={action().disabledReason}>
+          <span class="block whitespace-normal text-xs text-ink-muted">
+            {action().disabledReason}
+          </span>
+        </Show>
+      </>
+    );
+    const children = () => action().children?.filter(Boolean) ?? [];
     return (
-      <Show
-        when={children().length > 0}
-        fallback={
+      <Switch>
+        <Match when={action().menuItem}>
+          {(component) => (
+            <Dynamic
+              component={component()}
+              onActionComplete={() => {
+                if (open()) dismissContextMenu();
+              }}
+            />
+          )}
+        </Match>
+        <Match when={action().muteMenu}>
+          {(menu) => <NotificationMuteMenu {...menu()} />}
+        </Match>
+        <Match when={action().notificationSettingsMenu}>
+          {(menu) => (
+            <NotificationSettingsMenu
+              {...menu()}
+              onActionComplete={() => {
+                if (open()) dismissContextMenu();
+              }}
+            />
+          )}
+        </Match>
+        <Match when={action().copy}>
+          <CopyMenuItem
+            icon={
+              action().icon as Component<JSX.SvgSVGAttributes<SVGSVGElement>>
+            }
+            text={action().label}
+            hotkeyToken={action().hotkeyToken}
+            onCopy={async () => (await action().action?.()) !== false}
+          />
+        </Match>
+        <Match when={children().length > 0}>
+          <ContextMenu.Sub>
+            <SubTrigger
+              icon={
+                action().icon as Component<JSX.SvgSVGAttributes<SVGSVGElement>>
+              }
+              text={action().label}
+            />
+            <ContextMenuContent submenu class="w-64">
+              <Key each={children()} by={(child) => child.id ?? child.label}>
+                {item}
+              </Key>
+            </ContextMenuContent>
+          </ContextMenu.Sub>
+        </Match>
+        <Match when={true}>
           <MenuItem
-            icon={action.icon as Component<JSX.SvgSVGAttributes<SVGSVGElement>>}
-            text={action.label}
-            hotkeyToken={action.hotkeyToken}
-            onClick={() => action.action?.()}
+            icon={
+              action().icon as Component<JSX.SvgSVGAttributes<SVGSVGElement>>
+            }
+            text={label()}
+            hotkeyToken={action().hotkeyToken}
+            disabled={!!action().disabledReason}
+            onClick={() => action().action?.()}
           />
-        }
-      >
-        <ContextMenu.Sub>
-          <SubTrigger
-            icon={action.icon as Component<JSX.SvgSVGAttributes<SVGSVGElement>>}
-            text={action.label}
-          />
-          <ContextMenuContent submenu class="w-64">
-            <For each={children()}>{item}</For>
-          </ContextMenuContent>
-        </ContextMenu.Sub>
-      </Show>
+        </Match>
+      </Switch>
     );
   };
 
@@ -391,22 +524,27 @@ function SplitLabelContextMenu(props: ParentProps) {
 
   return (
     <Show when={hasActions()} fallback={props.children}>
-      <ContextMenu>
+      <ContextMenu onOpenChange={setOpen}>
         <ContextMenu.Trigger class="contents" onDblClick={openOnDoubleClick}>
           {props.children}
         </ContextMenu.Trigger>
         <ContextMenu.Portal>
           <ContextMenuContent class="w-64">
-            <For each={sections()}>
+            <Key each={sections()} by="key">
               {(section, index) => (
                 <>
                   <Show when={index() > 0}>
                     <MenuSeparator />
                   </Show>
-                  <For each={section.actions}>{item}</For>
+                  <Key
+                    each={section().actions}
+                    by={(action) => action.id ?? action.label}
+                  >
+                    {item}
+                  </Key>
                 </>
               )}
-            </For>
+            </Key>
           </ContextMenuContent>
         </ContextMenu.Portal>
       </ContextMenu>

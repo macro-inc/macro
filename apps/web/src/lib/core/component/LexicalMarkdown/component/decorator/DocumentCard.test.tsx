@@ -102,6 +102,11 @@ vi.mock('@ui', async (importOriginal) => {
         <div role="menu">{props.children}</div>
       ),
       Group: (props: { children?: JSX.Element }) => <div>{props.children}</div>,
+      CopyItem: (props: { children?: JSX.Element; onCopy: () => unknown }) => (
+        <div role="menuitem" onClick={props.onCopy}>
+          {props.children}
+        </div>
+      ),
       Item: (props: { children?: JSX.Element; onSelect?: () => void }) => (
         <div role="menuitem" onClick={() => props.onSelect?.()}>
           {props.children}

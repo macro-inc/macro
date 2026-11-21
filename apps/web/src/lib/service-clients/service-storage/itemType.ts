@@ -15,6 +15,7 @@ export type ItemType =
   | 'agent_session'
   | 'routine'
   | 'harness'
+  | 'team'
   | 'calendar_event'
   | 'foreign'
   | 'crm_company'
@@ -115,4 +116,5 @@ export const ITEM_TYPES = [
   'foreign',
   'crm_company',
   'crm_contact',
+  'initiative',
 ] as const satisfies readonly ItemType[];

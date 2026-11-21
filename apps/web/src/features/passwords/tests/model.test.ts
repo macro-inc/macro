@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   filterItems,
+  groupByKind,
   type PasswordDraft,
   type PasswordItem,
   validateDraft,
@@ -66,6 +67,51 @@ describe('metadata filters', () => {
     expect(ITEMS[0].id).toBe('one');
   });
 });
+describe('type filter and grouping', () => {
+  const NOTE: PasswordItem = {
+    ...ITEMS[0],
+    id: 'three',
+    name: 'Docs recovery',
+    kind: 'note',
+    url: null,
+  };
+  const ALL = [...ITEMS, NOTE];
+
+  it('keeps only the chosen types, together with the folder and search', () => {
+    expect(
+      filterItems(ALL, 'all', '', [], ['login', 'note']).map((item) => item.id)
+    ).toEqual(['one', 'three']);
+    expect(
+      filterItems(ALL, 'folder:work', 'recovery', [], ['note']).map(
+        (item) => item.id
+      )
+    ).toEqual(['three']);
+    expect(
+      filterItems(ALL, 'folder:work', 'docs', [], ['api']).map(
+        (item) => item.id
+      )
+    ).toEqual([]);
+    expect(filterItems(ALL, 'all', '', [], []).map((item) => item.id)).toEqual([
+      'one',
+      'two',
+      'three',
+    ]);
+  });
+
+  it('groups by type in the New menu order and leaves out empty types', () => {
+    expect(
+      groupByKind(ALL).map((group) => [
+        group.kind,
+        group.items.map((item) => item.id),
+      ])
+    ).toEqual([
+      ['login', ['one']],
+      ['note', ['three']],
+      ['api', ['two']],
+    ]);
+  });
+});
+
 it('blocks blank names and dangerous URL schemes before saving', () => {
   const draft: PasswordDraft = {
     name: 'Portal',

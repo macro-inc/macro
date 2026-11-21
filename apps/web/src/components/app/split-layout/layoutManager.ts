@@ -53,6 +53,7 @@ import {
 } from './contentInstanceRegistry';
 import { adjacentPane, type SplitDirection } from './split-direction';
 import { fitsNewColumn, fitsSplit, type TileArea } from './split-geometry';
+import { viewRestorationKey } from './view-restoration-key';
 import { createViewState, type ViewState } from './view-state';
 
 /** Checked on every route change in a pane, so entry state is captured before the pane moves. */
@@ -1165,7 +1166,9 @@ export function createSplitLayout(
   /** Forgets a split whose pane the router removed. */
   function dropSplit(id: SplitId) {
     const index = splitIndexById(id);
-    if (index < 0) return;
+    // A discarded parked split is not open, but its state and captors go too.
+    const parked = state.parked.some((split) => split.id === id);
+    if (index < 0 && !parked) return;
 
     contentChangeListeners.delete(id);
     entryStateCaptors.delete(id);
@@ -1184,7 +1187,9 @@ export function createSplitLayout(
         setState('activeSplitId', front.id);
         viewState.activate(front.id);
       }
-      dispatchEvent(SplitEvent.Remove, { splitId: id, splitIndex: index });
+      if (index >= 0) {
+        dispatchEvent(SplitEvent.Remove, { splitId: id, splitIndex: index });
+      }
     });
   }
 
@@ -1217,6 +1222,10 @@ export function createSplitLayout(
       return;
     }
 
+    setActiveSplit(id);
+  }
+
+  function setActiveSplit(id: SplitId) {
     const current = state.activeSplitId;
     if (current !== id) setState('lastActiveSplitId', current);
     if (state.spotlightId && state.spotlightId !== id) {
@@ -1226,12 +1235,19 @@ export function createSplitLayout(
     viewState.activate(id);
   }
 
-  /** Stacked panes bring a pane behind the front forward; the panes that were in front of it stay, behind it. */
+  /**
+   * Stacked panes bring a pane behind the front forward; the panes that were in
+   * front of it stay, behind it. The router applies the move later while it is
+   * busy, and the splits follow its order only when their computations run, so
+   * neither has happened yet inside an effect, a batch, or a router commit: the
+   * split is activated without waiting. The move targets the end of the panes
+   * as they are when it applies, which the router clamps to the front.
+   */
   function bringToFront(id: SplitId) {
     if (splitIndexById(id) < 0) return;
 
-    router.move(paneOf(id), state.splits.length - 1);
-    activateSplit(id);
+    router.move(paneOf(id), Number.MAX_SAFE_INTEGER);
+    setActiveSplit(id);
   }
 
   function spotlightSplit(id: SplitId) {
@@ -1706,7 +1722,9 @@ export function createSplitLayout(
     span.setAttr('view.id', content.id);
     try {
       const snapshot =
-        content.type === 'component' ? viewState.get(content.id) : undefined;
+        content.type === 'component'
+          ? viewState.get(viewRestorationKey(content.id, toLocation(content)))
+          : undefined;
       span.setAttr('view.restored', false);
       if (!snapshot) return;
       const restored = toContent(snapshot.location);

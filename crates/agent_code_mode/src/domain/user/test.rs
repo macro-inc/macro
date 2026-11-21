@@ -27,6 +27,14 @@ impl UserExecutionCredentials for Credentials {
 struct Returns(Value);
 #[async_trait]
 impl ProgramExecutor for Returns {
+    async fn check_program(
+        &self,
+        _: &ExecuteRequest,
+        _: code_execution::domain::ContextShape,
+        _: CancellationToken,
+    ) -> Result<(), Outcome> {
+        Ok(())
+    }
     async fn execute_program(
         &self,
         _: ExecuteRequest,
@@ -336,4 +344,62 @@ async fn an_image_someone_else_owns_is_not_shown() {
             .unwrap()
             .contains("image render-1 could not be shown")
     );
+}
+
+/// Fails every program at its check, as the checker fails one with type
+/// errors; running one is a bug.
+struct RejectsTypes;
+#[async_trait]
+impl ProgramExecutor for RejectsTypes {
+    async fn check_program(
+        &self,
+        _: &ExecuteRequest,
+        shape: code_execution::domain::ContextShape,
+        _: CancellationToken,
+    ) -> Result<(), Outcome> {
+        assert_eq!(shape, code_execution::domain::ContextShape::default());
+        Err(code_execution::domain::ExecutionFailure::new(
+            code_execution::domain::FailureCode::Compile,
+            "The program wasn't run: it doesn't type-check against the Macro SDK.",
+        )
+        .into())
+    }
+    async fn execute_program(
+        &self,
+        _: ExecuteRequest,
+        _: RunEnvironment,
+        _: CancellationToken,
+    ) -> Outcome {
+        unreachable!("a program with type errors never runs")
+    }
+}
+
+#[tokio::test]
+async fn a_program_with_type_errors_fails_before_minting_a_credential() {
+    let credentials = Arc::new(Credentials::default());
+    let service = UserCodeModeService::new(
+        Arc::new(RejectsTypes),
+        credentials.clone(),
+        Arc::new(Pixels),
+    );
+
+    let receipt = service
+        .execute(
+            &user(),
+            &ToolCaller::ApiKey,
+            None,
+            request(),
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(receipt.status, ExecutionStatus::Failed);
+    assert!(
+        receipt
+            .error
+            .unwrap()
+            .contains("doesn't type-check against the Macro SDK")
+    );
+    assert!(credentials.0.lock().unwrap().is_empty());
 }

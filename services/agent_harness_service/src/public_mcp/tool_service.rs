@@ -9,6 +9,7 @@ use ai_toolset::ToolCaller;
 use ai_toolset::{AsyncToolCollection, RequestContext, ToolSet};
 use cognition::domain::Cognition;
 use macro_user_id::user_id::MacroUserIdStr;
+use mcp_auth_proxy::inbound::middleware::McpCallerIds;
 use rmcp::{
     handler::server::ServerHandler,
     model::{
@@ -18,6 +19,7 @@ use rmcp::{
     },
 };
 use std::{sync::Arc, time::Instant};
+use tracing::Instrument as _;
 
 /// Maps our protocol-agnostic annotations onto the MCP wire representation.
 ///
@@ -170,6 +172,43 @@ fn caller(extensions: &rmcp::model::Extensions) -> Result<ToolCaller, rmcp::Erro
         })
 }
 
+/// The span over one public MCP tool call, with the opaque ids that tie it to
+/// its caller: the user's FusionAuth id, the OAuth client's id and registered
+/// name, or the agent a credential was signed for. Never the Macro user id,
+/// which is an email.
+fn tool_call_span(
+    tool_name: &str,
+    mode: ToolMode,
+    extensions: &rmcp::model::Extensions,
+) -> tracing::Span {
+    let parts = extensions.get::<http::request::Parts>();
+    let ids = parts
+        .and_then(|parts| parts.extensions.get::<McpCallerIds>())
+        .cloned()
+        .unwrap_or_default();
+    let caller = parts.and_then(|parts| parts.extensions.get::<ToolCaller>());
+    let (caller_kind, client_name, agent_id) = match caller {
+        Some(ToolCaller::McpClient { name }) => ("oauth_client", name.as_deref(), None),
+        Some(ToolCaller::ApiKey) => ("api_key", None, None),
+        Some(ToolCaller::Agent(agent)) => ("agent", None, Some(agent.to_string())),
+        None => ("none", None, None),
+    };
+    tracing::info_span!(
+        "public_mcp.call_tool",
+        mcp.tool.name = %tool_name,
+        mcp.tool_mode = match mode {
+            ToolMode::Standard => "standard",
+            ToolMode::Code => "code",
+        },
+        mcp.caller = caller_kind,
+        mcp.client.id = ids.oauth_client_id.as_deref(),
+        mcp.client.name = client_name,
+        agent_id = agent_id.as_deref(),
+        fusionauth_user_id = ids.fusionauth_user_id.as_deref(),
+        mcp.outcome = tracing::field::Empty,
+    )
+}
+
 /// Tools ChatGPT is never offered. Each one runs code or hands an open-ended
 /// task to an agent, and the plugin directory refuses generic executors.
 const HIDDEN_FROM_CHATGPT: [&str; 5] = [
@@ -302,9 +341,18 @@ where
         let user_id = Self::authenticated_user_id(&context.extensions)?;
         let started = Instant::now();
         // Bounded: an unknown tool's name is whatever the client sent.
-        let tool_name = request.name.chars().take(128).collect();
+        let tool_name: String = request.name.chars().take(128).collect();
 
-        let (outcome, result) = self.run_tool(user_id.clone(), request, &context).await;
+        let span = tool_call_span(
+            &tool_name,
+            self.tool_mode(&context.extensions),
+            &context.extensions,
+        );
+        let (outcome, result) = self
+            .run_tool(user_id.clone(), request, &context)
+            .instrument(span.clone())
+            .await;
+        span.record("mcp.outcome", outcome.as_str());
 
         self.analytics.record(
             user_id,

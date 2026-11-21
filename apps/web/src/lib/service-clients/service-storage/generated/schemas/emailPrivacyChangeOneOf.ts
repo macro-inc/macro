@@ -5,15 +5,14 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EmailPrivacyChangeOneOfAction } from './emailPrivacyChangeOneOfAction';
-import type { EmailPrivacyChangeOneOfLinkId } from './emailPrivacyChangeOneOfLinkId';
 
 /**
- * Consent covers all available past and future emails in the primary mailbox.
+ * Hold back or restore only the caller's contribution of one thread.
  */
 export type EmailPrivacyChangeOneOf = {
   action: EmailPrivacyChangeOneOfAction;
-  /** False withdraws this mailbox's CRM contribution without deleting records. */
-  enabled: boolean;
-  /** Required when enabling; must match the displayed primary connection. */
-  link_id?: EmailPrivacyChangeOneOfLinkId;
+  /** False removes this exception; consent and other exclusions still apply. */
+  excluded: boolean;
+  /** Must belong to a mailbox owned by the authenticated member. */
+  thread_id: string;
 };

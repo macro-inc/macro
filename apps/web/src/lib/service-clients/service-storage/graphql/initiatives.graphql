@@ -5,6 +5,9 @@ fragment InitiativeIdentityFields on GraphqlSoupInitiative {
   __typename
   id
   displayName
+  metadata {
+    ownerId
+  }
   viewerPermission {
     __typename
     ... on GraphqlAccessLevelPermission {
@@ -110,7 +113,7 @@ query ProjectSoup($input: SoupInput!) {
 query Initiative($initiativeId: ID!) {
   user {
     id
-    initiative(initiativeId: $initiativeId) {
+    visibleInitiative(initiativeId: $initiativeId) {
       ...InitiativeDetailFields
     }
   }
@@ -119,7 +122,7 @@ query Initiative($initiativeId: ID!) {
 query InitiativeIdentity($initiativeId: ID!) {
   user {
     id
-    initiative(initiativeId: $initiativeId) {
+    visibleInitiative(initiativeId: $initiativeId) {
       ...InitiativeIdentityFields
     }
   }

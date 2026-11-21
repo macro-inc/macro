@@ -1,108 +1,119 @@
-import { expect, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
+
+/** Scrolls the picker's last listed row into view, as reading to the end does. */
+async function scrollToEnd(page: Page) {
+  await page.locator('[data-entity-index]').last().scrollIntoViewIfNeeded();
+}
+
+const nextOptions = (page: Page) =>
+  page.getByRole('button', { name: 'Next options', exact: true });
 
 for (const [type, prefix] of [
   ['TASK', 'Task'],
   ['CONTACT', 'Contact'],
   ['MIXED', 'Task'],
 ] as const) {
-  test(`${type} picker exposes the next loaded page`, async ({
+  test(`${type} picker lists the next page as the list scrolls`, async ({
     page,
-  }, info) => {
+  }) => {
     await page.goto(`/?selector=${type}`);
-    const search = page.getByPlaceholder('Search options');
     const first = page
       .locator('[data-entity-index]')
       .filter({ hasText: `${prefix} 00` });
     const later = page
       .locator('[data-entity-index]')
       .filter({ hasText: `${prefix} 50` });
-    const next = page.getByRole('button', {
-      name: 'Next options',
-      exact: true,
-    });
 
     await expect(first).toBeVisible();
     await expect(later).toHaveCount(0);
-    if (info.project.name === 'phone') await next.tap();
-    else await search.press('PageDown');
+    await expect(nextOptions(page)).toHaveCount(0);
+    await scrollToEnd(page);
+    await later.scrollIntoViewIfNeeded();
     await expect(later).toBeVisible();
-    await expect(next).toHaveCount(0);
+    await expect(first).toHaveCount(1);
   });
 }
 
-test('thread picker advances browsed emails and server search pages', async ({
+test('PageDown lists the next page from the search field on desktop', async ({
   page,
 }, info) => {
+  test.skip(info.project.name === 'phone', 'Keyboard paging is desktop-only');
+  await page.goto('/?selector=TASK');
+  const later = page
+    .locator('[data-entity-index]')
+    .filter({ hasText: 'Task 50' });
+  await expect(later).toHaveCount(0);
+  await page.getByPlaceholder('Search options').press('PageDown');
+  await expect(later).toHaveCount(1);
+});
+
+test('thread picker advances browsed emails and server search pages', async ({
+  page,
+}) => {
   await page.goto('/?selector=THREAD');
   const search = page.getByPlaceholder('Search options');
   const option = (name: string) =>
     page.locator('[data-entity-index]').filter({ hasText: name });
-  const next = page.getByRole('button', { name: 'Next options', exact: true });
-  const loadNext = async () => {
-    if (info.project.name === 'phone') await next.tap();
-    else await search.press('PageDown');
-  };
 
   await expect(option('Email 00')).toBeVisible();
   await expect(option('Email 50')).toHaveCount(0);
-  await loadNext();
+  await scrollToEnd(page);
+  await option('Email 50').scrollIntoViewIfNeeded();
   await expect(option('Email 50')).toBeVisible();
-  await expect(next).toHaveCount(0);
+  await expect(nextOptions(page)).toHaveCount(0);
 
   await search.fill('remote');
   await expect(option('Remote email 00')).toBeVisible();
   await expect(option('Remote email 20')).toHaveCount(0);
-  await expect(next).toBeVisible();
-  await loadNext();
+  await scrollToEnd(page);
+  await option('Remote email 20').scrollIntoViewIfNeeded();
   await expect(option('Remote email 20')).toBeVisible();
 });
 
-test('thread picker exposes email loading, failure, and successful retry', async ({
+test('thread picker shows email loading, failure, and successful retry', async ({
   page,
-}, info) => {
+}) => {
   await page.goto('/?selector=THREAD');
-  const search = page.getByPlaceholder('Search options');
-  const next = page.getByRole('button', { name: 'Next options', exact: true });
+  await expect(
+    page.locator('[data-entity-index]').filter({ hasText: 'Email 00' })
+  ).toBeVisible();
   await page.evaluate(() => {
     window.emailPickerFixture.holdNext();
     window.emailPickerFixture.failNext();
   });
-  if (info.project.name === 'phone') await next.tap();
-  else await search.press('PageDown');
+  await scrollToEnd(page);
   await expect(
-    page.getByRole('button', { name: 'Loading options…', exact: true })
-  ).toBeDisabled();
+    page.getByRole('status').filter({ hasText: 'Loading options…' })
+  ).toBeVisible();
   await page.evaluate(() => window.emailPickerFixture.release());
   await expect(
     page.getByRole('status').filter({ hasText: 'Options unavailable' })
   ).toBeVisible();
-  await expect(next).toBeEnabled();
-  if (info.project.name === 'phone') await next.tap();
-  else await search.press('PageDown');
+  // A failed page waits for Retry rather than reading again by itself.
+  const retry = page.getByRole('button', { name: 'Retry options' });
+  await expect(retry).toBeEnabled();
+  await retry.click();
   await expect(
     page.locator('[data-entity-index]').filter({ hasText: 'Email 50' })
-  ).toBeVisible();
+  ).toHaveCount(1);
   await expect(
     page.getByRole('status').filter({ hasText: 'Options unavailable' })
   ).toHaveCount(0);
-  await expect(next).toHaveCount(0);
+  await expect(retry).toHaveCount(0);
 });
 
 test('generic picker advances Quick Access and browsed email pages together', async ({
   page,
-}, info) => {
+}) => {
   await page.goto('/?selector=GENERIC');
-  const search = page.getByPlaceholder('Search options');
   const option = (name: string) =>
     page.locator('[data-entity-index]').filter({ hasText: name });
-  const next = page.getByRole('button', { name: 'Next options', exact: true });
 
   await expect(option('Task 00')).toBeVisible();
   await expect(option('Task 50')).toHaveCount(0);
   await expect(option('Email 50')).toHaveCount(0);
-  if (info.project.name === 'phone') await next.tap();
-  else await search.press('PageDown');
-  await expect(option('Task 50')).toBeVisible();
-  await expect(option('Email 50')).toBeVisible();
-  await expect(next).toHaveCount(0);
+  await scrollToEnd(page);
+  await expect(option('Task 50')).toHaveCount(1);
+  await expect(option('Email 50')).toHaveCount(1);
+  await expect(nextOptions(page)).toHaveCount(0);
 });

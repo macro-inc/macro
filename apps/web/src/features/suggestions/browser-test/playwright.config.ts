@@ -6,6 +6,8 @@ export default defineConfig({
   timeout: 30_000,
   use: {
     baseURL: 'http://127.0.0.1:3012',
+    // Hour labels and event times are asserted as en-US text.
+    locale: 'en-US',
     viewport: { width: 1440, height: 1000 },
     trace: 'retain-on-failure',
   },

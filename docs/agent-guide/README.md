@@ -17,7 +17,7 @@ verified live against a local stack (`just run_local`, which needs no terminal: 
 | [tasks.md](tasks.md) | Task list and creation dialog |
 | [view-tours.md](view-tours.md) | Desktop feature flyovers, dismissal, targeting, and embedded videos |
 | [reminders.md](reminders.md) | Email snoozing, the reminder command menu, delivery, and safe failure verification |
-| [home.md](home.md) | Home and the mobile Notifications inbox |
+| [home.md](home.md) | Home, New Home, and the mobile Notifications inbox |
 | [email.md](email.md) | Mail: threads, read state, trash, cached filtering, reminders |
 | [calendar.md](calendar.md) | Calendar views, Scheduling workspace, booking links, events, and invitations in email |
 | [search.md](search.md) | Search |
@@ -83,7 +83,7 @@ and Home navigation preserves the sidebar.
 ## Public website documentation
 
 For the public website preview, open `/docs` to read the integrated guides. Navigate Home → Chat → Home and use browser Back/Forward: the desktop sidebar must stay mounted and visible without a document reload.
-Desktop navigation is always open with a search icon at the left of the pinned search field. Command/Control+K or Command/Control+F focuses search (and opens the drawer on phones). Search matches titles and content across feature pages, setup guides, comparisons, and customer stories, with at most eight results. Check that changelogs, Tool Reference, engineering posts, legal pages, and company pages are excluded, and each feature appears only once. Check a typo such as `calednar`, a blog such as `Linear`, and a guide such as `MCP Setup`; results show an icon, title, and location. Use arrow keys and Enter to open a result. The clear button or Escape clears the query; a second Escape closes the mobile drawer and restores focus. Use Top features and More features to open a product page. The current guide is highlighted. The desktop sidebar stays at a fixed 241px width with no collapse or resize controls. On phones, use the top-left menu button and close the full-screen drawer before reading. Escape closes the mobile drawer. Content is authored in `apps/docs`; rendering and navigation belong to `apps/marketing/src/features/documentation`.
+Desktop navigation is always open with a search icon at the left of the pinned search field. Command/Control+K or Command/Control+F focuses search (and opens the drawer on phones). Search matches titles and content across feature pages, setup guides, comparisons, and customer stories, with at most eight results. Check that changelogs, Tool Reference, engineering posts, legal pages, and company pages are excluded, and each feature appears only once. Check a typo such as `calednar`, a blog such as `Linear`, and a guide such as `Add Macro MCP`; results show an icon, title, and location. Use arrow keys and Enter to open a result. The clear button or Escape clears the query; a second Escape closes the mobile drawer and restores focus. Use Top features and More features to open a product page. Open Agents under Top features. Agent setup has two links, BYO agent and Add Macro MCP. Open BYO agent to find the Cursor, Claude, ChatGPT, and Hermes setup links. The current guide is highlighted. The desktop sidebar stays at a fixed 241px width with no collapse or resize controls. On phones, use the top-left menu button and close the full-screen drawer before reading. Escape closes the mobile drawer. Content is authored in `apps/docs`; rendering and navigation belong to `apps/marketing/src/features/documentation`.
 
 Feature links in the public website sidebar open the visual product overviews.
 Use the labeled documentation sections for standalone reference, or open Setup and reference
@@ -105,6 +105,8 @@ sidebar for the detailed guide. Folders is covered by Drive and Reviews by GitHu
 all original `/docs` URLs remain available.
 
 Projects are part of Tasks: `/projects` and the former Projects guide redirect to `/tasks`. Project setup, sharing, and agent assignment are in the Tasks reference.
+
+On `/email`, verify both provider buttons hand off to the shared signup flow. On phones, the visible labels shorten to Google and Microsoft while their accessible names stay intact. In the sharing demo, check that the email and contact mentions appear in the sent message, the acknowledgment stays in view, and autoplay does not change the frame height. Reduced motion shows the finished exchange.
 
 Main benefits starts with Replace 27+ apps (`/replace-apps`), followed by Company graph, AI tagging, Automatic permissions, Workspace events, and Unified search. The replacement page reuses the pricing savings calculator below a compact wall of app logos; check seat changes, tool toggles, and plan selection on desktop and mobile. The other benefit routes render centered feature-style overviews and annotated graphics on black with faint localized glow, without colored poster frames. Check all five on desktop and mobile, and confirm playing a demo replaces the diagram with a visible video. The original MDX remains available under Setup and reference. Verify the overview, expand the guide, and test a legacy heading fragment. Existing guide URLs remain valid; the event overview is at `/docs/concepts/event-system` and links to the routine trigger reference.
 

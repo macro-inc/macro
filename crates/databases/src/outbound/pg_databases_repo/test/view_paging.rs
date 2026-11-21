@@ -225,10 +225,10 @@ async fn formula_fixture(pool: &PgPool) -> (QueryTable, Vec<RowId>) {
                 table_id: table.id,
                 property_definition_id: placed.id,
                 position: position.clone(),
-                config: placed
-                    .formula
-                    .clone()
-                    .map(|formula| ColumnConfig::Derived { formula }),
+                config: placed.formula.clone().map(|formula| ColumnConfig::Derived {
+                    formula,
+                    percentage: false,
+                }),
                 display_name: None,
                 infer_type: false,
             },

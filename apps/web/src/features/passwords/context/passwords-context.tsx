@@ -30,7 +30,18 @@ import type {
   PasswordVersion,
 } from '../core/types';
 
-export type PasswordFailure = 'forbidden' | 'folderMissing' | 'failed';
+/**
+ * `unreachable`: no answer from Macro (offline, or a gateway that could not
+ * reach it). `serviceUnavailable`: the service answered 503.
+ * `notProvisioned`: the team's vault was never set up, so no action on its values can work.
+ */
+export type PasswordFailure =
+  | 'forbidden'
+  | 'folderMissing'
+  | 'unreachable'
+  | 'serviceUnavailable'
+  | 'notProvisioned'
+  | 'failed';
 export type PasswordResult<T> = Promise<Result<T, PasswordFailure>>;
 export type PasswordSource = {
   list(): Promise<PasswordItem[]>;
@@ -50,6 +61,8 @@ export type PasswordSource = {
     item: PasswordItem,
     folderId: string | null
   ): PasswordResult<PasswordItem>;
+  /** Personal preference; requires view access, independent of item edits. */
+  setFavorite(id: string, favorite: boolean): PasswordResult<void>;
   grants(id: string): PasswordResult<PasswordGrant[]>;
   remove(id: string): PasswordResult<void>;
   username(id: string): PasswordResult<{ username: string; version: number }>;
@@ -176,6 +189,8 @@ export type PasswordCapabilities = {
   recipientsLoading: Accessor<boolean>;
   recipientsError: Accessor<boolean>;
   writeClipboard(value: string): Promise<void>;
+  /** Name to show for an account, such as an agent asking for access. */
+  displayName(accountId: string): string;
   /** Parses an export file in the browser; the file is never uploaded. */
   parseExport(file: File): Promise<ParseReply>;
   importResume: ImportResumeStore;

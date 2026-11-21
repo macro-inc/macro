@@ -132,6 +132,7 @@ export function getActionVerb(type: NotificationType): string {
       .with('reminder', () => 'reminder')
       .with('calendar_event_reminder', () => 'upcoming event')
       .with('calendar_event_join_request', () => 'asked to join')
+      .with('password_access_requested', () => 'requested access')
       .with('inbox_reauth_required', () => 'needs reconnection')
       .with('agent_session_settled', () => 'finished')
       .with('agent_session_waiting_for_input', () => 'needs your answer')
@@ -139,6 +140,7 @@ export function getActionVerb(type: NotificationType): string {
       .with('routine_run_finished', () => 'ran')
       .with('agent_sign_in_expiry', () => 'needs a new sign-in')
       .with('computer_setup', () => 'finished setup')
+      .with('ping', () => 'pinged you')
       .exhaustive(() => 'updated')
   );
 }
@@ -203,6 +205,9 @@ export function getTypeNoun(type: NotificationType, count: number): string {
     .with('calendar_event_join_request', () =>
       count === 1 ? 'request to join' : 'requests to join'
     )
+    .with('password_access_requested', () =>
+      count === 1 ? 'access request' : 'access requests'
+    )
     .with('inbox_reauth_required', () => (count === 1 ? 'inbox' : 'inboxes'))
     .with('agent_session_settled', () =>
       count === 1 ? 'agent run' : 'agent runs'
@@ -222,6 +227,7 @@ export function getTypeNoun(type: NotificationType, count: number): string {
     .with('computer_setup', () =>
       count === 1 ? 'computer setup' : 'computer setups'
     )
+    .with('ping', () => (count === 1 ? 'ping' : 'pings'))
     .exhaustive(() => (count === 1 ? 'notification' : 'notifications'));
 }
 

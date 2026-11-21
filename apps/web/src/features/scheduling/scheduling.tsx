@@ -1,6 +1,5 @@
 import { useViewControlHotkeys } from '@app/components/view-shell';
 import { openChatWithInput } from '@app/features/chat/ChatWithAgentButton';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { createSearchParams, useBeforeLeave } from '@app/lib/split-router';
 import {
   useSplitDisplayName,
@@ -8,7 +7,6 @@ import {
 } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { toast } from '@core/component/Toast/Toast';
-import { enableCalendarScheduling } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserContext } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -17,7 +15,7 @@ import { writeClipboardData } from '@core/util/dataTransfer';
 import { getWebOrigin } from '@core/util/webOrigin';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { useNavigate } from '@solidjs/router';
-import { type ParentProps, Show, Suspense } from 'solid-js';
+import { type ParentProps, Suspense } from 'solid-js';
 import { bookingLinksSearch } from './booking-links-search';
 import { SchedulingProvider } from './context/scheduling-context';
 import { bookingLinkAgentSeed } from './core/booking-agent';
@@ -134,7 +132,6 @@ export function BookingLinksWorkspace() {
       run: () => focusSearch?.() ?? false,
     },
   });
-  const flag = useFeatureFlag(enableCalendarScheduling);
   const [search, setSearch] = createSearchParams(bookingLinksSearch);
   useSplitDisplayName(() => 'Scheduling');
   let beforeLeave:
@@ -144,39 +141,28 @@ export function BookingLinksWorkspace() {
     search: [bookingLinksSearch.namespace],
   });
   return (
-    <Show
-      when={flag().enabled}
-      fallback={
-        <p class="p-8 text-sm text-ink-muted">
-          {flag().loading
-            ? 'Loading booking links…'
-            : 'Booking links are not available.'}
-        </p>
-      }
-    >
-      <SplitPanel.Root>
-        <SplitPanel.Body>
-          <Suspense
-            fallback={
-              <p class="p-8 text-sm text-ink-muted">Loading booking links…</p>
-            }
-          >
-            <SchedulingHost>
-              <BookingWorkspaceView
-                registerSearchFocus={(focus) => (focusSearch = focus)}
-                search={search}
-                onSearchChange={(patch) => setSearch(patch)}
-                registerBeforeLeave={(guard) => {
-                  beforeLeave = guard;
-                  return () => {
-                    if (beforeLeave === guard) beforeLeave = undefined;
-                  };
-                }}
-              />
-            </SchedulingHost>
-          </Suspense>
-        </SplitPanel.Body>
-      </SplitPanel.Root>
-    </Show>
+    <SplitPanel.Root>
+      <SplitPanel.Body>
+        <Suspense
+          fallback={
+            <p class="p-8 text-sm text-ink-muted">Loading booking links…</p>
+          }
+        >
+          <SchedulingHost>
+            <BookingWorkspaceView
+              registerSearchFocus={(focus) => (focusSearch = focus)}
+              search={search}
+              onSearchChange={(patch) => setSearch(patch)}
+              registerBeforeLeave={(guard) => {
+                beforeLeave = guard;
+                return () => {
+                  if (beforeLeave === guard) beforeLeave = undefined;
+                };
+              }}
+            />
+          </SchedulingHost>
+        </Suspense>
+      </SplitPanel.Body>
+    </SplitPanel.Root>
   );
 }

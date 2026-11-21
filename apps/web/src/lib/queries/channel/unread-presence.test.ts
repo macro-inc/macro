@@ -1,6 +1,7 @@
+import { cacheSessionExchange } from '@graphql-cache/exchange/session-exchange';
 import { ChannelUnreadPresenceDocument } from '@service-storage/graphql/generated/graphql';
 import { createClient, type Operation, type OperationResult } from '@urql/core';
-import { createRoot, createSignal } from 'solid-js';
+import { createRoot } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { makeSubject, pipe, subscribe } from 'wonka';
 import {
@@ -26,6 +27,7 @@ function setup() {
   const client = createClient({
     url: 'http://test/graphql',
     exchanges: [
+      cacheSessionExchange,
       () => (ops) => {
         pipe(
           ops,
@@ -37,12 +39,8 @@ function setup() {
   });
   clientMock.mockReturnValue(client);
   const root = createRoot((dispose) => {
-    const [enabled, setEnabled] = createSignal(false);
-    const query = createChannelUnreadQuery(
-      { initial: { limit: 500 } },
-      enabled
-    );
-    return { dispose, query, setEnabled };
+    const query = createChannelUnreadQuery({ initial: { limit: 500 } });
+    return { dispose, query };
   });
   const respond = (state: 'UNSEEN' | 'SEEN') =>
     network.next({
@@ -68,12 +66,9 @@ function setup() {
 }
 
 describe('channel unread presence query', () => {
-  it('loads only when enabled and retains reactive witness states', async () => {
+  it('retains reactive witness states and unregisters on disposal', async () => {
     const f = setup();
     try {
-      expect(f.operations.filter((op) => op.kind === 'query')).toHaveLength(0);
-      expect(getChannelListRevalidations()).toHaveLength(0);
-      f.setEnabled(true);
       expect(f.query.isLoading).toBe(true);
       await vi.waitFor(() =>
         expect(f.operations.filter((op) => op.kind === 'query')).toHaveLength(1)
@@ -89,18 +84,16 @@ describe('channel unread presence query', () => {
           variables: { input: { initial: { limit: 500 } } },
         },
       ]);
-      f.setEnabled(false);
-      expect(getChannelListRevalidations()).toHaveLength(0);
     } finally {
       f.dispose();
     }
+    expect(getChannelListRevalidations()).toHaveLength(0);
   });
 
   it('shares bounded notification revalidation and unregisters on disposal', async () => {
     const visible = vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
     const f = setup();
     try {
-      f.setEnabled(true);
       await vi.waitFor(() =>
         expect(f.operations.filter((op) => op.kind === 'query')).toHaveLength(1)
       );
@@ -132,7 +125,6 @@ describe('channel unread presence query', () => {
     const visible = vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
     const f = setup();
     try {
-      f.setEnabled(true);
       await vi.waitFor(() =>
         expect(f.operations.filter((op) => op.kind === 'query')).toHaveLength(1)
       );

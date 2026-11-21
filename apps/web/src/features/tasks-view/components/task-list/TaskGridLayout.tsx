@@ -81,6 +81,7 @@ function buildStubProperty(col: TaskGridColumn): Property {
 type TaskGridLayoutProps = Omit<LayoutProps, 'entity'> & {
   entity: TaskEntityWithProperties;
   onFilterByTag?: (optionId: string) => void;
+  onFilterByAssignee?: (userId: string) => void;
   compact?: boolean;
   calendar: Accessor<DateBucketBoundaries>;
   referencePropertyIds?: readonly string[];
@@ -294,6 +295,11 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
                     class={col.id === 'dueDate' ? dueDateClass() : undefined}
                     property={
                       propertyMap().get(col.defId) ?? buildStubProperty(col)
+                    }
+                    onFilterByUser={
+                      col.id === 'assignees'
+                        ? props.onFilterByAssignee
+                        : undefined
                     }
                   />
                 </Entity.Slot>

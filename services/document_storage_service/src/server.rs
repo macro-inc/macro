@@ -385,8 +385,9 @@ async fn run_server() -> anyhow::Result<()> {
         event_broker_tracker.clone(),
     );
     let bots_repo = PgBotsRepo::new(db.clone());
-    // The agent API checks a newly selected MCP app against Pipedream's
-    // directory, the same check the ConfigureAgent tool makes.
+    // The agent API checks a newly selected MCP app against the connector
+    // catalog (native overlays, then Pipedream's directory), the same check
+    // the ConfigureAgent tool makes.
     let bots_service = BotServiceImpl::new(
         bots_repo,
         macro_event_broker.clone(),
@@ -395,9 +396,7 @@ async fn run_server() -> anyhow::Result<()> {
             hosted_runtimes::outbound::pg::PgComputerAgents::new(db.clone()),
         ),
     )
-    .with_mcp_apps(ai_tools::PipedreamMcpAppCatalog::new(
-        ai_tools::pipedream_client_from_env()?,
-    ));
+    .with_mcp_apps(ai_tools::PipedreamMcpAppCatalog::from_env(db.clone())?);
 
     let authorization_service: AuthorizationService = MacroAuthorizationServiceImpl::new(
         MacroAuthJwtValidator::new(jwt_validation_args.clone()),
@@ -433,12 +432,26 @@ async fn run_server() -> anyhow::Result<()> {
 
     let frecency_storage = FrecencyPgStorage::new(db.clone());
     let frecency_service = FrecencyQueryServiceImpl::new(frecency_storage.clone());
+    let flags = feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+        config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
+        config.posthog_api_key.as_ref().to_owned(),
+        // Availability checks on interactive paths must fail closed promptly.
+        Duration::from_millis(300),
+        config.environment,
+    )
+    .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
     // DSS only reads CRM rows — no-op resolver keeps reqwest/scraper
     // out of this binary.
     let crm_service = crm::domain::service::CrmServiceImpl::new(
         crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db.clone()),
         crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
-    );
+    )
+    .with_thread_exclusion_gate(Arc::new(
+        crm::outbound::thread_exclusions::FlaggedThreadExclusions(flags.clone()),
+    ))
+    .with_selective_email_gate(Arc::new(
+        crm::outbound::email_policy::FlaggedSelectiveEmail(flags.clone()),
+    ));
     let entity_access_service = Arc::new(
         entity_access::domain::service::EntityAccessServiceImpl::new(
             entity_access::outbound::PgAccessRepository::new(db.clone()),
@@ -454,7 +467,9 @@ async fn run_server() -> anyhow::Result<()> {
         macro_service_urls::AuthServiceUrl::new()?.to_string(),
     ));
     let email_service = EmailServiceImpl::new(
-        EmailPgRepo::new(db.clone()),
+        EmailPgRepo::new(db.clone()).with_rule_discovery(Arc::new(
+            crm::outbound::email_rule_discovery::PgEmailRuleDiscovery,
+        )),
         frecency_service.clone(),
         sqs_client.clone(),
         crm_service.clone(),
@@ -477,7 +492,9 @@ async fn run_server() -> anyhow::Result<()> {
     .with_macro_event_broker(macro_event_broker.clone());
     let readonly_email_service = ReadonlyEmailPreviewAdapter(
         EmailServiceImpl::new(
-            EmailPgRepo::new(readonly_db.clone()),
+            EmailPgRepo::new(readonly_db.clone()).with_rule_discovery(Arc::new(
+                crm::outbound::email_rule_discovery::PgEmailRuleDiscovery,
+            )),
             frecency_service.clone(),
             sqs_client.clone(),
             crm_service.clone(),
@@ -510,6 +527,24 @@ async fn run_server() -> anyhow::Result<()> {
                 apns_voip_platform_arn: String::new(),
             },
             realtime: notification::domain::ports::NoopNotificationRealtimePublisher,
+        });
+    // State changes made through GraphQL are published, so every session of
+    // the viewer's hears them.
+    let graphql_notification_writer: Arc<crate::api::context::GraphqlNotificationWriter> =
+        Arc::new(NotificationReaderService {
+            repository: notification::outbound::repository::DbNotificationRepository::new(
+                db.clone(),
+            ),
+            queue: ai_tools::ToolNotificationQueue::Sqs(ingress_queue.clone()),
+            sns_endpoint: ai_tools::NoOpSnsEndpointManager,
+            platform_config: PlatformArnConfig {
+                apns_platform_arn: String::new(),
+                fcm_platform_arn: String::new(),
+                apns_voip_platform_arn: String::new(),
+            },
+            realtime: notification::outbound::kafka_notification_realtime::KafkaNotificationRealtimePublisher::new(
+                macro_event_broker.clone(),
+            ),
         });
     tracing::trace!("initialized notification ingress service");
 
@@ -908,14 +943,7 @@ async fn run_server() -> anyhow::Result<()> {
     let call_service_builder = call_service_builder
         .with_voice_repo(PgVoiceRepo::new(db.clone()))
         .with_event_broker(macro_event_broker.clone());
-    let flags = feature_flags::outbound::posthog::PostHogFeatureFlags::new(
-        config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
-        config.posthog_api_key.as_ref().to_owned(),
-        // Flag evaluation is on the call-start path; fall back promptly.
-        Duration::from_millis(300),
-        config.environment,
-    )
-    .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
+
     let passwords_provider: Arc<dyn passwords::domain::ports::SecretProvider> = match (
         config.openbao_address.value(),
         config.passwords_jwt_issuer.value(),
@@ -934,38 +962,70 @@ async fn run_server() -> anyhow::Result<()> {
             "Passwords requires OPENBAO_ADDRESS, PASSWORDS_JWT_ISSUER and PASSWORDS_JWT_SIGNING_KEY together"
         ),
     };
-    let passwords_availability: Arc<dyn passwords::domain::ports::Availability> = match config
-        .environment
-    {
-        Environment::Local => Arc::new(passwords::outbound::availability::PasswordAvailability {
-            flags: passwords::outbound::availability::LocalPasswordsFlags,
-            provider_configured: config.openbao_address.value().is_some(),
-        }),
-        _ => Arc::new(passwords::outbound::availability::PasswordAvailability {
-            flags: flags.clone(),
-            provider_configured: config.openbao_address.value().is_some(),
-        }),
+    let (passwords_availability, passwords_agent_availability): (
+        Arc<dyn passwords::domain::ports::Availability>,
+        Arc<dyn passwords::domain::agent::ports::AgentAvailability>,
+    ) = match config.environment {
+        Environment::Local => {
+            let availability = Arc::new(passwords::outbound::availability::PasswordAvailability {
+                flags: passwords::outbound::availability::LocalPasswordsFlags,
+                provider_configured: config.openbao_address.value().is_some(),
+            });
+            (availability.clone(), availability)
+        }
+        _ => {
+            let availability = Arc::new(passwords::outbound::availability::PasswordAvailability {
+                flags: flags.clone(),
+                provider_configured: config.openbao_address.value().is_some(),
+            });
+            (availability.clone(), availability)
+        }
     };
+    let passwords_repository = Arc::new(
+        passwords::outbound::postgres::PgRepository::new(db.clone())
+            .map_err(|_| anyhow::anyhow!("invalid Passwords database pool capacity"))?,
+    );
     let passwords_state = passwords::inbound::router::PasswordRouterState {
         service: Arc::new(passwords::domain::service::PasswordService {
-            repository: Arc::new(
-                passwords::outbound::postgres::PgRepository::new(db.clone())
-                    .map_err(|_| anyhow::anyhow!("invalid Passwords database pool capacity"))?,
-            ),
+            repository: passwords_repository.clone(),
             provider: passwords_provider,
             availability: passwords_availability,
         }),
         authorization: authorization_state.clone(),
     };
+    // The agent platform supplies the authoritative directory adapter; until it
+    // is composed, every agent call is `invalid_agent` with the flags on.
+    let passwords_agent_state = passwords::inbound::agent_router::AgentRouterState {
+        service: Arc::new(passwords::domain::agent::service::AgentVaultService {
+            vault: passwords_state.service.clone(),
+            agents: passwords_repository,
+            directory: Arc::new(passwords::outbound::agent_directory::NoAgents),
+            availability: passwords_agent_availability,
+            events: Arc::new(crate::outbound::passwords_access::PasswordAccessDelivery {
+                ingress: notification_ingress_service.clone(),
+                broker: macro_event_broker.clone(),
+            }),
+            clock: Arc::new(chrono::Utc::now),
+        }),
+        authorization: authorization_state.clone(),
+    };
     consumer_tracker.spawn(crate::passwords_cleanup::run(
         passwords_state.service.clone(),
+        passwords_agent_state.service.clone(),
+        consumer_cancellation_token.clone(),
+    ));
+    consumer_tracker.spawn(crate::released_attachments::run(
+        documents_hex::domain::released_attachments::ReleasedAttachmentService::new(
+            documents_hex::outbound::pg_released_attachments::PgReleasedAttachmentRepo::new(
+                db.clone(),
+            ),
+            macro_event_broker.clone(),
+        ),
+        db.clone(),
         consumer_cancellation_token.clone(),
     ));
     let call_service_builder = call_service_builder.with_channel_threads(Arc::new(
-        call::outbound::channel_threads::FlaggedChannelThreads::new(
-            flags.clone(),
-            call_root_poster.clone(),
-        ),
+        call::outbound::channel_threads::MessageChannelThreads::new(call_root_poster.clone()),
     ));
     let search_term_matching: Arc<dyn search_service::TermMatchingRollout> =
         match config.environment {
@@ -973,7 +1033,7 @@ async fn run_server() -> anyhow::Result<()> {
             _ => Arc::new(search_service::FlaggedTermMatching::new(flags.clone())),
         };
     let call_service_builder = call_service_builder.with_programmatic_call_gate(
-        call::outbound::programmatic_calls::FlaggedProgrammaticCalls(flags),
+        call::outbound::programmatic_calls::FlaggedProgrammaticCalls(flags.clone()),
     );
     let call_public_rate_limiter = RateLimitServiceImpl {
         repo: RedisRateLimitAdapter {
@@ -1033,15 +1093,30 @@ async fn run_server() -> anyhow::Result<()> {
         authorization_state.clone(),
     );
 
-    let (webhook_stream_sender, _) =
-        tokio::sync::broadcast::channel(webhook::domain::stream::WEBHOOK_STREAM_CHANNEL_CAPACITY);
+    let contacts_service = Arc::new(contacts::domain::service::ContactsDomainService {
+        repository: contacts::outbound::repository::DbContactsRepository::new(db.clone()),
+        notifier: None::<contacts::outbound::gateway::ConnectionGatewayNotifier>,
+    });
+    let contact_lists = Arc::new(contacts::outbound::repository::DbContactsRepository::new(
+        db.clone(),
+    ));
+    // Each viewer's `people` rows, GraphQL directory and SSE contact audience
+    // come from the legacy graph or the list-aware tables, by the per-viewer
+    // `contacts-list-reads` flag; a failed flag read means the legacy graph.
+    let contact_reads = Arc::new(contacts::domain::list_reads::FlaggedContactReads::new(
+        contacts_service,
+        contact_lists.clone(),
+        contacts::domain::list_reads::ContactListReads::new(flags.clone()),
+    ));
+    let webhook_stream_feed = webhook::domain::stream::StreamFeed::new(
+        webhook::domain::stream::WEBHOOK_STREAM_CHANNEL_CAPACITY,
+        webhook::domain::stream::WEBHOOK_STREAM_REPLAY_CAPACITY,
+    );
     let sse_stream_service = webhook::domain::stream::WebhookEventStreamServiceImpl::new(
-        webhook_stream_sender.clone(),
+        webhook_stream_feed.clone(),
         entity_access_service.clone(),
         webhook_repository.clone(),
-        crate::outbound::stream_contacts::ContactsStreamChecker::new(Arc::new(
-            contacts::outbound::repository::DbContactsRepository::new(db.clone()),
-        )),
+        crate::outbound::stream_contacts::ContactsStreamChecker::new(contact_reads.clone()),
     );
     let sse_stream_state = webhook::inbound::stream_router::WebhookStreamRouterState::new(
         sse_stream_service,
@@ -1049,7 +1124,7 @@ async fn run_server() -> anyhow::Result<()> {
     );
     consumer_tracker.spawn({
         let brokers = config.kafka_brokers.as_ref().to_string();
-        let sender = webhook_stream_sender;
+        let feed = webhook_stream_feed;
         let workspace_resolver = webhook_repository.clone();
         let cancellation_token = consumer_cancellation_token.clone();
         async move {
@@ -1059,7 +1134,7 @@ async fn run_server() -> anyhow::Result<()> {
                     _ = cancellation_token.cancelled() => break,
                     result = webhook::inbound::kafka_stream_consumer::run_webhook_stream_consumer(
                         &brokers,
-                        &sender,
+                        &feed,
                         &workspace_resolver,
                     ) => result,
                 };
@@ -1287,6 +1362,50 @@ async fn run_server() -> anyhow::Result<()> {
     let sqs_client = Arc::new(sqs_client);
     let conn_gateway_client = Arc::new(conn_gateway_client);
 
+    // Pushes each created, renamed, re-pictured or deleted bot to the people
+    // who see it, so open views show its current name and picture.
+    let bot_profile_brokers = config.kafka_brokers.as_ref().to_string();
+    consumer_tracker.spawn({
+        let cancellation_token = consumer_cancellation_token.clone();
+        let consumer = bots::inbound::profile_consumer::BotProfileConsumer::new(
+            bots::domain::profile_fanout::BotProfileFanout::new(
+                PgBotsRepo::new(db.clone()),
+                bots::outbound::connection_gateway_profiles::ConnectionGatewayBotProfilePublisher::new(
+                    conn_gateway_client.clone(),
+                ),
+            ),
+        );
+        async move {
+            loop {
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                tracing::info!("starting bot profile push consumer");
+                let result = consumer
+                    .run(&bot_profile_brokers, cancellation_token.cancelled())
+                    .await;
+
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                match result {
+                    Ok(()) => tracing::error!("bot profile push consumer exited unexpectedly"),
+                    Err(error) => {
+                        tracing::error!(error = ?error, "bot profile push consumer exited unexpectedly");
+                    }
+                }
+
+                tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    _ = tokio::time::sleep(Duration::from_secs(5)) => {}
+                }
+            }
+        }
+    });
+
     // MacroConfig reads the shared OPENAI_API_KEY from Doppler's APP_SECRETS_JSON
     // or the local environment. Validate once before constructing consumers.
     let openai_api_key = config.openai_api_key.as_ref().to_owned();
@@ -1339,7 +1458,15 @@ async fn run_server() -> anyhow::Result<()> {
                 Arc::new(notification::outbound::withdrawal::PgNotificationWithdrawal(db.clone())),
             ),
         ),
-        ContactsChannelDispatcher::new(contacts_ingress.clone()),
+        ContactsChannelDispatcher::new(Arc::new(contacts::domain::list_writes::ListWritesGate {
+            inner: contacts::domain::service::SqsContactsIngress {
+                queue: contacts_ingress.queue.clone(),
+            },
+            writes: contacts::domain::list_writes::ContactListWrites::new(
+                config.environment,
+                Some(flags.clone()),
+            ),
+        })),
     )
     .with_macro_event_broker(macro_event_broker.clone());
 
@@ -1629,9 +1756,6 @@ async fn run_server() -> anyhow::Result<()> {
         worker: editing_worker.clone(),
         admission: admission.clone(),
         recorder: document_ai_usage.clone(),
-        // Off when PostHog isn't configured, as for the agents' Canvas tools.
-        artifacts: ai_tools::canvas_artifacts_rollout_from_env(config.environment)?
-            .unwrap_or_else(|| Arc::new(|_| Box::pin(async { false }))),
         images: Arc::new(crate::outbound::canvas_images::StaticFileCanvasImages(
             static_file_service_client::StaticFileServiceClient::new(
                 config.internal_api_key.to_string(),
@@ -1873,7 +1997,8 @@ async fn run_server() -> anyhow::Result<()> {
     // mutation metadata include viewer history.
     let primary_entity_soup = Arc::new(
         SoupImpl::new(
-            PgSoupRepo::new(readonly_pool::ReadOnlyPool(db.clone())),
+            PgSoupRepo::new(readonly_pool::ReadOnlyPool(db.clone()))
+                .with_source_items_enabled(config.soup_source_items_enabled),
             frecency_service.clone(),
             service::email_previews::ConsistentEmailPreviewReader::new(
                 ReadonlyEmailPreviewAdapter(email_service.clone()),
@@ -1897,24 +2022,23 @@ async fn run_server() -> anyhow::Result<()> {
         )),
     );
 
-    let contacts_service = Arc::new(contacts::domain::service::ContactsDomainService {
-        repository: contacts::outbound::repository::DbContactsRepository::new(db.clone()),
-        notifier: None::<contacts::outbound::gateway::ConnectionGatewayNotifier>,
-    });
     // SQL predicates and follow-up reads use the primary, matching the catalog
     // versions and writes; replica lag must not select stale rows for an edit.
     let sql_service = databases_sql::DatabasesSql::new(
         databases_service.clone(),
         entity_access_service.clone(),
         primary_entity_soup.clone(),
-        contacts_service.clone(),
+        contact_reads.clone(),
     );
 
     // Directory refreshes follow contacts_invalidation immediately after writes.
-    // Keep membership and names on the primary, matching the legacy contacts read.
+    // Keep membership, lists and names on the primary, matching the legacy
+    // contacts read. Lists come from the list-aware tables whichever store
+    // chose the contacts.
     let graphql_contacts_context = graphql_contacts::ContactsGraphqlContext::new(Arc::new(
         contacts::domain::service::directory::ContactsDirectoryService::new(
-            contacts_service,
+            contact_reads,
+            contact_lists,
             contacts::outbound::names::DbContactNames::new(db.clone()),
         ),
     ));
@@ -1926,7 +2050,8 @@ async fn run_server() -> anyhow::Result<()> {
     // leg reads the primary. Ordinary inbox lists keep using the replica.
     let soup_service = Arc::new(
         SoupImpl::new(
-            PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
+            PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone()))
+                .with_source_items_enabled(config.soup_source_items_enabled),
             frecency_service,
             service::email_previews::ConsistentEmailPreviewReader::new(
                 ReadonlyEmailPreviewAdapter(email_service.clone()),
@@ -2248,11 +2373,12 @@ async fn run_server() -> anyhow::Result<()> {
                     calendar_events::outbound::notification_notifier::NotificationCalendarJoinRequestNotifier::new(
                         (*notification_ingress_service).clone(),
                     ),
-                    crate::outbound::calendar_refresh::ConnectionGatewayCalendarRefresh::new(
+                    calendar_events::outbound::gateway_refresh::GatewayCalendarRefresh::new(
                         (*conn_gateway_client).clone(),
                         db.clone(),
                         event_broker_tracker.clone(),
-                    ),
+                    )
+                    .with_sends(cfg!(feature = "connection_gateway")),
                 ),
             ),
             authorization_state.clone(),
@@ -2341,6 +2467,12 @@ async fn run_server() -> anyhow::Result<()> {
         }
     });
 
+    let api_key_search_buckets: Arc<dyn search_service::SearchTokenBuckets> =
+        Arc::new(RedisRateLimitAdapter {
+            redis: redis_client
+                .get_connection_manager_lazy(redis::aio::ConnectionManagerConfig::new())
+                .context("failed to configure the search allowance's redis connection")?,
+        });
     let redis_sha_client = Arc::new(Redis::new(redis_client));
 
     let document_purger = Arc::new(documents_hex::domain::purge::DocumentPurger::new(
@@ -2489,6 +2621,10 @@ async fn run_server() -> anyhow::Result<()> {
     ));
     let api_context = ApiContext {
         search_term_matching,
+        search_lanes: Arc::new(search_service::SearchLanes::new(
+            search_service::LanePolicy::DEFAULT,
+        )),
+        api_key_search_buckets,
         saved_views,
         sync_sessions,
         dictation_state,
@@ -2659,6 +2795,16 @@ async fn run_server() -> anyhow::Result<()> {
             db.clone(),
         ),
         graphql_notification_reader,
+        graphql_notification_writer,
+        graphql_active_notification_ids_context:
+            complete_graph::ActiveNotificationIdsGraphqlContext::new(
+                notification::domain::active_notification_ids::ActiveNotificationIdService::new(
+                    notification::outbound::active_notification_ids::PgActiveNotificationIdRepository(
+                        readonly_db.clone(),
+                    ),
+                    model_notifications::NotifEvent::EVENT_TYPES,
+                ),
+            ),
         // GraphQL reads the activity log through the readonly pool; the
         // Kafka consumer's writer-pool repo above is separate on purpose.
         activity_reader: complete_graph::ActivityPortReader::new(Arc::new(
@@ -2691,6 +2837,7 @@ async fn run_server() -> anyhow::Result<()> {
         properties_service: properties_service.clone(),
         opensearch_client: Arc::new(opensearch_client),
         passwords_state,
+        passwords_agent_state,
         authorization_state: authorization_state.clone(),
         jwt_validation_args,
         dss_auth_key,

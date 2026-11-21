@@ -14,7 +14,6 @@ import { TasksCreateMenu } from './components/TasksCreateMenu';
 /** Task and project composers plus the shared tag editor, owned by this view. */
 export function TasksCreateAction(props: {
   presentation: 'sidebar' | 'toolbar';
-  projectsEnabled: boolean;
 }) {
   const layout = useSplitLayout();
   const team = useCurrentTeamQuery();
@@ -87,14 +86,8 @@ export function TasksCreateAction(props: {
         onCreateTask={() =>
           layout.popoverSplit({ type: 'component', id: 'task-compose' })
         }
-        onCreateProject={
-          props.projectsEnabled
-            ? () =>
-                layout.popoverSplit({
-                  type: 'component',
-                  id: 'project-compose',
-                })
-            : undefined
+        onCreateProject={() =>
+          layout.popoverSplit({ type: 'component', id: 'project-compose' })
         }
         onCreateSubtask={() => setParentPickerOpen(true)}
         onCreateTag={() => setCreatingTag(true)}

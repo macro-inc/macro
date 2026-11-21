@@ -15,7 +15,6 @@ export {
   refetchSoupEntity,
   removeSearchEntities,
   removeSoupEntities,
-  removeSoupEntitiesFromDoneFilteredQueries,
   removeSoupEntitiesFromQueriesReferencing,
   restoreSoupEntityToDoneFilteredQueries,
 } from './operations';

@@ -18,6 +18,7 @@ import type { FetchError } from '@core/service';
 import { cache } from '@core/util/cache';
 import {
   type FetchWithTokenErrorCode,
+  type FetchWithTokenInit,
   fetchWithToken,
 } from '@core/util/fetchWithToken';
 import { registerClient } from '@core/util/mockClient';
@@ -30,13 +31,13 @@ import type { SerializedEditorState } from 'lexical';
 import { err, ok, type Result } from 'neverthrow';
 import { createChannelLabelsClient } from './channel-labels';
 import type { ApiChannelListPage } from './channel-list-types';
+import { crmValidationError } from './crm-errors';
 import { fetchDatabaseOps } from './databases';
 import type { AccessiblePipeline as PipelineResponse } from './generated/schemas/accessiblePipeline';
 import type { AccessLevel } from './generated/schemas/accessLevel';
 import type { AccountManagerDecision } from './generated/schemas/accountManagerDecision';
 import type { AccountManagerGrant } from './generated/schemas/accountManagerGrant';
 import type { AccountManagersList } from './generated/schemas/accountManagersList';
-import type { AddFavoriteRequest } from './generated/schemas/addFavoriteRequest';
 import type { AddParticipantsRequest } from './generated/schemas/addParticipantsRequest';
 import type { AddPinRequest } from './generated/schemas/addPinRequest';
 import type { Agent } from './generated/schemas/agent';
@@ -113,8 +114,6 @@ import type { EmailFollowup } from './generated/schemas/emailFollowup';
 import type { EmailFollowupCommand } from './generated/schemas/emailFollowupCommand';
 import type { EmailReminderPage } from './generated/schemas/emailReminderPage';
 import type { ExportDocumentResponse } from './generated/schemas/exportDocumentResponse';
-import type { Favorite } from './generated/schemas/favorite';
-import type { FavoritesList } from './generated/schemas/favoritesList';
 import type { ForeignEntity } from './generated/schemas/foreignEntity';
 import type { GetAttachmentReferencesResponse } from './generated/schemas/getAttachmentReferencesResponse';
 import type { GetBatchChannelPreviewRequest } from './generated/schemas/getBatchChannelPreviewRequest';
@@ -129,7 +128,6 @@ import type { GetDocumentSearchResponse } from './generated/schemas/getDocumentS
 import type { GetOrCreateChannelResponse } from './generated/schemas/getOrCreateChannelResponse';
 import type { GetOrCreateDmRequest } from './generated/schemas/getOrCreateDmRequest';
 import type { GetOrCreatePrivateRequest } from './generated/schemas/getOrCreatePrivateRequest';
-import type { GetPendingProjectsHandler200 } from './generated/schemas/getPendingProjectsHandler200';
 import type { GetProjectContentResponse } from './generated/schemas/getProjectContentResponse';
 import type { GetProjectResponse } from './generated/schemas/getProjectResponse';
 import type { GetSystemSkillsHandler200 } from './generated/schemas/getSystemSkillsHandler200';
@@ -150,7 +148,6 @@ import type { Item } from './generated/schemas/item';
 import type { JobId } from './generated/schemas/jobId';
 import type { ListCompanyContactsPageParams } from './generated/schemas/listCompanyContactsPageParams';
 import type { ListEmailRemindersParams } from './generated/schemas/listEmailRemindersParams';
-import type { ListFavoritesParams } from './generated/schemas/listFavoritesParams';
 import type { ListOccurrencesParams } from './generated/schemas/listOccurrencesParams';
 import type { ListSlackImportsParams } from './generated/schemas/listSlackImportsParams';
 import type { ListTeamOutOfOfficeParams } from './generated/schemas/listTeamOutOfOfficeParams';
@@ -159,15 +156,12 @@ import type { PairingDetails } from './generated/schemas/pairingDetails';
 import type { PatchChannelRequest } from './generated/schemas/patchChannelRequest';
 import type { PatchHarnessRequest } from './generated/schemas/patchHarnessRequest';
 import type { PinRequest } from './generated/schemas/pinRequest';
-import type { PostActivityRequest } from './generated/schemas/postActivityRequest';
 import type { PostGroupedSoupAstGroupPageRequest } from './generated/schemas/postGroupedSoupAstGroupPageRequest';
 import type { PostGroupedSoupAstInitialRequest } from './generated/schemas/postGroupedSoupAstInitialRequest';
 import type { PostGroupedSoupAstRequest } from './generated/schemas/postGroupedSoupAstRequest';
 import type { PostSoupAstRequest } from './generated/schemas/postSoupAstRequest';
 import type { PostSoupRequest } from './generated/schemas/postSoupRequest';
-import type { Project } from './generated/schemas/project';
 import type { RemoveParticipantsRequest } from './generated/schemas/removeParticipantsRequest';
-import type { ReorderFavoritesRequest } from './generated/schemas/reorderFavoritesRequest';
 import type { ReorderPinRequest } from './generated/schemas/reorderPinRequest';
 import type { ReplaceCrmStagesRequest } from './generated/schemas/replaceCrmStagesRequest';
 import type { RequestAccountManagerBody } from './generated/schemas/requestAccountManagerBody';
@@ -246,15 +240,15 @@ const syncOrigin =
 
 export function dssFetch(
   url: string,
-  init?: SafeFetchInit
+  init?: FetchWithTokenInit
 ): Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>>;
-export function dssFetch<T extends Record<string, any>>(
+export function dssFetch<T extends Record<string, any> | null>(
   url: string,
-  init?: SafeFetchInit
+  init?: FetchWithTokenInit
 ): Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>;
-export function dssFetch<T extends Record<string, any> = never>(
+export function dssFetch<T extends Record<string, any> | null = never>(
   url: string,
-  init?: SafeFetchInit
+  init?: FetchWithTokenInit
 ):
   | Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>
   | Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>> {
@@ -738,11 +732,13 @@ export const storageServiceClient = {
       ? `?cursor=${args.params.cursor}`
       : '';
 
-    return await dssFetch<SoupPage>(`/items/soup/ast${searchParams}`, {
+    const body = JSON.stringify(args.body);
+    const result = await dssFetch<SoupPage>(`/items/soup/ast${searchParams}`, {
       method: 'POST',
-      body: JSON.stringify(args.body),
+      body,
       signal: args.signal,
     });
+    return result;
   },
 
   async getGroupedSoupAstItems(args: {
@@ -1188,15 +1184,6 @@ export const storageServiceClient = {
     ).map((result) => result);
   },
 
-  async deleteChannel(args: WithChannelId) {
-    const { channel_id } = args;
-    return (
-      await dssFetch<MessageResponse>(`/channels/${channel_id}`, {
-        method: 'DELETE',
-      })
-    ).map((result) => result);
-  },
-
   async addParticipantsToChanenl(args: AddParticipantsRequest & WithChannelId) {
     const { channel_id, participants } = args;
     return (
@@ -1377,16 +1364,6 @@ export const storageServiceClient = {
     return (
       await dssFetch<Array<ApiActivity>>(`/channels/activity`, {
         method: 'GET',
-      })
-    ).map((result) => result);
-  },
-
-  async postActivity(args: PostActivityRequest) {
-    const { activity_type, channel_id } = args;
-    return (
-      await dssFetch<ApiActivity>(`/channels/activity`, {
-        method: 'POST',
-        body: JSON.stringify({ activity_type, channel_id }),
       })
     ).map((result) => result);
   },
@@ -1960,25 +1937,6 @@ export const storageServiceClient = {
       return err(result.error);
     }
     return result;
-  },
-
-  async permanentlyDeleteDocument({ documentId }) {
-    return (
-      await dssFetch<SuccessResponse>(`/documents/${documentId}/permanent`, {
-        method: 'DELETE',
-      })
-    ).map((result) => result.data);
-  },
-
-  async revertDocumentDelete({ documentId }) {
-    return (
-      await dssFetch<SuccessResponse>(
-        `/documents/${documentId}/revert_delete`,
-        {
-          method: 'PUT',
-        }
-      )
-    ).map((result) => result.data);
   },
 
   async fetchCachedSnapshot(
@@ -2678,22 +2636,10 @@ export const storageServiceClient = {
   },
 
   projects: {
-    async getAll() {
-      return (await dssFetch<{ data: Project[] }>('/projects')).map(
-        (result) => ({ data: result.data })
-      );
-    },
-
     async getProject({ id }) {
       return (await dssFetch<GetProjectResponse>(`/projects/${id}`)).map(
         (result) => result.data
       );
-    },
-
-    async getPending() {
-      return (
-        await dssFetch<GetPendingProjectsHandler200>('/projects/pending')
-      ).map((result) => ({ data: result.data }));
     },
 
     async create(params: {
@@ -2705,24 +2651,6 @@ export const storageServiceClient = {
         await dssFetch<CreateProjectResponse>('/projects', {
           method: 'POST',
           body: JSON.stringify(params),
-        })
-      ).map((result) => result.data);
-    },
-
-    async delete({ id }: { id: string }) {
-      return (
-        await dssFetch<SuccessResponse>(`/projects/${id}`, {
-          method: 'DELETE',
-        })
-      ).map((result) => result.data);
-    },
-
-    async edit(args) {
-      const { id, ...body } = args;
-      return (
-        await dssFetch<SuccessResponse>(`/projects/${id}`, {
-          method: 'PATCH',
-          body: JSON.stringify(body),
         })
       ).map((result) => result.data);
     },
@@ -2772,21 +2700,6 @@ export const storageServiceClient = {
         )
       ).map((result) => result.data);
     },
-    async permanentlyDelete({ id }) {
-      return (
-        await dssFetch<SuccessResponse>(`/projects/${id}/permanent`, {
-          method: 'DELETE',
-        })
-      ).map((result) => result.data);
-    },
-
-    async revertDelete({ id }) {
-      return (
-        await dssFetch<SuccessResponse>(`/projects/${id}/revert_delete`, {
-          method: 'PUT',
-        })
-      ).map((result) => result.data);
-    },
   },
   async getDeletedItems() {
     return (
@@ -2832,41 +2745,6 @@ export const storageServiceClient = {
 
   channelLabels: createChannelLabelsClient(dssFetch, '/channel-labels'),
   channelSections: createChannelLabelsClient(dssFetch, '/channel-sections'),
-  favorites: {
-    async getFavorites(params?: ListFavoritesParams) {
-      const query = new URLSearchParams();
-      // Each dimension repeats its key once per value; the two combine with AND.
-      params?.entityType?.forEach((entityType) =>
-        query.append('entityType', entityType)
-      );
-      params?.entityId?.forEach((entityId) =>
-        query.append('entityId', entityId)
-      );
-      const qs = query.toString();
-      return await dssFetch<FavoritesList>(`/favorites${qs ? `?${qs}` : ''}`);
-    },
-    async addFavorite(params: AddFavoriteRequest) {
-      return await dssFetch<Favorite>('/favorites', {
-        method: 'POST',
-        body: JSON.stringify(params),
-      });
-    },
-    async removeFavoriteByEntity(params: {
-      entityType: AddFavoriteRequest['entityType'];
-      entityId: string;
-    }) {
-      return await dssFetch(
-        `/favorites/${params.entityType}/${encodeURIComponent(params.entityId)}`,
-        { method: 'DELETE' }
-      );
-    },
-    async reorderFavorites(params: ReorderFavoritesRequest) {
-      return await dssFetch('/favorites/reorder', {
-        method: 'PATCH',
-        body: JSON.stringify(params),
-      });
-    },
-  },
   reminders: {
     async listEmailReminders(params: ListEmailRemindersParams) {
       const query = new URLSearchParams();
@@ -2896,16 +2774,6 @@ export const storageServiceClient = {
         body: JSON.stringify(command),
       });
     },
-  },
-  async editThread(params) {
-    const { threadId, ...body } = params;
-
-    return (
-      await dssFetch<SuccessResponse>(`/threads/${threadId}`, {
-        method: 'PATCH',
-        body: JSON.stringify(body),
-      })
-    ).map((result) => result.data);
   },
   async createCompany(body: CreateCrmCompanyRequest) {
     return await dssFetch<CrmCompanyResponse>('/crm/companies', {
@@ -2980,7 +2848,7 @@ export const storageServiceClient = {
   async blockCrmDomain({ domain }: { domain: string }) {
     return await dssFetch(
       `/crm/blocked-domains/${encodeURIComponent(domain)}`,
-      { method: 'PUT' }
+      { method: 'PUT', errorResponseHandler: crmValidationError }
     );
   },
   async unblockCrmDomain({ domain }: { domain: string }) {
@@ -3121,6 +2989,7 @@ export const storageServiceClient = {
     return await dssFetch(`/crm/companies/${companyId}/hidden`, {
       method: 'PUT',
       body: JSON.stringify({ hidden }),
+      errorResponseHandler: crmValidationError,
     });
   },
   async setEmailSync({
@@ -3133,11 +3002,13 @@ export const storageServiceClient = {
     return await dssFetch(`/crm/companies/${companyId}/email-sync`, {
       method: 'PUT',
       body: JSON.stringify({ email_sync: emailSync }),
+      errorResponseHandler: crmValidationError,
     });
   },
   async getCrmTeamSettings() {
     return await dssFetch<CrmTeamSettingsResponse>('/crm/settings', {
       method: 'GET',
+      cache: 'no-store',
     });
   },
   async updateCrmTeamSettings(body: UpdateCrmTeamSettingsRequest) {

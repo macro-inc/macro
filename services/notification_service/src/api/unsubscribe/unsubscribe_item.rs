@@ -35,9 +35,14 @@ pub(super) fn deserialize_item_type<'de, D: serde::Deserializer<'de>>(
 pub struct SnoozeParams {
     /// A future resume time. Omit to mute indefinitely.
     pub snoozed_until: Option<chrono::DateTime<chrono::Utc>>,
+    /// Keep notifying for messages that @mention the user directly and silence
+    /// the rest. Channels only; cannot be combined with `snoozed_until`.
+    #[serde(default)]
+    pub mentions_only: bool,
 }
 
-/// Unsubscribes a user from a given item for notifications.
+/// Unsubscribes a user from a given item for notifications, or, with
+/// `mentions_only`, from everything on a channel but their direct mentions.
 #[utoipa::path(
         post,
         operation_id = "unsubscribe_item",
@@ -57,33 +62,54 @@ pub async fn handler(
     Path(UnsubscribeItemPathParams { item_type, item_id }): Path<UnsubscribeItemPathParams>,
     Query(params): Query<SnoozeParams>,
 ) -> Result<Response, Response> {
-    ctx.item_preferences
-        .set(
-            user.authorization.user.macro_user_id,
-            item_type.with_entity_string(item_id),
-            params.snoozed_until,
-            chrono::Utc::now(),
-        )
-        .await
-        .map_err(|e| {
-            if matches!(e, ItemNotificationPreferenceError::InvalidDeadline) {
-                return (
-                    StatusCode::BAD_REQUEST,
-                    Json(ErrorResponse {
-                        message: e.to_string().into(),
-                    }),
-                )
-                    .into_response();
-            }
-            tracing::error!(error=?e, "unable to unsubscribe item");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
+    let user_id = user.authorization.user.macro_user_id;
+    let entity = item_type.with_entity_string(item_id);
+
+    let saved = match (params.mentions_only, params.snoozed_until) {
+        (true, Some(_)) => {
+            return Err((
+                StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
-                    message: "unable to unsubscribe item".into(),
+                    message: "mentions_only cannot be combined with snoozed_until".into(),
                 }),
             )
-                .into_response()
-        })?;
+                .into_response());
+        }
+        (true, None) => {
+            ctx.item_preferences
+                .set_mentions_only(user_id, entity)
+                .await
+        }
+        (false, snoozed_until) => {
+            ctx.item_preferences
+                .set(user_id, entity, snoozed_until, chrono::Utc::now())
+                .await
+        }
+    };
+
+    saved.map_err(|e| {
+        if matches!(
+            e,
+            ItemNotificationPreferenceError::InvalidDeadline
+                | ItemNotificationPreferenceError::MentionsOnlyUnsupported
+        ) {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    message: e.to_string().into(),
+                }),
+            )
+                .into_response();
+        }
+        tracing::error!(error=?e, "unable to unsubscribe item");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                message: "unable to unsubscribe item".into(),
+            }),
+        )
+            .into_response()
+    })?;
 
     Ok((StatusCode::OK, Json(EmptyResponse {})).into_response())
 }

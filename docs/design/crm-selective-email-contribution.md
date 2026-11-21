@@ -1,67 +1,70 @@
 # Selective CRM email contribution
 
-Status: proposed; design only. Implementation requires approval and the separate
-thread-exclusion delivery. Source observations are from `87eb481d5d`.
+Status: implementation in phases. The product direction is direct agent
+activation, whole-thread matching, live contact/company selectors and retained
+CRM records after narrowing. Source observations are from `e417be81d6`.
+The first phase supplies dormant storage and compatibility guards; selected
+contribution must remain unavailable until every eligibility path is upgraded.
 
 ## Problem and scope
 
 A member can currently contribute all eligible mail or none. Domain exclusions
 cannot express “only these conversations, people, or companies.” Add a selected
-consent mode whose inclusion rules a member's agent can prepare through the SDK.
-Keep existing all-mail consents unchanged and provide no visual rule builder in
-v1. A small review and confirmation surface is required even without a builder.
+consent mode whose inclusion rules the member or an agent acting as that member
+can manage through the SDK. Existing all-mail consents remain unchanged. There
+is no visual rule builder in v1 and no required member confirmation for each
+agent activation. The member can inspect, edit or withdraw their rules anytime.
 
-Contribution controls what a mailbox shares, not who can use CRM. Restricting
-some team members from CRM or databases is a separate authorization project.
-Members with CRM access can use records without contributing mail. Admins and
-owners can manage that access through the member-access API; client controls
-follow separately. This proposal must not imply that selected consent provides
-a restricted member role.
+Contribution controls what a mailbox shares. CRM viewing is a separate
+permission managed through the member-access API; client controls follow
+separately. A member whose CRM viewing is off can still manage their consent
+and private rules. Selected consent does not grant CRM or database viewing.
 
 ## Current behavior and constraints
 
 - `crm_email_consent` is keyed by team/member and binds consent to the exact
   primary `email_links.id`. Mailbox lifecycle changes revoke it, including changes
-  that retain the link ID. Leaving a team deletes the consent. Opt-in covers past
+  that retain the link ID. Leaving a team deletes consent. Opt-in covers past
   and future eligible mail and atomically enqueues `crm_email_backfill_outbox`.
-- Team and personal domain blocks include subdomains with a dot boundary. Any
-  blocked sender or recipient, including CC/BCC, in any non-draft message denies
-  the entire contributed thread. Legacy company `email_sync = false` also denies.
+- Team and personal domain blocks include dot-boundary subdomains. A blocked
+  sender or recipient, including CC/BCC, in any non-draft message denies the
+  whole contributed thread. Legacy company `email_sync = false` also denies.
+- Owner-managed thread exceptions veto the contributor's exact mailbox copy.
+  Their controls and API writes remain rollout-gated; stored exclusions are
+  enforced independently of that flag.
 - [The privacy contract](../CRM_EMAIL_PRIVACY.md) retains companies, contacts and
-  past interaction metadata after withdrawal. CRM lists and direct CRM grants
-  enforce current exclusions on primary-database reads. Inbox ownership, explicit
-  sharing and project grants remain separate access paths.
-- `crm_email_thread_allowed(team, thread)` is the read-side eligibility authority.
-  Ingestion deliberately uses the set-based equivalent in
-  `crates/crm/src/outbound/companies_repo/email_privacy/interactions.sql`, with
-  parity tests. It does **not** call the function for each historical thread.
-- CRM listing in `crates/email/src/outbound/email_pg_repo/dynamic/query.rs` fences
-  cheaply filtered candidates with `OFFSET 0` before the function call, then
-  deduplicates teammate copies and applies the cursor/limit. Removing that fence
-  can charge a participant privacy scan for every thread in each team mailbox.
-- “Keep personal emails out” (`exclude_personal_emails`) currently gates
-  personal-provider contact population in `companies_repo.rs`. It is not a
-  whole-thread deny predicate in `crm_email_thread_allowed`. Direct grants also
-  have external-participant and contact/parent visibility checks. Preserve these
-  distinctions; inclusion never overrides them.
-- Contacts have several addresses in `crm_contact_emails`; `crm_contacts.email`
-  is only the primary. Companies have domains in `crm_domains`.
+  prior interaction metadata after withdrawal. CRM reads use current privacy
+  settings on the primary. Inbox ownership, explicit sharing and project grants
+  remain separate access paths.
+- There are **three implementations of eligibility** to keep equivalent:
+  `crm_email_thread_allowed(team, thread)` for direct grants and scoped reads;
+  `crates/crm/src/outbound/companies_repo/email_privacy/interactions.sql` for
+  set-based ingestion; and the inlined Team reader in
+  `crates/email/src/outbound/email_pg_repo/dynamic/query/team_scope.rs`.
+  The Team reader deliberately avoids a scalar function call per mailbox thread.
+- Scoped lists also depend on cheap candidate filters and planner fences before
+  expensive privacy work. Preserve those boundaries: a previous per-thread
+  privacy check made work grow with unrelated mailbox history.
+- “Keep personal emails out” (`exclude_personal_emails`) gates personal-provider
+  contact population. It is not a whole-thread deny predicate. Direct grants
+  have additional external-participant and contact/parent visibility checks.
+- Contacts hold every known address in `crm_contact_emails`; `crm_contacts.email`
+  is the primary display address. Companies hold domains in `crm_domains`.
 
 ## Proposal
 
 ### 1. Format, matching and storage
 
-Use a versioned, declarative OR-list of positive selectors. No scripts, regular
-expressions, arbitrary predicates, priorities or negation. A rule selects a whole
-mailbox-local thread when its ID matches or any sender/To/CC/BCC address in any
-non-draft message matches. The selection includes that thread's eligible past
-and future messages, including messages with additional participants. Draft-only
-threads do not qualify. Review copy must explain this whole-thread effect.
+Use a versioned OR-list of positive selectors, with no scripts, regular
+expressions, arbitrary predicates, priorities or negation. A matching thread ID
+or any sender/To/CC/BCC address in any non-draft message selects the **whole
+mailbox-local thread**, including its eligible past and future messages and other
+participants. Draft-only threads do not qualify. Explain this effect in settings,
+SDK guidance and every mutation result.
 
 ```json
 {
   "schema_version": 1,
-  "mode": "selected",
   "include": [
     { "kind": "thread", "thread_id": "00000000-0000-4000-8000-000000000001" },
     { "kind": "address", "address": "person@example.com" },
@@ -72,421 +75,678 @@ threads do not qualify. Review copy must explain this whole-thread effect.
 }
 ```
 
-This is authoring input. Validation returns a canonical, immutable draft with
-resolved targets, its hash, base revision and mailbox link ID. Confirmation
-activates exactly that draft, never re-resolves it silently.
+The rule definition is separate from the consent mode and grant. Parsing or
+validating JSON grants nothing; the authenticated activation transaction changes
+consent and its active revision.
 
-| Selector | Recommended v1 meaning |
+| Selector | Meaning |
 | --- | --- |
-| Thread | Exact internal thread UUID owned by the member's consented primary mailbox. A provider thread ID or another member's copy is invalid. |
-| Address | Trim and lowercase a valid mailbox address. Do not strip plus tags/dots or infer aliases. Match exactly. |
-| Contact | Resolve every current `crm_contact_emails.email` for an authorized contact in this team into an address snapshot. Show all addresses before confirmation. Reject an empty expansion. |
-| Domain | Reuse domain normalization/validation; match the domain and dot-boundary subdomains. Reject wildcards, public suffixes, malformed and personal-provider domains using maintained domain/provider classification. An address remains selectable at a personal provider. |
-| Company | Resolve its current authorized `crm_domains` into a domain snapshot. Do not expand through contacts' unrelated personal addresses. Reject an empty or invalid expansion. |
+| Thread | Exact internal UUID in the contributor's primary mailbox. Reject provider IDs and another member's copy. |
+| Address | Reuse contact normalization and its 320-byte limit; match exactly without stripping plus tags/dots or inferring aliases. |
+| Contact | Match every current `crm_contact_emails.email` for the referenced contact in this team, including secondary addresses. Resolve live on reads and ingestion. |
+| Domain | Normalize and validate a bare domain; match it and dot-boundary subdomains. Reject wildcards, public suffixes and personal-provider domains using maintained domain/provider classification. An individual address at a personal provider remains selectable. |
+| Company | Match its current `crm_domains` in this team. Resolve live; do not expand through unrelated personal addresses of its contacts. |
 
-Snapshots are intentional: adding an address to a contact or a domain to a
-company must not silently widen somebody else's mailbox consent. Removal,
-rename, reassignment, merge or deletion of the source record does not rewrite a
-confirmed snapshot either. Its saved targets remain effective until the member
-replaces it; a refresh is a newly reviewed draft. Warn when the source has
-changed or disappeared. Record visibility changes can still narrow CRM access
-through existing authorization. Reject live contact/company joins in the hot
-predicate: they both widen consent without confirmation and add query cost.
+Contact and company selectors **follow the record as it changes**. Adding or
+removing an address/domain changes matching without a rule activation. A source
+with no current targets matches nothing and carries a warning; it may match later.
+Deletion, loss of record-level visibility or a move outside the team makes the
+reference inactive. The contributor's CRM viewing preference alone does not
+change an existing grant or its live matching. A rename does not retarget it.
+A merge that deletes the old ID does not silently transfer consent to another
+ID. The agent can replace the reference explicitly. Preserve existing
+record/parent authorization checks.
 
-Scope rules to `(team_id, user_id, link_id)`, never a team policy writable by an
-admin. Teams retain their shared denials. Reject user/team IDs in mutation bodies;
-derive them from authenticated receipts. Reconnecting or changing the primary
-mailbox requires new consent and a newly validated draft; do not transfer thread
-IDs or reactivate old snapshots automatically.
+Scope rules to `(team_id, user_id, link_id)`, never a team allowlist. Derive
+member/team from authenticated receipts; reject those IDs in mutation bodies.
+Mailbox replacement or reconnection requires a fresh explicit grant and current
+validation, even when the old definition is retained for inspection. Do not move
+thread selectors or automatically reactivate a prior policy.
 
-Store drafts and immutable approved revisions in CRM-owned tables, linked to
-consent/membership, with an active revision pointer. Store canonical JSON for
-review and audit, and normalized target rows for execution: separate thread,
-address and domain tables keyed by `(team_id, user_id, revision, target)`, with
-mailbox identity bound through the revision. Use equality indexes for those
-keys; use enumerated domain suffixes to probe domain targets. Do not run JSON
-array expansion or contact/company resolution per thread. Write the revision,
-normalized targets, activation audit and outbox in one transaction. The JSON
-and normalized rows come from the same canonical validation result; neither is
-independently editable. Private exceptions use the dependency's store below,
-not negative entries in this JSON.
+Store immutable definitions in `crm_email_rule_revisions`, canonical JSON for
+inspection, and five normalized target tables: `crm_email_rule_threads`,
+`crm_email_rule_addresses`, `crm_email_rule_contacts`, `crm_email_rule_domains`,
+`crm_email_rule_companies`. Their primary keys are
+`(team_id, user_id, revision, target)`; the revision binds the mailbox. Contact and
+company rows retain IDs, not address/domain snapshots. Missing source records
+must not mutate historical definitions. Authorize targets in the domain service;
+normalized rows and JSON come from the same validation result and cannot be
+edited independently through an API.
 
-Initial limits are assumptions: 64 KiB canonical JSON, 500 authoring selectors,
-2,000 distinct expanded targets across all kinds, 100 addresses per contact and
-100 domains per company expansion. Enforce both pre-expansion and post-expansion
-limits and reject the entire request on overflow; never truncate consent. Reject
-unknown fields/versions, unauthorized or missing IDs and invalid targets; return
-field errors only within the caller's authorized scope. Canonicalize and dedupe
-without changing meaning. An empty selected ruleset is valid and contributes
-nothing. Validation warns when a target matches the contributor's own primary
-address, known aliases or mailbox domain: participant matching can select nearly
-the entire mailbox. Preserve the match, never silently discard the contributor.
-Compare-and-swap `base_revision` rejects concurrent replacements with
-409; identical retried draft/activation requests are idempotent. Version 1 is a
-wire schema version, distinct from the monotonically increasing policy revision.
-Unknown future versions fail closed, never become all-mail.
+The active consent pointer references that member's exact mailbox and revision.
+Store actor history separately in `crm_email_policy_audit`. Membership/mailbox
+cleanup removes private policy data without deleting shared CRM records.
+Equality indexes serve target probes. Resolve live references once per bounded
+candidate set, not by expanding JSON or scanning all CRM entities per thread.
+Source-change reconciliation also needs indexed reverse reference lookups.
 
-**Alternatives rejected:** a team allowlist lets one member enroll another;
-unversioned JSON loses safe review/concurrency; live entity selectors silently
-expand consent; a generic expression engine is unnecessary for the requested
-three forms of inclusion and harder to index and explain.
+Initial authoring limits are assumptions: 64 KiB canonical stored JSON (including
+separator spaces) and 500
+selectors before deduplication. Reject unknown versions/fields, unauthorized or
+missing IDs, invalid targets and an oversized request in full; never truncate
+consent. Canonicalize/deduplicate without changing meaning. An empty selection
+is valid and contributes nothing. Do not cap live expansions by silently dropping
+addresses/domains; bound query and preview work instead. Measure pathological
+records before rollout. Warn on the contributor's address, aliases or mailbox
+domain because those may match nearly all mail; preserve their intended meaning.
+
+Use compare-and-swap on the observed policy token. For modern rows it contains
+`consent_incarnation`, `policy_version` and an opaque fingerprint of current
+mailbox/membership authority. The incarnation is fresh for each consent row's
+lifetime and immutable across updates; the database owns the version. Compare
+these under the mailbox/membership and consent locks before a new mutation.
+A missing row or changed incarnation, version or authority returns 409. Leaving
+the team cascades consent; rejoining cannot reuse a prior modern token.
+
+Inspection is always read-only, with the flag on or off. It must not create
+consent, initialize an incarnation or transfer historical work. With the flag
+on, legacy inspection returns an opaque fingerprint of the observed consent and
+explicit mailbox/membership authority; with the flag off it returns legacy state
+without an editable token. The first sharing mutation compares that legacy
+observation under the existing locks, initializes a fresh identity while preserving
+any existing grant, and atomically replaces unfinished legacy work with a complete
+generation-bound history pass. This includes work already published out of the
+legacy outbox. Withdrawal cancels unfinished work. All-mail members who only read
+settings stay on the legacy worker path, even with the flag enabled.
+
+Authority fingerprints cover link ID, owner/address/provider and credential-owner
+identity, primary/deleting/disconnect/reauth state, grant ID/generation, team and
+member keys, role and CRM access. They exclude sync activity, history/provider
+cursors, timestamps, whole mailbox/member row versions, billing plan and seat
+bookkeeping. Legacy consent alone uses its row identity because it lacks a durable
+incarnation and has no sync writer. Modern tokens use incarnation/version instead.
+Recheck the exact live mailbox and target authorization at submit: a currently
+unhealthy, deleting, disconnected or non-primary mailbox cannot grant contribution.
+A grant, ownership, role or access change requires a new observation; CRM access
+denial still permits the member's own controls after that observation.
+
+A transient reauthentication failure that clears on the same link and grant may
+be accepted if consent itself did not change: the member's sharing intent still
+applies. An active grant revoked during that interval changes policy version and
+conflicts even after reauthentication clears. An absent-consent member who leaves
+and rejoins with identical authority may use the same first-grant observation;
+there is no previous consent to revive. No authority epochs or triggers are added
+to mailbox or membership tables. Live contact/company edits do not conflict with
+a policy token: their changing match sets are part of the grant. They invalidate
+previews independently.
+
+Scope idempotency keys and results to the incarnation and recheck that lifetime
+before replay. A committed retry returns its recorded outcome without executing
+any effect, marked as a replay rather than evidence of the current policy. A new
+mutation carrying a stale token cannot recreate or initialize replacement consent.
+Withdrawal remains available for existing consent while its mailbox is ineligible;
+inspect its current token first. Never automatically refresh a conflict and replay
+a sharing command.
+
+A definition revision, policy version and `schema_version` are distinct.
+Concurrent source edits do not rewrite the rule revision: preview results carry
+a separate effective-context generation. Unknown future modes/versions fail
+closed, never become all-mail. Incarnation storage and these guards are required
+before the policy API ships; the API consumes them without migrating on reads.
+
+**Alternatives rejected:** a team allowlist enrolls other people; snapshots fail
+to follow the selected record; unversioned JSON loses safe replacement and audit;
+version-only CAS can reuse a deleted consent's token; a generic expression
+engine is harder to authorize, index and explain.
 
 ### 2. Precedence and the private-thread dependency
 
-For each member's mailbox copy, the contribution predicate is:
+For each contributor's mailbox copy:
 
 ```text
 live exact-primary mailbox + current membership + active consent
 AND no team/legacy-company domain denial
 AND no personal domain denial
 AND no private-thread exclusion
-AND (all-mail mode OR at least one confirmed inclusion target matches)
+AND (all-mail mode OR a live inclusion target matches)
 AND any separately delivered contribution-cutoff restriction
 ```
 
-Existing record/parent authorization and personal-contact population gates still
-apply at their existing boundaries. Inclusion grants no new record visibility.
-Denials always win over a thread, address or domain inclusion; there is no
-“force include.” Matching one participant includes the whole otherwise eligible
-thread, but one denied participant excludes it. A later message can therefore
-make a previously eligible thread private, or make an unselected thread match.
-Evaluate against current stored messages on reads, not a cached allow decision.
+Denials always win, including over an exact thread selector. One matching
+participant selects the otherwise eligible thread; one denied participant
+excludes it. A later message can change either outcome. Existing record/parent
+authorization and personal-contact population gates still apply at their current
+boundaries. Inclusion grants no new record visibility.
 
-The private exception **must reuse** the thread-exclusion delivery's intended
-contract: `crm_email_thread_exclusions(team_id, user_id, thread_id)` retaining
-`link_id`, and `crm_email_thread_excluded(team, user, link, thread)`. Its mutations
-verify mailbox ownership, take the exclusive `crm-email:{team}` lock and clean
-up with membership/mailbox/thread deletion. Its owner-only listing is keyset
-paginated; setting/clearing a thread is an action on the existing privacy API.
-These names reflect that worker's proposed contract, not shipped code at this
-base. Reconcile to its merged API before implementation. Reuse the predicate in
-both the scalar function and set-based ingestion; do not introduce a second
-exception table. Future label/folder exclusions belong to that delivery's
-specific predicates, and must also dominate inclusions.
+CRM viewing checks belong to the requester-side read boundary. Never add the
+contributor's `crm_access` preference to eligibility: changing viewing permission
+does not withdraw consent, deactivate rules or stop contribution.
 
-Keep “Keep personal emails out” as the existing team-admin-controlled population
-gate. A selected personal address cannot force personal-contact creation while
-it is on. It does not currently guarantee that mixed company/personal threads
-are hidden, and the review must not claim otherwise. Making it a whole-thread
-deny would be a separate behavior change affecting existing all-mail users.
+Reuse the thread-exclusion dependency's
+`crm_email_thread_exclusions(team_id, user_id, thread_id)` retaining `link_id`,
+and `crm_email_thread_excluded(team, user, link, thread)`. Its mutations verify
+mailbox ownership, take the exclusive `crm-email:{team}` lock and clean up on
+membership/mailbox/thread deletion. Its owner-only list is keyset paginated;
+set/clear remains an action on the existing privacy API. Reconcile with the
+merged dependency before editing eligibility. Do not create a second exception
+store. The veto must apply in the scalar function, ingestion and inlined Team
+reader even if the exclusion feature's write flag is off. Future label/folder
+vetoes belong to that dependency's target-specific predicates.
 
-A future date cutoff must be an additional narrowing restriction, never an
-inclusion and never reset by switching mode. Recommend whole-thread exclusion
-when any non-draft message precedes the cutoff, because opening a thread exposes
-its older messages too; a “has one recent message” test leaks older history.
-The cutoff task owns the final timestamp and thread/message contract. Until it
-ships, all available history is in scope and no cutoff field is accepted here.
+Keep “Keep personal emails out” as the team-controlled population gate: an
+inclusion cannot force personal-contact creation, but the setting does not
+promise to hide every mixed company/personal thread. A future date cutoff adds
+a narrowing restriction and survives mode changes. Recommend excluding whole
+threads with older non-draft messages unless that task implements real message
+redaction. A “has a recent message” check exposes older contents. That task owns
+the final timestamp contract; accept no speculative cutoff field here.
 
-**Alternatives rejected:** inclusion-over-denial defeats existing privacy
-controls; denying every personal-provider participant changes all-mail behavior;
-a recent-message cutoff without redaction does not enforce a history boundary.
+**Alternatives rejected:** inclusion-over-denial defeats privacy settings;
+changing the personal-provider gate alters existing all-mail behavior; a recent
+message alone cannot enforce a history boundary.
 
-### 3. Consent, confirmation and audit
+### 3. Consent, direct agent activation and member visibility
 
-Retain all-mail consent and add a distinct selected grant. Suggested copy:
+Retain all-mail and add selected consent. Suggested effect copy:
 
-> Share the full contents of past and future email threads from this primary
-> mailbox that match these selections with your team's CRM. A matching person
-> or domain shares the whole thread, including other participants. Team and
-> personal exclusions still apply. Other members may contribute their own copies.
-> Changing this selection hides your no-longer-eligible contributions but does
-> not delete CRM records or previously recorded interaction dates.
+> Share full past and future email threads from this primary mailbox when a
+> selected thread, address, contact or company domain matches. A matching
+> participant shares the whole thread, including other participants. Contact and
+> company selections follow their current addresses and domains. Exclusions still
+> apply. Other members may contribute their own copies. Narrowing hides your
+> ineligible contributions but keeps CRM records and prior interaction dates.
 
-Show the exact mailbox, mode, canonical targets grouped by selection, expanded
-contact addresses/company domains, applicable exclusions, any implemented cutoff,
-and old-to-new counts. Counts are informational, not a frozen list of future
-messages. Include all targets in an expandable review, not just a truncated
-summary. Carry self-address/alias/domain warnings into this saved confirmation
-and show the preview's coverage counts so a broad selection is apparent. On
-mobile use the same responsive settings dialog/review with scrolling
-and an explicit confirmation button. No graphical condition editor is needed.
+The member **or their agent acting as them** may activate/replace selected rules
+and switch contribution mode directly. No saved approval, human-only credential
+check or per-activation confirmation token is required. Existing authenticated
+scope restrictions on sharing still apply; an agent cannot use a narrower
+credential to escape its permissions. An admin cannot enroll or edit another
+member. An autonomous agent identity manages only its own mailbox.
 
-Only the member may activate a revision for their own mailbox. Their delegated
-agent may read, validate, preview and save drafts acting as that member; an admin
-cannot grant consent, edit rules or approve for another member. A standalone
-agent identity can only manage its own mailbox. All active rule replacements,
-including all-to-selected, require member confirmation in v1. Withdrawing consent
-remains immediately available to the member without a preview or backfill wait.
-Private exceptions retain the dependency's existing mutation permissions.
+Rule, history, preview and consent methods use the same membership/own-mailbox
+boundary as `/crm/email-privacy`; they remain reachable with `crm_access = false`.
+Do not require a CRM-viewing receipt to inspect, edit or withdraw private rules.
+Resolving CRM record details remains separately authorized. When details are
+unavailable, show stored source IDs and the member's own literal rules instead
+of resolving additional CRM names, addresses or domains through this exception.
+Existing shared privacy lists keep their current contract.
 
-Use a server-owned review bound to member, team, exact mailbox, base revision,
-draft hash and expiry (24 hours). Activation comes from the member's authenticated
-review surface, with a server-verified approval, not an SDK `confirmed: true`,
-model-generated quote or arbitrary bearer-supplied approval claim. All delegated
-agent credentials, including ordinary unscoped sessions, must fail activation without that member-only approval. `agent_correlation`'s sharing
-restrictions are an additional check, not proof of human approval: unscoped
-requests currently pass `may_share()`. Enforce the approval boundary for every
-adapter, including legacy `SetConsent(enabled=true)` and selected-to-all
-transitions, so an agent cannot fall back to all-mail to bypass review. Existing
-member-driven all-mail consent remains available. If the saved-review framework
-cannot enforce that principal distinction, building it is a prerequisite, not
-permission to accept agent self-approval. The current email privacy handler
-itself does not provide this new confirmation contract.
+The member's privacy settings show mode, exact mailbox, active definition,
+current live targets when record access permits, warnings, applicable denials,
+last change and its actor.
+Provide a plain JSON editing surface with validation and a readable selector
+list, plus immediate withdrawal. Link to owner-only, keyset-paginated history:
+who changed what, when, the before/after definition and the resulting state.
+Display live-source changes separately from agent rule replacements so a contact
+edit is not falsely attributed to the last activating agent. Use existing
+responsive settings patterns on mobile; no separate visual rule builder.
 
-Bind approval to a policy context version covering blocks, exceptions, mailbox
-lifecycle and any cutoff; reject a changed context or stale base revision and
-show a refreshed review. Live mailbox contents can change after preview; consent
-explicitly covers future matching threads. Confirm under the existing exclusive
-team privacy lock, then mailbox/membership locks before consent/revision writes,
-following existing lock order. Recheck ownership, membership and connection state.
+Record activation atomically with the revision, targets, consent and outbox.
+Audit actor category (member, verified delegated agent, API credential, system),
+verified agent/session provenance when available, timestamp, prior/new revision,
+consent incarnation/version, consent wording version and outcome. Never trust an
+actor ID supplied in a request body. Credentials with no verifiable agent attribution
+are labeled API, not guessed to be human. Address-bearing definitions/history
+are private settings; admins receive no other member's targets or previews.
+Operational logs carry counts, revisions, timings and outcomes, not target JSON
+or mail content. Return the active revision and effects to the agent immediately.
 
-Keep an append-only revision/decision trail: actor, delegated session when
-present, timestamp, previous/new revision, canonical hash, approved targets,
-consent wording version and approval outcome. Owners can read their history;
-team admins do not get private targets or previews. Protect address-bearing
-snapshots like private settings, cascade them on membership/account deletion,
-and retain no email subjects/bodies. Log only counts, revisions, timings and
-outcomes in operational telemetry, not target addresses/domains or JSON bodies.
+Mutations use the exclusive team privacy lock. Activation then takes the existing
+mailbox/membership locks before consent/revision writes and rechecks primary
+mailbox, connection, membership, target authorization and CAS in the transaction.
+Withdrawal authorizes the caller's existing consent, membership and CAS without
+requiring a connected or eligible primary mailbox. It remains immediate and
+independent of a publisher's network lock.
+Preview is optional and informational; a failed preview cannot turn a request
+into all-mail. Future matching messages and live source changes are part of the
+grant, not a frozen list approved by a preview.
 
-**Alternatives rejected:** direct agent activation makes review unenforceable;
-admin-managed inclusion breaks individual consent; confirming only the first
-opt-in leaves later expansions unapproved. A visual builder is unnecessary,
-but removing the confirmation surface is not an acceptable shortcut.
+**Alternatives rejected:** mandatory human approval blocks end-to-end agent
+management; admin-owned rules violate individual consent; invisible agent edits
+leave members unable to inspect or correct their contribution policy.
 
 ### 4. Retroactive effects and backfill
 
 | Change | Immediate read effect | Historical work |
 | --- | --- | --- |
-| All-mail to selected | Only the new matching, non-denied contribution remains readable through CRM after commit. | No new backfill is needed only when prior historical work is complete. Otherwise preserve unfinished work under current eligibility, or durably schedule its replacement. |
-| Off to selected; selected to all-mail | New grant is effective after explicit confirmation. | Enqueue backfill atomically with activation. |
-| Add/replace rules | Reads use the new revision atomically, with no intermediate union. | Enqueue if potentially expanding. Treat mixed replacements conservatively as expanding. |
-| Remove rules; select nothing; withdraw | No-longer-eligible contributions disappear on subsequent primary reads. | Continue unfinished work that is still eligible; no-op only work now denied. Do not wait for publisher locks. |
-| Add/remove private exception or domain block | Deny immediately on subsequent reads; restoring eligibility respects the active mode. | Reuse existing exclusion removal backfill scheduling. |
+| All-mail to selected | Unselected contributions disappear after commit. | Preserve unfinished eligible history; no new backfill is needed only if historical work is complete. |
+| Off to selected; selected to all-mail | The explicit member/agent grant applies after commit. | Enqueue backfill atomically. |
+| Add/replace rules | Read the new revision atomically, without an intermediate union. | Enqueue on potential expansion; treat mixed changes conservatively. |
+| Remove rules; empty selection; withdraw | No-longer-eligible contributions disappear on subsequent primary reads. | Continue still-eligible unfinished work; only denied work may no-op. |
+| Contact addresses/company domains change | Live references change matching immediately. | Durably reconcile affected active policies; additions enqueue bounded backfill, removals cannot preserve stale grants. |
+| Add/remove private exception or domain block | Deny immediately; restoration still respects the active mode. | Reuse existing exclusion-removal scheduling. |
 
-Do not delete or hide sync-created companies/contacts, remove manual edits, or
-purge source attribution solely because a rule narrowed. Preserve prior
-interaction dates by the existing privacy precedent; they are historical CRM
-metadata, not proof that the corresponding mail is still available. Future
-population computes eligible interaction ranges from current stored messages;
-it must not trust queued timestamps. Do not promise a complete retroactive
-metadata scrub. An already downloaded message cannot be recalled; invalidate
-CRM list/detail caches after a privacy mutation and fail closed on primary errors.
+Keep sync-created companies/contacts, manual edits, source attribution and prior
+interaction dates under the existing privacy precedent. These are historical
+CRM metadata, not proof that mail remains readable. Future population computes
+eligible interactions from current stored messages, not queued timestamps. This
+is not a retroactive metadata scrub. Already downloaded mail cannot be recalled;
+invalidate CRM list/detail caches on policy changes and fail closed on primary
+errors. Live-record mutations also invalidate affected preview/context caches.
 
-Carry the desired policy revision through the outbox and paged historical
-workflow for coalescing/cancellation, but always authorize against current state.
-Use the existing `(team, member)` outbox and retry/idempotency mechanism, not a
-second queue. Coalesce changes to the latest desired revision. Bound fan-out in
-keyset pages; recheck before metadata enrichment and in the write transaction.
-A stale revision alone must not discard unfinished historical work. After any
-narrowing, including all-mail to selected, an existing job finishes its remaining
-scope against current eligibility. If it must restart, durably transfer that
-unfinished scope to the latest generation before acknowledging/cancelling the
-old job. Only work no longer eligible may no-op without replacement, including
-after withdrawal or an empty selection; a job must never restore a revoked rule.
-Verify a mid-backfill narrowing where the remaining selected contact has not yet
-been populated. Ensure a newer outbox request is not erased by completion of an
-older job; compare the claimed generation when completing it. Withdrawal must
-remain independent of a publisher holding a network request's row lock.
+Use the existing `(team, member)` outbox and retry/idempotency mechanism. Carry
+the claimed `(consent_incarnation, policy_version)` through publication, paged
+historical work and completion; authorize against current state before enrichment
+and again in the write transaction. Within the same incarnation, a stale version
+alone must not discard unfinished eligible history. After narrowing, finish the
+remaining scope with current eligibility or durably transfer it to the replacement
+job before acknowledging/canceling the old one. Only now-denied work may no-op
+without replacement.
 
-**Alternatives rejected:** destructive record cleanup loses shared/manual work;
-recomputing every historical interaction date adds a separate provenance project;
-only applying rules to future ingestion leaves existing mail readable.
+A different or missing incarnation revokes the old job's authority. It cannot
+adopt a newly created consent, enqueue work for it, or acknowledge/delete its
+outbox request. Completion compares the claimed incarnation and generation so
+an old worker cannot erase new work. A new grant schedules its own history.
+Before activation, drain legacy unversioned work or durably replace its unfinished
+eligible history through the current authorized scheduling path. Never attach
+the current incarnation to an old job at consumption time.
 
-### 5. Enforcement and performance evidence required
+Historical work walks raw mailbox contacts in pages of 100 through the existing
+`(link_id, email_address)` index. Empty or ineligible contacts advance the cursor;
+sent-capable contacts run first, then a second pass includes received-only
+contacts. Every effect recomputes current eligible dates. Checkpoints compare
+the captured generation, work ID, pass and address before publishing the next
+page. A modern outbox row remains as a recovery signal, due again after 15
+minutes if no page advances it; completion deletes only its exact generation.
+Legacy history stays unversioned and may run only while consent identity is
+null. New live-mail notifications are explicitly marked as reconciliation hints
+and use current stored eligibility; they carry no historical grant. Initializing
+a consent in the API phase must atomically schedule modern replacement history
+before retiring legacy work. Rollout must drain old unmarked live notifications.
 
-Extend `crm_email_thread_allowed` with indexed active-revision target probes and
-the dependency's exclusion predicate. Resolve consent/mailbox/revision once.
-Walk only the requested thread's non-draft participants; match thread IDs first,
-then normalized addresses/domain suffixes. Hard denials still apply even on an
-exact thread match. Never scan the contributor's mailbox, all company domains,
-or all contact records inside this scalar function.
+A source-record edit may affect many policies. Persist reconciliation work with
+that edit, use indexed reverse references and bounded fan-out, and coalesce
+backfills per member. Do not make one contact edit synchronously scan every
+mailbox. Authorization always resolves live data; asynchronous reconciliation
+only refreshes counts/history/population, never grants stale access. The worker
+records one content-free `live_targets_changed` system audit entry per affected
+member and event; retries neither duplicate that entry nor restart completed work.
 
-Extend `interactions.sql` with the same semantics as set-based joins: gather the
-address-filtered thread set, materialize its participants and suffixes once,
-join active rules and exclusions once, then aggregate eligible interactions.
-Retain shared/exclusive privacy locks and the existing pre-enrichment and
-in-transaction checks. Add parity fixtures for all/selected/empty, every selector,
-mixed participants, draft-only mail, stale revisions and exclusion changes.
-Do not regress ingestion into a loop calling the scalar privacy function.
+Use application transaction hooks for contact address/parent edits, contact and
+company hiding, hide cascades, and sync deletion. Probe the rule-target reverse
+indexes before recording events; bulk deletion first checks for any team rule
+references and preserves its existing SQL when there are none. Row triggers on
+all CRM imports and enrichment were rejected after measuring per-row overhead.
+New IDs cannot already be selected, and metadata-only changes do not change
+matching. Direct SQL edits and future domain/address writers must use the same
+transactional hook. Before activation, audit every live matching source, including
+member role changes, and complete any missing event producers. Preview context
+invalidation belongs with the preview API in 3c.
 
-For listings, keep cheap company/contact/mailbox filters and the existing planner
-fence. Add selected-mode positive target semijoins in the candidate stage so a
-sparse selection can use thread/address/domain indexes instead of invoking the
-full privacy function on an entire team-wide feed. Apply final eligibility
-before conversation deduplication, cursor and limit. A bare fence alone does
-not bound a broad Team feed; measure that case separately. If domain inclusion
-cannot use existing participant indexes, add a normalized mailbox/address/domain
-lookup index in a separately reviewed migration, not a per-thread mailbox scan.
-Do not prematurely limit candidates and return underfilled or missing pages.
+**Alternatives rejected:** destructive cleanup loses shared/manual work; future-
+only rules leave old mail readable; canceling every stale job silently loses
+eligible history; asynchronous allow caches delay privacy revocation.
 
-These are query shapes to measure, not SQL shipped by this document:
+### 5. Enforcement and performance evidence
 
-| Shape | Required evidence before enabling selected consent |
+Upgrade **all three eligibility paths** before activation. The scalar function
+resolves exact consent/revision once and walks only the requested thread's
+participants. Probe thread selectors first, then indexed addresses/domain
+suffixes and live contact/company references. Even an exact thread match still
+runs every veto. Never scan unrelated mailbox threads inside the function.
+
+Ingestion gathers the address-filtered thread set, materializes participants and
+suffixes once, and joins active rules, live references and exclusions set-wise
+before aggregation. Retain pre-enrichment checks, in-transaction checks and the
+shared/exclusive privacy locks. Never replace this with a scalar call per thread.
+
+The inlined Team reader needs equivalent positive and negative joins over
+candidates. Keep cheap mailbox/company/contact filters and planner fences in
+scoped lists. Sparse selected feeds should enter through indexed positive target
+candidates. Apply final eligibility **before** conversation deduplication,
+cursor and limit. Do not prematurely cap candidates and omit eligible results.
+The bounded discovery core lives in CRM and is injected into the email adapter.
+It resolves each distinct live contact/company source once, retaining contributor
+visibility separately from its values. The Team probe and page reuse the complete
+contact result in the same snapshot. All-mail reads call neither discovery nor
+admission and keep their existing SQL. This change adds no index or migration.
+
+Choose the small-input strategy before live expansion: at most eight selected
+contributors and 4,000 raw selector references. Exact-address policies use indexed
+mailbox/address probes while the estimated cross product is at most 50,000;
+beyond that threshold, use a bounded scan rather than reject a complete policy
+for the choice of algorithm. Small domain policies use a bounded SQL aggregate;
+larger inputs fold shared source values and stream mailbox contacts through
+keyset pages. Up to eight distinct live sources retain their single-source reads.
+Larger source sets start with indexed batches of at most 128 sources and eight
+raw values per source; full first pages continue by keyset in pages of at most
+2,048. Charge every prefetched page before any continuation, and shrink the batch
+so its worst-case raw count fits the remaining allowance plus one sentinel.
+Empty and singleton targets therefore avoid a separate roundtrip each without
+truncating larger expansions. Both strategies use the following request-wide
+limits:
+
+| Work | Maximum |
 | --- | --- |
-| Single direct thread grant: thread PK → exact consent/revision → participants → indexed rule/exclusion probes | `EXPLAIN (ANALYZE, BUFFERS)` for allowed/denied/no-match and very large threads; no scan of unrelated mailbox threads. |
-| CRM company/contact list: indexed address/domain candidates → fenced eligibility → dedupe → keyset/limit | First/deep pages, multi-address contacts, many teammate copies, 0/1/100% selection density; count function loops and verify fence remains effective. |
-| Broad Team/Me feed with selected contributors | Positive-target candidate joins scale with matching mail, not a scalar check for every mailbox thread; test mixed all/selected contributors and cursor stability after withdrawal. |
-| Ingestion for one address: indexed matching messages → grouped threads → shared participants/targets/denials → aggregate | Compare current and new plans and buffers; rule count does not multiply a full-mailbox scan. Include several addresses resolving to one contact. |
-| Preview: mailbox-bounded keyset batches → current/proposed eligible thread IDs → set counts | No content retrieval, bounded batch memory/time, no synchronous unbounded count transaction. |
-| Rule activation and outbox claim | Maximum target count, concurrent ingestion/withdrawal/lifecycle changes, lock order, short transaction and no lost outbox generation. |
+| Selected contributors, including empty policies | 1,000 |
+| Raw selector references | 50,000 |
+| Address rows from distinct live contacts | 50,000 |
+| Domain rows from distinct live companies | 50,000 |
+| One live source value, before normalization/decoding | 4 KiB |
+| Accounted literal/live source text | 8 MiB |
+| Mailbox contact rows, including nonmatches | 250,000 |
+| Mailbox contact text | 32 MiB |
+| Domain suffix checks | 750,000 |
+| Live-source membership checks | 250,000 |
+| Discovery deadline, shared by its stages | 10 seconds |
 
-Assume 10k/100k/1m threads per mailbox; 10/100/500 selectors; 1/10/100
-contributors; ordinary 5-message threads plus a 10k-message outlier. These are
-synthetic stress points, **not measured production distributions**. Test 2,000
-expanded targets, overlapping rules, dense blocks and large company directories.
-Hold the tested thread fixed while growing unrelated mailbox history tenfold:
-direct-check buffers/work must not grow proportionally. Capture existing versus
-proposed p50/p95, buffers, rows removed, function loops and batch throughput on a
-production-size synthetic local fixture. Establish absolute latency/lock budgets
-from the measured baseline before rollout; do not claim a performance pass from
-this design. No dev or production data was accessed for it.
+These are synthetic-fixture budgets, not production distributions. Charge raw
+rows before filtering/deduplication; share each source's allowance across all
+contributors. Bound SQL input batches and stop after one sentinel row beyond the
+remaining allowance. The small SQL aggregate can materialize the bounded raw
+contact page before checking its byte count; 32 MiB is a text-work allowance, not
+a claim about total database memory. Never return a partial contact set.
 
-**Alternatives rejected:** materializing every allowed mailbox thread requires
-mailbox-wide maintenance and risks stale grants; per-thread entity expansion
-repeats the prior privacy-check failure mode; asynchronous authorization caches
-cannot provide immediate revocation.
+`validateRules` and `replaceRules` run the same admission checker against the
+proposed replacement plus the team's other active selected policies. Validation
+is read-only and does not reserve capacity. Replacement rechecks inside its
+locked mutation before saving or granting; a refusal rolls back identity,
+history transfer, audit and idempotency effects too. The member/agent receives
+HTTP 400 naming the exceeded limit and maximum, without another member's usage
+or rule content. They can narrow the rules and validate again; changing consent
+to all-mail and withdrawal retain their independent paths.
 
-### 6. Multi-address contacts and teammate copies
+Live changes can outgrow a previously admitted policy. A Team read then returns
+HTTP 503 naming the limit, records `limit_hit` and work counts on its discovery
+span, and returns no partial page or advanced cursor. That request fails for the
+viewer; it must not silently omit one contributor or weaken an exclusion.
+Withdrawal remains available even after overflow or when the flag is off.
+This bounds discovery, not every later message/candidate/fallback query; retain
+those separate activation gates.
 
-An explicit address selects only that address. A contact selection expands all
-of its currently known addresses, not just the primary. Different rules matching
-the same thread count once. Removing one rule does not hide a thread still
-matched by another, unless an exclusion wins. Contact enrichment never grows the
-approved snapshot. Shared/recycled addresses remain addresses, not verified
-person identity; disclose them in the confirmation.
+| Query shape to measure | Required evidence |
+| --- | --- |
+| Direct thread PK → consent/revision → participants → target/veto probes | Allowed/denied/no-match, large thread, custom/generic plans; unrelated mailbox growth does not multiply buffers. |
+| Scoped company/contact list → fenced eligibility → dedupe/keyset | First/deep pages, multi-address contacts, teammate copies, sparse/dense matching and function loop counts. |
+| Inlined broad Team/Me feed | Mixed all/selected contributors, empty selections, 0/1/100% match density, cursor stability; no per-thread full-mailbox privacy work. |
+| Ingestion by address → candidate threads → shared participants/live targets | Baseline/new buffers and throughput, multiple addresses for one contact, rules do not multiply a mailbox scan. |
+| Live source edit → referenced active policies → paged reconciliation | Indexed reverse lookup, many policy references, no synchronous mailbox work, no missed concurrent edits. |
+| Preview → bounded mailbox batches → current/proposed counts | No content retrieval, bounded memory/time, cancellation and honest partial counts. |
+| Activation/lifecycle/outbox | Maximum rules, concurrent ingestion/withdrawal, lock order, legacy writes, no lost job generation. |
 
-Evaluate each mailbox-local copy independently. A private exception or missing
-inclusion for one member does not suppress another consenting member's copy,
-even when messages overlap. Listing deduplication must choose only among copies
-that passed eligibility; a disallowed own copy cannot shadow an allowed teammate
-copy. Direct access to the disallowed thread ID cannot borrow the teammate's
-consent; access to the other copy uses its own grant. Owner inbox and explicit
-non-CRM sharing remain independent. No cross-mailbox exception propagation or
-message-level redaction is introduced.
+Assume 10k/100k/1m threads per mailbox, 10/100/500 selectors, 1/10/100
+contributors, ordinary 5-message threads and a 10k-message outlier. Measure live
+contacts/companies with 1/100/2,000 targets and a source referenced by many members.
+These are synthetic stress points, **not measured production distributions**.
+Compare fresh/stale statistics and custom/generic plans with statement timeouts.
+Capture `EXPLAIN (ANALYZE, BUFFERS)`, p50/p95, rows filtered and loop counts on
+private synthetic fixtures. Set absolute rollout budgets from the baseline.
 
-**Alternatives rejected:** primary-address-only selection misses known aliases;
-conversation-wide suppression lets one contributor revoke another's consent and
-would require a new cross-mailbox identity and governance policy.
+Parity tests cover every selector, all/selected/empty states, sender/To/CC/BCC,
+drafts, all vetoes, contact/company mutation/deletion/visibility, mailbox lifecycle
+and stale backfill generations in the function, ingestion and inlined reader.
+CRM viewing denial must preserve contribution and access to private rule controls.
+Mutation/worker regressions cover deletion and rejoin with reused numeric
+versions, initially absent consent, committed idempotent retries, and stale
+completion after a new incarnation has queued work.
+Performance approval must not rely on a tiny correctness fixture.
+
+**Alternatives rejected:** materializing all allowed thread IDs requires mailbox-
+wide maintenance; per-thread live expansion repeats the privacy-check failure;
+caching allow decisions makes revocation eventual.
+
+### 6. Multiple addresses and teammate copies
+
+An address rule selects one address. A contact rule follows **all current**
+addresses, including new aliases, and stops matching an address removed from the
+record. Shared/recycled addresses are still addresses, not proof of person
+identity. Settings and SDK guidance disclose the live set. Overlapping rules
+count a thread once; removing one rule does not remove another match.
+
+Each mailbox-local copy is independent. One member's private exception or missing
+inclusion cannot suppress a consenting teammate's copy, including overlapping
+messages. Deduplicate only among eligible copies. Direct access to a disallowed
+thread ID cannot borrow a teammate's consent; the other copy uses its own grant.
+Inbox ownership and explicit non-CRM sharing remain independent.
+
+**Alternatives rejected:** primary-only contact matching misses known addresses;
+cross-mailbox suppression would let one member revoke another's contribution.
 
 ### 7. Agent and SDK contract
 
-Extend the privacy-settings SDK work under one `macro.crm.emailPrivacy`
-namespace; settle final method names with that delivery. Continue using generated
-storage API types and the CRM domain service behind thin HTTP adapters. Public
-SDK methods take and return entity handles: thread/contact/company selectors use
-their handles, and drafts/previews get handles with operations on them. The JSON
-above is the wire format; UUIDs stay inside the transport. Tag methods with their
-SDK operation category and register generated-method verbs. Do not add a
-parallel toolset or a second privacy settings client.
+Extend the privacy-settings SDK task in one `macro.crm.emailPrivacy` namespace,
+using generated storage types and thin adapters over the CRM domain service.
+Use entity handles for thread/contact/company selectors in public SDK methods;
+UUIDs belong to the wire transport. Follow operation-category and generated-verb
+registration conventions. Do not add a separate code-mode toolset.
 
-| Proposed method | Contract |
+| SDK method | Contract |
 | --- | --- |
-| `get()` | Caller-only consent mode, mailbox, active revision/rules and applicable exclusions; use the dependency's pagination for private exceptions. |
-| `validateRules(input)` | Authorize/normalize/resolve; return canonical draft material, expanded targets, warnings and validation errors. No activation or mailbox-content reads. |
-| `saveRulesDraft(input, {baseRevision})` | Persist an immutable draft with idempotency key; return a draft handle with hash/expiry and review destination. This is the agent's write operation. |
-| `draft.preview()` | Start a bounded asynchronous comparison for the caller's mailbox; return a preview handle, no content. |
-| `preview.get()` | Status, as-of time, policy revision and distinct contribution counts: current, proposed, added, removed, retained and denied. No thread IDs, subjects, participants or bodies. |
-| `draft.presentReview()` | Present/link the saved member review; return pending/confirmed/rejected/expired and resulting revision. Never approve it. |
-| Existing withdrawal/domain/thread methods | Reuse the privacy-settings and thread-exclusion APIs and their authorization. |
+| `get()` | Caller-only consent/mode, exact mailbox, active definition and observed-state token. Always read-only. Read domain exclusions separately with `settings()` and private exceptions with `excludedThreads()`; creating target handles fetches no record details. |
+| `validateRules(input)` | Authorize and canonicalize; return current live resolution, warnings and field errors. No grant and no mailbox content. |
+| `replaceRules(input, {ifPolicy, idempotencyKey})` | Directly activate a validated replacement for the authenticated member using the exact opaque observation. Initialize legacy identity only in this mutation; return the new token, revision, audit event and whole-thread/live effects. No human approval token. |
+| `previewRules(input, {ifPolicy, ifPreview})` | Start a bounded asynchronous comparison for the caller's mailbox, including before consent exists. Compare the observed policy and current preview slot; return a handle without initializing contribution. Repeat validation at activation. |
+| `preview.get()` | Status, as-of time/context and distinct counts: current, proposed, added, removed, retained and denied; no IDs, subjects, participants or bodies. |
+| `history()` / `revision.get()` | Owner-only fifty-event keyset history of actor, revision references, live-source events and resulting state; fetch one immutable definition separately. |
+| Existing consent/domain/thread methods | Reuse the privacy-settings/exclusion APIs; modern mode transitions use the same CAS/audit domain path. |
 
-Counts describe the caller's contribution copies, not how many conversations
-will disappear for every teammate. Denial reason counts may overlap and must
-say so. Counts must not inspect another mailbox to “deduplicate” the preview.
-Use a bounded asynchronous scan with progress, cancellation and a proposed
-five-minute job budget; return explicitly partial/lower-bound counts on timeout,
-never label them exact. Invalidate on policy-context change. Concurrent mailbox
-changes make results an as-of estimate unless a stable completed scan is proven;
-the review always states that future mail is included. Rate-limit preview jobs
-per member and reuse results for an unchanged draft/context.
+Counts concern only the caller's mailbox-local copies. Denied counts are proposed
+matches vetoed by exclusions; no teammate mailbox is inspected to deduplicate.
+The API uses a read-only repeatable-read snapshot, raw timestamp/ID pages of 100,
+a 10,000-raw-thread ceiling and a five-minute deadline from enqueue. Missing
+matches and drafts advance the cursor. Each statement has at most 15 seconds,
+limited further by the remaining deadline. Budget exhaustion returns explicit
+partial/lower-bound counts, never an exact total. Progress has no thread IDs,
+subjects, addresses or content. Cancellation and replacement fence late completions.
 
-Publish `@routing`/`@agent` guidance through `DescribeCodeTools`/`ReadCodeDocs`
-and `ExecuteCode`: save drafts, show the whole-thread/historical effect, explain
-snapshots and overriding exclusions, present confirmation, and report active
-only after the server says confirmed. Never infer permission to share from a
-request to inspect mail. Review/preview errors cannot fall back to all-mail.
-Generate OpenAPI/SDK types and guidance together during implementation; regenerate
-conflicting storage SDK outputs instead of hand-merging them.
+A separate poller runs counts so they cannot delay source reconciliation. A
+matching edit invalidates the team's preview metadata in its existing transaction;
+mailbox/member/consent changes are also detected through the authority observation.
+Ordinary imports do not invalidate a stable as-of result. Enforce one new request
+per member per thirty seconds and reuse identical retries; the retained slot ID
+prevents a delayed start from resurrecting older work. Previewing writes only
+bounded preview metadata, never consent or contribution/backfill work.
 
-**Alternatives rejected:** raw settings writes from code mode bypass review;
-content previews reveal more than needed; synchronous exact counts over an
-unbounded mailbox put expensive work on an interactive request.
+Publish routing/agent guidance through `DescribeCodeTools`/`ReadCodeDocs` and
+`ExecuteCode`: agents may manage and activate rules directly, must explain past
+and future whole-thread sharing and live references, must preserve overriding
+exclusions, and report active only after the server commits. A request merely
+to inspect mail is not a contribution instruction. Errors must not fall back to
+all-mail. The SDK must not automatically refresh tokens and replay stale CAS
+requests after a 409. Regenerate OpenAPI and SDK outputs; never hand-merge
+generated files.
+
+**Alternatives rejected:** a draft-only agent API prevents end-to-end management;
+content previews reveal unnecessary mail; synchronous unbounded counts threaten
+interactive latency.
 
 ### 8. Rollout and compatibility
 
-Use one remote `enable-crm-selective-email-contribution` flag in the web registry
-and `crates/feature_flags`. Gate draft/preview/review entry points and backend
-activation; a failed flag load refuses new activation. Keep it off in dev until
-the privacy dependency and compatibility checks pass, with an explicit registry
-comment explaining that exception to the normal dev default. Production rollout
-is a separate authorized action.
+Use remote `enable-crm-selective-email-contribution`, default **off**, including
+dev until compatibility passes. The foundation defines its key without exposing
+an activation path; later API/web wiring registers and evaluates it. Failed
+loads refuse new activations. The flag controls new operations, never enforcement
+of stored policies. Turning it off preserves selected restrictions, owner
+inspection and withdrawal; it must never convert selected to all-mail.
 
-The flag controls availability of new operations, never the enforcement of a
-stored policy. Turning it off freezes new selected activations but keeps existing
-selected grants restricted, readable in settings and revocable. It must not
-interpret selected as all-mail. Existing all-mail behavior is unchanged.
+Add `mode` defaulting to `all`, `selected_enabled` defaulting false, an active
+revision and database-owned policy version to `crm_email_consent`. Legacy
+`enabled` stays true **only for all-mail**. Selected uses false/true and an exact
+owner/mailbox revision. Checks forbid mixed grants. Existing rows retain their
+meaning; new policy tables start empty, with no migration backfill or consent
+conversion. Modern responses expose effective enabled plus mode; old binaries
+looking only at `enabled` fail closed.
 
-Recommend an additive compatibility representation in `crm_email_consent`:
-`mode` defaults to `all`, and `selected_enabled` defaults false. Keep legacy
-`enabled` true **only for active all-mail grants**; selected mode uses
-`enabled = false`, `selected_enabled = true`, a valid active revision and exact
-mailbox binding. Check constraints forbid both grant bits or a legacy enabled
-bit with selected mode. New responses expose the effective enabled state and mode;
-old readers/workers that inspect only `enabled` fail closed on selected mail.
-Existing rows get the all-mode interpretation, not a consent conversion or a
-mailbox backfill. New policy tables start empty.
+Guard old `enabled=true` upserts on selected rows with an error requiring current
+settings. Every old `UPDATE OF enabled=false`, even a no-op on the legacy bit,
+revokes selected too. New selected activation disables legacy consent, then sets
+selected state in the same transaction without naming `enabled` in the second
+statement. An explicit modern selected-to-all operation clears selected state
+and changes mode. The database version changes when the effective policy tuple
+changes, fencing new CAS writes against old clients and lifecycle revocation.
 
-New migrations must extend mailbox lifecycle revocation to clear both bits,
-including when only selected is active. Add a legacy-write guard: an old
-`SET enabled = true` on selected mode fails with “review current contribution
-settings”; an old withdrawal (`UPDATE OF enabled` to false, even if already
-false) also clears `selected_enabled`. New selected activation first disables
-legacy consent, then sets the selected grant/revision in the same transaction
-without naming the legacy bit in that second update. A confirmed switch to
-all-mail clears selected state and explicitly sets mode/all-mail consent.
-Lifecycle writes retain mailbox-before-consent ordering and acquire no new team
-privacy lock. Test legacy upserts and no-op false updates, not just new handlers.
+That version fences updates only within one consent row's lifetime. Before
+PR 3 exposes any modern policy mutation token, add `consent_incarnation` through a
+forward migration and enforce one fresh, immutable identifier per row lifetime.
+Keep legacy inserts compatible: a nullable column with guarded initialization
+can avoid rewriting existing rows. Inspection returns a read-only legacy
+observation. Only the first mutating request initializes a null incarnation under
+the authorization locks after comparing that observation; preserve any existing
+grant and transfer unfinished history atomically. Upgrade
+idempotency storage, queued-work envelopes and completion checks together;
+all must carry the incarnation before activation. Never edit an applied
+foundation migration to add this support.
 
-Deploy schema/guards and compatible read/ingestion implementations before any
-selected activation. Older readers may temporarily show no contributed mail;
-older workers may acknowledge jobs without population, so do not enable selected
-until every worker is compatible. Install the updated SQL function and set-based
-parity path before enabling writes. Rollback turns off new activations and leaves
-schema, denials and selected policy enforcement in place; it never turns selected
-back into all-mail. Roll forward or roll back only to a privacy-compatible build.
-Never rewrite an applied migration; use new additive migrations.
+Mailbox lifecycle revocation clears both bits, retaining mailbox-before-consent
+lock order without a new team advisory lock. An indexed exact-link update must
+also find selected-only rows. Reconnection does not reactivate either mode.
+Test real legacy upserts, no-op withdrawal and membership/mailbox cascades.
 
-**Alternatives rejected:** adding only `mode` beside `enabled = true` lets old
-workers ingest all mail; relying on a feature flag alone cannot guard stale
-binaries; converting existing consents would change permission without review.
+Deploy schema/guards and all three compatible eligibility paths before any
+selected activation. Older readers may temporarily show no selected mail; old
+workers may acknowledge without population, so **every worker must be upgraded**
+before enablement. PR 3c teardown hooks can produce coarse `team` source events
+that pre-3c workers cannot deserialize. The initial rollout is safe while saved
+rule tables are empty. After activation, disabling the flag does not stop these
+producers or make an old worker compatible: stop the new event producers and
+drain their events with compatible workers before an old-binary rollback.
+Older eligibility readers fail closed and need a later backfill repair; never
+roll back schema/guards or widen consent to preserve old-binary visibility.
+Keep stored restrictions enforced indefinitely.
+Initial rollout also requires private-thread mutations to be available to the
+same cohort, after both ingestion and the optimized Team reader are upgraded.
+
+**Alternatives rejected:** reusing `enabled=true` for selected leaks through old
+readers; deployment ordering without guards cannot protect rolling clients;
+flag-off-as-all-mail turns a rollout control into a disclosure.
 
 ### 9. Independently shippable PR sequence
 
-| PR | Deliverable and release boundary | Dependency |
-| --- | --- | --- |
-| 0 | This proposal and decisions only; no executable changes. | None. |
-| 1 | Land the thread-exclusion API/store, scalar/set-based enforcement and parity coverage. | Separate thread-exclusion PR; required before selective implementation consumes its mechanism. |
-| 2 | Add dormant policy/revision/target/audit schema, legacy-write and lifecycle guards, and compatible consent readers. No selected writes and no changes to existing grants. | Approved design and PR 1. |
-| 3 | Add selected enforcement to direct/list access and set-based population; indexed candidate narrowing, parity/concurrency coverage and measured query plans. Keep selected activation unavailable. | PR 2; reuse PR 1 predicate. |
-| 4 | Add bounded preview, draft validation/storage, revision-aware outbox/backfill and server-owned confirmation protocol, all gated off. Verify every worker is compatible. | PR 3 and a trustworthy member-only review boundary. |
-| 5 | Add minimal responsive confirmation/settings UI plus generated SDK methods and agent guidance, integrating the privacy-settings SDK task. Existing all-mail remains usable; flag off. | PR 4 and shared SDK contract. |
-| 6 | Enable an explicitly authorized limited rollout after end-to-end privacy, mixed-version and performance verification; update shipped privacy/agent docs. | All previous releases and the separately authorized rollout. |
+1. **Dormant foundation and revised design.** Typed rule format, empty revision/
+   target/audit tables, additive consent fields, legacy-write/version/lifecycle
+   guards and the default-off key. Test existing consents and old writers. No
+   activation API or eligibility edits. This phase does not require eligibility
+   changes; the following phase depends on the merged thread-exclusion contract.
+2. **Eligibility and live resolution.** After PR 1 **and merged
+   [thread exclusions](https://github.com/macro-inc/macro/pull/10836)**,
+   update `crm_email_thread_allowed`, set-based ingestion and the inlined Team
+   reader together, plus compatible consent readers. Reuse its veto, add indexed
+   live-target joins/reverse references and parity/performance evidence. Still
+   expose no selected activation. The migration asserts that no selected-mode
+   consent exists before replacing the function, making the old-inline-reader
+   deployment assumption executable. The Team reader retains its shared
+   ten-second deadline; ingestion admission and rechecks use a fifteen-second
+   statement timeout. Sparse policies probe positive targets before record
+   history; live domains resolve against scoped mailbox contacts once
+   per page, and fenced participant lookups reuse existing indexes. Resolve
+   contribution modes inside the Team snapshot, including General fallbacks.
+   Optimized all-mail-only pages keep their existing SQL without selected-rule
+   work; General retains its scalar page SQL. Test both directions
+   of a concurrent mode change across resolution, probe and page.
+   Base new migrations after the latest merged
+   dependency; never change an applied migration.
+3. **Policy API and historical work, in three ordered PRs.** All remain dormant
+   until the last stage is deployed and the default-off flag is enabled after
+   the PR 5 gates and explicit rollout authorization.
 
-Reject one combined schema-and-activation release: compatibility, enforcement
-and rollback safeguards must be deployed and verified before grants can become
-active. PRs 2–5 may be deployed while dormant; none enrolls members. Verify owner
-versus admin/agent denial, stale draft/mailbox lifecycle races, whole-thread exceptions,
-subdomains, multiple addresses, teammate-copy dedupe, primary-only revocation,
-legacy clients and queued old work before enabling. Instrument draft/preview,
-activation and backfill spans with revision/count/outcome fields and trace
-propagation, without private targets. Browser checks cover confirmation, rejected
-activation, withdrawal, stale previews and mobile review. The date-cutoff and
-restricted-member projects remain separate and may add further narrowing gates.
+   - **3a: storage and repository contracts.** Add nullable consent incarnation
+     with guarded initialization/immutability; stamp audit, idempotency, preview
+     and durable work with incarnation/version. The repository can initialize
+     a disabled row only with an eligible primary; the API reserves initialization
+     for a first mutation, never inspection. Old modern tokens never initialize. Store one replaceable preview and historical-work slot per
+     member, retaining tiny start receipts through the applicable mailbox/member
+     lifetime to reject delayed starts after replacement or completion, plus
+     durable source events and bounded reverse-reference indexes on saved contact/company rule targets. No API, worker wiring, hot email-table
+     index, existing-consent conversion or historical mailbox scan.
+   - **3b: generation-safe historical and live-source work.** Carry the captured
+     incarnation/version through enqueue, publication, pages and conditional
+     completion; reauthorize before enrichment and population. Drain or replace
+     legacy unversioned work. Commit one source event with each relevant record
+     change and reconcile raw references in bounded pages, checking active
+     consent after paging. Preserve unfinished eligible history when narrowing.
+     Demonstrate unchanged all-mail backfill behavior and throughput.
+   - **3c: own-member and agent APIs.** Add validation, CAS/idempotency, verified
+     audit provenance, direct activation and bounded asynchronous count preview.
+     Keep private controls independent of CRM viewing. Regenerate OpenAPI/storage
+     SDK outputs and record SDK coverage deferrals. Replace the dormant
+     `PopulateCrmPolicy` email E2E deferral with a full-stack generation/retry
+     scenario before activation. Refuse activation on a false
+     or unavailable flag; stored restrictions, inspection and withdrawal remain.
+     Close the first-activation/bulk-deletion race before exposing activation:
+     lock and revalidate live targets, and make teardown observe references
+     committed while it waited for source rows. The dormant worker's early
+     no-reference shortcut and same-statement deletion/reference snapshot do
+     not provide that guarantee. Do not hold the team privacy lock through bulk
+     teardown: its existing long cascades would delay or fail withdrawal. Keep
+     plain deletes when the initial reverse-index probe finds no references; a
+     fresh post-delete probe emits one coarse team reconcile event if first
+     activation appeared meanwhile. Return IDs only on the referenced branch,
+     and probe their references in a new statement. Measure both branches on the
+     10,000-contact seed with fresh and stale statistics.
 
-## Decisions to confirm and remaining unknowns
+   Merge 3a, then 3b, then 3c. These depend on PR 2 and confirmed reader/ingestion
+   compatibility. The unmatched discovery bound and million-thread mailbox tier
+   remain required PR 5 activation gates, not substitutes for these contracts.
 
-Proceed with these recommendations unless the design review changes them:
+4. **SDK and member settings.** Split delivery into SDK wrappers and an approved
+   UI change. The SDK exposes read/validate/replace/preview/history/withdrawal,
+   existing consent/domain/thread controls, generated contracts and code-mode
+   guidance in `macro.crm.emailPrivacy`; existing team-domain methods stay on
+   `macro.crm`. Policy writes carry exact tokens and caller-owned retry keys.
+   Prepare readable rules, JSON edit, counts, history and withdrawal as a desktop
+   and phone proposal grounded in the existing privacy rows; implement the UI
+   only after approval. Keep the server gate unchanged and default-off. Depends
+   on PR 3; regenerate storage SDK conflicts.
+5. **Rollout hardening and readiness.** Integration/parity/performance tests,
+   mixed-version drills, mixed sparse/dense policies across contributors,
+   concurrent source edits/backfill recovery, flag-off and
+   rollback checks, connected runtime traces, operational counters and rollout
+   runbook. Measure the
+   **1m-thread mailbox tier before activation**, including sparse selections,
+   large live targets and fresh/stale custom/generic plans; the eligibility
+   phase does not establish that tier's budget. Bound work examining unmatched
+   live addresses/domains and mailbox contacts before activation: a 99-selected-
+   mailbox seed with about 2,000 live addresses per contact required 198,297
+   address probes, 740,236 shared buffer accesses and 2,522 temporary blocks
+   written by the original eager-distinct probe (1.55 seconds; 4.45 seconds for
+   the request).
+   The shared discovery core and authoring admission above address that
+   expansion; measure its final Rust/API path and small/folded crossover before
+   declaring this gate complete. The initial final-path capture alternated
+   1,120 reads across fresh/stale custom/generic plans and 1/4/8/16/100
+   contributors. All 560 bounded reads completed; the original expanded-policy
+   path timed out at ten seconds in all 16 runs with 100 contributors, while
+   the bounded path took 436–447 ms. Paired successful reads returned identical
+   ordered IDs. Small literal/contact policies stayed near parity; one expanded
+   contact added 4–9 ms. The smaller fixture also exercised 2,880 authenticated
+   in-process API requests, including validation and replacement admission.
+   These timings exclude HTTPS. A separate corrected 500-target shared/disjoint
+   matrix completed 512 final-path reads without errors. Batched first pages
+   reduced stale eight-contributor empty-contact reads from about 4.4 seconds to
+   33 ms; fresh single-contributor singleton-contact cells added 5–24 ms. All 96
+   first-page plans used the existing source indexes (0.158–2.772 ms). Full first
+   pages still continue individually; these plans do not establish throughput
+   for thousands of full sources. Another 2,048 authenticated API requests all
+   succeeded: company-domain admission took roughly 232–288 ms for validation
+   and 246–307 ms for replacement, including its existing locks. That API fixture
+   retained 299,106 mailbox contacts but omitted thread/message history, and its
+   stale profile covered source/rule growth with fresh mailbox-contact statistics.
+   An overflow must never authorize a truncated
+   target set, and falling back to a dense record stream is not a sufficient
+   bound. The initial million-thread baseline used five million primary-mailbox
+   messages with 2.905 million background messages; the full ten-million
+   background tier remains required before activation on a quieter host.
+   Selectivity-dependent plans and index-only probes may change at that tier.
+   The General reader now keeps mode resolution, discovery and the scalar page
+   in one read-only snapshot, including initially all-mail requests. Its tests
+   cover both mode transitions, live-source changes after discovery, and
+   next-request withdrawal and thread exceptions. Optimized selected pages reuse
+   a complete participant set for inclusion and domain vetoes, avoiding a second
+   message/recipient expansion when both need participants. This does not bound
+   long threads or dense fallback work. Bound later candidate/message/recipient/fallback
+   work before activation; discovery alone does not establish those properties.
+   ViewedUpdated record pages now use the optimized reader: sparse matches
+   look up saved views by primary key, while dense pages merge viewed and
+   never-viewed sources and refill within the same snapshot and deadline.
+   Saved view times override newer mail; competing-copy priority and every
+   privacy veto remain cursor-independent. This does not bound rejected source
+   rows, timestamp ties or every unsupported General shape. Retain the
+   deterministic all-mail/selected snapshot-transition regressions added in
+   PR 2 and the full-page ViewedUpdated parity tests.
+   CRM-scoped email search is deferred: email search rejects CRM filters with
+   HTTP 400 and reads no team mail. **If CRM-scoped search ships before selected
+   activation**, it becomes a fourth contribution reader and must enforce the
+   same consent, selected-rule and thread-exclusion eligibility as
+   `crm_email_thread_allowed`, with a cross-reader parity test before activation.
+   This worker phase adds no search code.
+   Depends on all prior PRs. Enabling flags or deployment requires separate
+   authorization.
 
-1. Every agent-authored activation/replacement requires member confirmation;
-   agents manage drafts, with no standing authority to expand sharing in v1.
-2. Contact/company selections capture confirmed address/domain snapshots;
-   later record edits require a new review to change the selection.
-3. Privacy removal retains records and prior interaction metadata, and another
-   member's independently eligible copy remains visible.
-4. Keep the existing personal-email population setting's semantics; treat CRM
-   access restrictions and a true date boundary as separate projects.
+## Remaining implementation questions
 
-No additional product question blocks this draft. Implementation must determine
-real mailbox/rule distributions and latency budgets, verify the member-only
-saved-review capability, and reconcile the final merged thread-exclusion and
-privacy-settings SDK contracts. No query benchmarks or live-data verification
-were performed for this docs-only proposal.
+No further product decision is required to begin the foundation. Verify actual
+mailbox/rule/live-target distributions before setting rollout budgets; the sizes
+above are assumptions. Credential provenance and SDK names are now defined by the own-member API
+and `macro.crm.emailPrivacy`. None requires a member-only approval
+capability. The separate cutoff and CRM-access projects retain ownership of
+their product boundaries.

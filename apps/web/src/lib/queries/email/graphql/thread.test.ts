@@ -16,10 +16,6 @@ import { createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { filter, makeSubject, pipe } from 'wonka';
 
-vi.mock('@core/constant/featureFlags', () => ({
-  enableGraphqlSoup: {},
-  isFeatureEnabled: () => true,
-}));
 vi.mock('@service-email/client', () => ({ emailClient: {} }));
 vi.mock('@service-storage/client', () => ({ storageServiceClient: {} }));
 

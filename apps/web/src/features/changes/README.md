@@ -71,7 +71,9 @@ cancels exit without remounting the pane. Patch parsing and diff bodies are queu
 after the pane shell mounts, and off-screen bodies wait until needed.
 Split/full toggles retain the host and diff owners and restore the dragged split
 ratio without replaying the visibility slide or reparsing unchanged patch text.
-Hosts at 720px or narrower open Changes at full width and hide the width toggle,
+A host passes `hostMinWidth` to `ChangesSplit` (320px by default; a PR passes
+560px, which its header's title and actions need). A host no wider than that plus
+the pane's 400px opens Changes at full width and hides the width toggle,
 without changing the saved split ratio or route layout. Widening restores the
 requested wide layout and keeps the same conversation and diff owners.
 A spotlight request during a slide applies after the slide settles. A full-width

@@ -2,8 +2,7 @@
 
 ## Import from connected apps
 
-With `enable-sidebar-promotions` on (on in dev) and the Pipedream connector stack
-enabled, the Drive, Tasks, and Customers sidebars end with an import card (the
+The Drive, Tasks, and Customers sidebars end with an import card (the
 Chat sidebar's Slack card is the same component under the Slack import gates;
 see [channels](channels.md#imported-slack-history)):
 overlapping provider logos, a two-line pitch, and **Import files**, **Import
@@ -31,12 +30,52 @@ Every other app opens Pipedream's Connect UI inside the dialog. A connected row
   **Open full review** uses the existing full-height sheet. Approve on the card,
   or say yes and let the agent submit it with `DecideReview`; planning must be ready.
   Stop affects the selected source only, and completed copies stay in Macro.
+  For reviewed Notion, Linear and Jira imports, delete a completed copy,
+  then plan and approve again: it creates a new copy rather than linking the
+  deleted one or restoring trash. Verify this for the original importer, a
+  teammate's shared copy, and a personal copy. Deleting the Notion root folder
+  permits its deleted contents to be imported into a fresh root; re-importing
+  an active copy still reuses it. A teammate's active write keeps its claim.
+  A personal verdict keeps a replacement personal even when the deleted target
+  was a team copy. A finished copy deleted during a resumed write is reported
+  for replanning while unrelated objects continue.
+  If a linked data source disappears after planning, plan and approve again to
+  choose its database or task-list format; the old review cannot guess a new shape.
+
+Personal choices create owner-only copies. Personal tasks omit teammate
+assignees because assignment grants access; the import report lists the omitted
+assignee count. For Notion, when an old destination
+folder was explicitly shared, personal copies go into the matching path under
+**Notion (personal)**. The import report lists each relocation; the old shared
+folder stays as it is. A later shared plan uses a separate shared folder when
+reusing the old folder would expose personal contents, and the report explains
+that separation.
+
 - Files also offers **Upload files** and **Upload a folder** (Drive's own
   uploads), and Customers offers **Upload a CSV** (the existing CSV import).
   Each closes the dialog first.
 
 `src/features/connector-import/browser-test/` exercises the connect and
 handoff paths without a backend.
+
+### Import tray
+
+On desktop, signed in, every Notion, Linear, Jira and Slack import run also
+shows in the bottom-right corner, above upload progress (`src/features/import-jobs`,
+mounted in `ToastRegion`). A pill (`2 imports`, with an overall progress ring)
+toggles the list (**Hide imports** / **Show imports**); each row names the
+source and its phase: `Scanning 120 pages` (Linear and Jira: `Reading N
+issues`, Slack: `Finding channels`), `Deciding on N items`, `Waiting for your
+approval`, `Importing 31 of 124` with a percentage, then `Imported`, `Import
+failed` or `Import cancelled`. **Open the <Source> import** opens the agent
+session presenting the review, once one does; Slack rows have no session.
+Runs that stopped moving stay for an hour after their last change, and
+**Dismiss the <Source> import** hides them until they change again. Phones
+never show the tray. It reads `/import/state` (polling only while something
+is running, otherwise on `import_updated` pushes) and each listed workspace
+run's `/import/workspaces/{source}` report. `src/features/import-jobs/browser-test/`
+covers scanning, writing, done, failure, collapse and dismissal without a
+backend.
 
 The connector browser fixture uses in-memory connection responses. Desktop
 and 390-pixel viewport captures show the connected Linear/Jira actions:
@@ -57,12 +96,19 @@ card sits above **Settings**, outside the scrolling list.
   team** is hidden for members of a team that limits invites to admins
   (Settings → Team would offer nothing to do).
 - **Calendar**: "Connect more calendars", shown only with multi-inbox enabled.
-  If a connected account lacks calendar access the button is **Turn on
-  calendar**, and if its grant expired, **Reconnect calendar**; both rerun that
-  account's consent like the calendar settings menu. Otherwise **Connect a
-  calendar** adds another Google account (mail and calendar, like **Connect
-  another account**; plans without multi-inbox see the paywall). The card
-  hides once two accounts have working calendar access.
+  While a connected account needs attention the card names it instead, in the
+  calendar view's and the toast's words, and its button reruns that account's
+  consent like the calendar settings menu: **Enable calendar** with **Turn on
+  calendar** for calendar access never granted (or turned off), **Calendar
+  stopped syncing** with **Reconnect calendar** for one that lost its access
+  (shown even after the card was dismissed), and **Reconnect calendar** for an
+  expired grant, with or without calendar access. Otherwise **Connect a
+  calendar** adds another account (mail and calendar, like **Connect another
+  account**; plans without multi-inbox see the paywall) through the provider
+  chooser, which offers Google, and Microsoft when the server offers this user
+  Outlook. The pitch names no provider; the card shows the Google Calendar
+  logo, joined by Outlook's while Outlook is offered. The card hides once two
+  accounts have working calendar access.
 - **Pull requests**: "Bring in more repositories". Without a linked GitHub
   account the button is **Connect GitHub**; with an expired link it is
   **Reconnect GitHub** (the same reauthentication as Settings → GitHub). Once
@@ -74,7 +120,7 @@ card sits above **Settings**, outside the scrolling list.
 
 ## Suggested routines
 
-With `enable-routine-suggestions` and `enable-routine-code-steps` on, the
+With `enable-routine-suggestions` on, the
 Email, Calendar, Tasks, Drive, Customers, Chat, Calls, Reviews and Agents
 sidebars start with a suggestions card while the scheduler has suggestions for
 that area; it never shows on touch devices. The card shows up to three
@@ -125,7 +171,8 @@ permanent and per account: `POST /onboarding/prompts/<id>/dismiss` stores it
 server-side, so the card stays gone on every device and browser. If
 `GET /onboarding/prompts` fails, the browser's own record of dismissals is
 used. Ids are `import:<files|tasks|crm|channels>`, `home-setup`,
-`calendar-accounts`, and `pull-request-repositories`. Account deletion removes
+`calendar-accounts` (`calendar-accounts:stopped` for a calendar that stopped
+syncing), and `pull-request-repositories`. Account deletion removes
 them.
 
 ## Rendering on view switches

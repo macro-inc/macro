@@ -18,6 +18,10 @@ pub use crm_discussion::GraphqlCrmDiscussionMetadata;
 /// Request to join a channel-shared calendar event notification metadata.
 mod calendar_join_request;
 pub use calendar_join_request::GraphqlCalendarEventJoinRequestMetadata;
+
+/// Agent request for access to a vault item notification metadata.
+mod password_access_request;
+pub use password_access_request::GraphqlPasswordAccessRequestedMetadata;
 /// Request-to-join-a-channel notification metadata.
 mod channel_access_request;
 pub use channel_access_request::GraphqlChannelAccessRequestedMetadata;
@@ -34,7 +38,7 @@ use model_notifications::{
     GithubPrEventStatus, GithubPrMention, GithubPrMentionLocation, GithubPrNotificationCommon,
     GithubPrReview, GithubPrReviewState, GithubPrStatusChanged, GithubReviewRequested,
     InboxReauthRequiredMetadata, InviteToTeamMetadata, MentionedInDocumentCommentMetadata,
-    NewEmailMetadata, NotifEvent, NotificationDocumentSubType, ReminderMetadata,
+    NewEmailMetadata, NotifEvent, NotificationDocumentSubType, PingMetadata, ReminderMetadata,
     RepliedToDocumentCommentThreadMetadata, RoutineRunFinishedMetadata, RoutineRunOutcome,
     RuntimeAccessRemovedMetadata, StoppedAgent, TaskAssignedMetadata,
 };
@@ -898,8 +902,60 @@ impl GraphqlComputerSetupMetadata {
     async fn failure_reason(&self) -> Option<&str> {
         match &self.0.outcome {
             ComputerSetupOutcome::Ready => None,
-            ComputerSetupOutcome::Failed { failure_reason } => Some(failure_reason),
+            ComputerSetupOutcome::Failed { failure_reason, .. } => Some(failure_reason),
         }
+    }
+}
+
+/// GraphQL wrapper for ping metadata.
+pub struct GraphqlPingMetadata(PingMetadata);
+
+/// Metadata for a notification its sender wrote.
+#[Object]
+impl GraphqlPingMetadata {
+    /// What the sender wrote.
+    async fn body(&self) -> &str {
+        &self.0.body
+    }
+
+    /// The linked entity's name when it was sent, when it has one that reads
+    /// the same to every recipient.
+    async fn entity_name(&self) -> Option<&str> {
+        self.0.entity_name.as_deref()
+    }
+
+    /// The agent whose code sent it, when one did.
+    async fn agent_id(&self) -> Option<ID> {
+        self.0.agent.as_ref().map(|agent| ID(agent.id.to_string()))
+    }
+
+    /// The sending agent's name when it was sent.
+    async fn agent_name(&self) -> Option<&str> {
+        self.0.agent.as_ref().map(|agent| agent.name.as_str())
+    }
+
+    /// The sending agent's avatar when it was sent.
+    async fn agent_avatar_url(&self) -> Option<&str> {
+        self.0
+            .agent
+            .as_ref()
+            .and_then(|agent| agent.avatar_url.as_deref())
+    }
+
+    /// The channel message it opens at, when the sender linked one.
+    async fn message_id(&self) -> Option<ID> {
+        self.0
+            .message
+            .map(|message| ID(message.message_id.to_string()))
+    }
+
+    /// The top-level message the linked message replies to, when it is a
+    /// reply.
+    async fn thread_id(&self) -> Option<ID> {
+        self.0
+            .message
+            .and_then(|message| message.thread_id)
+            .map(|thread| ID(thread.to_string()))
     }
 }
 
@@ -1502,6 +1558,8 @@ pub enum GraphqlNotifEvent {
     AgentSessionMentioned(GraphqlAgentSessionMentionedMetadata),
     /// Calendar event join request metadata.
     CalendarEventJoinRequest(GraphqlCalendarEventJoinRequestMetadata),
+    /// Agent request for access to a vault item metadata.
+    PasswordAccessRequested(GraphqlPasswordAccessRequestedMetadata),
     /// Request-to-join-a-channel metadata.
     ChannelAccessRequested(GraphqlChannelAccessRequestedMetadata),
     /// Finished routine run metadata.
@@ -1510,6 +1568,8 @@ pub enum GraphqlNotifEvent {
     AgentSignInExpiry(GraphqlAgentSignInExpiryMetadata),
     /// Computer setup metadata.
     ComputerSetup(GraphqlComputerSetupMetadata),
+    /// Ping metadata.
+    Ping(GraphqlPingMetadata),
     /// Schema-only stub for released clients. Never returned.
     WhatsappGroupMessage(GraphqlWhatsappGroupMessageMetadata),
     /// Removed runtime access that stopped the recipient's agents.
@@ -1555,6 +1615,9 @@ impl From<NotifEvent> for GraphqlNotifEvent {
             NotifEvent::CalendarEventJoinRequest(metadata) => {
                 Self::CalendarEventJoinRequest(metadata.into())
             }
+            NotifEvent::PasswordAccessRequested(metadata) => {
+                Self::PasswordAccessRequested(metadata.into())
+            }
             NotifEvent::ChannelInvite(metadata) => {
                 Self::ChannelInvite(GraphqlChannelInviteMetadata(metadata))
             }
@@ -1580,6 +1643,7 @@ impl From<NotifEvent> for GraphqlNotifEvent {
             NotifEvent::ComputerSetup(metadata) => {
                 Self::ComputerSetup(GraphqlComputerSetupMetadata(metadata))
             }
+            NotifEvent::Ping(metadata) => Self::Ping(GraphqlPingMetadata(metadata)),
             NotifEvent::RuntimeAccessRemoved(metadata) => {
                 Self::RuntimeAccessRemoved(GraphqlRuntimeAccessRemovedMetadata(metadata))
             }

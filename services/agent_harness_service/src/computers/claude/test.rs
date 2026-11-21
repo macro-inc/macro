@@ -28,6 +28,7 @@ impl macro_authorization::JwtValidator for TestIdentity {
             identity: macro_authorization::ValidatedIdentity {
                 agent_id: None,
                 agent_via: None,
+                routine_id: None,
                 user_id: user_id.to_owned(),
                 fusion_user_id: "test-user".to_owned(),
                 permissions: None,
@@ -346,6 +347,109 @@ async fn computer_invalid_code_is_a_typed_retryable_response() {
             "code": "invalid_code",
             "message": "That code didn't work — sign in again to get a new one"
         })
+    );
+}
+
+/// Status and body `code` of a route error, as the web client reads them.
+async fn status_and_code(
+    error: super::ComputerRouteError,
+) -> (axum::http::StatusCode, Option<String>) {
+    use axum::response::IntoResponse as _;
+    let response = error.into_response();
+    let status = response.status();
+    let body = axum::body::to_bytes(response.into_body(), 1024)
+        .await
+        .unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    (status, body["code"].as_str().map(str::to_owned))
+}
+
+fn harnessd_error(kind: &str) -> super::ComputerRouteError {
+    super::ComputerRouteError::from_answer(
+        serde_json::from_value(
+            serde_json::json!({"result": "error", "agent": "claude", "kind": kind}),
+        )
+        .unwrap(),
+    )
+}
+
+/// A sign-in that is gone (too old, replaced, cancelled, harnessd restarted)
+/// is told apart from a busy or unreachable computer, so the dialog offers a
+/// new link instead of "try again shortly" forever.
+#[tokio::test]
+async fn sign_in_failures_carry_the_code_that_says_how_to_recover() {
+    use axum::http::StatusCode;
+    let expired = (StatusCode::GONE, Some("sign_in_expired".to_owned()));
+    assert_eq!(
+        status_and_code(harnessd_error("no_pending_sign_in")).await,
+        expired
+    );
+    assert_eq!(status_and_code(harnessd_error("cancelled")).await, expired);
+    assert_eq!(
+        status_and_code(harnessd_error("malformed_code")).await,
+        (StatusCode::BAD_REQUEST, Some("malformed_code".to_owned()))
+    );
+    assert_eq!(
+        status_and_code(harnessd_error("unavailable")).await,
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Some("computer_unreachable".to_owned())
+        )
+    );
+    assert_eq!(
+        status_and_code(super::ComputerRouteError::from(
+            super::super::harnessd::HarnessdError::Unreachable("refused".to_owned())
+        ))
+        .await,
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Some("computer_unreachable".to_owned())
+        )
+    );
+    assert_eq!(
+        status_and_code(super::ComputerRouteError::from(
+            super::super::harnessd::HarnessdError::Busy
+        ))
+        .await,
+        (StatusCode::CONFLICT, Some("computer_busy".to_owned()))
+    );
+    // A throttled computer is as busy as a held one: retry, not start over.
+    assert_eq!(
+        status_and_code(super::ComputerRouteError::from(
+            harnesses::domain::ports::HarnessError::Throttled
+        ))
+        .await,
+        (StatusCode::CONFLICT, Some("computer_busy".to_owned()))
+    );
+    // harnessd's own timeout waiting on the CLI has already ended the
+    // sign-in: a new one is needed, so it reads as expired.
+    assert_eq!(status_and_code(harnessd_error("timeout")).await, expired);
+    // This service giving up on harnessd may leave the computer still
+    // signing in: the code can be sent again.
+    assert_eq!(
+        status_and_code(super::ComputerRouteError::from(
+            super::super::harnessd::HarnessdError::Timeout
+        ))
+        .await,
+        (StatusCode::GATEWAY_TIMEOUT, None)
+    );
+}
+
+/// Both refusals are 403s, but only the rollout one clears without the
+/// caller's rights changing, so the web client must tell them apart.
+#[tokio::test]
+async fn a_refusal_says_whether_the_rollout_or_the_callers_rights_stopped_it() {
+    use axum::http::StatusCode;
+    assert_eq!(
+        status_and_code(super::ComputerRouteError::RolloutDisabled).await,
+        (StatusCode::FORBIDDEN, Some("rollout_disabled".to_owned()))
+    );
+    assert_eq!(
+        status_and_code(super::ComputerRouteError::from(
+            harnesses::domain::ports::HarnessError::Unauthorized
+        ))
+        .await,
+        (StatusCode::FORBIDDEN, None)
     );
 }
 

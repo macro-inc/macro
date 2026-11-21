@@ -1,8 +1,6 @@
 import { ViewSidebar } from '@app/components/view-shell';
 import { MobileFilterDrawer } from '@app/components/view-shell/MobileFilterDrawer';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import { enableMultiInbox } from '@core/constant/featureFlags';
 import { useAddInboxFlow } from '@core/email-link';
 import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -53,7 +51,6 @@ function createCalendarSettingsControls() {
   const calendarView = useCalendarView();
   const accounts = useCalendarAccounts();
   const startAddInbox = useAddInboxFlow();
-  const multiInboxFlag = useFeatureFlag(enableMultiInbox);
   const [turnOffTarget, setTurnOffTarget] =
     createSignal<TurnOffCalendarTarget | null>(null);
 
@@ -109,11 +106,6 @@ function createCalendarSettingsControls() {
     calendarView.closeEventDetails();
     calendarView.setTimeFormat(timeFormat);
   };
-
-  // The add-inbox flow is entitlement-gated by the backend (402 -> paywall), so
-  // "Connect another account" follows the multi-inbox flag like the email
-  // inbox selector rather than mirroring that rule on the client.
-  const showConnectAccount = () => multiInboxFlag().enabled;
 
   // Enable re-runs Google consent for calendar on an already-connected inbox;
   // turn off opens the confirmation, which lives outside the closing menu.
@@ -173,7 +165,6 @@ function createCalendarSettingsControls() {
     changeWeekStartsOn,
     changeTimeFormat,
     accounts,
-    showConnectAccount,
     runAccountAction,
     connectAnotherAccount,
     turnOffTarget,
@@ -294,52 +285,46 @@ function DesktopCalendarSettings(props: {
           </Dropdown.Sub>
         </Dropdown.Group>
 
-        <Show
-          when={controls.accounts().length > 0 || controls.showConnectAccount()}
-        >
-          <Dropdown.Group>
-            <Dropdown.GroupLabel>Accounts</Dropdown.GroupLabel>
-            <For each={controls.accounts()}>
-              {(account) => (
-                <Dropdown.Item
-                  closeOnSelect
-                  onSelect={() => controls.runAccountAction(account)}
-                >
-                  <span class="min-w-0 flex-1 truncate">
-                    {account.emailAddress}
-                  </span>
-                  <span
-                    class="shrink-0 text-xs font-medium"
-                    classList={{
-                      'text-accent': account.action !== 'turnOff',
-                      'text-failure': account.action === 'turnOff',
-                    }}
-                  >
-                    {match(account.action)
-                      .with('enable', () => 'Enable')
-                      .with('reconnect', () => 'Reconnect')
-                      .with('turnOff', () => 'Turn off')
-                      .exhaustive()}
-                  </span>
-                </Dropdown.Item>
-              )}
-            </For>
-            <Show when={controls.showConnectAccount()}>
+        <Dropdown.Group>
+          <Dropdown.GroupLabel>Accounts</Dropdown.GroupLabel>
+          <For each={controls.accounts()}>
+            {(account) => (
               <Dropdown.Item
                 closeOnSelect
-                onSelect={controls.connectAnotherAccount}
+                onSelect={() => controls.runAccountAction(account)}
               >
-                <PlusIcon class="size-3.5 shrink-0 text-ink-muted" />
-                <span class="flex min-w-0 flex-1 flex-col">
-                  <span class="truncate">Connect another account</span>
-                  <span class="truncate text-xs text-ink-muted">
-                    Email and calendar together
-                  </span>
+                <span class="min-w-0 flex-1 truncate">
+                  {account.emailAddress}
+                </span>
+                <span
+                  class="shrink-0 text-xs font-medium"
+                  classList={{
+                    'text-accent': account.action !== 'turnOff',
+                    'text-failure': account.action === 'turnOff',
+                  }}
+                >
+                  {match(account.action)
+                    .with('enable', () => 'Enable')
+                    .with('reconnect', () => 'Reconnect')
+                    .with('turnOff', () => 'Turn off')
+                    .exhaustive()}
                 </span>
               </Dropdown.Item>
-            </Show>
-          </Dropdown.Group>
-        </Show>
+            )}
+          </For>
+          <Dropdown.Item
+            closeOnSelect
+            onSelect={controls.connectAnotherAccount}
+          >
+            <PlusIcon class="size-3.5 shrink-0 text-ink-muted" />
+            <span class="flex min-w-0 flex-1 flex-col">
+              <span class="truncate">Connect another account</span>
+              <span class="truncate text-xs text-ink-muted">
+                Email and calendar together
+              </span>
+            </span>
+          </Dropdown.Item>
+        </Dropdown.Group>
       </Dropdown.Content>
     </Dropdown>
   );
@@ -559,58 +544,50 @@ function MobileCalendarSettings(props: {
               </For>
             </MobileDrawer.Section>
 
-            <Show
-              when={
-                controls.accounts().length > 0 || controls.showConnectAccount()
-              }
-            >
-              <MobileDrawer.Label class="pt-4">Accounts</MobileDrawer.Label>
-              <MobileDrawer.Section class="mb-3 flex shrink-0 flex-col">
-                <For each={controls.accounts()}>
-                  {(account) => (
-                    <MobileDrawer.Item
-                      onClick={() => {
-                        setOpen(false);
-                        controls.runAccountAction(account);
-                      }}
-                    >
-                      <span class="min-w-0 flex-1 truncate">
-                        {account.emailAddress}
-                      </span>
-                      <span
-                        class="shrink-0 text-xs font-medium"
-                        classList={{
-                          'text-accent': account.action !== 'turnOff',
-                          'text-failure': account.action === 'turnOff',
-                        }}
-                      >
-                        {match(account.action)
-                          .with('enable', () => 'Enable')
-                          .with('reconnect', () => 'Reconnect')
-                          .with('turnOff', () => 'Turn off')
-                          .exhaustive()}
-                      </span>
-                    </MobileDrawer.Item>
-                  )}
-                </For>
-                <Show when={controls.showConnectAccount()}>
+            <MobileDrawer.Label class="pt-4">Accounts</MobileDrawer.Label>
+            <MobileDrawer.Section class="mb-3 flex shrink-0 flex-col">
+              <For each={controls.accounts()}>
+                {(account) => (
                   <MobileDrawer.Item
                     onClick={() => {
                       setOpen(false);
-                      controls.connectAnotherAccount();
+                      controls.runAccountAction(account);
                     }}
                   >
-                    <PlusIcon class="size-4 shrink-0 text-ink-muted" />
-                    <span class="flex min-w-0 flex-1 flex-col">
-                      <span class="truncate">Connect another account</span>
-                      <span class="truncate text-xs text-ink-muted">
-                        Email and calendar together
-                      </span>
+                    <span class="min-w-0 flex-1 truncate">
+                      {account.emailAddress}
+                    </span>
+                    <span
+                      class="shrink-0 text-xs font-medium"
+                      classList={{
+                        'text-accent': account.action !== 'turnOff',
+                        'text-failure': account.action === 'turnOff',
+                      }}
+                    >
+                      {match(account.action)
+                        .with('enable', () => 'Enable')
+                        .with('reconnect', () => 'Reconnect')
+                        .with('turnOff', () => 'Turn off')
+                        .exhaustive()}
                     </span>
                   </MobileDrawer.Item>
-                </Show>
-              </MobileDrawer.Section>
-            </Show>
+                )}
+              </For>
+              <MobileDrawer.Item
+                onClick={() => {
+                  setOpen(false);
+                  controls.connectAnotherAccount();
+                }}
+              >
+                <PlusIcon class="size-4 shrink-0 text-ink-muted" />
+                <span class="flex min-w-0 flex-1 flex-col">
+                  <span class="truncate">Connect another account</span>
+                  <span class="truncate text-xs text-ink-muted">
+                    Email and calendar together
+                  </span>
+                </span>
+              </MobileDrawer.Item>
+            </MobileDrawer.Section>
           </MobileDrawer.ScrollBody>
         </MobileDrawer.Content>
       </MobileDrawer.Portal>

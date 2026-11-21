@@ -35,6 +35,7 @@ github = { path = "../github", default-features = false, features = [
   "sync",
 ] }
 http = { workspace = true }
+httpdate = { workspace = true }
 # Wrapping upstream event-stream bodies so their lifetime and volume get logged.
 http-body = { workspace = true }
 http-body-util = { workspace = true }
@@ -78,3 +79,4 @@ futures = { workspace = true }
 rmcp = { workspace = true, features = ["auth"] }
 tokio = { workspace = true, features = ["macros", "rt"] }
 tower = { workspace = true }
+tracing-subscriber = { workspace = true }

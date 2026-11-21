@@ -326,7 +326,11 @@ pub(super) fn apply_in_world(
                 if let Some(definition) = definition {
                     store_definition(world, writes.database_id, definition);
                 }
-                drop_column_cells(world, *table_id, replacement.column.property_definition_id);
+                // Postgres drops the old definition's cells by trigger when the
+                // placement moves; a format-only rebind keeps the same definition.
+                if replacement.definition_id != replacement.column.property_definition_id {
+                    drop_column_cells(world, *table_id, replacement.column.property_definition_id);
+                }
                 for (row, value) in &replacement.values {
                     world
                         .cells

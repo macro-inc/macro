@@ -29,6 +29,8 @@ use chat::outbound::postgres::PgChatRepo;
 pub use cognition::inbound::toolset::CognitionToolContext as ToolCognitionToolContext;
 use connection::domain::ports::ConnectionService;
 use connection_gateway_client::ConnectionGatewayClient;
+use contacts::domain::list_reads::{ContactListReads, FlaggedContactReads};
+use contacts::domain::list_writes::{ContactListWrites, ListWritesGate};
 use contacts::domain::service::{ContactsDomainService, SqsContactsIngress};
 use contacts::outbound::gateway::ConnectionGatewayNotifier;
 use contacts::outbound::ingress::SqsContactsQueue;
@@ -195,11 +197,12 @@ pub fn build_bot_tool_context(
                 event_broker,
                 harnesses::domain::service::HarnessServiceImpl::new(
                     harnesses::outbound::pg_harness_repo::PgHarnessRepo::new(pool.clone()),
-                    hosted_runtimes::outbound::pg::PgComputerAgents::new(pool),
+                    hosted_runtimes::outbound::pg::PgComputerAgents::new(pool.clone()),
                 ),
             )
             .with_mcp_apps(crate::mcp_app_catalog::PipedreamMcpAppCatalog::new(
                 pipedream,
+                pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(pool),
             )),
         ),
         entity_access_service,
@@ -325,6 +328,11 @@ pub struct ChannelSideEffectClients {
     pub sqs: aws_sdk_sqs::Client,
     /// Broker publishing channel events to the `macro.channels` topic.
     pub macro_event_broker: ToolEventBroker,
+    /// The host's environment, which turns list-aware contact changes on in
+    /// a local stack.
+    pub environment: macro_env::Environment,
+    /// Reads `contacts-list-writes` elsewhere; `None` keeps those changes off.
+    pub feature_flags: Option<feature_flags::outbound::posthog::PostHogFeatureFlags>,
 }
 
 /// Build the channel AI tool context dispatching the same side effects as the
@@ -377,11 +385,14 @@ fn channel_event_dispatcher(
     pool: &sqlx::PgPool,
     clients: &ChannelSideEffectClients,
 ) -> ToolChannelEventDispatcher {
-    let contacts_ingress = Arc::new(SqsContactsIngress {
-        queue: SqsContactsQueue::new(
-            clients.sqs.clone(),
-            macro_queues::ContactsQueue::new().to_string(),
-        ),
+    let contacts_ingress = Arc::new(ListWritesGate {
+        inner: SqsContactsIngress {
+            queue: SqsContactsQueue::new(
+                clients.sqs.clone(),
+                macro_queues::ContactsQueue::new().to_string(),
+            ),
+        },
+        writes: ContactListWrites::new(clients.environment, clients.feature_flags.clone()),
     });
     let side_effects = ChannelSideEffectService::new(
         PgChannelSideEffectContext::new(pool.clone()),
@@ -1451,10 +1462,14 @@ pub fn build_databases_tool_context(
     )
 }
 
-/// The contacts the SQL tools read `macro.people` from. Reads only, so
-/// nothing is ever invalidated through a notifier.
-pub type ToolContactsService =
-    ContactsDomainService<DbContactsRepository, Option<ConnectionGatewayNotifier>>;
+/// The contacts the SQL tools read `macro.people` from: the legacy graph or
+/// the list-aware tables, by the session user's `contacts-list-reads` flag.
+/// Reads only, so nothing is ever invalidated through a notifier.
+pub type ToolContactsService = FlaggedContactReads<
+    ContactsDomainService<DbContactsRepository, Option<ConnectionGatewayNotifier>>,
+    DbContactsRepository,
+    feature_flags::outbound::posthog::PostHogFeatureFlags,
+>;
 
 /// Type alias for the SQL tools' context: SQL over the same databases
 /// service the schema tools use, reading rows through Soup.
@@ -1475,20 +1490,26 @@ pub type ToolViewOnlyDatabasesSqlToolContext = DatabasesSqlToolContext<
 >;
 
 /// Build the SQL tools' context over the schema tools' databases service
-/// and entity access, and the host's Soup.
+/// and entity access, and the host's Soup. `flags` selects each user's
+/// `macro.people` reads; without a provider every user reads the legacy graph.
 pub fn build_databases_sql_tool_context(
     databases: &ToolDatabasesToolContext,
     soup_service: Arc<ToolSoupService>,
     pool: sqlx::PgPool,
+    flags: Option<feature_flags::outbound::posthog::PostHogFeatureFlags>,
 ) -> ToolDatabasesSqlToolContext {
     DatabasesSqlToolContext::new(DatabasesSql::new(
         databases.service.clone(),
         databases.entity_access_service.clone(),
         soup_service,
-        Arc::new(ContactsDomainService {
-            repository: DbContactsRepository::new(pool),
-            notifier: None,
-        }),
+        Arc::new(FlaggedContactReads::new(
+            Arc::new(ContactsDomainService {
+                repository: DbContactsRepository::new(pool.clone()),
+                notifier: None,
+            }),
+            Arc::new(DbContactsRepository::new(pool)),
+            ContactListReads::optional(flags),
+        )),
     ))
 }
 
@@ -1638,6 +1659,36 @@ pub struct ToolEntityCreator {
     pub document_service: Arc<ToolDocumentService>,
 }
 
+/// Build imported metadata before any document creation side effect.
+fn imported_document_metadata(
+    name: &str,
+    visibility: import::domain::ports::ImportVisibility,
+) -> documents::domain::create::NewDocumentMetadataBuilder {
+    let metadata = documents::domain::create::NewDocumentMetadata::builder(name);
+    match imported_link_share(visibility) {
+        models_permissions::share_permission::InitialLinkShare::Exact(state) => {
+            metadata.initial_link_share(state)
+        }
+        models_permissions::share_permission::InitialLinkShare::EntityDefault => metadata,
+    }
+}
+
+/// Translate the reviewed import policy into an exact link override when needed.
+pub(crate) fn imported_link_share(
+    visibility: import::domain::ports::ImportVisibility,
+) -> models_permissions::share_permission::InitialLinkShare {
+    match visibility {
+        import::domain::ports::ImportVisibility::Personal => {
+            models_permissions::share_permission::InitialLinkShare::Exact(
+                models_permissions::share_permission::LinkShareState::Off,
+            )
+        }
+        import::domain::ports::ImportVisibility::Shared => {
+            models_permissions::share_permission::InitialLinkShare::EntityDefault
+        }
+    }
+}
+
 impl ToolEntityCreator {
     pub(crate) fn creation_principal(
         user: &MacroUserIdStr<'static>,
@@ -1677,9 +1728,10 @@ impl ToolEntityCreator {
         subtype: documents::domain::create::MarkdownSubtype,
         folder: Option<uuid::Uuid>,
         dates: Option<import::domain::ports::SourceDates>,
+        visibility: import::domain::ports::ImportVisibility,
     ) -> anyhow::Result<String> {
         use std::str::FromStr as _;
-        let mut metadata = documents::domain::create::NewDocumentMetadata::builder(name);
+        let mut metadata = imported_document_metadata(name, visibility);
         if let Some(id) = id {
             metadata = metadata.id(id);
         }
@@ -1778,22 +1830,28 @@ impl ToolEntityCreator {
         folder: Option<uuid::Uuid>,
         dates: Option<import::domain::ports::SourceDates>,
         share_with_team: bool,
-    ) -> anyhow::Result<String> {
+        visibility: import::domain::ports::ImportVisibility,
+    ) -> anyhow::Result<import::domain::ports::CreatedImportTask> {
         // Same team resolution as the CreateDocument tool, so imported tasks
         // number correctly within the user's team; the roster doubles as the
         // assignee-email lookup. A teamless user gets a private task.
         let (team_id, roster) = self.team_roster(user).await;
         let subtype = documents::domain::create::MarkdownSubtype::Task {
             property_values: None,
+            pinned_property_definition_ids: None,
             share_with_team: share_with_team && team_id.is_some(),
             team_id,
         };
         let task_id = self
-            .create_doc(user, id, name, content, subtype, folder, dates)
+            .create_doc(user, id, name, content, subtype, folder, dates, visibility)
             .await?;
-        self.apply_task_properties(user, &task_id, properties, &roster)
+        let notice = self
+            .apply_task_properties(user, &task_id, properties, &roster, visibility)
             .await;
-        Ok(task_id)
+        Ok(import::domain::ports::CreatedImportTask {
+            id: task_id,
+            notice,
+        })
     }
 
     /// Create an imported markdown document, in `folder` when given and with
@@ -1811,6 +1869,7 @@ impl ToolEntityCreator {
         properties: &import::domain::ports::ImportedDocumentProperties,
         folder: Option<uuid::Uuid>,
         dates: Option<import::domain::ports::SourceDates>,
+        visibility: import::domain::ports::ImportVisibility,
     ) -> anyhow::Result<String> {
         let document_id = self
             .create_doc(
@@ -1821,6 +1880,7 @@ impl ToolEntityCreator {
                 documents::domain::create::MarkdownSubtype::Note,
                 folder,
                 dates,
+                visibility,
             )
             .await?;
         let access = match self
@@ -1858,7 +1918,8 @@ impl ToolEntityCreator {
         task_id: &str,
         properties: &import::domain::ports::ImportedTaskProperties,
         roster: &[MacroUserIdStr<'static>],
-    ) {
+        visibility: import::domain::ports::ImportVisibility,
+    ) -> Option<import::domain::ports::TaskImportNoticeReason> {
         use models_properties::api::requests::SetPropertyValue;
         use system_properties::SystemPropertyKey;
 
@@ -1930,38 +1991,114 @@ impl ToolEntityCreator {
             }
         }
 
-        if let Some(email) = properties.assignee_email.as_deref() {
-            // Only assign teammates — an email with no roster match (an
-            // external collaborator, a bot) is silently skipped.
-            let Some(assignee) = roster
-                .iter()
-                .find(|member| member.email_str().eq_ignore_ascii_case(email))
-            else {
-                return;
-            };
-            let reference = models_properties::EntityReference::new(
-                assignee.as_ref().to_string(),
-                models_properties::EntityType::User,
-            );
-            if let Err(e) = self
-                .task_properties
-                .set_entity_property(
-                    &principal,
-                    task_id,
-                    SystemPropertyKey::Assignees.uuid(),
-                    Some(SetPropertyValue::MultiEntityReference {
-                        references: vec![reference],
-                    }),
-                )
-                .await
-            {
-                tracing::warn!(task_id, email, error = ?e, "failed to set imported task assignee");
+        match self
+            .apply_task_assignee(
+                user,
+                task_id,
+                properties.assignee_email.as_deref(),
+                roster,
+                visibility,
+            )
+            .await
+        {
+            Ok(notice) => notice,
+            Err(error) => {
+                tracing::warn!(task_id, error = ?error, "failed to set imported task assignee");
+                None
             }
         }
     }
+
+    /// Apply only the assignee, sharing the same visibility policy with strict retries.
+    pub(crate) async fn apply_task_assignee(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        task_id: &str,
+        email: Option<&str>,
+        roster: &[MacroUserIdStr<'static>],
+        visibility: import::domain::ports::ImportVisibility,
+    ) -> anyhow::Result<Option<import::domain::ports::TaskImportNoticeReason>> {
+        use models_properties::api::requests::SetPropertyValue;
+        use system_properties::SystemPropertyKey;
+        let Some(assignee) = email.and_then(|email| {
+            roster
+                .iter()
+                .find(|member| member.email_str().eq_ignore_ascii_case(email))
+        }) else {
+            return Ok(None);
+        };
+        if let Some(notice) = visibility.task_assignee_notice(user, assignee) {
+            return Ok(Some(notice));
+        }
+        let reference = models_properties::EntityReference::new(
+            assignee.as_ref().to_string(),
+            models_properties::EntityType::User,
+        );
+        self.task_properties
+            .set_entity_property(
+                &Self::creation_principal(user),
+                task_id,
+                SystemPropertyKey::Assignees.uuid(),
+                Some(SetPropertyValue::MultiEntityReference {
+                    references: vec![reference],
+                }),
+            )
+            .await?;
+        Ok(None)
+    }
+}
+
+/// The entity-access type an import from `source` is recorded as. Linear
+/// and Jira issues become tasks, which are documents.
+fn imported_entity_type(source: import::domain::models::ImportSource) -> model_entity::EntityType {
+    use import::domain::models::ImportSource;
+    match source {
+        ImportSource::Linear | ImportSource::Jira | ImportSource::Notion => {
+            model_entity::EntityType::Document
+        }
+        ImportSource::Slack => model_entity::EntityType::Channel,
+    }
+}
+
+/// Whether an access-check failure means the caller cannot see the entity,
+/// as opposed to the check itself failing. A malformed id names nothing the
+/// caller can see, so it is refused too.
+pub(crate) fn refuses_view(error: &entity_access::domain::models::AccessError) -> bool {
+    use entity_access::domain::models::AccessError;
+    matches!(
+        error,
+        AccessError::Unauthorized
+            | AccessError::UnauthorizedWithMessage(_)
+            | AccessError::NotFound(_)
+            | AccessError::BadRequest(_)
+    )
 }
 
 impl import::domain::ports::EntityCreator for ToolEntityCreator {
+    async fn can_view(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: import::domain::models::ImportSource,
+        entity_id: &str,
+    ) -> anyhow::Result<bool> {
+        match self
+            .entity_access_service
+            .generate_entity_access_receipt::<ViewAccessLevel>(
+                user,
+                None,
+                entity_id,
+                imported_entity_type(source),
+            )
+            .await
+        {
+            Ok(_) => Ok(true),
+            Err(error) if refuses_view(&error) => Ok(false),
+            Err(error) => Err(anyhow::Error::new(error).context(format!(
+                "could not check access to imported entity {entity_id}"
+            ))),
+        }
+    }
+
     async fn create_task(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -1980,8 +2117,10 @@ impl import::domain::ports::EntityCreator for ToolEntityCreator {
             // Single tracked tasks (Linear) are shared with the team, as
             // tasks the user makes are.
             true,
+            import::domain::ports::ImportVisibility::Shared,
         )
         .await
+        .map(|created| created.id)
     }
 
     async fn create_notion_document(
@@ -2000,6 +2139,7 @@ impl import::domain::ports::EntityCreator for ToolEntityCreator {
             properties,
             None,
             None,
+            import::domain::ports::ImportVisibility::Shared,
         )
         .await
     }
@@ -2364,3 +2504,6 @@ fn self_chat_id(ctx: &ToolServiceContext) -> Option<uuid::Uuid> {
         .then_some(ctx.usage_context.entity)
         .flatten()
 }
+
+#[cfg(test)]
+mod test;

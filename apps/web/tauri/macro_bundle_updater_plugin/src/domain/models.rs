@@ -212,6 +212,8 @@ const MPSC_CHAN_SIZE: usize = 10;
 pub struct NativeAppInfo {
     /// The native app build number.
     pub native_build: u64,
+    /// The commit the embedded bundle was built from, if known.
+    pub embedded_git_sha: Option<String>,
     /// CPU architecture.
     pub arch: Arch,
     /// Operating system target.
@@ -223,6 +225,9 @@ pub struct NativeAppInfo {
 pub struct AppInfo {
     /// The current effective JS bundle build.
     pub current_bundle_build: u64,
+    /// The commit the current bundle was built from, sent only while the
+    /// embedded bundle is active.
+    pub current_git_sha: Option<String>,
     /// The native app build number.
     pub native_build: u64,
     /// CPU architecture.

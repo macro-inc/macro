@@ -37,7 +37,7 @@ fn tested_inventory_matches_every_registered_public_method_including_head() {
         .map(|(method, path, _)| (method.to_owned(), path))
         .collect();
     assert_eq!(registered, tested);
-    assert_eq!(tested.len(), 33);
+    assert_eq!(tested.len(), 35);
 }
 
 #[tokio::test]
@@ -416,4 +416,63 @@ async fn import_enforces_body_and_batch_limits_without_echoing_payloads() {
         serde_json::json!({"code":"invalid_request"})
     );
     assert!(!String::from_utf8_lossy(&body).contains(sentinel));
+}
+
+#[tokio::test]
+async fn import_accepts_and_audits_every_parser_format() {
+    use crate::domain::service::test::fakes::*;
+    let repository = Arc::new(FakeRepository::new());
+    let team = TeamId(Uuid::from_u128(1));
+    repository
+        .memberships
+        .lock()
+        .unwrap()
+        .insert("macro|synthetic@example.test".into(), vec![team]);
+    let app = router(PasswordRouterState {
+        authorization: MacroAuthorizationState::new(Arc::new(Authorization)),
+        service: Arc::new(PasswordService {
+            repository: repository.clone(),
+            provider: Arc::new(FakeProvider::new()),
+            availability: Arc::new(FakeAvailability),
+        }),
+    });
+    let formats = [
+        "one_password_pux",
+        "one_password_csv",
+        "bitwarden_json",
+        "bitwarden_csv",
+        "bitwarden_zip",
+    ];
+    for format in formats {
+        let body = serde_json::json!({"format":format,"target":{"kind":"root"},"private":true,"folders":[],
+            "items":[{"sourceKey":"one","name":"Synthetic","kind":"note","favorite":false,
+                "values":{"username":"","password":"","notes":"synthetic","fields":[]}}]});
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(format!(
+                        "/teams/{}/imports/{}/items",
+                        team.0,
+                        Uuid::now_v7()
+                    ))
+                    .header("authorization", "Bearer session")
+                    .header("x-macro-passwords", "1")
+                    .header("content-type", "application/json")
+                    .body(Body::from(body.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK, "{format}");
+    }
+    let audited: Vec<serde_json::Value> = repository
+        .imports
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|(_, _, format, _)| serde_json::to_value(format).unwrap())
+        .collect();
+    assert_eq!(audited, formats.map(serde_json::Value::from).to_vec());
 }

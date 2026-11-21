@@ -39,6 +39,10 @@ export default {
   empty: 'No passwords here yet',
   loading: 'Loading passwords…',
   failed: 'Could not complete this action. Please try again.',
+  unreachable: "Can't reach Macro. Check your connection.",
+  serviceUnavailable:
+    'Passwords is temporarily unavailable. Try again in a minute.',
+  vaultNotProvisioned: "This team's vault isn't set up yet.",
   retry: 'Retry',
   name: 'Name',
   kind: 'Type',
@@ -83,6 +87,13 @@ export default {
   moveFolderTo: 'Move “{{name}}” to',
   deleteFolder: 'Delete folder',
   folderActions: 'Folder actions for {{name}}',
+  filterItems: 'Filter items',
+  groupItems: 'Group by',
+  typeFilter: 'Type filter',
+  listOptions: 'List options',
+  openFilters: 'Open item filters',
+  listControls: 'List controls',
+  group: 'Group',
   topLevel: 'Top level',
   deleteFolderTitle: 'Delete “{{name}}”?',
   deleteFolderItems: {
@@ -185,10 +196,25 @@ export default {
   folderCreated: 'Folder created',
   folderCreateFailed: 'Could not create the folder',
   seconds: { other: '{{count}} seconds remaining' },
+  agentAccess: 'Agent access',
+  agentRequested_view: '{{name}} asked to view this item',
+  agentRequested_edit: '{{name}} asked to edit this item',
+  agentCanUse_view: '{{name}} can view this item',
+  agentCanUse_edit: '{{name}} can edit this item',
+  agentApprovalRequired: '{{name}} requires approval to use this item',
+  agentCreator: '{{name}} created this item',
+  agentAllowView: 'Allow view',
+  agentAllowEdit: 'Allow edit',
+  agentDeny: 'Deny',
+  agentRevoke: 'Revoke access for {{name}}',
+  agentRevokeApproval: 'Remove approval',
+  agentRevokeGrant: 'Remove access',
+  agentStale: 'This request changed. Showing the latest.',
+  agentActionFailed: 'That did not go through. Try again.',
   import: 'Import…',
   importTitle: 'Import passwords',
   importIntro:
-    'Import an export from 1Password (.1pux or CSV) or Bitwarden (unencrypted JSON or CSV). The file is read on this device and never uploaded.',
+    'Import an export from 1Password (.1pux or CSV) or Bitwarden (unencrypted JSON, CSV or .zip). The file is read on this device and never uploaded.',
   importDrop: 'Drop an export file here',
   importChoose: 'Choose file',
   importReading: 'Reading the export…',
@@ -198,6 +224,7 @@ export default {
   importSource_one_password_csv: '1Password CSV',
   importSource_bitwarden_json: 'Bitwarden JSON',
   importSource_bitwarden_csv: 'Bitwarden CSV',
+  importSource_bitwarden_zip: 'Bitwarden export (.zip)',
   importItems: { one: '{{count}} item', other: '{{count}} items' },
   importFolderCount: { one: '{{count}} folder', other: '{{count}} folders' },
   importResumed:
@@ -247,6 +274,9 @@ export default {
   importNotCarried_totp_non_default:
     'Extra verification codes (kept as fields)',
   importNotCarried_extra_field: 'Unsupported fields',
+  importNotCarried_empty_field: 'Empty fields',
+  importNotCarried_reprompt: 'Master password re-prompt',
+  importNotCarried_uri_match_type: 'Website match rules',
   importTooManyFolders:
     'This import would bring the team to {{total}} folders; the limit is {{limit}}. Import into an existing folder or remove folders first.',
   importTooDeep:
@@ -279,6 +309,7 @@ export default {
   importFailureBusy: 'The vault was busy ({{count}})',
   importFailureFolderMissing:
     'Their folder was deleted during the import ({{count}})',
+  importFailureNotProvisioned: "This team's vault isn't set up yet ({{count}})",
   importFailureInvalid: "The vault didn't accept them ({{count}})",
   importFailureRefused: 'Not allowed in this vault ({{count}})',
   importFailureNoAnswer: 'No answer from the server ({{count}})',
@@ -296,11 +327,12 @@ export default {
   importError_too_many_items: 'The export has more than 20,000 items.',
   importError_path_traversal: 'The archive contains unsafe file names.',
   importError_invalid_zip: 'The archive could not be opened.',
-  importError_missing_export_data: 'The archive is not a 1Password export.',
+  importError_missing_export_data:
+    'The archive is not a 1Password or Bitwarden export.',
   importError_encrypted_bitwarden:
-    'This Bitwarden export is encrypted. Export again as unencrypted JSON or CSV.',
+    'This Bitwarden export is encrypted. Export again as unencrypted JSON, CSV or .zip.',
   importError_unsupported_version:
-    'This export version is not supported. From 1Password, export a .1pux file or a 1Password 8 CSV; from Bitwarden, an unencrypted JSON or CSV.',
+    'This export version is not supported. From 1Password, export a .1pux file or a 1Password 8 CSV; from Bitwarden, an unencrypted JSON, CSV or .zip.',
   importError_invalid_json: 'The file is not valid JSON (line {{line}}).',
   importError_invalid_csv: 'The file is not valid CSV (row {{row}}).',
   importError_unreadable: 'The file could not be read. Try again.',

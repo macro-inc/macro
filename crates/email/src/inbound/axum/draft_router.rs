@@ -50,6 +50,9 @@ pub enum CreateDraftError {
     /// Not found.
     #[error("{0}")]
     NotFound(String),
+    /// The inbox is busy; the same request succeeds once it settles.
+    #[error("{0}")]
+    Conflict(String),
     /// Internal error.
     #[error("Internal error")]
     Internal(EmailErr),
@@ -64,6 +67,7 @@ impl IntoResponse for CreateDraftError {
         let status = match &self {
             CreateDraftError::Validation(_) => StatusCode::BAD_REQUEST,
             CreateDraftError::NotFound(_) => StatusCode::NOT_FOUND,
+            CreateDraftError::Conflict(_) => StatusCode::CONFLICT,
             CreateDraftError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
@@ -94,6 +98,7 @@ impl From<EmailErr> for CreateDraftError {
             | EmailErr::InvalidSender
             | EmailErr::UnverifiedSendingAlias { .. }
             | EmailErr::SendAsPermissionRequired => CreateDraftError::Validation(err.to_string()),
+            EmailErr::Contended => CreateDraftError::Conflict(err.to_string()),
             _ => CreateDraftError::Internal(err),
         }
     }

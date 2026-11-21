@@ -77,10 +77,15 @@ impl OpenBaoProvider {
         })
     }
 
-    #[tracing::instrument(skip_all, err, name = "passwords.openbao.authenticate")]
+    #[tracing::instrument(skip_all, err, name = "passwords.openbao.authenticate", fields(team_id = %team.0, outcome = tracing::field::Empty))]
     async fn login(&self, team: TeamId) -> Result<Session, Error> {
-        self.authenticated_client(team, NamespaceAccess::Values)
-            .await
+        let session = self
+            .authenticated_client(team, NamespaceAccess::Values)
+            .await;
+        if let Err(Error::NotProvisioned) = session {
+            tracing::Span::current().record("outcome", "not_provisioned");
+        }
+        session
     }
 
     /// Runs `call` with the team's token. When the provider rejects a cached
@@ -154,23 +159,22 @@ impl OpenBaoProvider {
             .map_err(|_| Error::Unavailable)?,
         );
         match access {
-            NamespaceAccess::Values => {
-                self.api
-                    .login_team(
-                        &format!("team-{}", team.0),
-                        "passwords-service",
-                        &jwt,
-                        Some(&audit_id),
-                    )
-                    .await
-            }
-            NamespaceAccess::Lifecycle => {
-                self.api
-                    .login_lifecycle(&format!("team-{}", team.0), &jwt, Some(&audit_id))
-                    .await
-            }
+            NamespaceAccess::Values => self
+                .api
+                .login_team(
+                    &format!("team-{}", team.0),
+                    "passwords-service",
+                    &jwt,
+                    Some(&audit_id),
+                )
+                .await
+                .map_err(login_error),
+            NamespaceAccess::Lifecycle => self
+                .api
+                .login_lifecycle(&format!("team-{}", team.0), &jwt, Some(&audit_id))
+                .await
+                .map_err(provider_error),
         }
-        .map_err(provider_error)
     }
 }
 
@@ -191,6 +195,21 @@ fn provider_error(error: openbao_client::Error) -> Error {
         Cause::CasMismatch => Error::Conflict,
         Cause::InvalidInput => Error::Invalid,
         _ => Error::Unavailable,
+    }
+}
+
+// Only team login may report a missing namespace as unprovisioned: the
+// namespace is created out of band, so nothing else proves it never existed.
+fn login_error(error: openbao_client::Error) -> Error {
+    match error.cause() {
+        Cause::Namespace => {
+            tracing::warn!(
+                status = error.status().map(i64::from),
+                "OpenBao team namespace missing"
+            );
+            Error::NotProvisioned
+        }
+        _ => provider_error(error),
     }
 }
 
@@ -334,6 +353,7 @@ impl SecretProvider for OpenBaoProvider {
         }
         #[derive(Deserialize)]
         struct UsernameValue {
+            #[serde(default)]
             username: SecretString,
         }
         let version = u64::try_from(version).map_err(|_| Error::Invalid)?;

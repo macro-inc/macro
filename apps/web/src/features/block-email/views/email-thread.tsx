@@ -98,7 +98,6 @@ export function EmailThread(props: EmailBlockViewProps) {
       title={props.title}
       threadId={props.threadId}
       source={props.source}
-      threadTransport={props.threadTransport}
       host={props.host}
       topBar={(context) => (
         <EmailThreadHeader

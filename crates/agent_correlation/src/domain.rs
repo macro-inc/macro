@@ -48,6 +48,10 @@ pub enum CorrelationError {
     /// with.
     #[error("this session may not make this request")]
     OutOfScope,
+    /// The request carries more than one credential that differ, so which
+    /// one it acts with can't be told.
+    #[error("conflicting_credentials")]
+    ConflictingCredentials,
     /// Storage failure; never report as invalid caller input.
     #[error("agent correlation storage is unavailable")]
     Unavailable(rootcause::Report),

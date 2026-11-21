@@ -46,6 +46,7 @@ call = { path = "../call", default-features = false, features = ["ai_tools", "ou
 chat = { path = "../chat", features = ["ai_tools", "outbound"] }
 channels = { path = "../channels", features = ["ai_tools", "outbound"] }
 cognition = { path = "../cognition" }
+jev = { path = "../jev", features = ["outbound"] }
 chrono.workspace = true
 dateparser.workspace = true
 connection = { path = "../connection", default-features = false, features = [
@@ -128,6 +129,8 @@ macro_service_urls = { path = "../macro_service_urls" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+aws-sdk-s3 = { workspace = true }
+wiremock = { workspace = true }
 harnesses = { path = "../harnesses", default-features = false, features = ["test-utils"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 calendar_scheduling = { path = "../calendar_scheduling", features = ["inbound"] }

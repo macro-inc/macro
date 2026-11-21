@@ -132,6 +132,8 @@ export const authExcluded = [
   'refresh',
   'rejectInvitation',
   'removeUserFromTeam',
+  // An agent teammate's own report that it is up; the starter agent calls it.
+  'reportTeamAgentOnline',
   'resendFusionauthVerifyUserEmail',
   'resolveGtmInviteLink',
   'revokeGtmInviteLink',
@@ -161,7 +163,10 @@ export const authBacklog = [
   'setTeamAgentVoice', // An agent teammate's call voice is an admin app setting for now.
   'cancelTeamComputer', // Computer billing and lifecycle controls belong to the app.
   'completeTeamComputerSetup', // The guided computer setup is an app flow.
+  'listTeamComputerUsage', // Computer usage graphs belong to the app.
   'listTeamComputerOffers', // Computer checkout offers belong to the app.
+  'listTeamComputerPurchaseOffers', // The buy dialog's offers belong to the app.
+  'getTeamComputerRollout', // Whether the app shows computers is an app gate.
   'listTeamComputers', // Computer billing and lifecycle controls belong to the app.
   'restoreTeamComputer', // Computer billing and lifecycle controls belong to the app.
   'purchaseTeamComputer', // Computer checkout belongs to the app.
@@ -225,7 +230,6 @@ export const cognitionExcluded = [
   'updatePipedreamMcpConnection',
   'updateToolCall',
   'updateToolResponse',
-  'upsertAiProjection',
 ] as const satisfies readonly (keyof CognitionSdk)[];
 
 export const cognitionBacklog =
@@ -277,11 +281,15 @@ export const notificationExcluded = [
   'getTypedNotificationsByEventItemId',
   'getUnsubscribes',
   'healthHandler',
+  // Chat sidebar sections remain app-only navigation, like their storage
+  // endpoints; so do their notification settings.
+  'listSectionNotificationSettings',
   'removeUnsubscribeAll',
   'removeUnsubscribeItems',
   'unsubscribeAll',
   'unsubscribeEmail',
   'unsubscribeItems',
+  'updateSectionNotificationSettings',
 ] as const satisfies readonly (keyof NotificationSdk)[];
 
 export const notificationBacklog =
@@ -302,6 +310,7 @@ export const scheduledActionExcluded = [
   'getRoutineDraftJob', // The routine editor's background drafting.
   'discardRoutineDraftJob', // The routine editor's background drafting.
   'listScheduledActionCodeUpgrades', // The routine page's review of SDK upgrades.
+  'listScheduledActionUnusableItems', // The routine page's knobs needing a new pick; a run fails the step with the same reason.
   'routineCatalog', // The new-routine flow's templates.
   'listRoutineSuggestions', // The app's suggestion surfaces; agents use CreateRoutine.
   'startSuggestionGeneration', // Onboarding starts the person's generation once the inbox connects.
@@ -405,6 +414,8 @@ export const storageExcluded = [
   'getPendingProjectsHandler',
   'getProjectsHandler',
   'getRingStatus',
+  // Membership-scoped channel rows used by the email Share dialog.
+  'getThreadChannelShares',
   // Status of the web app's own folder upload; uploads aren't an SDK surface.
   'getUploadExtractStatusHandler',
   'getUserDocumentViewLocation',
@@ -434,9 +445,12 @@ export const storageExcluded = [
   'meetingLeave',
   'meetingParticipants',
   'mentionPreviews',
-  // The v1 vault requires a normal human session and item access.
-  // Agent SDK credentials cannot access it.
+  // The v1 vault, and the human review of agent access requests, require a
+  // normal human session and item access. Agent SDK credentials cannot access it.
   'passwordsActivity',
+  'passwordsAgentAccessRequests',
+  'passwordsAgentResolveRequest',
+  'passwordsAgentRevoke',
   'passwordsCopy',
   'passwordsCopyUsername',
   'passwordsCreate',
@@ -451,10 +465,12 @@ export const storageExcluded = [
   'passwordsMoveFolder',
   'passwordsPatch',
   'passwordsRemove',
+  'passwordsRemoveFavorite',
   'passwordsRemoveFolder',
   'passwordsRemoveTotp',
   'passwordsRenameFolder',
   'passwordsReveal',
+  'passwordsSetFavorite',
   'passwordsSetTotp',
   'passwordsShare',
   'passwordsTeams',
@@ -491,11 +507,8 @@ export const storageExcluded = [
   'whatsappStartLookup',
 ] as const satisfies readonly (keyof StorageSdk)[];
 
-export const storageBacklog = [
-  // CRM privacy settings use the generated client.
-  'getCrmEmailPrivacy',
-  'updateCrmEmailPrivacy',
-] as const satisfies readonly (keyof StorageSdk)[];
+export const storageBacklog =
+  [] as const satisfies readonly (keyof StorageSdk)[];
 
 export const unfurlExcluded = [
   'proxyRequestHandler',

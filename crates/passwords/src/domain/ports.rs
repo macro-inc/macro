@@ -5,6 +5,8 @@ use async_trait::async_trait;
 #[async_trait]
 /// Metadata storage and cross-replica serialization. Object-safe for composition.
 pub trait Repository: Send + Sync {
+    /// Item futures that fit alongside the batch's independently held lease connection.
+    fn import_capacity(&self) -> std::num::NonZeroUsize;
     /// Current authoritative account classification; missing accounts are not humans.
     async fn is_human(
         &self,
@@ -29,6 +31,7 @@ pub trait Repository: Send + Sync {
     /// Persist a unique pending enrollment before any provider mutation.
     async fn stage_totp(&self, team: TeamId, item: ItemId, key: TotpKeyId) -> Result<(), Error>;
     /// Select a successful enrollment only while its authorized metadata revision remains current.
+    /// An agent identity retained on the enrollment is audited in the same transaction.
     async fn activate_totp(
         &self,
         team: TeamId,
@@ -61,6 +64,13 @@ pub trait Repository: Send + Sync {
         record: &Record,
         publisher: &macro_user_id::user_id::MacroUserIdStr<'_>,
     ) -> Result<(), Error>;
+    /// Who published the intent of this team, item and operation, if one exists.
+    async fn intent_origin(
+        &self,
+        team: TeamId,
+        item: ItemId,
+        operation: uuid::Uuid,
+    ) -> Result<Option<IntentOrigin>, Error>;
     /// Load the metadata intent belonging to this team, item, and operation.
     async fn staged(
         &self,
@@ -68,8 +78,16 @@ pub trait Repository: Send + Sync {
         item: ItemId,
         operation: uuid::Uuid,
     ) -> Result<Record, Error>;
-    /// Retire a reconciled metadata intent.
-    async fn finish(&self, operation: uuid::Uuid) -> Result<(), Error>;
+    /// Commit a reconciled intent's metadata with its version guard, record the
+    /// agent audit retained on the intent and mark the intent complete, in one
+    /// transaction. Initial publication seeds the creator's favorite as in `save`.
+    /// A live record's folder is share-locked as in `save`.
+    async fn save_reconciled(
+        &self,
+        record: &Record,
+        expected_version: Option<i32>,
+        operation: uuid::Uuid,
+    ) -> Result<(), Error>;
     /// Return current memberships from the authoritative team store.
     async fn teams(&self, actor: &Actor) -> Result<Vec<TeamId>, Error>;
     /// Search metadata visible to the actor within the team.
@@ -82,8 +100,25 @@ pub trait Repository: Send + Sync {
         team: TeamId,
         names: &[String],
     ) -> Result<Vec<Record>, Error>;
+    /// Personal favorites among at most MAX_LIST_ITEMS supplied item identities.
+    async fn favorites(
+        &self,
+        actor: &Actor,
+        team: TeamId,
+        items: &[ItemId],
+    ) -> Result<Vec<ItemId>, Error>;
+    /// Set a personal preference without a credential lease or item revision change.
+    async fn set_favorite(
+        &self,
+        actor: &Actor,
+        team: TeamId,
+        item: ItemId,
+        favorite: bool,
+    ) -> Result<(), Error>;
     /// Load an item and its authorization facts without resolving secret values.
     async fn get(&self, team: TeamId, item: ItemId) -> Result<Record, Error>;
+    /// Initial publication atomically seeds the creator's preference from the
+    /// supplied initial favorite flag; later saves never change personal favorites.
     /// Commit metadata with its observed version guard. A live record's folder is
     /// share-locked in the same transaction; a deleted one fails with `FolderMissing`.
     async fn save(&self, record: &Record, expected_version: Option<i32>) -> Result<(), Error>;
@@ -199,4 +234,19 @@ pub trait Availability: Send + Sync {
     async fn require_enabled(&self, actor: &Actor) -> Result<(), Error>;
     /// Require provider configuration before lifecycle side effects, without evaluating flags.
     fn require_provider(&self) -> Result<(), Error>;
+}
+
+/// Who published a write intent. Human intents name no publisher, only that no
+/// agent published them.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum IntentOrigin {
+    /// A human's create or update.
+    Human,
+    /// An agent's write, with its stored action.
+    Agent {
+        /// The publishing agent account.
+        agent: macro_user_id::user_id::MacroUserIdStr<'static>,
+        /// The action it staged.
+        action: super::agent::AgentAction,
+    },
 }

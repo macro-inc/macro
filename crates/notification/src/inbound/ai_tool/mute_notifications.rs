@@ -154,7 +154,8 @@ where
                         invalid("snoozeUntil must be in the future")
                     }
                     error @ (ItemNotificationPreferenceError::TooManyItems
-                    | ItemNotificationPreferenceError::ConflictingTypes) => {
+                    | ItemNotificationPreferenceError::ConflictingTypes
+                    | ItemNotificationPreferenceError::MentionsOnlyUnsupported) => {
                         invalid(&error.to_string())
                     }
                     error @ ItemNotificationPreferenceError::Repository(_) => ToolCallError {

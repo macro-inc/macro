@@ -58,6 +58,22 @@ const openTitleMenu = (name: string) => async (page: Page) => {
 };
 
 /**
+ * A block from the `view-parity-files` seed scenario, opened at the
+ * preview route that mounts the block on every device. Sign in as
+ * pat@seed.macro.local; the ids are the ones that scenario derives.
+ */
+const fileBlock = (block: string, id: string, name: string): ParityView => ({
+  id: `file-${block}`,
+  path: `/home/${block}/${id}`,
+  ready: async (page) => {
+    await expect(
+      page.getByText(name, { exact: true }).filter({ visible: true }).first()
+    ).toBeVisible();
+  },
+  states: [{ name: 'menu', only: 'touch', go: openTitleMenu(name) }],
+});
+
+/**
  * Add a view here when you split it. Steps use what a person would press, so
  * they run unchanged against the build before the split.
  */
@@ -124,4 +140,22 @@ export const PARITY_VIEWS: ParityView[] = [
       },
     ],
   },
+  fileBlock('image', '5eeda0ac-dfc9-80ad-b7af-d66208ffb667', 'Parity image'),
+  fileBlock('video', '5eeda0ac-9040-8c7f-84a5-35426d903d05', 'Parity video'),
+  fileBlock('code', '5eeda0ac-5d8d-80a5-b60d-8679e2e1941a', 'Parity code'),
+  fileBlock(
+    'unknown',
+    '5eeda0ac-e29e-80e6-a4f3-c47c45ec8d72',
+    'Parity archive'
+  ),
+  fileBlock('pdf', '5eeda0ac-c036-8d4d-a3f2-2e6bcc40f19f', 'Parity PDF'),
+  fileBlock('canvas', '5eeda0ac-f380-8a34-b50f-cadebb2e0bc3', 'Parity canvas'),
+  fileBlock('fig', '5eeda0ac-0e5e-8167-9b59-395e345c92aa', 'Parity design'),
+  fileBlock('psd', '5eeda0ac-04a0-8421-9f7a-5b518722773e', 'Parity layers'),
+  fileBlock('ai', '5eeda0ac-906f-8388-936e-0367c52b297a', 'Parity vector'),
+  fileBlock('pptx', '5eeda0ac-edb0-8a25-8b6a-c3305e335dce', 'Parity slides'),
+  fileBlock('write', '5eeda0ac-e5d7-8f83-b114-9c2860c37259', 'Parity words'),
+  fileBlock('chat', '5eeda0ac-4d06-8b88-a612-9ce488531aba', 'Parity chat'),
+  fileBlock('project', '5eeda0ac-35f3-8593-877f-0fa64fbc46ef', 'Parity folder'),
+  fileBlock('call', '5eeda0ac-ada9-85c7-b48b-7ed28a1d65dd', 'Parity call'),
 ];

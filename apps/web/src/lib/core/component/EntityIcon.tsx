@@ -104,8 +104,10 @@ import Spreadsheet from '@icon/system/regular/table.svg';
 import Table from '@icon/system/regular/table.svg';
 import Users from '@icon/system/regular/users.svg';
 import UsersThree from '@icon/system/regular/users-three.svg';
+import BookmarkSimple from '@phosphor/bookmark-simple.svg';
 import ChatsCircle from '@phosphor/chats-circle.svg';
 import FigmaLogo from '@phosphor/figma-logo.svg';
+import BookmarkSimpleBold from '@phosphor-icons/core/bold/bookmark-simple-bold.svg';
 import ChatsCircleBold from '@phosphor-icons/core/bold/chats-circle-bold.svg';
 import FigmaLogoBold from '@phosphor-icons/core/bold/figma-logo-bold.svg';
 import type { PreviewItem } from '@queries/preview';
@@ -147,7 +149,8 @@ export type EntityWithValidIcon =
   | 'html'
   | 'initiative'
   | 'reminder'
-  | 'external_chat';
+  | 'external_chat'
+  | 'saved_view';
 
 const ARCHIVE_EXTENSIONS = new Set(
   Object.values(FileTypeMap)
@@ -156,6 +159,13 @@ const ARCHIVE_EXTENSIONS = new Set(
 );
 
 export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
+  saved_view: {
+    icon: BookmarkSimple,
+    boldIcon: BookmarkSimpleBold,
+    foreground: 'text-current',
+    background: 'bg-ink/20',
+    prettyName: 'Saved view',
+  },
   // A chat glyph until the provider is known; see `providerIcon`.
   external_chat: {
     icon: ChatsCircle,
@@ -693,7 +703,7 @@ function providerIcon(
   };
 }
 
-type EntityIconData = Pick<EntityData, 'type'> & {
+type EntityIconData = { type: EntityData['type'] | 'saved_view' } & {
   channelType?: ChannelEntity['channelType'];
   fileType?: DocumentEntity['fileType'] | null;
   subType?: DocumentEntity['subType'];
@@ -749,7 +759,9 @@ export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
     .with({ type: 'crm_contact' }, () => 'contact')
     .with({ type: 'database' }, () => 'database')
     .with({ type: 'form' }, () => 'form')
+    .with({ type: 'saved_view' }, () => 'saved_view')
     .with({ type: 'harness' }, () => 'default')
+    .with({ type: 'team' }, () => 'default')
     .exhaustive(() => 'default');
 }
 

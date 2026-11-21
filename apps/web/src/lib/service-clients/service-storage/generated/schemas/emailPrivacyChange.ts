@@ -5,13 +5,15 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EmailPrivacyChangeOneOf } from './emailPrivacyChangeOneOf';
-import type { EmailPrivacyChangeOneOfFour } from './emailPrivacyChangeOneOfFour';
+import type { EmailPrivacyChangeOneOfEight } from './emailPrivacyChangeOneOfEight';
 import type { EmailPrivacyChangeOneOfSix } from './emailPrivacyChangeOneOfSix';
+import type { EmailPrivacyChangeOneOfThree } from './emailPrivacyChangeOneOfThree';
 
 /**
  * One explicit privacy change, avoiding lost updates to whole blocklists.
  */
 export type EmailPrivacyChange =
   | EmailPrivacyChangeOneOf
-  | EmailPrivacyChangeOneOfFour
-  | EmailPrivacyChangeOneOfSix;
+  | EmailPrivacyChangeOneOfThree
+  | EmailPrivacyChangeOneOfSix
+  | EmailPrivacyChangeOneOfEight;

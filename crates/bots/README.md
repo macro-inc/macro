@@ -66,6 +66,21 @@ Webhook consumption of `macro.bots` is not included in this change. The webhook
 Kafka consumer and webhook delivery pipeline do not consume or deliver these
 bot events.
 
+## Profile push to web clients
+
+Document Storage Service runs `BotProfileConsumer` (feature `realtime`,
+consumer group `bot-profile-push`, starting at the topic's head). For every
+`macro.bots` event it reads the bot's current profile, not the event's fields,
+and sends it as a `bot_profile_changed` connection-gateway message to the bot's
+audience: its owner, its team's members, and the people in the channels it is
+in (for a deleted bot, the channels its deletion removed it from). The payload
+is the `BotOwnerProfile` that `GET /bots/profiles` returns, so a deletion
+arrives as a profile with `deleted_at` set. The web client writes it into its
+bot profile cache, which messages, mention chips and agent sessions read, and
+refetches its agent, bot and channel-bot lists. A failed push is retried with
+backoff, then logged and dropped; clients refetch profiles when their gateway
+connection reopens.
+
 ## Delivery semantics and rollout
 
 Publication occurs after the repository mutation and is fire-and-forget. The API

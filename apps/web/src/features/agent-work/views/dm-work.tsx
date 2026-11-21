@@ -5,7 +5,10 @@ import { UserIcon } from '@core/component/UserIcon';
 import { enableAgentWork } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { getDisplayName, isAgentAccount, tryMacroId } from '@core/user';
-import { subscribeGraphqlSoupReconnected } from '@service-storage/graphql-soup';
+import {
+  getGraphqlSoupClient,
+  subscribeGraphqlSoupReconnected,
+} from '@service-storage/graphql-soup';
 import {
   type Accessor,
   createContext,
@@ -22,7 +25,6 @@ import { dmWorkAccount } from '../core/work-visibility';
 import { createRegisteredWork } from '../primitives/create-registered-work';
 import { createWorkArrivals } from '../primitives/create-work-arrivals';
 import { useOpenWorkItem } from './open-work-item';
-import { useWorkClient } from './use-work-client';
 
 const ARRIVAL_DURATION_MS = 6_000;
 
@@ -62,7 +64,7 @@ export function DmWorkProvider(
     return id ? [id] : [];
   });
   const work = createRegisteredWork({
-    client: useWorkClient(),
+    client: getGraphqlSoupClient,
     accountIds,
     enabled: () => account() !== undefined,
     onReconnected: subscribeGraphqlSoupReconnected,

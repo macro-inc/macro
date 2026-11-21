@@ -396,6 +396,88 @@ async fn a_team_keeps_one_copy_of_each_notion_object(pool: PgPool) {
     }
 }
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn recording_an_import_never_overwrites_a_row_a_running_import_holds(pool: PgPool) {
+    let actor = ledger_actor(&pool, "held-row").await;
+    let repo = PgImportRepo::new(pool);
+    let page = "0123456789abcdef0123456789abcdef";
+    let staged = repo
+        .upsert_staged(
+            &actor,
+            ImportSource::Notion,
+            ImportKind::Page,
+            Initiator::Chat,
+            page,
+            &serde_json::json!({"title": "Handbook"}),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    let claimed = repo.mark_importing(&actor, &[staged.id]).await.unwrap();
+    assert_eq!(claimed.len(), 1);
+
+    let result = repo
+        .upsert_imported(
+            &actor,
+            ImportSource::Notion,
+            ImportKind::Page,
+            Initiator::Chat,
+            page,
+            &serde_json::json!({"title": "Someone else's page"}),
+            "doc-elsewhere",
+            "md",
+            None,
+        )
+        .await;
+
+    assert!(
+        matches!(result, Err(ImportError::ImportRunning)),
+        "{result:?}"
+    );
+    let stored = repo.get(&actor, staged.id).await.unwrap().unwrap();
+    assert_eq!(stored.status, ImportStatus::Importing);
+    assert_eq!(stored.entity_id, None);
+    assert_eq!(stored.metadata, serde_json::json!({"title": "Handbook"}));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn recording_an_import_over_a_staged_row_marks_it_imported(pool: PgPool) {
+    let actor = ledger_actor(&pool, "staged-row").await;
+    let repo = PgImportRepo::new(pool);
+    let page = "0123456789abcdef0123456789abcdef";
+    let staged = repo
+        .upsert_staged(
+            &actor,
+            ImportSource::Notion,
+            ImportKind::Page,
+            Initiator::Chat,
+            page,
+            &serde_json::json!({"title": "Handbook"}),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+
+    let row = repo
+        .upsert_imported(
+            &actor,
+            ImportSource::Notion,
+            ImportKind::Page,
+            Initiator::Chat,
+            page,
+            &serde_json::json!({"title": "Handbook"}),
+            "doc-1",
+            "md",
+            None,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(row.id, staged.id);
+    assert_eq!(row.status, ImportStatus::Imported);
+    assert_eq!(row.entity_id.as_deref(), Some("doc-1"));
+}
+
 async fn ledger_actor(pool: &PgPool, label: &str) -> MacroUserIdStr<'static> {
     let id = Uuid::now_v7();
     let email = format!("{label}@example.com");

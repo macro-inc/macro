@@ -6,6 +6,7 @@
  */
 import type { ExternalChatReplyContent } from './externalChatReplyContent';
 import type { ExternalChatSendReplyReplyTo } from './externalChatSendReplyReplyTo';
+import type { ExternalChatSendReplyUserConfirmation } from './externalChatSendReplyUserConfirmation';
 
 /**
  * Explicit send action from a person. Only deliberate sends reach WhatsApp.
@@ -17,4 +18,9 @@ export interface ExternalChatSendReply {
   message: ExternalChatReplyContent;
   /** Message being quoted, within this chat. */
   replyTo?: ExternalChatSendReplyReplyTo;
+  /** The user's own reply approving this send, quoted verbatim. Required
+from an agent's program; never the request that asked for the message.
+Not part of the send's intent: it is neither stored nor compared on a
+retry. */
+  userConfirmation?: ExternalChatSendReplyUserConfirmation;
 }

@@ -197,6 +197,18 @@ pub struct DocumentPurgedMetadata {
     pub document_id: String,
 }
 
+/// Metadata for [`DocumentTopicEvent::EmailAttachmentsReleased`]: the
+/// documents of one queue batch that lost their last email link.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct EmailAttachmentsReleasedMetadata {
+    /// Documents the batch moved to the Trash.
+    pub trashed_document_ids: Vec<String>,
+    /// Documents left as they were: kept by their owner, or already in the
+    /// Trash. They are no longer email attachments either.
+    pub kept_document_ids: Vec<String>,
+}
+
 /// Why a document interaction was reported.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
@@ -279,6 +291,12 @@ pub enum DocumentTopicEvent {
     /// A peer joined, left, or a periodic save occurred.
     #[serde(rename = "document.interaction")]
     Interaction(DocumentInteractionMetadata),
+    /// Documents whose mail is gone stopped being email attachments, in one
+    /// batch: the system moved some to the Trash and left the rest. Like the
+    /// documents in a trashed folder, the trashed ones are removed from open
+    /// lists and trigger nothing per document.
+    #[serde(rename = "document.email_attachments_released")]
+    EmailAttachmentsReleased(EmailAttachmentsReleasedMetadata),
 }
 
 impl TopicEvent for DocumentTopicEvent {
@@ -328,6 +346,14 @@ impl DocumentMacroEvent {
     /// Build a purged event keyed by the document id.
     pub fn purged(key: impl Into<String>, metadata: DocumentPurgedMetadata) -> Self {
         Self::new(key, DocumentTopicEvent::Purged(metadata))
+    }
+
+    /// Build an email-attachments-released event, keyed by one of its documents.
+    pub fn email_attachments_released(
+        key: impl Into<String>,
+        metadata: EmailAttachmentsReleasedMetadata,
+    ) -> Self {
+        Self::new(key, DocumentTopicEvent::EmailAttachmentsReleased(metadata))
     }
 
     /// Build a copied event keyed by the new document id.

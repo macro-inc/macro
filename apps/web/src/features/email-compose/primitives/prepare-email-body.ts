@@ -10,6 +10,7 @@ import {
   EMAIL_SERVICE_EMBEDDED_HOSTS,
   staticFileReferenceEndpoint,
 } from '@core/constant/servers';
+import { hasLayoutTable } from '@core/email';
 import { encodeBase64UrlUtf8 } from '@core/util/base64';
 import { formatEmailDate } from '@core/util/date';
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html';
@@ -216,8 +217,9 @@ const $appendPreviousEmail = (
       const htmlNode = $createHtmlRenderNode({
         html: dom.documentElement.innerHTML,
         // Same branch the message view takes: personal or table-less emails
-        // get theme-adapted colors, table-layout emails get a white panel
-        adaptColors: Boolean(isPersonal) || !hasTable,
+        // get theme-adapted colors, table-layout emails get a white panel. A
+        // table inside the signature doesn't count as a table layout.
+        adaptColors: Boolean(isPersonal) || !hasLayoutTable(dom),
       });
       quoteNode.append(htmlNode);
     } else {
@@ -457,6 +459,7 @@ export function prepareEmailBody(
 ): {
   bodyHtml: string;
   bodyText: string;
+  hasWrittenContent: boolean;
   mentions: DocumentMentionInfo[];
 } | null {
   if (!editor) return null;
@@ -478,6 +481,7 @@ export function prepareEmailBodyFromHtml(
 ): {
   bodyHtml: string;
   bodyText: string;
+  hasWrittenContent: boolean;
   mentions: DocumentMentionInfo[];
 } {
   const parsed = new DOMParser().parseFromString(generatedHtml, 'text/html');
@@ -512,8 +516,40 @@ export function prepareEmailBodyFromHtml(
   const html = encodeBase64UrlUtf8(parsed.body.outerHTML);
   const bodyHtml = html;
   const bodyText = parsed.body.firstChild?.textContent ?? '';
+  const hasWrittenContent = bodyHasWrittenContent(parsed.body);
 
-  return { bodyHtml, bodyText, mentions };
+  return { bodyHtml, bodyText, hasWrittenContent, mentions };
+}
+
+/** Media that is content on its own, with no text around it. */
+const STANDALONE_MEDIA_SELECTOR = 'img, video, audio, iframe, svg';
+
+/**
+ * Whether any block outside the quoted thread holds text or media. Every
+ * block counts, not just the first: a reply can open with an image, an empty
+ * line before a list, or a heading. The free plan's watermark, which Send
+ * Later saves with the draft and a reopened draft wraps in a block, is not
+ * the user's writing either.
+ */
+function bodyHasWrittenContent(body: HTMLElement): boolean {
+  return Array.from(body.childNodes).some((block) => {
+    if (block instanceof Element) {
+      if (block.classList.contains('macro_quote')) return false;
+
+      const isMedia =
+        block.matches(STANDALONE_MEDIA_SELECTOR) ||
+        block.querySelector(STANDALONE_MEDIA_SELECTOR) !== null;
+      if (isMedia) return true;
+    }
+
+    return textWithoutWatermark(block).trim() !== '';
+  });
+}
+
+function textWithoutWatermark(node: Node): string {
+  if (!(node instanceof Element)) return node.textContent ?? '';
+  if (node.classList.contains('macro-watermark-node')) return '';
+  return Array.from(node.childNodes).map(textWithoutWatermark).join('');
 }
 
 /**
@@ -523,12 +559,11 @@ export function prepareEmailBodyFromHtml(
  * alive — reply recipients are auto-derived, so the reply path omits it.
  */
 export function hasDraftContent(
-  bodyText: string,
+  hasBody: boolean,
   subject: string | undefined,
   attachmentCount: number,
   recipientCount?: number
 ): boolean {
-  const hasBody = bodyText.trim() !== '';
   const hasAttachments = attachmentCount > 0;
   const hasRecipients = (recipientCount ?? 0) > 0;
   const trimmedSubject = subject?.trim() ?? '';

@@ -4,6 +4,7 @@
  */
 import { isInBlock, useIsNestedBlock } from '@core/block';
 import { ENABLE_SVG_PREVIEW } from '@core/constant/featureFlags';
+import { onElementConnect } from '@core/util/onElementConnect';
 import Braces from '@icon/system/regular/brackets-curly.svg';
 import Copy from '@icon/system/regular/copy.svg';
 import FileC from '@icon/system/regular/file-c.svg';
@@ -38,7 +39,9 @@ import {
   createEffect,
   createSignal,
   For,
+  Match,
   Show,
+  Switch,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { glueToElement } from '../../directive/glueToElement';
@@ -283,9 +286,10 @@ export function CodeBoxAccessory(props: {
                 e.preventDefault();
                 return copyCode();
               }}
-            >
-              <Copy class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
-            </CopyButton>
+              icon={
+                <Copy class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+              }
+            ></CopyButton>
           </div>
         </div>
         <Show when={isPreviewMode() && showPreviewToggle()}>
@@ -305,82 +309,74 @@ export function CodeBoxAccessory(props: {
   );
 }
 
+/**
+ * A data URL that draws the first `<svg>` element in a code block's text as an
+ * image, or undefined when the text has none.
+ *
+ * The text is whatever the block's author wrote, so it is never mounted into
+ * the page: an SVG drawn by `<img>` runs no script, loads nothing external and
+ * keeps its styles to itself. DOMParser parses it the way the HTML parser reads
+ * an inline SVG, so loosely written markup still previews, in a document that
+ * runs and loads nothing. Serializing the element as XML then adds the SVG
+ * namespace, which a standalone image needs and pasted SVG often leaves out.
+ *
+ * An image has no surrounding text, so `currentColor` (which icon sets use for
+ * their strokes) would draw black on a dark theme. `color` gives it the text
+ * colour around the preview instead, unless the SVG sets its own.
+ */
+function svgImageUrl(
+  content: string,
+  color: string | undefined
+): string | undefined {
+  const svg = new DOMParser()
+    .parseFromString(content, 'text/html')
+    .querySelector('svg');
+  if (!svg) return undefined;
+
+  if (color && !svg.hasAttribute('color')) svg.setAttribute('color', color);
+  const markup = new XMLSerializer().serializeToString(svg);
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(markup)}`;
+}
+
 function SvgPreview(props: { svgContent: () => string; overlay?: boolean }) {
-  const [error, setError] = createSignal<string | null>(null);
+  const [textColor, setTextColor] = createSignal<string>();
+  const readTextColor = (element: HTMLDivElement) =>
+    onElementConnect(element, () =>
+      setTextColor(getComputedStyle(element).color)
+    );
 
-  const sanitizeSvg = (content: string): string => {
-    // Remove potentially dangerous elements/attributes
-    return content
-      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-      .replace(/on\w+\s*=\s*["'][^"']*["']/gi, '')
-      .replace(/javascript:/gi, '');
-  };
-
-  const renderSvg = () => {
-    const content = props.svgContent();
-    if (!content.trim()) {
-      return (
-        <div class="flex items-center justify-center h-full text-ink-extra-muted/50 text-sm">
-          No SVG content
-        </div>
-      );
-    }
-
-    try {
-      const trimmedContent = content.trim().toLowerCase();
-      if (
-        !trimmedContent.startsWith('<svg') &&
-        !trimmedContent.includes('<svg')
-      ) {
-        setError('Content does not appear to be valid SVG');
-        return (
+  return (
+    <div
+      ref={readTextColor}
+      class="absolute top-12 inset-x-0 bottom-0 z-10 p-2"
+    >
+      <Switch
+        fallback={
           <div class="flex items-center justify-center h-full text-failure text-sm">
             Invalid SVG content
           </div>
-        );
-      }
-      const sanitizedContent = sanitizeSvg(content);
-
-      let containerRef: HTMLDivElement | undefined;
-
-      const setContainerRef = (el: HTMLDivElement) => {
-        containerRef = el;
-        setTimeout(() => {
-          if (containerRef) {
-            const svgElements = containerRef.querySelectorAll('svg');
-            svgElements.forEach((svg: SVGElement) => {
-              svg.style.maxWidth = '100%';
-              svg.style.maxHeight = '100%';
-              svg.style.width = 'auto';
-              svg.style.height = 'auto';
-              svg.style.display = 'block';
-              svg.style.margin = 'auto';
-            });
-          }
-        }, 0);
-      };
-
-      return (
-        <div class="size-full overflow-hidden p-2">
-          <div
-            ref={setContainerRef}
-            class="size-full flex items-center justify-center min-h-0"
-            innerHTML={sanitizedContent}
-          />
-        </div>
-      );
-    } catch (_e) {
-      setError('Failed to render SVG');
-      return (
-        <div class="flex items-center justify-center h-full text-failure text-sm">
-          Failed to render SVG: {error()}
-        </div>
-      );
-    }
-  };
-
-  return (
-    <div class="absolute top-12 inset-x-0 bottom-0 z-10 p-2">{renderSvg()}</div>
+        }
+      >
+        <Match when={!props.svgContent().trim()}>
+          <div class="flex items-center justify-center h-full text-ink-extra-muted/50 text-sm">
+            No SVG content
+          </div>
+        </Match>
+        <Match when={svgImageUrl(props.svgContent(), textColor())}>
+          {(url) => (
+            <div class="size-full overflow-hidden p-2">
+              <div class="size-full flex items-center justify-center min-h-0">
+                <img
+                  src={url()}
+                  alt="SVG preview"
+                  class="block m-auto max-w-full max-h-full"
+                />
+              </div>
+            </div>
+          )}
+        </Match>
+      </Switch>
+    </div>
   );
 }
 
@@ -450,9 +446,10 @@ export const StaticCodeBoxAccessory = (props: {
               e.preventDefault();
               return copyCode();
             }}
-          >
-            <Copy class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
-          </CopyButton>
+            icon={
+              <Copy class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+            }
+          ></CopyButton>
         </div>
       </div>
       <Show when={isPreviewMode() && showPreviewToggle()}>

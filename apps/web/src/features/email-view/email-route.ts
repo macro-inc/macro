@@ -1,6 +1,6 @@
 import { createSearchParamsCodec } from '@app/lib/split-router';
 import { z } from 'zod';
-import { DEFAULT_EMAIL_TAB, EMAIL_TAB_IDS } from './constants';
+import { DEFAULT_EMAIL_TAB, EMAIL_TAB_IDS, type EmailTab } from './constants';
 
 export const emailTabSearch = {
   namespace: 'mail',
@@ -19,6 +19,11 @@ export const emailTabSearch = {
 };
 
 export const emailTabSearchCodec = createSearchParamsCodec(emailTabSearch);
+
+/** The route search that opens Email's list on `tab`. */
+export const emailTabSearchUpdate = (tab: EmailTab) => ({
+  [emailTabSearch.namespace]: emailTabSearchCodec.serialize({ tab }),
+});
 
 export const EMAIL_DETAIL_SEARCH_NAMESPACE = 'email-detail';
 

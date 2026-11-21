@@ -187,10 +187,25 @@ impl ProjectService for FakeProjectService {
         Ok(project())
     }
 
+    async fn folder_has_explicit_grant(
+        &self,
+        _: EntityAccessReceipt<entity_access::domain::models::EditAccessLevel>,
+    ) -> Result<bool, ProjectError> {
+        unreachable!("import-only grant check")
+    }
+
+    async fn folder_has_team_edit_grant(
+        &self,
+        _: EntityAccessReceipt<entity_access::domain::models::EditAccessLevel>,
+    ) -> Result<bool, ProjectError> {
+        unreachable!("import-only grant check")
+    }
+
     async fn create_project_dated_by_contents(
         &self,
         _principal: &CreationPrincipal,
         _args: CreateProjectRequest,
+        _initial_link_share: models_permissions::share_permission::InitialLinkShare,
     ) -> Result<Project, ProjectError> {
         panic!("dated projects are not created by these tests")
     }
@@ -508,6 +523,7 @@ impl MacroAuthorizationService for FakeAuthorizationService {
                     origin: macro_authorization::CredentialOrigin::Bot,
                     agent_id: None,
                     agent_via: None,
+                    routine_id: None,
                     macro_user_id: user(&user_id),
                     user_context: user_context(&user_id),
                 }),

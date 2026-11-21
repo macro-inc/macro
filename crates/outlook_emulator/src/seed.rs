@@ -96,6 +96,9 @@ pub struct SeedMailbox {
     /// Contacts in the default contacts folder.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub contacts: Vec<SeedContact>,
+    /// The owner's profile photo. An account has none unless one is given.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub photo: Option<SeedPhoto>,
     /// Messages, oldest first.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub messages: Vec<NewMessage>,
@@ -181,6 +184,17 @@ pub struct SeedCalendar {
 #[serde(transparent)]
 pub struct NewEvent(pub serde_json::Map<String, serde_json::Value>);
 
+/// A photo: a mailbox owner's profile photo, or a contact's.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct SeedPhoto {
+    /// The content type. Defaults to `image/jpeg`, which Graph serves.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mime_type: Option<String>,
+    /// The image, as standard base64.
+    pub base64: String,
+}
+
 /// A contact.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -190,6 +204,9 @@ pub struct SeedContact {
     /// Their display name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    /// Their photo. A contact has none unless one is given.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub photo: Option<SeedPhoto>,
 }
 
 /// A message to put in a mailbox: seeded, or delivered later.

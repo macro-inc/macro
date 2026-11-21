@@ -176,7 +176,10 @@ fn native_effort_profiles_preserve_defaults_and_provider_boundaries() {
         "anthropic/claude-opus-5-5",
         "openai/gpt-5.5",
         "openai/gpt-5-mini",
+        "openai/gpt-6.1-sol",
+        "openai/gpt-6-astra",
     ] {
+        assert!(!ReasoningEffort::supported(model).is_empty(), "{model}");
         for effort in ReasoningEffort::supported(model) {
             let params = match router.route(model).unwrap() {
                 RoutedModel::Anthropic(model) => model.thinking_params(Some(*effort)).unwrap(),

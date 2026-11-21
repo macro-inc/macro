@@ -30,6 +30,7 @@ import type {
   ClaudeModeResponse,
   ClaudeSignedIn,
   ClaudeSignInComplete,
+  ClaudeSignInError,
   ClaudeSignInStarted,
   CodingAgentsResponse,
   CodingPreferencesBody,
@@ -1566,7 +1567,7 @@ export const deleteAgentSession = async (
 };
 
 /**
- * @summary Read activity using the same visibility capability as the session transcript.
+ * @summary Read session-visible activity after filtering CRM rows for the requester.
  */
 export type getAgentSessionActivityResponse200 = {
   data: AgentActivityPage;
@@ -3974,7 +3975,7 @@ export const linkAgentSessionTask = async (
 /**
  * @summary Answer a tool call the agent made in a turn somebody other than the
 session's owner prompted. Approve and deny are the owner's; cancel is
-anyone's with edit access.
+anyone's with edit access. Agent runs may deny or cancel, but never approve.
  */
 export type answerAgentSessionToolApprovalResponse200 = {
   data: AnswerToolApprovalResponse;
@@ -4498,37 +4499,42 @@ export type startClaudeSignInResponse200 = {
 };
 
 export type startClaudeSignInResponse400 = {
-  data: void;
+  data: ClaudeSignInError;
   status: 400;
 };
 
 export type startClaudeSignInResponse403 = {
-  data: void;
+  data: ClaudeSignInError;
   status: 403;
 };
 
 export type startClaudeSignInResponse404 = {
-  data: void;
+  data: ClaudeSignInError;
   status: 404;
 };
 
 export type startClaudeSignInResponse409 = {
-  data: void;
+  data: ClaudeSignInError;
   status: 409;
 };
 
+export type startClaudeSignInResponse410 = {
+  data: ClaudeSignInError;
+  status: 410;
+};
+
 export type startClaudeSignInResponse422 = {
-  data: void;
+  data: ClaudeSignInError;
   status: 422;
 };
 
 export type startClaudeSignInResponse503 = {
-  data: void;
+  data: ClaudeSignInError;
   status: 503;
 };
 
 export type startClaudeSignInResponse504 = {
-  data: void;
+  data: ClaudeSignInError;
   status: 504;
 };
 
@@ -4540,6 +4546,7 @@ export type startClaudeSignInResponseError = (
   | startClaudeSignInResponse403
   | startClaudeSignInResponse404
   | startClaudeSignInResponse409
+  | startClaudeSignInResponse410
   | startClaudeSignInResponse422
   | startClaudeSignInResponse503
   | startClaudeSignInResponse504
@@ -4583,37 +4590,42 @@ export type completeClaudeSignInResponse200 = {
 };
 
 export type completeClaudeSignInResponse400 = {
-  data: void;
+  data: ClaudeSignInError;
   status: 400;
 };
 
 export type completeClaudeSignInResponse403 = {
-  data: void;
+  data: ClaudeSignInError;
   status: 403;
 };
 
 export type completeClaudeSignInResponse404 = {
-  data: void;
+  data: ClaudeSignInError;
   status: 404;
 };
 
 export type completeClaudeSignInResponse409 = {
-  data: void;
+  data: ClaudeSignInError;
   status: 409;
 };
 
+export type completeClaudeSignInResponse410 = {
+  data: ClaudeSignInError;
+  status: 410;
+};
+
 export type completeClaudeSignInResponse422 = {
-  data: void;
+  data: ClaudeSignInError;
   status: 422;
 };
 
 export type completeClaudeSignInResponse503 = {
-  data: void;
+  data: ClaudeSignInError;
   status: 503;
 };
 
 export type completeClaudeSignInResponse504 = {
-  data: void;
+  data: ClaudeSignInError;
   status: 504;
 };
 
@@ -4626,6 +4638,7 @@ export type completeClaudeSignInResponseError = (
   | completeClaudeSignInResponse403
   | completeClaudeSignInResponse404
   | completeClaudeSignInResponse409
+  | completeClaudeSignInResponse410
   | completeClaudeSignInResponse422
   | completeClaudeSignInResponse503
   | completeClaudeSignInResponse504

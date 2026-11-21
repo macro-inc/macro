@@ -205,7 +205,8 @@ export type AppEvents = {
   /**
    * An entity was opened in a split (md, task, pdf, chat, email, channel,
    * canvas, code, project, company, contact, ...). Fired from BlockLoader on
-   * successful load; nested blocks and preview-panel peeks are excluded.
+   * successful load, including blocks a preview panel shows (Home, Agents,
+   * notifications); nested blocks are excluded.
    * Route-owned detail views fire it themselves: documents from
    * FileDetailLoadGate, channels from ChannelDetail, calls and PRs from their
    * detail views. Blocks without an open history row fire it only when they
@@ -283,6 +284,9 @@ export type AppEvents = {
       | 'shared_inbox_conflict'
       | 'payment_required'
       | 'no_gmail_grant'
+      | 'inbox_being_removed'
+      | 'identity_conflict'
+      | 'changed'
       | 'gmail_not_granted'
       | 'failed'
       | 'exception'
@@ -408,13 +412,12 @@ export type AppEvents = {
   // --- Notifications -------------------------------------------------------
   /**
    * A notification was opened: from the app's lists and stacks (`in_app`), a
-   * browser notification, a native iOS, Android or macOS notification tap
+   * browser notification, or a native iOS, Android or macOS notification tap
    * (`native_push`, counted once its navigation applies; `macro_device` tells
-   * the platforms apart), or a home recommendation that opens through its
-   * notification (`home_recommendation`, not a notification-driven open).
+   * the platforms apart).
    */
   notification_opened: {
-    source: 'in_app' | 'browser_push' | 'native_push' | 'home_recommendation';
+    source: 'in_app' | 'browser_push' | 'native_push';
     notificationType: string;
     entityType: string;
   };
@@ -501,6 +504,27 @@ export type AppEvents = {
   email_saved_view_opened: {
     savedViewId: string;
     viewCount: number;
+  };
+
+  // --- Email Focus ---------------------------------------------------------
+  /**
+   * A visit to the Focus tab, sent when the server answers the read the tab
+   * makes as it opens. `threads` is how many the Focus list holds, before the
+   * view's filters and search; 0 is an empty tab. A visit whose read fails,
+   * or that ends before the answer, is not counted.
+   */
+  email_focus_tab_opened: { threads: number };
+  /**
+   * A thread opened from the Focus list by click, tap or Enter, in the pane or
+   * a split. `position` is its 0-based place among the listed threads. Not
+   * counted: opens that follow the keyboard cursor in the reading pane, the
+   * thread the pane already shows, and next/previous from inside a thread.
+   */
+  email_focus_thread_opened: {
+    position: number;
+    rows: number;
+    /** The list's order: `recent` or `importance`. */
+    sort: string;
   };
 };
 

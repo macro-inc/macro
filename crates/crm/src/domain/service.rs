@@ -3,6 +3,9 @@
 #[cfg(test)]
 mod test;
 
+mod email_policy_api;
+mod email_policy_preview;
+mod email_policy_work;
 mod email_privacy;
 
 use crate::domain::{
@@ -400,6 +403,16 @@ pub trait CrmService: super::email_privacy::EmailPrivacyService {
         email: &str,
     ) -> impl Future<Output = Result<Option<CrmContact>, CrmError>> + Send;
 
+    /// The caller's team's company for `domain`, read like
+    /// [`CrmService::get_company_for_team`] without its contacts. The domain
+    /// is validated and normalized like a created company's. A member gets
+    /// `None` for a hidden company; admins and owners get it.
+    fn get_company_by_domain(
+        &self,
+        access: &CrmTeamReceipt<MemberTeamRole>,
+        domain: &str,
+    ) -> impl Future<Output = Result<Option<CrmCompanyWithContacts>, CrmError>> + Send;
+
     /// Fetch the company addressed by `access`, hydrated with all
     /// domains, the primary domain's directory metadata, and, when
     /// `include_contacts`, the company's full contact list. The receipt's role decides whether a
@@ -446,11 +459,14 @@ pub trait CrmService: super::email_privacy::EmailPrivacyService {
         patch: CrmTeamSettingsPatch,
     ) -> impl Future<Output = Result<CrmTeamSettings, CrmError>> + Send;
 
-    /// Manually creates a contact for the caller's team without a
-    /// company, with a display `name` and an optional `email` of any
-    /// domain. Validates like [`CrmService::create_contact`]. Any team
-    /// member may create one. See
-    /// [`CompaniesRepository::create_contact_for_team`].
+    /// Manually creates a contact for the caller's team with a display
+    /// `name` and an optional `email` of any domain, without naming a
+    /// company. An address at a company's own domain files the contact under
+    /// the team's company for that domain, as email sync does
+    /// ([`CompaniesRepository::create_contact_for_email_domain`]); a personal
+    /// or generic provider address, or none, leaves it without a company
+    /// ([`CompaniesRepository::create_contact_for_team`]). Validates like
+    /// [`CrmService::create_contact`]. Any team member may create one.
     fn create_team_contact(
         &self,
         access: &CrmTeamReceipt<MemberTeamRole>,
@@ -466,9 +482,9 @@ pub trait CrmService: super::email_privacy::EmailPrivacyService {
     ) -> impl Future<Output = Result<Vec<CrmBlockedDomain>, CrmError>> + Send;
 
     /// Adds a domain to (`blocked = true`) or removes it from the
-    /// caller's team blocklist. Blocking stops email sync for the domain
-    /// and hides the company and contacts the CRM holds for it;
-    /// unblocking un-hides them. Requires an admin/owner role
+    /// caller's team blocklist. Blocking excludes matching email contributions
+    /// without changing record visibility. A domain covering a member's connected
+    /// primary mailbox is refused. Requires an admin/owner role
     /// ([`CrmError::SettingsAdminRequired`] otherwise); the domain must
     /// be a bare domain like "acme.com" ([`CrmError::InvalidRequest`]).
     /// Returns the normalized domain.
@@ -620,12 +636,16 @@ where
     R: CompanyMetadataResolver,
 {
     /// The underlying companies repository
-    companies_repository: CR,
+    pub(super) companies_repository: CR,
     /// Resolver consulted when `crm_domain_directory` has no entry for a
     /// given domain, and for pending entries in
     /// [`CrmServiceImpl::enrich_pending_domains`]. The resolver itself is
     /// best-effort — when it is unavailable the entry stays pending.
     metadata_resolver: R,
+    /// Absent means thread-exclusion writes are unavailable.
+    thread_exclusion_gate: Option<std::sync::Arc<dyn super::email_privacy::ThreadExclusionGate>>,
+    /// Absent or failed evaluation refuses new policy grants.
+    selective_email_gate: Option<std::sync::Arc<dyn super::email_policy_api::SelectiveEmailGate>>,
 }
 
 impl<CR, R> Clone for CrmServiceImpl<CR, R>
@@ -637,6 +657,8 @@ where
         Self {
             companies_repository: self.companies_repository.clone(),
             metadata_resolver: self.metadata_resolver.clone(),
+            thread_exclusion_gate: self.thread_exclusion_gate.clone(),
+            selective_email_gate: self.selective_email_gate.clone(),
         }
     }
 }
@@ -651,7 +673,27 @@ where
         Self {
             companies_repository,
             metadata_resolver,
+            thread_exclusion_gate: None,
+            selective_email_gate: None,
         }
+    }
+
+    /// Supply the rollout gate for rule authoring; stored restrictions are unconditional.
+    pub fn with_selective_email_gate(
+        mut self,
+        gate: std::sync::Arc<dyn super::email_policy_api::SelectiveEmailGate>,
+    ) -> Self {
+        self.selective_email_gate = Some(gate);
+        self
+    }
+
+    /// Supply the rollout gate for thread-exclusion writes; otherwise they stay off.
+    pub fn with_thread_exclusion_gate(
+        mut self,
+        gate: std::sync::Arc<dyn super::email_privacy::ThreadExclusionGate>,
+    ) -> Self {
+        self.thread_exclusion_gate = Some(gate);
+        self
     }
 
     /// Resolves one batch of pending `crm_domain_directory` entries
@@ -712,7 +754,7 @@ where
     /// Ensures `crm_domain_directory` has an entry for `domain`: resolves
     /// it when the domain has none, storing a pending entry instead when
     /// the resolver is unavailable.
-    async fn ensure_domain_directory_entry(&self, domain: &str) -> Result<(), CrmError> {
+    pub(super) async fn ensure_domain_directory_entry(&self, domain: &str) -> Result<(), CrmError> {
         if self
             .companies_repository
             .lookup_domain_metadata(domain)
@@ -1321,6 +1363,19 @@ where
             })
     }
 
+    #[tracing::instrument(skip_all, fields(team_id = %access.team_id()), err)]
+    async fn get_company_by_domain(
+        &self,
+        access: &CrmTeamReceipt<MemberTeamRole>,
+        domain: &str,
+    ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
+        access.check_access(&self.companies_repository).await?;
+        let domain = normalize_company_domain(domain)?;
+        self.companies_repository
+            .get_company_by_domain_for_team(&access.team_id(), &domain, access.include_hidden())
+            .await
+    }
+
     #[tracing::instrument(skip(self, access), err)]
     async fn get_company_for_team(
         &self,
@@ -1413,8 +1468,27 @@ where
             .filter(|email| !email.is_empty())
             .map(normalize_contact_email)
             .transpose()?;
+
+        // An address at a company's own domain files the contact under that
+        // company, as email sync would. Personal and generic providers key no
+        // company, so those contacts start without one.
+        let company_address = email.as_deref().filter(|email| {
+            email
+                .split_once('@')
+                .is_some_and(|(_, domain)| !is_generic_email_domain(domain))
+        });
+        let Some(company_address) = company_address else {
+            return self
+                .companies_repository
+                .create_contact_for_team(&access.team_id(), email.as_deref(), name, Utc::now())
+                .await;
+        };
+
+        if let Some((_, domain)) = company_address.split_once('@') {
+            self.ensure_domain_directory_entry(domain).await?;
+        }
         self.companies_repository
-            .create_contact_for_team(&access.team_id(), email.as_deref(), name, Utc::now())
+            .create_contact_for_email_domain(&access.team_id(), company_address, name, Utc::now())
             .await
     }
 
@@ -1754,6 +1828,14 @@ impl CrmService for NoOpCrmService {
         _limit: u16,
     ) -> Result<Vec<CrmContact>, CrmError> {
         Ok(Vec::new())
+    }
+
+    async fn get_company_by_domain(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+        _domain: &str,
+    ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
+        Ok(None)
     }
 
     async fn get_contact_by_email(

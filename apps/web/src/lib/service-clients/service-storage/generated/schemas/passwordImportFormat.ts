@@ -17,4 +17,5 @@ export const PasswordImportFormat = {
   one_password_csv: 'one_password_csv',
   bitwarden_json: 'bitwarden_json',
   bitwarden_csv: 'bitwarden_csv',
+  bitwarden_zip: 'bitwarden_zip',
 } as const;

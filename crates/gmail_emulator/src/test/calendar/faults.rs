@@ -172,3 +172,31 @@ async fn a_grant_without_calendar_access_a_spent_quota_and_a_revoked_grant_are_r
     assert_eq!(revoked.kind(), CalendarProviderErrorKind::Transient);
     assert!(revoked.message().contains("authError"));
 }
+
+#[tokio::test]
+async fn one_calendar_can_fail_while_the_accounts_others_list() {
+    let emulator = emulator_with(vec![mailbox_with_events(
+        ADA,
+        vec![event_on("design1", "Design review", 5, 15)],
+    )])
+    .await;
+    let team = SeedCalendar {
+        secondary: true,
+        summary: Some("Team".to_string()),
+        ..SeedCalendar::default()
+    };
+    let team = emulator.add_calendar(ADA, &team).unwrap();
+    let list = |calendar: &str| format!("/calendars/{calendar}/events");
+
+    emulator
+        .fail_calendar(ADA, &team, Some(FaultError::Internal))
+        .unwrap();
+    let (status, _) = api(&emulator, ADA, reqwest::Method::GET, &list(&team), None).await;
+    assert_eq!(status, 500);
+    let (status, _) = api(&emulator, ADA, reqwest::Method::GET, &list("primary"), None).await;
+    assert_eq!(status, 200);
+
+    emulator.fail_calendar(ADA, &team, None).unwrap();
+    let (status, _) = api(&emulator, ADA, reqwest::Method::GET, &list(&team), None).await;
+    assert_eq!(status, 200);
+}

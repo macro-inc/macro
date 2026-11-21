@@ -495,6 +495,104 @@ test.describe('tablet device', () => {
   });
 });
 
+test('retained agent access remains removable after approval is removed', async ({
+  page,
+}) => {
+  await page.setViewportSize(VIEWPORTS[0]);
+  test.setTimeout(360_000);
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto(
+    '/src/features/passwords/browser-test/vault.html?focus=019a0000-0000-7000-8000-0000000000bb',
+    { timeout: 240_000 }
+  );
+  const section = page.getByRole('region', { name: 'Agent access' });
+  await section.getByRole('button', { name: 'Allow edit' }).click();
+  await expect(
+    section.getByText('deploy-agent@example.test can edit this item')
+  ).toBeVisible();
+  await section.getByRole('button', { name: /^Revoke access for/ }).click();
+  await page.getByRole('menuitem', { name: 'Remove approval' }).click();
+  await expect(
+    section.getByText(
+      'deploy-agent@example.test requires approval to use this item'
+    )
+  ).toBeVisible();
+  await expect(section.getByText(/can (view|edit) this item/)).toHaveCount(0);
+  await section.getByRole('button', { name: /^Revoke access for/ }).click();
+  await expect(
+    page.getByRole('menuitem', { name: 'Remove approval' })
+  ).toHaveCount(0);
+  await page.getByRole('menuitem', { name: 'Remove access' }).click();
+  await expect(section).toHaveCount(0);
+  await expect(
+    page.getByRole('heading', { name: 'Agent requested login' })
+  ).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test.describe('desktop agent access', () => {
+  test('agent access: a notification opens the item, approve edit, revoke, stale decisions refetch', async ({
+    page,
+  }) => {
+    const viewport = VIEWPORTS[0];
+    await page.setViewportSize(viewport);
+    test.setTimeout(360_000);
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    const fixture = '/src/features/passwords/browser-test/vault.html';
+    const item = '019a0000-0000-7000-8000-0000000000bb';
+    const section = page.getByRole('region', { name: 'Agent access' });
+
+    // A notification for another team opens the vault without a selection.
+    await page.goto(`${fixture}?focus=${item}&focusTeam=other-team`, {
+      timeout: 240_000,
+    });
+    await expect(
+      page.getByRole('button', { name: /Agent requested login/ })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Agent requested login' })
+    ).toHaveCount(0);
+
+    // The current team's notification opens the item with its request.
+    await page.goto(`${fixture}?focus=${item}`, { timeout: 240_000 });
+    await expect(
+      page.getByRole('heading', { name: 'Agent requested login' })
+    ).toBeVisible();
+    await expect(
+      section.getByText('deploy-agent@example.test asked to edit this item')
+    ).toBeVisible();
+    await section.getByRole('button', { name: 'Allow edit' }).click();
+    await expect(
+      section.getByText('deploy-agent@example.test can edit this item')
+    ).toBeVisible();
+    await section.getByRole('button', { name: /^Revoke access for/ }).click();
+    await page.getByRole('menuitem', { name: 'Remove access' }).click();
+    await expect(section).toHaveCount(0);
+
+    // Someone else approved view first: the decision is stale and the pane
+    // shows what they decided.
+    await page.goto(`${fixture}?focus=${item}&agentStale=1`, {
+      timeout: 240_000,
+    });
+    await expect(section.getByText(/asked to edit this item/)).toBeVisible();
+    await section.getByRole('button', { name: 'Allow edit' }).click();
+    await expect(
+      section.getByText('This request changed. Showing the latest.')
+    ).toBeVisible();
+    await expect(section.getByText(/can view this item/)).toBeVisible();
+
+    // An item the viewer cannot manage has no agent controls.
+    await press(page, viewport, /View-only login/);
+    await expect(
+      page.getByRole('heading', { name: 'View-only login' })
+    ).toBeVisible();
+    await expect(section).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+});
+
 test.describe('desktop creation', () => {
   test('New creates items only, and a failed folder create offers Retry under the same parent', async ({
     page,
@@ -688,6 +786,110 @@ for (const viewport of VIEWPORTS.slice(1)) {
           .getByRole('navigation', { name: 'Folders' })
           .getByRole('button', { name: 'Touch folder', exact: true })
       ).toBeVisible();
+    });
+  });
+}
+
+test('agent list failures remain in the item pane and retry replaces obsolete actions', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const target =
+    '/src/features/passwords/browser-test/vault.html?focus=019a0000-0000-7000-8000-0000000000bb';
+  await page.goto(`${target}&agentListFailure=1`, { timeout: 240_000 });
+  const section = page.getByRole('region', { name: 'Agent access' });
+  await expect(section.getByRole('alert')).toBeVisible({ timeout: 180_000 });
+  await expect(
+    page.getByRole('heading', { name: 'Agent requested login', exact: true })
+  ).toBeVisible();
+  await section.getByRole('button', { name: 'Retry', exact: true }).click();
+  await expect(
+    section.getByRole('button', { name: 'Allow edit', exact: true })
+  ).toBeVisible();
+  await page.goto(`${target}&agentStale=1&agentRefreshFailure=1`);
+  await section
+    .getByRole('button', { name: 'Allow edit', exact: true })
+    .click();
+  await expect(section.getByRole('alert')).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Agent requested login', exact: true })
+  ).toBeVisible();
+  await expect(
+    section.getByRole('button', { name: 'Allow edit', exact: true })
+  ).toHaveCount(0);
+  await expect(
+    section.getByText('This request changed. Showing the latest.')
+  ).toHaveCount(0);
+  await section.getByRole('button', { name: 'Retry', exact: true }).click();
+  await expect(section.getByText(/can view this item/)).toBeVisible();
+  await expect(
+    section.getByText('This request changed. Showing the latest.')
+  ).toBeVisible();
+});
+
+for (const viewport of [VIEWPORTS[0], VIEWPORTS[1]]) {
+  test.describe(`${viewport.name} favorites`, () => {
+    test.setTimeout(60_000);
+    test.use({
+      hasTouch: viewport.name !== 'desktop',
+      isMobile: viewport.name !== 'desktop',
+    });
+    test(`${viewport.name}: a viewer can favorite and unfavorite without editing`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(viewport);
+      const errors: string[] = [];
+      page.on('pageerror', (error) => errors.push(error.message));
+      await page.goto('/src/features/passwords/browser-test/vault.html');
+      await page
+        .getByRole('button', { name: /View-only login/ })
+        .first()
+        .click();
+      await expect(
+        page.getByRole('heading', { name: 'View-only login' })
+      ).toBeVisible();
+      await expect(
+        page.getByRole('button', { name: 'Edit', exact: true })
+      ).toHaveCount(0);
+      await page.getByRole('button', { name: 'Add to favorites' }).click();
+      await expect(
+        page.getByRole('button', { name: 'Remove from favorites' })
+      ).toBeEnabled();
+      await page.screenshot({ path: test.info().outputPath('starred.png') });
+      await page.getByRole('button', { name: 'Remove from favorites' }).click();
+      await expect(
+        page.getByRole('button', { name: 'Add to favorites' })
+      ).toBeEnabled();
+      expect(errors).toEqual([]);
+    });
+    test(`${viewport.name}: favorites are chosen at creation and changed with the detail star`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(viewport);
+      await page.goto('/src/features/passwords/browser-test/vault.html');
+      await startNew(page, viewport, 'Login');
+      await page
+        .getByLabel('Name', { exact: true })
+        .fill('Favorite creation fixture');
+      await page.getByText('Favorite', { exact: true }).click();
+      await press(page, viewport, 'Save');
+      await expect(
+        page.getByRole('heading', { name: 'Favorite creation fixture' })
+      ).toBeVisible();
+      await expect(
+        page.getByRole('button', { name: 'Remove from favorites' })
+      ).toBeEnabled();
+      await press(page, viewport, 'Edit');
+      await expect(page.getByLabel('Name', { exact: true })).toHaveValue(
+        'Favorite creation fixture'
+      );
+      await expect(
+        page.getByRole('checkbox', { name: 'Favorite', exact: true })
+      ).toHaveCount(0);
+      await press(page, viewport, 'Discard');
+      await expect(
+        page.getByRole('button', { name: 'Remove from favorites' })
+      ).toBeEnabled();
     });
   });
 }

@@ -1,3 +1,4 @@
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { createRoot, createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PreviewItem } from '../types';
@@ -13,14 +14,8 @@ const setGraphqlPreviewFileTypeMock = vi.hoisted(() => vi.fn());
 const setGraphqlPreviewNameMock = vi.hoisted(() => vi.fn());
 const setGraphqlPreviewOnCreateMock = vi.hoisted(() => vi.fn());
 
-vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({ enabled: true, loading: false }),
-}));
-
 vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
-  enableGraphqlSoup: { key: 'enable-graphql-soup' },
-  isFeatureEnabled: () => true,
   LOCAL_ONLY: false,
 }));
 
@@ -101,6 +96,20 @@ describe('preview transport facade', () => {
     });
   });
 
+  it('does not label an older create response with the new viewer or generation', async () => {
+    const generation = cacheSessionGeneration.capture();
+    await cacheSessionGeneration.transition(async () => {});
+    getQueryDataMock.mockReturnValue({ id: 'next-viewer' });
+    setPreviewOnCreate({
+      itemId: 'old-document',
+      itemType: 'document',
+      name: 'Old document',
+      generation,
+    });
+    expect(setGraphqlPreviewOnCreateMock).not.toHaveBeenCalled();
+    expect(setQueryDataMock).not.toHaveBeenCalled();
+  });
+
   it('uses urql-solid data without building the regular queries', () => {
     createRoot((dispose) => {
       const [item] = useItemPreview(() => ({
@@ -169,8 +178,8 @@ describe('preview transport facade', () => {
       expect(name()).toBe('Document');
       expect(createGraphqlItemPreviewQueryMock).toHaveBeenCalledWith(
         expect.any(Function),
-        expect.any(Function),
-        false
+        false,
+        expect.any(Function)
       );
       dispose();
     });
@@ -198,8 +207,8 @@ describe('preview transport facade', () => {
       });
       expect(createGraphqlItemPreviewQueryMock).toHaveBeenCalledWith(
         expect.any(Function),
-        expect.any(Function),
-        false
+        false,
+        expect.any(Function)
       );
       setData({
         id: 'doc-1',
@@ -308,6 +317,7 @@ describe('preview transport facade', () => {
     canWriteGraphqlPreviewCacheMock.mockReturnValue(false);
 
     setPreviewOnCreate({
+      generation: cacheSessionGeneration.capture(),
       itemId: 'doc-2',
       itemType: 'document',
       name: 'Created',
@@ -334,6 +344,7 @@ describe('preview transport facade', () => {
       name: 'Renamed',
     });
     setPreviewOnCreate({
+      generation: cacheSessionGeneration.capture(),
       itemId: 'doc-2',
       itemType: 'document',
       name: 'Created',
@@ -358,12 +369,13 @@ describe('preview transport facade', () => {
         fileType: 'md',
         subType: undefined,
       },
-      'user-1'
+      'user-1',
+      cacheSessionGeneration.capture()
     );
     expect(setQueryDataMock).not.toHaveBeenCalled();
   });
 
-  it('invalidates only active REST fallbacks under the GraphQL flag', async () => {
+  it('invalidates only active REST fallbacks', async () => {
     await invalidatePreview('doc-1');
 
     const options = invalidateQueriesMock.mock.calls[0]?.[0];

@@ -34,7 +34,11 @@ account, Docker, sudo, or local backend stack is required.
 ### Expected result
 
 Both suites must pass. The full suite checks native Soup predicate evaluation via
-`graphql_cache_entity_filter`, including filter combinations never fetched online.
+`graphql_cache_entity_filter`, including filter combinations never fetched online,
+then reloads the webview with the API still down and expects All mail to render
+from the native cache (identity comes from the persisted user-info query), with
+the rail avatar still showing the user's initials (`OF`), not the email's first
+letter.
 Neither IPC nor cache results are replaced. Establish a passing smoke run first
 when diagnosing an environment/startup failure.
 
@@ -217,7 +221,8 @@ native cache reads still work. All external routes are absent for the entire run
 so native HTTP/WebSocket clients cannot bypass browser-only interception.
 
 Vite/WebDriver remain reachable to load lazy frontend chunks and drive controls.
-This models **API transport loss**, not an offline packaged-app cold launch.
+This models **API transport loss** and a webview reload during it, not an
+offline packaged-app cold launch.
 Linux has no iOS `NWPathMonitor`: the test does not fake `navigator.onLine` or
 native reachability notifications. The matrix covers filter evaluation, while
 the smoke scenario drives the real Mail tabs. Clicking every dropdown sequence,

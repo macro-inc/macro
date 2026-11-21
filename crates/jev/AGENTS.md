@@ -39,7 +39,8 @@ composer's Auto mode.
   `document_cognition_service` (the `/decisions` endpoint), `agent_harness`
   (Auto mode choice, Clef Flash), `agent_session` (whether to retitle a
   session after a turn, TypeSafe), `agent_trigger` (routing unmentioned
-  thread replies to agent sessions).
+  thread replies to agent sessions), `memory` (the privacy judge,
+  TypeSafe, wired by `ai_tools`).
 
 ## Checks
 

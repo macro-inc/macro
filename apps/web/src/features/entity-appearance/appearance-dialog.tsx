@@ -11,9 +11,11 @@ import {
 } from '@service-storage/graphql-soup';
 import { createEffect, on, Show } from 'solid-js';
 import { refreshProjectQueries } from '../projects/queries/project-revalidation';
+import { refreshSavedViewReaders } from '../saved-views/queries/active-queries';
 import { createSaveEntityAppearance } from './queries/appearance';
 import {
   AppearanceEditor,
+  AppearanceEditorContent,
   type AppearanceEditorProps,
 } from './views/appearance-editor';
 
@@ -23,6 +25,10 @@ const saveEntityAppearance = createSaveEntityAppearance({
   update: setEntityAppearance,
   acknowledgeWrite: acknowledgeGraphqlRestWrite,
   refreshUncached: async (entity) => {
+    if (entity.type === 'saved_view') {
+      await refreshSavedViewReaders(getGraphqlSoupClient(), entity.id);
+      return;
+    }
     await Promise.all([
       refreshActiveGraphqlSoupQueries({ throwOnError: true }),
       refreshActiveGraphqlPreviewQueries(entity.id),
@@ -53,5 +59,21 @@ export function AppearanceDialog(props: Omit<AppearanceEditorProps, 'save'>) {
         }
       />
     </Show>
+  );
+}
+
+/** The same save adapter and picker state inside a menu-owned submenu. */
+export function AppearanceMenuContent(
+  props: Pick<AppearanceEditorProps, 'entity' | 'userId' | 'isCurrent'> & {
+    onClose: () => void;
+  }
+) {
+  return (
+    <AppearanceEditorContent
+      {...props}
+      save={(appearance) =>
+        saveEntityAppearance(props.entity, appearance, props.isCurrent)
+      }
+    />
   );
 }

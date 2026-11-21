@@ -149,12 +149,11 @@ async fn create(args: CreateArgs, ctx: SeedCliContext) -> anyhow::Result<()> {
         })
         .await?;
 
+    // The key the document services read: `s3_key`'s
+    // `build_cloud_storage_bucket_document_key`, with no extension.
     let key = format!(
-        "{}/{}/{}.{}",
-        document.owner,
-        document.document_id,
-        document.document_version_id,
-        file_type.as_str()
+        "{}/{}/{}",
+        document.owner, document.document_id, document.document_version_id
     );
 
     ctx.s3.upload_file(&key, &args.file_path).await?;
@@ -245,11 +244,8 @@ pub(crate) async fn seed_from_file_ref(
         match create_result {
             Ok(document) => {
                 let key = format!(
-                    "{}/{}/{}.{}",
-                    document.owner,
-                    document.document_id,
-                    document.document_version_id,
-                    file_type.as_str()
+                    "{}/{}/{}",
+                    document.owner, document.document_id, document.document_version_id
                 );
 
                 match ctx.s3.upload_file(&key, &file_path.to_string_lossy()).await {

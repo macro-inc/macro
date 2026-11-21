@@ -3,7 +3,7 @@
 use password_import::{ImportError, Limits, ParsedExport, SourceFormat, detect, parse};
 use serde_json::Value;
 
-use super::support::{fixture, one_password_pux, zip};
+use super::support::{bitwarden_zip, fixture, one_password_pux, zip};
 
 const SENTINEL: &str = "S3NT1NEL-value";
 
@@ -117,6 +117,11 @@ fn bitwarden_json_debug_is_redacted() {
 #[test]
 fn bitwarden_csv_debug_is_redacted() {
     assert_redacted(&fixture("bitwarden.csv"), SourceFormat::BitwardenCsv);
+}
+
+#[test]
+fn bitwarden_zip_debug_is_redacted() {
+    assert_redacted(&bitwarden_zip(), SourceFormat::BitwardenZip);
 }
 
 #[test]

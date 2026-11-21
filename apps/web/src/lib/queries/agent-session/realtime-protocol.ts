@@ -26,8 +26,9 @@ import type {
 
 /**
  * A run of persisted log entries, in log order, addressed by session for
- * realtime delivery. Each entry is the exact row `GET /agent-sessions/{id}/log`
- * serves, so the socket and the fetched log fold through one code path.
+ * realtime delivery. The web app reads only the session id, to mark a session
+ * nobody has open as moving; an open session folds its rows from the GraphQL
+ * log subscription.
  *
  * This mirrors `AgentSessionLogEvent` in
  * `crates/agent_session/src/outbound/connection_gateway_realtime.rs`.

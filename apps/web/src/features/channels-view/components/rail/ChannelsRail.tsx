@@ -20,6 +20,7 @@ import {
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
+import { usePending } from '@app/observability/flow';
 import { favoriteSplitContent } from '@app/util/favorites';
 import { prefetchLatestChannelMessages } from '@channel/queries/prefetch-channel-target';
 import {
@@ -39,6 +40,7 @@ import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { isModality } from '@core/mobile/inputModality';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import type { ChannelEntity, WithNotification } from '@entity';
+import { createChannelNotificationSettings } from '@notifications/primitives/create-channel-notification-settings';
 import { useCachedChannelsByIds } from '@queries/channel/by-ids';
 import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
 import { fetchChannelSelectionById } from '@queries/channel/selection-by-id';
@@ -438,8 +440,12 @@ export function ChannelsRail(props: ChannelsRailProps) {
     sectionsEnabled() ? [] : missingChannelIds()
   );
   const nextReferencedChannels = useCachedChannelsByIds(
-    referencedChannelIds,
+    missingChannelIds,
     sectionsEnabled
+  );
+  usePending(
+    'channels.sidebar.references',
+    () => sectionsEnabled() && nextReferencedChannels.isLoading()
   );
   const referencedChannels = createMemo<ChannelEntity[]>(
     (previous) =>
@@ -526,7 +532,10 @@ export function ChannelsRail(props: ChannelsRailProps) {
         return 'loading';
     };
     if (state.expandedGroups.favorites) {
-      statuses.favorites = statusFor(favoriteChannelIds());
+      // Favorite records already render their rows. Metadata enrichment cannot
+      // promise another visible row, especially under the Unread-only filter.
+      const status = statusFor(favoriteChannelIds());
+      if (status === 'error') statuses.favorites = status;
     }
     for (const label of labels()) {
       if (isLabelOpen(label.id)) {
@@ -563,7 +572,12 @@ export function ChannelsRail(props: ChannelsRailProps) {
     }
 
     const items = {
-      favorites: favorites(),
+      favorites: favorites().filter(
+        (favorite) =>
+          !sectionsEnabled() ||
+          favorite.entityType !== 'channel' ||
+          !nextReferencedChannels.unavailableIds().has(favorite.entityId)
+      ),
       team_channels: deduplicateChannels([
         props.sources.team_channels.items(),
         unreadForCollapsedGroup('team_channels').filter(
@@ -972,6 +986,9 @@ export function ChannelsRail(props: ChannelsRailProps) {
             if (row?.kind === 'all-threads') setThreadsChannelId(undefined);
             else if (row?.kind === 'conversation')
               setThreadsChannelId(row.channel.id);
+          } else if (shell.aside.fillsShell()) {
+            // A rail filling a narrow split opens a conversation on Enter,
+            // not on every move, which would hide the rail under the cursor.
           } else if (row?.kind === 'conversation') {
             previewAfterNavigation(row.channel);
           } else if (
@@ -1195,6 +1212,16 @@ export function ChannelsRail(props: ChannelsRailProps) {
     favorites,
     dialogOwner: labelDialogOwner,
   });
+  const channelNotifications = createChannelNotificationSettings({
+    labels,
+    resolveConflictChannels: true,
+    favoriteChannelIds: () =>
+      new Set(
+        favorites()
+          .filter((favorite) => favorite.entityType === 'channel')
+          .map((favorite) => favorite.entityId)
+      ),
+  });
 
   // Drops are resolved here rather than per row so a channel dragged from
   // anywhere in the section lands the same way.
@@ -1404,6 +1431,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     muteSection,
     snoozeSection,
     sectionNotificationsDisabled,
+    channelNotifications,
     sortBy: (group) => state.sortBy[group],
     setSortBy,
     sectionOrder: () => state.sectionOrder,
@@ -1471,6 +1499,9 @@ export function ChannelsRail(props: ChannelsRailProps) {
     registerInput: (element: HTMLInputElement) => {
       searchInput = element;
     },
+    focusResults: () => listRoot()?.focus({ preventScroll: true }),
+    // A conversation beside the rail can list its own rows (its calls).
+    hasResults: () => searchResults().length > 0,
     retry: retrySearch,
   };
 

@@ -145,7 +145,7 @@ trace:
 | `share.target` | One recipient or channel: finding its channel, sending its message, and granting access. |
 | `share.find_channel` | Finding or creating the direct message or group for people, around `http POST /dss/channels/get_or_create_dm` or `get_or_create_private`. |
 | `share.send_message` | One message, around `http POST /dss/messages/channel/<channel.id>`. |
-| `http …` under `share.target` | One channel access grant, such as `http PATCH /dss/documents/<id>`. With `enable-graphql-soup` on, a grant for a document, folder, chat, or email thread is an `entity.update_share_policy` span (`entity.type`, `entity.id`) around the `UpdateEntitySharePolicies` mutation instead. |
+| `http …` under `share.target` | One channel access grant, such as `http PATCH /dss/documents/<id>`. A grant for a document, folder, chat, or email thread is an `entity.update_share_policy` span (`entity.type`, `entity.id`) around the `UpdateEntitySharePolicies` mutation instead. |
 
 Each `http …` span continues into the backend trace. The root records
 `share.location` (`bulk_share`), `entity.ids`, the `share.items` and `share.targets` counts,
@@ -201,6 +201,57 @@ trace covers an email event from its Kafka publish to the browser's read:
 | `email_focus.notify` | One push to an inbox's readers, under the newest classification it covers. `coalesced` counts the classifications it covers, and 0 marks the repeat for the replica. `delivered` counts the websockets that got it. |
 | `connection_gateway.websocket_send` | The frame leaving the gateway. |
 | `email.focus.refresh` | The browser's read after a push, joined through the push's `traceparent`. A read after a reconnect starts its own trace. `email.focus.threads` is the list's size. |
+
+Backfills have their own traces. Every minute `email_focus.enrollment_scan`
+reads each connected inbox's place in the rollout (`inboxes`, `enrolled`,
+`unknown`). An enrolled inbox the worker hasn't filled since it started gets
+`email_focus.backfill` (`link_id`, `candidates`, `classified`,
+`stopped_early`) twice: its last 3 days, then the window, with a
+`classify_thread` child per thread (its mail reads, `jev.evaluate` and `save`). The log line
+"focus backfill pass finished" carries `pass`, `waited_secs` (found to started),
+`took_secs` and `since_found_secs`, the time from being found to the pass's end.
+
+The rollout's numbers are CloudWatch metrics, not spans: the worker publishes
+`Macro/EmailFocus` once a minute under `email_focus.metrics_publish`, whose log
+line "focus usage this minute" carries that minute's tokens and dollars. The
+**Email Focus rollout** Grafana dashboard draws them; see
+[the runbook](../runbooks/email-focus.md).
+
+## Contact searches
+
+Contact pickers read directory pages as they scroll, and read on by themselves
+past pages that list nothing new. Search for `{ name="contacts.search" }`
+(Datadog `resource_name:contacts.search`). One span covers one search, from its
+first page read to the page that ended it, with each `contacts.read_window`
+read as a child; server reads continue into the `contacts.graphql.page` span of
+`cloud-storage-service`.
+
+`contacts.search` records `contacts.mode`, `contacts.query_length`,
+`contacts.source` (`cache` or `server`, from the first page), `contacts.pages`,
+`contacts.server_pages`, `contacts.server_ms` (time in server reads),
+`contacts.failed_pages`, `contacts.empty_pages` (pages that listed no new
+eligible row), `contacts.max_empty_run` and `contacts.max_empty_run_ms` (the
+longest run of them), `contacts.listed`, `contacts.elapsed_ms`,
+`contacts.reached_end`, and `contacts.outcome` (`end`, `bound` at 500 rows,
+`changed` for a new query, `closed`). The span ends when its last page lands, so
+time a picker stays open afterwards is not counted. Reading the same input again
+after a search ended, as a reopened picker or a re-read after a contact change
+does, starts a new span with `contacts.repeat` true. Never add the query text.
+
+A `contacts.read_window` answered by the server (`contacts.source` `server`,
+a tab without a usable local cache) has a `contacts.read_server_window` child.
+On the first page of a typed search it has up to two more, read in parallel:
+`contacts.read_server_exact`, the server's exact-name search (never for text
+that holds an `@`), and `contacts.read_server_named`, the lookup by ID of the
+viewer's teammates or of the one person a whole typed address identifies. Each
+has its own `graphql.transport` request, with one exception: a teammate lookup
+equal to one still in flight, as the previous keystroke's is, shares that
+request, so its span has none under it and the request sits in the trace of the
+search that started it. The window records `contacts.named_exact_count` and
+`contacts.named_word_start_count`, how many of the listed people the text
+names, `contacts.named_failed` when one of the extra reads failed, and
+`contacts.named_late` when one had not answered within its budget; either way
+the page was listed without the people that read would have added.
 
 ## Agent sessions
 
@@ -353,11 +404,11 @@ Attributes every perf trace carries, set by the owners (`ui-operation.ts`,
 | On | Attributes |
 | --- | --- |
 | Every span in a classed trace, including HTTP client spans started in it | `macro.sampling.class` (the class it asked for, else its parent's) and `macro.sampling.rate` (that class's rate; weight by its inverse) |
-| Roots | `flow.kind`, `route.id` (when known), `ui.operation`, `ui.outcome` (`success`, `cancelled`, `hidden`, `timeout`), `ui.elapsed_ms`, `ui.work_to_ready_ms` (success only), `ui.long_task_count`, `ui.long_task_overlap_ms`, `ui.long_animation_frame_count`, `ui.long_animation_frame_overlap_ms`, `ui.long_animation_frame_blocking_ms`, `ui.visibility`; with an input event, `ui.input_to_ready_ms`, `ui.input_to_paint_opportunity_ms` and `ui.event_*` |
+| Roots | `flow.kind`, `route.id` (when known), `ui.operation`, `ui.outcome` (`success`, `cancelled`, `hidden`, `timeout`), `ui.elapsed_ms`, `ui.work_to_ready_ms` (success only), `ui.long_task_count`, `ui.long_task_overlap_ms`, `ui.long_animation_frame_count`, `ui.long_animation_frame_overlap_ms`, `ui.long_animation_frame_blocking_ms`, `ui.visibility`; with a long frame in the window, its attribution (below); with an input event, `ui.input_to_ready_ms`, `ui.input_to_paint_opportunity_ms` and `ui.event_*` |
 | Flow roots | `flow.phase_count` (child spans opened), `flow.ready_phase_count` (`usePending` phases already loaded when reached) |
 | Phases | `flow.root` (the root's name), `route.id` (the nearest view's), `flow.outcome` (`success` or `cancelled`) |
 | A phase's parent | `<phase>.waited`: `false` when it was already loaded (cache or an earlier load), `true` when the flow waited for it |
-| Resource (Datadog tags and facets) | `service.name=web-app`, `service.version` (Datadog `version`), `deployment.environment` (Datadog `env`), `app.runtime` (`browser`, `tauri`), `app.platform` (`web`, `desktop`, `ios`, `android`), `os.type` (`darwin`, `windows`, `linux`, `ios`, `android`, `chromeos`, `unknown`), `frontend_instance_id` |
+| Resource (Datadog tags and facets) | `service.name=web-app`, `service.version` (Datadog `version`), `deployment.environment` (Datadog `env`), `app.runtime` (`browser`, `tauri`), `app.platform` (`web`, `desktop`, `ios`, `android`), `os.type` (`darwin`, `windows`, `linux`, `ios`, `android`, `chromeos`, `unknown`), `frontend_instance_id`; native apps add `macro.native.version` (the marketing version, `2.5.0` on every Android build) and `macro.native.build`, the installed binary's build number (Android versionCode, iOS CFBundleVersion, desktop release build), absent when the binary can't report it. `service.version` names the web bundle, which reaches old binaries over the air: split native builds by `macro.native.build` |
 
 Entity context is opaque ids and categories only, on the phase that loads the
 entity (`block.type` and `document.id` on `block.data`, `channel.id`,
@@ -372,6 +423,29 @@ flow node and carry `traceparent` to the backend. They hang under the flow
 (`view.*` or a nested `TraceFlow`), not under the `usePending` phase that
 watches the query. A refetch after the flow settled, and global background
 queries (pending sends, Command-K sources), start their own traces.
+
+### Request and response body timing
+
+HTTP client spans (`http <METHOD> <path>`, from `safeFetch`) end when the
+response headers arrive (`http.timing_scope=until_response_headers`), timed by
+`http.response_headers_ms`. `graphql.transport` ends there too, timed by
+`graphql.response_headers_ms`, except that a projection request's ends after
+the projection check (`graphql.response_inspection_ms`, which includes its
+body) and a legacy retry's after the retry's headers. The body is timed on its
+own, because on native it can take far longer than the headers: the Tauri HTTP
+plugin hands it to the WebView in chunks over IPC.
+
+| Attribute | Meaning |
+| --- | --- |
+| `http.body_ms`, `graphql.body_ms` | From the headers of the response the client returned (a legacy retry's, after one) until the first read of its body (`json()`, `text()`, `arrayBuffer()`, ...) settled. `safeFetch` reads JSON with `json()`, so this includes parsing; urql reads `text()` and parses afterwards. Only on `complete`, `error` and `aborted`. |
+| `http.body_outcome`, `graphql.body_outcome` | `complete`; `error` (the connection broke mid-body, or invalid JSON); `aborted` (the request's signal); `unread` (released without a read: an error status or a `HEAD` request `safeFetch` did not read, a response read only through a clone or its `body` stream, such as the presence coalescer's shared original); `incomplete` (a read still running 60 seconds after the headers); `stream` (`text/event-stream`, `multipart/*`, NDJSON: never timed, and the span is not held open); `empty` (a status without a body: 204, 304, ...). |
+
+The span keeps its end time and is exported once the body settles, at most 60
+seconds after the headers; its `<attribute>.end` copies (such as
+`frontend_instance_id.end`) are taken then. Only the first read is counted,
+never a clone's. Chart it from the `macro.web.http.body_ms` and
+`macro.web.graphql.body_ms` span-based metrics (`@http.body_outcome:complete`)
+or aggregate the indexed spans; the `perf-investigation` skill has the query.
 
 ### Boot (`app.boot`)
 
@@ -461,7 +535,14 @@ Phases you will see:
   waited on after typing.
   `search.engine_restarted` is true when the cache engine was replaced while
   the search was pending, which is a search issued in the restart window after
-  returning to the tab.
+  returning to the tab. A failed search names its cause in
+  `search.failure_kind` (the cache's rejection code such as
+  `owner-handoff-blocked` or `owner-epoch-lost`, otherwise the cache error
+  class such as `timeout`, the host's 10 s read timeout) and the step that
+  gave up in `search.failure_phase` (`search_page` or `materialize`).
+  `search.buckets` names the list: `channel,dm,chat,document,note,project,task`
+  is the Soup local search pool behind the Home, Drive, Tasks, Soup view and
+  universal input searches, not Command-K.
   Only query lengths and counts are recorded. `email.drafts.discover` is
   event-driven local draft discovery, coalescing same-microtask notifications.
 - Preloading: block intent records `block.preload` with parallel
@@ -486,6 +567,25 @@ Phases you will see:
   `ui.long_task_*` and `ui.long_animation_frame_*`. These are a two-frame paint
   opportunity and overlapping main-thread work, not proof a pixel painted or
   that the flow caused every task.
+- Long-frame attribution on roots comes from the frames overlapping the root's
+  window (input event to finish), read 150 ms after the root finishes (at once
+  when it is cancelled, times out or the page hides) because Chrome reports a
+  frame only after presenting it; the span keeps its real end.
+  Fields: `ui.long_animation_frame_max_ms`, `_max_render_ms` (rendering phase of
+  the longest frame) and `_max_style_layout_ms` (its style and layout),
+  `_forced_style_layout_ms` (forced layout by scripts, all frames),
+  `_script_count` (scripts reported, at most three), and for the up to three
+  longest scripts
+  `ui.long_animation_frame_script_<1..3>.{invoker, invoker_type, source_url,
+  source_function, source_char_position, duration_ms, forced_style_layout_ms}`.
+  `source_url` is origin and path only; page code (inline handlers, Tauri IPC
+  replies) is `<origin>/(document)`, other schemes keep only the scheme, and
+  invokers drop element ids and `[src=…]`. The invoker is the entry point the
+  browser called: every Solid `onClick` is `#document.onclick` in `solid-js/web`,
+  and promise continuations go to whoever awaited first, so resolve
+  `source_url` + `source_char_position` through the build's source map
+  (`<chunk>.js.map` next to the chunk) to find the code. Chrome and Edge only
+  (desktop CEF included); Safari and Firefox have no Long Animation Frames.
 - `flow.outcome=success` means the UI reached readiness, which can be a
   terminal error panel; read connected HTTP spans to tell whether data loaded.
   Exclude cancelled, hidden, timeout and error outcomes from load percentiles.

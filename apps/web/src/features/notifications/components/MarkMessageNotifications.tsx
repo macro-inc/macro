@@ -2,8 +2,10 @@ import { useOptionalGlobalNotificationSource } from '@components/app/GlobalAppSt
 import { fireAndForget } from '@core/util/fireAndForget';
 import { catchToResult } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
-import { useNotificationsForEntity } from '@notifications/notification-helpers';
-import type { UnifiedNotification } from '@notifications/types';
+import {
+  compositeEntity,
+  type UnifiedNotification,
+} from '@notifications/types';
 import type { MessageParent } from '@service-storage/messages';
 import type { JSXElement } from 'solid-js';
 import {
@@ -17,9 +19,14 @@ import {
 } from 'solid-js';
 import { useMessageReadVisibility } from './MessageReadVisibility';
 
-/** Share exact unread matches so each message avoids scanning the channel history. */
+/**
+ * Share exact unread matches so each message avoids scanning the channel
+ * history. An undefined index leaves each message reading the global feed.
+ */
 export const MessageNotificationIndexContext =
-  createContext<Accessor<ReadonlyMap<string, UnifiedNotification[]>>>();
+  createContext<
+    Accessor<ReadonlyMap<string, UnifiedNotification[]> | undefined>
+  >();
 
 const MAX_MARK_ATTEMPTS = 3;
 
@@ -29,17 +36,13 @@ export function MarkMessageNotifications(props: {
   element: HTMLElement | undefined;
   children: JSXElement;
 }) {
-  // TODO(dev-rb/notifications): Stop discovering message notifications through the
-  // global NotificationSource. Use an exact-message GraphQL edge or scope that
-  // matches metadata.messageId only; the current CHANNEL_MESSAGE entity scope
-  // is thread-aware, so targeting a root also includes reply notifications.
+  // TODO(dev-rb/notifications): Without an index (REST mode, CRM contact
+  // threads), messages still discover their notifications through the global
+  // NotificationSource. Keep matching metadata.messageId exactly: the
+  // CHANNEL_MESSAGE entity scope is thread-aware, so targeting a root also
+  // includes reply notifications.
   const notificationSource = useOptionalGlobalNotificationSource();
   const scopedIndex = useContext(MessageNotificationIndexContext);
-  const notifications = notificationSource
-    ? scopedIndex
-      ? () => scopedIndex().get(props.messageId) ?? []
-      : useNotificationsForEntity(notificationSource, props.parent)
-    : () => [];
   const isMessageNotification = (n: UnifiedNotification) => {
     const content = n.notification_metadata.content;
     return (
@@ -47,12 +50,23 @@ export function MarkMessageNotifications(props: {
       ('commentId' in content && String(content.commentId) === props.messageId)
     );
   };
-  const unreadNotifications = () =>
-    notifications().filter(
+  const unreadNotifications = () => {
+    if (!notificationSource) return [];
+    const index = scopedIndex?.();
+    if (index) {
+      return (index.get(props.messageId) ?? []).filter(
+        (notification) => notification.state === 'unseen'
+      );
+    }
+    const feed =
+      notificationSource.notificationsByEntity()[
+        compositeEntity(props.parent)
+      ] ?? [];
+    return feed.filter(
       (notification) =>
-        notification.state === 'unseen' &&
-        (scopedIndex !== undefined || isMessageNotification(notification))
+        notification.state === 'unseen' && isMessageNotification(notification)
     );
+  };
   const batchKey = createMemo(() =>
     unreadNotifications().length
       ? JSON.stringify(

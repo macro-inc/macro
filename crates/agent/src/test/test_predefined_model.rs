@@ -81,3 +81,20 @@ fn sonnet_5_uses_adaptive_thinking() {
     assert!(params.get("temperature").is_none());
     assert_eq!(PredefinedModel::Sonnet5.context_window(), 1_000_000);
 }
+
+#[test]
+fn sonnet_5_5_routes_to_its_api_id_with_adaptive_thinking() {
+    assert_eq!(
+        PredefinedModel::Sonnet5_5.to_string(),
+        "anthropic/claude-sonnet-5-5"
+    );
+    assert_eq!(
+        serde_json::to_string(&PredefinedModel::Sonnet5_5).unwrap(),
+        r#""claude-sonnet-5-5""#
+    );
+    // Sonnet 5.5 rejects disabled thinking and a non-default temperature.
+    let params = PredefinedModel::Sonnet5_5.thinking_params();
+    assert_eq!(params["thinking"]["type"], "adaptive");
+    assert!(params.get("temperature").is_none());
+    assert_eq!(PredefinedModel::Sonnet5_5.context_window(), 1_000_000);
+}

@@ -47,6 +47,9 @@ export function getShareItemNoun(itemType: ShareItemType): string {
     .with('channel_thread', () => 'thread')
     .with('foreign', () => 'item')
     .with('harness', () => 'machine')
+    .with('team', () => {
+      throw new Error('teams do not support entity link sharing');
+    })
     .with('external_chat', () => 'chat')
     .with(
       'document',

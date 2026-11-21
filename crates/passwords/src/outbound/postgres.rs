@@ -1,7 +1,7 @@
 //! Metadata-only PostgreSQL adapter. The secret payload type never crosses this boundary.
 use crate::domain::{
     models::*,
-    ports::{ItemLock, Repository},
+    ports::{IntentOrigin, ItemLock, Repository},
 };
 use async_trait::async_trait;
 use opentelemetry::trace::TraceContextExt;
@@ -16,6 +16,7 @@ pub struct PgRepository {
     /// Metadata database pool; private payloads never cross this adapter.
     pool: PgPool,
     lock_admission: Arc<Semaphore>,
+    import_capacity: std::num::NonZeroUsize,
 }
 impl PgRepository {
     /// Construct one shared adapter per pool, reserving half its connections for repository queries.
@@ -26,6 +27,11 @@ impl PgRepository {
             return Err(Error::Invalid);
         }
         Ok(Self {
+            import_capacity: std::num::NonZeroUsize::new(
+                usize::try_from(pool.options().get_max_connections() - 1)
+                    .map_err(|_| Error::Invalid)?,
+            )
+            .ok_or(Error::Invalid)?,
             pool,
             lock_admission: Arc::new(Semaphore::new(
                 usize::try_from(capacity).map_err(|_| Error::Invalid)?,
@@ -53,6 +59,26 @@ impl PgRepository {
     }
 }
 
+/// Serialize every journal stage of one operation id across the human intent,
+/// agent intent and agent enrollment paths. The lock is the transaction's first
+/// statement, before any guard read, so a writer that waited reads the winner's
+/// committed row with a fresh snapshot. It is held only for the short stage
+/// transaction (never across provider I/O); past the 2s lock budget it is Busy.
+async fn reserve_operation(
+    transaction: &mut Transaction<'static, Postgres>,
+    operation: Uuid,
+) -> Result<(), Error> {
+    let key = format!("passwords/operation/{operation}");
+    sqlx::query!(
+        r#"SELECT 1 AS "locked!" FROM pg_advisory_xact_lock(hashtextextended($1, 0))"#,
+        key
+    )
+    .fetch_one(&mut **transaction)
+    .await
+    .map_err(database_error)?;
+    Ok(())
+}
+
 fn database_error(error: sqlx::Error) -> Error {
     match error
         .as_database_error()
@@ -65,9 +91,97 @@ fn database_error(error: sqlx::Error) -> Error {
     }
 }
 
+/// The agent publishing an intent: its account, original wake and stored action.
+pub(super) struct IntentPublisher<'a> {
+    pub agent: &'a str,
+    pub wake: Uuid,
+    pub action: &'a str,
+}
+
+/// Insert a metadata intent, or accept the identical intent of a retried
+/// operation. A retry must match the stored team, item, target version, creator
+/// and publisher identity: a human publisher only a row without an agent, an
+/// agent only its own row for the same action. The original wake is kept.
+async fn publish_intent(
+    transaction: &mut Transaction<'static, Postgres>,
+    operation: Uuid,
+    record: &Record,
+    publisher: Option<IntentPublisher<'_>>,
+) -> Result<(), Error> {
+    let value = serde_json::to_value(record).map_err(|_| Error::Invalid)?;
+    let (agent, wake, action) = match &publisher {
+        Some(publisher) => (
+            Some(publisher.agent),
+            Some(publisher.wake),
+            Some(publisher.action),
+        ),
+        None => (None, None, None),
+    };
+    let result=sqlx::query!("INSERT INTO password_write_intents(operation_id,team_id,item_id,record,agent_user_id,wake_id,agent_action) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(operation_id) DO NOTHING",operation,record.metadata.team_id.0,record.metadata.id.0,value,agent,wake,action).execute(&mut **transaction).await.map_err(database_error)?;
+    if result.rows_affected() == 0 {
+        let row=sqlx::query!("SELECT record,agent_user_id,agent_action FROM password_write_intents WHERE operation_id=$1 AND team_id=$2 AND item_id=$3",operation,record.metadata.team_id.0,record.metadata.id.0).fetch_optional(&mut **transaction).await.map_err(database_error)?.ok_or(Error::Conflict)?;
+        let previous: Record =
+            serde_json::from_value(row.record).map_err(|_| Error::Unavailable)?;
+        if previous.user_id != record.user_id
+            || previous.metadata.version != record.metadata.version
+            || row.agent_user_id.as_deref() != agent
+            || row.agent_action.as_deref() != action
+        {
+            return Err(Error::Conflict);
+        }
+    }
+    Ok(())
+}
+
+/// Commit metadata with its version and revision guard inside `transaction`.
+/// A live record's folder is share-locked in the same transaction.
+async fn save_record(
+    transaction: &mut Transaction<'static, Postgres>,
+    record: &Record,
+    expected_version: Option<i32>,
+) -> Result<(), Error> {
+    if !record.deleting
+        && let Some(folder) = record.metadata.folder_id
+    {
+        let live = sqlx::query_scalar!(
+            "SELECT id FROM password_folders WHERE team_id=$1 AND id=$2 FOR KEY SHARE",
+            record.metadata.team_id.0,
+            folder
+        )
+        .fetch_optional(&mut **transaction)
+        .await
+        .map_err(database_error)?;
+        if live.is_none() {
+            return Err(Error::FolderMissing);
+        }
+    }
+    let metadata = serde_json::to_value(&record.metadata).map_err(|_| Error::Invalid)?;
+    let grants = serde_json::to_value(&record.grants).map_err(|_| Error::Invalid)?;
+    let totp_key_id = record.totp_key_id.map(|key| key.0);
+    let changed=if let Some(expected_version)=expected_version {
+        sqlx::query_file!("src/outbound/postgres/update_record.sql",record.metadata.team_id.0,record.metadata.id.0,metadata,record.metadata.version,grants,expected_version,record.deleting,totp_key_id,record.revision).execute(&mut **transaction).await
+    }else{
+        sqlx::query!("INSERT INTO password_item_entities(team_id,id,user_id,metadata,version,grants,deleting,totp_key_id,cleanup_due_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,CASE WHEN $7 THEN now()+interval '180 seconds' ELSE NULL END) ON CONFLICT(team_id,id) DO NOTHING",record.metadata.team_id.0,record.metadata.id.0,record.user_id.as_ref(),metadata,record.metadata.version,grants,record.deleting,totp_key_id).execute(&mut **transaction).await
+    }.map_err(|_|Error::Unavailable)?;
+    if changed.rows_affected() != 1 {
+        return Err(Error::Conflict);
+    }
+    Ok(())
+}
+
+fn trace_id() -> String {
+    tracing::Span::current()
+        .context()
+        .span()
+        .span_context()
+        .trace_id()
+        .to_string()
+}
+
 struct PgItemLock {
     _admission: OwnedSemaphorePermit,
     _transaction: Transaction<'static, Postgres>,
+    _span: tracing::Span,
 }
 #[async_trait]
 impl ItemLock for PgItemLock {
@@ -102,6 +216,9 @@ const _: () = assert!(password_import::vault::MAX_IMPORT_MATCH_NAMES == 500);
 
 #[async_trait]
 impl Repository for PgRepository {
+    fn import_capacity(&self) -> std::num::NonZeroUsize {
+        self.import_capacity
+    }
     async fn is_human(
         &self,
         user: &macro_user_id::user_id::MacroUserIdStr<'_>,
@@ -188,10 +305,13 @@ impl Repository for PgRepository {
             return Err(Error::Conflict);
         }
         sqlx::query!("UPDATE password_totp_enrollments SET state='retired',cleanup_after=GREATEST(cleanup_after,now()+interval '180 seconds') WHERE team_id=$1 AND item_id=$2 AND key_id<>$3 AND state<>'retired' AND state='active'",team.0,item.0,key.0).execute(&mut *transaction).await.map_err(database_error)?;
-        let item=sqlx::query!(r#"UPDATE password_item_entities SET totp_key_id=$3,metadata=jsonb_set(metadata,'{hasTotp}','true'::jsonb),revision=revision+1 WHERE team_id=$1 AND id=$2 AND NOT deleting AND deleted_at IS NULL"#,team.0,item.0,key.0).execute(&mut *transaction).await.map_err(database_error)?;
-        if item.rows_affected() != 1 {
+        let selected=sqlx::query!(r#"UPDATE password_item_entities SET totp_key_id=$3,metadata=jsonb_set(metadata,'{hasTotp}','true'::jsonb),revision=revision+1 WHERE team_id=$1 AND id=$2 AND NOT deleting AND deleted_at IS NULL"#,team.0,item.0,key.0).execute(&mut *transaction).await.map_err(database_error)?;
+        if selected.rows_affected() != 1 {
             return Err(Error::NotFound);
         }
+        // An agent setup's audit commits with its activation, from the identity
+        // retained when the enrollment was staged.
+        sqlx::query!("INSERT INTO password_activity(team_id,item_id,id,user_id,action,trace_id,agent_user_id,wake_id) SELECT team_id,item_id,key_id,agent_user_id,'agent_totp_setup',$4,agent_user_id,wake_id FROM password_totp_enrollments WHERE team_id=$1 AND item_id=$2 AND key_id=$3 AND agent_user_id IS NOT NULL ON CONFLICT(team_id,item_id,id) DO NOTHING",team.0,item.0,key.0,trace_id()).execute(&mut *transaction).await.map_err(database_error)?;
         transaction.commit().await.map_err(database_error)
     }
     async fn retire_totp(
@@ -293,6 +413,7 @@ impl Repository for PgRepository {
         Ok(Box::new(PgItemLock {
             _admission: admission,
             _transaction: transaction,
+            _span: tracing::info_span!("passwords.lease.hold", team_id = %team.0),
         }))
     }
     #[tracing::instrument(skip_all,err,name="passwords.intent.publish",fields(team_id=%record.metadata.team_id.0,item_id=%record.metadata.id.0,outcome=tracing::field::Empty))]
@@ -302,7 +423,8 @@ impl Repository for PgRepository {
         record: &Record,
         publisher: &macro_user_id::user_id::MacroUserIdStr<'_>,
     ) -> Result<(), Error> {
-        let mut transaction = self.pool.begin().await.map_err(|_| Error::Unavailable)?;
+        let mut transaction = self.bounded_transaction().await?;
+        reserve_operation(&mut transaction, operation).await?;
         // Match revocation's team -> member lock order. A publisher must commit
         // before the revocation scan, or observe revoked admission after it.
         let team = sqlx::query_scalar!(
@@ -311,41 +433,90 @@ impl Repository for PgRepository {
         )
         .fetch_optional(&mut *transaction)
         .await
-        .map_err(|_| Error::Unavailable)?;
-        let member=sqlx::query_scalar!(r#"SELECT membership.user_id FROM team_user membership JOIN "User" profile ON profile.id=membership.user_id WHERE membership.team_id=$1 AND membership.user_id=$2 AND NOT EXISTS(SELECT 1 FROM password_team_lifecycle closed WHERE closed.team_id=membership.team_id) AND NOT profile."isAgent" FOR KEY SHARE OF membership"#,record.metadata.team_id.0,publisher.as_ref()).fetch_optional(&mut *transaction).await.map_err(|_|Error::Unavailable)?;
+        .map_err(database_error)?;
+        let member=sqlx::query_scalar!(r#"SELECT membership.user_id FROM team_user membership JOIN "User" profile ON profile.id=membership.user_id WHERE membership.team_id=$1 AND membership.user_id=$2 AND NOT EXISTS(SELECT 1 FROM password_team_lifecycle closed WHERE closed.team_id=membership.team_id) AND NOT profile."isAgent" FOR KEY SHARE OF membership"#,record.metadata.team_id.0,publisher.as_ref()).fetch_optional(&mut *transaction).await.map_err(database_error)?;
         if team.is_none() || member.is_none() {
             tracing::Span::current().record("outcome", "admission_revoked");
             return Err(Error::NotFound);
         }
-        let value = serde_json::to_value(record).map_err(|_| Error::Invalid)?;
-        let result=sqlx::query!("INSERT INTO password_write_intents(operation_id,team_id,item_id,record) VALUES($1,$2,$3,$4) ON CONFLICT(operation_id) DO NOTHING",operation,record.metadata.team_id.0,record.metadata.id.0,value).execute(&mut *transaction).await.map_err(|_|Error::Unavailable)?;
-        if result.rows_affected() == 0 {
-            let row=sqlx::query!("SELECT record FROM password_write_intents WHERE operation_id=$1 AND team_id=$2 AND item_id=$3",operation,record.metadata.team_id.0,record.metadata.id.0).fetch_optional(&mut *transaction).await.map_err(|_|Error::Unavailable)?.ok_or(Error::Conflict)?;
-            let previous: Record =
-                serde_json::from_value(row.record).map_err(|_| Error::Unavailable)?;
-            if previous.user_id != record.user_id
-                || previous.metadata.version != record.metadata.version
-            {
-                return Err(Error::Conflict);
-            }
+        // The id must not name an enrollment or another audit entry of the item,
+        // so this update's own audit is never silently dropped; only the same
+        // human's replay of their create or update passes.
+        let identity_free = sqlx::query_scalar!(
+            r#"SELECT NOT EXISTS(SELECT 1 FROM password_totp_enrollments WHERE team_id=$1 AND key_id=$3) AND NOT EXISTS(SELECT 1 FROM password_activity WHERE team_id=$1 AND item_id=$2 AND id=$3 AND NOT (action IN ('create','update') AND user_id=$4 AND agent_user_id IS NULL)) AS "identity_free!""#,
+            record.metadata.team_id.0,
+            record.metadata.id.0,
+            operation,
+            publisher.as_ref()
+        )
+        .fetch_one(&mut *transaction)
+        .await
+        .map_err(database_error)?;
+        if !identity_free {
+            tracing::Span::current().record("outcome", "operation_conflict");
+            return Err(Error::Conflict);
         }
-        transaction.commit().await.map_err(|_| Error::Unavailable)?;
+        publish_intent(&mut transaction, operation, record, None).await?;
+        transaction.commit().await.map_err(database_error)?;
         tracing::Span::current().record("outcome", "published");
         Ok(())
+    }
+    async fn intent_origin(
+        &self,
+        team: TeamId,
+        item: ItemId,
+        operation: Uuid,
+    ) -> Result<Option<IntentOrigin>, Error> {
+        // Bounded like every short repository read-then-decide: 5s/2s, then Busy.
+        let mut transaction = self.bounded_transaction().await?;
+        let row = sqlx::query!(
+            "SELECT agent_user_id,agent_action FROM password_write_intents WHERE operation_id=$1 AND team_id=$2 AND item_id=$3",
+            operation,
+            team.0,
+            item.0
+        )
+        .fetch_optional(&mut *transaction)
+        .await
+        .map_err(database_error)?;
+        transaction.commit().await.map_err(database_error)?;
+        let Some(row) = row else {
+            return Ok(None);
+        };
+        Ok(Some(match (row.agent_user_id, row.agent_action) {
+            (None, _) => IntentOrigin::Human,
+            (Some(agent), Some(action)) => IntentOrigin::Agent {
+                agent: macro_user_id::cowlike::CowLike::into_owned(
+                    macro_user_id::user_id::MacroUserIdStr::parse_from_str(&agent)
+                        .map_err(|_| Error::Unavailable)?,
+                ),
+                action: serde_json::from_value(serde_json::Value::String(action))
+                    .map_err(|_| Error::Unavailable)?,
+            },
+            (Some(_), None) => return Err(Error::Unavailable),
+        }))
     }
     async fn staged(&self, team: TeamId, item: ItemId, operation: Uuid) -> Result<Record, Error> {
         let row=sqlx::query!("SELECT record FROM password_write_intents WHERE operation_id=$1 AND team_id=$2 AND item_id=$3",operation,team.0,item.0).fetch_optional(&self.pool).await.map_err(|_|Error::Unavailable)?.ok_or(Error::NotFound)?;
         serde_json::from_value(row.record).map_err(|_| Error::Unavailable)
     }
-    async fn finish(&self, operation: Uuid) -> Result<(), Error> {
+    async fn save_reconciled(
+        &self,
+        record: &Record,
+        expected_version: Option<i32>,
+        operation: Uuid,
+    ) -> Result<(), Error> {
+        let mut transaction = self.bounded_transaction().await?;
+        save_record(&mut transaction, record, expected_version).await?;
+        // The agent audit retained on the intent lands with the metadata it describes.
+        sqlx::query!("INSERT INTO password_activity(team_id,item_id,id,user_id,action,trace_id,agent_user_id,wake_id) SELECT team_id,item_id,operation_id,agent_user_id,agent_action,$2,agent_user_id,wake_id FROM password_write_intents WHERE operation_id=$1 AND agent_user_id IS NOT NULL ON CONFLICT(team_id,item_id,id) DO NOTHING",operation,trace_id()).execute(&mut *transaction).await.map_err(database_error)?;
         sqlx::query!(
             "UPDATE password_write_intents SET completed_at=COALESCE(completed_at,now()) WHERE operation_id=$1",
             operation
         )
-        .execute(&self.pool)
+        .execute(&mut *transaction)
         .await
-        .map_err(|_| Error::Unavailable)?;
-        Ok(())
+        .map_err(database_error)?;
+        transaction.commit().await.map_err(database_error)
     }
     async fn teams(&self, actor: &Actor) -> Result<Vec<TeamId>, Error> {
         let teams = macro_db_client::team::get::get_user_teams(&self.pool, actor.user_id.as_ref())
@@ -417,6 +588,23 @@ impl Repository for PgRepository {
             })
             .collect()
     }
+    async fn favorites(
+        &self,
+        actor: &Actor,
+        team: TeamId,
+        items: &[ItemId],
+    ) -> Result<Vec<ItemId>, Error> {
+        self.list_favorites(actor, team, items).await
+    }
+    async fn set_favorite(
+        &self,
+        actor: &Actor,
+        team: TeamId,
+        item: ItemId,
+        favorite: bool,
+    ) -> Result<(), Error> {
+        self.store_favorite(actor, team, item, favorite).await
+    }
     async fn get(&self, team: TeamId, item: ItemId) -> Result<Record, Error> {
         let row=sqlx::query!(r#"SELECT metadata,user_id,grants,(deleting OR deleted_at IS NOT NULL) AS "deleting!",revision,totp_key_id FROM password_item_entities WHERE team_id=$1 AND id=$2"#,team.0,item.0).fetch_optional(&self.pool).await.map_err(|_|Error::Unavailable)?.ok_or(Error::NotFound)?;
         decode(
@@ -430,44 +618,20 @@ impl Repository for PgRepository {
     }
     async fn save(&self, record: &Record, expected_version: Option<i32>) -> Result<(), Error> {
         let mut transaction = self.bounded_transaction().await?;
-        if !record.deleting
-            && let Some(folder) = record.metadata.folder_id
-        {
-            let live = sqlx::query_scalar!(
-                "SELECT id FROM password_folders WHERE team_id=$1 AND id=$2 FOR KEY SHARE",
-                record.metadata.team_id.0,
-                folder
-            )
-            .fetch_optional(&mut *transaction)
-            .await
-            .map_err(database_error)?;
-            if live.is_none() {
-                return Err(Error::FolderMissing);
-            }
-        }
-        let metadata = serde_json::to_value(&record.metadata).map_err(|_| Error::Invalid)?;
-        let grants = serde_json::to_value(&record.grants).map_err(|_| Error::Invalid)?;
-        let totp_key_id = record.totp_key_id.map(|key| key.0);
-        let changed=if let Some(expected_version)=expected_version {
-            sqlx::query!("UPDATE password_item_entities SET metadata=$3,version=$4,grants=$5,deleting=$7,revision=revision+1,totp_key_id=$8,cleanup_due_at=CASE WHEN $7 THEN COALESCE(cleanup_due_at,now()+interval '180 seconds') ELSE cleanup_due_at END WHERE team_id=$1 AND id=$2 AND version=$6 AND revision=$9 AND deleted_at IS NULL",record.metadata.team_id.0,record.metadata.id.0,metadata,record.metadata.version,grants,expected_version,record.deleting,totp_key_id,record.revision).execute(&mut *transaction).await
-        }else{
-            sqlx::query!("INSERT INTO password_item_entities(team_id,id,user_id,metadata,version,grants,deleting,totp_key_id,cleanup_due_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,CASE WHEN $7 THEN now()+interval '180 seconds' ELSE NULL END) ON CONFLICT(team_id,id) DO NOTHING",record.metadata.team_id.0,record.metadata.id.0,record.user_id.as_ref(),metadata,record.metadata.version,grants,record.deleting,totp_key_id).execute(&mut *transaction).await
-        }.map_err(|_|Error::Unavailable)?;
-        if changed.rows_affected() != 1 {
-            return Err(Error::Conflict);
-        }
+        save_record(&mut transaction, record, expected_version).await?;
         transaction.commit().await.map_err(database_error)
     }
     async fn delete(&self, team: TeamId, item: ItemId) -> Result<(), Error> {
+        let mut transaction = self.bounded_transaction().await?;
         sqlx::query!(
             "UPDATE password_item_entities SET deleted_at=COALESCE(deleted_at,now()),cleanup_due_at=now()+interval '1 hour' WHERE team_id=$1 AND id=$2",
             team.0,
             item.0
         )
-        .execute(&self.pool)
+        .execute(&mut *transaction)
         .await
         .map_err(|_| Error::Unavailable)?;
-        Ok(())
+        transaction.commit().await.map_err(database_error)
     }
     #[tracing::instrument(skip_all,err,name="passwords.audit",fields(team_id=%team.0,item_id=%item.0,event_id=%id))]
     async fn audit(
@@ -490,7 +654,7 @@ impl Repository for PgRepository {
         Ok(())
     }
     async fn activity(&self, team: TeamId, item: ItemId) -> Result<Vec<Activity>, Error> {
-        let rows=sqlx::query!("SELECT id,user_id,action,occurred_at FROM password_activity WHERE team_id=$1 AND item_id=$2 ORDER BY id DESC LIMIT 200",team.0,item.0).fetch_all(&self.pool).await.map_err(|_|Error::Unavailable)?;
+        let rows=sqlx::query!("SELECT id,user_id,action,occurred_at FROM password_activity WHERE team_id=$1 AND item_id=$2 AND agent_user_id IS NULL ORDER BY id DESC LIMIT 200",team.0,item.0).fetch_all(&self.pool).await.map_err(|_|Error::Unavailable)?;
         rows.into_iter()
             .map(|row| {
                 Ok(Activity {
@@ -549,7 +713,10 @@ impl Repository for PgRepository {
 #[cfg(test)]
 mod test;
 
+mod agent;
 mod cleanup;
 mod folders;
 
 mod import;
+
+mod favorites;

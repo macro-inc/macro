@@ -4,6 +4,7 @@ export * from './artifact-commands';
 export * from './artifact-order';
 export type { GraphicsBackend } from './backend';
 export {
+  type FitViewport,
   fitImageCamera,
   INITIAL_CAMERA,
   MAX_SCALE,
@@ -76,6 +77,11 @@ export {
   selectionContainsPoint,
   selectionFrame,
 } from './selection-frame';
+export {
+  rotationKnobOffset,
+  rotationKnobPoint,
+  touchHandleAt,
+} from './selection-handles';
 export * from './shapes/artifact';
 export {
   type ConnectorAnchor,

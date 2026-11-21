@@ -3,13 +3,14 @@
 use password_import::{Limits, SourceFormat, detect, parse};
 use proptest::prelude::*;
 
-use super::support::{fixture, one_password_pux};
+use super::support::{bitwarden_zip, fixture, one_password_pux};
 
-const FORMATS: [SourceFormat; 4] = [
+const FORMATS: [SourceFormat; 5] = [
     SourceFormat::OnePasswordPux,
     SourceFormat::OnePasswordCsv,
     SourceFormat::BitwardenJson,
     SourceFormat::BitwardenCsv,
+    SourceFormat::BitwardenZip,
 ];
 
 /// Overwrite, insert and truncate bytes of `original`.
@@ -68,12 +69,21 @@ proptest! {
     }
 
     #[test]
-    fn mutated_text_exports_never_panic(
-        fixture_index in 0..4usize,
+    fn mutated_bitwarden_zip_never_panics(
         edits in proptest::collection::vec((any::<usize>(), any::<u8>(), any::<u8>()), 0..8),
         truncate_to in any::<usize>(),
     ) {
-        let name = ["one_password.csv", "bitwarden.json", "bitwarden.csv", "one_password_export.data.json"][fixture_index];
+        parse_every_format(&mutate(&bitwarden_zip(), &edits, truncate_to));
+    }
+
+    #[test]
+    fn mutated_text_exports_never_panic(
+        fixture_index in 0..6usize,
+        edits in proptest::collection::vec((any::<usize>(), any::<u8>(), any::<u8>()), 0..8),
+        truncate_to in any::<usize>(),
+    ) {
+        let name = ["one_password.csv", "bitwarden.json", "bitwarden.csv", "one_password_export.data.json",
+            "bitwarden_zip_data.json", "bitwarden_vaultwarden.csv"][fixture_index];
         parse_every_format(&mutate(&fixture(name), &edits, truncate_to));
     }
 }

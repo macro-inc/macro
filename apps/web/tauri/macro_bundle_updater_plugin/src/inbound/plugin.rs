@@ -216,6 +216,7 @@ impl BundleUpdateEvent {
 pub struct MacroBundleUpdaterPlugin {
     base_url: Url,
     embedded_bundle_build: u64,
+    embedded_git_sha: Option<&'static str>,
     bundle_routes: BundleRoutes,
     auto_update: bool,
 }
@@ -226,9 +227,18 @@ impl MacroBundleUpdaterPlugin {
         Self {
             base_url,
             embedded_bundle_build,
+            embedded_git_sha: None,
             bundle_routes,
             auto_update: true,
         }
+    }
+
+    /// Record the commit the embedded bundle was built from. Update checks send
+    /// it while the embedded bundle is active, so the server does not offer the
+    /// bundle deployed from that same commit as an update.
+    pub fn with_embedded_git_sha(mut self, git_sha: Option<&'static str>) -> Self {
+        self.embedded_git_sha = git_sha;
+        self
     }
 
     /// Enable or disable automatic update activity.
@@ -492,7 +502,7 @@ impl<R: Runtime> Plugin<R> for MacroBundleUpdaterPlugin {
         } else {
             native_build()
         };
-        let system_info = SystemInfo::new(app.clone(), native_build);
+        let system_info = SystemInfo::new(app.clone(), native_build, self.embedded_git_sha);
 
         let mut service = Service::new::<_, _, TauriTaskSpawner>(
             client,

@@ -33,7 +33,8 @@ per-entity-type search plus a unified search across them — mounted into
 
 - Depends on: `opensearch_client`, `models_opensearch`, `macro_db_client`,
   `entity_access`, `properties`, `crm`, `item_filters`, `calendar_events`
-  (domain only, no features, for its Macro call rule and label port).
+  (domain only, no features, for its Macro call rule and label port),
+  `rate_limit` (its token bucket, for the API-key search allowance).
 - Used by: `document_storage_service` (mounts `search_router`); called
   through `search_service_client`.
 
@@ -58,6 +59,56 @@ per-entity-type search plus a unified search across them — mounted into
   (`term_len`, `search.terms`, `search.search_on`). The unified
   search span is built by `simple_unified::unified_search_span`, which a test
   reads back; add a field there, not by instrumenting the request.
+- A unified search (`/search`, `/search/simple`, on both DSS mounts) waits
+  for its caller's turn in `domain::search_lanes` after the request's own
+  checks (query, paging, cursor, terms, sessions, email filters; ids a source
+  parses when it runs, such as channel and CRM company ids, are checked in the
+  turn) and before it reads anything: per process, three searches in
+  flight for the person's app session (the mention menu sends three one-type
+  searches per term) and two for every other caller, the rest waiting in
+  arrival order, and one still waiting after
+  20 s answered 429 (`SearchError::Busy`, `Retry-After`). OpenSearch has few
+  search threads per node, and one caller's burst of heavy searches filled
+  them for everyone. The caller (`api::search::caller::search_caller`) is the
+  user plus who acts: a signed agent (one lane across all its sessions for
+  that user) or routine, else the credential's kind: the app session, a
+  service searching for them (`Internal`: the AI tools, an agent's native
+  search tools, routine drafting), or an API credential. So a person's app
+  searches never wait behind a program's or a service's. The turn covers the
+  CRM membership read (so a receipt is never older than its search) and the
+  Postgres and OpenSearch search, not enrichment; the span records
+  `search.lane`, `search.lane_wait_ms` and `search.lane_outcome`
+  (`immediate`, `queued`, `refused`). Lanes are per process, so a caller's
+  bound grows with the replica count; DSS builds one `SearchLanes` for both
+  mounts. The internal mount runs under `connection_drop_prevention_handler`,
+  so a service search whose caller gave up keeps its place in the service's
+  lane and runs to the end.
+- Before its turn, a unified search sent with a user API key
+  (`CredentialOrigin::UserApiKey`, `search.caller = user_api_key`) draws on
+  its account's search allowance (`domain::search_allowance`): one token
+  bucket per account in Redis, shared by all its keys and every process, of
+  200 searches that refills one a second. An empty bucket answers 429
+  (`SearchError::RateLimited`, `Retry-After` in whole seconds) without
+  waiting in the lane. The lanes bound searches in flight per process; the
+  bucket bounds the rate across processes, which lanes cannot. It is a safety
+  net, sized from production traces so today's busiest keys, which search in
+  batches that a fixed 60-a-minute window would refuse, never reach it;
+  measure before tightening it. A bucket that errors or does not answer
+  within 500 ms lets the search run. A limited search is not logged as an
+  error. The span records `search.rate_limit` (`allowed`, `limited`,
+  `unavailable`), `search.rate_limit_remaining` (searches the account may
+  still send at once) and `search.rate_limit_wait_ms`. App sessions,
+  agents, routines, services, Macro API tokens and account-manager
+  credentials never draw on it, and neither does `/search/channel`, which
+  takes no lane turn either.
+- Search never returns an item in the Trash. The documents and chats indexes
+  keep trashed items until a purge (projects leave the index on trash).
+  Enrichment drops a document, chat or project hit whose row has `deletedAt`,
+  as it drops a hit whose row is gone, so the SDK, the API, the AI tools and
+  the web app get the same results. The web mapper still checks
+  `metadata.deleted_at`: saved AI chats render their stored search results
+  through it, and older ones hold trashed hits. `/search/simple` returns hits
+  unenriched and is not covered.
 - A query is valid from one character (`terms::trimmed_query` rejects only a
   blank or quotes-only one). Short queries stay bounded in the query builders, not here: a
   term under three characters matches as a whole word in document, chat, call
@@ -114,6 +165,44 @@ per-entity-type search plus a unified search across them — mounted into
   `off_schedule_summary` to such a result, and that sentence did. Measure a
   change to any of these with the default model on rows that are really in the
   index, and a user whose memory does not describe the behavior under test.
+
+- Email search scopes by the owners of the inboxes the caller can reach
+  (`fetch_search_inboxes_for_macro_id`), so a link's mail matches until its
+  documents are deleted. An inbox whose disconnect has started (`deleting_at`)
+  is excluded by `link_id` at once, because search-processing deletes its
+  documents only after the email service purges its rows. Threads someone
+  else shared from such an inbox are not excluded.
+- Email filters mean what the Email list query means by them, applied before
+  pagination (`domain/email_search.rs`). Shared threads are resolved from
+  `entity_access` grants to the caller's sources, leaving out their own
+  inboxes, and searched by id (at most `MAX_SHARED_THREADS`); `email_thread_ids`
+  narrow by id. Calendar only and `view` (Sent, Drafts) are `ThreadSet`
+  allowlists read from the partial index each view reads
+  (`idx_email_threads_calendar_view`, `idx_email_threads_sent_view_link_ts_id`,
+  `idx_email_messages_drafts_view`), at most `MAX_THREAD_SET_ALLOWLIST` per set,
+  past which the set is checked per hit; two sets intersect. Read, done
+  (`inbox_visible`), notification state and attachment kinds can each cover
+  most of a mailbox or have no index, so `read_until_page_kept` checks each
+  page's email threads in Postgres and reads further pages until the page is
+  full, the results end, or `MAX_EMAIL_STATE_ROUNDS`; the span records the
+  rounds and whether the bound was reached. Attachment kinds are read from
+  `email_attachments`, as the list's built-in tabs filter them, not from the
+  thread flags, which saved views read and which are not backfilled
+  everywhere. `email_filters.view` is search only: expanding it into a list
+  filter is an `ExpandErr`. `project_ids` (Drive folders) is an allowlist with
+  the list's Project candidate rule (`entity_access::project_email_threads`):
+  the caller's own threads in the folders, every thread in a folder granted to
+  their sources whoever's inbox holds it, and thread shares in the folders,
+  at most `MAX_PROJECT_THREADS`, from at most `MAX_EMAIL_PROJECTS` folders
+  (more is a 400); the other thread-level filters are then checked per hit.
+  Each folder's read stops once it has the cap's worth of threads the caller
+  reads, so a granted folder is not read whole; a folder without a grant is
+  read until then or to its end under the query's 5 s statement timeout.
+  Thread shares are probed only for
+  threads in folders the caller holds no grant on. `crm_domains` and `crm_addresses` are rejected with a 400
+  (`UnsupportedEmailFilter`): they need the list's CRM team scope and consent.
+  Enrichment reads a shared hit through its owner's inbox after `shared_among`
+  confirms a grant on the thread or on its folder; a revoked grant drops it.
 
 ## Related
 

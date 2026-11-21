@@ -192,10 +192,10 @@ it('uses the real menu category drilldown and return behavior', () => {
     .getByText('Documents, Agents, & Tasks')
     .closest('section')!;
   fireEvent.click(
-    within(documents).getByRole('button', { name: 'View all (8)' })
+    within(documents).getByRole('button', { name: 'View all (10)' })
   );
   expect(screen.queryByText('People')).toBeNull();
-  expect(screen.getAllByRole('option')).toHaveLength(8);
+  expect(screen.getAllByRole('option')).toHaveLength(10);
   fireEvent.click(screen.getByRole('button', { name: '← Back to everything' }));
   expect(screen.getByText('People')).toBeTruthy();
   fireEvent.keyDown(editor, { key: 'ArrowRight' });

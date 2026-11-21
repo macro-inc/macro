@@ -311,8 +311,11 @@ views/shared/<name>-parts.tsx  parts both views render
   outside `mobile/` and `shared/`.
 - **A mobile view composes its header with `MobileHeader`**
   (`components/app/mobile-header`). While it is mounted it owns the pane's
-  header: nothing else in the pane can add to it. A mobile view may branch on
-  `isMobile()` / `mobile:` for phone versus tablet.
+  header: nothing else in the pane can add to it. A file block's mobile header
+  uses `MobileBlockHeader` from the same directory: the file's title with its
+  menu, the view's own left islands, the permissions badge, then the view's
+  right islands and Info. A mobile
+  view may branch on `isMobile()` / `mobile:` for phone versus tablet.
 - **A block's desktop header uses `BlockToolbar`**
   (`components/app/block-toolbar`): its tools in one group, the side panel's
   header actions, trailing controls such as Share, and the title menu with the
@@ -320,11 +323,22 @@ views/shared/<name>-parts.tsx  parts both views render
   platforms' headers in one component and remains only for blocks not yet
   split.
 
-Some items have two hosts: on touch an email thread, channel, agent session,
-document, or CRM record opens as its block, while desktop shows it inline in
-its list view and uses the block for a second split or a preview. The block
-adapter is the entry and gets the desktop and mobile pair; the inline host is
-desktop-only.
+Some items have two hosts: its block, and its list view, which shows it inline
+beside the list. The block adapter is the entry and gets the desktop and mobile
+pair. A list view shows an item inline on desktop and on wide touch (Mail at
+every touch width; `AppView`'s `detailInlineOnly` sends a narrow touch pane to
+the block instead), so the inline host is an entry too. Its desktop view keeps
+the host's own top bar; its mobile view wraps the pane in `SplitHeaderScope`
+and renders the item's mobile view, whose `MobileHeader` lands in the pane's
+top bar. `EmailDetailView`, `EmailComposeRouteView` and `TasksDetailView` are
+such entries. The Drive, Home and CRM detail hosts show many item types, so
+they use `EntityDetailFrame` (`components/entity-detail`), which makes that
+choice per item: on touch, an item whose detail has a mobile header
+(`entityDetailHostsSplitHeader`) shows it, and any other item keeps the host's
+bar. The item's mobile view therefore reads its item from the feature's
+context, never from a legacy Block: `MobileEmailThread`, `MobileMarkdownHeader`
+through `HostedMarkdownHeader`, `MobileAgentSessionHeader` in
+`AgentSessionPane`.
 
 `features/task-composer` (`compose-task.tsx` and `views/`) and
 `features/block-email` (`EmailBlockAdapter.tsx` and `views/`) are the
@@ -336,7 +350,13 @@ switches between a desktop `views/*-header.tsx` and a
 `views/mobile/*-header.tsx`, while the body below them is still shared and its
 files are still in the baseline. A hook above the switch
 (`useAgentSessionHeader`) can hold the header's state and actions so both
-views list from the same source.
+views list from the same source. The file blocks (image, video, code, PDF,
+canvas, slides, Word and the rest), chat, project, call recording, spreadsheet
+and form are at the same stage: each has `views/<block>-header.tsx`,
+`views/mobile/<block>-header.tsx`, and
+`views/shared/<block>-header-parts.tsx`, which returns the header's actions by
+name. The entries of the split views are listed in
+`rules/ast-grep/tsx-no-device-composition.yml`.
 
 ### `context/`: the feature's capability contract
 
@@ -668,7 +688,8 @@ for the first three:
 `tsx-no-device-composition` ignores two lists of files: the entries, which hold
 each view's one switch, and "Not yet split", a baseline of files that predate
 the rule. When you split a view, delete its files from the baseline and add its
-entry. Never add a file to the baseline.
+entry. Add a file to the baseline only when its view's split is already a
+task, named in a comment on the file's line.
 
 The four feature-layer rules have warning severity and cover only the feature
 paths registered in their `files` lists. They do not automatically enforce every

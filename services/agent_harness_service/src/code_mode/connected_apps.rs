@@ -315,6 +315,9 @@ fn egress_error(error: EgressError) -> CodeModeError {
             tracing::warn!(%error, "a connected app could not be reached");
             CodeModeError::ConnectedAppUnreachable
         }
+        EgressError::RateLimited { retry_after } => {
+            CodeModeError::ConnectedAppRateLimited { retry_after }
+        }
         error => {
             tracing::error!(%error, "a connected app could not be reached");
             CodeModeError::Unavailable

@@ -86,6 +86,7 @@ export function getNotificationAction(n: UnifiedNotification): string {
       // Same shape: no actor, reads "Upcoming event · <event title>".
       .with('calendar_event_reminder', () => 'Upcoming event')
       .with('calendar_event_join_request', () => 'asked to join')
+      .with('password_access_requested', () => 'requested access to')
       .with('github_pr_status_changed', () => 'updated a pull request')
       .with('github_pr_check_run', () => {
         const meta = n.notification_metadata;
@@ -122,6 +123,7 @@ export function getNotificationAction(n: UnifiedNotification): string {
           .with('expired', () => `${agent} sign-in expired`)
           .exhaustive(() => `${agent} sign-in expires soon`);
       })
+      .with('ping', () => 'pinged you')
       .with('runtime_access_removed', () => 'removed your access to')
       // The computer, or the agent teammate it runs, is the actor:
       // "<computer> is ready", "<agent> couldn't be set up".
@@ -194,10 +196,12 @@ export function getNotificationTargetName(
         },
         (m) => m.content.title || '(No title)'
       )
+      .with({ tag: 'password_access_requested' }, (m) => m.content.itemName)
       .with({ tag: 'inbox_reauth_required' }, () => undefined)
       .with({ tag: 'routine_run_finished' }, () => undefined)
       .with({ tag: 'agent_sign_in_expiry' }, () => undefined)
       .with({ tag: 'computer_setup' }, () => undefined)
+      .with({ tag: 'ping' }, () => undefined)
       .with(
         {
           tag: P.union(
@@ -278,6 +282,7 @@ export function getNotificationContent(
         formatCalendarReminderTime(m.content)
       )
       .with({ tag: 'calendar_event_join_request' }, () => undefined)
+      .with({ tag: 'password_access_requested' }, () => undefined)
       .with({ tag: 'inbox_reauth_required' }, (m) => m.content.emailAddress)
       .with(
         { tag: 'agent_session_settled' },
@@ -300,6 +305,7 @@ export function getNotificationContent(
           .exhaustive();
         return `Its ${agent} sign-in ${when}. Sign in again in Settings → Machines.`;
       })
+      .with({ tag: 'ping' }, (m) => m.content.body)
       .with({ tag: 'runtime_access_removed' }, (m) =>
         stoppedAgentsText(m.content.agents, m.content.runtimeName)
       )
@@ -395,10 +401,12 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
       .with({ tag: 'reminder' }, () => true)
       .with({ tag: 'calendar_event_reminder' }, () => true)
       .with({ tag: 'calendar_event_join_request' }, () => true)
+      .with({ tag: 'password_access_requested' }, () => true)
       .with({ tag: 'inbox_reauth_required' }, () => false)
       .with({ tag: 'routine_run_finished' }, () => false)
       .with({ tag: 'agent_sign_in_expiry' }, () => false)
       .with({ tag: 'computer_setup' }, () => false)
+      .with({ tag: 'ping' }, () => false)
       .with({ tag: 'runtime_access_removed' }, () => true)
       .with(
         {
@@ -419,6 +427,29 @@ function agentDisplayName(agent: AgentProvider): string {
   return match(agent)
     .with('claude', () => 'Claude')
     .exhaustive();
+}
+
+/**
+ * Who pinged: "<sender> pinged you", where the sender is the agent or person
+ * who sent it. A ping people send themselves from a script has no sender.
+ */
+export function pingedBy(sender: string | undefined): string {
+  return sender ? `${sender} pinged you` : 'You pinged yourself';
+}
+
+/**
+ * What a ping is about, as its row names it: a channel as its messages do,
+ * anything else by its own name. A DM names the other person.
+ */
+export function pingPlace(entity: {
+  type: string;
+  name: string;
+  channelType?: string;
+}): string {
+  return entity.type === 'channel' &&
+    (entity.channelType === 'public' || entity.channelType === 'team')
+    ? `#${entity.name}`
+    : entity.name;
 }
 
 function routineRunFailed(n: UnifiedNotification): boolean {

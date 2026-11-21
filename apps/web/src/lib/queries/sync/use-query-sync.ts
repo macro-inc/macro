@@ -1,10 +1,6 @@
 import { AgentSession } from '@core/agent-session/AgentSession';
 import { publishSessionActivity } from '@core/agent-session/session-activity';
 import { noteSessionActivity } from '@core/agent-session/session-turn';
-import {
-  enableGraphqlSoup,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import { WebsocketEvent } from '@macro-inc/collaboration/websocket';
 import { handleAgentSessionChanges } from '@queries/agent-session/changes-sync';
 import { handleAgentSessionPreview } from '@queries/agent-session/preview';
@@ -28,22 +24,23 @@ import {
   handleAgentSessionUpdated,
   invalidateAgentSessionMetadata,
 } from '@queries/agent-session/session-metadata-sync';
+import {
+  BOT_PROFILE_CHANGED_EVENT,
+  handleBotProfileChanged,
+  invalidateBotProfiles,
+} from '@queries/bots/profile-sync';
 import { handleChannelAccessRequestChanged } from '@queries/channel/access-requests';
 import {
   handleChannelPictureChanged,
   invalidateChannelPictures,
 } from '@queries/channel/picture';
-import { requestContactRefresh } from '@queries/contacts/refresh';
+import { handleContactsInvalidation } from '@queries/contacts/refresh';
 import { handleRefreshEmail } from '@queries/email/sync';
 import { invalidateFavorites } from '@queries/favorites/favorites';
 import {
   handleMessageEvent,
   handleTimelineActivity,
 } from '@queries/messages/sync';
-import {
-  applyNotificationStatusUpdate,
-  notificationStatusUpdatePayloadSchema,
-} from '@queries/notification/user-notifications';
 import { invalidateAllProperties } from '@queries/properties/tags';
 import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import {
@@ -89,6 +86,10 @@ export function useQuerySync(userId: Accessor<string | undefined>): void {
   onCleanup(() =>
     ws.removeEventListener(WebsocketEvent.Open, invalidateChannelPictures)
   );
+  ws.addEventListener(WebsocketEvent.Open, invalidateBotProfiles);
+  onCleanup(() =>
+    ws.removeEventListener(WebsocketEvent.Open, invalidateBotProfiles)
+  );
   // Also cover the first connection: a lookup can finish before the socket opens.
   ws.addEventListener(WebsocketEvent.Open, invalidateAgentSessionMetadata);
   onCleanup(() =>
@@ -121,7 +122,10 @@ export function useQuerySync(userId: Accessor<string | undefined>): void {
         );
       })
       .with({ type: 'contacts_invalidation' }, () => {
-        requestContactRefresh();
+        handleContactsInvalidation(
+          parseWebsocketPayload(data.type, data.data),
+          data.trace
+        );
       })
       .with({ type: 'timeline_activity' }, () => {
         withParsedWebsocketPayload(
@@ -144,6 +148,13 @@ export function useQuerySync(userId: Accessor<string | undefined>): void {
           handleChannelPictureChanged
         );
       })
+      .with({ type: BOT_PROFILE_CHANGED_EVENT }, () => {
+        withParsedWebsocketPayload(
+          data.type,
+          data.data,
+          handleBotProfileChanged
+        );
+      })
       .with({ type: 'user_picture_changed' }, () => {
         withParsedWebsocketPayload(
           data.type,
@@ -158,15 +169,14 @@ export function useQuerySync(userId: Accessor<string | undefined>): void {
           handleChannelAccessRequestChanged
         );
       })
-      // One frame appended to a live agent session's log. Routed to the
-      // channel's fold rather than to any cache: the frame is not a message,
-      // it is a step towards one, and only the fold knows which.
+      // Frames appended to an agent session's log. An open session folds
+      // them from its GraphQL log subscription; here they only mark a session
+      // nobody has open as moving, so list rows follow its turn.
       .with({ type: AGENT_SESSION_LOG_EVENT }, () => {
         withParsedWebsocketPayload<AgentSessionLogEvent>(
           data.type,
           data.data,
           (event) => {
-            AgentSession.ingest(event);
             if (!AgentSession.get(event.agentSessionId)) {
               noteSessionActivity(event.agentSessionId);
             }
@@ -217,20 +227,6 @@ export function useQuerySync(userId: Accessor<string | undefined>): void {
           data.data,
           handleAgentSessionQueue
         );
-      })
-      .with({ type: 'notification_status_updated' }, () => {
-        if (isFeatureEnabled(enableGraphqlSoup)) return;
-        const result = notificationStatusUpdatePayloadSchema.safeParse(
-          data.data
-        );
-        if (!result.success) {
-          console.warn(
-            'Malformed notification status update payload',
-            data.data
-          );
-          return;
-        }
-        applyNotificationStatusUpdate(result.data);
       })
       .with({ type: 'refresh_email' }, () => {
         withParsedWebsocketPayload(data.type, data.data, handleRefreshEmail);

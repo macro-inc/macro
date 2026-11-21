@@ -11,10 +11,6 @@ import {
   moveToFolder,
 } from '@core/component/FileList/itemOperations';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  enableGraphqlSoup,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { deleteAgentSession } from '@queries/agent-session/entity-mutations';
@@ -41,9 +37,7 @@ import { soupKeys } from '@queries/soup/keys';
 import { ownTouchStamp } from '@queries/soup/normalized-cache/own-touch';
 import { permanentlyDeleteEntity } from '@queries/storage/entity-mutations';
 import { databasesKeys, formsKeys } from '@queries/storage/keys';
-import { callServiceClient } from '@service-call/client';
 import { scheduledActionClient } from '@service-scheduled-action/client';
-import { storageServiceClient } from '@service-storage/client';
 import type { ListedDatabase } from '@service-storage/generated/schemas/listedDatabase';
 import type { ListedForm } from '@service-storage/generated/schemas/listedForm';
 import { getEntityGraphqlClient } from '@service-storage/graphql-soup';
@@ -135,7 +129,7 @@ async function settleDssDeletes(
   return results;
 }
 
-function removeDssEntityCaches(entities: EntityData[], typeScoped: boolean) {
+function removeDssEntityCaches(entities: EntityData[]) {
   const ids = new Set(entities.map((entity) => entity.id));
   const keys = new Set(
     entities.flatMap((entity) => {
@@ -143,12 +137,6 @@ function removeDssEntityCaches(entities: EntityData[], typeScoped: boolean) {
       return key ? [key] : [];
     })
   );
-  if (!typeScoped)
-    return {
-      keys,
-      soupSnapshot: removeSoupEntities(ids),
-      searchSnapshot: removeSearchEntities(ids),
-    };
   return {
     keys,
     soupSnapshot: removeSoupEntities(ids, (item, id) =>
@@ -161,7 +149,6 @@ function removeDssEntityCaches(entities: EntityData[], typeScoped: boolean) {
 }
 
 export function createBulkDeleteDssItemsMutation() {
-  const graphqlSoupEnabled = isFeatureEnabled(enableGraphqlSoup);
   const isDeletable = (entity: EntityData) => {
     const type = entity.type;
     return (
@@ -181,12 +168,8 @@ export function createBulkDeleteDssItemsMutation() {
       .getAll()
       .some((mutation) => mutation.state.context === context);
   return useMutation(() => ({
-    ...(graphqlSoupEnabled
-      ? {
-          mutationKey: GRAPHQL_SOUP_DELETE_MUTATION_KEY,
-          gcTime: GRAPHQL_SOUP_DELETE_RETENTION_MS,
-        }
-      : {}),
+    mutationKey: GRAPHQL_SOUP_DELETE_MUTATION_KEY,
+    gcTime: GRAPHQL_SOUP_DELETE_RETENTION_MS,
     mutationFn: async (entities: EntityData[]) => {
       const deletable = entities.filter(isDeletable);
       const deletions = deletable.map(async (e) => {
@@ -195,23 +178,12 @@ export function createBulkDeleteDssItemsMutation() {
           return true;
         }
         if (e.type === 'channel') {
-          if (graphqlSoupEnabled) {
-            await permanentlyDeleteEntity({ type: 'CHANNEL', id: e.id });
-          } else {
-            await throwOnErr(() =>
-              storageServiceClient.deleteChannel({ channel_id: e.id })
-            );
-          }
+          await permanentlyDeleteEntity({ type: 'CHANNEL', id: e.id });
           return true;
         }
         if (e.type === 'call') {
-          if (isFeatureEnabled(enableGraphqlSoup)) {
-            await permanentlyDeleteEntity({ type: 'CALL', id: e.id });
-            return true;
-          }
-          return throwOnErr(() =>
-            callServiceClient.deleteCallRecord(e.id)
-          ).then(() => true);
+          await permanentlyDeleteEntity({ type: 'CALL', id: e.id });
+          return true;
         }
         if (e.type === 'routine') {
           return throwOnErr(() =>
@@ -235,42 +207,35 @@ export function createBulkDeleteDssItemsMutation() {
     },
     onMutate: async (entities: EntityData[]) => {
       const deletable = entities.filter(isDeletable);
-      const { keys, ...snapshots } = removeDssEntityCaches(
-        deletable,
-        graphqlSoupEnabled
-      );
+      const { keys, ...snapshots } = removeDssEntityCaches(deletable);
       return {
         ...snapshots,
-        ...(graphqlSoupEnabled
-          ? { graphqlDeletion: createGraphqlSoupDeletion([...keys]) }
-          : {}),
+        graphqlDeletion: createGraphqlSoupDeletion([...keys]),
       };
     },
-    onSettled: graphqlSoupEnabled
-      ? (results, error, entities, context) => {
-          if (!context?.graphqlDeletion) return;
-          // Logout/cache clearing can outlive an in-flight API call. Do not
-          // repopulate session-local tombstones after their mutation was cleared.
-          if (!isCurrentContext(context)) {
-            context.graphqlDeletion.release();
-            return;
-          }
-          const outcomes =
-            error instanceof BulkDeleteFailure ? error.results : results;
-          const deletedKeys = entities
-            .filter(isDeletable)
-            .flatMap((entity, index) => {
-              const key = soupEntityKey(entity);
-              return outcomes?.[index] === true && key ? [key] : [];
-            });
-          // API completion closes the mutation; display state survives it and
-          // independently retries revalidation. Failed keys are restored now.
-          context?.graphqlDeletion?.settle(deletedKeys);
-        }
-      : undefined,
+    onSettled: (results, error, entities, context) => {
+      if (!context?.graphqlDeletion) return;
+      // Logout/cache clearing can outlive an in-flight API call. Do not
+      // repopulate session-local tombstones after their mutation was cleared.
+      if (!isCurrentContext(context)) {
+        context.graphqlDeletion.release();
+        return;
+      }
+      const outcomes =
+        error instanceof BulkDeleteFailure ? error.results : results;
+      const deletedKeys = entities
+        .filter(isDeletable)
+        .flatMap((entity, index) => {
+          const key = soupEntityKey(entity);
+          return outcomes?.[index] === true && key ? [key] : [];
+        });
+      // API completion closes the mutation; display state survives it and
+      // independently retries revalidation. Failed keys are restored now.
+      context.graphqlDeletion.settle(deletedKeys);
+    },
     onError: (error, entities, context) => {
-      if (graphqlSoupEnabled && context && !isCurrentContext(context)) {
-        context.graphqlDeletion?.release();
+      if (context && !isCurrentContext(context)) {
+        context.graphqlDeletion.release();
         return;
       }
       const partialFailure =
@@ -282,7 +247,7 @@ export function createBulkDeleteDssItemsMutation() {
         batch(() => {
           context?.soupSnapshot.rollback();
           context?.searchSnapshot.rollback();
-          removeDssEntityCaches(error.deletedEntities, graphqlSoupEnabled);
+          removeDssEntityCaches(error.deletedEntities);
         });
       } else {
         context?.soupSnapshot.rollback();
@@ -400,9 +365,7 @@ function invalidateAfterMove(
       queryKey: ['project'],
     });
   }
-  if (isFeatureEnabled(enableGraphqlSoup)) {
-    return refreshActiveGraphqlSoupQueries();
-  }
+  return refreshActiveGraphqlSoupQueries();
 }
 
 export function createMoveToProjectDssEntityMutation() {
@@ -539,9 +502,7 @@ export function createBulkRemoveFromProjectDssEntityMutation() {
       if (entities.some((e) => e.type === 'project')) {
         queryClient.invalidateQueries({ queryKey: ['project'] });
       }
-      if (isFeatureEnabled(enableGraphqlSoup)) {
-        return refreshActiveGraphqlSoupQueries();
-      }
+      return refreshActiveGraphqlSoupQueries();
     },
   }));
 }
@@ -616,9 +577,7 @@ export function createBulkCopyDssEntityMutation() {
         queryKey: soupKeys.astItems._def,
       });
       queryClient.invalidateQueries({ queryKey: ['entity'] });
-      if (isFeatureEnabled(enableGraphqlSoup)) {
-        return refreshActiveGraphqlSoupQueries();
-      }
+      return refreshActiveGraphqlSoupQueries();
     },
   }));
 }

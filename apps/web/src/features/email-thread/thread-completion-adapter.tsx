@@ -6,11 +6,9 @@ import {
 } from '@app/features/next-soup/actions';
 import { useMaybeSoup } from '@app/features/next-soup/soup-context';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
-import { enableGraphqlSoup } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -25,11 +23,7 @@ import {
   bulkMarkNotificationsAsUndone,
   fetchDoneNotificationIdsByEventItemIds,
 } from '@queries/notification/user-notifications';
-import {
-  getSoupEntityById,
-  invalidateAllSoup,
-  refetchSoupEntity,
-} from '@queries/soup/cache';
+import { getSoupEntityById } from '@queries/soup/cache';
 import {
   isDisplayableSoupItem,
   mapApiSoupItemToEntity,
@@ -40,8 +34,7 @@ import type {
   EmailThreadCommands,
 } from './context/email-thread-context';
 export function createThreadCompletionAdapter(
-  threadSource: Accessor<EmailThread | undefined>,
-  toHeaderLinkId: (linkId: string | null | undefined) => string | undefined
+  threadSource: Accessor<EmailThread | undefined>
 ): Pick<
   EmailThreadCommands,
   | 'archiveThread'
@@ -50,7 +43,6 @@ export function createThreadCompletionAdapter(
   | 'markThreadNotDone'
 > {
   const notificationSource = useGlobalNotificationSource();
-  const graphqlSoup = useFeatureFlag(enableGraphqlSoup);
   const soup = useMaybeSoup();
   const splitPanel = useSplitPanel();
 
@@ -72,7 +64,7 @@ export function createThreadCompletionAdapter(
   // Only the direct unarchive fallback goes through this mutation
   // (the mark-done / mark-not-done action paths toast on their own).
   const archiveMutation = useUndoableArchiveThreadMutation({
-    onPushed: (handle, params, disposition) => {
+    onPushed: (handle, params) => {
       params.onUndoHandle?.(handle);
       const message = params.archive ? 'Marked as done' : 'Marked as not done';
       let toastId: number | undefined;
@@ -105,7 +97,7 @@ export function createThreadCompletionAdapter(
       showToast();
 
       // Undo/redo replay only the /archived flip; mirror the fallback's
-      // notification and soup-list side effects for the resulting state.
+      // notification side effects for the resulting state.
       const syncSideEffects = (nowArchived: boolean) => {
         const ids = restoredNotificationIds.get(params.threadId) ?? [];
         if (ids.length > 0) {
@@ -115,15 +107,6 @@ export function createThreadCompletionAdapter(
               ? bulkMarkNotificationsAsDone(ids)
               : bulkMarkNotificationsAsUndone(ids)
           ).catch(() => setDoneOverride(ids, undefined));
-        }
-        if (!graphqlSoup().enabled && disposition() !== 'queued') {
-          if (!nowArchived) {
-            fireAndForget(
-              refetchSoupEntity(params.threadId, 'emailThread'),
-              'email-thread'
-            );
-          }
-          invalidateAllSoup();
         }
       };
 
@@ -152,13 +135,12 @@ export function createThreadCompletionAdapter(
 
   // A thread with no received mail can never leave the archive. Older sent-only
   // threads read as having received mail until they are recomputed, so the
-  // server still has the final say on GraphQL. An archived received thread may
-  // have no inbox-sorting timestamp there; keep REST's existing timestamp gate.
+  // server still has the final say.
   const canMarkThreadNotDone = () => {
     const thread = threadSource();
-    if (!thread || thread.inbox_visible || thread.has_received_mail === false)
-      return false;
-    return graphqlSoup().enabled || thread.latest_inbound_message_ts != null;
+    return (
+      !!thread && !thread.inbox_visible && thread.has_received_mail !== false
+    );
   };
 
   // Resolve a thread's soup representation for the mark-done / mark-not-done
@@ -180,7 +162,7 @@ export function createThreadCompletionAdapter(
 
     // Mark-not-done issues the /archived request itself (plus notification
     // and soup-cache restore), so the path below skips archiveMutation and
-    // only mirrors its thread-cache handling via trackExternalThreadArchive.
+    // only mirrors its preview handling via trackExternalThreadArchive.
     const { selectedRow, cachedItem } = resolveThreadSoupLookup(thread.db_id);
 
     const entity =
@@ -194,18 +176,13 @@ export function createThreadCompletionAdapter(
 
     if (entity && markNotDoneAction.canExecute(entity)) {
       fireAndForget(
-        trackExternalThreadArchive(
-          thread.db_id,
-          markNotDoneAction.execute([entity]),
-          false
-        ),
+        trackExternalThreadArchive(markNotDoneAction.execute([entity])),
         'email-thread'
       );
     } else {
       // No soup entity to drive the action from — the mark-done removal
       // evicted it from the soup caches (or its done state hasn't caught up
-      // with the thread's): unarchive directly, then refetch the thread's
-      // soup item to reinsert its rows and refetch the lists.
+      // with the thread's): unarchive directly.
       const threadId = thread.db_id;
       // Snapshot the thread's notification ids now — the entity path restores
       // them via executeMarkEntitiesUndone, so mirror that here or they stay
@@ -216,13 +193,9 @@ export function createThreadCompletionAdapter(
         ] ?? []
       ).map((n) => n.id);
       archiveMutation.mutate(
+        { threadId, archive: false },
         {
-          threadId,
-          archive: false,
-          linkId: toHeaderLinkId(thread.link_id),
-        },
-        {
-          onSuccess: async (disposition) => {
+          onSuccess: async () => {
             // The live notification stream only carries not-done
             // notifications, so the thread's done ids may have aged out of
             // the local cache — merge the server's view (best effort: the
@@ -244,15 +217,6 @@ export function createThreadCompletionAdapter(
                 setDoneOverride(allIds, undefined);
                 toast.failure('Failed to mark as not done');
               }
-            }
-            // GraphQL owns its normalized write and durable revalidation;
-            // keep the legacy REST Soup reconciliation on the REST path only.
-            if (!graphqlSoup().enabled && disposition !== 'queued') {
-              fireAndForget(
-                refetchSoupEntity(threadId, 'emailThread'),
-                'email-thread'
-              );
-              invalidateAllSoup();
             }
           },
         }
@@ -277,7 +241,7 @@ export function createThreadCompletionAdapter(
     if (!thread.inbox_visible) return false;
 
     // Mark done issues the /archived request itself (with undo support), so
-    // the paths below skip archiveMutation and only mirror its thread-cache
+    // the paths below skip archiveMutation and only mirror its preview
     // handling via trackExternalThreadArchive.
     const { selectedRow, cachedItem } = resolveThreadSoupLookup(thread.db_id);
     const entity =
@@ -299,7 +263,6 @@ export function createThreadCompletionAdapter(
     if (opts?.navigate !== false && soup && selectedRow) {
       fireAndForget(
         trackExternalThreadArchive(
-          thread.db_id,
           markAsDoneAction.executeWithSoup(
             [entity],
             soup,
@@ -327,7 +290,6 @@ export function createThreadCompletionAdapter(
     } else {
       fireAndForget(
         trackExternalThreadArchive(
-          thread.db_id,
           markAsDoneAction.execute([entity], undefined, markDoneOpts)
         ),
         'email-thread'

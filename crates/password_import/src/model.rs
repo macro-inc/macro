@@ -22,6 +22,9 @@ pub enum SourceFormat {
     BitwardenJson,
     /// Bitwarden CSV export.
     BitwardenCsv,
+    /// Bitwarden zip export: `data.json` (the JSON export) plus
+    /// `attachments/<item id>/<file>`.
+    BitwardenZip,
 }
 
 /// Bounds on the work one file may cause.
@@ -29,9 +32,10 @@ pub enum SourceFormat {
 pub struct Limits {
     /// Largest accepted input file.
     pub max_input_bytes: usize,
-    /// Most entries a `.1pux` archive may list.
+    /// Most entries a zip export (`.1pux` or Bitwarden zip) may list.
     pub max_zip_entries: usize,
-    /// Most bytes `export.data` may inflate to; enforced while inflating.
+    /// Most bytes a zip's `export.data` or `data.json` may inflate to;
+    /// enforced while inflating.
     pub max_decompressed_bytes: u64,
     /// Most items an export may contain, imported or not. Bitwarden folders
     /// and 1Password accounts and vaults count toward it too.
@@ -411,6 +415,13 @@ pub enum DroppedPart {
     TotpNonDefault,
     /// A field with no vault equivalent, such as a link to another field.
     ExtraField,
+    /// A custom field without a value.
+    EmptyField,
+    /// The source asked for the master password before showing the item.
+    Reprompt,
+    /// A URL's match rule other than the default domain match, such as exact,
+    /// starts-with, regular expression or never.
+    UriMatchType,
 }
 
 /// Parts of one imported item that were dropped or downgraded.

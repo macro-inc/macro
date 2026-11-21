@@ -1,11 +1,11 @@
 //! Authenticated MCP code execution, optionally attributed to a managed session.
 use super::{
     CodeModeError, ExecutionActivity, ExecutionStatus, ModelImage, ModelImages,
-    service::{Reviews, attach_returned_images, settle, validate_request},
+    service::{Reviews, attach_returned_images, settle, settle_unrun, validate_request},
 };
 use ai_toolset::ToolCaller;
 use async_trait::async_trait;
-use code_execution::domain::{ExecuteRequest, ProgramExecutor, RunEnvironment};
+use code_execution::domain::{ContextShape, ExecuteRequest, ProgramExecutor, RunEnvironment};
 use macro_user_id::user_id::MacroUserIdStr;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -106,6 +106,24 @@ impl UserCodeMode for UserCodeModeService {
         cancel: CancellationToken,
     ) -> Result<UserExecutionReceipt, CodeModeError> {
         validate_request(&request)?;
+        // A program with type errors stops here, before a credential is
+        // minted for it. The program gets no session or execution handle.
+        if let Err(outcome) = self
+            .executor
+            .check_program(&request, ContextShape::default(), cancel.clone())
+            .await
+        {
+            let (status, result, error) = settle_unrun(outcome, Reviews::Rejected);
+            tracing::Span::current().record("status", tracing::field::debug(status));
+            return Ok(UserExecutionReceipt {
+                status,
+                activity: Vec::new(),
+                activity_truncated: false,
+                result,
+                error,
+                model_media: Vec::new(),
+            });
+        }
         let environment = self.credentials.issue(user, caller, session).await?;
         let (progress, mut updates) = tokio::sync::mpsc::channel(512);
         let execution = self.executor.execute_program_with_progress(

@@ -15,6 +15,7 @@ import type { ColumnKindOneOfOnethree } from './columnKindOneOfOnethree';
 import type { ColumnKindOneOfSeven } from './columnKindOneOfSeven';
 import type { ColumnKindOneOfThree } from './columnKindOneOfThree';
 import type { ColumnKindOneOfTwoone } from './columnKindOneOfTwoone';
+import type { ColumnKindOneOfTwothree } from './columnKindOneOfTwothree';
 
 /**
  * A type a column can have.
@@ -30,4 +31,5 @@ export type ColumnKind =
   | ColumnKindOneOfOnefive
   | ColumnKindOneOfOneseven
   | ColumnKindOneOfOnenine
-  | ColumnKindOneOfTwoone;
+  | ColumnKindOneOfTwoone
+  | ColumnKindOneOfTwothree;

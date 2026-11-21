@@ -4,10 +4,6 @@ import type { ShareKind } from '../core/share-item';
 import { changeChannelAccess } from './channel-access';
 
 const clients = vi.hoisted(() => ({
-  editDocument: vi.fn(),
-  updateChatPermissions: vi.fn(),
-  editProject: vi.fn(),
-  editThread: vi.fn(),
   updateAgentSessionSharePermissions: vi.fn(),
   updateDatabaseSharePermissions: vi.fn(),
   updateInitiativeSharePermissions: vi.fn(),
@@ -15,25 +11,9 @@ const clients = vi.hoisted(() => ({
   updatePipelineSharePermissions: vi.fn(),
   updateEntitySharePolicy: vi.fn(),
 }));
-const flags = vi.hoisted(() => ({ graphql: false }));
 
 vi.mock('@queries/storage/entity-mutations', () => ({
-  usesGraphqlSharePolicy: (kind: string) =>
-    flags.graphql &&
-    ['document', 'chat', 'project', 'email', 'call'].includes(kind),
   updateEntitySharePolicy: clients.updateEntitySharePolicy,
-}));
-vi.mock('@service-storage/client', () => ({
-  storageServiceClient: {
-    editDocument: clients.editDocument,
-    editThread: clients.editThread,
-    projects: { edit: clients.editProject },
-  },
-}));
-vi.mock('@service-cognition/client', () => ({
-  cognitionApiServiceClient: {
-    updateChatPermissions: clients.updateChatPermissions,
-  },
 }));
 vi.mock('@queries/agent-session/share-permissions', () => ({
   updateAgentSessionSharePermissions:
@@ -70,65 +50,34 @@ const replace = {
 const remove = { operation: 'remove', channelId: 'channel-1' };
 
 beforeEach(() => {
-  flags.graphql = false;
   for (const client of Object.values(clients)) client.mockResolvedValue(ok({}));
 });
 afterEach(() => vi.clearAllMocks());
 
 describe('changeChannelAccess', () => {
+  it.each<ShareKind>(['document', 'chat', 'project', 'email'])(
+    'sets and removes %s access through the GraphQL share policy',
+    async (kind) => {
+      const set = await changeChannelAccess(
+        { kind, id: 'item-1' },
+        { t: 'set', channelId: 'channel-1', level: 'edit' }
+      );
+      const removed = await changeChannelAccess(
+        { kind, id: 'item-1' },
+        { t: 'remove', channelId: 'channel-1' }
+      );
+
+      expect([set, removed]).toEqual([ok(undefined), ok(undefined)]);
+      expect(callsByClient()).toEqual({
+        updateEntitySharePolicy: [
+          [kind, 'item-1', { channelSharePermissions: [replace] }],
+          [kind, 'item-1', { channelSharePermissions: [remove] }],
+        ],
+      });
+    }
+  );
+
   it.each<{ kind: ShareKind; calls: Record<string, unknown[][]> }>([
-    {
-      kind: 'document',
-      calls: {
-        editDocument: [
-          [
-            {
-              documentId: 'item-1',
-              sharePermission: { channelSharePermissions: [replace] },
-            },
-          ],
-        ],
-      },
-    },
-    {
-      kind: 'chat',
-      calls: {
-        updateChatPermissions: [
-          [
-            {
-              chat_id: 'item-1',
-              sharePermission: { channelSharePermissions: [replace] },
-            },
-          ],
-        ],
-      },
-    },
-    {
-      kind: 'project',
-      calls: {
-        editProject: [
-          [
-            {
-              id: 'item-1',
-              sharePermission: { channelSharePermissions: [replace] },
-            },
-          ],
-        ],
-      },
-    },
-    {
-      kind: 'email',
-      calls: {
-        editThread: [
-          [
-            {
-              threadId: 'item-1',
-              sharePermission: { channelSharePermissions: [replace] },
-            },
-          ],
-        ],
-      },
-    },
     {
       kind: 'agent_session',
       calls: {
@@ -179,25 +128,13 @@ describe('changeChannelAccess', () => {
     expect(callsByClient()).toEqual(calls);
   });
 
-  it('removes access without a level, wrapped or not', async () => {
-    await changeChannelAccess(
-      { kind: 'document', id: 'doc-1' },
-      { t: 'remove', channelId: 'channel-1' }
-    );
+  it('removes access without a level through its own client', async () => {
     await changeChannelAccess(
       { kind: 'agent_session', id: 'session-1' },
       { t: 'remove', channelId: 'channel-1' }
     );
 
     expect(callsByClient()).toEqual({
-      editDocument: [
-        [
-          {
-            documentId: 'doc-1',
-            sharePermission: { channelSharePermissions: [remove] },
-          },
-        ],
-      ],
       updateAgentSessionSharePermissions: [
         ['session-1', { channelSharePermissions: [remove] }],
       ],
@@ -217,7 +154,9 @@ describe('changeChannelAccess', () => {
   it.each(['UNAUTHORIZED', 'FORBIDDEN'])(
     'reports %s as not allowed',
     async (code) => {
-      clients.editProject.mockResolvedValue(err([{ code, message: code }]));
+      clients.updateEntitySharePolicy.mockResolvedValue(
+        err([{ code, message: code }])
+      );
 
       const result = await changeChannelAccess(
         { kind: 'project', id: 'folder-1' },
@@ -243,7 +182,7 @@ describe('changeChannelAccess', () => {
 
   it('reports any other error as failed and logs it once', async () => {
     const errors = [{ code: 'SERVER_ERROR', message: 'boom' }];
-    clients.updateChatPermissions.mockResolvedValue(err(errors));
+    clients.updateEntitySharePolicy.mockResolvedValue(err(errors));
 
     const result = await changeChannelAccess(
       { kind: 'chat', id: 'chat-1' },
@@ -258,7 +197,7 @@ describe('changeChannelAccess', () => {
 
   it('reports a thrown client as failed and logs it once', async () => {
     const thrown = new Error('network down');
-    clients.editThread.mockRejectedValue(thrown);
+    clients.updateEntitySharePolicy.mockRejectedValue(thrown);
 
     const result = await changeChannelAccess(
       { kind: 'email', id: 'thread-1' },
@@ -269,69 +208,5 @@ describe('changeChannelAccess', () => {
     expect(logged.mock.calls).toEqual([
       ['Failed to change channel access', thrown],
     ]);
-  });
-});
-
-describe('changeChannelAccess with the GraphQL share policy', () => {
-  beforeEach(() => {
-    flags.graphql = true;
-  });
-
-  it.each<ShareKind>(['document', 'chat', 'project', 'email'])(
-    'sets and removes %s access through GraphQL only',
-    async (kind) => {
-      const set = await changeChannelAccess(
-        { kind, id: 'item-1' },
-        { t: 'set', channelId: 'channel-1', level: 'edit' }
-      );
-      const removed = await changeChannelAccess(
-        { kind, id: 'item-1' },
-        { t: 'remove', channelId: 'channel-1' }
-      );
-
-      expect([set, removed]).toEqual([ok(undefined), ok(undefined)]);
-      expect(callsByClient()).toEqual({
-        updateEntitySharePolicy: [
-          [kind, 'item-1', { channelSharePermissions: [replace] }],
-          [kind, 'item-1', { channelSharePermissions: [remove] }],
-        ],
-      });
-    }
-  );
-
-  it('keeps kinds GraphQL does not cover on their own clients', async () => {
-    await changeChannelAccess(
-      { kind: 'database', id: 'db-1' },
-      { t: 'set', channelId: 'channel-1', level: 'edit' }
-    );
-
-    expect(callsByClient()).toEqual({
-      updateDatabaseSharePermissions: [
-        [{ id: 'db-1', channelSharePermissions: [replace] }],
-      ],
-    });
-  });
-
-  it('still reports a call as unsupported without a request', async () => {
-    const result = await changeChannelAccess(
-      { kind: 'call', id: 'call-1' },
-      { t: 'set', channelId: 'channel-1', level: 'view' }
-    );
-
-    expect(result).toEqual(err({ kind: 'unsupported' }));
-    expect(callsByClient()).toEqual({});
-  });
-
-  it('reports a GraphQL refusal as not allowed', async () => {
-    clients.updateEntitySharePolicy.mockResolvedValue(
-      err([{ code: 'FORBIDDEN', message: 'forbidden' }])
-    );
-
-    const result = await changeChannelAccess(
-      { kind: 'document', id: 'doc-1' },
-      { t: 'set', channelId: 'channel-1', level: 'view' }
-    );
-
-    expect(result).toEqual(err({ kind: 'not-allowed' }));
   });
 });

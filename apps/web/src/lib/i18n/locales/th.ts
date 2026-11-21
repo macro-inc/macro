@@ -103,7 +103,6 @@ export default {
     close: 'ปิด',
     delete: 'ลบ',
     rename: 'เปลี่ยนชื่อ',
-    more: 'เพิ่มเติม',
     search: 'ค้นหา',
     settings: 'การตั้งค่า',
   },
@@ -504,6 +503,9 @@ export default {
       other: 'ลบ {{count}} รายการแล้ว',
     },
     toastDeleteFailed: 'ลบไม่สำเร็จ',
+    toastPropertySet: {
+      other: 'ตั้งค่า {{property}} ให้ {{count}} รายการแล้ว',
+    },
     toastAddedToFavorites: 'เพิ่มในรายการโปรดแล้ว',
     toastAddedCountToFavorites: {
       other: 'เพิ่ม {{count}} รายการในรายการโปรดแล้ว',
@@ -562,8 +564,6 @@ export default {
       other: 'ทำเครื่องหมาย {{accepted}} จาก {{count}} รายการว่ายังไม่เสร็จแล้ว',
     },
     toastMarkNotDoneFailed: 'ทำเครื่องหมายว่ายังไม่เสร็จไม่สำเร็จ',
-    toastThreadStaysDone: 'เธรดนี้ไม่มีข้อความที่ได้รับ จึงยังคงสถานะเสร็จแล้ว',
-    toastThreadsStayDone: 'เธรดเหล่านี้ไม่มีข้อความที่ได้รับ จึงยังคงสถานะเสร็จแล้ว',
     toastCountNotRestored: {
       other: 'กู้คืนไม่ได้ {{count}} รายการ',
     },
@@ -657,8 +657,6 @@ export default {
     create: 'สร้าง',
     getMobileApp: 'ดาวน์โหลดแอปบนอุปกรณ์เคลื่อนที่',
     signedInAs: 'ลงชื่อเข้าใช้เป็น {{name}}',
-    commandMenu: 'เมนูคำสั่ง',
-    searchEverything: 'ค้นหาทุกอย่าง',
     customizeSidebar: 'ปรับแต่งแถบด้านข้าง',
     customizeSidebarDescription:
       'เลือกแอปที่จะแสดงในแถบด้านข้าง แล้วลากเพื่อจัดลำดับใหม่ หน้าแรกจะอยู่ลำดับแรกเสมอ',

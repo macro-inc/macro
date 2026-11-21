@@ -90,7 +90,8 @@ it('excludes scoped rosters within the IPC budget and restarts when overflow exc
   expect(source!.hasNext()).toBe(true);
   await source!.next();
   await vi.runOnlyPendingTimersAsync();
-  expect(source!.items()[0].id).toBe('macro|person549@example.com');
+  expect(source!.items()[0].id).toBe('macro|person500@example.com');
+  expect(source!.items()[49].id).toBe('macro|person549@example.com');
   const nativeExclusions = reader.mock.calls.at(-1)?.[2].policy?.excluded;
 
   const next = new Set(initial);

@@ -7,6 +7,11 @@ android-dev *ARGS:
 android-build *ARGS:
     bash scripts/android.sh build "$@"
 
+# Android: performance benchmark of a signed-in benchmark build on one emulator
+# (`--serial` is required). See scripts/android-benchmark/README.md.
+android-benchmark *ARGS:
+    bun scripts/android-benchmark/run.ts "$@"
+
 # Increment the versionCode and commit before preparing the next native APK or
 # Play AAB release. Also raises the Android floor in min-native-build.json to
 # the new versionCode, so the next prod web deploy stops serving shared JS to
@@ -138,6 +143,7 @@ local-email: ensure-cache-wasm
 # Vite's chunk-rendering can exceed 6GB as the app grows. Leave headroom
 # above that peak; CI builds use the same mid-size runner as preview deploys.
 node_heap := "--max-old-space-size=8192"
+
 cache_wasm_target := justfile_directory() / "../../target/cache-wasm"
 agent_fold_wasm_target := justfile_directory() / "../../target/agent-fold-wasm"
 database_sql_wasm_target := justfile_directory() / "../../target/database-sql-wasm"
@@ -184,13 +190,19 @@ bundle mode:
     trap - EXIT
     bun scripts/cache-wasm/cli.ts package-dist --dist dist --precompressed "$sidecar"
 
-# Tauri build hook (run automatically via beforeBuildCommand) — not meant to be run directly
+# Tauri build hook (run automatically via beforeBuildCommand) — not meant to be run directly.
+# Tauri embeds every file in dist, so source maps are deleted: native crash
+# frames point at the public web copies, whose maps stay published.
+# Videos (dist/web-hosted, see `assetFileNames` in vite.base.ts) are deleted
+# too: the apps stream them from the web deploy.
 [private]
 build-tauri: build-wasm
     printf production > tauri/src-tauri/.macro-tauri-env
     MODE=production NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
     bun scripts/cache-wasm/cli.ts package-dist --dist dist
     bun scripts/cache-wasm/cli.ts remove-sidecar --dist dist
+    find dist -type f -name '*.map' -delete
+    rm -rf dist/web-hosted
 
 # As build-tauri, but MODE=development so the bundle talks to dev.macro.com.
 # Used by `ios-build-sim`: a PR preview must never be wired to production.
@@ -200,6 +212,8 @@ build-tauri-dev: build-cache-wasm build-agent-fold-wasm
     MODE=development NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
     bun scripts/cache-wasm/cli.ts package-dist --dist dist
     bun scripts/cache-wasm/cli.ts remove-sidecar --dist dist
+    find dist -type f -name '*.map' -delete
+    rm -rf dist/web-hosted
 
 # Build the bundle, zip it, and install it at
 # tooling/native_app_server/app-archive.zip for the bundle
@@ -210,7 +224,7 @@ dist-archive: build-prod
     set -euo pipefail
     TARGET="$(cd {{ justfile_directory() }}/../../tooling/native_app_server && pwd)/app-archive.zip"
     rm -f "$TARGET"
-    (cd dist && zip -qr "$TARGET" . -x '*cache_wasm_bg*.wasm.br')
+    (cd dist && zip -qr "$TARGET" . -x '*cache_wasm_bg*.wasm.br' '*.map' 'web-hosted/*')
     echo "Archive: $TARGET"
 
 bundle-smoke-server *ARGS:
@@ -250,6 +264,103 @@ test-calendar-details-browser *ARGS:
 # LD_LIBRARY_PATH caveat as the sign-up browser tests above.
 test-functional *ARGS:
     env -u LD_LIBRARY_PATH bunx playwright test --config tests/functional/playwright.config.ts {{ARGS}}
+
+# The channels suite (tests/channels-e2e/README.md) in Chromium against a
+# running local stack instance, whose address is read from the instance. Seed
+# its people first: `just seed-scenario --instance <instance> apply --file
+# seed/scenarios/channels-e2e.json` from the repository root.
+test-channels-e2e instance *ARGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    status=$(cd ../.. && just stack status --json --instance "{{instance}}")
+    # Assigned before it is exported: `export X=$(...)` hides a failure.
+    proxy=$(jq -er .proxy_url <<<"$status")
+    export CHANNELS_E2E_STACK_URL="$proxy"
+    env -u LD_LIBRARY_PATH bunx playwright test --config tests/channels-e2e/playwright.config.ts {{ARGS}}
+
+# The bundle the email browser suite serves (tests/email-e2e): every service on
+# the page's own origin, where the suite's front proxies to the email stack.
+# Suggestions are off: they are on in a development build only, and replace
+# the suggested actions of Home that the suite covers.
+build-email-e2e: build-wasm
+    MODE=development NODE_ENV=production VITE_LOCAL_SERVERS=ALL VITE_LOCAL_BACKEND_ORIGIN=same-origin VITE_LOCAL_ONLY=true VITE_ENABLE_GRAPHQL_SOUP=true VITE_ENABLE_INBOX_RESYNC=true VITE_ENABLE_SUGGESTIONS=false VITE_ENABLE_BROWSER_OTEL=false NODE_OPTIONS="{{node_heap}}" bun run --bun build
+
+# The built app in Chromium against the email stack; the root
+# `just email-e2e-browser` builds what this needs. Same LD_LIBRARY_PATH caveat
+# as the sign-up browser tests above.
+test-email-e2e-browser *ARGS:
+    env -u LD_LIBRARY_PATH bunx playwright test --config tests/email-e2e/playwright.config.ts {{ARGS}}
+
+# The same suite on a running local stack instance (tests/email-e2e/README.md,
+# "The full-stack tier"); the root `just email-e2e-full-stack` starts the
+# instance and builds the bundle. The addresses are read from the instance.
+test-email-e2e-full-stack instance *ARGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    status=$(cd ../.. && just run_local status --json --instance "{{instance}}")
+    # A stack started with Doppler's config holds real Google, model and
+    # payment keys: its sign-ups and its assistant would reach those
+    # services. The tier runs only on a stack that was started without.
+    state="../../infra/local/generated/{{instance}}/stack.json"
+    if [ "$(jq -r '.no_doppler' "$state" 2>/dev/null)" != "true" ]; then
+        echo "The instance {{instance}} was not started with --no-doppler ($state): the full-stack tier does not run on it. Stop it and start it with: just email-e2e-full-stack" >&2
+        exit 1
+    fi
+    # Assigned before they are exported: `export X=$(...)` hides a failure.
+    project=$(jq -er .project <<<"$status")
+    port() { docker compose -p "$project" port "$1" "$2" | sed 's/.*://'; }
+    proxy=$(jq -er .proxy_url <<<"$status")
+    database=$(jq -er .postgres_url <<<"$status")
+    redis=$(port redis 6379)
+    gmail=$(port gmail_emulator 8080)
+    outlook=$(port outlook_emulator 8080)
+    queues=$(jq -er .localstack_url <<<"$status")
+    # A stack runs the three stand-ins only when its config holds no real
+    # key for what they stand for: without one of them, it would call the
+    # real service.
+    model=$(port model_emulator 8080 2>/dev/null || true)
+    if [ -z "$model" ]; then
+        echo "The instance {{instance}} has no model stand-in running, so the assistant would reach a real model. Stop it and start it with: just email-e2e-full-stack" >&2
+        exit 1
+    fi
+    export EMAIL_E2E_STACK_PROXY_URL="$proxy"
+    export EMAIL_E2E_STACK_DATABASE_URL="$database"
+    export EMAIL_E2E_STACK_REDIS_URL="redis://localhost:$redis"
+    export EMAIL_E2E_STACK_GMAIL_URL="http://localhost:$gmail"
+    export EMAIL_E2E_STACK_OUTLOOK_URL="http://localhost:$outlook"
+    export EMAIL_E2E_STACK_SQS_URL="$queues"
+    export EMAIL_E2E_STACK_MODEL_URL="http://localhost:$model"
+    export EMAIL_E2E_STACK_NO_DOPPLER=true
+    env -u LD_LIBRARY_PATH bunx playwright test --config tests/email-e2e/playwright.config.ts {{ARGS}}
+
+# The coverage ledger of the email UI, from the last run of the browser suite
+# (tests/email-e2e/ledger/README.md). Reports only; `--enforce` fails on a
+# function or row with neither a passing test nor a waiver, `--record`
+# rewrites the list of what only the full-stack tier covers.
+email-e2e-ledger *ARGS:
+    bun tests/email-e2e/ledger/report.ts {{ARGS}}
+
+# The fixture tests that cover a class of email or calendar bug (real
+# components over scripted data, no backend). Each line is a Playwright
+# config and, where the suite holds more than those tests, the files or the
+# titles (`-g`, a dot for each space) to run:
+# the rest of such a suite is not run in CI. A dev server's first page load
+# can outlast a test's first wait, hence the retries. Tests tagged
+# `@known-bug` assert behaviour that is not fixed yet and stay out.
+test-email-fixtures-browser *ARGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    while read -r config files; do
+        env -u LD_LIBRARY_PATH bunx playwright test --config "$config" $files --grep-invert @known-bug --retries 2 {{ARGS}} < /dev/null
+    done <<'SUITES'
+    src/features/email-compose/browser-test/playwright.config.ts -g alias.does.not.make|already-sent.background.save|sends.its.newest.text.once|sends.the.newest.text.once
+    src/features/email-compose/browser-test/playwright.app.config.ts recipient-commit.app
+    src/features/calendar/browser-test/playwright.config.ts
+    src/features/calendar-view/browser-test/playwright.config.ts
+    src/features/settings/browser-test/signatures/playwright.config.ts
+    src/lib/core/component/LexicalMarkdown/component/decorator/browser-test/playwright.config.ts unavailable-mention.browser -g tapping.the.deleted.event.chip
+    ../../packages/email-renderer/playwright.config.ts rendering.pw
+    SUITES
 
 test-email-rendering:
     bun run --cwd ../../packages/email-renderer test

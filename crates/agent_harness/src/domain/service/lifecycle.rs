@@ -191,6 +191,7 @@ where
         action_id: AgentActionId,
         prompt: String,
         actor: Option<MacroUserIdStr<'static>>,
+        prompter: agent_session::domain::model::PrompterKind,
     ) -> agent_session::domain::error::Result<()> {
         self.execute(
             id,
@@ -198,6 +199,7 @@ where
                 action_id,
                 prompt,
                 actor,
+                prompter,
             },
         )
         .await

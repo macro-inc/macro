@@ -55,6 +55,6 @@ describe('makeCopyBranchNameAction', () => {
   it("still copies a task's derived branch name", async () => {
     expect(action.canExecute(task)).toBe(true);
     await action.execute([task]);
-    expect(mocks.copyTaskBranch).toHaveBeenCalledWith('task-1');
+    expect(mocks.copyTaskBranch).toHaveBeenCalledWith('task-1', {});
   });
 });

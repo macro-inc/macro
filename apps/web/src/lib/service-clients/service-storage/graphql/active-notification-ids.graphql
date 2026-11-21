@@ -1,0 +1,8 @@
+# Ids only, for acting on every active notification of a type (marking them
+# done) without reading the notification feed.
+query ActiveNotificationIds($eventTypes: [String!]!, $limit: Int) {
+	user {
+		id
+		activeNotificationIds(eventTypes: $eventTypes, limit: $limit)
+	}
+}

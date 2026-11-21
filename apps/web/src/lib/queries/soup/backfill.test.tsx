@@ -21,16 +21,13 @@ import {
 
 type FetchInput = Parameters<NonNullable<SoupBackfillParams['fetchPage']>>[0];
 
-const featureFlagMocks = vi.hoisted(() => ({
-  useFeatureFlag: vi.fn(),
-}));
-
 const graphqlMocks = vi.hoisted(() => ({
   getGraphqlSoupCacheHost: vi.fn(),
   hydrateGraphqlSoup: vi.fn(),
 }));
 
 vi.mock('../contacts/backfill', () => ({ useContactBackfill: () => {} }));
+vi.mock('../contacts/top-up', () => ({ useContactTopUp: () => {} }));
 const contextPublisher = vi.hoisted(() => vi.fn());
 vi.mock('../contacts/use-context-publisher', () => ({
   useContactContextPublisher: contextPublisher,
@@ -62,13 +59,8 @@ const mockCacheHost = {
   ),
 };
 
-vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: featureFlagMocks.useFeatureFlag,
-}));
-
 vi.mock('@core/constant/featureFlags', () => ({
   ENABLE_GRAPHQL_BACKFILL: true,
-  enableGraphqlSoup: { key: 'enable-graphql-soup' },
 }));
 
 vi.mock('@core/cross-tab/tab-leader', () => ({
@@ -134,9 +126,6 @@ function BackfillRunner(props: { userId: string }) {
 describe('runSoupBackfills', () => {
   beforeEach(() => {
     localStorage.clear();
-    featureFlagMocks.useFeatureFlag
-      .mockReset()
-      .mockReturnValue(() => ({ enabled: true, payload: undefined }));
     cacheGenerationCallbacks.clear();
     mockCacheHost.onCacheGenerationChanged.mockClear();
     mockCacheHost.currentStorageGeneration
@@ -750,25 +739,6 @@ describe('runSoupBackfills', () => {
     ]);
   });
 
-  it('starts after the GraphQL flag becomes enabled', async () => {
-    const [enabled, setEnabled] = createSignal(false);
-    featureFlagMocks.useFeatureFlag.mockReturnValue(() => ({
-      enabled: enabled(),
-      payload: undefined,
-    }));
-    graphqlMocks.hydrateGraphqlSoup.mockResolvedValue({ nextCursor: null });
-
-    const rendered = render(() => <BackfillRunner userId="user-1" />);
-    expect(graphqlMocks.hydrateGraphqlSoup).not.toHaveBeenCalled();
-
-    setEnabled(true);
-
-    await vi.waitFor(() =>
-      expect(graphqlMocks.hydrateGraphqlSoup).toHaveBeenCalled()
-    );
-    rendered.unmount();
-  });
-
   it('does not hydrate through a disabled cache host', async () => {
     vi.useFakeTimers();
     graphqlMocks.getGraphqlSoupCacheHost.mockReturnValue({
@@ -1070,10 +1040,6 @@ describe('runSoupBackfills', () => {
 it('warms sender metadata before paged backfill and pauses it without identity or leadership', () => {
   const [user, setUser] = createSignal<string>();
   const [leader, setLeader] = createSignal(true);
-  const [enabled, setEnabled] = createSignal(true);
-  featureFlagMocks.useFeatureFlag.mockReturnValue(() => ({
-    enabled: enabled(),
-  }));
   leaderMocks.createTabLeaderSignal.mockReturnValue(leader);
   mailAccounts.mockClear();
   const rendered = render(() => {
@@ -1088,8 +1054,7 @@ it('warms sender metadata before paged backfill and pauses it without identity o
     setLeader(false);
     expect(active()).toBe(false);
     setLeader(true);
-    setEnabled(false);
-    expect(active()).toBe(false);
+    expect(active()).toBe(true);
   } finally {
     rendered.unmount();
   }

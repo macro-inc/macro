@@ -186,6 +186,9 @@ pub enum UserApiKeyError {
     /// The request was invalid.
     #[error("{0}")]
     BadRequest(String),
+    /// The caller may not do this.
+    #[error("{0}")]
+    Forbidden(&'static str),
     /// Any other internal error.
     #[error("internal user api key error: {0:?}")]
     Internal(rootcause::Report),

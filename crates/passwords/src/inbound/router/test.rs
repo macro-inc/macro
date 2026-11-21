@@ -12,7 +12,7 @@ use rootcause::Report;
 use tower::ServiceExt;
 
 #[derive(Clone)]
-struct Authorization;
+pub(crate) struct Authorization;
 impl MacroAuthorizationService for Authorization {
     async fn authorize(&self, token: &str) -> Result<UserContext, Report<MacroAuthorizationError>> {
         Ok(UserContext {
@@ -127,6 +127,8 @@ fn routes() -> Vec<(&'static str, String, serde_json::Value)> {
         ),
         ("GET", item.clone(), serde_json::json!({})),
         ("GET", format!("{item}/username"), serde_json::json!({})),
+        ("PUT", format!("{item}/favorite"), serde_json::json!({})),
+        ("DELETE", format!("{item}/favorite"), serde_json::json!({})),
         (
             "POST",
             format!("{item}/username/copy"),
@@ -690,6 +692,11 @@ async fn access_and_lease_contention_have_distinct_typed_failures() {
             Error::Unavailable,
             StatusCode::SERVICE_UNAVAILABLE,
             FailureCode::VaultUnavailable,
+        ),
+        (
+            Error::NotProvisioned,
+            StatusCode::CONFLICT,
+            FailureCode::VaultNotProvisioned,
         ),
     ] {
         let response = ApiError(error).into_response();

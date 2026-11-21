@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendar_outlook_work SET page_cursor=NULL,next_page=NULL,terminal_cursor=NULL,page_loaded=false,visited_pages='{}',scan_id=$2,whole_window_scan_id=$2 WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a847d4a3c961a3596d9b55989d5102057b1cd8c389d78c1c01eb500ab1b51cd3"
+}

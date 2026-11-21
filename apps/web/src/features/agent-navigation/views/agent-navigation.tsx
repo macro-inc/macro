@@ -4,7 +4,6 @@
  */
 
 import { analytics } from '@app/lib/analytics/analytics';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import {
   type SplitLocation,
@@ -18,7 +17,6 @@ import {
   uiClientId,
 } from '@core/agent-session/ui-client';
 import { toast } from '@core/component/Toast/Toast';
-import { enableAgentNavigation } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -216,11 +214,9 @@ export function AgentNavigationProvider(props: ParentProps) {
   const arrivals = createAgentArrivals();
   const router = useOptionalSplitRouter();
   const userId = useUserId();
-  const navigation = useFeatureFlag(enableAgentNavigation);
 
   createConnectionWebsocketEffect((message) => {
     if (message.type !== UI_COMMAND_MESSAGE) return;
-    if (!navigation().enabled) return;
     if (!agentNavigationRunsHere()) return;
 
     const user = userId();

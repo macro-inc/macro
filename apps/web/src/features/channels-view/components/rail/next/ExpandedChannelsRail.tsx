@@ -1,7 +1,7 @@
 import { createDragAutoScroll } from '@app/components/drag-drop/create-drag-auto-scroll';
 import { createLayoutAnimation } from '@app/components/drag-drop/create-layout-animation';
 import type { ListScrollHandle } from '@app/components/list';
-import { SearchBar, ViewSidebar } from '@app/components/view-shell';
+import { ViewSidebar } from '@app/components/view-shell';
 import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import { SlackImportSidebar } from '@app/features/slack-import/slack-import-sidebar';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
@@ -35,6 +35,7 @@ import {
   CHANNEL_SECTION_ROW_HEIGHT,
 } from '../../../constants';
 import { canLabelChannel } from '../../../core/channel-label-eligibility';
+import { ChannelsLiveCallsSidebar } from '../../../live-calls-sidebar';
 import { CHANNELS_TOUR } from '../../../tour';
 import type { ChannelSectionKey, ChannelsGroup } from '../../../types';
 import { ConversationsCreateMenu } from '../../ConversationsCreateMenu';
@@ -82,6 +83,9 @@ export type ChannelRailSearch = {
   close: () => void;
   setQuery: (query: string) => void;
   registerInput: (element: HTMLInputElement) => void;
+  /** Moves keyboard focus from the search field into the results. */
+  focusResults: () => void;
+  hasResults: () => boolean;
   retry: () => Promise<void>;
 };
 
@@ -101,18 +105,14 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
           }
         }}
         search={() => (
-          <SearchBar
+          <ViewSidebar.Search
             ref={props.search.registerInput}
             label={t('channelSections.search')}
-            placeholder={t('channelSections.search')}
             value={props.search.query()}
             hotkey="cmd+f"
             onValueChange={props.search.setQuery}
-            onEscape={() => {
-              if (!props.search.query()) {
-                props.search.close();
-              }
-            }}
+            focusResults={props.search.focusResults}
+            hasResults={props.search.hasResults}
           />
         )}
       >
@@ -904,6 +904,7 @@ export function ExpandedChannelsRail(props: { search: ChannelRailSearch }) {
   return (
     <>
       <ExpandedHeader search={props.search} />
+      <ChannelsLiveCallsSidebar />
       <div
         ref={(element) => {
           rail.registerRootRef(element);

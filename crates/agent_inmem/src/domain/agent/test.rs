@@ -3049,6 +3049,55 @@ fn a_turn_that_ends_on_a_tool_call_has_not_replied() {
     assert!(output.replied);
 }
 
+#[test]
+fn a_program_that_failed_counts_as_a_failed_tool_call() {
+    let mut output = TurnOutput::default();
+    output.observe(&StreamPart::ToolResponse(ToolResponse::Json {
+        id: "call-1".to_owned(),
+        name: "ExecuteCode".to_owned(),
+        json: serde_json::json!({"executionId": "e1", "status": "failed", "error": "boom"}),
+    }));
+    output.observe(&StreamPart::ToolResponse(ToolResponse::Json {
+        id: "call-2".to_owned(),
+        name: "ExecuteCode".to_owned(),
+        json: serde_json::json!({"executionId": "e2", "status": "succeeded", "result": 1}),
+    }));
+    output.observe(&StreamPart::ToolResponse(ToolResponse::Err {
+        id: "call-3".to_owned(),
+        name: "ContentSearch".to_owned(),
+        description: "search failed".to_owned(),
+    }));
+    // Another tool's result that merely says `failed` is not a failed call.
+    output.observe(&StreamPart::ToolResponse(ToolResponse::Json {
+        id: "call-4".to_owned(),
+        name: "ReadRoutine".to_owned(),
+        json: serde_json::json!({"status": "failed"}),
+    }));
+
+    assert_eq!(output.code_executions, 2);
+    assert_eq!(output.code_failures, 1);
+    assert_eq!(output.tool_failures, 2);
+}
+
+#[test]
+fn a_program_run_through_the_internal_mcp_server_is_counted() {
+    let mut output = TurnOutput::default();
+    output.observe(&StreamPart::ToolResponse(ToolResponse::Json {
+        id: "call-1".to_owned(),
+        name: "mcp__macro_internal__ExecuteCode".to_owned(),
+        json: serde_json::json!({"executionId": "e1", "status": "failed", "error": "boom"}),
+    }));
+    output.observe(&StreamPart::ToolResponse(ToolResponse::Err {
+        id: "call-2".to_owned(),
+        name: "mcp__macro_internal__ExecuteCode".to_owned(),
+        description: "timed out".to_owned(),
+    }));
+
+    assert_eq!(output.code_executions, 2);
+    assert_eq!(output.code_failures, 2);
+    assert_eq!(output.tool_failures, 2);
+}
+
 /// A connect that left out the code-mode tools (here: no tools at all) is
 /// retried before each turn instead of failing every turn of the session.
 #[tokio::test]

@@ -13,11 +13,21 @@ means this is a Macro-managed team vault.
 - `src/domain/ports.rs`: provider, metadata, lock and per-user rollout ports.
 - `src/outbound/openbao.rs`: team JWT login, KV v2 CAS/history, TOTP.
 - `src/outbound/postgres.rs`: metadata index, durable intents and transaction-scoped locks.
+- `src/outbound/postgres/update_record.sql`: guarded update that locks the row by
+  primary key and updates it by ctid (a Tid Scan; no team-wide index scan under
+  stale statistics). `test/update_plan.rs` pins the plan. A concurrent change after
+  the statement snapshot is not re-checked, so every writer of a live item must
+  bump `revision`.
 - `src/inbound/router.rs`: authenticated human routes, CSRF header, private no-store responses.
+- `src/domain/agent.rs`, `src/domain/agent/service.rs`: bounded agent vault API
+  (closed Login/API selectors, Agent grants, standing approval, requests, TOTP lifetime).
+- `src/inbound/agent_router.rs`: agent routes at `/passwords/agent/teams/{team}` and
+  the human review routes; `src/outbound/postgres/agent.rs` their storage.
 
 ## Scope
 
-Owns password item entities, folders, grants and activity. No agent tools or UI.
+Owns password item entities, folders, grants and activity, and the agent vault API
+the agent platform's `secrets` capability calls. No agent tools or UI.
 Do not add plaintext values to any metadata record, errors or tracing fields.
 
 ## Checks
@@ -29,6 +39,13 @@ Do not add plaintext values to any metadata record, errors or tracing fields.
   verifies real OpenBao namespaces/JWT/CAS/TOTP; see its README for local settings.
 - Drain pool connections between independent lease assertions in database tests:
   SQLx queues rollback on transaction drop. Use a completion barrier, never sleeps.
+- Run the opt-in `import_performance` test with `PWCONC_MODE=after`, explicit
+  disposable OpenBao settings, and `DATABASE_URL` pointing to the local
+  `macrodb_pwconc` scratch database. It exports to the existing local collector
+  and prints timing, pool pressure, token retry counts and trace IDs. Use a
+  JSON-file Docker log driver for the fixture: journald can rate-limit its
+  redacted audit events during the sweep. Reproduction and audit summarization:
+  `src/outbound/postgres/import/test/benchmark.md`.
 
 ## Gotchas
 
@@ -47,7 +64,16 @@ Do not add plaintext values to any metadata record, errors or tracing fields.
   persist actor-specific capabilities in metadata or write intents.
   `canEdit` uses current edit grants or administrator access; management remains
   creator/administrator-only, and view grants still permit reveal and copy.
+- Favorites are private human preferences in `password_item_favorites`, projected
+  in one bounded lookup for list/match responses and one for detail. PUT/DELETE
+  `items/{item}/favorite` needs view access, no credential lease, version change
+  or shared Activity entry. Initial create/import seeds only the creator's star;
+  later credential saves never seed again. Item soft deletion clears preferences;
+  physical item deletion and member removal cascade through foreign keys.
 - Mutations require `X-Macro-Passwords: 1`; responses use `private, no-store`.
+- Missing provider username slots resolve as empty strings; malformed values still
+  fail. Username spans record `empty`, `present` or `failed`; HTTP failures warn
+  with fixed error codes and status, never values.
 - Username GET and audited username-copy POST resolve only the current committed
   identifier with normal human view authorization. Recheck access and revision after
   the provider read; never reconcile or return passwords, notes or custom fields.
@@ -67,14 +93,18 @@ Do not add plaintext values to any metadata record, errors or tracing fields.
 - Team namespace is `team-{uuid}`, KV mount `passwords`, TOTP mount `totp`;
   JWT role `macro/passwords-service` binds issuer, audience, subject and team ID.
 - Value calls reuse a team's service token (`outbound/openbao/token_cache.rs`): one
-  login per team per lease (clamped to 60 s), single-flight (waiters share a failed
-  login), refreshed 20 s before the lease ends. Idle slots are LRU-evicted past
+  login per team per lease (clamped to 60 s), single-flight (waiters get the
+  failed login's error), refreshed 20 s before the lease ends. Idle slots are LRU-evicted past
   1024 teams; a slot with a caller is never evicted. A 401/403 on a cached token
   replaces it once and re-runs the whole operation, so every `with_session`
   closure must be safe to re-run. A denied fresh token is policy: no retry, no
   eviction. `passwords.openbao.authenticate` spans mark real logins only;
   operation spans carry `cache_hit` and `token_retry`. Lifecycle (namespace
   purge) logins are never cached.
+- Nothing here creates namespaces. A missing one at team login (and only there) is
+  `Error::NotProvisioned`: HTTP 409 `vault_not_provisioned` (agent routes too), import item code
+  `vault_not_provisioned`, authenticate span `outcome=not_provisioned`. Locally,
+  `just passwords_provision` creates them (see `infra/local/openbao/README.md`).
 
 Run the ignored Rust provider and import tests against a disposable local OpenBao with
 `PASSWORDS_TEST_OPENBAO_ADDRESS`, `PASSWORDS_TEST_OPENBAO_SIGNING_KEY` (private
@@ -111,6 +141,91 @@ admission semaphore limits lease transactions to half the pool and leaves capaci
 for metadata queries. Every full-record save checks both provider version and
 metadata revision, so losing a lease cannot restore stale grants or TOTP pointers.
 
+## Agent vault API
+
+- Agents authenticate with their own user API key (`CredentialOrigin::UserApiKey`
+  only) and an untrusted `X-Macro-Agent-Session-Id` UUIDv7 wake. Admission order:
+  both `enable-passwords-v1` and `enable-agent-vault` in the agent's own per-user
+  snapshot, never its owner's (off, missing or failed → `404`), then
+  `AgentDirectory` (`403 invalid_agent`), wake (`400 invalid_session_attribution`),
+  provider configuration presence (`503`), and only then catalog, policy, kind and
+  provider I/O. Authority is rechecked after provider reads (disclosure, codes and an
+  update's own read); writes are authorized when staged and are not retroactive. Body
+  errors surface only after admission.
+- Composition wires `NoAgents`, which admits nobody, until the agent platform
+  supplies the authoritative directory adapter.
+- Human review routes require the reviewer's own snapshot of both keys; request
+  event delivery, like the other vault jobs, evaluates no flags.
+- Use requires `G && (C || A)`: a current Agent grant, plus creator attribution or
+  standing approval. Human, team and folder grants never count. A creator whose
+  grant was revoked is `not_granted` even with a pending request.
+- Agent grants live in the item's `grants` JSON as `kind: agent`. Human sharing
+  rejects them as input, preserves them, and never lists or counts them.
+- Agent create/update intents retain the agent, wake and action; reconcile commits
+  metadata, that audit and intent completion in one transaction
+  (`save_reconciled`), whoever reconciles. Agent TOTP setup retains the same on
+  the enrollment and audits in the activation transaction. An operation id names
+  one action and one item.
+- Each agent use case runs under one 30-second `timeout_at` deadline from handler
+  entry, after key extraction; reading the request body in axum is outside it, and
+  it is no whole-network guarantee. Expiry is a sanitized `503`.
+- Verification codes carry `validForMs` from the bracket `[t0 - 2s, t1 + 2s]`
+  fitting one 30-second window; the 2 seconds is an operational provider/vault
+  clock assumption, not a measured generation time.
+- Committed request events go through `password_agent_access_events` (reviewers
+  and item name frozen at commit, deferred with backoff on failure): reviewers get
+  a `password_access_requested` inbox notification, the agent a private
+  `passwords.access_request.resolved` hint on `macro.passwords`.
+- **Rollout prerequisite:** released v1 binaries reject `kind: agent` grant JSON,
+  even with the flags off. Before the first Agent grant is written, every binary
+  that reads password records must include this change, and the rollback target
+  must be one that does.
+
+## Agent runtime contract
+
+What an agent runtime must do with `macro.passwords.forAgent(team, { wake })`
+(`packages/sdk/src/entities/passwords/`). The SDK classes stay `@mcp-exclude` and
+carry no `@routing`/`@agent`, so code mode neither lists nor loads this area; a
+platform change that gives agents their own authority turns this section into
+those tags and a code-mode catalog entry.
+
+- **Prerequisites:** the agent's own user API key (code-mode credentials,
+  `MacroApiJwt` or `ScopedMacroApiJwt`, are refused); `enable-passwords-v1` and
+  `enable-agent-vault` on the agent's own account; an `AgentDirectory` that admits
+  it (composition wires `NoAgents`, so today nobody is); and a fresh UUIDv7 wake
+  per wake, never reused.
+- **Vault first:** on a sign-in wall or a missing credential, `vault.search(query)`
+  before asking a person. It lists team-shared items, items granted to the agent and
+  items it created, metadata only. An item neither shared with the team nor granted to
+  the agent never appears; one made private later stays visible while the agent keeps
+  its grant.
+- **Status:** `access.status` is `usable` (use it), `request_access` (ask first) or
+  `pending` (asked, undecided); use fails `pending` only while a request awaits review,
+  otherwise `not_granted`. `grantPermission` names the current Agent grant, which is no
+  authority on its own: after an approval-only revoke it stays while use is refused.
+- **Request:** `item.requestAccess(permission)` (`view` or `edit`) asks the human
+  creator and the team's admins, deduplicated per item and agent while pending:
+  asking again returns that request unchanged, with its original permission. Then
+  wait for `passwords.access_request.resolved` (`teamId`, `itemId`, `requestId`,
+  `status` `approved | denied | revoked`), a hint that grants nothing, or read
+  `item.accessRequest()` sparingly; its state is the truth.
+- **Denial:** on `denied` or `revoked`, tell the person and stop; never retry. A
+  denial blocks new requests for an hour, and new requests are limited to 20 an hour
+  per agent and team (`REQUEST_LIMITS`).
+- **One field:** `item.disclose(selector)` returns one login (`username`,
+  `password`) or API (`key`, `secret`) field for immediate use. Hand `value` only to
+  a sink the runtime supplies (the SDK has none); never put a value or code in chat,
+  messages, documents, logs, errors, program results or model context.
+- **Verification codes:** `item.verificationCode()` returns `code` and `validForMs`.
+  Hand `code` only to the runtime's sink, like a disclosed value, and never return it.
+  It is good for `validForMs` minus the time since the request was sent, rounded up; if
+  that is not positive when the code is entered, or the code is rejected, fetch a new
+  one. Never cache a code or reuse it. Enrolling a seed (`setVerificationSeed`) needs
+  `canSetTotp` (the creating agent with edit) on a Login item.
+- **Create:** `vault.create` stores a Login or API credential only, always with a team
+  Edit grant and the agent's own grant; there is no private option. Reuse one
+  `operationId` across retries; updates take `expectedVersion`.
+
 ## Membership and deletion
 
 - Membership and account deletion never erase items or transfer creators. Current
@@ -140,9 +255,14 @@ and opaque source keys derive stable item, folder and target ids. Retries use th
 ordinary create recovery path; existing folders retain their current name and
 parent, and an existing TOTP enrollment is never replaced by an import.
 Per-item failures use fixed codes (`busy` for lease contention, `folder_missing`
-when a folder was deleted after the batch ensured it); a failed TOTP setup
-returns the created item id so retrying can finish enrollment. Items recheck
-membership once, after their lease (`admit_member`); the batch checked it first.
+when a folder was deleted before that item's create validation); a failed TOTP setup
+returns the created item id so retrying can finish enrollment. Admit one team
+lease for folder setup and all item futures; recheck membership for each item
+when it starts. Validate distinct derived item IDs before sharing that lease.
+Keep create and TOTP ordered within each item. Bound concurrency
+by `IMPORT_CONCURRENCY` and `Repository::import_capacity` (pool size minus its
+lease connection), and return results in input order. Other writers remain
+excluded for the whole batch; do not replace the team fence with item locks.
 `POST /teams/{team}/items/match` takes up to 500 names in the body (never a
 URL), already trimmed and lower-cased by the client, and returns visible
 metadata whose `lower(name)` equals one, for the client's duplicate check. Both routes answer a malformed JSON body with the fixed
@@ -151,6 +271,9 @@ match) are `password_import::vault` constants; don't write them out here.
 `password_import_activity` records one counts-and-format entry per completed
 batch attempt, including empty and fully failed batches; team purge removes it.
 Audit failure preserves per-item results and records `audit_failed` on the batch
-span. Import steps await `ItemLock::release` so a new step cannot contend with
-asynchronous rollback of its own previous lease.
+span. Await `ItemLock::release` after every item future drains; dropping the
+batch cancels its futures and drops the lease. `passwords.import.item` spans
+parent to the batch, which records effective concurrency. The
+`passwords.lease.hold` span records guard lifetime: normal completion includes
+awaited rollback; drop queues SQLx rollback.
 The 20,000-item import limit belongs to the browser parser/client.

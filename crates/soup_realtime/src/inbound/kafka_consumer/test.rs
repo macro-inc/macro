@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use call::domain::events::{CallRecordImportedMetadata, CallRecordSummarizedMetadata};
+use channels::domain::broker_events::ChannelDeletedMetadata;
 use channels::domain::models::ChannelSender;
 use chat::domain::events::{
     ChatMessageDeletedMetadata, ChatMessageRole, ChatMessageSentMetadata, ChatTopicEvent,
@@ -15,7 +16,7 @@ use chrono::Utc;
 use documents::domain::events::{
     DocumentContentUploadedMetadata, DocumentCreatedMetadata, DocumentDeletedMetadata,
     DocumentInteractionMetadata, DocumentPurgedMetadata, DocumentSyncContentUpdatedMetadata,
-    DocumentUpdatedMetadata, InteractionReason,
+    DocumentUpdatedMetadata, EmailAttachmentsReleasedMetadata, InteractionReason,
 };
 use email::domain::events::{
     EmailEventOrigin, EmailTopicEvent, MessageDraftSyncedMetadata, ThreadBackfilledMetadata,
@@ -162,6 +163,31 @@ fn document_lifecycle_events_map_to_updated_and_deleted_patches() {
     let deleted = patches_from_document_event(&deleted);
     assert!(matches!(deleted[0].patch, Patch::Deleted(_)));
     assert_eq!(patch_entity(&deleted[0]).entity_id, DOCUMENT_ID);
+}
+
+#[test]
+fn released_email_attachments_leave_open_lists_only_when_trashed() {
+    let second = Uuid::now_v7().to_string();
+    let event = DocumentTopicEvent::EmailAttachmentsReleased(EmailAttachmentsReleasedMetadata {
+        trashed_document_ids: vec![DOCUMENT_ID.to_string(), second.clone()],
+        kept_document_ids: vec![Uuid::now_v7().to_string()],
+    });
+
+    let patches = patches_from_document_event(&event);
+
+    assert_eq!(patches.len(), 2);
+    assert!(
+        patches
+            .iter()
+            .all(|patch| matches!(patch.patch, Patch::Deleted(_)))
+    );
+    assert_eq!(
+        patches
+            .iter()
+            .map(|patch| patch_entity(patch).entity_id.clone())
+            .collect::<Vec<_>>(),
+        vec![DOCUMENT_ID.to_string(), second]
+    );
 }
 
 #[test]
@@ -639,6 +665,32 @@ fn posted(
         attachments: Vec::new(),
         created_at: Utc::now(),
     }
+}
+
+#[test]
+fn deleting_a_channel_reaches_the_members_it_had() {
+    let channel_id = Uuid::now_v7();
+    let members = vec![
+        user(),
+        MacroUserIdStr::try_from("macro|member@example.com".to_string()).expect("valid user id"),
+    ];
+    let event = ChannelTopicEvent::Deleted(ChannelDeletedMetadata {
+        channel_id,
+        actor: ChannelSender::new_from_user(user()),
+        participant_user_ids: members.clone(),
+    });
+
+    let patches = patches_from_channel_event(&event);
+
+    assert_eq!(
+        patches,
+        vec![
+            SoupRealtimePatch::for_entity(Patch::Deleted(
+                EntityType::Channel.with_entity_string(channel_id.to_string())
+            ))
+            .with_named_recipients(members)
+        ]
+    );
 }
 
 #[test]

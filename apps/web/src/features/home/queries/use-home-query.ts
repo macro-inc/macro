@@ -12,23 +12,16 @@ import {
   getEntityNotifications,
   withEntityNotifications,
 } from '@app/features/soup/entity-notifications';
+import type { FacetSelection } from '@app/features/soup/filters/facets/types';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
-  enableCalendarUi,
-  enableGraphqlSoup,
   enableInboxNotifiedSort,
-  enableSnippets,
   enableSupportedSoupForeignEntities,
-  isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import {
-  type EntityData,
-  isSnippetEntity,
-  type WithNotification,
-} from '@entity';
+import type { EntityData, WithNotification } from '@entity';
 import { unreadFilterFn } from '@entity/utils/filter';
 import type { UnifiedNotification } from '@notifications/types';
 import {
@@ -58,6 +51,7 @@ import {
 } from './home-admission';
 import { homeClock, homeTimestamp } from './home-date-buckets';
 import { soupItemMatchesHomeTab } from './home-item-filter';
+import { searchListedHomeEntities } from './home-listed-search';
 import { getHomePagination } from './home-pagination';
 import {
   buildHomeQuery,
@@ -87,9 +81,7 @@ function matchesCapabilities(
   entity: EntityData,
   capabilities: HomeQueryCapabilities
 ): boolean {
-  if (entity.type === 'calendar_event') return capabilities.calendar;
   if (entity.type === 'foreign') return capabilities.foreignEntities;
-  if (isSnippetEntity(entity)) return capabilities.snippets;
 
   return true;
 }
@@ -97,32 +89,51 @@ function matchesCapabilities(
 function matchesTab(
   entity: EntityData,
   tab: HomeTab,
-  notifications: () => UnifiedNotification[]
+  notifications: () => UnifiedNotification[],
+  searching: boolean
 ): boolean {
   const notDone = () =>
     entity.type === 'email'
       ? !entity.done
       : notifications().some((notification) => notification.state !== 'done');
-  return match(tab)
-    .with('signal', () => {
-      if (!signalFilter(entity) || !notDone()) return false;
+  return (
+    match(tab)
+      .with('signal', () => {
+        if (!signalFilter(entity) || !notDone()) return false;
 
-      if (
-        entity.type !== 'document' &&
-        entity.type !== 'email' &&
-        entity.type !== 'chat' &&
-        entity.type !== 'project'
-      ) {
-        return true;
-      }
+        if (
+          entity.type !== 'document' &&
+          entity.type !== 'email' &&
+          entity.type !== 'chat' &&
+          entity.type !== 'project'
+        ) {
+          return true;
+        }
 
-      return (
-        new Date(homeSortTimestamp(entity) ?? 0).getTime() >=
-        subWeeks(startOfDay(new Date()), 2).getTime()
-      );
-    })
-    .with('noise', () => noiseFilter(entity) && notDone())
-    .exhaustive(() => false);
+        return (
+          new Date(homeSortTimestamp(entity) ?? 0).getTime() >=
+          subWeeks(startOfDay(new Date()), 2).getTime()
+        );
+      })
+      .with('noise', () => noiseFilter(entity) && notDone())
+      // The viewer's own activity: cache inserts from other users carry no
+      // touch, and only server-classified Signal mail enters, as in Home's
+      // merged recents. A search finds beyond it, as Home's search does:
+      // its service hits carry no touch.
+      .with(
+        'recent',
+        () =>
+          searching ||
+          (homeTimestamp(entity.touchedAt) !== undefined &&
+            (entity.type !== 'email' || entity.isSignal === true))
+      )
+      .exhaustive(() => false)
+  );
+}
+
+function withoutStatus(facets: FacetSelection): FacetSelection {
+  const { read: _read, ...rest } = facets;
+  return rest;
 }
 
 // Cached query meta outlives the view; build the gate at module scope over the
@@ -133,7 +144,7 @@ function homeTabInsertFilter(tab: HomeTab): SoupApiItemFilter {
 
 /** Shared feed membership for the Home list and its sidebar unread indicator. */
 export function useHomeEntitiesQuery(
-  state: Pick<HomeDataSourceInput, 'tab' | 'facets'>,
+  state: Pick<HomeDataSourceInput, 'tab' | 'facets'> & { search?: string },
   options: { enabled?: () => boolean } = {}
 ) {
   const notificationSource = useGlobalNotificationSource();
@@ -145,16 +156,16 @@ export function useHomeEntitiesQuery(
   const facetContext = (): HomeFacetContext => ({ notificationSource });
 
   const capabilities = (): HomeQueryCapabilities => ({
-    calendar: isFeatureEnabled(enableCalendarUi),
     foreignEntities: foreignEntities().enabled,
     notifiedSort: notifiedSort().enabled,
-    snippets: isFeatureEnabled(enableSnippets),
   });
 
   const viewContext = createMemo(
     (): HomeViewContext => ({
       tab: state.tab,
-      facets: state.facets,
+      // Recent has no Status filter; old Home's saved one doesn't apply.
+      facets:
+        state.tab === 'recent' ? withoutStatus(state.facets) : state.facets,
       facetContext: facetContext(),
       capabilities: capabilities(),
       userId: userId(),
@@ -182,6 +193,7 @@ export function useHomeEntitiesQuery(
     };
   });
 
+  const searching = () => Boolean(state.search?.trim());
   const scopedNotifications = (entity: EntityData) =>
     getEntityNotifications(entity, notificationSource, {
       scopeChannelThreads: true,
@@ -191,7 +203,12 @@ export function useHomeEntitiesQuery(
     return entities
       .filter((entity) => matchesCapabilities(entity, context.capabilities))
       .filter((entity) =>
-        matchesTab(entity, context.tab, () => scopedNotifications(entity))
+        matchesTab(
+          entity,
+          context.tab,
+          () => scopedNotifications(entity),
+          searching()
+        )
       );
   };
 
@@ -204,7 +221,9 @@ export function useHomeEntitiesQuery(
       // same scoped snapshot, but later calls still observe optimistic changes.
       let snapshot: UnifiedNotification[] | undefined;
       const notifications = () => (snapshot ??= scopedNotifications(entity));
-      if (!matchesTab(entity, context.tab, notifications)) return false;
+      if (!matchesTab(entity, context.tab, notifications, searching())) {
+        return false;
+      }
       return unreadFilterFn({ ...entity, notifications });
     });
   };
@@ -213,8 +232,16 @@ export function useHomeEntitiesQuery(
     withEntityNotifications(entity, notificationSource, {
       scopeChannelThreads: true,
     });
+  // Recent rows sort, bucket and show the time of the viewer's last touch,
+  // or, for a search hit without one, of the item's last change.
   const transformEntities = (entities: EntityData[]) =>
-    filterEntities(entities).map(attachNotifications);
+    filterEntities(entities).map((entity) =>
+      attachNotifications(
+        viewContext().tab === 'recent'
+          ? { ...entity, sortTs: entity.touchedAt ?? homeSortTimestamp(entity) }
+          : entity
+      )
+    );
 
   return {
     query,
@@ -234,25 +261,25 @@ export type HomeListDataSource = HomeDataSource & {
 };
 
 /**
- * Home's list. Desktop Signal reads the server work feed wherever GraphQL
- * Soup is on, since the feed's live changes ride its websocket and cache;
- * every other view (Noise, touch devices, search) merges Soup, notification
- * and recent-activity sources on the client.
+ * Home's list. Desktop Signal reads the server work feed, since the feed's
+ * live changes ride the GraphQL Soup websocket and cache; every other view
+ * (Noise, touch devices) merges Soup, notification and recent-activity
+ * sources on the client. Searching a feed-backed Home lists the feed's rows
+ * whose name matches, then the search service's hits.
  */
 export function useHomeDataSource(
   state: HomeDataSourceInput
 ): HomeListDataSource {
-  const graphqlSoup = useFeatureFlag(enableGraphqlSoup);
-  const usesWorkFeed = () =>
-    graphqlSoup().enabled &&
-    state.tab === 'signal' &&
-    !isTouchDevice() &&
-    !state.search.trim();
+  const listsWorkFeed = () => state.tab === 'signal' && !isTouchDevice();
+  const usesWorkFeed = () => listsWorkFeed() && !state.search.trim();
 
+  // The feed stays live while searching: its rows are what the search finds.
+  const workFeed = useWorkFeedHomeDataSource(state, { enabled: listsWorkFeed });
   const soup = useSoupHomeDataSource(state, {
     enabled: () => !usesWorkFeed(),
+    listed: () => (listsWorkFeed() ? workFeed.entities() : undefined),
+    listedLoading: () => listsWorkFeed() && workFeed.isLoading(),
   });
-  const workFeed = useWorkFeedHomeDataSource(state, { enabled: usesWorkFeed });
   const active = (): HomeDataSource => (usesWorkFeed() ? workFeed : soup);
 
   return {
@@ -265,14 +292,21 @@ export function useHomeDataSource(
     isLoadingMore: () => active().isLoadingMore(),
     loadMore: () => active().loadMore(),
     refresh: () => active().refresh(),
+    // Feed rows found by a search complete as feed items too; the delegate
+    // passes on rows the feed does not hold.
     markDoneDelegate: () =>
-      usesWorkFeed() ? workFeed.markDoneDelegate() : undefined,
+      listsWorkFeed() ? workFeed.markDoneDelegate() : undefined,
   };
 }
 
 function useSoupHomeDataSource(
   state: HomeDataSourceInput,
-  options: { enabled: () => boolean }
+  options: {
+    enabled: () => boolean;
+    /** The rows a server-listed Home shows, which search must find. */
+    listed?: () => WithNotification<EntityData>[] | undefined;
+    listedLoading?: () => boolean;
+  }
 ): HomeDataSource {
   const {
     query,
@@ -329,7 +363,9 @@ function useSoupHomeDataSource(
         }))
       : transformEntities(entities);
 
-  const { entityPool } = useSearchContext();
+  const entityPool = useSearchContext().entityPool(() =>
+    Boolean(state.search.trim())
+  );
   const localPool = createMemo(() => {
     if (!state.search.trim()) return [];
     const pool = entityPool();
@@ -405,6 +441,14 @@ function useSoupHomeDataSource(
     });
   }, emptyHomeAdmission());
 
+  const shownEntities = createMemo(() => {
+    const listed = options.listed?.();
+    const query = state.search.trim();
+    if (!listed || !query) return entities().items;
+
+    return searchListedHomeEntities(listed, entities().items, query);
+  });
+
   const usesServiceSearch = search.usesServiceSearch;
   const hasNoTypes = () =>
     state.facets.type?.length === 1 && state.facets.type[0] === 'none';
@@ -430,12 +474,15 @@ function useSoupHomeDataSource(
     let result: HomeDataSourceItem[];
     if (state.groupBy === 'date' && !search.isSearching()) {
       result = buildGroupedSoupRows(
-        mergeRecents()
-          ? groupHomeEntitiesByDate(entities().items, new Date(now()))
-          : groupHomeEntitiesByTabDate(entities().items, viewContext())
+        mergeRecents() || state.tab === 'recent'
+          ? groupHomeEntitiesByDate(shownEntities(), new Date(now()))
+          : groupHomeEntitiesByTabDate(shownEntities(), viewContext()),
+        // The viewer's own activity moves a Recent row to a newer section;
+        // keyed by entity, it keeps its focus and selection as it moves.
+        { keyByEntity: state.tab === 'recent' }
       );
     } else {
-      result = buildFlatSoupRows(entities().items);
+      result = buildFlatSoupRows(shownEntities());
     }
 
     return result;
@@ -447,10 +494,11 @@ function useSoupHomeDataSource(
     if (!search.isSearching()) {
       return (
         (notificationsLoading() || (mergeRecents() && recentQuery.isLoading)) &&
-        entities().items.length === 0
+        shownEntities().length === 0
       );
     }
-    if (entities().items.length > 0) return false;
+    if (shownEntities().length > 0) return false;
+    if (options.listedLoading?.()) return true;
     if (usesServiceSearch()) return search.isLoading();
     return notificationsLoading();
   };
@@ -467,15 +515,16 @@ function useSoupHomeDataSource(
     error: () => {
       if (hasNoTypes()) return undefined;
       if (!usesServiceSearch())
-        return entities().items.length === 0 && !hasMore()
+        return shownEntities().length === 0 && !hasMore()
           ? (query.error ??
               (mergeRecents() ? recentQuery.error : undefined) ??
               undefined)
           : undefined;
-      return search.error();
+      // The feed's matching rows need no request, so they outlast a failed one.
+      return shownEntities().length === 0 ? search.error() : undefined;
     },
     warning: () => {
-      if (usesServiceSearch() || (entities().items.length === 0 && !hasMore()))
+      if (usesServiceSearch() || (shownEntities().length === 0 && !hasMore()))
         return undefined;
       if (query.error) return 'Notifications could not be refreshed.';
       if (mergeRecents() && recentQuery.error)

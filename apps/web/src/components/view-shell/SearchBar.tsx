@@ -56,6 +56,9 @@ export function SearchBar(props: SearchBarProps) {
 
   const onKeyDown = (event: KeyboardEvent) => {
     if (event.key !== 'Escape' || event.defaultPrevented) return;
+    // Escape cancels a composition before it leaves the field. Safari
+    // reports that key as not composing; its key code still marks it.
+    if (event.isComposing || event.keyCode === 229) return;
 
     event.preventDefault();
     input?.blur();

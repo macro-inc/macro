@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE password_agent_access_events SET delivered_at=COALESCE(delivered_at,now()) WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d8a34c6f100430dd3a7f7be6db9e9ef932f8b4a143d7a42f76866e6ea7cf0eab"
+}

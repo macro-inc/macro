@@ -23,7 +23,6 @@ vi.mock('@service-storage/client', () => ({
   blockNameToItemType: (name: string) => name,
 }));
 vi.mock('@core/constant/featureFlags', () => ({
-  enableSnippets: {},
   isFeatureEnabled: () => true,
 }));
 vi.mock('../context/LexicalWrapperContext', async () => {

@@ -155,21 +155,28 @@ type DatabaseColumnCastTarget = {
   isMultiSelect: boolean;
   specificEntityType?: DatabaseEntityType;
   relation: boolean;
+  percentage?: boolean;
 };
 
 /** How the dry run names a column kind. */
 export function castTargetOf(
   kind: DatabaseColumnKind
 ): DatabaseColumnCastTarget {
-  const plain = (dataType: DataType, isMultiSelect = false) => ({
+  const plain = (
+    dataType: DataType,
+    isMultiSelect = false,
+    percentage = false
+  ) => ({
     dataType,
     isMultiSelect,
     relation: false,
+    ...(percentage ? { percentage: true } : {}),
   });
   return match(kind)
     .returnType<DatabaseColumnCastTarget>()
     .with({ type: 'text' }, () => plain('STRING'))
     .with({ type: 'number' }, () => plain('NUMBER'))
+    .with({ type: 'percentage' }, () => plain('NUMBER', false, true))
     .with({ type: 'boolean' }, () => plain('BOOLEAN'))
     .with({ type: 'date' }, () => plain('DATE'))
     .with({ type: 'date_range' }, () => plain('DATE_RANGE'))
@@ -220,6 +227,7 @@ export function castFor(
       (wanted.relation ||
         (target.dataType === wanted.dataType &&
           target.isMultiSelect === wanted.isMultiSelect &&
-          target.specificEntityType === wanted.specificEntityType))
+          target.specificEntityType === wanted.specificEntityType &&
+          !!target.percentage === !!wanted.percentage))
   )?.cast;
 }

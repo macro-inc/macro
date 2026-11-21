@@ -10,8 +10,10 @@ export type DayEvent = {
 /** An event placed on the working-hours strip. */
 export type DayChip = {
   event: DayEvent;
-  /** Where it is drawn across the strip, 0 to 100: its start, kept on the strip. */
+  /** Where it starts across the strip, 0 to 100: its start time, kept on the strip. */
   left: number;
+  /** The widest it is drawn, as a share of the strip, so it ends on the strip. */
+  width: number;
   /** Which of the strip's rows it sits on, so neighbours don't overlap. */
   lane: number;
   /** It has ended. */
@@ -29,15 +31,21 @@ export type DayStrip = {
 export const WORKING_HOURS = { start: 8, end: 20 };
 
 /** The widest a chip is drawn, as a share of the strip. */
-export const CHIP_MAX_WIDTH = 28;
-/** The furthest right a chip starts, so its full width stays on the strip. */
-const CHIP_MAX_LEFT = 100 - CHIP_MAX_WIDTH;
+const CHIP_MAX_WIDTH = 28;
+/**
+ * The narrowest a chip is drawn, so it never shrinks to an empty box: about
+ * half an hour of the strip.
+ */
+const CHIP_MIN_WIDTH = 4;
 const LANES = 3;
 
 /**
- * Today's timed events across working hours. An event that starts before the
- * strip sits at its left edge; ones wholly outside it are left out. Each chip
- * takes the first row where it clears the chip before it.
+ * Today's timed events across working hours. Each chip starts at its event's
+ * start time: one that started before the strip sits at its left edge, and one
+ * near the right edge is drawn narrower rather than earlier. Only an event in
+ * the strip's last half hour, with no room even for the narrowest chip, is
+ * drawn ending at the strip's edge. Events wholly outside the strip are left
+ * out. Each chip takes the first row where it clears the chip before it.
  */
 export function layoutDay(events: DayEvent[], now: Date): DayStrip {
   const dayStart = new Date(now);
@@ -61,16 +69,18 @@ export function layoutDay(events: DayEvent[], now: Date): DayStrip {
     // Lanes are given by where chips are drawn and how wide they can be, so
     // two never cover each other.
     const left = Math.min(
-      CHIP_MAX_LEFT,
+      100 - CHIP_MIN_WIDTH,
       Math.max(0, across(Date.parse(event.start)))
     );
+    const width = Math.min(CHIP_MAX_WIDTH, 100 - left);
     const free = laneEnds.findIndex((end) => end <= left);
     // Every row taken: share the row that frees up first.
     const lane = free === -1 ? laneEnds.indexOf(Math.min(...laneEnds)) : free;
-    laneEnds[lane] = left + CHIP_MAX_WIDTH;
+    laneEnds[lane] = left + width;
     chips.push({
       event,
       left,
+      width,
       lane,
       past: Date.parse(event.end) <= now.getTime(),
     });

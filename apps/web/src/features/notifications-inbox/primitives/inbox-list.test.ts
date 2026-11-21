@@ -9,6 +9,7 @@ import { createInboxList, type InboxDoneNotices } from './inbox-list';
 const row = (id: string): NotificationInboxRow => ({
   id,
   type: 'task',
+  alsoListedAs: [],
   revision: `rev-${id}`,
   latestAt: 1,
   actions: [],

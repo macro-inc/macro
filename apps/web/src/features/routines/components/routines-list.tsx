@@ -1,4 +1,4 @@
-import { SearchBar, ViewShell } from '@app/components/view-shell';
+import { SearchBar, ViewShell, ViewSidebar } from '@app/components/view-shell';
 import {
   ListHeader,
   ListHeaderSearch,
@@ -12,6 +12,7 @@ import { Button, ComposerSurface, Layer, Tabs } from '@ui';
 import { type Accessor, createSignal, type JSX, Show } from 'solid-js';
 import type { RoutineTemplate } from '../core/routine-templates';
 import type { RoutineRow } from '../core/types';
+
 import { RoutineListRow, RoutineRowLayout } from './routine-row';
 import { RoutineRowMenu, type RoutineRowMenuActions } from './routine-row-menu';
 import { RoutineTemplateStrip } from './routine-template-strip';
@@ -40,6 +41,7 @@ export function RoutinesList(props: {
   pendingId?: string;
   /** False where the host already titles the page, as Settings does. */
   showTitle?: boolean;
+  mobileHeader?: (focusSearch: () => void) => JSX.Element;
   registerSearchFocus?: (focus: () => void) => void;
   onCreate: () => void;
   onOpen: (id: string, history?: boolean) => void;
@@ -68,6 +70,7 @@ export function RoutinesList(props: {
     setShowState(next);
   };
   let list: HTMLDivElement | undefined;
+  let focusSearch: (() => void) | undefined;
   const matches = (row: RoutineRow) =>
     (showing() !== 'on' || row.enabled) &&
     `${row.name} ${row.when} ${row.does}`
@@ -131,34 +134,40 @@ export function RoutinesList(props: {
       <Show
         when={!isTouchDevice()}
         fallback={
-          <ViewShell.Header>
+          <>
             <Show when={props.showTitle !== false}>
-              <h1 class="mb-3 text-xl font-semibold tracking-[-0.03em] text-ink">
-                Routines
-              </h1>
+              {props.mobileHeader?.(() => focusSearch?.())}
             </Show>
-            <div class="mb-3">{tabs()}</div>
-            <div class="flex min-w-0 items-center justify-between gap-3">
-              <SearchBar
-                ref={(input) =>
-                  props.registerSearchFocus?.(() => {
-                    input.focus();
-                    input.select();
-                  })
-                }
-                label="Search routines"
-                placeholder="Search routines"
-                value={search()}
-                onValueChange={setSearch}
-                onEscape={() => list?.focus()}
-                class="max-w-md flex-1"
-                hotkey="cmd+f"
-              />
-              <Button variant="secondary" onClick={props.onCreate}>
-                Create Routine
-              </Button>
-            </div>
-          </ViewShell.Header>
+            <ViewShell.Header>
+              <div class="mb-3 flex min-w-0 items-center gap-2">
+                <ViewSidebar.Toggle action="expand" presentation="pill" />
+                {tabs()}
+              </div>
+              <div class="flex min-w-0 items-center justify-between gap-3">
+                <SearchBar
+                  ref={(input) => {
+                    focusSearch = () => {
+                      input.focus();
+                      input.select();
+                    };
+                    props.registerSearchFocus?.(focusSearch);
+                  }}
+                  label="Search routines"
+                  placeholder="Search routines"
+                  value={search()}
+                  onValueChange={setSearch}
+                  onEscape={() => list?.focus()}
+                  class="max-w-md flex-1"
+                  hotkey="cmd+f"
+                />
+                <Show when={props.showTitle === false}>
+                  <Button variant="secondary" onClick={props.onCreate}>
+                    Create Routine
+                  </Button>
+                </Show>
+              </div>
+            </ViewShell.Header>
+          </>
         }
       >
         <ListHeader
@@ -178,7 +187,7 @@ export function RoutinesList(props: {
             label="Search routines"
             value={search()}
             onValueChange={setSearch}
-            onEscape={() => list?.focus()}
+            focusResults={() => list?.focus()}
             registerFocus={(focus) => props.registerSearchFocus?.(focus)}
           />
         </ListHeader>

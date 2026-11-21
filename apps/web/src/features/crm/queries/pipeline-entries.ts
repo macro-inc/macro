@@ -8,6 +8,7 @@ import {
 import type { Client } from '@urql/core';
 import { type Accessor, createMemo } from 'solid-js';
 import { match } from 'ts-pattern';
+import type { DatabaseApi } from '../../database/core/api';
 import { toCellRange } from '../../database/core/cell-date-range';
 import type {
   DatabaseCellValue,
@@ -15,6 +16,7 @@ import type {
 } from '../../database/core/database-view';
 import { UNAVAILABLE_OPTION } from '../../database/core/grid-cells';
 import { writeDatabaseRow } from '../../database/core/row-write';
+import type { TrackedPipeline } from '../core/pipeline';
 import type {
   PipelineEntry,
   PipelineEntryCell,
@@ -147,10 +149,16 @@ export function pipelineEntriesInput(
   };
 }
 
-/** The viewer's pipeline rows that reference one company or contact. */
+/**
+ * The viewer's pipeline rows that reference one company or contact. The
+ * Pipelines card reads `cache-and-network`; a later reader of the same record
+ * can pass `cache-first` to take the card's answer from the cache instead of
+ * sending the request again.
+ */
 export function createPipelineEntriesQuery(
   graphql: PipelineEntriesDependencies['graphql'],
-  record: Accessor<PipelineEntryRecord | undefined>
+  record: Accessor<PipelineEntryRecord | undefined>,
+  requestPolicy: 'cache-and-network' | 'cache-first' = 'cache-and-network'
 ) {
   const client = createMemo(graphql);
   const query = createLiveQuery(
@@ -162,7 +170,7 @@ export function createPipelineEntriesQuery(
     },
     () => ({
       client: client(),
-      requestPolicy: 'cache-and-network',
+      requestPolicy,
       keepPreviousData: false,
       select: (data) =>
         data.user.soup.items.flatMap((item) =>
@@ -175,8 +183,32 @@ export function createPipelineEntriesQuery(
   );
   return {
     entries: (): PipelineEntry[] => (query.isSuccess ? (query.data ?? []) : []),
+    /** No answer yet, so `entries` cannot say the record is in no pipeline. */
+    pending: () => query.isPending,
+    failed: () => !query.isSuccess && query.isError,
     refetch: () => query.refetch({ requestPolicy: 'network-only' }),
   };
+}
+
+/** A pipeline's ops, written from a record's page. */
+function recordPageOps(
+  storage: PipelineEntriesDependencies['storage'],
+  pipelineId: string,
+  /** Whose record page the write is made from. */
+  recordType: PipelineEntryRecord['type']
+): DatabaseApi['applyOps'] {
+  return (batch) =>
+    storage
+      .applyCrmPipelineOps(pipelineId, batch)
+      .mapErr(([error]) => error)
+      .map((applied) => {
+        trackPipelineEntryWrites(
+          { id: pipelineId, recordType },
+          'record',
+          batch.ops
+        );
+        return applied;
+      });
 }
 
 /** One cell of an entry, written through its pipeline's ops. */
@@ -193,20 +225,31 @@ export function savePipelineEntryCell(
     {
       tableId: entry.pipeline.tableId,
       columns: entry.cells.map((current) => current.column),
-      applyOps: (batch) =>
-        storage
-          .applyCrmPipelineOps(entry.pipeline.id, batch)
-          .mapErr(([error]) => error)
-          .map((applied) => {
-            trackPipelineEntryWrites(
-              { id: entry.pipeline.id, recordType },
-              'record',
-              batch.ops
-            );
-            return applied;
-          }),
+      applyOps: recordPageOps(storage, entry.pipeline.id, recordType),
     },
     { kind: 'cell', rowId: entry.rowId, columnId: cell.column.id, value },
+    createOptions
+  );
+}
+
+/**
+ * A new row for the record, written through its pipeline's ops: the same
+ * row write the pipeline's own table makes when a deal or contact is added.
+ */
+export function addPipelineEntryRow(
+  storage: PipelineEntriesDependencies['storage'],
+  pipeline: TrackedPipeline,
+  columns: readonly DatabaseViewColumn[],
+  values: Record<string, DatabaseCellValue>,
+  createOptions: boolean
+) {
+  return writeDatabaseRow(
+    {
+      tableId: pipeline.tableId,
+      columns,
+      applyOps: recordPageOps(storage, pipeline.id, pipeline.recordType),
+    },
+    { kind: 'create', values },
     createOptions
   );
 }

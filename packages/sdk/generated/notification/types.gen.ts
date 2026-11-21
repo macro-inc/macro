@@ -424,6 +424,34 @@ export type ChannelMessageSendMetadata = CommonChannelMetadata & {
     senderProfilePictureUrl?: string | null;
 };
 
+/**
+ * A channel notification a user can turn off for one channel.
+ *
+ * Each kind is one notification event type, which is also its wire form.
+ * A message that mentions a document follows the kind of its message: a
+ * top-level message outside a thread, a thread reply inside one (its
+ * producer says which, see [`crate::domain::models::request`]). Channel
+ * invites are not here: they reach people as they join, before they could
+ * have chosen anything.
+ */
+export type ChannelNotificationKind = 'channel_message_send' | 'channel_message_reply' | 'channel_mention' | 'channel_message_reaction' | 'call_started' | 'channel_access_requested';
+
+/**
+ * One channel's own notification settings.
+ */
+export type ChannelNotificationSettingsResponse = {
+    channelId: string;
+    /**
+     * The channel's own settings: exactly the kinds it notifies for,
+     * whatever its sections say. `null` follows the sections.
+     */
+    enabled: Array<ChannelNotificationKind> | null;
+    /**
+     * The channel notifies even when the sections holding it are muted.
+     */
+    overridesSectionMute: boolean;
+};
+
 export type ChannelReplyMetadata = CommonChannelMetadata & {
     /**
      * The message content
@@ -450,6 +478,24 @@ export type ChannelReplyMetadata = CommonChannelMetadata & {
      * The sender id of the reply, when sent by a user
      */
     userId?: string | null;
+};
+
+/**
+ * A Chat sidebar section a user can set notifications for. The catch-all
+ * "All channels" section has no settings and is not one of these.
+ */
+export type ChannelSection = {
+    /**
+     * The section's `channel_label` id.
+     */
+    labelId: string;
+    type: 'label';
+} | {
+    type: 'favorites';
+} | {
+    type: 'direct_messages';
+} | {
+    type: 'team_channels';
 };
 
 export type ChannelType = 'public' | 'private' | 'directMessage' | 'team';
@@ -555,6 +601,12 @@ export type ComputerSetupOutcome = {
      */
     failureReason: string;
     kind: 'failed';
+    /**
+     * Setup gave up a second time, so the computer was released and its
+     * purchase refunded (and an agent teammate taken back): there is
+     * nothing to retry.
+     */
+    released?: boolean;
 };
 
 /**
@@ -1155,6 +1207,21 @@ export type ItemSharedMetadata = {
     userIds: Array<string>;
 };
 
+export type ListChannelNotificationSettingsResponse = {
+    /**
+     * Every channel with settings; any other channel follows its sections.
+     */
+    channels: Array<ChannelNotificationSettingsResponse>;
+};
+
+export type ListSectionNotificationSettingsResponse = {
+    /**
+     * Every section with settings; any other section allows everything and
+     * is unmuted.
+     */
+    sections: Array<SectionNotificationSettingsResponse>;
+};
+
 export type MacroUserIdStr = string;
 
 /**
@@ -1420,6 +1487,12 @@ export type NotifEvent = {
     tag: 'channel_access_requested';
 } | {
     /**
+     * An agent asked for access to a vault item the user manages.
+     */
+    content: PasswordAccessRequestedMetadata;
+    tag: 'password_access_requested';
+} | {
+    /**
      * One of the user's routines finished a run, successfully or not.
      */
     content: RoutineRunFinishedMetadata;
@@ -1438,6 +1511,13 @@ export type NotifEvent = {
      */
     content: ComputerSetupMetadata;
     tag: 'computer_setup';
+} | {
+    /**
+     * Someone, usually agent code through the SDK, sent the user a
+     * notification they wrote.
+     */
+    content: PingMetadata;
+    tag: 'ping';
 } | {
     /**
      * A runtime's owner removed the user's access to it, and agents of
@@ -1482,6 +1562,121 @@ export type NotificationState = 'unseen' | 'seen' | 'done';
  * newtype wrapper for the the typename of a Notification
  */
 export type NotificationTypeName = string;
+
+/**
+ * An agent asked for access to a team vault item. Sent to the item's current
+ * human creator and the team's current administrators, with the agent as
+ * sender. Carries the item name and opaque ids only, never values.
+ */
+export type PasswordAccessRequestedMetadata = {
+    /**
+     * Requested item.
+     */
+    itemId: string;
+    /**
+     * Item display name when the request was made.
+     */
+    itemName: string;
+    /**
+     * Request under review.
+     */
+    requestId: string;
+    /**
+     * Team owning the item.
+     */
+    teamId: string;
+};
+
+/**
+ * The agent a ping reads as being from, as it was when sent.
+ */
+export type PingAgent = {
+    /**
+     * The agent's avatar.
+     */
+    avatarUrl?: string | null;
+    /**
+     * A string on the wire: system bots have fixed ids that are not RFC 4122
+     * uuids.
+     */
+    id: string;
+    /**
+     * The agent's display name.
+     */
+    name: string;
+};
+
+/**
+ * What a ping opens.
+ */
+export type PingLink = {
+    /**
+     * The entity's id.
+     */
+    entityId: string;
+    /**
+     * One of document, chat, channel, channel_message, project, initiative,
+     * email_thread, calendar_event, crm_company, crm_contact or
+     * agent_session: the kinds the inbox lists. A channel message is filed
+     * under its channel and opens at the message. Each recipient's inbox
+     * must also list it: their access comes from a share the inbox reads
+     * (not a link share or an attachment), it is not deleted, a session is
+     * listed, and an email thread is the recipient's own Signal mail in
+     * their inbox. Anyone else is skipped as `not_listed`.
+     */
+    entityType: EntityType;
+};
+
+/**
+ * The channel message a ping points at.
+ */
+export type PingMessage = {
+    /**
+     * The message.
+     */
+    messageId: string;
+    /**
+     * The top-level message it replies to; absent when it is top-level
+     * itself.
+     */
+    threadId?: string | null;
+};
+
+/**
+ * A notification written by its sender: their words, and the entity it
+ * opens. The sender is the notification's `sender_id`, or nobody when people
+ * notify themselves. One about a channel message is filed under the
+ * message's channel and names the message.
+ */
+export type PingMetadata = {
+    agent?: null | PingAgent;
+    /**
+     * What the sender wrote.
+     */
+    body: string;
+    /**
+     * The linked entity's name when it was sent, for a push to show under
+     * who sent it. Absent when it has none that reads the same to every
+     * recipient, such as a direct message.
+     */
+    entityName?: string | null;
+    message?: null | PingMessage;
+};
+
+/**
+ * Who a ping was sent to. A notified recipient's own
+ * preferences can still keep it from them; that is theirs to know.
+ */
+export type PingOutcome = {
+    /**
+     * The recipients it was queued for, in the order they were named.
+     */
+    notified: Array<string>;
+    /**
+     * The recipients it was not sent to.
+     */
+    skipped: Array<SkippedRecipient>;
+};
 
 /**
  * the value we send as the payload in the ios notification
@@ -1687,6 +1882,75 @@ export type RuntimeAccessRemovedMetadata = {
 };
 
 /**
+ * Whether a section is muted.
+ */
+export type SectionMute = {
+    state: 'unmuted';
+} | {
+    state: 'muted';
+} | {
+    state: 'snoozed';
+    /**
+     * When the section notifies again.
+     */
+    until: string;
+};
+
+/**
+ * One section's settings. They apply to every channel the section holds for
+ * the user: a channel notifies for a kind when any of its sections allows
+ * it, and its sections mute it only when all of them are muted.
+ */
+export type SectionNotificationSettingsResponse = {
+    /**
+     * Kinds the section does not allow.
+     */
+    disabled: Array<ChannelNotificationKind>;
+    mute: SectionMute;
+    section: ChannelSection;
+};
+
+/**
+ * A notification written by the caller.
+ */
+export type SendPingRequest = {
+    /**
+     * What to tell them, at most 280 characters once trimmed: one or two
+     * sentences, since `link` holds the detail.
+     */
+    body: string;
+    /**
+     * What the notification opens; the caller must be able to see it.
+     */
+    link: PingLink;
+    /**
+     * Who gets it, at most 100; the caller when omitted or empty. Anyone
+     * who cannot already see `link`, or whose inbox would not list it, is
+     * skipped, never given access.
+     */
+    recipientIds?: Array<string>;
+};
+
+/**
+ * Why a recipient was left out of a ping.
+ */
+export type SkipReason = 'no_access' | 'not_listed' | 'recipient_limit';
+
+/**
+ * A recipient a ping was not sent to.
+ */
+export type SkippedRecipient = {
+    /**
+     * Why they were left out.
+     */
+    reason: SkipReason;
+    /**
+     * The recipient.
+     */
+    userId: string;
+};
+
+/**
  * One of the recipient's agents that stopped with their runtime access.
  */
 export type StoppedAgent = {
@@ -1725,6 +1989,45 @@ export type UnsubscribeItemPathParams = {
     item_type: EntityType;
 };
 
+/**
+ * A change to one channel's settings. A channel either follows its sections
+ * for every kind or has its own setting for all of them.
+ */
+export type UpdateChannelNotificationSettingsRequest = {
+    /**
+     * Give the channel its own settings: exactly these kinds notify,
+     * whatever its sections say. Omit to keep the current kinds.
+     */
+    enabled?: Array<ChannelNotificationKind> | null;
+    /**
+     * Drop the channel's own kinds so it follows its sections again. Can't
+     * be combined with `enabled`.
+     */
+    inherit?: boolean;
+    /**
+     * Keep notifying while the sections holding the channel are muted.
+     * Omit to keep the current value.
+     */
+    overridesSectionMute?: boolean | null;
+};
+
+/**
+ * A change to one section's settings. Kinds the change does not name keep
+ * their setting.
+ */
+export type UpdateSectionNotificationSettingsRequest = {
+    /**
+     * Kinds to stop allowing.
+     */
+    disable?: Array<ChannelNotificationKind>;
+    /**
+     * Kinds to allow.
+     */
+    enable?: Array<ChannelNotificationKind>;
+    mute?: null | SectionMute;
+    section: ChannelSection;
+};
+
 export type UserUnsubscribe = {
     /**
      * The item id
@@ -1734,6 +2037,10 @@ export type UserUnsubscribe = {
      * The item type
      */
     item_type: string;
+    /**
+     * The item still notifies the user when a message @mentions them directly.
+     */
+    mentions_only?: boolean;
     /**
      * None for permanent mutes; notifications resume automatically at this deadline.
      */
@@ -1755,6 +2062,120 @@ export type HealthHandlerResponses = {
 };
 
 export type HealthHandlerResponse = HealthHandlerResponses[keyof HealthHandlerResponses];
+
+export type ListChannelNotificationSettingsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/notification_settings/channels';
+};
+
+export type ListChannelNotificationSettingsErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListChannelNotificationSettingsError = ListChannelNotificationSettingsErrors[keyof ListChannelNotificationSettingsErrors];
+
+export type ListChannelNotificationSettingsResponses = {
+    200: ListChannelNotificationSettingsResponse;
+};
+
+export type ListChannelNotificationSettingsResponse2 = ListChannelNotificationSettingsResponses[keyof ListChannelNotificationSettingsResponses];
+
+export type ResetChannelNotificationSettingsData = {
+    body?: never;
+    path: {
+        /**
+         * The channel the settings apply to.
+         */
+        channel_id: string;
+    };
+    query?: never;
+    url: '/notification_settings/channels/{channel_id}';
+};
+
+export type ResetChannelNotificationSettingsErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ResetChannelNotificationSettingsError = ResetChannelNotificationSettingsErrors[keyof ResetChannelNotificationSettingsErrors];
+
+export type ResetChannelNotificationSettingsResponses = {
+    200: EmptyResponse;
+};
+
+export type ResetChannelNotificationSettingsResponse = ResetChannelNotificationSettingsResponses[keyof ResetChannelNotificationSettingsResponses];
+
+export type UpdateChannelNotificationSettingsData = {
+    body: UpdateChannelNotificationSettingsRequest;
+    path: {
+        /**
+         * The channel the settings apply to.
+         */
+        channel_id: string;
+    };
+    query?: never;
+    url: '/notification_settings/channels/{channel_id}';
+};
+
+export type UpdateChannelNotificationSettingsErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UpdateChannelNotificationSettingsError = UpdateChannelNotificationSettingsErrors[keyof UpdateChannelNotificationSettingsErrors];
+
+export type UpdateChannelNotificationSettingsResponses = {
+    200: ChannelNotificationSettingsResponse;
+};
+
+export type UpdateChannelNotificationSettingsResponse = UpdateChannelNotificationSettingsResponses[keyof UpdateChannelNotificationSettingsResponses];
+
+export type ListSectionNotificationSettingsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/notification_settings/sections';
+};
+
+export type ListSectionNotificationSettingsErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListSectionNotificationSettingsError = ListSectionNotificationSettingsErrors[keyof ListSectionNotificationSettingsErrors];
+
+export type ListSectionNotificationSettingsResponses = {
+    200: ListSectionNotificationSettingsResponse;
+};
+
+export type ListSectionNotificationSettingsResponse2 = ListSectionNotificationSettingsResponses[keyof ListSectionNotificationSettingsResponses];
+
+export type UpdateSectionNotificationSettingsData = {
+    body: UpdateSectionNotificationSettingsRequest;
+    path?: never;
+    query?: never;
+    url: '/notification_settings/sections';
+};
+
+export type UpdateSectionNotificationSettingsErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UpdateSectionNotificationSettingsError = UpdateSectionNotificationSettingsErrors[keyof UpdateSectionNotificationSettingsErrors];
+
+export type UpdateSectionNotificationSettingsResponses = {
+    200: SectionNotificationSettingsResponse;
+};
+
+export type UpdateSectionNotificationSettingsResponse = UpdateSectionNotificationSettingsResponses[keyof UpdateSectionNotificationSettingsResponses];
 
 export type GetUnsubscribesData = {
     body?: never;
@@ -1830,6 +2251,11 @@ export type UnsubscribeItemData = {
          * A future resume time. Omit to mute indefinitely.
          */
         snoozed_until?: string | null;
+        /**
+         * Keep notifying for messages that @mention the user directly and silence
+         * the rest. Channels only; cannot be combined with `snoozed_until`.
+         */
+        mentions_only?: boolean;
     };
     url: '/unsubscribe/item/{item_type}/{item_id}';
 };
@@ -2179,6 +2605,46 @@ export type EnableNotificationTypeError = EnableNotificationTypeErrors[keyof Ena
 export type EnableNotificationTypeResponses = {
     200: unknown;
 };
+
+export type SendPingData = {
+    body: SendPingRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/user_notifications/send';
+};
+
+export type SendPingErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    /**
+     * Agent notifications are not enabled for the caller
+     */
+    403: ErrorResponse;
+    /**
+     * The link does not exist or the caller cannot see it
+     */
+    404: ErrorResponse;
+    /**
+     * The sender has notified too many recipients this hour; `Retry-After` says when to try again
+     */
+    429: ErrorResponse;
+    500: ErrorResponse;
+    /**
+     * Whether agent notifications are enabled for the caller could not be checked; try again
+     */
+    503: ErrorResponse;
+};
+
+export type SendPingError = SendPingErrors[keyof SendPingErrors];
+
+export type SendPingResponses = {
+    /**
+     * Queued for the recipients who can see the link
+     */
+    200: PingOutcome;
+};
+
+export type SendPingResponse = SendPingResponses[keyof SendPingResponses];
 
 export type DeleteUserNotificationV2Data = {
     body?: never;

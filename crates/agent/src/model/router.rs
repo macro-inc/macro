@@ -24,6 +24,7 @@ use ai_toolset::RequestContext;
 use ai_usage::{UsageContext, UsageRecorder};
 use futures::StreamExt;
 use macro_env_var::env_var;
+use macro_service_urls::GoogleGenerativeAiApiUrl;
 use rig_agent::agent::{Agent, AgentBuilder, MultiTurnStreamItem};
 use rig_agent::streaming::StreamingPrompt;
 use rig_agent::tool::server::ToolServerHandle;
@@ -43,10 +44,11 @@ use super::openai::{CompatibleCompletionModel, OpenAiChatCompletionsModel, OpenA
 use super::types::Model;
 use super::usage_amount::usage_amount;
 use super::{ModelSpeed, PredefinedModel, ReasoningEffort};
-use crate::agent_loop::{SystemPrompt, ToolSearch};
+use crate::agent_loop::ToolSearch;
 use crate::error::AgentError;
 use crate::hook::{BridgeInputs, StreamBridge};
 use crate::stream::{ChatCompletionStream, StreamPart};
+use crate::system_prompt::SystemPrompt;
 use crate::telemetry::{ChatSpanHook, GenAiContext, TracedModel};
 
 env_var! {
@@ -442,8 +444,11 @@ impl ModelRouter {
         // ride the compatible-provider registry: a `<provider>/` segment routes
         // to the client registered under that name. Gemini uses GenerateContent
         // so tool-call thought signatures survive the multi-step tool loop.
+        // Google's host unless `OVERRIDE_GOOGLE_GENERATIVE_AI_API_URL` names
+        // `crates/model_emulator`, which a local stack runs in its place.
         let gemini = gemini::Client::builder()
             .api_key(env.google_generative_ai_api_key.to_string())
+            .base_url(GoogleGenerativeAiApiUrl::new()?.as_str())
             .http_client(MeteredHttpClient::new(
                 http.clone(),
                 GOOGLE_PROVIDER,
@@ -763,6 +768,7 @@ where
     impl StreamLiveness {
         fn new(span: tracing::Span, telemetry: GenAiContext) -> Self {
             telemetry.take_run_first_chunk();
+            telemetry.take_run_model_calls();
             Self {
                 span,
                 telemetry,
@@ -783,6 +789,10 @@ where
         // attribute, which every numeric query would then silently miss.
         fn drop(&mut self) {
             self.span.record("agent.stream.items", self.items);
+            self.span.record(
+                "agent.stream.model_calls",
+                self.telemetry.take_run_model_calls(),
+            );
             if let Some((time_to_first_chunk, kind)) = self.telemetry.take_run_first_chunk() {
                 self.span
                     .record("agent.stream.first_chunk_ms", millis(time_to_first_chunk));

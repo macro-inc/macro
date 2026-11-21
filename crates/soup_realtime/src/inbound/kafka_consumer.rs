@@ -153,6 +153,13 @@ fn patches_from_document_event(event: &DocumentTopicEvent) -> Vec<SoupRealtimePa
         {
             push_unique_update(&mut updates, EntityType::Document, &metadata.document_id);
         }
+        // Trashed ones leave open lists like the documents of a trashed folder;
+        // kept ones stay where they are.
+        DocumentTopicEvent::EmailAttachmentsReleased(metadata) => {
+            for document_id in &metadata.trashed_document_ids {
+                push_unique_delete(&mut updates, EntityType::Document, document_id);
+            }
+        }
         DocumentTopicEvent::Interaction(_)
         | DocumentTopicEvent::ContentUploaded(_)
         | DocumentTopicEvent::SyncContentUpdated(_)
@@ -396,9 +403,11 @@ fn patches_from_channel_event(event: &ChannelTopicEvent) -> Vec<SoupRealtimePatc
         ChannelTopicEvent::Created(metadata) => {
             vec![update(EntityType::Channel, metadata.channel_id)]
         }
-        ChannelTopicEvent::Deleted(metadata) => {
-            vec![delete(EntityType::Channel, metadata.channel_id)]
-        }
+        // The delete removes every membership first, so current access names no one.
+        ChannelTopicEvent::Deleted(metadata) => vec![
+            delete(EntityType::Channel, metadata.channel_id)
+                .with_named_recipients(metadata.participant_user_ids.clone()),
+        ],
         // A request to join changes neither the channel nor its membership.
         ChannelTopicEvent::AccessRequested(_) => Vec::new(),
     }

@@ -325,7 +325,9 @@ pub struct ClaimedMutation {
     pub lease_generation: u64,
 }
 
-/// Read-only durable request snapshot. It contains no authority to settle a lease.
+/// Read-only durable request snapshot. Its lease lets a runner release a claim
+/// whose owner has gone; every settlement still presents the owner and
+/// generation, which the engine checks.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MutationInspection {
@@ -348,6 +350,21 @@ pub struct MutationInspection {
     /// Wall-clock first-enqueue time in epoch milliseconds.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub enqueued_at_ms: Option<i64>,
+    /// The current claim, if a runner holds one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lease: Option<MutationLeaseInspection>,
+}
+
+/// A queued mutation's current claim, as an inspection reports it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MutationLeaseInspection {
+    /// Runner that holds the claim.
+    pub owner: String,
+    /// Claim generation, encoded without losing JavaScript integer precision.
+    pub generation: String,
+    /// Time at which another runner may claim the mutation.
+    pub expires_at_ms: i64,
 }
 
 impl TryFrom<QueuedMutation> for MutationInspection {
@@ -356,6 +373,17 @@ impl TryFrom<QueuedMutation> for MutationInspection {
     fn try_from(queued: QueuedMutation) -> Result<Self, Self::Error> {
         let source = decode_optimistic_source(&queued.optimistic.optimistic_data_json)?;
         let enqueued_at_ms = queued.mutation.enqueued_at_ms();
+        let lease = match (
+            queued.mutation.lease_owner,
+            queued.mutation.lease_expires_at_ms,
+        ) {
+            (Some(owner), Some(expires_at_ms)) => Some(MutationLeaseInspection {
+                owner,
+                generation: queued.mutation.lease_generation.to_string(),
+                expires_at_ms,
+            }),
+            _ => None,
+        };
         let request = queued.mutation.request;
         Ok(Self {
             transaction_id: queued.id.to_string(),
@@ -368,6 +396,7 @@ impl TryFrom<QueuedMutation> for MutationInspection {
             client_metadata: source.client_metadata,
             optimistic_data: source.mutation_data,
             enqueued_at_ms,
+            lease,
         })
     }
 }

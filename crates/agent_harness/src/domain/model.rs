@@ -8,7 +8,9 @@ use agent_egress::domain::model::{
 };
 use agent_fold::domain::model::{StopReason, TurnSignal};
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId, PromptAttachment};
-use agent_session::domain::model::{AgentMcpServers, AgentSessionId, MessageId, SandboxSize};
+use agent_session::domain::model::{
+    AgentMcpServers, AgentSessionId, MessageId, PrompterKind, SandboxSize,
+};
 use agent_session::domain::ports::ControlEvent;
 use agent_session::domain::session::PermissionPolicy;
 
@@ -562,6 +564,32 @@ pub struct DeliverAction {
     /// The app tab a person typed the prompt in, when they typed it in one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub client: Option<agent_session::domain::model::UiClientId>,
+    /// Whether a person or a program for them sent it.
+    #[serde(default, skip_serializing_if = "PrompterKind::is_user")]
+    pub prompter: PrompterKind,
+}
+
+/// How long a session on an external runtime goes without activity before it
+/// is dormant. See [`ListedSessions::dormant`].
+pub const DORMANT_AFTER: chrono::TimeDelta = chrono::TimeDelta::days(7);
+
+/// The unarchived sessions a dialing runtime listed whose bot is bound to its
+/// harness.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ListedSessions {
+    /// Sessions the dial considers: restored now or left to their next prompt.
+    pub live: Vec<AgentSessionId>,
+    /// How many listed sessions are dormant: no activity (list-moving change
+    /// or log entry) for [`DORMANT_AFTER`], and nothing waiting on them: no
+    /// turn starting, running, stopping, waiting for input or interrupted by
+    /// a disconnect, no queued prompt, no tool call awaiting approval, no
+    /// undelivered notification, and no conversation they answer. Derived on
+    /// every dial from server-side state only (never the runtime's own
+    /// timestamps), never stored, and invisible to users. A dial does no
+    /// per-session work for them; their next prompt or delivery reconnects
+    /// them like any lazy session. A limit on how many sessions a runtime
+    /// keeps live counts [`Self::live`] only.
+    pub dormant: usize,
 }
 
 /// What decides whether a turn may run on an agent's registered runtime.
@@ -625,6 +653,9 @@ pub enum HarnessCommand {
         /// may not prompt a session may not rewrite what it is about to be
         /// prompted with.
         actor: Option<MacroUserIdStr<'static>>,
+        /// Whether a person or a program for them rewrote it.
+        #[serde(default, skip_serializing_if = "PrompterKind::is_user")]
+        prompter: PrompterKind,
     },
     /// Remove a queued action before it dispatches.
     RemoveQueued {
@@ -696,6 +727,7 @@ impl DeliverAction {
             announce,
             context: None,
             client: None,
+            prompter: PrompterKind::User,
         }
     }
 
@@ -713,6 +745,7 @@ impl DeliverAction {
             announce: None,
             context: event.context,
             client: event.client,
+            prompter: event.prompter,
         }
     }
 }

@@ -57,6 +57,7 @@ impl JwtValidator for FixtureCredential {
             identity: ValidatedIdentity {
                 agent_id: None,
                 agent_via: None,
+                routine_id: None,
                 user_id: token.into(),
                 fusion_user_id: "fixture".into(),
                 organization_id: None,
@@ -118,6 +119,7 @@ impl HarnessAuthorizer for FixtureHarness {
                 origin: CredentialOrigin::Harness,
                 agent_id: None,
                 agent_via: None,
+                routine_id: None,
                 macro_user_id,
                 user_context: user_context(OWNER),
             },

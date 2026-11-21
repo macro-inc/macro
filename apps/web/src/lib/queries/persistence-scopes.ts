@@ -1,5 +1,6 @@
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { hasLoginCookie } from '@core/util/cookies';
+import { isTauri } from '@core/util/platform';
 import { getOrCreateCacheScope } from '@graphql-cache/scope';
 import { hashKey, partialMatchKey, type QueryKey } from '@tanstack/query-core';
 import { authKeys } from './auth/keys';
@@ -62,14 +63,13 @@ export function createQueryPersistenceScopes(
       shouldRestore: hasLoginCookie,
     },
     {
-      store: createPerQueryIDBStore({
-        dbName: scopedKey('email-threads'),
-      }),
+      // Email thread messages are no longer persisted. The scope stays listed
+      // so logout still wipes what earlier versions saved here.
+      store: createPerQueryIDBStore({ dbName: scopedKey('email-threads') }),
       maxAge: { value: 7, unit: 'd' },
       buster,
-      shouldPersist: (queryKey) =>
-        partialMatchKey(queryKey, ['email', 'threadMessages']),
-      shouldRestore: hasLoginCookie,
+      shouldPersist: () => false,
+      shouldRestore: () => false,
     },
     ...(isNativeMobilePlatform()
       ? [
@@ -96,6 +96,12 @@ export function createQueryPersistenceScopes(
             // Range keys move with the date: no later session asks again.
             outlivesQuery: true,
           } satisfies PersistScope,
+        ]
+      : []),
+    // Native apps relaunch offline: without a restored identity every
+    // account-gated view waits on a fetch that cannot succeed.
+    ...(isTauri()
+      ? [
           {
             store: createPerQueryIDBStore({
               dbName: scopedKey('user-info'),

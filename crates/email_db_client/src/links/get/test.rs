@@ -1,7 +1,7 @@
 use crate::links::get::{
-    fetch_inbox_details_for_macro_id, fetch_inboxes_for_macro_id, fetch_link_by_email,
+    SearchInbox, fetch_inbox_details_for_macro_id, fetch_inboxes_for_macro_id, fetch_link_by_email,
     fetch_link_by_macro_id_and_email_address, fetch_owned_link_for_message,
-    fetch_owned_link_for_thread, fetch_readable_owned_inboxes,
+    fetch_owned_link_for_thread, fetch_readable_owned_inboxes, fetch_search_inboxes_for_macro_id,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -240,6 +240,37 @@ async fn resolves_nothing_for_unrelated_caller(pool: Pool<Postgres>) -> anyhow::
             .is_none()
     );
 
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn search_inboxes_flag_a_mailbox_being_disconnected(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    insert_user(&pool, CHILD, "sharedbox@corp.test").await;
+    insert_user(&pool, PRIMARY, "primary@corp.test").await;
+    let (kept, _, _) =
+        insert_inbox_with_thread_and_message(&pool, CHILD, "sharedbox@corp.test").await;
+    let (leaving, _, _) =
+        insert_inbox_with_thread_and_message(&pool, CHILD, "second@corp.test").await;
+    insert_delegation(&pool, PRIMARY, CHILD, leaving).await;
+    crate::links::delete::mark_link_deleting(&pool, leaving).await?;
+
+    let inbox = |id, deleting| SearchInbox {
+        id,
+        macro_id: CHILD.to_string(),
+        deleting,
+    };
+    let mut owned = fetch_search_inboxes_for_macro_id(&pool, CHILD).await?;
+    owned.sort_by_key(|inbox| inbox.id);
+    let mut expected = vec![inbox(kept, false), inbox(leaving, true)];
+    expected.sort_by_key(|inbox| inbox.id);
+    assert_eq!(owned, expected);
+    assert_eq!(
+        fetch_search_inboxes_for_macro_id(&pool, PRIMARY).await?,
+        [inbox(leaving, true)],
+        "a delegate sees the disconnect too"
+    );
     Ok(())
 }
 

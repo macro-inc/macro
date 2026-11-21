@@ -183,7 +183,11 @@ export function ItemDetailBody(props: {
                     <span class="text-ink-muted">
                       {props.state.usernameLoading
                         ? t('passwords.loadingUsername')
-                        : t('passwords.usernameUnavailable')}
+                        : props.state.failure === 'unreachable'
+                          ? t('passwords.unreachable')
+                          : props.state.failure === 'serviceUnavailable'
+                            ? t('passwords.serviceUnavailable')
+                            : t('passwords.usernameUnavailable')}
                     </span>
                   }
                 >
@@ -523,6 +527,7 @@ export function ItemDetailBody(props: {
 export function FavoriteToggle(props: {
   favorite: boolean;
   onToggle: () => void;
+  pending?: boolean;
 }) {
   return (
     <Button
@@ -535,6 +540,7 @@ export function FavoriteToggle(props: {
       tooltip={
         props.favorite ? t('passwords.unfavorite') : t('passwords.addFavorite')
       }
+      disabled={props.pending}
       onClick={props.onToggle}
     >
       <Show when={props.favorite} fallback={<StarIcon class="size-4" />}>

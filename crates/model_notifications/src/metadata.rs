@@ -3,6 +3,8 @@ mod agent_sign_in;
 mod calendar_join_request;
 mod channel_push;
 mod computer_setup;
+mod password_access_request;
+mod ping;
 pub use access_request::{
     ChannelAccessRequestedMetadata, EntityAccessGrantedMetadata, EntityAccessRequestedMetadata,
     RequestedAccessLevel, RuntimeAccessRemovedMetadata, StoppedAgent,
@@ -28,6 +30,8 @@ use notification::domain::models::{
         APNSPushNotification, Alert, AlertDictionary, Aps, InterruptionLevel, PushNotificationData,
     },
 };
+pub use password_access_request::PasswordAccessRequestedMetadata;
+pub use ping::{PingAgent, PingMessage, PingMetadata};
 use rootcause::Report;
 use rootcause::report;
 use serde::{Deserialize, Serialize};

@@ -903,7 +903,12 @@ const shortcutSections: ShortcutSection[] = [
         codes: [CmdOrCtrl, 'KeyJ'],
         description: 'Focus AI chat',
       },
-      { keys: ['g'], codes: ['KeyG'], description: 'Go to a view' },
+      {
+        keys: ['g'],
+        codes: ['KeyG'],
+        description:
+          'Go to a view: then h Home, i Notifications (Home without them), a Agents, e Email (Signal), s Sent, f Files, d Documents, t Tasks, r Calendar, c Channels, o Customers; ? lists every letter, including those behind flags',
+      },
       {
         keys: ['?'],
         codes: ['ShiftLeft', 'Slash'],
@@ -1022,7 +1027,6 @@ const shortcutSections: ShortcutSection[] = [
   {
     title: 'Email',
     items: [
-      { keys: ['/'], codes: ['Slash'], description: 'Search email' },
       { keys: ['s'], codes: ['KeyS'], description: 'Star or unstar' },
       {
         keys: ['shift+m'],
@@ -1034,12 +1038,6 @@ const shortcutSections: ShortcutSection[] = [
         keys: ['escape'],
         codes: ['Escape'],
         description: 'Back to the list, then to Signal',
-      },
-      {
-        keys: ['g'],
-        codes: ['KeyG'],
-        description:
-          'Then i Signal, o Noise, s Favorites, t Sent, d Drafts, e Archived, a All',
       },
       {
         keys: ['n', 'arrowdown'],

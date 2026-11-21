@@ -57,7 +57,6 @@ export function createComposeContext(): EmailComposeContext & {
       isTouch: () => false,
       isMobile: () => false,
       scheduleEnabled: true,
-      signaturesEnabled: () => false,
     },
     editorFiles: {
       readDroppedFiles: vi.fn(),

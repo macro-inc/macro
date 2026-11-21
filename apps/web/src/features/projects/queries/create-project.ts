@@ -58,7 +58,12 @@ export function createProjectMutation(
             client.create(createInitiativeInput(input))
           );
           if (scope.isCurrent()) {
-            await seedProjectDetail(scope.viewer, project, scope.host);
+            await seedProjectDetail(
+              scope.viewer,
+              project,
+              scope.generation,
+              scope.host
+            );
             if (scope.isCurrent())
               fireAndForget(
                 refetchSoupEntity(project.id, 'initiative', {

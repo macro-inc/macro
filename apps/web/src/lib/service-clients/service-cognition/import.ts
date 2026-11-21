@@ -40,9 +40,14 @@ function importFetch<T extends ObjectLike = never>(
   return fetchWithToken<T>(`${dcsHost}${url}`, init);
 }
 
-import type { ImportKind, ImportSource } from './generated/schemas';
+import type {
+  ImportKind,
+  ImportRun,
+  ImportSource,
+  RunStatus,
+} from './generated/schemas';
 
-export type { ImportKind, ImportSource } from './generated/schemas';
+export type { ImportKind, ImportRun, ImportSource } from './generated/schemas';
 
 export type ImportEntityStatus =
   | 'staged'
@@ -52,13 +57,7 @@ export type ImportEntityStatus =
 
 export type ImportInitiator = 'onboarding' | 'chat' | 'archive' | 'manual';
 
-export type ImportRunStatus =
-  | 'running'
-  | 'ready'
-  | 'importing'
-  | 'completed'
-  | 'failed'
-  | 'dismissed';
+export type ImportRunStatus = RunStatus;
 
 /** Metadata shape for staged Linear issues (`source === 'linear'`). */
 export type LinearIssueMeta = {
@@ -116,14 +115,6 @@ export type ImportEntity = {
   entity_type?: string | null;
   last_error?: string | null;
   created_at: string;
-  updated_at: string;
-};
-
-/** Discovery-run state for one source. */
-export type ImportRun = {
-  source: ImportSource;
-  status: ImportRunStatus;
-  error?: string | null;
   updated_at: string;
 };
 
