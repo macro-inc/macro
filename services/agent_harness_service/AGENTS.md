@@ -369,8 +369,9 @@ Background code jobs (`agent_code_mode`'s `JobRuntime`) run on their own
 `job`-scoped credential when it gets a slot (`mint_job`), returning the
 correlation the job is bound to, and revokes that correlation when the job
 stops (`revoke_job`). A scoped run (job, hidden session, dry run) gets no unfurl host
-(`code_mode::run_endpoints`), so neither `--allow-net` nor an egress
-forwarder can reach it.
+(`code_mode::run_endpoints`): no egress-forwarder upstream and, on its own
+origin, no `--allow-net` address; on the shared gateway origin the run
+bootstrap refuses `/unfurl`.
 `code_mode/jobs.rs` holds the detach rule (`DetachPolicy`: the owner prompted
 the launching turn, the session is not hidden background work, and the owner
 has `enable-background-code-jobs`), the session facts a job watches, and the

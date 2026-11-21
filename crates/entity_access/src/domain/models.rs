@@ -299,8 +299,8 @@ impl EntityPermission {
 
     /// Returns whether this permission satisfies the provided marker type.
     /// Under a background job's credential (`SessionScope::Job`), a change
-    /// needs owner access: a job changes only its owner's own items, never
-    /// one someone else shared with them.
+    /// needs owner access. Defense in depth: a job's lists carry no route
+    /// that changes an item.
     pub fn satisfies<T: RequiredPermission>(&self) -> bool {
         T::is_satisfied_by(self)
             && (!T::CHANGES

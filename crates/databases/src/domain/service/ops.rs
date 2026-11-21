@@ -442,8 +442,8 @@ where
         );
         shared.sort();
         shared.dedup();
-        // A background job changes only its owner's own items: a shared
-        // definition's options change wherever it is used.
+        // A scope that may not share changes no shared definition's options:
+        // they change wherever the definition is used.
         if shared.is_empty() || !agent_correlation::context::may_share() {
             return Ok(Vec::new());
         }

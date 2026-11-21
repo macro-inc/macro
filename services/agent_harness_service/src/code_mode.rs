@@ -425,9 +425,10 @@ impl UserExecutionCredentials for UserRunCredentials {
 
 /// The SDK hosts a run reaches. A scoped run (a background job, a hidden
 /// session, a routine's dry run) gets no unfurl host: unfurl fetches what its
-/// caller names from Macro's servers and takes no credential, so with no
-/// host there is neither an address in `--allow-net` nor an upstream in an
-/// egress forwarder. The run bootstrap also refuses unfurl's paths.
+/// caller names from Macro's servers and takes no credential. With no host,
+/// an egress forwarder has no unfurl upstream and, where unfurl has its own
+/// origin, `--allow-net` no address; on the shared gateway origin the run
+/// bootstrap refuses unfurl's `/unfurl` paths.
 pub(crate) fn run_endpoints(endpoints: &SdkEndpoints, scoped: bool) -> SdkEndpoints {
     let mut endpoints = endpoints.clone();
     if scoped {
