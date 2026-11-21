@@ -920,6 +920,15 @@ fn native_cache_parity_dump() {
     });
 }
 
+/// How a read of the stall pass ended for its caller.
+#[derive(Clone, Copy, PartialEq)]
+enum Outcome {
+    Answered,
+    TimedOut,
+    /// An error or a panic before the deadline: neither answered nor late.
+    Failed,
+}
+
 /// One read of the stall pass's mix.
 #[derive(Clone)]
 enum StallRead {
@@ -935,12 +944,12 @@ fn spawn_read(
     docs: &BTreeMap<String, String>,
     read: &StallRead,
     request_id: String,
-) -> tauri::async_runtime::JoinHandle<()> {
+) -> tauri::async_runtime::JoinHandle<bool> {
     let handle = reading(handle, request_id);
     let (document, read) = (docs["EmailThreadPage"].clone(), read.clone());
     tauri::async_runtime::spawn(async move {
-        // An abandoned read answers with an error; the caller is gone either way.
-        let _ = match read {
+        // Whether it succeeded; an abandoned read fails after its caller left.
+        match read {
             StallRead::Thread(thread) => handle
                 .read(
                     None,
@@ -959,7 +968,8 @@ fn spawn_read(
                 .await
                 .map(drop),
             StallRead::Search(query) => handle.search(search(query)).await.map(drop),
-        };
+        }
+        .is_ok()
     })
 }
 
@@ -1030,19 +1040,21 @@ fn native_stall_bench() {
             .entity_filter(mail_args(50, "INBOX", None))
             .await
             .unwrap();
-        // (ms after the stall ended at issue, answered within the deadline, ms)
-        let mut reads: Vec<(f64, bool, f64)> = Vec::new();
+        // (ms after the stall ended at issue, outcome, ms)
+        let mut reads: Vec<(f64, Outcome, f64)> = Vec::new();
         let mut timed_out_during = 0usize;
         for round in 0..rounds {
             let stop = Arc::new(AtomicBool::new(false));
+            let stall_start: Arc<std::sync::OnceLock<Instant>> = Arc::default();
             let stall_end: Arc<std::sync::OnceLock<Instant>> = Arc::default();
             let tasks: Vec<_> = (0..readers)
                 .map(|reader| {
-                    let (handle, docs, mix, stop, stall_end) = (
+                    let (handle, docs, mix, stop, stall_start, stall_end) = (
                         handle.clone(),
                         Arc::clone(&docs),
                         Arc::clone(&mix),
                         Arc::clone(&stop),
+                        Arc::clone(&stall_start),
                         Arc::clone(&stall_end),
                     );
                     tauri::async_runtime::spawn(async move {
@@ -1055,18 +1067,26 @@ fn native_stall_bench() {
                             n += readers;
                             let issued = Instant::now();
                             let task = spawn_read(&handle, &docs, read, id.clone());
-                            let answered = tokio::time::timeout(deadline, task).await.is_ok();
-                            if !answered {
-                                abandon(&handle, &id);
-                            }
+                            let outcome = match tokio::time::timeout(deadline, task).await {
+                                Ok(Ok(true)) => Outcome::Answered,
+                                Ok(_) => Outcome::Failed,
+                                Err(_) => {
+                                    abandon(&handle, &id);
+                                    Outcome::TimedOut
+                                }
+                            };
                             let ms = issued.elapsed().as_secs_f64() * 1000.0;
-                            match stall_end.get() {
-                                Some(end) if issued >= *end => out.push((
+                            match (stall_start.get(), stall_end.get()) {
+                                (_, Some(end)) if issued >= *end => out.push((
                                     issued.duration_since(*end).as_secs_f64() * 1000.0,
-                                    answered,
+                                    outcome,
                                     ms,
                                 )),
-                                _ => during += usize::from(!answered),
+                                (Some(start), _) if issued >= *start => {
+                                    during += usize::from(outcome == Outcome::TimedOut);
+                                }
+                                // Issued before the engine was held: warm-up.
+                                _ => {}
                             }
                         }
                         (out, during)
@@ -1076,6 +1096,7 @@ fn native_stall_bench() {
             tokio::time::sleep(std::time::Duration::from_millis(200)).await;
             {
                 let _held = handle.inner.write().await;
+                let _ = stall_start.set(Instant::now());
                 tokio::time::sleep(stall).await;
                 let _ = stall_end.set(Instant::now());
             }
@@ -1090,7 +1111,11 @@ fn native_stall_bench() {
             let _ = handle.inner.write().await;
         }
         let answered: Vec<f64> = {
-            let mut ms: Vec<f64> = reads.iter().filter(|r| r.1).map(|r| r.2).collect();
+            let mut ms: Vec<f64> = reads
+                .iter()
+                .filter(|r| r.1 == Outcome::Answered)
+                .map(|r| r.2)
+                .collect();
             ms.sort_by(f64::total_cmp);
             ms
         };
@@ -1101,11 +1126,12 @@ fn native_stall_bench() {
         };
         // Per round, the issue time of the last read after the stall that
         // timed out: until then the engine still served reads nobody waited for.
-        let last_timeout = reads
+        let timed_out: Vec<f64> = reads
             .iter()
-            .filter(|r| !r.1)
-            .map(|r| r.0)
-            .fold(0.0_f64, f64::max);
+            .filter(|r| r.1 == Outcome::TimedOut)
+            .map(|r| (r.0 * 10.0).round() / 10.0)
+            .collect();
+        let last_timeout = timed_out.iter().copied().fold(0.0_f64, f64::max);
         println!(
             "{}",
             serde_json::to_string_pretty(&serde_json::json!({
@@ -1118,12 +1144,13 @@ fn native_stall_bench() {
                 "afterStall": {
                     "issued": reads.len(),
                     "answered": answered.len(),
-                    "timedOut": reads.len() - answered.len(),
-                    "lastTimeoutIssuedMs": (last_timeout * 10.0).round() / 10.0,
+                    "timedOut": timed_out.len(),
+                    "failed": reads.iter().filter(|r| r.1 == Outcome::Failed).count(),
+                    "lastTimeoutIssuedMs": last_timeout,
                     "answeredMs": { "p50": quantile(0.5), "p90": quantile(0.9), "p99": quantile(0.99) },
                 },
                 "answeredAfterStallMs": answered,
-                "timedOutIssuedAtMs": reads.iter().filter(|r| !r.1).map(|r| (r.0 * 10.0).round() / 10.0).collect::<Vec<_>>(),
+                "timedOutIssuedAtMs": timed_out,
             }))
             .unwrap()
         );
