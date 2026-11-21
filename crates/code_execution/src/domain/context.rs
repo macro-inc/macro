@@ -41,7 +41,8 @@ const EXECUTION: &str = r#"
 "#;
 
 /// Programs often import `CodeContext` from the SDK as they would any other
-/// type; it is ambient, so let that import name the same type.
+/// type; it is ambient, so let that import name the same type. Drop this if
+/// the SDK ever exports a `CodeContext` of its own: the two would clash.
 const IMPORTABLE: &str = r#"
 declare module '@macro-inc/sdk' {
   /** The ambient `CodeContext`; importing it is optional. */
