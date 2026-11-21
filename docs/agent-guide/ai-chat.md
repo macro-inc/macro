@@ -2393,9 +2393,13 @@ must stay hidden; subsequent live messages must still appear.
   puts the message back in the composer with its attached files, ahead of
   anything typed since, with the caret left at the end. It always lands in
   the session it was sent to: in the composer that sent it, else another
-  composer open on that session in this window (one reopened while the send
-  was out), or else in that session's saved draft,
-  never replacing text typed there since. Any pending bubble it
+  composer open on that session in this window (for example one reopened
+  while the send was out), or else in that session's saved draft,
+  never replacing text typed there since. Its files come back as far as the
+  ten-file cap allows; one that no longer fits is turned away with the
+  attachment-limit notice. A send stopped before it reached the agent (a
+  rejected speed change, or editing access lost meanwhile) comes back the same
+  way. Any pending bubble it
   showed is retracted, so a resend appears once. A no-runtime refusal is
   explained in the transcript; any other failure shows "The message could not
   be sent".
