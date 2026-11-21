@@ -24,6 +24,12 @@ pub(crate) trait LinkRepository: Send + Sync {
         &self,
         days: i32,
     ) -> impl Future<Output = Result<Vec<Uuid>, Self::Error>> + Send;
+    /// Links whose owner's account no longer exists and whose removal has not
+    /// started, at most `limit`.
+    fn fetch_ownerless_link_ids(
+        &self,
+        limit: i64,
+    ) -> impl Future<Output = Result<Vec<Uuid>, Self::Error>> + Send;
 }
 
 pub(crate) trait LinkManagerQueue: Send + Sync {

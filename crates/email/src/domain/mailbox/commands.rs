@@ -137,7 +137,7 @@ impl<R: MailboxCommandRepository, G: MailboxCommandGateway> MailboxCommandServic
                     .release_command(
                         &lease,
                         match error {
-                            MailboxError::Provider(e) => super::retry_seconds(e),
+                            MailboxError::Provider(e) => super::retry::retry_seconds(e),
                             _ => 30,
                         },
                     )
@@ -232,9 +232,14 @@ impl<R: MailboxCommandRepository, G: MailboxCommandGateway> MailboxCommandServic
             if let (Some(previous), Some(current)) =
                 (snapshot.version.as_deref(), receipt.version.as_deref())
             {
-                self.repo
-                    .record_write_version(lease, target, previous, current)
-                    .await?;
+                // The next attempt finds the write applied and only confirms
+                // it, so a draft baseline left at `previous` would read as
+                // another client's edit.
+                super::record_after_provider("commands", || {
+                    self.repo
+                        .record_write_version(lease, target, previous, current)
+                })
+                .await?;
             }
             return Ok(());
         }
@@ -272,7 +277,11 @@ fn provider_action(
             return Ok(Some(MessageAction::SetTags(tags)));
         }
         MailboxAction::Archived(true) if current.state.in_inbox => FolderRole::Archive,
-        MailboxAction::Archived(false) if !current.state.in_inbox => FolderRole::Inbox,
+        // Restoring a conversation never moves its drafts out of Drafts: the
+        // move changes the draft's version under a pending send.
+        MailboxAction::Archived(false) if !current.state.in_inbox && !current.state.is_draft => {
+            FolderRole::Inbox
+        }
         MailboxAction::Trashed(true) if !current.state.in_trash => FolderRole::Trash,
         MailboxAction::Trashed(false) if current.state.in_trash => {
             if current.state.is_draft {

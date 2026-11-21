@@ -1,5 +1,4 @@
 import '@entity/composed/ListEntity.css';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   SwipableRow,
   SwipableRowContext,
@@ -24,11 +23,7 @@ import {
 } from '@entity/composed/list-entity/shared';
 import type { EntityRowConfig } from '@entity/extractors-notification';
 import { EntityReferenceProperties } from '@entity/extractors-property/entity-reference-properties';
-import {
-  BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
-  enqueueDocumentWakeup,
-  isWakeableDocument,
-} from '@queries/preview';
+import { enqueueDocumentWakeup, isWakeableDocument } from '@queries/preview';
 import {
   getStreamState,
   subscribeToStreamState,
@@ -90,10 +85,8 @@ function MaybeEntityRow(props: {
 export function TaskListEntity(props: TaskListEntityProps) {
   const unread = () => unreadFilterFn(props.entity);
   const isShared = useIsShared(props.entity);
-  const bulkWakeupEnabled = useFeatureFlag(BULK_DOCUMENT_WAKEUP_FEATURE_FLAG);
 
   createEffect(() => {
-    if (!bulkWakeupEnabled().enabled) return;
     if (!isWakeableDocument(props.entity)) return;
 
     enqueueDocumentWakeup(props.entity);

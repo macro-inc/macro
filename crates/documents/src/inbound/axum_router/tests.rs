@@ -1092,7 +1092,6 @@ fn canvas_routes(worker_url: &str) -> super::CanvasRouteDeps {
         ),
         admission: Arc::new(ai_billing::domain::admission::DisabledAiAdmissionService),
         recorder: Arc::new(ai_usage::NoOpUsageRecorder),
-        artifacts: Arc::new(|_| Box::pin(async { false })),
         images: Arc::new(FakeCanvasImages::default()),
     }
 }

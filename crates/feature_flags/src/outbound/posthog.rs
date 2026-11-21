@@ -16,7 +16,7 @@ const ENVIRONMENT_PROPERTY: &str = "environment";
 
 /// The `environment` value flags target. Spelled out here, not taken from
 /// `Display`, so a log-format change cannot move targeting.
-fn environment_value(environment: Environment) -> &'static str {
+pub(crate) fn environment_value(environment: Environment) -> &'static str {
     match environment {
         Environment::Production => "prod",
         Environment::Develop => "dev",
@@ -56,18 +56,7 @@ impl PostHogFeatureFlags {
         timeout: Duration,
         environment: Environment,
     ) -> Result<Self, Report> {
-        let mut endpoint =
-            Url::parse(host).map_err(|_| rootcause::report!("Invalid PostHog origin"))?;
-        if !matches!(endpoint.scheme(), "https" | "http")
-            || endpoint.host_str().is_none()
-            || !endpoint.username().is_empty()
-            || endpoint.password().is_some()
-            || endpoint.path() != "/"
-            || endpoint.query().is_some()
-            || endpoint.fragment().is_some()
-        {
-            return Err(rootcause::report!("PostHog host must be an HTTP(S) origin"));
-        }
+        let mut endpoint = parse_origin(host)?;
         if project_key.trim().is_empty() || project_key.trim() != project_key {
             return Err(rootcause::report!(
                 "PostHog project key must be nonblank without surrounding whitespace"
@@ -170,6 +159,23 @@ impl ServiceFeatureFlags for PostHogFeatureFlags {
             .await
             .map_err(|_| LoadError::Timeout)?
     }
+}
+
+/// Parse a PostHog origin: HTTP(S), with a host and no credentials, path,
+/// query or fragment.
+pub(crate) fn parse_origin(host: &str) -> Result<Url, Report> {
+    let origin = Url::parse(host).map_err(|_| rootcause::report!("Invalid PostHog origin"))?;
+    if !matches!(origin.scheme(), "https" | "http")
+        || origin.host_str().is_none()
+        || !origin.username().is_empty()
+        || origin.password().is_some()
+        || origin.path() != "/"
+        || origin.query().is_some()
+        || origin.fragment().is_some()
+    {
+        return Err(rootcause::report!("PostHog host must be an HTTP(S) origin"));
+    }
+    Ok(origin)
 }
 
 #[derive(Debug, thiserror::Error)]

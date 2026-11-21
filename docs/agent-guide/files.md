@@ -18,7 +18,7 @@ viewer identity is available, document inserts into Shared are rejected.
 
 Files opens **Drive** using the same shell as Tasks, on desktop and touch
 devices alike.
-The top of Drive's My Files, Recent and Shared lists (not folders) holds the Drive `TutorialRow`, outside the virtualized rows, and the top of Drive's sidebar holds the Docs `TutorialSidebarItem`, followed by Spreadsheets' under `enable-spreadsheets` and Databases' under `enable-databases` (all from `features/video-tutorials`, each once its video is in the catalog). While Drive's sidebar lists more than Docs, each item is labelled with its Block (**Macro Docs**, **Macro Spreadsheets**, **Macro Databases**) instead of **Watch tutorial**.
+The top of Drive's My Files, Recent and Shared lists (not folders) holds the Drive `TutorialRow`, outside the virtualized rows, and the top of Drive's sidebar holds the Docs `TutorialSidebarItem`, followed by Spreadsheets' and Databases' (all from `features/video-tutorials`, each once its video is in the catalog). While Drive's sidebar lists more than Docs, each item is labelled with its Block (**Macro Docs**, **Macro Spreadsheets**, **Macro Databases**) instead of **Watch tutorial**.
 
 The document header's **Copy Share Link** and the Share dialog's **Copy Link**
 copy a standalone link to the selected file, not the current browser URL.
@@ -41,7 +41,7 @@ well as ID, so an unrelated conversation with the same ID remains visible.
 Deleting a non-owned item still only removes it from history. Forking a markdown
 history version still uses REST because GraphQL duplication copies current content.
 
-With `enable-databases` enabled, **My Files** includes owned databases and
+**My Files** includes owned databases and
 **Shared with me** includes databases shared by other owners. **All files**
 also includes accessible databases owned by others. **Search Drive** matches
 database names and **Filter → Type → Database** narrows the list. **New →
@@ -72,7 +72,8 @@ corresponding database timestamp.
 An email attachment's Drive copy goes to the Trash within about a minute once
 its email is gone (the message deleted at the provider, a draft sent or
 discarded, or the inbox disconnected or removed), unless its owner moved it
-into a folder, shared it, edited it or commented on it. It never shows up in
+into a folder, shared it, renamed it, edited it or commented on it. Opening it
+does not keep it. It never shows up in
 **My Files** on its own, and it expires from the Trash like any other file.
 The app has no Trash view, so the document simply leaves **Email
 attachments**. Verify by deleting a test message whose attachment was opened,
@@ -103,11 +104,16 @@ with a folder search field — rather than a date-sorted list of every folder.
 Tap a folder name to open its contents; the expand control reveals child
 folders without leaving the overview. Inside a folder, a path under the header
 controls lists Folders and each ancestor; choosing one opens it. A docked sidebar keeps
-the date-sorted folder list beside the tree. The sidebar contains `New file or folder`, `My Files`, `Recent`,
+the date-sorted folder list beside the tree. By default the sidebar contains `New file or folder`, `My Files`, `Recent`,
 `Shared with me`, collapsible Favorites, a collapsible Databases section
 listing every database the viewer owns or has been shared, by name (past ten,
 it scrolls within its own height; hidden when there are none or databases are
 disabled), and a searchable folder hierarchy.
+Drag the Favorites, Databases, or Folders heading before or after the unnamed
+My Files/Recent/Shared group to change their shared local order. The unnamed group
+has no grip or keyboard move control. Reload to verify persistence independently
+of other workspaces.
+New file/folder and import controls remain pinned.
 The Drive sidebar's import card (**Import files**, see
 [setup cards](setup-cards.md#import-from-connected-apps)) lists Notion; its
 **Import** (or a successful **Connect**) opens a new agent chat beside Drive
@@ -242,9 +248,15 @@ details include Print, and DOCX files include Download DOCX. Markdown details
 use the document menu, which already includes Download. Spreadsheets keep the
 editor's Import and export menu for Excel and CSV downloads. Choose the current location
 breadcrumb to return to the list; choosing an ancestor file drops newer detail
-entries. Opening a list row or sidebar favorite pushes a new one-item detail path;
-sidebar favorites start from My Files instead of inheriting a previously selected
-folder. Only navigation originating inside a detail appends to that path. Browser
+entries. Opening a list row or a sidebar shortcut (a favorite, or an item in the
+Databases section) pushes a new one-item detail path; sidebar shortcuts start
+from My Files instead of inheriting a previously selected folder, and a new item
+opens in the list that holds it (its folder, else My Files). Only navigation
+originating inside a detail appends to that path. Only a file opened from a Drive
+list names that list as its location (`My Files ›`, `Shared with me ›`, a folder
+path); a sidebar shortcut, a call, or a file opened from anywhere else (an email
+attachment, a channel, search, a link) shows no location breadcrumb, nor do the
+files opened from inside it. Browser
 Back and Forward restore the exact path saved with each entry, and renamed files
 update in mounted ancestor breadcrumbs without rewriting history. Cmd/Ctrl-clicking a
 row toggles selection; Shift-clicking a checkbox selects a range, and Shift+Enter

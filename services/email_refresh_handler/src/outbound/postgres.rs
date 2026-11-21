@@ -79,6 +79,37 @@ impl LinkRepository for PostgresLinkRepository {
     async fn fetch_inactive_link_ids(&self, days: i32) -> Result<Vec<uuid::Uuid>, Self::Error> {
         fetch_inactive_link_ids(&self.db, days).await
     }
+
+    async fn fetch_ownerless_link_ids(&self, limit: i64) -> Result<Vec<uuid::Uuid>, Self::Error> {
+        fetch_ownerless_link_ids(&self.db, limit).await
+    }
+}
+
+/// Fetch links whose owner's "User" row is gone and whose removal has not
+/// started. Every owner is a "User" row while its link exists, a promoted
+/// shared mailbox's included: that row is deleted only after its link.
+pub(crate) async fn fetch_ownerless_link_ids(
+    pool: &Pool<Postgres>,
+    limit: i64,
+) -> Result<Vec<uuid::Uuid>, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"
+            SELECT
+                l.id AS "link_id!"
+            FROM
+                public.email_links l
+            WHERE
+                l.disconnect_requested_at IS NULL
+                AND l.deleting_at IS NULL
+                AND NOT EXISTS (SELECT 1 FROM public."User" u WHERE u.id = l.macro_id)
+            ORDER BY
+                l.id
+            LIMIT $1
+            "#,
+        limit
+    )
+    .fetch_all(pool)
+    .await
 }
 
 /// Fetch link IDs that were created > X days ago and have never viewed a thread

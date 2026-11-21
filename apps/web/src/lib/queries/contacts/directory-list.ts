@@ -1,20 +1,92 @@
 import type { IUser } from '@core/user/types';
+import type { DateValue } from '@core/util/date';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { hashKey } from '@tanstack/solid-query';
-import { type Accessor, createMemo, createSignal } from 'solid-js';
-import type { ContactDirectoryPage, RankedPerson } from './directory';
+import { toDate } from 'date-fns';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+  onCleanup,
+} from 'solid-js';
+import {
+  type ContactDirectoryPage,
+  type RankedPerson,
+  readContactDirectory,
+} from './directory';
 import { createContactDirectoryWindow } from './directory-query';
+import { createContactSearchTrace } from './search-trace';
 
 /** Listed pages stay bounded however far a picker or menu is scrolled. */
 export const MAX_LISTED_CONTACTS = 500;
+const NO_DIRECT_MESSAGES: ReadonlyMap<string, DateValue> = new Map();
+const NO_TEAMMATES: ReadonlySet<string> = new Set();
 
 type WindowParameters = Parameters<typeof createContactDirectoryWindow>;
+
+type ListedPages = {
+  key: string;
+  first: IUser[];
+  later: IUser[];
+  /** Who the first page's text names, when the server answered it. */
+  named: ContactDirectoryPage['named'];
+};
+
+/** The people the viewer works with, known without the local cache. */
+type WorkingRelationships = {
+  /** Latest direct-message activity per person the viewer has a DM with. */
+  directMessages: ReadonlyMap<string, DateValue>;
+  teammates: ReadonlySet<string>;
+};
+
+/**
+ * Orders the first server page as the local ranking orders the same people.
+ * The people the typed text names come first: direct-message partners, most
+ * recent first, then teammates, then everyone else, with exact matches ahead
+ * of word-start ones within each. The server's looser matches follow, in the
+ * same three groups. People equal in all of that keep the server's order.
+ */
+function orderServerPage(
+  users: IUser[],
+  named: NonNullable<ContactDirectoryPage['named']>,
+  working: WorkingRelationships
+): IUser[] {
+  const exact = new Set(named.exact);
+  const wordStart = new Set(named.wordStart);
+  const rows = users.map((user, index) => {
+    const messaged = toDate(working.directMessages.get(user.id) ?? 0);
+    // A missing or unreadable time counts as no direct message.
+    const lastMessage = Math.max(messaged.getTime() || 0, 0);
+    let closeness = 2;
+    if (lastMessage > 0) closeness = 0;
+    else if (working.teammates.has(user.id.toLowerCase())) closeness = 1;
+
+    let match = 2;
+    if (exact.has(user.id)) match = 0;
+    else if (wordStart.has(user.id)) match = 1;
+
+    return { user, index, loose: match === 2, closeness, match, lastMessage };
+  });
+  return rows
+    .sort(
+      (a, b) =>
+        Number(a.loose) - Number(b.loose) ||
+        a.closeness - b.closeness ||
+        a.match - b.match ||
+        b.lastMessage - a.lastMessage ||
+        a.index - b.index
+    )
+    .map((row) => row.user);
+}
 
 /**
  * A directory window whose further pages are listed below the earlier ones, up
  * to a bound. Takes the window's arguments and returns its shape, with `data`
  * holding every listed row and the current continuation. Only `eligible` rows
- * are listed, so rows a caller drops never count toward the bound.
+ * are listed, so rows a caller drops never count toward the bound. Each
+ * search's paging is traced as one `contacts.search` span.
  */
 export function createContactDirectoryList(
   scope: WindowParameters[0],
@@ -22,11 +94,30 @@ export function createContactDirectoryList(
   enabled: Accessor<boolean> = () => true,
   options: NonNullable<WindowParameters[3]> & {
     eligible?: (user: IUser) => boolean;
+    /** Latest direct-message activity per person, to order server pages. */
+    directMessages?: Accessor<ReadonlyMap<string, DateValue>>;
   } = {}
 ) {
-  const window = createContactDirectoryWindow(scope, reader, enabled, options);
   const eligible = (users: IUser[]) =>
     options.eligible ? users.filter(options.eligible) : users;
+  const trace = createContactSearchTrace(
+    reader ?? readContactDirectory,
+    MAX_LISTED_CONTACTS,
+    eligible,
+    () => options.resetKey?.()
+  );
+  createEffect(
+    on(enabled, (active) => {
+      if (!active) trace.close();
+    })
+  );
+  onCleanup(trace.close);
+  const window = createContactDirectoryWindow(
+    scope,
+    trace.read,
+    enabled,
+    options
+  );
   /** What the listed pages belong to: the account, the text, and who is eligible. */
   const listKey = () => {
     const current = scope();
@@ -38,7 +129,16 @@ export function createContactDirectoryList(
       options.resetKey?.(),
     ]);
   };
-  let listed: { key: string; first: IUser[]; later: IUser[] } | undefined;
+  let listed: ListedPages | undefined;
+  // The server does not rank its pages. Only the first is ordered here: later
+  // pages are listed below it, and never move rows already shown.
+  const firstPage = (pages: ListedPages) =>
+    pages.named
+      ? orderServerPage(pages.first, pages.named, {
+          directMessages: options.directMessages?.() ?? NO_DIRECT_MESSAGES,
+          teammates: options.teammates?.() ?? NO_TEAMMATES,
+        })
+      : pages.first;
   const data = createMemo<ContactDirectoryPage | undefined>((shown) => {
     const page = window.data();
     const key = listKey();
@@ -57,7 +157,7 @@ export function createContactDirectoryList(
 
     const fresh = eligible(page.users);
     if (listed?.key !== key) {
-      listed = { key, first: fresh, later: [] };
+      listed = { key, first: fresh, later: [], named: page.named };
     } else if (window.continued()) {
       const known = new Set(
         [...listed.first, ...listed.later].map((user) => user.id)
@@ -77,11 +177,17 @@ export function createContactDirectoryList(
         key,
         first: fresh,
         later: listed.later.filter((user) => !first.has(user.id)),
+        named: page.named,
       };
     }
 
+    // A server's first page also lists the people its text names, however
+    // many, so the bound applies to what is listed, not to each page.
+    const users = [...firstPage(listed), ...listed.later].slice(
+      0,
+      MAX_LISTED_CONTACTS
+    );
     // Ranking metadata accompanies only the listed rows, newest page first.
-    const users = [...listed.first, ...listed.later];
     const ids = new Set(users.map((user) => user.id));
     const people = new Map<string, RankedPerson>();
     for (const person of [...(page.people ?? []), ...(shown?.people ?? [])]) {
@@ -91,6 +197,8 @@ export function createContactDirectoryList(
     return {
       ...page,
       users,
+      // Whether the first listed page was ranked, whichever page landed last.
+      named: listed.named,
       people: [...people.values()],
       nextCursor: users.length < MAX_LISTED_CONTACTS ? page.nextCursor : null,
     };

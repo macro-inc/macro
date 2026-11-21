@@ -1,0 +1,51 @@
+/* Keep the expanded layout measurable. Only the enclosing shape clips it at rest,
+   so the editor never changes flex direction while the keyboard is opening. */
+.phone-composer-surface {
+  --composer-motion-duration: 200ms;
+  --composer-motion-ease: var(--ease-out);
+  overflow: clip;
+  border-radius: 23px;
+  transition: height var(--composer-motion-duration) var(--composer-motion-ease),
+    border-radius var(--composer-motion-duration) var(--composer-motion-ease);
+}
+
+.phone-composer-surface[data-composer-expanded] {
+  border-radius: 24px;
+}
+
+.phone-composer-editor {
+  transform: translate(12px, calc(-3px - var(--composer-attachment-offset, 0px)));
+  transition: transform var(--composer-motion-duration) var(--composer-motion-ease);
+}
+
+.phone-composer-surface[data-composer-expanded] .phone-composer-editor {
+  transform: translate(0, 0);
+}
+
+.phone-composer-surface:not([data-composer-expanded]) .phone-composer-attachments {
+  visibility: hidden;
+}
+
+.phone-composer-controls {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(4px) scale(0.96);
+  transform-origin: bottom center;
+  transition: opacity 120ms var(--composer-motion-ease),
+    transform 120ms var(--composer-motion-ease), visibility 0s 120ms;
+}
+
+.phone-composer-surface[data-composer-expanded] .phone-composer-controls {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0) scale(1);
+  transition-delay: calc(var(--composer-motion-duration) * 0.6), calc(var(--composer-motion-duration) * 0.6), 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .phone-composer-surface,
+  .phone-composer-editor,
+  .phone-composer-controls {
+    transition: none;
+  }
+}

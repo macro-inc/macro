@@ -130,7 +130,10 @@ The projection selects the fields the features consume and copies nested contact
 labels, and attachment records. It preserves absent versus empty body content,
 provider IDs needed for replies, attachment/CID identities, and project navigation
 metadata. Sync headers and unused transport display settings stay out of the models. `email-compose/queries/inbox-source.ts`
-projects linked-account metadata. Actual service-client operations remain in
+projects linked-account metadata. Its same-viewer snapshot retains the inbox owner,
+draft signal setting, and primary selection alongside display fields during a
+pending or failed catalog refresh. Queued saves and sends use that snapshot;
+an account change or a successful empty catalog clears it. Actual service-client operations remain in
 `src/lib/queries/email`, alongside the existing mutations and cache conventions.
 
 Compose controllers receive named `drafts`, `attachmentStorage`, `delivery`,
@@ -179,6 +182,12 @@ save reports its previous persisted thread to the production adapter, which mark
 both affected message caches for cleanup on disposal. Undo retains the selected
 inbox and envelope and reconciles the actual sent thread, even after navigation.
 Discard and scheduling also address the persisted thread.
+
+A saved reply to a thread shared at Edit lives in the reader’s inbox. Full
+and parsed thread reads include the reply when its inbox belongs to the
+viewer’s Drafts scope, so reopening the shared thread restores the composer.
+Outlook assigns a provider ID when it syncs a Macro draft. The mailbox draft
+record preserves its identity as a Macro draft after that assignment.
 
 The reply controller still owns draft collection, sending, reset and undo as one
 coordinated workflow: they share editor snapshots, draft identity and pending
@@ -550,7 +559,6 @@ provider MIME or parses ICS.
 When an already-loaded thread's saved invitations change, that thread's calendar
 resolution is revalidated in the background; its first load or a switch between threads
 does not trigger it. Cards are keyed by component, so thread refreshes keep their state.
-Without the calendar UI flag, cards render the saved invitation with no calendar lookup.
 
 Scheduling revisions come only from the thread's own saved components, and are
 reconciled separately for each original occurrence and its series master. A lower-sequence master cancellation still cancels an instance

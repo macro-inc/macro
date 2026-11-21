@@ -11,12 +11,16 @@ inbound = [
   "dep:macro_authorization",
   "dep:model-error-response",
   "dep:utoipa",
+  "hosted_runtimes/schema",
   "entity_access/axum",
   "entity_access/inbound",
 ]
 outbound = [
   "agent_git/client",
   "dep:macro_service_urls",
+  "dep:model-entity",
+  "dep:model_notifications",
+  "dep:notification",
   "dep:sqlx",
   "dep:teams",
   "dep:user_api_key",
@@ -29,11 +33,15 @@ axum = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
 entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
 feature_flags = { path = "../feature_flags" }
+harness_id = { path = "../harness_id" }
 hosted_runtimes = { path = "../hosted_runtimes", default-features = false, features = ["ports"] }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
 macro_service_urls = { path = "../macro_service_urls", optional = true }
 macro_user_id = { path = "../macro_user_id" }
+model-entity = { path = "../model-entity", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
+model_notifications = { path = "../model_notifications", optional = true }
+notification = { path = "../notification", optional = true, default-features = false }
 rootcause = { workspace = true }
 serde = { workspace = true }
 sqlx = { workspace = true, optional = true }
@@ -51,7 +59,9 @@ bot_id = { path = "../bot_id" }
 team_agents = { path = ".", features = ["inbound"] }
 tower = { workspace = true }
 axum = { workspace = true }
+harness_id = { path = "../harness_id", features = ["test-utils"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
+serde_json = { workspace = true }
 sqlx = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 user_api_key = { path = "../user_api_key", features = ["postgres"] }

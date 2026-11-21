@@ -1,8 +1,6 @@
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleItem';
-import { enableMultiInbox } from '@core/constant/featureFlags';
 import { useAddInboxFlow } from '@core/email-link';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
@@ -28,7 +26,6 @@ export function InboxSelector() {
     selectedIds: inboxFilter,
     setSelectedIds: setInboxFilter,
   });
-  const multiInboxFlag = useFeatureFlag(enableMultiInbox);
   const addInbox = useAddInboxFlow();
 
   const label = () => {
@@ -51,17 +48,13 @@ export function InboxSelector() {
       onOnly={picker.selectOnly}
       placeholder={t('viewMenus.searchInboxes')}
       preserveOrder
-      action={
-        multiInboxFlag().enabled
-          ? {
-              get label() {
-                return t('viewMenus.connectAnotherAccount');
-              },
-              icon: () => <PlusIcon class="size-4" />,
-              onSelect: () => addInbox(),
-            }
-          : undefined
-      }
+      action={{
+        get label() {
+          return t('viewMenus.connectAnotherAccount');
+        },
+        icon: () => <PlusIcon class="size-4" />,
+        onSelect: () => addInbox(),
+      }}
     >
       <Combobox.Trigger
         as={Button}
@@ -102,25 +95,22 @@ export function InboxSelector() {
     </Button>
   );
 
-  const showConnectButton = () =>
-    multiInboxFlag().enabled && picker.options().length === 1;
+  const showConnectButton = () => picker.options().length === 1;
 
   return (
-    <Show when={multiInboxFlag().enabled || picker.hasMultiple()}>
-      <CollapsibleHeaderItem
-        id="inbox-selector"
-        priority={3}
-        containerClass="h-full"
-      >
-        {(isCollapsed) => (
-          <Show
-            when={showConnectButton()}
-            fallback={<Selector hideLabel={isCollapsed()} />}
-          >
-            <ConnectAnotherAccount hideLabel={isCollapsed()} />
-          </Show>
-        )}
-      </CollapsibleHeaderItem>
-    </Show>
+    <CollapsibleHeaderItem
+      id="inbox-selector"
+      priority={3}
+      containerClass="h-full"
+    >
+      {(isCollapsed) => (
+        <Show
+          when={showConnectButton()}
+          fallback={<Selector hideLabel={isCollapsed()} />}
+        >
+          <ConnectAnotherAccount hideLabel={isCollapsed()} />
+        </Show>
+      )}
+    </CollapsibleHeaderItem>
   );
 }

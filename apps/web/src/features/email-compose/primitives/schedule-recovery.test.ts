@@ -5,7 +5,10 @@ import type { EmailDraftLifecycleState } from '../context/compose-capabilities';
 import { createComposeContext } from '../tests/capabilities';
 import { mountEmailComposer } from '../tests/composer';
 import { mountReplyComposer } from '../tests/reply';
-import { createEmailSendSchedule } from './email-send-schedule';
+import {
+  createEmailSendSchedule,
+  resetScheduledNoticesForTests,
+} from './email-send-schedule';
 
 const sendTime = '2026-12-01T12:00:00Z';
 const scheduled = (
@@ -21,7 +24,10 @@ const scheduled = (
 });
 
 beforeEach(() => vi.useFakeTimers());
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  resetScheduledNoticesForTests();
+});
 
 it.each(['standalone', 'reply'] as const)(
   '%s preserves an uncertain delivery from its initial draft before refreshing',

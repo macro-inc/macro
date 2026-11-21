@@ -6,10 +6,12 @@ mod test;
 
 use super::*;
 use cache_core::people::name_search::{
-    NameSearch, NameStage, prefix_end, projection as names, reader::NameSearchRead,
+    self as names_search, NameSearch, NameStage, prefix_end, projection as names,
+    reader::{NameSearchRead, ScanStart},
 };
 use cache_core::people::sql::projection as people;
 use sql::{Bounds, Params, Seed};
+use std::collections::BTreeSet;
 
 const PROBE_LIMIT: usize = 129;
 const RANK_BUDGET: usize = 4096;
@@ -100,7 +102,7 @@ fn stage_read(
         let mut p = Params::default();
         let restriction = seed.restriction(&mut p, "seed");
         let scope = sql::scope(&mut p, read, true);
-        let matching = if stage == NameStage::Contains {
+        let matching = if matches!(stage, NameStage::Contains | NameStage::Address) {
             sql::seed_filter(&mut p, read, Some(stage), seed)
         } else {
             "1".into()
@@ -201,20 +203,89 @@ fn visit(
     })
 }
 
+/// Walk one stage in window order and stop once nothing later can enter the
+/// window. Without a list priority that is the default and current-epoch rank
+/// streams. With one, each group walks its lists' scoped rank streams in turn,
+/// then people in no group walk the plain streams. False when a stream exceeded
+/// its work budget; the caller then reads the complete matching stream.
 fn ordered(
     connection: &Arc<Connection>,
     read: &mut NameSearchRead<'_>,
     stage: NameStage,
 ) -> Result<bool, TursoStorageError> {
-    let override_attr = if read.substitutes_dm() {
-        names::COMMAND_RANK
+    let (override_attribute, list_override_attribute) = if read.substitutes_dm() {
+        (names::COMMAND_RANK, names::LIST_COMMAND_RANK)
     } else {
-        names::USER_RANK
+        (names::USER_RANK, names::LIST_USER_RANK)
+    };
+    let groups = read.list_groups().to_vec();
+    let mut scanned = BTreeSet::new();
+    for (group, keys) in groups.iter().enumerate() {
+        let group = u8::try_from(group).map_err(|_| invariant())?;
+        if read.skip_group(stage, group) {
+            return Ok(true);
+        }
+        for key in keys {
+            if !scanned.insert(key.as_str()) {
+                continue;
+            }
+            let prefix = names_search::list_prefix(key);
+            let scan = RankScan {
+                group,
+                default_attribute: names::LIST_DEFAULT_RANK,
+                override_attribute: list_override_attribute,
+                prefix: &prefix,
+                excluded_lists: &[],
+            };
+            if !ordered_scan(connection, read, stage, &scan)? {
+                return Ok(false);
+            }
+        }
+    }
+    let group = read.unlisted_group();
+    if read.request().only_listed || read.skip_group(stage, group) {
+        return Ok(true);
+    }
+    let excluded_lists = scanned.into_iter().collect::<Vec<_>>();
+    let scan = RankScan {
+        group,
+        default_attribute: names::DEFAULT_RANK,
+        override_attribute,
+        prefix: &[],
+        excluded_lists: &excluded_lists,
+    };
+    ordered_scan(connection, read, stage, &scan)
+}
+
+/// One group's rank streams: keys under `prefix` in the default stream, and
+/// under `prefix` then the epoch in the current-epoch stream. Members of
+/// `excluded_lists` belong to an earlier group and are left out.
+struct RankScan<'a> {
+    group: u8,
+    default_attribute: &'static str,
+    override_attribute: &'static str,
+    prefix: &'a [u8],
+    excluded_lists: &'a [&'a str],
+}
+
+fn ordered_scan(
+    connection: &Arc<Connection>,
+    read: &mut NameSearchRead<'_>,
+    stage: NameStage,
+    scan: &RankScan<'_>,
+) -> Result<bool, TursoStorageError> {
+    let after = match read.scan_start(stage, scan.group) {
+        ScanStart::Skip => return Ok(true),
+        ScanStart::First => None,
+        ScanStart::After(key) => Some(key),
     };
     let epoch = read.epoch();
     for (attribute, prefix) in [
-        (names::DEFAULT_RANK, vec![]),
-        (override_attr, epoch.as_bytes().to_vec()),
+        (scan.default_attribute, scan.prefix.to_vec()),
+        (
+            scan.override_attribute,
+            [scan.prefix, epoch.as_bytes().as_slice()].concat(),
+        ),
     ] {
         let mut p = Params::default();
         let attr = p.bind(text(attribute));
@@ -224,8 +295,8 @@ fn ordered(
             let high = p.bind(Value::from_blob(end));
             range.push_str(&format!(" AND rank.value<{high}"));
         }
-        if let Some(after) = read.after_key(stage) {
-            let after = p.bind(Value::from_blob([prefix.as_slice(), &after].concat()));
+        if let Some(after) = &after {
+            let after = p.bind(Value::from_blob([prefix.as_slice(), after].concat()));
             range.push_str(&format!(" AND rank.value>{after}"));
         }
         // Bound the expensive filtered scan by rank position, including all time
@@ -247,9 +318,18 @@ fn ordered(
         }
         let scope = sql::scope(&mut p, read, true);
         let filter = sql::matches(&mut p, read, stage);
-        if attribute == names::DEFAULT_RANK {
+        if attribute == scan.default_attribute {
             let epoch_param = p.bind(Value::from_blob(epoch.as_bytes().to_vec()));
             range.push_str(&format!(" AND NOT EXISTS (SELECT 1 FROM exact_facts current INDEXED BY sqlite_autoindex_exact_facts_1 WHERE current.document_id=d.id AND current.attribute='{}' AND current.value={epoch_param})",names::CONTEXT_EPOCH));
+        }
+        if !scan.excluded_lists.is_empty() {
+            let keys = scan
+                .excluded_lists
+                .iter()
+                .map(|key| p.bind(Value::from_blob(key.as_bytes().to_vec())))
+                .collect::<Vec<_>>()
+                .join(",");
+            range.push_str(&format!(" AND NOT EXISTS (SELECT 1 FROM exact_facts listed INDEXED BY sqlite_autoindex_exact_facts_1 WHERE listed.document_id=d.id AND listed.attribute='{}' AND listed.value IN ({keys}))", names::LIST));
         }
         let query = format!(
             "SELECT r.__typename,r.id,r.value,rank.value FROM exact_facts rank INDEXED BY exact_facts_lookup_idx CROSS JOIN index_documents d ON d.id=rank.document_id {} WHERE {range} AND {scope} AND {filter} ORDER BY rank.value",
@@ -272,7 +352,7 @@ fn ordered(
             let record = decode_record(blob).map_err(|_| invariant())?;
             read.push(&key, &record, Some(stage));
             let rank = rank.get(prefix.len()..).ok_or_else(invariant)?;
-            stopped = read.can_stop_at(stage, rank);
+            stopped = read.can_stop_at(stage, scan.group, rank);
             Ok(!stopped)
         })?;
         if !complete && !stopped {

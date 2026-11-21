@@ -1,4 +1,4 @@
-//! Fresh JavaScript processes with run-only credentials and allowlisted API egress.
+//! Fresh Deno processes with run-only credentials and allowlisted API egress.
 
 use crate::domain::*;
 use async_trait::async_trait;
@@ -236,13 +236,8 @@ impl DenoRunner {
                 .await
                 .map_err(internal)?;
         }
-        // An unattended program is TypeScript; Deno strips its types on load.
-        let program = if job.environment.unattended.is_some() {
-            "main.ts"
-        } else {
-            "main.mjs"
-        };
-        tokio::fs::write(root.join(program), &job.request.source)
+        // Programs are TypeScript; Deno strips their types on load.
+        tokio::fs::write(root.join("main.ts"), &job.request.source)
             .await
             .map_err(internal)?;
         let bootstrap = root.join("bootstrap.mjs");
@@ -340,15 +335,22 @@ impl DenoRunner {
             .arg(&bootstrap)
             .spawn()
             .map_err(internal)?;
+        let spawned = tokio::time::Instant::now();
         if let Err(error) = limit(&child, &job.limits) {
             reap(&mut child).await;
             return Err(error);
         }
+        let pid = child.id();
         let stdin = child.stdin.take().expect("piped child stdin");
         let stdout = child.stdout.take().expect("piped child stdout");
         let stderr = child.stderr.take().expect("piped child stderr");
+        // Kept outside the run so a run the deadline, a cancellation or a
+        // protocol error cuts short still records how its child ended.
+        let mut usage = exit::ProcessUsage::default();
+        let mut answered = false;
+        let mut exited_by_itself = false;
         let execution = async {
-            let candidate = bridge(
+            let bridged = bridge(
                 &job.environment,
                 forwarder,
                 ChildPipes {
@@ -359,10 +361,25 @@ impl DenoRunner {
                 events,
                 &job.limits,
                 job.deadline,
-            )
-            .await?;
-            // Both streams have closed, so the process is exiting.
+            );
+            tokio::pin!(bridged);
+            let mut samples = tokio::time::interval(exit::SAMPLE_INTERVAL);
+            let candidate = loop {
+                tokio::select! {
+                    candidate = &mut bridged => break candidate?,
+                    _ = samples.tick() => if let Some(pid) = pid {
+                        usage.sample(pid);
+                    },
+                }
+            };
+            answered = candidate.is_some();
+            // Both streams have closed, so the process is exiting; its CPU
+            // time stays readable until it is reaped.
+            if let Some(pid) = pid {
+                usage.sample(pid);
+            }
             let status = child.wait().await.map_err(internal)?;
+            exited_by_itself = true;
             if std::os::unix::process::ExitStatusExt::signal(&status)
                 == Some(rustix::process::Signal::XCPU.as_raw())
             {
@@ -388,7 +405,22 @@ impl DenoRunner {
             _ = sleep_until(job.deadline) => Ok(Outcome::TimedOut),
             result = execution => result,
         };
-        reap(&mut child).await;
+        if !exited_by_itself && let Some(pid) = pid {
+            usage.sample(pid);
+        }
+        // A run that failed before waiting (an output budget overrun, say)
+        // may still have a child that already exited on its own.
+        let killed = !exited_by_itself && !matches!(child.try_wait(), Ok(Some(_)));
+        if let Some(status) = reap(&mut child).await {
+            exit::ProcessExit {
+                status,
+                wall: spawned.elapsed(),
+                usage,
+                answered,
+                killed,
+            }
+            .record(&tracing::Span::current());
+        }
         if let Some(egress) = egress {
             egress.stop().await;
         }
@@ -459,9 +491,10 @@ fn limit(child: &Child, limits: &Limits) -> Result<(), ExecutionFailure> {
 /// Niceness of background programs: below the host, above idle work.
 const BACKGROUND_NICENESS: i32 = 10;
 
-async fn reap(child: &mut Child) {
+/// Kill `child` if it still runs and wait for it; its exit status, once known.
+async fn reap(child: &mut Child) -> Option<std::process::ExitStatus> {
     let _ = child.start_kill();
-    let _ = child.wait().await;
+    child.wait().await.ok()
 }
 
 fn internal(_error: impl std::fmt::Display) -> ExecutionFailure {
@@ -657,6 +690,7 @@ fn bounded_line(line: String, remaining: &mut usize) -> Result<String, Execution
 
 pub mod check;
 mod egress;
+mod exit;
 
 #[cfg(test)]
 mod test;

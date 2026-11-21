@@ -58,7 +58,7 @@ export function EmailComposeToolbar(props: {
       description: () => t('commands.createEventFromEmail'),
       keyDownHandler: createEvent,
       hotkeyToken: TOKENS.email.createEvent,
-      condition: () => !!ctx.calendarEvents?.enabled() && !ctx.disabled(),
+      condition: () => !!ctx.calendarEvents && !ctx.disabled(),
     });
   }
 
@@ -136,7 +136,7 @@ export function EmailComposeToolbar(props: {
           >
             <TextAa class="size-4 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
-          <Show when={ctx.calendarEvents?.enabled()}>
+          <Show when={ctx.calendarEvents}>
             <CreateEventButton
               suggested={proposesMeeting(writtenText())}
               shortcut={hotkeyScope ? 'b' : undefined}

@@ -1,7 +1,6 @@
 import type { ComposeTaskSuccess } from '@app/features/task-composer/core/types';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { toast } from '@core/component/Toast/Toast';
-import { enableDatabases, isFeatureEnabled } from '@core/constant/featureFlags';
 import { trackMention } from '@core/signal/mention';
 import CheckSquare from '@icon/system/regular/check-square.svg';
 import CodeBlock from '@icon/system/regular/code-block.svg';
@@ -367,7 +366,6 @@ export const ACTIONS: Action[] = [
     icon: LightningIcon,
     dependencies: [DatabaseQueryNode],
     action: (editor) => {
-      if (!isFeatureEnabled(enableDatabases)) return;
       queueMicrotask(() =>
         editor.update(() => {
           $insertNodes([
@@ -389,7 +387,6 @@ export const ACTIONS: Action[] = [
     icon: TableIcon,
     dependencies: [AwaitNode, DocumentMentionNode, DocumentCardNode],
     action: (editor, context) => {
-      if (!isFeatureEnabled(enableDatabases)) return;
       queueMicrotask(async () => {
         let placeholderKey: NodeKey | undefined;
         try {

@@ -162,11 +162,6 @@ entry = "gateway refresh_email:PhotoSynced"
 provider = "gmail"
 reason = "not reached yet: on Gmail it follows the photo upload of sfs-uploader:SFSUploaderMessage, which a stack cannot complete"
 
-[[entry_point]]
-entry = "http PATCH /email/messages/labels"
-provider = "outlook"
-reason = "not reached yet: known bug outlook-message-labels-not-written, the route queues its change for the Gmail label worker whatever the inbox, so on Outlook nothing reaches the provider; state_labels outlook_a_label_on_one_message_reaches_outlook is kept for it and takes this waiver's place with the fix"
-
 # ---------------------------------------------------- sign-in, full stack
 
 [[deferred]]
@@ -346,8 +341,3 @@ owner = "calendar"
 [[intermittent_bug]]
 scenario = "state_writes outlook_a_thread_can_be_archived_while_a_reply_is_sending"
 reason = "state-update-races-send: the change answers 500 about one run in twenty, when the reply's row changes between reading the messages to move and queueing the move"
-
-# Dormant policy history: no API initializes a consent generation yet.
-[[deferred]]
-entry = "queue backfill:PopulateCrmPolicy"
-reason = "Deferred to the member-rule API phase: no deployed caller initializes a consent incarnation or activates selected rules. Replace this deferral with a full-stack generation/retry scenario before enabling activation; private repository and worker tests cover the dormant contract."

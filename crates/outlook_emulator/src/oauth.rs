@@ -60,7 +60,7 @@ fn refused(state: &State, error: &str, code: u32, description: &str) -> Response
 
 /// An injected fault for a token request, as a response.
 fn fault(state: &mut State, mailbox: Option<&str>) -> Option<Response> {
-    let fault = state.take_fault(mailbox, Route::OauthToken)?;
+    let fault = state.take_fault(mailbox, Route::OauthToken, None, false)?;
     let error = fault.error?.graph_error(fault.retry_after_seconds);
     Some(response(Err(error), state.now()))
 }

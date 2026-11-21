@@ -3,8 +3,16 @@ import type {
   SearchCachePage,
   SearchDocumentWire,
 } from '@graphql-cache/index';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
+import { Telemetry } from '@macro-inc/observability';
+import { SpanStatusCode, trace } from '@opentelemetry/api';
+import {
+  BasicTracerProvider,
+  InMemorySpanExporter,
+  SimpleSpanProcessor,
+} from '@opentelemetry/sdk-trace-base';
 import { createRoot, createSignal } from 'solid-js';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   createProjectedList,
   MAX_BROWSE_PAGES_PER_LOAD,
@@ -13,12 +21,38 @@ import {
 } from './projected-list';
 import { type Bucket, exclude } from './types';
 
+const exporter = new InMemorySpanExporter();
+trace.setGlobalTracerProvider(
+  new BasicTracerProvider({
+    spanProcessors: [new SimpleSpanProcessor(exporter)],
+  })
+);
+beforeAll(() =>
+  Telemetry.init({
+    serviceName: 'test',
+    environment: 'test',
+    enabled: async () => true,
+  })
+);
+
 const cleanups: (() => void)[] = [];
 afterEach(() => {
   for (const cleanup of cleanups.splice(0)) cleanup();
   vi.restoreAllMocks();
   vi.useRealTimers();
+  exporter.reset();
 });
+
+function searchSpanAttributes() {
+  return exporter
+    .getFinishedSpans()
+    .filter((span) => span.name === 'quick_access.search')
+    .map((span) => ({
+      status: span.status.code,
+      kind: span.attributes['search.failure_kind'],
+      phase: span.attributes['search.failure_phase'],
+    }));
+}
 
 function root<T>(fn: () => T): T {
   return createRoot((dispose) => {
@@ -58,6 +92,77 @@ function deferred<T>() {
 }
 
 describe('Quick Access local projection', () => {
+  it('retains visible results while refreshing after a same-access baseline correction', async () => {
+    const refresh = Promise.withResolvers<SearchCachePage>();
+    const started = Promise.withResolvers<void>();
+    const [revision, setRevision] = createSignal(0);
+    const search = vi
+      .fn()
+      .mockResolvedValueOnce(page(['kept']))
+      .mockImplementationOnce(() => {
+        started.resolve();
+        return refresh.promise;
+      });
+    const list = root(() =>
+      createProjectedList({
+        host: { search },
+        buckets: ['note'],
+        revision,
+        materialize,
+      })
+    );
+    await vi.waitFor(() =>
+      expect(list.items()).toEqual([{ id: 'GraphqlSoupDocument:kept' }])
+    );
+    cacheSessionGeneration.initialize('corrected-owner-generation');
+    setRevision(1);
+    await started.promise;
+    expect(list.items()).toEqual([{ id: 'GraphqlSoupDocument:kept' }]);
+    refresh.resolve(page(['updated']));
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    expect(list.items()).toEqual([{ id: 'GraphqlSoupDocument:updated' }]);
+  });
+
+  it('drops email-only results and a delayed materialization when access is revoked', async () => {
+    const delayed = deferred<{ id: string }[]>();
+    const [revision, setRevision] = createSignal(0);
+    const project = vi
+      .fn()
+      .mockResolvedValueOnce([{ id: 'old mail' }])
+      .mockImplementationOnce(() => delayed.promise)
+      .mockResolvedValue([]);
+    const list = root(() =>
+      createProjectedList({
+        host: {
+          search: async () => ({
+            documents: [document('mail', 'email')],
+            nextCursor: null,
+          }),
+        },
+        buckets: ['email'],
+        revision,
+        materialize: project,
+      })
+    );
+    await vi.waitFor(() => expect(list.items()).toEqual([{ id: 'old mail' }]));
+    setRevision(1);
+    await vi.waitFor(() => expect(project).toHaveBeenCalledTimes(2));
+    const retirement = deferred<void>();
+    const transition = cacheSessionGeneration.transition(
+      () => retirement.promise
+    );
+    try {
+      await vi.waitFor(() => expect(list.items()).toEqual([]));
+      delayed.resolve([{ id: 'stale delayed mail' }]);
+      await Promise.resolve();
+      expect(list.items()).toEqual([]);
+    } finally {
+      retirement.resolve();
+      await transition;
+    }
+    await vi.waitFor(() => expect(project).toHaveBeenCalledTimes(3));
+    expect(list.items()).toEqual([]);
+  });
   it('ranks the row reads of a typed search with it, and leaves browsing reads alone', async () => {
     const readRecordsByKeys = vi.fn(async () => ({
       revision: 0 as never,
@@ -1089,5 +1194,44 @@ describe('Quick Access local projection', () => {
     expect(list.isLoading()).toBe(false);
     expect(list.hasMore()).toBe(false);
     cleanups.splice(0).forEach((cleanup) => cleanup());
+  });
+
+  it('records why and where a search failed on its span, without the message', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const [revision, setRevision] = createSignal(0);
+    const search = vi
+      .fn<(args: SearchCacheArgs) => Promise<SearchCachePage>>()
+      .mockRejectedValueOnce(new Error('cache worker timeout: search'))
+      .mockResolvedValue(page(['seamus']));
+    const refused = Object.assign(
+      new Error('cache reads unavailable after owner handoff timeout'),
+      { errorCode: 'owner-handoff-blocked' }
+    );
+    const list = root(() =>
+      createProjectedList({
+        host: { search },
+        buckets: ['note'],
+        revision,
+        materialize: vi.fn().mockRejectedValueOnce(refused),
+      })
+    );
+    await vi.waitFor(() => expect(searchSpanAttributes()).toHaveLength(1));
+    setRevision(1);
+    await vi.waitFor(() => expect(searchSpanAttributes()).toHaveLength(2));
+
+    expect(searchSpanAttributes()).toEqual([
+      { status: SpanStatusCode.ERROR, kind: 'timeout', phase: 'search_page' },
+      {
+        status: SpanStatusCode.ERROR,
+        kind: 'owner-handoff-blocked',
+        phase: 'materialize',
+      },
+    ]);
+    expect(list.error()).toBe(refused);
+    expect(
+      exporter
+        .getFinishedSpans()
+        .find((span) => span.name === 'quick_access.search')?.status.message
+    ).toBe('Quick Access cache search failed');
   });
 });

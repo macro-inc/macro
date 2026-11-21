@@ -7,7 +7,6 @@ import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
  * the share dialog agree with what the service answered.
  */
 
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
@@ -17,7 +16,6 @@ import {
 import { useBlockId, useIsNestedBlock } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { useShareModal } from '@core/component/TopBar/shareModal';
-import { enableForms } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -237,16 +235,13 @@ function FormCardContent() {
 }
 
 export default function FormBlock(props: { view?: unknown }) {
-  const flag = useFeatureFlag(enableForms);
   const nested = useIsNestedBlock();
-  // The flag gates authoring only: with it off, a form opens on its respond
-  // view, and the service decides who may answer.
   return (
     <Show when={!nested} fallback={<FormCardContent />}>
       <DocumentBlockContainer>
         <div class="size-full">
           <FormBlockContent
-            respondOnly={props.view === 'respond' || !flag().enabled}
+            respondOnly={props.view === 'respond'}
             initialTab={
               props.view === 'responses' || props.view === 'share'
                 ? props.view

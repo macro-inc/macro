@@ -262,6 +262,7 @@ test('requests access from Teammates’ runtimes', async ({ page }) => {
   await page.goto('/');
   const row = page.locator('[data-teammate-runtime="Build box"]');
   await expect(row).toContainText('Your access: None');
+  await expect(row.getByRole('button', { name: 'Options' })).toHaveCount(0);
 
   await press(page, row.getByRole('button', { name: 'Request access' }));
 

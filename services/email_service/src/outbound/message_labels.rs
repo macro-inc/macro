@@ -5,7 +5,13 @@ use email::domain::message_labels::{
     MessageLabelDefinition, MessageLabelInbox, MessageLabelRepository, MessageLabelTarget,
     StageFailure, StagedLabelWrite,
 };
+use email::domain::models::UserProvider;
+use email::domain::models::mailbox_action::{
+    MailboxAction, MailboxActionMessage, MailboxActionTarget,
+};
+use email::domain::ports::EmailRepo;
 use email::outbound::label_state_pg::PgLabelState;
+use macro_user_id::user_id::MacroUserIdStr;
 use models_email::service;
 use uuid::Uuid;
 
@@ -14,16 +20,28 @@ pub mod gmail_ops;
 #[cfg(test)]
 mod test;
 
-pub struct PgMessageLabels(pub sqlx::PgPool);
+/// Message-label persistence on the pool, with the inbox's mailbox commands
+/// written through the email repository composed at startup.
+pub struct PgMessageLabels<M>(pub sqlx::PgPool, pub M);
 
 #[derive(Debug, thiserror::Error)]
 pub enum MessageLabelPersistenceError {
     #[error(transparent)]
     Database(#[from] anyhow::Error),
+    /// The inbox stayed locked past the lock timeout; the change can be retried.
+    #[error(transparent)]
+    Contended(email::domain::models::EmailErr),
 }
 
-impl MessageLabelRepository for PgMessageLabels {
+impl<M> MessageLabelRepository for PgMessageLabels<M>
+where
+    M: EmailRepo<Err = sqlx::Error>,
+{
     type Err = MessageLabelPersistenceError;
+
+    fn is_contended(&self, error: &Self::Err) -> bool {
+        matches!(error, MessageLabelPersistenceError::Contended(_))
+    }
 
     async fn inbox_for_message(
         &self,
@@ -42,6 +60,10 @@ impl MessageLabelRepository for PgMessageLabels {
         Ok(link.map(|link| MessageLabelInbox {
             id: link.id,
             macro_id: link.macro_id,
+            provider: match link.provider {
+                service::link::UserProvider::Gmail => UserProvider::Gmail,
+                service::link::UserProvider::Outlook => UserProvider::Outlook,
+            },
         }))
     }
 
@@ -226,9 +248,38 @@ impl MessageLabelRepository for PgMessageLabels {
             })
             .map_err(Into::into)
     }
+
+    async fn mailbox_action_messages(
+        &self,
+        link_id: Uuid,
+        thread_id: Uuid,
+    ) -> Result<Vec<MailboxActionMessage>, Self::Err> {
+        self.1
+            .mailbox_action_messages(link_id, thread_id)
+            .await
+            .map_err(|e| anyhow::Error::from(e).into())
+    }
+
+    async fn enqueue_mailbox_action(
+        &self,
+        link_id: Uuid,
+        actor: MacroUserIdStr<'static>,
+        action: &MailboxAction,
+        targets: &[MailboxActionTarget],
+    ) -> Result<Uuid, Self::Err> {
+        self.1
+            .enqueue_mailbox_action(link_id, actor, action, targets)
+            .await
+            .map_err(|error| match error {
+                email::domain::models::EmailErr::Contended => {
+                    MessageLabelPersistenceError::Contended(error)
+                }
+                error => anyhow::Error::from(error).into(),
+            })
+    }
 }
 
-impl PgMessageLabels {
+impl<M> PgMessageLabels<M> {
     /// Restore an unqueued write while holding the same thread label-write locks.
     async fn revert_unsent_write(
         &self,

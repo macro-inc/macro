@@ -1,6 +1,7 @@
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
 use super::*;
+use crate::domain::models::{AgentName, PurchaseKey};
 
 const TEAM: Uuid = Uuid::from_u128(0x0193_a1b2_0000_7000_8000_0000_0000_00aa);
 
@@ -42,7 +43,7 @@ fn sam() -> NewAgentAccount {
         created_by: MacroUserIdStr::parse_from_str("macro|admin@example.com")
             .unwrap()
             .into_owned(),
-        name: "Sam Rivera".to_owned(),
+        name: AgentName::try_new("Sam Rivera").unwrap(),
         avatar_url: None,
         persona_seed: PersonaSeed {
             creator_id: Some(
@@ -55,7 +56,29 @@ fn sam() -> NewAgentAccount {
             personality: "Dry, direct, kind.".to_owned(),
             voice: None,
         },
+        purchase_key: PurchaseKey::try_new("invite-1".to_owned()).unwrap(),
     }
+}
+
+/// The same invite again, as a retry builds it: a fresh account id, the
+/// same purchase key.
+fn sam_again() -> NewAgentAccount {
+    NewAgentAccount {
+        user_id: MacroUserIdStr::parse_from_str("macro|sam-rivera-def456@agents.macro.invalid")
+            .unwrap()
+            .into_owned(),
+        email: "sam-rivera-def456@agents.macro.invalid".to_owned(),
+        ..sam()
+    }
+}
+
+async fn accounts(pool: &PgPool) -> i64 {
+    sqlx::query_scalar!(
+        r#"SELECT count(*) AS "count!" FROM "User" WHERE email LIKE '%@agents.macro.invalid'"#
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -64,7 +87,10 @@ async fn an_agent_account_round_trips_and_is_marked_as_an_agent(pool: PgPool) {
     let repo = PgTeamAgentsRepo::new(pool.clone());
     let account = sam();
 
-    repo.create_account(&account).await.unwrap();
+    assert_eq!(
+        repo.create_account(&account).await.unwrap(),
+        CreatedAccount::Created
+    );
 
     let stored = repo.get(&account.user_id).await.unwrap().unwrap();
     assert_eq!(stored.team_id, TEAM);
@@ -82,6 +108,85 @@ async fn an_agent_account_round_trips_and_is_marked_as_an_agent(pool: PgPool) {
     .await
     .unwrap();
     assert!(is_agent);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_repeated_purchase_key_returns_the_first_agent_and_creates_no_account(pool: PgPool) {
+    insert_team(&pool).await;
+    let repo = PgTeamAgentsRepo::new(pool.clone());
+    repo.create_account(&sam()).await.unwrap();
+    let first = repo.get(&sam().user_id).await.unwrap().unwrap();
+
+    let repeated = repo.create_account(&sam_again()).await.unwrap();
+
+    assert_eq!(repeated, CreatedAccount::AlreadyInvited(Box::new(first)));
+    assert_eq!(accounts(&pool).await, 1);
+    assert_eq!(repo.get(&sam_again().user_id).await.unwrap(), None);
+    // Another invite, with its own key, is another agent.
+    let other = NewAgentAccount {
+        purchase_key: PurchaseKey::try_new("invite-2".to_owned()).unwrap(),
+        ..sam_again()
+    };
+    assert_eq!(
+        repo.create_account(&other).await.unwrap(),
+        CreatedAccount::Created
+    );
+    assert_eq!(accounts(&pool).await, 2);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_double_click_creates_one_account(pool: PgPool) {
+    insert_team(&pool).await;
+    let repo = PgTeamAgentsRepo::new(pool.clone());
+    let (first, second) = (sam(), sam_again());
+
+    let (first, second) = tokio::join!(repo.create_account(&first), repo.create_account(&second));
+
+    let mut outcomes = [first.unwrap(), second.unwrap()];
+    outcomes.sort_by_key(|outcome| matches!(outcome, CreatedAccount::AlreadyInvited(_)));
+    assert_eq!(outcomes[0], CreatedAccount::Created);
+    assert!(matches!(outcomes[1], CreatedAccount::AlreadyInvited(_)));
+    assert_eq!(accounts(&pool).await, 1);
+    assert_eq!(repo.list_for_team(TEAM).await.unwrap().len(), 1);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_first_online_report_is_stamped_and_kept(pool: PgPool) {
+    insert_team(&pool).await;
+    let repo = PgTeamAgentsRepo::new(pool);
+    let account = sam();
+    repo.create_account(&account).await.unwrap();
+    assert_eq!(
+        repo.get(&account.user_id)
+            .await
+            .unwrap()
+            .unwrap()
+            .first_online_at,
+        None
+    );
+
+    repo.mark_online(&account.user_id).await.unwrap();
+    let first = repo
+        .get(&account.user_id)
+        .await
+        .unwrap()
+        .unwrap()
+        .first_online_at
+        .expect("the first report is stamped");
+    repo.mark_online(&account.user_id).await.unwrap();
+
+    assert_eq!(
+        repo.get(&account.user_id)
+            .await
+            .unwrap()
+            .unwrap()
+            .first_online_at,
+        Some(first)
+    );
+    assert_eq!(
+        repo.list_for_team(TEAM).await.unwrap()[0].first_online_at,
+        Some(first)
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

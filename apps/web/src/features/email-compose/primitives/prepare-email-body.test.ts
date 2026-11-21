@@ -5,7 +5,7 @@ import {
   staticFileReferenceEndpoint,
 } from '@core/constant/servers';
 import { $generateNodesFromDOM } from '@lexical/html';
-import { DocumentMentionNode } from '@macro-inc/lexical-core';
+import { DocumentMentionNode, HtmlRenderNode } from '@macro-inc/lexical-core';
 import { $getRoot, $nodesOfType, createEditor } from 'lexical';
 import { describe, expect, it } from 'vitest';
 import { message } from '../../email-message/tests/messages';
@@ -166,6 +166,33 @@ describe('prepareEmailBodyFromHtml', () => {
       'cid:missing',
     ]);
   });
+  it.each([
+    {
+      name: 'a signature table',
+      html: '<p>See you Friday</p><div class="gmail_signature"><table width="470"><tr><td><b>Alex Example</b></td><td><a href="https://example.com">example.com</a></td></tr></table></div>',
+      adaptColors: true,
+    },
+    {
+      name: 'a layout table',
+      html: '<table width="600"><tr><td>Newsletter</td></tr></table>',
+      adaptColors: false,
+    },
+  ])(
+    "sets the quote's adaptColors to $adaptColors for $name",
+    ({ html, adaptColors }) => {
+      const editor = createEmailEditor('My reply');
+      registerToggleAppendedThread(editor);
+      editor.dispatchCommand(TOGGLE_APPEND_EMAIL_THREAD_COMMAND, {
+        replyingTo: { ...replyingTo, body_html_sanitized: html },
+        replyType: 'reply',
+        visible: true,
+      });
+      const quoted = editor
+        .read(() => $nodesOfType(HtmlRenderNode))
+        .map((node) => node.exportComponentProps().adaptColors);
+      expect(quoted).toEqual([adaptColors]);
+    }
+  );
   it.each(['reply', 'forward'] as const)(
     'drops Macro read-receipt pixels from a quoted %s',
     (replyType) => {

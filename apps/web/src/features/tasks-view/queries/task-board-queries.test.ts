@@ -55,7 +55,6 @@ function setup(
       grouping: () => 'status',
       searching: () => false,
       userId: () => 'viewer',
-      projectsEnabled: () => true,
       ...options,
     });
   });

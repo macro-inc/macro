@@ -149,6 +149,8 @@ a separate icon registry. Icons describe the action, not its containing view.
 | Open in new tab / Open externally | `regular/arrow-square-out.svg` |
 | Open in current split | `regular/arrow-right.svg` |
 | Open fullscreen | `regular/arrows-out.svg` |
+| Set status | `regular/task-in-progress.svg` (monochrome) |
+| Set priority | `../wide-priority-high.svg` (monochrome) |
 | Mark done | `regular/check-circle.svg` |
 | Mark not done | `regular/arrow-counter-clockwise.svg` |
 | Mark read | `regular/envelope-open.svg` |
@@ -164,6 +166,10 @@ Notification mute icons describe the offered action: use the slashed bell for
 Mute and the unslashed bell for Unmute. Keep mute-duration choices text-only.
 Copy actions replace their action icon with the shared plain green check after
 success; this feedback does not change the resting icon.
+
+Use the fixed In Progress and High glyphs for Set status and Set priority menu
+triggers in the inherited menu text color; keep selected values inside the
+pickers on their existing status and priority treatments.
 
 ## Optical review principles
 

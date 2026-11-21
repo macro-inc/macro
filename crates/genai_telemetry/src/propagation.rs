@@ -65,6 +65,37 @@ pub fn set_parent(span: &tracing::Span, meta: Option<&Map<String, Value>>) {
     }
 }
 
+/// The keys SEP-414 reserves in an MCP request's `_meta` for W3C context.
+const MCP_TRACE_KEYS: [&str; 2] = ["traceparent", "tracestate"];
+
+/// Put `span`'s context in an MCP request's `_meta` under the keys SEP-414
+/// reserves (`traceparent`, `tracestate`), keeping every other key. A
+/// disabled span clears stale context.
+pub fn inject_mcp(span: &tracing::Span, meta: &mut Map<String, Value>) {
+    for key in MCP_TRACE_KEYS {
+        meta.remove(key);
+    }
+    let context = span.context();
+    if !context.span().span_context().is_valid() {
+        return;
+    }
+    opentelemetry::global::get_text_map_propagator(|propagator| {
+        propagator.inject_context(&context, &mut CarrierMut(meta));
+    });
+}
+
+/// Parent an MCP server's handling of a request under the caller that sent
+/// it, from the request's `_meta` (SEP-414). Missing or malformed context is
+/// ignored.
+pub fn set_parent_from_mcp(span: &tracing::Span, meta: &Map<String, Value>) {
+    let context = opentelemetry::global::get_text_map_propagator(|propagator| {
+        propagator.extract_with_context(&opentelemetry::Context::new(), &Carrier(meta))
+    });
+    if context.span().span_context().is_valid() {
+        let _ = span.set_parent(context);
+    }
+}
+
 /// Link asynchronous delivery to a producing span without replacing the
 /// delivery worker's parent. Missing or invalid contexts are ignored.
 pub fn link(span: &tracing::Span, meta: Option<&Map<String, Value>>) {

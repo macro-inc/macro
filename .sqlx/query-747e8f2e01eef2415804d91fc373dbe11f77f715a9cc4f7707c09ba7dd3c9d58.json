@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO crm_email_rule_addresses(team_id,user_id,revision,address) SELECT $1,$2,$3,unnest($4::text[])",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "747e8f2e01eef2415804d91fc373dbe11f77f715a9cc4f7707c09ba7dd3c9d58"
+}

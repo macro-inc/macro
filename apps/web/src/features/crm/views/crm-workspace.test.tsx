@@ -5,20 +5,34 @@ import {
   screen,
   within,
 } from '@solidjs/testing-library';
-import { createSignal, For, type JSX, type ParentProps, Show } from 'solid-js';
+import {
+  createSignal,
+  For,
+  type JSX,
+  onCleanup,
+  type ParentProps,
+  Show,
+} from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createSettingsPage } from '../primitives/settings-page';
 import { CrmWorkspaceView } from './crm-workspace';
 
 const fixture = vi.hoisted(() => ({
   workspace: undefined as unknown,
-  pipelinesEnabled: true,
+  canAccess: (): boolean => true,
+  accessState: undefined as
+    | (() => 'pending' | 'allowed' | 'denied' | 'error')
+    | undefined,
   listsEnabled: true,
   touch: true,
   width: 600,
   openWithSplit: vi.fn(),
   activityFlag: () => ({ enabled: true, loading: false }),
   root: vi.fn(),
+  saveList: vi.fn(),
+  saved: undefined as Promise<void> | undefined,
+  recordMounted: vi.fn(),
+  recordDisposed: vi.fn(),
 }));
 
 vi.mock('@app/lib/analytics/posthog', () => ({
@@ -91,6 +105,7 @@ vi.mock('@entity', () => ({
 vi.mock('@ui', async () => ({
   ...(await import('../../../components/ui/utils/classname')),
   Layer: (props: ParentProps) => props.children,
+  EmptyStatePanel: (props: { title: string }) => <p>{props.title}</p>,
   Tooltip: (props: ParentProps) => props.children,
   Button: (
     props: JSX.ButtonHTMLAttributes<HTMLButtonElement> & { label?: string }
@@ -143,22 +158,49 @@ vi.mock(
   })
 );
 vi.mock('../components/company-list-dialog', () => ({
-  CrmListDialog: () => null,
+  CrmListDialog: (props: {
+    onSave(name: string, companyIds: string[]): Promise<void>;
+  }) => (
+    <button
+      type="button"
+      onClick={() => {
+        fixture.saved = props.onSave('Saved list', ['company']);
+      }}
+    >
+      Save list
+    </button>
+  ),
 }));
 vi.mock('../components/crm-sidebar', () => ({
   CrmSidebar: (props: {
     pipelines?: JSX.Element;
     onNavigate: (id: string) => void;
     onSettings: () => void;
+    canAccess: boolean;
+    canCreateList: boolean;
+    onNewList: () => void;
+    onImport: () => void;
   }) => (
     <nav aria-label="CRM sidebar">
-      <button type="button" onClick={() => props.onNavigate('active')}>
-        Companies
-      </button>
-      <button type="button" onClick={() => props.onNavigate('people')}>
-        People
-      </button>
+      <Show when={props.canAccess}>
+        <button type="button" onClick={() => props.onNavigate('active')}>
+          Companies
+        </button>
+        <button type="button" onClick={() => props.onNavigate('people')}>
+          People
+        </button>
+        <button type="button" onClick={props.onNewList}>
+          New list
+        </button>
+      </Show>
       {props.pipelines}
+      <button
+        type="button"
+        disabled={!props.canCreateList}
+        onClick={props.onImport}
+      >
+        Import
+      </button>
       <button type="button" onClick={props.onSettings}>
         CRM settings
       </button>
@@ -190,16 +232,22 @@ vi.mock('./record-detail', () => ({
   CrmRecordDetail: (props: {
     viewName: string;
     records: { type: string; id: string }[];
-  }) => (
-    <div>
-      {props.viewName} record{' '}
-      {props.records.map((record) => `${record.type}:${record.id}`).join(' ')}
-    </div>
-  ),
+  }) => {
+    fixture.recordMounted();
+    onCleanup(fixture.recordDisposed);
+    return (
+      <div>
+        {props.viewName} record{' '}
+        {props.records.map((record) => `${record.type}:${record.id}`).join(' ')}
+      </div>
+    );
+  },
 }));
 vi.mock('./crm-settings', () => ({ Crm: () => <div>Stage settings</div> }));
 vi.mock('./export-companies', () => ({ CrmExport: () => null }));
-vi.mock('./import-companies', () => ({ CrmImport: () => null }));
+vi.mock('./import-companies', () => ({
+  CrmImport: () => <div>Import dialog</div>,
+}));
 vi.mock('./email-privacy', () => ({ CrmEmailOptInBanner: () => null }));
 vi.mock('./pipeline', () => ({
   PipelineView: (props: {
@@ -228,7 +276,10 @@ vi.mock('../context/workspace-context', () => ({
 }));
 vi.mock('../context/crm-context', () => ({
   useCrmContext: () => ({
-    pipelinesEnabled: () => () => fixture.pipelinesEnabled,
+    canAccess: () => fixture.canAccess(),
+    accessState: () =>
+      fixture.accessState?.() ?? (fixture.canAccess() ? 'allowed' : 'denied'),
+    retryAccess: async () => {},
     listsEnabled: () => () => fixture.listsEnabled,
     createNavigation: () => ({ openWithSplit: fixture.openWithSplit }),
     createPipelines: () => ({
@@ -252,6 +303,11 @@ vi.mock('./use-crm', () => ({
       },
     ],
     query: { isLoading: false, isError: false },
+    save: { mutateAsync: fixture.saveList },
+  }),
+  useQuickAccessCrmCompaniesQuery: () => ({
+    companies: () => [],
+    query: { isLoading: false },
   }),
 }));
 vi.mock('./apply-view', () => ({
@@ -264,13 +320,18 @@ vi.mock('./apply-view', () => ({
 }));
 
 afterEach(() => {
+  fixture.canAccess = () => true;
+  fixture.accessState = undefined;
   cleanup();
-  fixture.pipelinesEnabled = true;
   fixture.listsEnabled = true;
   fixture.touch = true;
   fixture.width = 600;
   fixture.openWithSplit.mockReset();
   fixture.root.mockReset();
+  fixture.saveList.mockReset();
+  fixture.saved = undefined;
+  fixture.recordMounted.mockReset();
+  fixture.recordDisposed.mockReset();
   vi.unstubAllGlobals();
 });
 
@@ -294,19 +355,27 @@ function setup(
   const [records, setRecords] = createSignal<
     readonly { type: 'company' | 'contact'; id: string; name: string }[]
   >([]);
+  const [item, setItem] = createSignal<{
+    itemType: string;
+    itemId: string;
+  }>();
   const record = {
     records,
     section: () => undefined,
     commentTarget: () => undefined,
-    item: () => undefined,
-    openItem: vi.fn(),
-    closeItem: vi.fn(),
+    item,
+    openItem: vi.fn(setItem),
+    closeItem: vi.fn(() => setItem(undefined)),
     open: vi.fn(setRecords),
     setSection: vi.fn(),
-    close: vi.fn(() => setRecords([])),
+    close: vi.fn(() => {
+      setRecords([]);
+      setItem(undefined);
+    }),
   };
   const setActiveTab = (tab: string) => {
     setRecords([]);
+    setItem(undefined);
     setTab(tab);
   };
   const captureEntryState = vi.fn();
@@ -363,8 +432,7 @@ it('keeps sidebar destinations in the mobile header when switching records, pipe
   ).toBeTruthy();
 });
 
-it('omits pipelines and lists when those features are disabled', () => {
-  fixture.pipelinesEnabled = false;
+it('omits lists when that feature is disabled', () => {
   fixture.listsEnabled = false;
   setup();
   const tabs = within(screen.getByRole('navigation', { name: 'CRM views' }));
@@ -380,6 +448,7 @@ it('omits pipelines and lists when those features are disabled', () => {
     'Sales Email',
     'Sales Notes',
     'Sales Calls',
+    'Sales',
   ]);
 });
 
@@ -400,50 +469,6 @@ it('opens each CRM activity feed instead of the company list', () => {
   fireEvent.click(tabs.getByRole('button', { name: 'Companies' }));
   expect(screen.getByText('Record list')).toBeTruthy();
 });
-
-it('waits for the rollout before resolving a cold activity link', () => {
-  const { activeTab, setActivityFlag } = setup('tasks', {
-    enabled: false,
-    loading: true,
-  });
-  expect(activeTab()).toBe('tasks');
-  expect(
-    screen.getByRole('status', { name: 'Loading CRM activity' })
-  ).toBeTruthy();
-  expect(screen.queryByText('tasks feed')).toBeNull();
-  expect(screen.queryByText('Record list')).toBeNull();
-  setActivityFlag({ enabled: true, loading: false });
-  expect(activeTab()).toBe('tasks');
-  expect(screen.getByText('tasks feed')).toBeTruthy();
-});
-
-it('hides activity navigation and leaves its feed when the rollout turns off', () => {
-  const { activeTab, setActivityFlag } = setup('email');
-  expect(screen.getByText('email feed')).toBeTruthy();
-  setActivityFlag({ enabled: false, loading: false });
-  expect(activeTab()).toBe('active');
-  expect(screen.queryByText('email feed')).toBeNull();
-  expect(screen.getByText('Record list')).toBeTruthy();
-  const tabs = within(screen.getByRole('navigation', { name: 'CRM views' }));
-  for (const name of [
-    'Sales Tasks',
-    'Sales Email',
-    'Sales Notes',
-    'Sales Calls',
-  ]) {
-    expect(tabs.queryByRole('button', { name })).toBeNull();
-  }
-});
-
-it.each(['tasks', 'email', 'notes', 'calls'])(
-  'returns an unavailable %s deep link to Companies without mounting activity',
-  (tab) => {
-    const { activeTab } = setup(tab, { enabled: false, loading: false });
-    expect(activeTab()).toBe('active');
-    expect(screen.queryByText(`${tab} feed`)).toBeNull();
-    expect(screen.getByText('Record list')).toBeTruthy();
-  }
-);
 
 it('opens the company of a pipeline row through the route on desktop', () => {
   fixture.touch = false;
@@ -559,7 +584,7 @@ it('shows CRM settings in place of an open record and returns to it', () => {
   fireEvent.click(screen.getByRole('button', { name: 'CRM settings' }));
   expect(screen.getByText('Stage settings')).toBeTruthy();
   expect(screen.queryByText('Sales record company:acme')).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Close CRM settings' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Close settings' }));
   expect(screen.queryByText('Stage settings')).toBeNull();
   expect(screen.getByText('Sales record company:acme')).toBeTruthy();
   expect(record.close).not.toHaveBeenCalled();
@@ -576,7 +601,7 @@ it.each([false, true])(
     expect(screen.queryByText('tasks feed')).toBeNull();
     expect(screen.queryByText('Record list')).toBeNull();
     expect(activeTab()).toBe('tasks');
-    fireEvent.click(screen.getByRole('button', { name: 'Close CRM settings' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close settings' }));
     expect(screen.getByText('tasks feed')).toBeTruthy();
     expect(screen.queryByText('Stage settings')).toBeNull();
     expect(screen.queryByText('Record list')).toBeNull();
@@ -603,5 +628,204 @@ it('leaves CRM settings when the route moves elsewhere, as on Back', () => {
   expect(screen.queryByText('Stage settings')).toBeNull();
   expect(screen.getByText('Sales record company:acme')).toBeTruthy();
   record.close();
+  expect(screen.getByText('Sales table')).toBeTruthy();
+});
+
+it('retains an individually shared pipeline while denying the records workspace', () => {
+  const [allowed, setAllowed] = createSignal(true);
+  fixture.canAccess = allowed;
+  const workspace = setup('pipeline:sales');
+  expect(screen.getByText('Sales table')).toBeTruthy();
+  setAllowed(false);
+  expect(screen.getByText('Sales table')).toBeTruthy();
+  const tabs = within(screen.getByRole('navigation', { name: 'CRM views' }));
+  expect(tabs.queryByRole('tab', { name: 'Companies' })).toBeNull();
+  expect(tabs.queryByText('Favorites')).toBeNull();
+  workspace.activeTab();
+  fixture.workspace &&
+    (fixture.workspace as { setActiveTab(tab: string): void }).setActiveTab(
+      'active'
+    );
+  expect(screen.getByText("You don't have access to CRM")).toBeTruthy();
+  expect(screen.queryByText('Record list')).toBeNull();
+  setAllowed(true);
+  expect(screen.getByText('Record list')).toBeTruthy();
+});
+
+it.each([false, true])(
+  'can navigate from denied records to an individually shared pipeline (touch: %s)',
+  (touch) => {
+    fixture.touch = touch;
+    fixture.canAccess = () => false;
+    const { activeTab } = setup();
+    expect(screen.getByText("You don't have access to CRM")).toBeTruthy();
+    const navigation = within(
+      screen.getByRole('navigation', {
+        name: touch ? 'CRM views' : 'CRM sidebar',
+      })
+    );
+    if (!touch)
+      expect(
+        screen.getByRole('group', { name: 'Navigation controls' })
+      ).toBeTruthy();
+    fireEvent.click(navigation.getByRole('button', { name: 'Sales' }));
+    expect(activeTab()).toBe('pipeline:sales');
+    expect(screen.getByText('Sales table')).toBeTruthy();
+    expect(screen.queryByText('Record list')).toBeNull();
+  }
+);
+
+it('preserves a saved list route through an initial denial and later grant', () => {
+  const [allowed, setAllowed] = createSignal(false);
+  fixture.canAccess = allowed;
+  const { activeTab } = setup('list:favorites');
+  expect(activeTab()).toBe('list:favorites');
+  expect(screen.getByText("You don't have access to CRM")).toBeTruthy();
+  expect(screen.queryByText('Record list')).toBeNull();
+  setAllowed(true);
+  expect(activeTab()).toBe('list:favorites');
+  expect(screen.getByText('Record list')).toBeTruthy();
+});
+
+it.each([
+  { tab: 'active', detail: 'record', canNavigate: true },
+  { tab: 'pipeline:sales', detail: 'record', canNavigate: true },
+  { tab: 'active', detail: 'item', canNavigate: true },
+  { tab: 'pipeline:sales', detail: 'item', canNavigate: false },
+])(
+  'preserves mobile navigation after revoking an open $detail on $tab',
+  ({ tab, detail, canNavigate }) => {
+    const [allowed, setAllowed] = createSignal(true);
+    fixture.canAccess = allowed;
+    const { activeTab, record } = setup(tab);
+    if (detail === 'record')
+      record.open([{ type: 'company', id: 'company', name: '' }]);
+    else record.openItem({ itemType: 'document', itemId: 'shared-note' });
+    expect(screen.queryByRole('navigation', { name: 'CRM views' })).toBeNull();
+
+    setAllowed(false);
+    const navigation = screen.queryByRole('navigation', {
+      name: 'CRM views',
+    });
+    if (!canNavigate) {
+      expect(navigation).toBeNull();
+      return;
+    }
+    const tabs = within(screen.getByRole('navigation', { name: 'CRM views' }));
+    expect(tabs.queryByRole('button', { name: 'Companies' })).toBeNull();
+    expect(tabs.queryByRole('button', { name: 'Favorites' })).toBeNull();
+    fireEvent.click(tabs.getByRole('button', { name: 'Sales' }));
+    expect(activeTab()).toBe('pipeline:sales');
+    expect(record.records()).toEqual([]);
+    expect(record.item()).toBeUndefined();
+    expect(screen.getByText('Sales table')).toBeTruthy();
+  }
+);
+
+it('waits for the initial CRM proof before choosing the deep-link fallback', () => {
+  const [state, setState] = createSignal<'pending' | 'allowed' | 'denied'>(
+    'pending'
+  );
+  fixture.accessState = state;
+  fixture.canAccess = () => state() === 'allowed';
+  setup('list:favorites');
+  expect(screen.queryByText("You don't have access to CRM")).toBeNull();
+  expect(screen.queryByText('Record list')).toBeNull();
+  setState('allowed');
+  expect(screen.getByText('Record list')).toBeTruthy();
+  setState('denied');
+  expect(screen.getByText("You don't have access to CRM")).toBeTruthy();
+});
+
+it('unmounts the open record at the workspace boundary on denial and restores it on regrant', () => {
+  const [allowed, setAllowed] = createSignal(true);
+  fixture.canAccess = allowed;
+  const { record } = setup('pipeline:sales');
+  record.open([{ type: 'company', id: 'company', name: '' }]);
+  expect(fixture.recordMounted).toHaveBeenCalledOnce();
+  setAllowed(false);
+  expect(fixture.recordDisposed).toHaveBeenCalledOnce();
+  expect(screen.queryByText('Sales record company:company')).toBeNull();
+  expect(screen.getByText("You don't have access to CRM")).toBeTruthy();
+  setAllowed(true);
+  expect(fixture.recordMounted).toHaveBeenCalledTimes(2);
+  expect(screen.getByText('Sales record company:company')).toBeTruthy();
+});
+
+it.each(['pending', 'error'] as const)(
+  'keeps navigation available while the records workspace is %s',
+  (state) => {
+    fixture.canAccess = () => false;
+    fixture.accessState = () => state;
+    const { activeTab } = setup();
+    const navigation = within(
+      screen.getByRole('navigation', { name: 'CRM views' })
+    );
+    fireEvent.click(navigation.getByRole('button', { name: 'People' }));
+    expect(activeTab()).toBe('people');
+    expect(screen.queryByText('Record list')).toBeNull();
+    expect(screen.queryByText("You don't have access to CRM")).toBeNull();
+  }
+);
+
+it('does not open an import requested before CRM access was proven', () => {
+  const [state, setState] = createSignal<'pending' | 'allowed'>('pending');
+  fixture.accessState = state;
+  fixture.canAccess = () => state() === 'allowed';
+  fixture.touch = false;
+  setup();
+  const sidebar = within(
+    screen.getByRole('navigation', { name: 'CRM sidebar' })
+  );
+  fireEvent.click(sidebar.getByRole('button', { name: 'Import' }));
+  setState('allowed');
+  expect(screen.queryByText('Import dialog')).toBeNull();
+  fireEvent.click(sidebar.getByRole('button', { name: 'Import' }));
+  expect(screen.getByText('Import dialog')).toBeTruthy();
+});
+
+it.each([false, true])(
+  'does not open a shared pipeline record after denial (touch: %s)',
+  (touch) => {
+    fixture.touch = touch;
+    fixture.canAccess = () => false;
+    const { record } = setup('pipeline:sales');
+    fireEvent.click(screen.getByRole('button', { name: 'Open Acme' }));
+    expect(record.open).not.toHaveBeenCalled();
+    expect(fixture.openWithSplit).not.toHaveBeenCalled();
+    expect(screen.getByText('Sales table')).toBeTruthy();
+  }
+);
+
+it('offers pipeline navigation instead of a denied Companies destination', () => {
+  fixture.touch = false;
+  fixture.canAccess = () => false;
+  const { activeTab } = setup('pipeline:unavailable');
+  expect(
+    screen.queryByRole('button', { name: 'Back to companies' })
+  ).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Show navigation' }));
+  const navigation = within(
+    screen.getByRole('navigation', { name: 'CRM sidebar' })
+  );
+  fireEvent.click(navigation.getByRole('button', { name: 'Sales' }));
+  expect(activeTab()).toBe('pipeline:sales');
+  expect(screen.getByText('Sales table')).toBeTruthy();
+});
+
+it('keeps a shared pipeline open when a list save commits after denial', async () => {
+  const result = Promise.withResolvers<string>();
+  fixture.saveList.mockReturnValue(result.promise);
+  const [allowed, setAllowed] = createSignal(true);
+  fixture.canAccess = allowed;
+  fixture.touch = false;
+  const { activeTab } = setup('pipeline:sales');
+  fireEvent.click(screen.getByRole('button', { name: 'New list' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save list' }));
+  expect(fixture.saveList).toHaveBeenCalledOnce();
+  setAllowed(false);
+  result.resolve('saved');
+  await fixture.saved;
+  expect(activeTab()).toBe('pipeline:sales');
   expect(screen.getByText('Sales table')).toBeTruthy();
 });

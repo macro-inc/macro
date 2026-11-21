@@ -22,11 +22,9 @@ import {
   AssigneePickerStatus,
   useAssigneePicker,
 } from '@app/features/soup/assignee-picker';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { enableMultiInbox } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import { useContactFilterOptions } from '@core/user/use-contact-filter-options';
@@ -110,19 +108,11 @@ export const MobileFilterDrawer = (props: {
     selectedIds: inboxFilter,
     setSelectedIds: setInboxFilter,
   });
-  const multiInboxFlag = useFeatureFlag(enableMultiInbox);
   const addInbox = useAddInboxFlow();
 
-  // Mirrors the desktop InboxSelector's visibility rule so the "Connect
-  // another account" action stays discoverable with zero or one inbox
-  // connected. Also stays
-  // visible while a scope is active so it can be reset even if the linked
-  // inboxes drop to one.
-  const showInboxSection = () =>
-    currentView() === 'mail' &&
-    (multiInboxFlag().enabled ||
-      picker.hasMultiple() ||
-      inboxFilter() !== undefined);
+  // Mirrors the desktop InboxSelector: always shown in Mail so the "Connect
+  // another account" action stays discoverable with zero or one inbox.
+  const showInboxSection = () => currentView() === 'mail';
 
   const toggleInbox = (id: string) => {
     const current = picker.activeIds();
@@ -363,19 +353,17 @@ export const MobileFilterDrawer = (props: {
                   );
                 }}
               </For>
-              <Show when={multiInboxFlag().enabled}>
-                <MobileDrawer.Item
-                  type="button"
-                  onClick={() => fireAndForget(addInbox(), 'add-inbox')}
-                >
-                  <span class="size-4 flex items-center justify-center shrink-0">
-                    <PlusIcon class="size-4 text-ink-muted" />
-                  </span>
-                  <span class="flex-1 truncate">
-                    {t('viewMenus.connectAnotherAccount')}
-                  </span>
-                </MobileDrawer.Item>
-              </Show>
+              <MobileDrawer.Item
+                type="button"
+                onClick={() => fireAndForget(addInbox(), 'add-inbox')}
+              >
+                <span class="size-4 flex items-center justify-center shrink-0">
+                  <PlusIcon class="size-4 text-ink-muted" />
+                </span>
+                <span class="flex-1 truncate">
+                  {t('viewMenus.connectAnotherAccount')}
+                </span>
+              </MobileDrawer.Item>
             </FilterDrawer.Section>
           </Show>
 

@@ -23,7 +23,6 @@ const gateFailedOnNativeChecks = {
 const nativeChecks: Check[] = [
 	{ name: "Web App / iOS Native Check", bucket: "fail" },
 	{ name: "Web App / Android Native Check", bucket: "fail" },
-	{ name: "Web App / Web App Status Check", bucket: "fail" },
 	{ name: "Re-run the native check", bucket: "skipping" },
 ];
 const typecheck = { name: "Web App / Typecheck", bucket: "pass" };

@@ -1,11 +1,5 @@
 import { ConnectorImportPromotion } from '@app/features/connector-import/connector-import';
-import {
-  allOf,
-  flagVerdict,
-} from '@app/features/sidebar-promotion/sidebar-promotion';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
-import { enableSlackArchiveImport } from '@core/constant/featureFlags';
 import { lazyNamed } from '@core/util/lazyNamed';
 import FileZipIcon from '@icon/system/regular/file-zip.svg';
 import { useCurrentTeamQuery, useIsTeamAdmin } from '@queries/team/teams';
@@ -21,15 +15,14 @@ const SlackImport = lazyNamed(() => import('./slack-import'), 'SlackImport');
  * scratch instead.
  */
 export function SlackImportSidebar() {
-  const flag = useFeatureFlag(enableSlackArchiveImport);
-  const team = useCurrentTeamQuery(() => flag().enabled);
+  const team = useCurrentTeamQuery();
   const isAdmin = useIsTeamAdmin();
   const teamId = () => (team.isSuccess ? team.data?.team.id : undefined);
   let openHistory: ((opener: HTMLButtonElement) => void) | undefined;
 
   return (
     <>
-      <Show when={flag().enabled && isAdmin() && teamId()}>
+      <Show when={isAdmin() && teamId()}>
         {(id) => (
           <Suspense>
             <SlackImport
@@ -49,10 +42,7 @@ export function SlackImportSidebar() {
       <ConnectorImportPromotion
         category="channels"
         class="px-(--sidebar-gutter) py-2"
-        applies={allOf(
-          flagVerdict(flag()),
-          team.isSuccess ? isAdmin() && !!teamId() : undefined
-        )}
+        applies={team.isSuccess ? isAdmin() && !!teamId() : undefined}
         alternatives={[
           {
             icon: FileZipIcon,

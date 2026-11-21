@@ -47,6 +47,13 @@ export type QueryPersistence = {
   restoreQuery: (queryKey: QueryKey) => Promise<void>;
   /** Clear every durable scope and fence pending hydration on account changes. */
   clear: () => Promise<void>;
+  /** Retire selected server snapshots from memory and disk, fencing pending restores. */
+  retire: (matches: (key: QueryKey) => boolean) => Promise<void>;
+  /**
+   * Remove from disk what the permission policy excludes now, leaving memory
+   * alone: another window may have written it after this profile was pruned.
+   */
+  pruneExcluded: () => Promise<void>;
   /** Await pending local writes before restarting the native app. */
   flush: () => Promise<void>;
   dispose: () => void;
@@ -125,10 +132,14 @@ async function handleRestore(
  * a query would restore its old initialData; removing it alone would strand
  * observers on the retired query instead of delivering the next account's data.
  */
-function clearQueryMemory(queryClient: QueryClient): void {
+function clearQueryMemory(
+  queryClient: QueryClient,
+  matches?: (key: QueryKey) => boolean
+): void {
   const queryCache = queryClient.getQueryCache();
   notifyManager.batch(() => {
     for (const query of queryCache.getAll()) {
+      if (matches && !matches(query.queryKey)) continue;
       const observers = query.observers.map((observer) => ({
         observer,
         options: {
@@ -174,7 +185,7 @@ function clearQueryMemory(queryClient: QueryClient): void {
       }
     }
   });
-  queryClient.getMutationCache().clear();
+  if (!matches) queryClient.getMutationCache().clear();
 }
 
 /**
@@ -211,20 +222,29 @@ export function setupQueryPersistence(
   params: Readonly<{
     queryClient: QueryClient;
     scopes: readonly PersistScope[];
+    /** Entries excluded by the current permission policy cannot be restored or written. */
+    exclude?: (key: QueryKey) => boolean;
   }>
 ): QueryPersistence {
-  const { queryClient, scopes } = params;
+  const { queryClient, scopes, exclude } = params;
   let restores = new WeakMap<Query, Promise<void>>();
   let generation = 0;
   let clearing = false;
   let disposed = false;
+  const retiring = new Map<(key: QueryKey) => boolean, object>();
+  let retirement = Promise.resolve();
+  const isRetiring = (key: QueryKey) =>
+    [...retiring.keys()].some((matches) => matches(key));
 
   const findScope = (queryKey: QueryKey) =>
-    scopes.find((s) => s.shouldPersist(queryKey));
+    exclude?.(queryKey)
+      ? undefined
+      : scopes.find((s) => s.shouldPersist(queryKey));
 
   async function restoreFromStore(query: Query, scope: PersistScope) {
     const capturedGeneration = generation;
     try {
+      if (exclude?.(query.queryKey)) return;
       await handleRestore(
         queryClient,
         scope,
@@ -232,6 +252,8 @@ export function setupQueryPersistence(
         () =>
           !disposed &&
           !clearing &&
+          !isRetiring(query.queryKey) &&
+          !exclude?.(query.queryKey) &&
           capturedGeneration === generation &&
           queryClient.getQueryCache().get(query.queryHash) === query
       );
@@ -248,13 +270,29 @@ export function setupQueryPersistence(
     return pending;
   };
 
-  const flushAll = async () => {
-    await Promise.all(scopes.map((scope) => scope.store.flush()));
+  const pruneRetired = () => {
+    const work = retirement.then(async () => {
+      const owed = [...retiring];
+      await Promise.all(
+        scopes.map(async (scope) => {
+          await scope.store.flush({ throwOnError: true });
+          if (owed.length)
+            await scope.store.prune(
+              (entry) => !owed.some(([matches]) => matches(entry.queryKey))
+            );
+        })
+      );
+      for (const [matches, attempt] of owed) {
+        if (retiring.get(matches) === attempt) retiring.delete(matches);
+      }
+    });
+    retirement = work.catch(() => {});
+    return work;
   };
 
   const onVisibilityChange = () => {
     if (document.visibilityState === 'hidden')
-      fireAndForget(flushAll(), 'query-persistence');
+      fireAndForget(pruneRetired(), 'query-persistence');
   };
   document.addEventListener('visibilitychange', onVisibilityChange);
 
@@ -266,7 +304,7 @@ export function setupQueryPersistence(
     const scope = findScope(query.queryKey);
     if (!scope) return;
 
-    if (disposed || clearing) return;
+    if (disposed || clearing || isRetiring(query.queryKey)) return;
 
     if (type === 'added') {
       fireAndForget(restore(query, scope), 'query-persistence');
@@ -294,13 +332,32 @@ export function setupQueryPersistence(
   return {
     restoreQuery(queryKey) {
       const scope = findScope(queryKey);
-      if (disposed || clearing || !scope) return Promise.resolve();
+      if (disposed || clearing || isRetiring(queryKey) || !scope)
+        return Promise.resolve();
       // Building a missing query emits `added`, starting the same restore that
       // an observer would start, without issuing a request or needing a queryFn.
       const query = queryClient
         .getQueryCache()
         .build(queryClient, { queryKey });
       return restore(query, scope);
+    },
+    async retire(matches) {
+      restores = new WeakMap();
+      retiring.set(matches, {});
+      clearQueryMemory(queryClient, matches);
+      // Finish earlier puts before pruning, while matching new writes and restores
+      // stay fenced. This also removes entries that were never loaded this session.
+      // A failed prune leaves this scope quarantined; a later retirement or
+      // flush retries it without blocking fresh in-memory query results.
+      await pruneRetired();
+    },
+    async pruneExcluded() {
+      if (!exclude) return;
+      await Promise.all(
+        scopes.map((scope) =>
+          scope.store.prune((entry) => !exclude(entry.queryKey))
+        )
+      );
     },
     async clear() {
       generation += 1;
@@ -322,11 +379,7 @@ export function setupQueryPersistence(
         clearing = false;
       }
     },
-    flush: async () => {
-      await Promise.all(
-        scopes.map((scope) => scope.store.flush({ throwOnError: true }))
-      );
-    },
+    flush: pruneRetired,
     dispose() {
       disposed = true;
       cacheUnsubscribe();

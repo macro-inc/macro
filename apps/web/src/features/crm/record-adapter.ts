@@ -1,8 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import {
-  disableCrmContactSearch,
-  enableCrm,
-} from '@core/constant/featureFlags';
+import { disableCrmContactSearch } from '@core/constant/featureFlags';
 import { useDmActivityByUserId } from '@core/context/channels';
 import type { EntityItem } from '@core/context/quickAccess';
 import { useQuickAccess } from '@core/context/quickAccess/context';
@@ -13,6 +10,7 @@ import { isCrmContactEntity } from '@entity/types/entity';
 import { createContactAliasWindow } from '@queries/contacts/alias-window';
 import { queryReadyGate } from '@queries/gate';
 import { storageServiceClient } from '@service-storage/client';
+import { crmAccessAllowed } from '@service-storage/crm-access-authority';
 import { useQueryClient } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 import { createContactDiscovery } from './primitives/contact-discovery';
@@ -40,16 +38,15 @@ export function useCrmContactByEmailQuery(
     { storage: storageServiceClient, client: useQueryClient() },
     teamId,
     email,
-    enabled
+    () => enabled() && crmAccessAllowed()
   );
 }
 
 /** Quick Access feed of visible contacts across the viewer's CRM-enabled teams. */
 export function useQuickAccessCrmContactsQuery() {
-  const flag = useFeatureFlag(enableCrm);
   return createContactSuggestions(
     { storage: storageServiceClient, client: useQueryClient() },
-    () => flag().enabled
+    crmAccessAllowed
   );
 }
 
@@ -63,11 +60,11 @@ export function useCrmContactMentionSource(
 ) {
   const query = useCrmContactsQuery(
     { client: useQueryClient() },
-    enabled,
+    () => enabled() && crmAccessAllowed(),
     search
   );
   const entities = createMemo<EntityItem[]>(() =>
-    queryReadyGate(query)
+    crmAccessAllowed() && queryReadyGate(query)
       ? query.data.pages.flatMap((page) =>
           page.contacts.map((record) =>
             toCrmContactItem(toCrmContactEntity(record))
@@ -103,6 +100,13 @@ export function useCrmContactMentionSource(
     isLoading: () => query.isLoading || aliases.loading(),
     isLoadingMore: () => query.isFetchingNextPage || aliases.isLoadingMore(),
     loadMore: aliases.loadMore,
+    error: () => query.error ?? undefined,
+    // A failed later page is the next one to read; a failed first page is
+    // read from the start.
+    retry: async () => {
+      if (query.isFetchNextPageError) await query.fetchNextPage();
+      else await query.refetch();
+    },
   };
 }
 
@@ -114,11 +118,10 @@ export function useCrmContactDiscovery(
   search: Accessor<string>,
   active: Accessor<boolean>
 ) {
-  const flag = useFeatureFlag(enableCrm);
   const contactSearchDisabled = useFeatureFlag(disableCrmContactSearch);
   const query = () => search().trim();
   const enabled = () =>
-    flag().enabled &&
+    crmAccessAllowed() &&
     !contactSearchDisabled().enabled &&
     active() &&
     query().length > 0;

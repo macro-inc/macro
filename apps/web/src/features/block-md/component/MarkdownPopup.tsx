@@ -1,5 +1,4 @@
 import { taskSourceComposerContext } from '@app/features/task-composer/source-context';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useFlow } from '@app/observability/flow';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { applyAiOps } from '@block-md/ai-edit/applyAiOps';
@@ -44,10 +43,7 @@ import {
 } from '@core/component/LexicalMarkdown/plugins/popup/popupPlugin';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  ENABLE_MARKDOWN_COMMENTS,
-  enableInlineAiEditing,
-} from '@core/constant/featureFlags';
+import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
@@ -205,7 +201,6 @@ export function MarkdownPopup(props: {
     setNativeEditMenuSuppressed(false);
   });
 
-  const inlineAiEditing = useFeatureFlag(enableInlineAiEditing);
   const currentUserId = useUserId();
 
   const [locationCopied, setLocationCopied] = createSignal(false);
@@ -436,8 +431,7 @@ export function MarkdownPopup(props: {
   const shouldShowTableButton = () =>
     Boolean(canEdit() && convertibleListKey());
 
-  const shouldShowEditWithAiButton = () =>
-    inlineAiEditing().enabled && canEdit();
+  const shouldShowEditWithAiButton = () => canEdit();
 
   /** Resolves to the point after the inserted mention, or null if it failed. */
   const insertTaskMention = async (

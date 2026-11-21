@@ -48,6 +48,7 @@ key issuance, and account merge/link flows.
 ## Computer billing identifiers
 
 - Treat the six `STRIPE_COMPUTER_*_PRICE_ID` values as an optional all-or-none group: none means computer prices are not configured; any partial group fails startup and Doppler validation independently of physical fleet attachment. Validate configured price syntax in both startup and the Doppler binary.
+- Set `COMPUTERS_AGENT_EFFECTS=true` wherever the computers rollout is on: it runs the computers agents worker, the only consumer of `UndoAgentInvite`. Absent means off, and those effects wait in the outbox until it is on.
 - Store computer and seat prices as `stripe::PriceId` and reject malformed configured IDs during configuration loading with `config::configured_price_id` (async-stripe's parse accepts any string), including when no fleet is attached. `Config::computer_prices` returns a validation result.
 
 ## Checks
@@ -79,7 +80,10 @@ access, webhook reconciliation and billing workers remain independent of attachm
   plans. Replay durable item-change receipts before applying changes;
   `settle_computer_add` ends an unknown outcome for good (fencing a charge
   never sent); `charge_status` reads a key's receipt. Removing an item already
-  gone, or from a deleted team, succeeds.
+  gone, or from a deleted team, succeeds. `purchase_terms` (buy dialog
+  only) makes one `team_payment_terms` read and one `preview_item_prorations`
+  call for every size; it refuses a trialing Stripe-billed team and previews
+  nothing for a comped one (`due_today` 0).
 - With no computer prices, purchase returns 503 `computers are not available in this environment` through the shared computer router, before contacting Stripe.
 - The Stripe inbox's `computers` consumer reports each team subscription
   snapshot, in order, as a `SubscriptionObserved` (status, items with their
@@ -87,7 +91,10 @@ access, webhook reconciliation and billing workers remain independent of attachm
   `ComputerBillingObserver` (`ComputerService::observe_subscription`), which
   decides per computer by computer id, never by price or count. A snapshot
   with more than ten items is completed by paging the items once.
-- Computer billing work (effects and purchase confirmation) runs on its own
+- Computer billing work (effects, purchase refunds and purchase confirmation)
+  and taking back the agent teammates of computers released after a failed
+  first start (`run_computer_agent_effects`,
+  with the team_agents service as `AgentInvites`) run on their own
   `TaskTracker` (`computer_billing`), drained at shutdown.
 - Team deletion releases the team's computers first through
   `TeamOwnedEntityCleanupAdapter::release_computers`, backed by
@@ -213,6 +220,17 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 ## Gotchas
 
 - The email sign-in (`POST /login/passwordless`, `GET /oauth/passwordless/{code}`) refuses an agent's program (`middleware::refuse_program_sign_in`, 403): one that reads the code from the user's inbox would hold the session. These routes take no credential: inside the sandbox every request carries `x-macro-code-execution`, which is the guard; a sent credential signed for an agent or routine refuses too, though a program outside the sandbox can send none. A credential that does not verify counts as none, so a person with a stale session still signs in.
+- `POST /login/passwordless` creates an unknown address's account before anyone
+  has used a code, and FusionAuth calls it verified. Its FusionAuth user data
+  carries `emailCodeSignup`, so the `user.create` webhook records the address
+  unverified and skips the domain team; the request's referral code rides in
+  the code's state. The first code used (`GET /oauth/passwordless/{code}`)
+  marks the address verified and, only for that call, joins the domain team and
+  tracks the referral before the session starts
+  (`src/service/user/email_code_signup.rs`). Never grant anything on the code
+  request alone.
+- `POST /user/agent_setup` refuses an agent's program or a bot (`middleware::refuse_program_agent_setup`, 403): it returns the agent account's lasting API key and replaces the old one. The operator finishes setup in the browser, signed in as the agent.
+- `POST /link/gmail` and `POST /link/github` refuse an agent's program or a bot (`middleware::refuse_program_link`, 403): the consent URL they return works in any browser, and whoever finishes it gets a sign-in on this account. A person links in Settings. The callback is not bound to the browser that started the link; binding it is the deeper fix.
 - `GET /jwt/macro_api_token` refuses a program (`macro_authorization::is_program_run`, 403): it would turn a run's minute-long credential into an hour-long token the model can read. A person's session or API key still exchanges.
 - Match Google link email display names without ASCII case sensitivity: FusionAuth preserves Google's capitalization, while Macro normalizes email addresses. Keep refresh, token lookup, removal, and grant relocation consistent.
 - `/mobile-welcome-email` copies allowlisted ad parameters from the capture
@@ -260,6 +278,18 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   (`xtask_local`'s `microsoft_emulator.rs`): its placeholder key cannot load
   flags. Each decision is the
   `outlook.flag` span field (`on`, `off`, `error`, `unconfigured`).
+- A Gmail connect for a mailbox with no account of its own links the mailbox's
+  Google identity to the connecting account, and FusionAuth binds an identity to
+  one user. The Google callback records on the attempt whether it created that
+  link (`identity_link_created`); when the attempt ends without an inbox
+  (`/email/init` refuses it, marking `refused_at`, or it lapses after 24 h), the
+  5-minute `domain::google_identity_links` round releases the link, unless the
+  address now has an account of its own or the requester holds the inbox, then
+  drops the attempt. While the requester has another attempt for the address
+  under way (past the callback, neither refused nor lapsed), the round defers:
+  that retry's callback found the link and may be connecting with it. Read the
+  retry before the inbox: a connect commits its inbox before it drops its
+  attempt. A link that existed before the attempt is never released.
 - `/oauth2/{provider}/callback` verifies two signed `state` kinds
   (`src/account_link_state.rs`): account links, which expire, and Microsoft
   admin-consent returns, which do not. A consent screen that ends without a
@@ -331,6 +361,14 @@ subscription reconciliation still use them. Prices have no fallback. See [requir
   through team deletion; drop it before DSS RPC if data appeared.
 - Keep account deletion and membership compensation independent of vault items;
   team items retain their immutable creator after a person leaves.
+- Account deletion queues contacts `user_deleted` just before deleting each
+  profile (a retry no longer lists a deleted profile). The contacts worker
+  refuses it while the profile exists; after 5 receives it moves to
+  `contacts-dlq-<stack>` with no replay, which happens only when the profile
+  was never deleted, and a retried deletion queues it again. It, the teams `directory_changed`
+  sends and the channel interactions share one `ListWritesGate`
+  (`contacts-list-writes`, service context `contacts-list-writes`), so they are
+  no-ops until the flag is on; legacy contacts messages are not gated.
 
 - Compose `FlaggedCrmAccessRollout` from the shared flag provider for team CRM
   preference writes. `enable-crm-member-access-changes` is evaluated freshly for

@@ -21,13 +21,54 @@ something selected, **Style**, **Duplicate**, **Delete** and **More**. The
 page's **New** button is hidden while a canvas is open. On an upright phone
 Rectangle/Ellipse and Arrow/Line/Connector each share a button: tap it again
 while it is selected to choose another. **Style** opens the inspector in a
-bottom sheet on a phone and toggles the side panel on a tablet. **More**, or a
+bottom sheet on a phone and toggles the side panel on a tablet. In the phone
+sheet Fill and Stroke each list their palette and canvas colours as a row of
+swatches, so a colour can be tried with the shape still in view; the swatch
+beside the hex field still opens the full picker. **More**, or a
 long press on the canvas with Select or Hand, opens the sheet of clipboard,
 group, arrange, select-all and delete actions; the long press selects what is
 under the finger first, and lifting the finger leaves the sheet open without
-pressing the row under it. Check that nothing sits under the dock or the home
-indicator, that every button answers a real tap, and that closing a sheet
-leaves the selection as it was.
+pressing the row under it. Pressed on an item that is part of a group, the sheet
+also offers **Select inside group**, which selects that item alone (what
+Cmd/Ctrl-click does with a mouse). **Attach** opens a sheet with Media, Upload media,
+Reference and Artifact: Media and Reference open a
+searchable picker in a second
+sheet, and Upload media opens the device's photo library or file picker and
+places what is chosen at the middle of the view. Check that nothing sits under
+the dock or the home indicator, that every button answers a real tap, and that
+closing a sheet leaves the selection as it was.
+
+Text made low on the screen is panned up clear of the keyboard as it appears,
+and a long line keeps its end in view; the page itself never scrolls and the
+header stays put. The keyboard's Done button on a phone, or its hide key on a
+tablet, commits the text and leaves it selected with the Select tool (with
+Keep tool after drawing on, the Text tool stays and nothing is selected).
+
+**Zoom to fit** in the zoom sheet shows the whole scene between the header and
+the bottom chrome, 24px clear of both and of the screen's sides, and left of the
+inspector panel when it is open. The same sheet has **Keep tool after
+drawing**: switch it on, choose Rectangle once, and each further drag draws
+another rectangle instead of selecting the last one. After a pen (an Apple
+Pencil, say) has pressed the canvas, drawing is the pen's: one finger under a
+drawing tool or the eraser pans instead, and the sheet gains **Draw with pen
+only**, which gives drawing back to fingers when switched off. Select, Hand and
+Text stay a finger's throughout. A simulator has no pen; check this on a tablet
+with one. Turn the device: a canvas nobody has moved since
+the fit is fitted again, and one that was moved keeps what was in the middle of
+the view in the middle.
+
+Handles are drawn small but a finger takes them from further away: a drag that
+starts within 16px of a corner or of the rotation knob, or within 12px outside
+an edge, resizes or rotates; a drag from the middle of the shape moves it, a
+thin shape (a line of text, a divider) included. A tap
+in those places changes nothing: beside the shape it selects what is there or
+clears the selection. A selected connector's ends are taken from 16px away too,
+by any pointer in the touch view: a drag moves the end by as much as the pointer
+moves, and a tap leaves it and its attachment as they were. A tap on empty canvas within 10px of an unfilled shape's
+stroke selects it, but a shape under the finger always wins. A press on another
+shape is for that shape even right beside the selection. On touch there are no
+corner-radius handles; use Corner radius in the inspector. The handles' wider
+reach is for fingers only: a mouse on the same canvas hits what is drawn.
 
 ## Canvas colors
 
@@ -56,7 +97,7 @@ for multiple selections, groups, videos, and non-image shapes.
 
 ## Artifacts
 
-Artifacts are behind the `enable-canvas-artifacts` flag. **Insert** offers
+**Insert** offers
 **Artifact**, which places a node with starter HTML. The Canvas inspector edits its
 title and HTML. The document runs in a sandboxed frame; **Interact** or a
 double-click passes pointer input to it, and **Done** or a click elsewhere returns

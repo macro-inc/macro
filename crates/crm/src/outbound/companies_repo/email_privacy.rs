@@ -3,12 +3,14 @@ use crate::domain::{
     email_privacy::{
         EmailBlockScope, EmailContributionConsent, EmailContributionMailbox, EmailPrivacyChange,
         EmailPrivacyRepository, EmailPrivacySettings, ExcludedEmailThread, ExcludedEmailThreads,
+        mailbox_domains::{self, ConnectedMailboxDomain},
     },
     model::CrmError,
 };
 use chrono::{DateTime, Utc};
 use opentelemetry::trace::TraceContextExt as _;
 use sqlx::PgConnection;
+use tracing::Instrument as _;
 use tracing_opentelemetry::OpenTelemetrySpanExt as _;
 use uuid::Uuid;
 
@@ -18,7 +20,125 @@ pub(super) struct EligibleInteractions {
     pub(super) is_sent: bool,
 }
 
+struct MailboxGuardTimeouts {
+    statement: String,
+    lock: String,
+}
+
 impl CompaniesRepositoryImpl {
+    async fn bound_mailbox_guard(
+        conn: &mut PgConnection,
+    ) -> Result<MailboxGuardTimeouts, CrmError> {
+        let previous = sqlx::query_as!(
+            MailboxGuardTimeouts,
+            r#"SELECT current_setting('statement_timeout') AS "statement!",
+                      current_setting('lock_timeout') AS "lock!""#
+        )
+        .fetch_one(&mut *conn)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        sqlx::query!("SET LOCAL lock_timeout = '5s'")
+            .execute(&mut *conn)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        sqlx::query!("SET LOCAL statement_timeout = '15s'")
+            .execute(conn)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        Ok(previous)
+    }
+
+    async fn restore_mailbox_guard_timeouts(
+        conn: &mut PgConnection,
+        previous: MailboxGuardTimeouts,
+    ) -> Result<(), CrmError> {
+        // Legacy cascades retain the caller's limits; only the new lookup is bounded.
+        sqlx::query!(
+            "SELECT set_config('statement_timeout', $1, true) AS statement_timeout, set_config('lock_timeout', $2, true) AS lock_timeout",
+            previous.statement,
+            previous.lock
+        )
+        .fetch_one(conn)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        Ok(())
+    }
+
+    pub(super) async fn guard_team_domain_exclusion(
+        conn: &mut PgConnection,
+        team: Uuid,
+        domain: &str,
+    ) -> Result<(), CrmError> {
+        let previous = Self::bound_mailbox_guard(conn).await?;
+        let mailboxes = Self::lock_mailbox_domains(conn, team, None, EmailBlockScope::Team).await?;
+        mailbox_domains::validate(domain, EmailBlockScope::Team, &mailboxes)?;
+        Self::restore_mailbox_guard_timeouts(conn, previous).await
+    }
+
+    pub(super) async fn guard_company_domain_exclusion(
+        conn: &mut PgConnection,
+        team: Uuid,
+        company: Uuid,
+    ) -> Result<(), CrmError> {
+        let previous = Self::bound_mailbox_guard(conn).await?;
+        let mailboxes = Self::lock_mailbox_domains(conn, team, None, EmailBlockScope::Team).await?;
+        // Keep stale statistics from turning a company lookup into a team scan.
+        let domains = sqlx::query_scalar!(
+            "SELECT domain FROM (SELECT domain, team_id FROM crm_domains WHERE company_id = $2 OFFSET 0) company_domains WHERE team_id = $1",
+            team,
+            company
+        )
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        for domain in domains {
+            mailbox_domains::validate(&domain, EmailBlockScope::Team, &mailboxes)?;
+        }
+        Self::restore_mailbox_guard_timeouts(conn, previous).await
+    }
+
+    #[tracing::instrument(skip_all, fields(team_id = %team, scope = ?scope), err)]
+    pub(super) async fn lock_mailbox_domains(
+        conn: &mut PgConnection,
+        team: Uuid,
+        user: Option<&str>,
+        scope: EmailBlockScope,
+    ) -> Result<Vec<ConnectedMailboxDomain>, CrmError> {
+        let personal = scope == EmailBlockScope::Personal;
+        // Start at this team's membership index and probe only each member's
+        // primary connection. Keep lifecycle locks until the caller commits,
+        // before any domain/entity locks, so a checked mailbox cannot change
+        // between validation and the exclusion write.
+        sqlx::query_file_as!(
+            ConnectedMailboxDomain,
+            "src/outbound/companies_repo/email_privacy/lock_mailbox_domains.sql",
+            team,
+            user,
+            personal
+        )
+        .fetch_all(conn)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))
+    }
+
+    #[tracing::instrument(skip_all, fields(team_id = %team), err)]
+    async fn read_mailbox_domains(
+        conn: &mut PgConnection,
+        team: Uuid,
+        user: &str,
+    ) -> Result<Vec<ConnectedMailboxDomain>, CrmError> {
+        // Settings warnings must not wait for mailbox lifecycle or sync writes.
+        sqlx::query_file_as!(
+            ConnectedMailboxDomain,
+            "src/outbound/companies_repo/email_privacy/mailbox_domains.sql",
+            team,
+            user
+        )
+        .fetch_all(conn)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))
+    }
+
     async fn read_email_consent(
         conn: &mut PgConnection,
         team: Uuid,
@@ -78,13 +198,36 @@ impl CompaniesRepositoryImpl {
         Ok(())
     }
 
-    pub(super) async fn eligible_interactions(
+    /// Whether the mailbox may contribute this address at all: a live primary
+    /// mailbox, current membership, consent (in a queued worker's exact
+    /// generation) and an unblocked domain. It reads no message history.
+    async fn admitted(
         conn: &mut PgConnection,
         team: Uuid,
         link: Uuid,
         email: &str,
-    ) -> Result<Option<EligibleInteractions>, CrmError> {
-        Self::eligible_interactions_with_authority(conn, team, link, email, None).await
+        authority: Option<crate::domain::email_policy_work::EmailHistoryAuthority>,
+    ) -> Result<bool, CrmError> {
+        use crate::domain::email_policy_work::EmailHistoryAuthority;
+        let (incarnation, version) = match authority {
+            Some(EmailHistoryAuthority::Policy(generation)) => (
+                Some(generation.consent_incarnation),
+                Some(generation.policy_version),
+            ),
+            None | Some(EmailHistoryAuthority::Legacy) => (None, None),
+        };
+        sqlx::query_file_scalar!(
+            "src/outbound/companies_repo/email_privacy/admission.sql",
+            team,
+            link,
+            email,
+            authority.is_some(),
+            incarnation,
+            version
+        )
+        .fetch_one(conn)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))
     }
 
     #[tracing::instrument(
@@ -94,6 +237,7 @@ impl CompaniesRepositoryImpl {
         err
     )]
     pub(super) async fn eligible_interactions_with_authority(
+        &self,
         conn: &mut PgConnection,
         team: Uuid,
         link: Uuid,
@@ -107,17 +251,117 @@ impl CompaniesRepositoryImpl {
             .execute(&mut *conn)
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        // Retain lifecycle and membership locks through a population transaction.
-        // The pre-enrichment transaction ends before external work; the writer
-        // repeats admission and the history scan inside its own transaction.
+        // Reject stale work cheaply, without a mailbox row lock. Sync commits
+        // need that row while this potentially long address-history scan runs.
+        if !Self::admitted(conn, team, link, email, authority).await? {
+            return Ok(None);
+        }
+        let row = sqlx::query_file!(
+            "src/outbound/companies_repo/email_privacy/interactions.sql",
+            team,
+            link,
+            email
+        )
+        .fetch_one(&mut *conn)
+        .instrument(tracing::info_span!("crm.email_interaction_scan"))
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        let (
+            Some(first_at),
+            Some(last_at),
+            Some(is_sent),
+            Some(first_message),
+            Some(first_thread),
+            Some(first_contact),
+            Some(last_message),
+            Some(last_thread),
+            Some(last_contact),
+            Some(last_is_sent),
+        ) = (
+            row.first_at,
+            row.last_at,
+            row.is_sent,
+            row.first_message_id,
+            row.first_thread_id,
+            row.first_contact_id,
+            row.last_message_id,
+            row.last_thread_id,
+            row.last_contact_id,
+            row.last_is_sent,
+        )
+        else {
+            return Ok(None);
+        };
+
+        #[cfg(test)]
+        if let Some(gate) = &self.after_eligible_scan {
+            gate.entered.notify_one();
+            gate.resume.notified().await;
+        }
+
+        // In READ COMMITTED this recheck sees lifecycle changes committed
+        // during the scan. Writers retain their privacy/contact advisory locks
+        // across both phases, then keep these row locks through the CRM writes.
+        if !Self::lock_population_authority(conn, team, link, email, authority).await? {
+            return Ok(None);
+        }
+        // A provider deletion may have committed during the unlocked scan.
+        // Validate only its two scalar witnesses by primary key. A changed
+        // witness defers the job, so its next scan also runs without this lock.
+        let witnesses_valid = sqlx::query_file_scalar!(
+            "src/outbound/companies_repo/email_privacy/witnesses.sql",
+            link,
+            email,
+            first_message,
+            first_thread,
+            first_at,
+            is_sent,
+            first_contact,
+            last_message,
+            last_thread,
+            last_at,
+            last_is_sent,
+            last_contact
+        )
+        .fetch_one(&mut *conn)
+        .instrument(tracing::info_span!("crm.email_history_witnesses"))
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        if !witnesses_valid {
+            return Err(CrmError::Contended);
+        }
+        Ok(Some(EligibleInteractions {
+            first_at,
+            last_at,
+            is_sent,
+        }))
+    }
+
+    #[tracing::instrument(
+        name = "crm.email_authority_recheck",
+        skip_all,
+        fields(team_id = %team, link_id = %link),
+        err
+    )]
+    async fn lock_population_authority(
+        conn: &mut PgConnection,
+        team: Uuid,
+        link: Uuid,
+        email: &str,
+        authority: Option<crate::domain::email_policy_work::EmailHistoryAuthority>,
+    ) -> Result<bool, CrmError> {
+        // Preserve mailbox/member -> consent -> domain/entity lock order.
+        // Lifecycle writers own the mailbox before revoking consent and do
+        // not acquire the team privacy lock.
         let live = sqlx::query_scalar!(
             "SELECT l.id FROM email_links l JOIN team_user tu ON tu.user_id = l.macro_id AND tu.team_id = $1 WHERE l.id = $2 AND l.is_primary AND l.deleting_at IS NULL AND l.disconnect_requested_at IS NULL AND NOT l.needs_reauth FOR SHARE OF l FOR KEY SHARE OF tu",
             team, link
         ).fetch_optional(&mut *conn).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
         if live.is_none() {
-            return Ok(None);
+            return Ok(false);
         }
-        // Reject stale/unsolicited work before scanning mailbox history.
+        // Consent can change while waiting for the mailbox guard; use a new
+        // statement snapshot, including the queued worker's exact generation.
         let consented = if let Some(authority) = authority {
             use crate::domain::email_policy_work::EmailHistoryAuthority;
             let (incarnation, version) = match authority {
@@ -157,26 +401,7 @@ impl CompaniesRepositoryImpl {
         .await
         .map_err(|e| CrmError::StorageLayerError(e.into()))?
         };
-        if !consented {
-            return Ok(None);
-        }
-        let row = sqlx::query_file!(
-            "src/outbound/companies_repo/email_privacy/interactions.sql",
-            team,
-            link,
-            email
-        )
-        .fetch_one(conn)
-        .await
-        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        Ok(match (row.first_at, row.last_at, row.is_sent) {
-            (Some(first_at), Some(last_at), Some(is_sent)) => Some(EligibleInteractions {
-                first_at,
-                last_at,
-                is_sent,
-            }),
-            _ => None,
-        })
+        Ok(consented)
     }
 }
 
@@ -306,19 +531,16 @@ impl EmailPrivacyRepository for CompaniesRepositoryImpl {
         link: Uuid,
         email: &str,
     ) -> Result<bool, CrmError> {
-        let mut tx = self
+        // Admission only. The population transaction scans the address
+        // history once, after skipping a job that would change nothing: one
+        // job is queued per message, so most of a busy contact's jobs are
+        // duplicates that need no history at all.
+        let mut conn = self
             .pool
-            .begin()
+            .acquire()
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        let eligible =
-            Self::eligible_interactions(&mut tx, team, link, &email.to_ascii_lowercase())
-                .await?
-                .is_some();
-        tx.commit()
-            .await
-            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        Ok(eligible)
+        Self::admitted(&mut conn, team, link, &email.to_ascii_lowercase(), None).await
     }
 
     #[tracing::instrument(skip_all, fields(team_id = %team), err)]
@@ -347,6 +569,11 @@ impl EmailPrivacyRepository for CompaniesRepositoryImpl {
         let personal_domains = sqlx::query_scalar!(
             "SELECT domain FROM crm_personal_email_blocklist WHERE team_id = $1 AND user_id = $2 ORDER BY domain", team, user
         ).fetch_all(&mut *tx).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        let mailboxes = Self::read_mailbox_domains(&mut tx, team, user).await?;
+        let team_domain_warnings =
+            mailbox_domains::warnings(&team_domains, EmailBlockScope::Team, &mailboxes);
+        let personal_domain_warnings =
+            mailbox_domains::warnings(&personal_domains, EmailBlockScope::Personal, &mailboxes);
         tx.commit()
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
@@ -356,6 +583,8 @@ impl EmailPrivacyRepository for CompaniesRepositoryImpl {
             mailbox_email: consent.mailbox_email,
             team_domains,
             personal_domains,
+            team_domain_warnings,
+            personal_domain_warnings,
             can_remove_team_domains: false,
         })
     }
@@ -478,6 +707,9 @@ impl EmailPrivacyRepository for CompaniesRepositoryImpl {
                 backfill_user = enabled;
             }
             EmailPrivacyChange::AddDomain { scope, domain } => {
+                let mailboxes =
+                    Self::lock_mailbox_domains(&mut tx, team, Some(user), scope).await?;
+                mailbox_domains::validate(&domain, scope, &mailboxes)?;
                 match scope {
                     EmailBlockScope::Team => {
                         sqlx::query!("INSERT INTO crm_blocked_domains (team_id, domain) VALUES ($1, $2) ON CONFLICT DO NOTHING", team, domain)
@@ -531,6 +763,7 @@ impl EmailPrivacyRepository for CompaniesRepositoryImpl {
                 backfill_user = true;
             }
         }
+        Self::invalidate_email_previews(&mut tx, team).await?;
         if backfill_user || backfill_team {
             Self::schedule_contribution_history(&mut tx, team, (!backfill_team).then_some(user))
                 .await?;

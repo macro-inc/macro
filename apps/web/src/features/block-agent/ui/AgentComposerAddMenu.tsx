@@ -7,12 +7,13 @@ import { useSettingsState } from '@core/constant/SettingsState';
 import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
 import { isMobile } from '@core/mobile/isMobile';
 import { ConnectedAppIcon } from '@core/pipedream/ConnectedAppIcon';
+import { lazy } from '@core/util/lazy';
 import LightningIcon from '@icon/system/regular/lightning.svg';
 import PlugsIcon from '@icon/system/regular/plugs.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import BooksIcon from '@phosphor/books.svg';
 import { Button, Dialog } from '@ui';
-import { createSignal, lazy, Show, Suspense } from 'solid-js';
+import { createSignal, Show, Suspense } from 'solid-js';
 import type { ProviderId } from '../../settings/connections/model';
 import { providerIcon } from '../../settings/connections/provider-meta';
 import { useConnectionsModel } from '../../settings/connections/use-connections-model';
@@ -42,12 +43,21 @@ export function AgentComposerAddMenu(props: {
   getEditor: () => HTMLElement | null | undefined;
   session?: boolean;
   disabled?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const connections = useConnectionsModel();
   const settings = useSettingsState();
   const isTabAvailable = useSettingsTabAvailable();
-  const [drawerOpen, setDrawerOpen] = createSignal(false);
-  const [target, setTarget] = createSignal<Target>();
+  const [drawerOpen, updateDrawerOpen] = createSignal(false);
+  const [target, updateTarget] = createSignal<Target>();
+  const setDrawerOpen = (open: boolean) => {
+    updateDrawerOpen(open);
+    props.onOpenChange?.(open || !!target());
+  };
+  const setTarget = (next: Target | undefined) => {
+    updateTarget(next);
+    props.onOpenChange?.(drawerOpen() || !!next);
+  };
   const openTarget = (next: Target) => {
     // Release the mobile add sheet before opening the next focus trap.
     if (isMobile()) queueMicrotask(() => setTarget(next));
@@ -168,7 +178,7 @@ export function AgentComposerAddMenu(props: {
         disabled={props.disabled}
         onOpenDrawer={() => setDrawerOpen(true)}
         placement="bottom-start"
-        contentClass="w-[min(42rem,calc(100vw-2rem))] max-h-[min(32rem,var(--kb-popper-content-available-height))] overflow-y-auto rounded-2xl"
+        contentClass="w-[min(42rem,calc(100vw-2rem))] max-h-[min(32rem,var(--kb-popper-content-available-height))] overflow-y-auto"
       />
       <ComposerAddDrawer
         groups={groups()}

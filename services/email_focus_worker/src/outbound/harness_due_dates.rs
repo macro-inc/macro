@@ -5,7 +5,7 @@
 //! usage. The cognition service can't do this: it refuses free owners this model
 //! and bills paid owners' allowances for work they never asked for.
 
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use chrono::NaiveDate;
 use email::domain::focus::{DueDateExtractor, DueDateInput};
@@ -14,9 +14,14 @@ use macro_user_id::user_id::MacroUserIdStr;
 use reqwest::{Client, Url, header::HeaderValue};
 use rootcause::Report;
 use universal_input::domain::temporal::thread_due_date::{
-    ThreadDueDateRequest, ThreadDueDateResponse, ThreadMessage,
+    DueDateUsage, ThreadDueDateRequest, ThreadDueDateResponse, ThreadMessage,
 };
 use uuid::Uuid;
+
+use crate::{
+    metrics::{FocusMetrics, Metric},
+    outbound::metered::{Prices, UnlessDone, token_counts},
+};
 
 #[cfg(test)]
 mod test;
@@ -27,17 +32,25 @@ const ROUTE: &str = "universal_input/thread-due-date";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(8);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
 
-/// Asks the harness for the day a thread is due, acting as the thread's owner.
+/// Asks the harness for the day a thread is due, acting as the thread's owner,
+/// and counts each ask, its failures, and the tokens and cost the harness reports.
 pub struct HarnessDueDates {
     client: Client,
     url: Url,
     key: HeaderValue,
+    metrics: FocusMetrics,
+    prices: Arc<Prices>,
 }
 
 impl HarnessDueDates {
     /// Call the harness at `base` with the internal `key`. No retries or redirects:
     /// repeating a request can repeat provider usage.
-    pub fn new(base: &str, key: &str) -> Result<Self, Report> {
+    pub fn new(
+        base: &str,
+        key: &str,
+        metrics: FocusMetrics,
+        prices: Arc<Prices>,
+    ) -> Result<Self, Report> {
         let url = Url::parse(&format!("{}/{ROUTE}", base.trim_end_matches('/')))?;
         let mut key = HeaderValue::from_str(key)?;
         key.set_sensitive(true);
@@ -47,7 +60,30 @@ impl HarnessDueDates {
             .redirect(reqwest::redirect::Policy::none())
             .retry(reqwest::retry::never())
             .build()?;
-        Ok(Self { client, url, key })
+        Ok(Self {
+            client,
+            url,
+            key,
+            metrics,
+            prices,
+        })
+    }
+
+    /// Count what one read reports it took, without waiting on anything.
+    fn count_usage(&self, usage: &DueDateUsage) {
+        let amount = ai_usage::UsageAmount::Tokens {
+            input: usage.input_tokens,
+            output: usage.output_tokens,
+            cache_read: usage.cache_read_tokens,
+            cache_write: usage.cache_write_tokens,
+        };
+        if let Some((input, output)) = token_counts(amount) {
+            self.metrics.add(Metric::DueDateInputTokens, input);
+            self.metrics.add(Metric::DueDateOutputTokens, output);
+        }
+        if let Some(cost) = self.prices.cost(&usage.model, amount) {
+            self.metrics.add(Metric::DueDateCostUsd, cost);
+        }
     }
 }
 
@@ -63,6 +99,8 @@ impl DueDateExtractor for HarnessDueDates {
         thread_id: Uuid,
         input: &DueDateInput,
     ) -> Result<Option<NaiveDate>, Report> {
+        self.metrics.add(Metric::DueDateCalls, 1.0);
+        let outcome = UnlessDone::new(&self.metrics, Metric::DueDateFailures);
         let request = ThreadDueDateRequest {
             thread_id,
             subject: input.subject.clone(),
@@ -94,6 +132,10 @@ impl DueDateExtractor for HarnessDueDates {
             return Err(rootcause::report!("the harness answered {status}"));
         }
         let answer: ThreadDueDateResponse = response.json().await.map_err(request_failed)?;
+        outcome.finish(None);
+        if let Some(usage) = &answer.usage {
+            self.count_usage(usage);
+        }
         Ok(answer.due_on)
     }
 }

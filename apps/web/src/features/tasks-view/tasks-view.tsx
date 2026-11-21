@@ -2,18 +2,21 @@ import {
   CollectionPanes,
   ViewBreadcrumbs,
   ViewShell,
+  ViewSidebar,
 } from '@app/components/view-shell';
 import { MobileListLayout } from '@app/components/view-shell/MobileListLayout';
 import { openProject } from '@app/features/projects/open-project';
+import { ProjectSavedViewsProvider } from '@app/features/projects/project-saved-views';
 import { ProjectsTab } from '@app/features/projects/projects';
 import {
   useSavedView,
   useSavedViews,
 } from '@app/features/saved-views/queries/saved-views';
+import { SavedViewDraftHost } from '@app/features/saved-views/views/saved-view-draft-host';
 import { ViewTour, ViewTourAction } from '@app/features/tours/ViewTour';
 import { TutorialRow } from '@app/features/video-tutorials';
 import { SplitRouter, useNavigate, useParams } from '@app/lib/split-router';
-import { projectDetailRoute } from '@app/routes/routes';
+import { projectDetailRoute, tasksProjectsRoute } from '@app/routes/routes';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
@@ -31,9 +34,14 @@ import {
 } from 'solid-js';
 import { TasksHeader, TaskViewBreadcrumbItem } from './components/TasksHeader';
 import { TasksMobileControls } from './components/TasksMobileControls';
+
 import { TasksSidebar } from './components/TasksSidebar';
 import { TASK_TABS } from './constants';
-import { isProjectTab } from './core/task-navigation';
+import {
+  isProjectTab,
+  projectScopeForTab,
+  projectTabForScope,
+} from './core/task-navigation';
 import { TasksContent, TasksLoading } from './tasks-content';
 import { TasksViewProvider, useTasksView } from './tasks-view-context';
 import { tasksTour } from './tour';
@@ -88,6 +96,42 @@ function TasksViewBreadcrumbs(props: ParentProps) {
   );
 }
 
+function TasksProjectViews(props: ParentProps) {
+  const { state, registerProjectViewLeave } = useTasksView();
+  const navigate = useNavigate();
+  const params = useParams<{ projectId?: string; taskId?: string }>();
+  return (
+    <ProjectSavedViewsProvider
+      enabled={() => true}
+      active={() => isProjectTab(state.tab) && !state.savedViewActive}
+      registerLeave={registerProjectViewLeave}
+      scope={() => projectScopeForTab(state.tab)}
+      location={() => ({
+        projectId: params.projectId,
+        taskId: params.taskId,
+        tab: state.tab,
+      })}
+      onSelect={(id, scope = 'all') => {
+        const tab = projectTabForScope(scope);
+        fireAndForget(
+          navigate(
+            { route: tasksProjectsRoute, params: { projectsTab: 'projects' } },
+            {
+              search: {
+                tasks: { tab: [tab] },
+                projects: id ? { savedView: [id] } : {},
+              },
+            }
+          ),
+          'project-views'
+        );
+      }}
+    >
+      {props.children}
+    </ProjectSavedViewsProvider>
+  );
+}
+
 /** The tasks tour's shortcut for bringing existing issues over. */
 function ImportLinearAction() {
   const { openWithSplit } = useSplitLayout();
@@ -102,8 +146,15 @@ function ImportLinearAction() {
 
 function TasksViewRoot() {
   const panel = useSplitPanelOrThrow();
-  const { state, setState, projectsEnabled, savedViews, selectedTask } =
-    useTasksView();
+  const {
+    state,
+    setState,
+    savedViews,
+    selectedTask,
+    savedViewCreation,
+    savedViewsList,
+    discardNewSavedView,
+  } = useTasksView();
   const params = useParams<{ projectId?: string }>();
   const navigate = useNavigate();
   const layout = useSplitLayout();
@@ -120,7 +171,13 @@ function TasksViewRoot() {
   onMount(() => panel.handle.setDisplayName('Tasks'));
 
   const taskList = () => (
-    <MobileListLayout header={<TasksMobileControls />}>
+    <MobileListLayout
+      header={
+        <TasksMobileControls
+          focusSearchResults={() => listElement()?.focus()}
+        />
+      }
+    >
       <TasksHeader focusSearchResults={() => listElement()?.focus()} />
       <ViewTour tour={tasksTour} actions={<ImportLinearAction />} />
       <ViewShell.Content class="flex flex-col">
@@ -156,6 +213,14 @@ function TasksViewRoot() {
 
   return (
     <SplitPanel.Root>
+      <Show when={savedViewCreation && savedViewsList}>
+        <SavedViewDraftHost
+          creation={savedViewCreation!}
+          refresh={savedViewsList!.refresh}
+          discard={discardNewSavedView}
+          selection={{ tasks: ['tab', 'savedView'], projects: ['savedView'] }}
+        />
+      </Show>
       <SplitPanel.Body>
         <ViewShell.Root
           contentLayout="collection"
@@ -171,23 +236,15 @@ function TasksViewRoot() {
             hasDetail={!!selectedTask() || !!params.projectId}
             list={
               <Show
-                when={
-                  isProjectTab(state.tab) &&
-                  projectsEnabled() &&
-                  !state.savedViewActive
-                }
+                when={isProjectTab(state.tab) && !state.savedViewActive}
                 fallback={taskList()}
               >
                 <ProjectsTab
-                  scope={() =>
-                    state.tab === 'my-projects'
-                      ? 'assigned-to-me'
-                      : state.tab === 'created-projects'
-                        ? 'created-by-me'
-                        : 'all'
-                  }
+                  scope={() => projectScopeForTab(state.tab)}
                   title={TASK_TABS.find((tab) => tab.id === state.tab)?.label}
-                  mobileNavigation={<TasksMobileControls />}
+                  mobileNavigation={
+                    <ViewSidebar.Toggle action="expand" presentation="pill" />
+                  }
                   search={{
                     value: () => state.search,
                     onChange: (search) => setState('search', search),
@@ -248,9 +305,11 @@ export function TasksView(props: TasksViewProps) {
           return team ? { id: team.id, name: team.name } : undefined;
         }}
       >
-        <TasksViewBreadcrumbs>
-          <TasksViewRoot />
-        </TasksViewBreadcrumbs>
+        <TasksProjectViews>
+          <TasksViewBreadcrumbs>
+            <TasksViewRoot />
+          </TasksViewBreadcrumbs>
+        </TasksProjectViews>
       </TasksViewProvider>
     </ListEntityMetadataQueryProvider>
   );

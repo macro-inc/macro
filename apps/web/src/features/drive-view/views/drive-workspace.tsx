@@ -51,11 +51,13 @@ function DriveBrowser() {
 export function DriveWorkspace(props: { tour?: JSX.Element }) {
   const { state, sidebar, actions } = useDriveView();
 
-  const breadcrumbs = createMemo(() =>
-    driveLocationBreadcrumbs(state.value().location, sidebar.folders())
-  );
-
   const navigation = useDriveDetailNavigation();
+
+  const breadcrumbs = createMemo(() =>
+    navigation.showsLocation()
+      ? driveLocationBreadcrumbs(state.value().location, sidebar.folders())
+      : []
+  );
 
   const panel = useSplitPanelOrThrow();
 

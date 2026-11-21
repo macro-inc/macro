@@ -1,7 +1,3 @@
-import {
-  enableCanvasArtifacts,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import { screenToWorld, textTargetAt } from '@macro-inc/graphics';
 import type { CanvasState } from './create-canvas-state';
 /** Canvas text gestures stay separate from geometric drawing and pointer capture. */
@@ -56,7 +52,7 @@ export function attachTextInput(root: HTMLElement, state: CanvasState) {
       return;
     }
     if (item?.type === 'artifact') {
-      if (isFeatureEnabled(enableCanvasArtifacts)) state.embeds.enter(item.id);
+      state.embeds.enter(item.id);
       return;
     }
     const id = textTargetAt(state.editor.document, p);

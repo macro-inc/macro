@@ -1,7 +1,3 @@
-import {
-  enableCalendarUi,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import { openCalendarView } from './calendar-navigation';
 import { type CalendarEventTime, createCalendarRange } from './calendar-range';
 
@@ -38,7 +34,6 @@ export function eventTimeFromOccurrenceKey(
 export async function openCalendarEventSplit(
   target: CalendarEventOpenTarget
 ): Promise<boolean> {
-  if (!isFeatureEnabled(enableCalendarUi)) return false;
   const time =
     target.time ??
     (target.occurrenceKey

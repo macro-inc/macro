@@ -1,6 +1,6 @@
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
+import { lazy } from '@core/util/lazy';
 import { ok } from 'neverthrow';
-import { lazy } from 'solid-js';
 
 export const definition = defineBlock({
   name: 'routine',
