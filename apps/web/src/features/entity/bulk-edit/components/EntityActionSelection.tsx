@@ -31,7 +31,11 @@ export function EntityActionSelection(props: {
                 fallback={<EntitySelectionBadge entity={entity} />}
               >
                 {(item) => (
-                  <ItemPreview {...item()} class="min-w-0 max-w-48 shrink" />
+                  <ItemPreview
+                    {...item()}
+                    class="min-w-0 max-w-48 shrink"
+                    triggerClass="flex min-w-0 max-w-48 shrink"
+                  />
                 )}
               </Show>
             )}
@@ -41,6 +45,7 @@ export function EntityActionSelection(props: {
               variant="ghost"
               type="button"
               size="sm"
+              class="shrink-0"
               disabled={props.disabled}
               aria-label={
                 expanded()
