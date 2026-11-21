@@ -662,7 +662,8 @@ pub(super) fn settle(
 }
 
 /// Names the top-level keys a result may not have, so a program that returned
-/// `{data, count}` learns to move `count` into `data` instead of guessing.
+/// `{data, count}` learns to move `count` into `data` instead of guessing, and
+/// keeps valid `reviews` and `images` where they are.
 fn unexpected_keys(value: &serde_json::Value, allowed: &[&str]) -> String {
     let Some(object) = value.as_object() else {
         return String::new();
@@ -676,7 +677,7 @@ fn unexpected_keys(value: &serde_json::Value, allowed: &[&str]) -> String {
         String::new()
     } else {
         format!(
-            "The result has top-level {} beside data; put everything you return inside data. ",
+            "The result has top-level {} beside data; move only those keys inside data. ",
             extra.join(", ")
         )
     }

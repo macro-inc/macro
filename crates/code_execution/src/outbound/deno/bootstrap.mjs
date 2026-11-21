@@ -14,7 +14,14 @@ const entries = Object.entries;
 const hasOwn = Object.hasOwn;
 const keysOf = Object.keys;
 const call = Function.prototype.call.bind(Function.prototype.call);
+const defineProperty = Object.defineProperty;
 const {isWellFormed, toWellFormed} = String.prototype;
+const NumberObject = Number;
+const BooleanObject = Boolean;
+const StringObject = String;
+const numberValue = Number.prototype.valueOf;
+const booleanValue = Boolean.prototype.valueOf;
+const stringValue = String.prototype.valueOf;
 // Each search is heavy for the search cluster's few threads, so a program that
 // fans searches out makes every other user's search wait behind it. Four at once
 // still lets a program with dozens of searches finish inside its deadline.
@@ -24,13 +31,22 @@ const LOOP_HINT_CALLS = 50;
 // JSON.stringify writes a lone UTF-16 surrogate, such as a string sliced in
 // the middle of an emoji, as an escape like "\ud83d": valid JSON text but not
 // Unicode, so the host rejects the whole frame. Send U+FFFD in its place.
+// JSON unboxes Number, String and Boolean objects only after the replacer runs,
+// so unbox them here first, as JSON would.
 function wellFormed(_key, value) {
+  if (value instanceof NumberObject) return call(numberValue, value);
+  if (value instanceof BooleanObject) return call(booleanValue, value);
+  if (value instanceof StringObject) value = call(stringValue, value);
   if (typeof value === "string") return call(toWellFormed, value);
   if (value === null || typeof value !== "object" || isArray(value)) return value;
   const keys = keysOf(value);
   if (keys.every(key => call(isWellFormed, key))) return value;
+  // Define each key as an own property: assigning "__proto__" would call the
+  // inherited setter and drop the key.
   const fixed = {};
-  for (const key of keys) fixed[call(toWellFormed, key)] = value[key];
+  for (const key of keys) {
+    defineProperty(fixed, call(toWellFormed, key), {value: value[key], enumerable: true, writable: true, configurable: true});
+  }
   return fixed;
 }
 function emit(frame) {
