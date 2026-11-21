@@ -43,6 +43,7 @@ fn request(timeout_ms: u64) -> ExecuteRequest {
     ExecuteRequest {
         source: "return 42;".into(),
         timeout_ms,
+        language: Language::Javascript,
     }
 }
 
@@ -71,7 +72,8 @@ async fn validates_before_admission_and_bounds_queue() {
         service.execute(
             ExecuteRequest {
                 source: " ".into(),
-                timeout_ms: 1
+                timeout_ms: 1,
+                language: Language::Javascript,
             },
             RunEnvironment::default()
         ),
@@ -263,6 +265,7 @@ async fn a_program_with_type_errors_never_runs() {
                 ExecuteRequest {
                     source: source.into(),
                     timeout_ms: 10_000,
+                    language: Language::Javascript,
                 },
                 RunEnvironment {
                     session_id: Some(uuid::Uuid::now_v7()),
@@ -557,6 +560,7 @@ async fn a_program_that_turns_checking_off_is_refused() {
             &ExecuteRequest {
                 source: "// @ts-nocheck\nexport async function main() { return {data: 1}; }".into(),
                 timeout_ms: 10_000,
+                language: Language::Javascript,
             },
             ContextShape::default(),
             CancellationToken::new(),

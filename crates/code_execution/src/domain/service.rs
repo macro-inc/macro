@@ -106,6 +106,8 @@ impl ExecutionService {
             "code_execution.run",
             run_id = %run_id.0,
             check = tracing::field::Empty,
+            language = job.request.language.as_str(),
+            allowed_operations = job.environment.allowed_operations.as_ref().map(Vec::len),
             outcome = tracing::field::Empty,
         );
         self.tasks.spawn(

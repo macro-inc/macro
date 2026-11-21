@@ -1259,7 +1259,7 @@ export type MessagePart_Deserialize =
 /**  Prose from the user or the agent. */
 ({ kind: "text";
 /**  The prose. */
-text: string }) & { approvalId?: never; arguments?: never; control?: never; detail?: never; entries?: never; event?: never; id?: never; message?: never; mimeType?: never; name?: never; options?: never; outcome?: never; remembered?: never; reported?: never; request?: never; requestId?: never; requestedBy?: never; resolvedBy?: never; serverName?: never; serverSlug?: never; size?: never; status?: never; summary?: never; toolCall?: never; toolName?: never; toolOutcome?: never; uri?: never } |
+text: string }) & { approvalId?: never; approver?: never; arguments?: never; control?: never; detail?: never; entries?: never; event?: never; id?: never; message?: never; mimeType?: never; name?: never; options?: never; outcome?: never; remembered?: never; reported?: never; request?: never; requestId?: never; requestedBy?: never; resolvedBy?: never; serverName?: never; serverSlug?: never; size?: never; status?: never; summary?: never; toolCall?: never; toolName?: never; toolOutcome?: never; uri?: never } |
 /**
  *  A file the user attached to their prompt, by where it can be fetched.
  *
@@ -1279,11 +1279,11 @@ mimeType: string | null;
  *  specta refuses 64-bit integers, and no file this renders is
  *  anywhere near the precision limit.
  */
-size: number | null }) & { approvalId?: never; arguments?: never; control?: never; detail?: never; entries?: never; event?: never; id?: never; message?: never; options?: never; outcome?: never; remembered?: never; reported?: never; request?: never; requestId?: never; requestedBy?: never; resolvedBy?: never; serverName?: never; serverSlug?: never; status?: never; summary?: never; text?: never; toolCall?: never; toolName?: never; toolOutcome?: never } |
+size: number | null }) & { approvalId?: never; approver?: never; arguments?: never; control?: never; detail?: never; entries?: never; event?: never; id?: never; message?: never; options?: never; outcome?: never; remembered?: never; reported?: never; request?: never; requestId?: never; requestedBy?: never; resolvedBy?: never; serverName?: never; serverSlug?: never; status?: never; summary?: never; text?: never; toolCall?: never; toolName?: never; toolOutcome?: never } |
 /**  The agent's reasoning, which a reader may want to hide by default. */
 ({ kind: "thought";
 /**  The reasoning. */
-text: string }) & { approvalId?: never; arguments?: never; control?: never; detail?: never; entries?: never; event?: never; id?: never; message?: never; mimeType?: never; name?: never; options?: never; outcome?: never; remembered?: never; reported?: never; request?: never; requestId?: never; requestedBy?: never; resolvedBy?: never; serverName?: never; serverSlug?: never; size?: never; status?: never; summary?: never; toolCall?: never; toolName?: never; toolOutcome?: never; uri?: never } |
+text: string }) & { approvalId?: never; approver?: never; arguments?: never; control?: never; detail?: never; entries?: never; event?: never; id?: never; message?: never; mimeType?: never; name?: never; options?: never; outcome?: never; remembered?: never; reported?: never; request?: never; requestId?: never; requestedBy?: never; resolvedBy?: never; serverName?: never; serverSlug?: never; size?: never; status?: never; summary?: never; toolCall?: never; toolName?: never; toolOutcome?: never; uri?: never } |
 /**  A tool the agent invoked. */
 ({ kind: "tool_use";
 /**  The ACP `toolCallId`. */
@@ -1293,7 +1293,7 @@ name: ToolName;
 /**  Where the call got to. */
 status: ToolStatus;
 /**  What the tool did, as far as the log reveals. */
-detail: ToolDetail_Deserialize }) & { approvalId?: never; arguments?: never; control?: never; entries?: never; event?: never; message?: never; mimeType?: never; options?: never; outcome?: never; remembered?: never; reported?: never; request?: never; requestId?: never; requestedBy?: never; resolvedBy?: never; serverName?: never; serverSlug?: never; size?: never; summary?: never; text?: never; toolCall?: never; toolName?: never; toolOutcome?: never; uri?: never } |
+detail: ToolDetail_Deserialize }) & { approvalId?: never; approver?: never; arguments?: never; control?: never; entries?: never; event?: never; message?: never; mimeType?: never; options?: never; outcome?: never; remembered?: never; reported?: never; request?: never; requestId?: never; requestedBy?: never; resolvedBy?: never; serverName?: never; serverSlug?: never; size?: never; summary?: never; text?: never; toolCall?: never; toolName?: never; toolOutcome?: never; uri?: never } |
 /**  The agent asking to proceed. */
 ({ kind: "permission";
 /**  The agent request id an approval must echo. */
@@ -1303,7 +1303,7 @@ toolCall: ToolUseId;
 /**  The choices offered, in the order ACP listed them. */
 options: PermissionOption[];
 /**  How the request has resolved so far. */
-outcome: PermissionOutcome }) & { approvalId?: never; arguments?: never; control?: never; detail?: never; entries?: never; event?: never; id?: never; message?: never; mimeType?: never; name?: never; remembered?: never; reported?: never; request?: never; requestedBy?: never; resolvedBy?: never; serverName?: never; serverSlug?: never; size?: never; status?: never; summary?: never; text?: never; toolName?: never; toolOutcome?: never; uri?: never } |
+outcome: PermissionOutcome }) & { approvalId?: never; approver?: never; arguments?: never; control?: never; detail?: never; entries?: never; event?: never; id?: never; message?: never; mimeType?: never; name?: never; remembered?: never; reported?: never; request?: never; requestedBy?: never; resolvedBy?: never; serverName?: never; serverSlug?: never; size?: never; status?: never; summary?: never; text?: never; toolName?: never; toolOutcome?: never; uri?: never } |
 /**
  *  An MCP tool call the egress proxy is holding, or held, until the
  *  session's owner approved it: made in a turn somebody else prompted.
@@ -1329,17 +1329,23 @@ resolvedBy: string | null;
  *  Approved for good: the person who asked may make the calls it
  *  covers without the owner being asked again.
  */
-remembered: boolean }) & { control?: never; detail?: never; entries?: never; event?: never; id?: never; message?: never; mimeType?: never; name?: never; options?: never; outcome?: never; reported?: never; request?: never; requestId?: never; size?: never; summary?: never; text?: never; toolCall?: never; toolOutcome?: never; uri?: never } |
+remembered: boolean;
+/**
+ *  For a hold on the agent's permissions (`macro-sdk`), the only
+ *  person who may approve or decline it; absent on other holds,
+ *  whose approver is the session's owner.
+ */
+approver: string | null }) & { control?: never; detail?: never; entries?: never; event?: never; id?: never; message?: never; mimeType?: never; name?: never; options?: never; outcome?: never; reported?: never; request?: never; requestId?: never; size?: never; summary?: never; text?: never; toolCall?: never; toolOutcome?: never; uri?: never } |
 /**  A user-issued control operation on the session. */
 ({ kind: "control";
 /**  The requested operation. */
 control: Control;
 /**  How the runtime disposed of it so far. */
-outcome: ControlOutcome }) & { approvalId?: never; arguments?: never; detail?: never; entries?: never; event?: never; id?: never; message?: never; mimeType?: never; name?: never; options?: never; remembered?: never; reported?: never; request?: never; requestId?: never; requestedBy?: never; resolvedBy?: never; serverName?: never; serverSlug?: never; size?: never; status?: never; summary?: never; text?: never; toolCall?: never; toolName?: never; toolOutcome?: never; uri?: never } |
+outcome: ControlOutcome }) & { approvalId?: never; approver?: never; arguments?: never; detail?: never; entries?: never; event?: never; id?: never; message?: never; mimeType?: never; name?: never; options?: never; remembered?: never; reported?: never; request?: never; requestId?: never; requestedBy?: never; resolvedBy?: never; serverName?: never; serverSlug?: never; size?: never; status?: never; summary?: never; text?: never; toolCall?: never; toolName?: never; toolOutcome?: never; uri?: never } |
 /**  The agent's working todo list for the turn. */
 ({ kind: "plan";
 /**  The tasks, in the order the agent listed them. */
-entries: PlanEntry[] }) & { approvalId?: never; arguments?: never; control?: never; detail?: never; event?: never; id?: never; message?: never; mimeType?: never; name?: never; options?: never; outcome?: never; remembered?: never; reported?: never; request?: never; requestId?: never; requestedBy?: never; resolvedBy?: never; serverName?: never; serverSlug?: never; size?: never; status?: never; summary?: never; text?: never; toolCall?: never; toolName?: never; toolOutcome?: never; uri?: never } |
+entries: PlanEntry[] }) & { approvalId?: never; approver?: never; arguments?: never; control?: never; detail?: never; event?: never; id?: never; message?: never; mimeType?: never; name?: never; options?: never; outcome?: never; remembered?: never; reported?: never; request?: never; requestId?: never; requestedBy?: never; resolvedBy?: never; serverName?: never; serverSlug?: never; size?: never; status?: never; summary?: never; text?: never; toolCall?: never; toolName?: never; toolOutcome?: never; uri?: never } |
 /**
  *  A background task the harness reported on: a command, subagent or
  *  monitor it started earlier finished or emitted an event. The harness
@@ -1355,7 +1361,7 @@ status: TaskStatus | null;
  */
 summary: string;
 /**  The line a monitor streamed, for a monitor event. */
-event: string | null }) & { approvalId?: never; arguments?: never; control?: never; detail?: never; entries?: never; id?: never; message?: never; mimeType?: never; name?: never; options?: never; outcome?: never; remembered?: never; reported?: never; request?: never; requestId?: never; requestedBy?: never; resolvedBy?: never; serverName?: never; serverSlug?: never; size?: never; text?: never; toolCall?: never; toolName?: never; toolOutcome?: never; uri?: never } |
+event: string | null }) & { approvalId?: never; approver?: never; arguments?: never; control?: never; detail?: never; entries?: never; id?: never; message?: never; mimeType?: never; name?: never; options?: never; outcome?: never; remembered?: never; reported?: never; request?: never; requestId?: never; requestedBy?: never; resolvedBy?: never; serverName?: never; serverSlug?: never; size?: never; text?: never; toolCall?: never; toolName?: never; toolOutcome?: never; uri?: never } |
 /**
  *  The agent asking the user a question.
  *
@@ -1396,14 +1402,14 @@ reported: AnsweredField[] | null;
  *  call's later updates. Absent until the tool reports, and for
  *  every other kind of question.
  */
-toolOutcome: UserToolOutcome | null }) & { approvalId?: never; arguments?: never; control?: never; detail?: never; entries?: never; event?: never; id?: never; mimeType?: never; name?: never; options?: never; remembered?: never; requestedBy?: never; resolvedBy?: never; serverName?: never; serverSlug?: never; size?: never; status?: never; summary?: never; text?: never; toolName?: never; uri?: never };
+toolOutcome: UserToolOutcome | null }) & { approvalId?: never; approver?: never; arguments?: never; control?: never; detail?: never; entries?: never; event?: never; id?: never; mimeType?: never; name?: never; options?: never; remembered?: never; requestedBy?: never; resolvedBy?: never; serverName?: never; serverSlug?: never; size?: never; status?: never; summary?: never; text?: never; toolName?: never; uri?: never };
 
 /**  A unit of renderable content. */
 export type MessagePart_Serialize =
 /**  Prose from the user or the agent. */
 ({ kind: "text";
 /**  The prose. */
-text: string }) & { approvalId?: never; arguments?: never; control?: never; detail?: never; entries?: never; event?: never; id?: never; message?: never; mimeType?: never; name?: never; options?: never; outcome?: never; remembered?: never; reported?: never; request?: never; requestId?: never; requestedBy?: never; resolvedBy?: never; serverName?: never; serverSlug?: never; size?: never; status?: never; summary?: never; toolCall?: never; toolName?: never; toolOutcome?: never; uri?: never } |
+text: string }) & { approvalId?: never; approver?: never; arguments?: never; control?: never; detail?: never; entries?: never; event?: never; id?: never; message?: never; mimeType?: never; name?: never; options?: never; outcome?: never; remembered?: never; reported?: never; request?: never; requestId?: never; requestedBy?: never; resolvedBy?: never; serverName?: never; serverSlug?: never; size?: never; status?: never; summary?: never; toolCall?: never; toolName?: never; toolOutcome?: never; uri?: never } |
 /**
  *  A file the user attached to their prompt, by where it can be fetched.
  *
@@ -1423,11 +1429,11 @@ mimeType: string | null;
  *  specta refuses 64-bit integers, and no file this renders is
  *  anywhere near the precision limit.
  */
-size: number | null }) & { approvalId?: never; arguments?: never; control?: never; detail?: never; entries?: never; event?: never; id?: never; message?: never; options?: never; outcome?: never; remembered?: never; reported?: never; request?: never; requestId?: never; requestedBy?: never; resolvedBy?: never; serverName?: never; serverSlug?: never; status?: never; summary?: never; text?: never; toolCall?: never; toolName?: never; toolOutcome?: never } |
+size: number | null }) & { approvalId?: never; approver?: never; arguments?: never; control?: never; detail?: never; entries?: never; event?: never; id?: never; message?: never; options?: never; outcome?: never; remembered?: never; reported?: never; request?: never; requestId?: never; requestedBy?: never; resolvedBy?: never; serverName?: never; serverSlug?: never; status?: never; summary?: never; text?: never; toolCall?: never; toolName?: never; toolOutcome?: never } |
 /**  The agent's reasoning, which a reader may want to hide by default. */
 ({ kind: "thought";
 /**  The reasoning. */
-text: string }) & { approvalId?: never; arguments?: never; control?: never; detail?: never; entries?: never; event?: never; id?: never; message?: never; mimeType?: never; name?: never; options?: never; outcome?: never; remembered?: never; reported?: never; request?: never; requestId?: never; requestedBy?: never; resolvedBy?: never; serverName?: never; serverSlug?: never; size?: never; status?: never; summary?: never; toolCall?: never; toolName?: never; toolOutcome?: never; uri?: never } |
+text: string }) & { approvalId?: never; approver?: never; arguments?: never; control?: never; detail?: never; entries?: never; event?: never; id?: never; message?: never; mimeType?: never; name?: never; options?: never; outcome?: never; remembered?: never; reported?: never; request?: never; requestId?: never; requestedBy?: never; resolvedBy?: never; serverName?: never; serverSlug?: never; size?: never; status?: never; summary?: never; toolCall?: never; toolName?: never; toolOutcome?: never; uri?: never } |
 /**  A tool the agent invoked. */
 ({ kind: "tool_use";
 /**  The ACP `toolCallId`. */
@@ -1437,7 +1443,7 @@ name: ToolName;
 /**  Where the call got to. */
 status: ToolStatus;
 /**  What the tool did, as far as the log reveals. */
-detail: ToolDetail_Serialize }) & { approvalId?: never; arguments?: never; control?: never; entries?: never; event?: never; message?: never; mimeType?: never; options?: never; outcome?: never; remembered?: never; reported?: never; request?: never; requestId?: never; requestedBy?: never; resolvedBy?: never; serverName?: never; serverSlug?: never; size?: never; summary?: never; text?: never; toolCall?: never; toolName?: never; toolOutcome?: never; uri?: never } |
+detail: ToolDetail_Serialize }) & { approvalId?: never; approver?: never; arguments?: never; control?: never; entries?: never; event?: never; message?: never; mimeType?: never; options?: never; outcome?: never; remembered?: never; reported?: never; request?: never; requestId?: never; requestedBy?: never; resolvedBy?: never; serverName?: never; serverSlug?: never; size?: never; summary?: never; text?: never; toolCall?: never; toolName?: never; toolOutcome?: never; uri?: never } |
 /**  The agent asking to proceed. */
 ({ kind: "permission";
 /**  The agent request id an approval must echo. */
@@ -1447,7 +1453,7 @@ toolCall: ToolUseId;
 /**  The choices offered, in the order ACP listed them. */
 options: PermissionOption[];
 /**  How the request has resolved so far. */
-outcome: PermissionOutcome }) & { approvalId?: never; arguments?: never; control?: never; detail?: never; entries?: never; event?: never; id?: never; message?: never; mimeType?: never; name?: never; remembered?: never; reported?: never; request?: never; requestedBy?: never; resolvedBy?: never; serverName?: never; serverSlug?: never; size?: never; status?: never; summary?: never; text?: never; toolName?: never; toolOutcome?: never; uri?: never } |
+outcome: PermissionOutcome }) & { approvalId?: never; approver?: never; arguments?: never; control?: never; detail?: never; entries?: never; event?: never; id?: never; message?: never; mimeType?: never; name?: never; remembered?: never; reported?: never; request?: never; requestedBy?: never; resolvedBy?: never; serverName?: never; serverSlug?: never; size?: never; status?: never; summary?: never; text?: never; toolName?: never; toolOutcome?: never; uri?: never } |
 /**
  *  An MCP tool call the egress proxy is holding, or held, until the
  *  session's owner approved it: made in a turn somebody else prompted.
@@ -1473,17 +1479,23 @@ resolvedBy: string | null;
  *  Approved for good: the person who asked may make the calls it
  *  covers without the owner being asked again.
  */
-remembered: boolean }) & { control?: never; detail?: never; entries?: never; event?: never; id?: never; message?: never; mimeType?: never; name?: never; options?: never; outcome?: never; reported?: never; request?: never; requestId?: never; size?: never; summary?: never; text?: never; toolCall?: never; toolOutcome?: never; uri?: never } |
+remembered: boolean;
+/**
+ *  For a hold on the agent's permissions (`macro-sdk`), the only
+ *  person who may approve or decline it; absent on other holds,
+ *  whose approver is the session's owner.
+ */
+approver: string | null }) & { control?: never; detail?: never; entries?: never; event?: never; id?: never; message?: never; mimeType?: never; name?: never; options?: never; outcome?: never; reported?: never; request?: never; requestId?: never; size?: never; summary?: never; text?: never; toolCall?: never; toolOutcome?: never; uri?: never } |
 /**  A user-issued control operation on the session. */
 ({ kind: "control";
 /**  The requested operation. */
 control: Control;
 /**  How the runtime disposed of it so far. */
-outcome: ControlOutcome }) & { approvalId?: never; arguments?: never; detail?: never; entries?: never; event?: never; id?: never; message?: never; mimeType?: never; name?: never; options?: never; remembered?: never; reported?: never; request?: never; requestId?: never; requestedBy?: never; resolvedBy?: never; serverName?: never; serverSlug?: never; size?: never; status?: never; summary?: never; text?: never; toolCall?: never; toolName?: never; toolOutcome?: never; uri?: never } |
+outcome: ControlOutcome }) & { approvalId?: never; approver?: never; arguments?: never; detail?: never; entries?: never; event?: never; id?: never; message?: never; mimeType?: never; name?: never; options?: never; remembered?: never; reported?: never; request?: never; requestId?: never; requestedBy?: never; resolvedBy?: never; serverName?: never; serverSlug?: never; size?: never; status?: never; summary?: never; text?: never; toolCall?: never; toolName?: never; toolOutcome?: never; uri?: never } |
 /**  The agent's working todo list for the turn. */
 ({ kind: "plan";
 /**  The tasks, in the order the agent listed them. */
-entries: PlanEntry[] }) & { approvalId?: never; arguments?: never; control?: never; detail?: never; event?: never; id?: never; message?: never; mimeType?: never; name?: never; options?: never; outcome?: never; remembered?: never; reported?: never; request?: never; requestId?: never; requestedBy?: never; resolvedBy?: never; serverName?: never; serverSlug?: never; size?: never; status?: never; summary?: never; text?: never; toolCall?: never; toolName?: never; toolOutcome?: never; uri?: never } |
+entries: PlanEntry[] }) & { approvalId?: never; approver?: never; arguments?: never; control?: never; detail?: never; event?: never; id?: never; message?: never; mimeType?: never; name?: never; options?: never; outcome?: never; remembered?: never; reported?: never; request?: never; requestId?: never; requestedBy?: never; resolvedBy?: never; serverName?: never; serverSlug?: never; size?: never; status?: never; summary?: never; text?: never; toolCall?: never; toolName?: never; toolOutcome?: never; uri?: never } |
 /**
  *  A background task the harness reported on: a command, subagent or
  *  monitor it started earlier finished or emitted an event. The harness
@@ -1499,7 +1511,7 @@ status: TaskStatus | null;
  */
 summary: string;
 /**  The line a monitor streamed, for a monitor event. */
-event: string | null }) & { approvalId?: never; arguments?: never; control?: never; detail?: never; entries?: never; id?: never; message?: never; mimeType?: never; name?: never; options?: never; outcome?: never; remembered?: never; reported?: never; request?: never; requestId?: never; requestedBy?: never; resolvedBy?: never; serverName?: never; serverSlug?: never; size?: never; text?: never; toolCall?: never; toolName?: never; toolOutcome?: never; uri?: never } |
+event: string | null }) & { approvalId?: never; approver?: never; arguments?: never; control?: never; detail?: never; entries?: never; id?: never; message?: never; mimeType?: never; name?: never; options?: never; outcome?: never; remembered?: never; reported?: never; request?: never; requestId?: never; requestedBy?: never; resolvedBy?: never; serverName?: never; serverSlug?: never; size?: never; text?: never; toolCall?: never; toolName?: never; toolOutcome?: never; uri?: never } |
 /**
  *  The agent asking the user a question.
  *
@@ -1540,7 +1552,7 @@ reported: AnsweredField[] | null;
  *  call's later updates. Absent until the tool reports, and for
  *  every other kind of question.
  */
-toolOutcome: UserToolOutcome | null }) & { approvalId?: never; arguments?: never; control?: never; detail?: never; entries?: never; event?: never; id?: never; mimeType?: never; name?: never; options?: never; remembered?: never; requestedBy?: never; resolvedBy?: never; serverName?: never; serverSlug?: never; size?: never; status?: never; summary?: never; text?: never; toolName?: never; uri?: never };
+toolOutcome: UserToolOutcome | null }) & { approvalId?: never; approver?: never; arguments?: never; control?: never; detail?: never; entries?: never; event?: never; id?: never; mimeType?: never; name?: never; options?: never; remembered?: never; requestedBy?: never; resolvedBy?: never; serverName?: never; serverSlug?: never; size?: never; status?: never; summary?: never; text?: never; toolName?: never; uri?: never };
 
 /**  One model the runtime offers. */
 export type ModelOption = {
@@ -1654,6 +1666,12 @@ export type PendingToolApproval = {
 	toolName: string,
 	/**  Who prompted the turn; absent for a bot on nobody's behalf. */
 	requestedBy: string | null,
+	/**
+	 *  For a hold on the agent's permissions (`macro-sdk`), the only person
+	 *  who may approve or decline it; absent on other holds, whose approver
+	 *  is the session's owner.
+	 */
+	approver: string | null,
 };
 
 /**  One choice offered for a permission request. */

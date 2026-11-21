@@ -17,4 +17,5 @@ export const RecordedCallStatus = {
   completed: 'completed',
   failed: 'failed',
   unknown: 'unknown',
+  refused: 'refused',
 } as const;

@@ -1,5 +1,6 @@
 use super::{
-    CodeModeError, ExecutionId, ExecutionIdentity, ExecutionRecord, ModelImage, StaticFileId,
+    CodeModeError, ExecutionId, ExecutionIdentity, ExecutionRecord, ModelImage, ProgramLanguage,
+    StaticFileId,
 };
 use agent_session::domain::model::AgentSessionId;
 use async_trait::async_trait;
@@ -22,10 +23,12 @@ pub trait ExecutionTurns: Send + Sync + 'static {
 pub trait ExecutionCredentials: Send + Sync + 'static {
     /// Identity comes from the session, never from generated code. Implementations
     /// apply owner approval before minting and never persist the credential.
+    /// `language` is the language `source` is written in, for the approver.
     async fn issue(
         &self,
         identity: &ExecutionIdentity,
         source: &str,
+        language: ProgramLanguage,
         cancel: CancellationToken,
     ) -> Result<IssuedRun, CodeModeError>;
 }
@@ -72,4 +75,13 @@ pub trait ModelImages: Send + Sync + 'static {
         file: &StaticFileId,
         owner: &MacroUserIdStr<'_>,
     ) -> anyhow::Result<ModelImage>;
+}
+
+/// A per-owner backend rollout flag, such as whether a session owner may run
+/// JS tools programs.
+// Object-safe: code mode holds it as `Arc<dyn OwnerRollout>`.
+#[async_trait]
+pub trait OwnerRollout: Send + Sync + 'static {
+    /// On for `owner`. A flag that cannot be read counts as off.
+    async fn enabled(&self, owner: &macro_user_id::user_id::MacroUserIdStr<'static>) -> bool;
 }

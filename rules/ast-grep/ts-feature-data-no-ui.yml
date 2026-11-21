@@ -17,6 +17,8 @@ files:
   - apps/web/src/features/entity-appearance/primitives/**
   - apps/web/src/features/passwords/queries/**
   - apps/web/src/features/passwords/primitives/**
+  - apps/web/src/features/agent-permissions/queries/**
+  - apps/web/src/features/agent-permissions/primitives/**
   - apps/web/src/features/notifications-inbox/queries/**
   - apps/web/src/features/notifications-inbox/primitives/**
   - apps/web/src/features/channel-notification-stacks/primitives/**

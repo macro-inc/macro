@@ -93,6 +93,7 @@ async fn an_execution_joins_the_trace_of_the_turn_that_called_it() {
             reviews: Arc::new(OnceLock::new()),
             gate: Arc::new(agent_inmem::domain::tool_gate::UngatedNativeTools),
             app_url: "https://macro.com".into(),
+            permissions: None,
         },
     );
     use agent_inmem::domain::mcp::McpToolConnector as _;

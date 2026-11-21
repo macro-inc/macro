@@ -46,6 +46,14 @@ export async function main({macro}: CodeContext) {
 
 When it returns duplicates, tell the user it created nothing and ask whether to create the task anyway.
 
+## OCaml programs
+
+Sessions with the OCaml rollout can pass `language: "ocaml"` to ExecuteCode
+and send one `main.ml` that calls `Code_mode.run` once and returns
+`` `Assoc [("data", ...)] ``; requests go through `Macro_sdk_fetch.call_exn
+macro (Macro_sdk.<Service>.<operation> ...)`. ExecuteCode's description
+carries the contract and an example; there are no OCaml guides yet.
+
 ## Useful workflows
 
 - For a workspace overview, fetch small macro.workspace.page({includeTypes:[type], limit:3}) pages per type concurrently, including agent_session when the user asks about agent work. Use macro.search.all(query) for mixed-entity name or content searches, and its agentSessions option for session history. Return compact metadata and preserve pagination and source-scope limits. A sample is not a category total. Tasks use includeTypes:["document"], df:{l:{dst:"task"}}. AST & and | are binary; a single filter stays a leaf.

@@ -97,6 +97,32 @@ pub(super) struct InternalTools {
     pub(super) gate: Arc<dyn agent_inmem::domain::tool_gate::NativeToolGate>,
     /// Macro app origin, for links back to the calling session.
     pub(super) app_url: Arc<str>,
+    /// Agent permissions, for `ShowPermissions` in sessions whose JavaScript
+    /// tools programs they gate.
+    pub(super) permissions: Option<Arc<dyn agent_permissions::domain::service::AgentPermissions>>,
+}
+
+impl InternalTools {
+    /// `ShowPermissions`' context when `session`'s programs are gated: its
+    /// owner has the permissions rollout, and code mode runs JavaScript tools
+    /// programs there.
+    async fn permission_tools(
+        &self,
+        session: &agent_session::domain::model::AgentSession,
+    ) -> Option<agent_permissions::inbound::toolset::PermissionToolContext> {
+        let (Some(code_mode), Some(permissions)) = (&self.code_mode, &self.permissions) else {
+            return None;
+        };
+        if !code_mode.permissions_enabled(session).await {
+            return None;
+        }
+        Some(agent_permissions::inbound::toolset::PermissionToolContext {
+            service: Arc::clone(permissions),
+            session: session.id,
+            agent: session.bot_id,
+            owner: session.owner_user().ok()?.clone(),
+        })
+    }
 }
 
 impl ServerHandler for InternalTools {
@@ -122,7 +148,7 @@ impl ServerHandler for InternalTools {
     async fn list_tools(
         &self,
         _: Option<PaginatedRequestParams>,
-        _: rmcp::service::RequestContext<rmcp::RoleServer>,
+        context: rmcp::service::RequestContext<rmcp::RoleServer>,
     ) -> Result<ListToolsResult, rmcp::ErrorData> {
         let mut definitions: Vec<_> = toolset()
             .tools
@@ -143,27 +169,63 @@ impl ServerHandler for InternalTools {
                 )
             })
             .collect();
-        if self.code_mode.is_some() {
-            definitions.extend(
-                agent_code_mode::inbound::toolset::toolset()
-                    .tools
-                    .iter()
-                    .map(|(name, tool)| {
-                        Tool::new(
-                            name.clone(),
-                            tool.description.clone(),
-                            Arc::new(tool.input_schema.clone()),
-                        )
-                        .with_title(tool.annotations.title)
-                        .annotate(
-                            ToolAnnotations::with_title(tool.annotations.title)
-                                .read_only(tool.annotations.kind.read_only_hint())
-                                .destructive(tool.annotations.kind.destructive_hint())
-                                .idempotent(tool.annotations.idempotent)
-                                .open_world(tool.annotations.open_world),
-                        )
-                    }),
-            );
+        if let Some(code_mode) = &self.code_mode {
+            // A session that may run JS tools programs sees
+            // ExecuteCode with a language; every other session sees it
+            // unchanged.
+            let tools = match context
+                .extensions
+                .get::<axum::http::request::Parts>()
+                .and_then(|parts| parts.extensions.get::<AuthenticatedSession>())
+            {
+                Some(AuthenticatedSession(grant)) => {
+                    agent_code_mode::inbound::toolset::session_toolset(code_mode.as_ref(), grant)
+                        .await
+                }
+                None => agent_code_mode::inbound::toolset::toolset(),
+            };
+            if let Some(AuthenticatedSession(grant)) = context
+                .extensions
+                .get::<axum::http::request::Parts>()
+                .and_then(|parts| parts.extensions.get::<AuthenticatedSession>())
+                && self.permission_tools(grant).await.is_some()
+            {
+                definitions.extend(
+                    agent_permissions::inbound::toolset::toolset()
+                        .tools
+                        .iter()
+                        .map(|(name, tool)| {
+                            Tool::new(
+                                name.clone(),
+                                tool.description.clone(),
+                                Arc::new(tool.input_schema.clone()),
+                            )
+                            .with_title(tool.annotations.title)
+                            .annotate(
+                                ToolAnnotations::with_title(tool.annotations.title)
+                                    .read_only(tool.annotations.kind.read_only_hint())
+                                    .destructive(tool.annotations.kind.destructive_hint())
+                                    .idempotent(tool.annotations.idempotent)
+                                    .open_world(tool.annotations.open_world),
+                            )
+                        }),
+                );
+            }
+            definitions.extend(tools.tools.iter().map(|(name, tool)| {
+                Tool::new(
+                    name.clone(),
+                    tool.description.clone(),
+                    Arc::new(tool.input_schema.clone()),
+                )
+                .with_title(tool.annotations.title)
+                .annotate(
+                    ToolAnnotations::with_title(tool.annotations.title)
+                        .read_only(tool.annotations.kind.read_only_hint())
+                        .destructive(tool.annotations.kind.destructive_hint())
+                        .idempotent(tool.annotations.idempotent)
+                        .open_world(tool.annotations.open_world),
+                )
+            }));
         }
         definitions.extend(
             agent_code_mode::inbound::reviews::toolset()
@@ -186,9 +248,11 @@ impl ServerHandler for InternalTools {
                 }),
         );
         for tool in &mut definitions {
+            // ShowPermissions spends nobody's access: it shows the person
+            // controls they use with their own session.
             if !matches!(
                 tool.name.as_ref(),
-                "DescribeCodeTools" | "ReadCodeDocs" | "ExecuteCode"
+                "DescribeCodeTools" | "ReadCodeDocs" | "ExecuteCode" | "ShowPermissions"
             ) {
                 ai_toolset::actor::add_actor_schema(Arc::make_mut(&mut tool.input_schema));
             }
@@ -236,6 +300,32 @@ impl InternalTools {
             .owner_user()
             .map_err(|error| rmcp::ErrorData::invalid_request(error.to_string(), None))?;
         let mut acting_user = owner.clone();
+        if request.name.as_ref() == "ShowPermissions" {
+            let Some(permission_context) = self.permission_tools(grant).await else {
+                return Ok(CallToolResult::error(vec![ContentBlock::text(
+                    "ShowPermissions is not available in this session.",
+                )])
+                .into());
+            };
+            // Clients that send every call an account choice may send one
+            // here too; it has nothing to choose.
+            let mut arguments = request.arguments.unwrap_or_default();
+            arguments.remove("acting_as");
+            let result = agent_permissions::inbound::toolset::toolset()
+                .try_tool_call(
+                    permission_context,
+                    RequestContext::new(owner.clone()).with_genai_telemetry(false),
+                    &request.name,
+                    &serde_json::Value::Object(arguments),
+                )
+                .await
+                .map_err(|error| rmcp::ErrorData::invalid_params(error.to_string(), None))?;
+            let result = match result {
+                Ok(value) => CallToolResult::structured(value),
+                Err(error) => CallToolResult::error(vec![ContentBlock::text(error.description)]),
+            };
+            return Ok(result.into());
+        }
         if !matches!(
             request.name.as_ref(),
             "ExecuteCode" | "DescribeCodeTools" | "ReadCodeDocs"
@@ -287,7 +377,16 @@ impl InternalTools {
             return Ok(result.into());
         }
         if let Some(code_mode) = &self.code_mode {
-            let tools = agent_code_mode::inbound::toolset::toolset();
+            // Only a call that names a language needs the JS tools rollout; one without it is the same JavaScript call either way.
+            let tools = if request
+                .arguments
+                .as_ref()
+                .is_some_and(|arguments| arguments.contains_key("language"))
+            {
+                agent_code_mode::inbound::toolset::session_toolset(code_mode.as_ref(), grant).await
+            } else {
+                agent_code_mode::inbound::toolset::toolset()
+            };
             if tools.tools.contains_key(request.name.as_ref()) {
                 // The session actor meters the outer MCP call. Only SDK calls
                 // bypass ACP and retain the toolset's own telemetry.

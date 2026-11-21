@@ -61,6 +61,18 @@ pub const HOLD_LIMIT: Duration = Duration::from_secs(4 * 60);
 /// The server slug Macro's own tools are held under.
 pub const MACRO_SERVER_SLUG: &str = "macro";
 
+/// The server slug of a hold on an agent's permissions: a JS tools program
+/// that may call SDK operations set to "ask" waits here for the account it
+/// acts as. Its tool is `ExecuteCode`, and its standing approvals cover one
+/// `service.operation` each.
+pub const SDK_PERMISSION_SLUG: &str = "macro-sdk";
+
+/// What a person calls the server of a permission hold.
+const SDK_PERMISSION_SERVER_NAME: &str = "Macro";
+
+/// The tool a permission hold holds.
+const SDK_PERMISSION_TOOL: &str = "ExecuteCode";
+
 /// Macro's tools that use nobody's access: looking things up on the public
 /// web, and Macro's help about itself. Everything else on Macro's server
 /// reads or changes the owner's own data, and every connected app is the
@@ -178,6 +190,37 @@ impl<Approvals: OwnerApprovals> OwnerApprovals for Arc<Approvals> {
     }
 }
 
+/// A program held until the account it acts as allows the SDK operations it
+/// may call that the agent's permissions set to "ask".
+#[derive(Clone, Debug)]
+pub struct PermissionHold {
+    /// The session whose agent submitted the program.
+    pub session: AgentSessionId,
+    /// The only person who may approve or decline: the account the program
+    /// acts as. Recorded as the approval's owner.
+    pub approver: MacroUserIdStr<'static>,
+    /// Who prompted the turn the program was submitted in.
+    pub prompter: TurnPrompter,
+    /// The operations asked about, as `service.operation`. Never empty.
+    pub operations: Vec<String>,
+    /// What the dialog shows: `{"source", "permission": {"language",
+    /// "operations": [{"service", "operation", ..}]}}`.
+    pub arguments: serde_json::Value,
+}
+
+/// Holds programs on the agent's permissions.
+// Object-safe: the harness composition root holds an `Arc<dyn PermissionApprovals>`.
+#[async_trait::async_trait]
+pub trait PermissionApprovals: Send + Sync + 'static {
+    /// Wait until `hold` is answered, unless every operation it asks for
+    /// already has a standing approval for its approver in the session, and
+    /// say how it was resolved. Dropping the future cancels the hold.
+    async fn hold_permissions(
+        &self,
+        hold: PermissionHold,
+    ) -> Result<ToolApprovalStatus, EgressError>;
+}
+
 /// For a proxy with no way to ask the owner: every held call is refused, in
 /// words the model can relay. Fails closed, so a deployment that forgot to
 /// wire approvals cannot spend the owner's access on somebody else's behalf.
@@ -208,6 +251,17 @@ impl OwnerApprovals for RefuseHeldCalls {
     async fn hold_in_process(
         &self,
         _call: InProcessCall,
+    ) -> Result<ToolApprovalStatus, EgressError> {
+        Ok(ToolApprovalStatus::Expired)
+    }
+}
+
+#[async_trait::async_trait]
+impl PermissionApprovals for RefuseHeldCalls {
+    /// Nobody can be asked, so the program is refused as though it expired.
+    async fn hold_permissions(
+        &self,
+        _hold: PermissionHold,
     ) -> Result<ToolApprovalStatus, EgressError> {
         Ok(ToolApprovalStatus::Expired)
     }
@@ -352,13 +406,17 @@ pub trait ToolApprovalAnswers: Send + Sync + 'static {
     ///
     /// Only the owner recorded on the approval approves or declines: the
     /// call spends their access. Anyone with edit access may cancel, which is
-    /// how a turn gets unstuck while the owner is away.
+    /// how a turn gets unstuck while the owner is away. `by_person` says the
+    /// answer comes from a person's own session in Macro, not an agent's or
+    /// a program's credential; a hold on an agent's permissions
+    /// ([`SDK_PERMISSION_SLUG`]) takes anything but a cancel only from one.
     fn answer(
         &self,
         session: AgentSessionId,
         id: ToolApprovalId,
         answer: ApprovalAnswer,
         by: &MacroUserIdStr<'static>,
+        by_person: bool,
     ) -> impl Future<Output = Result<ToolApproval, ToolApprovalError>> + Send;
 
     /// Stop holding every call `session` is waiting on: its turn ended, it
@@ -376,8 +434,9 @@ impl<Answers: ToolApprovalAnswers> ToolApprovalAnswers for Arc<Answers> {
         id: ToolApprovalId,
         answer: ApprovalAnswer,
         by: &MacroUserIdStr<'static>,
+        by_person: bool,
     ) -> impl Future<Output = Result<ToolApproval, ToolApprovalError>> + Send {
-        (**self).answer(session, id, answer, by)
+        (**self).answer(session, id, answer, by, by_person)
     }
 
     fn release_session(
@@ -401,6 +460,7 @@ where
         id: ToolApprovalId,
         answer: ApprovalAnswer,
         by: &MacroUserIdStr<'static>,
+        by_person: bool,
     ) -> Result<ToolApproval, ToolApprovalError> {
         let approval = self
             .inner
@@ -411,6 +471,12 @@ where
             .ok_or(ToolApprovalError::NotFound)?;
         if answer != ApprovalAnswer::Cancel && *by != approval.owner {
             return Err(ToolApprovalError::NotOwner);
+        }
+        if answer != ApprovalAnswer::Cancel
+            && !by_person
+            && approval.server_slug == SDK_PERMISSION_SLUG
+        {
+            return Err(ToolApprovalError::NeedsPerson);
         }
         if !approval.status.is_pending() {
             return Err(ToolApprovalError::NotPending);
@@ -525,6 +591,9 @@ where
         approval: &ToolApproval,
         by: &MacroUserIdStr<'static>,
     ) -> Result<ToolApproval, ToolApprovalError> {
+        if approval.server_slug == SDK_PERMISSION_SLUG {
+            return self.approve_permissions_for_good(approval, by).await;
+        }
         let standing =
             StandingApproval::covering(approval, by).ok_or(ToolApprovalError::NobodyToRemember)?;
         self.store.remember(&standing).await?;
@@ -537,6 +606,70 @@ where
                 .await?;
         }
         Ok(approved)
+    }
+
+    /// [`Self::approve_for_good`] for a hold on the agent's permissions: one
+    /// standing approval per operation it asked for, for its approver, then
+    /// every other permission hold in the session whose operations are now
+    /// all standing.
+    #[tracing::instrument(
+        name = "agent_permissions.remember",
+        skip_all,
+        fields(approval_id = %approval.id, operations = tracing::field::Empty),
+        err(Debug)
+    )]
+    async fn approve_permissions_for_good(
+        &self,
+        approval: &ToolApproval,
+        by: &MacroUserIdStr<'static>,
+    ) -> Result<ToolApproval, ToolApprovalError> {
+        tracing::Span::current().record("operations", approval.permission_operations().len());
+        // Settled first: a hold that ended meanwhile remembers nothing.
+        let approved = self
+            .settle(approval.id, ToolApprovalStatus::Approved, Some(by), true)
+            .await?
+            .ok_or(ToolApprovalError::NotPending)?;
+        for standing in StandingApproval::covering_permissions(approval, by) {
+            self.store.remember(&standing).await?;
+        }
+        for id in self.store.pending_for_session(approval.session).await? {
+            let Some(other) = self.store.get(id).await? else {
+                continue;
+            };
+            if other.server_slug == SDK_PERMISSION_SLUG
+                && other.owner == approval.owner
+                && self
+                    .all_standing(other.session, &other.owner, &other.permission_operations())
+                    .await?
+            {
+                self.settle(id, ToolApprovalStatus::Approved, Some(by), true)
+                    .await?;
+            }
+        }
+        Ok(approved)
+    }
+
+    /// Whether `user` has a standing approval for every one of `operations`
+    /// (`service.operation`) in `session`. Never for none.
+    async fn all_standing(
+        &self,
+        session: AgentSessionId,
+        user: &MacroUserIdStr<'static>,
+        operations: &[String],
+    ) -> Result<bool, EgressError> {
+        if operations.is_empty() {
+            return Ok(false);
+        }
+        for operation in operations {
+            if !self
+                .store
+                .is_standing(session, user, SDK_PERMISSION_SLUG, operation)
+                .await?
+            {
+                return Ok(false);
+            }
+        }
+        Ok(true)
     }
 
     /// Wait until `id` is no longer pending, keeping the client alive on
@@ -807,6 +940,99 @@ where
             .await;
         guard.disarm();
         Ok(resolved?.status)
+    }
+}
+
+#[async_trait::async_trait]
+impl<Store, Signals, Announcer> PermissionApprovals
+    for ToolApprovalService<Store, Signals, Announcer>
+where
+    Store: ToolApprovalStore,
+    Signals: ToolApprovalSignals,
+    Announcer: ToolApprovalAnnouncer,
+{
+    #[tracing::instrument(
+        name = "agent_permissions.hold",
+        skip_all,
+        fields(
+            agent_session_id = %hold.session,
+            operations = hold.operations.len(),
+            approval_id = tracing::field::Empty,
+            status = tracing::field::Empty,
+            remembered = tracing::field::Empty,
+        ),
+        err
+    )]
+    async fn hold_permissions(
+        &self,
+        hold: PermissionHold,
+    ) -> Result<ToolApprovalStatus, EgressError> {
+        let span = tracing::Span::current();
+        if self
+            .inner
+            .all_standing(hold.session, &hold.approver, &hold.operations)
+            .await?
+        {
+            span.record("status", "approved");
+            span.record("remembered", true);
+            return Ok(ToolApprovalStatus::Approved);
+        }
+        let approval = ToolApproval {
+            id: ToolApprovalId::mint(),
+            session: hold.session,
+            turn_action_id: hold.prompter.action_id,
+            // No JSON-RPC request to name; unique so nothing withdraws it.
+            request_id: serde_json::Value::String(macro_uuid::generate_uuid_v7().to_string()),
+            owner: hold.approver.clone(),
+            requested_by: hold.prompter.acting_user().cloned(),
+            server_slug: SDK_PERMISSION_SLUG.to_owned(),
+            server_name: SDK_PERMISSION_SERVER_NAME.to_owned(),
+            tool_name: SDK_PERMISSION_TOOL.to_owned(),
+            arguments: hold.arguments,
+            status: ToolApprovalStatus::Pending,
+            resolved_by: None,
+            remembered: false,
+        };
+        span.record("approval_id", tracing::field::display(approval.id));
+        self.inner.store.insert(&approval).await?;
+        // A standing approval given between the check and the insert
+        // approves it quietly; one that settled it first is read below,
+        // and nobody is asked about either.
+        let settled_quietly = self
+            .inner
+            .all_standing(hold.session, &hold.approver, &hold.operations)
+            .await?;
+        if settled_quietly
+            && self
+                .inner
+                .store
+                .resolve(approval.id, ToolApprovalStatus::Approved, None, true)
+                .await?
+                .is_some()
+        {
+            span.record("status", "approved");
+            span.record("remembered", true);
+            return Ok(ToolApprovalStatus::Approved);
+        }
+        if !settled_quietly {
+            self.inner
+                .announcer
+                .requested(&approval, &hold.approver)
+                .await;
+        }
+        let guard = CancelOnDrop {
+            inner: Some(Arc::clone(&self.inner)),
+            id: approval.id,
+        };
+        let resolved = self
+            .inner
+            .await_resolution(&approval, None, hold.approver.email_str(), None)
+            .await;
+        guard.disarm();
+        let resolved = resolved?;
+        span.record("status", resolved.status.as_str());
+        span.record("remembered", resolved.remembered);
+        Ok(resolved.status)
     }
 }
 

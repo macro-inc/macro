@@ -244,7 +244,10 @@ the existing gateway prefixes.
 - Every public method carries one MCP hint tag (`@readonly`, `@write`, `@send` or
   `@destructive`, plus `@openworld`/`@idempotent` when true) or
   `@mcp-exclude <reason>`; `../sdk-mcp` turns methods into ChatGPT MCP tools
-  by them and fails on an untagged method. A new or changed public method
+  by them and fails on an untagged method. A method (or a module) behind a
+  feature flag also carries `@flag <flag-name>`: it stays in the package but
+  is left out of the MCP tools, the reference and code mode's docs until the
+  flag ships and the tag goes. A new or changed public method
   signature or hint tag updates that package's tool snapshots (`bunx vitest
   run -u` there); doc text alone does not.
 - Give each code-mode documentation topic exactly one `@routing` sentence
@@ -281,6 +284,9 @@ the existing gateway prefixes.
   them again on the exported specs.
 - Run `bun run generate` to regenerate SDK clients and normalize whitespace-only
   lines; do not hand-edit generated output to satisfy whitespace checks.
+- `../sdk-ocaml` generates its OCaml client from these same `specs/`; after a
+  spec change, run `just generate` there (in its `shell.nix`) and commit the
+  result, or its drift test fails (CI runs it as `OCaml SDK Check`).
 - The SDK reference (`../sdk-docs`) and the code-mode bundle and documentation
   (`crates/code_mode_assets`) are generated from this source at build time and
   never committed; run `bun run test` in `../sdk-docs` and `../code-mode-sdk`

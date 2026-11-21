@@ -1,8 +1,8 @@
 //! SDK discovery and one awaited code execution exposed as ordinary tools.
 use crate::domain::{
-    CodeModeError, ExecutionId, ExecutionReceipt, SessionCodeMode, SymbolReferences,
-    TaskDocumentation, UserCodeMode, UserExecutionReceipt, documentation_for_task, read_symbols,
-    with_attached_skill,
+    CodeModeError, ExecutionId, ExecutionReceipt, ProgramLanguage, SessionCodeMode,
+    SymbolReferences, TaskDocumentation, UserCodeMode, UserExecutionReceipt,
+    documentation_for_task, read_symbols, with_attached_skill,
 };
 use agent_session::domain::model::AgentSession;
 use ai_toolset::{
@@ -10,7 +10,7 @@ use ai_toolset::{
     ToolCallError, ToolResult,
 };
 use async_trait::async_trait;
-use code_execution::domain::ExecuteRequest;
+use code_execution::domain::{ExecuteRequest, Language};
 use cognition::domain::Cognition;
 use macro_user_id::user_id::MacroUserIdStr;
 use schemars::JsonSchema;
@@ -38,6 +38,29 @@ pub fn toolset() -> AsyncToolCollection<CodeModeToolContext> {
         .add_tool::<ExecuteCode, CodeModeToolContext>()
         .add_tool::<DescribeCodeTools, CodeModeToolContext>()
         .add_tool::<ReadCodeDocs, CodeModeToolContext>()
+}
+
+/// [`toolset`] for a session that may run JavaScript tools programs
+/// ([`SessionCodeMode::js_tools_enabled`]), which the agent's permissions
+/// always gate: its `ExecuteCode` takes a `language` and says how.
+pub fn toolset_with_js_tools() -> AsyncToolCollection<CodeModeToolContext> {
+    AsyncToolCollection::new()
+        .add_tool::<ExecuteCodeWithJsTools, CodeModeToolContext>()
+        .add_tool::<DescribeCodeTools, CodeModeToolContext>()
+        .add_tool::<ReadCodeDocs, CodeModeToolContext>()
+}
+
+/// The session's code-mode tools: with JavaScript tools programs, and how
+/// the agent's permissions gate them, when the session may run them.
+pub async fn session_toolset(
+    service: &dyn SessionCodeMode,
+    session: &AgentSession,
+) -> AsyncToolCollection<CodeModeToolContext> {
+    if service.js_tools_enabled(session).await {
+        toolset_with_js_tools()
+    } else {
+        toolset()
+    }
 }
 
 /// Facts supplied by an adapter that authenticated a user, not a session.
@@ -151,21 +174,137 @@ impl AsyncTool<CodeModeToolContext> for ExecuteCode {
         context: ServiceContext<CodeModeToolContext>,
         request: RequestContext,
     ) -> ToolResult<Self::Output> {
-        context
-            .service
-            .execute(
-                &context.session,
-                self.execution_id.unwrap_or_else(ExecutionId::mint),
-                self.acting_as,
-                self.turn_id,
-                ExecuteRequest {
-                    source: self.source.clone(),
-                    timeout_ms: self.timeout_ms,
-                },
-                request.cancel,
-            )
-            .await
-            .map_err(tool_error)
+        execute_in_session(
+            &context,
+            request,
+            self.execution_id,
+            self.acting_as,
+            self.turn_id,
+            ExecuteRequest {
+                source: self.source.clone(),
+                timeout_ms: self.timeout_ms,
+                language: Language::Javascript,
+            },
+        )
+        .await
+    }
+}
+
+async fn execute_in_session(
+    context: &CodeModeToolContext,
+    request: RequestContext,
+    execution_id: Option<ExecutionId>,
+    acting_as: ai_toolset::actor::ToolActor,
+    turn_id: macro_uuid::Uuid,
+    program: ExecuteRequest,
+) -> ToolResult<ExecutionReceipt> {
+    context
+        .service
+        .execute(
+            &context.session,
+            execution_id.unwrap_or_else(ExecutionId::mint),
+            acting_as,
+            turn_id,
+            program,
+            request.cancel,
+        )
+        .await
+        .map_err(tool_error)
+}
+
+/// [`ExecuteCode`] for a session that may run JavaScript tools programs: the
+/// same tool, with a `language`, the JS tools contract and how the agent's
+/// permissions gate those programs.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(
+    title = "ExecuteCode",
+    description = format!(
+        "{SESSION_EXECUTE_CODE}\n{NEVER_GUESS}\n{} {SESSION_CHECK_BACK}\n{PROGRAM}\n{RUNTIME}\nPresentView schema; execution.views.present(view) takes its view property:\n{}\n\n{}\n{}",
+        SESSION_PRESENT.trim_end(),
+        dynamic_ui::present_view_schema(),
+        include_str!("toolset/session/js_tools.md"),
+        include_str!("toolset/session/js_tools_permissions.md"),
+    )
+)]
+pub struct ExecuteCodeWithJsTools {
+    /// As [`ExecuteCode::execution_id`].
+    #[serde(default)]
+    #[schemars(
+        description = "Optional; usually omit it. The server assigns an ID and the receipt reports it as executionId. Pass a new random UUID only when a repeated write would be harmful: if the reply is lost, resending the same execution_id with identical source and language returns the saved receipt instead of running again. Never use an example or placeholder UUID or an ID from another session; an ID already taken runs under a new ID."
+    )]
+    pub execution_id: Option<ExecutionId>,
+    /// Choose whose account authenticates every SDK operation in this execution.
+    pub acting_as: ai_toolset::actor::ToolActor,
+    /// Copy the current server-issued turn_id from the prompt's execution context.
+    /// Never reuse an ID from another turn or discover a replacement for a stale call.
+    pub turn_id: macro_uuid::Uuid,
+    /// The program's language.
+    #[serde(default)]
+    #[schemars(
+        description = "The language of source: javascript (the default) or js_tools. Omit it for JavaScript."
+    )]
+    pub language: JsToolsToolLanguage,
+    /// A JavaScript ES module, or a JavaScript tools script.
+    #[schemars(
+        description = "The program, at most 64 KiB. JavaScript (the default): a TypeScript module, type-checked against the SDK before it runs. Import { Macro } from '@macro-inc/sdk' and Handlebars from 'handlebars'. Export async function main({token, hosts, webAppUrl}: CodeContext) { const macro = new Macro({token, hosts, webAppUrl}); return {data: ...}; }. The optional reviews array defaults to empty. Dependencies are preinstalled; no package downloads. The token, hosts and webAppUrl are supplied by the runner; never return or log the token. JavaScript tools (language js_tools): a script that calls await tools.<service>.<operation>({path, query, body}) and returns its data, as the description's JavaScript tools section shows."
+    )]
+    pub source: String,
+    /// Deadline including queueing and API calls.
+    #[serde(default = "default_timeout")]
+    #[schemars(
+        description = "Total deadline in milliseconds, from 1 to 30000; defaults to 30000."
+    )]
+    pub timeout_ms: u64,
+}
+
+impl ToolAnnotated for ExecuteCodeWithJsTools {
+    const ANNOTATIONS: ToolAnnotations = ExecuteCode::ANNOTATIONS;
+}
+
+#[async_trait]
+impl AsyncTool<CodeModeToolContext> for ExecuteCodeWithJsTools {
+    type Output = ExecutionReceipt;
+
+    async fn call(
+        &self,
+        context: ServiceContext<CodeModeToolContext>,
+        request: RequestContext,
+    ) -> ToolResult<Self::Output> {
+        execute_in_session(
+            &context,
+            request,
+            self.execution_id,
+            self.acting_as,
+            self.turn_id,
+            ExecuteRequest {
+                source: self.source.clone(),
+                timeout_ms: self.timeout_ms,
+                language: ProgramLanguage::from(self.language).into(),
+            },
+        )
+        .await
+    }
+}
+
+/// The languages [`ExecuteCodeWithJsTools`] takes.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum JsToolsToolLanguage {
+    /// A JavaScript ES module exporting `main`.
+    #[default]
+    Javascript,
+    /// A script in opencode's JavaScript dialect that calls SDK operations
+    /// as `tools.<service>.<operation>(input)`.
+    JsTools,
+}
+
+impl From<JsToolsToolLanguage> for ProgramLanguage {
+    fn from(language: JsToolsToolLanguage) -> Self {
+        match language {
+            JsToolsToolLanguage::Javascript => Self::Javascript,
+            JsToolsToolLanguage::JsTools => Self::JsTools,
+        }
     }
 }
 
@@ -221,6 +360,7 @@ impl AsyncTool<UserCodeModeToolContext> for UserExecuteCode {
                 ExecuteRequest {
                     source: self.source.clone(),
                     timeout_ms: self.timeout_ms,
+                    language: Language::Javascript,
                 },
                 request.cancel,
             )

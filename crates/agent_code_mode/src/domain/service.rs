@@ -2,7 +2,9 @@ use std::sync::Arc;
 
 use agent_session::domain::model::{AgentSession, AgentSessionId};
 use async_trait::async_trait;
-use code_execution::domain::{ContextShape, ExecuteRequest, Limits, Outcome, ProgramExecutor};
+use code_execution::domain::{
+    ContextShape, ExecuteRequest, Language, Limits, Outcome, ProgramExecutor,
+};
 use entity_access::domain::models::{EntityAccessReceipt, EntityType, ViewAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
 use tokio::sync::Semaphore;
@@ -30,6 +32,30 @@ pub trait SessionCodeMode: Send + Sync + 'static {
         access: &EntityAccessReceipt<ViewAccessLevel>,
         execution: ExecutionId,
     ) -> Result<ExecutionRecord, CodeModeError>;
+    /// Whether `session` may run JavaScript tools programs: this deployment
+    /// can run and gate them and the session owner has the agent permissions
+    /// rollout, which always gate them. Off when either is missing or the
+    /// flag cannot be read.
+    async fn js_tools_enabled(&self, session: &AgentSession) -> bool {
+        let _ = session;
+        false
+    }
+    /// Whether the agent's permissions gate some of `session`'s programs: its
+    /// JavaScript tools programs, which they always gate.
+    async fn permissions_enabled(&self, session: &AgentSession) -> bool {
+        let _ = session;
+        false
+    }
+}
+
+/// JavaScript tools programs, offered where the runner can run them and the
+/// agent permissions gate checks them.
+pub struct JsToolsPrograms {
+    /// The interpreter and catalog's fingerprint, recorded on every JS tools
+    /// execution.
+    pub fingerprint: String,
+    /// The per-owner rollout: agent permissions, the only flag on them.
+    pub rollout: Arc<dyn OwnerRollout>,
 }
 
 struct Inner {
@@ -39,6 +65,7 @@ struct Inner {
     turns: Arc<dyn ExecutionTurns>,
     images: Arc<dyn ModelImages>,
     admission: Arc<Semaphore>,
+    js_tools: Option<Arc<JsToolsPrograms>>,
 }
 
 /// Code-mode policy over interchangeable execution, credential, and storage capabilities.
@@ -62,6 +89,7 @@ impl CodeModeService {
             turns,
             images,
             admission: Arc::new(Semaphore::new(limits.max_running + limits.max_queued)),
+            js_tools: None,
         }))
     }
 
@@ -99,10 +127,38 @@ impl CodeModeService {
         }
     }
 
+    /// Offer JavaScript tools programs to sessions whose owner has the
+    /// rollout. Wire it only where the permissions gate analyzes them.
+    pub fn with_js_tools(self, js_tools: JsToolsPrograms) -> Self {
+        Self(Arc::new(Inner {
+            executor: self.0.executor.clone(),
+            credentials: Arc::clone(&self.0.credentials),
+            store: Arc::clone(&self.0.store),
+            turns: Arc::clone(&self.0.turns),
+            images: Arc::clone(&self.0.images),
+            admission: Arc::clone(&self.0.admission),
+            js_tools: Some(Arc::new(js_tools)),
+        }))
+    }
+
+    /// The fingerprint of what a JS tools execution ran against: its
+    /// interpreter and catalog.
+    fn sdk_fingerprint(&self, language: ProgramLanguage) -> Option<String> {
+        match language {
+            ProgramLanguage::Javascript => None,
+            ProgramLanguage::JsTools => self
+                .0
+                .js_tools
+                .as_ref()
+                .map(|js_tools| js_tools.fingerprint.clone()),
+        }
+    }
+
     async fn run(
         &self,
         mut identity: ExecutionIdentity,
         execution: ExecutionId,
+        language: ProgramLanguage,
         request: ExecuteRequest,
         cancel: CancellationToken,
     ) -> Result<(ExecutionReceipt, Option<MacroUserIdStr<'static>>), CodeModeError> {
@@ -111,12 +167,15 @@ impl CodeModeService {
             acting_as: Some(identity.acting_as),
             turn_id: Some(identity.turn),
             source: request.source.clone(),
+            language,
+            sdk_fingerprint: self.sdk_fingerprint(language),
             status: ExecutionStatus::Running,
             result: None,
             error: None,
             calls: Vec::new(),
             activity: Vec::new(),
             activity_truncated: false,
+            permission: None,
         };
         match self.0.store.create(identity.session, &record).await {
             Ok(()) => {}
@@ -124,6 +183,7 @@ impl CodeModeService {
                 match self.0.store.get(identity.session, execution).await {
                     Ok(existing)
                         if existing.source == request.source
+                            && existing.language == record.language
                             && existing.acting_as == Some(identity.acting_as)
                             && existing.turn_id == Some(identity.turn) =>
                     {
@@ -157,10 +217,12 @@ impl CodeModeService {
         }
         let executor = self.0.executor.as_ref().ok_or(CodeModeError::Unavailable)?;
         // A program with type errors stops here, before the owner is asked
-        // to approve it or a credential is minted for it.
-        if let Err(outcome) = executor
-            .check_program(&request, SESSION_PROGRAM, cancel.clone())
-            .await
+        // to approve it or a credential is minted for it. A JS tools program
+        // isn't TypeScript: the permission gate parses and analyzes it.
+        if language == ProgramLanguage::Javascript
+            && let Err(outcome) = executor
+                .check_program(&request, SESSION_PROGRAM, cancel.clone())
+                .await
         {
             (record.status, record.result, record.error) = settle_unrun(outcome, Reviews::Allowed);
             self.0.store.save(identity.session, &record).await?;
@@ -172,10 +234,36 @@ impl CodeModeService {
         } = match self
             .0
             .credentials
-            .issue(&identity, &request.source, cancel.clone())
+            .issue(&identity, &request.source, record.language, cancel.clone())
             .await
         {
-            Ok(issued) => issued,
+            Ok(issued) => {
+                tracing::Span::current().record(
+                    "permission",
+                    if issued.environment.allowed_operations.is_some() {
+                        "admitted"
+                    } else {
+                        "off"
+                    },
+                );
+                issued
+            }
+            // Checked and not run: the program's outcome, not the service's.
+            Err(CodeModeError::NotRun(not_run)) => {
+                tracing::Span::current().record(
+                    "permission",
+                    match &not_run.permission {
+                        Some(ExecutionPermission::Blocked { .. }) => "blocked",
+                        Some(ExecutionPermission::Declined { .. }) => "declined",
+                        None => "cannot_analyze",
+                    },
+                );
+                record.status = ExecutionStatus::Failed;
+                record.error = Some(not_run.message);
+                record.permission = not_run.permission;
+                self.0.store.save(identity.session, &record).await?;
+                return Ok((receipt(&record), None));
+            }
             Err(error) => {
                 record.status = ExecutionStatus::Failed;
                 record.error = Some(error.to_string());
@@ -498,6 +586,13 @@ impl SessionCodeMode for CodeModeService {
             .map_err(|_| CodeModeError::Forbidden)?
             .clone();
         validate_request(&request)?;
+        if request.language == Language::JsTools && !self.js_tools_enabled(session).await {
+            return Err(CodeModeError::Invalid(
+                "js_tools programs are not available in this session; write a JavaScript module."
+                    .into(),
+            ));
+        }
+        let language = ProgramLanguage::from(request.language);
         let permit = Arc::clone(&self.0.admission)
             .try_acquire_owned()
             .map_err(|_| CodeModeError::Busy)?;
@@ -518,9 +613,12 @@ impl SessionCodeMode for CodeModeService {
             execution_id = %execution,
             assigned_execution_id = tracing::field::Empty,
             source_bytes = request.source.len(),
+            language = request.language.as_str(),
+            sdk_fingerprint = self.sdk_fingerprint(language).as_deref(),
             status = tracing::field::Empty,
             activity = tracing::field::Empty,
             result_bytes = tracing::field::Empty,
+            permission = tracing::field::Empty,
         );
         // Finish the journal even when the MCP request future is dropped. The drop
         // guard cancels the runner; its final cleanup then persists the outcome.
@@ -528,7 +626,9 @@ impl SessionCodeMode for CodeModeService {
         tokio::spawn(
             async move {
                 let _permit = permit;
-                let mut result = service.run(identity, execution, request, cancel).await;
+                let mut result = service
+                    .run(identity, execution, language, request, cancel)
+                    .await;
                 // Image reads stay inside the admission budget, and show only
                 // files the account the execution acted as owns.
                 if let Ok((receipt, acting_user)) = &mut result {
@@ -577,6 +677,20 @@ impl SessionCodeMode for CodeModeService {
         // survived. Expose the same uncertainty on journal reads and retries.
         record.error = execution_error(&record);
         Ok(record)
+    }
+
+    async fn js_tools_enabled(&self, session: &AgentSession) -> bool {
+        let (Some(js_tools), Some(_)) = (&self.0.js_tools, &self.0.executor) else {
+            return false;
+        };
+        match session.owner_user() {
+            Ok(owner) => js_tools.rollout.enabled(owner).await,
+            Err(_) => false,
+        }
+    }
+
+    async fn permissions_enabled(&self, session: &AgentSession) -> bool {
+        self.js_tools_enabled(session).await
     }
 }
 
@@ -699,7 +813,10 @@ pub(super) fn validate_request(request: &ExecuteRequest) -> Result<(), CodeModeE
         || request.timeout_ms == 0
         || request.timeout_ms > 30_000
     {
-        return Err(CodeModeError::Invalid("Provide a nonempty TypeScript module exporting main() of at most 64 KiB and timeout_ms between 1 and 30000.".into()));
+        return Err(CodeModeError::Invalid(match request.language {
+            Language::Javascript => "Provide a nonempty TypeScript module exporting main() of at most 64 KiB and timeout_ms between 1 and 30000.",
+            Language::JsTools => "Provide a nonempty JS tools program of at most 64 KiB and timeout_ms between 1 and 30000.",
+        }.into()));
     }
     Ok(())
 }
@@ -712,6 +829,7 @@ fn receipt(record: &ExecutionRecord) -> ExecutionReceipt {
         result: record.result.clone(),
         error: execution_error(record),
         model_media: Vec::new(),
+        permission: record.permission.clone(),
     }
 }
 

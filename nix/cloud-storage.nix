@@ -248,6 +248,9 @@
           && (
             builtins.elem rel [
               "bun.lock"
+              "crates"
+              "crates/agent_permission_registry"
+              "crates/agent_permission_registry/registry.json"
               "package.json"
               "packages"
             ]
