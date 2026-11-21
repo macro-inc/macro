@@ -1,0 +1,22 @@
+apps/web/src/lib/core/hotkey/hotkeys.ts
+  s_4e42212d4c3baf::t_60385e10ae9fd7 261-266,271-275,350
+  s_4e42212d4c3baf::t_24d81d5801708f 52-54
+apps/web/src/lib/core/hotkey/eclipse-override.test.ts
+  s_4e42212d4c3baf::t_fd67dfb8927d86 114-136
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "3b87c3f4786fc02530d6552d840c3b43db662d95",
+  "prompts": {},
+  "sessions": {
+    "s_4e42212d4c3baf": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ddab8a28-4ae9-4528-927f-fe35728b54a2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
