@@ -7,7 +7,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::domain::inbox::{
-    AgentInboxFailure, AgentInboxRepository, AgentInboxState, InboxRecord, InboxUpdate,
+    AgentInboxFailure, AgentInboxRepository, AgentInboxState, InboxRecord, InboxUpdate, SweepCursor,
 };
 
 #[cfg(test)]
@@ -220,6 +220,7 @@ impl AgentInboxRepository for PgAgentInboxes {
     async fn unsettled(
         &self,
         changed_before: DateTime<Utc>,
+        after: Option<&SweepCursor>,
         limit: u32,
     ) -> Result<Vec<InboxRecord>, Self::Err> {
         let rows = sqlx::query_as!(
@@ -228,11 +229,15 @@ impl AgentInboxRepository for PgAgentInboxes {
             SELECT agent_user_id, team_id, request_id, mailbox_id, address, state,
                    last_error, fake_provider, updated_at
             FROM team_agent_inboxes
-            WHERE state IN ('pausing', 'releasing') AND updated_at < $1
-            ORDER BY updated_at
-            LIMIT $2
+            WHERE state IN ('pausing', 'releasing')
+              AND updated_at < $1
+              AND ($2::timestamptz IS NULL OR (updated_at, agent_user_id) > ($2, $3))
+            ORDER BY updated_at, agent_user_id
+            LIMIT $4
             "#,
             changed_before,
+            after.map(|after| after.updated_at),
+            after.map(|after| after.agent.as_str()),
             i64::from(limit),
         )
         .fetch_all(&self.pool)
