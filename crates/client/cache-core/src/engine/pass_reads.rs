@@ -124,10 +124,17 @@ impl<S: Storage> Engine<S> {
     /// Durable reads for the projection passes of the next write. Hand
     /// [`PassReads::finish`] to [`Self::keep_pass_reads`] after them.
     pub fn pass_reads(&self) -> PassReads<'_, S> {
+        self.resume_pass_reads(PassReadSet::default())
+    }
+
+    /// [`Self::pass_reads`] that already holds what earlier passes read, for
+    /// a host that runs other work between passes. The caller checks that
+    /// [`Storage::write_position`] has not moved since `set` was read.
+    pub fn resume_pass_reads(&self, set: PassReadSet) -> PassReads<'_, S> {
         PassReads {
             storage: &self.storage,
             hot: &self.hot,
-            read: Mutex::default(),
+            read: Mutex::new(set),
         }
     }
 

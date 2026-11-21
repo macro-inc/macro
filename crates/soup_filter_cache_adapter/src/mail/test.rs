@@ -14,6 +14,7 @@ mod optimistic;
 mod reconciliation;
 mod reminders;
 mod retention;
+mod stepping;
 mod through;
 
 const VIEWER: &str = "macro|mail@example.com";

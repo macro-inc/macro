@@ -39,7 +39,7 @@ pub use notifications::{
     notification_deletion_updates, notification_projection_updates,
     notification_projection_updates_for, optimistic_notification_updates,
 };
-pub use write_passes::{WritePassError, write_passes};
+pub use write_passes::{WritePassError, WritePassStep, WritePasses, write_passes};
 pub use write_response::WriteResponse;
 
 /// Failure to materialize or compile a Soup filter request.
