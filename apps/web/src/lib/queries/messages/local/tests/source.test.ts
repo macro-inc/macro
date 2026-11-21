@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   catchUpAndRefresh: vi.fn(async () => {}),
   channelCacheAnswered: vi.fn(() => true),
   withUnsettledThreadReplies: vi.fn(),
+  listQueuedReplies: vi.fn(),
 }));
 
 vi.mock('../flag', () => ({
@@ -36,6 +37,7 @@ vi.mock('../thread', () => ({
   loadChannelMessage: vi.fn(),
 }));
 vi.mock('../unsettled-replies', () => ({
+  listQueuedReplies: mocks.listQueuedReplies,
   pageHasQueuedReplies: vi.fn(async () => false),
   withUnsettledThreadReplies: mocks.withUnsettledThreadReplies,
 }));
@@ -58,11 +60,13 @@ const devicePage = (name: string, storedSeq: string) => ({
 });
 const thread = (name: string) => ({ name }) as unknown as MessageThread;
 const read = { channelId: CHANNEL_ID, limit: 50 };
+const QUEUED = Promise.resolve(new Map<string, string>());
 
 beforeEach(() => {
   for (const mock of Object.values(mocks)) mock.mockReset();
   mocks.channelCacheHost.mockReturnValue(host);
   mocks.catchUpAndRefresh.mockResolvedValue(undefined);
+  mocks.listQueuedReplies.mockReturnValue(QUEUED);
   mocks.withUnsettledThreadReplies.mockImplementation(
     async (_host, _channelId, read) => read
   );
@@ -178,6 +182,19 @@ describe('loadLocalChannelThread', () => {
     expect(mocks.withUnsettledThreadReplies).toHaveBeenCalledExactlyOnceWith(
       host,
       CHANNEL_ID,
+      thread('server'),
+      QUEUED
+    );
+  });
+
+  it('answers the thread as read when the waiting replies cannot be put in', async () => {
+    mocks.loadChannelThread.mockResolvedValue({
+      thread: thread('server'),
+      source: 'server',
+    });
+    mocks.withUnsettledThreadReplies.mockRejectedValue(new Error('retired'));
+
+    expect(await loadLocalChannelThread(CHANNEL_ID, 'root')).toEqual(
       thread('server')
     );
   });

@@ -261,12 +261,14 @@ function placeAmong(replies: readonly Message[], reply: Message): number {
 export async function withUnsettledThreadReplies(
   host: UnsettledRepliesHost,
   channelId: string,
-  thread: MessageThread
+  thread: MessageThread,
+  /** The queue as it was listed while the thread was being read. */
+  queued: Promise<Map<string, string>> = queuedReplies(host, channelId)
 ): Promise<MessageThread> {
   const rootId = thread.root.id;
   const shown = new Set(thread.replies.map((reply) => reply.id));
   const missing = new Set<string>();
-  for (const [id, queuedRootId] of await queuedReplies(host, channelId)) {
+  for (const [id, queuedRootId] of await queued) {
     if (queuedRootId === rootId && !shown.has(id)) missing.add(id);
   }
   for (const [id, note] of ownReplies) {
@@ -287,14 +289,16 @@ export async function withUnsettledThreadReplies(
     const record = held.get(id);
     const note = ownReplies.get(id);
     const noted = note && !note.delivered ? note.reply : undefined;
-    const reply = record ? mapChannelMessage(record) : noted;
+    const stored = record ? mapChannelMessage(record) : noted;
     // Delivered and no longer held, or deleted: the page read drops its note.
-    if (!reply || reply.deleted_at) continue;
+    if (!stored || stored.deleted_at) continue;
     if (note?.delivered) {
+      // The record may have been read before the delivery reached it.
+      const reply = note.reply;
       const at = placeAmong(replies, reply);
       replies = [...replies.slice(0, at), reply, ...replies.slice(at)];
     } else {
-      waiting.push(reply);
+      waiting.push(stored);
     }
   }
   if (replies === thread.replies && waiting.length === 0) return thread;

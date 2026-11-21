@@ -32,6 +32,7 @@ import {
   unheldReadsLeft,
 } from './unheld-reads';
 import {
+  listQueuedReplies,
   pageHasQueuedReplies,
   withUnsettledThreadReplies,
 } from './unsettled-replies';
@@ -272,6 +273,8 @@ export async function loadLocalChannelThread(
     return undefined;
   }
   try {
+    // Listed beside the read, not after it.
+    const queued = listQueuedReplies(host, channelId);
     let loaded = await loadChannelThread(host, channelId, rootId);
     // The views may already show a push this device thread is older than.
     for (let reread = 0; reread < MAX_PUSH_REREADS; reread += 1) {
@@ -283,8 +286,18 @@ export async function loadLocalChannelThread(
       fireAndForget(catchUpAndRefresh(host, channelId), SYNC_SURFACE);
     }
     if (!loaded) return undefined;
+    const { thread } = loaded;
     // The server's thread cannot carry a reply still waiting to be sent.
-    return await withUnsettledThreadReplies(host, channelId, loaded.thread);
+    return await withUnsettledThreadReplies(
+      host,
+      channelId,
+      thread,
+      queued
+    ).catch((error: unknown) => {
+      // The thread that was read still answers.
+      reportDeviceFault(error);
+      return thread;
+    });
   } catch (error) {
     reportDeviceFault(error);
     return undefined;

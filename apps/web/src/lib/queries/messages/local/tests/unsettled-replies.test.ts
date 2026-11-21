@@ -357,6 +357,23 @@ describe('a thread read and the replies it does not hold yet', () => {
     ]);
   });
 
+  it('places a delivered reply by the time the server gave it, not the one it was written with', async () => {
+    const root = graphqlMessage(1);
+    const earlier = graphqlMessage(2, { threadId: root.id });
+    const reply = graphqlMessage(3, { threadId: root.id });
+    const later = graphqlMessage(4, { threadId: root.id });
+    // The record was read before the delivery reached it.
+    const predicted = { ...reply, createdAt: graphqlMessage(9).createdAt };
+    noteOwnReply(CHANNEL_ID, root.id, mapChannelMessage(predicted));
+    ownReplyDelivered(mapChannelMessage(reply));
+
+    expect(await readThread(root, [earlier, later], [predicted])).toEqual([
+      earlier.id,
+      reply.id,
+      later.id,
+    ]);
+  });
+
   it('never lists a reply twice', async () => {
     const root = graphqlMessage(1);
     const reply = graphqlMessage(2, { threadId: root.id });
