@@ -31,6 +31,7 @@ import {
 } from '../channel/directory-reconcile';
 import { useContactBackfill } from '../contacts/backfill';
 import type { ContextChannel } from '../contacts/context-facts';
+import { useContactTopUp } from '../contacts/top-up';
 import { useContactContextPublisher } from '../contacts/use-context-publisher';
 import { useMailAccountsQuery } from '../email/mail-accounts';
 import {
@@ -731,6 +732,7 @@ export function useSoupBackfills(
   const [cacheHost, setCacheHost] = createSignal<CacheHost>();
   const [cacheGeneration, setCacheGeneration] = createSignal(0);
   useContactBackfill(userId, cacheHost, cacheGeneration);
+  useContactTopUp(userId, cacheHost, cacheGeneration);
   useContactContextPublisher(cacheHost, cacheGeneration, directoryChannels);
 
   createEffect(() => {

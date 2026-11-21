@@ -18,6 +18,7 @@ import {
 import { useSyncedCalendarEvent } from '@app/features/calendar/hooks/use-synced-calendar-event';
 import type { CalendarEvent } from '@app/features/calendar/types';
 import { viewerReplacesGuests } from '@app/features/calendar/utils/event-guest-editing';
+import { useCalendarPreferences } from '@app/features/calendar/utils/preferences';
 import {
   EventReplacement,
   useEventReplacement,
@@ -96,6 +97,7 @@ function EventComposerContent(
   const close = () => panel.handle.close();
   const guestInvitesEnabled = useCalendarGuestInvitesFlag();
   const invitationForwardEnabled = useCalendarInvitationForwardFlag();
+  const [preferences] = useCalendarPreferences();
   const editor = useEventEditor({
     event: () => props.event,
     macroCallsEnabled,
@@ -197,6 +199,7 @@ function EventComposerContent(
         guestPolicyEditable={editor.guestPolicyEditable()}
         detailsReadOnlyReason={editor.detailsReadOnlyReason()}
         showRecurringEditNotice={editor.showRecurringEditNotice()}
+        timeFormat={preferences.timeFormat}
         pending={editor.pending()}
         onCalendarChange={props.onCalendarChange}
         onDirtyChange={props.onDirtyChange}

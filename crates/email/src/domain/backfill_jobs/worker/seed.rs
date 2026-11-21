@@ -8,14 +8,13 @@ use models_email::service::{
 };
 use std::collections::HashSet;
 /// Consumer for `BackfillOperation::SeedSentContact`. Fetches one recent sent
-/// message and enqueues a sender<->recipient contact connection for every
-/// non-generic To/Cc/Bcc address on it. Fanned out one-per-message by the
-/// priority pass of `list_threads` so a new user has contacts before full
-/// backfill completes.
+/// message and records every non-generic To/Cc/Bcc address on it as known to
+/// the owner through this inbox. Fanned out one-per-message by the priority
+/// pass of `list_threads` so a new user has contacts before full backfill
+/// completes.
 ///
-/// Each connection is enqueued as a 2-element set (`{owner, recipient}`) rather
-/// than the whole recipient list, so the contacts service connects the sender
-/// to each recipient only — not the recipients to each other.
+/// The record is directed, owner to each recipient: the recipients gain
+/// nobody, and are not connected to each other.
 #[tracing::instrument(skip(ctx))]
 pub(super) async fn seed_sent_contact<R, G, Q, E, C>(
     ctx: &BackfillService<R, G, Q, E, C>,
@@ -48,8 +47,9 @@ where
 
     // Recipients the user addressed on this sent message. Generic/automated
     // addresses are dropped, the user's own address is dropped, and we dedupe
-    // so a recipient on both To and Cc only yields one connection.
+    // so a recipient on both To and Cc is recorded once.
     let mut seen: HashSet<String> = HashSet::new();
+    let mut recipients = Vec::new();
     for contact in message.to.iter().chain(&message.cc).chain(&message.bcc) {
         let email = contact.email.trim().to_ascii_lowercase();
         if email.is_empty()
@@ -70,19 +70,21 @@ where
             }
         };
 
-        let users: HashSet<MacroUserIdStr<'static>> =
-            HashSet::from([link.macro_id.clone(), recipient]);
-
-        // Idempotent on the consumer side, so a retried seed message that
-        // re-enqueues already-sent connections is harmless.
-        ctx.effects.connect(users).await.map_err(|e| {
-            ProcessingError::NonRetryable(DetailedError {
-                reason: FailureReason::SqsEnqueueFailed,
-                source: anyhow::anyhow!("{e:?}")
-                    .context("Failed to enqueue contact connection for sent-message seed"),
-            })
-        })?;
+        recipients.push(recipient);
     }
+    if recipients.is_empty() {
+        return Ok(());
+    }
+
+    // Idempotent on the consumer side, so a retried seed message that
+    // re-enqueues already-recorded contacts is harmless.
+    ctx.effects.connect(link, recipients).await.map_err(|e| {
+        ProcessingError::NonRetryable(DetailedError {
+            reason: FailureReason::SqsEnqueueFailed,
+            source: anyhow::anyhow!("{e:?}")
+                .context("Failed to enqueue contact connection for sent-message seed"),
+        })
+    })?;
 
     Ok(())
 }

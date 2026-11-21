@@ -656,13 +656,14 @@ async fn notify(repo: &PgMailboxSync, attempt: Uuid) {
         MailboxWatchNotifications, WatchHint, WatchNotification,
     };
 
-    MailboxWatchNotifications(repo.clone())
+    MailboxWatchNotifications::new(repo.clone())
         .receive(
             attempt,
             vec![WatchNotification {
                 subscription_id: "sub".into(),
                 client_state: "secret".into(),
                 hint: WatchHint::Changed,
+                message: None,
             }],
         )
         .await
