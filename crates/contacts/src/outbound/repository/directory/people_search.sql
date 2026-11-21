@@ -68,8 +68,10 @@ profiles AS (
         END AS list_group,
         COALESCE(u."isAgent", FALSE) AS is_agent,
         substr(c.id, length('macro|') + 1) AS email,
-        NULLIF(mui.first_name, 'N/A') AS first_name,
-        NULLIF(mui.last_name, 'N/A') AS last_name,
+        -- Empty profile fields count as missing, so the address-book label
+        -- still names the person.
+        NULLIF(NULLIF(mui.first_name, 'N/A'), '') AS first_name,
+        NULLIF(NULLIF(mui.last_name, 'N/A'), '') AS last_name,
         lower(concat_ws(' ',
             NULLIF(NULLIF(mui.first_name, 'N/A'), ''),
             NULLIF(NULLIF(mui.last_name, 'N/A'), '')

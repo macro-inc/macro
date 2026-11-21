@@ -73,6 +73,12 @@ async fn search_ranks_by_list_group_then_prefix_then_name(pool: PgPool) {
                 vec![ContactList::Outlook],
                 false
             ),
+            (
+                "samuel.e@example.org",
+                Some("Eve Label"),
+                vec![ContactList::Gmail],
+                false
+            ),
         ]
     );
 
