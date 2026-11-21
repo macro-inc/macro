@@ -319,7 +319,7 @@ impl ScreenRepo for PgScreenRepo {
                 expires_at = EXCLUDED.expires_at
             WHERE lease.user_id = EXCLUDED.user_id OR lease.expires_at <= now()
             RETURNING computer_id, session_id, user_id, driver_name, agent_user_id, started_at, expires_at,
-                      started_at < now() AS "continues!"
+                      xmax::text <> '0' AND started_at <> now() AS "continues!"
             "#,
             grant.computer_id.as_uuid(),
             grant.harness_id.as_uuid(),
@@ -343,7 +343,9 @@ impl ScreenRepo for PgScreenRepo {
                 name: driver.driver_name,
             }));
         };
-        // The same user moved the lease to this socket and kept its start.
+        // The same user moved the lease to this socket and kept its start:
+        // an update (xmax set) that left started_at at another transaction's
+        // time. A fresh insert or a lapsed lease's start is this one's now().
         let continues = row.continues;
         let row = LeaseRow {
             computer_id: row.computer_id,

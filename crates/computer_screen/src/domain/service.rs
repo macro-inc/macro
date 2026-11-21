@@ -247,9 +247,10 @@ where
             .map_err(ScreenError::internal)
     }
 
-    /// Open the audit row of a new socket, unless the computer already has
-    /// [`MAX_SOCKETS_PER_COMPUTER`] open, or this person
-    /// [`MAX_SOCKETS_PER_VIEWER`].
+    /// Open the audit row of a new socket, unless this person already has
+    /// [`MAX_SOCKETS_PER_VIEWER`] open on the computer, or (for a watching
+    /// socket) the computer [`MAX_SOCKETS_PER_COMPUTER`]: viewers never lock
+    /// a driver out.
     pub async fn open_session(&self, grant: &ScreenGrant) -> Result<SessionId, ScreenError> {
         let id = SessionId::new();
         // Rows a crashed or redeployed process left open end here, on the
@@ -267,7 +268,8 @@ where
             .open_sockets(grant.computer_id, &grant.user_id, SESSION_FRESH_FOR)
             .await
             .map_err(ScreenError::internal)?;
-        if theirs >= MAX_SOCKETS_PER_VIEWER || everyone >= MAX_SOCKETS_PER_COMPUTER {
+        let computer_full = grant.mode == Mode::View && everyone >= MAX_SOCKETS_PER_COMPUTER;
+        if theirs >= MAX_SOCKETS_PER_VIEWER || computer_full {
             return Err(ScreenError::TooManySockets);
         }
         self.repo
@@ -501,9 +503,11 @@ struct TicketLimiter {
 
 impl TicketLimiter {
     fn admit(&self, user: &MacroUserIdStr<'_>, now: tokio::time::Instant) -> bool {
-        let Ok(mut issued) = self.issued.lock() else {
-            return true;
-        };
+        // A poisoned lock still holds a usable count.
+        let mut issued = self
+            .issued
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         issued.retain(|_, times| {
             times.retain(|time| now.duration_since(*time) < TICKET_WINDOW);
             !times.is_empty()

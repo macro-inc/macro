@@ -522,3 +522,40 @@ async fn open_sockets_count_the_person_and_the_computer(pool: PgPool) {
         (2, 3)
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn two_tabs_of_one_person_taking_over_at_once_keep_one_drive(pool: PgPool) {
+    for round in 0..20u128 {
+        let repo = PgScreenRepo::new(pool.clone());
+        let computer = ComputerId::new_from_uuid(Uuid::from_u128(0xE000 + round));
+        let mut alice = grant("alice", Mode::Drive);
+        alice.computer_id = computer;
+        let first = session(&repo, &alice).await;
+        let second = session(&repo, &alice).await;
+
+        let barrier = std::sync::Arc::new(tokio::sync::Barrier::new(2));
+        let race = |session: SessionId| {
+            let repo = PgScreenRepo::new(pool.clone());
+            let barrier = std::sync::Arc::clone(&barrier);
+            let grant = alice.clone();
+            tokio::spawn(async move {
+                barrier.wait().await;
+                repo.take_over(&grant, session, None, TWO_MINUTES)
+                    .await
+                    .unwrap()
+            })
+        };
+        let (one, two) = (race(first), race(second));
+        assert!(matches!(one.await.unwrap(), TakeOver::Taken(_)));
+        assert!(matches!(two.await.unwrap(), TakeOver::Taken(_)));
+
+        let drives = sqlx::query_scalar!(
+            r#"SELECT count(*) AS "count!" FROM computer_screen_drives WHERE computer_id = $1"#,
+            computer.as_uuid(),
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(drives, 1, "round {round}: one person, one drive");
+    }
+}

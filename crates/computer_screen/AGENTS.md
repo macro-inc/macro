@@ -35,8 +35,10 @@ agent's brain waiting while a person drives.
   accounts, then checks the rollout and the harness permission, and limits a
   person to `MAX_TICKETS_PER_WINDOW` a minute on each replica.
 - At most `MAX_SOCKETS_PER_VIEWER` sockets per person and
-  `MAX_SOCKETS_PER_COMPUTER` per computer are open (sockets seen within
-  `SESSION_FRESH_FOR`).
+  `MAX_SOCKETS_PER_COMPUTER` watching sockets per computer are open (sockets
+  seen within `SESSION_FRESH_FOR`); a driving socket is never refused for
+  the computer's count. The count and the insert are not atomic, so
+  parallel opens can pass a cap by a few.
 - A take-over takes the lease only when it is free, lapsed or the same
   user's: the upsert is guarded, so two people taking over at once never both
   drive.

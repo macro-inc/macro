@@ -457,6 +457,8 @@ async fn the_rollout_and_the_harness_decide_who_gets_a_ticket(pool: PgPool) {
         outside.issue_ticket(request(Mode::View), None).await,
         Err(ScreenError::RolloutDisabled)
     ));
+    // A socket of someone the rollout dropped ends at its next check.
+    assert!(!outside.reauthorize(&grant(Mode::View)).await.unwrap());
 
     let (denied, _, _) = service_with(
         pool,
@@ -505,4 +507,30 @@ async fn a_person_opens_only_so_many_sockets_on_a_computer(pool: PgPool) {
     let mut other = grant(Mode::View);
     other.user_id = MacroUserIdStr::try_from("macro|bob@example.com".to_owned()).unwrap();
     service.open_session(&other).await.unwrap();
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn watchers_never_lock_a_driver_out_of_a_full_computer(pool: PgPool) {
+    let (service, _, _) = service(pool).await;
+    let person = |name: &str, mode: Mode| {
+        let mut grant = grant(mode);
+        grant.user_id = MacroUserIdStr::try_from(format!("macro|{name}@example.com")).unwrap();
+        grant
+    };
+    let full = super::MAX_SOCKETS_PER_COMPUTER / MAX_SOCKETS_PER_VIEWER;
+    for index in 0..full {
+        let watcher = person(&format!("watcher{index}"), Mode::View);
+        for _ in 0..MAX_SOCKETS_PER_VIEWER {
+            service.open_session(&watcher).await.unwrap();
+        }
+    }
+
+    assert!(matches!(
+        service.open_session(&person("late", Mode::View)).await,
+        Err(ScreenError::TooManySockets)
+    ));
+    service
+        .open_session(&person("owner", Mode::Drive))
+        .await
+        .unwrap();
 }
