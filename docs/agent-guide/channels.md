@@ -650,8 +650,13 @@ so their late answer never pushes People's rows down; phones pin People rows
 above the rest of their single list.
 On a fresh load and on reopening, at desktop and phone width, no agent may show
 in a row a person then takes, and the menu must not change height as they land.
-When the people read fails (a busy cache times it out), the menu reads it again
-once by itself and shows "Couldn't load people" with Retry only if that fails too.
+The loading rows stay blank for the first half second, so an ordinary open
+shows no loading state. When the local cache has not answered within two
+seconds (a busy cache, or one changing owner across tabs), People lists the
+server's people instead and keeps them in place for that query.
+When the people read fails, the menu reads it again once by itself and shows
+"Couldn't load people" with Retry if that fails too, or if nothing has answered
+by the time the rows stop waiting. People never disappears without a message.
 
 The shared `@` menu also offers `Recent agent sessions` after Channels and
 before Companies (the latest 500 accessible sessions, searchable by title or
