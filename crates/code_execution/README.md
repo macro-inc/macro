@@ -185,6 +185,9 @@ real hosts for its links, its fetch sends their requests to the forwarder,
 and the forwarder, outside the realm, sets the mark and
 the trace context (a child of the run's span) on every request, dropping
 the ones the program set. It follows no redirects and stops with the run.
+It also matches each request against the SDK's operations and records on the
+request's span the operation and `would_refuse`, what enforcement would
+refuse; every request is still forwarded.
 
 Deno shares the harness container. The heap setting does not hard-limit native
 memory, ArrayBuffers, or CPU; a container OOM can affect the harness and other

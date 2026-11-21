@@ -113,12 +113,30 @@ struct Routes {
 static CATALOG: std::sync::LazyLock<decision::Catalog> =
     std::sync::LazyLock::new(decision::Catalog::of_the_sdk);
 
+/// The headers a Macro credential travels in besides `authorization`: a
+/// user's API key, a bot token and a harness token.
+const CREDENTIAL_HEADERS: [&str; 3] = [
+    "x-macro-user-api-key",
+    "x-macro-bot-token",
+    "x-macro-harness-token",
+];
+
+/// The access-token cookie's name in production, in development and locally
+/// (the environment prefixes it).
+const ACCESS_TOKEN_COOKIES: [&str; 3] = [
+    "macro-access-token",
+    "dev-macro-access-token",
+    "local-macro-access-token",
+];
+
 /// Whether a request carries a Macro credential, wherever one goes: its
-/// `authorization` or `x-macro-user-api-key` header, its
-/// `macro-access-token` cookie, or its `macro-api-token` query parameter.
+/// `authorization` or one of the `CREDENTIAL_HEADERS`, an access-token
+/// cookie, or its `macro-api-token` query parameter.
 fn credentialed(headers: &HeaderMap, url: &url::Url) -> bool {
     headers.contains_key(axum::http::header::AUTHORIZATION)
-        || headers.contains_key("x-macro-user-api-key")
+        || CREDENTIAL_HEADERS
+            .iter()
+            .any(|header| headers.contains_key(*header))
         || headers
             .get_all(axum::http::header::COOKIE)
             .iter()
@@ -128,7 +146,7 @@ fn credentialed(headers: &HeaderMap, url: &url::Url) -> bool {
                 cookie
                     .trim()
                     .split_once('=')
-                    .is_some_and(|(name, _)| name == "macro-access-token")
+                    .is_some_and(|(name, _)| ACCESS_TOKEN_COOKIES.contains(&name))
             })
         || url.query_pairs().any(|(name, _)| name == "macro-api-token")
 }
@@ -233,12 +251,9 @@ async fn forward(State(routes): State<Arc<Routes>>, request: Request) -> Respons
         },
     };
     if let Some(operation) = decided.operation {
+        // Services under one base share a forwarder segment, so the
+        // operation's key, `service.operation`, says which one this is.
         span.record("operation", operation);
-        // Services under one base share a forwarder segment: the operation
-        // says which one this is.
-        if let Some((owner, _)) = operation.split_once('.') {
-            span.record("service", owner);
-        }
     }
     if decided.uncatalogued {
         span.record("uncatalogued", true);
