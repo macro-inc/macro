@@ -379,7 +379,7 @@ const R = {
   diffs: [], // first 400 real differences with context
   diffSignatures: {}, // signature -> count
   examples: {}, // class -> first few examples
-  mutant: CONFIG.mutant ? { name: CONFIG.mutant, applied: 0, caughtBy: {}, firstCatch: null, ignoredAsInBaseline: 0, beforeApplied: 0, candidate: {}, candidatesBy: {}, tainted: {}, running: {}, touched: {}, discardedCatches: 0, taintedSequences: 0 } : null,
+  mutant: CONFIG.mutant ? { name: CONFIG.mutant, applied: 0, caughtBy: {}, firstCatch: null, ignoredAsInBaseline: 0, beforeApplied: 0, candidate: {}, candidatesBy: {}, tainted: {}, running: {}, marks: [], clock: 0, discardedCatches: 0, taintedSequences: 0 } : null,
   load: CONFIG.load ? { pages: CONFIG.load, ops: 0, errors: 0, sameUserReads: 0, sameUserErrors: 0 } : null,
   crashes: [],
 };
@@ -426,11 +426,11 @@ const sig = (level, cls, kind, d, extra) =>
 const NOT_A_CATCH = new Set(['settle', 'write-replay', 'page-errors']);
 // Where each planted fault can show. The response mutants rewrite NEW's
 // GraphQL read responses, so any read of them; the cache mutants change what
-// NEW's live query cache holds, so only live readers and callers (and the
-// live-vs-fresh staleness built from them), never a direct read or a fresh
+// NEW's live query cache holds, so only live readers (and the live-vs-fresh
+// staleness built from them), never a direct read or a fresh
 // mount.
 const anyRead = () => true;
-const liveCache = (level) => /:live(:caller)?$|:staleness$/.test(level);
+const liveCache = (level) => /:live$|:staleness$/.test(level);
 const MUTANT_REACH = {
   'drop-row': anyRead,
   'swap-order': anyRead,
@@ -448,9 +448,9 @@ function callerOk(snap, caller) {
   const src = snap?.callers?.__sources;
   if (!source || !src || threw(snap.callers[caller])) return false;
   if (source === 'opts') return Object.entries(snap).every(([k, r]) => readerKind(k) !== 'opts' || readerOk(r));
-  return src[source] !== null && src[source] !== undefined && src.failing?.[source] === false;
+  return src[source] !== null && src[source] !== undefined && src.failing?.[source] === false && src.placeholder?.[source] === false;
 }
-const snapshotClean = (s, expected = []) => !!s && expected.every((k) => k in s) && Object.entries(s).every(([k, v]) => (k === 'callers' ? !!v && Object.keys(v).every((c) => c === '__sources' || callerOk(s, c)) : readerOk(v)));
+const snapshotClean = (s, expected = []) => !!s && 'callers' in s && expected.every((k) => k in s) && Object.entries(s).every(([k, v]) => (k === 'callers' ? !!v && Object.keys(v).every((c) => c === '__sources' || callerOk(s, c)) : readerOk(v)));
 function record(level, kind, cls, a, b, extra = {}, canon = (x) => x) {
   bump(R.classes, level, cls);
   if (cls === 'equal') return;
@@ -460,12 +460,13 @@ function record(level, kind, cls, a, b, extra = {}, canon = (x) => x) {
   const d = cls === 'diff' || cls === 'state' ? firstDiff(norm(a), norm(b)) : firstDiff(a, b);
   const at = { ...here() };
   if (ex.length < 5) ex.push({ kind, ...at, ...extra, diff: d });
+  let shown = null;
   if (cls === 'diff' || cls === 'error-shape' || cls === 'state') {
     const s = sig(level, cls, kind, d, extra);
     bump(R.diffSignatures, s);
     R.totals.differences++;
     if (R.diffs.length < 400) R.diffs.push({ level, kind, class: cls, ...at, ...extra, diff: d });
-    if (R.mutant && cls === 'diff' && extra.clean && MUTANT_REACH[R.mutant.name](level) && R.mutant.running[laneOf(at)] && R.mutant.touched[extra.account]) {
+    if (R.mutant && cls === 'diff' && extra.clean && MUTANT_REACH[R.mutant.name](level) && R.mutant.running[laneOf(at)] && (shown = marked(level, kind, norm(a), norm(b), extra))) {
       // A catch is a difference in data both sides read successfully, at a
       // level the planted fault can reach, that the clean run does not have,
       // after the fault was applied at least once.
@@ -473,7 +474,7 @@ function record(level, kind, cls, a, b, extra = {}, canon = (x) => x) {
       else if (BASELINE.has(s)) R.mutant.ignoredAsInBaseline++;
       else {
         bump(R.mutant.candidatesBy, level);
-        R.mutant.candidate[laneOf(at)] ??= { level, kind, signature: s, appliedBefore: R.mutant.applied, ...at, diff: d };
+        R.mutant.candidate[laneOf(at)] ??= { level, kind, signature: s, appliedBefore: R.mutant.applied, mark: shown, ...at, diff: d };
       }
     }
     if (R.mutant && NOT_A_CATCH.has(level)) R.mutant.tainted[laneOf(at)] = true;
@@ -484,8 +485,55 @@ const laneOf = (at) => String(at.lane ?? 'none');
 // account whose NEW page it changed; a catch must be an observation of that
 // account, in the same sequence, after the change.
 const acctKey = (label) => String(label).replace(/-(old|neu)$/, '');
-function touch(label) {
-  if (R.mutant) R.mutant.touched[acctKey(label)] = true;
+// Each application of the fault leaves a mark: the account, the order it
+// happened in, and what it changed (a row's id, the two swapped rows, or the
+// open readers a cache fault left stale). A catch must show that change: the
+// dropped row on OLD only, the two rows in opposite order, the altered row
+// different, or a marked reader differing live or stale on NEW only.
+const laneNum = (label) => String(label).match(/^L(\d+)[AB]-/)?.[1] ?? null;
+function mark(label, m) {
+  R.mutant.marks.push({ ...m, lane: laneNum(label), account: acctKey(label), clock: ++R.mutant.clock });
+}
+const clockNow = () => R.mutant?.clock ?? 0;
+function walkRows(x, f) {
+  if (Array.isArray(x)) x.forEach((v) => walkRows(v, f));
+  else if (x && typeof x === 'object') {
+    if (typeof x.id === 'string') f(x);
+    Object.values(x).forEach((v) => walkRows(v, f));
+  }
+}
+const rowsWith = (x, id) => {
+  const out = [];
+  walkRows(x, (r) => r.id === id && out.push(r));
+  return out;
+};
+const position = (x, id) => {
+  let i = 0;
+  let at = -1;
+  walkRows(x, (r) => {
+    if (r.id === id && at < 0) at = i;
+    i++;
+  });
+  return at;
+};
+function shows(m, level, kind, a, b) {
+  if (m.kind === 'drop-row') return rowsWith(a, m.id).length > 0 && rowsWith(b, m.id).length === 0;
+  if (m.kind === 'swap-order') {
+    const [pa, qa, pb, qb] = [position(a, m.ids[0]), position(a, m.ids[1]), position(b, m.ids[0]), position(b, m.ids[1])];
+    return [pa, qa, pb, qb].every((p) => p >= 0) && Math.sign(pa - qa) !== Math.sign(pb - qb);
+  }
+  if (m.kind === 'alter-field') {
+    const ra = rowsWith(a, m.id);
+    const rb = rowsWith(b, m.id);
+    return ra.length > 0 && rb.length > 0 && J(ra) !== J(rb);
+  }
+  // cache faults: a marked reader's data live, or its staleness on NEW only
+  if (/:live$/.test(level)) return m.readers.some((id) => kind === `reader${id}.data`);
+  if (/:staleness$/.test(level)) return m.readers.some((id) => Array.isArray(b) && b.includes(id) && !(Array.isArray(a) && a.includes(id)));
+  return false;
+}
+function marked(level, kind, a, b, extra) {
+  return R.mutant.marks.find((m) => m.account === extra.account && m.clock <= (extra.asOf ?? -1) && shows(m, level, kind, a, b)) ?? null;
 }
 // A sequence's first catch stands only if the sequence had no harness-level
 // difference: a replay failure, a timeout or a page error can leave the two
@@ -698,9 +746,10 @@ async function openSide(storageState, side, label) {
       const resp = await r.fetch().catch((e) => (harnessError(`${label}: mutant fetch: ${firstLine(e)}`), null));
       if (!resp) return r.abort('failed');
       const json = await resp.json();
-      if (mutateResponse(json, CONFIG.mutant, g)) {
+      const m = mutateResponse(json, CONFIG.mutant, g);
+      if (m) {
         R.mutant.applied++;
-        touch(label);
+        mark(label, m);
       }
       const headers = { ...resp.headers() };
       delete headers['content-encoding'];
@@ -810,18 +859,18 @@ async function ev(s, fnPath, ...args) {
 // Mutants for the response path: break the GraphQL answer the new code reads.
 function mutateResponse(json, kind, g) {
   const user = json?.data?.user;
-  if (!user) return false;
+  if (!user) return null;
   const lists = [];
   if (Array.isArray(user.propertyDefinitions)) lists.push(user.propertyDefinitions);
   if (Array.isArray(user.propertyOptions)) lists.push(user.propertyOptions);
   for (const d of user.propertyDefinitions ?? []) if (Array.isArray(d?.options)) lists.push(d.options);
   for (const s of user.tagSets ?? []) if (Array.isArray(s?.options)) lists.push(s.options);
   const nonEmpty = lists.filter((l) => l.length > 0);
-  if (!nonEmpty.length) return false;
+  if (!nonEmpty.length) return null;
   const list = g.pick(nonEmpty);
   if (kind === 'drop-row') {
-    list.splice(g.int(list.length), 1);
-    return true;
+    const [row] = list.splice(g.int(list.length), 1);
+    return { kind, id: row?.id };
   }
   if (kind === 'swap-order') {
     const sig = (x) => J(Object.fromEntries(Object.entries(x).filter(([k]) => !['id', '__typename', 'createdAt', 'updatedAt'].includes(k))));
@@ -829,19 +878,19 @@ function mutateResponse(json, kind, g) {
       for (let j = list.length - 1; j > i; j--)
         if (sig(list[i]) !== sig(list[j])) {
           [list[i], list[j]] = [list[j], list[i]];
-          return true;
+          return { kind, ids: [list[j].id, list[i].id] };
         }
-    return false;
+    return null;
   }
   if (kind === 'alter-field') {
     const row = g.pick(list);
     const fields = Object.entries(row).filter(([k, v]) => !['id', '__typename'].includes(k) && (typeof v === 'string' || typeof v === 'number' || v === null));
-    if (!fields.length) return false;
+    if (!fields.length) return null;
     const [k, v] = g.pick(fields);
     row[k] = typeof v === 'number' ? v + 1 : typeof v === 'string' && !ISO_TS.test(v) ? `${v}·` : v === null ? '#010203' : v;
-    return row[k] !== v;
+    return row[k] !== v ? { kind, id: row.id } : null;
   }
-  return false;
+  return null;
 }
 
 // ------------------------------------------------------------ comparisons ----
@@ -881,7 +930,7 @@ function compareErrors(level, kind, ea, eb, extra = {}) {
   const cls = (A === null) !== (B === null) || A?.retry !== B?.retry ? 'diff' : 'error-shape';
   record(level, `${kind}.error`, cls, A, B, { ...extra, errorPair: pairLabel(A, B) });
 }
-function compareReader(level, id, a, b, account) {
+function compareReader(level, id, a, b, at) {
   R.counts.readerComparisons++;
   const kind = `reader${id}`;
   if (!a || !b) {
@@ -892,10 +941,10 @@ function compareReader(level, id, a, b, account) {
   const sb = Object.fromEntries(STATE_FIELDS.map((k) => [k, b[k]]));
   if (J(sa) !== J(sb)) record(level, kind, 'state', sa, sb);
   const canon = canonFor(readerKind(id));
-  record(level, `${kind}.data`, classify(a.data, b.data, canon), a.data, b.data, { clean: readerOk(a) && readerOk(b), account }, canon);
+  record(level, `${kind}.data`, classify(a.data, b.data, canon), a.data, b.data, { clean: readerOk(a) && readerOk(b), ...at }, canon);
   compareErrors(level, kind, a.error, b.error);
 }
-function compareCallers(level, sa, sb, groupsFor, account) {
+function compareCallers(level, sa, sb, groupsFor, at) {
   const a = sa.callers;
   const b = sb.callers;
   for (const k of new Set([...Object.keys(a ?? {}), ...Object.keys(b ?? {})])) {
@@ -903,17 +952,17 @@ function compareCallers(level, sa, sb, groupsFor, account) {
     const clean = callerOk(sa, k) && callerOk(sb, k);
     const canon = (x) => canonCallers(x, groupsFor(k));
     R.counts.callerComparisons++;
-    record(`${level}:caller`, `caller.${k}`, classify(a?.[k], b?.[k], canon), a?.[k], b?.[k], { clean, account }, canon);
+    record(`${level}:caller`, `caller.${k}`, classify(a?.[k], b?.[k], canon), a?.[k], b?.[k], { clean, ...at }, canon);
   }
 }
 // `expected`: the reader ids that must be in both snapshots.
-function compareSnapshots(level, a, b, expected, account) {
+function compareSnapshots(level, a, b, expected, at) {
   const groupsFor = callerGroups(a, b);
   for (const k of new Set([...Object.keys(a), ...Object.keys(b), ...expected, 'callers'])) {
     if (k === 'callers') {
       if (!a.callers || !b.callers) record(`${level}:caller`, 'callers', 'state', a.callers ?? null, b.callers ?? null, { note: 'callers missing' });
-      else compareCallers(level, a, b, groupsFor, account);
-    } else compareReader(level, k, a[k], b[k], account);
+      else compareCallers(level, a, b, groupsFor, at);
+    } else compareReader(level, k, a[k], b[k], at);
   }
 }
 // Raw read case: the old queryFn and the new reader, back to back.
@@ -927,7 +976,7 @@ function compareRaw(kind, k, oldR, newR, account) {
   }
   bump(R.coverage, 'raw outcome', 'both ok');
   const canon = canonFor(k);
-  return record(level, kind, classify(oldR.value, newR.value, canon), oldR.value, newR.value, { clean: true, account }, canon);
+  return record(level, kind, classify(oldR.value, newR.value, canon), oldR.value, newR.value, { clean: true, account, asOf: clockNow() }, canon);
 }
 // In CONTROL both halves of a raw case run the base commit's functions.
 const newRaw = (fn) => (CONFIG.control ? `raw.old.${fn}` : `raw.neu.${fn}`);
@@ -1093,12 +1142,14 @@ async function compareStep(pair, level, op) {
   if (CONFIG.mutant === 'stale-cache') {
     const pages = [pair.A.neu, pair.B.neu];
     const restored = await Promise.all(pages.map((s) => ev(s, 'mutant.restoreCache')));
-    if (restored.some((n) => n > 0)) R.mutant.applied++;
-    restored.forEach((n, i) => n > 0 && touch(pages[i].label));
+    if (restored.some((x) => x.restored > 0)) R.mutant.applied++;
+    restored.forEach((x, i) => x.restored > 0 && mark(pages[i].label, { kind: 'stale-cache', readers: x.readers }));
   }
   if (CONFIG.mutant === 'skip-live-update') await takeSkipped(pair.A.neu, pair.B.neu);
   const keys = pair.keys;
   const expected = keys.map((k) => JSON.stringify(k));
+  // Only a fault applied before a snapshot was taken can show in it.
+  const liveAsOf = clockNow();
   const [liveAo, liveAn, liveBo, liveBn] = await Promise.all(sides(pair).map((s) => ev(s, 'snapshot')));
   const fresh = await Promise.all(sides(pair).map((s) => ev(s, 'fresh', keys, CONFIG.settleMs)));
   R.counts.freshMounts += 4;
@@ -1112,6 +1163,7 @@ async function compareStep(pair, level, op) {
   });
   const freshOut = fresh.map((f) => f.timing.timedOut);
   const [frAo, frAn, frBo, frBn] = fresh.map((f) => f.snap);
+  const freshAsOf = clockNow();
   const c = here();
   for (const [who, lo, ln, fo, fn] of [['A', liveAo, liveAn, frAo, frAn], ['B', liveBo, liveBn, frBo, frBn]]) {
     c.account = who;
@@ -1119,8 +1171,8 @@ async function compareStep(pair, level, op) {
     const liveOut = timedOut[at] || timedOut[at + 1];
     const freshOutHere = freshOut[at] || freshOut[at + 1];
     const account = `L${pair.lane}${who}`;
-    if (!liveOut) compareSnapshots(`${level}:live`, lo, ln, expected, account);
-    if (!freshOutHere) compareSnapshots(`${level}:fresh`, fo, fn, expected, account);
+    if (!liveOut) compareSnapshots(`${level}:live`, lo, ln, expected, { account, asOf: liveAsOf });
+    if (!freshOutHere) compareSnapshots(`${level}:fresh`, fo, fn, expected, { account, asOf: freshAsOf });
     if (liveOut || freshOutHere) continue;
     // staleness: which readers differ live vs fresh, per side. Each side is
     // compared with itself, so only tie order is removed.
@@ -1140,7 +1192,7 @@ async function compareStep(pair, level, op) {
     if (sn.length) bump(R.staleness.byOp, `${op}:${who}`, 'new');
     if (J(so) !== J(sn)) {
       R.staleness.mismatches++;
-      record(`${level}:staleness`, `stale keys ${who}`, 'diff', so, sn, { clean: [lo, ln, fo, fn].every((x) => snapshotClean(x, expected)), account });
+      record(`${level}:staleness`, `stale keys ${who}`, 'diff', so, sn, { clean: [lo, ln, fo, fn].every((x) => snapshotClean(x, expected)), account, asOf: liveAsOf });
     } else record(`${level}:staleness`, `stale keys ${who}`, 'equal');
   }
   delete c.account;
@@ -1154,8 +1206,8 @@ async function compareStep(pair, level, op) {
 }
 async function takeSkipped(...pages) {
   const n = await Promise.all(pages.map((s) => ev(s, 'mutant.takeSkipped')));
-  R.mutant.applied += n.reduce((a, b) => a + b, 0);
-  n.forEach((x, i) => x > 0 && touch(pages[i].label));
+  R.mutant.applied += n.reduce((a, x) => a + x.count, 0);
+  n.forEach((x, i) => x.count > 0 && mark(pages[i].label, { kind: 'skip-live-update', readers: x.readers }));
 }
 
 // One write, through the real mutation hooks: NEW performs it against the
@@ -1208,7 +1260,7 @@ async function compareImperative(acct, id) {
   const [o, n] = await Promise.all([ev(acct.old, 'imperative.fetchDefinitionWithOptions', id), ev(acct.neu, 'imperative.fetchDefinitionWithOptions', id)]);
   if (o.ok !== n.ok) return record('imperative', 'fetchPropertyDefinitionWithOptions', 'diff', o, n);
   if (!o.ok) return compareErrors('imperative', 'fetchPropertyDefinitionWithOptions', o.error, n.error, { oldMessage: o.message, newMessage: n.message });
-  record('imperative', 'fetchPropertyDefinitionWithOptions', classify(o.value, n.value, canonDefWithOptions), o.value, n.value, { clean: true, account: acctKey(acct.neu.label) }, canonDefWithOptions);
+  record('imperative', 'fetchPropertyDefinitionWithOptions', classify(o.value, n.value, canonDefWithOptions), o.value, n.value, { clean: true, account: acctKey(acct.neu.label), asOf: clockNow() }, canonDefWithOptions);
 }
 // Read-after-write: the old and new readers right after a write (or an
 // out-of-band change), then whether the write is visible to each.
@@ -1440,15 +1492,17 @@ async function runLane(lane, seqCount) {
   const gen = makeGen(g);
   let pair = null;
   for (let seq = 0; seq < seqCount; seq++) {
+    const rotating = !pair || seq % CONFIG.rotate === 0;
+    // The outgoing pair's sweep runs outside any sequence, so it never catches.
+    if (rotating && pair) {
+      if (CONFIG.sweep) await sweep(pair, 'end');
+      await closePair(pair);
+    }
     if (R.mutant) {
       R.mutant.running[String(lane)] = true;
-      for (const k of Object.keys(R.mutant.touched)) if (k.startsWith(`L${lane}`)) delete R.mutant.touched[k];
+      R.mutant.marks = R.mutant.marks.filter((m) => m.lane !== String(lane));
     }
-    if (!pair || seq % CONFIG.rotate === 0) {
-      if (pair) {
-        if (CONFIG.sweep) await sweep(pair, 'end');
-        await closePair(pair);
-      }
+    if (rotating) {
       pair = await newAccountPair(lane, Math.floor(seq / CONFIG.rotate));
       // empty account first, then (most pairs) a team from the start
       setCtx({ lane, generation: pair.generation, seq, step: 0, op: 'empty' });

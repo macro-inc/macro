@@ -79,12 +79,16 @@ not run the base commit's modules, or a mutant was not applied or not caught.
   shape, and a mutant counts as caught only at a signature
   the baseline does not have, after the fault was applied. It must be a `diff`
   in data both sides read successfully (a reader that succeeded on both, not with placeholder data, a
-  caller that rendered on both over a source list that read without error),
+  caller that rendered on both over a source list that read without error and was not placeholder data),
   at a level the fault can reach (`MUTANT_REACH`: any read for the response
-  mutants, only live readers, callers and staleness for the cache mutants).
-  It must also observe the account whose NEW page the fault changed in that
-  sequence, after the change (a cache restore that changes nothing is not
-  applied). A settle timeout, a write-replay difference or an uncaught page
+  mutants, only live readers and staleness for the cache mutants), and it
+  must show the change the fault made: each application leaves a mark (the
+  account, when, and the dropped row, the two swapped rows, the altered row,
+  or the open readers a restored cache or a swallowed invalidation left
+  stale), and the catch must observe that account after the mark, with the
+  dropped row on OLD only, the swapped rows in opposite order, the altered
+  row different, or a marked reader differing live or stale on NEW only. A
+  cache restore that changes nothing is not applied. A settle timeout, a write-replay difference or an uncaught page
   error never counts, and a catch in a sequence that had one is discarded (each sequence
   ends with a reload, so its fallout stays inside it). `CONTROL=1` runs OLD
   against OLD.

@@ -66,7 +66,12 @@ import {
   listPropertyOptions,
   listTagSets,
 } from '@service-storage/property-catalog';
-import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import {
+  hashKey,
+  type InvalidateQueryFilters,
+  QueryClient,
+  QueryClientProvider,
+} from '@tanstack/solid-query';
 import {
   type Accessor,
   createMemo,
@@ -297,6 +302,12 @@ function Callers(props: { registry: Registry; optionIds: Accessor<string[]> }) {
       system: system.isPending ? null : plain(system.data),
       crmExport: crmExport.isPending ? null : plain(crmExport.data),
       tags: tags.isPending ? null : plain(tags.data),
+      placeholder: {
+        all: all.isPlaceholderData,
+        system: system.isPlaceholderData,
+        crmExport: crmExport.isPlaceholderData,
+        tags: tags.isPlaceholderData,
+      },
       failing: {
         all: all.isError,
         system: system.isError,
@@ -546,6 +557,31 @@ async function fresh(keys: Key[], boundMs: number) {
 
 let staleCache: [readonly unknown[], unknown][] = [];
 let skippedInvalidations = 0;
+let skippedHashes = new Set<string>();
+
+// The query an open reader reads, by its registry id (the reader's key).
+function readerHash(id: string) {
+  const spec = JSON.parse(id) as Key;
+  if (spec.k === 'defs')
+    return hashKey(
+      propertiesKeys.definitions({
+        scope: spec.scope as 'all',
+        includeOptions: spec.includeOptions,
+        forEntityType: spec.forEntityType as undefined,
+      }).queryKey
+    );
+  if (spec.k === 'opts')
+    return hashKey(
+      propertiesKeys.options({ propertyDefinitionId: spec.id }).queryKey
+    );
+  return hashKey(propertiesKeys.tags.queryKey);
+}
+// The open readers whose query is one of these.
+function readersOf(hashes: Set<string>) {
+  return [...registry.keys()].filter(
+    (id) => id !== 'callers' && hashes.has(readerHash(id))
+  );
+}
 
 declare global {
   interface Window {
@@ -592,16 +628,23 @@ window.__h = {
   },
   mutant: {
     skipLiveUpdate() {
-      queryClient.invalidateQueries = (() => {
+      queryClient.invalidateQueries = ((filters?: InvalidateQueryFilters) => {
         skippedInvalidations++;
+        for (const q of queryClient.getQueryCache().findAll(filters))
+          skippedHashes.add(q.queryHash);
         return Promise.resolve();
       }) as typeof queryClient.invalidateQueries;
     },
-    // Invalidations the mutant swallowed since the last call.
+    // Invalidations the mutant swallowed since the last call, and the open
+    // readers they would have refreshed.
     takeSkipped() {
-      const n = skippedInvalidations;
+      const out = {
+        count: skippedInvalidations,
+        readers: readersOf(skippedHashes),
+      };
       skippedInvalidations = 0;
-      return n;
+      skippedHashes = new Set();
+      return out;
     },
     // Stale cache: remember every property query's data before a write and
     // put it back after the page settles, as a cache that missed the write.
@@ -614,6 +657,7 @@ window.__h = {
     // already holds changes nothing and is not a fault applied.
     restoreCache() {
       let restored = 0;
+      const hashes = new Set<string>();
       for (const [key, data] of staleCache) {
         if (data === undefined) continue;
         if (
@@ -621,10 +665,11 @@ window.__h = {
         )
           continue;
         queryClient.setQueryData(key, data);
+        hashes.add(hashKey(key));
         restored++;
       }
       staleCache = [];
-      return restored;
+      return { restored, readers: readersOf(hashes) };
     },
   },
   raw: {
