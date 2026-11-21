@@ -51,10 +51,10 @@ export const MAX_DELTA_RETRIES = 3;
 /**
  * What a read about to answer from the cache did first. `current`: the cache
  * held everything already shown, so nothing ran. `held`: a delta ran, or a
- * running one was joined, and brought the cache forward. `retried`: the last
- * run had failed and this read retried it, successfully. `behind`: the cache
- * could not be brought forward (the run failed, or its retry is backing off
- * or used up), so it may be older than what REST already showed.
+ * running one was joined, and brought the cache forward. `retried`: as
+ * `held`, with a retry of a failed delta. `behind`: the cache could not be
+ * brought forward (the delta failed or stopped short, or a failed one's retry
+ * is backing off or used up), so it may be older than what REST showed.
  */
 export type CalendarCatchUp = 'current' | 'held' | 'retried' | 'behind';
 
@@ -81,20 +81,23 @@ export const refetchCalendarList = () =>
  *
  * A covered week is only as current as the last run, while a viewport REST
  * answered shows the server as it is. Reads therefore ask `catchUp` before
- * answering from the cache: after a REST answer the run started since, or
- * after a failed run a retry, has to succeed first. A failed run is retried
- * on its own a few times with backoff.
+ * answering from the cache: after a REST answer, a run that read the server
+ * after it has to finish first. A failed run is retried on its own a few
+ * times with backoff.
  */
 export class CalendarSyncController {
   private running: Promise<void> | undefined;
   private rerun = false;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private disposed = false;
-  // REST answers counted when the last complete run started.
+  // REST answers counted before the last complete run read the server, and
+  // before the running pass did, once it has.
   private appliedRestAnswers = 0;
+  private passRestAnswers: number | undefined;
   private failures = 0;
   private retryAt = 0;
   private retryTimer: ReturnType<typeof setTimeout> | undefined;
+  private retrying = false;
   private readonly fetchChanges: FetchCalendarChanges;
   private readonly refetchCalendars: () => Promise<unknown>;
   private readonly debounceMs: number;
@@ -127,30 +130,38 @@ export class CalendarSyncController {
 
   /**
    * Whether the cache holds at least what any viewport already showed: the
-   * last run succeeded, and the last complete one started after every REST
-   * answer. A cache that answered from the start and synced is current.
+   * last complete run read the server after every REST answer. A cache that
+   * no REST read has overtaken is current, even when a run failed.
    */
   caughtUp(): boolean {
-    return (
-      this.failures === 0 && this.appliedRestAnswers >= calendarRestAnswers()
-    );
+    return this.appliedRestAnswers >= calendarRestAnswers();
   }
 
   /**
    * Brings the cache forward before a read answers from it, when it may be
-   * older than what is on screen. A failed run is retried here only once its
-   * backoff has passed and retries remain; otherwise the read is `behind`.
+   * older than what is on screen. A running pass is joined, and run again
+   * only if it read the server before the latest REST answer. After a failed
+   * run, a new one starts only once its backoff has passed and retries
+   * remain; otherwise the read is `behind`.
    */
   async catchUp(): Promise<CalendarCatchUp> {
     if (this.disposed || this.caughtUp()) return 'current';
-    const retry = !this.running && this.failures > 0;
-    if (retry && !this.retryDue()) return 'behind';
-    const ran = await ResultAsync.fromPromise(
-      this.runDelta(),
-      (error) => error
-    );
-    if (ran.isErr()) return 'behind';
-    return retry ? 'retried' : 'held';
+    let run: Promise<void>;
+    if (this.running) {
+      const pass = this.passRestAnswers;
+      if (pass !== undefined && pass < calendarRestAnswers()) this.rerun = true;
+      run = this.running;
+    } else {
+      if (this.failures > 0) {
+        if (!this.retryDue()) return 'behind';
+        this.retrying = true;
+      }
+      run = this.runDelta();
+    }
+    const outcome = this.retrying ? 'retried' : 'held';
+    const ran = await ResultAsync.fromPromise(run, (error) => error);
+    if (ran.isErr() || this.disposed || !this.caughtUp()) return 'behind';
+    return outcome;
   }
 
   /**
@@ -164,18 +175,21 @@ export class CalendarSyncController {
       return this.running;
     }
     this.clearRetry();
+    // A stale signal waiting on its debounce is covered by this run.
+    if (this.timer !== undefined) clearTimeout(this.timer);
+    this.timer = undefined;
     const run = (async () => {
       try {
         do {
           this.rerun = false;
-          const restAnswers = calendarRestAnswers();
+          this.passRestAnswers = undefined;
           try {
-            const complete = await this.applyChanges();
+            const vouched = await this.applyChanges();
             this.failures = 0;
-            if (complete) {
+            if (vouched !== undefined) {
               this.appliedRestAnswers = Math.max(
                 this.appliedRestAnswers,
-                restAnswers
+                vouched
               );
             }
           } catch (error) {
@@ -190,6 +204,8 @@ export class CalendarSyncController {
         throw error;
       } finally {
         this.running = undefined;
+        this.passRestAnswers = undefined;
+        this.retrying = false;
       }
     })();
     this.running = run;
@@ -227,16 +243,23 @@ export class CalendarSyncController {
   }
 
   private async retry(): Promise<void> {
+    if (!this.running) this.retrying = true;
     const run = await ResultAsync.fromPromise(this.runDelta(), (e) => e);
     if (run.isErr())
       console.warn('Calendar delta sync retry failed', run.error);
   }
 
-  /** Returns whether the run reached the end of the change log. */
-  private async applyChanges(): Promise<boolean> {
+  /**
+   * Returns the REST answers counted before this pass read the server, or
+   * `undefined` when it stopped before the end of the change log.
+   */
+  private async applyChanges(): Promise<number | undefined> {
     const generation = cacheSessionGeneration.capture();
     const state = await this.host.calendarRange(SYNC_STATE_RANGE);
-    if (state.kind === 'unsupported' || !state.watermark?.length) return true;
+    const restAnswers = calendarRestAnswers();
+    this.passRestAnswers = restAnswers;
+    if (state.kind === 'unsupported' || !state.watermark?.length)
+      return restAnswers;
     let since = state.watermark;
     let calendarsChanged = false;
     let hasMore = false;
@@ -256,7 +279,7 @@ export class CalendarSyncController {
           generation
         );
         await this.refetchCalendars();
-        return true;
+        return restAnswers;
       }
       const visible = new Set(to.map((link) => link.linkId));
       const removedLinkIds = since
@@ -288,7 +311,7 @@ export class CalendarSyncController {
     }
     if (calendarsChanged) await this.refetchCalendars();
     if (hasMore) this.markStale('continue');
-    return !hasMore;
+    return hasMore || this.disposed ? undefined : restAnswers;
   }
 }
 

@@ -17,6 +17,7 @@ import {
   type CalendarRangeInput,
 } from '@service-storage/graphql/generated/graphql';
 import { ResultAsync } from 'neverthrow';
+import { match } from 'ts-pattern';
 import type { CalendarOccurrenceQueryRange } from '../keys';
 import type { CalendarOccurrencesData } from '../occurrences';
 import { mapCalendarOccurrence, mapCalendarSyncStatus } from './map';
@@ -27,7 +28,10 @@ import {
   markCalendarCacheAnswered,
   withinCacheHeadStart,
 } from './readiness';
-import type { CalendarSyncController } from './sync-controller';
+import type {
+  CalendarCatchUp,
+  CalendarSyncController,
+} from './sync-controller';
 
 const MS_PER_DAY = 86_400_000;
 const OCCURRENCE_PAGE_SIZE = 2000;
@@ -387,8 +391,11 @@ const firstReads = new WeakMap<object, Promise<unknown>>();
 
 export type CalendarRangeRead =
   | { kind: 'range'; data: CalendarOccurrencesData }
-  /** Answered from a cache older than what REST already showed. */
-  | { kind: 'behind'; data: CalendarOccurrencesData }
+  /**
+   * The cache may be older than what REST already showed. `older` is what it
+   * holds for a covered week, for when REST cannot answer either.
+   */
+  | { kind: 'behind'; older?: CalendarOccurrencesData }
   | { kind: 'unsupported' }
   | { kind: 'not-ready' };
 
@@ -439,7 +446,7 @@ export async function readCalendarRange(
     fetchPage?: FetchCalendarOccurrencePage;
     signal?: AbortSignal;
     headStartMs?: number;
-    sync?: Pick<CalendarSyncController, 'catchUp'>;
+    sync?: Pick<CalendarSyncController, 'caughtUp' | 'catchUp'>;
     span?: TraceSpan;
   } = {}
 ): Promise<CalendarRangeRead> {
@@ -452,16 +459,23 @@ export async function readCalendarRange(
   if (first === 'not-ready') return { kind: 'not-ready' };
   let result = first;
   if (result.kind === 'unsupported') return { kind: 'unsupported' };
-  const catchUp = (await options.sync?.catchUp()) ?? 'current';
-  if (catchUp !== 'current') {
+  let catchUp: CalendarCatchUp = 'current';
+  if (options.sync && !options.sync.caughtUp()) {
+    // Stays on a read whose deadline passes while the delta runs.
+    options.span?.setAttr('calendar.read.catch_up', 'waiting');
+    catchUp = await options.sync.catchUp();
     options.span?.setAttr('calendar.read.catch_up', catchUp);
   }
   if (options.signal?.aborted) throw options.signal.reason;
-  if (catchUp === 'held' || catchUp === 'retried') {
+  const current = await match(catchUp)
+    .with('current', () => result)
     // The delta changed what the range holds since the first read.
-    result = await host.calendarRange(args);
-    if (result.kind === 'unsupported') return { kind: 'unsupported' };
-  }
+    .with('held', 'retried', () => host.calendarRange(args))
+    .with('behind', () => undefined)
+    .exhaustive();
+  if (!current) return olderRange(host, result);
+  result = current;
+  if (result.kind === 'unsupported') return { kind: 'unsupported' };
   const fetchPage = options.fetchPage ?? fetchCalendarOccurrencePage;
   if (result.gaps.length > 0) {
     for (const window of calendarGapWindows(result.gaps)) {
@@ -478,10 +492,20 @@ export async function readCalendarRange(
     options.signal
   );
   if (items === 'unsupported') return { kind: 'unsupported' };
-  return {
-    kind: catchUp === 'behind' ? 'behind' : 'range',
-    data: { items, syncStatus: latestSyncStatus },
-  };
+  return { kind: 'range', data: { items, syncStatus: latestSyncStatus } };
+}
+
+/**
+ * A read REST answers first, so it fetches nothing: a covered week keeps what
+ * the cache holds in case REST fails, and a week with gaps keeps nothing.
+ */
+async function olderRange(
+  host: Pick<CacheHost, 'readRecordsByKeys'>,
+  range: Extract<CalendarRangeCacheResult, { kind: 'range' }>
+): Promise<CalendarRangeRead> {
+  if (range.gaps.length > 0) return { kind: 'behind' };
+  const { items } = await readOccurrenceItems(host, range.occurrenceKeys);
+  return { kind: 'behind', older: { items, syncStatus: latestSyncStatus } };
 }
 
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';

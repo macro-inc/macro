@@ -77,7 +77,7 @@ type Contender =
 
 type TraceSpan = Pick<Span, 'setAttr'>;
 
-type CatchUpSource = Pick<CalendarSyncController, 'catchUp'>;
+type CatchUpSource = Pick<CalendarSyncController, 'caughtUp' | 'catchUp'>;
 
 // Cache reads of each host still running past their deadline. While one is,
 // later viewports give the cache only the startup head start before REST
@@ -133,10 +133,10 @@ function cacheAnswer(outcome: CacheOutcome): CacheAnswer {
     )
     .with(
       { kind: 'behind' },
-      ({ data }): CacheAnswer => ({
+      ({ older }): CacheAnswer => ({
         answered: false,
         fallback: 'behind',
-        older: data,
+        ...(older ? { older } : {}),
       })
     )
     .with(

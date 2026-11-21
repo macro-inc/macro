@@ -352,6 +352,18 @@ describe('CalendarSyncController catching up a read', () => {
     controller.dispose();
   });
 
+  it('keeps a cache no REST read overtook answering after a failed delta', async () => {
+    const { fetchChanges, controller } = setup([changes()]);
+    await controller.runDelta();
+    fetchChanges.mockRejectedValueOnce(new Error('offline'));
+    await expect(controller.runDelta()).rejects.toThrow('offline');
+
+    expect(controller.caughtUp()).toBe(true);
+    await expect(controller.catchUp()).resolves.toBe('current');
+    expect(fetchChanges).toHaveBeenCalledTimes(2);
+    controller.dispose();
+  });
+
   it('runs one delta before answering after REST showed a viewport', async () => {
     const { fetchChanges, controller } = setup([changes(), changes()]);
     await controller.runDelta();
@@ -364,7 +376,7 @@ describe('CalendarSyncController catching up a read', () => {
     controller.dispose();
   });
 
-  it('holds a read for the running delta when REST answered during it', async () => {
+  it('runs a joined pass again when it read the server before the REST answer', async () => {
     const { fetchChanges, controller } = setup([changes(), changes()]);
     const started = Promise.withResolvers<void>();
     const first = Promise.withResolvers<CalendarChangesPage>();
@@ -380,15 +392,55 @@ describe('CalendarSyncController catching up a read', () => {
 
     await expect(read).resolves.toBe('held');
     await running;
-    // The pass that started before the REST answer could not vouch for it.
     expect(fetchChanges).toHaveBeenCalledTimes(2);
     expect(controller.caughtUp()).toBe(true);
+    controller.dispose();
+  });
+
+  it('joins a pass without another when it reads the server after the REST answer', async () => {
+    const { host, fetchChanges, controller } = setup([changes()]);
+    const state = Promise.withResolvers<CalendarRangeCacheResult>();
+    host.calendarRange.mockImplementationOnce(() => state.promise);
+    const running = controller.runDelta();
+    recordCalendarRestAnswer();
+    const read = controller.catchUp();
+    state.resolve(
+      syncState([
+        { linkId: 'link-1', seq: '1' },
+        { linkId: 'link-2', seq: '7' },
+      ])
+    );
+
+    await expect(read).resolves.toBe('held');
+    await running;
+    expect(fetchChanges).toHaveBeenCalledOnce();
+    controller.dispose();
+  });
+
+  it('reads as behind when the delta stops at the page cap', async () => {
+    const pages = Array.from({ length: 51 }, (_, index) =>
+      changes({
+        newWatermark: [{ linkId: 'link-1', seq: String(index + 2) }],
+        hasMore: index < 50,
+      })
+    );
+    const { fetchChanges, controller } = setup(pages, [
+      { linkId: 'link-1', seq: '1' },
+    ]);
+    recordCalendarRestAnswer();
+
+    await expect(controller.catchUp()).resolves.toBe('behind');
+    expect(fetchChanges).toHaveBeenCalledTimes(50);
+    await vi.runAllTimersAsync();
+    expect(fetchChanges).toHaveBeenCalledTimes(51);
+    await expect(controller.catchUp()).resolves.toBe('current');
     controller.dispose();
   });
 
   it('reads as behind after a failed delta until its retry succeeds', async () => {
     const { fetchChanges, controller } = setup([changes()]);
     fetchChanges.mockRejectedValueOnce(new Error('owner handoff'));
+    recordCalendarRestAnswer();
     await expect(controller.runDelta()).rejects.toThrow('owner handoff');
 
     await expect(controller.catchUp()).resolves.toBe('behind');
@@ -400,9 +452,26 @@ describe('CalendarSyncController catching up a read', () => {
     controller.dispose();
   });
 
+  it('labels a read that joins the scheduled retry as retried', async () => {
+    const { fetchChanges, controller } = setup([]);
+    fetchChanges.mockRejectedValueOnce(new Error('owner handoff'));
+    recordCalendarRestAnswer();
+    await expect(controller.runDelta()).rejects.toThrow('owner handoff');
+    const retried = Promise.withResolvers<CalendarChangesPage>();
+    fetchChanges.mockImplementationOnce(() => retried.promise);
+
+    await vi.advanceTimersByTimeAsync(DELTA_RETRY_BASE_MS);
+    const read = controller.catchUp();
+    retried.resolve(changes());
+
+    await expect(read).resolves.toBe('retried');
+    controller.dispose();
+  });
+
   it('retries a failed delta from a read once its backoff has passed', async () => {
     const { fetchChanges, controller } = setup([changes()]);
     fetchChanges.mockRejectedValueOnce(new Error('owner handoff'));
+    recordCalendarRestAnswer();
     await expect(controller.runDelta()).rejects.toThrow('owner handoff');
     // A hidden tab can hold the retry timer past its time.
     vi.setSystemTime(Date.now() + DELTA_RETRY_BASE_MS);
@@ -418,6 +487,7 @@ describe('CalendarSyncController catching up a read', () => {
     const { fetchChanges, controller } = setup([]);
     fetchChanges.mockRejectedValue(new Error('owner handoff'));
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    recordCalendarRestAnswer();
     await expect(controller.runDelta()).rejects.toThrow('owner handoff');
 
     let waited = 0;
@@ -435,5 +505,17 @@ describe('CalendarSyncController catching up a read', () => {
     expect(fetchChanges).toHaveBeenCalledTimes(MAX_DELTA_RETRIES + 1);
     warn.mockRestore();
     controller.dispose();
+  });
+
+  it('does not count a run cut short by disposal as caught up', async () => {
+    const { host, controller } = setup([changes()]);
+    const state = Promise.withResolvers<CalendarRangeCacheResult>();
+    host.calendarRange.mockImplementationOnce(() => state.promise);
+    recordCalendarRestAnswer();
+    const read = controller.catchUp();
+    controller.dispose();
+    state.resolve(syncState([{ linkId: 'link-1', seq: '1' }]));
+
+    await expect(read).resolves.toBe('behind');
   });
 });
