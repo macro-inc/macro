@@ -612,6 +612,13 @@ pub fn configure_cache_schema(schema_sdl: &str) -> Result<(), JsValue> {
     })
 }
 
+/// Records the browser engine keeps decoded in its hot tier when the host
+/// names no capacity. Lower than `cache_core`'s default because wasm linear
+/// memory never shrinks: the tier fills during a large initial hydration, and
+/// at 10,000 records it held about 50 MB of the worker's peak, while reads it
+/// misses are answered from the database's page cache.
+const BROWSER_HOT_CAPACITY: usize = 2_500;
+
 fn build_engine(storage: TursoStorage, hot_capacity: Option<u32>) -> BrowserEngine {
     let storage = wrap_storage(storage);
     let schema = RUNTIME_SCHEMA.with(|slot| {
@@ -621,7 +628,7 @@ fn build_engine(storage: TursoStorage, hot_capacity: Option<u32>) -> BrowserEngi
     });
     Engine::with_schema(
         storage,
-        hot_capacity.map_or(cache_core::engine::DEFAULT_HOT_CAPACITY, |c| c as usize),
+        hot_capacity.map_or(BROWSER_HOT_CAPACITY, |c| c as usize),
         schema,
     )
     .with_response_records(soup_filter_cache_adapter::permissions::response_property_owners)
