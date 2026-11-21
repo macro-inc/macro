@@ -226,9 +226,10 @@ pub(crate) fn receipt_lag(event_id: Uuid, received: SystemTime) -> Option<Durati
         .ok()
 }
 
-/// Milliseconds for a span field.
-pub(crate) fn millis(duration: Duration) -> u64 {
-    u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
+/// Milliseconds for a span field: an `i64`, which OpenTelemetry exports as
+/// a number (a `u64` arrives as a string).
+pub(crate) fn millis(duration: Duration) -> i64 {
+    i64::try_from(duration.as_millis()).unwrap_or(i64::MAX)
 }
 
 /// Translate one delivered event and execute it. Skippable events are

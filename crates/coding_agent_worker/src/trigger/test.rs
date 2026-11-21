@@ -329,3 +329,23 @@ fn a_mention_tells_the_runtime_what_opened_its_session() {
         trigger_context::TriggerOrigin::Mentioned { .. }
     ));
 }
+
+#[test]
+fn receipt_lag_is_the_time_since_the_event_id_was_minted() {
+    let minted = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_795_000_000);
+    let id = Uuid::new_v7(uuid::Timestamp::from_unix(
+        uuid::NoContext,
+        1_795_000_000,
+        0,
+    ));
+
+    assert_eq!(
+        receipt_lag(id, minted + std::time::Duration::from_millis(56_700)),
+        Some(std::time::Duration::from_millis(56_700))
+    );
+    // This machine's clock behind the service's: no lag rather than a wrong one.
+    assert_eq!(
+        receipt_lag(id, minted - std::time::Duration::from_secs(1)),
+        None
+    );
+}

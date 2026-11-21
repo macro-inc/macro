@@ -187,7 +187,6 @@ impl WorkExecutor for Dispatcher {
                     &bot.as_uuid(),
                     thread_id.as_bytes(),
                 ));
-                tracing::Span::current().record("session_id", tracing::field::display(session));
                 let workspace = phase(
                     "workspace_prepare_ms",
                     tracing::info_span!("macrod.trigger.workspace_prepare"),
@@ -261,7 +260,11 @@ impl WorkExecutor for Dispatcher {
                     Err(ApiError::ThreadSessionExists {
                         session: Some(session),
                     }) => {
-                        tracing::Span::current().record("resumed", true);
+                        // The thread's session, which a session opened
+                        // another way may make differ from the derived id.
+                        let span = tracing::Span::current();
+                        span.record("session_id", tracing::field::display(session));
+                        span.record("resumed", true);
                         tracing::info!(%thread_id, %session, "thread already has a session; resuming it");
                         self.prompted(session, &sender);
                         self.connect_and_prompt(session, &sender, &content, message_id, context)
@@ -275,6 +278,7 @@ impl WorkExecutor for Dispatcher {
                     Err(error) => return Err(error.into()),
                 };
                 let session = AgentSessionId::new_from_uuid(created.session.id);
+                tracing::Span::current().record("session_id", tracing::field::display(session));
                 self.created(session, &sender);
                 // No retry around the prompt: the session actor buffers
                 // actions from the moment the runtime attaches, so the only
