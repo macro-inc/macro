@@ -23,7 +23,7 @@ fn input() -> DueDateInput {
 }
 
 #[tokio::test]
-async fn asks_as_the_owner_and_reads_the_date_back() {
+async fn asks_as_the_owner_and_reads_the_dates_back() {
     let harness = MockServer::start().await;
     let thread_id = Uuid::now_v7();
     Mock::given(matchers::method("POST"))
@@ -40,7 +40,10 @@ async fn asks_as_the_owner_and_reads_the_date_back() {
             "subject": "Contract",
             "messages": [{"written_on": "2026-10-27", "from_owner": false, "text": MAIL}],
         })))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"due_on": "2026-10-30"})))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({"due_on": "2026-10-30", "event_on": "2026-11-02"})),
+        )
         .expect(1)
         .mount(&harness)
         .await;
@@ -49,15 +52,18 @@ async fn asks_as_the_owner_and_reads_the_date_back() {
 
     assert_eq!(
         due_dates
-            .due_on(&owner(), thread_id, &input())
+            .dates(&owner(), thread_id, &input())
             .await
             .unwrap(),
-        NaiveDate::from_ymd_opt(2026, 10, 30)
+        ThreadDates {
+            due_on: NaiveDate::from_ymd_opt(2026, 10, 30),
+            event_on: NaiveDate::from_ymd_opt(2026, 11, 2),
+        }
     );
 }
 
 #[tokio::test]
-async fn no_deadline_reads_as_no_date() {
+async fn no_deadline_or_event_reads_as_no_dates() {
     let harness = MockServer::start().await;
     Mock::given(matchers::any())
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"due_on": null})))
@@ -67,10 +73,10 @@ async fn no_deadline_reads_as_no_date() {
 
     assert_eq!(
         due_dates
-            .due_on(&owner(), Uuid::now_v7(), &input())
+            .dates(&owner(), Uuid::now_v7(), &input())
             .await
             .unwrap(),
-        None
+        ThreadDates::default()
     );
 }
 
@@ -84,7 +90,7 @@ async fn a_failure_reports_no_mail_text() {
     let (due_dates, metrics) = harness_at(&harness.uri());
 
     let error = due_dates
-        .due_on(&owner(), Uuid::now_v7(), &input())
+        .dates(&owner(), Uuid::now_v7(), &input())
         .await
         .unwrap_err();
 
@@ -130,7 +136,7 @@ async fn each_ask_counts_with_the_tokens_and_cost_the_harness_reports() {
     let (due_dates, metrics) = harness_at(&harness.uri());
 
     due_dates
-        .due_on(&owner(), Uuid::now_v7(), &input())
+        .dates(&owner(), Uuid::now_v7(), &input())
         .await
         .unwrap();
 
