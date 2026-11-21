@@ -20,6 +20,14 @@ class PersistenceIntegration(unittest.TestCase):
         source = Path(__file__).resolve().parent
         project = "passwords-persistence-" + uuid4().hex
         with tempfile.TemporaryDirectory() as directory:
+            # Mount readable copies: a private checkout's files are 0600, which
+            # the container's openbao user cannot read.
+            config = Path(directory) / "config"
+            config.mkdir(mode=0o755)
+            config.chmod(0o755)
+            for name in ("local.hcl", "start.sh"):
+                (config / name).write_bytes((source / name).read_bytes())
+                (config / name).chmod(0o644)
             compose = Path(directory) / "compose.json"
             compose.write_text(json.dumps({
                 "services": {"openbao": {
@@ -27,8 +35,8 @@ class PersistenceIntegration(unittest.TestCase):
                     "entrypoint": ["/usr/bin/dumb-init", "--", "/bin/sh", "/openbao/config/start.sh"],
                     "environment": {"BAO_ADDR": "http://127.0.0.1:8200"},
                     "volumes": [
-                        str(source / "local.hcl") + ":/openbao/config/macro-local.hcl:ro,z",
-                        str(source / "start.sh") + ":/openbao/config/start.sh:ro,z",
+                        str(config / "local.hcl") + ":/openbao/config/macro-local.hcl:ro,z",
+                        str(config / "start.sh") + ":/openbao/config/start.sh:ro,z",
                         "vault:/openbao/file",
                     ],
                     "ports": ["127.0.0.1::8200"],

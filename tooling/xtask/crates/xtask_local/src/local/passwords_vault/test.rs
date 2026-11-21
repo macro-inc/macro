@@ -47,3 +47,33 @@ fn provisions_every_team_against_the_loopback_vault_in_one_run() {
         ]
     );
 }
+
+#[test]
+fn stages_openbao_config_readable_by_the_container_user_from_a_private_checkout() {
+    // A checkout and a previous run under umask 077 leave everything 0600/0700.
+    let dir = tempfile::tempdir().unwrap();
+    let staged = dir.path().join("openbao");
+    std::fs::create_dir(&staged).unwrap();
+    std::fs::set_permissions(&staged, std::fs::Permissions::from_mode(0o700)).unwrap();
+    std::fs::write(staged.join("start.sh"), "stale").unwrap();
+    std::fs::set_permissions(
+        staged.join("start.sh"),
+        std::fs::Permissions::from_mode(0o600),
+    )
+    .unwrap();
+
+    stage_config(&staged).unwrap();
+
+    let mode = |path: &Path| std::fs::metadata(path).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode(&staged), 0o755);
+    assert_eq!(mode(&staged.join("start.sh")), 0o644);
+    assert_eq!(mode(&staged.join("macro-local.hcl")), 0o644);
+    assert_eq!(
+        std::fs::read(staged.join("start.sh")).unwrap(),
+        std::fs::read(repo_root().join("infra/local/openbao/start.sh")).unwrap()
+    );
+    assert_eq!(
+        std::fs::read(staged.join("macro-local.hcl")).unwrap(),
+        std::fs::read(repo_root().join("infra/local/openbao/local.hcl")).unwrap()
+    );
+}
