@@ -7,9 +7,10 @@ import { match } from 'ts-pattern';
 import type { ControlLost } from '../core/screen-status';
 
 /**
- * Says that the connection dropped while this viewer was driving, and, once
- * back without the lease, offers to take over again. Never shown when the
- * server kept the lease across the reconnect.
+ * Says that this viewer's drive ended without it letting go (its connection
+ * dropped, the lease lapsed, someone took over), and, once it's known to be
+ * gone, offers to take over again. Never shown when the server kept the
+ * lease across a reconnect.
  */
 export function ControlLostBanner(props: {
   state: ControlLost | undefined;
@@ -24,11 +25,20 @@ export function ControlLostBanner(props: {
       .with({ kind: 'reconnecting' }, () =>
         t('agentScreen.controlLostReconnecting')
       )
-      .with({ kind: 'released', driver: null }, () =>
+      .with({ kind: 'released', driver: null, reconnected: true }, () =>
         t('agentScreen.controlLostReleased')
       )
-      .with({ kind: 'released' }, ({ driver }) =>
+      .with({ kind: 'released', driver: null, reconnected: false }, () =>
+        t('agentScreen.controlLostLapsed')
+      )
+      .with({ kind: 'released', reconnected: true }, ({ driver }) =>
         t('agentScreen.controlLostTakenBy', {
+          name:
+            props.driverName ?? driver?.name ?? t('agentScreen.someoneElse'),
+        })
+      )
+      .with({ kind: 'released', reconnected: false }, ({ driver }) =>
+        t('agentScreen.controlTakenBy', {
           name:
             props.driverName ?? driver?.name ?? t('agentScreen.someoneElse'),
         })

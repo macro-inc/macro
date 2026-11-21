@@ -220,6 +220,7 @@ describe('createScreenSession', () => {
       expect(session.controlLost()).toEqual({
         kind: 'released',
         driver: { userId: 'user-bob', name: 'Bob' },
+        reconnected: true,
       });
 
       session.takeOver();
@@ -645,7 +646,11 @@ describe('createScreenSession', () => {
       });
 
       expect(connections[1].controls).toEqual([]);
-      expect(session.controlLost()).toEqual({ kind: 'released', driver: null });
+      expect(session.controlLost()).toEqual({
+        kind: 'released',
+        driver: null,
+        reconnected: true,
+      });
       dispose();
     });
   });
@@ -886,13 +891,18 @@ describe('createScreenSession', () => {
       connections[1].handlers.onState(state(alice, true));
       expect(session.drivingMe()).toBe(true);
 
-      // Another drop, and meanwhile someone else took the lease: let go.
+      // Another drop, and meanwhile someone else took the lease: no drive
+      // to win back, but stray keys stay swallowed until the person acts
+      // on the banner.
       connections[1].handlers.onEnded('connectionLost');
       expect(session.holdsKeyboard()).toBe(true);
       await vi.advanceTimersByTimeAsync(5_000);
       connections[2].handlers.onState(
         state({ userId: 'user-bob', name: 'Bob' }, false)
       );
+      expect(session.resumingDrive()).toBe(false);
+      expect(session.holdsKeyboard()).toBe(true);
+      session.dismissControlLost();
       expect(session.holdsKeyboard()).toBe(false);
       dispose();
     });
@@ -1032,6 +1042,80 @@ describe('createScreenSession', () => {
       await settle();
       expect(connections).toHaveLength(2);
       expect(session.store.status).toEqual({ kind: 'live' });
+      dispose();
+    });
+  });
+
+  it('says a drive that lapsed on a live connection is over and keeps the keyboard until the person acts, but not after a hand-back or a move to their own other tab', async () => {
+    const connections: FakeConnection[] = [];
+    const capabilities: ScreenCapabilities = {
+      requestTicket: async () =>
+        ok({ socketUrl: 'wss://screen.test/ws?ticket=t1', expiresAt: '' }),
+      transport: () => fakeTransport(connections),
+    };
+    const state = (
+      driver: { userId: string; name: string } | null,
+      drivingHere: boolean
+    ) => ({
+      driver,
+      agentHeld: driver !== null,
+      waking: false,
+      transport: 'vnc' as const,
+      viewers: 1,
+      drivingHere,
+    });
+    const alice = { userId: 'user-alice', name: 'Alice' };
+
+    await createRoot(async (dispose) => {
+      const session = createScreenSession({
+        harnessId: 'harness-1',
+        canDrive: () => true,
+        accessKnown: () => true,
+        currentUserId: () => 'user-alice',
+        transport: () => 'vnc',
+        capabilities,
+      });
+      session.attach(document.createElement('div'));
+      await settle();
+      const live = connections[0].handlers;
+
+      // No input for a while: the server lets the lease go.
+      live.onState(state(alice, true));
+      live.onState(state(null, false));
+      expect(session.controlLost()).toEqual({
+        kind: 'released',
+        driver: null,
+        reconnected: false,
+      });
+      expect(session.holdsKeyboard()).toBe(true);
+      // Nothing to win back: no take-over of its own. Holding Esc (a hand
+      // back) just lets go: there's no lease to give.
+      expect(connections[0].controls).toEqual([]);
+      session.handBack(null);
+      expect(connections[0].controls).toEqual([]);
+      expect(session.holdsKeyboard()).toBe(false);
+
+      // Someone else takes it.
+      live.onState(state(alice, true));
+      live.onState(state({ userId: 'user-bob', name: 'Bob' }, false));
+      expect(session.controlLost()).toMatchObject({
+        kind: 'released',
+        reconnected: false,
+      });
+      session.takeOver();
+      live.onState(state(alice, true));
+      expect(session.controlLost()).toBeUndefined();
+
+      // Handed back from here: nothing lost.
+      session.handBack(null);
+      live.onState(state(null, false));
+      expect(session.controlLost()).toBeUndefined();
+      expect(session.holdsKeyboard()).toBe(false);
+
+      // Taken over in another tab of the same person: nothing lost here.
+      live.onState(state(alice, true));
+      live.onState(state(alice, false));
+      expect(session.controlLost()).toBeUndefined();
       dispose();
     });
   });

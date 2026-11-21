@@ -414,3 +414,42 @@ describe('what the viewer says the agent does while someone drives', () => {
     }
   );
 });
+
+describe('a drive that lapses', () => {
+  it('says so, and keeps the keys from the app until the person acts', async () => {
+    vi.useFakeTimers();
+    const openSearch = hotkeys();
+    const connections: Connection[] = [];
+    const { unmount } = renderView(AgentScreen, connections);
+    await vi.advanceTimersByTimeAsync(0);
+    connections[0].handlers.onState(state(true));
+    const keyboard = screen.getByRole('textbox', {
+      name: 'Keyboard for Scout’s desktop',
+    });
+    keyboard.focus();
+
+    connections[0].handlers.onState({ ...state(false), driver: null });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(
+      screen.getByText(
+        'You’re no longer driving: the drive ended after a while without input.'
+      )
+    ).toBeTruthy();
+    expect(document.activeElement).toBe(keyboard);
+    keyboard.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: '/',
+        code: 'Slash',
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    expect(openSearch).not.toHaveBeenCalled();
+    expect(connections[0].sent).toEqual([]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(document.activeElement).not.toBe(keyboard);
+    unmount();
+  });
+});

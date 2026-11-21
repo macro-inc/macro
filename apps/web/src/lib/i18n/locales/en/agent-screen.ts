@@ -24,6 +24,9 @@ export default {
     'Connection lost while you were driving. Reconnecting…',
   controlLostReleased: 'Reconnected. You’re no longer driving.',
   controlLostTakenBy: 'Reconnected. {{name}} is driving now.',
+  controlLostLapsed:
+    'You’re no longer driving: the drive ended after a while without input.',
+  controlTakenBy: 'You’re no longer driving: {{name}} took over.',
   someoneElse: 'Someone else',
   dismissControlLost: 'Dismiss',
   takingOver: 'Taking over…',

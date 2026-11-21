@@ -60,12 +60,15 @@ type SessionStore = {
   /** The last error the server reported on an open socket. */
   notice: ScreenError | undefined;
   /**
-   * This viewer was driving when its connection ended (a drop, a server
-   * restart, a transport switch), and hasn't seen the server confirm it still
-   * holds the lease. Cleared by that confirmation, Take over, Hand back or a
-   * dismissal; never silently.
+   * This viewer drove and no longer does, without letting go itself, and
+   * hasn't acted on it yet. `drop`: its connection ended (a drop, a server
+   * restart, a transport switch), and it hasn't seen the server confirm it
+   * still holds the lease; the drive is won back if the lease is still its
+   * own. `lapse`: the server let the lease go (no input for a while) or gave
+   * it to someone else on a live connection. Cleared by Take over, Hand
+   * back, a dismissal, or the server confirming the lease; never silently.
    */
-  controlLost: boolean;
+  controlLost: 'drop' | 'lapse' | undefined;
 };
 
 /**
@@ -83,7 +86,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
     server: undefined,
     takingOver: false,
     notice: undefined,
-    controlLost: options.continueDriving ?? false,
+    controlLost: options.continueDriving ? 'drop' : undefined,
   });
 
   let element: HTMLElement | undefined;
@@ -104,6 +107,8 @@ export function createScreenSession(options: ScreenSessionOptions) {
   let leaseCarriedAway = false;
   /** Stop already handed back; closing must not do it twice. */
   let handedBackOnLeaving = false;
+  /** This tab let go of its drive itself: the lease leaving isn't a loss. */
+  let handedBackHere = false;
   /** Releases keys and buttons held in the guest (the input controller's). */
   let releaseInput: () => void = () => {};
   const [attached, setAttached] = createSignal(false);
@@ -153,6 +158,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
     if (!session || !drivingMe() || leaseCarriedAway || handedBackOnLeaving)
       return;
     handedBackOnLeaving = true;
+    handedBackHere = true;
     record('computer.screen.hand_back', { reason: 'leaving' });
     releaseInput();
     session.handBack(null);
@@ -164,7 +170,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
     setStore({
       status: step.status,
       takingOver: false,
-      ...(step.kind === 'show' ? { controlLost: false } : {}),
+      ...(step.kind === 'show' ? { controlLost: undefined } : {}),
     });
     if (step.kind === 'show') {
       record('computer.screen.status', { status: step.status.kind });
@@ -237,16 +243,24 @@ export function createScreenSession(options: ScreenSessionOptions) {
         {
           onState: (state) => {
             if (current !== generation) return;
-            const driving =
-              state.driver?.userId === options.currentUserId() &&
-              state.drivingHere !== false;
+            const ours = state.driver?.userId === options.currentUserId();
+            const driving = ours && state.drivingHere !== false;
+            // This tab drove and the lease went elsewhere without a hand-back
+            // from here: it lapsed, or someone took it. Not when the same
+            // person moved it to another tab of theirs on purpose.
+            const lapsed = drivingMe() && !driving && !ours && !handedBackHere;
+            if (driving) handedBackHere = false;
             // One update, so a lease being taken back never shows as lost.
             batch(() => {
               setStore({
                 server: state,
                 takingOver: store.takingOver && !driving,
-                // The server kept our lease across the reconnect.
-                controlLost: store.controlLost && !driving,
+                // The server kept (or gave back) our lease.
+                controlLost: driving
+                  ? undefined
+                  : lapsed
+                    ? 'lapse'
+                    : store.controlLost,
               });
               resumeDriving();
               // Until the first frame, say the computer is waking while it is.
@@ -266,11 +280,12 @@ export function createScreenSession(options: ScreenSessionOptions) {
             // An error answering the take-back of a dropped drive ends the
             // resume: the lease stays where it is, and the view offers the
             // ordinary Take over here instead of holding the keyboard.
-            const resumeRefused = store.takingOver && store.controlLost;
+            const resumeRefused =
+              store.takingOver && store.controlLost === 'drop';
             setStore({
               notice: error,
               takingOver: false,
-              ...(resumeRefused ? { controlLost: false } : {}),
+              ...(resumeRefused ? { controlLost: undefined } : {}),
             });
           },
           onEnded: (reason) => {
@@ -398,11 +413,12 @@ export function createScreenSession(options: ScreenSessionOptions) {
    * socket's lease would otherwise show "You're driving" while dropping input.
    */
   function resumeDriving() {
-    if (!store.controlLost || !session || store.status.kind !== 'live') return;
+    if (store.controlLost !== 'drop' || !session) return;
+    if (store.status.kind !== 'live') return;
     if (store.takingOver) return;
     if (!store.server || !options.canDrive()) return;
     if (drivingMe()) {
-      setStore('controlLost', false);
+      setStore('controlLost', undefined);
       return;
     }
     // Only a lease that is still ours: when it is free, someone (perhaps us,
@@ -427,17 +443,18 @@ export function createScreenSession(options: ScreenSessionOptions) {
     setStore({
       server: undefined,
       takingOver: false,
-      controlLost: store.controlLost || wasDriving,
+      controlLost: store.controlLost ?? (wasDriving ? 'drop' : undefined),
     });
   }
 
   /**
    * The viewer keeps the keyboard (keys swallowed, never the app's hotkeys)
-   * while it drives, and while it wins back a drive a drop interrupted: until
-   * the new connection settles the lease, the person is still typing at the
-   * remote computer.
+   * while it drives, while it wins back a drive a drop interrupted, and after
+   * a drive ended without the person letting go, until they act on the
+   * banner: meanwhile they may still be typing at the remote computer.
    */
-  const holdsKeyboard = () => drivingMe() || resumingDrive();
+  const holdsKeyboard = () =>
+    drivingMe() || resumingDrive() || controlLost()?.kind === 'released';
 
   /**
    * A drive this tab lost to a drop is being won back: from the end, through
@@ -445,7 +462,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
    * taking it back).
    */
   const resumingDrive = () =>
-    store.controlLost &&
+    store.controlLost === 'drop' &&
     options.canDrive() &&
     (!store.server || store.takingOver || leaseOnOtherSocket());
 
@@ -461,7 +478,11 @@ export function createScreenSession(options: ScreenSessionOptions) {
       return { kind: 'reconnecting' };
     }
     if (status !== 'live' || !store.server || drivingMe()) return undefined;
-    return { kind: 'released', driver: store.server.driver };
+    return {
+      kind: 'released',
+      driver: store.server.driver,
+      reconnected: store.controlLost === 'drop',
+    };
   };
 
   return {
@@ -473,7 +494,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
     resumingDrive,
     /** The person read the control-lost banner and closed it. */
     dismissControlLost() {
-      setStore('controlLost', false);
+      setStore('controlLost', undefined);
     },
     /** The element the transport renders into; connecting starts here. */
     attach(next: HTMLElement) {
@@ -488,15 +509,19 @@ export function createScreenSession(options: ScreenSessionOptions) {
     takeOver() {
       if (!session || !options.canDrive()) return;
       record('computer.screen.take_over');
-      setStore({ takingOver: true, notice: undefined, controlLost: false });
+      setStore({ takingOver: true, notice: undefined, controlLost: undefined });
       session.takeOver();
     },
     handBack(note: string | null) {
       record('computer.screen.hand_back', {
         has_note: note !== null,
       });
-      setStore('controlLost', false);
+      setStore('controlLost', undefined);
       releaseInput();
+      // Nothing to hand back once the lease is gone (Esc held after a
+      // lapse): letting go is all that's left.
+      if (!ownLease()) return;
+      handedBackHere = true;
       session?.handBack(note);
     },
     stop() {

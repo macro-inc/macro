@@ -33,8 +33,11 @@ export type ScreenStatus =
 /** What to tell a viewer whose connection dropped while it was driving. */
 export type ControlLost =
   | { kind: 'reconnecting' }
-  /** Back, but no longer driving: the lease lapsed, or `driver` took it. */
-  | { kind: 'released'; driver: ScreenDriver | null };
+  /**
+   * No longer driving: the lease lapsed, or `driver` took it; `reconnected`
+   * when that was found after a reconnect.
+   */
+  | { kind: 'released'; driver: ScreenDriver | null; reconnected: boolean };
 
 /** Why minting a ticket failed, from the service client's error codes. */
 export type TicketFailure =
