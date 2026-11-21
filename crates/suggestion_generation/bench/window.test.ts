@@ -319,14 +319,29 @@ describe('rereadList', () => {
     }
   });
 
-  test('leaves the list as the run read it when the transcript holds no brief', () => {
+  test('never erases a list the run read with a transcript that shows less', () => {
     const dir = mkdtempSync(join(tmpdir(), 'reread-'));
+    const file = join(dir, 'gen-1.jsonl');
+    const picking = { ...row, content: { ...row.content, params: { prompt: [{ type: 'text', text: 'Pick routines.\n<untrusted>\nmail\n</untrusted>' }] } } };
     try {
-      writeFileSync(join(dir, 'gen-1.jsonl'), '');
-      const kept = generation({ transcript: join(dir, 'gen-1.jsonl'), workList: list });
+      // Empty: unknown, the run's list stands, and with none it is an error.
+      writeFileSync(file, '');
+      const kept = generation({ transcript: file, workList: list });
       expect(rereadList(kept, join(dir, 'run.json'))).toContain('holds no brief');
       expect(kept.workList).toEqual(list);
       expect(kept.listError).toBeUndefined();
+      const none = generation({ transcript: file });
+      expect(rereadList(none, join(dir, 'run.json'))).toContain('holds no brief');
+      expect(none.listError).toContain('unknown');
+      // Only the picking session's brief: the run's list stands; with none, none was read.
+      writeFileSync(file, `${JSON.stringify(picking)}\n`);
+      const partial = generation({ transcript: file, workList: list });
+      expect(rereadList(partial, join(dir, 'run.json'))).toContain('stands');
+      expect(partial.workList).toEqual(list);
+      const unread = { ...generation({ transcript: file }), listError: 'an old reader failed' };
+      expect(rereadList(unread, join(dir, 'run.json'))).toBeUndefined();
+      expect(unread.workList).toBeUndefined();
+      expect(unread.listError).toBeUndefined();
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -361,7 +376,7 @@ describe('wholeCount', () => {
     expect(wholeCount('--reps', '3')).toBe(3);
     expect(wholeCount('--reps', 2)).toBe(2);
     expect(wholeCount('--reps', '1000')).toBe(1000);
-    for (const bad of ['0', '-1', '1.5', 'x', '', '1001', '4294967296', '9007199254740993']) expect(() => wholeCount('--reps', bad)).toThrow('--reps takes a whole number from 1 to 1000');
+    for (const bad of ['0', '-1', '1.5', 'x', '', ' 3', '3e0', '0x3', '1.0000000000000001', '1001', '4294967296', '9007199254740993']) expect(() => wholeCount('--reps', bad)).toThrow('--reps takes a whole number from 1 to 1000');
   });
 });
 

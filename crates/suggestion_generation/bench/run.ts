@@ -286,29 +286,39 @@ export function readWorkList(rows: Iterable<unknown>): { list?: WorkList; error?
 /**
  * Read `generation`'s work list again from its sessions' transcript, where
  * it was saved or beside the run file at `runPath` (a run directory moved
- * with its transcripts). A transcript that can't be read is the list's
- * error. One that is gone keeps the list the run read; with no list read,
- * whether its sessions read one is unknown, which is an error too, never an
- * empty list. One that holds no brief to a runtime (empty, say) can't say
- * what was read either, and leaves the list as the run read it. Says so when
- * the transcript is gone or holds no brief.
+ * with its transcripts). A re-read can correct what the run read, never
+ * erase a list it read:
+ * - a list read is the list; a transcript or brief that can't be read is
+ *   the list's error;
+ * - a transcript that is gone, or holds no brief to a runtime (empty, say),
+ *   can't say what was read: the run's list stands, and with none, whether
+ *   its sessions read one is unknown, an error too;
+ * - briefs that carry no list leave a list the run read (the transcript may
+ *   hold only some sessions), and otherwise say none was read.
+ * Says why when the run's reading stands.
  */
 export function rereadList(generation: Generation, runPath: string): string | undefined {
   const saved = generation.transcript;
   if (!saved) return undefined;
   const transcript = [saved, join(dirname(runPath), basename(saved))].find((file) => existsSync(file));
-  if (!transcript) {
-    if (!generation.workList && !generation.listError) generation.listError = `${saved} is gone and the run saved no list, so whether its sessions read one is unknown`;
-    return `${saved} is gone, so its work list is judged as the run first read it`;
-  }
+  const unknown = (why: string) => {
+    if (!generation.workList) generation.listError = `${why}, and the run read no list, so whether its sessions read one is unknown`;
+    return `${why}, so its work list is judged as the run first read it`;
+  };
+  if (!transcript) return unknown(`${saved} is gone`);
+  let rows: unknown[];
   try {
-    const rows = readFileSync(transcript, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line) as unknown);
-    if (!rows.some((row) => isPrompt(row as TranscriptRow))) return `${transcript} holds no brief to a runtime, so its work list is judged as the run first read it`;
-    ({ list: generation.workList, error: generation.listError } = readWorkList(rows));
+    rows = readFileSync(transcript, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line) as unknown);
   } catch (error) {
     generation.workList = undefined;
     generation.listError = `reading ${transcript}: ${String(error).slice(0, 200)}`;
+    return undefined;
   }
+  if (!rows.some((row) => isPrompt(row as TranscriptRow))) return unknown(`${transcript} holds no brief to a runtime`);
+  const { list, error } = readWorkList(rows);
+  if (!list && !error && generation.workList) return `${transcript} holds no brief with a list, so the list the run read stands`;
+  generation.workList = list;
+  generation.listError = error;
   return undefined;
 }
 

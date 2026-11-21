@@ -151,7 +151,7 @@ sessions' transcripts beside it. A routines attempt is written as soon as it
 has generated, marked not judged until it is, so `rejudge` can judge a run
 that stopped first; `rejudge` reads each work list again from the
 transcripts (where they were saved, or beside `run.json`). Where both are
-gone, or the one found holds no brief, it keeps the list the run read; a run
+gone, or the one found holds no brief or only briefs without a list, it keeps the list the run read (a re-read never erases one); a run
 that read none then has an unknown list. The harness sends a brief to its
 runtime as Markdown, which backslash-escapes characters such as `_`; the
 bench undoes those escapes. A brief that says it carries a list (the

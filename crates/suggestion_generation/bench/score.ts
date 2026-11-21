@@ -454,7 +454,7 @@ const MAX_COUNT = 1000;
 
 /** `value` as a whole number from 1 to `MAX_COUNT`; `what` names it in the refusal. */
 export function wholeCount(what: string, value: string | number): number {
-  const n = Number(value);
+  const n = typeof value === 'number' ? value : /^\d+$/.test(value) ? Number(value) : NaN;
   if (!Number.isInteger(n) || n < 1 || n > MAX_COUNT) throw new Error(`${what} takes a whole number from 1 to ${MAX_COUNT}, not ${value}`);
   return n;
 }
