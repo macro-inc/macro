@@ -45,6 +45,10 @@ impl BrowserStorage {
         self.inner
     }
 
+    pub(super) fn inner(&self) -> &TursoStorage {
+        &self.inner
+    }
+
     pub(super) fn arm(&self, fault: TestStorageFault) {
         self.fault.store(fault as u8, Ordering::Release);
     }
