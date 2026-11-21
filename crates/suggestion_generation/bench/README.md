@@ -150,14 +150,15 @@ with each attempt's suggestions, the judge's marks, the score and the
 sessions' transcripts beside it. A routines attempt is written as soon as it
 has generated, marked not judged until it is, so `rejudge` can judge a run
 that stopped first; `rejudge` reads each work list again from the
-transcripts (where they were saved, or beside `run.json`); where both are
-gone it keeps the list the run read, and a run that read none has an unknown
-list. The harness sends a brief to its runtime as Markdown, which
-backslash-escapes characters such as `_`; the bench undoes those escapes. A
-brief that says it carries a list (the drafting brief's words, outside the
-mail's `<untrusted>` block) the bench still can't parse is that attempt's
-list error, as is an unknown list: counted as not judged, by `rescore` too,
-never an empty list. `run` starts the stand-in if it isn't up and holds the
+transcripts (where they were saved, or beside `run.json`). Where both are
+gone, or the one found holds no brief, it keeps the list the run read; a run
+that read none then has an unknown list. The harness sends a brief to its
+runtime as Markdown, which backslash-escapes characters such as `_`; the
+bench undoes those escapes. A brief that says it carries a list (the
+drafting brief's words at the start of a line, outside the mail's
+`<untrusted>` block) the bench still can't parse is that attempt's list
+error, as is an unknown list: counted as not judged, by `rescore` too, never
+an empty list. `run` starts the stand-in if it isn't up and holds the
 stack while it runs (the drafting eval's lock), so two runs never share it.
 
 To compare a change: run main, switch the stack to your build (`just
@@ -234,7 +235,7 @@ needs (by id, with a drafted routine that isn't blank) a drafted routine can
 meet. Both writers refuse a workspace where two people share a first name in
 any case (each is mailed as first name at the domain) or a colleague is named
 Owner (the person's own place), when sketching and when finishing a set.
-`run`, `find` and `heldout make` take counts of 1 or more.
+`run`, `find` and `heldout make` take counts from 1 to 1000.
 Writing one took $4.50 to $4.91 a person (three at once in about ten
 minutes). The stand-in serves the month to the read the finding step makes
 (`?days=30&limit=500&texts=100&snippet_chars=500`), refuses any other

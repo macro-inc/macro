@@ -192,6 +192,8 @@ const SESSIONS = `SELECT s.session_id::text, s.kind, s.surfaces, s.ending, s.ope
 
 /** What a drafting session's brief says before the work streams it was given. */
 const WORK_LIST_MARK = 'The streams of work a step found';
+/** The mark where the brief puts it: at the start of a line. */
+const LINE_MARK = new RegExp(`(^|\\n)${WORK_LIST_MARK}`, 'g');
 
 function* strings(value: unknown): Generator<string> {
   if (typeof value === 'string') yield value;
@@ -200,6 +202,9 @@ function* strings(value: unknown): Generator<string> {
 }
 
 type TranscriptRow = { session?: string; direction?: string; created_at?: string; content?: { method?: unknown; params?: unknown } };
+
+/** Whether `row` is a prompt the harness sent a runtime. */
+const isPrompt = (row: TranscriptRow) => row?.direction === 'to_runtime' && row.content?.method === 'session/prompt';
 
 /** Whether `value` has the shape of a work list (`finding.ts` `WORK_LIST`). */
 function isWorkList(value: unknown): value is WorkList {
@@ -244,17 +249,18 @@ export function unescapeMarkdown(text: string): string {
 }
 
 /**
- * The work list one brief carried, if it carried one. The brief says
- * `WORK_LIST_MARK` outside any `<untrusted>` block; the mark inside one is
- * mail (a subject, say), never the list.
+ * The work list one brief carried, if it carried one. The brief starts a
+ * line with `WORK_LIST_MARK`, outside any `<untrusted>` block, and the list's
+ * block follows that line. The mark inside a block is mail (a subject, say),
+ * and inside a line it is quoted (a dismissed routine's name): neither is the
+ * list.
  */
 function listIn(row: TranscriptRow): WorkList | undefined {
   for (const text of strings(row.content?.params)) {
     const spans = untrustedSpans(text);
-    let at = text.indexOf(WORK_LIST_MARK);
-    while (at >= 0 && spans.some(([start, end]) => at > start && at < end)) at = text.indexOf(WORK_LIST_MARK, at + 1);
-    if (at < 0) continue;
-    const block = /<untrusted>\n([\s\S]*?)\n<\/untrusted>/.exec(text.slice(at));
+    const at = [...text.matchAll(LINE_MARK)].map((m) => m.index + m[1].length).find((start) => !spans.some(([from, to]) => start > from && start < to));
+    if (at === undefined) continue;
+    const block = /^[^\n]*\n<untrusted>\n([\s\S]*?)\n<\/untrusted>/.exec(text.slice(at));
     if (!block) throw new Error(`a brief says it carries a work list but has no <untrusted> block after it`);
     let list: unknown;
     try {
@@ -283,7 +289,9 @@ export function readWorkList(rows: Iterable<unknown>): { list?: WorkList; error?
  * with its transcripts). A transcript that can't be read is the list's
  * error. One that is gone keeps the list the run read; with no list read,
  * whether its sessions read one is unknown, which is an error too, never an
- * empty list. Says so when the transcript is gone.
+ * empty list. One that holds no brief to a runtime (empty, say) can't say
+ * what was read either, and leaves the list as the run read it. Says so when
+ * the transcript is gone or holds no brief.
  */
 export function rereadList(generation: Generation, runPath: string): string | undefined {
   const saved = generation.transcript;
@@ -295,6 +303,7 @@ export function rereadList(generation: Generation, runPath: string): string | un
   }
   try {
     const rows = readFileSync(transcript, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line) as unknown);
+    if (!rows.some((row) => isPrompt(row as TranscriptRow))) return `${transcript} holds no brief to a runtime, so its work list is judged as the run first read it`;
     ({ list: generation.workList, error: generation.listError } = readWorkList(rows));
   } catch (error) {
     generation.workList = undefined;
@@ -315,7 +324,7 @@ export function rereadList(generation: Generation, runPath: string): string | un
 export function workListOf(rows: Iterable<unknown>): WorkList | undefined {
   const prompts = [...rows]
     .map((row) => row as TranscriptRow)
-    .filter((row) => row.direction === 'to_runtime' && row.content?.method === 'session/prompt')
+    .filter(isPrompt)
     // `capture` writes `created_at` at a fixed width in UTC, so its text sorts as its time does.
     .sort((a, b) => ((a.created_at ?? '') < (b.created_at ?? '') ? -1 : (a.created_at ?? '') > (b.created_at ?? '') ? 1 : 0));
   const shares = new Map<string | undefined, WorkList>();

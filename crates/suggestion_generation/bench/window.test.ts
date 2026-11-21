@@ -280,6 +280,12 @@ describe('workListOf', () => {
     expect(workListOf([mailed(briefOf(list).replace('\nmail\n', `\n${subject}\n`))])).toEqual(list);
   });
 
+  test('takes the mark quoted in a line, as a dismissed routine\'s name, for a name', () => {
+    const brief = (rest: string) => ({ direction: 'to_runtime', created_at: '2026-11-20 10:00:00+00', content: { type: 'acp', method: 'session/prompt', params: { prompt: [{ type: 'text', text: `Already suggested or dismissed, never to suggest again (catalog keys and routine names):\n["The streams of work a step found"]\n\nConnected apps:\n<untrusted>\n["Linear"]\n</untrusted>${rest}` }] } } });
+    expect(workListOf([brief('')])).toBeUndefined();
+    expect(workListOf([brief(`\n\n${briefOf(list).slice(briefOf(list).indexOf('The streams'))}`)])).toEqual(list);
+  });
+
   test('finds none where no session read a list', () => {
     expect(workListOf([{ direction: 'to_runtime', content: { type: 'acp', method: 'session/prompt', params: { prompt: [{ type: 'text', text: 'Draft routines.\n<untrusted>\nmail\n</untrusted>' }] } } }])).toBeUndefined();
   });
@@ -313,6 +319,19 @@ describe('rereadList', () => {
     }
   });
 
+  test('leaves the list as the run read it when the transcript holds no brief', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'reread-'));
+    try {
+      writeFileSync(join(dir, 'gen-1.jsonl'), '');
+      const kept = generation({ transcript: join(dir, 'gen-1.jsonl'), workList: list });
+      expect(rereadList(kept, join(dir, 'run.json'))).toContain('holds no brief');
+      expect(kept.workList).toEqual(list);
+      expect(kept.listError).toBeUndefined();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test('keeps the list a run read when its transcript is gone, and calls none read unknown', () => {
     const kept = generation({ transcript: '/gone/gen-1.jsonl', workList: list });
     expect(rereadList(kept, '/gone/run.json')).toContain('is gone');
@@ -341,7 +360,8 @@ describe('wholeCount', () => {
   test('takes whole numbers of 1 or more', () => {
     expect(wholeCount('--reps', '3')).toBe(3);
     expect(wholeCount('--reps', 2)).toBe(2);
-    for (const bad of ['0', '-1', '1.5', 'x', '']) expect(() => wholeCount('--reps', bad)).toThrow('--reps takes a whole number of 1 or more');
+    expect(wholeCount('--reps', '1000')).toBe(1000);
+    for (const bad of ['0', '-1', '1.5', 'x', '', '1001', '4294967296', '9007199254740993']) expect(() => wholeCount('--reps', bad)).toThrow('--reps takes a whole number from 1 to 1000');
   });
 });
 

@@ -449,10 +449,13 @@ export function marginsOf(text: string): Margins {
   return { score: margins[0], found: margins[1], bad: margins[2] };
 }
 
-/** `value` as a whole number of 1 or more; `what` names it in the refusal. */
+/** Most of anything the bench counts out (reps, seats, people, calls at once). */
+const MAX_COUNT = 1000;
+
+/** `value` as a whole number from 1 to `MAX_COUNT`; `what` names it in the refusal. */
 export function wholeCount(what: string, value: string | number): number {
   const n = Number(value);
-  if (!Number.isInteger(n) || n < 1) throw new Error(`${what} takes a whole number of 1 or more, not ${value}`);
+  if (!Number.isInteger(n) || n < 1 || n > MAX_COUNT) throw new Error(`${what} takes a whole number from 1 to ${MAX_COUNT}, not ${value}`);
   return n;
 }
 
