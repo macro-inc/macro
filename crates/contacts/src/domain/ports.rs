@@ -1,5 +1,10 @@
 use crate::domain::models::contact::{Contact, ContactName, ContactPage};
-use crate::domain::models::messages::{ContactConnection, ContactConnections, ContactsNodes};
+use crate::domain::models::invalidation::ContactsInvalidation;
+use crate::domain::models::list::InboxSource;
+use crate::domain::models::listed::ListedContact;
+use crate::domain::models::messages::{
+    ContactConnection, ContactConnections, ContactsNodes, DirectoryChange,
+};
 use crate::domain::models::page::{ContactCursor, ContactIdPage, ContactPageSize};
 use crate::domain::models::people::{PeopleSearchLimit, PeopleSearchQuery, PersonMatch};
 use crate::domain::models::query::{ContactLookup, ContactSearch};
@@ -21,6 +26,94 @@ pub trait ContactsRepository: Send + Sync + 'static {
         &self,
         connections: Vec<(MacroUserIdStr<'_>, MacroUserIdStr<'_>)>,
     ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// Writes to directed, list-aware directory membership. Every write is
+/// idempotent and reports only the rows it added, so a repeat reports nothing.
+pub trait ContactListRepository: Send + Sync + 'static {
+    /// Add every user and every peer to each other's `interacted` list,
+    /// skipping self-pairs and ids with no profile (a deleted account).
+    /// Returns the added (owner, contact) pairs.
+    fn record_interactions(
+        &self,
+        users: &[MacroUserIdStr<'static>],
+        peers: &[MacroUserIdStr<'static>],
+    ) -> impl Future<
+        Output = Result<Vec<(MacroUserIdStr<'static>, MacroUserIdStr<'static>)>, Report>,
+    > + Send;
+
+    /// Add contacts to the inbox owner's list for that inbox, skipping the
+    /// owner. Writes nothing once the inbox is disconnected. Returns the
+    /// contacts added.
+    fn record_inbox_contacts(
+        &self,
+        inbox: &InboxSource,
+        contacts: &[MacroUserIdStr<'static>],
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Report>> + Send;
+
+    /// Add `contact` to `owner`'s `invited` list, skipping a self-invite.
+    /// Directed: the contact's directory is unchanged. Returns whether the row
+    /// was added.
+    fn record_invite(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        contact: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<bool, Report>> + Send;
+
+    /// The ids among `ids` that have no profile (deleted accounts).
+    fn missing_profiles(
+        &self,
+        ids: &[MacroUserIdStr<'static>],
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Report>> + Send;
+
+    /// Remove the user's own lists and every list entry naming them. Returns
+    /// the other owners who lost them. Fails while the user's profile still
+    /// exists, so a queued deletion is received again once nothing can add
+    /// them back.
+    fn delete_user_lists(
+        &self,
+        user: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Report>> + Send;
+}
+
+/// Bounded reads of the directed, list-aware directory: a person is in a
+/// viewer's directory when they are in one of the viewer's stored lists or
+/// inboxes, on the viewer's current team, or the viewer. Ids are canonical, so
+/// pages are in plain byte order. Not read by any caller yet; it replaces
+/// [`ContactsPageRepository`] behind a flag.
+pub trait ContactListReader: Send + Sync + 'static {
+    /// One page of the viewer's directory, including the viewer, in contact-id
+    /// order after the cursor.
+    fn list_directory_page(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        after: Option<&ContactCursor>,
+        limit: ContactPageSize,
+    ) -> impl Future<Output = Result<ContactIdPage, Report>> + Send;
+
+    /// The requested ids that are in the viewer's directory, in request order.
+    fn lookup_listed_contacts(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        lookup: &ContactLookup,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Report>> + Send;
+
+    /// The viewer's lists each requested contact is in, in request order.
+    /// Contacts in none, including the viewer, are left out.
+    fn contact_lists(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        lookup: &ContactLookup,
+    ) -> impl Future<Output = Result<Vec<ListedContact>, Report>> + Send;
+
+    /// One page of the users who have `subject` in their directory, including
+    /// the subject, in user-id order after the cursor.
+    fn audience_page(
+        &self,
+        subject: MacroUserIdStr<'_>,
+        after: Option<&ContactCursor>,
+        limit: ContactPageSize,
+    ) -> impl Future<Output = Result<ContactIdPage, Report>> + Send;
 }
 
 /// Bounded directory reads, separate from the deployed full-list API.
@@ -130,10 +223,11 @@ pub trait ContactDirectory: Send + Sync + 'static {
 
 /// Port trait for notifying users about contact changes.
 pub trait ContactsNotifier: Send + Sync + 'static {
-    /// Invalidates cached contacts for the given user IDs.
+    /// Tells each user's clients their directory changed, naming the contacts
+    /// to re-read when they are known.
     fn invalidate_contacts_for_users(
         &self,
-        user_ids: Vec<MacroUserIdStr<'_>>,
+        invalidations: Vec<ContactsInvalidation>,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
@@ -161,6 +255,12 @@ pub trait ContactsIngressQueue: Send + Sync + 'static {
         &self,
         message: ContactConnections,
     ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Publishes one bounded list-aware directory change to the queue.
+    fn publish_change(
+        &self,
+        message: DirectoryChange,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
 /// Port trait for enqueuing contacts messages for async processing.
@@ -178,6 +278,41 @@ pub trait ContactsIngress: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
+/// Producer API for list-aware directory changes. Each call is split into
+/// queue messages small enough for SQS, and each message is applied on its own,
+/// so a retry after a partial publish only repeats idempotent writes.
+pub trait ContactListIngress: Send + Sync + 'static {
+    /// Record that every user and every peer have interacted. Mutual: each
+    /// gains the other. Pass the same set as both to pair a whole channel.
+    fn record_interactions(
+        &self,
+        users: Vec<MacroUserIdStr<'static>>,
+        peers: Vec<MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Record the people the inbox owner knows through that inbox. Directed:
+    /// the contacts' own directories are unchanged.
+    fn record_inbox_contacts(
+        &self,
+        inbox: InboxSource,
+        contacts: Vec<MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Tell each user's clients to re-read `changed`. Empty, or more than one
+    /// lookup holds, means unknown: the clients fall back to their scan.
+    fn directory_changed(
+        &self,
+        users: Vec<MacroUserIdStr<'static>>,
+        changed: Vec<MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Drop the deleted user's directory and remove them from every other.
+    fn user_deleted(
+        &self,
+        user: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
 /// Trait for contacts service operations
 pub trait ContactsService: Send + Sync + 'static {
     /// Queries a user's contacts.
@@ -190,6 +325,14 @@ pub trait ContactsService: Send + Sync + 'static {
     fn add_contact_nodes(
         &self,
         nodes: ContactsNodes,
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
+
+    /// Records a referral invite: `invitee` joins `inviter`'s `invited` list,
+    /// and only the inviter is told to re-read them.
+    fn invite_contact(
+        &self,
+        inviter: MacroUserIdStr<'static>,
+        invitee: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
 }
 

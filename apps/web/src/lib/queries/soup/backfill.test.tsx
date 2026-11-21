@@ -33,6 +33,7 @@ vi.mock('../channel/directory-reconcile', () => ({
     async () => (input: unknown, options: unknown) =>
       graphqlMocks.hydrateGraphqlSoup({}, { input }, options),
 }));
+vi.mock('../contacts/top-up', () => ({ useContactTopUp: () => {} }));
 const contextPublisher = vi.hoisted(() => vi.fn());
 vi.mock('../contacts/use-context-publisher', () => ({
   useContactContextPublisher: contextPublisher,

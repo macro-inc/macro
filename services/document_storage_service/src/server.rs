@@ -1033,7 +1033,7 @@ async fn run_server() -> anyhow::Result<()> {
             _ => Arc::new(search_service::FlaggedTermMatching::new(flags.clone())),
         };
     let call_service_builder = call_service_builder.with_programmatic_call_gate(
-        call::outbound::programmatic_calls::FlaggedProgrammaticCalls(flags),
+        call::outbound::programmatic_calls::FlaggedProgrammaticCalls(flags.clone()),
     );
     let call_public_rate_limiter = RateLimitServiceImpl {
         repo: RedisRateLimitAdapter {
@@ -1445,7 +1445,15 @@ async fn run_server() -> anyhow::Result<()> {
                 Arc::new(notification::outbound::withdrawal::PgNotificationWithdrawal(db.clone())),
             ),
         ),
-        ContactsChannelDispatcher::new(contacts_ingress.clone()),
+        ContactsChannelDispatcher::new(Arc::new(contacts::domain::list_writes::ListWritesGate {
+            inner: contacts::domain::service::SqsContactsIngress {
+                queue: contacts_ingress.queue.clone(),
+            },
+            writes: contacts::domain::list_writes::ContactListWrites::new(
+                config.environment,
+                Some(flags),
+            ),
+        })),
     )
     .with_macro_event_broker(macro_event_broker.clone());
 

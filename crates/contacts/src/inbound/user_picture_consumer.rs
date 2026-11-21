@@ -87,7 +87,7 @@ async fn fan_out_with_retries<R, N>(
             return;
         }
         if attempt == MAX_ATTEMPTS {
-            tracing::error!(user_id = %user.as_ref(), attempts = MAX_ATTEMPTS, "giving up user picture fan-out");
+            tracing::error!(attempts = MAX_ATTEMPTS, "giving up user picture fan-out");
             return;
         }
         tokio::time::sleep(delay).await;
