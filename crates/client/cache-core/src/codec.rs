@@ -77,14 +77,21 @@ fn decode<T: DeserializeOwned>(bytes: &[u8]) -> Result<T, CodecError> {
 /// Encodes a normalized record, deflating it when that makes the payload smaller.
 pub fn encode_record(record: &Record) -> Vec<u8> {
     let raw = encode(record);
-    let compressed = (raw.len() >= RECORD_COMPRESSION_MIN_BYTES)
-        .then(|| deflate::compress_to_vec(&raw, RECORD_DEFLATE_LEVEL));
+    let compressed =
+        may_deflate(raw.len()).then(|| deflate::compress_to_vec(&raw, RECORD_DEFLATE_LEVEL));
     match compressed {
         Some(compressed) if compressed.len() < raw.len() => {
             tagged(RECORD_ENCODING_DEFLATE, compressed)
         }
         _ => tagged(RECORD_ENCODING_RAW, raw),
     }
+}
+
+/// Whether a record of `len` encoded bytes may be stored deflated: the reader
+/// inflates up to the bound and no further, so a larger record stays raw and
+/// reads back instead of failing as corrupt.
+fn may_deflate(len: usize) -> bool {
+    (RECORD_COMPRESSION_MIN_BYTES..=RECORD_MAX_INFLATED_BYTES).contains(&len)
 }
 
 /// Decodes a normalized record written by [`encode_record`].
@@ -312,6 +319,22 @@ mod tests {
             );
             assert_eq!(decode_record(&stored).unwrap(), record);
         }
+    }
+
+    #[test]
+    fn records_past_the_inflate_bound_stay_raw_and_read_back() {
+        let record = record_with_body(&"x".repeat(RECORD_MAX_INFLATED_BYTES));
+        let bytes = encode_record(&record);
+        assert_eq!(bytes.first(), Some(&RECORD_ENCODING_RAW));
+        assert_eq!(decode_record(&bytes).unwrap(), record);
+
+        // A record of exactly the bound still deflates: the reader inflates it.
+        let overhead = encode(&record).len() - RECORD_MAX_INFLATED_BYTES;
+        let record = record_with_body(&"x".repeat(RECORD_MAX_INFLATED_BYTES - overhead));
+        assert_eq!(encode(&record).len(), RECORD_MAX_INFLATED_BYTES);
+        let bytes = encode_record(&record);
+        assert_eq!(bytes.first(), Some(&RECORD_ENCODING_DEFLATE));
+        assert_eq!(decode_record(&bytes).unwrap(), record);
     }
 
     #[test]
