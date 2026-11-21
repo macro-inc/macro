@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Up to $2 of a deleted account's list rows (primary key prefix). The\n-- account check is repeated so an account created since the scan keeps its\n-- rows.\nDELETE FROM contact_list_members\nWHERE (user_id, contact_user_id, list_key) IN (\n    SELECT m.user_id, m.contact_user_id, m.list_key\n    FROM contact_list_members m\n    WHERE m.user_id = $1\n    LIMIT $2\n)\n  AND NOT EXISTS (SELECT 1 FROM \"User\" u WHERE u.id = $1)\n  AND NOT EXISTS (SELECT 1 FROM \"User\" u WHERE lower(u.email) = substr($1, 7))\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fbac77eefdaa325f65f3f03e9bde51113d2b4b1d00d80f316dc8fca5c2cd862e"
+}
