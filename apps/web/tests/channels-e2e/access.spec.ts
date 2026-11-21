@@ -89,7 +89,10 @@ test('ACC-03 a request to join reaches the owner at once, and approving it lets 
   );
   await expect(request).toBeVisible();
   await page.getByRole('button', { name: 'Approve' }).click();
-  await expect(view.list.getByText('Approved by Ada Owner')).toBeVisible();
+  await expect(
+    view.list.getByText('Ada Owner added Cy Teammate').first()
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Approve' })).toHaveCount(0);
 
   // Cy is in without a reload, with everything said before.
   const cyView = new ChannelView(cyPage, channel.id);

@@ -237,7 +237,7 @@ test('UNR-06 a muted channel shows a crossed bell and is not marked unread by ne
   // The submenu's entries are sometimes made again while it is open; the one
   // with the keyboard is then gone, and Enter chooses nothing.
   const mute = () =>
-    chooseFromRowMenu(page, row, 'Mute notifications', 'Until I turn it off');
+    chooseFromRowMenu(page, row, 'Mute', 'Until I turn it off');
   await failsSometimes(async () => {
     await mute();
     await expect(mutedBell(row)).toBeVisible({ timeout: 5_000 });
@@ -259,7 +259,7 @@ test('UNR-06 a muted channel shows a crossed bell and is not marked unread by ne
   await expect(unreadDot(row)).toHaveCount(0);
   await expect(mutedBell(row)).toBeVisible();
 
-  await chooseFromRowMenu(page, row, 'Unmute notifications');
+  await chooseFromRowMenu(page, row, 'Unmute');
   await expect(mutedBell(row)).toHaveCount(0);
   await ben.post(made.muted, 'after unmuting');
   await expect(
