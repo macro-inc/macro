@@ -1038,7 +1038,6 @@ dependencies = [
  "lru",
  "macro_user_id",
  "maybe_send",
- "miniz_oxide 0.8.9",
  "postcard",
  "predicate-index",
  "serde",
