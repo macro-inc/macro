@@ -86,7 +86,8 @@ envelope = "crates/models_email/src/email/service/crm_cleanup.rs::CrmCleanupPubs
 
 [[queue]]
 name = "link-manager"
-consumes = ["LinkManagerQueue"]
+aliases = ["link-maintenance"]
+consumes = ["LinkManagerQueue", "LinkMaintenanceQueue"]
 type = "crates/models_email/src/email/service/pubsub.rs::LinkManagerMessage"
 at = ""
 
@@ -153,11 +154,18 @@ type = "crates/outlook_emulator/src/fault.rs::Route"
 [[loop]]
 file = "services/email_service/src/mailbox_sync_worker.rs"
 
+# The Outlook sync flags' refresh loop, run by the pubsub workers and the API.
+[[loop]]
+file = "services/email_service/src/outlook_flags.rs"
+
 [[loop]]
 file = "services/email_service/src/backfill_outbox.rs"
 
 [[loop]]
 file = "services/email_service/src/crm_enrichment_worker.rs"
+
+[[loop]]
+file = "services/email_service/src/email_policy_worker.rs"
 
 # Providers a row applies to, where the default is wrong. The default is the
 # provider the row's key names, else the one its source path names, else
@@ -167,6 +175,12 @@ kind = "queue"
 key = "backfill:*"
 providers = "gmail"
 reason = "The backfill queue pages through the Gmail API; Outlook mail arrives through mailbox sync."
+
+[[applies]]
+kind = "queue"
+key = "backfill:PopulateCrmPolicy"
+providers = "both"
+reason = "Generation-bound CRM history reads local mailbox contacts for either provider; it does not call the Gmail backfill API."
 
 [[applies]]
 kind = "lambda"

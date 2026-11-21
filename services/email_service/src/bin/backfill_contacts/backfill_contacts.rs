@@ -26,12 +26,16 @@ async fn main() -> anyhow::Result<()> {
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
 
-    let contacts_ingress = contacts::domain::service::SqsContactsIngress {
-        queue: contacts::outbound::ingress::SqsContactsQueue::new(
-            aws_sdk_sqs::Client::new(&aws_config),
-            macro_queues::ContactsQueue::new().to_string(),
-        ),
-    };
+    let contacts_ingress = email_service::composition::contacts_producer(
+        aws_sdk_sqs::Client::new(&aws_config),
+        macro_queues::ContactsQueue::new().to_string(),
+        config.environment,
+        email_service::outlook_flags::posthog_client(
+            config.environment,
+            config.posthog_api_key.as_ref().and_then(|key| key.value()),
+            config.posthog_host.as_ref().and_then(|host| host.value()),
+        )?,
+    );
 
     println!("Processing {} macro IDs: {:?}", macro_ids.len(), macro_ids);
 

@@ -19,7 +19,11 @@ pub async fn process_call_record(
     let Some(payload) =
         macro_db_client::call_record::get::get_call_record_search_payload(db, &call_id).await?
     else {
-        tracing::debug!(call_id = %call_id, "call record no longer exists; skipping");
+        tracing::info!(call_id = %call_id, "call record no longer exists; removing it from search");
+        opensearch_client
+            .delete_call_record(&call_id.to_string(), index_override)
+            .await
+            .context("failed to remove a call record that no longer exists from search")?;
         return Ok(());
     };
 
@@ -72,19 +76,10 @@ pub async fn process_call_record(
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    let result = opensearch_client
+    opensearch_client
         .bulk_upsert_call_record_segments(&segments, index_override)
         .await
         .context("failed to bulk upsert call record segments")?;
-
-    if result.failed > 0 {
-        tracing::warn!(
-            failed = result.failed,
-            errors = ?result.errors,
-            call_id = %call_id,
-            "some call-record segments failed to upsert"
-        );
-    }
 
     Ok(())
 }
@@ -109,3 +104,6 @@ pub async fn process_remove_call_record(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod test;

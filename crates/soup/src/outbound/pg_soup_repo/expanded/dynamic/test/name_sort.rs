@@ -97,6 +97,7 @@ async fn flat(
             cursor,
             exclude_frecency: false,
         },
+        false,
     )
     .await?)
 }
@@ -285,7 +286,7 @@ fn name_queries_order_on_the_name_column_without_a_property_join() {
         &filter,
         false,
         sort,
-        AccessGate::Planned,
+        DocumentGrants::Estimated,
         &mut DocumentIdArrays::starting_at(first_document_id_slot(sort, false)),
     );
     let sql = query.sql().to_owned();

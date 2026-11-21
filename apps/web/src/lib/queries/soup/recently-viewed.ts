@@ -1,5 +1,4 @@
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
-import { enableCrm, isFeatureEnabled } from '@core/constant/featureFlags';
 import { throwOnErr } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
 import {
@@ -36,10 +35,7 @@ function buildRecentlyViewedArgs(): SoupItemsQueryArgs {
       document_filters: undefined,
       email_filters: undefined,
       project_filters: undefined,
-      // CRM companies only surface in recently-viewed when the feature is enabled.
-      ...(isFeatureEnabled(enableCrm)
-        ? { crm_company_filters: undefined }
-        : {}),
+      crm_company_filters: undefined,
     },
   };
 }

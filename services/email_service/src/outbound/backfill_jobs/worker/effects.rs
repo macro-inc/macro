@@ -2,12 +2,21 @@
 mod test;
 
 use super::*;
+use crate::outbound::inbox_source::inbox_source;
 use crate::util::upload_attachment::{
     UploadAttachmentContext, UploadAttachmentError, upload_attachment,
 };
-use contacts::domain::ports::ContactsIngress;
+use contacts::domain::{
+    models::messages::ContactConnection,
+    ports::{ContactListIngress, ContactsIngress},
+};
 use crm::domain::{
-    email_privacy::{EmailContributionMailbox, EmailPrivacyService},
+    email_policy::EmailPolicyGeneration,
+    email_policy_work::{
+        EmailHistoryAuthority, EmailPolicyHistoryContact, EmailPolicyHistoryPage,
+        EmailPolicyWorkRequest, EmailPolicyWorkService,
+    },
+    email_privacy::EmailContributionMailbox,
     model::{CrmError, DepopulateContactOutcome},
     service::CrmService,
 };
@@ -57,13 +66,23 @@ impl BackfillEffects for BackfillWorkerEffects {
     }
     async fn connect(
         &self,
-        users: HashSet<MacroUserIdStr<'static>>,
+        link: &Link,
+        recipients: Vec<MacroUserIdStr<'static>>,
     ) -> Result<(), rootcause::Report> {
-        self.contacts_ingress.enqueue_contacts(users).await
+        // The legacy message pairs the owner with one recipient at a time, so
+        // the recipients are not connected to each other.
+        for recipient in &recipients {
+            self.contacts_ingress
+                .enqueue_contacts(HashSet::from([link.macro_id.clone(), recipient.clone()]))
+                .await?;
+        }
+        self.contacts_ingress
+            .record_inbox_contacts(inbox_source(link), recipients)
+            .await
     }
     async fn acquire_crm(&self, team: Uuid) -> anyhow::Result<Option<Self::Permit>> {
         self.redis_client
-            .acquire_crm_population_slot(team)
+            .try_acquire_crm_population_slot(team)
             .await
             .map_err(anyhow::Error::new)
     }
@@ -98,7 +117,54 @@ impl MacroEventBroker for BackfillWorkerEffects {
     }
 }
 
+fn policy_request(payload: &PopulateCrmPolicyPayload) -> EmailPolicyWorkRequest {
+    EmailPolicyWorkRequest {
+        team_id: payload.team_id,
+        user_id: payload.macro_id.to_string(),
+        link_id: payload.link_id,
+        work_id: payload.work_id,
+        generation: EmailPolicyGeneration {
+            consent_incarnation: payload.consent_incarnation,
+            policy_version: payload.policy_version,
+        },
+    }
+}
+
 impl BackfillCrm for BackfillWorkerCrm {
+    async fn policy_history_page(
+        &self,
+        payload: &PopulateCrmPolicyPayload,
+    ) -> Result<Option<EmailPolicyHistoryPage>, CrmError> {
+        self.0.history_page(&policy_request(payload)).await
+    }
+    async fn populate_policy_contact(
+        &self,
+        payload: &PopulateCrmPolicyPayload,
+        page: &EmailPolicyHistoryPage,
+        contact: &EmailPolicyHistoryContact,
+    ) -> Result<(), CrmError> {
+        let request = policy_request(payload);
+        self.0
+            .populate_history_contact(
+                request.team_id,
+                request.link_id,
+                &page.mailbox.email_address,
+                &contact.address,
+                contact.name.as_deref(),
+                EmailHistoryAuthority::Policy(request.generation),
+                !page.cursor.received_pass,
+            )
+            .await
+    }
+    async fn finish_policy_history_page(
+        &self,
+        payload: &PopulateCrmPolicyPayload,
+        page: &EmailPolicyHistoryPage,
+    ) -> Result<(), CrmError> {
+        self.0
+            .finish_history_page(&policy_request(payload), page)
+            .await
+    }
     async fn get_team_id_for_user(&self, user: &str) -> Result<Option<Uuid>, CrmError> {
         self.0.get_team_id_for_user(user).await
     }
@@ -107,7 +173,7 @@ impl BackfillCrm for BackfillWorkerCrm {
         team: Uuid,
         user: &str,
     ) -> Result<Option<EmailContributionMailbox>, CrmError> {
-        self.0.contribution_mailbox(team, user).await
+        self.0.legacy_history_mailbox(team, user).await
     }
     async fn populate_contact(
         &self,
@@ -115,6 +181,20 @@ impl BackfillCrm for BackfillWorkerCrm {
         link: &Link,
         p: &PopulateCrmContactPayload,
     ) -> Result<(), CrmError> {
+        if !p.live_mail {
+            return self
+                .0
+                .populate_history_contact(
+                    *team,
+                    link.id,
+                    link.email_address.0.as_ref(),
+                    &p.contact_email,
+                    p.contact_name.as_deref(),
+                    EmailHistoryAuthority::Legacy,
+                    false,
+                )
+                .await;
+        }
         self.0
             .populate_contact(
                 team,
@@ -248,21 +328,19 @@ impl BackfillLifecycleEffects for BackfillWorkerEffects {
     }
     async fn connect_contacts(
         &self,
-        owner: &MacroUserIdStr<'static>,
+        link: &Link,
         contacts: Vec<MacroUserIdStr<'static>>,
     ) -> Result<(), rootcause::Report> {
         self.contacts_ingress
             .enqueue_contact_connections(
                 contacts
-                    .into_iter()
-                    .map(|contact| {
-                        contacts::domain::models::messages::ContactConnection::new(
-                            owner.clone(),
-                            contact,
-                        )
-                    })
+                    .iter()
+                    .map(|contact| ContactConnection::new(link.macro_id.clone(), contact.clone()))
                     .collect(),
             )
+            .await?;
+        self.contacts_ingress
+            .record_inbox_contacts(inbox_source(link), contacts)
             .await
     }
 }

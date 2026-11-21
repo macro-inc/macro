@@ -1,4 +1,3 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { useHasPaidAccess } from '@core/auth';
 import {
@@ -6,10 +5,7 @@ import {
   getDragDropPosition,
 } from '@core/component/LexicalMarkdown/utils/fileUploadUtils';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  ENABLE_EMAIL_SCHEDULED_SEND,
-  enableEmailSignatures,
-} from '@core/constant/featureFlags';
+import { ENABLE_EMAIL_SCHEDULED_SEND } from '@core/constant/featureFlags';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { useEmail, useUserContext, useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -36,7 +32,6 @@ import {
   transferEmailDraft,
   useDeleteDraftMutation,
 } from '@queries/email/draft';
-import { markThreadDraftSaved } from '@queries/email/draft-cache';
 import { subscribeToDraftLifecycleChanges } from '@queries/email/draft-lifecycle-events';
 import {
   assertEmailDraftQueueAvailable,
@@ -107,7 +102,10 @@ import {
 } from './queries/draft-lifecycle';
 import { createEmailInboxSource } from './queries/inbox-source';
 import { queuedDraftSaveArgs } from './queries/queued-draft';
-import { watchEmailSendProgress } from './queries/send-progress';
+import {
+  watchEmailSendProgress,
+  watchSentThread,
+} from './queries/send-progress';
 import {
   restoreDraftBodyAfterUndo,
   runQueuedUndoSend,
@@ -142,16 +140,13 @@ export function createEmailComposeContext(): EmailComposeContext {
   const paywall = usePaywallState();
   const viewerEmail = useEmail();
   const viewerId = useUserId();
-  const primaryId = () =>
-    accounts.isSuccess
-      ? findPrimaryEmailLinkId(accounts.data?.links ?? [], viewerId())
-      : undefined;
-  const headerId = (id: string | null | undefined) =>
-    nonPrimaryEmailLinkIdHeader(id, primaryId());
   const inboxSource = createEmailInboxSource(viewerEmail, accounts, (email) =>
     getDisplayName(tryMacroId(`macro|${email}`))
   );
-  const signatures = useFeatureFlag(enableEmailSignatures);
+  const primaryId = () =>
+    findPrimaryEmailLinkId(inboxSource.inboxes(), viewerId());
+  const headerId = (id: string | null | undefined) =>
+    nonPrimaryEmailLinkIdHeader(id, primaryId());
   const calendarEvents = useCreateEmailEvent();
   const remove = useDeleteDraftMutation();
   const upload = useUploadDraftAttachmentsMutation();
@@ -247,7 +242,6 @@ export function createEmailComposeContext(): EmailComposeContext {
       // email in Mail's preview pane matches the phone composer.
       isMobile: isTouchDevice,
       scheduleEnabled: ENABLE_EMAIL_SCHEDULED_SEND,
-      signaturesEnabled: () => signatures().enabled,
     },
     editorFiles: {
       readDroppedFiles: readDroppedEmailFiles,
@@ -296,11 +290,12 @@ export function createEmailComposeContext(): EmailComposeContext {
               {
                 persistent: true,
                 dismissStyle: isDraftRecovery ? 'icon' : undefined,
+                replace: options.replace,
+                onDismiss: options.onDismiss,
               }
             );
           }
-          toast.failure(message, notice(options));
-          return undefined;
+          return toast.failure(message, notice(options));
         },
         alert: (message, options) => toast.alert(message, notice(options)),
         dismiss: toast.dismiss,
@@ -376,6 +371,9 @@ export function createEmailComposeContext(): EmailComposeContext {
             });
           const local = await readLocalDraft(handles.draftId);
           const senderLinkId = local?.inboxId ?? inboxId ?? primaryId() ?? '';
+          const inbox = inboxSource
+            .inboxes()
+            .find((inbox) => inbox.id === senderLinkId);
           const outcome = await saveEmailDraftQueued({
             args: {
               ...queuedDraftSaveArgs({
@@ -387,18 +385,8 @@ export function createEmailComposeContext(): EmailComposeContext {
                     }
                   : handles,
                 senderLinkId,
-                senderAccount: accounts.isSuccess
-                  ? accounts.data?.links.find(
-                      (link) => link.id === senderLinkId
-                    )
-                  : undefined,
-                senderEmail:
-                  inboxSource
-                    .inboxes()
-                    .find((inbox) => inbox.id === senderLinkId)
-                    ?.email_address ??
-                  viewerEmail() ??
-                  '',
+                senderAccount: inbox,
+                senderEmail: inbox?.email_address ?? viewerEmail() ?? '',
               }),
               localRevision: local?.revision,
             },
@@ -433,14 +421,12 @@ export function createEmailComposeContext(): EmailComposeContext {
         try {
           const threadId = result.threadId;
           if (threadId) {
-            markThreadDraftSaved(threadId);
             fireAndForget(
               refreshEmailLists(threadId, !!completingThread),
               'email-compose'
             );
           }
           if (previousThreadId && previousThreadId !== threadId) {
-            markThreadDraftSaved(previousThreadId);
             invalidateSoupEntity(previousThreadId);
             void refetchSoupEntity(previousThreadId, 'emailThread').catch(
               reportError
@@ -472,7 +458,6 @@ export function createEmailComposeContext(): EmailComposeContext {
         });
         try {
           publishDraftLifecycleChange(input.draftId, inboxId);
-          if (input.threadId) markThreadDraftSaved(input.threadId);
         } catch (error) {
           reportError(error);
         }
@@ -553,6 +538,7 @@ export function createEmailComposeContext(): EmailComposeContext {
                 emailSendLocked(intent)
             )),
       watchSend: watchEmailSendProgress,
+      watchSentThread,
       async sendMessage({ inboxId, ...input }) {
         if (
           !inboxSource
@@ -587,14 +573,8 @@ export function createEmailComposeContext(): EmailComposeContext {
               draft: input.message,
               handles: { draftId, threadId },
               senderLinkId,
-              senderAccount: accounts.isSuccess
-                ? accounts.data?.links.find((link) => link.id === senderLinkId)
-                : undefined,
-              senderEmail:
-                inboxSource.inboxes().find((inbox) => inbox.id === senderLinkId)
-                  ?.email_address ??
-                viewerEmail() ??
-                '',
+              senderAccount: inbox,
+              senderEmail: inbox.email_address,
             }),
             sendTime: input.sendTime,
           },

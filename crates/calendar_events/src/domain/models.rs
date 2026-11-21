@@ -1795,7 +1795,9 @@ pub const WATCH_UNSUPPORTED_RETRY_INTERVAL: chrono::Duration = chrono::Duration:
 /// How often Google's own read-only system calendars (holidays, birthdays)
 /// are synced. Their content changes on the order of once a year, and Google
 /// chronically resets their sync tokens, turning every poll into a full
-/// snapshot; a daily cadence keeps them fresh without that churn.
+/// snapshot; a daily cadence keeps them fresh without that churn. An Outlook
+/// mailbox's own read-only calendars (`OutlookCalendar::is_system`) follow
+/// it too, since without a delta every round re-reads all their events.
 pub const SYSTEM_CALENDAR_SYNC_INTERVAL: chrono::Duration = chrono::Duration::hours(24);
 
 /// Consecutive isolated sync failures a calendar must accumulate before its
@@ -1950,11 +1952,14 @@ pub struct GoogleBackfillRunReport {
     pub team_ooo_changed: bool,
     /// Events written through the ingestion upsert this run.
     pub events_upserted: usize,
+    /// Those upserts that created or rewrote a row. A provider echo of what
+    /// Macro already stored, such as the sync after a Macro write, is not one.
+    pub events_changed: usize,
     /// Cancellation tombstones the change feed reported this run.
     pub cancellations_observed: usize,
     /// Events removed or rewritten because a source they relied on was
-    /// retired: unobserved by a full snapshot, or on a calendar the account
-    /// no longer lists.
+    /// retired: cancelled by a tombstone, unobserved by a full snapshot, or on
+    /// a calendar the account no longer lists.
     pub events_retired: usize,
     /// Guest copies in other inboxes whose guest policy changed to follow an
     /// organizer's copy this run wrote; their viewers need a refresh too.
@@ -1963,12 +1968,11 @@ pub struct GoogleBackfillRunReport {
 
 impl GoogleBackfillRunReport {
     /// Whether the run plausibly changed the local projection. Quiet
-    /// token-only polls report nothing and skip client notifications.
+    /// token-only polls report nothing and skip client notifications, and so
+    /// does a run that only read back what Macro had already stored: an
+    /// unchanged upsert, or a tombstone for a source already gone.
     pub fn changed(&self) -> bool {
-        self.team_ooo_changed
-            || self.events_upserted > 0
-            || self.cancellations_observed > 0
-            || self.events_retired > 0
+        self.team_ooo_changed || self.events_changed > 0 || self.events_retired > 0
     }
 }
 
@@ -2155,6 +2159,10 @@ pub enum CalendarBackfillClaim {
         lease_token: Uuid,
         /// Calendar account provisioned by the grant transaction.
         account_id: Uuid,
+        /// When the first delivery of this round claimed the job. A round
+        /// deferred at Macro's per-inbox request limit keeps it, so a later
+        /// delivery skips the calendars the round already synced.
+        round_started_at: DateTime<Utc>,
     },
     /// The durable job already completed.
     Complete,

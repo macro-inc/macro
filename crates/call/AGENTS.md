@@ -64,6 +64,8 @@ in-call chat.
 
 ## Gotchas
 
+- `GET /call/record/{id}` leaves out the presigned `recordingUrl` and `recordingPreviewUrl` for a program (`is_program_run`): they are bearer secrets for as long as they last. A program reads the bytes through `GET /call/record/{id}/recording`.
+- `POST /call/record/{id}/link` refuses an agent's program or a bot (`refuse_program_link`, 403): a new meeting link lets anyone holding it join as a guest. Meeting responses still carry `shareToken`, because the SDK keys meetings on it and it grants only a guest join.
 - A call's discussion is stored in `call_entities.discussion` when it is created, and can't be
   inferred from `channel_id`: past channel calls keep `call_chat`. See
   `docs/design/call-chat-in-channel.md`.

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH refused AS (\n                UPDATE in_progress_user_link SET refused_at = now()\n                WHERE id = $1 AND macro_user_id::text = $2 AND identity_link_created\n            )\n            DELETE FROM in_progress_user_link\n            WHERE id = $1 AND macro_user_id::text = $2 AND NOT identity_link_created\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a8a1181a9be888d5918572377117d36de736dd79784a54f4a9870b3e7575dc66"
+}

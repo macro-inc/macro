@@ -173,9 +173,10 @@ where
     }
 
     /// Mint the write capability for changing an existing message as its
-    /// author: messages the tool actor bot posted are changed as the bot, and
-    /// every other message as the user, so the message service applies the
-    /// same authorship and moderation rules as in the app.
+    /// author: a message the tool actor bot posted for the requesting user is
+    /// changed as the bot, and every other message as the user, so the
+    /// message service applies the same authorship and moderation rules as in
+    /// the app.
     pub async fn require_message_author_write(
         &self,
         request_context: &RequestContext,
@@ -190,7 +191,7 @@ where
             .get(view, message_id)
             .await
             .map_err(message_mutation_error("read the message"))?;
-        if message.sender_id == Sender::new_from_bot(self.actor) {
+        if message.posted_by_bot_for(self.actor, request_context.user_id.as_ref()) {
             self.require_channel_message_write(request_context, channel_id)
                 .await
         } else {

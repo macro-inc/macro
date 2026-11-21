@@ -46,6 +46,7 @@ use crate::domain::engine::{AgentIdentity, ReplyDelivery, TurnEngine, TurnReques
 use crate::domain::entity_routing::{EntityRoutingPolicy, NoEntityRouting};
 use crate::domain::skill_routing::{NoSkillRouting, SessionSkills, SkillRoutingPolicy};
 use crate::domain::tool_gate::{NativeToolGate, NativeToolVerdict, UngatedNativeTools};
+use crate::domain::turn_docs::SessionDocs;
 use crate::inbound::ask_user::{AskUser, AskUserContext};
 
 #[path = "outbound/rig_engine/opener.rs"]
@@ -81,6 +82,7 @@ pub struct RigTurnEngine {
     auto_model: Arc<dyn AutoModelSelector>,
     skill_routing: Arc<dyn SkillRoutingPolicy>,
     session_skills: Arc<SessionSkills>,
+    session_docs: Arc<SessionDocs>,
     entity_routing: Arc<dyn EntityRoutingPolicy>,
     tool_context: ToolServiceContext,
     gate: Arc<dyn NativeToolGate>,
@@ -104,6 +106,7 @@ impl RigTurnEngine {
             },
             skill_routing: Arc::new(NoSkillRouting),
             session_skills: Arc::new(SessionSkills::default()),
+            session_docs: Arc::new(SessionDocs::default()),
             entity_routing: Arc::new(NoEntityRouting),
             tool_context,
             gate: Arc::new(UngatedNativeTools),
@@ -420,6 +423,7 @@ impl TurnEngine for RigTurnEngine {
         let auto_model = Arc::clone(&self.auto_model);
         let skill_routing = Arc::clone(&self.skill_routing);
         let session_skills = Arc::clone(&self.session_skills);
+        let session_docs = Arc::clone(&self.session_docs);
         let entity_routing = Arc::clone(&self.entity_routing);
         let tool_context = self.tool_context.clone();
         let gate = Arc::clone(&self.gate);
@@ -442,15 +446,16 @@ impl TurnEngine for RigTurnEngine {
                 // The product toolset makes this future large. Keep its state
                 // on the heap when adding the panic boundary, including in
                 // unoptimized local builds with Tokio's default worker stack.
-                let skills = TurnRouting {
+                let routing = TurnRouting {
                     routes,
                     sessions: &session_skills,
+                    docs: &session_docs,
                     entities: entities_routed,
                 };
                 let turn = Box::pin(drive_turn(
                     &memory,
                     &native_tools,
-                    skills,
+                    routing,
                     tool_context,
                     gate,
                     request,
@@ -532,6 +537,7 @@ async fn routes_entities(policy: &dyn EntityRoutingPolicy, request: &TurnRequest
 struct TurnRouting<'a> {
     routes: bool,
     sessions: &'a SessionSkills,
+    docs: &'a SessionDocs,
     entities: bool,
 }
 
@@ -576,7 +582,7 @@ fn code_tools_listed(request: &TurnRequest) -> Result<(), AgentError> {
 async fn drive_turn(
     memory: &MemoryServiceImpl<PgMemoryRepo>,
     native_tools: &NativeTools,
-    skills: TurnRouting<'_>,
+    routing: TurnRouting<'_>,
     base_context: ToolServiceContext,
     gate: Arc<dyn NativeToolGate>,
     request: TurnRequest,
@@ -683,11 +689,12 @@ async fn drive_turn(
     // Chat's tools with the session's prompt: the user tools (`SendEmail`,
     // `CreateCalendarEvent`) defer to the user, and this runtime finishes
     // them in the turn through `reviewer`.
-    let (system_prompt, toolset, deferred, loaded_skills) = if summarizing {
+    let (system_prompt, toolset, deferred, received_docs, loaded_skills) = if summarizing {
         (
             SystemPrompt::from(instructions.unwrap_or_default()),
             Arc::new(AsyncToolCollection::<InMemToolContext>::new()),
             Arc::from(Vec::new()),
+            Vec::new(),
             Vec::new(),
         )
     } else {
@@ -704,10 +711,10 @@ async fn drive_turn(
             previous: user_messages.iter().rev().nth(1).map(String::as_str),
         };
         // Routed turns leave area guidance out of the prompt; the entities the
-        // request needs bring theirs, with their indexes, in the turn's part.
+        // request needs bring theirs, with their indexes, on the request.
         // An unseen turn is routed the same way, unless its opener gave the
         // documentation (see `routes_documentation`).
-        let routed = skills.entities;
+        let routed = routing.entities;
         let picks = routes_documentation(delivery, instructions.as_deref());
         let docs = async {
             if !picks {
@@ -727,18 +734,18 @@ async fn drive_turn(
             .await
         };
         let loaded_skills = async {
-            if !skills.routes || unseen {
+            if !routing.routes || unseen {
                 return Vec::new();
             }
             let selection = select_skills(
                 &base_context,
                 &owner,
                 request,
-                &skills.sessions.loaded_ids(session_id),
+                &routing.sessions.loaded_ids(session_id),
                 &cancel,
             )
             .await;
-            skills.sessions.add(
+            routing.sessions.add(
                 session_id,
                 user_messages.len().saturating_sub(1),
                 selection.loaded,
@@ -746,24 +753,26 @@ async fn drive_turn(
         };
         let (user_memory, sdk_docs, loaded_skills) =
             tokio::join!(fetch_user_memory(memory, &owner), docs, loaded_skills);
-        let prompt = system_prompt(
+        let mut prompt = system_prompt(
             if routed {
                 &native_tools.routed_prompt
             } else {
                 &native_tools.prompt
             },
-            &sdk_docs,
             session_id,
             delivery,
             identity.as_ref(),
             instructions.as_deref(),
             user_memory.as_deref(),
         );
+        prompt.record(PromptSection::SdkDocs, &sdk_docs);
+        let received_docs = routing.docs.add(session_id, &user_messages, sdk_docs);
         if unseen {
             (
                 prompt,
                 Arc::clone(&native_tools.unseen),
                 Arc::from(Vec::new()),
+                received_docs,
                 loaded_skills,
             )
         } else {
@@ -771,6 +780,7 @@ async fn drive_turn(
                 prompt,
                 native_tools.for_turn(user_input.is_some()),
                 Arc::clone(&native_tools.deferred),
+                received_docs,
                 loaded_skills,
             )
         }
@@ -929,9 +939,10 @@ async fn drive_turn(
         }
     }));
 
-    // Loaded skills ride with the request that loaded them, in the model's copy
-    // of the conversation only.
+    // Documentation and loaded skills ride with the request that received
+    // them, in the model's copy of the conversation only.
     let mut messages = messages;
+    crate::domain::turn_docs::inject(&mut messages, &received_docs);
     crate::domain::skill_routing::inject(&mut messages, &loaded_skills);
     let rig_messages = agent::to_rig_messages_limited(&messages, &tool_results);
     let result = async {
@@ -1072,8 +1083,8 @@ fn elapsed_ms(since: tokio::time::Instant) -> u64 {
 /// product: mentions, tools, terminology), which are the same for every
 /// session of every agent; then the agent's identity, the session's own
 /// instructions when there are any, which session this is, and the owner's
-/// memory when there is any; and last the SDK documentation picked for this
-/// turn.
+/// memory when there is any. The SDK documentation picked for a turn is not
+/// here: it rides on the turn's request ([`crate::domain::turn_docs`]).
 ///
 /// The prompt is split after the static Macro prompt, so every session reads
 /// it back from the cache whatever its agent or instructions. Identity opens
@@ -1082,15 +1093,13 @@ fn elapsed_ms(since: tokio::time::Instant) -> u64 {
 /// the standing prompt so the model reads it as the caller's word — the same
 /// reason DCS puts `additional_instructions` after the standing prompt.
 /// Memory stays after the instructions so a remembered fact is never read as
-/// an instruction. The turn's documentation goes after everything the loop
-/// adds, because each turn picks different documentation.
+/// an instruction.
 ///
 /// An unseen turn splits after its identity and instructions instead: its
 /// opener gives every session of its kind the same ones (every routine
 /// draft's), so they are read back from the cache across those sessions.
 fn system_prompt(
     tools_prompt: &impl std::fmt::Display,
-    sdk_docs: &str,
     session_id: agent_session::domain::model::AgentSessionId,
     delivery: ReplyDelivery,
     identity: Option<&AgentIdentity>,
@@ -1157,7 +1166,6 @@ fn system_prompt(
             &format!("\n<user_memory>\n{memory}\n</user_memory>"),
         );
     }
-    prompt.push_turn(PromptSection::SdkDocs, sdk_docs);
     prompt
 }
 

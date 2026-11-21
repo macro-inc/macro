@@ -42,11 +42,7 @@ import {
   fileTypeToBlockName,
   resolveBlockAlias,
 } from '@core/constant/allBlocks';
-import {
-  enableCalendarUi,
-  isFeatureEnabled,
-  USE_MACRO_PR_SUMMARY_BLOCK,
-} from '@core/constant/featureFlags';
+import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
 import {
   ENTITY_ID_DATA_ATTRIBUTE,
   entityIdSelector,
@@ -679,7 +675,6 @@ const openEntity = async (
   if (entity.type === 'foreign') return;
 
   if (entity.type === 'calendar_event') {
-    if (!isFeatureEnabled(enableCalendarUi)) return;
     openCalendarView(calendarViewTargetForEntity(entity), {
       manager: splitManager,
       handle: splitHandle,

@@ -1,5 +1,8 @@
 import { useUserId } from '@core/context/user';
-import { calendarConsentScopes } from '@core/email-link/consent';
+import {
+  calendarConsentScopes,
+  calendarStoppedSyncing,
+} from '@core/email-link/consent';
 import { useEmailLinksQuery } from '@queries/email/link';
 import type { ConsentScopes } from '@service-auth/client';
 import type { Link as EmailLink } from '@service-email/generated/schemas';
@@ -14,17 +17,20 @@ export interface CalendarAccount {
   provider: EmailLink['provider'];
   emailAddress: string;
   action: CalendarAccountAction;
+  /** A `reconnect` for a calendar that used to sync and lost its access. */
+  stoppedSyncing: boolean;
   consentScopes: ConsentScopes;
 }
 
 /**
  * Classifies the viewer's own inboxes into one calendar action each. An inbox
- * whose enabled calendar grant has expired offers `reconnect`. Missing calendar
- * access — never granted, declined, or turned off — offers `enable`, including
- * when the mailbox also needs reconnection; one that already
- * has it offers `turnOff`. A legacy inbox that still has data but no longer
- * satisfies the capability check also reads as `enable`: re-granting resumes
- * it, and removing the stale data stays available from connection settings.
+ * that needs a full reconnect offers `reconnect`, whether or not its grant
+ * still has calendar access, as the calendar view does; its consent asks for
+ * the mailbox and calendar together. Otherwise missing calendar access — never
+ * granted, declined, or turned off — offers `enable`, and an inbox that already
+ * has it offers `turnOff`. An inbox whose calendar used to sync and lost its
+ * capability ({@link calendarStoppedSyncing}) offers `reconnect` instead of
+ * `enable`, marked `stoppedSyncing`: its events are gone until it re-grants.
  *
  * Delegated inboxes are dropped: the viewer reads the owner's calendar but must
  * not enable or delete the owner's calendar from here. The viewer's primary
@@ -37,17 +43,22 @@ export function toCalendarAccounts(
   return links
     .filter((link) => link.macro_id === userId)
     .sort((a, b) => Number(b.is_primary) - Number(a.is_primary))
-    .map((link) => ({
-      linkId: link.id,
-      provider: link.provider,
-      emailAddress: link.email_address,
-      consentScopes: calendarConsentScopes(link),
-      action: link.needs_calendar_permission
-        ? 'enable'
-        : link.needs_reauth
-          ? 'reconnect'
-          : 'turnOff',
-    }));
+    .map((link) => {
+      const stoppedSyncing = calendarStoppedSyncing(link);
+      return {
+        linkId: link.id,
+        provider: link.provider,
+        emailAddress: link.email_address,
+        consentScopes: calendarConsentScopes(link),
+        stoppedSyncing,
+        action:
+          link.needs_reauth || stoppedSyncing
+            ? 'reconnect'
+            : link.needs_calendar_permission
+              ? 'enable'
+              : 'turnOff',
+      };
+    });
 }
 
 /** Reactive {@link toCalendarAccounts} over the current email links. */

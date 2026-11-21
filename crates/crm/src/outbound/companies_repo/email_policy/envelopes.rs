@@ -211,7 +211,9 @@ impl EmailPolicyTransaction for PgEmailPolicyTransaction {
         Ok(Some(EmailPolicyPreview {
             preview_id: row.preview_id,
             generation: EmailPolicyGeneration {
-                consent_incarnation: row.consent_incarnation,
+                consent_incarnation: row
+                    .consent_incarnation
+                    .ok_or(CrmError::EmailPolicyConflict)?,
                 policy_version: row.policy_version,
             },
             context_id: row.context_id,
@@ -274,15 +276,15 @@ impl EmailPolicyTransaction for PgEmailPolicyTransaction {
         {
             return Ok(());
         }
-        // Publication wiring is deliberately deferred: old consumers must not
-        // consume generation-aware work before the next rollout stage.
+        let current_trace = super::CompaniesRepositoryImpl::current_traceparent();
+        let traceparent = traceparent.or(current_trace.as_deref());
         sqlx::query!(
             r#"INSERT INTO crm_email_policy_work
                (team_id, user_id, work_id, link_id, consent_incarnation, policy_version, traceparent)
                VALUES ($1, $2, $3, $4, $5, $6, $7)
                ON CONFLICT (team_id, user_id) DO UPDATE SET work_id = EXCLUDED.work_id,
                    link_id = EXCLUDED.link_id, consent_incarnation = EXCLUDED.consent_incarnation,
-                   policy_version = EXCLUDED.policy_version, after_thread_id = NULL,
+                   policy_version = EXCLUDED.policy_version, after_thread_id = NULL, after_contact_address = NULL, received_pass = FALSE,
                    requested_at = now(), traceparent = EXCLUDED.traceparent
                WHERE (crm_email_policy_work.work_id, crm_email_policy_work.consent_incarnation,
                       crm_email_policy_work.policy_version)
@@ -290,6 +292,7 @@ impl EmailPolicyTransaction for PgEmailPolicyTransaction {
             self.team, self.user, work_id, self.state.link_id, self.state.generation.consent_incarnation,
             self.state.generation.policy_version, traceparent
         ).execute(&mut *self.tx).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        self.publish_history_work(work_id, traceparent).await?;
         Ok(())
     }
 

@@ -4,8 +4,11 @@
 use chrono::{DateTime, Utc};
 use hosted_runtimes::domain::{
     ids::ComputerId,
-    lifecycle::SubscriptionItemId,
-    models::{BillingInterval, Quote, SubscriptionItem},
+    lifecycle::{PurchaseRefund, SubscriptionItemId},
+    models::{
+        BillingInterval, CardBrand, PaymentCard, PurchaseBilling, PurchaseQuote, PurchaseTerms,
+        Quote, SubscriptionItem,
+    },
     ports::{Billing, BillingError, ChargeStatus, ComputerRepo, ItemCharge},
     service::{Clock, ComputerService, SubscriptionObserved},
     size::ComputerSize,
@@ -13,7 +16,7 @@ use hosted_runtimes::domain::{
 use teams::domain::{
     model::{
         BillingCadence, CustomerError, ItemChangeStatus, ItemProration, ItemQuantityChange,
-        ItemRemoval,
+        ItemRemoval, SubscriptionTerms,
     },
     subscription_items::{TeamSubscriptionItems, TeamSubscriptionItemsError},
 };
@@ -37,12 +40,14 @@ impl<Teams: TeamSubscriptionItems> TeamComputerBilling<Teams> {
         Self { teams, prices }
     }
 
-    async fn interval(&self, team_id: Uuid) -> Result<BillingInterval, BillingError> {
-        let terms = self
-            .teams
+    async fn terms(&self, team_id: Uuid) -> Result<SubscriptionTerms, BillingError> {
+        self.teams
             .team_subscription_terms(&team_id)
             .await
-            .map_err(billing_error)?;
+            .map_err(billing_error)
+    }
+
+    fn interval(terms: &SubscriptionTerms) -> Result<BillingInterval, BillingError> {
         match terms.interval {
             BillingCadence::Month => Ok(BillingInterval::Month),
             BillingCadence::Year => Ok(BillingInterval::Year),
@@ -52,15 +57,13 @@ impl<Teams: TeamSubscriptionItems> TeamComputerBilling<Teams> {
         }
     }
 
-    async fn computer_price(
+    /// The size's price at the subscription's interval.
+    fn computer_price(
         &self,
-        team_id: Uuid,
         size: ComputerSize,
+        terms: &SubscriptionTerms,
     ) -> Result<(stripe::PriceId, BillingInterval), BillingError> {
-        if self.prices.is_empty() {
-            return Err(BillingError::NotAvailable);
-        }
-        let interval = self.interval(team_id).await?;
+        let interval = Self::interval(terms)?;
         let price_id = self
             .prices
             .price_id(size, interval)
@@ -76,7 +79,10 @@ impl<Teams: TeamSubscriptionItems> Billing for TeamComputerBilling<Teams> {
 
     #[tracing::instrument(skip(self), err)]
     async fn quote(&self, team_id: Uuid, size: ComputerSize) -> Result<Quote, BillingError> {
-        let (price_id, interval) = self.computer_price(team_id, size).await?;
+        if self.prices.is_empty() {
+            return Err(BillingError::NotAvailable);
+        }
+        let (price_id, interval) = self.computer_price(size, &self.terms(team_id).await?)?;
         let price = self.teams.price(&price_id).await.map_err(billing_error)?;
         Ok(Quote {
             size,
@@ -85,6 +91,101 @@ impl<Teams: TeamSubscriptionItems> Billing for TeamComputerBilling<Teams> {
             currency: price.currency,
             interval,
         })
+    }
+
+    #[tracing::instrument(skip(self, billing), fields(sizes = sizes.len()), err)]
+    async fn purchase_terms(
+        &self,
+        team_id: Uuid,
+        sizes: &[ComputerSize],
+        billing: &PurchaseBilling,
+    ) -> Result<PurchaseTerms, BillingError> {
+        if self.prices.is_empty() {
+            return Err(BillingError::NotAvailable);
+        }
+        let payment = self
+            .teams
+            .team_payment_terms(&team_id)
+            .await
+            .map_err(billing_error)?;
+        if let PurchaseBilling::Stripe = billing
+            && payment.terms.trialing
+        {
+            return Err(BillingError::TeamOnTrial);
+        }
+        let mut quotes = Vec::with_capacity(sizes.len());
+        for &size in sizes {
+            let (price_id, interval) = self.computer_price(size, &payment.terms)?;
+            let price = self.teams.price(&price_id).await.map_err(billing_error)?;
+            quotes.push(Quote {
+                size,
+                price_id,
+                amount: price.amount,
+                currency: price.currency,
+                interval,
+            });
+        }
+        let due_today = match billing {
+            PurchaseBilling::Stripe => {
+                let prices: Vec<stripe::PriceId> =
+                    quotes.iter().map(|quote| quote.price_id.clone()).collect();
+                let charges = self
+                    .teams
+                    .preview_item_prorations(&team_id, &prices)
+                    .await
+                    .map_err(billing_error)?;
+                if charges.len() != prices.len()
+                    || charges
+                        .iter()
+                        .zip(&prices)
+                        .any(|(charge, price_id)| &charge.price_id != price_id)
+                {
+                    return Err(BillingError::Provider(rootcause::report!(
+                        "the invoice preview answered other prices than asked"
+                    )));
+                }
+                // Each purchase alone: the credit is applied to its invoice
+                // before the card is charged.
+                charges
+                    .into_iter()
+                    .map(|charge| (charge.amount - payment.credit).max(0))
+                    .collect()
+            }
+            // Nothing is invoiced for a computer the team doesn't pay for.
+            PurchaseBilling::Comped { .. } => vec![0; quotes.len()],
+        };
+        Ok(PurchaseTerms {
+            quotes: quotes
+                .into_iter()
+                .zip(due_today)
+                .map(|(quote, due_today)| PurchaseQuote { quote, due_today })
+                .collect(),
+            renews_at: payment.terms.current_period_end,
+            card: match billing {
+                PurchaseBilling::Stripe => payment.card.map(|card| PaymentCard {
+                    brand: card_brand(card.brand),
+                    last4: card.last4,
+                }),
+                // Nothing is charged, so no card is named.
+                PurchaseBilling::Comped { .. } => None,
+            },
+        })
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn purchase_price(
+        &self,
+        team_id: Uuid,
+        size: ComputerSize,
+    ) -> Result<stripe::PriceId, BillingError> {
+        if self.prices.is_empty() {
+            return Err(BillingError::NotAvailable);
+        }
+        let terms = self.terms(team_id).await?;
+        if terms.trialing {
+            return Err(BillingError::TeamOnTrial);
+        }
+        Ok(self.computer_price(size, &terms)?.0)
     }
 
     #[tracing::instrument(skip(self, extra_items), fields(extra_items = extra_items.len()), err)]
@@ -224,6 +325,24 @@ impl<Teams: TeamSubscriptionItems> Billing for TeamComputerBilling<Teams> {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn refund_computer_purchase(
+        &self,
+        team_id: Uuid,
+        computer_id: ComputerId,
+        idempotency_key: &str,
+    ) -> Result<Option<PurchaseRefund>, BillingError> {
+        let credit = self
+            .teams
+            .refund_computer_purchase(&team_id, computer_id, idempotency_key)
+            .await
+            .map_err(billing_error)?;
+        Ok(credit.map(|credit| PurchaseRefund {
+            credit_note: credit.credit_note,
+            refund: credit.refund,
+        }))
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn require_paid_plan(&self, team_id: Uuid) -> Result<(), BillingError> {
         if self
             .teams
@@ -248,6 +367,21 @@ impl<Teams: TeamSubscriptionItems> Billing for TeamComputerBilling<Teams> {
     }
 }
 
+fn card_brand(brand: teams::domain::model::CardBrand) -> CardBrand {
+    use teams::domain::model::CardBrand as Teams;
+    match brand {
+        Teams::Amex => CardBrand::Amex,
+        Teams::Diners => CardBrand::Diners,
+        Teams::Discover => CardBrand::Discover,
+        Teams::EftposAu => CardBrand::EftposAu,
+        Teams::Jcb => CardBrand::Jcb,
+        Teams::Mastercard => CardBrand::Mastercard,
+        Teams::Unionpay => CardBrand::Unionpay,
+        Teams::Visa => CardBrand::Visa,
+        Teams::Unknown => CardBrand::Unknown,
+    }
+}
+
 fn billing_error(error: TeamSubscriptionItemsError) -> BillingError {
     match error {
         TeamSubscriptionItemsError::NoSubscription
@@ -261,6 +395,9 @@ fn billing_error(error: TeamSubscriptionItemsError) -> BillingError {
         TeamSubscriptionItemsError::Customer(
             CustomerError::PaymentFailed | CustomerError::ItemChangeAbandoned,
         ) => BillingError::PaymentFailed,
+        TeamSubscriptionItemsError::Customer(CustomerError::ItemChangeInFlight) => {
+            BillingError::ChangeInFlight
+        }
         error => BillingError::Provider(rootcause::Report::new(error).into_dynamic()),
     }
 }

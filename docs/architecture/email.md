@@ -130,7 +130,10 @@ The projection selects the fields the features consume and copies nested contact
 labels, and attachment records. It preserves absent versus empty body content,
 provider IDs needed for replies, attachment/CID identities, and project navigation
 metadata. Sync headers and unused transport display settings stay out of the models. `email-compose/queries/inbox-source.ts`
-projects linked-account metadata. Actual service-client operations remain in
+projects linked-account metadata. Its same-viewer snapshot retains the inbox owner,
+draft signal setting, and primary selection alongside display fields during a
+pending or failed catalog refresh. Queued saves and sends use that snapshot;
+an account change or a successful empty catalog clears it. Actual service-client operations remain in
 `src/lib/queries/email`, alongside the existing mutations and cache conventions.
 
 Compose controllers receive named `drafts`, `attachmentStorage`, `delivery`,
@@ -179,6 +182,12 @@ save reports its previous persisted thread to the production adapter, which mark
 both affected message caches for cleanup on disposal. Undo retains the selected
 inbox and envelope and reconciles the actual sent thread, even after navigation.
 Discard and scheduling also address the persisted thread.
+
+A saved reply to a thread shared at Edit lives in the reader’s inbox. Full
+and parsed thread reads include the reply when its inbox belongs to the
+viewer’s Drafts scope, so reopening the shared thread restores the composer.
+Outlook assigns a provider ID when it syncs a Macro draft. The mailbox draft
+record preserves its identity as a Macro draft after that assignment.
 
 The reply controller still owns draft collection, sending, reset and undo as one
 coordinated workflow: they share editor snapshots, draft identity and pending
@@ -252,7 +261,7 @@ state cannot disagree because they retained separate snapshots.
 
 Production compose and thread composition no longer fetch the complete personal
 contact list. `EmailComposeContext.createRecipientSource` supplies a factory to each
-To/Cc/Bcc input; the input owns its open/query lifetime and one replaceable page.
+To/Cc/Bcc input; the input owns its open/query lifetime and one growing, bounded list of pages.
 The field is required at composition boundaries, with explicit `undefined` for
 hosts that offer only a scoped pool (such as a generated draft's supplied recipients).
 `recipients` and reply-session options contain scoped extras and thread addresses,
@@ -550,7 +559,6 @@ provider MIME or parses ICS.
 When an already-loaded thread's saved invitations change, that thread's calendar
 resolution is revalidated in the background; its first load or a switch between threads
 does not trigger it. Cards are keyed by component, so thread refreshes keep their state.
-Without the calendar UI flag, cards render the saved invitation with no calendar lookup.
 
 Scheduling revisions come only from the thread's own saved components, and are
 reconciled separately for each original occurrence and its series master. A lower-sequence master cancellation still cancels an instance
@@ -742,13 +750,25 @@ general mutation queues are retained but are not imported into it; verify their
 recovery separately during the cache rollout. The email journal is independent
 of these cache files and retains its draft working copies and send attempts.
 
+## Agent program reads of sign-in mail
+
+A program (`macro_authorization::is_program_run`) never reads one of Macro's
+own sign-in emails: a sign-in code or verification link would let it sign in
+as the user. Every email-service response, and the storage service's REST
+`/items` and `/search` responses, pass `rewrite_program_json` with
+`models_email::sign_in_email::hide_sign_in_emails`, which replaces the
+subject, snippet, body, headers and search highlights of any message or
+thread from a sign-in sender. `GET /email/messages/{id}/eml` refuses such a
+message, and GraphQL refuses programs. A person reads the email whole.
+
 ## Agent program sends
 
 An agent's program (a token with agent attribution, or a code-mode request
 marked by `x-macro-code-execution` whose token signs no program;
 `macro_authorization::is_agent_run`) never sends
-an email the user has not seen. The REST send (`POST /email/messages`) answers
-it 403. It sends through a session review (`execution.reviews.create({kind:
+an email the user has not seen. The REST send (`POST /email/messages`) and the
+calendar invite forward (`POST /email/calendar-events/{event_id}/forward`)
+answer it 403. It sends through a session review (`execution.reviews.create({kind:
 'email'})`), whose card the user submits, or, for a prompt from a channel or
 document thread, on the user's quoted approval:
 

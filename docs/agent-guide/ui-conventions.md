@@ -28,15 +28,24 @@ in a detail header), never inside a group. Action groups use
 `variant="secondary" finish="raised"`, fully rounded ends, and 8px gaps. Keep
 the right side of a bar at one height: detail headers use `sm`/`icon-sm` segments
 (28px controls); collection headers, beside New and Search, use `md`/`icon-md`
-(32px). New and Search retain `md` sizing. A block whose split header is 32px
-passes `size="md"` to `SplitHeaderRight` so the header's own previous/next
+(32px). New and Search retain `md` sizing. Inside an `@container/split-header`
+600px or narrower (the `@max-[600px]/split-header` rule header actions share),
+New drops its label and keeps its icon, its caret when it opens a menu, its name
+and its tooltip. The open Search field narrows, down
+to its 96px minimum, before the header's actions would push its end and its
+close button out of view; check a narrowed pane (Customers or Tasks at 760px,
+or beside a docked sidebar) with the field open. A block whose split header is
+32px passes `size="md"` to `SplitHeaderRight` so the header's own previous/next
 island matches.
 Compose their actions with `ButtonGroup.Button`; the group shares Button's frame
 materials while each segment keeps its own interaction states. Standalone Buttons
 remain independent. Nested shared actions reuse the containing group rather than adding
 another frame, and a group with no visible actions renders nothing. Keep
 tooltips on icon-only controls and collapse labels as a pane narrows (`Tabs
-iconOnly`, then a menu). Preserve specialized editor toolbars. A touch header
+iconOnly`, then a menu). Decide those steps from whether the row fits with the
+shared mechanisms, `createLabelCollapse` (`@core/signal/create-label-collapse`;
+Reviews' list header, Email's phone reply buttons) or the split header's
+`PriorityCollapse`, never a new measurement. Preserve specialized editor toolbars. A touch header
 belongs to its view's mobile view, which lists every island it shows. A new one
 shows Back, the title (tap it for the title menu), and Info, with other actions
 in the title menu, as the email thread's does. A header split from a shared one
@@ -120,7 +129,9 @@ Opening the editor must not blank or remount the surrounding app.
 Readers, including public viewers, see saved appearance wherever an entity icon
 already appears. Appearance edits do not reorder content, update content recency,
 or send notifications. They create entity-history entries without entering
-broader activity feeds. Copies and template instances retain the appearance.
+broader activity feeds. Copies and template instances retain the appearance,
+except that an agent creating or changing a routine may pick its look; it never
+replaces a look the owner chose.
 
 ## Responsive workspace navigation
 
@@ -216,18 +227,20 @@ unchanged. See the [selection-control API contract](../../.agents/rules/web/ui-p
 ## Recipient suggestions
 
 New message/channel, main email, call, routine-template and sharing pickers search personal
-contacts through one bounded window. Type to find later contacts; **Next options**
-or PageDown replaces the window, and ArrowDown at its end advances it. An empty
-window can still have a next page. Touch Next preserves input focus. Closing and
-reopening starts at the first window, without clearing selected/custom chips.
+contacts through one bounded list. Type to find later contacts; scrolling to the
+end lists the next page below the earlier ones, up to 500 rows, and PageDown or
+ArrowDown at the end does the same from the keyboard. A page with no matching
+rows reads on until one matches or the directory ends; only a failed page shows a
+**Retry options** button. Closing and reopening starts at the first page, without
+clearing selected/custom chips.
 Explicit participant/agent/thread choices remain scoped extras. Matching addresses
 are deduplicated while keeping the caller's selected representation. Other recipient surfaces
 are migrating separately; these controls do not change the AI planner's people pool.
 
 ## Property people pickers
 
-Personal user rows and calendar guest pickers use replaceable windows with Next
-options/PageDown. Selections and scoped extras stay independent of the page; names
+Personal user rows and calendar guest pickers list each further page below the
+earlier ones as the list scrolls (PageDown on desktop). Selections and scoped extras stay independent of the page; names
 from a chosen row survive later searches. A returned person page is not capped a
 second time, and broader native/server matches are kept. Search changes immediately
 remove stale person results from keyboard selection while the source debounces its
@@ -261,10 +274,11 @@ Inbox selectors retain their explicit **Only**/**All** reset action.
 Query-driven filter groups keep the existing menu/drawer controls but load only
 while open. Their source keeps all selected IDs in the collection (including
 unavailable values), separately from the current visible window. Do not apply a
-second substring filter to already matched source rows. Next options replaces
-the window; scroll and virtual focus reset only when a replacement is committed,
-not when selection labels or highlights change. Checkbox toggles keep row order
-stable within a window. A zero-result page can still offer Next options.
+second substring filter to already matched source rows. Scrolling to the end
+lists the next page below; scroll and virtual focus reset only for a new search,
+not when a page is added or selection labels or highlights change. Checkbox
+toggles and added pages keep row order stable. A zero-result page reads on by
+itself; only a failed page offers Retry options.
 `ListFilterGroup.createSource` requires explicit `selectedIds` and multiselect;
 static groups keep their existing behavior.
 
@@ -319,7 +333,12 @@ newly selected values.
 New references appear immediately in the collection as pending chips with an
 inline spinner through saving and refresh. Use the dragged item's label while
 its preview metadata loads. Failed saves clear pending chips through the existing
-error flow. Pending chips cannot be opened or removed. A persistently
+error flow. Pending chips cannot be opened or removed. Click a saved chip's
+name to open its item (a contact, company, task, document, channel, email,
+folder or project); shift-click opens it in a new split, and an item already
+open in another split is brought forward instead of opened twice. The Add
+button opens the picker and a chip's remove control removes that value; a chip
+never opens the picker. People who can't edit the item still open its values. A persistently
 mounted status region announces additions, including picker saves. Removed
 references disappear immediately and are restored from the last confirmed values
 if saving fails. A failed refresh does not undo a successful save: keep confirmed

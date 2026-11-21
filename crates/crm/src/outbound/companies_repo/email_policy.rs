@@ -1,7 +1,14 @@
-//! Dormant owner-bound metadata transactions; no caller can activate consent here.
+//! Owner-bound policy transactions, history work and count-preview storage.
 
+mod authoring;
 mod envelopes;
+mod history;
+mod mutations;
+mod population;
+mod preview;
+mod source_changes;
 mod sources;
+mod targets;
 
 use super::CompaniesRepositoryImpl;
 use crate::domain::{email_policy::*, model::CrmError};
@@ -14,6 +21,9 @@ pub struct PgEmailPolicyTransaction {
     team: Uuid,
     user: String,
     state: EmailPolicyState,
+    initialized_legacy: bool,
+    original_policy_version: i64,
+    authority_fingerprint: Option<String>,
 }
 
 /// A source event stays locked while a bounded page is handled.
@@ -89,27 +99,9 @@ impl EmailPolicyRepository for CompaniesRepositoryImpl {
         }
 
         if let OpenEmailPolicy::Initialize { .. } = open {
-            // A token is generated here, never copied from a mutation request.
-            let incarnation = Uuid::now_v7();
-            if absent {
-                sqlx::query!(
-                    r#"INSERT INTO crm_email_consent (team_id, user_id, link_id, consent_incarnation)
-                       VALUES ($1, $2, $3, $4) ON CONFLICT (team_id, user_id) DO NOTHING"#,
-                    team, user, link, incarnation
-                ).execute(&mut *tx).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
-            } else {
-                sqlx::query!(
-                    r#"UPDATE crm_email_consent SET consent_incarnation = $3
-                       WHERE team_id = $1 AND user_id = $2 AND consent_incarnation IS NULL"#,
-                    team,
-                    user,
-                    incarnation
-                )
-                .execute(&mut *tx)
-                .await
-                .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-            }
+            Self::initialize_policy_identity(&mut tx, team, user, link).await?;
         }
+
         let Some(row) = sqlx::query!(
             r#"SELECT link_id, consent_incarnation, policy_version, mode, enabled,
                       selected_enabled, active_rule_revision
@@ -134,6 +126,9 @@ impl EmailPolicyRepository for CompaniesRepositoryImpl {
             tx,
             team,
             user: user.to_owned(),
+            initialized_legacy: false,
+            original_policy_version: row.policy_version,
+            authority_fingerprint: None,
             state: EmailPolicyState {
                 link_id: row.link_id,
                 generation: EmailPolicyGeneration {

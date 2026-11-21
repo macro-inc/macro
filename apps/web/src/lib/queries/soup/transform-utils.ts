@@ -55,9 +55,11 @@ import type {
   SoupProperty,
 } from '@service-storage/generated/schemas';
 import type { ChannelType } from '@service-storage/generated/schemas/channelType';
+import type { SoupItemWithCalendarInvite } from '@service-storage/graphql-soup';
 import { formatDocumentName } from '@service-storage/util/filename';
 import { differenceInMilliseconds } from 'date-fns';
 import { match } from 'ts-pattern';
+import { mapChannelToEntity } from '../channel/list-entity';
 import { mapAgentSessionSearchResult } from './agent-session-search';
 
 /** Search sends a property's entity type only when it has one. */
@@ -81,7 +83,7 @@ type InnerSearchResult =
   | ProjectSearchResult
   | CallRecordSearchResult;
 
-type DisplayableSoupItem = SoupPage['items'][number];
+type DisplayableSoupItem = SoupItemWithCalendarInvite;
 type SoupDocument = Extract<DisplayableSoupItem, { tag: 'document' }>['data'];
 
 type SoupEntity =
@@ -796,6 +798,7 @@ export const mapApiSoupItemToEntity = (
       }));
 
       const hasIcsAttachment =
+        item.hasCalendarInvite ||
         item.data.attachments?.some(isCalendarAttachment);
 
       // Inline images (signature logos, pasted screenshots) carry a Content-ID.
@@ -893,51 +896,10 @@ export const mapApiSoupItemToEntity = (
       };
       return out;
     })
-    .with({ tag: 'channel' }, (item) => {
-      const latestMessage = item.data.latest_message;
-      const latestRootMessage = item.data.latest_non_thread_message;
-
-      const out: ChannelEntity = {
-        type: 'channel',
-        unreadNotifications: (item as SoupItemWithOptionalNotifications).data
-          .unreadNotifications,
-        unreadMentions: (item as SoupItemWithOptionalNotifications).data
-          .unreadMentions,
-        id: item.data.channel.id,
-        name: item.data.channel.name || 'Unknown Channel',
-        channelType: item.data.channel.channel_type,
-        teamId: item.data.channel.team_id ?? undefined,
-        ownerId: item.data.channel.owner_id,
-        frecencyScore: item.frecency_score ?? 0,
-        updatedAt: item.data.channel.updated_at,
-        createdAt: item.data.channel.created_at,
-        participantIds: item.data.participants.map((p) => p.user_id),
-        isParticipant: item.data.is_participant ?? true,
-        viewedAt: item.data.viewed_at ?? item.data.interacted_at,
-        interactedAt: item.data.interacted_at,
-        latestMessage: latestMessage
-          ? {
-              messageId: latestMessage.message_id,
-              threadId: latestMessage.thread_id ?? undefined,
-              content: latestMessage.content,
-              mentions: latestMessage.mentions,
-              senderId: latestMessage.sender_id,
-              createdAt: latestMessage.created_at,
-            }
-          : undefined,
-        latestRootMessage: latestRootMessage
-          ? {
-              messageId: latestRootMessage.message_id,
-              threadId: latestRootMessage.thread_id ?? undefined,
-              content: latestRootMessage.content,
-              mentions: latestRootMessage.mentions,
-              senderId: latestRootMessage.sender_id,
-              createdAt: latestRootMessage.created_at,
-            }
-          : undefined,
-      };
-      return out;
-    })
+    .with({ tag: 'channel' }, (item) => ({
+      ...mapChannelToEntity(item.data),
+      frecencyScore: item.frecency_score ?? 0,
+    }))
     .with({ tag: 'foreignEntity' }, (item) => {
       // `authorLogin`/`authorId`/`labels` are enrichment-only fields the
       // backend now returns but that aren't on the base generated schema yet.

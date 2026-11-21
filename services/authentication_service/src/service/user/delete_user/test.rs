@@ -34,6 +34,9 @@ impl UserDeletionGateway for FakeGateway {
     async fn delete_onboarding(&self, user: &MacroUserIdStr<'static>) -> Result<(), Report> {
         self.call("onboarding", user.as_ref())
     }
+    async fn delete_contacts(&self, user: &MacroUserIdStr<'static>) -> Result<(), Report> {
+        self.call("contacts", user.as_ref())
+    }
     async fn delete_profile(&self, user: &MacroUserIdStr<'static>, _: &Uuid) -> Result<(), Report> {
         self.call("profile", user.as_ref())
     }
@@ -61,6 +64,7 @@ fn expected_calls() -> Vec<String> {
             "teams",
             "items",
             "onboarding",
+            "contacts",
             "profile",
         ] {
             expected.push(format!("{step}:{user}"));

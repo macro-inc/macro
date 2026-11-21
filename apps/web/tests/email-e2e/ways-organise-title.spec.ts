@@ -77,13 +77,13 @@ for (const provider of PROVIDERS) {
     test.use({ provider });
     test.beforeEach(({ page }) => loadAppSteadily(page));
 
-    // Known bug (row-menu-dialogs-close-at-once): the folder picker opened
-    // from a row's menu closes at once, because the row's menu dismisses
-    // itself with an Escape that the picker receives. When this passes, the bug is fixed: remove the
-    // tag and the row's line in `ledger/waivers.tsv`.
-    test("known bug: row-menu-dialogs-close-at-once: Move to folder in a row's menu files the thread @known-bug", {
-      tag: '@known-bug',
-    }, async ({ page, mailbox }) => {
+    // When this fails, Move to folder in a row's menu opens no folder
+    // picker, one that closes at once (the row menu's own dismissal reaching
+    // it), or one that leaves the thread out of the folder named there.
+    test("Move to folder in a row's menu files the thread", async ({
+      page,
+      mailbox,
+    }) => {
       const ids = await deliverAll(mailbox, ['Agenda']);
       await mailbox.open();
       await expect.poll(() => rowIds(page)).toEqual([ids.Agenda]);

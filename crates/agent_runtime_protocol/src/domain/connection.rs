@@ -242,6 +242,11 @@ async fn run_runtime<H>(
                             acp_open = false;
                         }
                     }
+                    // Only hosted computers run agent teammates; their
+                    // daemon handles this message itself.
+                    ToRuntimeMessage::ApplyAgent { .. } => {
+                        tracing::debug!("ignoring an agent environment this runtime cannot apply");
+                    }
                     ToRuntimeMessage::ModelProbeRequest => {
                         let model_probes = Arc::clone(&model_probes);
                         let outbound = outbound.clone();
@@ -255,6 +260,8 @@ async fn run_runtime<H>(
                             let _ = outbound.send(ToServerMessage::ModelProbeResponse { result });
                         });
                     }
+                    // This side serves one agent and no triggers.
+                    ToRuntimeMessage::AgentsChanged => {}
                 }
             }
             result = probes.join_next(), if !probes.is_empty() => {

@@ -54,15 +54,12 @@ beforeEach(() => {
   mocks.write.mockResolvedValue(ok(result));
 });
 describe('email follow-up cache reconciliation', () => {
-  it('refreshes thread, preview and reminder state after persistence', async () => {
+  it('refreshes preview and reminder state after persistence', async () => {
     const after = vi.fn();
     await expect(
       executeEmailFollowup('thread', command, after)
     ).resolves.toEqual(result);
     expect(after).toHaveBeenCalledWith(result);
-    expect(mocks.invalidate).toHaveBeenCalledWith({
-      queryKey: emailKeys.threadMessages('thread').queryKey,
-    });
     expect(mocks.invalidate).toHaveBeenCalledWith({
       queryKey: emailKeys.previews._def,
     });

@@ -51,7 +51,11 @@ for (const provider of PROVIDERS) {
         .getByRole('button', { name: 'Undo' })
         .click();
       did('AC-059');
-      await expect(notice(page, 'Send cancelled')).toBeVisible();
+      // By the toast's name: the Drafts panel can say the same for a moment
+      // before the cancelled send leaves it.
+      await expect(
+        page.getByRole('status', { name: 'Send cancelled' })
+      ).toBeVisible();
       saw('STC-028');
 
       // The composer is back with what was typed, and only that.

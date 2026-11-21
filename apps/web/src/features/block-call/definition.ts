@@ -5,11 +5,11 @@ import {
   loadResult,
 } from '@core/block';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
+import { lazy } from '@core/util/lazy';
 import { callKeys } from '@queries/call/keys';
 import { queryClient } from '@queries/client';
 import { callServiceClient } from '@service-call/client';
 import { err, ok } from 'neverthrow';
-import { lazy } from 'solid-js';
 
 export const definition = defineBlock({
   name: 'call',

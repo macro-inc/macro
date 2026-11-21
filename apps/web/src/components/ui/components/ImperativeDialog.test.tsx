@@ -1,3 +1,4 @@
+import { lazy } from '@core/util/lazy';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import {
   type Component,
@@ -5,7 +6,6 @@ import {
   createRoot,
   createSignal,
   getOwner,
-  lazy,
   Suspense,
 } from 'solid-js';
 import { afterEach, describe, expect, it } from 'vitest';

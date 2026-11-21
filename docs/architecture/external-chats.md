@@ -64,7 +64,9 @@ send, `sendReason` says why: `no_account`, `disconnected`, `not_added` (their
 account hasn't added this chat), `not_allowed` (not in it, or may not post
 now) or `unavailable` (removed). Sends, uploads and adds take the person's
 session or their own API credential; bots, harnesses and internal callers
-never send.
+never send. An agent's program (an agent-signed token or a code-mode
+request) sends only with `userConfirmation` quoting the user's approval, as
+for email; otherwise the send answers 403 `confirmation_required`.
 
 ## Live updates
 

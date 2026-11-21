@@ -28,13 +28,13 @@ import { did } from './ledger/record';
 test.use({ provider: 'GMAIL' });
 test.beforeEach(({ page }) => loadAppSteadily(page));
 
-// Known bug (row-menu-dialogs-close-at-once): Share in a row's menu
-// opens the Share dialog and closes it at once, because the menu dismisses
-// itself with an Escape that the new dialog receives. When this passes, the
-// bug is fixed: remove the tag and the row's line in `ledger/waivers.tsv`.
-test("known bug: row-menu-dialogs-close-at-once: Share in a row's menu opens the thread's Share dialog @known-bug", {
-  tag: '@known-bug',
-}, async ({ page, mailbox }) => {
+// When this fails, Share in a row's menu opens no Share dialog, one that
+// closes at once (the menu's own dismissal reaching it), or one that does
+// not list the person the thread is shared with.
+test("Share in a row's menu opens the thread's Share dialog", async ({
+  page,
+  mailbox,
+}) => {
   const ids = await deliverAll(mailbox, ['Agenda']);
   const bob = await mailbox.stack.user('bob@example.com');
   await grantView(mailbox, ids.Agenda, bob);

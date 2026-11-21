@@ -79,7 +79,7 @@ axum-extra = { workspace = true }
 base64 = { workspace = true }
 bots = { path = "../../crates/bots", features = ["realtime"] }
 bot_id = { path = "../../crates/bot_id" }
-calendar_events = { path = "../../crates/calendar_events", features = ["dispatch-sqs", "inbound", "mutation-client", "notify", "postgres"] }
+calendar_events = { path = "../../crates/calendar_events", features = ["dispatch-sqs", "gateway-refresh", "inbound", "mutation-client", "notify", "postgres"] }
 cal = { path = "../../crates/cal", features = ["axum", "outbound"] }
 call = { path = "../../crates/call" }
 feature_flags = { path = "../../crates/feature_flags" }
@@ -219,6 +219,7 @@ model = { path = "../../crates/model" }
 model-entity = { path = "../../crates/model-entity" }
 model_notifications = { path = "../../crates/model_notifications" }
 model_owner = { path = "../../crates/model_owner" }
+models_email = { path = "../../crates/models_email" }
 models_databases = { path = "../../crates/models_databases" }
 models_dcs = { path = "../../crates/models_dcs" }
 models_pagination = { path = "../../crates/models_pagination", features = [
@@ -240,6 +241,7 @@ readonly_pool = { path = "../../crates/readonly_pool" }
 redis = { workspace = true, features = [
   "aio",
   "cluster-async",
+  "connection-manager",
   "tokio-rustls-comp",
 ] }
 reminders = { path = "../../crates/reminders", features = [
@@ -252,6 +254,7 @@ reqwest = { workspace = true }
 rootcause = { workspace = true }
 sha2 = { workspace = true }
 s3_key = { path = "../../crates/s3_key" }
+model_entity = { package = "model-entity", path = "../../crates/model-entity" }
 saved_views = { path = "../../crates/saved_views" }
 scheduled_action = { path = "../../crates/scheduled_action" }
 schemars = { workspace = true }
@@ -291,6 +294,7 @@ sync_service_hex = { path = "../../crates/sync_service", package = "sync_service
 ] }
 system_properties = { path = "../../crates/system_properties" }
 task_dedup = { path = "../../crates/task_dedup" }
+task_templates = { path = "../../crates/task_templates" }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["signal"] }
 tokio-util = { workspace = true, features = ["rt"] }
@@ -329,7 +333,6 @@ tokio-tungstenite = { workspace = true }
 flate2 = "1"
 frecency = { path = "../../crates/frecency", features = ["mock"] }
 macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
-macro_db_migrator = { path = "../../crates/macro_db_migrator" }
 opentelemetry = { workspace = true, features = ["trace"] }
 opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
 tracing-opentelemetry = { workspace = true }

@@ -253,9 +253,8 @@ for (const provider of PROVIDERS) {
       page,
       mailbox,
     }) => {
-      const bob = await mailbox.stack.user(
-        mailbox.stack.address('bob@example.com')
-      );
+      const owner = mailbox.stack.address('bob@example.com');
+      const bob = await mailbox.stack.user(owner);
       const team = (await mailbox.stack.link(bob, provider, 'team@example.com'))
         .email;
 
@@ -266,7 +265,10 @@ for (const provider of PROVIDERS) {
       const dialog = page.getByRole('dialog').filter({
         hasText: 'Share this inbox?',
       });
-      await expect(dialog).toBeVisible({ timeout: 60_000 });
+      await expect(dialog).toContainText(
+        `${team} is already connected by ${owner}`,
+        { timeout: 60_000 }
+      );
       saw('STX-213');
       await dialog.getByRole('button', { name: 'Cancel' }).click();
       did('AX-038');

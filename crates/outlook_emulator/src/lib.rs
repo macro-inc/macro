@@ -253,7 +253,16 @@ impl OutlookEmulator {
         seed: Seed,
         options: Options,
     ) -> Result<Self, StartError> {
-        let listener = TcpListener::bind(address).await?;
+        Self::start_with_listener(TcpListener::bind(address).await?, seed, options)
+    }
+
+    /// Starts an emulator on a listener the caller bound, for a caller that
+    /// picks its own port. Call it inside a Tokio runtime.
+    pub fn start_with_listener(
+        listener: TcpListener,
+        seed: Seed,
+        options: Options,
+    ) -> Result<Self, StartError> {
         let address = listener.local_addr()?;
         let mut state = State::new(options.allow_http_notification_urls);
         state.apply_seed(&seed)?;
@@ -502,6 +511,13 @@ impl OutlookEmulator {
                 .remove_message(message_id)
                 .map_err(|_| EmulatorError::UnknownMessage(message_id.to_string()))
         })
+    }
+
+    /// Deletes a folder for good, with its subfolders and their messages, as
+    /// if its owner had emptied it out of Deleted Items in Outlook. Its
+    /// messages are then read as Graph reads any message deleted for good.
+    pub fn delete_folder(&self, email: &str, folder: &str) -> Result<(), EmulatorError> {
+        self.with_state(|state| state.mailbox(email)?.remove_folder(folder))
     }
 
     /// Drops a mailbox's sync state: its delta tokens answer 410, as after

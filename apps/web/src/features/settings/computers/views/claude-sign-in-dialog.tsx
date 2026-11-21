@@ -6,35 +6,49 @@ import {
   useClaudeModeQuery,
   useClaudeSignOutMutation,
 } from '@queries/computers/claude';
-import { ActionDialogShell, Dialog } from '@ui';
-import type { JSX } from 'solid-js';
+import { ActionDialogShell, confirmDialog, Dialog } from '@ui';
+import { computerFailureMessage } from '../core/computer-display';
 import { ClaudeSignInFlow } from './claude-sign-in-flow';
 
-/** Sign in with Claude from a computer's or agent's row, outside guided setup. */
+/**
+ * Sign in with Claude from a computer's or agent's row, outside guided setup.
+ * Its one secondary action is Macro credits: on credits already, it only
+ * closes; signed in (or expired), it signs the computer out first.
+ */
 export function ClaudeSignInDialog(props: {
   harnessId: string;
   entry: ClaudeSignInEntry;
   onClose: () => void;
-  /** Replaces the default title, e.g. "Bring your AI to Ada". */
+  /** Replaces the default title, e.g. "Connect Ada to your Claude plan". */
   title?: string;
-  /** Shown above the title, e.g. the computer's setup progress. */
-  header?: JSX.Element;
+  /** Replaces the default line under the title. */
+  description?: string;
+  /** Replaces the default small print about who can use the sign-in. */
+  footnote?: string;
   /** Replaces the default toast once signed in. */
   onSignedIn?: () => void;
+  /** Replaces the default question before signing out to Macro credits. */
+  switchToCredits?: { title: string; body: string };
 }) {
   const signOut = useClaudeSignOutMutation();
   const mode = useClaudeModeQuery(() => props.harnessId);
-  const useCredits = async () => {
-    // Already on credits: nothing to sign out of.
-    if (mode.data?.mode === 'macro_credits') {
-      props.onClose();
-      return;
-    }
+  // Unknown until the mode loads: closing is the safe reading. A failed
+  // refetch keeps the last known mode, so gate on pending, not success.
+  const onCredits = () => mode.isPending || mode.data?.mode !== 'own_account';
+  const switchToCredits = async () => {
+    const confirmed = await confirmDialog({
+      title: props.switchToCredits?.title ?? t('computers.claudeSwitchTitle'),
+      body: props.switchToCredits?.body ?? t('computers.claudeSwitchBody'),
+      confirmLabel: t('computers.claudeSwitchToCredits'),
+    });
+    if (!confirmed) return;
     try {
       await signOut.mutateAsync(props.harnessId);
       props.onClose();
-    } catch {
-      toast.failure(t('computers.claudeCreditsFailed'));
+    } catch (error) {
+      toast.failure(
+        computerFailureMessage(error, t('computers.claudeCreditsFailed'))
+      );
     }
   };
   return (
@@ -50,14 +64,27 @@ export function ClaudeSignInDialog(props: {
           harnessId={props.harnessId}
           entry={props.entry}
           title={props.title}
-          header={props.header}
-          onClose={props.onClose}
-          onSignedIn={() => {
-            props.onClose();
+          description={props.description}
+          footnote={props.footnote ?? t('computers.claudeSharedAccount')}
+          secondary={
+            onCredits()
+              ? {
+                  label: t('computers.claudeKeepCredits'),
+                  onClick: props.onClose,
+                }
+              : {
+                  label: t('computers.claudeSwitchToCredits'),
+                  pending: signOut.isPending,
+                  onClick: () =>
+                    fireAndForget(switchToCredits(), 'computer-claude'),
+                }
+          }
+          onSignedIn={(closed) => {
+            // Closed already: a dialog opened since is another sign-in.
+            if (!closed) props.onClose();
             if (props.onSignedIn) props.onSignedIn();
             else toast.success(t('computers.claudeSignedIn'));
           }}
-          onUseCredits={() => fireAndForget(useCredits(), 'computer-claude')}
         />
       </ActionDialogShell>
     </Dialog>

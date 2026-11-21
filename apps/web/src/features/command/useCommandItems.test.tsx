@@ -26,7 +26,6 @@ const fixtures = vi.hoisted(() => {
   };
   return {
     commands: [] as CommandWithInfo[],
-    projectFlag: (): boolean | undefined => undefined,
     requests: [] as Bucket[][],
     project,
     projects: (): QuickAccessItem[] => [project],
@@ -38,11 +37,6 @@ vi.mock('@queries/team/members', () => ({
     users: () => [],
     isLoading: () => false,
     isError: () => false,
-  }),
-}));
-vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: (flag: { key: string }) => () => ({
-    enabled: flag.key === 'enable-projects' && fixtures.projectFlag() === true,
   }),
 }));
 vi.mock('@core/context/user', () => ({
@@ -116,10 +110,8 @@ const createCommands: CommandWithInfo[] = [
   },
 ];
 
-it('lists Projects from Quick Access and gates project creation without hiding Folder', () => {
-  const [flag, setFlag] = createSignal<boolean | undefined>(true);
+it('lists Projects from Quick Access with project creation beside Folder', () => {
   const [category, setCategory] = createSignal<CategoryFilter>('projects');
-  fixtures.projectFlag = flag;
   fixtures.commands = createCommands;
   let source!: ReturnType<typeof useCommandItems>;
   render(() => {
@@ -134,14 +126,9 @@ it('lists Projects from Quick Access and gates project creation without hiding F
   expect(ids()).toEqual(['launch', 'new-project']);
   setCategory('commands');
   expect(ids()).toEqual(['command-Create-project', 'command-Create-folder']);
-  setFlag(false);
-  expect(ids()).toEqual(['command-Create-folder']);
-  setCategory('projects');
-  expect(ids()).not.toContain('new-project');
 });
 
 it('adds projects to All only for typed queries', () => {
-  fixtures.projectFlag = () => true;
   const [query, setQuery] = createSignal('');
   render(() => {
     useCommandItems(query, () => 'all', { searchActive: () => true }).items();
@@ -154,7 +141,6 @@ it('adds projects to All only for typed queries', () => {
 });
 
 it('ranks a short All query once when no command matches it', () => {
-  fixtures.projectFlag = () => true;
   fixtures.commands = createCommands;
   let source!: ReturnType<typeof useCommandItems>;
   render(() => {
@@ -174,7 +160,6 @@ it('ranks a short All query once when no command matches it', () => {
 });
 
 it('ranks again only when a republished list holds different rows', () => {
-  fixtures.projectFlag = () => true;
   fixtures.commands = [];
   const [projects, setProjects] = createSignal<QuickAccessItem[]>([
     fixtures.project,

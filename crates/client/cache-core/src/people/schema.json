@@ -6,7 +6,8 @@
   "maxSqlColumns": 64,
   "maxSqlInputBytes": 262144,
   "maxSqlRows": 500,
-  "policyVersion": 5,
+  "minPolicyVersion": 5,
+  "policyVersion": 7,
   "referencePolicyVersion": 4,
   "schemas": {
     "ContactReconcile": {
@@ -756,6 +757,17 @@
           "minimum": 1,
           "type": "integer"
         },
+        "listPriority": {
+          "description": "Ordered groups of opaque contact list keys. Within a name stage, a\nperson ranks by the first group holding any of their lists, then by\nrecency; people in no group come last. A nonempty order supersedes the\npolicy 6 messaged split; empty keeps the policy 6 order.\nOmitted when empty, which policy 5 and 6 hosts require.",
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "maxItems": 16,
+          "type": "array"
+        },
         "mode": {
           "$ref": "#/$defs/PeopleMode",
           "description": "Surface ranking policy."
@@ -764,6 +776,10 @@
           "description": "Retained wire input for older hosts; recent-first order needs no clock.",
           "format": "int64",
           "type": "integer"
+        },
+        "onlyListed": {
+          "description": "Drop people in none of the `list_priority` groups instead of ranking them\nlast; with no groups, nobody is listed. The empty-browse self pin stays.",
+          "type": "boolean"
         },
         "query": {
           "description": "Name/explicit-identity input, capped at 512 UTF-8 bytes.",

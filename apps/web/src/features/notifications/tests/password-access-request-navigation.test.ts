@@ -41,7 +41,6 @@ vi.mock('@core/constant/allBlocks', () => ({
   resolveBlockAlias: (type: string) => type,
 }));
 vi.mock('@core/constant/featureFlags', () => ({
-  enableCalendarUi: true,
   enablePasswords: true,
   enableReminders: false,
   isFeatureEnabled: () => mocks.passwordsEnabled,

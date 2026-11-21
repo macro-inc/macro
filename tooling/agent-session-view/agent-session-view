@@ -36,6 +36,7 @@ import urllib.parse
 
 import datadog_spans
 import markdown_export
+import reconstruct
 import turn_context
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -198,7 +199,7 @@ def appended_at(log_id):
     return datetime.datetime.fromtimestamp(millis / 1000, datetime.timezone.utc).isoformat()
 
 
-def query_session(url, session_id, with_spans=False):
+def query_session(url, session_id, env, with_spans=False):
     export = psql_json(url, QUERY, id=session_id)
     if not export["session"]:
         sys.exit(f"no agent session {session_id}")
@@ -206,6 +207,7 @@ def query_session(url, session_id, with_spans=False):
         frame["t"] = appended_at(frame["id"])
     if with_spans:
         export["spans"] = session_spans(export)
+    export["env"] = env
     return export
 
 
@@ -285,8 +287,8 @@ def export_batch(url, args):
     rows = []
     for number, match in enumerate(found, 1):
         print(f"[{number}/{len(found)}] {match['id']}", file=sys.stderr)
-        export = query_session(url, match["id"], args.datadog)
-        contexts = turn_context.for_session(export, eager_source)
+        export = query_session(url, match["id"], args.env, args.datadog)
+        contexts = contexts_for(export, eager_source, args)
         summary, full = markdown_export.render(export, contexts)
         (out_dir / f"{match['id']}.md").write_text(summary)
         (out_dir / f"{match['id']}.full.md").write_text(full)
@@ -308,13 +310,27 @@ def normalize(export):
     return {"session": session, "frames": frames}
 
 
-def render(export):
+def contexts_for(export, eager_source, args):
+    """Each turn's context; with --reconstruct, its literal prompt parts too."""
+    contexts = turn_context.for_session(export, eager_source)
+    if args.reconstruct and contexts:
+        turns = markdown_export.parse(export["frames"], export["spans"].get("tools"))
+        print("rebuilding the turns' prompt parts from source…", file=sys.stderr)
+        reconstruct.attach(export, contexts, turns, export.get("env") or args.env)
+    return contexts
+
+
+def render(export, contexts=None):
     # The turns' context goes in beside the export, computed at render time
     # so an older export renders with it too.
-    contexts = turn_context.for_session(export, turn_context.eager_names_from_source())
+    if contexts is None:
+        contexts = turn_context.for_session(export, turn_context.eager_names_from_source())
     # Every `<` as \u003c, so no `</script>` or `<!--` in the session ends or
     # changes the script element it is inlined in.
-    payload = json.dumps({**export, "turn_context": contexts}, ensure_ascii=False).replace("<", "\\u003c")
+    literal = reconstruct.texts(contexts)
+    payload = json.dumps(
+        {**export, "turn_context": contexts, "literal_texts": literal}, ensure_ascii=False,
+    ).replace("<", "\\u003c")
     return TEMPLATE.read_text().replace("__SESSION_JSON__", payload)
 
 
@@ -369,6 +385,11 @@ def main():
     )
     parser.add_argument("--markdown", action="store_true")
     parser.add_argument("--datadog", action="store_true", help="merge tool and model-call spans")
+    parser.add_argument(
+        "--reconstruct", action="store_true",
+        help="with spans: rebuild each turn's SDK docs and fixed prompt parts from source at the deploy "
+        "commit that served it (builds a Rust example there; ASV_BUILD_WRAPPER prefixes the build)",
+    )
     batch = parser.add_argument_group("batch export (--query): markdown for every matching session")
     batch.add_argument("--query", action="store_true")
     now = datetime.datetime.now(datetime.timezone.utc)
@@ -390,7 +411,7 @@ def main():
         export = normalize(json.loads(args.from_json.read_text()))
     elif args.session_id and UUID.match(args.session_id):
         with database(args.env) as url:
-            export = query_session(url, args.session_id, args.datadog)
+            export = query_session(url, args.session_id, args.env, args.datadog)
     else:
         parser.error("pass an agent session id (uuid), --from-json, or --query")
 
@@ -399,13 +420,13 @@ def main():
     suffix = ".md" if args.markdown else ".html"
     out = args.out or DEFAULT_OUT_DIR / f"{export['session']['id']}{suffix}"
     out.parent.mkdir(parents=True, exist_ok=True)
+    contexts = contexts_for(export, turn_context.eager_names_from_source(), args)
     if args.markdown:
-        contexts = turn_context.for_session(export, turn_context.eager_names_from_source())
         summary, full = markdown_export.render(export, contexts)
         out.write_text(summary)
         out.with_suffix(".full.md").write_text(full)
     else:
-        out.write_text(render(export))
+        out.write_text(render(export, contexts))
     print(out)
     if args.serve:
         serve(out, args.serve, args.bind)

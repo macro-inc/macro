@@ -40,18 +40,12 @@ where
         return Ok(());
     }
 
-    ctx.effects
-        .connect(&link.macro_id, connections)
-        .await
-        .map_err(|e| {
-            ProcessingError::NonRetryable(DetailedError {
-                reason: FailureReason::SqsEnqueueFailed,
-                source: e.context(format!(
-                    "Failed to enqueue contacts message for {}",
-                    link.macro_id
-                )),
-            })
-        })?;
+    ctx.effects.connect(link, connections).await.map_err(|e| {
+        ProcessingError::NonRetryable(DetailedError {
+            reason: FailureReason::SqsEnqueueFailed,
+            source: e.context("Failed to enqueue contacts message"),
+        })
+    })?;
 
     Ok(())
 }
@@ -130,6 +124,7 @@ where
             backfill_operation: BackfillOperation::PopulateCrmContact(LinkScopedPayload {
                 link_id,
                 payload: PopulateCrmContactPayload {
+                    live_mail: true,
                     contact_email,
                     contact_name,
                     first_at,

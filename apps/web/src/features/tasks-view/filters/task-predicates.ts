@@ -1,6 +1,9 @@
-import { testFacets } from '@app/features/soup';
-import { getTaskAssigneeIds, type TaskEntityWithProperties } from '@entity';
-import { getTaskDueDate } from '@entity/utils/task-properties';
+import { testFacets } from '@app/features/soup/filters/facets';
+import type { TaskEntityWithProperties } from '@entity/types/entity';
+import {
+  getTaskAssigneeIds,
+  getTaskDueDate,
+} from '@entity/utils/task-properties';
 import {
   type TaskDatePredicate,
   taskMatchesDueDate,

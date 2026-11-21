@@ -3,7 +3,7 @@ use models_email::{
     api::refresh::RefreshEmailEvent,
     service::{
         backfill::{BackfillOperation, BackfillPubsubMessage, InitPayload, JobScopedPayload},
-        pubsub::LinkManagerMessage,
+        pubsub::{LinkManagerMessage, LinkManagerSender},
     },
 };
 use uuid::Uuid;
@@ -129,10 +129,13 @@ impl InboxLifecycleEffects for InboxLifecycleClients {
                 .map_err(|_| MailboxError::Persistence),
             InboxLifecycleEffect::DeleteMailbox { reason } => self
                 .queue
-                .enqueue_link_manager_notification(LinkManagerMessage::DeleteLink {
-                    link_id: link,
-                    deletion_reason: *reason,
-                })
+                .enqueue_link_manager_notification(
+                    LinkManagerMessage::DeleteLink {
+                        link_id: link,
+                        deletion_reason: *reason,
+                    },
+                    LinkManagerSender::Event,
+                )
                 .await
                 .map_err(|_| MailboxError::Persistence),
             InboxLifecycleEffect::GmailBackfill { job_id } => self

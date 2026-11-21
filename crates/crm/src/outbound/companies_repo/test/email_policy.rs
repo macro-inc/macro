@@ -1,5 +1,11 @@
+mod all_mail;
+#[cfg(feature = "inbound")]
+mod api;
 mod envelopes;
+mod history;
+mod source_changes;
 mod sources;
+mod targets;
 
 use super::helpers::*;
 use crate::{

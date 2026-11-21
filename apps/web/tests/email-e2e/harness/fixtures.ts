@@ -9,6 +9,7 @@ import {
   type WebSocketRoute,
 } from '@playwright/test';
 import { record } from '../ledger/record';
+import { keepCalendarPromptsClosed } from './calendar-prompt';
 import {
   bundleFile,
   FROM_TEST,
@@ -67,6 +68,8 @@ type Options = {
   address: string;
   /** What the mailbox is linked with; the calendar needs the local stack. */
   access: InboxAccess;
+  /** Whether Gmail mailboxes on the local stack start with the emulator's grant. */
+  seedGoogleGrant: boolean;
 };
 
 /**
@@ -132,6 +135,7 @@ export const test = base.extend<
   stackEnv: [{}, { option: true }],
   address: ['ada@example.com', { option: true }],
   access: ['mail', { option: true }],
+  seedGoogleGrant: [true, { option: true }],
 
   evidence: [
     async ({ page, provider, hasTouch }, use, testInfo) => {
@@ -143,7 +147,7 @@ export const test = base.extend<
   ],
 
   mailbox: async (
-    { page, provider, stackEnv, address, access, evidence },
+    { page, provider, stackEnv, address, access, seedGoogleGrant, evidence },
     use,
     testInfo
   ) => {
@@ -156,7 +160,7 @@ export const test = base.extend<
       );
     }
     const stack: EmailStack = local
-      ? new LocalStack(local)
+      ? new LocalStack(local, { seedGoogleGrant })
       : await Stack.start(stackEnv);
     let failed = true;
     try {
@@ -185,6 +189,7 @@ export const test = base.extend<
         await page.addInitScript(() => {
           localStorage.setItem('macro:login', 'true');
         });
+        await keepCalendarPromptsClosed(page, stack, user, [inbox.linkId]);
         // Proving a test (`ledger/README.md`): a bundle built with breaks
         // that each wait for a name, and the one this run switches on.
         const broken = process.env.EMAIL_E2E_BREAK;

@@ -1,0 +1,21 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  labels:
+    app.kubernetes.io/instance: aws-load-balancer-controller
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: aws-load-balancer-controller
+    app.kubernetes.io/version: v3.6.3
+    helm.sh/chart: aws-load-balancer-controller-3.6.3
+  name: aws-load-balancer-root-cert
+  namespace: kube-system
+spec:
+  commonName: ca.webhook.aws-load-balancer-controller
+  duration: 43800h0m0s
+  isCA: true
+  issuerRef:
+    name: aws-load-balancer-selfsigned-issuer
+  secretName: aws-load-balancer-root-cert
+  subject:
+    organizations:
+      - aws-load-balancer-controller

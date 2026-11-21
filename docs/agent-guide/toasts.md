@@ -13,6 +13,13 @@ the dock and preserves full descriptions and accessible close buttons. On phones
 open sheets and the pickers and menus on them cover prompts and reminders, which
 sit above the transient notice; the notice itself stays on top of sheets.
 
+Backend-free regression that a toast animating over a heavy page restyles only
+the toasts, never the whole page (it counts style passes in a trace, not
+milliseconds): `bunx playwright test --config
+src/components/view-shell/browser-test/playwright.config.ts
+toast-frame-cost.browser.e2e.ts` from `apps/web`. Keep per-frame stack
+geometry off `<html>`: a custom property there restyles every element.
+
 All toasts place actions to the right of the message, centered vertically. The
 close button floats halfway over the top-right corner; stacked cards leave room
 for it when expanded. Close, Escape while focused,

@@ -95,6 +95,7 @@ pub use inbound::{
     UserBotOrHarnessEntity, UserOnly, UserOrBot, UserOrBotAuthorization, UserOrBotEntity,
     UserOrInternal, UserOrInternalAuthorization, UserOrInternalCaller, UserOrInternalEntity,
     UserOrInternalService, UserOrInternalServiceAuthorization, is_agent_run, is_program_run,
+    request_is_program, rewrite_program_json,
 };
 /// JWT validation adapters for user-authenticated and internal-only services.
 #[cfg(feature = "outbound")]

@@ -1147,8 +1147,6 @@ by = ["kafka macro.email:MessageReceived", "kafka macro.email:MessageSent"]
 also = ["http GET /internal/recent_messages/{user_id}"]
 
 [F-176]  # Enrich CRM contacts from mail and clean up after removal
-bug = "outlook-crm-cleanup"
-bug_on = "outlook"
 by = [
   "queue backfill:PopulateCrmContact",
   "queue backfill:PopulateCrmForUser",
@@ -1160,6 +1158,8 @@ also = [
   "queue crm-cleanup:ListCandidates",
   "queue crm-cleanup:ProcessCandidate",
   "loop crm_enrichment_worker::run",
+  "queue backfill:PopulateCrmPolicy",
+  "loop email_policy_worker::run",
 ]
 
 # ------------------------------------------------- added after the first pass
@@ -1237,8 +1237,6 @@ outlook = ["provider outlook:rules.delete"]
 also = ["queue gmail-ops:UnblockSender"]
 
 [F-197]  # Report a thread as spam
-bug = "gmail-junk-stays-in-inbox"
-bug_on = "gmail"
 by = [
   "http PATCH /email/threads/{id}/state where /field=junk, /value=true",
   "graphql CompleteMutationRoot.setEmailThreadState where /input/field=JUNK, /input/value=true",

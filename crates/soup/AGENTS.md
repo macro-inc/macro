@@ -55,7 +55,14 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   `src/domain/service/tests/attention.rs` → `src/outbound/pg_soup_repo/attention.rs`
   (`attention/query.sql`). Channel-thread keying applies only to
   `AttentionKeying::ThreadScoped`; keep it in step with `attention_feed`'s
-  `keying.rs`.
+  `keying.rs`. A read of known items (`only`) under `FiledEntity` keying
+  takes its pending notifications from `attention/pending_only.sql`, by key;
+  every other read, and every probe (which empties it), takes them from
+  `attention/pending.sql`. Change both.
+- Find where a viewer's unread rows may be without paging a feed:
+  `src/outbound/pg_soup_repo/attention_unread.rs`. It is neither gated nor
+  filtered and runs for every signed-in viewer; its two reads are bounded by
+  their `limit` and must stay so.
 - Give a kind with no list of its own (runtimes, teams) inbox rows: an
   attention-only kind like `pg_soup_repo/harness.rs` or `team.rs`, a gate in
   `attention/query.sql`'s attention stream only, a by-ids leg, and the type in
@@ -77,6 +84,14 @@ rows, initiatives, ...) and get back a single unified, paginated result.
 
 ## Gotchas
 
+- `AttentionCandidateRequest::assume_attention` probes the attention query:
+  each `only` key counts as if a notification about it were pending, so a
+  caller can ask whether a new notification would be listed. A probe never
+  reads the viewer's pending notifications, so its cost stays flat however
+  many they have (`a_probe_costs_the_same_however_many_notifications_are_pending`;
+  past Postgres's JIT threshold a probe took hundreds of milliseconds).
+  Normal pages build byte-identical SQL (`only_a_probe_changes_the_query`).
+
 - Project grouping uses the system Project property (initiative membership),
   including canonical TASK assignments, rather than legacy folder `project_id`.
   `SoupService::group_labels` names the groups a grouping field leaves
@@ -87,6 +102,8 @@ rows, initiatives, ...) and get back a single unified, paginated result.
 - Attention feeds admit visible CRM records through current team membership,
   independently of mailbox contribution consent or the retired team CRM switch.
   Hidden companies, their contacts, and hidden company-less contacts stay out.
+- Preserve email-rule resource failures as HTTP 503 with the named limit; do
+  not turn a failed CRM Team email read into an empty or partial Soup page.
 - `crm_association.rs` resolves CRM scope before filtering, sorting, and paging.
   Activity uses property edges rather than references and matches email within
   the caller's mailbox. It reads only what the request's sources can return
@@ -103,6 +120,20 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   `entity_type = 'DATABASE_ROW' AND values->>'type' = 'EntityReference'` so the
   partial index applies, and join the row by the guarded uuid cast, never
   `r.id::text = ep.entity_id`, which reads every row cell of every database.
+  Keep both of its `OFFSET 0` fences as well: joined plainly, the planner
+  started from every entity definition and compared all of their cells with
+  every record, from about 500 records with fresh statistics and for a single
+  record once they were stale, and the statement ran into its timeout.
+- Property edges reach a task's custom entity properties from the requested
+  records through `idx_ep_crm_record_references_gin`, for a company or contact
+  scope only (`custom_task_properties`; the activity scope reads the built-in
+  properties). Keep that arm's copy of the index predicate, without which the
+  index cannot apply, and both `OFFSET 0` fences: joined plainly, the planner
+  started from every custom entity definition and read all of their values
+  once statistics were stale or the scope named more than about ten records.
+  The arm does not check who owns the property: a task shows every property
+  set on it to whoever can open it, and the document arm still checks access
+  to the task.
 
 - A `crm_domains` (`ecd`) scope that email rejects as not found or not
   permitted (archived company, email sync off) leaves email threads out of the
@@ -144,12 +175,31 @@ rows, initiatives, ...) and get back a single unified, paginated result.
 - Preserve deployed timestamp cursor encodings; client query keys restart pages when ranges or selections change.
 - Keep flat timestamp top clauses lightweight; bind the caller's source ids, then document-ID arrays, after the sort's fixed parameters and skip subtype namespace joins when the filter proves TASK-only unless other predicates need them.
 - The dynamic query's document, chat, and project arms match `entity_access.source_id = ANY(<bound source ids>)`, not a join to the `user_source_ids` CTE: Postgres costs a CTE join at the average source's grant count and probed the item table once per grant for callers holding hundreds of thousands. The query runs in a transaction that raises `parallel_setup_cost`, because parallel plans made callers with a few thousand grants twice as slow.
-- `entity_access.source_id` statistics cost every source outside its most-common values at the column average, so a caller with thousands of small sources (private channels) is planned as millions of grants and gets sequential scans of `entity_access` and the item table. Callers with more than `MANY_SOURCES` sources get their grants counted (`access_gate`), and at most `MAX_PROBED_GRANTS` of them switch the arms to `AccessGate::PerSource`: one `OFFSET 0`-fenced index probe per source, then one item lookup per grant. Keep `= ANY` for everyone else: its estimate is what keeps a large team's hundreds of thousands of grants hashed.
+- Those statistics list only the largest sources and estimate every other one at the table's average, so a caller in a few hundred channels was planned as a hash join over a scan of every live document. The document arm counts the caller's document grants first (`DocumentGrants::count`, up to `COUNTED_DOCUMENT_GRANTS`) and, under the limit, reads the distinct granted ids behind an `OFFSET 0` fence with the count as the `LIMIT` (`counted_document_access_semi_join`): a constant `LIMIT` is the estimate Postgres takes as given. `begin_dynamic_query` opens a `REPEATABLE READ` transaction so the count and the gate read the same rows and the `LIMIT` never drops one. Keep the fence: `DISTINCT ... LIMIT` without it walked an entity-ordered index over all of `entity_access`. Callers over the limit, named-id arms, and arms that require a folder or a notification (`requires_a_folder_or_notification`, which Postgres reads from those few documents first) keep the estimated gate; chat and project arms keep it too, their tables being small enough to scan. Re-measure on a production-size seed with `source_id` statistics pinned to production's per-source estimate before changing the limit or the exceptions.
 - A document arm whose filter admits only ids it names, at most `MAX_NAMED_CANDIDATES` of them (`named_document_bound`: CRM Tasks, Notes, References) checks access after its own filters (`DocumentArmAccess::AfterFilters`): the candidates and their sub-type, file-type and property filters sit behind an `OFFSET 0` fence, the `properties_filter` `EXISTS` run once per candidate (`PropertyProbe::PerCandidate`) instead of as a bitmap over every row the property holds (a `DocumentLiteral::Property` inside the document filter keeps `PropertyProbe::Planned`), and each survivor probes `entity_access` by uuid over its two partial unique indexes, in page order and past the cursor so a flat timestamp page stops at its `LIMIT`. Broad arms and longer lists keep the semi-join. An id OR'ed with any other literal does not bound the arm.
 - OR'ed select options of one definition and entity type render as one `EXISTS` over `?| ARRAY[...]` (`option_membership_predicate`), always fenced with `PER_CANDIDATE` whatever the `PropertyProbe`: unfenced, Postgres pulls that single `EXISTS` up into a semi-join and drives a broad list (the Tasks view, every task by status) from the property index's matches across every entity, about ten times slower warm and a full read of every matching task cold.
 - Read grouping/sort definition types through uncorrelated scalar lookups; join grouping options once outside the value expansion and preserve missing-option groups.
 - Build option-sort order maps with an uncorrelated `jsonb_object_agg` lookup using the sort definition bind; ignore unknown option IDs and keep unknown-only values missing.
 - Materialize grouped `TopItems` only for property sorts so the sort key is computed before multi-value group expansion; leave timestamp CTEs inlineable.
+- With `with_source_items_enabled`, flat listings read document, chat and
+  project candidates from the trigger-maintained `source_items` table
+  (`expanded/dynamic/feed.rs`) instead of the item tables, per arm, under a timestamp sort `source_items`
+  can order (not `CreatedAt`, property or name sorts) when the arm's filter lets a source scan stop at the page (`served_by_scan`) and does
+  not fold to false (`matches_nothing`, over the `*_literal_constant` functions
+  beside each renderer). A page with a projected arm first asks for the bound
+  (`ScanBound`, one query): the whole query reads the item tables unless
+  `source_items_exact()` holds (triggers on, backfilled since), so a stale or
+  empty table costs speed, never access; and, for in-order scans, when the
+  session is not UTC or, for source scans, the user's sources exceed
+  `SOURCE_SCAN_SOURCES` or `SOURCE_SCAN_ROWS` / page size. With the projection
+  disabled no arm is projected and nothing extra runs. The projected arms
+  check access against the same bound source ids as the item-table arms
+  (`fetch_user_source_ids`); never restate the source rule in SQL. Both paths
+  must return identical pages: the query test helper installs the triggers,
+  backfills the table from the fixture, audits it, and runs every case on both.
+  The migrations install no maintenance triggers; feed tests load
+  `fixtures/source_items_triggers.sql` first, which also marks the empty table
+  backfilled. Rollout: `SOURCE_ITEMS_ROLLOUT.md`.
 - `candidate_gates.rs` encodes access-gate SQL shared across repo queries;
   changing it changes what every entity kind can return.
 - Keep the notified feed's notification lookup behind a lateral `OFFSET 0`

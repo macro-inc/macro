@@ -9,12 +9,27 @@ const PLAIN: &str = "0d000000-0000-0000-0000-000000000001";
 const IN_FOLDER: &str = "0d000000-0000-0000-0000-000000000002";
 const SHARED_WITH_TEAM: &str = "0d000000-0000-0000-0000-000000000003";
 const SHARING_CHANGED: &str = "0d000000-0000-0000-0000-000000000004";
-const NEW_VERSION: &str = "0d000000-0000-0000-0000-000000000005";
+const SAVED_CONTENT: &str = "0d000000-0000-0000-0000-000000000005";
 const HIGHLIGHTED: &str = "0d000000-0000-0000-0000-000000000006";
 const COMMENTED: &str = "0d000000-0000-0000-0000-000000000007";
 const RELINKED: &str = "0d000000-0000-0000-0000-000000000008";
 const ALREADY_TRASHED: &str = "0d000000-0000-0000-0000-000000000009";
 const PURGED: &str = "0d000000-0000-0000-0000-000000000010";
+const OPENED: &str = "0d000000-0000-0000-0000-000000000011";
+const OPENED_WITH_ITS_ANNOTATION: &str = "0d000000-0000-0000-0000-000000000012";
+const TEXT_BOX_ADDED: &str = "0d000000-0000-0000-0000-000000000013";
+const ANNOTATION_REMOVED: &str = "0d000000-0000-0000-0000-000000000014";
+const RENAMED: &str = "0d000000-0000-0000-0000-000000000015";
+
+/// What the PDF viewer saves the first time someone who can edit opens a PDF
+/// with no annotations of its own.
+const VIEWER_SAVE: &str =
+    r#"{"highlights":null,"bookmarks":[],"placeables":[],"pinnedTermsNames":[]}"#;
+/// The same save for a PDF with one annotation of its own, which the viewer
+/// loads as a placeable.
+const VIEWER_SAVE_WITH_ITS_ANNOTATION: &str = r#"{"highlights":null,"bookmarks":[],"placeables":[{"originalIndex":0,"wasEdited":false}],"pinnedTermsNames":[]}"#;
+/// A save after the user placed a text box.
+const TEXT_BOX_SAVE: &str = r#"{"highlights":null,"bookmarks":[],"placeables":[{"originalIndex":-1,"wasEdited":true}],"pinnedTermsNames":[]}"#;
 
 /// Every document except PURGED is an import the owner holds with its owner
 /// grant, one version, a pin and view history; the others add what their name
@@ -28,8 +43,9 @@ async fn seed(pool: &Pool<Postgres>) -> anyhow::Result<()> {
         CREATE TEMP TABLE seeded (document_id text, n int) ON COMMIT DROP;
         INSERT INTO seeded VALUES
             ('{PLAIN}', 1), ('{IN_FOLDER}', 2), ('{SHARED_WITH_TEAM}', 3), ('{SHARING_CHANGED}', 4),
-            ('{NEW_VERSION}', 5), ('{HIGHLIGHTED}', 6), ('{COMMENTED}', 7), ('{RELINKED}', 8),
-            ('{ALREADY_TRASHED}', 9);
+            ('{SAVED_CONTENT}', 5), ('{HIGHLIGHTED}', 6), ('{COMMENTED}', 7), ('{RELINKED}', 8),
+            ('{ALREADY_TRASHED}', 9), ('{OPENED}', 11), ('{OPENED_WITH_ITS_ANNOTATION}', 12),
+            ('{TEXT_BOX_ADDED}', 13), ('{ANNOTATION_REMOVED}', 14), ('{RENAMED}', 15);
 
         INSERT INTO "Document" (id, name, owner, "createdAt", "updatedAt")
         SELECT document_id, 'attachment ' || n || '.pdf', '{OWNER}', '2026-01-01', '2026-01-01' FROM seeded;
@@ -52,7 +68,26 @@ async fn seed(pool: &Pool<Postgres>) -> anyhow::Result<()> {
         VALUES ('{SHARED_WITH_TEAM}', 'document', '7ea30000-0000-0000-0000-000000000001', 'team', 'view');
         UPDATE "SharePermission" SET "linkShare" = 'PUBLIC', "linkShareAccessLevel" = 'view', "updatedAt" = '2026-02-01'
         WHERE id = 'share-4';
-        INSERT INTO "DocumentInstance" ("documentId", sha) VALUES ('{NEW_VERSION}', 'sha5-edited');
+        INSERT INTO "DocumentInstance" ("documentId", sha) VALUES ('{SAVED_CONTENT}', 'sha5-edited');
+        CREATE TEMP TABLE viewer_saves (document_id text, n int, modification_data jsonb) ON COMMIT DROP;
+        INSERT INTO viewer_saves VALUES
+            ('{OPENED}', 1, '{VIEWER_SAVE}'),
+            ('{OPENED}', 2, '{VIEWER_SAVE}'),
+            ('{OPENED_WITH_ITS_ANNOTATION}', 1, '{VIEWER_SAVE_WITH_ITS_ANNOTATION}'),
+            ('{OPENED_WITH_ITS_ANNOTATION}', 2, '{VIEWER_SAVE_WITH_ITS_ANNOTATION}'),
+            ('{TEXT_BOX_ADDED}', 1, '{VIEWER_SAVE}'),
+            ('{TEXT_BOX_ADDED}', 2, '{TEXT_BOX_SAVE}'),
+            ('{ANNOTATION_REMOVED}', 1, '{VIEWER_SAVE_WITH_ITS_ANNOTATION}'),
+            ('{ANNOTATION_REMOVED}', 2, '{VIEWER_SAVE}');
+        INSERT INTO "DocumentInstance" ("documentId", sha)
+        SELECT document_id, 'viewer-save-' || n FROM viewer_saves;
+        INSERT INTO "DocumentInstanceModificationData" ("documentInstanceId", "modificationData")
+        SELECT i.id, s.modification_data
+        FROM viewer_saves s
+        JOIN "DocumentInstance" i ON i."documentId" = s.document_id AND i.sha = 'viewer-save-' || s.n;
+        UPDATE "Document" SET name = 'renamed by its owner' WHERE id = '{RENAMED}';
+        INSERT INTO activity_events (id, actor_id, subject_id, action, entity_type, entity_id, occurred_at)
+        VALUES ('00000000-0000-0000-0000-0000000ac015', '{OWNER}', '{OWNER}', 'edited', 'document', '{RENAMED}', now());
         INSERT INTO "PdfHighlightAnchor" (
             "documentId", owner, page, red, green, blue, alpha, type, text, "pageViewportWidth", "pageViewportHeight"
         ) VALUES ('{HIGHLIGHTED}', '{OWNER}', 1, 255, 255, 0, 1, 1, 'note', 600, 800);
@@ -106,27 +141,34 @@ async fn a_batch_trashes_only_unlinked_unadopted_live_documents(
     let repo = PgReleasedAttachmentRepo::new(pool.clone());
 
     let mut batch = repo.trash_released_batch(100).await?;
+    batch.trashed.sort();
     batch.kept.sort();
 
-    // The document already in the Trash is kept as it is; only the purged one
-    // is missing.
+    // Opening a PDF in the viewer is not adopting it, whatever the viewer
+    // saved. The document already in the Trash is kept as it is; only the
+    // purged one is missing.
     assert_eq!(
         batch,
         ReleasedBatch {
-            claimed: 10,
-            trashed: vec![PLAIN.to_string()],
+            claimed: 15,
+            trashed: [PLAIN, OPENED, OPENED_WITH_ITS_ANNOTATION]
+                .map(String::from)
+                .to_vec(),
             kept: [
                 IN_FOLDER,
                 SHARED_WITH_TEAM,
                 SHARING_CHANGED,
-                NEW_VERSION,
+                SAVED_CONTENT,
                 HIGHLIGHTED,
                 COMMENTED,
                 ALREADY_TRASHED,
+                TEXT_BOX_ADDED,
+                ANNOTATION_REMOVED,
+                RENAMED,
             ]
             .map(String::from)
             .to_vec(),
-            adopted: 6,
+            adopted: 9,
             relinked: 1,
             missing: 1,
         }
@@ -137,16 +179,30 @@ async fn a_batch_trashes_only_unlinked_unadopted_live_documents(
             .fetch_one(&pool)
             .await?;
     assert!(still_trashed_at);
-    assert_eq!(trashed(&pool).await?, vec![PLAIN.to_string()]);
-    assert_eq!(trash_marks(&pool, PLAIN).await?, (true, 0, 0));
+    assert_eq!(
+        trashed(&pool).await?,
+        [PLAIN, OPENED, OPENED_WITH_ITS_ANNOTATION]
+            .map(String::from)
+            .to_vec()
+    );
+    for document in [PLAIN, OPENED, OPENED_WITH_ITS_ANNOTATION] {
+        assert_eq!(
+            trash_marks(&pool, document).await?,
+            (true, 0, 0),
+            "{document}"
+        );
+    }
     for kept in [
         IN_FOLDER,
         SHARED_WITH_TEAM,
         SHARING_CHANGED,
-        NEW_VERSION,
+        SAVED_CONTENT,
         HIGHLIGHTED,
         COMMENTED,
         RELINKED,
+        TEXT_BOX_ADDED,
+        ANNOTATION_REMOVED,
+        RENAMED,
     ] {
         assert_eq!(trash_marks(&pool, kept).await?, (false, 1, 1), "{kept}");
     }
@@ -168,7 +224,7 @@ async fn a_batch_claims_the_oldest_rows_up_to_its_limit(
     assert_eq!(batch.trashed, vec![PLAIN.to_string()]);
     assert_eq!(batch.kept, vec![IN_FOLDER.to_string()]);
     assert_eq!(batch.adopted, 1);
-    assert_eq!(repo.queue().await?.depth, 8);
+    assert_eq!(repo.queue().await?.depth, 13);
 
     Ok(())
 }

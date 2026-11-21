@@ -9,11 +9,13 @@ use macro_user_id::cowlike::CowLike;
 use macro_user_id::email::EmailStr;
 use models_pagination::{Query, SimpleSortMethod};
 use sqlx::Execute;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::sync::Arc;
 use tokio::sync::oneshot;
 
 pub(super) mod selected;
+mod stream_plan;
+mod viewed;
 
 const TEAM: Uuid = Uuid::from_u128(0xf1);
 const OWN: Uuid = Uuid::from_u128(1);
@@ -113,6 +115,18 @@ fn leaves_other_requests_to_the_general_builder() {
 
     let view = all_mail();
     assert!(team_read(&view, &filter, params(SimpleSortMethod::ViewedAt)).is_none());
+    assert!(team_read(&view, &filter, params(SimpleSortMethod::ViewedUpdated)).is_some());
+    let viewed_filter = record_and(Expr::Literal(EmailLiteral::ViewedAt(
+        DateLiteral::GreaterThan(Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap()),
+    )));
+    assert!(
+        team_read(
+            &view,
+            &viewed_filter,
+            params(SimpleSortMethod::ViewedUpdated)
+        )
+        .is_none()
+    );
 
     let mut shared = params(SimpleSortMethod::UpdatedAt);
     shared.shared = SharedEmailFilter::Include;
@@ -137,7 +151,7 @@ fn inbox_stream_walks_each_inbox_in_order() {
     let view = all_mail();
     let filter = any_direction("example.test");
     let read = team_read(&view, &filter, params(SimpleSortMethod::UpdatedAt)).unwrap();
-    let page = sql(read.build_page(Stream::Inboxes));
+    let page = sql(read.build_page(Stream::Inboxes).unwrap());
 
     // One limited walk per inbox, merged, then the window.
     assert_eq!(
@@ -164,14 +178,17 @@ fn thread_terms_and_cursor_are_stream_conditions() {
     params.cursor_timestamp = Some(Utc.with_ymd_and_hms(2026, 1, 2, 3, 4, 5).unwrap());
     params.cursor_id_str = Some(Uuid::from_u128(9).to_string());
     let read = team_read(&view, &filter, params).unwrap();
-    let page = sql(read.build_page(Stream::Superset));
+    let page = sql(read.build_page(Stream::Superset).unwrap());
 
     let stream = page
         .split(") AS stream")
         .next()
-        .and_then(|head| head.rsplit("FROM email_threads t").next())
+        .and_then(|head| {
+            head.rsplit("FROM (SELECT DISTINCT thread_id FROM matching_threads) matched")
+                .next()
+        })
         .unwrap();
-    assert!(stream.contains("t.id = ANY(ARRAY(SELECT thread_id FROM matching_threads))"));
+    assert!(stream.contains("WHERE id = matched.thread_id OFFSET 0"));
     assert!(stream.contains("t.is_signal"));
     assert!(stream.contains("t.link_id = $"));
     assert!(stream.contains("(COALESCE(t.latest_non_spam_message_ts, t.updated_at), t.id) < ($"));
@@ -308,12 +325,16 @@ async fn checks_read_only_the_threads_id_and_inbox(pool: sqlx::PgPool) -> anyhow
     }
 
     let view = all_mail();
-    for sort in [SimpleSortMethod::UpdatedAt, SimpleSortMethod::CreatedAt] {
+    for sort in [
+        SimpleSortMethod::UpdatedAt,
+        SimpleSortMethod::CreatedAt,
+        SimpleSortMethod::ViewedUpdated,
+    ] {
         for filter in &filters {
             let read = team_read(&view, filter, params(sort))
                 .ok_or_else(|| anyhow::anyhow!("no team read for {sort:?} {filter:?}"))?;
             for stream in [Stream::Superset, Stream::Inboxes] {
-                read.build_page(stream)
+                read.build_page(stream)?
                     .build()
                     .fetch_all(&pool)
                     .await
@@ -345,7 +366,7 @@ async fn verdicts(pool: &sqlx::PgPool, team: Uuid) -> anyhow::Result<(i64, i64, 
     let read = team_read(&view, &filter, params).unwrap();
 
     let mut builder = QueryBuilder::new("");
-    read.push_ctes(&mut builder, Stream::Inboxes);
+    read.push_ctes(&mut builder, Stream::Inboxes)?;
     builder.push(
         r#"
         SELECT count(*) FILTER (WHERE allowed),
@@ -591,6 +612,14 @@ struct ProbePause {
 
 tokio::task_local! {
     static PROBE_PAUSE: RefCell<Option<ProbePause>>;
+    static EXPIRE_VIEWED_AFTER_WINDOW: Cell<Option<usize>>;
+}
+
+/// Expire only the scoped request, after a real underfilled page query.
+pub(super) fn expire_viewed_after_window(rows: usize) -> bool {
+    EXPIRE_VIEWED_AFTER_WINDOW
+        .try_with(|slot| slot.set(Some(rows)))
+        .is_ok()
 }
 
 /// Pause only the request scoped by a concurrency test, after its real probe.
@@ -784,7 +813,15 @@ async fn sender_probe_caps_message_rows(pool: sqlx::PgPool) -> anyhow::Result<()
         resolved: resolved.clone(),
         ..params(SimpleSortMethod::UpdatedAt)
     };
-    let expected = super::super::read_team_page(&pool, &view, &filter, make_params(), None).await?;
+    let expected = super::super::read_team_page(
+        &pool,
+        &view,
+        &filter,
+        make_params(),
+        None,
+        Some(&crm::outbound::email_rule_discovery::PgEmailRuleDiscovery),
+    )
+    .await?;
     assert_eq!(expected.len(), 3);
 
     // Thirteen message rows fit at cap 13, exceed cap 12 by one, and exceed
@@ -799,9 +836,15 @@ async fn sender_probe_caps_message_rows(pool: sqlx::PgPool) -> anyhow::Result<()
             .unwrap();
         let branch_rows: i64 = read.probe().build_query_scalar().fetch_one(&pool).await?;
         assert_eq!(branch_rows, 13.min(cap + 1), "probe at cap {cap}");
-        let actual =
-            super::super::read_team_page(&pool, &view, &filter, make_params(), Some(tuning))
-                .await?;
+        let actual = super::super::read_team_page(
+            &pool,
+            &view,
+            &filter,
+            make_params(),
+            Some(tuning),
+            Some(&crm::outbound::email_rule_discovery::PgEmailRuleDiscovery),
+        )
+        .await?;
         assert_eq!(
             format!("{actual:?}"),
             format!("{expected:?}"),

@@ -16,8 +16,28 @@ async fn setup(limits: Limits) -> (tempfile::TempDir, ExecutionService) {
         .unwrap();
     (
         root,
-        ExecutionService::new(Arc::new(runner), limits).unwrap(),
+        ExecutionService::new(Arc::new(runner), Arc::new(Unchecked), limits).unwrap(),
     )
+}
+
+/// Passes every program, so these tests reach the process boundary with
+/// code a type checker would refuse.
+pub(super) struct Unchecked;
+
+#[async_trait::async_trait]
+impl ProgramChecker for Unchecked {
+    fn sdk_fingerprint(&self) -> &str {
+        "unchecked"
+    }
+
+    async fn check_files(
+        &self,
+        _files: &[SourceFile],
+        _declarations: &str,
+        _imports: ProgramImports,
+    ) -> Result<Vec<Diagnostic>, CheckError> {
+        Ok(Vec::new())
+    }
 }
 
 async fn collect(mut handle: ExecutionHandle) -> (Vec<ExecutionEvent>, Outcome) {
@@ -138,6 +158,7 @@ async fn real_sdk_nested_calls_are_authenticated_and_concurrent() {
             web_app_url: "https://app.example.test".into(),
         },
         unattended: None,
+        egress: Egress::Direct,
     };
     let source = r#"
 import { Macro } from '@macro-inc/sdk';
@@ -203,6 +224,76 @@ export async function main({token, hosts, macro: supplied, session, execution}) 
 
 #[tokio::test]
 #[ignore = "requires pinned Deno runtime"]
+async fn a_program_sends_four_searches_at_once_and_queues_the_rest() {
+    const IN_FLIGHT: usize = 4;
+    const SEARCHES: usize = 6;
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        let mut held = Vec::new();
+        for _ in 0..IN_FLIGHT {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let request = read_request(&mut stream).await;
+            assert!(request.starts_with("POST /search?"), "{request}");
+            held.push(stream);
+        }
+        assert!(
+            tokio::time::timeout(Duration::from_millis(500), listener.accept())
+                .await
+                .is_err(),
+            "a fifth search started while four were unanswered"
+        );
+        for mut stream in held {
+            respond(&mut stream, r#"{"results":[]}"#).await;
+        }
+        for _ in IN_FLIGHT..SEARCHES {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            read_request(&mut stream).await;
+            respond(&mut stream, r#"{"results":[]}"#).await;
+        }
+    });
+    let environment = RunEnvironment {
+        token: "fixture-run-token".into(),
+        endpoints: SdkEndpoints {
+            hosts: BTreeMap::from([("search".into(), format!("http://{address}"))]),
+            web_app_url: "https://app.example.test".into(),
+        },
+        ..RunEnvironment::default()
+    };
+    let source = format!(
+        r#"
+export async function main({{macro}}) {{
+  const pages = await Promise.all(Array.from({{length: {SEARCHES}}}, (_, i) => macro.search.page(`query ${{i}}`)));
+  return {{ data: {{ pages: pages.length }}, reviews: [] }};
+}}
+"#
+    );
+    let (_, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source,
+                    timeout_ms: 8000,
+                },
+                environment,
+            )
+            .unwrap(),
+    )
+    .await;
+    assert!(
+        matches!(outcome, Outcome::Succeeded { ref value } if value["data"]["pages"] == SEARCHES),
+        "{outcome:?}"
+    );
+    tokio::time::timeout(Duration::from_secs(5), server)
+        .await
+        .unwrap()
+        .unwrap();
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
 async fn a_program_presents_a_view_through_its_session() {
     let (_root, service) = setup(Limits::default()).await;
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -224,6 +315,7 @@ async fn a_program_presents_a_view_through_its_session() {
             web_app_url: "https://app.example.test".into(),
         },
         unattended: None,
+        egress: Egress::Direct,
     };
     let source = r#"
 export async function main({execution}) {
@@ -324,16 +416,20 @@ export async function main({token, hosts, webAppUrl, macro: supplied}) {
 
 #[tokio::test]
 #[ignore = "requires pinned Deno runtime"]
-async fn requires_javascript_exported_main() {
+async fn requires_an_exported_main() {
     let (_root, service) = setup(Limits::default()).await;
-    for source in [
-        "return 42;",
-        "export const main = 42;",
-        "export function main() { const n: number = 42; return n; }",
-    ] {
+    for source in ["return 42;", "export const main = 42;"] {
         let (_, outcome) = run(&service, source, 5000).await;
         assert!(matches!(outcome, Outcome::Failed { error } if error.code == FailureCode::Runtime));
     }
+    // Programs are TypeScript; Deno strips the types.
+    let (_, outcome) = run(
+        &service,
+        "export function main() { const n: number = 42; return n; }",
+        5000,
+    )
+    .await;
+    assert!(matches!(outcome, Outcome::Succeeded { value } if value == 42));
     service.shutdown().await;
 }
 
@@ -429,7 +525,7 @@ export async function main() {
     } catch (error) {
       const message = String(error?.message ?? error);
       results[name] = message.includes("Make requests with fetch") ? "unavailable"
-        : message.includes("do not sleep") ? "refused as a sleep"
+        : message.includes("Promise.race deadline guards") ? "refused as a sleep"
         : error instanceof TypeError ? "removed" : message;
     }
   }
@@ -574,7 +670,7 @@ export async function main() {{
       results[name] = "loaded";
     }} catch (error) {{
       results[name] = error.message.includes("Make requests with fetch") ? "unavailable"
-        : error.message.includes("do not sleep") ? "refused as a sleep" : error.message;
+        : error.message.includes("Promise.race deadline guards") ? "refused as a sleep" : error.message;
     }}
   }}
   return results;
@@ -613,6 +709,42 @@ export async function main() {{
         error.message,
         "Error: node:net is unavailable in ExecuteCode. Make requests with fetch or the macro SDK."
     );
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn timer_deadline_guards_explain_supported_parallel_calls() {
+    let (_root, service) = setup(Limits::default()).await;
+    for source in [
+        "export async function main() { return Promise.race([new Promise(() => {}), new Promise((_, reject) => setTimeout(() => reject(new Error('deadline')), 1000))]); }",
+        "export function main() { setInterval(() => {}, 1000); }",
+        "export async function main() { await import('node:timers/promises'); }",
+    ] {
+        let (_, outcome) = run(&service, source, 5000).await;
+        let Outcome::Failed { error } = outcome else {
+            panic!("{source}: {outcome:?}");
+        };
+        assert_eq!(error.code, FailureCode::Runtime);
+        assert!(
+            error
+                .message
+                .contains("including Promise.race deadline guards"),
+            "{}",
+            error.message
+        );
+        assert!(error.message.contains("30 s"), "{}", error.message);
+        assert!(
+            error.message.contains("Promise.allSettled"),
+            "{}",
+            error.message
+        );
+        assert!(
+            error.message.contains("return successful results"),
+            "{}",
+            error.message
+        );
+    }
     service.shutdown().await;
 }
 
@@ -1132,6 +1264,22 @@ async fn the_cpu_limit_stops_a_busy_program() {
     service.shutdown().await;
 }
 
+async fn checked_service() -> (tempfile::TempDir, ExecutionService) {
+    let root = tempfile::tempdir().unwrap();
+    let binary = Command::new("which").arg("deno").output().await.unwrap();
+    assert!(binary.status.success(), "Deno 2.9.6 must be on PATH");
+    let binary = PathBuf::from(String::from_utf8(binary.stdout).unwrap().trim());
+    let runner = DenoRunner::new(binary.clone(), root.path().join("runs"), 128)
+        .await
+        .unwrap();
+    let checker = check::DenoChecker::new(binary, root.path().join("checks"), 1, 4, 64 * 1024)
+        .await
+        .unwrap();
+    let service =
+        ExecutionService::new(Arc::new(runner), Arc::new(checker), Limits::default()).unwrap();
+    (root, service)
+}
+
 /// A server answering every request with `body`, counting them.
 async fn counting_server(body: &'static str) -> (String, Arc<std::sync::atomic::AtomicUsize>) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -1196,6 +1344,33 @@ async fn run_in_session(
     )
     .await
     .1
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn sdk_misuse_is_reported_by_line_and_never_runs() {
+    let (_root, service) = checked_service().await;
+    // Run, it would print; a rejected program has no log events.
+    let source = "export async function main({ macro }: CodeContext) {\n  console.log('ran');\n  return await macro.tasks.findSimilarr({ title: 'x', body: 'y' });\n}\n";
+    let (events, outcome) = run(&service, source, 20_000).await;
+    let Outcome::Failed { error } = outcome else {
+        panic!("expected a type error, got {outcome:?}");
+    };
+    assert_eq!(error.code, FailureCode::Compile);
+    assert!(
+        error
+            .message
+            .contains("Property 'findSimilarr' does not exist on type 'TaskNamespace'"),
+        "{}",
+        error.message
+    );
+    assert!(error.message.contains("at main.ts:3:"), "{}", error.message);
+    assert!(
+        events
+            .iter()
+            .all(|event| !matches!(event.kind, EventKind::Started | EventKind::Log { .. }))
+    );
+    service.shutdown().await;
 }
 
 #[tokio::test]
@@ -1290,6 +1465,25 @@ export async function main({ macro }) {
         "{}",
         error.message
     );
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_typed_program_with_handlebars_checks_and_runs() {
+    let (_root, service) = checked_service().await;
+    let source = r#"import Handlebars from 'handlebars';
+export async function main({ macro, webAppUrl }: CodeContext) {
+  const render = Handlebars.compile('{{count}} items', { strict: true });
+  return { data: { text: render({ count: 2 }), sdk: typeof macro.tasks.findSimilar, webAppUrl } };
+}
+"#;
+    let (_, outcome) = run(&service, source, 20_000).await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("expected success, got {outcome:?}");
+    };
+    assert_eq!(value["data"]["text"], "2 items");
+    assert_eq!(value["data"]["sdk"], "function");
     service.shutdown().await;
 }
 
@@ -1408,6 +1602,225 @@ export async function main({token, hosts}) {
     server.await.unwrap();
 }
 
+/// A proxied run, with its one SDK host at `host`.
+fn proxied(host: &str) -> RunEnvironment {
+    RunEnvironment {
+        token: "fixture-run-token".into(),
+        endpoints: SdkEndpoints {
+            hosts: BTreeMap::from([("cognition".into(), host.to_owned())]),
+            web_app_url: "https://app.example.test".into(),
+        },
+        egress: Egress::Proxied,
+        ..RunEnvironment::default()
+    }
+}
+
+/// A proxied run's requests are marked by the host's forwarder, whatever
+/// the program does to the realm or its own headers, and reach the host's
+/// path with their query.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_proxied_run_is_marked_outside_the_realm() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let host = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let request = read_request(&mut stream).await;
+        respond(&mut stream, "{}").await;
+        request
+    });
+    let source = r#"
+export async function main({hosts}) {
+  Headers.prototype.set = function () {};
+  const response = await fetch(`${hosts.cognition}/marked?x=1`, {
+    headers: {"x-macro-code-execution": "0", traceparent: "00-forged-forged-01", authorization: "Bearer fixture-run-token"},
+  });
+  return {status: response.status, cognition: hosts.cognition};
+}
+"#;
+    let (_, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source: source.into(),
+                    timeout_ms: 10_000,
+                },
+                proxied(&host),
+            )
+            .unwrap(),
+    )
+    .await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(value["status"], 200);
+    // The program keeps the real host, which its links need; its request
+    // went to the forwarder.
+    assert_eq!(value["cognition"], serde_json::json!(host));
+    let request = server.await.unwrap().to_ascii_lowercase();
+    assert!(request.starts_with("get /marked?x=1 "), "{request}");
+    assert!(
+        request.contains("x-macro-code-execution: 1\r\n"),
+        "{request}"
+    );
+    assert!(!request.contains("x-macro-code-execution: 0"), "{request}");
+    assert!(!request.contains("forged"), "{request}");
+    assert!(
+        request.contains("authorization: bearer fixture-run-token\r\n"),
+        "{request}"
+    );
+    service.shutdown().await;
+}
+
+/// With the forwarder its only address, a proxied run can't reach an SDK
+/// host directly.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_proxied_run_cannot_reach_the_hosts_directly() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    // The SDK host is named `localhost`, so the program's fetch doesn't send
+    // `127.0.0.1` to the forwarder: it tries to connect itself.
+    let host = format!("http://localhost:{port}");
+    let direct = format!("http://127.0.0.1:{port}");
+    let source = format!(
+        r#"
+export async function main() {{
+  try {{
+    await fetch("{direct}/direct");
+    return "sent";
+  }} catch (error) {{
+    return String(error);
+  }}
+}}
+"#
+    );
+    let (_, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source,
+                    timeout_ms: 10_000,
+                },
+                proxied(&host),
+            )
+            .unwrap(),
+    )
+    .await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert!(value.as_str().unwrap().contains("NotCapable"), "{value}");
+    assert!(
+        tokio::time::timeout(Duration::from_millis(500), listener.accept())
+            .await
+            .is_err()
+    );
+    service.shutdown().await;
+}
+
+/// A run's forwarder stops listening when the run ends, and when it is
+/// cancelled.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_proxied_runs_forwarder_stops_with_the_run() {
+    let (_root, service) = setup(Limits::default()).await;
+    let host = "http://127.0.0.1:9";
+    let finished = r#"export function main({forwarder}) { return forwarder.cognition; }"#;
+    let (_, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source: finished.into(),
+                    timeout_ms: 10_000,
+                },
+                proxied(host),
+            )
+            .unwrap(),
+    )
+    .await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    let forwarder = value
+        .as_str()
+        .unwrap()
+        .trim_start_matches("http://")
+        .split('/')
+        .next()
+        .unwrap()
+        .to_owned();
+    assert!(TcpStream::connect(&forwarder).await.is_err(), "{forwarder}");
+
+    let waiting = r#"export async function main({forwarder}) { console.log(forwarder.cognition); await new Promise(() => {}); }"#;
+    let mut handle = service
+        .execute(
+            ExecuteRequest {
+                source: waiting.into(),
+                timeout_ms: 10_000,
+            },
+            proxied(host),
+        )
+        .unwrap();
+    let forwarder = loop {
+        if let EventKind::Log { message, .. } = handle.events.recv().await.unwrap().kind {
+            break message
+                .trim_start_matches("http://")
+                .split('/')
+                .next()
+                .unwrap()
+                .to_owned();
+        }
+    };
+    assert!(TcpStream::connect(&forwarder).await.is_ok(), "{forwarder}");
+    handle.cancellation.cancel();
+    let (_, outcome) = collect(handle).await;
+    assert!(matches!(outcome, Outcome::Cancelled), "{outcome:?}");
+    assert!(TcpStream::connect(&forwarder).await.is_err(), "{forwarder}");
+    service.shutdown().await;
+}
+
+/// A request still in flight when a proxied run ends is dropped with it:
+/// the host sees its connection close.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_proxied_runs_requests_end_with_the_run() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let host = format!("http://{}", listener.local_addr().unwrap());
+    let (closed, was_closed) = tokio::sync::oneshot::channel();
+    tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        read_request(&mut stream).await;
+        // Never answer; wait for the forwarder to hang up.
+        let mut buffer = [0; 64];
+        while stream.read(&mut buffer).await.is_ok_and(|count| count > 0) {}
+        let _ = closed.send(());
+    });
+    let source =
+        r#"export async function main({hosts}) { await fetch(`${hosts.cognition}/hangs`); }"#;
+    let (_, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source: source.into(),
+                    timeout_ms: 1000,
+                },
+                proxied(&host),
+            )
+            .unwrap(),
+    )
+    .await;
+    assert!(matches!(outcome, Outcome::TimedOut), "{outcome:?}");
+    tokio::time::timeout(Duration::from_secs(2), was_closed)
+        .await
+        .expect("the forwarder kept the host's connection open after the run")
+        .unwrap();
+    service.shutdown().await;
+}
+
 /// `--allow-net` lets `host.` through as `host`, so a trailing dot must not
 /// lose the mark either.
 #[tokio::test]
@@ -1459,4 +1872,114 @@ export async function main() {{
     // A fetch refused before connecting fails here rather than hanging below.
     assert!(matches!(outcome, Outcome::Succeeded { .. }), "{outcome:?}");
     server.await.unwrap();
+}
+
+/// A proxied request's body reaches the host as the program sent it.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_proxied_requests_body_reaches_the_host() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let host = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let request = read_request(&mut stream).await;
+        respond(&mut stream, "{}").await;
+        request
+    });
+    let source = r#"
+export async function main({hosts}) {
+  const response = await fetch(`${hosts.cognition}/decisions`, {
+    method: "POST",
+    headers: {"content-type": "application/json"},
+    body: JSON.stringify({input: "x", questions: {yes: "Yes?"}}),
+  });
+  return response.status;
+}
+"#;
+    let (_, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source: source.into(),
+                    timeout_ms: 10_000,
+                },
+                proxied(&host),
+            )
+            .unwrap(),
+    )
+    .await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(value, 200);
+    let request = server.await.unwrap();
+    assert!(request.starts_with("POST /decisions "), "{request}");
+    assert!(
+        request.ends_with(r#"{"input":"x","questions":{"yes":"Yes?"}}"#),
+        "{request}"
+    );
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn an_unattended_entity_knob_arrives_as_the_sdk_handle_for_its_item() {
+    let (_root, service) = setup(Limits::default()).await;
+    // What `routine_program`'s entity knob sends: the item, marked.
+    let knobs = serde_json::json!({
+        "bugs": { "$entity": { "type": "channel", "id": "c1" } },
+        "doc": { "$entity": { "type": "document", "id": "d1" } },
+        "folder": { "$entity": { "type": "project", "id": "p1" } },
+        "table": { "$entity": { "type": "database", "id": "db1" } },
+        "person": { "$entity": { "type": "user", "id": "macro|dana@macro.com" } },
+        "task": { "$entity": { "type": "task", "id": "t1" } },
+        "thread": { "$entity": { "type": "email_thread", "id": "e1" } },
+        "chat": { "$entity": { "type": "chat", "id": "a1" } },
+        "company": { "$entity": { "type": "crm_company", "id": "co1" } },
+        "contact": { "$entity": { "type": "crm_contact", "id": "ct1" } },
+        "initiative": { "$entity": { "type": "initiative", "id": "i1" } },
+        "days": 7,
+    });
+    let source = r#"
+export async function main({ macro, knobs }: any) {
+  return {
+    channel: knobs.bugs.constructor === macro.channels.byId("x").constructor && knobs.bugs.id,
+    document: knobs.doc.constructor === macro.documents.byId("x").constructor && knobs.doc.id,
+    project: knobs.folder.constructor === macro.projects.byId("x").constructor && knobs.folder.id,
+    database: knobs.table.constructor === macro.databases.byId("x").constructor && knobs.table.id,
+    user: knobs.person.constructor === macro.users.byId("x").constructor && knobs.person.id,
+    task: knobs.task.constructor === macro.tasks.byId("x").constructor && knobs.task.id,
+    email_thread: knobs.thread.constructor === macro.email.byId("x").constructor && knobs.thread.id,
+    chat: knobs.chat.constructor === macro.chats.byId("x").constructor && knobs.chat.id,
+    crm_company: knobs.company.constructor === macro.crm.companyById("x").constructor && knobs.company.id,
+    crm_contact: knobs.contact.constructor === macro.crm.contactById("x").constructor && knobs.contact.id,
+    initiative: knobs.initiative.constructor === macro.initiatives.byId("x").constructor && knobs.initiative.id,
+    days: knobs.days,
+  };
+}
+"#;
+    let (_, outcome) = run_unattended(
+        &service,
+        source,
+        unattended(
+            "fixture-run-token",
+            &[],
+            serde_json::json!({ "knobs": knobs }),
+            true,
+        ),
+    )
+    .await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(
+        value,
+        serde_json::json!({
+            "channel": "c1", "document": "d1", "project": "p1", "database": "db1",
+            "user": "macro|dana@macro.com", "task": "t1", "email_thread": "e1", "chat": "a1",
+            "crm_company": "co1", "crm_contact": "ct1", "initiative": "i1", "days": 7,
+        })
+    );
+    service.shutdown().await;
 }

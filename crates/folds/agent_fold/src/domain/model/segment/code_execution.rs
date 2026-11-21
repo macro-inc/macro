@@ -8,6 +8,19 @@ use serde::Deserialize;
 
 use super::{ActivityRow, ActivityStatus, ToolDetail, ToolName, ToolStatus};
 
+/// The row of a code execution with no workspace steps to show, while it runs.
+const WORKING: &str = "Working on it";
+/// The same row once the execution succeeded.
+const FINISHED: &str = "Finished a step";
+/// The same row once the execution failed.
+const FAILED: &str = "A step failed";
+/// The same row once the execution was cancelled, or its turn ended first.
+const INTERRUPTED: &str = "Step interrupted";
+
+/// Labels of a code-execution row that names no workspace step. They say
+/// nothing about the work, and the live status line is told so.
+pub const UNNAMED_STEP_LABELS: [&str; 4] = [WORKING, FINISHED, FAILED, INTERRUPTED];
+
 /// The agent looking up its own tools: code-mode discovery and deferred-tool
 /// search. Like a thought, it belongs to no segment and makes no row.
 const LOOKUP_TOOLS: [&str; 4] = [
@@ -64,9 +77,12 @@ pub(super) fn rows(
     {
         return None;
     }
-    let activity = operations(detail).filter(|activity| !activity.is_empty());
+    let receipt = receipt(detail);
+    let activity = receipt
+        .and_then(operations)
+        .filter(|activity| !activity.is_empty());
     let Some(activity) = activity else {
-        return Some(vec![workspace_row(id, status, closed)]);
+        return Some(vec![workspace_row(id, status, receipt, closed)]);
     };
     Some(
         activity
@@ -88,26 +104,44 @@ pub(super) fn rows(
     )
 }
 
-fn operations(detail: &ToolDetail) -> Option<Vec<Operation>> {
-    let output = match detail {
+/// The execution receipt a finished call returned.
+fn receipt(detail: &ToolDetail) -> Option<&serde_json::Value> {
+    match detail {
         ToolDetail::Macro { output, .. } => output.as_ref(),
         ToolDetail::Other { result, .. } => result.as_ref(),
         _ => None,
-    }?;
-    serde_json::from_value(output.get("activity")?.clone()).ok()
+    }
+}
+
+fn operations(receipt: &serde_json::Value) -> Option<Vec<Operation>> {
+    serde_json::from_value(receipt.get("activity")?.clone()).ok()
+}
+
+/// A program that threw, ran out of time or was cancelled still returns its
+/// receipt, so the call completes; only the receipt says how the program ended.
+fn program_status(receipt: Option<&serde_json::Value>) -> Option<&str> {
+    receipt?.get("status")?.as_str()
 }
 
 /// A code execution with no workspace steps to show yet, or none at all.
-fn workspace_row(id: &str, status: ToolStatus, closed: bool) -> ActivityRow {
+/// Nothing names what it does, so the row only says how far it got.
+fn workspace_row(
+    id: &str,
+    status: ToolStatus,
+    receipt: Option<&serde_json::Value>,
+    closed: bool,
+) -> ActivityRow {
     let (label, status) = match status {
         ToolStatus::Pending | ToolStatus::Running if closed => {
-            ("Worked in your workspace", ActivityStatus::Interrupted)
+            (INTERRUPTED, ActivityStatus::Interrupted)
         }
-        ToolStatus::Pending | ToolStatus::Running => {
-            ("Working in your workspace", ActivityStatus::Running)
-        }
-        ToolStatus::Completed => ("Worked in your workspace", ActivityStatus::Completed),
-        ToolStatus::Failed => ("Workspace step failed", ActivityStatus::Failed),
+        ToolStatus::Pending | ToolStatus::Running => (WORKING, ActivityStatus::Running),
+        ToolStatus::Completed => match program_status(receipt) {
+            Some("failed" | "timed_out") => (FAILED, ActivityStatus::Failed),
+            Some("cancelled") => (INTERRUPTED, ActivityStatus::Interrupted),
+            _ => (FINISHED, ActivityStatus::Completed),
+        },
+        ToolStatus::Failed => (FAILED, ActivityStatus::Failed),
     };
     ActivityRow {
         id: id.to_owned(),

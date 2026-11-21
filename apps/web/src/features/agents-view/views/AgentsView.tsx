@@ -13,6 +13,7 @@ import {
 import { FloatRegions } from '@components/app/mobile/float-regions/float-region-state';
 import { PreviewPanel } from '@components/app/PreviewPanel';
 import { previewBlockTarget } from '@components/app/previewTarget';
+import { runSplitBack } from '@components/app/split-layout/back-interceptor';
 import { useEntryState } from '@components/app/split-layout/entry-state';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -42,15 +43,28 @@ import {
 import { routineContent } from '../../routines/routine-navigation';
 import { RoutinesPage } from '../../routines/routines-page';
 import '../agents-view.css';
+
+import { changeSessionArchiveState } from '@app/features/block-agent/queries/change-session-archive-state';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
+import {
+  beginInteraction,
+  TraceFlow,
+  usePending,
+} from '@app/observability/flow';
 import { ComposerGreeting } from '@core/component/ComposerGreeting';
 import { enableAgentUpdates } from '@core/constant/featureFlags';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { writeClipboardData } from '@core/util/dataTransfer';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { openExternalUrl } from '@core/util/url';
 import type { AgentSessionEntity } from '@entity';
+import { Telemetry } from '@macro-inc/observability';
 import { AgentSessionPane } from '../components/AgentSessionPane';
 import { AgentSessionSkeleton } from '../components/AgentSessionSkeleton';
 import { AgentsSidebar } from '../components/AgentsSidebar';
 import { Topbar } from '../components/Topbar';
+import type { ConversationActions } from '../context/conversation-actions';
 import { DataModeProvider, dataModeFor } from '../context/data-mode';
 import { type AgentKind, modeForKind } from '../core/agent-kind';
 import type { AgentsMode } from '../core/mode';
@@ -64,12 +78,16 @@ import {
 } from '../core/recent-conversations';
 import { kindForBot } from '../core/roster';
 import { type AgentsRoute, agentsRouteId } from '../core/route';
+import { PhoneAgentsList } from '../phone-list';
 import { createPersistedComposerDraft } from '../primitives/composer-draft';
 import { createConversationListView } from '../primitives/conversation-list-view';
+import { mobileAgentRequest } from '../primitives/mobile-agent-request';
 import { createWorkspaceMode } from '../primitives/workspace-mode';
 import { agentConversationsQuery } from '../queries/agent-conversations-query';
 import { createAgentRosterSource } from '../queries/agent-roster-source';
 import { agentsTour } from '../tour';
+import { DesktopAgentsSidebar } from './agents-sidebar/agents-sidebar';
+import { ArchivedConversations } from './archived-conversations/archived-conversations';
 import {
   type AgentRequest,
   NewChatPage,
@@ -101,7 +119,7 @@ function AgentsMobileList(props: { children: JSX.Element }) {
   return (
     <Show when={!shell.aside.isOverlay()}>
       <div
-        class="size-full min-h-0 pt-2"
+        class="size-full min-h-0 pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.5rem)]"
         style={{ 'padding-bottom': `${FloatRegions.hostHeight()}px` }}
       >
         {props.children}
@@ -126,6 +144,8 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
   // A coding agent another surface asked the composer to start with.
   const [requestedAgent, setRequestedAgent] = createSignal<AgentRequest>();
   const listView = createConversationListView(userId());
+  const conversationSort = () =>
+    isTouchDevice() ? ('updated' as const) : listView.sort();
   const [creatingKind, setCreatingKind] = createSignal<AgentKind>();
   const [localPage, setPage] = createSignal<AgentsPage>('new');
   const isRoutinesPage = () => {
@@ -183,6 +203,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
   );
   const persistedDraft = createPersistedComposerDraft(undefined, userId);
   const [search, setSearch] = createSignal('');
+  const [archivedSearch, setArchivedSearch] = createSignal('');
   // Routines that run often leave their runs unlisted; those stay a click
   // away instead of in the list.
   const [showUnlistedRuns, setShowUnlistedRuns] = createSignal(false);
@@ -191,18 +212,32 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
     () =>
       agentConversationsQuery(userId() ?? '', {
         showUnlistedRuns: showUnlistedRuns(),
+        sort: conversationSort(),
       }),
     () => ({ enabled: Boolean(userId()), keepPreviousData: true })
   );
-  const conversations = createMemo(() =>
+  usePending('agents.conversations', () => query.isPending);
+  const allConversations = createMemo(() =>
     selectRecentAgentConversations(
       // A pending REST fallback's data read would suspend the sidebar.
       (query.isPending ? [] : (query.data?.entities ?? [])).map((entity) =>
         withEntityNotifications(entity, notifications)
       ),
       userId(),
-      search()
+      '',
+      conversationSort()
     )
+  );
+  const conversations = createMemo(() =>
+    selectRecentAgentConversations(
+      allConversations(),
+      userId(),
+      search(),
+      conversationSort()
+    )
+  );
+  const allArchived = createMemo(
+    () => partitionArchived(allConversations()).archived
   );
   const partitioned = createMemo(() => partitionArchived(conversations()));
   const updateSessions = () =>
@@ -219,6 +254,10 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
   let composerFocus: (() => void) | undefined;
   const showComposer = () => {
     setMobileList(false);
+    if (mobileLayout() && page() !== 'new') {
+      panel.handle.replace({ next: { type: 'component', id: 'agents' } });
+      return;
+    }
     if (panel.handle.content().id !== 'agents') {
       panel.handle.replace({ next: { type: 'component', id: 'agents' } });
       return;
@@ -265,18 +304,38 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
           // this entry, which is when entry state is otherwise captured.
           panel.handle.captureEntryState();
         }
-        showComposer();
+        if (mobileLayout() && content.id === 'agents') {
+          setSelected(undefined);
+          setPage('new');
+          setMobileList(false);
+          composerFocus?.();
+        } else showComposer();
       }
     )
   );
-  const openPage = (next: AgentsPage) => {
-    setCreatingKind(undefined);
+  const openPage = (next: AgentsPage, createKind?: AgentKind) => {
+    setCreatingKind(createKind);
     setMobileList(false);
     if (next === 'routines') {
       layout.openWithSplit(routineContent(), {
         handle: panel.handle,
         activate: true,
         search: {},
+      });
+      return;
+    }
+    if (mobileLayout()) {
+      panel.handle.replace({
+        next: {
+          type: 'component',
+          id: 'agents',
+          preserveParams: true,
+          params: {
+            agentPage: next,
+            agentPageRequest: crypto.randomUUID(),
+            createAgentKind: createKind,
+          },
+        },
       });
       return;
     }
@@ -295,6 +354,45 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
     setSelected(undefined);
     setPage(next);
   };
+  // A history entry owns the mobile page. Restoring it never opens a new entry.
+  createEffect(
+    on(
+      () => panel.handle.content(),
+      (content) => {
+        if (!mobileLayout()) return;
+        const next =
+          content.type === 'component' && content.id === 'routines'
+            ? 'routines'
+            : content.type === 'component' && content.id === 'agents'
+              ? (parseAgentsPage(content.params?.agentPage) ?? 'new')
+              : 'new';
+        setSelected(undefined);
+        setPage(next);
+        setMobileList(
+          next === 'new' &&
+            !(content.type === 'component' && content.params?.focusComposer)
+        );
+        const createKind =
+          content.type === 'component' && next === 'agents'
+            ? content.params?.createAgentKind
+            : undefined;
+        setCreatingKind(
+          createKind === 'agent' || createKind === 'coder'
+            ? createKind
+            : undefined
+        );
+        if (next === 'new' && content.type === 'component') {
+          const agent = content.params?.composerAgentId;
+          const request = content.params?.agentPageRequest;
+          if (typeof agent === 'string' && typeof request === 'string') {
+            workspace.setMode('code');
+            setRequestedAgent({ agentId: agent, request });
+            setMobileList(false);
+          }
+        }
+      }
+    )
+  );
   createEffect(
     on(
       () => {
@@ -304,6 +402,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
           : undefined;
       },
       () => {
+        if (mobileLayout()) return;
         const content = panel.handle.content();
         if (content.type !== 'component') return;
         const next = parseAgentsPage(content.params?.agentPage);
@@ -326,7 +425,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
   };
   const openConversation = (
     conversation: AgentConversationTarget,
-    event?: MouseEvent,
+    newSplit = false,
     targetMode: AgentsMode = mode()
   ) => {
     if (mobileLayout()) {
@@ -343,12 +442,12 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
       type: 'component' as const,
       id: agentsRouteId({ mode: targetMode, conversation }),
     };
-    if (!event?.shiftKey && panel.handle.content().id === next.id) {
+    if (!newSplit && panel.handle.content().id === next.id) {
       selectConversation(conversation);
       return;
     }
     const result = layout.openWithSplit(next, {
-      preferNewSplit: event?.shiftKey,
+      preferNewSplit: newSplit,
       referredFrom: 'agents',
     });
     if (result.status === 'reused' && result.owner !== result.sourceOwner) {
@@ -363,7 +462,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
     });
     openConversation(
       { id, type: 'agent_session' },
-      undefined,
+      false,
       modeForKind(kindForBot(start.botId, rosterSource.roster()))
     );
   };
@@ -391,13 +490,123 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
       return { ...current, activeConversationId: sessionId };
     });
   };
+  const backToPreviousPage = () => {
+    if (panel.handle.canGoBack()) panel.handle.goBack();
+    else
+      panel.handle.replace({
+        next: { type: 'component', id: 'agents' },
+        mergeHistory: true,
+      });
+  };
   const pageTitle = () => {
     if (page() === 'routines') return 'Routines';
     if (page() === 'agents') return 'Agents';
     if (page() === 'connections') return 'Integrations';
+    if (page() === 'archived') return t('viewMenus.archived');
     return undefined;
   };
 
+  const openListedConversation = (
+    conversation: AgentConversationEntity,
+    event?: MouseEvent
+  ) => {
+    markRowNotificationsSeenOnOpen(conversation, notifications);
+    openConversation(
+      conversation,
+      event?.shiftKey ?? false,
+      modeForConversation(conversation)
+    );
+  };
+  const actions: ConversationActions = {
+    openPullRequest: (pr, event) => {
+      if (pr.id) {
+        layout.openWithSplit(
+          { type: 'pr', id: pr.id },
+          { preferNewSplit: event.shiftKey, referredFrom: 'agents' }
+        );
+      } else {
+        openExternalUrl(pr.url);
+      }
+    },
+    openBranch: openExternalUrl,
+    copyBranch: async (branch) => {
+      const copied = await writeClipboardData({ 'text/plain': branch });
+      if (!copied)
+        toast.failure(t('entityActions.toastCopyFailed', { count: 1 }));
+      return copied;
+    },
+    unarchive: (id) =>
+      Telemetry.span('agents.unarchive', async (span) => {
+        span.setAttr('session.id', id);
+        const success = await changeSessionArchiveState(id, false);
+        if (!success) span.error('Unable to unarchive session');
+        return success;
+      }),
+  };
+  const openSidebarPage = (next: AgentsPage) => {
+    if (next === 'new') {
+      showComposer();
+      return;
+    }
+    if (next === 'agents') {
+      openRoster('agent');
+      return;
+    }
+    const interaction = beginInteraction('agents.page.open');
+    try {
+      openPage(next);
+    } finally {
+      interaction.end();
+    }
+  };
+  const desktopSidebar = () => (
+    <DesktopAgentsSidebar
+      ownerId={userId()}
+      sort={conversationSort()}
+      onSortChange={(sort) => {
+        const interaction = beginInteraction('agents.conversations.sort');
+        try {
+          listView.setSort(sort);
+        } finally {
+          interaction.end();
+        }
+      }}
+      filters={listView.filters()}
+      onFilterChange={listView.setSelected}
+      onClearFilters={listView.clear}
+      activePage={selected() ? undefined : page()}
+      onOpenPage={openSidebarPage}
+      onCreateAgent={(kind) => {
+        openPage('agents');
+        setCreatingKind(kind);
+      }}
+      onCreateRoutine={() =>
+        layout.popoverSplit({ type: 'component', id: 'routine-compose' })
+      }
+      modeForConversation={modeForConversation}
+      activeConversationId={selected()?.activeConversationId}
+      search={search()}
+      onSearchChange={setSearch}
+      conversations={partitioned().conversations}
+      archived={partitioned().archived}
+      loading={query.isPending}
+      error={Boolean(query.error)}
+      hasNextPage={Boolean(query.hasNextPage)}
+      loadingNextPage={query.isFetchingNextPage}
+      showOpenPullRequests={updatesFlag().enabled}
+      showUnlistedRuns={showUnlistedRuns()}
+      onShowUnlistedRunsChange={setShowUnlistedRuns}
+      onOpenConversation={openListedConversation}
+      onRetry={() =>
+        fireAndForget(
+          query.isFetchNextPageError ? query.fetchNextPage() : query.refetch(),
+          'agents-view'
+        )
+      }
+      onLoadMore={() => fireAndForget(query.fetchNextPage(), 'agents-view')}
+      actions={actions}
+    />
+  );
   const sidebar = () => (
     <AgentsSidebar
       filters={listView.filters()}
@@ -432,11 +641,11 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
       onSearchChange={setSearch}
       showUnlistedRuns={showUnlistedRuns()}
       onShowUnlistedRunsChange={setShowUnlistedRuns}
-      onOpenConversation={(conversation, event) => {
+      onOpenConversation={(conversation, newSplit) => {
         markRowNotificationsSeenOnOpen(conversation, notifications);
         openConversation(
           conversation,
-          event,
+          newSplit,
           modeForConversation(conversation)
         );
       }}
@@ -448,7 +657,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
   return (
     <DataModeProvider value={dataMode}>
       <div
-        class="agents-view"
+        class="agents-view agents-scope"
         data-agents-workspace={panel.handle.id}
         data-mode={dataMode()}
         data-session={selected() ? '1' : undefined}
@@ -457,27 +666,54 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
           asidePreferenceKey="agents"
           class="bg-panel"
           resizable
-          aside={{ min: 224, max: 380, preserveDuringResize: false }}
+          aside={
+            isTouchDevice() && mobileLayout()
+              ? false
+              : { min: 224, max: 380, preserveDuringResize: false }
+          }
           main={{ min: 280, preferredWidth: 640 }}
         >
-          <ViewShell.Aside>{sidebar()}</ViewShell.Aside>
+          <ViewShell.Aside>
+            <Switch>
+              <Match when={mobileLayout()}>{null}</Match>
+              <Match when={isTouchDevice()}>{sidebar()}</Match>
+              <Match when={true}>{desktopSidebar()}</Match>
+            </Switch>
+          </ViewShell.Aside>
 
           <ViewShell.Main class="overflow-hidden">
             <ViewTour tour={agentsTour} />
             <main
               class="main touch:pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.5rem)] touch:[&>*]:[--mobile-content-inset-top:0px]"
-              classList={{ hidden: mobileLayout() && mobileList() }}
+              classList={{
+                hidden:
+                  mobileLayout() && (mobileList() || page() === 'archived'),
+              }}
             >
               <Show
                 when={selected()?.conversation}
                 keyed
                 fallback={
                   <>
-                    <Show when={page() !== 'routines'}>
+                    <Show
+                      when={
+                        page() !== 'routines' &&
+                        !(
+                          mobileLayout() &&
+                          (mobileList() || page() === 'archived')
+                        )
+                      }
+                    >
                       <Topbar
                         title={pageTitle()}
                         onBack={
-                          mobileLayout() ? () => setMobileList(true) : undefined
+                          mobileLayout()
+                            ? () =>
+                                runSplitBack({
+                                  canGoBack: () => true,
+                                  goBack: backToPreviousPage,
+                                })
+                            : undefined
                         }
                       />
                     </Show>
@@ -489,6 +725,38 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
                           </Match>
                           <Match when={page() === 'connections'}>
                             <IntegrationsPage />
+                          </Match>
+                          <Match when={page() === 'archived'}>
+                            <Show when={!mobileLayout()}>
+                              <TraceFlow name="agents.archived">
+                                <ArchivedConversations
+                                  conversations={allArchived()}
+                                  ownerId={userId()}
+                                  sort={conversationSort()}
+                                  modeForConversation={modeForConversation}
+                                  loading={query.isPending}
+                                  error={Boolean(query.error)}
+                                  hasNextPage={Boolean(query.hasNextPage)}
+                                  loadingNextPage={query.isFetchingNextPage}
+                                  onLoadMore={() =>
+                                    fireAndForget(
+                                      query.fetchNextPage(),
+                                      'agents-view'
+                                    )
+                                  }
+                                  onRetry={() =>
+                                    fireAndForget(
+                                      query.isFetchNextPageError
+                                        ? query.fetchNextPage()
+                                        : query.refetch(),
+                                      'agents-view'
+                                    )
+                                  }
+                                  onOpenConversation={openListedConversation}
+                                  actions={actions}
+                                />
+                              </TraceFlow>
+                            </Show>
                           </Match>
                           <Match when={page() === 'agents'}>
                             <AgentSettings
@@ -513,7 +781,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
                               if (session)
                                 openConversation(
                                   session,
-                                  undefined,
+                                  false,
                                   modeForConversation(session)
                                 );
                             }}
@@ -587,8 +855,64 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
                 )}
               </Show>
             </main>
-            <Show when={mobileLayout() && mobileList()}>
-              <AgentsMobileList>{sidebar()}</AgentsMobileList>
+            <Show
+              when={mobileLayout() && (mobileList() || page() === 'archived')}
+            >
+              <AgentsMobileList>
+                <PhoneAgentsList
+                  archived={page() === 'archived'}
+                  conversations={
+                    search() ? conversations() : partitioned().conversations
+                  }
+                  archivedRows={selectRecentAgentConversations(
+                    allArchived(),
+                    userId(),
+                    archivedSearch(),
+                    'updated'
+                  )}
+                  archivedTotalCount={allArchived().length}
+                  roster={rosterSource.roster()}
+                  rosterLoading={rosterSource.loading()}
+                  search={page() === 'archived' ? archivedSearch() : search()}
+                  onSearchChange={
+                    page() === 'archived' ? setArchivedSearch : setSearch
+                  }
+                  filters={listView.filters()}
+                  onFilterChange={listView.setSelected}
+                  onClearFilters={listView.clear}
+                  showUnlistedRuns={showUnlistedRuns()}
+                  onShowUnlistedRunsChange={setShowUnlistedRuns}
+                  modeForConversation={modeForConversation}
+                  loading={query.isPending}
+                  error={Boolean(query.error)}
+                  hasNextPage={Boolean(query.hasNextPage)}
+                  loadingNextPage={query.isFetchingNextPage}
+                  onLoadMore={() =>
+                    fireAndForget(query.fetchNextPage(), 'agents-view')
+                  }
+                  onRetry={() =>
+                    fireAndForget(
+                      query.isFetchNextPageError
+                        ? query.fetchNextPage()
+                        : query.refetch(),
+                      'agents-view'
+                    )
+                  }
+                  onOpenPage={(next) =>
+                    next === 'new' ? setMobileList(true) : openSidebarPage(next)
+                  }
+                  onBack={() => {
+                    backToPreviousPage();
+                    setArchivedSearch('');
+                  }}
+                  onOpenConversation={openListedConversation}
+                  onSelectAgent={(agent) =>
+                    mobileAgentRequest.select(userId(), agent.id, agent.kind)
+                  }
+                  onCreateAgent={() => openPage('agents', 'agent')}
+                  actions={actions}
+                />
+              </AgentsMobileList>
             </Show>
           </ViewShell.Main>
         </ViewShell.Root>

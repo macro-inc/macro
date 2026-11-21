@@ -75,19 +75,15 @@ for (const provider of PROVIDERS) {
     // When this fails, Mark as read on the envelope button of a thread in
     // the reading pane, or Mark Read in the menu after its subject, leaves
     // the message unread at the mailbox, or is not offered once u has marked
-    // it unread. Only the reading pane's thread keeps the keys to itself, so
-    // only there does u leave a thread open and unread (a thread open in the
-    // list's place hands u to the list: inline-thread-read-keys-reach-the-
-    // list). Known bug: the unread's own write clears the thread's toggle,
-    // which goes back to offering Mark as unread.
-    test('known bug: thread-unread-toggle-resets-on-own-write: the reading pane marks an unread thread read again @known-bug', {
-      tag: '@known-bug',
-    }, async ({ page, mailbox }) => {
+    // it unread.
+    test('the reading pane marks an unread thread read again', async ({
+      page,
+      mailbox,
+    }) => {
       const ids = await deliverAll(mailbox, ['Minutes', 'Budget']);
       const read = (subject: string) => readAt(mailbox, subject);
-      const header = page
-        .getByRole('region', { name: 'Reading pane' })
-        .getByRole('group', { name: 'Email actions' });
+      const pane = page.getByRole('region', { name: 'Reading pane' });
+      const header = pane.getByRole('group', { name: 'Email actions' });
       const seenInFlight = seenRequestsInFlight(page);
       // u is refused while a read is on its way, and Mark as read while the
       // unread is: each has finished before the next is asked.
@@ -96,7 +92,10 @@ for (const provider of PROVIDERS) {
         await expect.poll(seenInFlight).toBe(0);
         await page.getByRole('heading', { name: subject, level: 1 }).click();
         await page.keyboard.press('u');
-        await expect(notice(page, 'Marked as unread')).toBeVisible();
+        const unreadNotice = notice(page, 'Marked as unread');
+        await expect(unreadNotice).toBeVisible();
+        await unreadNotice.getByRole('button', { name: 'Close' }).click();
+        await expect(unreadNotice).toHaveCount(0);
         await expect.poll(read(subject)).toBe(false);
         await expect(
           header.getByRole('button', { name: 'Mark as read' })
@@ -110,7 +109,7 @@ for (const provider of PROVIDERS) {
         .toEqual(expect.arrayContaining(Object.values(ids)));
       await page.getByRole('button', { name: 'Show reading pane' }).click();
 
-      await openFromList(page, ids.Minutes, 'About Minutes.');
+      await openFromList(page, ids.Minutes, 'About Minutes.', pane);
       await unreadWithU('Minutes');
       await header.getByRole('button', { name: 'Mark as read' }).click();
       did('AL-126', 'F-068');
@@ -119,29 +118,11 @@ for (const provider of PROVIDERS) {
         header.getByRole('button', { name: 'Mark as unread' })
       ).toBeVisible();
 
-      await openFromList(page, ids.Budget, 'About Budget.');
+      await openFromList(page, ids.Budget, 'About Budget.', pane);
       await unreadWithU('Budget');
       await titleMenu(page, 'Budget', /^Mark Read/);
       did('AL-151', 'F-068');
       await expect.poll(read('Budget')).toBe(true);
-    });
-
-    // Known bug (row-menu-dialogs-close-at-once), in some runs: a row's menu
-    // opened again while the entry picked before is still being saved is
-    // closed by that entry's own dismissal, so Unfavorite cannot be picked.
-    // Seen in two of three runs of the whole suite, and in none of sixteen
-    // runs of this test alone: `@sometimes`.
-    test("known bug: row-menu-dialogs-close-at-once: Unfavorite in a row's menu, right after Favorite @known-bug", {
-      tag: ['@known-bug', '@sometimes'],
-    }, async ({ page, mailbox }) => {
-      const ids = await deliverAll(mailbox, ['Agenda']);
-      await mailbox.open();
-      await expect.poll(() => rowIds(page)).toEqual([ids.Agenda]);
-      await rowMenu(page, ids.Agenda, /^Favorite/);
-      await expect.poll(() => favorites(mailbox)).toEqual([ids.Agenda]);
-      await rowMenu(page, ids.Agenda, /^Unfavorite/);
-      did('AL-080', 'F-074');
-      await expect.poll(() => favorites(mailbox)).toEqual([]);
     });
 
     // When this fails, Favorite in the row's menu, in the command menu of a
@@ -154,10 +135,6 @@ for (const provider of PROVIDERS) {
     }) => {
       const ids = await deliverAll(mailbox, ['Agenda', 'Minutes', 'Budget']);
       const selected = page.getByText('1 selected', { exact: true });
-      // Agenda stays a favorite: taking it out again in the row's menu is
-      // the known bug above.
-      const besidesAgenda = async () =>
-        (await favorites(mailbox)).filter((id) => id !== ids.Agenda);
 
       await mailbox.open();
       await expect
@@ -166,6 +143,9 @@ for (const provider of PROVIDERS) {
       await rowMenu(page, ids.Agenda, /^Favorite/);
       did('AL-080', 'F-073');
       await expect.poll(() => favorites(mailbox)).toEqual([ids.Agenda]);
+      await rowMenu(page, ids.Agenda, /^Unfavorite/);
+      did('AL-080', 'F-074');
+      await expect.poll(() => favorites(mailbox)).toEqual([]);
 
       // Favoriting leaves the selection as it was, so the same selection
       // takes the thread out again.
@@ -173,12 +153,12 @@ for (const provider of PROVIDERS) {
       await page.getByRole('button', { name: /^Actions/ }).click();
       await commandAction(page, 'favorite', /^Favorite/);
       did('AL-608', 'F-073');
-      await expect.poll(besidesAgenda).toEqual([ids.Minutes]);
+      await expect.poll(() => favorites(mailbox)).toEqual([ids.Minutes]);
       await expect(selected).toBeVisible();
       await page.getByRole('button', { name: /^Actions/ }).click();
       await commandAction(page, 'favorite', /^Unfavorite/);
       did('AL-608', 'F-074');
-      await expect.poll(besidesAgenda).toEqual([]);
+      await expect.poll(() => favorites(mailbox)).toEqual([]);
 
       await toolbarButton(page, CLEAR).click();
       did('AL-407');
@@ -190,11 +170,10 @@ for (const provider of PROVIDERS) {
       await openFromList(page, ids.Budget, 'About Budget.');
       await titleMenu(page, 'Budget', 'Favorite');
       did('AL-613', 'F-073');
-      await expect.poll(besidesAgenda).toEqual([ids.Budget]);
+      await expect.poll(() => favorites(mailbox)).toEqual([ids.Budget]);
       await titleMenu(page, 'Budget', 'Unfavorite');
       did('AL-613', 'F-074');
-      await expect.poll(besidesAgenda).toEqual([]);
-      expect(await favorites(mailbox)).toEqual([ids.Agenda]);
+      await expect.poll(() => favorites(mailbox)).toEqual([]);
     });
   });
 }

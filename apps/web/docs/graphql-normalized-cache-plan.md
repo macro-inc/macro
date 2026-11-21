@@ -135,7 +135,25 @@ entire cache in browser memory. With 10s of thousands of cached objects
     `attempt_count` still counts every claim for backoff and coalescing safety.
     Settlement removes the pending mutation and counter; there is no retained DLQ.
     Each queued network attempt has a one-minute timeout, comfortably inside its
-    five-minute lease.
+    five-minute lease. A page that reloads or closes mid-attempt never settles
+    its claim, so each page holds a Web Lock named after its lease owner
+    (`mutation-queue-owner.ts`) while it is shown and lets it go on
+    `pagehide`, as the coordinator does with its own lock, so the lock never
+    keeps a page out of the back/forward cache; a page restored from it claims
+    under a new owner. A runner that finds the head leased by another page's
+    live owner waits for that lock, which is granted only once the page has
+    been hidden or gone. It then waits one more second for a request the page
+    left in flight, as long as a runner waits before it resends an attempt
+    whose connection dropped (which may also still reach the server), looks
+    at the head again, and releases the claim that owner holds on it then by
+    deferring it with the holder's owner and generation; the engine refuses a
+    release once the claim has moved on. Queue inspections therefore carry the
+    head's lease; they read the whole queue, so a runner looks at most once
+    per 30-second poll, plus those two looks per departed owner. A page sends
+    a claim only while it still holds the owner it claimed under. Claims made
+    without Web Locks, before the lock is granted, while hidden, or by older
+    bundles keep their full lease, as do claims on a native app built before
+    inspections carried the lease.
 
 ### Open questions
 
@@ -905,6 +923,87 @@ deletion, metadata updates, and reconnect when the normalized cache is unavailab
 Invalidations arriving during a refresh cause a trailing authorized read instead
 of being discarded; simultaneous refresh requests share one read.
 
+CRM member-access changes are rare session transitions. One primary
+`/crm/member-access` read runs on boot, focus and reconnect. A changed
+`x-macro-crm-access` response hint or a CRM 403 triggers that read in the
+background. Ordinary requests, subscription frames and local cache reads never
+wait for permission proof. There are no GraphQL-field or REST-route admission
+classifiers.
+
+Startup installs the cache host before request producers but initializes it in
+the background. The host's phase deadlines bound initialization and retain its
+classified failure and queue-recovery paths. No outer owner timer interrupts
+worker retries or converts them into permanent failures. Root and first render
+never await the owner or permission HTTP. A synchronous
+profile-local mirror supplies account, policy and generation as hints; missing
+or unreadable hints stamp an explicit nonmatching UUID. Same-account/same-policy
+observations correct future write stamps without retiring in-memory responses.
+Copied writes keep their original stamp and recover their own query if rejected.
+Subscriptions restart with the baseline stamp without replaying old-source frames.
+
+A missing mirror with a first non-denied owner initializes the baseline while
+preserving query observers, rows, open menus and persisted snapshots, including
+legacy upgrades. TanStack keeps its active reads without cancelling or refetching;
+urql rereads only rejected copied writes in the background, keeping visible rows.
+These reads use the exchange's network dispatch directly: a queued cache reread
+cannot replace or suppress recovery. Only the still-mounted latest response can
+recover, and an already pending network request prevents a duplicate. A newer
+operation stamp from a cache-only miss does not establish successful persistence.
+Denied or incomplete owners and known account/policy mismatches still retire copied
+content.
+Actual account replacement retains the full session fence.
+First allowed/team-less proofs, first account binding without a policy, and
+unchanged ready boot/focus proofs without failed cleanup do not advance the owner
+generation or refetch. Unchanged proofs still retry failed local cleanup.
+
+On web, a ready allowed mirror can open CRM UI before storage. With no mirror or
+owner snapshot, a short UI-only proof runs in parallel with initialization and
+may also open CRM. Login/host changes and owner observations fence its completion;
+denial, unfinished cleanup and mismatching accounts override it. Only a separate
+proof dispatched after reading the owner generation can commit durable policy.
+This successful missing-mirror launch makes two permission reads, versus one on
+a normal returning launch with a valid mirror. Native uses neither early UI
+path: CRM email-list REST pages can restore independently from IndexedDB before
+the owner finishes interrupted cleanup. A ready allowed local owner still opens
+native CRM without waiting for a network proof.
+
+The shared owner persists the new policy and generation before selective
+retirement. The application adapter removes CRM records, derived email and
+property content, mixed viewer lists and projection-only orphans. An interrupted
+retirement resumes before cached content is returned. Initial allowed/team-less
+proofs preserve both legacy offline data and the existing generation. Denial or
+a team change retires old content; an unchanged ready policy needs no owner
+transition. Client snapshots may still need cleanup after an earlier failure.
+
+Every request and subscription source captures one owner-issued generation.
+The TS exchange and response observer discard older query results and frames;
+active queries refetch after transition. Cache writes compare that generation
+under the native owner lock or browser worker, so a delayed write from another
+window cannot restore retired content. Reads need no proof or readiness token.
+This fence supplements the existing account-switch wipe and queue lease fence.
+
+Retirement preserves authored commands, UUIDs, leases, retry state, identity
+bindings and draft recovery metadata. In-flight mutations retain their actual
+server outcome. A stale queued commit atomically settles canonical identities
+and removes its queue entry without publishing copied content, projections or
+link recipes, then revalidates active queries. The draft journal sees the full
+server result before content is discarded. A confirmed local settlement retry
+keeps its original generation; a new HTTP attempt captures the current one.
+
+Initial access stays pending until proof succeeds. Network failures and stale
+proof generations retry once; network retries wait 250 ms and use a 3-second
+second deadline instead of 15 seconds. Terminal failures and timeouts do not
+retry. Exhausted initial verification shows the existing retry state and retries
+on reconnect. Transient failure preserves a previously proven UI state.
+
+Coordinator protocol 18 and the native current/transition commands are required
+for this bundle. An offline or idle device can display cached CRM content until
+its next server signal, including a boot proof after a revocation while closed;
+already-rendered content remains until rerender. There is no offline TTL.
+Queue inspection on this native build omits copied optimistic data for legacy
+queued drafts, so an older OTA bundle cannot recover that data during rollback;
+authored variables and current-bundle draft recovery metadata remain intact.
+
 [Mutation coverage](../src/lib/queries/mutation-coverage.test.ts) enumerates all
 47 mutation documents and fails when a document has no declared strategy.
 Because predictions are keyed by mutation field, it also checks that local
@@ -1239,11 +1338,17 @@ Missing matches become durable incomplete projections, not deleted records or
 invented archive/signal facts. Mail retention excludes explicitly invalidated
 (`Dirty`) baseline rows in the same projection scope unless an optimistic shadow
 takes precedence; an older open view cannot restore the revoked evidence.
+While a write to the row is queued, an older view's baseline can still list it,
+until the write settles.
 This differs from missing metadata, which still retains same-query membership.
 Full canonical snapshots restore their proof;
 partial patches cannot. Backfills, cursor pages, incomplete responses,
-unsupported predicates, identity switches, and pending optimistic rows do not
-supply this negative evidence. The existing authoritative-write telemetry covers
+unsupported predicates, and identity switches do not supply this negative
+evidence. A row with queued writes is invalidated only when its authoritative
+facts, and those facts after each prefix of the queue, all still match the page:
+then no queued write explains the omission. A queued mark read cannot keep a
+thread trashed through REST listed, while an archive whose Undo is still queued
+keeps the restored row. The existing authoritative-write telemetry covers
 this preparation/write path; no new worker command or database migration is needed.
 See [cached Mail verification](../../../docs/agent-guide/email.md#cached-mail-filtering).
 
@@ -1287,7 +1392,7 @@ Invalidations coalesce on a 15-minute cadence without interrupting active scans;
 hourly passes refresh names. Scan omissions never delete records. The same lane
 then scans at most 500 raw cached contact records per keyset window and verifies
 scoped IDs through the existing exact lookup. Only validated requested-ID omissions
-permit removal. Checkpoint v2 tracks hydration/verification and completes only
+permit removal. Checkpoint v2 (v3 while `enable-contact-lists` selects contact lists) tracks hydration/verification and completes only
 after the verification pass; failures/interruption resume at the last committed
 cursor. No directory-sized seen set or extra synchronization endpoint is used.
 
@@ -1324,7 +1429,8 @@ Remaining ranking end-to-end validation and whole-app acceptance are tracked in
 ### Deterministic person-policy foundation
 
 Ordinary entity/name scoring remains corpus-independent. Personal suggestions use
-policy 5: exact names, all-word prefixes, then literal contains, recent-first with
+policy 5: exact names, all-word prefixes, then literal contains, then address
+terms, recent-first with
 identity ties. Complete addresses and Macro IDs cannot match display-name aliases.
 Command keywords keep their separate matcher; reference evidence stays policy 4.
 
@@ -1381,7 +1487,7 @@ with existing DM peers/inboxes; full channel sources are still in memory.
 The web full-list query/hooks, shared recipient pool and manual contacts GET
 wrapper are removed. Message/native-share/websocket invalidations now issue only
 coalesced `requestContactRefresh()` hints; deployed backend and SDK APIs remain
-compatible. Quick Access reads a replaceable person window rather than a global
+compatible. Quick Access reads a bounded, growing person list rather than a global
 contact item index. Commands/mentions forward typed queries; CRM alias matching
 uses exact lookup for only the current 50-row CRM window. Soup facets and property
 pickers preserve selections separately. General Soup creator menus and chips use

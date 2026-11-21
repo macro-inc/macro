@@ -169,7 +169,7 @@ const context: EmailComposeContext = {
     feedback: {
       success: () => undefined,
       failure: () => undefined,
-      alert: () => {},
+      alert: () => undefined,
       dismiss: () => {},
     },
     blockingNotice: async () => {},
@@ -192,7 +192,6 @@ const context: EmailComposeContext = {
     isTouch: () => mobile,
     isMobile: () => mobile,
     scheduleEnabled: false,
-    signaturesEnabled: () => false,
   },
   editorFiles: {
     readDroppedFiles: () => {},

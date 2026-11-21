@@ -1,6 +1,8 @@
 import { enclosing } from './affine';
 import type { GraphicsBackend } from './backend';
 import {
+  type FitViewport,
+  fitBoundsCamera,
   fitImageCamera,
   INITIAL_CAMERA,
   MAX_SCALE,
@@ -36,8 +38,9 @@ import {
   drawableIds,
   freezeDocument,
   groupNodes,
-  hitTest,
+  hitTestWithin,
   nodeBoundsPoints,
+  PICK_TOLERANCE,
   reparent,
   ungroupNode,
   worldBounds,
@@ -236,32 +239,11 @@ function createEditor(
     for (const listener of listeners) listener(camera);
   }
 
-  function fitBounds(
-    bounds: Bounds,
-    viewport: { width: number; height: number }
-  ) {
-    if (
-      (bounds.width <= 0 && bounds.height <= 0) ||
-      ![viewport.width, viewport.height].every(
-        (size) => Number.isFinite(size) && size > 0
-      )
-    )
-      return;
-    // Screen-space margins; leave usable room even in a small embedded view.
-    const padding = Math.min(100, viewport.width / 4, viewport.height / 4);
-    const scale = Math.max(
-      MIN_SCALE,
-      Math.min(
-        MAX_SCALE,
-        (viewport.width - padding * 2) / bounds.width,
-        (viewport.height - padding * 2) / bounds.height
-      )
-    );
-    publish({
-      scale,
-      x: (viewport.width - bounds.width * scale) / 2 - bounds.x * scale,
-      y: (viewport.height - bounds.height * scale) / 2 - bounds.y * scale,
-    });
+  /** False when there was nothing to fit, or no room to fit it into. */
+  function fitBounds(bounds: Bounds, viewport: FitViewport) {
+    const fitted = fitBoundsCamera(bounds, viewport);
+    if (fitted) publish(fitted);
+    return !!fitted;
   }
 
   function beginShape(kind: DrawingKind, point: DrawingSample) {
@@ -360,8 +342,20 @@ function createEditor(
       };
     },
     select,
-    hitTest: (point: Point, deep = false) =>
-      hitTest(document, point, deep, 3 / camera.scale),
+    selectMany: selection.selectMany,
+    /**
+     * The topmost item at a point. Its paint is picked as a cursor picks it;
+     * a wider `reach`, in screen pixels, is searched only when nothing is
+     * under the point.
+     */
+    hitTest: (point: Point, deep = false, reach = PICK_TOLERANCE) =>
+      hitTestWithin(
+        document,
+        point,
+        deep,
+        PICK_TOLERANCE / camera.scale,
+        reach / camera.scale
+      ),
     groupSelection(id: string) {
       if (disposed) return;
       commitDocument(
@@ -434,15 +428,15 @@ function createEditor(
     setImageSurface(surface: ImageSurface) {
       resetDocument({ ...createScene(), surface });
     },
-    fitScene(viewport: { width: number; height: number }) {
+    fitScene(viewport: FitViewport) {
       const bounds = worldBounds(document, document.rootId);
-      fitBounds(bounds, viewport);
+      return fitBounds(bounds, viewport);
     },
-    fitSelection(viewport: { width: number; height: number }) {
+    fitSelection(viewport: FitViewport) {
       const points = selection
         .getState()
         .selectedIds.flatMap((id) => nodeBoundsPoints(document, id));
-      if (points.length) fitBounds(enclosing(points), viewport);
+      return points.length > 0 && fitBounds(enclosing(points), viewport);
     },
     fitImage(viewport: { width: number; height: number }) {
       if (document.surface) publish(fitImageCamera(document.surface, viewport));
@@ -495,6 +489,11 @@ function createEditor(
     },
     zoomAt(anchor: Point, scale: number) {
       publish(zoomAt(camera, anchor, scale));
+    },
+    /** One camera change for a two-finger step: pan, then zoom around `anchor`. */
+    panZoomBy(pan: Point, anchor: Point, factor: number) {
+      const panned = { ...camera, x: camera.x + pan.x, y: camera.y + pan.y };
+      publish(zoomAt(panned, anchor, camera.scale * factor));
     },
     resetCamera() {
       publish(INITIAL_CAMERA);

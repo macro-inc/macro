@@ -6,10 +6,7 @@ import {
   CURSOR_BOT_NAME,
   CURSOR_BOT_PRINCIPAL_ID,
 } from '@core/constant/cursorAgent';
-import {
-  MACRO_AGENT_NAME,
-  MACRO_AGENT_PRINCIPAL_ID,
-} from '@core/constant/macroAgent';
+import { MACRO_AGENT_NAME } from '@core/constant/macroAgent';
 import { MACRO_NEW_PRINCIPAL_ID } from '@core/constant/macroNew';
 import type { IUser } from '@core/user/types';
 
@@ -32,13 +29,11 @@ export { isMacroNewId } from '@core/constant/macroNew';
  * canonical `bot|<uuid>` principal form so persisted mention content matches
  * bot sender/participant ids.
  *
- * Which Macro answers is the rollout's business, not the mentioning user's:
- * under chat-v3 `@macro` opens an agent session, otherwise it gets the classic
- * in-channel reply. Only ever one entry, named "Macro" either way.
+ * `@macro` opens an agent session.
  */
-export function macroMentionUser(agentSessions: boolean): IUser {
+export function macroMentionUser(): IUser {
   return {
-    id: agentSessions ? MACRO_NEW_PRINCIPAL_ID : MACRO_AGENT_PRINCIPAL_ID,
+    id: MACRO_NEW_PRINCIPAL_ID,
     name: MACRO_AGENT_NAME,
     email: MACRO_AGENT_NAME,
   };

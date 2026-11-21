@@ -1,7 +1,5 @@
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import { TaskListEntity } from '@app/features/next-soup/soup-view/views/tasks/TaskListEntity';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableTaskDuplicates } from '@core/constant/featureFlags';
 import { ListLayoutProvider } from '@entity';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
@@ -129,8 +127,6 @@ export function SimilarTasksSection(props: {
   content: Accessor<string>;
   onOpenTask: (taskId: string) => void;
 }) {
-  const flag = useFeatureFlag(enableTaskDuplicates);
-
   const [debounced, setDebounced] = createSignal<DebouncedInput>({
     title: props.title(),
     markdown: props.content(),
@@ -146,13 +142,8 @@ export function SimilarTasksSection(props: {
   });
 
   return (
-    <Show when={flag().enabled}>
-      <Suspense>
-        <SimilarTasksInner
-          debounced={debounced}
-          onOpenTask={props.onOpenTask}
-        />
-      </Suspense>
-    </Show>
+    <Suspense>
+      <SimilarTasksInner debounced={debounced} onOpenTask={props.onOpenTask} />
+    </Suspense>
   );
 }

@@ -94,19 +94,4 @@ describe('initiative block', () => {
       },
     });
   });
-
-  it('sends a disabled project to Tasks once flags have loaded', () => {
-    mocks.flag = { enabled: false, loading: false };
-    render(() => <InitiativeBlock />);
-
-    expect(screen.getByText('redirect to tasks')).toBeTruthy();
-    expect(mocks.detail).not.toHaveBeenCalled();
-  });
-
-  it('waits for flags before deciding', () => {
-    mocks.flag = { enabled: false, loading: true };
-    render(() => <InitiativeBlock />);
-
-    expect(screen.getByText('loading')).toBeTruthy();
-  });
 });

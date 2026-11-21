@@ -53,17 +53,6 @@ vi.mock('@app/lib/analytics/posthog', () => ({
     loading: !state.flagsLoaded(),
   }),
 }));
-vi.mock('@core/constant/featureFlags', async (importOriginal) => {
-  const original =
-    await importOriginal<typeof import('@core/constant/featureFlags')>();
-  return {
-    ...original,
-    isFeatureEnabled: (flag: typeof original.enableCrmActivity) =>
-      flag === original.enableCrmActivity
-        ? state.enabled()
-        : original.isFeatureEnabled(flag),
-  };
-});
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ pageView: state.pageView, track: state.track }),
 }));
@@ -642,63 +631,5 @@ describe('pane create context registration', () => {
     expect(context.read('task')?.key).toBe('parent');
     removeParent();
     expect(context.read('task')).toBeUndefined();
-  });
-});
-
-describe('project registration', () => {
-  const routes = [
-    ['tasks-projects', 'Project collection'],
-    ['new-project', 'Project composer'],
-    ['project-compose', 'Project composer'],
-    [
-      'initiative-view~01a0cf92-3101-7e21-9a20-6e21058d20e0~overview',
-      'Project detail',
-    ],
-  ] as const;
-
-  it.each(routes)(
-    'gates a restored %s route until PostHog enables Projects',
-    async (route, title) => {
-      const [enabled, setEnabled] = createSignal(false);
-      const [loaded, setLoaded] = createSignal(false);
-      state.enabled = enabled;
-      state.flagsLoaded = loaded;
-      const component = resolveComponent(route);
-      render(() => <Suspense>{component.element()}</Suspense>);
-      expect(state.mountProjects).not.toHaveBeenCalled();
-      expect(state.replace).not.toHaveBeenCalled();
-
-      setEnabled(true);
-      setLoaded(true);
-      expect(await screen.findByText(title)).toBeTruthy();
-      expect(state.replace).not.toHaveBeenCalled();
-
-      setEnabled(false);
-      expect(screen.queryByText(title)).toBeNull();
-      expect(state.replace).toHaveBeenCalledExactlyOnceWith({
-        next: { type: 'component', id: 'tasks' },
-      });
-    }
-  );
-
-  it.each(routes)(
-    'redirects disabled %s without mounting project data',
-    (route) => {
-      const component = resolveComponent(route);
-      render(() => <Suspense>{component.element()}</Suspense>);
-      expect(state.mountProjects).not.toHaveBeenCalled();
-      expect(state.replace).toHaveBeenCalledExactlyOnceWith({
-        next: { type: 'component', id: 'tasks' },
-      });
-    }
-  );
-
-  it('closes a disabled composer popover instead of replacing its background split', () => {
-    state.isPopover = true;
-    const component = resolveComponent('project-compose');
-    render(() => <Suspense>{component.element()}</Suspense>);
-    expect(state.mountProjects).not.toHaveBeenCalled();
-    expect(state.replace).not.toHaveBeenCalled();
-    expect(state.close).toHaveBeenCalledOnce();
   });
 });

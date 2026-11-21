@@ -2,6 +2,14 @@ import { z } from 'zod';
 import type { DriveDocumentRoute } from './drive-route';
 import { driveDocumentRoute } from './drive-route';
 
+/**
+ * Marks a trail's first target as opened from the Drive list its route names.
+ * Only such a trail has a Drive location: a document opened anywhere else
+ * (an email, a channel, Home, a favorite) lands on the My Files route without
+ * being listed there.
+ */
+const fromList = z.literal(true).optional();
+
 export const driveDocumentTargetSchema = z.object({
   type: z.literal('document'),
   id: z.string().min(1),
@@ -14,12 +22,14 @@ export const driveDocumentTargetSchema = z.object({
     .nullable()
     .optional(),
   fallbackName: z.string().optional(),
+  fromList,
 });
 
 const driveDatabaseTargetSchema = z.object({
   type: z.enum(['database', 'form']),
   id: z.string().min(1),
   fallbackName: z.string().optional(),
+  fromList,
 });
 
 const driveDetailTargetSchema = z.union([
@@ -30,6 +40,14 @@ const driveDetailTargetSchema = z.union([
 export const driveDetailTrailSchema = z.array(driveDetailTargetSchema).min(1);
 
 export type DriveDetailTarget = z.infer<typeof driveDetailTargetSchema>;
+
+export function listTrail(target: DriveDetailTarget): DriveDetailTarget[] {
+  return [{ ...target, fromList: true }];
+}
+
+export function openedFromList(trail: readonly DriveDetailTarget[]): boolean {
+  return trail[0]?.fromList === true;
+}
 
 export function detailTargetFromRoute(
   document: DriveDocumentRoute | undefined

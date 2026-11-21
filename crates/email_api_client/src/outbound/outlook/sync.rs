@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, SecondsFormat, Utc};
 use reqwest::Method;
 use serde_json::json;
 
@@ -8,8 +8,8 @@ use super::{
     wire,
 };
 use crate::domain::models::{
-    AccessToken, EmailApiError, MailboxChangePage, MailboxSubscription, ProviderId, StreamPosition,
-    StreamToken,
+    AccessToken, EmailApiError, MailboxChangePage, MailboxSubscription, ProviderId, RoundStart,
+    StreamPosition, StreamToken,
 };
 use crate::domain::ports::{FolderChangeReader, MailboxWatchClient};
 
@@ -26,13 +26,31 @@ impl FolderChangeReader for OutlookApiClientRepository {
         token: &AccessToken,
         folder: &ProviderId,
         position: Option<&StreamToken>,
+        start: RoundStart,
     ) -> Result<MailboxChangePage, EmailApiError> {
         let url = match position {
             Some(position) => self.continuation(position)?,
             None => {
                 let mut url =
                     self.endpoint(&["me", "mailFolders", folder.as_str(), "messages", "delta"])?;
-                url.query_pairs_mut().append_pair("$select", "id");
+                {
+                    let mut query = url.query_pairs_mut();
+                    query.append_pair("$select", "id");
+                    // Message delta takes only this order and only `ge`/`gt`
+                    // on `receivedDateTime`, and its links carry both. The
+                    // time drops its fraction, so nothing received in the
+                    // cutoff's second is left out.
+                    match start {
+                        RoundStart::Unordered => {}
+                        RoundStart::NewestFirst => {
+                            query.append_pair("$orderby", "receivedDateTime desc");
+                        }
+                        RoundStart::ReceivedSince(since) => {
+                            let since = since.to_rfc3339_opts(SecondsFormat::Secs, true);
+                            query.append_pair("$filter", &format!("receivedDateTime ge {since}"));
+                        }
+                    }
+                }
                 url
             }
         };

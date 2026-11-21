@@ -99,6 +99,7 @@ async fn delegation_commits_before_grant_and_never_starts_a_second_backfill() {
             "attempt",
             "account",
             "by_email",
+            "link_departing",
             "delegate",
             "apply:false:",
             "consume",
@@ -222,6 +223,7 @@ async fn shared_conflict_keeps_the_attempt_for_confirmation() {
             "account",
             "by_grant",
             "by_email",
+            "link_departing",
             "failure"
         ]
     );
@@ -250,7 +252,7 @@ async fn promotion_is_durable_before_relocation_and_survives_its_failure() {
             "account",
             "by_grant",
             "by_email",
-            "organization",
+            "link_departing",
             "promote",
             "relocate",
         ];
@@ -333,7 +335,7 @@ async fn assert_credential_owner_retry_backoff(failures: usize, terminal_failure
             "account",
             "by_grant",
             "by_email",
-            "organization",
+            "link_departing",
             "promote",
             "relocate",
             "update_owner",
@@ -412,6 +414,7 @@ async fn an_existing_grant_applies_permissions_without_registering_a_watch() {
             "attempt",
             "account",
             "by_grant",
+            "link_departing",
             "apply:true:",
             "consume",
             "clear_reauth"
@@ -676,4 +679,63 @@ async fn first_login_discovers_permissions_before_starting_backfill_without_cons
             "backfill",
         ]
     );
+}
+
+#[tokio::test]
+async fn a_departing_inbox_is_neither_shared_reconnected_nor_delegated() {
+    let sharing = || Data {
+        by_email: Some(link("macro|owner@example.com")),
+        departing: true,
+        ..Data::default()
+    };
+    let reconnecting = || Data {
+        by_grant: Some(link("macro|actor@example.com")),
+        departing: true,
+        ..Data::default()
+    };
+    let delegating = || Data {
+        owner: Some("macro|child@example.com".into()),
+        by_email: Some(link("macro|child@example.com")),
+        departing: true,
+        ..Data::default()
+    };
+    let cases: [&dyn Fn() -> Data; 3] = [&sharing, &reconnecting, &delegating];
+    for data in cases {
+        for force_share in [false, true] {
+            let (service, fake) = service(data());
+            let mut request = request(true);
+            request.force_share = force_share;
+            assert!(matches!(
+                service.connect(request).await,
+                Err(ConnectionError::MailboxInitialization(
+                    InitializationError::InboxBeingRemoved
+                ))
+            ));
+            let calls = fake.0.lock().unwrap().calls.clone();
+            for effect in ["promote", "delegate", "create", "watch", "consume"] {
+                assert!(!calls.iter().any(|call| call == effect), "{calls:?}");
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn a_promotion_that_finds_the_inbox_departing_connects_nothing() {
+    let (service, fake) = service(Data {
+        by_email: Some(link("macro|owner@example.com")),
+        departing_at_promotion: true,
+        ..Data::default()
+    });
+    let mut request = request(true);
+    request.force_share = true;
+    assert!(matches!(
+        service.connect(request).await,
+        Err(ConnectionError::MailboxInitialization(
+            InitializationError::InboxBeingRemoved
+        ))
+    ));
+    let calls = fake.0.lock().unwrap().calls.clone();
+    for effect in ["relocate", "create", "watch", "consume"] {
+        assert!(!calls.iter().any(|call| call == effect), "{calls:?}");
+    }
 }

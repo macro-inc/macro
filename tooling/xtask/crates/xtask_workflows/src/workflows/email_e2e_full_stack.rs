@@ -10,17 +10,23 @@
 //! (`workflow_dispatch`). It is not part of `PR CI` and does not run on
 //! pushes to `main`: the stack is every service, built from the commit under
 //! test. A failure is a red run on that commit; nothing is reverted or
-//! blocked by it.
+//! blocked by it. Its last job tells the Macro Alerts channel when the sweep
+//! turns red, and when it passes again ([`email_e2e_alert`]).
 
-use gh_workflow::{
-    Concurrency, Event, Expression, Job, Run, Schedule, Step, Use, Workflow, WorkflowDispatch,
-};
+use gh_workflow::expr::typed::{JobHandle, cancelled, failure};
+use gh_workflow::{Event, Job, Run, Step, Use, Workflow, WorkflowDispatch};
 
 use crate::workflows::{
-    code_check_cloud_storage, email_e2e, runners,
+    code_check_cloud_storage, email_e2e, email_e2e_alert, runners,
     steps::{self, FluentBuilder},
     vars, web_app_check_main,
 };
+
+/// The job that runs the tier.
+const TIER_JOB: JobHandle<()> = JobHandle::new("email-e2e-full-stack", ());
+
+/// The artifact the tier uploads its coverage report as.
+const COVERAGE_REPORT: &str = "email-e2e-full-stack-coverage";
 
 /// The stack instance the job starts: its own Compose project and ports.
 const INSTANCE: &str = "email-e2e";
@@ -42,19 +48,15 @@ const LEDGER: xtask_paths::RuntimePath<'static> =
 pub fn email_e2e_full_stack() -> Workflow {
     Workflow::new("Email end-to-end (full stack)")
         .on(Event::default()
-            .add_schedule(Schedule::new(email_e2e::SWEEP))
+            .add_schedule(email_e2e::sweep())
             .workflow_dispatch(WorkflowDispatch::default()))
-        .concurrency(concurrency())
+        .concurrency(email_e2e::concurrency("email-e2e-full-stack"))
         .map(vars::with_global_env)
-        .add_job("email-e2e-full-stack", tier())
-}
-
-/// Every commit keeps its own result, per event.
-fn concurrency() -> Concurrency {
-    Concurrency::new(Expression::new(
-        "email-e2e-full-stack-${{ github.event_name }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.sha }}",
-    ))
-    .cancel_in_progress(true)
+        .add_job(TIER_JOB, tier())
+        .add_job(
+            email_e2e_alert::JOB,
+            email_e2e_alert::job(&[&TIER_JOB], COVERAGE_REPORT),
+        )
 }
 
 /// Build the services and the web bundle, start the stack, run the tier.
@@ -70,6 +72,7 @@ fn tier() -> Job {
         .add_env(("EMAIL_E2E_BROWSER_WORKERS", "4"))
         .add_step(steps::checkout(false, false))
         .add_step(steps::mount_cache_volume())
+        .add_step(steps::reuse_cargo_target())
         .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_reqs_web("Setup", true))
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
@@ -79,16 +82,17 @@ fn tier() -> Job {
         .add_step(known_bugs())
         .add_step(ledger())
         .add_step(
-            steps::upload_artifact("email-e2e-full-stack-coverage", LEDGER)
-                .add_with(("if-no-files-found", "ignore"))
-                .add_with(("retention-days", 30))
-                .if_condition(Expression::new("!cancelled()")),
+            steps::upload_artifact_action(COVERAGE_REPORT, LEDGER)
+                .if_no_files_found("ignore")
+                .step()
+                .if_condition(!cancelled()),
         )
         .add_step(stack_logs())
         .add_step(upload("email-e2e-full-stack-logs", STACK_LOGS))
         .add_step(upload("email-e2e-full-stack-traces", TRACES))
         .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
+        .add_step(steps::seal_cargo_target())
 }
 
 /// Start the stack and run the tests tagged for it.
@@ -110,7 +114,7 @@ fn known_bugs() -> Step<Run> {
         .add_env(("EMAIL_E2E_KNOWN_BUGS", "1"))
         .working_directory(xtask_paths::repo_dir!("apps/web"))
         .continue_on_error(true)
-        .if_condition(Expression::new("!cancelled()"))
+        .if_condition(!cancelled())
 }
 
 /// What the tier covers of the email UI, from what the two runs above
@@ -122,7 +126,7 @@ fn ledger() -> Step<Run> {
     Step::new("check the tier's coverage of the email UI")
         .run("just email-e2e-ledger --enforce")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
-        .if_condition(Expression::new("!cancelled()"))
+        .if_condition(!cancelled())
 }
 
 /// What every container of the stack logged, and how its start went.
@@ -134,12 +138,13 @@ fn stack_logs() -> Step<Run> {
              cp infra/local/generated/{INSTANCE}/run/*.log {logs}/ 2>/dev/null || true",
             logs = STACK_LOGS.as_str(),
         ))
-        .if_condition(Expression::new("failure()"))
+        .if_condition(failure())
 }
 
 fn upload(name: &str, path: xtask_paths::RuntimePath<'static>) -> Step<Use> {
-    steps::upload_artifact(name, path)
-        .add_with(("if-no-files-found", "ignore"))
-        .add_with(("retention-days", 7))
-        .if_condition(Expression::new("failure()"))
+    steps::upload_artifact_action(name, path)
+        .if_no_files_found("ignore")
+        .retention_days(7)
+        .step()
+        .if_condition(failure())
 }

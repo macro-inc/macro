@@ -206,6 +206,10 @@ async function performGraphqlRenames(
     }
     if (disposition?.kind === 'permanently-failed') throw disposition.error;
     if (result.error) throw result.error;
+    if (!result.data && disposition?.kind === 'committed') {
+      // Preserve accepted edits until fresh reads can establish each result.
+      return operations.map(() => ({ success: true, queued: true }));
+    }
     if (!result.data) throw new Error('GraphQL rename returned no data');
     return result.data.renameEntities.results.map((result) => ({
       success: result.__typename === 'GraphqlMutationSuccess',

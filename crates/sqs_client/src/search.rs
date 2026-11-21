@@ -8,6 +8,7 @@ use crate::{
         document::SearchExtractorMessage,
         email::EmailThreadBatchMessage,
         project::UpsertProject,
+        replay::ReplayBrokerEvent,
     },
 };
 use anyhow::Context;
@@ -22,6 +23,7 @@ pub mod chat;
 pub mod document;
 pub mod email;
 pub mod project;
+pub mod replay;
 
 use crate::{MAX_BATCH_SIZE, PrimaryId};
 
@@ -42,10 +44,40 @@ impl SQS {
         }
     }
 
+    /// Send `message` to the search event queue, invisible to workers until
+    /// `delay` has passed. SQS caps the delay at 15 minutes.
+    pub async fn send_message_to_search_event_queue_after(
+        &self,
+        message: SearchQueueMessage,
+        delay: std::time::Duration,
+    ) -> anyhow::Result<String> {
+        let Some(search_event_queue) = &self.search_event_queue else {
+            anyhow::bail!("search_event_queue is not configured");
+        };
+        let delay_seconds = i32::try_from(delay.as_secs())
+            .unwrap_or(i32::MAX)
+            .min(MAX_DELAY_SECONDS);
+        let result = self
+            .inner
+            .send_message()
+            .queue_url(search_event_queue)
+            .message_body(serde_json::to_string(&message)?)
+            .delay_seconds(delay_seconds)
+            .send()
+            .await?;
+        Ok(result
+            .message_id
+            .context("expected a message id")?
+            .to_string())
+    }
+
+    /// Send `items` in batches. SQS can accept a batch and refuse some of its
+    /// entries; those it refused for a reason on its side are sent again, and
+    /// the entries it still refused come back.
     pub async fn bulk_send_message_to_search_event_queue(
         &self,
         items: Vec<SearchQueueMessage>,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<Vec<UnqueuedEntry>, anyhow::Error> {
         if let Some(search_event_queue) = &self.search_event_queue {
             bulk_enqueue_search_text_extractor(&self.inner, search_event_queue, items).await
         } else {
@@ -90,6 +122,9 @@ pub enum SearchQueueMessage {
 
     // User
     RemoveUserProfile(String),
+
+    // Broker events whose indexing failed
+    ReplayBrokerEvent(ReplayBrokerEvent),
 }
 
 impl PrimaryId for SearchQueueMessage {
@@ -113,6 +148,7 @@ impl PrimaryId for SearchQueueMessage {
             SearchQueueMessage::UpsertCalendarEvent(message) => message.event_id.clone(),
 
             SearchQueueMessage::RemoveUserProfile(message) => message.clone(),
+            SearchQueueMessage::ReplayBrokerEvent(message) => message.event_id.clone(),
         }
     }
 }
@@ -138,6 +174,7 @@ impl SearchQueueMessage {
             SearchQueueMessage::UpsertCalendarEvent(_) => Operation::UpdateMetadata,
             // Users
             SearchQueueMessage::RemoveUserProfile(_) => Operation::Remove,
+            SearchQueueMessage::ReplayBrokerEvent(_) => Operation::ExtractText,
         }
     }
 }
@@ -164,14 +201,38 @@ pub async fn enqueue_search_text_extractor(
 }
 
 const MAX_CONCURRENT_BATCHES: usize = 20;
+/// The longest `DelaySeconds` SQS accepts.
+const MAX_DELAY_SECONDS: i32 = 900;
+/// Sends of an entry SQS refuses for a reason on its side, the first included.
+const ENTRY_ATTEMPTS: u32 = 3;
+/// Delay before the first resend of refused entries; each later one doubles.
+const ENTRY_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(100);
+/// How many ids of the entries SQS would not queue a warning names.
+const UNQUEUED_IDS_LOGGED: usize = 10;
 
-/// Bulk enqueues items to the search text extractor queue
-#[tracing::instrument(skip(sqs_client, items))]
+/// An entry of a batch SQS would not queue.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnqueuedEntry {
+    /// The entry's batch id, the message's [`PrimaryId`].
+    pub id: String,
+    /// SQS's error code, such as `InternalError`.
+    pub code: String,
+    /// Whether SQS blamed the entry itself, so a resend cannot succeed.
+    pub sender_fault: bool,
+}
+
+/// Bulk enqueues items to the search text extractor queue, returning the
+/// entries SQS would not queue.
+#[tracing::instrument(
+    err,
+    skip(sqs_client, items),
+    fields(items = items.len(), resent = tracing::field::Empty, unqueued = tracing::field::Empty)
+)]
 pub async fn bulk_enqueue_search_text_extractor(
     sqs_client: &aws_sdk_sqs::Client,
     queue_url: &str,
     items: Vec<SearchQueueMessage>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Vec<UnqueuedEntry>> {
     let mut entries: Vec<SendMessageBatchRequestEntry> = vec![];
     for item in items {
         tracing::trace!(item=?item, "enqueueing search text extractor");
@@ -185,7 +246,7 @@ pub async fn bulk_enqueue_search_text_extractor(
 
     if entries.is_empty() {
         tracing::warn!("no entries to enqueue");
-        return Ok(());
+        return Ok(Vec::new());
     }
 
     let results: Vec<_> = futures::stream::iter(
@@ -194,20 +255,80 @@ pub async fn bulk_enqueue_search_text_extractor(
             .map(|chunk| chunk.to_vec())
             .collect::<Vec<_>>(),
     )
-    .map(|chunk| {
-        sqs_client
-            .send_message_batch()
-            .set_entries(Some(chunk))
-            .queue_url(queue_url)
-            .send()
-    })
+    .map(|chunk| send_batch(sqs_client, queue_url, chunk))
     .buffer_unordered(MAX_CONCURRENT_BATCHES)
     .collect()
     .await;
 
+    let mut unqueued = Vec::new();
+    let mut resent = 0;
     for result in results {
-        result?;
+        let batch = result?;
+        resent += batch.resent;
+        unqueued.extend(batch.unqueued);
     }
-
-    Ok(())
+    let span = tracing::Span::current();
+    span.record("resent", resent);
+    span.record("unqueued", unqueued.len());
+    if !unqueued.is_empty() {
+        tracing::warn!(
+            unqueued = unqueued.len(),
+            codes = ?unqueued.iter().map(|entry| entry.code.as_str()).collect::<std::collections::BTreeSet<_>>(),
+            ids = ?unqueued.iter().take(UNQUEUED_IDS_LOGGED).map(|entry| entry.id.as_str()).collect::<Vec<_>>(),
+            "SQS would not queue some search event messages"
+        );
+    }
+    Ok(unqueued)
 }
+
+/// What sending one batch came to.
+struct BatchOutcome {
+    /// Entry sends after the first.
+    resent: usize,
+    /// Entries SQS still would not queue.
+    unqueued: Vec<UnqueuedEntry>,
+}
+
+/// Send one batch, resending the entries SQS refuses for a reason on its
+/// side.
+async fn send_batch(
+    sqs_client: &aws_sdk_sqs::Client,
+    queue_url: &str,
+    mut entries: Vec<SendMessageBatchRequestEntry>,
+) -> anyhow::Result<BatchOutcome> {
+    let mut unqueued = Vec::new();
+    let mut resent = 0;
+    let mut delay = ENTRY_RETRY_DELAY;
+    for attempt in 1..=ENTRY_ATTEMPTS {
+        let output = sqs_client
+            .send_message_batch()
+            .set_entries(Some(entries.clone()))
+            .queue_url(queue_url)
+            .send()
+            .await?;
+        let last = attempt == ENTRY_ATTEMPTS;
+        let mut resend = std::collections::HashSet::new();
+        for failure in output.failed() {
+            if failure.sender_fault() || last {
+                unqueued.push(UnqueuedEntry {
+                    id: failure.id().to_owned(),
+                    code: failure.code().to_owned(),
+                    sender_fault: failure.sender_fault(),
+                });
+            } else {
+                resend.insert(failure.id().to_owned());
+            }
+        }
+        entries.retain(|entry| resend.contains(entry.id()));
+        if entries.is_empty() {
+            break;
+        }
+        resent += entries.len();
+        tokio::time::sleep(delay).await;
+        delay *= 2;
+    }
+    Ok(BatchOutcome { resent, unqueued })
+}
+
+#[cfg(test)]
+mod test;

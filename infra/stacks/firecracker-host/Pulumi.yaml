@@ -1,0 +1,3 @@
+name: firecracker-host
+runtime: nodejs
+description: A GCP host for Firecracker computers (NixOS, installed with nixos-anywhere)

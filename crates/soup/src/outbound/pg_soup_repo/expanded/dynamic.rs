@@ -6,11 +6,13 @@ mod test;
 
 mod database_row;
 mod document_ids;
+mod feed;
 mod initiative;
 mod property_filter;
 
 use database_row::{build_database_row_filter, database_row_opted_in, database_row_top_clause};
 pub(in crate::outbound::pg_soup_repo) use document_ids::DocumentIdArrays;
+use feed::{Feed, FeedArm, FeedReads, OrderedScans};
 use initiative::initiative_top_clause;
 pub(in crate::outbound::pg_soup_repo) use initiative::{
     build_initiative_filter, initiative_access_clause, initiative_opted_in,
@@ -278,83 +280,6 @@ async fn fetch_user_source_ids(
     .fetch_all(connection)
     .await?;
     Ok(source_ids.into_iter().flatten().collect())
-}
-
-/// How the document, chat, and project arms check the caller's grants.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum AccessGate {
-    /// `source_id = ANY(...)`: Postgres estimates the grants from
-    /// `entity_access.source_id` statistics, and hashes them when there are
-    /// many (a large team's grants are in its most-common values).
-    Planned,
-    /// One index probe per source, then one item lookup per grant. For callers
-    /// with many sources but few grants: the statistics cost every source that
-    /// is not a most-common value at the column average, so 16k private
-    /// channels holding 30k grants were planned as millions of rows, with
-    /// sequential scans of `entity_access` and the item table.
-    PerSource,
-}
-
-/// Callers with more sources than this get their grants counted, so the gate
-/// is chosen from the count instead of the statistics. Prod has no caller
-/// between 1k and 5k sources; 15 hold more.
-const MANY_SOURCES: usize = 1_000;
-
-/// Above this many grants, hashing them against one scan of the item table may
-/// be cheaper than one item lookup per grant. Measured warm on 5M documents,
-/// probing took 0.28 s for 24k grants (1.34 s hashed), 0.33 s for 47k
-/// (0.91 s), 0.93 s for 153k (1.06 s), and 2.9 s for 469k (0.8 s). The cutoff
-/// stays well below the crossover because a cold cache pays a random read
-/// per probe.
-const MAX_PROBED_GRANTS: i64 = 50_000;
-
-/// Chooses the caller's [`AccessGate`]. Only callers with more than
-/// [`MANY_SOURCES`] sources pay for the count, and only when an arm reads the
-/// gate; it reads one index range per source and stops past
-/// [`MAX_PROBED_GRANTS`].
-async fn access_gate(
-    connection: &mut PgConnection,
-    filter_ast: &EntityFilterAst,
-    source_ids: &[String],
-) -> Result<AccessGate, sqlx::Error> {
-    if source_ids.len() <= MANY_SOURCES || !DynamicArms::use_bound_access(filter_ast) {
-        return Ok(AccessGate::Planned);
-    }
-
-    let grants = sqlx::query_scalar!(
-        r#"
-        SELECT count(*) AS "grants!"
-        FROM (
-            SELECT 1
-            FROM unnest($1::text[]) AS caller(source_id)
-            CROSS JOIN LATERAL (
-                SELECT 1
-                FROM entity_access ea
-                WHERE ea.source_id = caller.source_id
-                    AND ea.entity_type IN ('document', 'chat', 'project')
-                OFFSET 0
-            ) grants
-            LIMIT $2
-        ) capped
-        "#,
-        source_ids,
-        MAX_PROBED_GRANTS + 1
-    )
-    .fetch_one(connection)
-    .await?;
-
-    if grants > MAX_PROBED_GRANTS {
-        Ok(AccessGate::Planned)
-    } else {
-        Ok(AccessGate::PerSource)
-    }
-}
-
-/// Where the caller's source ids are bound, and how the arms gate on them.
-#[derive(Clone, Copy)]
-struct SourceGrants {
-    slot: usize,
-    gate: AccessGate,
 }
 
 // -- Lightweight top clauses: only id + sort_ts (plus filter-required joins) --
@@ -1332,6 +1257,30 @@ pub(in crate::outbound::pg_soup_repo) fn build_document_filter(
     }
 }
 
+/// The value `document_literal_sql` renders `literal` as when it renders a constant.
+pub(in crate::outbound::pg_soup_repo) fn document_literal_constant(
+    literal: &DocumentLiteral,
+) -> Option<bool> {
+    match literal {
+        DocumentLiteral::IncludeCbmAtmNc(false) => Some(true),
+        DocumentLiteral::CrmAssociated(_) => Some(false),
+        DocumentLiteral::FileType(_)
+        | DocumentLiteral::Id(_)
+        | DocumentLiteral::ProjectId(_)
+        | DocumentLiteral::Owner(_)
+        | DocumentLiteral::Importance(_)
+        | DocumentLiteral::NotificationState(_)
+        | DocumentLiteral::IncludeCbmAtmNc(true)
+        | DocumentLiteral::SubType(_)
+        | DocumentLiteral::IsEmailAttachment(_)
+        | DocumentLiteral::CreatedAt(_)
+        | DocumentLiteral::UpdatedAt(_)
+        | DocumentLiteral::Property(_)
+        | DocumentLiteral::EmailAttachmentParticipant(_)
+        | DocumentLiteral::NameContains(_) => None,
+    }
+}
+
 fn document_literal_sql(literal: DocumentLiteral) -> String {
     match literal {
         DocumentLiteral::FileType(f) => {
@@ -1505,6 +1454,22 @@ fn build_calendar_event_filter(ast: Option<&Expr<CalendarEventLiteral>>) -> Stri
     }
 }
 
+/// The value `build_chat_filter` renders `literal` as when it renders a constant.
+pub(in crate::outbound::pg_soup_repo) fn chat_literal_constant(
+    literal: &ChatLiteral,
+) -> Option<bool> {
+    match literal {
+        ChatLiteral::Role(_) => Some(true),
+        ChatLiteral::Importance(important) => Some(*important),
+        ChatLiteral::ProjectId(_)
+        | ChatLiteral::ChatId(_)
+        | ChatLiteral::Owner(_)
+        | ChatLiteral::NotificationState(_)
+        | ChatLiteral::CreatedAt(_)
+        | ChatLiteral::UpdatedAt(_) => None,
+    }
+}
+
 pub(in crate::outbound::pg_soup_repo) fn build_chat_filter(
     ast: Option<&Expr<ChatLiteral>>,
 ) -> String {
@@ -1545,6 +1510,21 @@ pub(in crate::outbound::pg_soup_repo) fn build_chat_filter(
         String::new()
     } else {
         format!(" AND {}", formatting)
+    }
+}
+
+/// The value `build_project_filter` renders `literal` as when it renders a constant.
+pub(in crate::outbound::pg_soup_repo) fn project_literal_constant(
+    literal: &ProjectLiteral,
+) -> Option<bool> {
+    match literal {
+        ProjectLiteral::Importance(important) => Some(*important),
+        ProjectLiteral::ProjectId(_)
+        | ProjectLiteral::ProjectIdSelf(_)
+        | ProjectLiteral::Owner(_)
+        | ProjectLiteral::NotificationState(_)
+        | ProjectLiteral::CreatedAt(_)
+        | ProjectLiteral::UpdatedAt(_) => None,
     }
 }
 
@@ -1831,18 +1811,6 @@ impl DynamicArms {
         }
     }
 
-    /// Whether an arm gates on the caller's source ids through
-    /// [`bound_access_semi_join`]: a chat or project arm, or a document arm
-    /// that is not bounded by named ids ([`DocumentArmAccess::Joined`]).
-    fn use_bound_access(filter_ast: &EntityFilterAst) -> bool {
-        let arms = Self::new(filter_ast);
-        let joined_documents = matches!(
-            DocumentArmAccess::new(filter_ast.document_filter.as_deref()),
-            DocumentArmAccess::Joined
-        );
-        arms.chats || arms.projects || (arms.documents && joined_documents)
-    }
-
     /// Whether the query can return a row. With no arm, it is a `WHERE false`
     /// placeholder; with only a project arm under the nil parent, it reads no
     /// row either. Callers skip both, and their transaction.
@@ -1913,38 +1881,143 @@ pub(in crate::outbound::pg_soup_repo) fn access_semi_join(
 }
 
 /// [`access_semi_join`] over the caller's source ids, bound as a constant
-/// array at parameter `sources.slot`. Postgres costs the `user_source_ids` join
-/// at the average source's grant count, so it planned callers holding hundreds
-/// of thousands of grants with one item probe per grant; it estimates the
-/// array from `entity_access.source_id` statistics and hashes the grants
-/// instead. [`AccessGate::PerSource`] probes each source's grants through
-/// `idx_entity_access_source_type_entity_plain` instead; the `OFFSET 0` keeps
-/// the probe from being flattened back into a join planned from statistics.
-fn bound_access_semi_join(id_sql: &str, entity_type: &str, sources: SourceGrants) -> String {
-    let slot = sources.slot;
-    match sources.gate {
-        AccessGate::Planned => format!(
-            r#"{id_sql} IN (
+/// array at parameter `source_ids`. Postgres costs the `user_source_ids` join at the average
+/// source's grant count, so it planned callers holding hundreds of thousands
+/// of grants with one item probe per grant; it estimates the array from
+/// `entity_access.source_id` statistics and hashes the grants instead.
+fn bound_access_semi_join(id_sql: &str, entity_type: &str, source_ids: usize) -> String {
+    format!(
+        r#"{id_sql} IN (
                     SELECT ea.entity_id::text
                     FROM entity_access ea
-                    WHERE ea.source_id = ANY(${slot}::text[])
+                    WHERE ea.source_id = ANY(${source_ids}::text[])
                         AND ea.entity_type = '{entity_type}'
                 )"#
-        ),
-        AccessGate::PerSource => format!(
-            r#"{id_sql} IN (
-                    SELECT grants.entity_id::text
-                    FROM unnest(${slot}::text[]) AS caller(source_id)
-                    CROSS JOIN LATERAL (
+    )
+}
+
+/// The document arm's access gate for a caller whose grants were counted
+/// ([`DocumentGrants::Counted`]): the semi-join over their distinct granted
+/// ids, with the count as its `LIMIT`. Postgres estimates every source it has
+/// no statistics for at the table's average grant count, so a caller with a
+/// few hundred channels looked like a holder of hundreds of thousands of
+/// grants and got a hash join over a scan of every live document. A constant
+/// `LIMIT` is the one estimate Postgres takes as given, so it now plans
+/// with the real number: one index probe per granted document for a broad
+/// list, the list's own index for a selective one. The `LIMIT` never removes
+/// a row: the count read the same grant rows in the same snapshot
+/// ([`begin_dynamic_query`]), and there are no more distinct ids than rows.
+/// The fence reads the grants by source before the `DISTINCT`; without it,
+/// `DISTINCT ... LIMIT` was answered by walking an entity-ordered index over
+/// all of `entity_access`.
+fn counted_document_access_semi_join(source_ids: usize, grants: u32) -> String {
+    format!(
+        r#"d.id IN (
+                    SELECT DISTINCT held.entity_id::text
+                    FROM (
                         SELECT ea.entity_id
                         FROM entity_access ea
-                        WHERE ea.source_id = caller.source_id
-                            AND ea.entity_type = '{entity_type}'
+                        WHERE ea.source_id = ANY(${source_ids}::text[])
+                            AND ea.entity_type = 'document'
                         OFFSET 0
-                    ) grants
+                    ) held
+                    LIMIT {grants}
                 )"#
-        ),
+    )
+}
+
+/// Callers holding at most this many document grants have them counted for
+/// [`counted_document_access_semi_join`]. At the limit a broad page costs
+/// about half a second warm, one lookup per granted document. Above it, one
+/// scan of the live documents can cost less than that many random reads, and
+/// the statistics list the sources that hold that many, so the planner
+/// chooses. The search lookup (`get_user_accessible_items`) switches at the
+/// same count.
+const COUNTED_DOCUMENT_GRANTS: u32 = 50_000;
+
+/// How many document grants the caller's sources hold, as far as the
+/// document arm's access gate needs to know.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::outbound::pg_soup_repo) enum DocumentGrants {
+    /// Not counted: the document arm does not gate on the count
+    /// ([`document_arm_gates_on_count`]), or the caller holds more than
+    /// [`COUNTED_DOCUMENT_GRANTS`]. Postgres estimates them.
+    Estimated,
+    /// The grant rows the caller's sources hold, counted in the query's
+    /// snapshot.
+    Counted(u32),
+}
+
+impl DocumentGrants {
+    /// Counts the caller's document grants, up to one past
+    /// [`COUNTED_DOCUMENT_GRANTS`], when the document arm gates on the count.
+    async fn count(
+        connection: &mut PgConnection,
+        filter: &EntityFilterAst,
+        source_ids: &[String],
+    ) -> Result<Self, sqlx::Error> {
+        if !document_arm_gates_on_count(filter) {
+            return Ok(Self::Estimated);
+        }
+        let span = tracing::info_span!(
+            "soup.sql.count_document_grants",
+            grants = tracing::field::Empty
+        );
+        let counted = sqlx::query_scalar!(
+            r#"
+            SELECT COUNT(*) AS "count!"
+            FROM (
+                SELECT 1
+                FROM entity_access ea
+                WHERE ea.source_id = ANY($1)
+                    AND ea.entity_type = 'document'
+                LIMIT $2
+            ) held
+            "#,
+            source_ids,
+            i64::from(COUNTED_DOCUMENT_GRANTS) + 1
+        )
+        .persistent(false)
+        .fetch_one(connection)
+        .instrument(span.clone())
+        .await?;
+        span.record("grants", counted);
+        Ok(u32::try_from(counted)
+            .ok()
+            .filter(|&grants| grants <= COUNTED_DOCUMENT_GRANTS)
+            .map_or(Self::Estimated, Self::Counted))
     }
+}
+
+/// Whether the document arm checks access against the caller's counted
+/// grants. It does not when it can return no document, when it checks its
+/// named documents after its filters ([`DocumentArmAccess::AfterFilters`]),
+/// or when its filter requires a folder or a notification
+/// ([`requires_a_folder_or_notification`]).
+fn document_arm_gates_on_count(filter: &EntityFilterAst) -> bool {
+    let document_filter = filter.document_filter.as_deref();
+    DynamicArms::new(filter).documents
+        && !names_few_documents(document_filter)
+        && !requires_a_folder_or_notification(document_filter)
+}
+
+/// Whether every document the filter admits is in a named folder, or has a
+/// notification for the caller. Postgres reads those few documents by index
+/// first and probes each one's grants, which costs less than reading every
+/// grant the caller holds: a folder's page took under a millisecond with the
+/// grants estimated, and up to a tenth of a second with them counted.
+fn requires_a_folder_or_notification(ast: Option<&Expr<DocumentLiteral>>) -> bool {
+    ast.is_some_and(|expr| {
+        expr.collapse_frames(|frame: filter_ast::ExprFrame<bool, _>| match frame {
+            filter_ast::ExprFrame::And(a, b) => a || b,
+            filter_ast::ExprFrame::Or(a, b) => a && b,
+            filter_ast::ExprFrame::Not(_) => false,
+            filter_ast::ExprFrame::Literal(
+                DocumentLiteral::ProjectId(_) | DocumentLiteral::NotificationState(_),
+            ) => true,
+            filter_ast::ExprFrame::Literal(_) => false,
+        })
+    })
 }
 
 /// The most named ids an arm checks access for after its filters. Each
@@ -1989,31 +2062,40 @@ struct FencedPage {
     after_cursor: &'static str,
 }
 
-/// How a document arm gates access. A broad arm keeps the flattenable
-/// [`bound_access_semi_join`], so Postgres can hash the caller's grants. An
-/// arm bounded by at most [`MAX_NAMED_CANDIDATES`] named ids reads its
-/// candidates and their own filters behind an `OFFSET` fence and probes
-/// `entity_access` once per survivor afterwards ([`bounded_access_probe`]):
-/// Postgres otherwise checks access first, on every listed id, and pays a
-/// grant lookup for each document the sub-type, file-type and property
-/// filters then reject.
+/// Whether the filter names at most [`MAX_NAMED_CANDIDATES`] documents, and
+/// admits no other.
+fn names_few_documents(ast: Option<&Expr<DocumentLiteral>>) -> bool {
+    named_document_bound(ast).is_some_and(|bound| bound <= MAX_NAMED_CANDIDATES)
+}
+
+/// How a document arm gates access. A broad arm keeps a flattenable
+/// semi-join: [`counted_document_access_semi_join`] when the caller's grants
+/// were counted, [`bound_access_semi_join`] otherwise, so Postgres can hash
+/// the caller's grants or probe them per candidate. An arm bounded by at
+/// most [`MAX_NAMED_CANDIDATES`] named ids reads its candidates and their
+/// own filters behind an `OFFSET` fence and probes `entity_access` once per
+/// survivor afterwards ([`bounded_access_probe`]): Postgres otherwise checks
+/// access first, on every listed id, and pays a grant lookup for each
+/// document the sub-type, file-type and property filters then reject.
 #[derive(Clone, Copy)]
 enum DocumentArmAccess {
     Joined,
+    Counted(u32),
     AfterFilters,
 }
 
 impl DocumentArmAccess {
-    fn new(document_filter: Option<&Expr<DocumentLiteral>>) -> Self {
-        match named_document_bound(document_filter) {
-            Some(bound) if bound <= MAX_NAMED_CANDIDATES => Self::AfterFilters,
-            _ => Self::Joined,
+    fn new(document_filter: Option<&Expr<DocumentLiteral>>, grants: DocumentGrants) -> Self {
+        match grants {
+            _ if names_few_documents(document_filter) => Self::AfterFilters,
+            DocumentGrants::Counted(grants) => Self::Counted(grants),
+            DocumentGrants::Estimated => Self::Joined,
         }
     }
 
     fn property_probe(self) -> PropertyProbe {
         match self {
-            Self::Joined => PropertyProbe::Planned,
+            Self::Joined | Self::Counted(_) => PropertyProbe::Planned,
             Self::AfterFilters => PropertyProbe::PerCandidate,
         }
     }
@@ -2021,7 +2103,7 @@ impl DocumentArmAccess {
     /// Opens the arm, before its top clause.
     fn open(self) -> &'static str {
         match self {
-            Self::Joined => "",
+            Self::Joined | Self::Counted(_) => "",
             Self::AfterFilters => "SELECT * FROM (",
         }
     }
@@ -2032,7 +2114,7 @@ impl DocumentArmAccess {
     fn close(self, page: Option<&FencedPage>, source_ids: usize) -> String {
         let probe = bounded_access_probe("bounded_documents.id", "document", source_ids);
         match (self, page) {
-            (Self::Joined, _) => String::new(),
+            (Self::Joined | Self::Counted(_), _) => String::new(),
             (Self::AfterFilters, None) => {
                 format!(" {PER_CANDIDATE}) bounded_documents WHERE {probe}\n")
             }
@@ -2076,7 +2158,7 @@ fn bounded_access_probe(id_sql: &str, entity_type: &str, source_ids: usize) -> S
 fn document_top_where_clause(
     sort_method: SimpleSortMethod,
     access: DocumentArmAccess,
-    sources: SourceGrants,
+    source_ids: usize,
 ) -> String {
     let user_history_join = if top_needs_user_history(sort_method) {
         r#"                LEFT JOIN "UserHistory" uh ON uh."itemId" = d.id AND uh."itemType" = 'document' AND uh."userId" = $1
@@ -2087,7 +2169,11 @@ fn document_top_where_clause(
     let access_clause = match access {
         DocumentArmAccess::Joined => format!(
             "\n                AND {}",
-            bound_access_semi_join("d.id", "document", sources)
+            bound_access_semi_join("d.id", "document", source_ids)
+        ),
+        DocumentArmAccess::Counted(grants) => format!(
+            "\n                AND {}",
+            counted_document_access_semi_join(source_ids, grants)
         ),
         DocumentArmAccess::AfterFilters => String::new(),
     };
@@ -2097,40 +2183,135 @@ fn document_top_where_clause(
     )
 }
 
-fn chat_top_where_clause(sources: SourceGrants) -> String {
+fn chat_top_where_clause(source_ids: usize) -> String {
     format!(
         r#"                WHERE c."deletedAt" IS NULL
                 AND {}
 "#,
-        bound_access_semi_join("c.id", "chat", sources)
+        bound_access_semi_join("c.id", "chat", source_ids)
     )
 }
 
-fn project_top_where_clause(sources: SourceGrants) -> String {
+fn project_top_where_clause(source_ids: usize) -> String {
     format!(
         r#"                WHERE p."deletedAt" IS NULL
                 AND {}
 "#,
-        bound_access_semi_join("p.id", "project", sources)
+        bound_access_semi_join("p.id", "project", source_ids)
     )
 }
 
+/// Source scans read up to a page from every source the user holds, where the item tables read
+/// each visible item once. Past this many sources × page size the query reads the item tables. A
+/// routing threshold fit to the production-scale benchmark, not a bound on rows read.
+const SOURCE_SCAN_ROWS: i64 = 5_000;
+
+/// Each source also costs an index descent per kind before it yields a row. The benchmark's users
+/// held up to 354 sources; past this many the query reads the item tables.
+const SOURCE_SCAN_SOURCES: i64 = 400;
+
+/// What decides whether a page may read `source_items`: asked once, on the page's connection,
+/// before any page with a projected arm, and never with the projection disabled.
+struct ScanBound {
+    /// How many sources `fetch_user_source_ids` returned for the user.
+    sources: i64,
+    /// Whether the session's time zone is UTC. Projected scans order and bound the stored
+    /// `timestamp` values, which order like the item-table path's `timestamptz` casts only
+    /// where no daylight-saving jump reorders them.
+    utc: bool,
+    /// Whether the table is maintained and was backfilled since (`source_items_exact()`). Without
+    /// it the table can be empty or stale, so the page reads the item tables: a revoked grant
+    /// must not keep listing an item.
+    exact: bool,
+}
+
+impl ScanBound {
+    fn allows(&self, reads: FeedReads, limit: i64) -> bool {
+        self.exact
+            && match reads.ordered {
+                None => true,
+                Some(OrderedScans::Owner) => self.utc,
+                Some(OrderedScans::Sources) => {
+                    self.utc
+                        && self.sources <= SOURCE_SCAN_SOURCES
+                        && self.sources * limit <= SOURCE_SCAN_ROWS
+                }
+            }
+    }
+}
+
+async fn scan_bound(
+    connection: &mut sqlx::PgConnection,
+    source_ids: &[String],
+) -> Result<ScanBound, sqlx::Error> {
+    let sources = i64::try_from(source_ids.len()).unwrap_or(i64::MAX);
+    let span = tracing::info_span!(
+        "soup.source_items.bound",
+        sources,
+        utc = tracing::field::Empty,
+        exact = tracing::field::Empty
+    );
+    let state = sqlx::query!(
+        r#"SELECT current_setting('TimeZone') IN ('UTC', 'Etc/UTC') AS "utc!",
+            source_items_exact() AS "exact!""#
+    )
+    .fetch_one(connection)
+    .instrument(span.clone())
+    .await?;
+    span.record("utc", state.utc);
+    span.record("exact", state.exact);
+    Ok(ScanBound {
+        sources,
+        utc: state.utc,
+        exact: state.exact,
+    })
+}
+
+/// Where `build_query` finds documents, chats and projects.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ItemSource {
+    /// `source_items`, under every sort it can order.
+    SourceItems,
+    /// The item tables, which `CreatedAt` always reads.
+    ItemTables,
+}
+
+/// The flat query over the item tables, as production builds it with the projection disabled.
+#[cfg(test)]
 fn build_query<'a>(
     filter_ast: &'a EntityFilterAst,
     exclude_frecency: bool,
     sort: DynamicSort,
-    gate: AccessGate,
+    document_grants: DocumentGrants,
     document_ids: &mut DocumentIdArrays,
 ) -> QueryBuilder<'a, Postgres> {
+    build_query_from(
+        filter_ast,
+        exclude_frecency,
+        sort,
+        document_grants,
+        ItemSource::ItemTables,
+        "",
+        document_ids,
+    )
+    .0
+}
+
+/// The flat query, reading documents, chats and projects from `item_source` where it can.
+/// Also returns the in-order scans whose bound the caller must check before running it.
+fn build_query_from<'a>(
+    filter_ast: &'a EntityFilterAst,
+    exclude_frecency: bool,
+    sort: DynamicSort,
+    document_grants: DocumentGrants,
+    item_source: ItemSource,
+    viewer: &str,
+    document_ids: &mut DocumentIdArrays,
+) -> (QueryBuilder<'a, Postgres>, Option<FeedReads>) {
     let sort_method = sort.timestamp_method();
     let source_ids = source_ids_slot(sort, false);
-    let sources = SourceGrants {
-        slot: source_ids,
-        gate,
-    };
     let property_sort = matches!(sort, DynamicSort::Property { .. });
     let name_sort = matches!(sort, DynamicSort::Name { .. });
-    let mut builder = sqlx::QueryBuilder::new(PREFIX);
 
     let DynamicArms {
         documents: include_documents,
@@ -2198,6 +2379,57 @@ fn build_query<'a>(
             filter_ast.project_filter.as_deref()
         };
 
+    let properties_filter = filter_ast.properties_filter.as_deref();
+    // An arm comes from source_items when the projection can order this sort and
+    // the arm's filter lets a source scan stop at the page; otherwise it reads its
+    // item table, as every arm does with the projection disabled. Building the
+    // document arm binds its id arrays, so only the arm the query reads is built.
+    let projected = item_source == ItemSource::SourceItems
+        && matches!(sort, DynamicSort::Timestamp(method) if Feed::serves(method));
+    let document_arm = (projected && include_documents)
+        .then(|| {
+            FeedArm::document(
+                document_filter,
+                properties_filter,
+                optimized_notification_predicate.is_some() && document_notification.is_some(),
+                viewer,
+                document_ids,
+            )
+        })
+        .flatten();
+    let chat_arm = (projected && include_chats)
+        .then(|| {
+            FeedArm::chat(
+                chat_filter,
+                properties_filter,
+                optimized_notification_predicate.is_some() && chat_notification.is_some(),
+            )
+        })
+        .flatten();
+    let project_arm = (projected && include_projects)
+        .then(|| {
+            FeedArm::project(
+                project_filter,
+                properties_filter,
+                optimized_notification_predicate.is_some() && project_notification.is_some(),
+            )
+        })
+        .flatten();
+    let documents_from_table = include_documents && document_arm.is_none();
+    let chats_from_table = include_chats && chat_arm.is_none();
+    let projects_from_table = include_projects && project_arm.is_none();
+    let feed = projected
+        .then(|| {
+            Feed::new(
+                sort_method,
+                exclude_frecency,
+                source_ids,
+                [document_arm, chat_arm, project_arm].into_iter().flatten(),
+            )
+        })
+        .flatten();
+
+    let mut builder = sqlx::QueryBuilder::new(PREFIX);
     if let Some(predicate) = optimized_notification_predicate {
         let mut item_types = Vec::with_capacity(3);
         if include_documents && document_notification.is_some() {
@@ -2211,6 +2443,9 @@ fn build_query<'a>(
         }
         build_notification_items_cte(&mut builder, predicate, &item_types);
     }
+    if let Some(feed) = &feed {
+        feed.push_ctes(&mut builder);
+    }
 
     // TopItems CTE: lightweight id + sort_ts with filters, cursor, and limit
     builder.push("TopItems AS (");
@@ -2223,11 +2458,15 @@ fn build_query<'a>(
 
     let mut needs_separator = false;
 
-    if include_documents {
+    if let Some(feed) = &feed {
+        feed.push_members(&mut builder, &mut needs_separator);
+    }
+
+    if documents_from_table {
         push_union_separator(&mut builder, &mut needs_separator);
         // Subtype is needed only for task-property filters or property-sort namespaces.
         let needs_task_property_joins = document_filter_needs_task_property_joins(document_filter);
-        let access = DocumentArmAccess::new(document_filter);
+        let access = DocumentArmAccess::new(document_filter, document_grants);
         builder.push(access.open());
         builder.push(document_top_clause(
             sort_method,
@@ -2242,7 +2481,7 @@ fn build_query<'a>(
         if needs_task_property_joins {
             builder.push(DOCUMENT_TASK_PROPERTY_JOINS);
         }
-        builder.push(document_top_where_clause(sort_method, access, sources));
+        builder.push(document_top_where_clause(sort_method, access, source_ids));
         builder.push(build_document_filter(document_filter, Some(document_ids)));
         builder.push(build_probed_properties_filter(
             filter_ast.properties_filter.as_deref(),
@@ -2253,14 +2492,14 @@ fn build_query<'a>(
         builder.push(access.close(page, source_ids));
     }
 
-    if include_chats {
+    if chats_from_table {
         push_union_separator(&mut builder, &mut needs_separator);
         // Chat top clause (lightweight)
         builder.push(chat_top_clause(sort_method, property_sort, name_sort));
         if optimized_notification_predicate.is_some() && chat_notification.is_some() {
             builder.push(build_notification_join("c", "chat"));
         }
-        builder.push(chat_top_where_clause(sources));
+        builder.push(chat_top_where_clause(source_ids));
         builder.push(build_chat_filter(chat_filter));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
@@ -2268,14 +2507,14 @@ fn build_query<'a>(
         ));
     }
 
-    if include_projects {
+    if projects_from_table {
         push_union_separator(&mut builder, &mut needs_separator);
         // Project top clause (lightweight)
         builder.push(project_top_clause(sort_method, property_sort, name_sort));
         if optimized_notification_predicate.is_some() && project_notification.is_some() {
             builder.push(build_notification_join("p", "project"));
         }
-        builder.push(project_top_where_clause(sources));
+        builder.push(project_top_where_clause(source_ids));
         builder.push(build_project_filter(project_filter));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
@@ -2467,7 +2706,7 @@ fn build_query<'a>(
     ));
     builder.push(" LIMIT $3");
 
-    builder
+    (builder, feed.as_ref().map(Feed::reads))
 }
 
 #[derive(Debug, FromRow)]
@@ -2744,7 +2983,7 @@ impl SoupRow {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct ExpandedDynamicCursorArgs<'a> {
     /// the user for which we are performing the query
     pub user_id: MacroUserIdStr<'a>,
@@ -2761,9 +3000,11 @@ pub(crate) struct ExpandedDynamicCursorArgs<'a> {
 /// this query tens of milliseconds to start, so at the default
 /// `parallel_setup_cost` callers with a few thousand grants ran twice as slow
 /// in parallel; the raised cost keeps parallel plans for the largest callers.
+/// Its statements read one snapshot, so the grants [`DocumentGrants::count`]
+/// counts are the rows [`counted_document_access_semi_join`] reads.
 async fn begin_dynamic_query(db: &PgPool) -> Result<Transaction<'static, Postgres>, sqlx::Error> {
     let mut transaction = db
-        .begin()
+        .begin_with("BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY")
         .instrument(tracing::info_span!(
             "soup.pool.acquire",
             pool_size = db.size(),
@@ -2780,6 +3021,7 @@ async fn begin_dynamic_query(db: &PgPool) -> Result<Transaction<'static, Postgre
 async fn expanded_dynamic_cursor_soup_hydrated(
     db: &PgPool,
     args: ExpandedDynamicCursorArgs<'_>,
+    item_source: ItemSource,
 ) -> Result<Vec<SoupProjectionHydration>, sqlx::Error> {
     let ExpandedDynamicCursorArgs {
         user_id,
@@ -2806,16 +3048,30 @@ async fn expanded_dynamic_cursor_soup_hydrated(
 
     let mut transaction = begin_dynamic_query(db).await?;
     let source_ids = fetch_user_source_ids(&mut transaction, user_id.as_ref()).await?;
-    let gate = access_gate(&mut transaction, cursor.filter(), &source_ids).await?;
-    let mut document_ids =
-        DocumentIdArrays::starting_at(first_document_id_slot(*cursor.sort_method(), false));
-    let mut builder = build_query(
-        cursor.filter(),
-        exclude_frecency,
-        *cursor.sort_method(),
-        gate,
-        &mut document_ids,
-    );
+    let document_grants =
+        DocumentGrants::count(&mut transaction, cursor.filter(), &source_ids).await?;
+    let first_document_ids = first_document_id_slot(*cursor.sort_method(), false);
+    let mut document_ids = DocumentIdArrays::starting_at(first_document_ids);
+    let build = |item_source, document_ids: &mut DocumentIdArrays| {
+        build_query_from(
+            cursor.filter(),
+            exclude_frecency,
+            *cursor.sort_method(),
+            document_grants,
+            item_source,
+            user_id.as_ref(),
+            document_ids,
+        )
+    };
+    let (mut builder, feed_reads) = build(item_source, &mut document_ids);
+    if let Some(reads) = feed_reads
+        && !scan_bound(&mut transaction, &source_ids)
+            .await?
+            .allows(reads, query_limit)
+    {
+        document_ids = DocumentIdArrays::starting_at(first_document_ids);
+        (builder, _) = build(ItemSource::ItemTables, &mut document_ids);
+    }
     let mut query = builder
         .build()
         .bind(user_id.as_ref())
@@ -2871,19 +3127,56 @@ async fn expanded_dynamic_cursor_soup_hydrated(
 pub(crate) async fn expanded_dynamic_cursor_soup_with_projection(
     db: &PgPool,
     args: ExpandedDynamicCursorArgs<'_>,
+    source_items_enabled: bool,
 ) -> Result<Vec<SoupProjectionHydration>, sqlx::Error> {
-    expanded_dynamic_cursor_soup_hydrated(db, args).await
+    let item_source = if source_items_enabled {
+        ItemSource::SourceItems
+    } else {
+        ItemSource::ItemTables
+    };
+    expanded_dynamic_cursor_soup_hydrated(db, args, item_source).await
 }
 
-/// Execute a flat expanded dynamic query without exposing projection metadata.
+/// Execute a flat expanded dynamic query on both listing paths, require the same
+/// page from each, and return it without projection metadata.
 #[cfg(test)]
 #[tracing::instrument(err, skip_all, fields(limit = i64::from(args.limit), exclude_frecency = args.exclude_frecency))]
 pub(crate) async fn expanded_dynamic_cursor_soup(
     db: &PgPool,
     args: ExpandedDynamicCursorArgs<'_>,
 ) -> Result<Vec<SoupItem<()>>, sqlx::Error> {
-    Ok(expanded_dynamic_cursor_soup_hydrated(db, args)
-        .await?
+    let item_tables =
+        expanded_dynamic_cursor_soup_hydrated(db, args.clone(), ItemSource::ItemTables).await?;
+    // The migrations install no maintenance triggers: turn them on and rebuild the projection
+    // from what the fixtures wrote, so reads trust it; `crates/source_items` tests the triggers.
+    sqlx::query!("SELECT source_items_install_triggers()")
+        .execute(db)
+        .await?;
+    let backfill = source_items::backfill::run(db).await?;
+    assert!(
+        backfill.readable,
+        "the projection was not maintained while backfilled"
+    );
+    let mismatches = source_items::audit::run(db).await?;
+    assert!(
+        mismatches.is_empty(),
+        "source_items drifted: {mismatches:?}"
+    );
+    let source_items =
+        expanded_dynamic_cursor_soup_hydrated(db, args, ItemSource::SourceItems).await?;
+    let shown = |page: &[SoupProjectionHydration]| {
+        page.iter()
+            .map(|hydration| serde_json::to_value(&hydration.item).unwrap())
+            .collect::<Vec<_>>()
+    };
+    // Production reads the item tables unless the projection is enabled, so
+    // every query test checks both listings and asserts on the default one.
+    assert_eq!(
+        shown(&source_items),
+        shown(&item_tables),
+        "source_items and the item tables listed different pages"
+    );
+    Ok(item_tables
         .into_iter()
         .map(|hydration| hydration.item)
         .collect())
@@ -3036,15 +3329,11 @@ fn build_grouped_query<'a>(
     exclude_frecency: bool,
     grouping: &'a GroupingConfig,
     sort: DynamicSort,
-    gate: AccessGate,
+    document_grants: DocumentGrants,
     document_ids: &mut DocumentIdArrays,
 ) -> (QueryBuilder<'a, Postgres>, Option<String>) {
     let sort_method = sort.timestamp_method();
     let source_ids = source_ids_slot(sort, true);
-    let sources = SourceGrants {
-        slot: source_ids,
-        gate,
-    };
     let property_sort = matches!(sort, DynamicSort::Property { .. });
     let name_sort = matches!(sort, DynamicSort::Name { .. });
     let mut builder = sqlx::QueryBuilder::new(PREFIX);
@@ -3087,7 +3376,7 @@ fn build_grouped_query<'a>(
         push_union_separator(&mut builder, &mut needs_separator);
         let document_filter = filter_ast.document_filter.as_deref();
         let needs_task_property_joins = document_filter_needs_task_property_joins(document_filter);
-        let access = DocumentArmAccess::new(document_filter);
+        let access = DocumentArmAccess::new(document_filter, document_grants);
         builder.push(access.open());
         builder.push(grouped_document_top_clause(
             sort_method,
@@ -3098,7 +3387,7 @@ fn build_grouped_query<'a>(
         if needs_task_property_joins {
             builder.push(DOCUMENT_TASK_PROPERTY_JOINS);
         }
-        builder.push(document_top_where_clause(sort_method, access, sources));
+        builder.push(document_top_where_clause(sort_method, access, source_ids));
         builder.push(build_document_filter(document_filter, Some(document_ids)));
         builder.push(build_probed_properties_filter(
             filter_ast.properties_filter.as_deref(),
@@ -3112,7 +3401,7 @@ fn build_grouped_query<'a>(
     if include_chats {
         push_union_separator(&mut builder, &mut needs_separator);
         builder.push(grouped_chat_top_clause(sort_method, name_sort));
-        builder.push(chat_top_where_clause(sources));
+        builder.push(chat_top_where_clause(source_ids));
         builder.push(build_chat_filter(filter_ast.chat_filter.as_deref()));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
@@ -3123,7 +3412,7 @@ fn build_grouped_query<'a>(
     if include_projects {
         push_union_separator(&mut builder, &mut needs_separator);
         builder.push(grouped_project_top_clause(sort_method, name_sort));
-        builder.push(project_top_where_clause(sources));
+        builder.push(project_top_where_clause(source_ids));
         builder.push(build_project_filter(filter_ast.project_filter.as_deref()));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
@@ -3337,7 +3626,8 @@ pub async fn expanded_dynamic_cursor_soup_grouped(
 
     let mut transaction = begin_dynamic_query(db).await?;
     let source_ids = fetch_user_source_ids(&mut transaction, user_id.as_ref()).await?;
-    let gate = access_gate(&mut transaction, cursor.filter(), &source_ids).await?;
+    let document_grants =
+        DocumentGrants::count(&mut transaction, cursor.filter(), &source_ids).await?;
     let mut document_ids =
         DocumentIdArrays::starting_at(first_document_id_slot(*cursor.sort_method(), true));
     let (mut query_builder, entity_type_bind) = build_grouped_query(
@@ -3345,7 +3635,7 @@ pub async fn expanded_dynamic_cursor_soup_grouped(
         exclude_frecency,
         &grouping,
         *cursor.sort_method(),
-        gate,
+        document_grants,
         &mut document_ids,
     );
 

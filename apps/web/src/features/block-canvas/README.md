@@ -58,7 +58,7 @@ for the remaining editor and collaboration work.
 
 ## Artifacts
 
-Behind `enable-canvas-artifacts`, an `artifact` node runs a self-contained HTML
+An `artifact` node runs a self-contained HTML
 document in `views/artifact-frame.tsx`. The frame's sandbox is `allow-scripts`
 only, so the document has an opaque origin with no access to Macro's cookies,
 storage or DOM. Never add `allow-same-origin`. `core/artifact-document.ts` writes
@@ -97,19 +97,128 @@ that forwards these keys unless the artifact handled them or the user is typing.
 The host treats those messages only as navigation. Touch devices use the on-screen
 buttons.
 
+## Desktop and touch views
+
+`canvas-next.tsx` is the entry: it owns the editor, state, clipboard and hotkeys,
+and holds the view's device switch. The pane's header is switched beside it, in
+`component/Block.tsx`, between `views/canvas-header.tsx` and
+`views/mobile/canvas-header.tsx`. `views/canvas-view.tsx` and
+`views/canvas-read-only-view.tsx` are the desktop compositions,
+`views/mobile/` the phone and tablet ones, and `views/shared/` the parts both
+render: `CanvasViewParts` (the root that wires the viewport, the scene, the
+insert menu, the presentation and the empty state), `CanvasInspectorSections`,
+`CanvasReadOnlyParts`, and `CANVAS_TOOLS`, which names and draws each tool
+while every view lists the tools it offers. A canvas embedded in a document
+keeps its controls inside the embed: the desktop read-only view on desktop, and
+on touch `views/mobile/canvas-embedded-view.tsx`, which lets the document
+scroll. There one finger or a pen over the canvas scrolls the document and the
+plain wheel does too (`yieldToPage` on the surface: `touch-action: pan-x pan-y`,
+and presses other than a mouse's ignored), while two fingers, a trackpad pinch
+and Ctrl/Cmd-wheel still move the canvas. **Interact** gives the canvas every
+gesture, with the Hand tool, until **Done** or a press elsewhere in the
+document. Zoom to fit and Done then sit at the bottom of the screen, above the
+dock, because the embed's own corner may be out of reach.
+
+On touch the canvas's controls are islands in the app's bottom chrome, in the
+`accessory` float region above the dock, so the dock, the home indicator and
+the keyboard never cover them, and the page's New button gives way while a
+canvas is open. Zoom and undo/redo sit on the left, the drawing tools in the
+middle, and, while something is selected, Style, Duplicate, Delete and More on
+the right. They share one row wherever it fits (tablets, a phone on its side);
+an upright phone stacks the tools under the rest. Where there is no room to list
+every tool, Rectangle and Ellipse fold into one button and Arrow, Line and
+Connector into another: a tap picks the group's last tool, and a tap while it is
+picked opens the others. A read-only canvas offers zoom, Select and Hand. The
+chrome steps aside while the keyboard is up. A press on it first commits text
+being edited and leaves an embed, as a press on the canvas does, because the
+float region renders it outside the canvas's own root. On a page without the
+app's bottom chrome (a public link opened signed out) there is no float region,
+and the same islands sit at the bottom of the canvas instead.
+
+The zoom button opens a sheet with what the desktop zoom menu holds: fit, zoom
+to selection, zoom levels, the dot grid and snapping. It also holds **Keep tool
+after drawing** (`toolLocked` in the canvas state): a drawing tool normally hands
+back to Select after one shape, line or text, which costs a finger a trip to the
+toolbar for every further one; kept, it stays and nothing is selected. The lock
+acts only while a drawing tool is chosen (`keepsTool`): under Select, a text
+edited or a connector's end dragged stays selected. More, and a long press on
+the canvas with Select or Hand, open a sheet with every context-menu action:
+clipboard, duplicate, select all, group, layer order and delete. Copy leaves the
+sheet open and confirms with a check, as copy actions do in other menus. A long press
+first selects what is under the finger, as a right-click does, and cancels
+whatever the press had started; `longPress` on the graphics input reports it,
+half a second in, if the finger has drifted no more than 10px. The sheet opens
+under the finger, and a browser clicks whatever is under a finger as it lifts,
+so the graphics input swallows that lift's click: letting go presses no row.
+When the press
+landed on an item inside the group it selected, the sheet adds Select inside
+group, which selects that item alone: a finger has no Cmd/Ctrl-click.
+
+On a phone Style opens the inspector in a sheet over the lower half of the
+screen. Its scrim is clear, so the shape stays visible and a change shows as it
+is made, and a tap on the canvas closes it with the selection kept. The colour
+picker is a popover that would cover the shape, so in the sheet each colour
+field also lists its swatches in a row (`swatchRow` on `InspectorColorField`),
+the palette and then the canvas's own colours. Wider touch
+screens keep the inspector as a floating panel on the right, between the split
+header and the bottom chrome; Style collapses it, remembered for the browser
+session.
+
 ## Controls
 
 The floating top toolbar uses the shared `Toolbar` and Phosphor icons for drawing
 and inserting media, document cards, and embeds. Tooltips show each tool's shortcut.
 Zoom, reset-to-100%, fit, undo, and redo live at the bottom-left. Adjacent controls
 toggle floating properties and layers panels.
-Fit Scene and menu/keyboard zoom use the full canvas viewport without subtracting
-floating panels. Fit Scene centers all scene geometry and
+On desktop, Fit Scene and menu/keyboard zoom use the full canvas viewport without
+subtracting floating panels. Fit Scene centers all scene geometry and
 zooms in or out to leave 100 screen pixels per side on the first axis to fill.
+The touch views fit into the part of the canvas their chrome leaves clear, with
+24px around the content: `MobileCanvasChrome` lays a frame between the header and
+the bottom chrome (and left of the side panel when it is open) and hands it to
+`frameWithin` (`views/shared/canvas-framing.ts`). Sheet zoom levels zoom about the
+middle of that frame. The view follows the frame: until the person has moved the
+canvas, the last fit is redone when the frame changes (the chrome is measured
+after the first paint, and a rotation changes everything); once they have, a
+rotation keeps what was in the middle in the middle, and chrome that grows or
+shrinks, or a keyboard that makes the view shorter, moves nothing. A fit of an
+empty canvas is not kept up, and neither is any fit once a press lands on the
+canvas or text is being typed.
 Camera zoom limits still apply; padding decreases for small embedded viewports.
-Ctrl/Meta-wheel zoom is pointer-anchored, with a continuous 0.002 exponential rate
-per normalized wheel pixel and an exponent cap of 0.2 per event (about 22% zoom-in).
+Ctrl/Meta-wheel zoom is pointer-anchored, with a continuous 0.01 exponential rate
+per normalized wheel pixel and an exponent cap of 0.6 per event (about 82% zoom-in).
 Plain wheel input pans at its existing speed.
+On a touchscreen two fingers navigate in every tool, editable or read-only: their
+midpoint pans, their spread zooms around it, and a flick glides to a stop. One
+finger still belongs to the tool. A second finger landing drops whatever the first
+started (marquee, move, resize, shape, stroke, connector, erase, text box) with no
+history entry and restores the selection from before it; a finger left behind does
+nothing until every finger has lifted. Touches inside an embed being interacted
+with, or inside text being edited, stay with that editor. A pen or mouse that is
+already pressed keeps its gesture, and fingers landing meanwhile do not
+navigate. Beside a pen they are a resting palm, so no tool hears of them
+either, until they lift. A pen that lands among fingers takes the surface from
+them: what one finger had started is dropped the same way, navigation stops
+where it is, and the fingers do nothing more, and reach no tool, until they
+have lifted and landed again. A two-finger flick glides only when the fingers
+were travelling together as they lifted: a pinch, whose midpoint also drifts,
+does not, and neither does a gesture the system cancelled.
+Each finger reports its own moves, so the camera is moved once per animation
+frame, to where both fingers are by then, rather than once per event.
+`attachTouchNavigation` in `packages/graphics/src/browser` owns this for every
+`GraphicsSurface`; the glide and the pinch math are `@macro-inc/graphics/pan-zoom`,
+which the lightbox and opened images also use for their momentum.
+
+In the touch view the first press of a pen gives the drawing to the pen
+(`drawsWith` in the canvas state, for as long as the canvas is open). From then
+on one finger pans under any tool but Select, Hand and Text, as two fingers do,
+and the tool never sees it (`fingerPans` on the graphics input). It pans only
+once it has moved 10px from where it landed, so a hand that merely settles
+moves nothing, and it glides on a flick. Once a pen has been seen the zoom
+sheet offers **Draw with pen only**, which hands drawing back to fingers when
+switched off; later pen presses do not switch it on again. The desktop view
+passes no `fingerPans` and has no pen mode.
+
 The Canvas panel's zoom menu offers **No grid snapping** (the default grid mode for each session),
 **Snap to px** (1 canvas px at every zoom), and **Auto snapping** (the smallest
 currently visible dot-grid interval, including faint dots). Auto follows zoom;
@@ -264,13 +373,42 @@ scale into its samples instead, preserving nominal brush width.
 Picking accepts painted stroke pixels or the existing 3-screen-pixel minimum
 outline tolerance; a thick stroke does not gain another 3px outside its paint.
 
+A finger gets larger targets than a cursor, decided by the pointer type of each
+press, while the handles are drawn the same size. A touch within 16px of a
+corner or the rotation knob, or 12px outside an edge, takes that handle even
+though nothing is drawn under it (`touchHandleAt` in the graphics core). A corner
+claims only the outer quarter of each side that meets at it, so a short side (one
+line of text) keeps its middle for its edge handle. Inside the frame the reach
+shrinks with it (a quarter of the shorter side for a corner, a sixth and at most
+8px for an edge), so the middle of a small shape still moves it; where the reach
+finds no handle a finger takes none, even on the strip drawn along the edge of a
+thin shape. Outside the frame the reach ends at another item's paint: a press
+there selects or drags that item. Inside the frame a press is the selection's,
+whatever is painted there, as it is for a cursor. A finger
+resizes or rotates once it has moved 3px; one that only taps near a handle
+changes nothing, and outside the frame it selects what it tapped or clears the
+selection. A touch that lands on nothing picks a stroke from 10px away rather
+than 3; paint under the finger always wins over a stroke that is merely near.
+The touch view also sets `touchHandles` on the surface, which holds for every
+pointer there: the rotation knob stands 32px off the frame instead of 16, a
+connector's endpoints are taken from 16px, and the corner-radius handles, which
+sit inside each corner, are left to the inspector's Corner radius field. An
+endpoint's reach holds over other items' paint, unlike a handle's: an end usually
+sits on the shape it is attached to, and only a selected connector has ends to
+take. An end taken from a distance (by a finger or pen, or by any pointer on
+that wider target) keeps its distance from the pointer and moves once the
+pointer has moved 3px, so a tap leaves the end, and what it is bound to, alone.
+A cursor that presses the end itself places it under the cursor, as on desktop.
+
 ## Ownership
 
 - `core/`: seed/defaults only. Editing algorithms and typed commands live in graphics.
 - `primitives/`: Solid state, mixed values, creation defaults and UI actions.
 - `components/`: inspector and layer list with explicit props.
-- `views/`: editor surface and controls composed around a supplied editor/state.
-- `canvas-next.tsx`: shared Loro editor (or read-only JSON before sharing), hotkeys and clipboard.
+- `views/`: editor surface and controls composed around a supplied editor/state,
+  split into desktop, `mobile/` and `shared/` (see Desktop and touch views).
+- `canvas-next.tsx`: shared Loro editor (or read-only JSON before sharing), hotkeys,
+  clipboard, and the device switch between the desktop and touch views.
 - `queries/canvas-session.ts`: shared runtime, initialization, recovery, permissions and teardown.
 - `primitives/create-canvas-presence.ts`: ephemeral cursor/selection/gesture publication.
 - `clipboard.ts` / `hotkeys.ts`: host adapters. No browser/app dependency in the core.
@@ -306,9 +444,27 @@ budget. Mixed-content performance and general spatial indexing remain later work
 ## Rich text checkpoint
 
 T chooses text. Click for auto width, or drag horizontally to choose a wrapping
-width. Double-click an existing text shape, or select it and press Enter, to edit.
+width. The text tool acts when the press is released, on new text and on existing
+text or labels alike, so a cancelled press (a second finger landing to pinch)
+opens no editor. A pen or mouse press outranks a touch: a palm that lands beside
+the pen cannot take the press, and a pen takes it from a palm already resting.
+Double-click an existing text shape, or select it and press Enter, to edit.
 Double-click empty canvas also creates text. Escape, Cmd/Ctrl+Enter, or a click
 outside commits the edit. Empty drafts disappear without an undo entry.
+On touch the on-screen keyboard going away also commits it, returns to Select and
+selects the text: a phone's Done button takes the focus from the text to nowhere
+(`focusout` without a `relatedTarget`), and a tablet's hide key leaves the focus
+in place, so there `onKeyboardClosed` watches the app's keyboard state and the
+visual viewport growing back. While text is typed the touch views keep it inside
+the frame and the visual viewport (`keepInFrame` in `views/shared/canvas-framing.ts`):
+the canvas pans as the keyboard comes up and as the text grows, and the page
+itself is put back if the browser scrolled it to reveal the caret, so the
+header stays on screen. Text that fits is kept whole; text larger than the
+frame follows its caret and is otherwise left where the person put it. The
+keyboard closing because the focus moved to one of the editor's own menus, or
+the window losing focus, does not commit. On every device a scroll the browser gives the canvas
+surface (a caret typed past its edge) is turned into the same pan and undone, so
+presses keep landing where they are aimed.
 
 The editing toolbar supports bold, italic, underline, strike, code, highlight,
 links, headings, quotes, and nested bulleted/numbered lists.
@@ -457,6 +613,13 @@ activates the highlighted slice instead of dismissing the menu. The center remai
 navigate; Enter selects and Escape closes. Scrolled results
 keep the same inset as the menu padding. The media picker includes a dashed drop
 area and Add files button for local images/videos.
+On touch the Attach button opens a sheet of the same choices, and Media and
+Reference open the picker in a second sheet with finger-sized rows; Media has an
+Upload media row where a desktop has the drop area.
+Uploading asks the device through `pickCanvasMedia`: the photo library in the iOS
+app (`pickPhotoLibraryMediaOrFiles`), a file picker everywhere else. The menu
+closes as the picker opens, and the picker's input stays in the document until it
+answers, so the files arrive although the menu that asked is gone.
 Insertion keeps the world position captured when the menu opened, even under
 pan/zoom. New embed insertion and preview-to-embed conversion are unavailable.
 Existing embeds can be converted to previews in the inspector. Double-click an
@@ -499,8 +662,6 @@ selection, and group movement. Scene hierarchy, paint order, and picking bounds
 are indexed on immutable snapshots; edits and undo replace those indexes.
 Selection outlines share a camera transform so panning does not rewrite every
 outline. Mutable scene builders continue to bypass caches.
-
-On touch layouts, keep the floating zoom/inspector below the split header so the details button and document-title file menu remain reachable.
 
 
 ## AI snapshot rendering and measured fitting
