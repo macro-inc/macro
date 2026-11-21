@@ -46,8 +46,8 @@ impl ContactsPageRepository for DbContactsRepository {
         .await?;
         let has_more = rows.len() > usize::from(limit.get());
         rows.truncate(usize::from(limit.get()));
-        // Advance through source rows before filtering malformed IDs so a bad
-        // legacy row cannot strand every subsequent valid contact.
+        // Advance through source rows before filtering hidden and malformed
+        // IDs so neither can strand every subsequent valid contact.
         let next_cursor = rows
             .last()
             .filter(|_| has_more)
@@ -58,6 +58,7 @@ impl ContactsPageRepository for DbContactsRepository {
             .transpose()?;
         let contacts = rows
             .into_iter()
+            .filter(|row| !row.hidden)
             .filter_map(|row| ContactIdEntry::parse(row.contact))
             .collect();
         Ok(ContactIdPage {

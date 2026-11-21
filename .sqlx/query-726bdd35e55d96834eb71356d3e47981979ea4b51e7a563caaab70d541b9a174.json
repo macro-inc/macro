@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Keep the viewer as a scalar initplan. With a high-degree viewer, substituting\n-- its literal into each branch can make Postgres scan a global ordering index\n-- and discard unrelated edges instead of seeking the viewer's composite index.\n-- Valid IDs are nonempty. An empty initial bound avoids a nullable OR turning\n-- deep cursors into post-scan filters when a prepared statement uses a generic plan.\n--\n-- A legacy edge says nothing about direction, so the directed lists decide:\n-- a peer is hidden when only the peer has the viewer (the peer's inbox or\n-- invite) and nothing says the viewer has the peer (no list or inbox row of\n-- the viewer's, not a teammate). Edges no list explains stay visible. Hidden\n-- rows still come back, flagged, so the cursor advances past them; the probes\n-- run only for the page's rows, two primary-key reads each.\nWITH viewer AS MATERIALIZED (SELECT $1::text AS id)\nSELECT\n    page.contact AS \"contact!\",\n    (\n        (\n            EXISTS (\n                SELECT 1 FROM contact_inbox_members AS theirs\n                WHERE theirs.user_id = lower(page.contact COLLATE \"C\")\n                  AND theirs.contact_user_id = lower($1 COLLATE \"C\")\n            )\n            OR EXISTS (\n                SELECT 1 FROM contact_list_members AS theirs\n                WHERE theirs.user_id = lower(page.contact COLLATE \"C\")\n                  AND theirs.contact_user_id = lower($1 COLLATE \"C\")\n                  AND theirs.list_key = 'invited'\n            )\n        )\n        AND NOT EXISTS (\n            SELECT 1 FROM contact_list_members AS mine\n            WHERE mine.user_id = lower($1 COLLATE \"C\")\n              AND mine.contact_user_id = lower(page.contact COLLATE \"C\")\n        )\n        AND NOT EXISTS (\n            SELECT 1 FROM contact_inbox_members AS mine\n            WHERE mine.user_id = lower($1 COLLATE \"C\")\n              AND mine.contact_user_id = lower(page.contact COLLATE \"C\")\n        )\n        AND NOT EXISTS (\n            SELECT 1\n            FROM team_user AS own\n            JOIN team_user AS teammate ON teammate.team_id = own.team_id\n            WHERE own.user_id = $1 AND teammate.user_id = page.contact\n        )\n    ) AS \"hidden!\"\nFROM (\n    SELECT contact\n    FROM (\n        (\n            SELECT user1 AS contact\n            FROM contacts_connections\n            WHERE user2 = (SELECT id FROM viewer) AND user1 > COALESCE($2::text, '')\n            ORDER BY user1\n            LIMIT $3\n        )\n        UNION ALL\n        (\n            SELECT user2 AS contact\n            FROM contacts_connections\n            WHERE user1 = (SELECT id FROM viewer) AND user2 > COALESCE($2::text, '')\n            ORDER BY user2\n            LIMIT $3\n        )\n        UNION ALL\n        SELECT $1::text AS contact WHERE $1 > COALESCE($2::text, '')\n    ) AS directory\n    ORDER BY contact\n    LIMIT $3\n) AS page\nORDER BY page.contact\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "contact!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "hidden!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "726bdd35e55d96834eb71356d3e47981979ea4b51e7a563caaab70d541b9a174"
+}

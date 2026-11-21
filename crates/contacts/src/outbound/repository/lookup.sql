@@ -18,5 +18,43 @@ LEFT JOIN LATERAL (
       AND user1 COLLATE "C" LIKE 'macro|%'
     LIMIT 1
 ) AS membership ON TRUE
-WHERE requested.contact = $1 OR membership.present IS TRUE
+-- Hide a peer only the peer has, as page.sql does: the peer's inbox or invite
+-- names the viewer, and no list or inbox row of the viewer's, nor the team,
+-- names the peer. Ids in the lists are canonical, like requested.contact.
+WHERE requested.contact = $1
+   OR (
+       membership.present IS TRUE
+       AND NOT (
+           (
+               EXISTS (
+                   SELECT 1 FROM contact_inbox_members AS theirs
+                   WHERE theirs.user_id = requested.contact
+                     AND theirs.contact_user_id = lower($1 COLLATE "C")
+               )
+               OR EXISTS (
+                   SELECT 1 FROM contact_list_members AS theirs
+                   WHERE theirs.user_id = requested.contact
+                     AND theirs.contact_user_id = lower($1 COLLATE "C")
+                     AND theirs.list_key = 'invited'
+               )
+           )
+           AND NOT EXISTS (
+               SELECT 1 FROM contact_list_members AS mine
+               WHERE mine.user_id = lower($1 COLLATE "C")
+                 AND mine.contact_user_id = requested.contact
+           )
+           AND NOT EXISTS (
+               SELECT 1 FROM contact_inbox_members AS mine
+               WHERE mine.user_id = lower($1 COLLATE "C")
+                 AND mine.contact_user_id = requested.contact
+           )
+           AND NOT EXISTS (
+               SELECT 1
+               FROM team_user AS own
+               JOIN team_user AS teammate ON teammate.team_id = own.team_id
+               WHERE own.user_id = $1
+                 AND lower(teammate.user_id COLLATE "C") = requested.contact
+           )
+       )
+   )
 ORDER BY requested.ordinal

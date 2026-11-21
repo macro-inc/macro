@@ -34,17 +34,11 @@ impl ContactsRepository for DbContactsRepository {
         user_id: MacroUserIdStr<'_>,
     ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
         // Each pair is stored once with user1 < user2, so the branches are
-        // disjoint and neither repeats a contact.
-        let rows = sqlx::query!(
-            "
-            SELECT user1 AS contact FROM contacts_connections WHERE user2 = $1
-            UNION ALL
-            SELECT user2 AS contact FROM contacts_connections WHERE user1 = $1
-            ",
-            user_id.as_ref()
-        )
-        .fetch_all(&self.db)
-        .await?;
+        // disjoint and neither repeats a contact. Peers only the peer has
+        // are left out, as in page.sql.
+        let rows = sqlx::query_file!("src/outbound/repository/contacts.sql", user_id.as_ref())
+            .fetch_all(&self.db)
+            .await?;
 
         Ok(rows
             .into_iter()
@@ -100,6 +94,47 @@ impl ContactsRepository for DbContactsRepository {
         })?;
 
         Ok(())
+    }
+
+    async fn delete_connections(
+        &self,
+        connections: Vec<(MacroUserIdStr<'_>, MacroUserIdStr<'_>)>,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
+        // Stored once with user1 < user2, so canonicalize like the insert.
+        let (users1, users2): (Vec<&str>, Vec<&str>) = connections
+            .iter()
+            .filter(|(a, b)| a.as_ref() != b.as_ref())
+            .map(|(a, b)| {
+                if a.as_ref() < b.as_ref() {
+                    (a.as_ref(), b.as_ref())
+                } else {
+                    (b.as_ref(), a.as_ref())
+                }
+            })
+            .unzip();
+        if users1.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let rows = sqlx::query!(
+            "
+            DELETE FROM contacts_connections AS c
+            USING unnest($1::text[], $2::text[]) AS removed (user1, user2)
+            WHERE c.user1 = removed.user1 AND c.user2 = removed.user2
+            RETURNING c.user1, c.user2
+            ",
+            &users1 as &[&str],
+            &users2 as &[&str]
+        )
+        .fetch_all(&self.db)
+        .await?;
+
+        let disconnected: HashSet<_> = rows
+            .into_iter()
+            .flat_map(|row| [row.user1, row.user2])
+            .filter_map(|id| MacroUserIdStr::try_from(id).ok())
+            .collect();
+        Ok(disconnected.into_iter().collect())
     }
 }
 

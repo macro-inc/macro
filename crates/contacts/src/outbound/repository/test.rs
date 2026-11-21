@@ -6,6 +6,8 @@ use sqlx::types::Uuid;
 
 use super::DbContactsRepository;
 
+mod one_directional;
+
 fn mid(s: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(s.to_owned()).unwrap()
 }
@@ -23,6 +25,45 @@ async fn test_create_connections_basic(pool: PgPool) -> sqlx::Result<()> {
         .await?;
     assert_eq!(pair.user1, user1);
     assert_eq!(pair.user2, user2);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_delete_connections_removes_only_the_named_pairs(pool: PgPool) -> sqlx::Result<()> {
+    let repo = DbContactsRepository::new(pool.clone());
+    repo.create_connections(vec![
+        (mid("macro|leaver@example.com"), mid("macro|a@example.com")),
+        (mid("macro|leaver@example.com"), mid("macro|b@example.com")),
+        (mid("macro|a@example.com"), mid("macro|b@example.com")),
+    ])
+    .await
+    .unwrap();
+
+    // Either order names the same stored pair.
+    let mut disconnected = repo
+        .delete_connections(vec![
+            (mid("macro|leaver@example.com"), mid("macro|a@example.com")),
+            (mid("macro|b@example.com"), mid("macro|leaver@example.com")),
+            (mid("macro|leaver@example.com"), mid("macro|nobody@example.com")),
+        ])
+        .await
+        .unwrap();
+    disconnected.sort_by(|a, b| a.as_ref().cmp(b.as_ref()));
+
+    assert_eq!(
+        disconnected,
+        vec![
+            mid("macro|a@example.com"),
+            mid("macro|b@example.com"),
+            mid("macro|leaver@example.com"),
+        ]
+    );
+    let remaining = sqlx::query!("SELECT user1, user2 FROM contacts_connections")
+        .fetch_all(&pool)
+        .await?;
+    assert_eq!(remaining.len(), 1);
+    assert_eq!(remaining[0].user1, "macro|a@example.com");
+    assert_eq!(remaining[0].user2, "macro|b@example.com");
     Ok(())
 }
 

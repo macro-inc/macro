@@ -1,5 +1,5 @@
--- Ranked people search over the viewer's contact graph (both directions),
--- self, and the viewer's current team. Peers are read through
+-- Ranked people search over the viewer's contact graph (both directions,
+-- less peers only the peer has), self, and the viewer's current team. Peers are read through
 -- contacts_connections_user1_user2_key and idx_contacts_connections_user2_user1,
 -- so nothing outside the viewer's own edges and team is ever read.
 -- $1 viewer id, $2 trimmed query (at least two characters), $3 result limit.
@@ -57,8 +57,39 @@ ranked AS (
         ) AS is_prefix,
         COALESCE(NULLIF(p.full_name, ''), p.email) COLLATE "C" AS sort_key
     FROM profiles AS p
-    WHERE strpos(p.email, (SELECT needle FROM viewer)) > 0
-       OR strpos(p.full_name, (SELECT needle FROM viewer)) > 0
+    WHERE (
+        strpos(p.email, (SELECT needle FROM viewer)) > 0
+        OR strpos(p.full_name, (SELECT needle FROM viewer)) > 0
+    )
+      -- Hide a peer only the peer has, as page.sql does: the peer's inbox or
+      -- invite names the viewer, and no list or inbox row of the viewer's
+      -- names the peer. Teammates always stay. Probed for matches only.
+      AND NOT (
+          NOT p.is_teammate
+          AND (
+              EXISTS (
+                  SELECT 1 FROM contact_inbox_members AS theirs
+                  WHERE theirs.user_id = p.id COLLATE "C"
+                    AND theirs.contact_user_id = lower($1 COLLATE "C")
+              )
+              OR EXISTS (
+                  SELECT 1 FROM contact_list_members AS theirs
+                  WHERE theirs.user_id = p.id COLLATE "C"
+                    AND theirs.contact_user_id = lower($1 COLLATE "C")
+                    AND theirs.list_key = 'invited'
+              )
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM contact_list_members AS mine
+              WHERE mine.user_id = lower($1 COLLATE "C")
+                AND mine.contact_user_id = p.id COLLATE "C"
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM contact_inbox_members AS mine
+              WHERE mine.user_id = lower($1 COLLATE "C")
+                AND mine.contact_user_id = p.id COLLATE "C"
+          )
+      )
     -- Byte order keeps ties stable whatever the database's locale.
     ORDER BY p.is_teammate DESC, is_prefix DESC, sort_key, p.id COLLATE "C"
     LIMIT $3
