@@ -1021,24 +1021,24 @@ async fn an_undecodable_response_names_where_it_failed_but_not_the_value() {
 }
 
 #[tokio::test]
-async fn inbox_and_sent_windows_filter_and_sort_on_received_date_time() {
+async fn inbox_windows_read_arrival_and_sent_windows_read_send_time() {
     let (server, api, token) = setup().await;
-    for (folder, folder_name) in [
-        (RecentMailFolder::Inbox, "inbox"),
-        (RecentMailFolder::Sent, "sentitems"),
+    for (folder, folder_name, dated_by) in [
+        (RecentMailFolder::Inbox, "inbox", "receivedDateTime"),
+        (RecentMailFolder::Sent, "sentitems", "sentDateTime"),
     ] {
         Mock::given(method("GET"))
             .and(path(format!("/v1.0/me/mailFolders/{folder_name}/messages")))
-            .and(query_param("$orderby", "receivedDateTime desc"))
+            .and(query_param("$orderby", format!("{dated_by} desc")))
             .and(query_param("$top", "500"))
             .and(query_param(
                 "$filter",
-                "receivedDateTime ge 2026-10-21T09:30:00Z",
+                format!("{dated_by} ge 2026-10-21T09:30:00Z"),
             ))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({"value":[{
                 "id":folder_name, "conversationId":"c1", "parentFolderId":folder_name,
                 "subject":"Invoice 42", "isRead":false, "isDraft":false, "flag":{},
-                "receivedDateTime":"2026-10-27T09:00:00Z"
+                "receivedDateTime":"2026-10-27T09:00:00Z", "sentDateTime":"2026-10-27T08:59:00Z"
             }]})))
             .expect(1)
             .mount(&server)

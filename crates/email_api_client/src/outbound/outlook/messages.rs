@@ -288,14 +288,16 @@ impl MailboxContentReader for OutlookApiClientRepository {
         since: Option<chrono::DateTime<Utc>>,
         folders: &[MailFolder],
     ) -> Result<Vec<MailboxMessage>, EmailApiError> {
-        let folder_name = match folder {
-            RecentMailFolder::Inbox => "inbox",
-            RecentMailFolder::Sent => "sentitems",
+        // Received mail is dated by its arrival, sent mail by when it was
+        // sent: the window's start and its order read the same date.
+        let (folder_name, dated_by) = match folder {
+            RecentMailFolder::Inbox => ("inbox", "receivedDateTime"),
+            RecentMailFolder::Sent => ("sentitems", "sentDateTime"),
         };
         let mut url = self.endpoint(&["me", "mailFolders", folder_name, "messages"])?;
         url.query_pairs_mut()
             .append_pair("$select", RECENT_MESSAGE_FIELDS)
-            .append_pair("$orderby", "receivedDateTime desc")
+            .append_pair("$orderby", &format!("{dated_by} desc"))
             .append_pair("$top", &limit.to_string());
         // Graph orders by a filtered property only when the filter names it
         // first, as this one does.
@@ -303,7 +305,7 @@ impl MailboxContentReader for OutlookApiClientRepository {
             url.query_pairs_mut().append_pair(
                 "$filter",
                 &format!(
-                    "receivedDateTime ge {}",
+                    "{dated_by} ge {}",
                     since.to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
                 ),
             );
