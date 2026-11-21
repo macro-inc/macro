@@ -169,32 +169,35 @@ impl<'a> Exec<'a> {
     /// process killed there would, and is dropped; the open after it runs the
     /// rest. Not traced, since a file with nothing to migrate opens whole and
     /// the other side's run need not migrate: counted as
-    /// `migration.interrupted` or `migration.not-interrupted`. An interrupted
-    /// open that asks for a reset fails the run.
+    /// `migration.interrupted` or `migration.not-interrupted`. A failed open
+    /// the hook did not stop, or one that asks for a reset, fails the run.
     fn interrupt_open(&mut self) -> Result<(), String> {
         let Some(steps) = self.interrupt_migration.take() else {
             return Ok(());
         };
         #[cfg(migration_hooks)]
         {
-            use cache_turso::migration_test_hooks::interrupt_after_steps;
+            use cache_turso::migration_test_hooks::{interrupt_after_steps, take_interrupted};
             let database = cache_turso::TursoFileDatabase::new(&self.path)
                 .map_err(|error| error.to_string())?;
-            interrupt_after_steps(Some(
-                steps
-                    .try_into()
-                    .map_err(|_| "--interrupt-migration-after is too large")?,
-            ));
+            interrupt_after_steps(Some(steps));
             let opened = database.open(SCOPE);
             interrupt_after_steps(None);
+            let interrupted = take_interrupted();
             match opened {
-                Ok(storage) => {
+                Ok(storage) if !interrupted => {
                     drop(storage);
                     self.count("migration.not-interrupted");
                 }
+                Ok(_) => return Err("the migration hook stopped an open that succeeded".into()),
                 Err(error) if error.requires_physical_reset() => {
                     return Err(format!(
                         "migration interrupted after step {steps} asked for a reset: {error}"
+                    ));
+                }
+                Err(error) if !interrupted => {
+                    return Err(format!(
+                        "the open with --interrupt-migration-after {steps} failed without the hook stopping it: {error}"
                     ));
                 }
                 Err(_) => self.count("migration.interrupted"),

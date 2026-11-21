@@ -94,7 +94,8 @@ disk after a reopen must come out the same.
   by NEW, each then running the case again.
 - Interrupted migration: build NEW with `MIGRATION_HOOKS=1` (its `cache-turso` needs the
   `migration-test-hooks` feature) and give it `FUZZ_ARGS_B="--interrupt-migration-after K"`:
-  its first open fails right after committing step K, as a killed process would, and the open
+  its first open fails right after committing step K, as a killed process would (the hook must
+  report it stopped that open), and the open
   after it finishes the migration. Stats count `migration.interrupted` (only opens that had
   that step to run are interrupted, so count them before trusting a clean run).
 - Rerun one seed: `bin/SIDE --seed N --schema static_assets/schema.graphql --assets
