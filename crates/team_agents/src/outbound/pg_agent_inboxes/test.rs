@@ -183,23 +183,36 @@ async fn a_live_update_never_overwrites_an_inbox_being_wound_down(pool: PgPool) 
             &user(AGENT),
             TEAM,
             Uuid::from_u128(1),
-            AgentInboxState::Paused,
+            AgentInboxState::Provisioning,
         )
         .await
         .unwrap();
-    let active = InboxUpdate {
-        mailbox_id: Some(Uuid::from_u128(9)),
-        address: Some("sam-rivera@agents.example.com".to_owned()),
-        state: AgentInboxState::Active,
+    let update = |state| InboxUpdate {
+        mailbox_id: None,
+        address: None,
+        state,
         last_error: None,
         fake_provider: false,
     };
+    for wound_down in [
+        AgentInboxState::Releasing,
+        AgentInboxState::Released,
+        AgentInboxState::Paused,
+    ] {
+        inboxes
+            .update(&user(AGENT), &update(wound_down))
+            .await
+            .unwrap();
 
-    let refused = inboxes.update_live(&user(AGENT), &active).await.unwrap();
+        let refused = inboxes
+            .update_live(&user(AGENT), &update(AgentInboxState::Active))
+            .await
+            .unwrap();
 
-    assert_eq!(refused, None);
-    assert_eq!(
-        inboxes.get(&user(AGENT)).await.unwrap().unwrap().state,
-        AgentInboxState::Paused
-    );
+        assert_eq!(refused, None, "{wound_down:?}");
+        assert_eq!(
+            inboxes.get(&user(AGENT)).await.unwrap().unwrap().state,
+            wound_down
+        );
+    }
 }
