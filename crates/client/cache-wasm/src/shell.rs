@@ -7,7 +7,8 @@ use cache_core::deps::OpId;
 use cache_core::engine::{
     BeginOptimisticWrite, CommitOptimisticWriteResult, DeferOptimisticWriteResult, Engine,
     EngineError, HydrationScope, HydrationWriteResult, InitialClaimOutcome, NetworkWrite,
-    QueryRegistration, ReadResult, RollbackOptimisticWriteResult, StagedHydrate, WriteResult,
+    NormalizedResponse, QueryRegistration, ReadResult, RollbackOptimisticWriteResult,
+    StagedHydrate, WriteResult,
 };
 use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
@@ -27,11 +28,11 @@ use cache_turso::{
 use predicate_index::RecordKey;
 use serde::{Deserialize, Serialize};
 use soup_filter_cache_adapter::{
-    SoupFilterCompileOutcome, WritePassError, WriteResponse, authoritative_projection_mutations,
-    compile_current_filter_request as compile_filter_request, dirty_projection_mutations,
-    mail::ProjectionError as MailProjectionError, notification_deletion_updates,
-    notification_projection_updates, optimistic_notification_updates,
-    optimistic_projection_mutations, write_passes,
+    SoupFilterCompileOutcome, WritePassError, WritePassStep, WritePasses, WriteResponse,
+    authoritative_projection_mutations, compile_current_filter_request as compile_filter_request,
+    dirty_projection_mutations, mail::ProjectionError as MailProjectionError,
+    notification_deletion_updates, notification_projection_updates,
+    optimistic_notification_updates, optimistic_projection_mutations, write_passes,
 };
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -219,16 +220,45 @@ impl HydrateRequest {
             scope: None,
         })
     }
+
+    fn write(&self) -> NetworkWrite<'_> {
+        NetworkWrite {
+            query: &self.query,
+            operation_name: self.operation_name.as_deref(),
+            variables: &self.variables,
+            data: &self.data,
+            identity: self.identity.as_deref(),
+        }
+    }
 }
 
 /// A hydrate's projections, read before its write, and where the WAL ended
 /// when they were read.
 struct PreparedHydrate {
     request: HydrateRequest,
+    /// The hydration scope as the host sent it, until the passes ran.
+    scope: Option<JsValue>,
+    /// The projection passes still to run, one per `stepHydrate`.
+    passes: Option<WritePasses>,
     projections: Vec<ProjectionMutation>,
+    /// The response normalized once for the passes and the write, under
+    /// `schema`.
+    normalized: Option<NormalizedResponse>,
+    schema: std::sync::Arc<cache_core::meta::Schema>,
     wal_position: Option<WalPosition>,
     /// The write itself, computed at `wal_position` by `stageHydrate`.
     staged: Option<StagedHydrate>,
+}
+
+impl PreparedHydrate {
+    /// Parses the scope once the projections are read, so a request that is
+    /// wrong in both ways fails on its projections first.
+    fn parse_scope(&mut self) -> Result<(), JsValue> {
+        if let Some(scope) = self.scope.take() {
+            self.request.scope = serde_wasm_bindgen::from_value(scope).map_err(err_js)?;
+        }
+        Ok(())
+    }
 }
 
 #[derive(Deserialize)]
@@ -603,12 +633,10 @@ impl CacheState {
         turso_storage(engine.storage()).wal_position().ok()
     }
 
-    /// The projection rows a hydrate's response changes. It only reads
-    /// storage, so requests that only read may run between it and the write.
-    async fn hydrate_projections(
-        &mut self,
-        request: &HydrateRequest,
-    ) -> Result<Vec<ProjectionMutation>, JsValue> {
+    /// Starts a hydrate's projection passes: the rows its response sets
+    /// itself, and whether the passes may reuse what storage holds for the
+    /// identity. Every pass only reads storage.
+    async fn hydrate_passes(&mut self, request: &HydrateRequest) -> Result<WritePasses, JsValue> {
         #[cfg(test)]
         {
             self.projection_reads += 1;
@@ -623,64 +651,105 @@ impl CacheState {
         let reuse_stored_identity = self
             .can_reuse_stored_identity(request.identity.as_deref())
             .await?;
-        // The passes below share one normalization of the response.
-        let response_schema = self.engine_mut()?.schema_snapshot();
-        let response = WriteResponse::new(
-            &response_schema,
-            &request.query,
-            request.operation_name.as_deref(),
-            &request.variables,
-            &request.data,
-        );
-        let projections = write_passes(
-            self.engine_mut()?,
-            &response,
-            reuse_stored_identity,
-            projections,
-        )
-        .await;
-        self.write_passes_result(projections)
+        Ok(WritePasses::new(reuse_stored_identity, projections))
     }
 
+    /// The projection rows a hydrate's response changes, every pass at once.
+    /// `normalized` must be current for the engine's schema.
+    async fn hydrate_projections(
+        &mut self,
+        request: &HydrateRequest,
+        normalized: Option<&NormalizedResponse>,
+    ) -> Result<Vec<ProjectionMutation>, JsValue> {
+        let mut passes = self.hydrate_passes(request).await?;
+        let schema = self.engine_mut()?.schema_snapshot();
+        // The passes share one normalization of the response.
+        let response = write_response(&schema, request, normalized);
+        loop {
+            let step = passes.step(self.engine_mut()?, &response).await;
+            if let WritePassStep::Done(projections) = self.write_passes_result(step)? {
+                return Ok(projections);
+            }
+        }
+    }
+
+    /// Normalizes the response and reads the rows it sets itself; the
+    /// projection passes run later, one per `step_hydrate`.
     async fn prepare_hydrate(
         &mut self,
-        mut request: HydrateRequest,
+        request: HydrateRequest,
         hydration_scope: JsValue,
     ) -> Result<PreparedHydrate, JsValue> {
         let wal_position = self.wal_position();
-        let projections = self.hydrate_projections(&request).await?;
-        request.scope = serde_wasm_bindgen::from_value(hydration_scope).map_err(err_js)?;
+        let engine = self.engine_mut()?;
+        let schema = engine.schema_snapshot();
+        // A response that fails to normalize fails the write, which reports it.
+        let normalized = engine.normalize_network(None, request.write()).ok();
+        let passes = self.hydrate_passes(&request).await?;
         Ok(PreparedHydrate {
             request,
-            projections,
+            scope: Some(hydration_scope),
+            passes: Some(passes),
+            projections: Vec::new(),
+            normalized,
+            schema,
             wal_position,
             staged: None,
         })
     }
 
-    /// Computes a prepared hydrate's write while it only reads. It stages
-    /// nothing when storage changed since the prepare, or the engine says the
-    /// hydrate must run whole; the commit then does what it always did. A
-    /// failed read fails the hydrate with the error the whole hydrate
-    /// reports, reset marker included.
+    /// Runs a prepared hydrate's next projection pass, and says whether one
+    /// ran. None runs once they all ran, or once storage or the schema
+    /// changed since the prepare: the commit then reads the projections
+    /// again, whole.
+    async fn step_hydrate(&mut self, prepared: &mut PreparedHydrate) -> Result<bool, JsValue> {
+        let Some(passes) = prepared.passes.as_mut() else {
+            return Ok(false);
+        };
+        let schema = self.engine_mut()?.schema_snapshot();
+        if prepared.wal_position.is_none()
+            || self.wal_position() != prepared.wal_position
+            || !std::sync::Arc::ptr_eq(&schema, &prepared.schema)
+        {
+            prepared.passes = None;
+            prepared.wal_position = None;
+            return Ok(false);
+        }
+        let response = write_response(
+            &prepared.schema,
+            &prepared.request,
+            prepared.normalized.as_ref(),
+        );
+        let step = passes.step(self.engine_mut()?, &response).await;
+        if let WritePassStep::Done(projections) = self.write_passes_result(step)? {
+            prepared.projections = projections;
+            prepared.passes = None;
+            prepared.parse_scope()?;
+        }
+        Ok(true)
+    }
+
+    /// Computes a prepared hydrate's write while it only reads, after any
+    /// projection passes still to run. It stages nothing when storage changed
+    /// since the prepare, or the engine says the hydrate must run whole; the
+    /// commit then does what it always did. A failed read fails the hydrate
+    /// with the error the whole hydrate reports, reset marker included.
     async fn stage_hydrate(&mut self, prepared: &mut PreparedHydrate) -> Result<(), JsValue> {
         prepared.staged = None;
+        while self.step_hydrate(prepared).await? {}
         if prepared.wal_position.is_none() || self.wal_position() != prepared.wal_position {
             return Ok(());
         }
-        let request = &prepared.request;
-        let write = NetworkWrite {
-            query: &request.query,
-            operation_name: request.operation_name.as_deref(),
-            variables: &request.variables,
-            data: &request.data,
-            identity: request.identity.as_deref(),
-        };
         let Some(engine) = self.engine.as_mut() else {
             return Ok(());
         };
         let staged = engine
-            .stage_hydrate(write, request.scope.as_ref(), &prepared.projections)
+            .stage_normalized_hydrate(
+                prepared.request.write(),
+                &mut prepared.normalized,
+                prepared.request.scope.as_ref(),
+                &prepared.projections,
+            )
             .await;
         let staged = self.engine_result(staged)?;
         // Staging only reads, so the WAL cannot have moved; check anyway.
@@ -694,29 +763,26 @@ impl CacheState {
         Ok(())
     }
 
-    /// Writes a prepared hydrate. When a write committed since its
-    /// projections were read, it reads them again first. A staged write
-    /// commits as it is while storage and the engine are unchanged.
+    /// Writes a prepared hydrate, after any projection passes still to run.
+    /// When a write committed since its projections were read, it reads them
+    /// again first. A staged write commits as it is while storage and the
+    /// engine are unchanged.
     async fn commit_hydrate(
         &mut self,
-        prepared: PreparedHydrate,
+        mut prepared: PreparedHydrate,
         ops: &RefCell<OpInterner>,
     ) -> Result<JsHydrationWriteResult, JsValue> {
         self.ensure_callable()?;
-        let PreparedHydrate {
-            request,
-            mut projections,
-            wal_position,
-            staged,
-        } = prepared;
-        let projections_reread = wal_position.is_none() || self.wal_position() != wal_position;
+        while self.step_hydrate(&mut prepared).await? {}
+        let projections_reread =
+            prepared.wal_position.is_none() || self.wal_position() != prepared.wal_position;
         if !projections_reread
-            && let Some(staged) = staged
+            && let Some(staged) = prepared.staged.take()
             && self.engine_mut()?.staged_hydrate_current(&staged)
         {
             let result = self
                 .engine_mut()?
-                .commit_staged_hydrate(staged, projections)
+                .commit_staged_hydrate(staged, prepared.projections)
                 .await;
             let result = self.engine_result(result)?;
             #[cfg(test)]
@@ -725,24 +791,42 @@ impl CacheState {
             }
             return self.hydration_result(result, false, ops).await;
         }
+        let schema = self.engine_mut()?.schema_snapshot();
+        let normalized = prepared
+            .normalized
+            .take()
+            .filter(|_| std::sync::Arc::ptr_eq(&schema, &prepared.schema));
         if projections_reread {
-            projections = self.hydrate_projections(&request).await?;
+            prepared.projections = self
+                .hydrate_projections(&prepared.request, normalized.as_ref())
+                .await?;
         }
-        let write = NetworkWrite {
-            query: &request.query,
-            operation_name: request.operation_name.as_deref(),
-            variables: &request.variables,
-            data: &request.data,
-            identity: request.identity.as_deref(),
-        };
-        let result = match &request.scope {
-            Some(scope) => {
-                self.engine_mut()?
+        prepared.parse_scope()?;
+        let PreparedHydrate {
+            request,
+            projections,
+            ..
+        } = prepared;
+        let write = request.write();
+        let engine = self.engine_mut()?;
+        let result = match (&request.scope, normalized) {
+            (Some(scope), Some(normalized)) => {
+                engine
+                    .hydrate_normalized_query_in_scope(write, normalized, scope, projections)
+                    .await
+            }
+            (Some(scope), None) => {
+                engine
                     .hydrate_query_in_scope(write, scope, projections)
                     .await
             }
-            None => {
-                self.engine_mut()?
+            (None, Some(normalized)) => {
+                engine
+                    .hydrate_normalized_query(write, normalized, projections)
+                    .await
+            }
+            (None, None) => {
+                engine
                     .hydrate_query_with_projections(
                         write.query,
                         write.operation_name,
@@ -804,13 +888,10 @@ impl CacheState {
         }
     }
 
-    fn write_passes_result(
+    fn write_passes_result<T>(
         &mut self,
-        result: Result<
-            Vec<cache_core::predicate::ProjectionMutation>,
-            WritePassError<TursoStorageError>,
-        >,
-    ) -> Result<Vec<cache_core::predicate::ProjectionMutation>, JsValue> {
+        result: Result<T, WritePassError<TursoStorageError>>,
+    ) -> Result<T, JsValue> {
         result.map_err(|error| match error {
             WritePassError::Notification(error) => err_js(error),
             WritePassError::Projection(error) => self.mail_projection_error(error),
@@ -1440,6 +1521,32 @@ const RESET_REQUIRED_MESSAGE: &str = "cache storage reset required";
 const OWNER_LOCK_UNAVAILABLE_MARKER: &str = "cacheOwnerLockUnavailable";
 const STORAGE_BUSY_MARKER: &str = "cacheStorageBusy";
 const OWNER_LOCK_UNAVAILABLE_MESSAGE: &str = "cache database owner lock is held by another context";
+
+/// A hydrate's response as its projection passes read it, with the records
+/// the engine normalized when there are any.
+fn write_response<'a>(
+    schema: &'a cache_core::meta::Schema,
+    request: &'a HydrateRequest,
+    normalized: Option<&'a NormalizedResponse>,
+) -> WriteResponse<'a> {
+    match normalized {
+        Some(normalized) => WriteResponse::with_updates(
+            schema,
+            &request.query,
+            request.operation_name.as_deref(),
+            &request.variables,
+            &request.data,
+            normalized.updates(),
+        ),
+        None => WriteResponse::new(
+            schema,
+            &request.query,
+            request.operation_name.as_deref(),
+            &request.variables,
+            &request.data,
+        ),
+    }
+}
 
 /// All rejections surface as real `Error` objects with consistent
 /// `instanceof Error` and `.message` behavior.
@@ -2074,12 +2181,13 @@ impl CacheEngine {
     }
 
     /// The first half of `hydrateQuery`: converts the response and reads the
-    /// projection rows it changes, without writing. The engine keeps the
-    /// result for `commitHydrate`, replacing any it kept before. Between the
-    /// two the host may run requests that only read. Whatever runs between,
-    /// the commit writes the response as `hydrateQuery` would at that moment:
-    /// after a write, a clear, a reset or an authority transition it reads
-    /// the projections again first. A close drops the kept hydrate.
+    /// projection rows it sets itself, without writing. The engine keeps the
+    /// result for `stepHydrate`, `stageHydrate` and `commitHydrate`,
+    /// replacing any it kept before. Between them the host may run requests
+    /// that only read. Whatever runs between, the commit writes the response
+    /// as `hydrateQuery` would at that moment: after a write, a clear, a
+    /// reset or an authority transition it reads the projections again
+    /// first. A close drops the kept hydrate.
     #[wasm_bindgen(js_name = prepareHydrate)]
     pub fn prepare_hydrate(
         &self,
@@ -2099,6 +2207,29 @@ impl CacheEngine {
             let prepared = state.prepare_hydrate(request, hydration_scope).await?;
             state.prepared_hydrate = Some(prepared);
             Ok(JsValue::UNDEFINED)
+        })
+    }
+
+    /// Optional, after `prepareHydrate`: runs the kept hydrate's next
+    /// projection pass, without writing, and resolves whether one ran. The
+    /// host may run requests that only read after each. It resolves false
+    /// once every pass ran, or once a write since the prepare means the
+    /// commit reads them again; `stageHydrate` and `commitHydrate` run any
+    /// passes left. Rejects, keeping nothing to commit, when a pass fails:
+    /// the hydrate fails with the error it would have met whole.
+    #[wasm_bindgen(js_name = stepHydrate)]
+    pub fn step_hydrate(&self) -> js_sys::Promise {
+        let state = self.state.clone();
+        future_to_promise(async move {
+            let mut state = state.lock().await;
+            let mut prepared = state
+                .prepared_hydrate
+                .take()
+                .ok_or_else(|| err_js("no prepared hydrate to step"))?;
+            state.ensure_callable()?;
+            let ran = state.step_hydrate(&mut prepared).await?;
+            state.prepared_hydrate = Some(prepared);
+            Ok(JsValue::from_bool(ran))
         })
     }
 

@@ -791,6 +791,11 @@ export class CacheWorkerCore {
       request.hydrationScope
     );
     await this.runReadsBeforeHydrateCommit();
+    const step = engine.stepHydrate?.bind(engine);
+    if (step) {
+      // One projection pass at a time, so a read waits for one, not all.
+      while (await step()) await this.runReadsBeforeHydrateCommit();
+    }
     const stage = engine.stageHydrate?.bind(engine);
     if (stage) {
       // Most of the write is reading what it merges into: done here, it

@@ -3131,6 +3131,89 @@ async fn a_staged_hydrate_lets_reads_run_then_commits_as_hydrate_query_does() {
     }
 }
 
+/// A hydrate stepped one projection pass at a time lets reads run after
+/// each, sees no change from them, and commits what the whole hydrate
+/// commits, staged or not.
+#[wasm_bindgen_test(async)]
+async fn a_stepped_hydrate_lets_reads_run_between_passes() {
+    const SCOPE: &str = "cache-wasm-stepped-hydrate";
+    for bound in [true, false] {
+        let engine = fresh_engine(SCOPE).await;
+        if bound {
+            resolved(write_soup(&engine, "doc-bound")).await;
+        }
+        let whole: serde_json::Value = from_js(resolved(hydrate_backfill(&engine)).await);
+        let whole_state = hydrated_state(&engine).await;
+        close_and_destroy(&engine, SCOPE).await;
+
+        let engine = fresh_engine(SCOPE).await;
+        if bound {
+            resolved(write_soup(&engine, "doc-bound")).await;
+        }
+        let before = hydrated_state(&engine).await;
+        resolved(prepare_backfill(&engine)).await;
+        let mut passes = 0;
+        while from_js::<bool>(resolved(engine.step_hydrate()).await) {
+            passes += 1;
+            assert_eq!(hydrated_state(&engine).await, before, "bound {bound}");
+        }
+        // Notifications, Mail and properties.
+        assert_eq!(passes, 3, "bound {bound}");
+        // Every pass ran, so staging and the commit run none.
+        assert!(!from_js::<bool>(resolved(engine.step_hydrate()).await));
+        resolved(engine.stage_hydrate()).await;
+        assert_eq!(hydrated_state(&engine).await, before, "bound {bound}");
+        let split: serde_json::Value = from_js(resolved(engine.commit_hydrate()).await);
+        assert_eq!(split, whole, "bound {bound}");
+        let state = engine.state.lock().await;
+        assert_eq!(
+            (state.projection_reads, state.staged_commits),
+            (1, usize::from(bound)),
+            "bound {bound}"
+        );
+        drop(state);
+        assert_eq!(hydrated_state(&engine).await, whole_state, "bound {bound}");
+
+        let error = JsFuture::from(engine.step_hydrate())
+            .await
+            .expect_err("nothing left to step");
+        assert_eq!(
+            js_sys::Reflect::get(&error, &"message".into())
+                .unwrap()
+                .as_string()
+                .unwrap(),
+            "no prepared hydrate to step"
+        );
+        close_and_destroy(&engine, SCOPE).await;
+    }
+}
+
+/// A pass whose read fails rejects with the error the whole hydrate meets,
+/// reset marker included, and keeps nothing to commit.
+#[wasm_bindgen_test(async)]
+async fn a_failed_pass_fails_the_hydrate_with_its_error() {
+    const SCOPE: &str = "cache-wasm-stepped-hydrate-fails";
+    let engine = fresh_engine(SCOPE).await;
+    resolved(write_soup(&engine, "doc-bound")).await;
+    resolved(prepare_backfill(&engine)).await;
+    engine
+        .arm_storage_fault(TestStorageFault::LoadProjectionStates)
+        .await;
+    // The first pass that reads projection rows meets the fault.
+    let error = loop {
+        match JsFuture::from(engine.step_hydrate()).await {
+            Ok(ran) => assert_eq!(ran.as_bool(), Some(true), "a pass reads projection rows"),
+            Err(error) => break error,
+        }
+    };
+    assert_reset_required(js_sys::Promise::reject(&error)).await;
+    let state = engine.state.lock().await;
+    assert!(state.reset_required);
+    assert!(state.prepared_hydrate.is_none());
+    drop(state);
+    close_and_destroy(&engine, SCOPE).await;
+}
+
 /// A stage whose read fails rejects with the error the whole hydrate meets,
 /// reset marker included, and keeps nothing to commit.
 #[wasm_bindgen_test(async)]
@@ -3139,6 +3222,8 @@ async fn a_failed_stage_fails_the_hydrate_with_its_error() {
     let engine = fresh_engine(SCOPE).await;
     resolved(write_soup(&engine, "doc-bound")).await;
     resolved(prepare_backfill(&engine)).await;
+    // The passes run first, so the fault meets the stage's own read.
+    while from_js::<bool>(resolved(engine.step_hydrate()).await) {}
     engine.arm_storage_fault(TestStorageFault::GetBatch).await;
     assert_reset_required(engine.stage_hydrate()).await;
     let state = engine.state.lock().await;
@@ -3376,7 +3461,14 @@ async fn assert_page_commit_is_hydrate_after(
 
     // Staged before `between`, the write is stale by the commit; staged
     // after it, there is nothing to stage. Either way the commit is whole.
-    for stage in [None, Some(false), Some(true)] {
+    // One projection pass run before `between` is stale too: the commit
+    // reads them all again.
+    for (stage, stepped) in [
+        (None, false),
+        (Some(false), false),
+        (Some(true), false),
+        (None, true),
+    ] {
         let engine = fresh_engine(scope).await;
         run_steps(&engine, before).await;
         // Staging runs only on a cache bound to the hydrate's identity.
@@ -3392,6 +3484,9 @@ async fn assert_page_commit_is_hydrate_after(
             JsValue::UNDEFINED,
         ))
         .await;
+        if stepped {
+            assert!(from_js::<bool>(resolved(engine.step_hydrate()).await));
+        }
         if stage == Some(false) {
             resolved(engine.stage_hydrate()).await;
         }
@@ -3401,27 +3496,37 @@ async fn assert_page_commit_is_hydrate_after(
         }
         let reads = engine.state.lock().await.projection_reads;
         let mut split: serde_json::Value = from_js(resolved(engine.commit_hydrate()).await);
-        assert_eq!(split["projectionsReread"], true, "staged {stage:?}");
+        assert_eq!(
+            split["projectionsReread"], true,
+            "staged {stage:?} stepped {stepped}"
+        );
         let state = engine.state.lock().await;
-        assert_eq!(state.projection_reads, reads + 1, "staged {stage:?}");
-        assert_eq!(state.staged_commits, 0, "staged {stage:?}");
+        assert_eq!(
+            state.projection_reads,
+            reads + 1,
+            "staged {stage:?} stepped {stepped}"
+        );
+        assert_eq!(
+            state.staged_commits, 0,
+            "staged {stage:?} stepped {stepped}"
+        );
         assert_eq!(
             state.stages_kept,
             usize::from(stageable),
-            "staged {stage:?}"
+            "staged {stage:?} stepped {stepped}"
         );
         drop(state);
         split.as_object_mut().unwrap().remove("projectionsReread");
-        assert_eq!(split, whole, "staged {stage:?}");
+        assert_eq!(split, whole, "staged {stage:?} stepped {stepped}");
         assert_eq!(
             hydrated_state(&engine).await,
             whole_state,
-            "staged {stage:?}"
+            "staged {stage:?} stepped {stepped}"
         );
         assert_eq!(
             projection_rows(&engine, documents).await,
             whole_rows,
-            "staged {stage:?}"
+            "staged {stage:?} stepped {stepped}"
         );
         close_and_destroy(&engine, scope).await;
     }

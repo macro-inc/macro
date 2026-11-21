@@ -70,6 +70,11 @@ impl BrowserStorage {
 
 impl Storage for BrowserStorage {
     type Error = TursoStorageError;
+
+    fn write_position(&self) -> Option<cache_core::store::WritePosition> {
+        self.inner.write_position()
+    }
+
     async fn record_keys(
         &self,
         typename: &str,
