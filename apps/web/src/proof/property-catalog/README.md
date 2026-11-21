@@ -77,7 +77,7 @@ not run the base commit's modules, or a mutant was not applied or not caught.
   errors are compared whatever the data did.
 - `MUTANT=drop-row|swap-order|alter-field|stale-cache|skip-live-update` plants a
   fault in the NEW path; `mutants` mode first runs a clean baseline of the same
-  shape, and a mutant counts as caught only at a signature
+  shape (a mutant run refuses a baseline without a passing verdict), and a mutant counts as caught only at a signature
   the baseline does not have, after the fault was applied. It must be a `diff`
   in data both sides read successfully (a reader that succeeded on both, not with placeholder data, a
   caller that rendered on both over a source list that read without error and was not placeholder data),
@@ -121,16 +121,19 @@ The counts measure work attempted, not successes, and are not interchangeable:
   included. `readerComparisons` and `callerComparisons` count every reader or
   caller compared, including one missing on a side or one that threw (a
   missing one is a `state` or `diff`; two that threw the same message compare
-  `equal`, as the caller behaves the same). `freshMounts` and `reloads` count
-  mounts and page loads that returned, timeouts included; `imperativeReads`
+  `equal`, as the caller behaves the same). `freshMounts` count mounts that returned, timeouts included;
+  `reloads` count page loads that succeeded, after retries; `imperativeReads`
   count reads started.
 - `classes` and the summary's rollups count assertions: one reader pair
   gives a data and an error record, so these are not pair counts.
   `diffSignatures` group differences by level, class, normalized location and
   the signature's own fields; different values at the same path can share one.
-- `coverage` counts how often a generator chose a dimension, credited only
-  when the case really has it (a rename that changed the name, a null color
-  on an option that had one); it is not a count of successful reads.
+- `coverage` counts how often a case had a dimension. A write's dimensions
+  (created type and scope, unicode and long names, tag scope, renames, team
+  events, SQL renames and null colors) are credited only when the write
+  succeeded and changed that value; an option write to a system definition is
+  credited as `(refused)` when refused, as both sides must refuse it alike.
+  Read dimensions count reads made, not reads that succeeded.
 - `ops`: for a hook write, NEW's outcome per operation and actor (OLD's replay
   is checked at `write-replay`); for an out-of-band SQL write, the statement's
   outcome, where `rejected` includes database refusals (`sqlRefusals`, the two
@@ -144,7 +147,7 @@ The counts measure work attempted, not successes, and are not interchangeable:
 - `volume` reports its targets beside the successful counts. `load.ops` and
   `sameUserReads` count returned attempts, errors included.
 - `settle` buckets by elapsed time to first quiet (the settle is confirmed
-  60 ms later); the last bucket is everything from 2.5 s, timeouts included.
+  60 ms later), or to the timeout; the last bucket is everything from 2.5 s.
 - `traffic` counts requests as sent by method and service (REST GET includes
   HEAD and OPTIONS); `otherWrites` counts every non-catalog request that could
   write, which can include a persisted GraphQL read.
@@ -156,7 +159,9 @@ The counts measure work attempted, not successes, and are not interchangeable:
 - `moduleChecks` count verified page loads per physical side; `harnessErrors`
   count error events; `pageErrors` count occurrences per masked message and
   side, while the `page-errors` comparison uses presence. The collation check
-  lists at most 50 mismatches.
+  takes at most 200,000 distinct strings, skips strings with a NUL, and lists
+  at most 50 mismatches. An uncaught error on a load page (`LOAD`) counts in
+  `harnessErrors` only.
 
 ## What it does not check
 

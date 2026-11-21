@@ -388,7 +388,11 @@ const R = {
 };
 // The clean run a mutant is measured against: its difference signatures do
 // not count as a catch.
-const BASELINE = new Set(E.BASELINE ? Object.keys(JSON.parse(fs.readFileSync(E.BASELINE, 'utf8')).diffSignatures) : []);
+const BASELINE_RESULT = E.BASELINE ? JSON.parse(fs.readFileSync(E.BASELINE, 'utf8')) : null;
+// A baseline that failed or never finished has not reached every signature a
+// clean run has, so a mutant measured against it could be credited with one.
+if (BASELINE_RESULT && !BASELINE_RESULT.verdict?.passed) throw new Error(`baseline ${E.BASELINE} did not pass: ${JSON.stringify(BASELINE_RESULT.verdict ?? 'no verdict')}`);
+const BASELINE = new Set(BASELINE_RESULT ? Object.keys(BASELINE_RESULT.diffSignatures) : []);
 if (CONFIG.mutant && !E.BASELINE) log('warning: no BASELINE; every difference counts as a catch');
 function git(...args) {
   try {
@@ -1083,7 +1087,7 @@ async function newAccountPair(lane, generation) {
   const [stA, stB] = await Promise.all([login(emailA), login(emailB)]);
   const A = { name: 'A', old: await openSide(stA, 'old', `L${lane}A-old`), neu: await openSide(stA, 'neu', `L${lane}A-neu`), storage: stA };
   const B = { name: 'B', old: await openSide(stB, 'old', `L${lane}B-old`), neu: await openSide(stB, 'neu', `L${lane}B-neu`), storage: stB };
-  const pair = { lane, generation, A, B, inTeam: false, teamCreated: false, bUserId: null, deleted: [], foreign: [] };
+  const pair = { lane, generation, A, B, inTeam: false, teamCreated: false, everJoined: false, bUserId: null, deleted: [], foreign: [] };
   // B's private user definition: an id A may not read (permission dimension).
   const bPrivate = await ev(B.neu, 'setup.rest', 'createPropertyDefinition', { body: { display_name: `B private ${tag}`, data_type: { type: 'select_string', multi: false, options: [{ display_order: 0, value: 'secret' }] }, scope: 'user' } });
   if (bPrivate.ok) pair.foreign.push(bPrivate.value.id ?? bPrivate.value.definition?.id);
@@ -1113,6 +1117,7 @@ async function teamJoin(pair) {
   const member = team.ok ? team.value?.members?.find((m) => m !== owner) : null;
   pair.bUserId = member?.user_id ?? null;
   pair.inTeam = true;
+  pair.everJoined = true;
   return true;
 }
 async function teamRevoke(pair) {
@@ -1351,7 +1356,7 @@ async function step(pair, g, gen) {
   here().op = op;
   here().actor = actor;
   cover('op', op);
-  cover('actor', actor === 'A' ? (pair.teamCreated ? 'team owner' : 'owner, no team') : pair.inTeam ? 'team member' : pair.teamCreated ? 'revoked member' : 'second user, no team');
+  cover('actor', actor === 'A' ? (pair.teamCreated ? 'team owner' : 'owner, no team') : pair.inTeam ? 'team member' : pair.everJoined ? 'revoked member' : 'second user, no team');
   switch (op) {
     case 'createDef':
     case 'crmStage': {
@@ -1360,11 +1365,14 @@ async function step(pair, g, gen) {
       const body = op === 'crmStage'
         ? { display_name: 'Deal Stage', data_type: { type: 'select_string', multi: false, options: [{ display_order: 0, value: 'Lead' }, { display_order: 1, value: 'Won', color: '#00AA88' }] }, scope }
         : { display_name: gen.name(), data_type: gen.dataType(), scope };
-      cover('created data type', body.data_type.type);
-      cover('created scope', scope);
-      if (/[^\x00-\x7f]/.test(body.display_name)) cover('odd value', 'unicode name');
-      if (body.display_name.length > 60) cover('odd value', 'long name');
-      return write(pair, actor, 'createDef', { body });
+const res = await write(pair, actor, 'createDef', { body });
+      if (res?.n?.ok) {
+        cover('created data type', body.data_type.type);
+        cover('created scope', scope);
+        if (/[^\x00-\x7f]/.test(body.display_name)) cover('odd value', 'unicode name');
+        if (body.display_name.length > 60) cover('odd value', 'long name');
+      }
+      return res;
     }
     case 'deleteDef': {
       const pool = cat.own.filter((d) => defType(d) !== 'TAG');
@@ -1377,12 +1385,14 @@ async function step(pair, g, gen) {
     case 'addOption': {
       if (!writable.length) return write(pair, actor, 'createDef', { body: { display_name: gen.name(), data_type: { type: 'select_string', multi: false, options: [] }, scope: teamScope() } });
       const d = g.pick(writable);
-      cover('option write target', d.definition.is_system ? 'system definition' : 'own definition');
+
       const body = defType(d) === 'SELECT_NUMBER'
         ? { type: 'select_number', option: { value: gen.number(), display_order: gen.displayOrder() } }
         : { type: 'select_string', option: { value: gen.optString(), display_order: gen.displayOrder(), ...(g.chance(0.05) ? { color: g.pick(TAG_COLORS) } : {}) } };
-      if (body.option.color === null) cover('odd value', 'null color');
-      return write(pair, actor, 'addOption', { propertyDefinitionId: d.definition.id, body });
+const res = await write(pair, actor, 'addOption', { propertyDefinitionId: d.definition.id, body });
+      // a refused write to a system definition is coverage too: both sides must refuse it alike
+      cover('option write target', `${d.definition.is_system ? 'system definition' : 'own definition'}${res?.n?.ok ? '' : ' (refused)'}`);
+      return res;
     }
     case 'updateOption':
     case 'deleteOption': {
@@ -1394,15 +1404,17 @@ async function step(pair, g, gen) {
       if (g.chance(0.05)) body.color = g.pick(TAG_COLORS);
       if (g.chance(0.5)) body.display_order = gen.displayOrder();
       if (defType(d) !== 'SELECT_NUMBER' && g.chance(0.6)) body.value = gen.optString();
-      cover('odd value', 'rename option');
-      return write(pair, actor, 'updateOption', { propertyDefinitionId: d.definition.id, optionId: o.id, body });
+const res = await write(pair, actor, 'updateOption', { propertyDefinitionId: d.definition.id, optionId: o.id, body });
+      if (res?.n?.ok && body.value !== undefined && body.value !== o.value) cover('odd value', 'rename option');
+      return res;
     }
     case 'ensureTagSet':
       return write(pair, actor, 'ensureTagSet', { scope: teamScope() });
     case 'createTag': {
       const scope = teamScope();
-      cover('tag scope', scope);
-      return write(pair, actor, 'createTag', { scope, value: gen.optString(), ...(g.chance(0.95) ? { color: g.pick(TAG_COLORS) } : {}) });
+const res = await write(pair, actor, 'createTag', { scope, value: gen.optString(), ...(g.chance(0.95) ? { color: g.pick(TAG_COLORS) } : {}) });
+      if (res?.n?.ok) cover('tag scope', scope);
+      return res;
     }
     case 'updateTag':
     case 'deleteTag': {
@@ -1413,8 +1425,9 @@ async function step(pair, g, gen) {
       if (g.chance(0.6)) body.value = gen.optString();
       if (g.chance(0.5)) body.color = g.chance(0.95) ? g.pick(TAG_COLORS) : null;
       if (g.chance(0.3)) body.display_order = gen.displayOrder();
-      cover('odd value', 'rename tag');
-      return write(pair, actor, 'updateTag', { propertyDefinitionId: t.propertyDefinitionId, optionId: t.id, body });
+const res = await write(pair, actor, 'updateTag', { propertyDefinitionId: t.propertyDefinitionId, optionId: t.id, body });
+      if (res?.n?.ok && body.value !== undefined && body.value !== t.value) cover('odd value', 'rename tag');
+      return res;
     }
     case 'promoteTag': {
       const pool = tagOpts.filter((t) => t.scope === 'user');
@@ -1462,7 +1475,8 @@ async function step(pair, g, gen) {
       return null;
     }
     case 'team': {
-      const [ok, event] = !pair.teamCreated ? [await teamCreate(pair, g), 'created + member joined'] : pair.inTeam ? [await teamRevoke(pair), 'member revoked'] : [await teamJoin(pair), 'member re-joined'];
+      // a join after a first join that failed is a first join, not a re-join
+      const [ok, event] = !pair.teamCreated ? [await teamCreate(pair, g), 'created + member joined'] : pair.inTeam ? [await teamRevoke(pair), 'member revoked'] : pair.everJoined ? [await teamJoin(pair), 'member re-joined'] : [await teamJoin(pair), 'created + member joined'];
       if (ok) cover('team event', event);
       // Membership changes what B can read: read-after-write on both accounts.
       for (const a of [pair.A, pair.B]) await readAfterWrite(a.neu, op, {}, null);

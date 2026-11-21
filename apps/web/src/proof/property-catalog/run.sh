@@ -37,6 +37,9 @@ done
 FAILED=()
 node_run() {
   local name="$1"
+  # Before Node starts, so a run that never gets that far leaves no earlier
+  # result behind: summarize reads it as INCOMPLETE from the marker.
+  mkdir -p "$OUT" && rm -f "$OUT/results.json" && date -Is > "$OUT/started"
   if ! (cd "$ROOT" && nix develop --command node "$HERE/run.mjs"); then
     FAILED+=("$name")
   fi
@@ -59,6 +62,8 @@ run_mode() {
       # no fault. A mutant counts as caught only at a difference this run
       # does not have.
       SEED=1 SEQS=2 LANES=1 SWEEP=0 VOLUME=0 OUT="$HERE/out/mutant-baseline" node_run mutant-baseline
+      # run.mjs also refuses a baseline without a passing verdict
+      if [[ " ${FAILED[*]} " == *" mutant-baseline "* ]]; then echo "baseline failed; mutants not run" >&2; return; fi
       for m in drop-row swap-order alter-field stale-cache skip-live-update; do
         SEED=1 SEQS=2 LANES=1 SWEEP=0 VOLUME=0 MUTANT=$m BASELINE="$HERE/out/mutant-baseline/results.json" \
           OUT="$HERE/out/mutant-$m" node_run "mutant-$m"
