@@ -835,3 +835,66 @@ fn native_runtime_schema_persists_across_ota_and_rejects_conflicts_without_data_
         reopened.shutdown().unwrap();
     });
 }
+
+#[test]
+fn a_staged_native_hydrate_writes_and_reports_what_a_whole_one_does() {
+    let run = |staging: bool| {
+        super::test_hooks::STAGING.with(|on| on.set(staging));
+        super::test_hooks::STAGED_COMMITS.with(|commits| commits.set(0));
+        let handle = spawn_handle();
+        let scope = HydrationScope {
+            contact_fence: None,
+            storage_generation: block_on(handle.current_storage_generation())
+                .unwrap()
+                .parse()
+                .unwrap(),
+            identity: "user-1".into(),
+        };
+        let bound = || Some("user-1".to_string());
+        let mut results = Vec::new();
+        // The first bound hydrate binds the account, so it runs whole.
+        for (data, identity, scope) in [
+            (soup_data(true), None, None),
+            (soup_data(true), None, None),
+            (soup_data(false), None, None),
+            (soup_data(true), bound(), Some(scope.clone())),
+            (soup_data(true), bound(), Some(scope)),
+            (soup_data(false), bound(), None),
+        ] {
+            let result = block_on(handle.hydrate_query(
+                HYDRATION_QUERY.to_string(),
+                Some("Soup".to_string()),
+                variables(),
+                data,
+                identity,
+                scope,
+            ))
+            .unwrap();
+            results.push(serde_json::json!({
+                "unchangedViews": result.unchanged_views,
+                "searchChangedBuckets": result.search_changed_buckets,
+                "writeResult": result.write_result,
+                "data": result.data,
+            }));
+            let ReadResultWire::Hit { data } = block_on(handle.read(
+                None,
+                "query Viewer { user { id } }".to_string(),
+                Some("Viewer".to_string()),
+                Variables::new(),
+                Vec::new(),
+            ))
+            .unwrap() else {
+                panic!("expected hydrated viewer");
+            };
+            results.push(data);
+        }
+        let staged = super::test_hooks::STAGED_COMMITS.with(std::cell::Cell::get);
+        super::test_hooks::STAGING.with(|on| on.set(true));
+        (results, staged)
+    };
+    let (whole, none_staged) = run(false);
+    let (staged, staged_commits) = run(true);
+    assert_eq!(none_staged, 0);
+    assert_eq!(staged_commits, 5);
+    assert_eq!(staged, whole);
+}

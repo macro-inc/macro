@@ -31,8 +31,8 @@ From the repository root:
 ## Gotchas
 
 - `graphql_cache_contact_snapshot` and `graphql_cache_contact_reconcile` reuse the existing engine and exact-lookup backfill lane; return only bounded IDs/scalar progress and publish committed invalidations after removals. Older binaries must explicitly refuse this capability without disabling context/search.
-- Hold the engine lock across scoped hydration's generation/identity/contact-fence check and
-  write. A stale background response must not clear or rebind the current account.
+- Hold the engine lock, or the turn, across scoped hydration's generation/identity/contact-fence check and
+  write. A stale background response must not clear or rebind the current account. `hydrate_query` computes its write, then gives the engine to reads only (`yield_to_reads` keeps its turn; `access.rs`), and writes the staged result only when the WAL position and `staged_hydrate_current` are unchanged; otherwise it rechecks the session and runs whole. Every non-read command takes the turn, and a read that arrives after a command still waiting for its turn follows it.
 - OTA JS cannot add native policy: scoped hydration requires projection 5 and
   the distinct `graphql_cache_hydrate_scoped` command. Never fall back to the
   deployed unscoped command after a guarded-write failure. Register new commands
