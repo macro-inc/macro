@@ -80,7 +80,7 @@ impl PgComputerRepo {
             ComputerRow,
             r#"
             SELECT id, team_id, host_id, name, size AS "size: ComputerSize", vcpus, memory_gib, disk_gib, catalog_entry, price_id, comp_reason, state, harness_id, created_by,
-                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image
+                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image, hibernated_at
             FROM hosted_runtime
             WHERE id = $1
             FOR UPDATE
@@ -131,6 +131,29 @@ impl PgComputerRepo {
                 return Ok(Some(Applied::Rejected(rejected)));
             }
         };
+        // The setup timeline is part of the state: an event that only
+        // advances it (a finished agent hand-off) is still a change.
+        let agent = crate::domain::setup::AgentProgress {
+            reported_online: matches!(event, Event::AgentOnline),
+            delivered: matches!(event, Event::AgentDelivered),
+        };
+        let waiting_for_capacity = state.waiting_for_capacity();
+        let (phase, connected, payment) = (
+            state.phase.clone(),
+            state.macrod_connected,
+            state.payment_progress(),
+        );
+        let finished_setup = state
+            .setup
+            .as_mut()
+            .map(|setup| {
+                let mut finished =
+                    setup.advance(&phase, connected, waiting_for_capacity, payment, now);
+                finished.extend(setup.advance_agent(agent, now));
+                finished
+            })
+            .unwrap_or_default();
+
         if state == computer.state && effects.is_empty() {
             return Ok(Some(Applied::Changed(Box::new(computer))));
         }
@@ -150,18 +173,6 @@ impl PgComputerRepo {
         {
             span.record("phase", tag);
         }
-
-        let waiting_for_capacity = state.waiting_for_capacity();
-        let (phase, connected, payment) = (
-            state.phase.clone(),
-            state.macrod_connected,
-            state.payment_progress(),
-        );
-        let finished_setup = state
-            .setup
-            .as_mut()
-            .map(|setup| setup.advance(&phase, connected, waiting_for_capacity, payment, now))
-            .unwrap_or_default();
 
         if !state.is_live() {
             sqlx::query!(

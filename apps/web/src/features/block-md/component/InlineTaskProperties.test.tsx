@@ -46,6 +46,7 @@ const mocks = vi.hoisted(() => ({
   open: vi.fn<typeof openPropertyEditor>(),
   kind: 'document' as MarkdownDocumentKind,
   setProperties: undefined as Setter<Property[]> | undefined,
+  fetchDefinition: vi.fn(async (_id: string): Promise<unknown> => null),
 }));
 const entityWrite = vi.fn();
 
@@ -90,25 +91,31 @@ vi.mock('@property/component/modal/CreatePropertyModal', () => ({
     initialName: string;
     autoPinOnCreate: boolean;
     onPropertyCreated: (id: string, definition: PropertyDefinition) => void;
+    onUseBuiltIn: (id: string) => void;
   }) => (
-    <button
-      onClick={() =>
-        props.onPropertyCreated('created-notes', {
-          id: 'created-notes',
-          display_name: props.initialName,
-          data_type: 'STRING',
-          is_multi_select: false,
-          is_metadata: false,
-          is_system: false,
-          owner: { scope: 'system' },
-          specific_entity_type: null,
-          created_at: '2026-01-01',
-          updated_at: '2026-01-01',
-        })
-      }
-    >
-      Create {props.initialName}
-    </button>
+    <>
+      <button onClick={() => props.onUseBuiltIn('built-in-contacts')}>
+        Use built-in
+      </button>
+      <button
+        onClick={() =>
+          props.onPropertyCreated('created-notes', {
+            id: 'created-notes',
+            display_name: props.initialName,
+            data_type: 'STRING',
+            is_multi_select: false,
+            is_metadata: false,
+            is_system: false,
+            owner: { scope: 'system' },
+            specific_entity_type: null,
+            created_at: '2026-01-01',
+            updated_at: '2026-01-01',
+          })
+        }
+      >
+        Create {props.initialName}
+      </button>
+    </>
   ),
 }));
 vi.mock('@property/hooks', async () => ({
@@ -124,7 +131,7 @@ vi.mock('@property/hooks', async () => ({
 vi.mock('@property/tags', () => ({ InlineFetchedEntityTagsPill: () => null }));
 vi.mock('@queries/properties/definitions', () => ({
   useListPropertiesQuery: () => ({ isSuccess: false }),
-  fetchPropertyDefinitionWithOptions: vi.fn(async () => null),
+  fetchPropertyDefinitionWithOptions: mocks.fetchDefinition,
 }));
 vi.mock('@queries/properties/tags', () => ({
   useTagsQuery: () => ({ isSuccess: true, data: [] }),
@@ -540,7 +547,6 @@ it('selects a shared property and edits its draft value without an entity write'
       saveHandler={{ saveProperty: async () => {}, saveDate: async () => {} }}
     >
       <TaskComposerPropertyEditor
-        name="New task"
         definitions={[draftDefinition]}
         properties={[]}
         onAdd={onAdd}
@@ -596,7 +602,6 @@ it('creates a property through the shared dialog and saves its value into the dr
       saveHandler={{ saveProperty: async () => {}, saveDate: async () => {} }}
     >
       <TaskComposerPropertyEditor
-        name="New task"
         definitions={[]}
         properties={[]}
         onAdd={onAdd}
@@ -634,4 +639,178 @@ it('creates a property through the shared dialog and saves its value into the dr
     value: 'Created value',
   });
   expect(entityWrite).not.toHaveBeenCalled();
+});
+
+it('leaves creation for the built-in property the create dialog suggests', async () => {
+  mocks.fetchDefinition.mockResolvedValueOnce({
+    definition: {
+      id: 'built-in-contacts',
+      display_name: 'Built-in contacts',
+      data_type: 'STRING',
+      is_multi_select: false,
+      is_metadata: false,
+      is_system: true,
+      owner: { scope: 'system' },
+      specific_entity_type: null,
+      created_at: '2026-01-01',
+      updated_at: '2026-01-01',
+    },
+    property_options: [],
+  });
+  const onAdd = vi.fn(async () => {});
+  const [values, setValues] = createStore<Record<string, PropertyApiValues>>(
+    {}
+  );
+  render(() => (
+    <PropertiesProvider
+      entityType="TASK"
+      canEdit
+      properties={() => []}
+      onRefresh={() => {}}
+      onPropertyAdded={() => {}}
+      onPropertyDeleted={() => {}}
+      saveHandler={{ saveProperty: async () => {}, saveDate: async () => {} }}
+    >
+      <TaskComposerPropertyEditor
+        definitions={[]}
+        properties={[]}
+        onAdd={onAdd}
+        onSave={(id, value) => setValues(id, value)}
+      />
+    </PropertiesProvider>
+  ));
+
+  await fireEvent.click(screen.getByRole('button', { name: 'Add property' }));
+  await fireEvent.input(screen.getByPlaceholderText('Choose a property...'), {
+    target: { value: 'Contact' },
+  });
+  await fireEvent.click(screen.getByText('Create property "Contact"'));
+  await fireEvent.click(screen.getByRole('button', { name: 'Use built-in' }));
+
+  // The built-in is selected like a listed property: nothing was created.
+  await waitFor(() => expect(onAdd).toHaveBeenCalledWith('built-in-contacts'));
+  expect(onAdd).toHaveBeenCalledOnce();
+  expect(screen.queryByRole('button', { name: 'Create Contact' })).toBeNull();
+  await fireEvent.input(
+    await screen.findByPlaceholderText('Enter Built-in contacts'),
+    { target: { value: 'Ada' } }
+  );
+  await fireEvent.click(
+    screen.getByText('Set Built-in contacts', { exact: false })
+  );
+  expect(values['built-in-contacts']).toEqual({
+    valueType: 'STRING',
+    value: 'Ada',
+  });
+  expect(entityWrite).not.toHaveBeenCalled();
+});
+
+it('opens the suggested built-in property on the value the draft holds', async () => {
+  mocks.fetchDefinition.mockResolvedValueOnce({
+    definition: {
+      id: 'built-in-contacts',
+      display_name: 'Built-in contacts',
+      data_type: 'STRING',
+      is_multi_select: false,
+      is_metadata: false,
+      is_system: true,
+      owner: { scope: 'system' },
+      specific_entity_type: null,
+      created_at: '2026-01-01',
+      updated_at: '2026-01-01',
+    },
+    property_options: [],
+  });
+  render(() => (
+    <PropertiesProvider
+      entityType="TASK"
+      canEdit
+      properties={() => []}
+      onRefresh={() => {}}
+      onPropertyAdded={() => {}}
+      onPropertyDeleted={() => {}}
+      saveHandler={{ saveProperty: async () => {}, saveDate: async () => {} }}
+    >
+      <TaskComposerPropertyEditor
+        definitions={[]}
+        properties={[
+          {
+            propertyId: 'compose-Built-in contacts',
+            propertyDefinitionId: 'built-in-contacts',
+            displayName: 'Built-in contacts',
+            isMultiSelect: false,
+            owner: { scope: 'system' },
+            specificEntityType: null,
+            updatedAt: new Date(0),
+            createdAt: new Date(0),
+            valueType: 'STRING',
+            value: 'Grace',
+          },
+        ]}
+        onAdd={async () => {}}
+        onSave={() => {}}
+      />
+    </PropertiesProvider>
+  ));
+
+  await fireEvent.click(screen.getByRole('button', { name: 'Add property' }));
+  await fireEvent.input(screen.getByPlaceholderText('Choose a property...'), {
+    target: { value: 'Contact' },
+  });
+  await fireEvent.click(screen.getByText('Create property "Contact"'));
+  await fireEvent.click(screen.getByRole('button', { name: 'Use built-in' }));
+
+  // A host that edits the property with its own control never lists it, so
+  // the value the editor starts from is the one the host passed in.
+  expect(await screen.findByDisplayValue('Grace')).toBeTruthy();
+});
+
+it('hands focus back to the search field when the create dialog closes', async () => {
+  mocks.fetchDefinition.mockResolvedValueOnce({
+    definition: {
+      id: 'built-in-contacts',
+      display_name: 'Built-in contacts',
+      data_type: 'STRING',
+      is_multi_select: false,
+      is_metadata: false,
+      is_system: true,
+      owner: { scope: 'system' },
+      specific_entity_type: null,
+      created_at: '2026-01-01',
+      updated_at: '2026-01-01',
+    },
+    property_options: [],
+  });
+  render(() => (
+    <PropertiesProvider
+      entityType="TASK"
+      canEdit
+      properties={() => []}
+      onRefresh={() => {}}
+      onPropertyAdded={() => {}}
+      onPropertyDeleted={() => {}}
+      saveHandler={{ saveProperty: async () => {}, saveDate: async () => {} }}
+    >
+      <TaskComposerPropertyEditor
+        definitions={[]}
+        properties={[]}
+        onAdd={async () => {}}
+        onSave={() => {}}
+      />
+    </PropertiesProvider>
+  ));
+
+  await fireEvent.click(screen.getByRole('button', { name: 'Add property' }));
+  await fireEvent.input(screen.getByPlaceholderText('Choose a property...'), {
+    target: { value: 'Contact' },
+  });
+  await fireEvent.click(screen.getByText('Create property "Contact"'));
+  // A press focuses the button, and the dialog takes that focus with it when
+  // it unmounts. Left on the page, the next keys would reach app shortcuts.
+  const useBuiltIn = screen.getByRole('button', { name: 'Use built-in' });
+  useBuiltIn.focus();
+  await fireEvent.click(useBuiltIn);
+
+  const value = await screen.findByPlaceholderText('Enter Built-in contacts');
+  expect(document.activeElement).toBe(value);
 });

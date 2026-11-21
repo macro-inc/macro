@@ -34,6 +34,10 @@ Derive native field metadata from the checksum-pinned class declarations before 
 Generate session/foreign-host.generated.ts from document_session_wasm/abi/foreign-host.bop; keep compiler output excluded from Biome like abi.generated.ts, mirror that exclusion in tooling/just/check.just, and format AST-derived descriptors in their generator. Preserve public export objects in opaque slots until an explicit serialization request; record references retain their instance owner namespace.
 Generate session/abi.generated.ts from document_session_wasm/abi/session.bop.
 Keep `StorageOpKind : byte` tags 0 through 9 wire-compatible; validate generated storage payload types and reject unknown kinds before locks or database access. Dispatch named kinds exhaustively and keep lock policy complete over the generated enum.
+Use the output envelope's kind and request id for storage completion; reject
+inner/outer kind disagreement. Complete known malformed bodies as Corrupt in
+the same FIFO without storage I/O, and defer unknown-kind error/Stop until the
+current effect batch is admitted. Keep completion traps and host failures distinct.
 Keep wasm.generated.d.ts synchronized with the shipping native-only wasm-pack output without dev-probes; keep preview declarations inside their paired preview package and require the source-derived Rust export-inventory test to reject development-only declarations; the native build recipe copies it so clean checkouts can type-check before compiling the binary. Keep the explicit compatibility-web output separate in wasm-compat.generated.d.ts and export it only as types through ./session/wasm-compat; never add compatibility stubs to native declarations.
 
 ## Checks

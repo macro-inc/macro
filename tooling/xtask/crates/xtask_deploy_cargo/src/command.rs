@@ -20,6 +20,31 @@ pub struct Selection {
     pub target: Option<String>,
 }
 
+impl Selection {
+    /// Feature resolution must cover non-host dependency edges unless the build
+    /// explicitly selects a target.
+    pub fn tree_args(&self) -> Vec<String> {
+        let mut args = Vec::new();
+        for package in &self.packages {
+            args.extend(["-p".to_owned(), package.clone()]);
+        }
+        for features in &self.features {
+            args.extend(["--features".to_owned(), features.clone()]);
+        }
+        if self.no_default_features {
+            args.push("--no-default-features".to_owned());
+        }
+        if self.all_features {
+            args.push("--all-features".to_owned());
+        }
+        args.extend([
+            "--target".to_owned(),
+            self.target.clone().unwrap_or_else(|| "all".to_owned()),
+        ]);
+        args
+    }
+}
+
 const SELECTION_VALUE: &[&str] = &["--package", "-p", "--features", "-F", "--target"];
 /// Options that take a value but cannot change which packages or features resolve.
 const OTHER_VALUE: &[&str] = &[
@@ -64,8 +89,19 @@ pub fn parse(words: &[String]) -> Result<Option<Selection>, String> {
             Some("prepare") => return Ok(None),
             other => return Err(format!("unsupported `cargo chef {}`", other.unwrap_or(""))),
         },
+        (Some("cargo"), Some("install")) => {
+            if words.any(|word| {
+                word == "--path"
+                    || word.starts_with("--path=")
+                    || word == "--git"
+                    || word.starts_with("--git=")
+            }) {
+                return Err("non-registry cargo install is outside the deploy grammar".into());
+            }
+            return Ok(None);
+        }
         // Commands that compile no workspace code.
-        (Some("cargo"), Some("install" | "strip" | "--version" | "-V")) => return Ok(None),
+        (Some("cargo"), Some("strip" | "--version" | "-V")) => return Ok(None),
         (Some("cargo" | "cargoWithProfile"), other) => {
             return Err(format!(
                 "unsupported Cargo subcommand `{}`",

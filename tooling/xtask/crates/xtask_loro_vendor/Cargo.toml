@@ -15,4 +15,3 @@ quote = { workspace = true }
 rootcause = { workspace = true }
 syn = { workspace = true, features = ["full", "visit-mut", "extra-traits"] }
 toml = { workspace = true }
-workspace-hack = { version = "0.1", path = "../../../../crates/workspace-hack" }

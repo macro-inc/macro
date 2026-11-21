@@ -1,4 +1,9 @@
 import type { EmailThreadHost } from '@app/features/email-thread/context/email-thread-context';
+import { withListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
+import type {
+  SplitHandle,
+  SplitId,
+} from '@components/app/split-layout/layoutManager';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import type { ComponentProps } from 'solid-js';
 import { createStore } from 'solid-js/store';
@@ -9,6 +14,13 @@ const state = vi.hoisted(() => ({
   search: {} as { messageId: string; seek: string },
   navigate: (_params: Record<string, unknown>) => {},
   host: undefined as EmailThreadHost | undefined,
+  split: undefined as
+    | Pick<
+        SplitHandle,
+        'id' | 'content' | 'canGoBack' | 'goBack' | 'previousContent'
+      >
+    | undefined,
+  onDeleted: undefined as (() => void) | undefined,
   touch: false,
 }));
 vi.mock('@core/mobile/isTouchDevice', () => ({
@@ -20,7 +32,7 @@ vi.mock('@app/lib/split-router', async (importOriginal) => ({
 }));
 vi.mock('@solidjs/router', () => ({ useSearchParams: () => [{}] }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
-  useSplitPanel: () => undefined,
+  useSplitPanel: () => state.split && { handle: state.split },
   useCanAutofocusSplitContent: () => false,
 }));
 vi.mock('@core/orchestrator', () => ({
@@ -50,8 +62,12 @@ vi.mock('./views/email-thread', () => ({
   },
 }));
 vi.mock('./views/mobile/email-thread', () => ({
-  MobileEmailThread: (props: { host: EmailThreadHost }) => {
+  MobileEmailThread: (props: {
+    host: EmailThreadHost;
+    list?: { onDeleted?: () => void };
+  }) => {
     state.host = props.host;
+    state.onDeleted = props.list?.onDeleted;
     return <p>Mobile email thread</p>;
   },
 }));
@@ -59,7 +75,44 @@ afterEach(() => {
   cleanup();
   vi.useRealTimers();
   state.touch = false;
+  state.split = undefined;
+  state.onDeleted = undefined;
 });
+
+it.each([
+  { sourceId: 'pane', returnsToList: true },
+  { sourceId: undefined, returnsToList: false },
+  { sourceId: 'another-pane', returnsToList: false },
+])(
+  'uses Back only for a thread opened from its prior list (source $sourceId)',
+  ({ sourceId, returnsToList }) => {
+    state.touch = true;
+    state.search = { messageId: '', seek: '' };
+    const search = { type: 'component', id: 'search' } as const;
+    const thread = { type: 'email', id: 'thread' } as const;
+    const goBack = vi.fn();
+    state.split = {
+      id: 'pane' as SplitId,
+      content: () =>
+        sourceId
+          ? withListNavigationSource(thread, {
+              id: sourceId as SplitId,
+              content: () => search,
+            })
+          : thread,
+      canGoBack: () => true,
+      goBack,
+      previousContent: () => search,
+    };
+    const props = {
+      title: 'Email',
+      threadId: () => 'thread',
+      source: {},
+    } as ComponentProps<typeof EmailBlockAdapter>;
+    render(() => <EmailBlockAdapter {...props} />);
+    expect(state.onDeleted).toBe(returnsToList ? goBack : undefined);
+  }
+);
 
 it('mounts the mobile view on touch and the desktop view otherwise', () => {
   state.search = { messageId: '', seek: '' };

@@ -9,7 +9,13 @@ import { afterEach, expect, test, vi } from 'vitest';
 
 const control = vi.hoisted(() => ({
   touch: false,
+  connectionType: 'sync' as 'sync' | 'session',
+  sourceStatus: 0,
+  sessionStatus: 1,
+  initialSync: vi.fn(),
   documentProps: [] as Record<string, unknown>[],
+  contentProps: [] as Record<string, unknown>[],
+  headerStatus: [] as (() => unknown)[],
 }));
 const passthrough = (props: ParentProps) => props.children;
 vi.mock('@core/mobile/isTouchDevice', () => ({
@@ -22,17 +28,33 @@ vi.mock('@block-md/views/mobile/body-format-popup', () => ({
   mobileBodyFormatPopup: { device: 'touch' },
 }));
 vi.mock('@block-md/component/MarkdownDocument', () => ({
-  MarkdownDocument: (props: Record<string, unknown>) => {
+  MarkdownDocument: (props: ParentProps<Record<string, unknown>>) => {
     control.documentProps.push(props);
+    return props.children;
+  },
+  MarkdownDocumentContent: (props: Record<string, unknown>) => {
+    control.contentProps.push(props);
     return null;
   },
-  MarkdownDocumentContent: () => null,
+}));
+vi.mock('@block-md/component/HostedMarkdownHeader', () => ({
+  HostedMarkdownHeader: (props: { collaborationStatus: () => unknown }) => {
+    control.headerStatus.push(props.collaborationStatus);
+    return null;
+  },
 }));
 vi.mock('./components/FileDetail', () => ({
   FileDetailLoadGate: (props: { children: (data: unknown) => JSX.Element }) =>
     props.children({
       metadata: { documentId: 'document-1', documentName: 'Doc' },
-      connection: { type: 'loading' },
+      connection:
+        control.connectionType === 'sync'
+          ? {
+              type: 'sync',
+              source: { status: () => control.sourceStatus },
+              doInitialSync: control.initialSync,
+            }
+          : { type: 'session', context: {} },
       permissions: { canComment: true, canEdit: true, isOwner: true },
       userAccessLevel: 'owner',
     }),
@@ -50,7 +72,10 @@ vi.mock('@block-md/component/sidepanel/MarkdownSidePanelSections', () => ({
   MarkdownSidePanelSections: () => null,
 }));
 vi.mock('@block-md/context/markdown-document-state', () => ({
-  createMarkdownDocumentState: () => ({ params: { navigate: () => {} } }),
+  createMarkdownDocumentState: () => ({
+    params: { navigate: () => {} },
+    session: { status: () => control.sessionStatus },
+  }),
 }));
 vi.mock('@block-md/primitives/create-markdown-route-navigation', () => ({
   createMarkdownRouteNavigation: () => {},
@@ -82,11 +107,17 @@ vi.mock('@notifications', () => ({
 }));
 vi.mock('@queries/preview', () => ({ useItemRawName: () => () => 'Doc' }));
 
-const { MarkdownDetail } = await import('./MarkdownDetail');
+const { MarkdownDetail } = await import('./views/MarkdownDetail');
 
 afterEach(() => {
   cleanup();
   control.documentProps.length = 0;
+  control.contentProps.length = 0;
+  control.headerStatus.length = 0;
+  control.connectionType = 'sync';
+  control.sourceStatus = 0;
+  control.sessionStatus = 1;
+  control.initialSync.mockClear();
 });
 
 test.each([
@@ -99,5 +130,26 @@ test.each([
     render(() => <MarkdownDetail documentId="document-1" />);
     expect(control.documentProps).toHaveLength(1);
     expect(control.documentProps[0].bodyFormatPopup).toEqual({ device });
+  }
+);
+
+test.each(['sync', 'session'] as const)(
+  'the embedded %s document keeps status and initial sync with its model owner',
+  (connectionType) => {
+    control.connectionType = connectionType;
+    render(() => <MarkdownDetail documentId="document-1" />);
+    expect(control.documentProps[0].documentSource).toMatchObject({
+      type: connectionType,
+    });
+    expect(control.headerStatus).toHaveLength(1);
+    expect(control.headerStatus[0]()).toBe(connectionType === 'sync' ? 0 : 1);
+    control.sourceStatus = 2;
+    control.sessionStatus = 0;
+    expect(control.headerStatus[0]()).toBe(connectionType === 'sync' ? 2 : 0);
+    expect(control.contentProps).toHaveLength(1);
+    expect(control.contentProps[0].doInitialSync).toBe(
+      connectionType === 'sync' ? control.initialSync : undefined
+    );
+    expect(control.initialSync).not.toHaveBeenCalled();
   }
 );

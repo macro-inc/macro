@@ -8,25 +8,20 @@ use crate::{
             Highlight, SearchGotoCallRecord, SearchGotoContent, SearchHit, parse_highlight_hit,
         },
         properties::build_tag_filter,
-        query::Keys,
+        query::{Keys, child_content_query},
         utils::{millis_to_datetime, split_inner_hits_budget},
     },
 };
 
 use models_opensearch::{OpenSearchEntityType, SearchEntityType};
 use opensearch_query_builder::{
-    BoolQueryBuilder, HasChildQuery, InnerHits, MatchPhrasePrefixQuery, MatchPhraseQuery,
-    QueryType, ToOpenSearchJson,
+    BoolQueryBuilder, HasChildQuery, InnerHits, QueryType, ToOpenSearchJson,
 };
 
 /// Relation names for the join field. Kept in sync with the upsert path
 /// in `upsert::call_record`.
 const PARENT_RELATION: &str = "call";
 const CHILD_RELATION: &str = "segment";
-
-/// Minimum prefix length before we emit a `match_phrase_prefix`. Mirrors
-/// the documents/chats threshold.
-const MIN_PREFIX_LEN: usize = 3;
 
 /// The segment `_source` fields a `SearchHit` carries. Inner hits do not
 /// inherit the request-level `_source` filter, so without this every segment
@@ -38,8 +33,6 @@ const SEGMENT_SOURCE_FIELDS: [&str; 5] = [
     "started_at_millis",
     "ended_at_millis",
 ];
-
-const MATCH_PHRASE_PREFIX_MAX_EXPANSIONS: u32 = 256;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) struct CallRecordIndex {
@@ -237,7 +230,7 @@ impl CallRecordQueryBuilder {
             .iter()
             .enumerate()
             .map(|(idx, term)| {
-                let term_query = build_child_content_query(term, &self.inner.match_type);
+                let term_query = child_content_query(term, &self.inner.match_type);
                 let inner_query = if self.speaker_ids.is_empty() {
                     term_query
                 } else {
@@ -283,7 +276,7 @@ fn inner_hits_content_highlight(highlight_query: &serde_json::Value) -> serde_js
 fn build_all_terms_highlight_query(terms: &[String], match_type: &str) -> serde_json::Value {
     let term_queries: Vec<serde_json::Value> = terms
         .iter()
-        .map(|t| build_child_content_query(t, match_type).to_json())
+        .map(|t| child_content_query(t, match_type).to_json())
         .collect();
     if term_queries.len() == 1 {
         return term_queries.into_iter().next().unwrap();
@@ -294,23 +287,6 @@ fn build_all_terms_highlight_query(terms: &[String], match_type: &str) -> serde_
             "minimum_should_match": 1,
         }
     })
-}
-
-fn build_child_content_query<'a>(term: &str, match_type: &str) -> QueryType<'a> {
-    let exact = match_type == "exact"
-        || term.chars().any(|c| c.is_whitespace())
-        || term.chars().count() < MIN_PREFIX_LEN;
-    if exact {
-        QueryType::MatchPhrase(MatchPhraseQuery::new(
-            "content".to_string(),
-            term.to_string(),
-        ))
-    } else {
-        QueryType::MatchPhrasePrefix(
-            MatchPhrasePrefixQuery::new("content".to_string(), term.to_string())
-                .max_expansions(MATCH_PHRASE_PREFIX_MAX_EXPANSIONS),
-        )
-    }
 }
 
 #[derive(Debug, Default)]

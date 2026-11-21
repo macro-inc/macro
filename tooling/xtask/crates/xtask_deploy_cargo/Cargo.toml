@@ -18,4 +18,3 @@ serde_json = { workspace = true }
 serde_yaml = { workspace = true }
 shell-words = { workspace = true }
 xtask_paths = { path = "../xtask_paths" }
-workspace-hack = { version = "0.1", path = "../../../../crates/workspace-hack" }

@@ -9,6 +9,7 @@ import {
   ConnectMsg,
   Failure,
   type INodeCursorMsg,
+  type IStorageOpMsg,
   type IViewEffectMsg,
   NodeCursorMsg,
   SaveReason,
@@ -27,6 +28,7 @@ import {
 import type { SessionRouter } from './router';
 import {
   decodeStorageOperation,
+  isStorageOperationKind,
   StorageAdapter,
   type StorageResult,
   storageFailure,
@@ -910,20 +912,50 @@ export class SessionExecutor<S extends NativeSession = EditorSession> {
       return;
     }
     if (effect.tag === 6) {
-      const op = decodeStorageOperation(effect.payload);
+      // The output envelope owns the request id and completion family. A bad
+      // body must not route its completion using an untrusted inner tag.
+      const kind = effect.b;
+      if (!isStorageOperationKind(kind)) {
+        this.launch(async () => {
+          // Yield through the existing FIFO so the remaining current-batch
+          // effects are admitted before Stop. Never invent a storage reply.
+          await this.storageQueue;
+          try {
+            this.options.view.apply(new Uint32Array(), new Uint8Array(), [
+              { ...emptyViewError(), text: 'Unknown storage operation' },
+            ]);
+          } finally {
+            // Keep close failures separate from the view reporter's failure.
+            this.launch(() => this.close());
+          }
+        });
+        return;
+      }
+      let op: IStorageOpMsg | undefined;
+      try {
+        op = decodeStorageOperation(effect.payload);
+        if (op.kind !== kind) op = undefined;
+      } catch {
+        op = undefined;
+      }
+      const operation = op;
       this.storageQueue = this.storageQueue
         .then(async () => {
-          let result: StorageResult | undefined;
-          try {
-            await this.lease.ready;
-            await this.options.telemetry.storage(
-              storageOperationName(op.kind),
-              async () => {
-                result = await this.storage.execute(op);
-              }
-            );
-          } catch {
-            result ??= storageFailure(op.kind, Failure.Unavailable);
+          let result: StorageResult | undefined = operation
+            ? undefined
+            : storageFailure(kind, Failure.Corrupt);
+          if (operation) {
+            try {
+              await this.lease.ready;
+              await this.options.telemetry.storage(
+                storageOperationName(operation.kind),
+                async () => {
+                  result = await this.storage.execute(operation);
+                }
+              );
+            } catch {
+              result ??= storageFailure(kind, Failure.Unavailable);
+            }
           }
           const completion = result;
           if (!completion)

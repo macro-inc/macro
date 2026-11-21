@@ -1,11 +1,8 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/build_rust_ci_image.rs
 name: Build Rust CI Image
-
 on:
   workflow_dispatch: {}
-
-# Create a GitHub-hosted larger image-generation runner with this label before
-# running this workflow. Keep its CPU/RAM/disk size at or below the smallest
-# runner size that should be allowed to use the generated custom image.
 jobs:
   build-rust-ci-image:
     runs-on: linux-rust-ci-image-generation-small
@@ -13,10 +10,11 @@ jobs:
       image-name: macro-rust-ci-small
       version: 1.*
     steps:
-      - uses: actions/checkout@v6
-
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # zizmor: ignore[artipacked] snapshots a runner image built from the checkout
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
       - name: Install system packages
-        shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update
@@ -24,9 +22,8 @@ jobs:
             curl \
             postgresql-client \
             unzip
-
-      - name: Install Nix
         shell: bash
+      - name: Install Nix
         run: |
           set -euo pipefail
           curl --http1.1 --retry 5 --retry-delay 5 --retry-all-errors \
@@ -39,9 +36,8 @@ jobs:
           # Make nix discoverable in non-login shells (GHA default).
           echo 'PATH="/nix/var/nix/profiles/default/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"' \
             | sudo tee /etc/environment >/dev/null
-
-      - name: Materialize dev shell into /nix/store
         shell: bash
+      - name: Materialize dev shell into /nix/store
         run: |
           set -euo pipefail
           export NIX_REMOTE=daemon
@@ -49,12 +45,8 @@ jobs:
           sudo mkdir -p /var/cache/nix
           sudo chown runner:runner /var/cache/nix
           nix develop --profile /var/cache/nix/dev-shell --command true
-
-      - name: Write image markers
         shell: bash
-        env:
-          BUILD_RUN_ID: ${{ github.run_id }}
-          BUILD_SHA: ${{ github.sha }}
+      - name: Write image markers
         run: |
           set -euo pipefail
           marker="run_id=${BUILD_RUN_ID} sha=${BUILD_SHA} ts=$(date -u +%FT%TZ)"
@@ -65,9 +57,11 @@ jobs:
           echo "$marker" > /home/runner/macro-ami-marker.txt
           # Also drop a sentinel inside /nix so we can tell if the whole tree was wiped.
           echo "$marker" | sudo tee /nix/macro-ami-marker.txt >/dev/null
-
-      - name: Verify image contents
         shell: bash
+        env:
+          BUILD_RUN_ID: ${{ github.run_id }}
+          BUILD_SHA: ${{ github.sha }}
+      - name: Verify image contents
         run: |
           set -euo pipefail
           export NIX_REMOTE=daemon
@@ -86,3 +80,4 @@ jobs:
             sccache --version
             mold --version
           '
+        shell: bash

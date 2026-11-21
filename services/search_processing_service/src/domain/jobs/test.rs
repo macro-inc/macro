@@ -61,7 +61,7 @@ async fn finish_ok_after_cancel_marks_cancelled() {
     };
     let handle = jobs.start("chats").await.expect("start");
     handle.cancel.cancel();
-    jobs.finish(&handle.id, Ok(BackfillReceipt { enqueued: 0 }))
+    jobs.finish(&handle.id, Ok(BackfillReceipt::default()))
         .await
         .expect("finish");
 
@@ -130,7 +130,7 @@ async fn finish_drops_local_cancel_entry() {
     };
     let handle = jobs.start("emails").await.expect("start");
     let id = handle.id.clone();
-    jobs.finish(&id, Ok(BackfillReceipt { enqueued: 0 }))
+    jobs.finish(&id, Ok(BackfillReceipt::default()))
         .await
         .expect("finish");
 
@@ -207,4 +207,71 @@ async fn finish_stopped_records_the_reason_and_the_cursor_to_resume_after() {
         snap.error
     );
     assert_eq!(snap.cursor.as_deref(), Some("doc-b"));
+}
+
+#[test]
+fn a_job_that_left_messages_off_the_queue_is_not_completed() {
+    let (status, error, _) = terminal_state(
+        Ok(BackfillReceipt {
+            enqueued: 30,
+            not_queued: 2,
+        }),
+        false,
+    );
+
+    assert_eq!(status, JobStatus::Failed);
+    assert_eq!(
+        error.as_deref(),
+        Some("the search event queue refused 2 of the backfill's messages")
+    );
+}
+
+#[test]
+fn a_cancelled_job_that_left_messages_off_the_queue_is_failed() {
+    let (status, _, _) = terminal_state(
+        Ok(BackfillReceipt {
+            enqueued: 10,
+            not_queued: 1,
+        }),
+        true,
+    );
+
+    assert_eq!(status, JobStatus::Failed);
+}
+
+#[test]
+fn a_job_that_queued_everything_is_completed() {
+    let (status, error, _) = terminal_state(
+        Ok(BackfillReceipt {
+            enqueued: 30,
+            not_queued: 0,
+        }),
+        false,
+    );
+
+    assert_eq!((status, error), (JobStatus::Completed, None));
+}
+
+#[tokio::test]
+async fn unqueued_messages_show_on_the_failed_job() {
+    let Some(jobs) = try_jobs().await else {
+        eprintln!("skipping: dynamodb-local not reachable at {LOCAL_ENDPOINT}");
+        return;
+    };
+    let handle = jobs.start("documents").await.expect("start");
+    handle.progress.add(5).await;
+    handle.progress.add_not_queued(2).await;
+    jobs.finish(
+        &handle.id,
+        Ok(BackfillReceipt {
+            enqueued: 5,
+            not_queued: 2,
+        }),
+    )
+    .await
+    .expect("finish");
+
+    let snap = jobs.snapshot(&handle.id).await.expect("snapshot").unwrap();
+    assert_eq!(snap.status, JobStatus::Failed);
+    assert_eq!((snap.enqueued, snap.not_queued), (5, Some(2)));
 }

@@ -191,6 +191,7 @@ members = [
   "crates/system_skills",
   "crates/system_status",
   "crates/task_dedup",
+  "crates/task_templates",
   "crates/unfurl",
   "crates/single_flight",
   "crates/upstream_error",
@@ -240,6 +241,7 @@ members = [
   "services/organization_retention_handler",
   "services/organization_retention_trigger",
   "crates/scheduled_action",
+  "services/search_freshness_probe",
   "services/search_processing_service",
   "services/search_upload_handler",
   "services/sha_cleanup_worker",
@@ -300,7 +302,6 @@ insta = { version = "1.48.0", default-features = false, features = ["json"] }
 libtest-mimic = { version = "0.8.2", default-features = false }
 rand_chacha = { version = "0.9.0", default-features = false }
 ryu-js = { version = "1.0.2", default-features = false }
-macro_user_id = { path = "crates/macro_user_id" }
 sync_doc_id = { path = "crates/sync_doc_id" }
 lexical_node_id = { path = "crates/lexical_node_id" }
 document_id = { path = "crates/document_id" }
@@ -315,6 +316,8 @@ computer_id = { path = "crates/computer_id" }
 harnessd_protocol = { path = "crates/harnessd_protocol" }
 pairing_id = { path = "crates/pairing_id" }
 openbao_client = { path = "crates/openbao_client" }
+macro_user_id = { path = "crates/macro_user_id" }
+model-entity = { path = "crates/model-entity" }
 aes = "0.8.4"
 aes-gcm = { version = "0.10.3", features = ["zeroize"] }
 anyhow = "1.0.100"
@@ -350,6 +353,7 @@ aws-msk-iam-sasl-signer = "1.0.1"
 # SDK defaults also enable the deprecated `rustls` feature, which pulls in
 # rustls 0.21 / hyper 0.14. Keep the modern HTTPS client and the other defaults;
 # macro_aws_config uses BehaviorVersion::latest() with this transport.
+aws-sdk-cloudwatch = { version = "1.113.0", default-features = false, features = ["default-https-client", "rt-tokio"] }
 aws-sdk-dynamodb = { version = "1.111.0", default-features = false, features = ["default-https-client", "rt-tokio"] }
 aws-sdk-ecs = { version = "1.124.0", default-features = false, features = ["default-https-client", "rt-tokio"] }
 aws-sdk-kms = { version = "1.104.0", default-features = false, features = ["default-https-client", "rt-tokio"] }
@@ -382,6 +386,7 @@ cron = "0.16.0"
 csv = "1"
 csv-core = "0.1.13"
 dashmap = "6.1.0"
+derive_setters = "0.1.8"
 dateparser = "0.2.1"
 determinator = "0.12.0"
 dotenvy = "0.15.7"
@@ -455,6 +460,7 @@ loro = "=1.17.1"
 loro-internal = "=1.17.1"
 lru = "0.16"
 md-5 = "0.10.6"
+merge = "0.2.0"
 mimalloc = { version = "0.1", default-features = false }
 miniz_oxide = { version = "0.8", features = ["with-alloc"] }
 mockall = "0.13"
@@ -483,6 +489,7 @@ pgvector = { version = "0.4", features = ["postgres", "sqlx"] }
 png = "0.18"
 postcard = { version = "1", features = ["use-std"] }
 pollster = "0.4"
+pretty_assertions = "1.4.1"
 progenitor-client = "0.15.1"
 proptest = { version = "1.11", default-features = false, features = ["std"] }
 proc-macro2 = "1"
@@ -641,6 +648,8 @@ doppler-config = "0.1.2"
 js-sys = "0.3"
 scoped-tls-hkt = "0.1.5"
 scraper = "0.18"
+# The html5ever scraper 0.18 parses with: email_utils wraps its tree sink.
+html5ever = "0.26"
 serde_urlencoded = "0.7.1"
 strum_macros = "0.27.1"
 unicode-segmentation = "1.9.0"

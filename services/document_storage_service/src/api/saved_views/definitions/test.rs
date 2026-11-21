@@ -45,6 +45,10 @@ enum Call {
         name: Option<String>,
         share: String,
     },
+    Appearance {
+        id: Uuid,
+        appearance: model_entity::EntityAppearance,
+    },
     Delete {
         id: Uuid,
         revision: i64,
@@ -89,6 +93,7 @@ fn view(id: Uuid) -> View {
         updated_at: at,
         revision: 3,
         shared_team_id: Some(TEAM),
+        appearance: None,
     }
 }
 
@@ -127,6 +132,7 @@ impl SavedViewApi for FakeSavedViews {
         name: String,
         _config: Value,
         team: Option<Uuid>,
+        _appearance: Option<model_entity::EntityAppearance>,
     ) -> Result<View, Error> {
         self.record(viewer, Call::Create { id, name, team })?;
         Ok(view(id))
@@ -153,6 +159,16 @@ impl SavedViewApi for FakeSavedViews {
                 share,
             },
         )?;
+        Ok(view(id))
+    }
+
+    async fn set_appearance(
+        &self,
+        viewer: &str,
+        id: Uuid,
+        appearance: model_entity::EntityAppearance,
+    ) -> Result<View, Error> {
+        self.record(viewer, Call::Appearance { id, appearance })?;
         Ok(view(id))
     }
 
@@ -566,5 +582,49 @@ async fn requires_a_signed_in_user() {
     let (status, _) = send(&service, request).await;
 
     assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert!(service.calls().is_empty());
+}
+
+#[tokio::test]
+async fn appearance_replaces_metadata_through_the_signed_in_owner_service() {
+    let service = Arc::new(FakeSavedViews::default());
+    let uri = format!("/saved_views/definitions/{VIEW}/appearance");
+    let (status, body) = send(
+        &service,
+        request(
+            "PUT",
+            &uri,
+            Some(json!({
+                "icon": { "kind": "emoji", "value": "📚" }, "color": "blue"
+            })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["revision"], json!(3));
+    assert_eq!(
+        service.calls(),
+        vec![Call::Appearance {
+            id: VIEW,
+            appearance: model_entity::EntityAppearance {
+                icon: Some(model_entity::AppearanceIcon::Emoji {
+                    value: "📚".into()
+                }),
+                color: Some(model_entity::AppearanceColor::Blue),
+            },
+        }]
+    );
+    let (status, _) = send(
+        &service,
+        request(
+            "PUT",
+            &uri,
+            Some(json!({
+                "icon": { "kind": "unknown", "value": "📚" }
+            })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert!(service.calls().is_empty());
 }

@@ -31,7 +31,7 @@ pub(super) async fn enqueue(
     action: &MailboxAction,
     targets: &[MailboxActionTarget],
 ) -> Result<Uuid, sqlx::Error> {
-    let mut tx = pool.begin().await?;
+    let mut tx = super::begin(pool).await?;
     // Serialize acceptance per mailbox and recheck the scoped delegation edge at
     // commit, so an access revocation cannot create new pending work.
     let binding = sqlx::query!(r#"

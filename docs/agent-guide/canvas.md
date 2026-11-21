@@ -48,7 +48,12 @@ Keep tool after drawing on, the Text tool stays and nothing is selected).
 the bottom chrome, 24px clear of both and of the screen's sides, and left of the
 inspector panel when it is open. The same sheet has **Keep tool after
 drawing**: switch it on, choose Rectangle once, and each further drag draws
-another rectangle instead of selecting the last one. Turn the device: a canvas nobody has moved since
+another rectangle instead of selecting the last one. After a pen (an Apple
+Pencil, say) has pressed the canvas, drawing is the pen's: one finger under a
+drawing tool or the eraser pans instead, and the sheet gains **Draw with pen
+only**, which gives drawing back to fingers when switched off. Select, Hand and
+Text stay a finger's throughout. A simulator has no pen; check this on a tablet
+with one. Turn the device: a canvas nobody has moved since
 the fit is fitted again, and one that was moved keeps what was in the middle of
 the view in the middle.
 

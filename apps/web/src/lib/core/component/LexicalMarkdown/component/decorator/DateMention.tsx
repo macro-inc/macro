@@ -1,5 +1,6 @@
 import { DatePicker } from '@core/component/DatePicker';
 import {
+  formatMentionLabel,
   formatRelativeDay,
   formatTooltipDate,
   parseMentionDate,
@@ -24,8 +25,8 @@ false && floatWithElement;
 
 /**
  * Source `importJSON` and `exportComponentProps` hand stored values over
- * unchanged, so null or omitted fields reach this component. It reads only
- * `date`, through `parseMentionDate`, which renders any value.
+ * unchanged, so null or omitted fields reach this component. The shared
+ * formatter reads both fields and preserves the day fallback for absent labels.
  */
 export type DateMentionUIProps = Omit<
   DateMentionDecoratorProps,
@@ -45,9 +46,9 @@ export function DateMention(props: DateMentionUIProps) {
   const [hovered, setHovered] = createSignal(false);
   let mentionRef!: HTMLSpanElement;
 
-  const displayFormat = createMemo(() => {
-    return formatRelativeDay(parseMentionDate(props.date));
-  });
+  const displayFormat = createMemo(() =>
+    formatMentionLabel(props.date, props.displayFormat)
+  );
 
   const isSelectedAsNode = () => {
     if (props.host) return props.host.isSelected(props.key);

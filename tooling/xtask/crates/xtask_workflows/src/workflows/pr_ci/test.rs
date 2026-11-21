@@ -1,17 +1,18 @@
 use super::*;
 
 fn rendered() -> serde_yaml::Value {
-    let yaml = crate::workflows::render_patched(pr_ci, patch).expect("PR CI should render");
+    let yaml = crate::workflows::render_gh_workflow(pr_ci)().expect("PR CI should render");
     serde_yaml::from_str(&yaml).expect("PR CI should parse")
+}
+
+/// The path of the workflow a call runs, as its `uses` names it.
+fn uses(call: &Call) -> String {
+    (call.workflow)().uses
 }
 
 /// The committed YAML of a workflow PR CI calls.
 fn called(call: &Call) -> serde_yaml::Value {
-    let path = format!(
-        "{}/../../../../.github/workflows/{}",
-        env!("CARGO_MANIFEST_DIR"),
-        call.file
-    );
+    let path = format!("{}/../../../../{}", env!("CARGO_MANIFEST_DIR"), uses(call));
     serde_yaml::from_str(&std::fs::read_to_string(&path).expect("called workflow exists"))
         .expect("called workflow parses")
 }
@@ -44,7 +45,7 @@ fn every_called_workflow_can_be_called() {
         assert!(
             triggers.get("workflow_call").is_some(),
             "{} has no workflow_call trigger",
-            call.file
+            uses(call)
         );
     }
 }
@@ -53,8 +54,8 @@ fn every_called_workflow_can_be_called() {
 /// A job limit at or just above a step limit inside it would cut that step short.
 #[test]
 fn every_job_the_gate_waits_for_has_a_timeout() {
-    let workflows = std::iter::once(("pr-ci.yml", rendered()))
-        .chain(CALLS.iter().map(|call| (call.file, called(call))));
+    let workflows = std::iter::once(("pr-ci.yml".to_string(), rendered()))
+        .chain(CALLS.iter().map(|call| (uses(call), called(call))));
 
     for (file, workflow) in workflows {
         let jobs = workflow["jobs"].as_mapping().expect("jobs");
@@ -63,10 +64,21 @@ fn every_job_the_gate_waits_for_has_a_timeout() {
                 continue;
             }
             let id = id.as_str().unwrap_or_default();
-            let limit = job
-                .get("timeout-minutes")
-                .and_then(serde_yaml::Value::as_u64)
-                .unwrap_or_else(|| panic!("{file} job {id} has no numeric timeout-minutes"));
+            let timeout = &job["timeout-minutes"];
+            let limit =
+                if file == "./.github/workflows/code_check_cloud_storage.yml" && id == "check" {
+                    assert_eq!(
+                        timeout.as_str(),
+                        Some("${{ needs.path-check.outputs.loro_guards == 'true' && 30 || 20 }}"),
+                        "the guarded Rust job must retain its exact 30/20-minute policy"
+                    );
+                    // Both branches must leave the same margin above step limits.
+                    20
+                } else {
+                    timeout
+                        .as_u64()
+                        .unwrap_or_else(|| panic!("{file} job {id} has no numeric timeout-minutes"))
+                };
             let longest_step = job["steps"]
                 .as_sequence()
                 .into_iter()
@@ -96,13 +108,13 @@ fn every_called_job_reaches_the_gate() {
             assert!(
                 job.get("continue-on-error").is_none(),
                 "{} job {id} continues on error, so the gate can't see it fail",
-                call.file
+                uses(call)
             );
             let condition = job.get("if").and_then(serde_yaml::Value::as_str);
             assert!(
                 !condition.is_some_and(|condition| condition.contains("always()")),
                 "{} job {id} is a roll-up; the gate reads the call's result instead",
-                call.file
+                uses(call)
             );
         }
     }
@@ -171,7 +183,7 @@ fn full_history_checkouts_fetch_no_blobs_up_front() {
                 assert!(
                     !full || with["filter"].as_str() == Some("blob:none"),
                     "{} job {id} fetches every blob of the full history",
-                    call.file
+                    uses(call)
                 );
             }
         }
@@ -203,7 +215,7 @@ fn blobless_history_is_prepared() {
                     run.contains("git config --unset extensions.partialclone")
                         && run.contains("git config diff.renames false"),
                     "{} job {id} doesn't prepare its blobless checkout",
-                    call.file
+                    uses(call)
                 );
             }
         }

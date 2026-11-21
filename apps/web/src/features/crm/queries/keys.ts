@@ -1,6 +1,16 @@
 import { createQueryKeys } from '@lukemorales/query-key-factory';
 
 export const crmKeys = createQueryKeys('crm', {
+  emailPolicy: (scope: string | undefined) => [scope],
+  emailPolicyHistory: (scope: string | undefined, before?: string) => [
+    scope,
+    before,
+  ],
+  emailPolicyRevision: (scope: string | undefined, revision: number) => [
+    scope,
+    revision,
+  ],
+  emailPolicyPreview: (scope: string | undefined) => [scope],
   emailPrivacy: (teamId: string | undefined, userId: string | undefined) => [
     teamId,
     userId,

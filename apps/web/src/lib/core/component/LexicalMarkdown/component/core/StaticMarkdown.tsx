@@ -93,6 +93,7 @@ import {
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { MarkNode } from '@lexical/mark';
 import type { SearchMatchNode } from '@macro-inc/lexical-core/nodes/SearchMatchNode';
+import { isAllowedLinkUrl } from '@macro-inc/lexical-core/utils/link-url';
 import { theme as baseTheme, createTheme } from '../../theme';
 import { forceSingleLine, setEditorStateFromMarkdown } from '../../utils';
 import { StaticCodeBoxAccessory } from '../accessory/CodeBoxAccessory';
@@ -940,6 +941,8 @@ const Link: TypedRenderableElement<LinkNode> = {
   render: (props) => {
     if ($isAutoLinkNode(props.node) && props.node.getIsUnlinked())
       return props.children;
+    // Saved Lexical JSON can hold any URL; one a link may not open stays text.
+    if (!isAllowedLinkUrl(props.node.__url)) return props.children;
     return (
       <LinkWithPreview
         url={props.node.__url}

@@ -62,6 +62,7 @@ impl FileStore {
 impl Store for FileStore {
     type Err = StoreError;
 
+    #[tracing::instrument(name = "firecracker_host.store_load_all", skip(self), fields(count = tracing::field::Empty), err)]
     async fn load_all(&self) -> Result<Vec<ComputerRecord>, StoreError> {
         let computers = self.layout.computers();
         let entries = match std::fs::read_dir(&computers) {
@@ -83,9 +84,11 @@ impl Store for FileStore {
                 .map_err(|source| StoreError::Parse { path, source })?;
             records.push(record);
         }
+        tracing::Span::current().record("count", records.len());
         Ok(records)
     }
 
+    #[tracing::instrument(name = "firecracker_host.store_save", skip_all, fields(computer_id = %record.computer_id), err)]
     async fn save(&self, record: &ComputerRecord) -> Result<(), StoreError> {
         let directory = self.layout.computer(record.computer_id);
         let path = directory.join(RECORD);
@@ -104,6 +107,7 @@ impl Store for FileStore {
             })?
     }
 
+    #[tracing::instrument(name = "firecracker_host.store_load_host_limits", skip(self), err)]
     async fn load_host_limits(&self) -> Result<Option<HostLimits>, StoreError> {
         let path = self.layout.host_limits();
         match std::fs::read(&path) {
@@ -115,6 +119,7 @@ impl Store for FileStore {
         }
     }
 
+    #[tracing::instrument(name = "firecracker_host.store_save_host_limits", skip_all, err)]
     async fn save_host_limits(&self, limits: &HostLimits) -> Result<(), StoreError> {
         let directory = self.layout.durable();
         let text = serde_json::to_vec_pretty(limits).map_err(|source| StoreError::Parse {
@@ -130,6 +135,7 @@ impl Store for FileStore {
             })?
     }
 
+    #[tracing::instrument(name = "firecracker_host.store_load_staged", skip_all, fields(computer_id = %computer_id), err)]
     async fn load_staged(
         &self,
         computer_id: ComputerId,
@@ -145,6 +151,7 @@ impl Store for FileStore {
             .map_err(|source| StoreError::Parse { path, source })
     }
 
+    #[tracing::instrument(name = "firecracker_host.store_delete", skip_all, fields(computer_id = %computer_id), err)]
     async fn delete(&self, computer_id: ComputerId) -> Result<(), StoreError> {
         let directory = self.layout.computer(computer_id);
         match std::fs::remove_dir_all(&directory) {

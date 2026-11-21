@@ -67,13 +67,21 @@ navigation updates only the previous and next focused rows.
 ### Sticky group headers
 
 `ListViewport.isSticky` opts structural rows into `StickyVirtualizer`, also used
-by the next-soup task list. It keeps the current header and any focused row
-mounted, pins the real header with an opaque backing, and pushes it away at the
-next group. Header selection uses measured offsets rather than fixed row heights.
-The exposed scroll handle keeps keyboard targets below the destination header;
-`stickyInset` reserves persistent chrome separately from `startMargin`.
-`ListViewport.start` scrolls above the rows (a block's tutorial row) and
-becomes their `startMargin`, so list focus and sticky headers skip it.
+by the next-soup task list. On desktop, `ListViewport` keeps the current header
+and any focused row mounted, pins the real header with an opaque backing, and
+pushes it away at the next group. Header selection uses measured offsets rather
+than fixed row heights. `ListViewport` disables sticky group placement on touch;
+focused rows stay mounted for navigation. The exposed scroll handle keeps desktop
+keyboard targets below the destination header; `stickyInset` reserves persistent
+chrome separately from `startMargin`. `ListViewport.start` scrolls above the rows
+(a block's tutorial row) and becomes their `startMargin`, so list focus skips it.
+For a one-page host, pass `scrollContainer`, the measured `scrollStart` before
+rows, and `stickyInset` for its pinned heading. The list does not add a nested
+scroller; paging and focused-row navigation use the host viewport.
+With `touchInset`, a list that owns its scroller reserves bottom clearance after
+the virtual rows equal to
+`max(var(--safe-bottom), var(--mobile-content-inset-bottom)) + 16px` on touch.
+An external scroller's host owns its bottom clearance.
 
 ### Boundary pagination
 

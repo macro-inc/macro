@@ -40,6 +40,7 @@ import { autoRegister, registerCommandEffect } from '../plugins';
 import {
   editorIsEmpty,
   editorStateAsMarkdown,
+  focusEditorFromClick,
   focusEditorWithoutScroll,
   initializeEditorEmpty,
   initializeEditorWithState,
@@ -239,7 +240,8 @@ export const MarkdownShell: Component<MarkdownShellProps> = (props) => {
           )
             return;
           e.stopPropagation();
-          if (!isMobile()) editor.focus();
+          if (isMobile()) return;
+          focusEditorFromClick(editor);
         }}
         on:mousedown={(e) => e.stopPropagation()}
         on:mouseup={(e) => e.stopPropagation()}

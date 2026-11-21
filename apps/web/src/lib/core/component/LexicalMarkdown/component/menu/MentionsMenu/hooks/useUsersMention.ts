@@ -18,6 +18,7 @@ import {
   NAME_MATCH_RANKING,
 } from '@core/util/freshSort';
 import { preservePersonOrder } from '@core/util/ordered-window';
+import { useMentionListPriority } from '@queries/contacts/lists';
 import { createLazyMemo } from '@solid-primitives/memo';
 import {
   type Accessor,
@@ -59,7 +60,10 @@ type UseUsersMentionResult = {
   /** Whether the people still loading join rows already placed (Macro, or
    * agents held back until they can be placed after the people). */
   holdsRows: Accessor<boolean>;
-  /** Whether the directory's read for the term failed and lists no one. */
+  /** Whether the rows held for the people still loading show as loading yet. */
+  showsLoading: Accessor<boolean>;
+  /** Whether the directory's read for the term failed, or has not answered
+   * in time, and lists no one. */
   peopleFailed: Accessor<boolean>;
   /** Reads the failed directory window again, waiting for it as on opening. */
   retryPeople: () => Promise<void>;
@@ -68,6 +72,19 @@ type UseUsersMentionResult = {
 };
 
 type DirectoryAnswer = 'unread' | 'reading' | 'answered';
+
+/**
+ * How long the menu waits for the local cache before listing the server's
+ * people: longer than a cold cache read usually takes, short enough that a
+ * busy or ownerless cache does not leave People loading.
+ */
+const PEOPLE_CACHE_BUDGET_MS = 2_000;
+
+/**
+ * How long People's reserved rows stay blank before they shimmer: a healthy
+ * cache answers sooner, so an ordinary open shows no loading state.
+ */
+const LOADING_ROWS_DELAY_MS = 500;
 
 /** Available group aliases and their match functions */
 const GROUPS = [
@@ -92,6 +109,8 @@ export function useUsersMention(
     buckets: ['person'],
     searchTerm,
     peopleMode: 'mention',
+    peopleListPriority: useMentionListPriority(),
+    peopleLocalBudgetMs: PEOPLE_CACHE_BUDGET_MS,
     enabled: usesDirectory,
   });
   const workspaceUsers = workspace.items;
@@ -156,7 +175,8 @@ export function useUsersMention(
   // not known where the agents go among the people. Later reads keep the
   // people who still match while they run, so typing does not wait again. A
   // directory that has not answered by the time other menus stop saying the
-  // cache is searching gets its agents listed after all.
+  // cache is searching gets its agents listed after all, with the same
+  // message and Retry as a failed read.
   const listsPeople = () => usersList().some((item) => !isBotMentionUser(item));
 
   // The directory does not read a failed window again until its input
@@ -209,7 +229,9 @@ export function useUsersMention(
       if (!usesDirectory()) return answer('unread');
       if (state === 'answered' || listsPeople()) return answer('answered');
       if (workspace.isLoading()) return answer('reading');
-      if (failedRead() && !rereadSpent()) return answer(state);
+      // A failed read is no answer: a read that follows it (a retry, or the
+      // cache changing owner) is waited for like the first.
+      if (failedRead()) return answer(state);
       return answer(state === 'reading' ? 'answered' : 'unread');
     },
     { attempt: 0, state: 'unread' }
@@ -219,15 +241,20 @@ export function useUsersMention(
       usesDirectory() &&
       (firstAnswer().state !== 'answered' || awaitingReread())
   );
-  const waitedTooLong = deferredGate(
-    awaitingDirectory,
-    UNANSWERED_SEARCH_LIMIT_MS
-  );
-  const waitingForPeople = () => awaitingDirectory() && !waitedTooLong();
-
   // As other contact menus do, a read that failed again offers Retry.
+  const failedTwice = () => failedRead() && rereadSpent();
+  const [restarting, setRestarting] = createSignal(false);
+  const readPending = () =>
+    awaitingDirectory() && !failedTwice() && !restarting();
+  const waitedTooLong = deferredGate(readPending, UNANSWERED_SEARCH_LIMIT_MS);
+  const waitingForPeople = () => readPending() && !waitedTooLong();
+  const showsLoading = deferredGate(waitingForPeople, LOADING_ROWS_DELAY_MS);
+
+  // People never goes missing without a word: a read still pending after the
+  // wait says so too, since nothing else would until it settles.
   const peopleFailed = () =>
-    failedRead() && rereadSpent() && !waitingForPeople();
+    !listsPeople() &&
+    (failedTwice() || (awaitingDirectory() && !waitingForPeople()));
 
   // Macro leads, then people come before the other agents and bots, as in
   // assignee menus. The directory's personal window keeps its own order among
@@ -352,9 +379,14 @@ export function useUsersMention(
     isLoading: () => usesDirectory() && workspace.isLoading(),
     waitingForPeople,
     holdsRows: () => waitingForPeople() && listing().agents > 0,
+    showsLoading,
     peopleFailed,
     retryPeople: async () => {
+      // A read still pending keeps its wait; lowering it for a moment starts
+      // the wait again, so Retry holds the rows as opening does.
+      setRestarting(true);
       setAttempt((value) => value + 1);
+      setRestarting(false);
       await workspace.retry?.();
     },
     isLoadingMore: () => usesDirectory() && workspace.isLoadingMore(),

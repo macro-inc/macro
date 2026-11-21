@@ -273,7 +273,6 @@ fn schema_changes_run_the_compatibility_check() {
 fn rust_jobs_have_timeouts() {
     for job in [
         path_check(),
-        check(),
         doppler_config(),
         graphql_schema_compat(),
         test(),
@@ -281,6 +280,11 @@ fn rust_jobs_have_timeouts() {
         let job = serde_json::to_value(job).unwrap();
         assert!(job["timeout-minutes"].is_u64(), "{job}");
     }
+    let guarded_check = serde_json::to_value(check()).unwrap();
+    assert_eq!(
+        guarded_check["timeout-minutes"],
+        "${{ needs.path-check.outputs.loro_guards == 'true' && 30 || 20 }}"
+    );
     for job in [check(), doppler_config(), test()] {
         let job = serde_json::to_value(job).unwrap();
         let shell = job["steps"]
@@ -329,7 +333,9 @@ fn service_bins_gate_covers_every_service_the_script_builds() {
 
     for service in services.split_whitespace() {
         assert!(
-            BUILD_SERVICE_BINS_CONDITION.contains(&format!("'{service}'")),
+            build_service_bins_condition()
+                .to_string()
+                .contains(&format!("'{service}'")),
             "{service} is built by the script but missing from the job's gate"
         );
     }
@@ -418,6 +424,47 @@ fn live_query_crates_are_where_the_dating_looks() {
     }
 }
 
+/// The content search target is `test = false`, and cargo's `--tests` drops it
+/// even when `--test` names it, so its step must never pass `--tests`, or a
+/// full run reports success without running it.
+#[test]
+fn the_content_search_step_runs_its_target_on_every_selection() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let stub_bin = tempfile::tempdir().unwrap();
+    let cargo = stub_bin.path().join("cargo");
+    std::fs::write(&cargo, "#!/bin/sh\necho \"$@\"\n").unwrap();
+    std::fs::set_permissions(&cargo, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    for packages in ["all", "opensearch_client search_service"] {
+        let output = std::process::Command::new("bash")
+            .args([
+                "-c",
+                "export PATH=\"$STUB_BIN:$PATH\"\nexec bash \"$STUB_SCRIPT\"",
+            ])
+            // CI's dev shell sets BASH_ENV, which puts the real cargo back in
+            // front of the stand-in.
+            .env_remove("BASH_ENV")
+            .env("STUB_BIN", stub_bin.path())
+            .env(
+                "STUB_SCRIPT",
+                std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("src/workflows/scripts/run_tests.sh"),
+            )
+            .env("RUST_PACKAGES", packages)
+            .env("NEXTEST_RUN_OPENSEARCH_TESTS", "true")
+            .output()
+            .unwrap();
+        let command = String::from_utf8_lossy(&output.stdout);
+        assert!(output.status.success(), "{packages}: {output:?}");
+        assert!(
+            command.contains("--test content_search"),
+            "{packages}: {command}"
+        );
+        assert!(!command.contains("--tests"), "{packages}: {command}");
+    }
+}
+
 #[test]
 fn loro_guards_are_required_and_share_the_path_check_gate() {
     let job = serde_json::to_value(check()).unwrap();
@@ -472,7 +519,7 @@ fn every_loro_guard_input_also_opens_the_existing_job_gate() {
 
 #[test]
 fn rendered_guard_budget_is_thirty_minutes_only_when_requested_otherwise_twenty() {
-    let rendered = crate::workflows::render_patched(code_check_cloud_storage, patch).unwrap();
+    let rendered = code_check_cloud_storage().to_string().unwrap();
     let workflow: serde_yaml::Value = serde_yaml::from_str(&rendered).unwrap();
     assert_eq!(workflow["jobs"].as_mapping().unwrap().len(), 6);
     assert_eq!(

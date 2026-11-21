@@ -31,6 +31,7 @@ mod moves;
 mod overcommit;
 #[cfg(test)]
 mod test;
+mod usage;
 
 pub const TEAM: Uuid = Uuid::from_u128(0x0000_0000_0000_4000_8000_0000_0000_00aa);
 pub const HOST: HostId = HostId::new(Uuid::from_u128(0x0000_0000_0000_4000_8000_0000_0000_0001));
@@ -128,6 +129,8 @@ pub struct FakeRepo {
     pub home_max_concurrent_starts: Option<u32>,
     /// Hosts' overcommit state, hibernations and wake requests.
     pub overcommit: overcommit::FakeOvercommit,
+    /// Usage readings, each computer's in the order recorded.
+    pub usage: Mutex<HashMap<ComputerId, Vec<crate::domain::usage::StoredSample>>>,
     /// Moves (`domain::moves`), in the order created.
     pub moves: Mutex<Vec<crate::domain::moves::ComputerMove>>,
 }
@@ -358,6 +361,7 @@ impl ComputerRepo for FakeRepo {
             created_by: reservation.created_by,
             created_at: reservation.created_at,
             enrolled_at: None,
+            hibernated_at: None,
             setup_completed_at: None,
             default_agent_id: None,
             image: None,
@@ -467,8 +471,18 @@ impl ComputerRepo for FakeRepo {
             state.waiting_for_capacity(),
             state.payment_progress(),
         );
+        let agent = crate::domain::setup::AgentProgress {
+            reported_online: matches!(event, Event::AgentOnline),
+            delivered: matches!(event, Event::AgentDelivered),
+        };
         if let Some(setup) = state.setup.as_mut() {
             setup.advance(&phase, connected, waiting, payment, now);
+            setup.advance_agent(agent, now);
+        }
+        // Like the Postgres applier: nothing changed, timeline included,
+        // nothing written.
+        if state == computer.state && effects.is_empty() {
+            return Ok(Some(Applied::Changed(Box::new(computer.clone()))));
         }
         computer.state = state;
         self.push_effects(computer, effects, now);
@@ -710,6 +724,12 @@ impl ComputerRepo for FakeRepo {
         self.complete_effect(id).await
     }
 
+    async fn defer_effect(&self, id: i64, run_after: DateTime<Utc>) -> Result<(), FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        self.effect_run_after.lock().unwrap().insert(id, run_after);
+        Ok(())
+    }
+
     async fn retry_effect(
         &self,
         id: i64,
@@ -883,6 +903,7 @@ pub fn deployment() -> crate::domain::enrollment::Deployment {
         document_storage_url: "http://10.210.0.1:8081".parse().unwrap(),
         app_url: "http://10.210.0.1:3000".parse().unwrap(),
         egress_url: "http://10.210.0.1:41027".parse().unwrap(),
+        telemetry_url: None,
     }
 }
 

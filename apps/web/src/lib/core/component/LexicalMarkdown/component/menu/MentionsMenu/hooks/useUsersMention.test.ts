@@ -1,7 +1,8 @@
 import type { UserItem } from '@core/context/quickAccess';
 import type { QuickAccessListOptions } from '@core/context/quickAccess/types';
 import type { IUser } from '@core/user';
-import { createRoot, createSignal } from 'solid-js';
+import { MENTION_LIST_PRIORITY } from '@queries/contacts/list-priority';
+import { batch, createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { sortMobileMentions } from '../utils/mobileSort';
 import { useUsersMention } from './useUsersMention';
@@ -9,20 +10,30 @@ import { useUsersMention } from './useUsersMention';
 const mocks = vi.hoisted(() => ({
   users: (): UserItem[] => [],
   loading: (): boolean => false,
-  error: undefined as unknown,
+  error: (): unknown => undefined,
+  retry: vi.fn<() => Promise<void>>(),
   loadMore: vi.fn<() => Promise<void>>(),
+  listOptions: [] as QuickAccessListOptions[],
+  contactLists: (): boolean => false,
+}));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: mocks.contactLists() }),
 }));
 vi.mock('@core/context/quickAccess', () => ({
   useQuickAccess: () => ({
-    useList: (options: QuickAccessListOptions) => ({
-      items: () => (options.enabled?.() === false ? [] : mocks.users()),
-      windowKey: () => 'window',
-      hasMore: () => true,
-      isLoading: () => mocks.loading(),
-      error: () => mocks.error,
-      isLoadingMore: () => false,
-      loadMore: mocks.loadMore,
-    }),
+    useList: (options: QuickAccessListOptions) => {
+      mocks.listOptions.push(options);
+      return {
+        items: () => (options.enabled?.() === false ? [] : mocks.users()),
+        windowKey: () => 'window',
+        hasMore: () => true,
+        isLoading: () => mocks.loading(),
+        error: () => mocks.error(),
+        retry: mocks.retry,
+        isLoadingMore: () => false,
+        loadMore: mocks.loadMore,
+      };
+    },
     interactionForUser: (id: string) =>
       mocks.users().find((user) => user.id === id)?.timestamps
         .lastInteraction ?? undefined,
@@ -89,12 +100,17 @@ const userItem = (user: IUser, lastInteraction?: Date): UserItem => ({
 });
 
 beforeEach(() => {
-  mocks.error = undefined;
+  mocks.error = () => undefined;
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-09-29T12:00:00Z'));
   mocks.loadMore.mockReset();
   mocks.loadMore.mockResolvedValue(undefined);
   mocks.loading = () => false;
+  mocks.error = () => undefined;
+  mocks.retry.mockReset();
+  mocks.listOptions = [];
+  mocks.contactLists = () => false;
+  mocks.retry.mockResolvedValue(undefined);
   mocks.users = () => [
     userItem(sean),
     userItem(alias),
@@ -257,6 +273,72 @@ it('lists only the rows that lead the people until the directory first answers',
   setLoading(false);
   expect(directory.waitingForPeople()).toBe(false);
   expect(ids()).toEqual([macroAgent.id, reviewCodex.id]);
+  dispose();
+});
+
+it('never drops People without a word while its read is pending or restarts', async () => {
+  const [people, setPeople] = createSignal<UserItem[]>([]);
+  const [loading, setLoading] = createSignal(true);
+  const [error, setError] = createSignal<unknown>();
+  mocks.users = people;
+  mocks.loading = loading;
+  mocks.error = error;
+  const { directory, dispose } = createRoot((dispose) => ({
+    directory: useUsersMention({ searchTerm: () => '' }),
+    dispose,
+  }));
+
+  // The held rows stay blank for as long as a healthy cache takes to answer.
+  expect(directory.waitingForPeople()).toBe(true);
+  expect(directory.showsLoading()).toBe(false);
+  vi.advanceTimersByTime(499);
+  expect(directory.showsLoading()).toBe(false);
+  vi.advanceTimersByTime(1);
+  expect(directory.showsLoading()).toBe(true);
+
+  // A read still pending when the wait ends is reported like a failed one.
+  expect(directory.peopleFailed()).toBe(false);
+  vi.advanceTimersByTime(11_500);
+  expect(directory.waitingForPeople()).toBe(false);
+  expect(directory.peopleFailed()).toBe(true);
+
+  // Retry waits for it again.
+  await directory.retryPeople();
+  expect(directory.waitingForPeople()).toBe(true);
+  expect(directory.peopleFailed()).toBe(false);
+
+  // A read that fails, and fails again when re-read, offers Retry.
+  setError(new Error('cache reads unavailable after owner handoff timeout'));
+  setLoading(false);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(mocks.retry).toHaveBeenCalledTimes(2);
+  expect(directory.waitingForPeople()).toBe(false);
+  expect(directory.peopleFailed()).toBe(true);
+
+  // The cache changing owner restarts the read: the menu waits for it as it
+  // does on opening, and keeps saying so if that read outlasts the wait too.
+  batch(() => {
+    setError(undefined);
+    setLoading(true);
+  });
+  expect(directory.waitingForPeople()).toBe(true);
+  expect(directory.peopleFailed()).toBe(false);
+  vi.advanceTimersByTime(12_000);
+  expect(directory.waitingForPeople()).toBe(false);
+  expect(directory.peopleFailed()).toBe(true);
+
+  setPeople([{ ...userItem(sean), personOrder: 0 }]);
+  setLoading(false);
+  expect(directory.peopleFailed()).toBe(false);
+  expect(directory.users().map((item) => item.id)).toEqual([sean.id]);
+
+  // A later read that fails twice says so as well, after people were listed.
+  batch(() => {
+    setPeople([]);
+    setError(new Error('cache worker timeout: read'));
+  });
+  expect(directory.waitingForPeople()).toBe(false);
+  expect(directory.peopleFailed()).toBe(true);
   dispose();
 });
 
@@ -583,7 +665,7 @@ it('reports actual workspace search state without blocking supplied people', () 
     const supplied = useUsersMention({ searchTerm: () => '', users: () => [] });
     const failure = new Error('fixture search failed');
     mocks.loading = () => true;
-    mocks.error = failure;
+    mocks.error = () => failure;
     expect(workspace.isLoading()).toBe(true);
     expect(workspace.error()).toBe(failure);
     expect(supplied.isLoading()).toBe(false);
@@ -611,6 +693,25 @@ it('lists people before @here for a partial alias and @here first once it is typ
     ]);
     setSearchTerm('here');
     expect(mention.usersAndGroups()[0].id).toBe('here');
+    dispose();
+  });
+});
+
+it('orders the personal mention window by contact list only while enable-contact-lists is on', () => {
+  createRoot((dispose) => {
+    const [enabled, setEnabled] = createSignal(false);
+    mocks.contactLists = enabled;
+    useUsersMention({ searchTerm: () => '' });
+    const options = mocks.listOptions.at(-1);
+    expect(options?.peopleMode).toBe('mention');
+    expect(options?.peopleListPriority?.()).toBeUndefined();
+    setEnabled(true);
+    expect(options?.peopleListPriority?.()).toEqual([
+      ['teammates'],
+      ['interacted', 'invited'],
+      ['gmail', 'outlook'],
+    ]);
+    expect(options?.peopleListPriority?.()).toBe(MENTION_LIST_PRIORITY);
     dispose();
   });
 });

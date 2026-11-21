@@ -13,6 +13,7 @@ import { createMenuOperations } from '../../../shared/inlineMenu';
 import type { MentionItem } from '../../../utils/mentionsUtils';
 import { useEmailSearchMention } from './hooks/useEmailSearchMention';
 import { MentionsMenu } from './MentionsMenu';
+import type { MentionBucketId } from './MentionsMenuController';
 import type { NativeMentionPresentation } from './native-presentation';
 import { createItemHandler } from './utils/mentionHandlers';
 import * as mobileSort from './utils/mobileSort';
@@ -31,6 +32,8 @@ const mocks = vi.hoisted(() => ({
   peopleLoading: (): boolean => false,
   people: (): import('@core/context/quickAccess').UserItem[] => [],
   peopleError: (): unknown => undefined,
+  bookingLinks:
+    (): import('../../../utils/mentionsUtils').BookingLinkMentionItem[] => [],
   retryPeople: vi.fn(async () => {}),
   contactsLoadingMore: (): boolean => false,
   loadMoreContacts: vi.fn(async () => {}),
@@ -92,6 +95,7 @@ vi.mock('@core/constant/featureFlags', () => {
   const enableWhatsappLinked = { name: 'whatsapp' };
   return {
     disableCrmContactSearch,
+    enableContactLists: { name: 'enable-contact-lists' },
     enableCrm,
     enableWhatsappLinked,
     isFeatureEnabled: (flag: unknown) => {
@@ -198,7 +202,7 @@ vi.mock('./hooks/useEmailSearchMention', () => ({
 }));
 vi.mock('./hooks/useBookingLinkMention', () => ({
   useBookingLinkMention: () => ({
-    bookingLinks: () => [],
+    bookingLinks: () => mocks.bookingLinks(),
     isLoading: () => false,
   }),
 }));
@@ -251,6 +255,7 @@ afterEach(() => {
   mocks.peopleLoading = () => false;
   mocks.people = () => [];
   mocks.peopleError = () => undefined;
+  mocks.bookingLinks = () => [];
   mocks.retryPeople.mockClear();
   mocks.contactsLoadingMore = () => false;
   mocks.loadMoreContacts.mockReset();
@@ -1023,6 +1028,7 @@ function openWhilePeopleLoad(options: {
   agents: IUser[];
   phone?: boolean;
   term?: string;
+  sources?: MentionBucketId[];
   onPick?: (item: MentionItem) => void;
 }) {
   mocks.crmEnabled = true;
@@ -1048,14 +1054,14 @@ function openWhilePeopleLoad(options: {
     options.phone ? (
       <MentionsMenu
         menu={menu}
-        sources={['users', 'crm']}
+        sources={options.sources ?? ['users', 'crm']}
         transformUsers={transformUsers}
         editor={createEditor()}
       />
     ) : (
       <MentionsMenu
         menu={menu}
-        sources={['users', 'crm']}
+        sources={options.sources ?? ['users', 'crm']}
         transformUsers={transformUsers}
         anchor={document.createElement('div')}
         onPick={options.onPick ?? vi.fn()}
@@ -1088,6 +1094,36 @@ const placeholderRows = (label: string) =>
     .queryByRole('status', { name: label })
     ?.querySelectorAll('.skeleton-shimmer').length ?? 0) / 2;
 const contactRows = () => screen.queryAllByText(/^Acme contact \d$/).length;
+
+it.each([false, true])(
+  'holds People row space before drawing the delayed loading skeleton on phone=%s',
+  async (phone) => {
+    vi.useFakeTimers();
+    mocks.mobile = phone;
+    if (phone) {
+      vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(
+        256
+      );
+      vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(
+        384
+      );
+    }
+    const people = openWhilePeopleLoad({ agents: [macroAgent], phone });
+    const skeleton = screen.getByRole('status', {
+      name: phone ? 'Loading…' : 'Loading people',
+    });
+    const bars = skeleton.querySelectorAll('.skeleton-shimmer').length;
+    expect(bars).toBeGreaterThan(0);
+    expect(skeleton.classList.contains('invisible')).toBe(true);
+    await vi.advanceTimersByTimeAsync(499);
+    expect(skeleton.classList.contains('invisible')).toBe(true);
+    expect(skeleton.querySelectorAll('.skeleton-shimmer')).toHaveLength(bars);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(skeleton.classList.contains('invisible')).toBe(false);
+    people.land();
+    expect(skeleton.isConnected).toBe(false);
+  }
+);
 
 it.each([
   ['Macro and Codex', [codex, macroAgent]],
@@ -1195,6 +1231,61 @@ it('waits for the re-read when a later read fails, instead of moving the rows be
   expect(screen.queryByRole('alert')).toBeNull();
 });
 
+it('keeps People in place while its first answer loads even when no agent matches, holding the highlighted row', () => {
+  const onPick = vi.fn();
+  const people = openWhilePeopleLoad({
+    agents: [codex, macroAgent],
+    term: 'te',
+    onPick,
+  });
+  expect(placeholderRows('Loading people')).toBe(3);
+  expect(contactRows()).toBe(5);
+  const contact = screen.getByText('Acme contact 1');
+
+  people.land();
+  expect(screen.getByText('Ana Lima')).toBeTruthy();
+  expect(screen.getByText('Acme contact 1')).toBe(contact);
+  fireEvent.keyDown(document, { key: 'Enter' });
+  expect(onPick).toHaveBeenCalledWith(
+    expect.objectContaining({ id: 'contact-1' })
+  );
+});
+
+it('lists booking links that arrive late below People, leaving the highlighted row in place', () => {
+  const onPick = vi.fn();
+  const [links, setLinks] = createSignal<
+    import('../../../utils/mentionsUtils').BookingLinkMentionItem[]
+  >([]);
+  mocks.bookingLinks = links;
+  const people = openWhilePeopleLoad({
+    agents: [macroAgent],
+    sources: ['users', 'bookingLinks', 'crm'],
+    onPick,
+  });
+  people.land();
+  const macro = screen.getByText('Macro');
+
+  setLinks([
+    {
+      kind: 'bookingLink',
+      id: 'profile-1:intro',
+      data: {
+        profileId: 'profile-1',
+        slug: 'intro',
+        title: 'Intro call',
+        durationMinutes: 30,
+        owner: 'Personal',
+      },
+    },
+  ]);
+  const text = document.body.textContent ?? '';
+  const order = ['Macro', 'Ana Lima', 'Bo Chen', 'Intro call'].map((name) =>
+    text.indexOf(name)
+  );
+  expect(order).toEqual([...order].sort((left, right) => left - right));
+  expect(screen.getByText('Macro')).toBe(macro);
+});
+
 it('reads a failed people window again by itself, holding the People rows meanwhile', () => {
   const people = openWhilePeopleLoad({ agents: [codex, macroAgent] });
 
@@ -1240,6 +1331,28 @@ it('offers Retry when the people read fails again, and waits for the retried rea
     text.indexOf(name)
   );
   expect(order).toEqual([...order].sort((left, right) => left - right));
+});
+
+it('says it is searching while People loads when the other sections cannot answer the query', async () => {
+  vi.useFakeTimers();
+  mockNoEmails();
+  mocks.peopleLoading = () => true;
+  const menu = createMenuOperations();
+  menu.setSearchTerm('jacob');
+  menu.openMenu();
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      sources={['users', 'bookingLinks']}
+      anchor={document.createElement('div')}
+      onPick={vi.fn()}
+    />
+  ));
+  // Booking Links answer only an empty query, so there is nothing below
+  // People to keep in place.
+  expect(screen.queryByRole('status', { name: 'Loading people' })).toBeNull();
+  await vi.advanceTimersByTimeAsync(500);
+  expect(screen.getByText('Searching…')).toBeTruthy();
 });
 
 it('picks the highlighted mention on Enter at once, even while typing continues', async () => {

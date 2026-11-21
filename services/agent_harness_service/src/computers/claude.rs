@@ -131,6 +131,35 @@ impl std::fmt::Debug for ClaudeSignInComplete {
     }
 }
 
+/// How the user recovers from a failed Claude sign-in. The web dialog
+/// chooses its way out from this, never from the message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SignInRecoveryCode {
+    /// Claude refused the code; start a new sign-in.
+    InvalidCode,
+    /// Not a code Claude shows; paste it again.
+    MalformedCode,
+    /// The pending sign-in is gone; start a new one.
+    SignInExpired,
+    /// The computer can't be reached; try again.
+    ComputerUnreachable,
+    /// The computer is busy; try again.
+    ComputerBusy,
+    /// Computers are not enabled for this account yet.
+    RolloutDisabled,
+}
+
+/// A failed computer route's body.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct ClaudeSignInError {
+    /// Safe to show, but not to branch on.
+    pub message: String,
+    /// Set when the failure has a specific way out.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub code: Option<SignInRecoveryCode>,
+}
+
 /// `POST /harnesses/{harness_id}/claude-sign-in/complete` answer.
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -193,7 +222,7 @@ impl ClaudeModeResponse {
     params(("harness_id" = String, Path, description = "Harness ID")),
     responses(
         (status = 200, body = ClaudeSignInStarted),
-        (status = 400), (status = 403), (status = 404), (status = 409), (status = 410), (status = 422), (status = 503), (status = 504),
+        (status = 400, body = ClaudeSignInError), (status = 403, body = ClaudeSignInError), (status = 404, body = ClaudeSignInError), (status = 409, body = ClaudeSignInError), (status = 410, body = ClaudeSignInError), (status = 422, body = ClaudeSignInError), (status = 503, body = ClaudeSignInError), (status = 504, body = ClaudeSignInError),
     )
 )]
 pub async fn claude_sign_in_handler<Harnesses, Auth>(
@@ -236,7 +265,7 @@ where
     request_body = ClaudeSignInComplete,
     responses(
         (status = 200, body = ClaudeSignedIn),
-        (status = 400), (status = 403), (status = 404), (status = 409), (status = 410), (status = 422), (status = 503), (status = 504),
+        (status = 400, body = ClaudeSignInError), (status = 403, body = ClaudeSignInError), (status = 404, body = ClaudeSignInError), (status = 409, body = ClaudeSignInError), (status = 410, body = ClaudeSignInError), (status = 422, body = ClaudeSignInError), (status = 503, body = ClaudeSignInError), (status = 504, body = ClaudeSignInError),
     )
 )]
 pub async fn claude_sign_in_complete_handler<Harnesses, Auth>(
@@ -490,7 +519,11 @@ impl ComputerRouteError {
             ErrorKind::InvalidCode => Self::InvalidCode,
             ErrorKind::MalformedCode => Self::MalformedCode,
             ErrorKind::NoPendingSignIn | ErrorKind::Cancelled => Self::SignInExpired,
-            ErrorKind::Timeout => Self::Timeout,
+            // harnessd's own wait on the CLI ran out, and it ended the sign-in
+            // before answering: only a new one can follow. This service
+            // giving up on harnessd (HarnessdError::Timeout) is the timeout
+            // that may leave the computer still signing in.
+            ErrorKind::Timeout => Self::SignInExpired,
             ErrorKind::Failed => {
                 Self::Failed("Claude could not sign in on the computer".to_owned())
             }
@@ -540,16 +573,18 @@ impl From<HarnessError> for ComputerRouteError {
 impl ComputerRouteError {
     /// What the web dialog reads to pick its way out, never the message.
     /// Listed exhaustively, so a new variant has to choose.
-    fn recovery_code(&self) -> Option<&'static str> {
+    fn recovery_code(&self) -> Option<SignInRecoveryCode> {
         match self {
-            Self::InvalidCode => Some("invalid_code"),
-            Self::MalformedCode => Some("malformed_code"),
-            Self::SignInExpired => Some("sign_in_expired"),
-            Self::ComputerUnreachable(_) => Some("computer_unreachable"),
-            Self::ComputerBusy => Some("computer_busy"),
+            Self::InvalidCode => Some(SignInRecoveryCode::InvalidCode),
+            Self::MalformedCode => Some(SignInRecoveryCode::MalformedCode),
+            Self::SignInExpired => Some(SignInRecoveryCode::SignInExpired),
+            Self::ComputerUnreachable(_) => Some(SignInRecoveryCode::ComputerUnreachable),
+            Self::ComputerBusy => Some(SignInRecoveryCode::ComputerBusy),
+            // Both are 403s; only this one clears without the caller's
+            // rights changing.
+            Self::RolloutDisabled => Some(SignInRecoveryCode::RolloutDisabled),
             Self::BadRequest(_)
             | Self::Forbidden
-            | Self::RolloutDisabled
             | Self::Unavailable(_)
             | Self::NotFound(_)
             | Self::Conflict(_)
@@ -580,10 +615,10 @@ impl IntoResponse for ComputerRouteError {
         if status == StatusCode::INTERNAL_SERVER_ERROR {
             tracing::error!(error = ?self, "computer route failed");
         }
-        let mut body = serde_json::json!({ "message": self.to_string() });
-        if let Some(code) = self.recovery_code() {
-            body["code"] = serde_json::json!(code);
-        }
+        let body = ClaudeSignInError {
+            message: self.to_string(),
+            code: self.recovery_code(),
+        };
         (status, Json(body)).into_response()
     }
 }

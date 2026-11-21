@@ -1157,7 +1157,7 @@
     "/agent-sessions/{session_id}/activity": {
       "get": {
         "tags": ["agent-sessions"],
-        "summary": "Read activity using the same visibility capability as the session transcript.",
+        "summary": "Read session-visible activity after filtering CRM rows for the requester.",
         "operationId": "get_agent_session_activity",
         "parameters": [
           {
@@ -3878,28 +3878,84 @@
             }
           },
           "400": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeSignInError"
+                }
+              }
+            }
           },
           "403": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeSignInError"
+                }
+              }
+            }
           },
           "404": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeSignInError"
+                }
+              }
+            }
           },
           "409": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeSignInError"
+                }
+              }
+            }
           },
           "410": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeSignInError"
+                }
+              }
+            }
           },
           "422": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeSignInError"
+                }
+              }
+            }
           },
           "503": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeSignInError"
+                }
+              }
+            }
           },
           "504": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeSignInError"
+                }
+              }
+            }
           }
         }
       }
@@ -3942,28 +3998,84 @@
             }
           },
           "400": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeSignInError"
+                }
+              }
+            }
           },
           "403": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeSignInError"
+                }
+              }
+            }
           },
           "404": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeSignInError"
+                }
+              }
+            }
           },
           "409": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeSignInError"
+                }
+              }
+            }
           },
           "410": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeSignInError"
+                }
+              }
+            }
           },
           "422": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeSignInError"
+                }
+              }
+            }
           },
           "503": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeSignInError"
+                }
+              }
+            }
           },
           "504": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeSignInError"
+                }
+              }
+            }
           }
         }
       }
@@ -5899,6 +6011,28 @@
           }
         }
       },
+      "ClaudeSignInError": {
+        "type": "object",
+        "description": "A failed computer route's body.",
+        "required": ["message"],
+        "properties": {
+          "code": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SignInRecoveryCode",
+                "description": "Set when the failure has a specific way out."
+              }
+            ]
+          },
+          "message": {
+            "type": "string",
+            "description": "Safe to show, but not to branch on."
+          }
+        }
+      },
       "ClaudeSignInStarted": {
         "type": "object",
         "description": "`POST /harnesses/{harness_id}/claude-sign-in` answer.",
@@ -6845,7 +6979,7 @@
           },
           "source": {
             "type": "string",
-            "description": "The submitted JavaScript module."
+            "description": "The submitted TypeScript module."
           },
           "status": {
             "$ref": "#/components/schemas/ExecutionStatus",
@@ -8540,6 +8674,18 @@
             ]
           }
         }
+      },
+      "SignInRecoveryCode": {
+        "type": "string",
+        "description": "How the user recovers from a failed Claude sign-in. The web dialog\nchooses its way out from this, never from the message.",
+        "enum": [
+          "invalid_code",
+          "malformed_code",
+          "sign_in_expired",
+          "computer_unreachable",
+          "computer_busy",
+          "rollout_disabled"
+        ]
       },
       "StartFreshAgentConversationRequest": {
         "type": "object",

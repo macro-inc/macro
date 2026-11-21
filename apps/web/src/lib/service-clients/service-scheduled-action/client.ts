@@ -73,6 +73,7 @@ import type {
   Suggestion,
   SuggestionChanged,
   SuggestionFeed,
+  UnusableKnob,
 } from './generated/schemas';
 
 /** How `POST /suggestions/regenerate` answered. */
@@ -271,6 +272,13 @@ export const scheduledActionClient = {
   listCodeUpgrades: async (args: { scheduleId: string }) =>
     scheduledActionFetch<CodeUpgrade[]>(
       `/scheduled-actions/${args.scheduleId}/code-upgrades`,
+      { method: 'GET' }
+    ),
+
+  /** The routine's entity knobs whose item its owner can't use now. */
+  listUnusableItems: async (args: { scheduleId: string }) =>
+    scheduledActionFetch<UnusableKnob[]>(
+      `/scheduled-actions/${args.scheduleId}/unusable-items`,
       { method: 'GET' }
     ),
 

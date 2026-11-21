@@ -19,12 +19,17 @@ use crate::domain::overcommit::telemetry::{
 };
 use crate::domain::overcommit::{self, ActivitySample, ActivityTracker, WakeAdmission};
 use crate::domain::ports::{
-    ComputersInUse, EveryComputerInUse, GuestUsage, HostLimitsState, OvercommitRepo,
+    ComputersInUse, EveryComputerInUse, GuestUsage, HostLimitsState, OvercommitRepo, UsageHistory,
 };
+use crate::domain::usage::{self, UsageSample};
 
 /// Hibernations relief runs at once on one host; each takes ~3 s.
 const HIBERNATIONS_AT_ONCE: usize = 4;
 const MIB: u64 = 1024 * 1024;
+/// Between deletions of usage readings past their retention. Pruning rides
+/// on the overcommit pass, the only writer of readings: while it does not
+/// run, nothing is written and nothing is pruned.
+const USAGE_PRUNE_EVERY: chrono::Duration = chrono::Duration::minutes(10);
 
 /// What the overcommit pass keeps between passes.
 pub(super) struct Relief {
@@ -33,6 +38,10 @@ pub(super) struct Relief {
     /// Signalled when a harness's macrod connects, for dispatches waiting on a wake.
     connections: std::sync::Mutex<HashMap<HarnessId, Arc<tokio::sync::Notify>>>,
     in_use: Arc<dyn ComputersInUse>,
+    /// The minute of each host's last kept usage reading.
+    usage_minutes: std::sync::Mutex<HashMap<HostId, DateTime<Utc>>>,
+    /// When usage readings were last pruned.
+    usage_pruned_at: std::sync::Mutex<Option<DateTime<Utc>>>,
 }
 
 impl Default for Relief {
@@ -42,6 +51,8 @@ impl Default for Relief {
             wake_queues: std::sync::Mutex::default(),
             connections: std::sync::Mutex::default(),
             in_use: Arc::new(EveryComputerInUse),
+            usage_minutes: std::sync::Mutex::default(),
+            usage_pruned_at: std::sync::Mutex::default(),
         }
     }
 }
@@ -156,6 +167,7 @@ where
     Repo: ComputerRepo
         + crate::domain::agent::ComputerAgents
         + OvercommitRepo
+        + UsageHistory
         + crate::domain::moves::ComputerMoves,
     Machines: Fleets,
     Registry: Harnesses,
@@ -192,7 +204,77 @@ where
             })
             .ok();
         }
+        self.prune_usage().await;
         Ok(())
+    }
+
+    /// Keep this minute's usage reading of each of the host's running
+    /// guests, for the graphs in Settings: the first pass of each minute
+    /// writes, the rest do nothing. Never fails the pass; a reading that
+    /// could not be kept is tried again on the next pass.
+    async fn record_usage(&self, host: HostId, guests: &[GuestUsage], sampled_at: DateTime<Utc>) {
+        let minute = usage::minute_of(sampled_at);
+        let recorded = self
+            .relief
+            .usage_minutes
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&host)
+            .copied();
+        if recorded == Some(minute) {
+            return;
+        }
+
+        let samples: Vec<UsageSample> = guests
+            .iter()
+            .filter(|guest| !guest.hibernated)
+            .filter_map(|guest| {
+                Some(UsageSample {
+                    computer_id: guest.computer_id,
+                    cpu_usage_microseconds: guest.cpu_usage_microseconds?,
+                    memory_bytes: guest
+                        .private_memory_bytes?
+                        .saturating_add(guest.swap_bytes?),
+                })
+            })
+            .collect();
+        if !samples.is_empty()
+            && let Err(error) = UsageHistory::record_usage(&self.repo, sampled_at, &samples).await
+        {
+            tracing::warn!(host_id = %host, error = ?error, "could not keep usage readings; the next pass retries");
+            return;
+        }
+        self.relief
+            .usage_minutes
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(host, minute);
+    }
+
+    /// Delete usage readings past their retention, every
+    /// [`USAGE_PRUNE_EVERY`]. Never fails the pass.
+    async fn prune_usage(&self) {
+        let now = self.clock.now();
+        let pruned_at = *self
+            .relief
+            .usage_pruned_at
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if pruned_at.is_some_and(|at| now - at < USAGE_PRUNE_EVERY) {
+            return;
+        }
+        match UsageHistory::prune_usage(&self.repo, now - usage::RETENTION).await {
+            Ok(_) => {
+                *self
+                    .relief
+                    .usage_pruned_at
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(now);
+            }
+            Err(error) => {
+                tracing::warn!(error = ?error, "could not prune usage readings; the next pass retries");
+            }
+        }
     }
 
     async fn overcommit_host(
@@ -227,6 +309,8 @@ where
             return Ok(());
         };
         tracing::Span::current().record("resident_memory_mib", memory.report.resident_memory_mib);
+        self.record_usage(host, &memory.guests, memory.report.reported_at)
+            .await;
 
         let limits = capacity.agent_limits(crate::domain::image::sold_home_disk_gib());
         if let HostLimitsState::Enforced(current) = &memory.limits

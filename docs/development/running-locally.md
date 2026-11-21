@@ -372,8 +372,9 @@ persona accounts it created. It is safe to run against a stack that you tested i
 
 Passwords uses a local OpenBao server with team-scoped namespaces and single-node
 integrated Raft on a named Compose volume per instance. Startup initializes it once
-and unseals it automatically with a generated local seal key. Provision each new team
-using the [local vault bootstrap](../../infra/local/openbao/README.md); container
+and unseals it automatically with a generated local seal key. Stack startup provisions
+every existing team; for a team created later run `just passwords_provision`
+(see the [local vault bootstrap](../../infra/local/openbao/README.md)). Container
 and stack restarts preserve credentials, TOTP seeds, and provisioning without a
 reseed. Keep the volume and seal key together, and use synthetic credentials only.
 Migrating from the old in-memory development server requires restoring its values
@@ -705,8 +706,8 @@ Harness config required for a fleet:
 and `COMPUTERS_AGENT_IMAGE` (agent teammates' computers). The local Docker host's
 capacity comes from its `hosted_runtime_host` row like any host's
 ([overcommit runbook](../runbooks/computer-overcommit.md)). The Docker images are `macro-box:latest` and `macro-box-agent:latest`
-(`run_local` builds and loads both: `.#macro-box-docker` and
-`.#macro-box-agent-docker`).
+(`run_local --computers docker` builds and loads both: `.#macro-box-docker`
+and `.#macro-box-agent-docker`).
 
 Docker additionally requires `COMPUTERS_DOCKER_NETWORK`,
 `COMPUTERS_DOCKER_ENROLLMENT_DIR`, and `COMPUTERS_DOCKER_MEMORY_GB` (`32` locally).
@@ -742,19 +743,25 @@ Select a fleet with:
 
 | Flag | Fleet | Computers run on |
 | --- | --- | --- |
-| none (`run_local`), `--computers docker` | `docker` | this machine's Docker daemon |
-| `--no-computers`, `--computers off`, none (`stack up`) | off | nowhere; no control plane |
+| `--computers docker` | `docker` | this machine's Docker daemon |
+| none, `--no-computers`, `--computers off` | off | nowhere; no control plane |
 
-`stack up` defaults to off so agents and CI do not build the computer image;
-`stack update` keeps the fleet `up` recorded. `run_dev` never runs computers.
+Computers are off by default for `run_local` and `stack up`: with them on,
+every start builds two Nix images first. `stack update` keeps the fleet `up`
+recorded. `run_dev` never runs computers. A stack resumed without
+`--computers docker` keeps any `macro-computer-*` containers it ran before but
+drives none of them; `--fresh` removes them.
 
-### Docker (default)
+### Docker
 
-`run_local` builds the image with `nix build .#macro-box-docker` and loads it
-as `macro-box:latest`. Nix caches the build, and the load only runs again when
-the store path or the daemon's image changes
-(`infra/local/generated/.macro-box-image`). The first build is slow; pass
-`--no-computers` to skip it.
+`run_local --computers docker` builds the images with `nix build
+.#macro-box-docker` and `.#macro-box-agent-docker` and loads them as
+`macro-box:latest` and `macro-box-agent:latest`. Nix caches the builds, and a
+load only runs again when the store path or the daemon's image changes
+(`infra/local/generated/.macro-box-image`, `.macro-box-agent-image`). macrod
+and harnessd build from their own crate closures (`.#macro-box-macrod`,
+`.#macro-box-harnessd`), so only a change to a crate they depend on rebuilds
+them; the first build is slow.
 
 Computers are privileged `macro-box` containers named `macro-computer-<id>`
 on the instance's `<project>_services` network, so macrod dials the agent

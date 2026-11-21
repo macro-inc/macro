@@ -328,3 +328,22 @@ fn a_runtime_accepts_only_the_messages_it_lists() {
     headers.insert(RUNTIME_ACCEPTS_HEADER, HeaderValue::from_static("agents"));
     assert!(!super::runtime_accepts(&headers).agents_changed);
 }
+
+#[test]
+fn only_a_runtime_that_lists_apply_agent_can_run_an_agent_teammate() {
+    use axum::http::{HeaderMap, HeaderValue};
+
+    assert!(!super::runtime_accepts(&HeaderMap::new()).apply_agent);
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        RUNTIME_ACCEPTS_HEADER,
+        HeaderValue::from_static("agents-changed,apply-agent"),
+    );
+    assert_eq!(
+        super::runtime_accepts(&headers),
+        RuntimeAccepts {
+            agents_changed: true,
+            apply_agent: true,
+        }
+    );
+}

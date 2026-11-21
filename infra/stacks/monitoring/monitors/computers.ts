@@ -12,6 +12,11 @@
 //   computer released after failing its first start twice could not be
 //   refunded within its attempt cap, so the team paid for a computer that
 //   never worked. Fields: `computer_id`, `effect_id`, `attempts`.
+// - `computer purchase refund found no paid purchase`, from
+//   authentication-service: a computer released after two failed first starts
+//   was billed on an item, but no paid invoice carried its purchase (still
+//   open, or older than the invoices searched), so nothing was refunded.
+//   Fields: `computer_id`.
 // - `agent invite undo abandoned`, from authentication-service: a computer
 //   bought for an agent teammate was released after failing its first start,
 //   and taking the agent back failed for its whole attempt cap. Fields:
@@ -57,6 +62,28 @@ ${notify({ pages: environment === 'prod', environment })}`,
       message: `Computer {{computer_id.name}} failed its first start twice and was released, but refunding its purchase failed for its whole retry budget. The team paid for a computer that never worked.
 
 Find the invoice line whose price has metadata computer_id={{computer_id.name}} and credit note it (refund the card part), then remove the item carrying that computer_id without proration. Search @computer_id:{{computer_id.name}} "billing effect failed" for the errors. See crates/hosted_runtimes/AGENTS.md.
+
+${notify({ pages: environment === 'prod', environment })}`,
+      monitorThresholds: { critical: '0' },
+      tags: [env, 'service:authentication-service'],
+      priority: environment === 'prod' ? '2' : '3',
+      includeTags: true,
+      requireFullWindow: false,
+      renotifyInterval: RENOTIFY_MINUTES,
+      onMissingData: 'resolve',
+    },
+    { dependsOn: goalertWebhooks }
+  );
+
+  new datadog.Monitor(
+    `computer-purchase-refund-unmatched-${environment}`,
+    {
+      name: `[${environment.toUpperCase()}] Computers: no purchase found to refund for {{computer_id.name}}`,
+      type: 'log alert',
+      query: `logs("service:authentication-service status:error \\"computer purchase refund found no paid purchase\\" ${env}").index("*").rollup("count").by("@computer_id").last("1h") > 0`,
+      message: `Computer {{computer_id.name}} was released after failing its first start twice and was billed on an item, but no paid invoice carried its purchase, so nothing was refunded.
+
+Find the team's invoice whose line has a price with metadata computer_id={{computer_id.name}} (it may still be open, or older than the 20 most recent paid invoices) and credit note it. See crates/hosted_runtimes/AGENTS.md.
 
 ${notify({ pages: environment === 'prod', environment })}`,
       monitorThresholds: { critical: '0' },

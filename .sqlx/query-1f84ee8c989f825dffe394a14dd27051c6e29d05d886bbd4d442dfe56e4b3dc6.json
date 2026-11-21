@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT h.history_id FROM email_links l JOIN email_gmail_histories h ON h.link_id=l.id\n            WHERE l.id=$1 AND l.provider='GMAIL' AND l.is_sync_active AND l.disconnect_requested_at IS NULL FOR SHARE OF l FOR UPDATE OF h",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "history_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "1f84ee8c989f825dffe394a14dd27051c6e29d05d886bbd4d442dfe56e4b3dc6"
+}

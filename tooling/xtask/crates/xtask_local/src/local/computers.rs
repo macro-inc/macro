@@ -7,7 +7,8 @@
 //!   dials the stack in-network. The harness already mounts the Docker socket
 //!   for local sandboxes; it also gets the enrollment directory at the same
 //!   absolute path, because the daemon resolves the bind sources it creates.
-//! - `off`: no attached fleet; emits no `COMPUTERS_*` settings.
+//! - `off` (the default): no attached fleet; emits no `COMPUTERS_*` settings
+//!   and builds no macro-box image.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -63,23 +64,22 @@ pub enum Fleet {
 
 #[derive(Args, Clone, Default)]
 pub struct ComputersArgs {
-    /// Which fleet runs Macro computers. Defaults to `docker` for
-    /// `run_local` and `off` for `stack up`.
+    /// Which fleet runs Macro computers. Defaults to `off`: `docker` builds
+    /// the two macro-box images with Nix before the stack starts.
     #[arg(long, value_enum)]
     pub computers: Option<Fleet>,
-    /// Run no computer control plane and skip the macro-box image build
-    /// (`--computers off`).
+    /// Run no computer control plane (the default; `--computers off`).
     #[arg(long, conflicts_with = "computers")]
     pub no_computers: bool,
 }
 
 impl ComputersArgs {
-    /// The chosen fleet; `default` when no flag names one.
-    pub fn fleet(&self, default: Fleet) -> Fleet {
+    /// The chosen fleet: `off` unless `--computers` names one.
+    pub fn fleet(&self) -> Fleet {
         if self.no_computers {
             Fleet::Off
         } else {
-            self.computers.unwrap_or(default)
+            self.computers.unwrap_or(Fleet::Off)
         }
     }
 }
@@ -88,6 +88,8 @@ impl ComputersArgs {
 #[derive(Clone, Debug)]
 pub struct Computers {
     fleet: Fleet,
+    /// Whether this mode can run computers at all (`run_dev` can't).
+    local_infra: bool,
     instance: Instance,
 }
 
@@ -95,13 +97,11 @@ impl Computers {
     /// Computers run on fully local stacks only: `run_dev` points at shared
     /// dev resources, and the control plane's URL overrides are local-only.
     pub fn new(mode: Mode, fleet: Fleet, instance: &Instance) -> Self {
-        let fleet = if mode.spec().runs_local_infra {
-            fleet
-        } else {
-            Fleet::Off
-        };
+        let local_infra = mode.spec().runs_local_infra;
+        let fleet = if local_infra { fleet } else { Fleet::Off };
         Self {
             fleet,
+            local_infra,
             instance: instance.clone(),
         }
     }
@@ -198,6 +198,9 @@ impl Computers {
     /// What the developer must know once the stack is up.
     pub fn print_hint(&self, stage: &Stage) {
         match self.fleet {
+            Fleet::Off if self.local_infra => stage.note(
+                "  computers: off (pass --computers docker to buy and run Macro computers locally)",
+            ),
             Fleet::Off => {}
             Fleet::Docker => stage.note(&format!(
                 "  computers: Docker fleet `{DOCKER_HOST_NAME}` ({DOCKER_IMAGE}) on {}",

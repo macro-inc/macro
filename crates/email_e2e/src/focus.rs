@@ -1,8 +1,8 @@
 //! What `email_focus_worker` asks outside Macro's own database, stood in
 //! for: the model that answers the Focus questions about a thread, the
 //! agent harness route that reads the day a thread is due, and PostHog,
-//! whose `enable-email-focus` flag puts an owner's inboxes in the Focus
-//! rollout.
+//! whose `enable-email-focus` flag puts a user's inboxes, and those linked
+//! to them, in the Focus rollout.
 //!
 //! The questions, their order and the thread ids are the product's, so a
 //! scenario does not script answers by them. It says which mail belongs in
@@ -12,7 +12,7 @@
 //! text. Every other question is answered "no", so nothing but that answer
 //! decides.
 //!
-//! Every owner has the flag on unless the scenario turned it off for them
+//! Every user has the flag on unless the scenario turned it off for them
 //! ([`FocusClassifier::turn_off_focus_flag_for`]).
 
 use std::collections::HashMap;
@@ -55,7 +55,8 @@ const FLAG_DEFINITIONS_ROUTE: &str = "/flags/definitions";
 /// stand-in asks for as PostHog does.
 pub(crate) const POSTHOG_PROJECT_KEY: &str = "email-e2e-project";
 pub(crate) const POSTHOG_SECRET_KEY: &str = "email-e2e-flags";
-/// The flag that puts an owner's inboxes in the Focus rollout
+/// The flag that puts a user's inboxes, and those linked to them, in the
+/// Focus rollout
 /// (`EMAIL_FOCUS_FLAG` in `email_focus_worker`).
 const FOCUS_FLAG: &str = "enable-email-focus";
 /// The headers a service names itself and the user with to the harness.
@@ -77,7 +78,7 @@ struct Answers {
     asked: Vec<String>,
     /// The stand-in and route of every request, oldest first.
     calls: Vec<(&'static str, &'static str)>,
-    /// The addresses of the owners whose Focus flag is off.
+    /// The addresses of the users whose Focus flag is off.
     flag_off: Vec<String>,
     /// Whether the worker has read the flag definitions, which it reads
     /// again only five minutes later.
@@ -88,7 +89,7 @@ struct Answers {
 /// as a scenario sets them
 /// ([`Stack::focus_classifier`](crate::Stack::focus_classifier)). Until told
 /// otherwise the model finds no mail worth Focus, no thread has a due date
-/// and every owner has the flag on.
+/// and every user has the flag on.
 #[derive(Clone, Default)]
 pub struct FocusClassifier {
     answers: Arc<Mutex<Answers>>,
@@ -113,8 +114,9 @@ impl FocusClassifier {
         self.answers().due.push((text.to_owned(), day));
     }
 
-    /// Turns the Focus flag off for the owner at `address`, so the worker
-    /// classifies the mail of none of their inboxes.
+    /// Turns the Focus flag off for the user at `address`, so the worker
+    /// classifies the mail of their inboxes, and of those linked to them, only
+    /// while another user the inbox belongs or is linked to has the flag.
     ///
     /// The worker reads the flag when it first looks at an inbox, mail or no
     /// mail (it looks at every linked inbox once a minute), and again only
@@ -288,7 +290,7 @@ fn header<'a>(headers: &'a HeaderMap, name: &str) -> &'a str {
 }
 
 /// PostHog's flag definitions, which the worker polls to evaluate
-/// `enable-email-focus` itself: on for every owner but those the scenario
+/// `enable-email-focus` itself: on for every user but those the scenario
 /// turned it off for. The wire shape is the one
 /// `feature_flags::outbound::posthog_local` reads.
 async fn flag_definitions(

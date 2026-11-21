@@ -8,6 +8,7 @@ const SERVICE_NAMES = [
   'calendar-service',
   'cloud-storage-service',
   'search-processing-service',
+  'search-freshness-probe',
   'unfurl-service',
   'static-file-service',
   'image-proxy-service',

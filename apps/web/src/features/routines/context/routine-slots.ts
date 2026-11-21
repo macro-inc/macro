@@ -32,6 +32,8 @@ export type RoutineEditorSlots = {
     /** A chip listing the apps (default), or an "Add connection" button. */
     variant?: 'chip' | 'button';
   }>;
+  /** Connects an app the routine requires that the viewer hasn't. */
+  ConnectApp: Component<{ app: RoutineApp }>;
   /** The viewer's connected app slugs; undefined until they load. */
   createConnectedApps(): Accessor<ReadonlySet<string> | undefined>;
   /** AI that adds and changes steps; without it, steps are added by hand. */

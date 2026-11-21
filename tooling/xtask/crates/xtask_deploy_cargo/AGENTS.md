@@ -40,6 +40,13 @@ tracked Dockerfile except the named exemptions in `src/main.rs`.
 - Every deploy root must yield its own selection; one root's extra commands
   never cover another root's missing ones.
 - Add an option to `command.rs` only with a test; unknown options must fail.
+- Resolve omitted build targets with `--target all`; preserve explicit targets.
+- Registry `cargo install` commands are outside workspace selection; reject
+  `--path` and `--git` installs rather than skipping their builds.
+- Keep the grammar's limits explicit: Docker ARG defaults are currently
+  file-wide, and caller discovery is a bounded literal inventory. Per-stage
+  and source-order ARG semantics plus broader discovery remain follow-up
+  `mac-wasm-rust.18`; this is not a general Docker, shell or TypeScript proof.
 - The grammar is strict on purpose: Cargo behind a wrapper (`env`, `sh -c`),
   exec-form RUNs, any heredoc, `$NAME` instead of `${NAME}`, an unset build arg,
   a non-literal `dockerfile:`/`buildArgs:` value, a `buildArgs:` outside its

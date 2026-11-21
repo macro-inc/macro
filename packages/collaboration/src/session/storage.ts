@@ -66,8 +66,16 @@ const storagePolicy = {
   { name: string; snapshot: boolean; sourceOwner: boolean }
 >;
 
+export function isStorageOperationKind(kind: unknown): kind is StorageOpKind {
+  return (
+    typeof kind === 'number' &&
+    Number.isInteger(kind) &&
+    Object.hasOwn(storagePolicy, kind)
+  );
+}
+
 export function storageOperationName(kind: StorageOpKind): string {
-  if (!Number.isInteger(kind) || !Object.hasOwn(storagePolicy, kind))
+  if (!isStorageOperationKind(kind))
     throw new DOMException('Unknown storage operation', 'DataError');
   return storagePolicy[kind].name;
 }

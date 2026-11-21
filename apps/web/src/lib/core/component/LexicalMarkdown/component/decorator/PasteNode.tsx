@@ -45,8 +45,9 @@ function PastedText(props: PasteNodeDecoratorProps & PasteNodeHostProp) {
         on:click={(e) => {
           // Native listener (not delegated `onClick`) so this fires during
           // real DOM bubbling and its stopPropagation beats the MarkdownTextarea
-          // container's native `on:click`, which otherwise calls editor.focus()
-          // and steals focus back, instantly closing the modal in input boxes.
+          // container's native `on:click`, which otherwise can call
+          // editor.focus() and steal focus back, instantly closing the modal in
+          // input boxes.
           e.preventDefault();
           e.stopPropagation();
           node.selectNode();

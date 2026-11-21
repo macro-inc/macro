@@ -224,6 +224,7 @@ fn insert_graphql_context_data(
         macro_user_id.clone(),
     ));
     data.insert(state.graphql_notification_reader.clone());
+    data.insert(state.graphql_notification_writer.clone());
     data.insert(state.soup_router_state.email_service());
     data.insert(state.entity_access_service.clone());
     data.insert(state.graphql_soup_item_loader.clone());

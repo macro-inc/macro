@@ -50,6 +50,21 @@ fn crate_change_maps_to_rdeps_of_that_crate() {
     );
 }
 
+#[test]
+fn deployed_sync_schema_copies_select_the_equality_guard() {
+    let graph = build_graph(false).expect("cargo metadata");
+    for path in [
+        "services/sync-service/bebop/schema.bop",
+        "services/sync-service/bebop-schema/src/generated.rs",
+    ] {
+        let selection = select_in_repo(&graph, &[path]);
+        assert!(
+            selected_packages(&selection).contains("sync_protocol"),
+            "deployed schema change must run the equality guard: {path}: {selection:?}"
+        );
+    }
+}
+
 /// Top-level files that belong to no package — a JSON at the repo root, a
 /// README, a deleted misc file — must not select the full suite.
 #[test]

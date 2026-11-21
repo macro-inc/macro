@@ -3,6 +3,7 @@
  */
 
 import { differenceInCalendarDays } from 'date-fns';
+import { formatDateWithContext } from './dateSearch/useDateSearch';
 
 export type ParsedDate = {
   date: Date;
@@ -385,6 +386,30 @@ export function parseMentionDate(value: string | null | undefined): Date {
   const local = new Date(0, 0, 1);
   local.setFullYear(year, month - 1, date);
   return local.getMonth() === month - 1 ? local : new Date(Number.NaN);
+}
+
+const BARE_DAY = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_OF_DAY = /\d{1,2}:\d{2}|\b\d{1,2}\s?[ap]\.?m\b/i;
+
+/**
+ * The label a date chip shows. A chip written for a moment (a timestamp whose
+ * stored label names a time of day, as agents and Notion imports write) shows
+ * that moment's day and time in the viewer's zone; every other chip shows its
+ * day alone, relative to today. A chip picked in the editor is a timestamp at
+ * its author's midnight with a day label, so it stays a day for every viewer.
+ */
+export function formatMentionLabel(
+  date: string | null | undefined,
+  displayFormat: string | null | undefined
+): string {
+  const parsed = parseMentionDate(date);
+  const namesTime =
+    typeof date === 'string' &&
+    typeof displayFormat === 'string' &&
+    !BARE_DAY.test(date) &&
+    TIME_OF_DAY.test(displayFormat) &&
+    !Number.isNaN(parsed.getTime());
+  return namesTime ? formatDateWithContext(parsed) : formatRelativeDay(parsed);
 }
 
 /**

@@ -3,6 +3,7 @@ use async_graphql::{Context, EmptyMutation, EmptySubscription, Object, Request, 
 use contacts::domain::{
     models::{
         contact::{Contact, ContactId, ContactPage},
+        list::ContactList,
         page::{ContactCursor, ContactPageSize},
         query::{ContactLookup, ContactSearch},
     },
@@ -87,6 +88,7 @@ impl ContactDirectory for Reader {
                     id: ContactId::for_viewer(&viewer, &user_id),
                     user_id,
                     name: Some("Person".into()),
+                    lists: vec![ContactList::Teammates, ContactList::Gmail],
                 }]
             },
             next_cursor: ContactCursor::from_position("legacy-position".into()),
@@ -273,8 +275,10 @@ async fn enriched_rows_and_empty_pages_preserve_opaque_continuations() {
         let viewer = MacroUserIdStr::try_from_email("viewer@example.com").unwrap();
         let result = schema
             .execute(
-                Request::new("{ user { contacts { nodes { id userId email name } nextCursor } } }")
-                    .data(viewer.clone()),
+                Request::new(
+                    "{ user { contacts { nodes { id userId email name lists } nextCursor } } }",
+                )
+                .data(viewer.clone()),
             )
             .await;
         assert!(result.errors.is_empty(), "{:?}", result.errors);
@@ -285,6 +289,10 @@ async fn enriched_rows_and_empty_pages_preserve_opaque_continuations() {
             assert_eq!(page["nodes"][0]["email"], "person@example.com");
             assert_eq!(page["nodes"][0]["userId"], "macro|person@example.com");
             assert_eq!(page["nodes"][0]["name"], "Person");
+            assert_eq!(
+                page["nodes"][0]["lists"],
+                serde_json::json!(["teammates", "gmail"])
+            );
             assert_ne!(page["nodes"][0]["id"], page["nodes"][0]["userId"]);
         }
         let cursor = page["nextCursor"].as_str().unwrap();

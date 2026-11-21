@@ -267,22 +267,7 @@ fn main() -> Result<(), Report> {
         bail!("{} deploy build problems", errors.len());
     }
     for deploy::Bound { source, selection } in &bound {
-        let mut args = Vec::new();
-        for package in &selection.packages {
-            args.extend(["-p".to_owned(), package.clone()]);
-        }
-        for features in &selection.features {
-            args.extend(["--features".to_owned(), features.clone()]);
-        }
-        if selection.no_default_features {
-            args.push("--no-default-features".to_owned());
-        }
-        if selection.all_features {
-            args.push("--all-features".to_owned());
-        }
-        if let Some(target) = &selection.target {
-            args.extend(["--target".to_owned(), target.clone()]);
-        }
+        let args = selection.tree_args();
         println!("{source}\t{}", args.join(" "));
     }
     eprintln!(

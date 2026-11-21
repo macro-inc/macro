@@ -1036,6 +1036,10 @@ pub struct AttentionCandidateRequest<'a> {
     pub crm: bool,
     /// Restrict the feed to these candidate keys, for recomputing known items.
     pub only: Option<&'a [Entity<'static>]>,
+    /// Treat every `only` key as if a notification about it were pending now:
+    /// asks whether a new notification would be listed, before it exists.
+    /// Meaningful only with `only` and without own work.
+    pub assume_attention: bool,
 }
 
 /// One attention feed candidate and the timestamps of its two reasons.
@@ -1082,6 +1086,8 @@ pub struct AttentionSoupRequest {
     pub after: Option<AttentionPagePosition>,
     /// Restrict the feed to these candidate keys, for recomputing known items.
     pub only: Option<Vec<Entity<'static>>>,
+    /// See [`AttentionCandidateRequest::assume_attention`].
+    pub assume_attention: bool,
 }
 
 /// One hydrated attention feed item and its reason timestamps.
@@ -1184,7 +1190,8 @@ fn map_properties_to_call(expr: &Expr<PropertiesLiteral>) -> Expr<CallLiteral> {
     }
 }
 
-/// An entity whose Companies or Contacts property names a CRM record.
+/// An entity whose Companies or Contacts property names a CRM record, or a
+/// task whose custom entity property does.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CrmPropertyEdge {
     /// The entity type the property row is stored under.

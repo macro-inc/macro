@@ -275,13 +275,27 @@ horizontally and removal remains available without hover. Composer fixture
 screenshots: [desktop](media/share-images/desktop.png) and
 [phone](media/share-images/mobile.png).
 
+If account or CRM access changes while a document or file is still loading,
+its load retries once with fresh permissions and content in both Drive and
+standalone file views. Check a cold file open
+with local storage delayed: the file should finish opening after recovery. A
+revoked file stays unavailable, and a second interruption leaves the existing
+retry control. An already-open editor does not reload merely because the cache
+finishes starting.
+
 Opening a document or file in a Drive, Home, CRM or Tasks detail view (tasks,
 snippets and skills included) records the open once in the user's history,
 which orders Recents and Cmd+K. On dev, expect one `POST /history/document/<id>`
-per open, none when access changes or a retry reloads the same document. An item
-already in Quick Access's history list is then first in empty Cmd+K; one opened
-for the first time outside that list is recorded but appears there only once the
-tab's cache learns the view.
+per open, none when access changes or a retry reloads the same document. Agent
+sessions opened from the Agents view, Tasks projects, CRM companies and contacts,
+and Drive folders record their opens the same way, as `agent_session`,
+`initiative`, `crm_company`, `crm_contact` and `project` history. An opened
+document, chat or folder is then first in empty Cmd+K, including one opened for
+the first time or last viewed long ago: the open stamps its viewed time on its
+record in the GraphQL cache, which orders cached history. An item the cache does
+not hold yet is loaded by id (one `HistoryViewItem` request) after the history
+POST succeeds. To check that case, open a document that empty Cmd+K does not
+list.
 
 Verify **Public → View** links in a fresh signed-out browser context. The
 `/app/drive/md/<id>` route (including folder/tab document links and legacy
@@ -326,9 +340,11 @@ to request again.
 This workflow also applies to the existing chat, folder, project, database, call,
 and agent-session Share menus, using the access levels that each supports.
 
-Reviewers see a pending count on **Share**. Entering an item with pending requests
+Reviewers see a pending count on **Share**, after its label (after the icon
+where the header hides the label), and its tooltip and accessible name read
+"N pending permission requests". Entering an item with pending requests
 opens Share once for that visit; requests arriving during the visit update the
-badge. On mobile, review requests in the **People** tab. **Permission requests**
+count. On mobile, review requests in the **People** tab. **Permission requests**
 lets a reviewer choose an access level and **Grant access**, or **Deny**. Team
 owners/admins and the human responsible for a bot-owned item review on its behalf.
 Only the first review of a request succeeds. Grants notify the requester; denials
@@ -2915,6 +2931,19 @@ under **Contacts & Companies** in `@` mentions and under **People** in the
 command menu. Values show the record's name and open the company or contact.
 An entity can carry the property without listing it (set at creation or through
 the API); adding that property pins the existing value rather than clearing it.
+A custom entity property can point at a company or contact too. A task set that
+way is listed on the record's Tasks tab and in its References; no other record
+list and no Sales view reads a custom property.
+**Create property** therefore points at them: a property named `Contact`,
+`Contacts`, `Company`, `Companies`, `Customer` or `Customers` shows a note under
+the name that the built-in property exists and what it links, with **Use
+Contacts** (or **Use Companies**), which leaves creation and opens that
+property's value instead. For every type but **Any Entity** the note adds that
+the type can't link to CRM records. **Create** still creates the property.
+A name that is exactly a built-in property's (`Contacts`, `Status`, `Owner`, in
+any case) cannot be used: the note says the name belongs to a built-in
+property, **Create** is disabled, and **Use <name>** appears when that property
+applies to the item being edited.
 Calls are linked automatically
 when they end, from their participants and the invitees of the calendar event
 carrying the meeting link; verify on a finished call's `Properties`.
@@ -3064,40 +3093,43 @@ access to the title and property controls.
 4. Completion signal: the `Stop` button disappears. Poll for that with `evaluate_script`;
    do not rely on `wait_for` text.
 
-## Comments (Discussion)
+## Discussion and anchored comments
 
-Below the editor: `Discussion` section with a `Leave a comment...` contenteditable.
+Below the editor, the unanchored `Discussion` uses an `Add to the discussion…`
+composer. Reserve comment wording for annotations anchored to document content.
 Desktop uses the same compact 15px composer as channels and AI chat, with an
 `Attach images` paperclip that opens the image picker directly. Wrapping text or
 Shift+Enter expands the editor above the controls. Lists, blockquotes, and other
 non-paragraph blocks always expand while editing. A single paragraph returns to
-the compact layout once it fits on one line.
-Touch keeps separate `Attach images` and
-`Format` buttons. `Send comment` is disabled until text exists. Click the
-composer, `type_text`, then click `Send comment` (Enter also submits). The comment renders
-above the composer with author + timestamp. `@`-mentions in comments notify the mentioned
-user. Editing a discussion comment keeps the attachment and send controls, with no
-trash button. Deleting a comment's first message deletes the whole discussion —
-the confirmation reads `Delete comment`, the replies under it go too, and an
-anchored comment's highlight clears from the document. Deleting a reply removes
-only that reply. On mobile, the new-comment composer is docked above the navigation bar,
-replacing New when commenting is available in documents and tasks.
-When the comment composer is unavailable, New remains available; these views
-have no floating Ask AI input.
-Tap `Leave a comment...`
-to expand the channel-style input; use Send comment to submit (Enter inserts a
-newline on mobile). Submitting clears and unfocuses the mobile input, returning
-it to its compact state and dismissing the keyboard. The compact input's paperclip
+the compact layout once it fits on one line. Touch keeps separate `Attach images`
+and `Format` buttons. Send a message after text exists; the new message appears
+above the composer with author and timestamp. Mentions notify the mentioned user.
+Editing a message keeps the attachment and send controls. Deleting a root message
+removes its thread; deleting a reply removes only that reply.
+
+On phones, tasks show the shared newest-message card below their full description.
+View discussion opens Discussion at half height; drag its handle or heading to
+full height, half height, or down to dismiss. Empty tasks show Start a discussion,
+opening the sheet with keyboard focus. Typing expands it to full height, retained
+after keyboard dismissal; the thread shrinks and only its pinned input rises. Send appears only with text.
+Closing/reopening retains an unsent draft. Desktop tasks keep inline discussion;
+ordinary documents and tablet tasks retain the docked composer described below.
+On those touch surfaces, the message composer sits above the navigation bar,
+replacing New when discussion posting is available. When the composer is
+unavailable, New remains available; these views have no floating Ask AI input.
+Tap `Add to the discussion…` to expand the channel-style input. Enter inserts a
+newline on mobile. Submitting clears and unfocuses the mobile input, returning it
+to its compact state and dismissing the keyboard. The compact input's paperclip
 opens the native photo library in the iOS app, with a file-picker fallback when
 unavailable; browsers use the file picker. Cancelling adds no images.
-While the main document editor is focused with the virtual keyboard
-open, the floating comment input is hidden; dismissing the keyboard or leaving
-the document editor restores it with any unsent draft intact. Comments remain in the
-Discussion section, and collapsing that section does not hide the docked composer.
-On touch devices, the Discussion section is hidden until it contains a comment;
-the floating **Leave a comment...** input remains available. If the discussion
-becomes empty again, the section disappears. Desktop keeps the empty section
-and inline input.
+While the main document editor is focused with the virtual keyboard open, the
+floating message input is hidden; dismissing the keyboard or leaving the editor
+restores it with any unsent draft intact. Messages remain in the Discussion
+section, and collapsing that section does not hide the docked composer.
+On touch surfaces with a docked composer, Discussion is hidden until it contains a
+message; the floating Add to the discussion… input remains available. If the
+discussion becomes empty again, the section disappears. Desktop keeps the empty
+section and inline input.
 
 Select plain text or text already covered by a comment, then press **Comment**.
 The press keeps the editor selection until the draft opens. Cancel with Escape
@@ -3184,17 +3216,16 @@ copy links should retain the document/task route and the selected comment.
 
 ### Document discussions
 
-Document comments are messages read and written through
-`/dss/messages/document/<id>`, and both comment surfaces reuse the channel
-message components, as channels do.
+Document messages and anchored comments are read and written through
+`/dss/messages/document/<id>`, and both surfaces reuse the channel message components.
 
-Below the editor, expand `Discussion` to see comments without a text anchor.
-Its `Leave a comment...` composer is the channel composer: the `+` (`Add`) menu,
+Below the editor, expand `Discussion` to see messages without a text anchor.
+Its `Add to the discussion…` composer is the channel composer: the `+` (`Add`) menu,
 formatting, mentions, and `Send message` (Enter also submits). Confirm
 completion by the new message appearing above the composer; a failed send
 retains the draft. The timeline initially loads a bounded page with up to three
 preview replies per thread. Expand a thread to load its replies;
-`Load earlier comments` pages backward. Live updates preserve unsent replies
+`Load earlier messages` pages backward. Live updates preserve unsent replies
 and edits while updating the surrounding thread.
 
 Discussion and comment headers include the date for older messages (for example,

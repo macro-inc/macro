@@ -81,36 +81,3 @@ async fn refreshes_origin_main_without_changing_the_users_branch_or_files() {
         "uncommitted work"
     );
 }
-
-#[tokio::test]
-async fn reopening_a_linked_worktree_uses_the_main_checkout_as_herdr_source() {
-    let root = tempfile::tempdir().unwrap();
-    let source = root.path().join("source with spaces");
-    let linked = root.path().join("linked");
-    std::fs::create_dir(&source).unwrap();
-    git(&source, &["init", "--initial-branch=main"])
-        .await
-        .unwrap();
-    git(
-        &source,
-        &[
-            "-c",
-            "user.name=Test",
-            "-c",
-            "user.email=test@example.invalid",
-            "commit",
-            "--allow-empty",
-            "-m",
-            "initial",
-        ],
-    )
-    .await
-    .unwrap();
-    git(
-        &source,
-        &["worktree", "add", "-b", "session", linked.to_str().unwrap()],
-    )
-    .await
-    .unwrap();
-    assert_eq!(primary_worktree(&linked).await.unwrap(), source);
-}

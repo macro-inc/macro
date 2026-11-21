@@ -44,6 +44,10 @@ pub struct SoupRealtimePatch {
     pub patch: Patch<Entity<'static>>,
     /// Entity whose current accessors should receive the patch.
     pub access_source: Entity<'static>,
+    /// Users who also receive the patch: those the source event names because
+    /// their access ended with the change, as when an entity is hard-deleted
+    /// before its event is consumed.
+    pub named_recipients: Vec<MacroUserIdStr<'static>>,
 }
 
 impl SoupRealtimePatch {
@@ -52,6 +56,7 @@ impl SoupRealtimePatch {
         Self {
             patch,
             access_source,
+            named_recipients: Vec::new(),
         }
     }
 
@@ -59,6 +64,13 @@ impl SoupRealtimePatch {
     pub fn for_entity(patch: Patch<Entity<'static>>) -> Self {
         let access_source = patch.value().clone();
         Self::new(patch, access_source)
+    }
+
+    /// Also delivers the patch to `users`, whatever their current access.
+    #[must_use]
+    pub fn with_named_recipients(mut self, users: Vec<MacroUserIdStr<'static>>) -> Self {
+        self.named_recipients = users;
+        self
     }
 }
 

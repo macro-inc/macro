@@ -20,6 +20,12 @@ import { createEffect, on } from 'solid-js';
 import { computerKeys } from './keys';
 
 const TRANSITION_POLL_MS = 3_000;
+/**
+ * How often a ready or failed computer is checked again: the server marks it
+ * unhealthy, or recovers it, minutes after any presence change this client
+ * sees.
+ */
+const SETTLED_POLL_MS = 30_000;
 
 const TRANSITIONAL_STATUSES: readonly ComputerStatusKind[] = [
   'purchasing',
@@ -27,16 +33,22 @@ const TRANSITIONAL_STATUSES: readonly ComputerStatusKind[] = [
   'waiting_for_capacity',
   'starting',
   'stopping',
+  'unhealthy',
 ];
 
-/** Polls only while a computer is moving between states. */
-function computersPollInterval(
+const SETTLED_LIVE_STATUSES: readonly ComputerStatusKind[] = [
+  'ready',
+  'failed',
+];
+
+/** Polls fast while a computer is moving between states, slowly while one may change on its own. */
+export function computersPollInterval(
   computers: readonly ComputerStatus[] | undefined
 ): number | false {
-  const moving = computers?.some((computer) =>
-    TRANSITIONAL_STATUSES.includes(computer.status)
-  );
-  return moving ? TRANSITION_POLL_MS : false;
+  const has = (statuses: readonly ComputerStatusKind[]) =>
+    computers?.some((computer) => statuses.includes(computer.status));
+  if (has(TRANSITIONAL_STATUSES)) return TRANSITION_POLL_MS;
+  return has(SETTLED_LIVE_STATUSES) ? SETTLED_POLL_MS : false;
 }
 
 // Cached callbacks outlive the hooks; keep hook scope out of these closures.
@@ -172,6 +184,25 @@ export function retryComputerOffers(failures: number, error: unknown): boolean {
       thrownResultErrorHasCode(error, code)
     )
   );
+}
+
+/** New points arrive once a minute. */
+const USAGE_POLL_MS = 60_000;
+
+// Cached callbacks outlive the hooks; keep hook scope out of these closures.
+function computerUsageQueryOptions(enabled: boolean) {
+  return queryOptions({
+    queryKey: computerKeys.usage.queryKey,
+    enabled,
+    queryFn: () => throwOnErr(computersClient.usage),
+    reconcile: 'computerId',
+    refetchInterval: USAGE_POLL_MS,
+  });
+}
+
+/** Each of the team's computers' CPU and memory over the last day. */
+export function useComputerUsageQuery(enabled: () => boolean) {
+  return useQuery(() => computerUsageQueryOptions(enabled()));
 }
 
 const ROLLOUT_STALE_MS = 5 * 60_000;

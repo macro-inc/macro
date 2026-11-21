@@ -1,0 +1,248 @@
+{
+  "scenario": "channels-e2e",
+  "description": "People for the channels end-to-end suite (apps/web/tests/channels-e2e), as six casts of four so that each parallel worker has people of its own: in each cast Ada owns a team, Ben and Cy are members, Dee is outside it. The suite creates its own channels and messages through the app, so nothing else is seeded.",
+  "users": {
+    "ada": {
+      "email": "ada@channels-e2e.seed.macro.local",
+      "first_name": "Ada",
+      "last_name": "Owner",
+      "roles": [
+        "team_subscriber",
+        "sub_opus"
+      ]
+    },
+    "ben": {
+      "email": "ben@channels-e2e.seed.macro.local",
+      "first_name": "Ben",
+      "last_name": "Member",
+      "roles": [
+        "team_subscriber",
+        "sub_opus"
+      ]
+    },
+    "cy": {
+      "email": "cy@channels-e2e.seed.macro.local",
+      "first_name": "Cy",
+      "last_name": "Teammate",
+      "roles": [
+        "team_subscriber",
+        "sub_opus"
+      ]
+    },
+    "dee": {
+      "email": "dee@channels-e2e.seed.macro.local",
+      "first_name": "Dee",
+      "last_name": "Outsider"
+    },
+    "ada1": {
+      "email": "ada.1@channels-e2e.seed.macro.local",
+      "first_name": "Ada",
+      "last_name": "Owner",
+      "roles": [
+        "team_subscriber",
+        "sub_opus"
+      ]
+    },
+    "ben1": {
+      "email": "ben.1@channels-e2e.seed.macro.local",
+      "first_name": "Ben",
+      "last_name": "Member",
+      "roles": [
+        "team_subscriber",
+        "sub_opus"
+      ]
+    },
+    "cy1": {
+      "email": "cy.1@channels-e2e.seed.macro.local",
+      "first_name": "Cy",
+      "last_name": "Teammate",
+      "roles": [
+        "team_subscriber",
+        "sub_opus"
+      ]
+    },
+    "dee1": {
+      "email": "dee.1@channels-e2e.seed.macro.local",
+      "first_name": "Dee",
+      "last_name": "Outsider"
+    },
+    "ada2": {
+      "email": "ada.2@channels-e2e.seed.macro.local",
+      "first_name": "Ada",
+      "last_name": "Owner",
+      "roles": [
+        "team_subscriber",
+        "sub_opus"
+      ]
+    },
+    "ben2": {
+      "email": "ben.2@channels-e2e.seed.macro.local",
+      "first_name": "Ben",
+      "last_name": "Member",
+      "roles": [
+        "team_subscriber",
+        "sub_opus"
+      ]
+    },
+    "cy2": {
+      "email": "cy.2@channels-e2e.seed.macro.local",
+      "first_name": "Cy",
+      "last_name": "Teammate",
+      "roles": [
+        "team_subscriber",
+        "sub_opus"
+      ]
+    },
+    "dee2": {
+      "email": "dee.2@channels-e2e.seed.macro.local",
+      "first_name": "Dee",
+      "last_name": "Outsider"
+    },
+    "ada3": {
+      "email": "ada.3@channels-e2e.seed.macro.local",
+      "first_name": "Ada",
+      "last_name": "Owner",
+      "roles": [
+        "team_subscriber",
+        "sub_opus"
+      ]
+    },
+    "ben3": {
+      "email": "ben.3@channels-e2e.seed.macro.local",
+      "first_name": "Ben",
+      "last_name": "Member",
+      "roles": [
+        "team_subscriber",
+        "sub_opus"
+      ]
+    },
+    "cy3": {
+      "email": "cy.3@channels-e2e.seed.macro.local",
+      "first_name": "Cy",
+      "last_name": "Teammate",
+      "roles": [
+        "team_subscriber",
+        "sub_opus"
+      ]
+    },
+    "dee3": {
+      "email": "dee.3@channels-e2e.seed.macro.local",
+      "first_name": "Dee",
+      "last_name": "Outsider"
+    },
+    "ada4": {
+      "email": "ada.4@channels-e2e.seed.macro.local",
+      "first_name": "Ada",
+      "last_name": "Owner",
+      "roles": [
+        "team_subscriber",
+        "sub_opus"
+      ]
+    },
+    "ben4": {
+      "email": "ben.4@channels-e2e.seed.macro.local",
+      "first_name": "Ben",
+      "last_name": "Member",
+      "roles": [
+        "team_subscriber",
+        "sub_opus"
+      ]
+    },
+    "cy4": {
+      "email": "cy.4@channels-e2e.seed.macro.local",
+      "first_name": "Cy",
+      "last_name": "Teammate",
+      "roles": [
+        "team_subscriber",
+        "sub_opus"
+      ]
+    },
+    "dee4": {
+      "email": "dee.4@channels-e2e.seed.macro.local",
+      "first_name": "Dee",
+      "last_name": "Outsider"
+    },
+    "ada5": {
+      "email": "ada.5@channels-e2e.seed.macro.local",
+      "first_name": "Ada",
+      "last_name": "Owner",
+      "roles": [
+        "team_subscriber",
+        "sub_opus"
+      ]
+    },
+    "ben5": {
+      "email": "ben.5@channels-e2e.seed.macro.local",
+      "first_name": "Ben",
+      "last_name": "Member",
+      "roles": [
+        "team_subscriber",
+        "sub_opus"
+      ]
+    },
+    "cy5": {
+      "email": "cy.5@channels-e2e.seed.macro.local",
+      "first_name": "Cy",
+      "last_name": "Teammate",
+      "roles": [
+        "team_subscriber",
+        "sub_opus"
+      ]
+    },
+    "dee5": {
+      "email": "dee.5@channels-e2e.seed.macro.local",
+      "first_name": "Dee",
+      "last_name": "Outsider"
+    }
+  },
+  "teams": {
+    "channels-e2e": {
+      "name": "Channels E2E",
+      "owner": "ada",
+      "members": {
+        "ben": "member",
+        "cy": "member"
+      }
+    },
+    "channels-e2e1": {
+      "name": "Channels E2E",
+      "owner": "ada1",
+      "members": {
+        "ben1": "member",
+        "cy1": "member"
+      }
+    },
+    "channels-e2e2": {
+      "name": "Channels E2E",
+      "owner": "ada2",
+      "members": {
+        "ben2": "member",
+        "cy2": "member"
+      }
+    },
+    "channels-e2e3": {
+      "name": "Channels E2E",
+      "owner": "ada3",
+      "members": {
+        "ben3": "member",
+        "cy3": "member"
+      }
+    },
+    "channels-e2e4": {
+      "name": "Channels E2E",
+      "owner": "ada4",
+      "members": {
+        "ben4": "member",
+        "cy4": "member"
+      }
+    },
+    "channels-e2e5": {
+      "name": "Channels E2E",
+      "owner": "ada5",
+      "members": {
+        "ben5": "member",
+        "cy5": "member"
+      }
+    }
+  }
+}

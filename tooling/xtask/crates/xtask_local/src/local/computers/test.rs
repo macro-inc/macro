@@ -113,20 +113,21 @@ fn run_dev_runs_no_computers() {
 
 #[test]
 fn flags_pick_the_fleet() {
-    let pick = |args: ComputersArgs| args.fleet(Fleet::Docker);
-    assert_eq!(pick(ComputersArgs::default()), Fleet::Docker);
+    assert_eq!(ComputersArgs::default().fleet(), Fleet::Off);
     assert_eq!(
-        pick(ComputersArgs {
-            no_computers: true,
+        ComputersArgs {
+            computers: Some(Fleet::Docker),
             ..Default::default()
-        }),
-        Fleet::Off
+        }
+        .fleet(),
+        Fleet::Docker
     );
     assert_eq!(
-        pick(ComputersArgs {
-            computers: Some(Fleet::Off),
+        ComputersArgs {
+            no_computers: true,
             ..Default::default()
-        }),
+        }
+        .fleet(),
         Fleet::Off
     );
 }

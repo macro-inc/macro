@@ -131,9 +131,10 @@ impl<ESvc: EntityAccessService> MessageToolContext<ESvc> {
     }
 
     /// The write capability for changing an existing comment as its author:
-    /// comments the tool actor bot posted are changed as the bot, and every
-    /// other comment as the user, so the message service applies the same
-    /// authorship and moderation rules as the web composer.
+    /// a comment the tool actor bot posted for the requesting user is changed
+    /// as the bot, and every other comment as the user, so the message
+    /// service applies the same authorship and moderation rules as the web
+    /// composer.
     async fn comment_author_write(
         &self,
         request_context: &RequestContext,
@@ -146,7 +147,7 @@ impl<ESvc: EntityAccessService> MessageToolContext<ESvc> {
             .get(view, comment_id)
             .await
             .map_err(comment_error("unable to read the comment"))?;
-        if comment.sender_id.as_ref() == self.actor.into_storage_id().as_ref() {
+        if comment.posted_by_bot_for(self.actor, request_context.user_id.as_ref()) {
             return self.discussion_write(request_context, parent).await;
         }
         self.entity_access_service

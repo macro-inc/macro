@@ -14,7 +14,7 @@ use macro_uuid::Uuid;
 use secretsmanager_client::LocalOrRemoteSecret;
 
 #[cfg(test)]
-mod test;
+pub(crate) mod test;
 
 macro_env_var::env_vars!(
     /// Local static file bucket, read only when using local AWS.

@@ -1,5 +1,4 @@
 pub(crate) use super::email::init::InitFailureObserver;
-use crate::calendar_refresh::ConnectionGatewayCalendarRefresh;
 use crate::calendar_request_gate::RedisCalendarRequestGate;
 use crate::calendar_tokens::CalendarTokenProviderAdapter;
 use axum::extract::FromRef;
@@ -39,7 +38,7 @@ pub(crate) type CalendarMutationSvc = CalendarMutationServiceImpl<
     >,
     CalendarTokenProviderAdapter,
     EmailEventBroker,
-    ConnectionGatewayCalendarRefresh,
+    calendar_events::outbound::gateway_refresh::GatewayCalendarRefresh,
 >;
 pub(crate) type EmailEntityAccessService = EntityAccessServiceImpl<PgAccessRepository>;
 pub(crate) type EmailEntityAccessManagementService =

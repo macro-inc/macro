@@ -267,6 +267,19 @@ test-calendar-details-browser *ARGS:
 test-functional *ARGS:
     env -u LD_LIBRARY_PATH bunx playwright test --config tests/functional/playwright.config.ts {{ARGS}}
 
+# The channels suite (tests/channels-e2e/README.md) in Chromium against a
+# running local stack instance, whose address is read from the instance. Seed
+# its people first: `just seed-scenario --instance <instance> apply --file
+# seed/scenarios/channels-e2e.json` from the repository root.
+test-channels-e2e instance *ARGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    status=$(cd ../.. && just stack status --json --instance "{{instance}}")
+    # Assigned before it is exported: `export X=$(...)` hides a failure.
+    proxy=$(jq -er .proxy_url <<<"$status")
+    export CHANNELS_E2E_STACK_URL="$proxy"
+    env -u LD_LIBRARY_PATH bunx playwright test --config tests/channels-e2e/playwright.config.ts {{ARGS}}
+
 # The bundle the email browser suite serves (tests/email-e2e): every service on
 # the page's own origin, where the suite's front proxies to the email stack.
 # Suggestions are off: they are on in a development build only, and replace

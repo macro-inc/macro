@@ -1,8 +1,10 @@
+type Restore<Snapshot> = (snapshot: Snapshot, mode?: 'notify') => void;
+
 /** Draft-keyed snapshots and reply-keyed remount recovery. No reactive or application state. */
 export function createEmailUndoStore<Snapshot extends { draftId: string }>() {
   const sent = new Map<string, Snapshot>();
   const pending = new Map<string, Snapshot>();
-  const listeners = new Map<string, (snapshot: Snapshot) => void>();
+  const listeners = new Map<string, Restore<Snapshot>>();
   const remember = (snapshot: Snapshot) => {
     sent.set(snapshot.draftId, snapshot);
     // Only the recent send toast offers Undo; keep a small bounded recovery history.
@@ -30,7 +32,10 @@ export function createEmailUndoStore<Snapshot extends { draftId: string }>() {
       pending.set(key, snapshot);
       if (pending.size > 50) pending.delete(pending.keys().next().value!);
     },
-    register(key: string, listener: (snapshot: Snapshot) => void) {
+    notifyMounted(key: string, snapshot: Snapshot) {
+      listeners.get(key)?.(snapshot, 'notify');
+    },
+    register(key: string, listener: Restore<Snapshot>) {
       listeners.set(key, listener);
       return () => {
         if (listeners.get(key) === listener) listeners.delete(key);

@@ -109,7 +109,8 @@ num-iter = { version = "0.1", default-features = false, features = ["i128", "std
 num-traits = { version = "0.2", features = ["i128", "libm"] }
 once_cell = { version = "1" }
 opentelemetry = { version = "0.31", default-features = false, features = ["internal-logs", "logs", "metrics", "testing"] }
-opentelemetry-http = { version = "0.31", default-features = false, features = ["internal-logs"] }
+opentelemetry-http = { version = "0.31", default-features = false, features = ["internal-logs", "reqwest-blocking", "reqwest-rustls"] }
+opentelemetry-otlp = { version = "0.31", default-features = false, features = ["grpc-tonic", "http-proto", "internal-logs", "logs", "reqwest-blocking-client", "reqwest-rustls"] }
 opentelemetry_sdk = { version = "0.31", default-features = false, features = ["internal-logs", "testing"] }
 percent-encoding = { version = "2" }
 phf = { version = "0.13", features = ["macros"] }
@@ -118,7 +119,6 @@ phf_shared-93f6ce9d446188ac = { package = "phf_shared", version = "0.10" }
 phf_shared-a6292c17cd707f01 = { package = "phf_shared", version = "0.11" }
 proc-macro2 = { version = "1", features = ["span-locations"] }
 prost = { version = "0.12", features = ["prost-derive"] }
-quote = { version = "1" }
 rand-274715c4dabd11b0 = { package = "rand", version = "0.9" }
 rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", features = ["small_rng"] }
 rand_core = { version = "0.6", default-features = false, features = ["std"] }
@@ -126,7 +126,8 @@ redis = { version = "1", features = ["cluster-async", "connection-manager", "tok
 regex = { version = "1" }
 regex-automata = { version = "0.4" }
 regex-syntax = { version = "0.8" }
-reqwest = { version = "0.13", features = ["form", "gzip", "hickory-dns", "json", "multipart", "query", "stream"] }
+reqwest-594e8ee84c453af0 = { package = "reqwest", version = "0.13", features = ["form", "gzip", "hickory-dns", "json", "multipart", "query", "stream"] }
+reqwest-5ef9efb8ec2df382 = { package = "reqwest", version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls-native-roots", "rustls-tls-webpki-roots"] }
 rig-agent = { version = "0.41", features = ["test-utils"] }
 rig-core = { version = "0.41", features = ["test-utils"] }
 rmcp = { version = "3", features = ["auth", "client", "transport-streamable-http-client-reqwest", "transport-streamable-http-server"] }
@@ -155,7 +156,6 @@ sqlx-core = { version = "0.8", features = ["_rt-tokio", "_tls-rustls-ring-webpki
 sqlx-postgres = { version = "0.8", default-features = false, features = ["any", "chrono", "json", "migrate", "offline", "uuid"] }
 stable_deref_trait = { version = "1" }
 subtle = { version = "2", features = ["const-generics"] }
-syn-f595c2ba2a3f28df = { package = "syn", version = "2", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
 sync_wrapper = { version = "1", default-features = false, features = ["futures"] }
 thiserror = { version = "2" }
 time = { version = "0.3", features = ["formatting", "macros", "parsing"] }
@@ -279,7 +279,8 @@ num-iter = { version = "0.1", default-features = false, features = ["i128", "std
 num-traits = { version = "0.2", features = ["i128", "libm"] }
 once_cell = { version = "1" }
 opentelemetry = { version = "0.31", default-features = false, features = ["internal-logs", "logs", "metrics", "testing"] }
-opentelemetry-http = { version = "0.31", default-features = false, features = ["internal-logs"] }
+opentelemetry-http = { version = "0.31", default-features = false, features = ["internal-logs", "reqwest-blocking", "reqwest-rustls"] }
+opentelemetry-otlp = { version = "0.31", default-features = false, features = ["grpc-tonic", "http-proto", "internal-logs", "logs", "reqwest-blocking-client", "reqwest-rustls"] }
 opentelemetry_sdk = { version = "0.31", default-features = false, features = ["internal-logs", "testing"] }
 percent-encoding = { version = "2" }
 phf = { version = "0.13", features = ["macros"] }
@@ -297,7 +298,8 @@ redis = { version = "1", features = ["cluster-async", "connection-manager", "tok
 regex = { version = "1" }
 regex-automata = { version = "0.4" }
 regex-syntax = { version = "0.8" }
-reqwest = { version = "0.13", features = ["form", "gzip", "hickory-dns", "json", "multipart", "query", "stream"] }
+reqwest-594e8ee84c453af0 = { package = "reqwest", version = "0.13", features = ["form", "gzip", "hickory-dns", "json", "multipart", "query", "stream"] }
+reqwest-5ef9efb8ec2df382 = { package = "reqwest", version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls-native-roots", "rustls-tls-webpki-roots"] }
 rig-agent = { version = "0.41", features = ["test-utils"] }
 rig-core = { version = "0.41", features = ["test-utils"] }
 rmcp = { version = "3", features = ["auth", "client", "transport-streamable-http-client-reqwest", "transport-streamable-http-server"] }

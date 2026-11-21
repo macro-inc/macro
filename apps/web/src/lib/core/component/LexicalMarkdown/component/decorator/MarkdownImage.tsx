@@ -6,6 +6,7 @@ import { Lightbox } from '@core/component/Lightbox';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { displayImageUrl, isImageProxyUrl } from '@core/util/imageProxy';
+import { createNativeImageSrc } from '@core/util/nativeImageSrc';
 import ImageIcon from '@icon/system/regular/image-broken.svg';
 import LoadingSpinner from '@icon/system/regular/spinner.svg';
 import { Dialog } from '@kobalte/core/dialog';
@@ -89,6 +90,11 @@ export function MarkdownImage(props: MarkdownImageProps) {
   const [imageUrl, setImageUrl] = createSignal('');
   const [state, setState] = createSignal<ImageState>('loading');
   const [imageError, setImageError] = createSignal<ImageError | undefined>();
+  // What the <img> shows: `imageUrl` itself, or in the native apps a blob of a
+  // proxied image fetched with the native session.
+  const shownUrl = createNativeImageSrc(imageUrl, {
+    onError: () => setState('error'),
+  });
 
   const [scale, setScale] = createSignal(props.scale);
 
@@ -164,7 +170,7 @@ export function MarkdownImage(props: MarkdownImageProps) {
   };
 
   const onImageError = () => {
-    if (imageUrl()) {
+    if (shownUrl()) {
       // only set error if we looked for a real url
       setState('error');
     }
@@ -269,7 +275,7 @@ export function MarkdownImage(props: MarkdownImageProps) {
         </Show>
         <img
           crossorigin={
-            isImageProxyUrl(imageUrl()) ? 'use-credentials' : 'anonymous'
+            isImageProxyUrl(shownUrl()) ? 'use-credentials' : 'anonymous'
           }
           class={cn(
             'h-full object-contain',
@@ -286,9 +292,15 @@ export function MarkdownImage(props: MarkdownImageProps) {
             // copied from its URL.
             if (interactable() && host.isEditable())
               e.dataTransfer?.setData(DRAG_DATA_FORMAT, props.key);
+            // A native app shows a blob URL that dies with this image; carry
+            // the image's own URL out instead.
+            if (shownUrl().startsWith('blob:') && props.srcType === 'url') {
+              e.dataTransfer?.setData('text/uri-list', props.url);
+              e.dataTransfer?.setData('text/plain', props.url);
+            }
           }}
           ref={imageRef}
-          src={imageUrl()}
+          src={shownUrl()}
           style={{
             width: effectiveDims()[0] ? '100%' : 'auto',
           }}
@@ -348,9 +360,9 @@ export function MarkdownImage(props: MarkdownImageProps) {
       <Dialog.Portal>
         <Dialog.Overlay class="fixed inset-0 z-modal scrim-glass" />
         <Lightbox
-          src={imageUrl}
+          src={shownUrl}
           crossOrigin={
-            isImageProxyUrl(imageUrl()) ? 'use-credentials' : 'anonymous'
+            isImageProxyUrl(shownUrl()) ? 'use-credentials' : 'anonymous'
           }
           // Its one reader names the download `image-${id}`; this converts alike.
           imageId={() => `${props.id}`}

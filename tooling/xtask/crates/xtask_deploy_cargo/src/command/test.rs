@@ -64,11 +64,43 @@ fn ignores_commands_that_compile_no_workspace_code() {
     for line in [
         "cargo --version",
         "cargo install cargo-chef cargo-strip",
+        "cargo install --locked cargo-chef --root /usr/local",
         "cargo chef prepare --recipe-path recipe.json --bin convert_service",
         "cargo strip",
         "strip /app/target/release/svc",
     ] {
         assert_eq!(parse(&words(line)).unwrap(), None, "{line}");
+    }
+}
+
+#[test]
+fn rejects_non_registry_install_sources() {
+    for line in [
+        "cargo install --path services/example --features native-editor",
+        "cargo install --path=services/example",
+        "cargo install --git https://example.invalid/source.git",
+        "cargo install --git=https://example.invalid/source.git",
+        "cargo install --root /tmp/bin --path services/example",
+    ] {
+        assert!(parse(&words(line)).is_err(), "{line}");
+    }
+}
+
+#[test]
+fn feature_checks_cover_all_targets_unless_the_build_selects_one() {
+    for (line, target) in [
+        ("cargo build -p server --bin server", "all"),
+        (
+            "cargo zigbuild -p server --target aarch64-unknown-linux-gnu.2.26",
+            "aarch64-unknown-linux-gnu",
+        ),
+        (
+            "cargo build -p server --target wasm32-unknown-unknown",
+            "wasm32-unknown-unknown",
+        ),
+    ] {
+        let selection = parse(&words(line)).unwrap().unwrap();
+        assert_eq!(selection.tree_args(), ["-p", "server", "--target", target]);
     }
 }
 

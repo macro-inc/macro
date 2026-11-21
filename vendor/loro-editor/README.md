@@ -44,6 +44,14 @@ the two required guards and the existing job's budget. No standalone or nightly
 workflow is added. Local timings do not establish CI performance; the guarded
 path must execute successfully on the published CI head.
 
+Deploy selections without an explicit target are checked with `--target all`;
+explicit targets remain unchanged. Non-registry `cargo install --path` and
+`--git` commands are rejected. The deploy parser covers a bounded tracked
+literal grammar: Docker ARG defaults are currently file-wide, and stage/order
+overrides and broader dynamic or imported consumer discovery are not proven.
+The independent package pass still checks every server package on all targets;
+the deploy pass is not a general proof of Docker, shell or TypeScript semantics.
+
 ## Local changes
 
 Local runtime change: assign each dense text-tracker update range through a

@@ -54,6 +54,7 @@ pub async fn run(
         }
     });
 
+    let colors = ui::ColorSupport::detect();
     let mut terminal = ratatui::init();
     let existing_config = match Config::load(config_path) {
         Ok(config) => Some(config),
@@ -75,6 +76,7 @@ pub async fn run(
     } else {
         match run_quickstart(
             &mut terminal,
+            colors,
             config_path,
             existing_config.as_ref(),
             &mut input_rx,
@@ -103,13 +105,14 @@ pub async fn run(
             return Err(error);
         }
     };
-    let outcome = run_loop(&mut terminal, &mut app, &mut input_rx, quickstarted).await;
+    let outcome = run_loop(&mut terminal, colors, &mut app, &mut input_rx, quickstarted).await;
     ratatui::restore();
     outcome
 }
 
 async fn run_quickstart(
     terminal: &mut ratatui::DefaultTerminal,
+    colors: ui::ColorSupport,
     config_path: &Path,
     existing_config: Option<&Config>,
     input: &mut tokio::sync::mpsc::UnboundedReceiver<TermEvent>,
@@ -120,7 +123,10 @@ async fn run_quickstart(
     };
     loop {
         terminal
-            .draw(|frame| ui::render_quickstart(frame, &quickstart, config_path))
+            .draw(|frame| {
+                ui::render_quickstart(frame, &quickstart, config_path);
+                colors.fit_buffer(frame.buffer_mut());
+            })
             .context("failed to draw Quickstart")?;
         let Some(event) = input.recv().await else {
             return Ok(false);
@@ -157,7 +163,10 @@ async fn run_quickstart(
                     // returns.
                     quickstart.status = Some((format!("Installing {}...", install.package), false));
                     terminal
-                        .draw(|frame| ui::render_quickstart(frame, &quickstart, config_path))
+                        .draw(|frame| {
+                            ui::render_quickstart(frame, &quickstart, config_path);
+                            colors.fit_buffer(frame.buffer_mut());
+                        })
                         .context("failed to draw Quickstart")?;
                     if let Err(error) = install.run().await {
                         quickstart.status = Some((error, true));
@@ -192,6 +201,7 @@ fn config_is_working(config: &Config) -> bool {
 
 async fn run_loop(
     terminal: &mut ratatui::DefaultTerminal,
+    colors: ui::ColorSupport,
     app: &mut App,
     input: &mut tokio::sync::mpsc::UnboundedReceiver<TermEvent>,
     pair_on_start: bool,
@@ -211,7 +221,10 @@ async fn run_loop(
 
     loop {
         terminal
-            .draw(|frame| ui::render(frame, app))
+            .draw(|frame| {
+                ui::render(frame, app);
+                colors.fit_buffer(frame.buffer_mut());
+            })
             .context("failed to draw the terminal UI")?;
 
         tokio::select! {
@@ -219,7 +232,10 @@ async fn run_loop(
                 match event {
                     Some(TermEvent::Key(key)) => app.on_key(key).await,
                     Some(_) => {}
-                    None => return Ok(None),
+                    None => {
+                        tracing::info!("terminal input closed; exiting");
+                        return Ok(None);
+                    }
                 }
                 apply_pending_browser(app);
             }
@@ -252,6 +268,7 @@ async fn run_loop(
         }
 
         if app.quit {
+            tracing::info!("quit from the panel");
             app.stop_daemon().await;
             return Ok(None);
         }
