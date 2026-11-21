@@ -59,6 +59,7 @@ vi.mock('@queries/client', () => ({
 }));
 vi.mock('@service-cognition/client', () => ({
   PIPEDREAM_DISABLED: 'PIPEDREAM_DISABLED',
+  SIGN_IN_PAGE_REFUSED: 'SIGN_IN_PAGE_REFUSED',
   cognitionApiServiceClient: {
     createPipedreamToken: mocks.token,
     completePipedreamConnection: mocks.complete,
@@ -68,7 +69,11 @@ vi.mock('@service-cognition/client', () => ({
   },
 }));
 
-import { connectPipedreamApp, overlaidAppSlug } from './pipedream-connectors';
+import {
+  connectPipedreamApp,
+  overlaidAppSlug,
+  UnsafeSignInPageError,
+} from './pipedream-connectors';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -350,8 +355,21 @@ describe('overlaid apps connect through their own MCP server', () => {
     );
     mocks.assignUrl.mockReturnValue(false);
 
-    await expect(connectPipedreamApp({ appSlug: 'sentry' })).rejects.toThrow();
+    await expect(
+      connectPipedreamApp({ appSlug: 'sentry' })
+    ).rejects.toBeInstanceOf(UnsafeSignInPageError);
     expect(mocks.fetchServers).not.toHaveBeenCalled();
+  });
+
+  it('reports a sign-in page the backend refused as unsafe', async () => {
+    mocks.reservePopup.mockReturnValue({ closed: false, close: vi.fn() });
+    mocks.startAuth.mockResolvedValue(
+      err([{ code: 'SIGN_IN_PAGE_REFUSED', message: 'not https' }])
+    );
+
+    await expect(
+      connectPipedreamApp({ appSlug: 'sentry' })
+    ).rejects.toBeInstanceOf(UnsafeSignInPageError);
   });
 
   it('looks the overlay up when it is not cached yet', async () => {

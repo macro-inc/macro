@@ -2049,11 +2049,14 @@ filled in with its name and URL; nothing signs in until they add it and press
 Connect again. For a server they have, Connect starts its sign-in, and a toast
 asks them to reply once connected. If that sign-in cannot start, a toast says
 so and, if the server needs none (no OAuth), to reply to continue: such a
-server works without one and never reads **Connected**. Before the user's
+server works without one and never reads **Connected**. If Macro refuses the
+server's sign-in page because it is not https, the toast says the page isn't
+secure instead. A card whose URL does not parse reads **MCP server · invalid
+address** and its Connect is disabled. Before the user's
 server list has loaded, Connect only asks them to try again. Connect is
 disabled while the session cannot connect (a viewer, an archived session, a
-running turn), and outside the session (a channel reply) for anyone but the
-session's owner. Any sign-in page that is not https (or http on loopback) is
+running turn), and outside the session (a channel reply, even one embedded
+in another session's view) for anyone but the presenting session's owner. Any sign-in page that is not https (or http on loopback) is
 refused, in Settings → Connections too. A code-mode agent is told to present
 connect cards by its session prompt and the `macro.connectedApps` docs, and
 by the not-connected answers of connected-app tool calls; the `m-connect-app`

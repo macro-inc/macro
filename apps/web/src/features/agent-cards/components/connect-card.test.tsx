@@ -23,6 +23,7 @@ vi.mock('@queries/pipedream-connectors', () => ({
   }),
   connectPipedreamApp: mocks.connectPipedreamApp,
   connectMcpServer: mocks.connectMcpServer,
+  UnsafeSignInPageError: class UnsafeSignInPageError extends Error {},
 }));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { success: mocks.toastSuccess, alert: mocks.toastAlert },
@@ -35,12 +36,12 @@ vi.mock('@app/features/settings/connections/add-custom-mcp-dialog', () => ({
     open: boolean;
     initialName?: string;
     initialUrl?: string;
-    title?: string;
+    title?: (url: string) => string;
   }) => (
     <div
       data-testid="add-mcp-dialog"
       data-open={String(props.open)}
-      data-title={props.title}
+      data-title={props.title?.(props.initialUrl ?? '')}
       data-name={props.initialName}
       data-url={props.initialUrl}
     />
@@ -51,6 +52,7 @@ import {
   AppConnectionContext,
   ConnectCardAccessContext,
 } from '@core/pipedream/connection-context';
+import { UnsafeSignInPageError } from '@queries/pipedream-connectors';
 import { ConnectCard } from './connect-card';
 
 beforeEach(() => {
@@ -226,6 +228,45 @@ describe('connect card', () => {
       )
     );
     expect(screen.getByTestId('add-mcp-dialog').dataset.open).toBe('false');
+  });
+
+  it("says so when Macro refuses a listed server's sign-in page", async () => {
+    mocks.listedServers.add('https://mcp.acme.example/mcp');
+    mocks.connectMcpServer.mockRejectedValue(new UnsafeSignInPageError());
+    render(() => (
+      <ConnectCardAccessContext.Provider value={{ allowed: () => true }}>
+        <ConnectCard
+          name="Acme"
+          target={{ kind: 'server', url: 'https://mcp.acme.example/mcp' }}
+        />
+      </ConnectCardAccessContext.Provider>
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Connect Acme' }));
+
+    await waitFor(() =>
+      expect(mocks.toastAlert).toHaveBeenCalledWith(
+        "This server's sign-in page isn't secure (not https), so Macro won't open it"
+      )
+    );
+  });
+
+  it('names an address that does not parse as invalid, with Connect disabled', () => {
+    render(() => (
+      <ConnectCardAccessContext.Provider value={{ allowed: () => true }}>
+        <ConnectCard
+          name="Linear"
+          target={{ kind: 'server', url: 'linear.app/mcp' }}
+        />
+      </ConnectCardAccessContext.Provider>
+    ));
+
+    expect(screen.getByText('MCP server · invalid address')).toBeTruthy();
+    expect(
+      screen
+        .getByRole('button', { name: 'Connect Linear' })
+        .hasAttribute('disabled')
+    ).toBe(true);
   });
 
   it('asks to try again, starting nothing, before the server list has loaded', () => {

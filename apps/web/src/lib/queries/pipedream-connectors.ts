@@ -25,6 +25,7 @@ import {
   type PipedreamConnectionResponse,
   type PipedreamOverlayResponse,
   type PipedreamUpdateRequest,
+  SIGN_IN_PAGE_REFUSED,
 } from '@service-cognition/client';
 import type { ServerResponse } from '@service-cognition/generated/schemas';
 import {
@@ -459,6 +460,14 @@ async function connectGithubLink(span: Span): Promise<PipedreamConnectOutcome> {
   return 'connected';
 }
 
+/** The server's sign-in page is not https, so Macro will not open it. */
+export class UnsafeSignInPageError extends Error {
+  constructor() {
+    super("The server's sign-in page is not https");
+    this.name = 'UnsafeSignInPageError';
+  }
+}
+
 const MCP_AUTH_POLL_MS = 2000;
 /** Failed reads of the server list in a row that end the wait. */
 const MCP_AUTH_MAX_FAILED_READS = 3;
@@ -511,21 +520,25 @@ async function authorizeMcpServer(
   span: Span
 ): Promise<PipedreamConnectOutcome> {
   const userId = currentUserId();
-  const started = await span.span('mcp.auth_start', async () =>
-    throwOnErr(
-      async () =>
-        await cognitionApiServiceClient.startMcpAuth({
-          server_url: server.url,
-          server_name: server.name,
-        })
-    )
-  );
+  const started = await span.span('mcp.auth_start', async () => {
+    const result = await cognitionApiServiceClient.startMcpAuth({
+      server_url: server.url,
+      server_name: server.name,
+    });
+    if (
+      result.isErr() &&
+      result.error.some((e) => e.code === SIGN_IN_PAGE_REFUSED)
+    ) {
+      throw new UnsafeSignInPageError();
+    }
+    return throwOnErr(async () => result);
+  });
   if (currentUserId() !== userId) {
     popup?.close();
     return 'closed';
   }
   if (!assignOauthUrl(popup, started.authorization_url)) {
-    throw new Error('The server offered a sign-in page that is not https');
+    throw new UnsafeSignInPageError();
   }
 
   const consent = span.span('mcp.consent');

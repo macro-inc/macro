@@ -1,4 +1,7 @@
-import { ConnectCardAccessContext } from '@core/pipedream/connection-context';
+import {
+  AppConnectionContext,
+  ConnectCardAccessContext,
+} from '@core/pipedream/connection-context';
 import { render } from '@solidjs/testing-library';
 import { useContext } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -53,5 +56,28 @@ describe("connect cards outside the owner's session", () => {
     mocks.userId = undefined;
     mocks.ownerId = 'macro|owner@example.com';
     expect(readAccess()).toBe(false);
+  });
+
+  it("judges another session's cards by that session, not the one around it", () => {
+    mocks.ownerId = 'macro|owner@example.com';
+    let outer: unknown = 'unset';
+    let allowed: boolean | undefined;
+    function Probe() {
+      outer = useContext(AppConnectionContext);
+      allowed = useContext(ConnectCardAccessContext)?.allowed();
+      return null;
+    }
+    render(() => (
+      <AppConnectionContext.Provider
+        value={{ connect: async () => {}, disabled: () => false }}
+      >
+        <OwnerConnectAccess sessionId="session-1">
+          <Probe />
+        </OwnerConnectAccess>
+      </AppConnectionContext.Provider>
+    ));
+
+    expect(outer).toBeUndefined();
+    expect(allowed).toBe(false);
   });
 });

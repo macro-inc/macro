@@ -11,6 +11,7 @@ import {
   connectMcpServer,
   connectPipedreamApp,
   type PipedreamConnectOutcome,
+  UnsafeSignInPageError,
   useMcpServerConnected,
   usePipedreamConnectedSlugs,
 } from '@queries/pipedream-connectors';
@@ -154,11 +155,11 @@ function ConnectAppCard(props: { name: string; appSlug: string }) {
   );
 }
 
-/** A server URL's host, as the card names it; the URL itself if it has none. */
-function serverHost(url: string): string {
+/** A server URL's host, as the card names it; undefined if it does not parse. */
+function serverHost(url: string): string | undefined {
   return parseUrl(url).match(
     (parsed) => parsed.host,
-    () => url
+    () => undefined
   );
 }
 
@@ -177,14 +178,19 @@ function ConnectServerCard(props: { name: string; url: string }) {
     setBusy(true);
     const outcome = await ResultAsync.fromPromise(
       connectMcpServer({ url: props.url, name: props.name }),
-      () => ({ kind: 'no-sign-in' as const })
+      (error) =>
+        error instanceof UnsafeSignInPageError
+          ? ({ kind: 'unsafe' } as const)
+          : ({ kind: 'no-sign-in' } as const)
     );
     setBusy(false);
     if (outcome.isErr()) {
-      // The server is in the user's list, so its sign-in could not start; a
-      // server that needs none works without one.
+      // The server is in the user's list, so its sign-in could not start;
+      // Macro refused its page, or it needs none and works without one.
       toast.alert(
-        `Could not start a sign-in for ${props.name}. If it needs none, reply to continue.`
+        outcome.error.kind === 'unsafe'
+          ? "This server's sign-in page isn't secure (not https), so Macro won't open it"
+          : `Could not start a sign-in for ${props.name}. If it needs none, reply to continue.`
       );
       return;
     }
@@ -210,18 +216,22 @@ function ConnectServerCard(props: { name: string; url: string }) {
     <>
       <ConnectCardView
         name={props.name}
-        kind={`MCP server · ${serverHost(props.url)}`}
+        kind={`MCP server · ${serverHost(props.url) ?? 'invalid address'}`}
         icon={<Plug class="size-[18px]" />}
         connected={server.ready() && server.connected()}
         busy={busy()}
-        disabled={disabled()}
-        disabledReason={reason()}
+        disabled={disabled() || serverHost(props.url) === undefined}
+        disabledReason={
+          serverHost(props.url) === undefined
+            ? "This server's address isn't valid"
+            : reason()
+        }
         onConnect={onConnect}
       />
       <AddCustomMcpDialog
         open={adding()}
         onOpenChange={setAdding}
-        title={`Add ${serverHost(props.url)}?`}
+        title={(url) => `Add ${serverHost(url) ?? 'invalid address'}?`}
         initialName={props.name}
         initialUrl={props.url}
       />
