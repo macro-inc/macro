@@ -23,11 +23,10 @@ const gatewayLoadBalancer = getGatewayAlb();
 // NOTE: the BASE_NAME for sps does not match the pulumi project name so do not change
 const BASE_NAME = 'search-processing';
 const REPO_ROOT = '../../..';
-// A deploy sets the desired count: keep production at six tasks, one per
-// partition of the email topic, while its backlog drains, so a deploy or a
-// scale-in does not leave the consumer behind the topic's retention and no
-// task carries two partitions' backlog.
-const MIN_TASKS = stack === 'prod' ? 6 : 1;
+// A deploy sets the desired count: keep production at three tasks, so a deploy
+// or a scale-in does not leave the consumer behind the topics' retention;
+// autoscaling adds tasks on CPU and on backlog age.
+const MIN_TASKS = stack === 'prod' ? 3 : 1;
 // Each task publishes the age of the oldest record it has not processed, per
 // lane, as this metric (services/search_processing_service/src/outbound/
 // cloudwatch_backlog.rs), with the dimensions `Environment` and `Lane`.

@@ -530,7 +530,11 @@ export function ComputerSetupSteps(props: {
             entry="computer_setup"
             header={header()}
             title={t('computers.signInToClaude')}
-            onSignedIn={signedIn}
+            onSignedIn={(closed) => {
+              // Closed meanwhile: nothing on screen says it worked.
+              if (closed) toast.success(t('computers.claudeSignedIn'));
+              signedIn();
+            }}
             footnote={t('computers.claudeSharedAccount')}
             secondary={{
               label: t('computers.claudeUseCreditsInstead'),
