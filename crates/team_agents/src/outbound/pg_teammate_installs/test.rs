@@ -357,6 +357,7 @@ async fn a_rolled_back_image_is_stored_with_its_reason(pool: PgPool) {
     assert!(
         installs
             .record_status(
+                HarnessId::new_from_uuid(LAPTOP),
                 INSTALL,
                 (1, 1),
                 InstallRunState::RolledBack,
@@ -414,7 +415,13 @@ async fn only_a_running_report_of_the_current_delivery_confirms_it(pool: PgPool)
 
     assert!(
         installs
-            .record_status(INSTALL, (1, 1), InstallRunState::Downloading, None)
+            .record_status(
+                HarnessId::new_from_uuid(LAPTOP),
+                INSTALL,
+                (1, 1),
+                InstallRunState::Downloading,
+                None
+            )
             .await
             .unwrap()
     );
@@ -424,7 +431,13 @@ async fn only_a_running_report_of_the_current_delivery_confirms_it(pool: PgPool)
     );
     assert!(
         installs
-            .record_status(INSTALL, (1, 1), InstallRunState::Running, None)
+            .record_status(
+                HarnessId::new_from_uuid(LAPTOP),
+                INSTALL,
+                (1, 1),
+                InstallRunState::Running,
+                None
+            )
             .await
             .unwrap()
     );
@@ -432,6 +445,7 @@ async fn only_a_running_report_of_the_current_delivery_confirms_it(pool: PgPool)
     assert!(
         !installs
             .record_status(
+                HarnessId::new_from_uuid(LAPTOP),
                 INSTALL,
                 (0, 3),
                 InstallRunState::Failed,
@@ -545,6 +559,7 @@ async fn a_start_refused_for_network_isolation_is_stored_with_its_reason(pool: P
     assert!(
         installs
             .record_status(
+                HarnessId::new_from_uuid(LAPTOP),
                 INSTALL,
                 (1, 1),
                 InstallRunState::Failed,
@@ -587,4 +602,70 @@ async fn a_teams_installs_are_read_in_one_query_by_agent(pool: PgPool) {
             .collect::<Vec<_>>(),
         [INSTALL]
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn another_machine_cant_set_an_installs_state(pool: PgPool) {
+    fixture(&pool).await;
+    let installs = PgTeammateInstalls::new(pool.clone());
+    installs
+        .create(&new_install(INSTALL, LAPTOP))
+        .await
+        .unwrap();
+    deliver(&installs, INSTALL, HarnessId::new_from_uuid(LAPTOP), (0, 0)).await;
+
+    let applied = installs
+        .record_status(
+            HarnessId::new_from_uuid(DESKTOP),
+            INSTALL,
+            (1, 1),
+            InstallRunState::Failed,
+            Some(InstallFailure::CrashLoop),
+        )
+        .await
+        .unwrap();
+
+    assert!(!applied);
+    let stored = installs.by_id(INSTALL).await.unwrap().unwrap();
+    assert_eq!(stored.run_state, InstallRunState::Pending);
+    assert_eq!(stored.failure, None);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_late_report_about_an_older_delivery_doesnt_overwrite_a_newer_one(pool: PgPool) {
+    fixture(&pool).await;
+    let installs = PgTeammateInstalls::new(pool.clone());
+    let laptop = HarnessId::new_from_uuid(LAPTOP);
+    installs
+        .create(&new_install(INSTALL, LAPTOP))
+        .await
+        .unwrap();
+    deliver(&installs, INSTALL, laptop, (0, 0)).await;
+    // The machine still runs nothing: a second delivery is counted.
+    assert_eq!(
+        deliver(&installs, INSTALL, laptop, (0, 0)).await,
+        Some((1, 2))
+    );
+    assert!(
+        installs
+            .record_status(laptop, INSTALL, (1, 2), InstallRunState::Running, None)
+            .await
+            .unwrap()
+    );
+
+    let applied = installs
+        .record_status(
+            laptop,
+            INSTALL,
+            (1, 1),
+            InstallRunState::Failed,
+            Some(InstallFailure::BadConfiguration),
+        )
+        .await
+        .unwrap();
+
+    assert!(!applied);
+    let stored = installs.by_id(INSTALL).await.unwrap().unwrap();
+    assert_eq!(stored.run_state, InstallRunState::Running);
+    assert_eq!(stored.applied, Some((1, 2)));
 }

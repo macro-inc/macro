@@ -38,6 +38,9 @@ CREATE TABLE team_agent_installs (
     -- The delivery the machine confirmed by reporting it starting or running.
     applied_generation BIGINT,
     applied_delivery BIGINT,
+    -- The newest delivery of this generation the machine reported on, so a
+    -- late report about an older one can't overwrite the state.
+    reported_delivery BIGINT,
     -- A move or removal waiting for the machine to stop the agent (its last
     -- push) before its credentials are revoked.
     checkpoint TEXT CHECK (checkpoint IN ('moving', 'removing')),

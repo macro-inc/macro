@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE team_agent_installs\n            SET run_state = $4,\n                failure = $5,\n                applied_generation = CASE\n                    WHEN $6 AND COALESCE((applied_generation, applied_delivery) < ($2::BIGINT, $3::BIGINT), TRUE)\n                    THEN $2 ELSE applied_generation END,\n                applied_delivery = CASE\n                    WHEN $6 AND COALESCE((applied_generation, applied_delivery) < ($2::BIGINT, $3::BIGINT), TRUE)\n                    THEN $3 ELSE applied_delivery END,\n                reported_delivery = $3,\n                updated_at = now()\n            WHERE install_id = $1\n              AND (harness_id = $7 OR move_to_harness_id = $7)\n              AND generation = $2\n              AND delivery >= $3\n              AND COALESCE(reported_delivery <= $3, TRUE)\n            RETURNING install_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "install_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Int8",
+        "Text",
+        "Text",
+        "Bool",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "7a790ea82ce9779e51022cc0bc4c3bd5c03d6e02130e276d831684a40a507798"
+}

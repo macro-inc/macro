@@ -108,6 +108,7 @@ pub(crate) trait InstallStore: Send + Sync + 'static {
     /// Record what the runtime said about an install's delivery.
     fn record_status(
         &self,
+        harness: HarnessId,
         install_id: Uuid,
         delivery: (u64, u64),
         run_state: InstallRunState,
@@ -146,12 +147,13 @@ impl InstallStore for team_agents::outbound::pg_teammate_installs::PgTeammateIns
 
     fn record_status(
         &self,
+        harness: HarnessId,
         install_id: Uuid,
         delivery: (u64, u64),
         run_state: InstallRunState,
         failure: Option<InstallFailure>,
     ) -> BoxFuture<'_, Result<bool, TeamAgentError>> {
-        Box::pin(self.record_status(install_id, delivery, run_state, failure))
+        Box::pin(self.record_status(harness, install_id, delivery, run_state, failure))
     }
 }
 
@@ -480,7 +482,7 @@ impl TeammateDelivery {
             let (run_state, failure) = install_state(&state);
             if let Err(error) = self
                 .store
-                .record_status(install_id, pair, run_state, failure)
+                .record_status(harness, install_id, pair, run_state, failure)
                 .await
             {
                 tracing::error!(error = ?error, "could not record an install's state");

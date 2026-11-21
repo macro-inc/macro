@@ -340,6 +340,7 @@ impl TeammateInstalls for PgTeammateInstalls {
                 harness_id = move_to_harness_id,
                 generation = generation + 1,
                 delivery = 0,
+                reported_delivery = NULL,
                 applied_generation = NULL,
                 applied_delivery = NULL,
                 run_state = 'pending',
@@ -526,6 +527,7 @@ impl PgTeammateInstalls {
             UPDATE team_agent_installs
             SET generation = generation + 1,
                 delivery = 0,
+                reported_delivery = NULL,
                 run_state = 'pending',
                 failure = NULL,
                 updated_at = now()
@@ -549,13 +551,15 @@ impl PgTeammateInstalls {
         bumped.map(TeammateInstallRecord::try_from).transpose()
     }
 
-    /// Record what the machine said about an install's delivery; a report
-    /// about another generation, or another install, changes nothing. A
+    /// Record what `harness` said about an install's delivery; a report
+    /// from another machine, about another generation, or about an older
+    /// delivery than one it already reported on changes nothing. A
     /// `starting` or `running` report confirms the delivery as applied.
     /// Whether it applied.
     #[tracing::instrument(skip(self), err)]
     pub async fn record_status(
         &self,
+        harness: HarnessId,
         install_id: Uuid,
         (generation, delivery): (u64, u64),
         run_state: InstallRunState,
@@ -576,8 +580,13 @@ impl PgTeammateInstalls {
                 applied_delivery = CASE
                     WHEN $6 AND COALESCE((applied_generation, applied_delivery) < ($2::BIGINT, $3::BIGINT), TRUE)
                     THEN $3 ELSE applied_delivery END,
+                reported_delivery = $3,
                 updated_at = now()
-            WHERE install_id = $1 AND generation = $2 AND delivery >= $3
+            WHERE install_id = $1
+              AND (harness_id = $7 OR move_to_harness_id = $7)
+              AND generation = $2
+              AND delivery >= $3
+              AND COALESCE(reported_delivery <= $3, TRUE)
             RETURNING install_id
             "#,
             install_id,
@@ -586,6 +595,7 @@ impl PgTeammateInstalls {
             run_state.as_ref(),
             failure.as_ref().map(AsRef::<str>::as_ref),
             confirms,
+            harness.as_uuid(),
         )
         .fetch_optional(&self.pool)
         .await

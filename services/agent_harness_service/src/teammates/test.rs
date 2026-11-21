@@ -110,6 +110,7 @@ impl InstallStore for FakeStore {
 
     fn record_status(
         &self,
+        _: HarnessId,
         install_id: Uuid,
         delivery: (u64, u64),
         run_state: InstallRunState,
