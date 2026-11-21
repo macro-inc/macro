@@ -36,10 +36,14 @@ import {
   cursorFromSortKey,
 } from './sort-key';
 import { forgetUnheldRead, noteUnheldRead } from './unheld-reads';
+import { withUnsettledReplies } from './unsettled-replies';
 
 export type ChannelPageHost = Pick<
   CacheHost,
-  'channelTimeline' | 'channelTimelineCommit' | 'readRecordsByKeys'
+  | 'channelTimeline'
+  | 'channelTimelineCommit'
+  | 'readRecordsByKeys'
+  | 'inspectMutations'
 >;
 
 export type ChannelServerPage = ChannelTimelineQuery['user']['channelTimeline'];
@@ -204,7 +208,10 @@ type DeviceRead =
 
 /** Answers a page from the device, or says why the server must. */
 export async function readDeviceChannelPage(
-  host: Pick<CacheHost, 'channelTimeline' | 'readRecordsByKeys'>,
+  host: Pick<
+    CacheHost,
+    'channelTimeline' | 'readRecordsByKeys' | 'inspectMutations'
+  >,
   request: ChannelPageRequest
 ): Promise<DeviceRead> {
   const result = await host.channelTimeline(cacheArgs(request));
@@ -214,7 +221,12 @@ export async function readDeviceChannelPage(
   if (!records) return { kind: 'miss', storedSeq: result.seq };
   return {
     kind: 'page',
-    page: timelinePage(records, result.olderCursor, result.newerCursor),
+    // A root's record does not show a reply this device has just written.
+    page: await withUnsettledReplies(
+      host,
+      request.channelId,
+      timelinePage(records, result.olderCursor, result.newerCursor)
+    ),
     storedSeq: result.seq,
   };
 }
