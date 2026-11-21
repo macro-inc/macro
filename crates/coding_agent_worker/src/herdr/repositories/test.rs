@@ -28,12 +28,16 @@ const URL: &str = "https://github.com/org/project";
 async fn clone(root: &Path) -> PathBuf {
     let clone = root.join("clone");
     std::fs::create_dir(&clone).unwrap();
-    git(&clone, &["init", "--initial-branch=main"]).await.unwrap();
+    git(&clone, &["init", "--initial-branch=main"])
+        .await
+        .unwrap();
     git(&clone, &["config", "user.email", "test@example.com"])
         .await
         .unwrap();
     git(&clone, &["config", "user.name", "Test"]).await.unwrap();
-    git(&clone, &["remote", "add", "origin", URL]).await.unwrap();
+    git(&clone, &["remote", "add", "origin", URL])
+        .await
+        .unwrap();
     git(&clone, &["commit", "--allow-empty", "-m", "initial"])
         .await
         .unwrap();

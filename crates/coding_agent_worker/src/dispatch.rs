@@ -152,7 +152,8 @@ impl Dispatcher {
         phase(
             "prompt_ms",
             tracing::info_span!("macrod.trigger.prompt"),
-            self.api.prompt(session, sender, content, message_id, context),
+            self.api
+                .prompt(session, sender, content, message_id, context),
         )
         .await?;
         Ok(())
