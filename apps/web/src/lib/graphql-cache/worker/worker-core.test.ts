@@ -4,7 +4,11 @@ import {
   testAuthority,
   withoutAuthorityEnvelope,
 } from '../authority-fixture';
-import { type CacheRequest, INITIAL_CACHE_REVISION } from '../protocol';
+import {
+  type CacheRequest,
+  INITIAL_CACHE_REVISION,
+  parseCacheRevision,
+} from '../protocol';
 
 const loadCacheWasmMock = vi.hoisted(() => vi.fn());
 
@@ -3723,7 +3727,7 @@ describe('CacheWorkerCore', () => {
         order.push('commit');
         return {
           ...written,
-          revision: '1',
+          revision: parseCacheRevision('1'),
           revisionAdvanced: true,
           searchChangedBuckets: ['document'],
           data: null,
