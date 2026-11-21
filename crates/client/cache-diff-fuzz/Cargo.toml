@@ -24,3 +24,9 @@ tokio = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }
 turso_core = { workspace = true, features = ["fs"] }
 uuid = { workspace = true }
+
+# build.rs compiles the Tauri host's engine module and src/fuzz_hooks.rs into the binary
+# through include!, where cargo-shear can't see them use these.
+[package.metadata.cargo-shear]
+ignored = ["soup-filter-cache-adapter", "tokio", "tracing"]
+ignored-paths = ["src/fuzz_hooks.rs"]
