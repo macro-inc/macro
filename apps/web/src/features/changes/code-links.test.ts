@@ -94,10 +94,14 @@ describe('createCodeLinkOpener', () => {
       expect(open('example.com/spec.html')).toBe(false);
       expect(open('docs.rs/serde')).toBe(false);
       expect(open('crates.io/crates/serde')).toBe(false);
+      expect(open('192.168.1.1')).toBe(false);
+      expect(open('192.168.1.1:8080')).toBe(false);
+      expect(open('example.com:8080')).toBe(false);
       expect(context.opened).toEqual([]);
       expect(context.notified).toEqual([]);
       // Repository paths of the same look still open on GitHub.
       expect(open('package.json#L5')).toBe(true);
+      expect(open('package.json:5')).toBe(true);
       expect(open('.github/ci.yml')).toBe(true);
       expect(open('src/b.ts#L2')).toBe(true);
       // A bare docs or source file, and a version folder, are paths too.
@@ -107,6 +111,7 @@ describe('createCodeLinkOpener', () => {
       // The one trade-off: a bare docs.rs reads as a Rust file.
       expect(open('docs.rs')).toBe(true);
       expect(context.opened).toEqual([
+        'https://github.com/macro-inc/macro/blob/abc123/package.json#L5',
         'https://github.com/macro-inc/macro/blob/abc123/package.json#L5',
         'https://github.com/macro-inc/macro/blob/abc123/.github/ci.yml',
         'https://github.com/macro-inc/macro/blob/abc123/src/b.ts#L2',

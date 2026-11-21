@@ -59,7 +59,7 @@ inline code naming a changed file into such a link, and rewrites links to a
 changed file that the markdown import would drop (`file://…`, `package.json:5`)
 into the `path#L…` form. A resolved link calls `layout.open()` and
 `review.activate(path, lines)`; `review.pointed()` lights the lines through
-`DiffView.Stack`'s `selection` (a note draft or focused note wins) and its
+`DiffView.Stack`'s `selection` (a note's range or the link's lines, whichever was set last, via `createLitRange`) and its
 `reveal` scrolls the pointed line in once the file settles. A line outside the
 diff's hunks has no row, so nothing lights and the file header stays in view.
 Unchanged relative files open on GitHub at the head commit. `browser-test/`
