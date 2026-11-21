@@ -35,15 +35,35 @@ pub const SWEEP_BATCH: u32 = 500;
 /// Most sweep statements in one round; the next round continues.
 pub const SWEEP_MAX_BATCHES: u32 = 20;
 
-/// Refuse arguments too large to store; the filter's own size is part of
-/// [`super::filter::McpEventFilter::validate`].
-fn check_arguments_size(arguments: &serde_json::Value) -> Result<(), McpSubscriptionError> {
+/// Refuse arguments that cannot be stored: too large, or holding a NUL
+/// character, which PostgreSQL rejects in `jsonb`. The filter's own checks
+/// are part of [`super::filter::McpEventFilter::validate`].
+fn check_arguments(arguments: &serde_json::Value) -> Result<(), McpSubscriptionError> {
     if serde_json::to_vec(arguments).map_or(true, |bytes| bytes.len() > MAX_ARGUMENTS_BYTES) {
         return Err(McpSubscriptionError::InvalidParams(format!(
             "arguments must be at most {MAX_ARGUMENTS_BYTES} bytes of JSON"
         )));
     }
+    if holds_nul(arguments) {
+        return Err(McpSubscriptionError::InvalidParams(
+            "arguments must not hold a NUL character".to_owned(),
+        ));
+    }
     Ok(())
+}
+
+/// Whether any key or string in `value` holds a NUL character.
+fn holds_nul(value: &serde_json::Value) -> bool {
+    match value {
+        serde_json::Value::String(text) => text.contains('\0'),
+        serde_json::Value::Array(items) => items.iter().any(holds_nul),
+        serde_json::Value::Object(fields) => fields
+            .iter()
+            .any(|(key, field)| key.contains('\0') || holds_nul(field)),
+        serde_json::Value::Null | serde_json::Value::Bool(_) | serde_json::Value::Number(_) => {
+            false
+        }
+    }
 }
 
 /// Subscribe and unsubscribe.
@@ -104,7 +124,7 @@ where
         filter
             .validate()
             .map_err(|error| McpSubscriptionError::InvalidParams(error.to_string()))?;
-        check_arguments_size(&key.arguments)?;
+        check_arguments(&key.arguments)?;
 
         // A live subscription of this user to this URL means the endpoint
         // already proved it wants their deliveries.

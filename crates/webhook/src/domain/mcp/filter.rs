@@ -153,8 +153,9 @@ pub enum McpFilterError {
     /// A condition, or a clause's `ids`, holds no values, or too many.
     #[error("a condition or id list holds 1 to {MAX_VALUES} values")]
     ValueCount,
-    /// A value or id is blank or too long.
-    #[error("values and ids are 1 to {MAX_VALUE_LEN} bytes, not blank")]
+    /// A value or id is blank, too long, or holds a NUL character (which
+    /// PostgreSQL cannot store in `jsonb`).
+    #[error("values and ids are 1 to {MAX_VALUE_LEN} bytes, not blank, with no NUL character")]
     ValueLength,
     /// The filter is over [`MAX_FILTER_BYTES`] of JSON.
     #[error("a filter is at most {MAX_FILTER_BYTES} bytes of JSON")]
@@ -336,7 +337,9 @@ fn check_values<'a>(
     if count == 0 || count > MAX_VALUES {
         return Err(McpFilterError::ValueCount);
     }
-    if literals.any(|value| value.trim().is_empty() || value.len() > MAX_VALUE_LEN) {
+    if literals
+        .any(|value| value.trim().is_empty() || value.len() > MAX_VALUE_LEN || value.contains('\0'))
+    {
         return Err(McpFilterError::ValueLength);
     }
     Ok(())

@@ -578,6 +578,35 @@ async fn oversized_arguments_and_filters_are_refused() {
 }
 
 #[tokio::test]
+async fn a_nul_character_is_refused_before_the_endpoint_is_called() {
+    let repo = FakeRepo::default();
+    let endpoint = FakeEndpoint::accepting();
+    let service = service(&repo, &endpoint);
+
+    let refused = service
+        .subscribe(
+            user(ME),
+            request("new\u{0}messages", mentions_of_me_in_channels()),
+        )
+        .await;
+    assert!(matches!(
+        refused,
+        Err(McpSubscriptionError::InvalidParams(_))
+    ));
+
+    let mut filter = mentions_of_me_in_channels();
+    filter.any_of[0].ids = Some(vec!["chan\u{0}nel".to_owned()]);
+    assert_eq!(filter.validate(), Err(McpFilterError::ValueLength));
+    let refused = service.subscribe(user(ME), request("ids", filter)).await;
+    assert!(matches!(
+        refused,
+        Err(McpSubscriptionError::InvalidParams(_))
+    ));
+    assert_eq!(endpoint.verify_count(), 0);
+    assert!(repo.rows().is_empty());
+}
+
+#[tokio::test]
 async fn a_large_audience_is_matched_in_bounded_chunks() {
     let repo = FakeRepo::default();
     let endpoint = FakeEndpoint::accepting();
