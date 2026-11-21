@@ -361,9 +361,38 @@ fn a_write_open_on_another_connection_does_not_hold_back_the_copy() {
     assert_eq!(copied.backfilled_frames, copied.wal_frames, "{copied:?}");
 
     execute(&other, "COMMIT", vec![]).unwrap();
-    let later = writer.checkpoint_over(1).unwrap();
-    assert!(later.ran && later.backfilled_frames >= 1, "{later:?}");
+    // The writer sees the other commit from its next transaction on; until
+    // then its view of the WAL is the one it already copied.
+    assert!(!writer.checkpoint_over(1).unwrap().ran);
     let rows =
         read_transaction(&writer, || query(&writer, "SELECT count(*) FROM t", vec![])).unwrap();
     assert_eq!(rows[0][0], Value::from_i64(41));
+    let later = writer.checkpoint_over(1).unwrap();
+    assert!(later.ran && later.backfilled_frames >= 1, "{later:?}");
+}
+
+#[test]
+fn a_copy_held_back_by_a_reader_runs_again_once_the_reader_ends() {
+    let (writer, reader) = connection_pair("checkpoint-partial.db");
+    write_pages(&writer, 0, 40);
+    execute(&reader, "BEGIN", vec![]).unwrap();
+    query(&reader, "SELECT count(*) FROM t", vec![]).unwrap();
+    write_pages(&writer, 40, 10);
+
+    // The reader's snapshot ends before the last write's frames.
+    let partial = writer.checkpoint_over(1).unwrap();
+    assert!(partial.ran, "{partial:?}");
+    assert!(
+        partial.backfilled_frames < partial.wal_frames,
+        "{partial:?}"
+    );
+
+    execute(&reader, "COMMIT", vec![]).unwrap();
+    let rest = writer.checkpoint_over(1).unwrap();
+    assert!(rest.ran, "{rest:?}");
+    assert_eq!(
+        rest.backfilled_frames,
+        rest.wal_frames - partial.backfilled_frames,
+        "{rest:?}"
+    );
 }

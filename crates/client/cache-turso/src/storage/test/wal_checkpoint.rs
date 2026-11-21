@@ -145,17 +145,22 @@ fn end_and_reopen(
 
 #[test]
 fn a_checkpoint_that_fails_to_sync_keeps_the_log() {
-    for end in [End::WriteAndCrash, End::Close] {
+    // The WAL sync fails before any page is copied; the database sync fails
+    // after every page is copied but before Turso records them as copied.
+    for (fault, end) in [IoFault::Sync, IoFault::DatabaseSync]
+        .into_iter()
+        .flat_map(|fault| [End::WriteAndCrash, End::Close].map(|end| (fault, end)))
+    {
         let io = FaultIo::new();
-        let path = format!("checkpoint-sync-{end:?}.db");
+        let path = format!("checkpoint-sync-{fault:?}-{end:?}.db");
         let mut storage = due(&io, &path);
         let before = wal_frames(&storage);
-        io.arm(IoFault::Sync);
+        io.arm(fault);
         assert_eq!(
             storage.checkpoint_if_due(),
             Err(TursoStorageError::Database)
         );
-        assert!(io.is_clear(), "the checkpoint never synced");
+        assert!(io.is_clear(), "the checkpoint never hit {fault:?}");
 
         // The next write appends: Turso did not start the log over frames
         // that may be missing from the database file.
@@ -187,7 +192,7 @@ fn a_checkpoint_lets_the_next_write_start_the_log_over() {
 fn checkpoint_failures_never_fence_the_storage() {
     let io = FaultIo::new();
     let mut storage = due(&io, "checkpoint-no-fence.db");
-    io.arm(IoFault::Sync);
+    io.arm(IoFault::DatabaseSync);
     assert_eq!(
         storage.checkpoint_if_due(),
         Err(TursoStorageError::Database)
@@ -201,4 +206,38 @@ fn checkpoint_failures_never_fence_the_storage() {
         storage.try_close().unwrap(),
         TursoStorageCloseOutcome::Healthy
     );
+}
+
+#[test]
+fn a_due_wal_with_nothing_new_to_copy_keeps_the_page_cache() {
+    let io = FaultIo::new();
+    let storage = due(&io, "checkpoint-page-cache.db");
+    let last = DUE_WRITES - 1;
+    let checkpoint = storage.checkpoint_if_due().unwrap();
+    assert!(checkpoint.ran, "{checkpoint:?}");
+    // Any checkpoint changes the WAL's state, and Turso drops a connection's
+    // cached pages when it next reads, as after its own checkpoint in COMMIT.
+    assert_holds(&storage, last);
+    let warm = io.reads();
+    assert_holds(&storage, last);
+    assert_eq!(
+        io.reads(),
+        warm,
+        "a second read is served from the page cache"
+    );
+
+    // Until the next write the WAL stays due with nothing to copy; the call
+    // skips it rather than run a checkpoint that drops the cached pages.
+    let again = storage.checkpoint_if_due().unwrap();
+    assert_eq!(
+        again,
+        WalCheckpoint {
+            ran: false,
+            wal_frames: checkpoint.wal_frames,
+            backfilled_frames: 0
+        }
+    );
+    let before = io.reads();
+    assert_holds(&storage, last);
+    assert_eq!(io.reads(), before, "the idle call dropped cached pages");
 }

@@ -22,7 +22,7 @@ mod startup;
 mod wal_checkpoint;
 use cache_core::normalize::RecordUpdates;
 use pollster::block_on;
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 use turso_core::io::{FileId, FileSyncType};
 use turso_core::{
     Buffer, Clock, Completion, CompletionError, File, IO, LimboError, MemoryIO, MonotonicInstant,
@@ -1972,7 +1972,7 @@ fn corruption_quota_io_and_uncertain_transactions_have_payload_free_classes() {
     assert!(!error.to_string().contains("secret"));
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 #[repr(u8)]
 enum IoFault {
     None = 0,
@@ -1980,11 +1980,15 @@ enum IoFault {
     Sync = 2,
     CommitCompletion = 3,
     RollbackIoStep = 4,
+    /// The next sync of the main database file, not of its WAL.
+    DatabaseSync = 5,
 }
 
 struct FaultIo {
     inner: MemoryIO,
     fault: Arc<AtomicU8>,
+    /// Reads from every file, so a test can tell a cached page from a read one.
+    reads: Arc<AtomicU64>,
 }
 
 impl FaultIo {
@@ -1992,6 +1996,7 @@ impl FaultIo {
         Arc::new(Self {
             inner: MemoryIO::new(),
             fault: Arc::new(AtomicU8::new(IoFault::None as u8)),
+            reads: Arc::new(AtomicU64::new(0)),
         })
     }
 
@@ -2012,6 +2017,10 @@ impl FaultIo {
 
     fn is_clear(&self) -> bool {
         self.fault.load(Ordering::SeqCst) == IoFault::None as u8
+    }
+
+    fn reads(&self) -> u64 {
+        self.reads.load(Ordering::SeqCst)
     }
 }
 
@@ -2034,6 +2043,8 @@ impl IO for FaultIo {
     ) -> turso_core::Result<Arc<dyn File>> {
         Ok(Arc::new(FaultFile {
             fault: self.fault.clone(),
+            database: !path.ends_with("-wal"),
+            reads: self.reads.clone(),
             inner: self.inner.open_file(path, flags, direct)?,
         }))
     }
@@ -2066,6 +2077,9 @@ impl IO for FaultIo {
 
 struct FaultFile {
     fault: Arc<AtomicU8>,
+    /// The main database file rather than its WAL.
+    database: bool,
+    reads: Arc<AtomicU64>,
     inner: Arc<dyn File>,
 }
 
@@ -2108,6 +2122,7 @@ impl File for FaultFile {
     }
 
     fn pread(&self, pos: u64, completion: Completion) -> turso_core::Result<Completion> {
+        self.reads.fetch_add(1, Ordering::SeqCst);
         self.inner.pread(pos, completion)
     }
 
@@ -2149,7 +2164,7 @@ impl File for FaultFile {
         if self.deliver_commit_completion_error(&completion) {
             return Ok(completion);
         }
-        if self.take(IoFault::Sync) {
+        if self.take(IoFault::Sync) || (self.database && self.take(IoFault::DatabaseSync)) {
             return Err(CompletionError::IOError(std::io::ErrorKind::Other, "sync").into());
         }
         self.inner.sync(completion, sync_type)

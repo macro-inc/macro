@@ -48,6 +48,10 @@ pub struct WalCheckpoint {
 pub(crate) struct Db {
     connection: Arc<Connection>,
     statements: Option<Arc<Mutex<StatementCache>>>,
+    /// The WAL (checkpoint sequence, last frame) the last idle checkpoint
+    /// copied completely; until a write changes it, the WAL stays due but
+    /// holds nothing to copy.
+    copied_wal: Arc<Mutex<Option<(u32, u64)>>>,
 }
 
 impl Db {
@@ -56,6 +60,7 @@ impl Db {
         Self {
             connection,
             statements: Some(Arc::new(Mutex::new(StatementCache::default()))),
+            copied_wal: Arc::default(),
         }
     }
 
@@ -65,6 +70,7 @@ impl Db {
         Self {
             connection,
             statements: None,
+            copied_wal: Arc::default(),
         }
     }
 
@@ -88,25 +94,36 @@ impl Db {
     /// This is the passive checkpoint Turso itself runs inside COMMIT, run
     /// earlier; Turso keeps restarting the log at the next write and
     /// checkpointing on close. A failure is Turso's own too: the WAL stays
-    /// whole and the next checkpoint copies it again.
+    /// whole and the next checkpoint copies it again. Once a copy is complete
+    /// the WAL stays due until the next write starts it over, so calls in
+    /// between skip it: Turso's explicit checkpoint drops the page cache even
+    /// when it has nothing to copy.
     pub(crate) fn checkpoint_over(&self, frames: u64) -> Result<WalCheckpoint, TursoStorageError> {
-        let wal_frames = self
+        let wal = self
             .connection
             .wal_state()
-            .map_err(|_| TursoStorageError::Database)?
-            .max_frame;
+            .map_err(|_| TursoStorageError::Database)?;
+        let wal_frames = wal.max_frame;
+        let position = Some((wal.checkpoint_seq_no, wal_frames));
         let mut outcome = WalCheckpoint {
             ran: false,
             wal_frames,
             backfilled_frames: 0,
         };
-        if wal_frames < frames.max(1) {
+        let mut copied_wal = self
+            .copied_wal
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if wal_frames < frames.max(1) || *copied_wal == position {
             return Ok(outcome);
         }
         match self.connection.checkpoint(CheckpointMode::Passive {
             upper_bound_inclusive: None,
         }) {
             Ok(copied) => {
+                if copied.everything_backfilled() {
+                    *copied_wal = position;
+                }
                 outcome.ran = true;
                 outcome.backfilled_frames = copied.wal_checkpoint_backfilled;
                 Ok(outcome)
