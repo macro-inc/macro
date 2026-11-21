@@ -84,9 +84,10 @@ DMs, and the shared message store other domains discuss things on.
   people's participant rows behind an `OFFSET 0` fence, through the partial
   `(user_id, channel_id)` indexes on active rows and on left rows
   (`idx_comms_cp_left_by_user_channel`), then checks the shared channels. Left
-  rows count: an imported DM both people left is still the one to reuse. Keep
-  that shape; checking every direct-message channel for both people reads the
-  whole table.
+  rows count: an imported DM both people left is still the one to reuse. A
+  bot that was removed does not: the DM is the pair's again, as channel lists
+  show it; a bot still in it makes it a group. Keep that shape; checking
+  every direct-message channel for both people reads the whole table.
 
 - The channel list picks its candidates from the filter
   (`ChannelCandidates::for_filter`): joined channels by default, plus the
