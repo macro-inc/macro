@@ -2676,6 +2676,138 @@ describe('CacheWorkerCore', () => {
     ]);
   });
 
+  it('reports a request answered a second after it arrived, split into its wait and its run', async () => {
+    let monotonicNow = 0;
+    let finishWrite!: () => void;
+    const writeQuery = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          finishWrite = () =>
+            resolve({
+              revision: INITIAL_CACHE_REVISION,
+              changed: [],
+              affectedOps: [],
+              reset: false,
+            });
+        })
+    );
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        writeQuery,
+        readQuery: async () => ({ kind: 'miss' }),
+      }),
+    });
+    const observations: Array<Record<string, unknown>> = [];
+    const core = new CacheWorkerCore({
+      monotonicNow: () => monotonicNow,
+      telemetry: {
+        record: (observation) => observations.push(observation),
+        flush: vi.fn(),
+      },
+    });
+    const port = { postMessage: vi.fn() };
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+
+    const write = core.handleRequest(port, {
+      generation: TEST_AUTHORITY_GENERATION,
+      id: 2,
+      kind: 'write',
+      query: 'query Read { value }',
+      data: { value: true },
+    });
+    await vi.waitFor(() => expect(writeQuery).toHaveBeenCalledOnce());
+    monotonicNow = 200;
+    const read = core.handleRequest(port, {
+      id: 3,
+      kind: 'read',
+      opId: 'op-1',
+      query: 'query Read { value }',
+    });
+    monotonicNow = 1_700;
+    finishWrite();
+    await Promise.all([write, read]);
+    // Answered 300 ms after it arrived: not reported.
+    monotonicNow = 2_000;
+    await core.handleRequest(port, {
+      id: 4,
+      kind: 'read',
+      opId: 'op-2',
+      query: 'query Read { value }',
+    });
+
+    expect(
+      observations.filter(
+        (observation) => observation.name === 'graphql_cache.slow_request'
+      )
+    ).toEqual([
+      {
+        name: 'graphql_cache.slow_request',
+        operationCategory: 'write',
+        requestKind: 'write',
+        outcome: 'success',
+        errorCode: 'none',
+        queueWaitMs: 0,
+        durationMs: 1_700,
+        queueDepth: 0,
+      },
+      {
+        name: 'graphql_cache.slow_request',
+        operationCategory: 'read',
+        requestKind: 'read',
+        outcome: 'success',
+        errorCode: 'none',
+        queueWaitMs: 1_500,
+        durationMs: 0,
+        queueDepth: 0,
+      },
+    ]);
+  });
+
+  it('reports a slow request that failed with its error class', async () => {
+    let monotonicNow = 0;
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        readQuery: async () => {
+          monotonicNow += 1_200;
+          throw new Error('OPFS read failed');
+        },
+      }),
+    });
+    const observations: Array<Record<string, unknown>> = [];
+    const core = new CacheWorkerCore({
+      monotonicNow: () => monotonicNow,
+      telemetry: {
+        record: (observation) => observations.push(observation),
+        flush: vi.fn(),
+      },
+    });
+    const port = { postMessage: vi.fn() };
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+    await core.handleRequest(port, {
+      id: 2,
+      kind: 'read',
+      opId: 'op-1',
+      query: 'query Read { value }',
+    });
+
+    expect(port.postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: 2, ok: false })
+    );
+    expect(
+      observations.filter(
+        (observation) => observation.name === 'graphql_cache.slow_request'
+      )
+    ).toEqual([
+      expect.objectContaining({
+        requestKind: 'read',
+        outcome: 'error',
+        errorCode: 'opfs-io',
+        queueWaitMs: 0,
+        durationMs: 1_200,
+      }),
+    ]);
+  });
+
   it('marks compatibility diagnostics unavailable instead of authoritative empty', async () => {
     loadCacheWasmMock.mockResolvedValue({
       openCache: vi.fn().mockResolvedValue({ close: vi.fn() }),

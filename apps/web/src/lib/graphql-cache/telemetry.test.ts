@@ -103,6 +103,36 @@ describe('cache telemetry privacy contract', () => {
     );
   });
 
+  it('exports a slow request with its fixed kind and wait, and drops an unknown kind', () => {
+    const events: CacheTelemetryEnvelope[] = [];
+    const reporter = new CacheTelemetryReporter(
+      browserCacheTelemetryContext('treatment'),
+      { emit: (event) => events.push(event) }
+    );
+    const slowRequest = {
+      name: 'graphql_cache.slow_request',
+      operationCategory: 'write',
+      requestKind: 'hydrate',
+      outcome: 'success',
+      errorCode: 'none',
+      queueWaitMs: 40,
+      durationMs: 1_200,
+      queueDepth: 2,
+    } as const;
+    expect(isCacheTelemetryObservation(slowRequest)).toBe(true);
+    reporter.emit(slowRequest);
+    reporter.emit({
+      ...slowRequest,
+      requestKind: 'query Private { private }',
+    } as unknown as CacheTelemetryObservation);
+
+    expect(events).toEqual([
+      expect.objectContaining(slowRequest),
+      expect.not.objectContaining({ requestKind: expect.anything() }),
+    ]);
+    expect(JSON.stringify(events)).not.toContain('Private');
+  });
+
   it('rejects relay payloads with unknown fields or ad-hoc names', () => {
     expect(
       isCacheTelemetryObservation({
