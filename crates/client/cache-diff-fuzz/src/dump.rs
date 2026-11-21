@@ -47,6 +47,15 @@ fn rows(statement: &mut Statement, mut visit: impl FnMut(Vec<String>)) -> Result
                     .get_values()
                     .map(|value| match value {
                         turso_core::Value::Text(text) => text.as_str().to_owned(),
+                        // Printable bytes as they are, so ids inside encoded records stay
+                        // visible to normalization.
+                        turso_core::Value::Blob(blob) => blob
+                            .iter()
+                            .map(|byte| match byte {
+                                0x20..=0x7e if *byte != b'\\' => char::from(*byte).to_string(),
+                                _ => format!("\\x{byte:02x}"),
+                            })
+                            .collect(),
                         other => format!("{other:?}"),
                     })
                     .collect();

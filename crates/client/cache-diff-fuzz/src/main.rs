@@ -129,6 +129,7 @@ fn run(
     if let Err(error) = &outcome {
         writeln!(trace, "abort {}", normalizer.text(error))?;
     }
+    normalizer.freeze();
     let tables = dump::tables(&path).map_err(|error| rootcause::report!("{error}"))?;
     for (table, rows) in tables {
         let rows: Vec<String> = rows.iter().map(|row| normalizer.text(row)).collect();

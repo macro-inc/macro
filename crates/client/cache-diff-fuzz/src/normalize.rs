@@ -11,6 +11,9 @@ pub struct Normalizer {
     keep: BTreeSet<String>,
     minted: HashMap<String, String>,
     root: String,
+    /// After the responses: ids first seen now get no number, since the order
+    /// they are seen in (table rows) is not the order they were made in.
+    frozen: bool,
 }
 
 /// Keys whose arrays come from hash sets, so their order means nothing.
@@ -22,7 +25,12 @@ impl Normalizer {
             keep,
             minted: HashMap::new(),
             root: root.display().to_string(),
+            frozen: false,
         }
+    }
+
+    pub fn freeze(&mut self) {
+        self.frozen = true;
     }
 
     pub fn value(&mut self, value: Value) -> Value {
@@ -61,8 +69,15 @@ impl Normalizer {
                 if !self.keep.contains(uuid) {
                     out.push_str(&text[copied..index]);
                     let next = self.minted.len() + 1;
-                    let name = self.minted.entry(uuid.to_owned()).or_insert_with(|| format!("#{next}"));
-                    out.push_str(name);
+                    match self.minted.get(uuid) {
+                        Some(name) => out.push_str(name),
+                        None if self.frozen => out.push_str("#?"),
+                        None => {
+                            let name = format!("#{next}");
+                            out.push_str(&name);
+                            self.minted.insert(uuid.to_owned(), name);
+                        }
+                    }
                     index += 36;
                     copied = index;
                     continue;
