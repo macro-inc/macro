@@ -6,7 +6,8 @@
 //! person's tab: the command is addressed to the tab the prompt came from and
 //! sent to that person's own connections, which ignore it unless the tab is
 //! theirs. Admitted turns without a tab answer `no_client` and send nothing.
-//! Scoped, uncorrelated and foreign credentials are refused before navigation. What to show is an app path that
+//! Scoped callers answer `no_client` without sending. Uncorrelated and foreign
+//! unscoped credentials are refused before navigation. What to show is an app path that
 //! must match a route the web app opened to agents, checked here and again by
 //! the tab against its real route table. Each turn and each person has a
 //! budget, so a program that reads an instruction in an email cannot flood
@@ -332,6 +333,12 @@ impl UiCommandService {
         input: OpenInApp,
     ) -> Result<UiCommandOutcome, CodeModeError> {
         let span = tracing::Span::current();
+        // Scoped runs have no prompting tab. Preserve the non-throwing SDK
+        // outcome without reading an execution or delivering a command.
+        if agent_correlation::context::is_scoped() {
+            span.record("outcome", "no_client");
+            return Ok(UiCommandOutcome::NoClient);
+        }
         let admitted = self.admit(access, caller, input.execution_id).await?;
         span.record(
             "agent_session.id",
