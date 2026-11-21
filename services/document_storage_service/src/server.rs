@@ -2530,13 +2530,15 @@ async fn run_server() -> anyhow::Result<()> {
     ));
 
     // Attention feeds (Home's work feed and the notifications inbox) share
-    // one feed layer and these adapters: Soup candidates over the replica,
-    // except that recomputes of a change the viewer was just sent read the
-    // primary, as that change's Soup patch did; notification acknowledgement
-    // on the primary; and live updates recomputed from the viewer's
-    // notification, activity and Soup streams. Done publishes a viewer-addressed Soup patch
-    // so the viewer's other sessions recompute too: GraphQL notification
-    // writes publish no realtime update.
+    // one feed layer and these adapters: Soup candidates over the replica
+    // for pages, unread counts and bulk clears, and over the primary for
+    // recomputes (a change the viewer was just sent, as that change's Soup
+    // patch read it) and for the rows done and seen act on, so they
+    // acknowledge what a recompute showed; notification acknowledgement on
+    // the primary; and live updates recomputed from the viewer's
+    // notification, activity and Soup streams. Done publishes a
+    // viewer-addressed Soup patch so the viewer's other sessions recompute
+    // too: GraphQL notification writes publish no realtime update.
     let feed_triggers: Arc<dyn attention_feed::domain::ports::FeedTriggers> = Arc::new(
         attention_feed::outbound::triggers::RealtimeFeedTriggers::new(
             websocket_notification_consumer_service.clone(),
