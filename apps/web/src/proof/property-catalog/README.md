@@ -107,37 +107,56 @@ not run the base commit's modules, or a mutant was not applied or not caught.
 - `node summarize.mjs` rolls every `out/*/results.json` into `out/summary.json`
   and prints each run's commit and verdict. A run deletes its old
   `results.json` when it starts and writes `verdict` only after its final
-  checks, so a crashed or killed run reads `INCOMPLETE`, never as passed.
+  checks, so a crashed or killed run reads `INCOMPLETE` (with no results
+  file yet, from its `started` marker), never as passed. Results are written
+  to a temporary file and renamed into place.
 
 ## What the counts mean
 
 The counts measure work attempted, not successes, and are not interchangeable:
 
-- `counts`: `rawCases` are completed old/new pairs (errors on both sides
-  included). `readerComparisons` and `callerComparisons` count every reader or
-  caller compared, including one missing on a side or one that threw (each such
-  is a `state` or `diff`, never `equal`). `freshMounts`, `reloads` and
-  `imperativeReads` count mounts, reloads and reads started.
+- `counts`: `sequences`, `steps` and `volumeSteps` are finished loop
+  iterations, no-op steps and steps whose snapshot comparison was skipped
+  included. `rawCases` are completed old/new pairs, errors on both sides
+  included. `readerComparisons` and `callerComparisons` count every reader or
+  caller compared, including one missing on a side or one that threw (a
+  missing one is a `state` or `diff`; two that threw the same message compare
+  `equal`, as the caller behaves the same). `freshMounts` and `reloads` count
+  mounts and page loads that returned, timeouts included; `imperativeReads`
+  count reads started.
 - `classes` and the summary's rollups count assertions: one reader pair
   gives a data and an error record, so these are not pair counts.
-  `diffSignatures` are the distinct differences.
+  `diffSignatures` group differences by level, class, normalized location and
+  the signature's own fields; different values at the same path can share one.
 - `coverage` counts how often a generator chose a dimension, credited only
   when the case really has it (a rename that changed the name, a null color
   on an option that had one); it is not a count of successful reads.
-- `ops` is the NEW side's outcome per operation (OLD's replay is checked at
-  `write-replay`), and `rejections` buckets refused writes by class, codes
-  and the first 80 characters of the message. `sqlRefusals` are writes the
-  database refused; `sqlFailures` anything else, which fails the run.
-- `staleness` counts live vs fresh differences per side by the operation
-  chosen, whatever the step then did; `visibility` counts both missing and
-  unexpectedly present rows.
-- `volume` and `load` report their targets beside the successful counts.
-  `settle` buckets are by first quiet (the settle is confirmed 60 ms later),
-  the last bucket includes timeouts. `traffic` counts requests by method and
-  service as sent, `otherWrites` every non-catalog request that could write.
-- `mutant.applied` counts injections (a swallowed invalidation counts even if
-  no reader was open), `candidatesBy` observations, `caughtBy` accepted
+- `ops`: for a hook write, NEW's outcome per operation and actor (OLD's replay
+  is checked at `write-replay`); for an out-of-band SQL write, the statement's
+  outcome, where `rejected` includes database refusals (`sqlRefusals`, the two
+  recognized ones) and harness failures (`sqlFailures`, which fail the run).
+  `rejections` buckets refused hook writes, transport errors included, by
+  class, codes and the first 80 characters of the message. Write requests per
+  mutation include requests that failed.
+- `staleness.byOp` counts one hit per account, side and step with any key
+  whose live and fresh reads differ, under the operation chosen, whatever the
+  step then did; `visibility` counts both missing and unexpectedly present rows.
+- `volume` reports its targets beside the successful counts. `load.ops` and
+  `sameUserReads` count returned attempts, errors included.
+- `settle` buckets by elapsed time to first quiet (the settle is confirmed
+  60 ms later); the last bucket is everything from 2.5 s, timeouts included.
+- `traffic` counts requests as sent by method and service (REST GET includes
+  HEAD and OPTIONS); `otherWrites` counts every non-catalog request that could
+  write, which can include a persisted GraphQL read.
+- `mutant.applied` is per fault: rewritten responses (drop-row, swap-order,
+  alter-field), swallowed invalidation calls whether or not a reader was open
+  (skip-live-update), or steps with at least one restored cache entry
+  (stale-cache). `candidatesBy` counts observations, `caughtBy` accepted
   catches, at most one per sequence.
+- `moduleChecks` count verified page loads per physical side; `harnessErrors`
+  count error events; `pageErrors` count occurrences per masked message and
+  side, while the `page-errors` comparison uses presence. The collation check
+  lists at most 50 mismatches.
 
 ## What it does not check
 

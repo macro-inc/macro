@@ -10,7 +10,11 @@ const OUT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'out');
 const runs = {};
 for (const dir of fs.readdirSync(OUT).sort()) {
   const file = path.join(OUT, dir, 'results.json');
-  if (!fs.existsSync(file)) continue;
+  if (!fs.existsSync(file)) {
+    // a run that started here but never wrote a result
+    if (fs.existsSync(path.join(OUT, dir, 'started'))) console.log(`${dir} [INCOMPLETE]: no results written`);
+    continue;
+  }
   const r = JSON.parse(fs.readFileSync(file, 'utf8'));
   // level families: raw (by phase), write replay, imperative, mutation results, readers, callers, staleness
   const family = (level) => {

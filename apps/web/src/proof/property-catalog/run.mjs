@@ -46,6 +46,7 @@ const OUT = path.resolve(
 fs.mkdirSync(OUT, { recursive: true });
 // A results file left by an earlier run in this directory is never read as this run's.
 fs.rmSync(path.join(OUT, 'results.json'), { force: true });
+fs.writeFileSync(path.join(OUT, 'started'), new Date().toISOString());
 const PW = E.PW_PATH ?? path.join(ROOT, 'node_modules/playwright/index.mjs');
 const { chromium } = await import(PW);
 const ORIGIN = new URL(CONFIG.base).origin;
@@ -1720,7 +1721,10 @@ async function stopLoad() {
 
 function flush() {
   R.updatedAt = new Date().toISOString();
-  fs.writeFileSync(path.join(OUT, 'results.json'), JSON.stringify(R, null, 2));
+  // written whole and renamed into place, so a reader or a kill never sees half a file
+  const tmp = path.join(OUT, 'results.json.tmp');
+  fs.writeFileSync(tmp, JSON.stringify(R, null, 2));
+  fs.renameSync(tmp, path.join(OUT, 'results.json'));
 }
 
 // ------------------------------------------------------------------- main ----
