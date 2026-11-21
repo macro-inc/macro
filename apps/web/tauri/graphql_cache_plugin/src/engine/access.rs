@@ -98,7 +98,7 @@ impl<T> EngineAccess<T> {
     fn held<'a>(&'a self, turn: MutexGuard<'a, ()>) -> Turn<'a> {
         Turn {
             _turn: turn,
-            _wake: Wake(&self.available),
+            _wake: Wake(Some(&self.available)),
         }
     }
 
@@ -117,7 +117,7 @@ impl<T> EngineAccess<T> {
     pub(super) async fn lock(&self) -> AccessGuard<'_, T> {
         let _wait = AcquisitionWait::new();
         let _waiting = Counted::new(&self.turn_waiting);
-        let turn = self.held(self.turn.lock().await);
+        let turn = self.held(wake_if_dropped(&self.available, self.turn.lock()).await);
         AccessGuard {
             value: self.value.lock().await,
             _turn: Some(turn),
@@ -135,7 +135,7 @@ impl<T> EngineAccess<T> {
         }
         let _wait = AcquisitionWait::new();
         AccessGuard {
-            value: self.value.lock().await,
+            value: wake_if_dropped(&self.available, self.value.lock()).await,
             _turn: None,
             _release: self.release_notice(),
         }
@@ -151,6 +151,9 @@ impl<T> EngineAccess<T> {
         let epoch = self.write_epoch.load(Ordering::SeqCst);
         let _waiting = Counted::new(&self.hydrates_waiting);
         let _wait = AcquisitionWait::new();
+        // A hydrate that stops waiting, superseded or cancelled, may be the
+        // one another found holding the turn: wake the rest.
+        let mut gave_up = Wake(Some(&self.available));
         loop {
             // Register before trying the lock so a release cannot be lost.
             let notified = self.available.notified();
@@ -162,21 +165,26 @@ impl<T> EngineAccess<T> {
                 );
             }
             if let Ok(turn) = self.turn.try_lock() {
-                // With the turn, only a read can hold the engine: wait for it
-                // rather than give the turn back, which would wake this
-                // hydrate's own registration and spin.
-                let turn = self.held(turn);
-                let guard = AccessGuard {
-                    value: self.value.lock().await,
-                    _turn: Some(turn),
-                    _release: self.release_notice(),
-                };
-                if epoch != self.write_epoch.load(Ordering::SeqCst) {
-                    return Err(
-                        "cache hydration superseded by a foreground write; refetch the page".into(),
-                    );
+                // With the turn, only a read can hold the engine. Holding the
+                // turn while it waits would put this hydrate ahead of commands
+                // that queue meanwhile, so give the turn back, without a wake:
+                // this hydrate's own registration would spin on it. The read's
+                // release wakes it.
+                if let Ok(value) = self.value.try_lock() {
+                    let guard = AccessGuard {
+                        value,
+                        _turn: Some(self.held(turn)),
+                        _release: self.release_notice(),
+                    };
+                    if epoch != self.write_epoch.load(Ordering::SeqCst) {
+                        return Err(
+                            "cache hydration superseded by a foreground write; refetch the page"
+                                .into(),
+                        );
+                    }
+                    gave_up.0 = None;
+                    return Ok(guard);
                 }
-                return Ok(guard);
             }
             notified.await;
         }
@@ -297,11 +305,25 @@ struct Turn<'a> {
     _turn: MutexGuard<'a, ()>,
     _wake: Wake<'a>,
 }
-struct Wake<'a>(&'a Notify);
+/// Wakes waiters on drop, unless disarmed.
+struct Wake<'a>(Option<&'a Notify>);
 impl Drop for Wake<'_> {
     fn drop(&mut self) {
-        self.0.notify_waiters();
+        if let Some(available) = self.0 {
+            available.notify_waiters();
+        }
     }
+}
+
+/// Waits for a lock, waking waiters if dropped first: Tokio may already have
+/// handed the lock to this waiter, and gives it back without a release
+/// notice when the wait is cancelled. The awaited lock future is dropped
+/// before `wake`, so a woken waiter finds the lock free.
+async fn wake_if_dropped<G>(available: &Notify, lock: impl std::future::Future<Output = G>) -> G {
+    let mut wake = Wake(Some(available));
+    let guard = lock.await;
+    wake.0 = None;
+    guard
 }
 
 // Struct fields drop in declaration order: unlock before waking waiters.
@@ -772,6 +794,70 @@ mod test {
                 "giving the turn back woke waiters"
             );
             drop(read);
+        });
+    }
+
+    /// Tokio hands a released turn straight to the next queued command. One
+    /// cancelled before it runs gives the turn back with a wake, so a
+    /// hydrate that found it handed out still runs.
+    #[test]
+    fn a_command_cancelled_once_handed_the_turn_wakes_waiting_hydrates() {
+        pollster::block_on(async {
+            let access = EngineAccess::new(0);
+            let blocker = access.lock().await;
+            let mut queued = Box::pin(access.lock());
+            assert!(pending(queued.as_mut()));
+            let mut hydration = std::pin::pin!(access.hydrate());
+            assert!(pending(hydration.as_mut()));
+            drop(blocker);
+            assert!(
+                pending(hydration.as_mut()),
+                "the turn went to the queued command"
+            );
+            drop(queued);
+            assert!(
+                !pending(hydration.as_mut()),
+                "the cancelled command woke the hydrate"
+            );
+        });
+    }
+
+    /// The same for a read handed the engine and cancelled before it runs.
+    #[test]
+    fn a_read_cancelled_once_handed_the_engine_wakes_waiting_hydrates() {
+        pollster::block_on(async {
+            let access = EngineAccess::new(0);
+            let command = access.lock().await;
+            let mut read = Box::pin(access.read());
+            assert!(pending(read.as_mut()));
+            let mut hydration = std::pin::pin!(access.hydrate());
+            assert!(pending(hydration.as_mut()));
+            drop(command);
+            assert!(pending(hydration.as_mut()), "the engine went to the read");
+            drop(read);
+            assert!(
+                !pending(hydration.as_mut()),
+                "the cancelled read woke the hydrate"
+            );
+        });
+    }
+
+    /// A warming hydrate never keeps the turn while a read holds the engine,
+    /// so a command that queues meanwhile still goes first, as it did when
+    /// hydrates waited only for the engine.
+    #[test]
+    fn a_command_queued_behind_a_read_goes_before_a_waiting_hydrate() {
+        pollster::block_on(async {
+            let access = EngineAccess::new(0);
+            let read = access.read().await;
+            let mut hydration = std::pin::pin!(access.hydrate());
+            assert!(pending(hydration.as_mut()));
+            let mut command = std::pin::pin!(access.lock());
+            assert!(pending(command.as_mut()));
+            drop(read);
+            assert!(pending(hydration.as_mut()), "the command goes first");
+            assert!(!pending(command.as_mut()));
+            assert!(!pending(hydration.as_mut()));
         });
     }
 
