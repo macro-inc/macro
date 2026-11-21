@@ -3,6 +3,9 @@ use super::*;
 use mailparse::MailHeaderMap;
 use std::{collections::BTreeMap, time::Instant};
 
+const PRE_BODY_BUDGET: Duration = Duration::from_secs(60);
+const MIN_RETRY_BUDGET: Duration = Duration::from_secs(30);
+
 #[derive(Default)]
 pub(super) struct Extensions {
     pub(super) utf8: bool,
@@ -71,6 +74,12 @@ mod extensions_test;
 #[cfg(test)]
 mod authentication_test;
 
+#[cfg(test)]
+mod reuse_test;
+
+#[cfg(test)]
+mod retry_test;
+
 pub(super) struct Pooled {
     stream: Stream,
     extensions: Extensions,
@@ -114,31 +123,46 @@ impl ProtocolTransport {
         credentials: &Credentials,
     ) -> Result<(Option<String>, Pooled), Error> {
         let key = Self::smtp_key(credentials);
-        {
+        let cached = {
             let mut pool = self.smtp_pool.lock().await;
             pool.retain(|_, connection| {
                 connection.last_used.elapsed() < Duration::from_secs(600)
                     && connection.opened.elapsed() < Duration::from_secs(1800)
                     && connection.messages < 100
             });
-            if let Some(key) = &key
-                && let Some(connection) = pool.remove(key)
-            {
-                return Ok((Some(key.clone()), connection));
+            key.as_ref().and_then(|key| pool.remove(key))
+        };
+        if let Some(mut connection) = cached {
+            // A peer may close its idle socket before our retention limit.
+            // Probe outside the pool lock and before any new envelope bytes.
+            match check_reuse(&mut connection.stream).await {
+                Ok(()) => {
+                    tracing::Span::current().record("smtp.probe", "ok");
+                    return Ok((key, connection));
+                }
+                Err(error) => {
+                    tracing::Span::current().record("smtp.probe", "evicted");
+                    tracing::warn!(
+                        smtp.phase = "rset",
+                        error.code = ?error,
+                        "Discarding unavailable pooled SMTP connection"
+                    );
+                }
             }
         }
+        Ok((key, self.open_smtp(credentials).await?))
+    }
+
+    async fn open_smtp(&self, credentials: &Credentials) -> Result<Pooled, Error> {
         let (stream, extensions) = self.smtp_with_features(&credentials.smtp).await?;
         let now = Instant::now();
-        Ok((
-            key,
-            Pooled {
-                stream,
-                extensions,
-                opened: now,
-                last_used: now,
-                messages: 0,
-            },
-        ))
+        Ok(Pooled {
+            stream,
+            extensions,
+            opened: now,
+            last_used: now,
+            messages: 0,
+        })
     }
 
     pub(super) async fn smtp_with_features(
@@ -166,6 +190,16 @@ impl ProtocolTransport {
         authenticate(&mut stream, &extensions, login).await?;
         Ok((stream, extensions))
     }
+    #[tracing::instrument(
+        name = "smtp.submit",
+        skip_all,
+        fields(
+            smtp.attempt = tracing::field::Empty,
+            smtp.probe = tracing::field::Empty,
+            smtp.outcome = tracing::field::Empty,
+        ),
+        err,
+    )]
     pub(super) async fn submit_inner(
         &self,
         c: &Credentials,
@@ -182,26 +216,99 @@ impl ProtocolTransport {
             return Err(Error::Forbidden);
         }
         let wire = without_bcc(mime)?;
-        let (key, mut pooled) = self.take_smtp(c).await?;
-        let outcome = deliver(
-            &mut pooled.stream,
-            &pooled.extensions,
-            from,
-            recipients,
-            &wire,
-        )
-        .await?;
-        if outcome == SubmissionOutcome::Accepted {
-            pooled.messages = pooled.messages.saturating_add(1);
-            pooled.last_used = Instant::now();
-            if let Some(key) = key {
-                let mut pool = self.smtp_pool.lock().await;
-                if pool.len() < 64 || pool.contains_key(&key) {
-                    pool.insert(key, pooled);
+        let key = Self::smtp_key(c);
+        let deadline = tokio::time::Instant::now() + PRE_BODY_BUDGET;
+        let span = tracing::Span::current();
+        span.record("smtp.outcome", "not_submitted");
+        // Both attempts use the same frozen MIME and durable send record. The
+        // transport returns Unknown once message-body IO starts, so that path exits here
+        // without reconnecting or submitting those bytes a second time.
+        for attempt in 0..2 {
+            span.record("smtp.attempt", i64::from(attempt + 1));
+            let connection = match tokio::time::timeout_at(deadline, async {
+                if attempt == 0 {
+                    self.take_smtp(c).await.map(|(_, connection)| connection)
+                } else {
+                    self.open_smtp(c).await
                 }
+            })
+            .await
+            {
+                Ok(connection) => connection,
+                Err(_) => Err(Error::SendUnavailable),
+            };
+            let result = match connection {
+                Ok(mut connection) => {
+                    match deliver(
+                        &mut connection.stream,
+                        &connection.extensions,
+                        from,
+                        recipients,
+                        &wire,
+                        deadline,
+                    )
+                    .await
+                    {
+                        Ok(outcome) => {
+                            span.record(
+                                "smtp.outcome",
+                                if outcome == SubmissionOutcome::Accepted {
+                                    "accepted"
+                                } else {
+                                    "unknown"
+                                },
+                            );
+                            if outcome == SubmissionOutcome::Accepted {
+                                connection.messages = connection.messages.saturating_add(1);
+                                connection.last_used = Instant::now();
+                                if let Some(key) = key {
+                                    let mut pool = self.smtp_pool.lock().await;
+                                    if pool.len() < 64 || pool.contains_key(&key) {
+                                        pool.insert(key, connection);
+                                    }
+                                }
+                            }
+                            return Ok(outcome);
+                        }
+                        Err(error) => error,
+                    }
+                }
+                Err(error) => error,
+            };
+            let error = definite_submission_error(result);
+            if error != Error::SendUnavailable
+                || attempt == 1
+                || deadline.saturating_duration_since(tokio::time::Instant::now())
+                    < MIN_RETRY_BUDGET
+            {
+                return Err(error);
             }
+            tracing::warn!(
+                smtp.retry_count = 1_i64,
+                "Retrying unavailable SMTP connection before any message body byte"
+            );
         }
-        Ok(outcome)
+        Err(Error::SendUnavailable)
+    }
+}
+
+#[tracing::instrument(name = "smtp.connection.reuse", skip_all, fields(smtp.phase = "rset"), err)]
+async fn check_reuse<S: AsyncRead + AsyncWrite + Unpin>(stream: &mut S) -> Result<(), Error> {
+    timeout(Duration::from_secs(3), command(stream, b"RSET\r\n", 250))
+        .await
+        .map_err(|_| Error::ConnectionTimedOut)?
+}
+
+// Only an explicit pre-body transport result carries non-submission certainty.
+// HTTP timeouts and generic service errors cannot be upgraded to this category.
+fn definite_submission_error(error: Error) -> Error {
+    match error {
+        Error::ConnectionUnavailable
+        | Error::ConnectionTimedOut
+        | Error::DnsUnavailable
+        | Error::TcpUnavailable
+        | Error::TlsUnavailable => Error::SendUnavailable,
+        error => error,
     }
 }
 
@@ -240,6 +347,7 @@ async fn deliver<S: AsyncRead + AsyncWrite + Unpin>(
     from: &str,
     recipients: &[String],
     wire: &str,
+    deadline: tokio::time::Instant,
 ) -> Result<SubmissionOutcome, Error> {
     let utf8 = international_headers(wire)?
         || !from.is_ascii()
@@ -264,19 +372,27 @@ async fn deliver<S: AsyncRead + AsyncWrite + Unpin>(
         mail_from.push_str(" BODY=8BITMIME");
     }
     mail_from.push_str("\r\n");
-    submission_command(stream, mail_from.as_bytes(), 250, "mail-from").await?;
-    for recipient in recipients {
-        // Refused sockets are discarded, so cleanup must not delay a known
-        // pre-DATA rejection or turn it into an uncertain RPC timeout.
-        submission_command(
-            stream,
-            format!("RCPT TO:<{recipient}>\r\n").as_bytes(),
-            250,
-            "rcpt-to",
-        )
-        .await?;
-    }
-    submission_command(stream, b"DATA\r\n", 354, "data-command").await?;
+    // Connection setup and every envelope command share one absolute deadline.
+    // Stop this timer before writing the body: cancellation after a body byte
+    // cannot establish non-submission and must retain the Unknown outcome.
+    tokio::time::timeout_at(deadline, async {
+        submission_command(stream, mail_from.as_bytes(), 250, "mail-from").await?;
+        for recipient in recipients {
+            // Refused sockets are discarded, so cleanup must not delay a known
+            // pre-DATA rejection or turn it into an uncertain RPC timeout.
+            submission_command(
+                stream,
+                format!("RCPT TO:<{recipient}>\r\n").as_bytes(),
+                250,
+                "rcpt-to",
+            )
+            .await?;
+        }
+        submission_command(stream, b"DATA\r\n", 354, "data-command").await?;
+        Ok::<(), Error>(())
+    })
+    .await
+    .map_err(|_| Error::SendUnavailable)??;
     // Admission was persisted before IO. Lost DATA delivery acknowledgments remain Unknown.
     if stream.write_all(&data).await.is_err() {
         tracing::warn!(

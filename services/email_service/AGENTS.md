@@ -14,6 +14,9 @@ the gateway `/email` prefix.
   command, attachment and draft ports through the internal engine client.
   `imap_runtime.rs` resumes interrupted credential-free connection promotions.
   Established IMAP work has no service-wide rollout polling.
+  Only a typed engine `SendUnavailable` proves no message-body byte was submitted and
+  terminates the draft as failed. Keep generic 503/timeouts uncertain; never
+  infer safe resubmission from them or from the presence of a remote draft.
 
 - `src/main.rs` / `src/lib.rs`: entrypoint and `run()`.
 - `src/api.rs` + `src/api/context.rs`: HTTP surface and `ApiContext`.

@@ -6,6 +6,7 @@
  */
 import type { ApiMessageOperationIssueProperty } from './apiMessageOperationIssueProperty';
 import type { ApiMessageOperationRemoteVersion } from './apiMessageOperationRemoteVersion';
+import type { ApiMessageOperationSendRejectionReason } from './apiMessageOperationSendRejectionReason';
 import type { ApiMessageOperationState } from './apiMessageOperationState';
 
 /**
@@ -15,5 +16,6 @@ export interface ApiMessageOperation {
   issue?: ApiMessageOperationIssueProperty;
   remote_version?: ApiMessageOperationRemoteVersion;
   revision: string;
+  send_rejection_reason?: ApiMessageOperationSendRejectionReason;
   state: ApiMessageOperationState;
 }

@@ -1312,6 +1312,10 @@ type EmailMessageOperation {
 	The reason the operation needs attention, when one is available.
 	"""
 	issue: EmailMessageOperationIssue
+	"""
+	Optional definite failure detail; old rows retain an unknown reason.
+	"""
+	sendRejectionReason: EmailSendRejectionReason
 }
 
 """
@@ -1478,6 +1482,20 @@ type EmailSendAttemptPayload {
 	Server conversation identity, when admitted.
 	"""
 	threadId: ID
+}
+
+"""
+Definite non-submission evidence, without changing existing issue enum values.
+"""
+enum EmailSendRejectionReason {
+	"""
+	The provider explicitly refused the transaction before message data.
+	"""
+	PROVIDER_REJECTED
+	"""
+	No message data was submitted after the bounded connection retry.
+	"""
+	CONNECTION_UNAVAILABLE
 }
 
 """

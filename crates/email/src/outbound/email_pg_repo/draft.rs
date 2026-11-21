@@ -17,7 +17,27 @@ pub(super) async fn operation_facts(
     sqlx::Error,
 > {
     use crate::domain::models::mailbox_operation::MessageOperationFacts;
-    let rows = sqlx::query!("SELECT d.message_id,d.state,d.revision,m.provider_version,d.error_code,d.checkpoint->>'stage' AS stage FROM email_mailbox_drafts d JOIN email_messages m ON m.id = d.message_id WHERE d.message_id = ANY($1)",ids).fetch_all(pool).await?;
+    let rows = sqlx::query!(
+        r#"
+        SELECT
+            d.message_id,
+            d.state,
+            d.revision,
+            m.provider_version,
+            d.error_code,
+            d.checkpoint->>'stage' AS stage,
+            d.checkpoint->>'send_rejection_reason' AS send_rejection_reason
+        FROM
+            email_mailbox_drafts d
+        JOIN
+            email_messages m ON m.id = d.message_id
+        WHERE
+            d.message_id = ANY($1)
+        "#,
+        ids,
+    )
+    .fetch_all(pool)
+    .await?;
     let mut result = rows
         .into_iter()
         .map(|row| {
@@ -29,6 +49,18 @@ pub(super) async fn operation_facts(
                     revision: row.revision,
                     remote_version: row.provider_version,
                     issue: row.error_code.map(operation_enum).transpose()?,
+                    // New optional reason values must not hide old drafts when
+                    // another binary writes a newer checkpoint vocabulary.
+                    send_rejection_reason: row.send_rejection_reason.and_then(|value| {
+                        serde_json::from_value(serde_json::Value::String(value))
+                            .inspect_err(|_| {
+                                tracing::warn!(
+                                    message_id = %row.message_id,
+                                    "Ignoring an unknown stored send rejection reason"
+                                );
+                            })
+                            .ok()
+                    }),
                 },
             ))
         })
@@ -49,6 +81,7 @@ pub(super) async fn operation_facts(
                 issue: Some(operation_enum(
                     row.issue.unwrap_or_else(|| "move_pending".into()),
                 )?),
+                send_rejection_reason: None,
             },
         );
     }

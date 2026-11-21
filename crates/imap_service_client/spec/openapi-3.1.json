@@ -995,6 +995,7 @@
           "tls_unavailable",
           "connection_timed_out",
           "send_rejected",
+          "send_unavailable",
           "throttled"
         ]
       },

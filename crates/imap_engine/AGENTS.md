@@ -18,6 +18,7 @@ accepts bearer access to a remote mail server.
 
 ## Checks
 
+- SMTP reconnect tests generate ephemeral TLS identities with OpenSSL from the dev shell/CI.
 - `cargo test -p imap_engine` with SQLX_OFFLINE unset and a migrated local database.
 - `cargo check -p imap_engine`.
 - Run `cargo test -p imap_engine real_tls_initial_scan_of_one_hundred_thousand_remote_messages -- --ignored --nocapture`
@@ -42,7 +43,7 @@ accepts bearer access to a remote mail server.
 - Every sent draft id retains a readable fallback until the remote Sent copy
   is associated with it. Commit `sent_copy_attempted` before an APPEND-capable call;
   later reconciliation searches without another APPEND after an uncertain result.
-  Keep Sent and Answered effects pending while the provider-write gate is off.
+  Keep Sent and Answered effects pending until their provider writes succeed.
 - Resolve, block private addresses, pin the numeric socket, then validate the
   original TLS hostname. Local endpoint maps are composition-only and forbidden
   outside the local environment.
@@ -65,6 +66,10 @@ accepts bearer access to a remote mail server.
 - Spare IMAP and SMTP sockets belong to an exact link and both generations. Evict
   them on disconnect, failed commands and bounded idle/age maintenance. Keep each
   synchronization and IDLE cycle on a fresh independent connection.
+- Check a pooled SMTP socket with bounded RSET before reuse. Retry a transport
+  failure once on a fresh socket only before any message-body byte; keep the frozen send identity.
+  The connection and envelope share a 60-second deadline; skip a retry with less than 30 seconds left.
+  Return typed `SendUnavailable` when neither attempt submitted message data.
 - Drain STORE completion codes explicitly: RFC7162 `MODIFIED` means Conflict even
   when the tagged status is OK.
 - Preserve the protocol source/literal limits. Run the ignored protocol tests against

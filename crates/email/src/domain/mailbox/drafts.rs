@@ -138,6 +138,7 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
                 stage: DraftStage::Inspect,
                 stage_started_at: Utc::now(),
                 submission_started: false,
+                send_rejection_reason: None,
                 draft: None,
                 completed_files: 0,
                 completed_removals: 0,
@@ -546,6 +547,7 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
         }
         checkpoint.advance(DraftStage::Submitting);
         checkpoint.submission_started = true;
+        checkpoint.send_rejection_reason = None;
         match self.repo.start_delivery(lease, checkpoint).await? {
             DeliveryStart::NotDue => {
                 checkpoint.submission_started = false;
@@ -569,6 +571,13 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
                         // Definitive rejections are surfaced for a deliberate retry.
                         // A crash after recording Submitting always resumes reads.
                         if definitively_rejected(&error) {
+                            if let EmailApiError::SendRejected { reason, .. } = &error {
+                                tracing::warn!(send.failure.reason = ?reason, "Message was not submitted");
+                                checkpoint.send_rejection_reason = Some(*reason);
+                                // Persist the fact before terminal settlement. A crash
+                                // between these writes resumes failure, never SMTP.
+                                self.checkpoint_after_provider(lease, checkpoint).await?;
+                            }
                             self.repo
                                 .fail_draft(lease, DraftFailure::SendRejected)
                                 .await?;
@@ -586,6 +595,12 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
         lease: &DraftLease,
         checkpoint: &mut DraftCheckpoint,
     ) -> Result<(), MailboxError> {
+        if checkpoint.send_rejection_reason.is_some() {
+            return self
+                .repo
+                .fail_draft(lease, DraftFailure::SendRejected)
+                .await;
+        }
         let prior = checkpoint.draft.as_ref().ok_or(MailboxError::Persistence)?;
         let found = match self.provider.get_draft(lease.mailbox, &prior.id).await {
             Ok(found) => found,

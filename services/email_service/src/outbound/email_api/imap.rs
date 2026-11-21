@@ -316,7 +316,12 @@ pub(crate) fn error(error: models::Error) -> EmailApiError {
             message: "IMAP service is temporarily unavailable".into(),
         },
         models::Error::SendRejected => EmailApiError::SendRejected {
+            reason: SendRejectionReason::ProviderRejected,
             message: "SMTP server refused submission".into(),
+        },
+        models::Error::SendUnavailable => EmailApiError::SendRejected {
+            reason: SendRejectionReason::ConnectionUnavailable,
+            message: "SMTP connection unavailable; no message was submitted".into(),
         },
         models::Error::Throttled => EmailApiError::RateLimited {
             retry_after: Some(std::time::Duration::from_secs(60)),

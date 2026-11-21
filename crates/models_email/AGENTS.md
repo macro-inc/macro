@@ -20,6 +20,9 @@ thread/message API types, DB row types, and Gmail API response shapes.
   durable organization/draft work from Gmail's queue operations.
 
 - Owns: email/Gmail wire and DB-row models shared across email services.
+- `service::message::SendRejectionReason` is the shared closed non-submission
+  fact used by provider errors and durable operation status. Keep it independent
+  of provider adapters so the email `ports` feature can expose it alone.
 - Not here: calendar sync (moved out, see `#6826`) → `calendar_events`;
   actual IMAP/SMTP calls → `imap_engine`; Gmail API calls → `gmail_client`.
 

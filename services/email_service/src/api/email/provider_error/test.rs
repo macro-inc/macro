@@ -20,6 +20,7 @@ fn maps_provider_errors_to_api_statuses() {
         (EmailApiError::Conflict, StatusCode::CONFLICT),
         (
             EmailApiError::SendRejected {
+                reason: email_api_client::domain::models::SendRejectionReason::ProviderRejected,
                 message: "message exceeds provider size limit".to_string(),
             },
             StatusCode::BAD_REQUEST,

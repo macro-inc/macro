@@ -8,6 +8,7 @@ fn uncertain() -> MessageOperationFacts {
         revision: 7,
         remote_version: Some("opaque-version".into()),
         issue: Some(MessageOperationIssue::SendUnknown),
+        send_rejection_reason: None,
     }
 }
 
@@ -57,5 +58,32 @@ fn confirmation_and_uncertainty_are_distinct_from_success() {
     assert_eq!(
         MessageOperationStatus::from(facts).state,
         MessageOperationState::Sent
+    );
+}
+
+#[test]
+fn retrying_or_other_failures_do_not_report_a_prior_send_rejection_reason() {
+    let mut facts = uncertain();
+    facts.state = StoredOperationState::Failed;
+    facts.stage = Some(DraftStage::Ready);
+    facts.issue = Some(MessageOperationIssue::SendRejected);
+    facts.send_rejection_reason = Some(SendRejectionReason::ConnectionUnavailable);
+    assert_eq!(
+        MessageOperationStatus::from(facts.clone()).send_rejection_reason,
+        Some(SendRejectionReason::ConnectionUnavailable)
+    );
+    // RetrySend clears the persisted issue while retaining the old checkpoint.
+    // Neither HTTP nor GraphQL may project that old reason as current evidence.
+    facts.state = StoredOperationState::Pending;
+    facts.issue = None;
+    let retry = MessageOperationStatus::from(facts.clone());
+    assert_eq!(retry.state, MessageOperationState::Pending);
+    assert_eq!(retry.issue, None);
+    assert_eq!(retry.send_rejection_reason, None);
+    facts.state = StoredOperationState::Failed;
+    facts.issue = Some(MessageOperationIssue::AccessRevoked);
+    assert_eq!(
+        MessageOperationStatus::from(facts).send_rejection_reason,
+        None
     );
 }

@@ -2,6 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
+pub use models_email::service::message::SendRejectionReason;
+
 #[cfg(test)]
 mod test;
 
@@ -73,6 +75,8 @@ pub struct MessageOperationFacts {
     pub revision: i64,
     pub remote_version: Option<String>,
     pub issue: Option<MessageOperationIssue>,
+    /// Optional definite non-submission reason; legacy rows retain no inferred reason.
+    pub send_rejection_reason: Option<SendRejectionReason>,
 }
 
 #[derive(Debug, Clone)]
@@ -81,6 +85,8 @@ pub struct MessageOperationStatus {
     pub revision: i64,
     pub remote_version: Option<String>,
     pub issue: Option<MessageOperationIssue>,
+    /// Optional definite non-submission reason, independent of the compatible issue code.
+    pub send_rejection_reason: Option<SendRejectionReason>,
 }
 
 impl From<MessageOperationFacts> for MessageOperationStatus {
@@ -111,6 +117,13 @@ impl From<MessageOperationFacts> for MessageOperationStatus {
             revision: facts.revision,
             remote_version: facts.remote_version,
             issue: facts.issue,
+            // A deliberate retry or a later failure can retain an old checkpoint.
+            // Only the current rejection issue makes that reason actionable.
+            send_rejection_reason: if facts.issue == Some(MessageOperationIssue::SendRejected) {
+                facts.send_rejection_reason
+            } else {
+                None
+            },
         }
     }
 }

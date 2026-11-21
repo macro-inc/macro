@@ -87,6 +87,53 @@ async fn definite_pre_data_refusal_reports_failed_and_is_not_claimed_again(db: P
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn deliberate_retry_does_not_project_the_previous_send_rejection_reason(db: PgPool) {
+    use crate::domain::models::mailbox_operation::*;
+
+    let (sync, repo, lease, _) = submitted_send(&db).await;
+    let mut checkpoint = checkpoint(&lease, DraftStage::Submitting);
+    checkpoint.send_rejection_reason = Some(SendRejectionReason::ConnectionUnavailable);
+    sync.checkpoint_draft(&lease, &checkpoint).await.unwrap();
+    sync.fail_draft(&lease, DraftFailure::SendRejected)
+        .await
+        .unwrap();
+    let facts = repo
+        .message_operation_facts(&[lease.message_id])
+        .await
+        .unwrap()
+        .remove(&lease.message_id)
+        .unwrap();
+    assert_eq!(
+        MessageOperationStatus::from(facts.clone()).send_rejection_reason,
+        Some(SendRejectionReason::ConnectionUnavailable)
+    );
+    let retry = plan_resolution(
+        facts.clone(),
+        MessageResolutionRequest {
+            message_id: lease.message_id,
+            revision: facts.revision,
+            remote_version: facts.remote_version,
+            action: MessageResolutionAction::RetrySend,
+            accept_duplicate_risk: false,
+        },
+    )
+    .unwrap();
+    repo.commit_message_resolution(&actor(), retry)
+        .await
+        .unwrap();
+    let status = MessageOperationStatus::from(
+        repo.message_operation_facts(&[lease.message_id])
+            .await
+            .unwrap()
+            .remove(&lease.message_id)
+            .unwrap(),
+    );
+    assert_eq!(status.state, MessageOperationState::Pending);
+    assert_eq!(status.issue, None);
+    assert_eq!(status.send_rejection_reason, None);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn confirmed_delivery_reports_sent_and_is_not_claimed_again(db: PgPool) {
     let (sync, repo, lease, link) = submitted_send(&db).await;
     let attempt = pending_attempt(&repo, link).await.attempt_id;

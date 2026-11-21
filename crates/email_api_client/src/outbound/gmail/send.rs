@@ -1,6 +1,8 @@
 //! Gmail send capability implementation.
 
-use crate::domain::models::{AccessToken, EmailApiError, SendRequest, SentIds};
+use crate::domain::models::{
+    AccessToken, EmailApiError, SendRejectionReason, SendRequest, SentIds,
+};
 use crate::domain::ports::{MailboxSendClient, MailboxSendRecoveryClient};
 
 use super::{GmailApiClientRepository, map_gmail_error};
@@ -69,7 +71,10 @@ fn map_send_error(error: gmail_client::GmailApiHttpError) -> EmailApiError {
         .status()
         .is_some_and(|status| status.is_client_error() && status.as_u16() != 408);
     match map_gmail_error(error) {
-        EmailApiError::Permanent { message } if rejected => EmailApiError::SendRejected { message },
+        EmailApiError::Permanent { message } if rejected => EmailApiError::SendRejected {
+            reason: SendRejectionReason::ProviderRejected,
+            message,
+        },
         error => error,
     }
 }

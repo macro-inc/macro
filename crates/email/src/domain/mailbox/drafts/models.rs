@@ -2,7 +2,7 @@ use super::super::MailboxKey;
 use crate::domain::models::ResolvedDraftInput;
 use chrono::{DateTime, Utc};
 use email_api_client::domain::models::{
-    AttachmentUploadSession, ProviderDraft, ProviderId, SendRequest,
+    AttachmentUploadSession, ProviderDraft, ProviderId, SendRejectionReason, SendRequest,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -66,6 +66,9 @@ pub struct DraftCheckpoint {
     /// True only after Macro atomically claims a requested delivery.
     #[serde(default)]
     pub submission_started: bool,
+    /// Persisted proof of non-submission; absent in old checkpoints and uncertain sends.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub send_rejection_reason: Option<SendRejectionReason>,
     pub draft: Option<ProviderDraft>,
     pub completed_files: usize,
     pub completed_removals: usize,

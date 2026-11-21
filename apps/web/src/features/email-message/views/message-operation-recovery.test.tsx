@@ -6,6 +6,48 @@ import { MessageOperationRecovery } from './message-operation-recovery';
 
 afterEach(cleanup);
 
+it.each([
+  [
+    'CONNECTION_UNAVAILABLE',
+    'No message was submitted because the mail server connection failed. Try sending again.',
+  ],
+  [
+    'PROVIDER_REJECTED',
+    'Your mail provider rejected this send. Correct the problem in your mailbox before trying again.',
+  ],
+  [
+    undefined,
+    'This message was not submitted. Review your mailbox settings before trying again.',
+  ],
+] as const)(
+  'keeps a %s failure visible and requires a deliberate retry',
+  async (reason, description) => {
+    const operation: MessageOperation = {
+      state: 'FAILED',
+      issue: 'SEND_REJECTED',
+      sendRejectionReason: reason,
+      revision: '17',
+    };
+    const resolve = vi.fn(async () => {});
+    render(() => (
+      <MessageOperationRecovery
+        source={{ operation: () => operation, resolve }}
+      />
+    ));
+    const copy = screen.getByText(description);
+    expect(copy.isConnected).toBe(true);
+    expect(getComputedStyle(copy).display).not.toBe('none');
+    expect(getComputedStyle(copy).visibility).not.toBe('hidden');
+    expect(resolve).not.toHaveBeenCalled();
+    await fireEvent.click(screen.getByRole('button', { name: 'Retry send' }));
+    expect(resolve).toHaveBeenCalledExactlyOnceWith(
+      operation,
+      'retry_send',
+      false
+    );
+  }
+);
+
 it('requires deliberate acknowledgement before retrying an uncertain send', async () => {
   const operation: MessageOperation = {
     state: 'UNCERTAIN',

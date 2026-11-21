@@ -51,6 +51,22 @@ Drafts and uploads are engine-side staging. Sending persists admission before
 SMTP side effects. Explicit 4xx/5xx refusals before DATA fail the attempt. A
 negative or lost final response after the body remains Unknown rather than
 being retried as a fresh send. SMTP telemetry records only phase and reply class.
+Pooled SMTP sessions receive a three-second RSET check before reuse. A transport
+failure before any message-body byte gets one fresh-connection retry using the same frozen MIME
+and send identity. Connection setup and envelope commands share one 60-second
+deadline; a retry needs at least 30 seconds remaining. Body IO lies outside that
+deadline and remains uncertain on failure. Exhausted pre-body connection failures return the closed
+`SendUnavailable` category: the email coordinator fails that attempt visibly,
+clears its submitting marker, and releases later work on the same link. A generic
+HTTP 503 or timeout does not carry this certainty and remains an uncertain send.
+The durable code remains `send_rejected`; an optional `send_rejection_reason`
+checkpoint field carries the shared closed reason and is persisted before terminal
+settlement. Recovery of that fact fails the attempt without reading or submitting
+again. HTTP/GraphQL status adds an optional reason without changing existing issue
+enum values. Only the current send-rejection issue projects that reason; a
+deliberate retry or another failure does not expose an old checkpoint reason.
+Legacy rows have an unknown reason. The current UI reads this detail
+from its existing HTTP status query; existing GraphQL fragments stay unchanged.
 Read-only reconciliation targets the requested draft and requires one exact
 Message-ID header in Sent; substring search hits, duplicate IDs and a missing
 Sent folder cannot establish delivery. Reconciliation never APPENDs evidence.

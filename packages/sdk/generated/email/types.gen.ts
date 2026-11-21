@@ -427,6 +427,7 @@ export type ApiMessageOperation = {
     issue?: null | ApiMessageOperationIssue;
     remote_version?: string | null;
     revision: string;
+    send_rejection_reason?: null | ApiSendRejectionReason;
     state: ApiMessageOperationState;
 };
 
@@ -449,6 +450,11 @@ export type ApiPaginatedThreadCursor = {
     items: Array<ApiThreadPreviewCursor>;
     next_cursor?: string | null;
 };
+
+/**
+ * Definite non-submission evidence; absent for legacy and uncertain outcomes.
+ */
+export type ApiSendRejectionReason = 'PROVIDER_REJECTED' | 'CONNECTION_UNAVAILABLE';
 
 /**
  * common types of sorts based on timestamps

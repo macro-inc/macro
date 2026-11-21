@@ -14,6 +14,16 @@ use std::collections::HashMap;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+/// Known evidence that message data was never accepted; never inferred from HTTP status alone.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SendRejectionReason {
+    /// The provider explicitly refused the envelope or DATA command.
+    ProviderRejected,
+    /// A bounded connection retry ended before any DATA bytes were submitted.
+    ConnectionUnavailable,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ParsedMessage {
     /// Draft edit generation captured with this message snapshot.

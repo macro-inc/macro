@@ -1,7 +1,10 @@
 use async_graphql::{Enum, SimpleObject};
 use email::domain::models::mailbox_operation::{
-    MessageOperationIssue, MessageOperationState, MessageOperationStatus,
+    MessageOperationIssue, MessageOperationState, MessageOperationStatus, SendRejectionReason,
 };
+
+#[cfg(test)]
+mod test;
 
 /// Provider-independent progress for an email write or delivery attempt.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
@@ -73,6 +76,8 @@ pub struct GraphqlMessageOperation {
     remote_version: Option<String>,
     /// The reason the operation needs attention, when one is available.
     issue: Option<GraphqlMessageOperationIssue>,
+    /// Optional definite failure detail; old rows retain an unknown reason.
+    send_rejection_reason: Option<GraphqlSendRejectionReason>,
 }
 
 impl From<MessageOperationStatus> for GraphqlMessageOperation {
@@ -96,6 +101,26 @@ impl From<MessageOperationStatus> for GraphqlMessageOperation {
             revision: status.revision.to_string(),
             remote_version: status.remote_version,
             issue: status.issue.map(Into::into),
+            send_rejection_reason: status.send_rejection_reason.map(Into::into),
+        }
+    }
+}
+
+/// Definite non-submission evidence, without changing existing issue enum values.
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+#[graphql(name = "EmailSendRejectionReason")]
+pub enum GraphqlSendRejectionReason {
+    /// The provider explicitly refused the transaction before message data.
+    ProviderRejected,
+    /// No message data was submitted after the bounded connection retry.
+    ConnectionUnavailable,
+}
+
+impl From<SendRejectionReason> for GraphqlSendRejectionReason {
+    fn from(value: SendRejectionReason) -> Self {
+        match value {
+            SendRejectionReason::ProviderRejected => Self::ProviderRejected,
+            SendRejectionReason::ConnectionUnavailable => Self::ConnectionUnavailable,
         }
     }
 }

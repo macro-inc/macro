@@ -59,6 +59,10 @@ Outlook (Microsoft Graph) outbound adapters.
 
 ## Gotchas
 
+- Treat `SendRejected` as definite non-submission, including an explicit typed
+  connection failure before any message-body byte. Never derive it from a generic HTTP outage,
+  timeout, malformed success or a negative acknowledgment after DATA.
+
 - `SendRequest::build_mime` accepts stored bracketed or bare reply/reference IDs
   and removes their surrounding pair before mail-builder supplies RFC delimiters;
   keep the stable outgoing Message-ID contract bare.

@@ -351,6 +351,9 @@ pub enum Error {
     /// Send rejected before acceptance.
     #[error("send rejected")]
     SendRejected,
+    /// No DATA bytes were submitted after a bounded fresh-connection retry.
+    #[error("send unavailable")]
+    SendUnavailable,
     /// Resource or attempt limit reached.
     #[error("throttled")]
     Throttled,

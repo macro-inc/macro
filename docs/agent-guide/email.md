@@ -1403,7 +1403,11 @@ when another Mail tab delivers or cancels the send first, and a cancelled reply
 still returns its thread to Inbox. When the server cannot say how such a send
 ended, the notice closes. A send that fails after it was queued turns the
 notice into a persistent **Email failed to send**, and **Delivery unconfirmed**
-reports a send the provider did not confirm. An offline send shows **Email
+reports a send the provider did not confirm. For IMAP, a typed connection failure before any message-body byte after one fresh retry ends as **Email failed to send** and
+releases the next draft on that link. A generic service outage or a lost reply
+after DATA stays unconfirmed and must never automatically resend. Exercise an
+idle-closed pooled SMTP socket, then a real RCPT refusal, separately.
+An offline send shows **Email
 queued to send**, which expires as usual, and returns to the email list; once
 the send goes out a **Sending…** notice follows it the same way. The status panel shows a send only while it waits on this
 device (**Queued on this device**), needs attention, or is scheduled

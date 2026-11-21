@@ -67,6 +67,7 @@ fn harness(stage: Option<DraftStage>) -> Harness {
         stage,
         stage_started_at: Utc::now(),
         submission_started: matches!(stage, DraftStage::Submitting | DraftStage::Confirming),
+        send_rejection_reason: None,
         draft: Some(remote.clone()),
         completed_files: 0,
         completed_removals: 0,
@@ -386,19 +387,92 @@ async fn unknown_send_is_only_read_back_until_a_sent_copy_is_confirmed() {
 }
 
 #[tokio::test]
-async fn explicit_submission_rejection_fails_once_without_reclaiming_the_send() {
+async fn typed_pre_data_rejection_fails_once_and_retains_the_reason() {
+    for reason in [
+        SendRejectionReason::ProviderRejected,
+        SendRejectionReason::ConnectionUnavailable,
+    ] {
+        let h = harness(Some(DraftStage::Ready));
+        h.0.lock().unwrap().submission_error = Some(EmailApiError::SendRejected {
+            reason,
+            message: "Synthetic definite non-submission".into(),
+        });
+        let service = service(&h);
+        assert!(service.execute_once().await.unwrap());
+        assert!(matches!(
+            h.0.lock().unwrap().failure,
+            Some(DraftFailure::SendRejected)
+        ));
+        assert_eq!(
+            h.0.lock()
+                .unwrap()
+                .lease
+                .checkpoint
+                .as_ref()
+                .unwrap()
+                .send_rejection_reason,
+            Some(reason)
+        );
+        assert_eq!(h.0.lock().unwrap().submissions, 1);
+        assert!(!service.execute_once().await.unwrap());
+        assert_eq!(h.0.lock().unwrap().submissions, 1);
+    }
+}
+
+#[tokio::test]
+async fn pre_data_checkpoint_recovers_failure_without_a_read_or_another_submit() {
+    let h = harness(Some(DraftStage::Submitting));
+    {
+        let mut state = h.0.lock().unwrap();
+        state
+            .lease
+            .checkpoint
+            .as_mut()
+            .unwrap()
+            .send_rejection_reason = Some(SendRejectionReason::ConnectionUnavailable);
+        state.read_error = Some(EmailApiError::Transient {
+            message: "Synthetic service outage".into(),
+        });
+    }
+    assert!(service(&h).execute_once().await.unwrap());
+    let state = h.0.lock().unwrap();
+    assert!(matches!(state.failure, Some(DraftFailure::SendRejected)));
+    assert!(state.read_error.is_some());
+    assert_eq!(state.submissions, 0);
+}
+
+#[tokio::test]
+async fn generic_service_failure_has_no_pre_data_certainty_and_never_replays() {
     let h = harness(Some(DraftStage::Ready));
-    h.0.lock().unwrap().submission_error = Some(EmailApiError::SendRejected {
-        message: "Synthetic SMTP refusal before DATA".into(),
+    h.0.lock().unwrap().submission_error = Some(EmailApiError::Transient {
+        message: "Synthetic generic 503".into(),
     });
     let service = service(&h);
+    assert!(service.execute_once().await.is_err());
+    assert!(
+        h.0.lock()
+            .unwrap()
+            .lease
+            .checkpoint
+            .as_ref()
+            .unwrap()
+            .send_rejection_reason
+            .is_none()
+    );
+    assert!(service.execute_once().await.unwrap());
+    assert!(h.0.lock().unwrap().failure.is_none());
+    h.0.lock()
+        .unwrap()
+        .lease
+        .checkpoint
+        .as_mut()
+        .unwrap()
+        .stage_started_at = Utc::now() - UNCERTAIN_WAIT - Duration::seconds(1);
     assert!(service.execute_once().await.unwrap());
     assert!(matches!(
         h.0.lock().unwrap().failure,
-        Some(DraftFailure::SendRejected)
+        Some(DraftFailure::SendUnknown)
     ));
-    assert_eq!(h.0.lock().unwrap().submissions, 1);
-    assert!(!service.execute_once().await.unwrap());
     assert_eq!(h.0.lock().unwrap().submissions, 1);
 }
 

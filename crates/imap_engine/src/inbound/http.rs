@@ -102,6 +102,7 @@ impl IntoResponse for ApiError {
             | Error::DnsUnavailable
             | Error::TcpUnavailable
             | Error::TlsUnavailable
+            | Error::SendUnavailable
             | Error::ConnectionTimedOut => StatusCode::SERVICE_UNAVAILABLE,
             Error::SendRejected => StatusCode::UNPROCESSABLE_ENTITY,
             Error::Throttled => StatusCode::TOO_MANY_REQUESTS,

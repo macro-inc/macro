@@ -43,3 +43,6 @@ uuid = { workspace = true }
 webpki-roots = { workspace = true }
 zeroize = { workspace = true, features = ["derive"] }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }

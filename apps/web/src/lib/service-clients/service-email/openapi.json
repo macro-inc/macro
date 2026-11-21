@@ -5146,6 +5146,17 @@
           "revision": {
             "type": "string"
           },
+          "send_rejection_reason": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ApiSendRejectionReason",
+                "description": "Optional failure detail; older clients can continue using the issue and state."
+              }
+            ]
+          },
           "state": {
             "$ref": "#/components/schemas/ApiMessageOperationState"
           }
@@ -5211,6 +5222,11 @@
             "type": ["string", "null"]
           }
         }
+      },
+      "ApiSendRejectionReason": {
+        "type": "string",
+        "description": "Definite non-submission evidence; absent for legacy and uncertain outcomes.",
+        "enum": ["PROVIDER_REJECTED", "CONNECTION_UNAVAILABLE"]
       },
       "ApiSortMethod": {
         "type": "string",

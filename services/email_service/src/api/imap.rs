@@ -87,7 +87,10 @@ impl IntoResponse for ConnectionError {
                 (StatusCode::TOO_MANY_REQUESTS, "throttled")
             }
             ImapConnectionError::Provider(
-                Error::CursorOutdated | Error::ConnectionUnavailable | Error::SendRejected,
+                Error::CursorOutdated
+                | Error::ConnectionUnavailable
+                | Error::SendRejected
+                | Error::SendUnavailable,
             ) => (StatusCode::BAD_GATEWAY, "connection_unavailable"),
             ImapConnectionError::Provider(Error::DnsUnavailable) => {
                 (StatusCode::BAD_GATEWAY, "dns_unavailable")

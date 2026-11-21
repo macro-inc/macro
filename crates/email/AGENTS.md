@@ -13,6 +13,10 @@ tools — hexagonal, heavily feature-gated.
   outside the email domain. Provider-bound repositories isolate IMAP and
   Outlook work without a shared rollout snapshot.
 
+- Durable send failures retain the compatible `send_rejected` code and an
+  optional typed checkpoint/status reason. Persist that fact before settlement
+  so recovery fails without another submit; legacy checkpoints have no inferred reason.
+
 - `src/domain/service.rs` + `src/domain/ports.rs`: the domain service and the
   traits its adapters implement.
 - `src/domain/message_reads.rs` (feature `mailbox`): synced message/thread

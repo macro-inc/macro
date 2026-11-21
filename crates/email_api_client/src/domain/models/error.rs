@@ -2,6 +2,8 @@ use std::time::Duration;
 
 use thiserror::Error;
 
+pub use models_email::service::message::SendRejectionReason;
+
 /// A rate-limit decision made before a provider request is attempted.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RateLimitRefusal {
@@ -61,10 +63,13 @@ pub enum EmailApiError {
         /// A sanitized diagnostic suitable for logs.
         message: String,
     },
-    /// The provider explicitly rejected message submission without accepting it.
-    /// Unlike a malformed success response, this permits cancelling and editing.
-    #[error("email provider rejected the message: {message}")]
+    /// Submission definitively failed before the provider accepted message data.
+    /// Explicit refusals and typed pre-DATA connection failures permit editing;
+    /// a generic service outage or malformed success cannot establish this fact.
+    #[error("email could not be submitted: {message}")]
     SendRejected {
+        /// Closed non-submission evidence for recovery copy and retry policy.
+        reason: SendRejectionReason,
         /// A sanitized diagnostic suitable for logs.
         message: String,
     },

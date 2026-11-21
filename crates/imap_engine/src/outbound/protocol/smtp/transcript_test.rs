@@ -63,7 +63,15 @@ async fn exchange(
     });
     assert_eq!(response(&mut client).await.unwrap().0, 220);
     let extensions = Extensions::parse(&ehlo(&mut client).await.unwrap());
-    let outcome = deliver(&mut client, &extensions, from, &[recipient.into()], wire).await;
+    let outcome = deliver(
+        &mut client,
+        &extensions,
+        from,
+        &[recipient.into()],
+        wire,
+        tokio::time::Instant::now() + PRE_BODY_BUDGET,
+    )
+    .await;
     drop(client);
     let transcript = tokio::time::timeout(Duration::from_secs(3), peer)
         .await
@@ -168,6 +176,7 @@ async fn refusal_before_data_is_definite_and_any_negative_final_reply_is_unknown
             "sender@example.com",
             &["recipient@example.com".into()],
             ASCII,
+            tokio::time::Instant::now() + PRE_BODY_BUDGET,
         )
         .await;
         assert_eq!(outcome, expected);
@@ -331,6 +340,7 @@ async fn recipient_refusal_returns_without_waiting_for_connection_cleanup() {
                 "owner@example.net",
                 &["recipient@example.net".into()],
                 ASCII,
+                tokio::time::Instant::now() + PRE_BODY_BUDGET,
             ),
         )
         .await

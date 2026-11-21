@@ -67,6 +67,7 @@ export const createMessageOperationSource: MessageOperationSourceFactory = (
             revision: value.revision,
             remoteVersion: value.remote_version,
             issue: value.issue,
+            sendRejectionReason: value.send_rejection_reason,
           }
         : null;
     },

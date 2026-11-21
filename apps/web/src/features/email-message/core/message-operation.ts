@@ -1,3 +1,6 @@
+import type { ApiSendRejectionReason } from '@service-email/generated/schemas';
+import { match } from 'ts-pattern';
+
 /** Opaque versions of a provider-independent mailbox write. */
 export interface MessageOperation {
   state:
@@ -13,6 +16,7 @@ export interface MessageOperation {
     | 'FAILED';
   revision: string;
   remoteVersion?: string | null;
+  sendRejectionReason?: ApiSendRejectionReason | null;
   issue?:
     | 'ACCEPTING_REMOTE'
     | 'DRAFT_CONFLICT'
@@ -116,8 +120,23 @@ export function operationDescription(
     return 'The original Gmail draft remains in its mailbox. Review it before continuing with this copy.';
   if (operation.issue === 'ACCEPTING_REMOTE')
     return 'Loading the mailbox version. Wait for synchronization before reopening the draft.';
-  if (operation.issue === 'SEND_REJECTED')
-    return 'Your mail provider rejected this send. You can retry after correcting the problem in your mailbox.';
+  if (operation.issue === 'SEND_REJECTED') {
+    return match(operation.sendRejectionReason)
+      .with(
+        'CONNECTION_UNAVAILABLE',
+        () =>
+          'No message was submitted because the mail server connection failed. Try sending again.'
+      )
+      .with(
+        'PROVIDER_REJECTED',
+        () =>
+          'Your mail provider rejected this send. Correct the problem in your mailbox before trying again.'
+      )
+      .otherwise(
+        () =>
+          'This message was not submitted. Review your mailbox settings before trying again.'
+      );
+  }
   if (operation.issue === 'ACCESS_REVOKED')
     return 'Access to this inbox has changed. Reconnect it or ask its owner to restore your access.';
   if (operation.issue === 'INVALID_CONTENT')
