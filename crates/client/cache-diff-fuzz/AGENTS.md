@@ -17,12 +17,16 @@ disk after a reopen must come out the same.
   filters and live views of them (read, read since, resume, release), search, the optimistic mutation queue (enqueue, claim, commit,
   rollback, defer), deletes, invalidation, people search, idle, reopen, crash,
   probes, and written pages again with one value broken (`src/malformed.rs`). Responses come from `src/faker.rs` over the app schema.
+  Random filters rarely fill a first candidate window (64 candidates), so a `deep-window`
+  op hydrates every core page, invalidates a few of the newest documents and filters for a
+  few documents past the first window: the window has to extend past the incomplete ones.
 - `src/exec.rs` runs a case. `src/normalize.rs` replaces the ids the engine mints
   (`#1`, `#2`, …) and keeps every id that appears in the case. `src/dump.rs`
   writes the tables after a final reopen, each value tagged with its type.
 - A reset on open (`open_or_reset` deleting a file it can't read) and a failed
-  idle checkpoint are recorded, not hidden: the first goes into the trace, the
-  second stops the run. A run that stops early writes `abort` to its trace and
+  checkpoint at an `idle` op's hook are recorded, not hidden: the first goes into the
+  trace, the second stops the run. A checkpoint the host's own idle task runs
+  (`--no-idle-hook`) is not observed; only its effect on what is read and stored is. A run that stops early writes `abort` to its trace and
   exits non-zero, so `fuzz.sh` counts the seed as failed.
 
 ## Recipes
@@ -35,7 +39,9 @@ disk after a reopen must come out the same.
   The run works on copies of both binaries, the schema and the assets, so a
   rebuild or an edit meanwhile does not reach it. Differences go to `runs/RUN/diffs.txt`, seeds a side could not finish to
   `runs/RUN/failures.txt`; it exits 0 only when neither has a line.
-- Shrink a difference: `minimize.sh SEED SIDE_A SIDE_B`.
+- Shrink a difference: `minimize.sh SEED SIDE_A SIDE_B`. It reruns the case from an
+  empty file, so it can't shrink a finding of an `UPGRADE` or `CHAIN_*` run: rerun
+  those from the file kept in `runs/RUN/upgrade/SEED` by hand.
 - When a change alters how records are encoded on purpose, compare with
   `FUZZ_ARGS=--decoded-records`: `records.value` is compared as the record each
   side's own codec decodes, and a `search_documents.source_hash` equal to the hash
@@ -55,16 +61,22 @@ disk after a reopen must come out the same.
 - When the cache core splits a hydrate into a stage and a commit (`Engine::stage_hydrate`),
   build the side with `STAGED_HYDRATE=1` and give it `--stage-hydrates`: each hydrate is
   staged before the op ahead of it runs and committed at its own turn, or run whole when
-  that op made the stage stale (stats `stage.committed`, `stage.whole-at-commit`).
+  that op made the stage stale (stats `stage.committed`, `stage.whole-at-commit`). A stage
+  that fails answers the hydrate with its error, as the browser's `prepareHydrate` rejects.
+  Staging reads the authority and the contact fence before the op ahead, which the
+  browser never lets a write do; a difference that only that ordering explains is the
+  harness's.
 - When reads may run while a hydrate writes, add `--concurrent-reads RATE` (0 to 1) to
-  both sides: that share of hydrates runs with reads from other threads, and a read that
-  equals neither the state before the hydrate nor after it fails the seed (stats
-  `split.read-before`, `split.read-after`).
+  both sides: that share of hydrates runs with reads from other threads. A read issued
+  before the hydrate returned must equal the state before it or after it, and one issued
+  after it returned the state after it, or the seed fails. Timers don't guarantee overlap:
+  stats `split.issued-during` and `split.issued-after` say how many reads overlapped.
 - `FUZZ_ARGS` goes to both sides; `FUZZ_ARGS_A` and `FUZZ_ARGS_B` to one each, for
   one build under two settings (e.g. `FUZZ_ARGS_B="--hot-capacity 16"` against
   itself: the hot tier is a cache, so its size must change nothing).
 - Upgrade: `UPGRADE=1 fuzz.sh RUN FIRST COUNT OLD NEW`. OLD runs each case and keeps
-  its file; both sides then start from that file (`--start-from`) with a probe and
+  its file; both sides then start from that file (`--start-from`, which must lie outside
+  `--work`) with a probe and
   the case again, so NEW must read and extend what OLD stored exactly as OLD does.
   Seeds that differ or fail keep the file in `runs/RUN/upgrade/SEED`. When NEW hashes
   records differently, add `--mask-source-hashes` to `FUZZ_ARGS`: NEW rehashes
