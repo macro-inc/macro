@@ -657,8 +657,11 @@ async fn a_group_the_other_person_left_is_not_their_dm(pool: PgPool) {
         );
     }
 
-    // With a removed bot instead of a third person, the DM the other person
-    // left is still theirs, as get-or-create always reused it.
+    // A removed bot's row never counts, so with one instead of a third
+    // person the DM the other person left is still the pair's: the lookup
+    // answers it and get-or-create reuses it. On main neither did, since
+    // get-or-create counted the bot's row and the list left out the other
+    // person.
     let bot_dm = insert_dm(&pool, 500, &[(&lo, false), (&hi, true), (&bot, true)]).await;
     sqlx::query!(
         "UPDATE comms_channel_participants SET left_at = NOW() WHERE channel_id = $1",
@@ -695,6 +698,16 @@ async fn live_ranks_by_who_left_then_age_then_id(pool: PgPool) {
         pair().hi().as_ref().to_owned(),
     );
     let both_left = insert_dm(&pool, 1_000, &[(&lo, true), (&hi, true)]).await;
+    assert_eq!(
+        repo.ensure_dm(pair(), DmCreation::Live(pair().lo().clone()))
+            .await
+            .unwrap(),
+        EnsuredChannel {
+            id: both_left,
+            created: false
+        },
+        "a DM both left is still theirs when it is the only one"
+    );
     let lo_left = insert_dm(&pool, 2_000, &[(&lo, true), (&hi, false)]).await;
     assert_eq!(
         repo.ensure_dm(pair(), DmCreation::Live(pair().lo().clone()))
