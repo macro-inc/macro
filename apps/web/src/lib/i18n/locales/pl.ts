@@ -829,7 +829,6 @@ export default {
       'Nie znaleziono ustawień. Spróbuj „podpis”, „motyw” lub „kalendarz”.',
     backToSettings: 'Wróć do ustawień',
     closeSettings: 'Zamknij ustawienia',
-    goToTab: 'Przejdź do karty ustawień {{number}}',
     editProfile: 'Edytuj profil',
     logOut: 'Wyloguj się',
     yourAccount: 'Twoje konto',

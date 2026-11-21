@@ -1,7 +1,7 @@
-// The other ways to the tabs of the mail list: the sidebar's Inbox item, the
-// number keys, Tab and Shift+Tab, and on a phone the Inbox pills and the
-// sidebar's sheet, each for a Gmail and an Outlook inbox; and the header
-// breadcrumb's name.
+// The other ways to the tabs of the mail list: the sidebar's Inbox item, Tab,
+// Shift+Tab and the number keys over the Inbox tabs, and on a phone the Inbox
+// pills and the sidebar's sheet, each for a Gmail and an Outlook inbox; and
+// the header breadcrumb's name.
 
 import { loadAppSteadily } from './harness/drafts';
 import { expect, test } from './harness/fixtures';
@@ -25,9 +25,10 @@ for (const provider of PROVIDERS) {
     test.beforeEach(({ page }) => loadAppSteadily(page));
 
     // When this fails, one of the desktop's other ways to a tab is dead or
-    // opens the wrong tab: a number key, Tab or Shift+Tab between the Inbox
-    // tabs, or the sidebar's Inbox item.
-    test('number keys, Tab and the sidebar Inbox item each open their tab', async ({
+    // opens the wrong tab: Tab or Shift+Tab between the Inbox tabs, their
+    // number keys, or the sidebar's Inbox item; or Tab still switches tabs
+    // from a control, where it should move focus.
+    test('Tab, the number keys and the sidebar Inbox item each open their tab', async ({
       page,
       mailbox,
     }) => {
@@ -42,28 +43,14 @@ for (const provider of PROVIDERS) {
       const inboxTabs = page.getByRole('radiogroup', { name: 'Inbox view' });
       const checked = (name: string) =>
         expect(inboxTabs.getByRole('radio', { name })).toBeChecked();
+      const list = page.getByRole('grid', { name: 'Email' });
 
       await mailbox.open();
       await expectRows(page, [lunch]);
 
-      // 7 is All mail: Signal, Favorites, Drafts, Sent, Scheduled,
-      // Reminders, then the Library.
-      await page.keyboard.press('7');
-      did('AL-006', 'F-030');
-      await expect(page).toHaveURL(/mail\.tab=all/);
-      await expectRows(page, [lunch, sale]);
-
-      // The sidebar's Inbox item leads back to Signal.
-      await page
-        .getByRole('navigation', { name: 'Email tabs' })
-        .getByRole('button', { name: 'Inbox' })
-        .click();
-      did('AL-001');
-      await checked('Signal');
-      await expectRows(page, [lunch]);
-
-      // The focus is on the sidebar, not in the list: Tab walks the Inbox
-      // tabs, Signal to Noise, and Shift+Tab back.
+      // With the keyboard on the list, Tab walks the Inbox tabs, Signal to
+      // Noise, and Shift+Tab back.
+      await list.focus();
       await page.keyboard.press('Tab');
       did('AL-007');
       await checked('Noise');
@@ -72,11 +59,40 @@ for (const provider of PROVIDERS) {
       await checked('Signal');
       await expectRows(page, [lunch]);
 
-      // 1 is Signal, from any tab.
+      // The number keys pick the Inbox tabs by position (Focus, when it
+      // shows, comes first).
+      const names = await inboxTabs
+        .getByRole('radio')
+        .evaluateAll((radios) =>
+          radios.map(
+            (radio) =>
+              radio.closest('[role="group"]')?.textContent?.trim() ?? ''
+          )
+        );
+      const key = (name: string) => String(names.indexOf(name) + 1);
+      await list.focus();
+      await page.keyboard.press(key('Noise'));
+      did('AL-006', 'F-029');
+      await checked('Noise');
+      await expectRows(page, [sale]);
+      await page.keyboard.press(key('Signal'));
+      await checked('Signal');
+      await expectRows(page, [lunch]);
+
+      // The sidebar's Inbox item leads back to Signal; on that button, Tab
+      // moves focus and leaves the tab alone.
       await inboxTabs.getByText('Noise', { exact: true }).click();
       await expectRows(page, [sale]);
-      await page.keyboard.press('1');
-      did('AL-006', 'F-029');
+      const inboxItem = page
+        .getByRole('navigation', { name: 'Email tabs' })
+        .getByRole('button', { name: 'Inbox' });
+      await inboxItem.click();
+      did('AL-001');
+      await checked('Signal');
+      await expectRows(page, [lunch]);
+      await inboxItem.focus();
+      await page.keyboard.press('Tab');
+      await expect(inboxItem).not.toBeFocused();
       await checked('Signal');
       await expectRows(page, [lunch]);
     });
