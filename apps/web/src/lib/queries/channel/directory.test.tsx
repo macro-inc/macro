@@ -3529,6 +3529,52 @@ describe("the viewer's own channel writes", () => {
     expect(nameOf(directory, 'a')).toBe('before');
   });
 
+  it('starts no later reads of a write once the account changed', async () => {
+    const names = ['a', 'b', 'c', 'd', 'e', 'f'];
+    const network = fakeNetwork([], {
+      primary: names.map((name) =>
+        channelRecord(name, { updatedAt: UPDATED_MID })
+      ),
+    });
+    const held = heldNetwork(network);
+    let sent = 0;
+    const counting = fakeClient(
+      (...args: Parameters<typeof held.client.query>) => {
+        sent += 1;
+        return held.client.query(...args);
+      }
+    ) as typeof network.client;
+    const client = queryClient();
+
+    let account = ACCOUNT;
+    const written = writeOf(client, { client: counting }, names, () => account);
+    await vi.waitFor(() => expect(sent).toBe(4));
+    account = { userId: VIEWER, session: 2 };
+    held.land();
+    await written;
+
+    expect(sent).toBe(4);
+    expect(ownChannelWrites(client).writes()).toEqual({});
+  });
+
+  it('holds and reads nothing for a write another sign-in made', async () => {
+    const network = fakeNetwork([], {
+      primary: [channelRecord('a', { name: 'after', updatedAt: UPDATED_MID })],
+    });
+    const client = queryClient();
+
+    await refreshChannelDirectory([channelUuid('a')], {
+      client,
+      soup: () => network.client,
+      account: () => ACCOUNT,
+      removed: [channelUuid('b')],
+      writer: { userId: VIEWER, session: 0 },
+    });
+
+    expect(network.entityReads).toEqual([]);
+    expect(ownChannelWrites(client).writes()).toEqual({});
+  });
+
   it("holds nothing when the read fails, and shows no other viewer's write", async () => {
     const network = fakeNetwork([channelRecord('a', { name: 'before' })], {
       primary: [channelRecord('a', { name: 'after', updatedAt: UPDATED_MID })],

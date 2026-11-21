@@ -766,6 +766,9 @@ type RefreshChannelDirectoryOptions = {
   /** Channels the write took away from everyone (deleted): held as ones
    * the viewer can no longer read, with no read. */
   removed?: readonly string[];
+  /** The sign-in that made the write, when it settles after the call
+   * started: a write another sign-in made holds and reads nothing. */
+  writer?: QueryAccount;
 };
 
 /**
@@ -787,9 +790,17 @@ export async function refreshChannelDirectory(
     soup = () => getGraphqlSoupClient(),
     account = () => currentQueryAccount(),
     removed = [],
+    writer,
   }: RefreshChannelDirectoryOptions = {}
 ) {
-  const ownWrites = readOwnWrites(changed, removed, client, soup, account);
+  const ownWrites = readOwnWrites(
+    changed,
+    removed,
+    client,
+    soup,
+    account,
+    writer
+  );
   directoryWrites(client).seen += 1;
   const filters = { queryKey: channelKeys.directory._def };
   const firstReads = client
@@ -945,7 +956,8 @@ async function readOwnWrites(
   removed: readonly string[],
   client: QueryClient,
   soup: () => UrqlQuery,
-  account: () => QueryAccount | undefined
+  account: () => QueryAccount | undefined,
+  writerOf?: QueryAccount
 ) {
   const removedIds = new Set(removed);
   const gone = [...removedIds].filter(isChannelId);
@@ -953,8 +965,15 @@ async function readOwnWrites(
     .filter(isChannelId)
     .filter((id) => !removedIds.has(id));
   if (channelIds.length === 0 && gone.length === 0) return;
-  const writer = account();
+  const writer = writerOf ?? account();
   if (!writer) return;
+  const signedIn = () => {
+    const now = account();
+    return now?.userId === writer.userId && now.session === writer.session;
+  };
+  // A write another sign-in made holds nothing for this one: its reads
+  // would carry this sign-in's credentials.
+  if (!signedIn()) return;
   const own = ownChannelWrites(client);
   await Telemetry.span('channel_directory.own_writes', async (span) => {
     span.setAttr('channel_directory.requested', channelIds.length);
@@ -970,8 +989,14 @@ async function readOwnWrites(
     const found: Record<string, DirectoryChannel | null> = {};
     try {
       const reads: PrimaryChannelRead[] = [];
-      // Chunks after the first start past an await, outside the span.
-      for (let at = 0; at < reading.length; at += OWN_WRITE_READ_CONCURRENCY)
+      // Chunks after the first start past an await, outside the span. Each
+      // starts only while the writer is still signed in, so none goes out
+      // under a later sign-in.
+      for (let at = 0; at < reading.length; at += OWN_WRITE_READ_CONCURRENCY) {
+        if (!signedIn()) {
+          span.setAttr('channel_directory.scope', 'other_viewer');
+          return;
+        }
         reads.push(
           ...(await span.run(() =>
             Promise.all(
@@ -981,8 +1006,8 @@ async function readOwnWrites(
             )
           ))
         );
-      const now = account();
-      if (now?.userId !== writer.userId || now.session !== writer.session) {
+      }
+      if (!signedIn()) {
         span.setAttr('channel_directory.scope', 'other_viewer');
         return;
       }

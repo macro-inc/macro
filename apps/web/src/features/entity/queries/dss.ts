@@ -14,6 +14,10 @@ import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { deleteAgentSession } from '@queries/agent-session/entity-mutations';
+import {
+  currentQueryAccount,
+  type QueryAccount,
+} from '@queries/auth/account-scope';
 import { callKeys } from '@queries/call/keys';
 import { refreshChannelDirectory } from '@queries/channel/directory';
 import { channelKeys } from '@queries/channel/keys';
@@ -47,7 +51,10 @@ import { batch } from 'solid-js';
 import { type EntityData, getEntityProjectId } from '../types/entity';
 import { BulkDeleteFailure } from './bulk-delete-result';
 
-function invalidateDeletedDssItems(entities: EntityData[]): void {
+function invalidateDeletedDssItems(
+  entities: EntityData[],
+  writer: QueryAccount | undefined
+): void {
   // A deleted folder's databases and forms return to the root on the server.
   if (entities.some((e) => e.type === 'project')) {
     queryClient.invalidateQueries({ queryKey: databasesKeys.list.queryKey });
@@ -66,7 +73,7 @@ function invalidateDeletedDssItems(entities: EntityData[]): void {
     // The channel directory reads a replica, or waits for the soup update:
     // the deleted channels come out at once, with no read of each.
     fireAndForget(
-      refreshChannelDirectory([], { removed: channelIds }),
+      refreshChannelDirectory([], { removed: channelIds, writer }),
       'channel-delete'
     );
   }
@@ -123,7 +130,8 @@ function invalidateDeletedDssItems(entities: EntityData[]): void {
 
 async function settleDssDeletes(
   entities: EntityData[],
-  deletions: Promise<boolean>[]
+  deletions: Promise<boolean>[],
+  writer: QueryAccount | undefined
 ): Promise<boolean[]> {
   const outcomes = await Promise.allSettled(deletions);
   const results = outcomes.map(
@@ -132,7 +140,10 @@ async function settleDssDeletes(
   // Process confirmed successes before surfacing sibling failures. Never remove
   // failed schedules or skip call invalidation because another API threw.
   try {
-    invalidateDeletedDssItems(entities.filter((_, index) => results[index]));
+    invalidateDeletedDssItems(
+      entities.filter((_, index) => results[index]),
+      writer
+    );
   } catch (error) {
     console.error('Failed to reconcile deleted item caches', error);
   }
@@ -186,6 +197,9 @@ export function createBulkDeleteDssItemsMutation() {
     mutationKey: GRAPHQL_SOUP_DELETE_MUTATION_KEY,
     gcTime: GRAPHQL_SOUP_DELETE_RETENTION_MS,
     mutationFn: async (entities: EntityData[]) => {
+      // The sign-in that deletes: a deletion settling after another sign-in
+      // holds nothing in its directory.
+      const writer = currentQueryAccount();
       const deletable = entities.filter(isDeletable);
       const deletions = deletable.map(async (e) => {
         if (e.type === 'agent_session') {
@@ -218,7 +232,7 @@ export function createBulkDeleteDssItemsMutation() {
         }
         return deleteItem({ id: e.id, itemType: e.type });
       });
-      return settleDssDeletes(deletable, deletions);
+      return settleDssDeletes(deletable, deletions, writer);
     },
     onMutate: async (entities: EntityData[]) => {
       const deletable = entities.filter(isDeletable);

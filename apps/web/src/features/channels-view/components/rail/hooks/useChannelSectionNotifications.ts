@@ -5,6 +5,7 @@ import { useUserId } from '@core/context/user';
 import { Telemetry } from '@macro-inc/observability';
 import { markChannelsAsRead } from '@notifications/notification-helpers';
 import { openSnoozeNotifications } from '@notifications/SnoozeNotificationsDialog';
+import { queryAccountSession } from '@queries/auth/account-scope';
 import { useBulkNotificationPreferencesMutation } from '@queries/notification/unsubscribes';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
@@ -105,11 +106,15 @@ export function useChannelSectionNotifications(
     }
 
     const request = { actorId };
+    // A new sign-in, even to the same account, ends the action: the rail
+    // can outlive it.
+    const session = queryAccountSession();
 
     const isCurrent = () =>
       !disposed &&
       options.enabled() &&
       userId() === actorId &&
+      queryAccountSession() === session &&
       options.dialogOwner() === owner;
 
     setPending(request);

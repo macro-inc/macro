@@ -18,6 +18,7 @@ vi.mock('../directory', () => ({
   refreshChannelDirectory: vi.fn(async () => undefined),
 }));
 
+import { QueryAccountChangedError } from '../../auth/account-scope';
 import { authKeys } from '../../auth/keys';
 import { existingDirectMessage } from '../get-or-create-dm';
 
@@ -84,4 +85,14 @@ it('fails when another account signed in during the lookup', async () => {
   });
   const found = await existingDirectMessage(VIEWER, PERSON);
   expect(found.isErr()).toBe(true);
+});
+
+it('fails without asking when the viewer is no longer the one signed in', async () => {
+  mocks.client?.setQueryData(authKeys.userInfo.queryKey, {
+    id: 'macro|other@example.com',
+    authenticated: true,
+  });
+  const found = await existingDirectMessage(VIEWER, PERSON);
+  expect(found._unsafeUnwrapErr()).toBeInstanceOf(QueryAccountChangedError);
+  expect(mocks.query).not.toHaveBeenCalled();
 });

@@ -20,6 +20,7 @@ import {
   isCurrentQueryAccount,
   mutationQueryAccount,
   type QueryAccount,
+  QueryAccountChangedError,
 } from '../auth/account-scope';
 import { useQueryAccount } from '../auth/use-query-account';
 import { refreshChannelDirectory } from './directory';
@@ -153,16 +154,20 @@ export function existingDirectMessage(
   if (recipientId === viewerId || isBotPrincipalId(recipientId))
     return okAsync(undefined);
   return ResultAsync.fromPromise(
-    lookupDirectMessage(recipientId),
+    lookupDirectMessage(viewerId, recipientId),
     (error) => error
   );
 }
 
+// Looked up as `viewerId` only: a lookup for a viewer who is no longer
+// signed in rejects with `QueryAccountChangedError`.
 async function lookupDirectMessage(
+  viewerId: string,
   recipientId: string
 ): Promise<string | undefined> {
   const account = currentQueryAccount();
   assertQueryAccount(account);
+  if (account.userId !== viewerId) throw new QueryAccountChangedError();
   const result = await getGraphqlSoupClient()
     .query(
       DirectMessageChannelIdDocument,

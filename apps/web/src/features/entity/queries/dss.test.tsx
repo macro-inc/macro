@@ -80,6 +80,7 @@ vi.mock('@service-storage/graphql-soup', () => ({
 }));
 
 import { scheduledActionKeys } from '@app/features/routines/queries/keys';
+import { authKeys } from '@queries/auth/keys';
 import { callKeys } from '@queries/call/keys';
 import { channelKeys } from '@queries/channel/keys';
 import {
@@ -842,5 +843,29 @@ describe('channel deletion', () => {
     expect(client.getQueryState(open)?.isInvalidated).toBe(true);
     // Left to the directory's own refresh, which reads it once.
     expect(client.getQueryState(directory)?.isInvalidated).toBe(false);
+  });
+
+  it('refreshes the directory as the sign-in that deleted, after another signs in', async () => {
+    client.setQueryData(authKeys.userInfo.queryKey, {
+      id: 'macro|viewer@example.com',
+      authenticated: true,
+    });
+    const deleting = deferred<void>();
+    mocks.deleteCallGraphql.mockImplementation(() => deleting.promise);
+    const { mutation } = mount();
+
+    const deleted = mutation.mutateAsync([entity('gone', 'channel')]);
+    await vi.waitFor(() => expect(mocks.deleteCallGraphql).toHaveBeenCalled());
+    client.setQueryData(authKeys.userInfo.queryKey, {
+      id: 'macro|other@example.com',
+      authenticated: true,
+    });
+    deleting.resolve();
+    await deleted;
+
+    expect(mocks.refreshDirectory).toHaveBeenCalledWith([], {
+      removed: ['gone'],
+      writer: expect.objectContaining({ userId: 'macro|viewer@example.com' }),
+    });
   });
 });

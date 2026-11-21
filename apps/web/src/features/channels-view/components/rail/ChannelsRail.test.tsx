@@ -33,7 +33,12 @@ vi.mock('@core/context/channels', async (importOriginal) => ({
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => mocks.userId,
 }));
+vi.mock('@queries/auth/account-scope', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@queries/auth/account-scope')>()),
+  queryAccountSession: () => mocks.session,
+}));
 const mocks = vi.hoisted(() => ({
+  session: 0,
   fetchChannel: vi.fn<(id: string) => Promise<ChannelEntity>>(),
   bulkPreferences: vi.fn(),
   createSection: vi.fn(),
@@ -607,6 +612,7 @@ beforeEach(() => {
   mocks.sectionPreferences = {};
   mocks.listRows = undefined;
   mocks.hotkeys.clear();
+  mocks.session = 0;
   mocks.userId = 'viewer';
   mocks.source.muteEntity.mockResolvedValue(undefined);
   mocks.source.unmuteEntity.mockResolvedValue(undefined);
@@ -1568,6 +1574,22 @@ describe('section notification actions', () => {
     const actions = mountActions();
     const pending = actions.markSectionRead('team_channels');
     mocks.userId = 'another-viewer';
+    finish([{ id: 'one' }]);
+    await pending;
+    expect(mocks.markChannelsAsRead).not.toHaveBeenCalled();
+  });
+
+  it('discards a mark-read action when the same viewer signs in again during membership lookup', async () => {
+    let finish!: (channels: { id: string }[]) => void;
+    mocks.readComplete.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        })
+    );
+    const actions = mountActions();
+    const pending = actions.markSectionRead('team_channels');
+    mocks.session = 1;
     finish([{ id: 'one' }]);
     await pending;
     expect(mocks.markChannelsAsRead).not.toHaveBeenCalled();
