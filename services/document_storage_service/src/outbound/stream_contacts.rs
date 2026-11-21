@@ -1,19 +1,20 @@
 //! Live-stream contact audience backed by the contacts crate's exact lookup.
 
 use contacts::domain::models::query::ContactLookup;
-use contacts::domain::ports::ContactsPageRepository;
+use contacts::domain::ports::ContactsPageService;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
 use webhook::domain::ports::WebhookContactChecker;
 
-/// Answers "is `other` a contact of `user`" with one indexed point lookup
+/// Answers "is `other` in `user`'s directory" with one indexed point lookup
 /// (`lookup.sql`), never by paging the user's contact list.
 pub struct ContactsStreamChecker<R> {
     repository: Arc<R>,
 }
 
 impl<R> ContactsStreamChecker<R> {
-    /// Wrap the contacts repository shared with the rest of the service.
+    /// Wrap the directory reads shared with the rest of the service, which
+    /// follow each viewer's `contacts-list-reads` flag.
     pub fn new(repository: Arc<R>) -> Self {
         Self { repository }
     }
@@ -27,7 +28,7 @@ impl<R> Clone for ContactsStreamChecker<R> {
     }
 }
 
-impl<R: ContactsPageRepository> WebhookContactChecker for ContactsStreamChecker<R> {
+impl<R: ContactsPageService> WebhookContactChecker for ContactsStreamChecker<R> {
     type Err = anyhow::Error;
 
     async fn is_contact(

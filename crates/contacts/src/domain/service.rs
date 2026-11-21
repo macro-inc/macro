@@ -10,8 +10,8 @@ use crate::domain::models::query::ContactLookup;
 use crate::domain::ports::{
     ContactListIngress, ContactListRepository, ContactsBackfillOutboxRepo, ContactsIngress,
     ContactsIngressQueue, ContactsNotifier, ContactsOutboxService, ContactsPageRepository,
-    ContactsPageService, ContactsRepository, ContactsService, PeopleSearchRepository,
-    PeopleSearchService,
+    ContactsPageService, ContactsRepository, ContactsService, CorrespondentsService,
+    PeopleSearchRepository, PeopleSearchService,
 };
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -331,50 +331,77 @@ impl<R: ContactsPageRepository, N: ContactsNotifier> ContactsPageService
 impl<R: PeopleSearchRepository, N: ContactsNotifier> PeopleSearchService
     for ContactsDomainService<R, N>
 {
-    #[tracing::instrument(
-        name = "contacts.directory.people_search",
-        skip_all,
-        fields(
-            limit = i64::from(limit.get()),
-            query_bytes = query.byte_len() as i64,
-            result_count = tracing::field::Empty,
-            outcome = tracing::field::Empty,
-        ),
-        err
-    )]
     async fn search_people(
         &self,
         viewer: MacroUserIdStr<'_>,
         query: &PeopleSearchQuery,
         limit: PeopleSearchLimit,
     ) -> Result<Vec<PersonMatch>, Report> {
-        let span = tracing::Span::current();
-        let Some(needle) = query.searchable() else {
-            span.record("result_count", 0_i64);
-            span.record("outcome", "query_too_short");
-            return Ok(Vec::new());
-        };
-        let people = self
-            .repository
-            .search_people(viewer, needle, limit)
-            .await
-            .inspect_err(|_| {
-                span.record("outcome", "error");
-            })?;
-        if people.len() > usize::from(limit.get()) {
-            span.record("outcome", "error");
-            return Err(rootcause::report!("people search exceeded its limit"));
-        }
-        span.record("result_count", people.len() as i64);
-        span.record(
-            "outcome",
-            if people.is_empty() {
-                "no_match"
-            } else {
-                "match"
-            },
-        );
-        Ok(people)
+        search_people_with(query, limit, |needle| {
+            self.repository.search_people(viewer, needle, limit)
+        })
+        .await
+    }
+}
+
+/// Runs one ranked people search through `read`: a query too short to search
+/// returns no people without reading, and a read that returns more than
+/// `limit` people is an error.
+#[tracing::instrument(
+    name = "contacts.directory.people_search",
+    skip_all,
+    fields(
+        limit = i64::from(limit.get()),
+        query_bytes = query.byte_len() as i64,
+        result_count = tracing::field::Empty,
+        outcome = tracing::field::Empty,
+    ),
+    err
+)]
+pub(crate) async fn search_people_with<'q, Read, Fut>(
+    query: &'q PeopleSearchQuery,
+    limit: PeopleSearchLimit,
+    read: Read,
+) -> Result<Vec<PersonMatch>, Report>
+where
+    Read: FnOnce(&'q str) -> Fut,
+    Fut: Future<Output = Result<Vec<PersonMatch>, Report>>,
+{
+    let span = tracing::Span::current();
+    let Some(needle) = query.searchable() else {
+        span.record("result_count", 0_i64);
+        span.record("outcome", "query_too_short");
+        return Ok(Vec::new());
+    };
+    let people = read(needle).await.inspect_err(|_| {
+        span.record("outcome", "error");
+    })?;
+    if people.len() > usize::from(limit.get()) {
+        span.record("outcome", "error");
+        return Err(rootcause::report!("people search exceeded its limit"));
+    }
+    span.record("result_count", people.len() as i64);
+    span.record(
+        "outcome",
+        if people.is_empty() {
+            "no_match"
+        } else {
+            "match"
+        },
+    );
+    Ok(people)
+}
+
+impl<R: ContactsRepository, N: ContactsNotifier> CorrespondentsService
+    for ContactsDomainService<R, N>
+{
+    /// The legacy graph cannot tell an email correspondent from anyone else,
+    /// so this is the whole directory without the user.
+    async fn correspondents(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
+        self.repository.get_contacts(user_id).await
     }
 }
 

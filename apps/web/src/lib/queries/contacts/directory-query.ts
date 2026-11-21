@@ -106,11 +106,16 @@ export function createContactDirectoryWindow(
       const value = options.policy?.();
       if (value && value.excluded.length > MAX_PEOPLE_BATCH)
         throw new Error('Invalid contact policy exclusions');
-      const policy = value
+      // Plain copies: the request outlives the accessor's reactive values.
+      const policy: ContactPeoplePolicy | undefined = value
         ? {
             mode: value.mode,
             excluded: [...value.excluded],
             senderDomain: value.senderDomain,
+            ...(value.listPriority?.length
+              ? { listPriority: value.listPriority.map((group) => [...group]) }
+              : {}),
+            ...(value.onlyListed ? { onlyListed: true } : {}),
           }
         : undefined;
       // Only a typed search reads its teammates. Browsing leaves the roster

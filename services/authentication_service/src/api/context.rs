@@ -125,7 +125,14 @@ pub(crate) type SubscriptionStatusServiceType =
 
 pub(crate) type DomainNoticeServiceType = teams::domain::domain_notice::DomainNoticeServiceImpl<
     teams::outbound::colleague_directory::ContactsColleagueDirectory<
-        contacts::outbound::repository::DbContactsRepository,
+        contacts::domain::list_reads::FlaggedContactReads<
+            contacts::domain::service::ContactsDomainService<
+                contacts::outbound::repository::DbContactsRepository,
+                Option<contacts::outbound::gateway::ConnectionGatewayNotifier>,
+            >,
+            contacts::outbound::repository::DbContactsRepository,
+            feature_flags::outbound::posthog::PostHogFeatureFlags,
+        >,
     >,
     teams::domain::join_announcement::JoinAnnouncementServiceImpl<
         teams::outbound::join_announcement_repo::JoinAnnouncementRepositoryImpl,

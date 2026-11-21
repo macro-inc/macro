@@ -133,7 +133,15 @@ a covered range with such occurrences refetches once instead of rendering
 without them (span `calendar.refetch_unreadable_occurrences`). A
 `refresh_calendar` poke, reconnecting, coming online, or returning to the tab
 runs one `CalendarChanges` delta that
-applies edits made elsewhere. RSVPs, edits, deletions, and creates show at once
+applies edits made elsewhere. The delta tracks the user's own inboxes and the
+ones delegated to them, not teammates' shared calendars. When an inbox becomes
+visible after weeks were cached, the cache drops what it holds and refetches
+the visible weeks: it never adopts the new inbox from a page, so the delta
+leaves it out and the server resets. That includes the first inbox of a user
+whose weeks were cached with none; with no inbox the delta asks for the
+server's watermark only. Span `calendar.delta_sync` records
+`calendar.delta.reset` (`first_link`, `new_link`, `retention`) and
+`calendar.delta.pages`. RSVPs, edits, deletions, and creates show at once
 through the durable mutation queue: a rejected write rolls back with the usual
 error, and a write made offline stays visible and replays on reconnect. Native
 apps whose engine lacks the calendar cache commands keep the REST path. Until the
