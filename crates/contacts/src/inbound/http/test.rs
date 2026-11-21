@@ -82,6 +82,7 @@ impl PeopleSearchService for MockService {
                         ),
                         user_id,
                         name: (index == 0).then(|| "Person Zero".to_string()),
+                        lists: Vec::new(),
                     },
                     is_teammate: index == 0,
                     is_agent: index == 1,
