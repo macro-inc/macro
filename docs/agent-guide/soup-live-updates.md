@@ -72,8 +72,10 @@ Marking a notification done removes only that notification's contribution immedi
 other active notifications can keep the entity in the list. Seen/reopen operations
 update filter membership on the authoritative reply, not from a guessed optimistic
 state. Rollback restores only the failed operation's contribution. `DONE` predicates,
-other entity partitions, and notified-at sorting still use the network path: a
-new notification re-reads mounted notified-at lists. A flat one replays its
+other entity partitions, and notified-at sorting still use the network path:
+every notification patch (new, updated or deleted) re-reads mounted notified-at
+lists, whose rows render their own notifications; an entity the notification
+feed's refetch no longer returns is patched by nothing else. A flat one replays its
 loaded pages with the notified-at query; a grouped one asks for update time
 (groups sort by it), while its rows carry notification times and its filters
 can select by notification state, so it replays its first page and every
