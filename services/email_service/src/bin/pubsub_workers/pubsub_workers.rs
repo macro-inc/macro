@@ -26,9 +26,6 @@ use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// PostHog's US ingestion origin, used when `POSTHOG_HOST` is unset.
-const DEFAULT_POSTHOG_HOST: &str = "https://us.i.posthog.com";
-
 fn compose_email_api(
     db: PgPool,
     subscription_topic: String,
@@ -154,12 +151,12 @@ async fn main() -> anyhow::Result<()> {
         event_broker_tracker.clone(),
     );
 
-    let contacts_ingress = Arc::new(contacts::domain::service::SqsContactsIngress {
-        queue: contacts::outbound::ingress::SqsContactsQueue::new(
-            aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
-            contacts_queue.to_string(),
-        ),
-    });
+    let contacts_ingress = Arc::new(email_service::composition::contacts_producer(
+        aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
+        contacts_queue.to_string(),
+        config.environment,
+        email_service::outlook_flags::posthog(&config)?,
+    ));
 
     // One message per receive: messages are processed one at a time and only the one in
     // progress renews its visibility, so the rest of a batch would time out behind a long
@@ -359,22 +356,16 @@ async fn main() -> anyhow::Result<()> {
         );
         // Newest-first imports and the live pass beside them follow
         // `enable-outlook-import-live-pass`; without a PostHog key they are off.
-        let feature_flags = config
-            .posthog_api_key()
-            .map(|key| {
-                feature_flags::outbound::posthog::PostHogFeatureFlags::new(
-                    config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
-                    key.to_owned(),
-                    Duration::from_secs(3),
-                    config.environment,
-                )
-            })
-            .transpose()
-            .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
+        let feature_flags = email_service::outlook_flags::posthog(&config)?;
         let live_import_pass = email::domain::mailbox::live_pass::LiveImportPass::default();
-        worker_tracker.spawn(email_service::mailbox_sync_worker::run_live_import_pass(
+        let switch = live_import_pass.clone();
+        worker_tracker.spawn(email_service::outlook_flags::run(
             feature_flags,
-            live_import_pass.clone(),
+            email_service::outlook_flags::OutlookFlag {
+                key: email_service::outlook_flags::LIVE_IMPORT_PASS_FLAG,
+                name: "outlook import live pass",
+                set: move |on| switch.set(on),
+            },
             worker_cancellation_token.clone(),
         ));
         let mailbox_sync = email::domain::mailbox::MailboxSyncService::new(

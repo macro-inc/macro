@@ -172,7 +172,7 @@ rec {
   # The switch (README "The switch"). True adds a listener rule per host and
   # the target-group alarms. The Pulumi stack's rule (priority 1) still wins
   # until it drops these hostnames, so applying this alone moves no traffic.
-  switched = false;
+  switched = true;
 
   # The host copies its Prometheus blocks straight into Mimir's bucket: once
   # with one old block while the cluster is tested, then everything at the

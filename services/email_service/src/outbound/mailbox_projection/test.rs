@@ -1,4 +1,6 @@
 use super::*;
+use crate::outbound::inbox_source::recording::{Recorded, RecordingContactLists};
+use contacts::domain::models::list::InboxProvider;
 use email_api_client::domain::models::{EmailApiError, RateLimitOrigin};
 use email_db_client::attachments::provider::upload::new_email_media_atts;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -43,7 +45,17 @@ fn effects<A: MailboxAttachmentAccess>(
     attachments: A,
     sfs_url: &str,
 ) -> impl MailboxProjectionEffects {
-    let sqs = aws_sdk_sqs::Client::from_conf(
+    let contacts = Arc::new(contacts::domain::service::SqsContactsIngress {
+        queue: contacts::outbound::ingress::SqsContactsQueue::new(
+            unused_sqs(),
+            UNUSED_URL.to_string(),
+        ),
+    });
+    effects_with_contacts(db, attachments, sfs_url, contacts)
+}
+
+fn unused_sqs() -> aws_sdk_sqs::Client {
+    aws_sdk_sqs::Client::from_conf(
         aws_sdk_sqs::Config::builder()
             .behavior_version(aws_sdk_sqs::config::BehaviorVersion::latest())
             .region(aws_sdk_sqs::config::Region::new("us-east-1"))
@@ -52,7 +64,19 @@ fn effects<A: MailboxAttachmentAccess>(
             ))
             .endpoint_url(UNUSED_URL)
             .build(),
-    );
+    )
+}
+
+fn effects_with_contacts<
+    A: MailboxAttachmentAccess,
+    C: contacts::domain::ports::ContactsIngress + ContactListIngress + 'static,
+>(
+    db: PgPool,
+    attachments: A,
+    sfs_url: &str,
+    contacts: Arc<C>,
+) -> impl MailboxProjectionEffects {
+    let sqs = unused_sqs();
     MailboxEffects {
         attachments,
         invitations: email::outbound::invitation_pg::InvitationPgRepository(db.clone()),
@@ -66,12 +90,7 @@ fn effects<A: MailboxAttachmentAccess>(
                 UNUSED_URL.to_string(),
             ),
         }),
-        contacts: Arc::new(contacts::domain::service::SqsContactsIngress {
-            queue: contacts::outbound::ingress::SqsContactsQueue::new(
-                sqs.clone(),
-                UNUSED_URL.to_string(),
-            ),
-        }),
+        contacts,
         crm_population: crate::outbound::crm_population::requests(
             crate::util::redis::RedisClient::new(
                 redis::Client::open("redis://127.0.0.1:9/").unwrap(),
@@ -607,4 +626,80 @@ async fn a_failure_that_cannot_be_recorded_still_names_its_attachment(db: PgPool
         logged.contains(&format!("outlook.attachment_id={IMAGE_ID}")),
         "{logged}"
     );
+}
+
+fn correspondence(provider: UserProvider) -> CorrespondenceProjection {
+    CorrespondenceProjection {
+        link_id: LINK_ID,
+        owner: MacroUserIdStr::try_from("macro|claim_test@example.com".to_owned()).unwrap(),
+        provider,
+        is_sent: false,
+        // CRM contacts go to the backfill queue, which these tests leave out.
+        contacts: Vec::new(),
+        connections: vec![MacroUserIdStr::try_from_email("friend@example.com").unwrap()],
+    }
+}
+
+/// A pool that is never connected: the contacts effect touches no database.
+fn unconnected_pool() -> PgPool {
+    PgPool::connect_lazy("postgres://unused@127.0.0.1:9/unused").unwrap()
+}
+
+#[tokio::test]
+async fn correspondents_are_connected_and_join_the_owners_list_for_the_inbox_provider() {
+    for (provider, list) in [
+        (UserProvider::Outlook, InboxProvider::Outlook),
+        (UserProvider::Gmail, InboxProvider::Gmail),
+    ] {
+        let lists = Arc::new(RecordingContactLists::default());
+        let effects = effects_with_contacts(
+            unconnected_pool(),
+            Downloads::failing(interrupted()),
+            UNUSED_URL,
+            lists.clone(),
+        );
+
+        effects.contacts(correspondence(provider)).await.unwrap();
+
+        let correspondence = correspondence(provider);
+        let connections = correspondence
+            .connections
+            .iter()
+            .map(|contact| ContactConnection::new(correspondence.owner.clone(), contact.clone()))
+            .collect();
+        assert_eq!(
+            lists.calls(),
+            [
+                Recorded::Connections(connections),
+                Recorded::InboxContacts(
+                    InboxSource {
+                        owner: correspondence.owner,
+                        link_id: LINK_ID,
+                        provider: list,
+                    },
+                    correspondence.connections,
+                ),
+            ]
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_failed_contacts_publish_defers_the_projection() {
+    let effects = effects_with_contacts(
+        unconnected_pool(),
+        Downloads::failing(interrupted()),
+        UNUSED_URL,
+        Arc::new(RecordingContactLists::failing()),
+    );
+
+    let error = effects
+        .contacts(correspondence(UserProvider::Outlook))
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        error,
+        MailboxError::Effect(EffectFailure::Downstream)
+    ));
 }

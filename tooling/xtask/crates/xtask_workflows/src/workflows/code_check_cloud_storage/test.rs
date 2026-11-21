@@ -329,7 +329,9 @@ fn service_bins_gate_covers_every_service_the_script_builds() {
 
     for service in services.split_whitespace() {
         assert!(
-            BUILD_SERVICE_BINS_CONDITION.contains(&format!("'{service}'")),
+            build_service_bins_condition()
+                .to_string()
+                .contains(&format!("'{service}'")),
             "{service} is built by the script but missing from the job's gate"
         );
     }

@@ -265,12 +265,13 @@ impl World {
                 db.clone(),
                 &worker(queue),
                 sqs_client.clone(),
-                Arc::new(contacts::domain::service::SqsContactsIngress {
-                    queue: contacts::outbound::ingress::SqsContactsQueue::new(
-                        sqs_sdk.clone(),
-                        format!("{services_url}/queue/contacts"),
-                    ),
-                }),
+                Arc::new(crate::composition::contacts_producer(
+                    sqs_sdk.clone(),
+                    format!("{services_url}/queue/contacts"),
+                    // No flags: list-aware contacts messages stay off.
+                    macro_env::Environment::Develop,
+                    None,
+                )),
                 email_api.clone(),
                 wiring::redis_client(redis_client.clone()),
                 Arc::new(notification::domain::service::SqsNotificationIngress {
@@ -324,12 +325,13 @@ impl World {
                 db.clone(),
                 &worker(&queues.sync),
                 sqs_client.clone(),
-                Arc::new(contacts::domain::service::SqsContactsIngress {
-                    queue: contacts::outbound::ingress::SqsContactsQueue::new(
-                        sqs_sdk.clone(),
-                        format!("{services_url}/queue/contacts"),
-                    ),
-                }),
+                Arc::new(crate::composition::contacts_producer(
+                    sqs_sdk.clone(),
+                    format!("{services_url}/queue/contacts"),
+                    // No flags: list-aware contacts messages stay off.
+                    macro_env::Environment::Develop,
+                    None,
+                )),
                 email_api.clone(),
                 wiring::redis_client(redis_client.clone()),
                 Arc::new(notification::domain::service::SqsNotificationIngress {

@@ -131,9 +131,9 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
         id: Uuid,
         name: &str,
         markdown: &str,
-        shared: bool,
+        visibility: import::domain::ports::ImportVisibility,
     ) -> anyhow::Result<Uuid> {
-        self.create_tracker_project_impl(user, id, name, markdown, shared)
+        self.create_tracker_project_impl(user, id, name, markdown, visibility)
             .await
     }
     async fn create_tracker_task(
@@ -143,9 +143,9 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
         name: &str,
         markdown: &str,
         properties: &ImportedTaskProperties,
-        shared: bool,
-    ) -> anyhow::Result<String> {
-        self.create_tracker_task_impl(user, id, name, markdown, properties, shared)
+        visibility: import::domain::ports::ImportVisibility,
+    ) -> anyhow::Result<import::domain::ports::CreatedImportTask> {
+        self.create_tracker_task_impl(user, id, name, markdown, properties, visibility)
             .await
     }
     async fn link_tracker_task(
@@ -163,6 +163,7 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
         user: &MacroUserIdStr<'static>,
         name: &str,
         parent: Option<Uuid>,
+        visibility: import::domain::ports::ImportVisibility,
     ) -> anyhow::Result<Uuid> {
         // Mirrors the CreateProject tool: creating inside a parent requires
         // edit access to it.
@@ -177,6 +178,7 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
                     name: name.to_string(),
                     project_parent_id: parent,
                 },
+                crate::tool_context::imported_link_share(visibility),
             )
             .await
             .map_err(|error| anyhow::anyhow!("failed to create imported folder: {error:?}"))?;
@@ -194,6 +196,7 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
         properties: &ImportedDocumentProperties,
         folder: Option<Uuid>,
         dates: Option<SourceDates>,
+        visibility: import::domain::ports::ImportVisibility,
     ) -> anyhow::Result<String> {
         let created = self
             .create_imported_document(
@@ -204,6 +207,7 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
                 properties,
                 folder,
                 dates,
+                visibility,
             )
             .await;
         already_created(created, id)
@@ -220,7 +224,8 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
         properties: &ImportedTaskProperties,
         folder: Option<Uuid>,
         dates: Option<SourceDates>,
-    ) -> anyhow::Result<String> {
+        visibility: import::domain::ports::ImportVisibility,
+    ) -> anyhow::Result<import::domain::ports::CreatedImportTask> {
         let created = self
             .create_imported_task(
                 user,
@@ -232,12 +237,106 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
                 dates,
                 // A shared task list shares its folder, which reaches its tasks.
                 false,
+                visibility,
             )
             .await;
-        already_created(created, id)
+        match created {
+            Ok(created) => Ok(created),
+            Err(error) => {
+                let task = already_created(Err(error), id)?;
+                let (_, roster) = self.team_roster(user).await;
+                let notice = self
+                    .apply_task_properties(user, &task, properties, &roster, visibility)
+                    .await;
+                Ok(import::domain::ports::CreatedImportTask { id: task, notice })
+            }
+        }
+    }
+
+    #[tracing::instrument(skip_all, fields(task_id = %id, visibility = ?visibility), err)]
+    async fn reapply_task_assignee(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        id: Uuid,
+        email: &str,
+        visibility: import::domain::ports::ImportVisibility,
+    ) -> anyhow::Result<Option<import::domain::ports::TaskImportNoticeReason>> {
+        let access = self
+            .entity_access_service
+            .generate_entity_access_receipt::<EditAccessLevel>(
+                user,
+                None,
+                &id.to_string(),
+                model_entity::EntityType::Document,
+            )
+            .await
+            .map_err(anyhow::Error::new)?;
+        use teams::domain::team_repo::TeamRepository as _;
+        // Replay must not clear an omission notice after a failed roster lookup.
+        let roster = match self.entity_access_service.get_user_team(user).await? {
+            Some(team) => self
+                .team_repository
+                .get_team_members(&team.team_id)
+                .await?
+                .into_iter()
+                .map(|member| macro_user_id::cowlike::CowLike::into_owned(member.user_id))
+                .collect(),
+            None => Vec::new(),
+        };
+        self.apply_task_assignee(
+            user,
+            access.entity().entity_id.as_ref(),
+            Some(email),
+            &roster,
+            visibility,
+        )
+        .await
     }
 
     #[tracing::instrument(skip(self, user), err)]
+    async fn folder_has_explicit_grant(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        folder: Uuid,
+    ) -> anyhow::Result<bool> {
+        let receipt = self
+            .entity_access_service
+            .generate_entity_access_receipt::<EditAccessLevel>(
+                user,
+                None,
+                &folder.to_string(),
+                model_entity::EntityType::Project,
+            )
+            .await
+            .map_err(|error| anyhow::anyhow!("no edit access to import folder: {error:?}"))?;
+        Ok(self
+            .project_service
+            .folder_has_explicit_grant(receipt)
+            .await?)
+    }
+
+    #[tracing::instrument(skip(self, user), err)]
+    async fn folder_has_team_edit_grant(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        folder: Uuid,
+    ) -> anyhow::Result<bool> {
+        let receipt = self
+            .entity_access_service
+            .generate_entity_access_receipt::<EditAccessLevel>(
+                user,
+                None,
+                &folder.to_string(),
+                model_entity::EntityType::Project,
+            )
+            .await
+            .map_err(|error| anyhow::anyhow!("no edit access to import folder: {error:?}"))?;
+        Ok(self
+            .project_service
+            .folder_has_team_edit_grant(receipt)
+            .await?)
+    }
+
     async fn folder_exists(
         &self,
         user: &MacroUserIdStr<'static>,

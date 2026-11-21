@@ -28,7 +28,7 @@ use crate::{
             self,
             recently_deleted::{RecentlyDeletedResponse, RecentlyDeletedResponseData},
         },
-        saved_views, threads, user_document_view_location,
+        saved_views, task_templates, threads, user_document_view_location,
     },
     model::{
         request::{
@@ -689,6 +689,11 @@ use email_policy::EmailPolicySchemas;
         saved_views::definitions::appearance_handler,
         saved_views::definitions::delete_handler,
         saved_views::definitions::reorder_handler,
+        task_templates::list_task_templates,
+        task_templates::get_task_template,
+        task_templates::create_task_template,
+        task_templates::update_task_template,
+        task_templates::delete_task_template,
 
         // /github
         github::inbound::github_sync_router::install_sync_handler,
@@ -812,6 +817,11 @@ use email_policy::EmailPolicySchemas;
             documents_hex::domain::models::SkillDescriptionBody,
             documents_hex::domain::models::PropertyInput,
             models_properties::api::requests::SetPropertyValue,
+            ::task_templates::domain::TaskTemplateConfiguration,
+            ::task_templates::domain::PropertyDefault,
+            ::task_templates::domain::TaskTemplate,
+            ::task_templates::domain::CreateTaskTemplateRequest,
+            ::task_templates::domain::UpdateTaskTemplateRequest,
             models_properties::shared::EntityReference,
             models_properties::shared::EntityType, // Quick create task
             CreateBulkDocumentResponseData,

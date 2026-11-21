@@ -220,7 +220,10 @@ impl MailboxGateway for UncertainProvider {
     async fn folders(
         &self,
         _: MailboxKey,
-    ) -> Result<Vec<MailFolder>, email_api_client::domain::models::EmailApiError> {
+    ) -> Result<
+        email_api_client::domain::models::MailFolderCatalog,
+        email_api_client::domain::models::EmailApiError,
+    > {
         unreachable!()
     }
     async fn changes(

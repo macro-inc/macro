@@ -4,8 +4,6 @@ use crate::pubsub::inbox_sync::process;
 use crate::pubsub::worker_lifecycle::run_until_cancelled;
 use crate::util::redis::RedisClient;
 use connection_gateway_client::client::ConnectionGatewayClient;
-use contacts::domain::service::SqsContactsIngress;
-use contacts::outbound::ingress::SqsContactsQueue;
 use document_storage_service_client::DocumentStorageServiceClient;
 use futures::StreamExt;
 use static_file_service_client::StaticFileServiceClient;
@@ -32,7 +30,7 @@ pub async fn run_worker(
     db: sqlx::Pool<sqlx::Postgres>,
     worker: sqs_worker::SQSWorker,
     sqs_client: sqs_client::SQS,
-    contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
+    contacts_ingress: Arc<crate::composition::ContactsProducer>,
     email_api: GmailApi,
     redis_client: RedisClient,
     notification_ingress_service: Arc<NotificationIngressType>,
@@ -75,7 +73,7 @@ pub(crate) fn context(
     db: sqlx::Pool<sqlx::Postgres>,
     worker: &sqs_worker::SQSWorker,
     sqs_client: sqs_client::SQS,
-    contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
+    contacts_ingress: Arc<crate::composition::ContactsProducer>,
     email_api: GmailApi,
     redis_client: RedisClient,
     notification_ingress_service: Arc<NotificationIngressType>,
@@ -136,7 +134,7 @@ pub async fn run_worker_with_cancellation(
     db: sqlx::Pool<sqlx::Postgres>,
     worker: sqs_worker::SQSWorker,
     sqs_client: sqs_client::SQS,
-    contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
+    contacts_ingress: Arc<crate::composition::ContactsProducer>,
     email_api: GmailApi,
     redis_client: RedisClient,
     notification_ingress_service: Arc<NotificationIngressType>,

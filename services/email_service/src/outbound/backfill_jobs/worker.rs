@@ -41,11 +41,7 @@ pub(crate) struct BackfillWorkerEffects {
     pub invitation_extractor: crate::composition::workers::EmailInvitationExtractor,
     pub db: sqlx::PgPool,
     pub sqs_client: sqs_client::SQS,
-    pub contacts_ingress: std::sync::Arc<
-        contacts::domain::service::SqsContactsIngress<
-            contacts::outbound::ingress::SqsContactsQueue,
-        >,
-    >,
+    pub contacts_ingress: std::sync::Arc<crate::composition::ContactsProducer>,
     pub email_api: GmailApi,
     pub redis_client: crate::util::redis::RedisClient,
     pub sfs_client: static_file_service_client::StaticFileServiceClient,

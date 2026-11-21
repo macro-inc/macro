@@ -2,7 +2,8 @@ use super::*;
 use crate::domain::mailbox::progress::MailboxProgressService;
 use crate::telemetry_capture::Telemetry;
 use email_api_client::domain::models::{
-    EmailApiError, GateLimit, MailboxMessage, RateLimitOrigin, RoundStart, StreamPosition,
+    EmailApiError, GateLimit, MailFolderCatalog, MailboxMessage, RateLimitOrigin, RoundStart,
+    StreamPosition,
 };
 use email_api_client::domain::request_count;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -30,8 +31,8 @@ impl Provider {
 }
 
 impl MailboxGateway for Arc<Provider> {
-    async fn folders(&self, _: MailboxKey) -> Result<Vec<MailFolder>, EmailApiError> {
-        Ok(Vec::new())
+    async fn folders(&self, _: MailboxKey) -> Result<MailFolderCatalog, EmailApiError> {
+        Ok(MailFolderCatalog::Folders(Vec::new()))
     }
     async fn changes(
         &self,
@@ -655,13 +656,14 @@ async fn notify(repo: &PgMailboxSync, attempt: Uuid) {
         MailboxWatchNotifications, WatchHint, WatchNotification,
     };
 
-    MailboxWatchNotifications(repo.clone())
+    MailboxWatchNotifications::new(repo.clone())
         .receive(
             attempt,
             vec![WatchNotification {
                 subscription_id: "sub".into(),
                 client_state: "secret".into(),
                 hint: WatchHint::Changed,
+                message: None,
             }],
         )
         .await

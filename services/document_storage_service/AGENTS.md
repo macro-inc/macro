@@ -17,6 +17,7 @@ threads, pins, recents, notifications, folders, activity.
   `folders_query`, `graphql_soup`, `threads`, `annotations`, `history`,
   `pins`, `recents`, `notification`, `instructions`, `internal`.
 - `/databases/query` mounts the `databases_sql` HTTP adapter, sharing the database/access services and the primary Soup reader; SQL authorization stays in its domain service. Browser people SQL executes separately in local Turso; there is no dedicated `/databases/read` endpoint or deployment prerequisite for browser execution.
+- `src/service/task_templates.rs`: composes task-template policy with primary-backed Teams roles; `src/api/task_templates.rs` exposes versioned REST routes, including replay-safe client creation IDs. See `docs/guides/task-templates.md`.
 - `/channel-labels` retains legacy participant-only label semantics; additive `/channel-sections` mounts `channel_labels` with `for_sections` services for exclusive manual or name-rule membership and visible unjoined team channels.
 - `src/service/saved_views.rs`: composes saved-view storage with the primary-backed Teams repository, reusing `get_user_teams` and `get_all_team_members`. REST and GraphQL share its owner-only domain policy. `PUT /saved_views/definitions/{id}/appearance` changes shared icon/color metadata without advancing the filter revision or timestamp, and creation accepts optional initial appearance. `src/api/saved_views/definitions.rs` is the SDK's REST adapter over the same `SavedViewApi` as GraphQL (kinds, revisions, sharing, order); the legacy `/saved_views` routes beside it share the CRM configuration-kind permission gate. All three use the one `ApiContext::saved_views` service built in `server.rs`, whose `outbound/saved_view_changes.rs` notifier pushes `saved_views_changed` through the gateway on `event_broker_tracker`, resolving team members off the request path.
 - Personal contact pages use `graphql_contacts` and the contacts directory service.
@@ -112,6 +113,11 @@ threads, pins, recents, notifications, folders, activity.
 - Both `/search` mounts share `ApiContext::search_lanes`, one per process, so a
   caller's unified searches queue in one lane (`search_service`'s
   `domain::search_lanes`) whichever mount they reach.
+  `ApiContext::api_key_search_buckets` is the Redis token bucket behind the
+  API-key search allowance, shared by every process. It holds one lazy
+  `ConnectionManager` built at startup, so a burst of draws shares one
+  connection; it connects on the first draw and adds no startup dependency of
+  its own (startup still awaits Redis for `RedisLogStreamConsumer::connect`).
 - The REST `/items` routes and `/search` hide Macro's own sign-in emails from a program (`hide_sign_in_emails_from_programs` in `src/api.rs`), so a code-mode run cannot read a sign-in code from workspace previews or search hits. GraphQL (`/items/soup/graphql` and its websocket) refuses programs outright: a query picks its own fields, so no rewrite can find the email. Nothing program-side calls it.
 - Inject the shared PostHog client into CRM's thread-exclusion gate; missing or
   failed `enable-crm-thread-exclusions` evaluation must refuse API writes.

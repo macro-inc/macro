@@ -42,7 +42,7 @@ export type Attempt = {
   routineMarks?: RoutineMark[];
   feedMarks?: FeedMarks;
   judgeUsd: number;
-  /** The bench failed, not the build: seeding, the stack or the judge. Left out of scores. */
+  /** The bench failed, not the build (seeding, the stack or the judge), or the attempt waits to be judged. Left out of scores. */
   benchError?: string;
   score?: Score;
 };

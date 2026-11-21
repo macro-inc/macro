@@ -1,7 +1,11 @@
 //! Adapters from durable email projections to existing Macro services.
 
+use crate::outbound::inbox_source::inbox_provider;
 use chrono::{DateTime, Utc};
-use contacts::domain::{models::messages::ContactConnection, ports::ContactsIngress};
+use contacts::domain::{
+    models::{list::InboxSource, messages::ContactConnection},
+    ports::{ContactListIngress, ContactsIngress},
+};
 use email::domain::{
     events::EmailMacroEvent,
     invitation_extraction::InvitationExtractionRepository,
@@ -70,7 +74,7 @@ where
     I: InvitationExtractionRepository + 'static,
     B: MacroEventBroker,
     N: NotificationIngress + 'static,
-    C: ContactsIngress + 'static,
+    C: ContactsIngress + ContactListIngress + 'static,
 {
     async fn reauthorization(
         &self,
@@ -175,11 +179,22 @@ where
         if cfg!(feature = "contacts_sync") && !correspondence.connections.is_empty() {
             let connections = correspondence
                 .connections
-                .into_iter()
-                .map(|contact| ContactConnection::new(correspondence.owner.clone(), contact))
+                .iter()
+                .map(|contact| {
+                    ContactConnection::new(correspondence.owner.clone(), contact.clone())
+                })
                 .collect();
             self.contacts
                 .enqueue_contact_connections(connections)
+                .await
+                .map_err(failed)?;
+            let inbox = InboxSource {
+                owner: correspondence.owner.clone(),
+                link_id: correspondence.link_id,
+                provider: inbox_provider(correspondence.provider),
+            };
+            self.contacts
+                .record_inbox_contacts(inbox, correspondence.connections)
                 .await
                 .map_err(failed)?;
         }

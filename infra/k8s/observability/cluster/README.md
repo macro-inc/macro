@@ -63,7 +63,8 @@ as Argo CD's own field manager, waits for it, and applies
 everything from `main`, Argo CD and the `apps` Application included; nothing is
 applied by hand again.
 
-For the first rollout `env/prod.nix` has `macro.cluster.autoSync = false`.
+On a new cluster, set `macro.cluster.autoSync = false` in `env/prod.nix`,
+render and merge it before the bootstrap (prod ran its first rollout that way).
 `apps` still syncs itself, but it holds only the Application objects; every
 other application shows what it would change and applies nothing until
 someone syncs it. Read each diff, then sync them in the order of the table
@@ -81,8 +82,8 @@ argocd app diff argocd/cert-manager
 argocd app sync argocd/cert-manager
 ```
 
-Once the cluster has been tested, a change sets `autoSync = true`, and merging
-deploys from then on.
+Then a change sets `autoSync = true`, and merging deploys from then on. Prod
+has it on.
 
 After the first login, change the admin password (`argocd account update-password`)
 and delete `argocd-initial-admin-secret`. Any pod in the cluster can reach the
@@ -489,9 +490,11 @@ The cluster's Loki and Tempo leave the host's buckets before the host's run
 again, every time:
 
 1. Revert *Cluster, buckets*, and *Cluster, notify* if merged, in one change.
-   If step 9 turned auto-sync on, first set `macro.cluster.autoSync = false`
-   in that change and let `apps` apply it (a pinned `--revision` sync is
-   refused while auto-sync is on). Sync `grafana` at the revert's commit and
+   With auto-sync on (step 9), first merge a separate change that sets
+   `macro.cluster.autoSync = false`, wait until `apps` has applied it (every
+   Application's `spec.syncPolicy` has no `automated`), and only then merge
+   the revert: in one change the children could sync it before their policy
+   is off, and a pinned `--revision` sync is refused while auto-sync is on. Sync `grafana` at the revert's commit and
    wait until no pod of the old ReplicaSet is left, not even terminating, so
    no Grafana that notifies is running when the host's starts:
    ```sh

@@ -220,6 +220,7 @@ test('every prod monitor is graphed on its dashboard with its thresholds', () =>
     'routine-suggestions-failures',
     'search-dropped-events',
     'search-email-backlog',
+    'search-email-indexer-silent',
     'search-email-near-retention',
     'search-failed-bulk-items',
     'search-indexer-silent',
@@ -375,6 +376,7 @@ test('a heartbeat uses one missing-data mode', () => {
   const heartbeats = monitors().filter((r) => r.inputs.notifyNoData === true);
   expect(heartbeats.map((r) => r.name).sort()).toEqual([
     'firecracker-host-unhealthy',
+    'search-email-indexer-silent',
     'search-indexer-silent',
   ]);
   for (const resource of heartbeats) {
@@ -383,8 +385,10 @@ test('a heartbeat uses one missing-data mode', () => {
       onMissingData: resource.inputs.onMissingData,
     }).toEqual({ name: resource.name, onMissingData: undefined });
   }
-  const silent = heartbeats.find((r) => r.name === 'search-indexer-silent');
-  expect(silent?.inputs.noDataTimeframe).toBe(10);
+  for (const name of ['search-indexer-silent', 'search-email-indexer-silent']) {
+    const silent = heartbeats.find((r) => r.name === name);
+    expect(silent?.inputs.noDataTimeframe).toBe(10);
+  }
 });
 
 test('Firecracker restore percentiles use an enabled distribution of successful snapshot launches', () => {

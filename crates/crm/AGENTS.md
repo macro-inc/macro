@@ -73,10 +73,9 @@ tools/HTTP/GraphQL surfaces over them.
   using the same isolated database as the tests.
 - For member-access changes, also run `cargo test -p crm --all-features member_access`;
   the HTTP, search and tool revocation test requires the `search` feature.
-- After tool input or description changes, regenerate frontend tool types and
-  public MCP reference pages using the
-  [entity creation guide](../../docs/guides/add-entity.md#13-ai-and-mcp-tools);
-  CI checks both outputs.
+- After tool input or description changes, regenerate frontend tool types using
+  the [entity creation guide](../../docs/guides/add-entity.md#13-ai-and-mcp-tools);
+  CI checks the output.
 
 ## Gotchas
 

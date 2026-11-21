@@ -188,14 +188,18 @@ the gateway `/email` prefix.
   claiming pages once per cycle would leave a folder with new mail behind
   every worker's whole cycle of queued messages. A cycle ends when no message
   is due, so folder catalogs are checked again before more pages are read.
-- `pubsub_workers` reads the PostHog flag `enable-outlook-import-live-pass`
-  for the service context `outlook-mailbox-sync` about once a minute
-  (`mailbox_sync_worker::run_live_import_pass`, one
-  `outlook.live_import_pass.refresh` span per read) and sets the sync's
-  `LiveImportPass` from it: newest-first imports and the live pass beside
-  each folder's import round. Without a `POSTHOG_API_KEY`, or while a read
-  fails, it is off and warns once; a local stack's placeholder key reads off.
-  ([runbook](../../docs/runbooks/outlook-sync.md#new-mail-during-an-import))
+- Outlook sync flags are PostHog flags for the service context
+  `outlook-mailbox-sync`, each read about once a minute into a domain switch
+  by `outlook_flags::run` (one `outlook.feature_flag.refresh` span per read,
+  `feature_flag.key` names it). `pubsub_workers` reads
+  `enable-outlook-import-live-pass` into the sync's `LiveImportPass`:
+  newest-first imports and the live pass beside each folder's import round
+  ([runbook](../../docs/runbooks/outlook-sync.md#new-mail-during-an-import)).
+  The API server reads `enable-outlook-notified-message-reads` into the
+  webhook's `NotifiedMessageReads`: a notification's message is queued as
+  live work ([runbook](../../docs/runbooks/outlook-sync.md#reading-notified-messages)).
+  Without a `POSTHOG_API_KEY`, or while a read fails, a flag is off and warns
+  once; a local stack's placeholder key reads off.
 - `OUTLOOK_IMPORTS_PAUSED` (read at startup) makes the Outlook sync loop claim
   only live message work; import rows wait and live changes keep importing.
   `src/bin/reimport_outlook_folders` re-imports folders whose delta round
@@ -346,6 +350,15 @@ the gateway `/email` prefix.
   (`pubsub::util::sqlstate`).
 - gmail_ops moves transient Gmail failures to the retry queue like rate limits;
   the primary queue dead-letters after three receives.
+- Every contacts producer (address-book sync, inbox sync, the backfill's sent
+  seed and contacts step, the Outlook projection, `bin/backfill_contacts`)
+  publishes through `composition::ContactsProducer`: the legacy
+  owner-to-contact connections always, then `record_inbox_contacts` with the
+  inbox (`outbound/inbox_source.rs`: owner, link id, provider), which the
+  contacts crate's `ListWritesGate` sends only while the PostHog flag
+  `contacts-list-writes` is on (read with `POSTHOG_API_KEY`; on in a local
+  stack). A disconnect sends `directory_changed` for the owner after the purge,
+  through the same gate. Keep both sends until the legacy graph is retired.
 - Header addresses that Gmail accepts can fail `MacroUserIdStr::try_from_email`.
   Skip the bad address with a WARN that omits it (the parse error echoes it)
   instead of failing the step; see
