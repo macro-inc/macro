@@ -1894,16 +1894,17 @@ impl<S: Storage> Engine<S> {
         let mut staging: HashMap<EntityKey<'static>, Record> = HashMap::new();
         let mut missing: Vec<EntityKey<'static>> = Vec::new();
         let mut kept = self.take_kept_reads();
+        let mut from_kept: Vec<EntityKey<'static>> = Vec::new();
         for key in updates.keys() {
             match self.hot.peek(key) {
                 Some(record) => {
                     staging.insert(key.clone(), record.clone());
                 }
                 None => match kept.as_mut().and_then(|kept| kept.record(key)) {
-                    Some(Some(record)) => {
-                        staging.insert(key.clone(), record);
+                    Some(record) => {
+                        staging.extend(record.map(|record| (key.clone(), record)));
+                        from_kept.push(key.clone());
                     }
-                    Some(None) => {}
                     None => missing.push(key.clone()),
                 },
             }
@@ -1918,6 +1919,23 @@ impl<S: Storage> Engine<S> {
                 if let Some(r) = record {
                     staging.insert(key, r);
                 }
+            }
+        }
+        // The kept records stand for reading storage now, after the batch
+        // above. Once storage has committed since the passes read them, read
+        // them again.
+        if !from_kept.is_empty() && !kept.as_ref().is_some_and(|kept| self.kept_reads_hold(kept)) {
+            kept = None;
+            let fetched = self
+                .storage
+                .get_batch(&from_kept)
+                .await
+                .map_err(EngineError::Storage)?;
+            for (key, record) in from_kept.into_iter().zip(fetched) {
+                match record {
+                    Some(record) => staging.insert(key, record),
+                    None => staging.remove(&key),
+                };
             }
         }
 
@@ -2016,7 +2034,7 @@ impl<S: Storage> Engine<S> {
     async fn projection_mutations_change(
         &self,
         mutations: &[ProjectionMutation],
-        kept: Option<&PassReadSet>,
+        kept: Option<&pass_reads::KeptReads>,
     ) -> Result<bool, EngineError<S::Error>> {
         if mutations.is_empty() {
             return Ok(false);
@@ -2028,9 +2046,13 @@ impl<S: Storage> Engine<S> {
             .collect::<BTreeSet<_>>();
         let mut projected = HashMap::new();
         let mut missing = Vec::new();
+        let mut from_kept = Vec::new();
         for key in keys {
             match kept.and_then(|kept| kept.state(&key)) {
-                Some(state) => projected.extend(state.map(|state| (key, state))),
+                Some(state) => {
+                    projected.extend(state.map(|state| (key.clone(), state)));
+                    from_kept.push(key);
+                }
                 None => missing.push(key),
             }
         }
@@ -2046,6 +2068,20 @@ impl<S: Storage> Engine<S> {
                     .zip(states)
                     .filter_map(|(key, state)| state.map(|state| (key, state))),
             );
+        }
+        // As for records: the kept states stand for reading storage now.
+        if !from_kept.is_empty() && !kept.is_some_and(|kept| self.kept_reads_hold(kept)) {
+            let states = self
+                .storage
+                .load_projection_states(&from_kept)
+                .await
+                .map_err(EngineError::Storage)?;
+            for (key, state) in from_kept.into_iter().zip(states) {
+                match state {
+                    Some(state) => projected.insert(key, state),
+                    None => projected.remove(&key),
+                };
+            }
         }
         let before = projected.clone();
         apply_authoritative_projection_mutations(&mut projected, mutations);

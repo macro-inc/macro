@@ -3,10 +3,12 @@
 //! Before a network write, the host's projection passes read the stored
 //! records and projection states the response touches; the write then reads
 //! the same records to merge and the same states to see whether its
-//! projections change anything. [`PassReads`] serves the passes through the
-//! hot tier and keeps what storage returned. [`Engine::keep_pass_reads`]
-//! hands that to the next write, which uses it only while storage has
-//! committed nothing since, so it reads exactly what it would have read.
+//! projections change anything. [`PassReads`] serves the passes from storage,
+//! as before, reading each key once, and keeps what storage returned.
+//! [`Engine::keep_pass_reads`] hands that to the next write, which uses it in
+//! place of its own storage reads only when storage has committed nothing
+//! between the passes' reads and the write's last storage read, so the write
+//! sees exactly what reading storage then would have returned.
 use super::*;
 use crate::store::{DurableRead, WritePosition};
 use maybe_send::MaybeSync;
@@ -21,11 +23,9 @@ pub struct PassReadSet {
     states: HashMap<PredicateRecordKey, Option<ProjectionState>>,
 }
 
-/// [`DurableRead`] through the engine's hot tier, reading each key from
-/// storage at most once.
+/// [`DurableRead`] from storage, reading each key at most once.
 pub struct PassReads<'a, S> {
     storage: &'a S,
-    hot: &'a LruCache<EntityKey<'static>, Record>,
     read: Mutex<PassReadSet>,
 }
 
@@ -60,10 +60,7 @@ impl<S: crate::predicate::PredicateIndexStorage + MaybeSync> DurableRead for Pas
             let mut missing = Vec::new();
             let mut seen = HashSet::new();
             for key in &keys {
-                if self.hot.peek(key).is_none()
-                    && !read.records.contains_key(key)
-                    && seen.insert(key)
-                {
+                if !read.records.contains_key(key) && seen.insert(key) {
                     missing.push(key.clone());
                 }
             }
@@ -76,10 +73,7 @@ impl<S: crate::predicate::PredicateIndexStorage + MaybeSync> DurableRead for Pas
         let read = self.read();
         Ok(keys
             .iter()
-            .map(|key| match self.hot.peek(key) {
-                Some(record) => Some(record.clone()),
-                None => read.records.get(key).cloned().flatten(),
-            })
+            .map(|key| read.records.get(key).cloned().flatten())
             .collect())
     }
 
@@ -114,7 +108,7 @@ impl<S: crate::predicate::PredicateIndexStorage + MaybeSync> DurableRead for Pas
     }
 }
 
-/// A [`PassReadSet`] and where storage stood when it was read.
+/// A [`PassReadSet`] and where storage stood before it was read.
 pub(super) struct KeptReads {
     position: WritePosition,
     set: PassReadSet,
@@ -134,7 +128,6 @@ impl<S: Storage> Engine<S> {
     pub fn resume_pass_reads(&self, set: PassReadSet) -> PassReads<'_, S> {
         PassReads {
             storage: &self.storage,
-            hot: &self.hot,
             read: Mutex::new(set),
         }
     }
@@ -147,22 +140,29 @@ impl<S: Storage> Engine<S> {
         self.kept_reads = position.map(|position| KeptReads { position, set });
     }
 
-    /// The kept reads, while storage has committed nothing since they were
-    /// read. Taking them forgets them either way.
-    pub(super) fn take_kept_reads(&mut self) -> Option<PassReadSet> {
-        let kept = self.kept_reads.take()?;
-        (self.storage.write_position() == Some(kept.position)).then_some(kept.set)
+    /// The kept reads, forgotten here. The write confirms what it used with
+    /// [`Self::kept_reads_hold`] after its own storage reads.
+    pub(super) fn take_kept_reads(&mut self) -> Option<KeptReads> {
+        self.kept_reads.take()
+    }
+
+    /// Whether storage has committed nothing since `kept` was read, so each
+    /// kept read is what reading storage now would return. The write asks
+    /// after its last storage read, so the kept reads stand for reads made
+    /// alongside it.
+    pub(super) fn kept_reads_hold(&self, kept: &KeptReads) -> bool {
+        self.storage.write_position() == Some(kept.position)
     }
 }
 
-impl PassReadSet {
+impl KeptReads {
     /// The stored record for `key`, when the passes read it.
     pub(super) fn record(&mut self, key: &EntityKey<'static>) -> Option<Option<Record>> {
-        self.records.remove(key)
+        self.set.records.remove(key)
     }
 
     /// The projection state for `key`, when the passes read it.
     pub(super) fn state(&self, key: &PredicateRecordKey) -> Option<Option<ProjectionState>> {
-        self.states.get(key).cloned()
+        self.set.states.get(key).cloned()
     }
 }
