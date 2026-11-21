@@ -86,7 +86,8 @@ envelope = "crates/models_email/src/email/service/crm_cleanup.rs::CrmCleanupPubs
 
 [[queue]]
 name = "link-manager"
-consumes = ["LinkManagerQueue"]
+aliases = ["link-maintenance"]
+consumes = ["LinkManagerQueue", "LinkMaintenanceQueue"]
 type = "crates/models_email/src/email/service/pubsub.rs::LinkManagerMessage"
 at = ""
 

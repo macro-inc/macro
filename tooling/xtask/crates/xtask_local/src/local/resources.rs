@@ -249,6 +249,15 @@ pub const QUEUES: &[Queue] = &[
         bindings: &[("LINK_MANAGER_QUEUE", Name)],
     },
     Queue {
+        // Consumed by email_service's link-maintenance consumers; the refresh
+        // handler sends its periodic work here.
+        name: macro_queues::LinkMaintenanceQueue::LOCAL,
+        bindings: &[(
+            macro_queues::LinkMaintenanceQueue::OVERRIDE_ENV_VAR_NAME,
+            Url,
+        )],
+    },
+    Queue {
         name: macro_queues::SearchEventQueue::LOCAL,
         bindings: &[("SEARCH_EVENT_QUEUE", Name)],
     },
