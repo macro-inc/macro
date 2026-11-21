@@ -153,7 +153,7 @@ impl CodeModeService {
         if !active_turn(&self.0, &identity).await || cancel.is_cancelled() {
             record.status = ExecutionStatus::Cancelled;
             record.error = Some("Execution cancelled before authorization.".into());
-            self.0.store.save(identity.session, &record).await?;
+            self.save_cancelled(identity.session, &record).await;
             return Ok((receipt(&record), None));
         }
         let executor = self.0.executor.as_ref().ok_or(CodeModeError::Unavailable)?;
@@ -189,7 +189,7 @@ impl CodeModeService {
         if !active_turn(&self.0, &identity).await || cancel.is_cancelled() {
             record.status = ExecutionStatus::Cancelled;
             record.error = Some("Execution cancelled before starting.".into());
-            self.0.store.save(identity.session, &record).await?;
+            self.save_cancelled(identity.session, &record).await;
             return Ok((receipt(&record), None));
         }
         // Admission of connected-app calls must see this exact issued credential
@@ -204,7 +204,7 @@ impl CodeModeService {
             None => {
                 record.status = ExecutionStatus::Cancelled;
                 record.error = Some("Execution cancelled before starting.".into());
-                self.0.store.save(identity.session, &record).await?;
+                self.save_cancelled(identity.session, &record).await;
                 return Ok((receipt(&record), None));
             }
         }
@@ -266,6 +266,21 @@ impl CodeModeService {
         record.error = error;
         self.0.store.save(identity.session, &record).await?;
         Ok((receipt(&record), Some(acting_user)))
+    }
+
+    // Cancellation must finish even if the journal is unavailable. No program
+    // starts on these paths, so a stale Running row cannot spend this credential.
+    async fn save_cancelled(&self, session: AgentSessionId, record: &ExecutionRecord) {
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(1),
+            self.0.store.save(session, record),
+        )
+        .await
+        {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) => tracing::warn!(%error, "could not save cancelled execution"),
+            Err(_) => tracing::warn!("cancelled execution save timed out"),
+        }
     }
 }
 

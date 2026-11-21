@@ -95,7 +95,12 @@ async fn navigation_refuses_borrowed_executions_and_keeps_the_own_run_working() 
             ),
         )
         .await;
-        if !matches!(result, Err(CodeModeError::Forbidden)) {
+        let expected = if attribution.scope.is_some() || attribution.signed_scope {
+            matches!(result, Ok(UiCommandOutcome::NoClient))
+        } else {
+            matches!(result, Err(CodeModeError::Forbidden))
+        };
+        if !expected {
             failures.push(format!("{label}: {result:?}"));
         }
     }

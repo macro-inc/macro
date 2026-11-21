@@ -171,6 +171,7 @@ async fn the_issued_binding_is_saved_before_the_runner_starts() {
 struct StalledBinding {
     journal: Journal,
     saving: tokio::sync::Notify,
+    stall_terminal: bool,
 }
 #[async_trait]
 impl ExecutionStore for StalledBinding {
@@ -186,7 +187,8 @@ impl ExecutionStore for StalledBinding {
         session: AgentSessionId,
         record: &ExecutionRecord,
     ) -> Result<(), CodeModeError> {
-        if record.status == agent_code_mode::domain::ExecutionStatus::Running {
+        if self.stall_terminal || record.status == agent_code_mode::domain::ExecutionStatus::Running
+        {
             self.saving.notify_one();
             std::future::pending::<()>().await;
         }
@@ -202,45 +204,48 @@ impl ExecutionStore for StalledBinding {
 }
 #[tokio::test]
 async fn cancellation_during_binding_save_starts_no_program() {
-    let store = Arc::new(StalledBinding {
-        journal: Journal::default(),
-        saving: tokio::sync::Notify::new(),
-    });
-    let starts = Arc::new(AtomicUsize::new(0));
-    // If launched, this runner would first require a persisted binding.
-    let service = CodeModeService::new(
-        Some(Arc::new(Runner {
-            journal: Arc::new(Journal::default()),
-            starts: starts.clone(),
-        })),
-        Arc::new(Credentials),
-        store.clone(),
-        Arc::new(Turns),
-        Arc::new(NoImages),
-    );
-    let session = test_agent_session(AgentSessionId::new_from_uuid(Uuid::from_u128(202)));
-    let cancel = CancellationToken::new();
-    let run = service.execute(
-        &session,
-        ExecutionId::from_uuid(Uuid::from_u128(102)),
-        ai_toolset::actor::ToolActor::Owner,
-        Uuid::from_u128(402),
-        ExecuteRequest {
-            source: "export async function main() { return {data:42,reviews:[]}; }".into(),
-            timeout_ms: 1000,
-        },
-        cancel.clone(),
-    );
-    let (result, ()) = tokio::join!(
-        tokio::time::timeout(std::time::Duration::from_secs(2), run),
-        async {
-            store.saving.notified().await;
-            cancel.cancel();
-        }
-    );
-    assert_eq!(
-        result.unwrap().unwrap().status,
-        agent_code_mode::domain::ExecutionStatus::Cancelled
-    );
-    assert_eq!(starts.load(Ordering::SeqCst), 0);
+    for stall_terminal in [false, true] {
+        let store = Arc::new(StalledBinding {
+            journal: Journal::default(),
+            saving: tokio::sync::Notify::new(),
+            stall_terminal,
+        });
+        let starts = Arc::new(AtomicUsize::new(0));
+        // If launched, this runner would first require a persisted binding.
+        let service = CodeModeService::new(
+            Some(Arc::new(Runner {
+                journal: Arc::new(Journal::default()),
+                starts: starts.clone(),
+            })),
+            Arc::new(Credentials),
+            store.clone(),
+            Arc::new(Turns),
+            Arc::new(NoImages),
+        );
+        let session = test_agent_session(AgentSessionId::new_from_uuid(Uuid::from_u128(202)));
+        let cancel = CancellationToken::new();
+        let run = service.execute(
+            &session,
+            ExecutionId::from_uuid(Uuid::from_u128(102)),
+            ai_toolset::actor::ToolActor::Owner,
+            Uuid::from_u128(402),
+            ExecuteRequest {
+                source: "export async function main() { return {data:42,reviews:[]}; }".into(),
+                timeout_ms: 1000,
+            },
+            cancel.clone(),
+        );
+        let (result, ()) = tokio::join!(
+            tokio::time::timeout(std::time::Duration::from_secs(2), run),
+            async {
+                store.saving.notified().await;
+                cancel.cancel();
+            }
+        );
+        assert_eq!(
+            result.unwrap().unwrap().status,
+            agent_code_mode::domain::ExecutionStatus::Cancelled
+        );
+        assert_eq!(starts.load(Ordering::SeqCst), 0);
+    }
 }

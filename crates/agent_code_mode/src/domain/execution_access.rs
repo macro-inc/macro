@@ -26,6 +26,7 @@ impl Refusal {
     }
     pub(super) fn error(self) -> CodeModeError {
         tracing::Span::current().record("refusal", self.as_str());
+        tracing::warn!(refusal = self.as_str(), "execution admission refused");
         CodeModeError::Forbidden
     }
 }
@@ -52,4 +53,20 @@ pub(super) fn check_binding(
         return Err(Refusal::UnboundOrOtherExecution.error());
     }
     Ok(())
+}
+
+/// Record backend failures at their severity without downgrading infrastructure
+/// errors to the expected admission-refusal level.
+pub(super) fn record_backend_error(error: &CodeModeError) {
+    match error {
+        CodeModeError::Forbidden | CodeModeError::NotFound => {
+            tracing::warn!(%error, "execution backend request refused");
+        }
+        _ => {
+            let span = tracing::Span::current();
+            span.record("error", tracing::field::display(error));
+            span.record("otel.status_code", "ERROR");
+            tracing::error!(%error, "execution backend operation failed");
+        }
+    }
 }
