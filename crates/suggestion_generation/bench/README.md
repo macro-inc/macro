@@ -217,8 +217,9 @@ short model calls each, since the stack gives one 90 seconds), and three
 are written at once, so a set of three or of nine takes under an hour. If one still times out, `heldout make`
 says which people are missing; run the same command again to write just
 those. A set whose author sketches someone an earlier set or the tune set
-already has (the same slug, full name or mail domain) stops before anyone is
-written, without saying whom; run it again.
+already has, or two people of the set who share one (the same slug, full
+name or mail domain), stops before anyone is written, without saying whom;
+run it again.
 
 Held-out sets live outside the repository and are reported only in
 aggregate: `report`, `summary`, `compare` and `noise` show a measure only

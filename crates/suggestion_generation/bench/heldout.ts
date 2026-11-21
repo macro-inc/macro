@@ -246,7 +246,7 @@ export async function makeHeldout(at: Stack, name: string, count: number, month 
     const unusable = rosterProblems(people);
     if (unusable) throw new Error(`${unusable}; run heldout make again`);
     // A held-out person is someone no earlier set has, by slug, name or mail domain.
-    if (repeatsEarlier(people, takenIdentities())) throw new Error('a sketched person repeats one from an earlier set (by slug, full name or mail domain); run heldout make again');
+    if (repeatsEarlier(people, takenIdentities())) throw new Error('a sketched person repeats one from an earlier set or this one (by slug, full name or mail domain); run heldout make again');
     const slugs = people.map((person) => person.slug);
     if (slugs.some((slug) => !/^[a-z]+$/.test(slug)) || new Set(slugs).size !== slugs.length) {
       throw new Error(`the people came back with unusable slugs (${slugs.join(', ')}); run heldout make again`);
@@ -318,9 +318,16 @@ export function takenIdentities(): Set<string> {
   return new Set([...tune, ...written].flatMap(identityKeys));
 }
 
-/** Whether a sketched person shares a slug, full name or mail domain with an earlier one; it says nothing of whom, so a held-out set stays unread. */
-export const repeatsEarlier = (people: Pick<Sketch, 'slug' | 'owner_first' | 'owner_last' | 'domain'>[], taken: Set<string>) =>
-  people.some((s) => identityKeys({ slug: s.slug, name: `${s.owner_first} ${s.owner_last}`, domain: s.domain }).some((key) => taken.has(key)));
+/** Whether a sketched person shares a slug, full name or mail domain with an earlier one, or with another of the same set; it says nothing of whom, so a held-out set stays unread. */
+export function repeatsEarlier(people: Pick<Sketch, 'slug' | 'owner_first' | 'owner_last' | 'domain'>[], taken: Set<string>): boolean {
+  const seen = new Set(taken);
+  for (const s of people) {
+    const keys = identityKeys({ slug: s.slug, name: `${s.owner_first} ${s.owner_last}`, domain: s.domain });
+    if (keys.some((key) => seen.has(key))) return true;
+    for (const key of keys) seen.add(key);
+  }
+  return false;
+}
 
 /** What the author spent since `started`, in all and per person written. */
 async function reportCost(at: Stack, started: Date, people: number) {

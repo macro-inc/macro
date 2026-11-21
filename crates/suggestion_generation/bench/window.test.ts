@@ -639,5 +639,8 @@ describe('a held-out person is someone no earlier set has', () => {
     expect(repeatsEarlier([person, { ...person, slug: 'ana' }], taken)).toBe(true);
     expect(repeatsEarlier([{ ...person, owner_first: 'ANA', owner_last: 'Lopez' }], taken)).toBe(true);
     expect(repeatsEarlier([{ ...person, domain: 'Acme.example' }], taken)).toBe(true);
+    // Two people of one set are two people too.
+    expect(repeatsEarlier([person, { ...person, slug: 'cy', owner_first: 'Cy' }], taken)).toBe(true);
+    expect(repeatsEarlier([person, { slug: 'cy', owner_first: 'Cy', owner_last: 'Moss', domain: 'moss.example' }], taken)).toBe(false);
   });
 });
