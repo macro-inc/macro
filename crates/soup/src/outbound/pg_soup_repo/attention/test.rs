@@ -1208,6 +1208,131 @@ async fn a_recompute_costs_the_same_however_much_the_viewer_holds(
     fixtures(path = "../../../../fixtures", scripts("work_feed")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
+async fn an_agent_session_recompute_reads_its_grants_not_the_viewers_sources(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // A viewer in 15,000 channels, notified about a session they reach only
+    // through the last of them.
+    let session = Uuid::from_u128(0xa5e5_0001);
+    let channel = "77777777-0000-7000-8000-000000015000";
+    sqlx::query(
+        "INSERT INTO comms_channels (id, channel_type, owner_id, created_at, updated_at)
+        SELECT ('77777777-0000-7000-8000-' || lpad(i::text, 12, '0'))::uuid, 'private', $1,
+               timestamptz '2024-01-01', timestamptz '2024-01-01'
+        FROM generate_series(1, 15000) AS i",
+    )
+    .bind(USER_1)
+    .execute(&pool)
+    .await?;
+    sqlx::query(
+        "INSERT INTO comms_channel_participants (channel_id, role, user_id, joined_at)
+        SELECT ('77777777-0000-7000-8000-' || lpad(i::text, 12, '0'))::uuid, 'member', $1,
+               timestamptz '2024-01-01'
+        FROM generate_series(1, 15000) AS i",
+    )
+    .bind(USER_1)
+    .execute(&pool)
+    .await?;
+    sqlx::query(
+        "INSERT INTO agent_session (
+            id, owner_id, bot_id, model, harness, repo_url, workspace, name,
+            status, status_event_name, created_at, modified_at
+        )
+        VALUES ($1, 'macro|owner@example.com', $2, 'model', 'harness', NULL, '/workspace',
+                'Session', 'event', 'acp_ready', '2024-06-01 09:00:00+00', '2024-06-01 09:00:00+00')",
+    )
+    .bind(session)
+    .bind(Uuid::from_u128(0xa9e7))
+    .execute(&pool)
+    .await?;
+    sqlx::query(
+        "INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        VALUES ($1, 'agent_session', 'macro|owner@example.com', 'user', 'owner'),
+               ($1, 'agent_session', $2, 'channel', 'view')",
+    )
+    .bind(session)
+    .bind(channel)
+    .execute(&pool)
+    .await?;
+    let notification = Uuid::from_u128(0xa5e5_0051);
+    sqlx::query(
+        "INSERT INTO notification (id, notification_event_type, event_item_id, event_item_type,
+                                   service_sender, created_at, metadata)
+        VALUES ($1, 'agent_session_settled', $2, 'agent_session', 'test',
+                '2026-06-01 10:21:00', '{}')",
+    )
+    .bind(notification)
+    .bind(session.to_string())
+    .execute(&pool)
+    .await?;
+    sqlx::query(
+        "INSERT INTO user_notification (user_id, notification_id, created_at, sent, state,
+                                        event_item_type, event_item_id, notification_event_type)
+        VALUES ($1, $2, '2026-06-01 10:21:00', TRUE, 'unseen', 'agent_session', $3,
+                'agent_session_settled')",
+    )
+    .bind(USER_1)
+    .bind(notification)
+    .bind(session.to_string())
+    .execute(&pool)
+    .await?;
+    // Other people's sessions, so `entity_access` is big enough that an
+    // unanalyzed estimate expects several grants on any one session.
+    sqlx::query(
+        "INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        SELECT gen_random_uuid(), 'agent_session', 'macro|owner-' || (i % 2000) || '@example.com',
+               'user', 'owner'
+        FROM generate_series(1, 400000) AS i",
+    )
+    .execute(&pool)
+    .await?;
+    // Statistics from before the grants and memberships landed.
+    sqlx::query(
+        "DELETE FROM pg_statistic
+        WHERE starelid IN ('comms_channel_participants'::regclass, 'entity_access'::regclass)",
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query(
+        "UPDATE pg_class SET reltuples = 0, relpages = 0
+        WHERE oid IN ('comms_channel_participants'::regclass, 'entity_access'::regclass)",
+    )
+    .execute(&pool)
+    .await?;
+
+    let filter = EntityFilterAst {
+        agent_session_filter: Some(Arc::new(Expr::val(
+            item_filters::ast::agent_session::AgentSessionLiteral::Include,
+        ))),
+        ..EntityFilterAst::default()
+    };
+    let link_ids = [Uuid::parse_str(LINK_1)?];
+    let sources = sources();
+    let only = vec![EntityType::AgentSession.with_entity_string(session.to_string())];
+    let recompute = || {
+        let mut recompute = req(WORK, &link_ids, &sources);
+        recompute.filter = Some(&filter);
+        recompute.only = Some(&only);
+        recompute
+    };
+    let page = attention_soup_page(&pool, recompute()).await?;
+    assert_eq!(
+        keys(&page),
+        vec![(EntityType::AgentSession, session.to_string())]
+    );
+    let blocks = blocks_read(&pool, &recompute()).await;
+    eprintln!("recompute of an agent session: {blocks} blocks");
+    assert!(
+        blocks < 1_000,
+        "recompute of an agent session read {blocks} blocks"
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("work_feed")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
 async fn a_thread_recompute_looks_up_its_root_not_every_channels_roots(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
