@@ -11,7 +11,7 @@ export default defineConfig(({ command }) => ({
   plugins: [
     {
       // The directory reader's checkpoint and server modules load the app's
-      // sync and analytics code; the list order harness needs neither.
+      // sync and analytics code; the people harnesses need neither.
       name: 'people-list-order-adapters',
       enforce: 'pre',
       resolveId(source, importer) {
@@ -74,6 +74,7 @@ export default defineConfig(({ command }) => ({
           'search-buckets.html',
           'people-references.html',
           'people-list-order.html',
+          'people-teammate-order.html',
         ].map((name) => [name.replace('.html', ''), resolve(directory, name)])
       ),
     },
