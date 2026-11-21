@@ -21,7 +21,13 @@ export type ScreenStatus =
   | { kind: 'denied'; reason: 'cannotWatch' | 'rolloutDisabled' }
   | {
       kind: 'ended';
-      reason: 'stopped' | 'accessRevoked' | 'notFound' | 'failed';
+      reason:
+        | 'stopped'
+        /** Closed while this tab was hidden; it comes back when shown. */
+        | 'idle'
+        | 'accessRevoked'
+        | 'notFound'
+        | 'failed';
     };
 
 /** What to tell a viewer whose connection dropped while it was driving. */
@@ -66,6 +72,12 @@ export function afterSessionEnded(
       .with('stopped', () => ({
         kind: 'show',
         status: { kind: 'ended', reason: 'stopped' },
+      }))
+      // Nobody was looking: not a drop to retry, but the session reconnects
+      // when the tab is shown again.
+      .with('idle', () => ({
+        kind: 'show',
+        status: { kind: 'ended', reason: 'idle' },
       }))
       .with('accessRevoked', () => ({
         kind: 'show',

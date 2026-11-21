@@ -54,6 +54,7 @@ const serverMessageSchema = z.discriminatedUnion('type', [
       'tooManySockets',
       'badMessage',
       'inputFailed',
+      'agentNotPausable',
     ]),
     message: z.string(),
   }),
@@ -64,6 +65,7 @@ const serverMessageSchema = z.discriminatedUnion('type', [
       'computerOff',
       'accessRevoked',
       'shutdown',
+      'idle',
       'error',
     ]),
   }),
@@ -97,6 +99,41 @@ export function parseServerMessage(
 export function sendControl(socket: WebSocket, message: ScreenClientMessage) {
   if (socket.readyState !== WebSocket.OPEN) return;
   socket.send(JSON.stringify(message));
+}
+
+/** A shown tab says so this often; the server ends one that hasn't for 10 minutes. */
+export const VISIBILITY_HEARTBEAT_MS = 60_000;
+
+/**
+ * Tells the server whether this tab is shown: once the socket opens, on every
+ * change, and every minute while shown. The server ends a socket (`idle`) that
+ * hasn't been shown or sent input for 10 minutes, or was hidden for two, so a
+ * forgotten tab holds neither a socket nor a drive. Stops when the socket
+ * closes.
+ */
+export function reportVisibility(socket: WebSocket) {
+  const report = () =>
+    sendControl(socket, {
+      type: 'visibility',
+      visible: document.visibilityState === 'visible',
+    });
+  const start = () => {
+    report();
+    const heartbeat = setInterval(() => {
+      if (document.visibilityState === 'visible') report();
+    }, VISIBILITY_HEARTBEAT_MS);
+    document.addEventListener('visibilitychange', report);
+    socket.addEventListener(
+      'close',
+      () => {
+        clearInterval(heartbeat);
+        document.removeEventListener('visibilitychange', report);
+      },
+      { once: true }
+    );
+  };
+  if (socket.readyState === WebSocket.OPEN) start();
+  else socket.addEventListener('open', start, { once: true });
 }
 
 /** Waits for the socket to open; rejects if it closes or errors first. */

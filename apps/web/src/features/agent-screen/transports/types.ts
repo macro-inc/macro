@@ -51,7 +51,9 @@ export type ScreenClientMessage =
   | { type: 'takeOver' }
   | { type: 'handBack'; note: string | null }
   | { type: 'input'; event: ScreenInputEvent }
-  | { type: 'stop' };
+  | { type: 'stop' }
+  /** Whether this tab is shown: the server ends a socket nobody looks at. */
+  | { type: 'visibility'; visible: boolean };
 
 /** Why the server ended the session; `shutdown` means reconnect with a new ticket. */
 export type ScreenEndReason =
@@ -59,6 +61,11 @@ export type ScreenEndReason =
   | 'computerOff'
   | 'accessRevoked'
   | 'shutdown'
+  /**
+   * Nobody looked: no shown tab and no input for a while, or hidden for a
+   * couple of minutes. A drive ends with it, as a hand-back with no note.
+   */
+  | 'idle'
   | 'error';
 
 /** Errors that leave the socket open. */
@@ -75,7 +82,12 @@ export type ScreenErrorCode =
   /** Too many screen sockets for this computer; the socket then ends with `error`. */
   | 'tooManySockets'
   | 'badMessage'
-  | 'inputFailed';
+  | 'inputFailed'
+  /**
+   * Take over refused: the agent couldn't be paused on that computer. This
+   * viewer still watches; another attempt may work.
+   */
+  | 'agentNotPausable';
 
 export type ScreenError = { code: ScreenErrorCode; message: string };
 

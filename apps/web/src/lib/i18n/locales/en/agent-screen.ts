@@ -58,6 +58,7 @@ export default {
   deniedHint: 'Only members of the agent’s team can watch its computer.',
   rolloutDisabledTitle: 'Computers aren’t enabled for this account',
   endedStoppedTitle: 'You stopped watching',
+  endedIdleTitle: 'Closed while this tab was hidden',
   endedRevokedTitle: 'You no longer have access to this screen',
   endedNotFoundTitle: 'This computer no longer exists',
   endedFailedTitle: 'Couldn’t connect to the screen',
@@ -72,6 +73,8 @@ export default {
   noticeTunnelFailed: 'Couldn’t reach the computer’s screen. Reconnecting…',
   noticeTooManySockets:
     'Too many screens are open for this computer. Close one; this view keeps trying.',
+  noticeAgentNotPausable:
+    'Couldn’t pause the agent on this computer, so it can’t be taken over right now.',
 
   modeView: 'View',
   modeTouch: 'Touch',

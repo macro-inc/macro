@@ -343,3 +343,32 @@ describe('the screen viewer while a drive drops', () => {
     unmount();
   });
 });
+
+describe('a refused Take over', () => {
+  it('says the agent could not be paused, and leaves Take over to try again', async () => {
+    vi.useFakeTimers();
+    const connections: Connection[] = [];
+    const { unmount } = renderView(AgentScreen, connections);
+    await vi.advanceTimersByTimeAsync(0);
+    connections[0].handlers.onState({ ...state(true), driver: null });
+
+    fireEvent.click(screen.getByRole('button', { name: /^Take over/ }));
+    connections[0].handlers.onError({
+      code: 'agentNotPausable',
+      message: 'could not freeze the agent',
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(
+      screen.getByText(
+        'Couldn’t pause the agent on this computer, so it can’t be taken over right now.'
+      )
+    ).toBeTruthy();
+    expect(
+      screen
+        .getByRole('button', { name: /^Take over/ })
+        .hasAttribute('disabled')
+    ).toBe(false);
+    unmount();
+  });
+});

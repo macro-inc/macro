@@ -946,4 +946,93 @@ describe('createScreenSession', () => {
       dispose();
     });
   });
+
+  it('says a hidden tab was closed for going unwatched, gives up its drive, and reconnects as a viewer once shown', async () => {
+    let visibility: DocumentVisibilityState = 'visible';
+    vi.spyOn(document, 'visibilityState', 'get').mockImplementation(
+      () => visibility
+    );
+    const connections: FakeConnection[] = [];
+    const capabilities: ScreenCapabilities = {
+      requestTicket: async () =>
+        ok({ socketUrl: 'wss://screen.test/ws?ticket=t1', expiresAt: '' }),
+      transport: () => fakeTransport(connections),
+    };
+
+    await createRoot(async (dispose) => {
+      const session = createScreenSession({
+        harnessId: 'harness-1',
+        canDrive: () => true,
+        accessKnown: () => true,
+        currentUserId: () => 'user-alice',
+        transport: () => 'vnc',
+        capabilities,
+      });
+      session.attach(document.createElement('div'));
+      await settle();
+      connections[0].handlers.onState({
+        driver: { userId: 'user-alice', name: 'Alice' },
+        agentHeld: true,
+        waking: false,
+        transport: 'vnc',
+        viewers: 1,
+      });
+
+      visibility = 'hidden';
+      document.dispatchEvent(new Event('visibilitychange'));
+      connections[0].handlers.onEnded('idle');
+      expect(session.store.status).toEqual({ kind: 'ended', reason: 'idle' });
+      // The server released the lease: nothing to win back, no keyboard held.
+      expect(session.controlLost()).toBeUndefined();
+      expect(session.holdsKeyboard()).toBe(false);
+      // Hidden, it stays closed.
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(connections).toHaveLength(1);
+
+      visibility = 'visible';
+      document.dispatchEvent(new Event('visibilitychange'));
+      await settle();
+      expect(connections).toHaveLength(2);
+      expect(session.store.status).toEqual({ kind: 'live' });
+      connections[1].handlers.onState({
+        driver: null,
+        agentHeld: false,
+        waking: false,
+        transport: 'vnc',
+        viewers: 1,
+      });
+      expect(connections[1].controls).toEqual([]);
+      expect(session.controlLost()).toBeUndefined();
+      dispose();
+    });
+    vi.restoreAllMocks();
+  });
+
+  it('reconnects at once when it was closed for going unwatched while shown', async () => {
+    const connections: FakeConnection[] = [];
+    const capabilities: ScreenCapabilities = {
+      requestTicket: async () =>
+        ok({ socketUrl: 'wss://screen.test/ws?ticket=t1', expiresAt: '' }),
+      transport: () => fakeTransport(connections),
+    };
+
+    await createRoot(async (dispose) => {
+      const session = createScreenSession({
+        harnessId: 'harness-1',
+        canDrive: () => false,
+        accessKnown: () => true,
+        currentUserId: () => 'user-bob',
+        transport: () => 'vnc',
+        capabilities,
+      });
+      session.attach(document.createElement('div'));
+      await settle();
+
+      connections[0].handlers.onEnded('idle');
+      await settle();
+      expect(connections).toHaveLength(2);
+      expect(session.store.status).toEqual({ kind: 'live' });
+      dispose();
+    });
+  });
 });

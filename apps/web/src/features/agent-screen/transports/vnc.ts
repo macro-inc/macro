@@ -1,5 +1,10 @@
 import { Telemetry } from '@macro-inc/observability';
-import { parseServerMessage, sendControl, waitForOpen } from './control';
+import {
+  parseServerMessage,
+  reportVisibility,
+  sendControl,
+  waitForOpen,
+} from './control';
 import { encodeInput } from './rfb-input';
 import type {
   ScreenEndReason,
@@ -139,6 +144,7 @@ async function connectVnc(
 ): Promise<ScreenSession> {
   if (signal.aborted) throw abortError();
   const socket = new WebSocket(ticket.socketUrl);
+  reportVisibility(socket);
   socket.binaryType = 'arraybuffer';
   let endReason: ScreenEndReason | undefined;
   let closedByViewer = false;

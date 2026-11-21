@@ -119,6 +119,7 @@ export function ScreenOverlay(props: {
             title={
               {
                 stopped: t('agentScreen.endedStoppedTitle'),
+                idle: t('agentScreen.endedIdleTitle'),
                 accessRevoked: t('agentScreen.endedRevokedTitle'),
                 notFound: t('agentScreen.endedNotFoundTitle'),
                 failed: t('agentScreen.endedFailedTitle'),
@@ -126,14 +127,18 @@ export function ScreenOverlay(props: {
             }
           >
             <Show
-              when={ended().reason === 'stopped' || ended().reason === 'failed'}
+              when={
+                ended().reason === 'stopped' ||
+                ended().reason === 'idle' ||
+                ended().reason === 'failed'
+              }
             >
               <Button
                 size="sm"
                 variant="secondary"
                 onClick={() => props.onRetry()}
               >
-                {ended().reason === 'stopped'
+                {ended().reason === 'stopped' || ended().reason === 'idle'
                   ? t('agentScreen.viewAgain')
                   : t('agentScreen.tryAgain')}
               </Button>

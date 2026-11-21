@@ -289,6 +289,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
               forgetServer();
               apply(step, connected ? 1 : attempt + 1);
             });
+            reconnectIfShown();
           },
         },
         abandon.signal
@@ -320,7 +321,23 @@ export function createScreenSession(options: ScreenSessionOptions) {
     return liveSince !== undefined && Date.now() - liveSince < FLAPPING_MS;
   }
 
+  /** Ended for going unwatched: comes back as soon as the tab is shown. */
+  function reconnectIfShown() {
+    if (disposed || document.visibilityState !== 'visible') return;
+    if (store.status.kind !== 'ended' || store.status.reason !== 'idle') return;
+    record('computer.screen.reconnect_shown');
+    retry();
+  }
+  document.addEventListener('visibilitychange', reconnectIfShown);
+
+  function retry() {
+    clearTimeout(retryTimer);
+    setStore({ status: { kind: 'connecting' } });
+    fireAndForget(connect(0), 'agent-screen.connect');
+  }
+
   onCleanup(() => {
+    document.removeEventListener('visibilitychange', reconnectIfShown);
     handBackIfDriving();
     disposed = true;
     // Late results from any attempt in flight are dropped from here on.
@@ -464,11 +481,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
       setAttached(true);
     },
     /** Try again now: after giving up, or after the computer was turned on. */
-    retry() {
-      clearTimeout(retryTimer);
-      setStore({ status: { kind: 'connecting' } });
-      fireAndForget(connect(0), 'agent-screen.connect');
-    },
+    retry,
     sendInput(event: ScreenInputEvent) {
       if (drivingMe()) session?.sendInput(event);
     },

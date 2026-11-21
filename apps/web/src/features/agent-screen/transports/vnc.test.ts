@@ -184,6 +184,8 @@ describe('VNC_TRANSPORT', () => {
 
     await vi.waitFor(() => expect(received).toEqual([[1, 2], [3]]));
     expect(socket.sent).toEqual([
+      // Sent on open: this tab is shown (the server ends unwatched sockets).
+      JSON.stringify({ type: 'visibility', visible: true }),
       [...new TextEncoder().encode('RFB 003.008\n')],
       [1, 1],
       [3, 0, 0, 0, 0, 0, 7, 128, 4, 56],

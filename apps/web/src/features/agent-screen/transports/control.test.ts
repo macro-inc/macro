@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest';
-import { parseServerMessage } from './control';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  parseServerMessage,
+  reportVisibility,
+  VISIBILITY_HEARTBEAT_MS,
+} from './control';
 
 describe('parseServerMessage', () => {
   it('keeps a state whose driver has no profile name, and one bad field does not drop the frame', () => {
@@ -85,5 +89,86 @@ describe('parseServerMessage', () => {
       code: 'tooManySockets',
       message: 'too many sockets',
     });
+  });
+
+  it('parses the idle end and the refused take-over the server sends', () => {
+    expect(
+      parseServerMessage(JSON.stringify({ type: 'ended', reason: 'idle' }))
+    ).toEqual({ type: 'ended', reason: 'idle' });
+    expect(
+      parseServerMessage(
+        JSON.stringify({
+          type: 'error',
+          code: 'agentNotPausable',
+          message: 'could not freeze the agent',
+        })
+      )
+    ).toEqual({
+      type: 'error',
+      code: 'agentNotPausable',
+      message: 'could not freeze the agent',
+    });
+  });
+});
+
+class FakeSocket extends EventTarget {
+  readyState: number = WebSocket.CONNECTING;
+  sent: unknown[] = [];
+  send(data: string) {
+    this.sent.push(JSON.parse(data));
+  }
+  open() {
+    this.readyState = WebSocket.OPEN;
+    this.dispatchEvent(new Event('open'));
+  }
+  close() {
+    this.readyState = WebSocket.CLOSED;
+    this.dispatchEvent(new CloseEvent('close'));
+  }
+}
+
+describe('reportVisibility', () => {
+  let visibility: DocumentVisibilityState = 'visible';
+  const setVisibility = (next: DocumentVisibilityState) => {
+    visibility = next;
+    document.dispatchEvent(new Event('visibilitychange'));
+  };
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    visibility = 'visible';
+  });
+
+  it('says whether the tab is shown on open, on every change and every minute while shown, until the socket closes', () => {
+    vi.useFakeTimers();
+    vi.spyOn(document, 'visibilityState', 'get').mockImplementation(
+      () => visibility
+    );
+    const socket = new FakeSocket();
+    reportVisibility(socket as unknown as WebSocket);
+    expect(socket.sent).toEqual([]);
+
+    socket.open();
+    expect(socket.sent).toEqual([{ type: 'visibility', visible: true }]);
+
+    vi.advanceTimersByTime(VISIBILITY_HEARTBEAT_MS);
+    expect(socket.sent).toHaveLength(2);
+    expect(socket.sent[1]).toEqual({ type: 'visibility', visible: true });
+
+    setVisibility('hidden');
+    expect(socket.sent[2]).toEqual({ type: 'visibility', visible: false });
+    // Hidden: no heartbeat, so the server's clock runs out.
+    vi.advanceTimersByTime(VISIBILITY_HEARTBEAT_MS * 3);
+    expect(socket.sent).toHaveLength(3);
+
+    setVisibility('visible');
+    expect(socket.sent[3]).toEqual({ type: 'visibility', visible: true });
+
+    socket.close();
+    // Nothing keeps running for a closed socket.
+    expect(vi.getTimerCount()).toBe(0);
+    setVisibility('hidden');
+    vi.advanceTimersByTime(VISIBILITY_HEARTBEAT_MS * 3);
+    expect(socket.sent).toHaveLength(4);
   });
 });
