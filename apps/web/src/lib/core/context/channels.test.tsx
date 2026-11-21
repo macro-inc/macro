@@ -23,18 +23,28 @@ vi.mock('./user', () => ({
   useUserId: () => () => viewer.id,
   useIsAuthenticated: () => () => true,
 }));
+const serverViews = vi.hoisted(() => ({ read: vi.fn() }));
+vi.mock(import('@queries/channel/viewed-at'), async (original) => ({
+  ...(await original()),
+  readChannelViewedAt: serverViews.read,
+}));
 
+import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import {
   ChannelDirectoryProvider,
+  type ChannelLastViewed,
   channelMemberIds,
   directMessagePeer,
+  LAST_VIEW_WAIT_MS,
   useChannel,
   useChannelCanCall,
+  useChannelLastViewed,
   useDmActivityByUserId,
 } from './channels';
 
 afterEach(() => {
   cleanup();
+  serverViews.read.mockReset();
   viewer.id = 'viewer';
 });
 
@@ -128,6 +138,127 @@ describe('useChannel', () => {
     expect(channel()?.name).toBe('Renamed');
     filling.fill([directoryChannel('first', { isParticipant: false })]);
     expect(channel()).toBeUndefined();
+  });
+});
+
+describe('useChannelLastViewed', () => {
+  const VIEWED = '2026-11-20T10:00:00+00:00';
+  const SERVER_VIEWED = '2026-11-19T08:00:00+00:00';
+
+  /** The server's answer, held until the test lets it through. */
+  function heldAnswer() {
+    let release!: (viewedAt: string | null) => void;
+    serverViews.read.mockReturnValue(
+      ResultAsync.fromSafePromise(
+        new Promise<string | null>((resolve) => {
+          release = resolve;
+        })
+      )
+    );
+    return (viewedAt: string | null) => release(viewedAt);
+  }
+
+  function setup(channelId: string, filling = fillingDirectory()) {
+    let lastViewed!: () => ChannelLastViewed;
+    render(() => (
+      <ChannelDirectoryProvider directory={filling.directory}>
+        {(() => {
+          lastViewed = useChannelLastViewed(channelId);
+          return null;
+        })()}
+      </ChannelDirectoryProvider>
+    ));
+    return { ...filling, lastViewed: () => lastViewed() };
+  }
+
+  const settles = () => new Promise((resolve) => setTimeout(resolve));
+
+  it("reads a joined channel's view from its record, never asking the server", async () => {
+    const filling = fillingDirectory();
+    const id = channelUuid('joined');
+    filling.fill([directoryChannel(id, { viewedAt: VIEWED })]);
+    const { lastViewed } = setup(id, filling);
+    await settles();
+    expect(lastViewed()).toEqual({ status: 'known', viewedAt: VIEWED });
+    expect(serverViews.read).not.toHaveBeenCalled();
+  });
+
+  it('asks the server once for a channel the viewer left, and is pending until it answers', async () => {
+    const filling = fillingDirectory();
+    const id = channelUuid('left');
+    filling.fill([directoryChannel(id, { isParticipant: false })]);
+    const answer = heldAnswer();
+    const { lastViewed } = setup(id, filling);
+    await settles();
+    expect(lastViewed()).toEqual({ status: 'pending' });
+    answer(SERVER_VIEWED);
+    await settles();
+    expect(lastViewed()).toEqual({ status: 'known', viewedAt: SERVER_VIEWED });
+    expect(serverViews.read).toHaveBeenCalledTimes(1);
+    expect(serverViews.read).toHaveBeenCalledWith(id);
+  });
+
+  it('knows that the viewer never viewed a channel the server has no view of', async () => {
+    const filling = fillingDirectory();
+    filling.fill([]);
+    serverViews.read.mockReturnValue(okAsync(null));
+    const { lastViewed } = setup(channelUuid('public'), filling);
+    await settles();
+    expect(lastViewed()).toEqual({ status: 'known', viewedAt: null });
+  });
+
+  it('stops waiting for a server that does not answer, and ignores its late answer', async () => {
+    vi.useFakeTimers();
+    try {
+      const filling = fillingDirectory();
+      filling.fill([]);
+      const answer = heldAnswer();
+      const { lastViewed } = setup(channelUuid('slow'), filling);
+      await vi.advanceTimersByTimeAsync(LAST_VIEW_WAIT_MS - 1);
+      expect(lastViewed()).toEqual({ status: 'pending' });
+      await vi.advanceTimersByTimeAsync(1);
+      expect(lastViewed()).toEqual({ status: 'unknown' });
+      answer(SERVER_VIEWED);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(lastViewed()).toEqual({ status: 'unknown' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('settles as unknown when the server fails', async () => {
+    const filling = fillingDirectory();
+    filling.fill([]);
+    serverViews.read.mockReturnValue(errAsync(new Error('lookup failed')));
+    const { lastViewed } = setup(channelUuid('public'), filling);
+    await settles();
+    expect(lastViewed()).toEqual({ status: 'unknown' });
+  });
+
+  it('asks the server while a cold directory cannot place the channel, and takes the record that arrives first', async () => {
+    const id = channelUuid('cold');
+    const answer = heldAnswer();
+    const { fill, lastViewed } = setup(id);
+    await settles();
+    expect(serverViews.read).toHaveBeenCalledTimes(1);
+    expect(lastViewed()).toEqual({ status: 'pending' });
+    fill([directoryChannel(id, { viewedAt: VIEWED })]);
+    expect(lastViewed()).toEqual({ status: 'known', viewedAt: VIEWED });
+    answer(SERVER_VIEWED);
+    await settles();
+    expect(lastViewed()).toEqual({ status: 'known', viewedAt: VIEWED });
+  });
+
+  it('keeps reading the record after the viewer leaves the channel it opened in', async () => {
+    const filling = fillingDirectory();
+    const id = channelUuid('leaving');
+    filling.fill([directoryChannel(id, { viewedAt: VIEWED })]);
+    const { lastViewed } = setup(id, filling);
+    await settles();
+    filling.fill([directoryChannel(id, { isParticipant: false })]);
+    await settles();
+    expect(serverViews.read).not.toHaveBeenCalled();
+    expect(lastViewed()).toEqual({ status: 'known', viewedAt: VIEWED });
   });
 });
 

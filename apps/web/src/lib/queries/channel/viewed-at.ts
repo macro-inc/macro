@@ -5,8 +5,13 @@ import {
   ChannelViewedAtCacheWriteDocument,
   type ChannelViewedAtCacheWriteSubscription,
   ChannelViewedAtFieldsFragmentDoc,
+  ViewerChannelViewedAtDocument,
 } from '@service-storage/graphql/generated/graphql';
+import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import { stringifyDocument } from '@urql/core';
+import { okAsync, ResultAsync } from 'neverthrow';
+import { assertQueryAccount, currentQueryAccount } from '../auth/account-scope';
+import { isChannelId } from './channel-id';
 import { CHANNEL_RECORD_PREFIX } from './directory-cache';
 
 const VIEWED_AT_SELECTION = selectRecords(ChannelViewedAtFieldsFragmentDoc);
@@ -88,4 +93,38 @@ export async function stampCachedChannelView(
   } finally {
     if (queue.get(channelId) === stamp) queue.delete(channelId);
   }
+}
+
+/**
+ * When the viewer last viewed a channel, asked of the server, which reads the
+ * viewer's own activity row: null when they never viewed it. For a channel
+ * the directory does not hold (one they left or never joined), whose record
+ * carries no view of theirs. Asking records nothing and skips every cache, so
+ * the answer is the server's as of the request.
+ */
+export function readChannelViewedAt(
+  channelId: string
+): ResultAsync<string | null, unknown> {
+  // The server refuses an id it cannot parse, and no view names one.
+  if (!isChannelId(channelId)) return okAsync(null);
+  return ResultAsync.fromPromise(
+    askChannelViewedAt(channelId),
+    (error) => error
+  );
+}
+
+async function askChannelViewedAt(channelId: string): Promise<string | null> {
+  const account = currentQueryAccount();
+  assertQueryAccount(account);
+  const result = await getGraphqlSoupClient()
+    .query(
+      ViewerChannelViewedAtDocument,
+      { channelId },
+      { requestPolicy: 'network-only' }
+    )
+    .toPromise();
+  assertQueryAccount(account);
+  if (result.error) throw result.error;
+  if (!result.data) throw new Error('channel view lookup returned no data');
+  return result.data.user.channelViewedAt;
 }

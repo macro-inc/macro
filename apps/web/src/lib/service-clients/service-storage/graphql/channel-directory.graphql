@@ -80,3 +80,12 @@ query DirectMessageChannelId($userId: ID!) {
 		directMessageChannelId(userId: $userId)
 	}
 }
+
+# When the viewer last viewed one channel, for a channel the directory does not
+# hold: one they left or never joined. Null when they never viewed it.
+query ViewerChannelViewedAt($channelId: ID!) {
+	user {
+		id
+		channelViewedAt(channelId: $channelId)
+	}
+}

@@ -49,8 +49,10 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import {
+  knownLastView,
   useChannel,
   useChannelDirectory,
+  useChannelLastViewed,
   useChannelName,
   useChannelType,
 } from '@core/context/channels';
@@ -348,14 +350,16 @@ export function Channel(props: ChannelProps) {
 
   const channel = useChannel(props.channelId);
   const directory = useChannelDirectory();
+  const lastViewed = useChannelLastViewed(props.channelId);
 
   // One view on entry, after the first page and away from the open's own
-  // requests, and one on leaving. The channel remounts per id, so cleanup
-  // covers every way out of it.
+  // requests, and one on leaving. The entry view also waits for the view
+  // before it, so what's new is marked from that one. The channel remounts per
+  // id, so cleanup covers every way out of it.
   let entryViewRecorded = false;
   createEffect(
     on(
-      () => queryReadyGate(messagesQuery),
+      () => queryReadyGate(messagesQuery) && lastViewed().status !== 'pending',
       (loaded) => {
         // The panel hides what's new in the channel, so it hasn't been seen.
         if (callPanel || !loaded || entryViewRecorded) return;
@@ -480,7 +484,7 @@ export function Channel(props: ChannelProps) {
   });
 
   const activityTracker = createActivityTracker({
-    lastViewedAt: () => channel()?.viewedAt,
+    lastViewedAt: () => knownLastView(lastViewed()),
     userId,
   });
 

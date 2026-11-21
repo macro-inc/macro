@@ -1,4 +1,5 @@
 import type { DateValue } from '@core/util/date';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type ChannelDirectory,
   type ChannelLookup,
@@ -10,11 +11,49 @@ import {
   type DirectoryChannel,
   type DirectoryChannelType,
 } from '@queries/channel/directory-core';
-import { type Accessor, createMemo } from 'solid-js';
+import { readChannelViewedAt } from '@queries/channel/viewed-at';
+import {
+  type Accessor,
+  createMemo,
+  createSignal,
+  onCleanup,
+  onMount,
+} from 'solid-js';
 import { createAssertedContextProvider } from './createContext';
 import { useUserId } from './user';
 
 export type { ChannelDirectory, ChannelLookup, DirectoryChannel };
+
+/** When the viewer last viewed a channel: `pending` until that is known,
+ * `known` (null when they never did), or `unknown` when the server could not
+ * say. */
+export type ChannelLastViewed =
+  | { status: 'pending' }
+  | { status: 'known'; viewedAt: string | null }
+  | { status: 'unknown' };
+
+const LAST_VIEW_PENDING: ChannelLastViewed = { status: 'pending' };
+const LAST_VIEW_UNKNOWN: ChannelLastViewed = { status: 'unknown' };
+
+/** How long an open waits for the server's answer before it records its own
+ * view without one. An answer after that could already be that view. */
+export const LAST_VIEW_WAIT_MS = 5_000;
+
+function sameLastViewed(a: ChannelLastViewed, b: ChannelLastViewed) {
+  return a.status === b.status && knownLastView(a) === knownLastView(b);
+}
+
+async function askLastView(
+  channelId: string,
+  settle: (state: ChannelLastViewed) => void
+) {
+  const viewedAt = await readChannelViewedAt(channelId);
+  settle(
+    viewedAt.isOk()
+      ? { status: 'known', viewedAt: viewedAt.value }
+      : LAST_VIEW_UNKNOWN
+  );
+}
 
 type ChannelDirectoryProviderProps = {
   /** A directory to provide instead of the app's, for tests and fixtures. */
@@ -57,6 +96,50 @@ export function useChannel(
 ): Accessor<DirectoryChannel | undefined> {
   const lookup = useChannelLookup(channelId);
   return createMemo(() => loadedChannel(lookup()));
+}
+
+/**
+ * When the viewer last viewed a channel, as it opens. A joined channel's view
+ * is on its directory record. For any other channel (one they left or never
+ * joined, or one a cold directory cannot place yet) the server answers once,
+ * from the viewer's own activity row, which keeps their views after they
+ * leave. Record the open's own view only once this is no longer `pending`,
+ * or the answer can be that view.
+ */
+export function useChannelLastViewed(
+  channelId: string
+): Accessor<ChannelLastViewed> {
+  const lookup = useChannelLookup(channelId);
+  const [answer, setAnswer] = createSignal(LAST_VIEW_PENDING);
+  onMount(() => {
+    if (lookup().status === 'loaded') return;
+    const wait = setTimeout(() => settle(LAST_VIEW_UNKNOWN), LAST_VIEW_WAIT_MS);
+    onCleanup(() => clearTimeout(wait));
+    // The first settlement wins: an answer after the wait is ignored.
+    function settle(state: ChannelLastViewed) {
+      clearTimeout(wait);
+      if (answer().status === 'pending') setAnswer(state);
+    }
+    fireAndForget(askLastView(channelId, settle), 'channel-viewed-at');
+  });
+  return createMemo(
+    (previous): ChannelLastViewed => {
+      const found = lookup();
+      if (found.status === 'loaded') {
+        return { status: 'known', viewedAt: found.channel.viewedAt };
+      }
+      // A channel left while open keeps the view its record had.
+      const asked = answer();
+      return asked.status === 'pending' ? previous : asked;
+    },
+    LAST_VIEW_PENDING,
+    { equals: sameLastViewed }
+  );
+}
+
+/** The view a last-viewed state knows, undefined until it knows one. */
+export function knownLastView(state: ChannelLastViewed) {
+  return state.status === 'known' ? state.viewedAt : undefined;
 }
 
 /**
