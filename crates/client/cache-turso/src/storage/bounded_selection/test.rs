@@ -284,25 +284,32 @@ fn the_shadow_probe_runs_only_while_optimistic_documents_exist() {
             .await
             .unwrap();
         let query = query(owner("owner"), SortDirection::Desc, SortDirection::Asc);
+        // The connection keeps a statement text from its second use, so the
+        // selector runs twice on an emptied statement cache, and the kept
+        // texts show whether it ran the shadow probe and the optimistic window.
         let page = |storage: &TursoStorage| {
             let connection = storage.connection();
-            let pending = has_optimistic_documents(&connection).unwrap();
+            connection.release_statements();
+            for _ in 0..2 {
+                assert!(try_select(&connection, &query, &[]).unwrap().is_some());
+            }
+            let ran = Ran {
+                pending: has_optimistic_documents(&connection).unwrap(),
+                shadow_probe: connection.cached_texts_containing(SHADOW_PROBE) > 0,
+                optimistic_window: connection.cached_texts_containing(OPTIMISTIC_WINDOW) > 0,
+            };
             let actual = hits(&connection, &query, &[]);
             assert_eq!(actual, reference(&connection, &query, &[]));
-            (pending, actual)
+            (ran, actual)
         };
-        let (pending, before) = page(&storage);
-        assert!(!pending);
+        let idle = Ran {
+            pending: false,
+            shadow_probe: false,
+            optimistic_window: false,
+        };
+        let (ran, before) = page(&storage);
+        assert_eq!(ran, idle);
         assert_eq!(before[0], ("Thing:00039".to_owned(), 39));
-        let (sql, _) = candidate_sql(
-            query.as_query(),
-            conjunction::FactSource::Authority,
-            &[],
-            None,
-            MIN_CANDIDATES,
-            false,
-        );
-        assert!(!sql.contains("optimistic_index_documents"), "{sql}");
 
         let mut moved = document(39, 39);
         moved.partition = Token::new("other").unwrap();
@@ -322,8 +329,15 @@ fn the_shadow_probe_runs_only_while_optimistic_documents_exist() {
             )
             .await
             .unwrap();
-        let (pending, shadowed) = page(&storage);
-        assert!(pending);
+        let (ran, shadowed) = page(&storage);
+        assert_eq!(
+            ran,
+            Ran {
+                pending: true,
+                shadow_probe: true,
+                optimistic_window: true,
+            }
+        );
         assert_eq!(shadowed[0], ("Thing:00100".to_owned(), 100));
         assert!(!shadowed.iter().any(|(key, _)| key == "Thing:00039"));
 
@@ -348,9 +362,20 @@ fn the_shadow_probe_runs_only_while_optimistic_documents_exist() {
                 .await
                 .unwrap()
         );
-        assert_eq!(page(&storage), (false, before));
+        assert_eq!(page(&storage), (idle, before));
     });
 }
+
+/// What one selection ran, read back from the connection's statement cache.
+#[derive(Debug, PartialEq)]
+struct Ran {
+    pending: bool,
+    shadow_probe: bool,
+    optimistic_window: bool,
+}
+
+const SHADOW_PROBE: &str = "FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key";
+const OPTIMISTIC_WINDOW: &str = "INDEXED BY optimistic_sort_facts_lookup_idx";
 
 #[test]
 fn optimistic_moves_deletes_and_uncertainty_suppress_authority() {

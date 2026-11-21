@@ -81,6 +81,20 @@ impl Db {
             .map_or(0, |statements| statements.lock().unwrap().copies(sql))
     }
 
+    /// Kept statement texts that contain `needle`.
+    #[cfg(test)]
+    pub(crate) fn cached_texts_containing(&self, needle: &str) -> usize {
+        self.statements.as_ref().map_or(0, |statements| {
+            statements
+                .lock()
+                .unwrap()
+                .texts
+                .keys()
+                .filter(|sql| sql.contains(needle))
+                .count()
+        })
+    }
+
     #[cfg(test)]
     pub(crate) fn cached_texts(&self) -> usize {
         self.statements
