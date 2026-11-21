@@ -290,6 +290,7 @@ pub struct TimeEntryPathParams {
 #[serde(rename_all = "camelCase")]
 pub struct ListTimeEntriesQuery {
     /// Entries per page, 1 to 200; 50 when omitted.
+    #[param(minimum = 1, maximum = 200)]
     pub limit: Option<u8>,
     /// The `date` of the previous page's `nextCursor`.
     pub cursor_date: Option<NaiveDate>,
@@ -307,6 +308,7 @@ pub struct LogTimeRequest {
     /// The logger's calendar day for the work, `YYYY-MM-DD`.
     pub date: NaiveDate,
     /// Length in whole minutes, 1 to 1440.
+    #[schema(minimum = 1, maximum = 1440)]
     pub minutes: u16,
     /// What the time was spent on, up to 2000 characters.
     #[serde(default)]
@@ -328,6 +330,7 @@ pub struct UpdateTimeEntryRequest {
     pub date: Option<NaiveDate>,
     /// A new length in whole minutes, 1 to 1440.
     #[serde(default)]
+    #[schema(minimum = 1, maximum = 1440)]
     pub minutes: Option<u16>,
     /// A new note, or `null` for none.
     #[serde(default, with = "::serde_with::rust::double_option")]
@@ -399,6 +402,7 @@ pub struct DiscardTimerRequest {
         (status = 403, body = TimeTrackingApiError),
         (status = 404, body = TimeTrackingApiError),
         (status = 500, body = TimeTrackingApiError),
+        (status = 503, body = TimeTrackingApiError),
     )
 )]
 #[tracing::instrument(skip_all, err(level = Level::INFO))]
@@ -453,6 +457,7 @@ where
         (status = 404, body = TimeTrackingApiError),
         (status = 409, body = TimeTrackingApiError),
         (status = 500, body = TimeTrackingApiError),
+        (status = 503, body = TimeTrackingApiError),
     )
 )]
 #[tracing::instrument(skip_all, err(level = Level::INFO))]
@@ -500,6 +505,7 @@ where
         (status = 403, body = TimeTrackingApiError),
         (status = 404, body = TimeTrackingApiError),
         (status = 500, body = TimeTrackingApiError),
+        (status = 503, body = TimeTrackingApiError),
     )
 )]
 #[tracing::instrument(skip_all, err(level = Level::INFO))]
@@ -544,6 +550,7 @@ where
         (status = 403, body = TimeTrackingApiError),
         (status = 404, body = TimeTrackingApiError),
         (status = 500, body = TimeTrackingApiError),
+        (status = 503, body = TimeTrackingApiError),
     )
 )]
 #[tracing::instrument(skip_all, err(level = Level::INFO))]
@@ -610,6 +617,7 @@ where
         (status = 404, body = TimeTrackingApiError),
         (status = 409, body = TimeTrackingApiError),
         (status = 500, body = TimeTrackingApiError),
+        (status = 503, body = TimeTrackingApiError),
     )
 )]
 #[tracing::instrument(skip_all, err(level = Level::INFO))]
@@ -655,6 +663,7 @@ where
         (status = 404, body = TimeTrackingApiError),
         (status = 409, body = TimeTrackingApiError),
         (status = 500, body = TimeTrackingApiError),
+        (status = 503, body = TimeTrackingApiError),
     )
 )]
 #[tracing::instrument(skip_all, err(level = Level::INFO))]
@@ -692,6 +701,7 @@ where
         (status = 204),
         (status = 404, body = TimeTrackingApiError),
         (status = 500, body = TimeTrackingApiError),
+        (status = 503, body = TimeTrackingApiError),
     )
 )]
 #[tracing::instrument(skip_all, err(level = Level::INFO))]

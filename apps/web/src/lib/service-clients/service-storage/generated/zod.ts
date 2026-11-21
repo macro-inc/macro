@@ -89158,7 +89158,7 @@ export const updateTimeEntryParams = zod.object({
   entry_id: zod.uuid().describe("The entry's id."),
 });
 
-export const updateTimeEntryBodyMinutesMin = 0;
+export const updateTimeEntryBodyMinutesMax = 1440;
 
 export const updateTimeEntryBody = zod
   .object({
@@ -89171,7 +89171,8 @@ export const updateTimeEntryBody = zod
       ),
     minutes: zod
       .number()
-      .min(updateTimeEntryBodyMinutesMin)
+      .min(1)
+      .max(updateTimeEntryBodyMinutesMax)
       .nullish()
       .describe('A new length in whole minutes, 1 to 1440.'),
     note: zod.string().nullish().describe('A new note, or `null` for none.'),
@@ -89242,12 +89243,13 @@ export const listTimeEntriesParams = zod.object({
   task_id: zod.string().describe("The task document's id."),
 });
 
-export const listTimeEntriesQueryLimitMin = 0;
+export const listTimeEntriesQueryLimitMax = 200;
 
 export const listTimeEntriesQueryParams = zod.object({
   limit: zod
     .number()
-    .min(listTimeEntriesQueryLimitMin)
+    .min(1)
+    .max(listTimeEntriesQueryLimitMax)
     .optional()
     .describe('Entries per page, 1 to 200; 50 when omitted.'),
   cursorDate: zod.iso
@@ -89340,7 +89342,7 @@ export const logTimeParams = zod.object({
   task_id: zod.string().describe("The task document's id."),
 });
 
-export const logTimeBodyMinutesMin = 0;
+export const logTimeBodyMinutesMax = 1440;
 
 export const logTimeBody = zod
   .object({
@@ -89359,7 +89361,8 @@ export const logTimeBody = zod
       ),
     minutes: zod
       .number()
-      .min(logTimeBodyMinutesMin)
+      .min(1)
+      .max(logTimeBodyMinutesMax)
       .describe('Length in whole minutes, 1 to 1440.'),
     note: zod
       .string()

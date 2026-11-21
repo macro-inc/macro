@@ -20,7 +20,8 @@ export interface UpdateTimeEntryRequest {
   endedAt?: UpdateTimeEntryRequestEndedAt;
   /**
    * A new length in whole minutes, 1 to 1440.
-   * @minimum 0
+   * @minimum 1
+   * @maximum 1440
    */
   minutes?: UpdateTimeEntryRequestMinutes;
   /** A new note, or `null` for none. */

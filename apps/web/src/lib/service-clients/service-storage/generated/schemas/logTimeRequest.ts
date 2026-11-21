@@ -21,7 +21,8 @@ export interface LogTimeRequest {
   id?: LogTimeRequestId;
   /**
    * Length in whole minutes, 1 to 1440.
-   * @minimum 0
+   * @minimum 1
+   * @maximum 1440
    */
   minutes: number;
   /** What the time was spent on, up to 2000 characters. */

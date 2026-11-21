@@ -30287,6 +30287,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
           }
         }
       },
@@ -30376,6 +30386,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
           }
         }
       }
@@ -30403,7 +30423,8 @@
             "schema": {
               "type": "integer",
               "format": "int32",
-              "minimum": 0
+              "maximum": 200,
+              "minimum": 1
             }
           },
           {
@@ -30479,6 +30500,16 @@
             }
           },
           "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "503": {
             "description": "",
             "content": {
               "application/json": {
@@ -30585,6 +30616,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
           }
         }
       }
@@ -30668,6 +30709,16 @@
             }
           },
           "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "503": {
             "description": "",
             "content": {
               "application/json": {
@@ -30765,6 +30816,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
           }
         }
       }
@@ -30836,6 +30897,16 @@
             }
           },
           "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "503": {
             "description": "",
             "content": {
               "application/json": {
@@ -54615,7 +54686,8 @@
             "type": "integer",
             "format": "int32",
             "description": "Length in whole minutes, 1 to 1440.",
-            "minimum": 0
+            "maximum": 1440,
+            "minimum": 1
           },
           "note": {
             "type": ["string", "null"],
@@ -69823,7 +69895,8 @@
             "type": ["integer", "null"],
             "format": "int32",
             "description": "A new length in whole minutes, 1 to 1440.",
-            "minimum": 0
+            "maximum": 1440,
+            "minimum": 1
           },
           "note": {
             "type": ["string", "null"],

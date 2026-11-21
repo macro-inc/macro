@@ -8,7 +8,8 @@
 export type ListTimeEntriesParams = {
   /**
    * Entries per page, 1 to 200; 50 when omitted.
-   * @minimum 0
+   * @minimum 1
+   * @maximum 200
    */
   limit?: number;
   /**

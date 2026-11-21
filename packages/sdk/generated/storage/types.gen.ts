@@ -38208,6 +38208,7 @@ export type DeleteTimeEntryErrors = {
     403: TimeTrackingApiError;
     404: TimeTrackingApiError;
     500: TimeTrackingApiError;
+    503: TimeTrackingApiError;
 };
 
 export type DeleteTimeEntryError = DeleteTimeEntryErrors[keyof DeleteTimeEntryErrors];
@@ -38236,6 +38237,7 @@ export type UpdateTimeEntryErrors = {
     403: TimeTrackingApiError;
     404: TimeTrackingApiError;
     500: TimeTrackingApiError;
+    503: TimeTrackingApiError;
 };
 
 export type UpdateTimeEntryError = UpdateTimeEntryErrors[keyof UpdateTimeEntryErrors];
@@ -38277,6 +38279,7 @@ export type ListTimeEntriesErrors = {
     403: TimeTrackingApiError;
     404: TimeTrackingApiError;
     500: TimeTrackingApiError;
+    503: TimeTrackingApiError;
 };
 
 export type ListTimeEntriesError = ListTimeEntriesErrors[keyof ListTimeEntriesErrors];
@@ -38306,6 +38309,7 @@ export type LogTimeErrors = {
     404: TimeTrackingApiError;
     409: TimeTrackingApiError;
     500: TimeTrackingApiError;
+    503: TimeTrackingApiError;
 };
 
 export type LogTimeError = LogTimeErrors[keyof LogTimeErrors];
@@ -38347,6 +38351,7 @@ export type DiscardTimerErrors = {
     401: ErrorResponse;
     404: TimeTrackingApiError;
     500: TimeTrackingApiError;
+    503: TimeTrackingApiError;
 };
 
 export type DiscardTimerError = DiscardTimerErrors[keyof DiscardTimerErrors];
@@ -38371,6 +38376,7 @@ export type StartTimerErrors = {
     404: TimeTrackingApiError;
     409: TimeTrackingApiError;
     500: TimeTrackingApiError;
+    503: TimeTrackingApiError;
 };
 
 export type StartTimerError = StartTimerErrors[keyof StartTimerErrors];
@@ -38394,6 +38400,7 @@ export type StopTimerErrors = {
     404: TimeTrackingApiError;
     409: TimeTrackingApiError;
     500: TimeTrackingApiError;
+    503: TimeTrackingApiError;
 };
 
 export type StopTimerError = StopTimerErrors[keyof StopTimerErrors];
