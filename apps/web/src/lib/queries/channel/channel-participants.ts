@@ -536,9 +536,10 @@ function afterExpiry(
 /**
  * A confirmed change whose recheck has not answered: the newest answer decides
  * who shows. A failed recheck asks once more when the time to show runs out
- * after that check was sent, as a change asked about early does: a reader that
- * was on another channel missed checks another reader still waits on. The time
- * is the shared check's, so the readers that rode it share the next one too.
+ * after the first check since the record changed was sent, as a change asked
+ * about early does: a reader that was on another channel missed checks another
+ * reader still waits on. The time is the shared check's, so the readers that
+ * rode it share the next one too, and the one more check cannot move it.
  * If that fails too, the newest answer decides for good, once every check sent since
  * the confirmation has answered: one still out may be newer than it.
  */
@@ -568,7 +569,7 @@ function whileRechecking(
       askAt: says.kind === 'unasked' ? expires : undefined,
     };
   if (expires === seen.checkFrom) {
-    const failedAt = Math.max(
+    const firstAt = Math.min(
       ...context.questions
         .filter(
           (q) =>
@@ -578,7 +579,7 @@ function whileRechecking(
         )
         .map((q) => q.at)
     );
-    const retryAt = failedAt + CHANNEL_PARTICIPANTS_MUTATION_GC_MS;
+    const retryAt = firstAt + CHANNEL_PARTICIPANTS_MUTATION_GC_MS;
     return context.now < retryAt
       ? { seen, shown: stillShown(shown, refuted), askAt: retryAt }
       : afterExpiry(shown, seen, retryAt, context);
