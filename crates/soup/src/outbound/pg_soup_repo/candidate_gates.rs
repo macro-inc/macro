@@ -47,7 +47,10 @@ fn exact_subtree_sql<T>(expr: &Expr<T>, fold: &impl Fn(&T) -> Option<String>) ->
 /// `EXISTS` by hashing every row its subquery returns, and it prices that
 /// against every candidate the outer scan could produce rather than the
 /// page's `LIMIT`. For these gates that hash is the user's whole accessible
-/// set. An `OFFSET` keeps the subquery per candidate.
+/// set. The channel-thread gate's is worse: without the candidate's id to look
+/// up, only `parent_entity_type` narrows its message scan, so the hash is
+/// every channel's root messages. An `OFFSET` keeps the subquery per
+/// candidate.
 pub(super) const PER_CANDIDATE: &str = "OFFSET 0";
 
 /// Renders the implied conjuncts of `tree` that `fold` knows how to express
@@ -248,6 +251,7 @@ pub(super) fn channel_thread_gate(id_sql: &str, filter: Option<&EntityFilterAst>
                 AND m.thread_id IS NULL
                 AND m.deleted_at IS NULL
                 {implied}
+                {PER_CANDIDATE}
             )"#
         ),
     )

@@ -1203,3 +1203,62 @@ async fn a_recompute_costs_the_same_however_much_the_viewer_holds(
     }
     Ok(())
 }
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("work_feed")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn a_thread_recompute_looks_up_its_root_not_every_channels_roots(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    copy_entities_onto_recipient_rows(&pool).await?;
+    // Other people's channels, holding root messages the viewer can't read.
+    sqlx::query(
+        "INSERT INTO comms_channels (id, channel_type, owner_id, created_at, updated_at)
+        SELECT ('77777777-0000-7000-8000-' || lpad(i::text, 12, '0'))::uuid, 'private',
+               'macro|someone@example.com', timestamptz '2024-01-01', timestamptz '2024-01-01'
+        FROM generate_series(0, 499) AS i",
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query(
+        "INSERT INTO comms_messages (id, parent_entity_type, parent_entity_id, sender_id,
+                                     content, created_at, updated_at)
+        SELECT gen_random_uuid(), 'channel',
+               '77777777-0000-7000-8000-' || lpad((i % 500)::text, 12, '0'),
+               'macro|someone@example.com', 'm', timestamptz '2024-01-01', timestamptz '2024-01-01'
+        FROM generate_series(1, 50000) AS i",
+    )
+    .execute(&pool)
+    .await?;
+    // Statistics from before the messages landed.
+    sqlx::query("DELETE FROM pg_statistic WHERE starelid = 'comms_messages'::regclass")
+        .execute(&pool)
+        .await?;
+    sqlx::query(
+        "UPDATE pg_class SET reltuples = 0, relpages = 0 WHERE oid = 'comms_messages'::regclass",
+    )
+    .execute(&pool)
+    .await?;
+
+    let link_ids = [Uuid::parse_str(LINK_1)?];
+    let sources = sources();
+    let only = vec![EntityType::ChannelMessage.with_entity_string(THREAD_M.to_string())];
+    let recompute = || {
+        let mut recompute = req(WORK, &link_ids, &sources);
+        recompute.only = Some(&only);
+        recompute
+    };
+    let page = attention_soup_page(&pool, recompute()).await?;
+    assert_eq!(
+        keys(&page),
+        vec![(EntityType::ChannelMessage, THREAD_M.to_string())]
+    );
+    let blocks = blocks_read(&pool, &recompute()).await;
+    eprintln!("recompute of a channel thread: {blocks} blocks");
+    assert!(
+        blocks < 1_000,
+        "recompute of a channel thread read {blocks} blocks"
+    );
+    Ok(())
+}
