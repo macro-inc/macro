@@ -10,6 +10,24 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+
+// This driver answers every API request of every page (its route handlers), so
+// a stall of its event loop delays every page's answers at once. Stalls of
+// 100 ms or more are kept, so a settle timeout can show whether it waited on
+// the driver rather than on the server or the page.
+const driverStalls = [];
+{
+  let last = performance.now();
+  setInterval(() => {
+    const now = performance.now();
+    const ms = Math.round(now - last - 50);
+    if (ms >= 100) {
+      driverStalls.push({ end: Date.now(), ms });
+      if (driverStalls.length > 500) driverStalls.shift();
+    }
+    last = now;
+  }, 50).unref();
+}
 const ROOT = path.resolve(HERE, '../../../../..');
 const E = process.env;
 
@@ -350,8 +368,8 @@ const R = {
   config: { ...CONFIG },
   commit: git('rev-parse', 'HEAD'),
   // The code under test is the web PR's head; the harness commit only adds this directory.
-  prHead: E.PR_HEAD ?? 'f0a18fbd81b',
-  identicalToPrHeadOutsideProof: git('diff', '--quiet', E.PR_HEAD ?? 'f0a18fbd81b', 'HEAD', '--', '.', ':(exclude)apps/web/src/proof') !== null,
+  prHead: E.PR_HEAD ?? '51cc987139b',
+  identicalToPrHeadOutsideProof: git('diff', '--quiet', E.PR_HEAD ?? '51cc987139b', 'HEAD', '--', '.', ':(exclude)apps/web/src/proof') !== null,
   dssBinaryBuiltAt: (() => {
     try {
       return fs.statSync(path.join(ROOT, 'target/debug/document_storage_service')).mtime.toISOString();
@@ -1205,7 +1223,8 @@ function withWaitedOn(s, t) {
   const recent = s.finished
     .filter((x) => now - x.end <= t.ms + 1000)
     .map((x) => ({ method: x.method, path: x.path, status: x.status, startedAgoMs: now - x.at, ms: x.ms }));
-  return { ...t, waitedOn: { busy: t.busy ?? null, inflight: [...s.inflight.values()].map((x) => ({ method: x.method, path: x.path, ms: now - x.at })), recent, net: (s.netlog ?? []).slice(-8) } };
+  const stalls = driverStalls.filter((x) => now - x.end <= t.ms + 1000).map((x) => ({ endedAgoMs: now - x.end, ms: x.ms }));
+  return { ...t, waitedOn: { busy: t.busy ?? null, fetches: t.fetches ?? null, driverStalls: stalls, inflight: [...s.inflight.values()].map((x) => ({ method: x.method, path: x.path, ms: now - x.at })), recent, net: (s.netlog ?? []).slice(-8) } };
 }
 async function settleAll(pair) {
   // what a side that timed out waited on is sampled as its settle returns

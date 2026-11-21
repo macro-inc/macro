@@ -480,6 +480,69 @@ render(
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// API fetches as this page saw them, so a settle timeout separates a request
+// the page sent late from an answer that came back late. Only the timing is
+// kept; the wrapper passes every call through unchanged.
+type FetchNote = {
+  method: string;
+  path: string;
+  op: string | null;
+  start: number;
+  end: number | null;
+  status: number | null;
+};
+const fetchNotes: FetchNote[] = [];
+const pageFetch = globalThis.fetch.bind(globalThis);
+globalThis.fetch = async (input, init) => {
+  const url = new URL(
+    input instanceof Request ? input.url : String(input),
+    location.href
+  );
+  const note: FetchNote = {
+    method: (
+      init?.method ?? (input instanceof Request ? input.method : 'GET')
+    ).toUpperCase(),
+    path: url.pathname.replace(/[0-9a-f]{8}-[0-9a-f-]{27}/g, '<id>'),
+    op: operationName(init?.body),
+    start: performance.now(),
+    end: null,
+    status: null,
+  };
+  if (!/^\/(src|node_modules|@)/.test(url.pathname)) {
+    fetchNotes.push(note);
+    if (fetchNotes.length > 60) fetchNotes.shift();
+  }
+  const res = await pageFetch(input, init);
+  note.end = performance.now();
+  note.status = res.status;
+  return res;
+};
+// A GraphQL request's operation name, so its fetches can be told apart.
+function operationName(body: unknown): string | null {
+  if (typeof body !== 'string') return null;
+  try {
+    const name = (JSON.parse(body) as { operationName?: unknown })
+      .operationName;
+    return typeof name === 'string' ? name : null;
+  } catch {
+    return null;
+  }
+}
+
+// The fetches since a settle started, in ms from its start.
+function fetchesSince(start: number) {
+  return fetchNotes
+    .filter((f) => f.end === null || f.end >= start)
+    .map((f) => ({
+      method: f.method,
+      path: f.path,
+      op: f.op,
+      start: Math.round(f.start - start),
+      end: f.end === null ? null : Math.round(f.end - start),
+      status: f.status,
+    }));
+}
+
 function busy(client: QueryClient, reg: Registry) {
   if (client.isFetching() > 0 || client.isMutating() > 0) return true;
   for (const [id, read] of reg) {
@@ -506,6 +569,7 @@ async function settle(client: QueryClient, reg: Registry, boundMs: number) {
     ms: Math.round(performance.now() - start),
     timedOut: true,
     busy: busyNow(client, reg),
+    fetches: fetchesSince(start),
   };
 }
 

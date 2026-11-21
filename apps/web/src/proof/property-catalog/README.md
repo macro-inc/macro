@@ -207,8 +207,13 @@ The counts measure work attempted, not successes, and are not interchangeable:
   page at the timeout), every non-module request of that page still in flight
   with its age (`inflight`; a request whose end Playwright never reported stays
   there), the API requests that finished during the wait with their status,
-  start and duration (`recent`), and the page's last eight network notes
-  (failed requests, failed module responses, console errors: `net`).
+  start and duration (`recent`), the page's own view of its API fetches, in ms
+  from the settle's start (`fetches`, from a pass-through `fetch` wrapper in
+  `harness.tsx`), the driver's event-loop stalls of 100 ms or more during the
+  wait (`driverStalls`; the driver answers every API request through its route
+  handlers, so a stall delays every page's answers), and the page's last eight
+  network notes (failed requests, failed module responses, console errors:
+  `net`).
   `inflight`, `recent` and `net` are taken when that side's call returns, which
   for a fresh mount is after the mount was torn down.
 - `out/` can hold Playwright error dumps with the local session cookie; it is
