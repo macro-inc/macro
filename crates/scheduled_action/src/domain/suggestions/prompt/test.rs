@@ -223,7 +223,14 @@ fn a_drafting_session_drafts_for_each_stream_found() {
     // newest mail, so a stream seen only before it is drafted.
     assert!(brief.contains(&format!("A routine the catalog lacks, {LISTED_STREAM}:")));
     assert!(!brief.contains(WEEKLY_STREAM));
-    assert!(brief.contains("only when none of its messages is in that newest mail"));
+    assert!(brief.contains(
+        "Skip it when a catalog routine handles it and its messages are in their newest mail"
+    ));
+    // Each stream is settled once, and each draft handed back as it is written.
+    assert!(brief.contains("Go down the list once, in its order"));
+    assert!(
+        brief.contains("suggest each routine in a program of its own as soon as it is written")
+    );
     // The list says what the person does with each stream, and each draft does that job.
     assert!(brief.contains("what they do with it (`does`"));
     assert!(brief.contains("for mail they answer, their reply ready to send"));
