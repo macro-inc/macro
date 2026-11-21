@@ -1858,6 +1858,24 @@ export function createCachedChannelDirectory(
   laneStalled();
   refreshNow();
 
+  // What a lookup answers by: the by-id reads, and while the network's
+  // channels are shown, the confirming reads that found a channel gone. Such
+  // a read is the same evidence a lookup's own would be, so it never reads
+  // the channel again; one that returned a channel is shown in its row.
+  const lookupOutcomes = createMemo(() => {
+    const outcomes = reader.outcomes();
+    if (shown().fallback !== 'loaded') return outcomes;
+    let merged: Record<string, ByIdOutcome> | undefined;
+    for (const [id, outcome] of Object.entries(confirm.outcomes())) {
+      if (outcome !== 'absent') continue;
+      const own = outcomes[id];
+      if (own === 'returned' || own === 'absent') continue;
+      merged ??= { ...outcomes };
+      merged[id] = 'absent';
+    }
+    return merged ?? outcomes;
+  });
+
   // A complete pass of the lane proves the records it wrote, not those it
   // did not: a joined channel another query cached without every field is
   // listed only once its by-id read lands it. The network's pages prove the
@@ -1883,7 +1901,7 @@ export function createCachedChannelDirectory(
       const { unconfirmed } = shown();
       const result = lookupChannel(
         view(),
-        reader.outcomes(),
+        lookupOutcomes(),
         channelId,
         unconfirmed
       );

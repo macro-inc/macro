@@ -1534,6 +1534,32 @@ describe('cached channel directory', () => {
     expect(directory.lookup(channelUuid('stale')).status).toBe('missing');
   });
 
+  it('answers missing, without reading it again, for a channel lacking a field that the fallback found gone', async () => {
+    let answer!: (channels: DirectoryChannel[]) => void;
+    const { cache, directory, hydrate } = mountCachedDirectory(
+      [channelRecord('kept')],
+      {
+        pageAll: () =>
+          new Promise((resolve) => {
+            answer = resolve;
+          }),
+      }
+    );
+    cache.put(channelRecord('kept'));
+    // Cached without every field when the viewer lost it.
+    cache.put(channelRecord('lost'), { incomplete: true });
+    await vi.waitFor(() => expect(ids(directory.channels())).toEqual(['kept']));
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+    await vi.waitFor(() => expect(answer).toBeDefined());
+    answer([directoryChannel('kept')]);
+
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    expect(hydrate).toHaveBeenCalledOnce();
+    expect(directory.lookup(channelUuid('lost')).status).toBe('missing');
+    await new Promise((done) => setTimeout(done, 50));
+    expect(hydrate).toHaveBeenCalledOnce();
+  });
+
   it('reads a channel again that a by-id read found gone once the viewer rejoins it', async () => {
     let answer!: (channels: DirectoryChannel[]) => void;
     const server = [channelRecord('kept')];
