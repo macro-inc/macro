@@ -332,7 +332,9 @@ async fn propagate_request(
     // Handlers read the scope stored with the correlation, else the one the
     // credential signs (the harness signs the stored one).
     // The routine claim needs no lookup: the token's signature is its authority.
+    let signed_scope = !matches!(signed, SignedScope::Unscoped) || others_scope.is_some();
     let attribution = Attribution {
+        signed_scope,
         correlation_id,
         routine_id: token.and_then(|token| token.routine_id),
         session_id: correlation.map(|(_, correlation)| correlation.session_id),

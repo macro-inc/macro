@@ -145,6 +145,7 @@ impl UiCommandDelivery for Gateway {
 
 fn record(execution: ExecutionId, turn: Uuid) -> ExecutionRecord {
     ExecutionRecord {
+        credential_correlation_id: None,
         execution_id: execution,
         // System turns' programs act as the owner, who also prompts here.
         acting_as: Some(ToolActor::Owner),

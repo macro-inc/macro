@@ -107,6 +107,7 @@ impl CodeModeService {
         cancel: CancellationToken,
     ) -> Result<(ExecutionReceipt, Option<MacroUserIdStr<'static>>), CodeModeError> {
         let mut record = ExecutionRecord {
+            credential_correlation_id: None,
             execution_id: execution,
             acting_as: Some(identity.acting_as),
             turn_id: Some(identity.turn),
@@ -167,6 +168,7 @@ impl CodeModeService {
             return Ok((receipt(&record), None));
         }
         let IssuedRun {
+            correlation_id,
             environment,
             acting_user,
         } = match self
@@ -183,12 +185,16 @@ impl CodeModeService {
                 return Err(error);
             }
         };
+        record.credential_correlation_id = Some(correlation_id);
         if !active_turn(&self.0, &identity).await || cancel.is_cancelled() {
             record.status = ExecutionStatus::Cancelled;
             record.error = Some("Execution cancelled before starting.".into());
             self.0.store.save(identity.session, &record).await?;
             return Ok((receipt(&record), None));
         }
+        // Admission of connected-app calls must see this exact issued credential
+        // before the runner can make its first request. A failed save starts nothing.
+        self.0.store.save(identity.session, &record).await?;
         let (progress, mut updates) = tokio::sync::mpsc::channel(512);
         let execution =
             executor.execute_program_with_progress(request, environment, cancel.clone(), progress);

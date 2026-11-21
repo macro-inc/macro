@@ -201,7 +201,10 @@ impl ConnectedAppService {
     /// Admit only a running execution of the session's current turn, so a
     /// finished program, a replayed one or another turn cannot spend it, and
     /// only a caller holding the account that execution was approved to act
-    /// as: its credential names that account, and nobody else's may spend it.
+    /// as. The verified correlation and session must match the credential
+    /// recorded before this execution started; scoped credentials are never
+    /// admitted, even when their scope name is unknown.
+    #[tracing::instrument(skip_all, err, fields(code_execution_id = %execution, agent_session_id = tracing::field::Empty))]
     async fn admit(
         &self,
         access: &EntityAccessReceipt<EditAccessLevel>,
@@ -210,10 +213,21 @@ impl ConnectedAppService {
     ) -> Result<ConnectedAppUse, CodeModeError> {
         let session =
             super::reviews::session_id(access.entity().entity_type, &access.entity().entity_id)?;
+        tracing::Span::current().record("agent_session_id", tracing::field::display(session));
+        let correlation = agent_correlation::context::current();
+        if correlation.is_none()
+            || agent_correlation::context::current_session() != Some(session.as_uuid())
+            || agent_correlation::context::is_scoped()
+        {
+            return Err(CodeModeError::Forbidden);
+        }
         if access.acting_user_id() != Some(caller) {
             return Err(CodeModeError::Forbidden);
         }
         let record = self.store.get(session, execution).await?;
+        if record.credential_correlation_id != correlation {
+            return Err(CodeModeError::Forbidden);
+        }
         let active = self.turns.active(session).await?;
         let (Some(acting_as), Some(turn)) = (record.acting_as, record.turn_id) else {
             return Err(CodeModeError::Forbidden);
