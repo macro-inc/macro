@@ -27,7 +27,7 @@ import { compareCaller, compareData, DATA_RULES, type Diff, PREVIEW_DROPS_NOTIFI
 import { pageLoad, pendingRequests } from './inflight';
 import { login } from './login';
 import { oddName } from './names';
-import { mount, resetQueries, settle, unmount } from './probe';
+import { mount, resetQueries, settle, unmount, write as probeWrite } from './probe';
 import type { Coverage, Rng } from './rng';
 import type { Ent, UserKey, World } from './world';
 import type { Browser, BrowserContext, Page } from 'playwright';
@@ -233,17 +233,7 @@ async function truthRead(truth: Page, readers: Reader[]): Promise<Snap[]> {
 }
 
 async function inPageWrite(page: Page, op: string, params: unknown): Promise<{ ok: boolean; error?: string }> {
-  return await page.evaluate(
-    async ({ op, params }) => {
-      try {
-        await (window as any).__probe.write(op, params);
-        return { ok: true };
-      } catch (error) {
-        return { ok: false, error: String(error).slice(0, 300) };
-      }
-    },
-    { op, params }
-  );
+  return await probeWrite(page, op, params);
 }
 
 // ---------------------------------------------------------------- the model

@@ -77,3 +77,37 @@ export async function translate(page: Page, args: unknown): Promise<unknown> {
 export async function flushTelemetry(page: Page) {
   await page.evaluate(() => (window as any).__probe.flushTelemetry());
 }
+
+/**
+ * One write through the app's own mutation path (`__probe.write`), without
+ * awaiting a page promise across it. Chromium dropped the promise an
+ * `evaluate` awaited while the branch's cache-off session rename ran
+ * ("Resulting promise was garbage collected"), though the write landed and its
+ * lists refreshed; so the page records the outcome and the driver polls for it.
+ */
+export async function write(page: Page, op: string, params: unknown, timeoutMs = 60_000): Promise<{ ok: boolean; error?: string }> {
+  const id = await page.evaluate(({ op, params }) => {
+    const w = window as any;
+    const id = crypto.randomUUID();
+    w.__writes ??= {};
+    w.__writes[id] = { state: 'pending' };
+    Promise.resolve()
+      .then(() => w.__probe.write(op, params))
+      .then(
+        () => { w.__writes[id] = { state: 'ok' }; },
+        (error: unknown) => { w.__writes[id] = { state: 'err', error: String(error).slice(0, 300) }; }
+      );
+    return id;
+  }, { op, params });
+  try {
+    await page.waitForFunction((id) => (window as any).__writes?.[id]?.state !== 'pending', id, { timeout: timeoutMs, polling: 25 });
+  } catch {
+    return { ok: false, error: `write still pending after ${timeoutMs} ms` };
+  }
+  return await page.evaluate((id) => {
+    const w = window as any;
+    const outcome = w.__writes[id];
+    delete w.__writes[id];
+    return outcome.state === 'ok' ? { ok: true } : { ok: false, error: outcome.error };
+  }, id);
+}

@@ -11,7 +11,7 @@
  */
 import { ApiUser } from '../lib/api';
 import { closeBrowser, launch, openUser, reloadApp, type Side } from '../lib/browser';
-import { mount, settle } from '../lib/probe';
+import { mount, settle, write } from '../lib/probe';
 const rounds = Number(process.argv[2] ?? 4);
 const reader = process.argv[3] ?? 'qa.skills';
 const kind = reader === 'qa.snippets' ? 'snippet' : 'skill';
@@ -56,9 +56,7 @@ try {
       const writers: Side[] = mode === 'both' ? sides : [mode];
       const t0 = Date.now();
       const results = await Promise.all(writers.map((side) =>
-        s.pages[side].evaluate(async (p) => {
-          try { await (window as any).__probe.write('rename', p); return 'ok'; } catch (e) { return String(e).slice(0, 120); }
-        }, { id: item.id, type: 'document', name, oldName: item.name })));
+        write(s.pages[side], 'rename', { id: item.id, type: 'document', name, oldName: item.name }).then((w) => (w.ok ? 'ok' : String(w.error).slice(0, 120)))));
       (writes[mode] ??= []).push(results.join('/'));
       item.name = name;
       // Every 200 ms for 30 s, each side's live list.

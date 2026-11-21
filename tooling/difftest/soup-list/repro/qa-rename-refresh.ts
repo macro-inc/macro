@@ -16,7 +16,7 @@
  */
 import { ApiUser } from '../lib/api';
 import { closeBrowser, launch, openUser, reloadApp, type Side } from '../lib/browser';
-import { mount, settle } from '../lib/probe';
+import { mount, settle, write } from '../lib/probe';
 const rounds = Number(process.argv[2] ?? 3);
 const kind = process.argv[3] === 'snippet' ? 'snippet' : 'skill';
 const feed = kind === 'snippet' ? 'qa.snippets' : 'qa.skills';
@@ -71,9 +71,7 @@ try {
     const newName = `Renamed ${r} ${tag}`;
     const t0 = Date.now();
     const writes = await Promise.all(sides.map((side) =>
-      s.pages[side].evaluate(async (p) => {
-        try { await (window as any).__probe.write('rename', p); return 'ok'; } catch (e) { return String(e).slice(0, 120); }
-      }, { id: target.id, type: 'document', name: newName, oldName: target.name })));
+      write(s.pages[side], 'rename', { id: target.id, type: 'document', name: newName, oldName: target.name }).then((w) => (w.ok ? 'ok' : String(w.error).slice(0, 120)))));
     target.name = newName;
     const samples: Record<string, [number, unknown][]> = {};
     while (Date.now() - t0 < 30_000) {

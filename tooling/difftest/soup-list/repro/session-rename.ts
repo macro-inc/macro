@@ -10,7 +10,7 @@
  */
 import { ApiUser } from '../lib/api';
 import { closeBrowser, launch, openUser, type Side } from '../lib/browser';
-import { mount, settle } from '../lib/probe';
+import { mount, settle, write } from '../lib/probe';
 const rounds = Number(process.argv[2] ?? 5);
 const tag = Date.now().toString(36);
 const email = `owner@wrepro-${tag}.difftest.dev`;
@@ -66,9 +66,7 @@ try {
       const writers: Side[] = mode === 'both' ? sides : [mode];
       const t0 = Date.now();
       const results = await Promise.all(writers.map((side) =>
-        s.pages[side].evaluate(async (p) => {
-          try { await (window as any).__probe.write('renameSession', p); return 'ok'; } catch (e) { return String(e).slice(0, 120); }
-        }, { id, name })));
+        write(s.pages[side], 'renameSession', { id, name }).then((w) => (w.ok ? 'ok' : String(w.error).slice(0, 120)))));
       const wroteMs = Date.now() - t0;
       const seenAt: Partial<Record<Side, number>> = {};
       while (Date.now() - t0 < 30_000 && sides.some((side) => seenAt[side] == null)) {
