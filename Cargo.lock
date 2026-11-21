@@ -3891,6 +3891,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "cache-bench"
+version = "0.1.0"
+dependencies = [
+ "apollo-compiler",
+ "cache-core",
+ "clap",
+ "predicate-index",
+ "rootcause",
+ "serde_json",
+ "soup-filter-cache-adapter",
+ "soup-filter-projection",
+ "uuid",
+]
+
+[[package]]
 name = "cache-core"
 version = "0.1.0"
 dependencies = [
