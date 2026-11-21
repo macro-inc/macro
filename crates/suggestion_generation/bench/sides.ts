@@ -81,9 +81,6 @@ export function comparable(a: RunFile, b: RunFile) {
     // Runs from before the judge was recorded may come from different judges too.
     if (!side.judge) throw new Error(`${side.label} has no judge recorded, so its marks may come from another judge: run it again`);
   }
-  if (a.judge !== b.judge) {
-    throw new Error(`${a.label} and ${b.label} were judged by different judges (${a.judge ?? 'unrecorded'}, ${b.judge ?? 'unrecorded'}): rejudge the older one first`);
-  }
   // A changed mailbox or workspace, or a changed answer key, would read as a change of build.
   const inB = personasOf(b);
   for (const name of [...personasOf(a)].filter((name) => inB.has(name))) {
@@ -93,6 +90,10 @@ export function comparable(a: RunFile, b: RunFile) {
     const [ka, kb] = [keyOf(a, name), keyOf(b, name)];
     if (!ka || !kb) throw new Error(`${(ka ? b : a).label} has no digest of ${named([a, b], name)}'s answer keys: ${recordKeys([a, b], name)}`);
     if (ka !== kb) throw new Error(`${a.label} and ${b.label} were scored against different answer keys for ${named([a, b], name)}: rejudge the older one`);
+  }
+  // After the keys: a run whose keys are missing is run again or rejudged first, as they say.
+  if (a.judge !== b.judge) {
+    throw new Error(`${a.label} and ${b.label} were judged by different judges (${a.judge ?? 'unrecorded'}, ${b.judge ?? 'unrecorded'}): rejudge the older one first`);
   }
 }
 

@@ -265,9 +265,10 @@ export function unlinkMarkdown(text: string): string {
         const link = JSON.parse(body) as { url?: unknown; text?: unknown };
         if (typeof link.text !== 'string' || typeof link.url !== 'string') return element;
         // A text with a scheme of its own is a URL, linked as written; any other is an address or a
-        // host (`mill.example:8443/po` has a port, not a scheme), given a slash only where it is bare.
+        // host (`mill.example:8443/po` has a port, not a scheme), given a slash only where it is bare:
+        // no path, query or fragment.
         const t = link.text;
-        const hosts = t.includes('/') ? [t] : [t, `${t}/`];
+        const hosts = /[/?#]/.test(t) ? [t] : [t, `${t}/`];
         const spelled = /^([a-z][a-z0-9+.-]*:\/\/|(mailto|tel):)/i.test(t) ? [t] : [t, ...hosts.flatMap((host) => [`https://${host}`, `http://${host}`]), `mailto:${t}`];
         return spelled.includes(link.url) ? t : `[${t}](${link.url})`;
       } catch {

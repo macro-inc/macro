@@ -243,6 +243,8 @@ describe('workListOf', () => {
     // A slash added to a bare host is the host's own link; one added to a path is another target.
     expect(unlinkMarkdown(element('https://example.com/', 'example.com'))).toBe('example.com');
     expect(unlinkMarkdown(element('https://example.com/incoming/', 'example.com/incoming'))).toBe('[example.com/incoming](https://example.com/incoming/)');
+    expect(unlinkMarkdown(element('https://example.com?route=orders/', 'example.com?route=orders'))).toBe('[example.com?route=orders](https://example.com?route=orders/)');
+    expect(unlinkMarkdown(element('https://example.com#orders/', 'example.com#orders'))).toBe('[example.com#orders](https://example.com#orders/)');
     // A host with a port has no scheme.
     expect(unlinkMarkdown(element('https://www.example.com:8443/incoming', 'www.example.com:8443/incoming'))).toBe('www.example.com:8443/incoming');
     expect(unlinkMarkdown(element('mailto:ops@example.com', 'ops@example.com'))).toBe('ops@example.com');

@@ -64,6 +64,9 @@ describe('one side of a comparison', () => {
     const held = (over: Partial<RunFile>) => run({ attempts: [attempt('ana', 1, true), attempt('bo', 1, true)], ...over });
     expect(() => joinRuns('a,b', [held({}), held({ keys: undefined })])).toThrow('run it again');
     expect(() => comparable(held({}), held({ keys: undefined }))).toThrow('run it again');
+    // Judged by another judge too, it is still run again: rejudging it is refused.
+    expect(() => comparable(held({}), held({ keys: undefined, judge: 'judge v4' }))).toThrow('run it again');
+    expect(() => comparable(run(), run({ judge: 'judge v4' }))).toThrow('different judges');
   });
 
   test('never names a held-out person', () => {

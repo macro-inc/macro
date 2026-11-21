@@ -613,7 +613,11 @@ async function main() {
     case 'summary':
       for (const path of rest) {
         const run = readRun(path);
-        console.log(withheld(run) ?? JSON.stringify(summary(run.attempts), null, 1));
+        const hidden = withheld(run);
+        const s = summary(run.attempts);
+        // As in `report`: the lists can show where the scores can't.
+        const lists = s.finding && !('withheld' in s.finding) && s.finding.lists ? `\n${JSON.stringify({ finding: s.finding }, null, 1)}` : '';
+        console.log(hidden ? hidden + lists : JSON.stringify(s, null, 1));
       }
       break;
     default:
