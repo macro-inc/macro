@@ -39,11 +39,11 @@ async fn two_agents_mail_each_other_and_cannot_read_each_others_mailboxes() {
     let ben = adapter.create_mailbox(&create("ben", 2)).await.unwrap();
     adapter.apply_guardrails(&ada.id, 10).await.unwrap();
     let (_, ada_key) = adapter
-        .grant_access(&ada.id, Uuid::from_u128(1))
+        .grant_access(&ada.id, Uuid::from_u128(101))
         .await
         .unwrap();
     let (_, ben_key) = adapter
-        .grant_access(&ben.id, Uuid::from_u128(2))
+        .grant_access(&ben.id, Uuid::from_u128(102))
         .await
         .unwrap();
 
@@ -125,7 +125,7 @@ async fn a_revoked_key_reads_nothing() {
     let adapter = adapter_against_fake().await;
     let mailbox = adapter.create_mailbox(&create("ada", 1)).await.unwrap();
     let (grant, key) = adapter
-        .grant_access(&mailbox.id, Uuid::from_u128(1))
+        .grant_access(&mailbox.id, Uuid::from_u128(101))
         .await
         .unwrap();
 
@@ -143,11 +143,11 @@ async fn revoking_all_access_finds_keys_by_their_scope() {
     let adapter = adapter_against_fake().await;
     let mailbox = adapter.create_mailbox(&create("ada", 1)).await.unwrap();
     let (_, first) = adapter
-        .grant_access(&mailbox.id, Uuid::from_u128(1))
+        .grant_access(&mailbox.id, Uuid::from_u128(101))
         .await
         .unwrap();
     let (_, second) = adapter
-        .grant_access(&mailbox.id, Uuid::from_u128(2))
+        .grant_access(&mailbox.id, Uuid::from_u128(102))
         .await
         .unwrap();
 
@@ -159,4 +159,14 @@ async fn revoking_all_access_finds_keys_by_their_scope() {
             .await;
         assert!(matches!(read, Err(ProviderError::NotFound)));
     }
+}
+
+#[tokio::test]
+async fn a_key_reused_for_another_operation_is_refused() {
+    let adapter = adapter_against_fake().await;
+    let mailbox = adapter.create_mailbox(&create("ada", 1)).await.unwrap();
+
+    let reused = adapter.grant_access(&mailbox.id, Uuid::from_u128(1)).await;
+
+    assert!(matches!(reused, Err(ProviderError::Rejected)));
 }

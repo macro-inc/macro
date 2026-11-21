@@ -61,8 +61,10 @@ struct VendorState {
     messages: Vec<FakeMessage>,
     /// Mail addressed outside the fake: kept, never sent.
     outbox: Vec<FakeMessage>,
-    /// Idempotency key → the response it got.
-    replays: HashMap<String, Value>,
+    /// (credential, idempotency key) → the operation it was used for and the
+    /// response it got. Scoped per credential, not per endpoint, as many real
+    /// APIs scope it, so a key reused across operations is caught.
+    replays: HashMap<String, (String, Value)>,
     next_id: u64,
 }
 
@@ -170,11 +172,20 @@ impl FakeVendor {
 }
 
 fn idempotency_key(headers: &HeaderMap) -> Option<String> {
-    headers
-        .get("idempotency-key")?
-        .to_str()
-        .ok()
-        .map(str::to_owned)
+    let key = headers.get("idempotency-key")?.to_str().ok()?;
+    Some(format!("{}:{key}", bearer(headers).unwrap_or_default()))
+}
+
+/// A replayed answer, or a refusal when the key was used for another operation.
+fn replayed(state: &VendorState, key: Option<&String>, operation: &str) -> Option<Response> {
+    let (used_for, answer) = state.replays.get(key?)?;
+    if used_for != operation {
+        return Some(error(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "idempotency_key_reused",
+        ));
+    }
+    Some(data(StatusCode::CREATED, answer.clone()))
 }
 
 #[derive(Deserialize)]
@@ -192,10 +203,11 @@ async fn create_inbox(
     if !vendor.is_admin(&headers) {
         return error(StatusCode::PAYMENT_REQUIRED, "payment_required");
     }
-    let replay_key = idempotency_key(&headers).map(|key| format!("inbox:{key}"));
+    let replay_key = idempotency_key(&headers);
+    let operation = "create_inbox".to_owned();
     let mut state = vendor.lock();
-    if let Some(replayed) = replay_key.as_ref().and_then(|key| state.replays.get(key)) {
-        return data(StatusCode::CREATED, replayed.clone());
+    if let Some(answer) = replayed(&state, replay_key.as_ref(), &operation) {
+        return answer;
     }
 
     let inbox_id = state.id("inbox");
@@ -215,7 +227,7 @@ async fn create_inbox(
     let created =
         json!({"inbox_id": inbox_id, "email": email, "tags": body.tags, "status": "active"});
     if let Some(key) = replay_key {
-        state.replays.insert(key, created.clone());
+        state.replays.insert(key, (operation, created.clone()));
     }
     data(StatusCode::CREATED, created)
 }
@@ -297,10 +309,11 @@ async fn create_api_key(
     if !vendor.is_admin(&headers) {
         return error(StatusCode::UNAUTHORIZED, "unauthorized");
     }
-    let replay_key = idempotency_key(&headers).map(|key| format!("key:{key}"));
+    let replay_key = idempotency_key(&headers);
+    let operation = "create_api_key".to_owned();
     let mut state = vendor.lock();
-    if let Some(replayed) = replay_key.as_ref().and_then(|key| state.replays.get(key)) {
-        return data(StatusCode::CREATED, replayed.clone());
+    if let Some(answer) = replayed(&state, replay_key.as_ref(), &operation) {
+        return answer;
     }
 
     // The fake supports only what Macro mints: a key for exactly one inbox.
@@ -318,7 +331,9 @@ async fn create_api_key(
 
     let created = json!({"key_id": key_id, "key": key, "inbox_ids": [inbox_id]});
     if let Some(replay_key) = replay_key {
-        state.replays.insert(replay_key, created.clone());
+        state
+            .replays
+            .insert(replay_key, (operation, created.clone()));
     }
     data(StatusCode::CREATED, created)
 }
@@ -490,10 +505,11 @@ async fn send_message(
     if !vendor.scoped_inbox(&headers, &inbox_id) {
         return error(StatusCode::NOT_FOUND, "not_found");
     }
-    let replay_key = idempotency_key(&headers).map(|key| format!("send:{inbox_id}:{key}"));
+    let replay_key = idempotency_key(&headers);
+    let operation = format!("send:{inbox_id}");
     let mut state = vendor.lock();
-    if let Some(replayed) = replay_key.as_ref().and_then(|key| state.replays.get(key)) {
-        return data(StatusCode::CREATED, replayed.clone());
+    if let Some(answer) = replayed(&state, replay_key.as_ref(), &operation) {
+        return answer;
     }
     let Some(from_email) = state
         .inboxes
@@ -518,7 +534,7 @@ async fn send_message(
     );
     let sent = json!({"message_id": message_id, "thread_id": thread_id, "status": "sent"});
     if let Some(key) = replay_key {
-        state.replays.insert(key, sent.clone());
+        state.replays.insert(key, (operation, sent.clone()));
     }
     data(StatusCode::CREATED, sent)
 }
@@ -537,10 +553,11 @@ async fn reply(
     if !vendor.scoped_inbox(&headers, &inbox_id) {
         return error(StatusCode::NOT_FOUND, "not_found");
     }
-    let replay_key = idempotency_key(&headers).map(|key| format!("reply:{inbox_id}:{key}"));
+    let replay_key = idempotency_key(&headers);
+    let operation = format!("reply:{inbox_id}:{message_id}");
     let mut state = vendor.lock();
-    if let Some(replayed) = replay_key.as_ref().and_then(|key| state.replays.get(key)) {
-        return data(StatusCode::CREATED, replayed.clone());
+    if let Some(answer) = replayed(&state, replay_key.as_ref(), &operation) {
+        return answer;
     }
     let Some(original) = state
         .messages
@@ -583,7 +600,7 @@ async fn reply(
     );
     let sent = json!({"message_id": sent_id, "thread_id": original.thread_id, "status": "sent"});
     if let Some(key) = replay_key {
-        state.replays.insert(key, sent.clone());
+        state.replays.insert(key, (operation, sent.clone()));
     }
     data(StatusCode::CREATED, sent)
 }

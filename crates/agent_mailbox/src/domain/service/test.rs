@@ -41,6 +41,8 @@ struct VendorState {
     sent_by_key: HashMap<Uuid, SentMessage>,
     taken_addresses: Vec<String>,
     guardrails: HashMap<String, u32>,
+    /// Every idempotency key the provider saw, with the operation it came with.
+    idempotency_keys: Vec<(&'static str, Uuid)>,
     create_calls: usize,
     send_calls: usize,
     /// Errors the next calls of an operation return, in order.
@@ -117,6 +119,9 @@ impl MailboxProvisioner for FakeVendor {
     ) -> Result<ProvisionedMailbox, ProviderError> {
         let mut state = self.0.lock().unwrap();
         state.create_calls += 1;
+        state
+            .idempotency_keys
+            .push(("create", request.idempotency_key));
         if let Some(error) = Self::take_failure(&mut state, "create") {
             return Err(error);
         }
@@ -194,6 +199,7 @@ impl MailboxProvisioner for FakeVendor {
         idempotency_key: Uuid,
     ) -> Result<(ProviderGrantId, MailboxKey), ProviderError> {
         let mut state = self.0.lock().unwrap();
+        state.idempotency_keys.push(("grant", idempotency_key));
         if let Some(error) = Self::take_failure(&mut state, "grant") {
             return Err(error);
         }
@@ -305,6 +311,7 @@ impl MailboxClient for FakeVendor {
         let mut state = self.0.lock().unwrap();
         Self::authorize(&state, mailbox, key)?;
         state.send_calls += 1;
+        state.idempotency_keys.push(("send", idempotency_key));
         if let Some(error) = Self::take_failure(&mut state, "send") {
             return Err(error);
         }
@@ -330,6 +337,7 @@ impl MailboxClient for FakeVendor {
         let mut state = self.0.lock().unwrap();
         Self::authorize(&state, mailbox, key)?;
         state.send_calls += 1;
+        state.idempotency_keys.push(("send", idempotency_key));
         if let Some(sent) = state.sent_by_key.get(&idempotency_key) {
             return Ok(sent.clone());
         }
@@ -1822,4 +1830,90 @@ async fn a_request_id_reused_for_another_agent_is_refused() {
         world.service.status(&user(BEN)).await,
         Err(AgentMailboxError::NotFound)
     ));
+}
+
+#[test]
+fn reserved_role_names_are_not_mailbox_names() {
+    for reserved in [
+        "admin",
+        "administrator",
+        "postmaster",
+        "abuse",
+        "hostmaster",
+        "webmaster",
+        "root",
+        "security",
+        "noreply",
+        "no-reply",
+        "support",
+        "billing",
+    ] {
+        assert!(LocalPart::parse(reserved).is_err(), "{reserved}");
+    }
+    assert!(LocalPart::parse("admin-helper").is_ok());
+}
+
+#[tokio::test]
+async fn every_provider_operation_gets_its_own_idempotency_key() {
+    let world = world();
+    world
+        .vendor
+        .0
+        .lock()
+        .unwrap()
+        .taken_addresses
+        .push("ada@fake-vendor.invalid".to_owned());
+    world
+        .service
+        .provision(request(ADA, 1, "ada"))
+        .await
+        .unwrap();
+    world
+        .service
+        .provision(request(BEN, 2, "ben"))
+        .await
+        .unwrap();
+    let agent_key = Uuid::from_u128(42);
+    world
+        .service
+        .send(
+            &user(ADA),
+            OwnerApproval(Some("Send it.".to_owned())),
+            agent_key,
+            outgoing("Hi"),
+        )
+        .await
+        .unwrap();
+    world
+        .service
+        .send(
+            &user(BEN),
+            OwnerApproval(Some("Send it.".to_owned())),
+            agent_key,
+            outgoing("Hi"),
+        )
+        .await
+        .unwrap();
+
+    let keys: Vec<Uuid> = world
+        .vendor
+        .0
+        .lock()
+        .unwrap()
+        .idempotency_keys
+        .iter()
+        .map(|(_, key)| *key)
+        .collect();
+    let mut distinct = keys.clone();
+    distinct.sort();
+    distinct.dedup();
+    assert_eq!(
+        distinct.len(),
+        keys.len(),
+        "no key is reused across operations or mailboxes: {keys:?}"
+    );
+    assert!(
+        !keys.contains(&agent_key),
+        "an agent's own key never reaches the provider unscoped"
+    );
 }

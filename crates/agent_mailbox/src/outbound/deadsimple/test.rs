@@ -129,7 +129,7 @@ async fn finds_a_lost_create_by_its_owner_tag() {
         .and(path("/v1/inboxes"))
         .and(query_param("tag", format!("macro-agent-mailbox:{}", Uuid::from_u128(9))))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-            "data": {"inboxes": [{"inbox_id": inbox_id().0, "email": "nova@example.net"}], "count": 1}
+            "data": {"inboxes": [{"inbox_id": inbox_id().0, "email": "nova@example.net", "tags": [format!("macro-agent-mailbox:{}", Uuid::from_u128(9))]}], "count": 1}
         })))
         .mount(&server)
         .await;
@@ -362,4 +362,49 @@ async fn revoking_all_access_revokes_only_keys_scoped_to_exactly_that_mailbox() 
         .filter(|request| request.method == wiremock::http::Method::DELETE)
         .count();
     assert_eq!(deletes, 1);
+}
+
+#[tokio::test]
+async fn a_lost_create_is_never_matched_to_another_owners_inbox() {
+    let (server, adapter) = adapter().await;
+    // An API that ignores the tag filter and lists the whole account.
+    Mock::given(method("GET"))
+        .and(path("/v1/inboxes"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": {"inboxes": [
+                {"inbox_id": "someone-else", "email": "other@example.net", "tags": ["macro-agent-mailbox:00000000-0000-0000-0000-000000000001"]},
+                {"inbox_id": "untagged", "email": "plain@example.net", "tags": []},
+            ], "count": 2}
+        })))
+        .mount(&server)
+        .await;
+
+    let found = adapter
+        .find_mailbox(AgentMailboxId(Uuid::from_u128(9)))
+        .await
+        .unwrap();
+
+    assert_eq!(found, None);
+}
+
+#[tokio::test]
+async fn two_inboxes_with_the_same_owner_tag_are_refused_rather_than_guessed() {
+    let (server, adapter) = adapter().await;
+    let tag = format!("macro-agent-mailbox:{}", Uuid::from_u128(9));
+    Mock::given(method("GET"))
+        .and(path("/v1/inboxes"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": {"inboxes": [
+                {"inbox_id": "first", "email": "a@example.net", "tags": [tag]},
+                {"inbox_id": "second", "email": "b@example.net", "tags": [tag]},
+            ], "count": 2}
+        })))
+        .mount(&server)
+        .await;
+
+    let found = adapter
+        .find_mailbox(AgentMailboxId(Uuid::from_u128(9)))
+        .await;
+
+    assert!(matches!(found, Err(ProviderError::Unavailable)));
 }

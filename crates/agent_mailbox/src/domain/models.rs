@@ -112,12 +112,48 @@ pub enum ProvisioningFailure {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LocalPart(String);
 
+/// Role and staff names no agent may take: RFC 2142 roles, the addresses a
+/// certificate authority mails to prove control of a domain, and names that
+/// would pass for Macro staff.
+pub const RESERVED_LOCAL_PARTS: &[&str] = &[
+    "abuse",
+    "admin",
+    "administrator",
+    "billing",
+    "help",
+    "helpdesk",
+    "hostmaster",
+    "info",
+    "legal",
+    "mailer-daemon",
+    "marketing",
+    "no-reply",
+    "noc",
+    "noreply",
+    "postmaster",
+    "privacy",
+    "root",
+    "sales",
+    "security",
+    "ssladmin",
+    "ssl-admin",
+    "support",
+    "sysadmin",
+    "team",
+    "usenet",
+    "uucp",
+    "webmaster",
+    "www",
+];
+
 /// The longest local part Macro asks for, leaving room for a suffix.
 pub const MAX_LOCAL_PART_LENGTH: usize = 40;
 
 /// A local part that cannot be used.
 #[derive(Debug, thiserror::Error)]
-#[error("a mailbox name uses lowercase letters, digits, '.' and '-', at most 40 characters")]
+#[error(
+    "a mailbox name uses lowercase letters, digits, '.' and '-', at most 40 characters, and is not a reserved role name"
+)]
 pub struct InvalidLocalPart;
 
 impl LocalPart {
@@ -143,6 +179,7 @@ impl LocalPart {
             || !valid_characters
             || !edges_are_alphanumeric
             || value.contains("..")
+            || RESERVED_LOCAL_PARTS.contains(&value)
         {
             return Err(InvalidLocalPart);
         }

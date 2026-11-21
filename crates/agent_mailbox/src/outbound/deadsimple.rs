@@ -151,6 +151,8 @@ struct ErrorBody {
 struct Inbox {
     inbox_id: String,
     email: String,
+    #[serde(default)]
+    tags: Vec<String>,
 }
 
 impl From<Inbox> for ProvisionedMailbox {
@@ -397,15 +399,24 @@ impl MailboxProvisioner for DeadSimple {
         let tag = self::owner_tag(owner_tag);
         let list: InboxList = data(
             self.admin(Method::GET, "/v1/inboxes")?
-                .query(&[("tag", tag.as_str()), ("limit", "2")]),
+                .query(&[("tag", tag.as_str()), ("limit", "100")]),
             Operation::Other,
         )
         .await?;
-        Ok(list
+
+        // The tag filter is the provider's; the match is ours. An inbox that
+        // doesn't carry exactly this owner's tag is never taken for it, and
+        // two that do are refused rather than guessed between.
+        let mut owned = list
             .inboxes
             .into_iter()
-            .next()
-            .map(ProvisionedMailbox::from))
+            .filter(|inbox| inbox.tags.iter().any(|candidate| candidate == &tag));
+        let first = owned.next();
+        if owned.next().is_some() {
+            tracing::error!(agent_mailbox.id = %owner_tag, "two provider inboxes carry one mailbox's owner tag");
+            return Err(ProviderError::Unavailable);
+        }
+        Ok(first.map(ProvisionedMailbox::from))
     }
 
     #[tracing::instrument(name = "agent_mailbox.deadsimple.create_scoped_key", skip_all, err)]

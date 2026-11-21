@@ -84,6 +84,14 @@ pub struct SweepReport {
     pub failed: usize,
 }
 
+/// The idempotency key sent to the provider for one operation on one
+/// mailbox. Derived per mailbox and per operation, so a provider that scopes
+/// keys per account never replays one operation's answer for another, or one
+/// agent's send for another's.
+fn provider_key(mailbox: AgentMailboxId, operation: &[u8]) -> Uuid {
+    Uuid::new_v5(&mailbox.0, operation)
+}
+
 fn internal<Error: std::error::Error + Send + Sync + 'static>(error: Error) -> AgentMailboxError {
     AgentMailboxError::Internal(rootcause::Report::new(error).into_dynamic())
 }
@@ -267,12 +275,12 @@ where
                         return self.stop(&mailbox, token, error).await;
                     }
 
-                    // The mailbox id is the grant's idempotency key: a retry
+                    // A key derived from the mailbox id: a retry
                     // inside the provider's replay window gets the same
                     // credential back instead of minting another.
                     let (grant_id, key) = match self
                         .vendor
-                        .grant_access(&provisioned.id, mailbox.id.0)
+                        .grant_access(&provisioned.id, provider_key(mailbox.id, b"grant"))
                         .await
                     {
                         Ok(grant) => grant,
@@ -320,7 +328,7 @@ where
         }
 
         let request = CreateMailbox {
-            idempotency_key: mailbox.id.0,
+            idempotency_key: provider_key(mailbox.id, b"create"),
             owner_tag: mailbox.id,
             local_part: mailbox.requested_local_part.clone(),
             display_name: mailbox.display_name.clone(),
@@ -332,7 +340,7 @@ where
                 };
                 // A different idempotency key: the first one is bound to the taken address.
                 let suffixed = CreateMailbox {
-                    idempotency_key: mailbox.request_id,
+                    idempotency_key: provider_key(mailbox.id, b"create-suffixed"),
                     local_part: Some(local_part.with_suffix(mailbox.id)),
                     ..request
                 };
@@ -755,7 +763,12 @@ where
         let sent = self
             .with_reserved_send(&mailbox, idempotency_key, SendKind::Message, async || {
                 self.vendor
-                    .send(&provider_mailbox, &key, &message, idempotency_key)
+                    .send(
+                        &provider_mailbox,
+                        &key,
+                        &message,
+                        provider_key(mailbox.id, idempotency_key.as_bytes()),
+                    )
                     .await
             })
             .await?;
@@ -785,7 +798,13 @@ where
 
         self.with_reserved_send(&mailbox, idempotency_key, SendKind::Reply, async || {
             self.vendor
-                .reply(&provider_mailbox, &key, message, &reply, idempotency_key)
+                .reply(
+                    &provider_mailbox,
+                    &key,
+                    message,
+                    &reply,
+                    provider_key(mailbox.id, idempotency_key.as_bytes()),
+                )
                 .await
         })
         .await
