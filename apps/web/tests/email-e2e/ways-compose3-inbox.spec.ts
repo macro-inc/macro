@@ -11,6 +11,7 @@ import {
 import { expect, test } from './harness/fixtures';
 import { readMailbox } from './harness/journeys';
 import { replyEditor, threadMessages } from './harness/send';
+import { backfilled } from './harness/states-send2';
 import { sentCopy } from './harness/ways-compose1';
 import { replyTo, send } from './harness/ways-compose2';
 import { did } from './ledger/record';
@@ -93,6 +94,11 @@ test('the Retry of an inbox change that did not go through sends the new email f
   mailbox,
 }) => {
   const work = await mailbox.stack.link(mailbox.user, 'GMAIL', WORK);
+  // "Inbox synced", raised when an inbox's first backfill is announced,
+  // stacks on the refused change's notice and covers its Retry. A page
+  // opened after both inboxes' backfills never hears of them.
+  await backfilled(mailbox);
+  await backfilled(mailbox, work);
   let refused = 0;
   await page.route('**/email/drafts/*/transfer', async (route) => {
     if (refused > 0) return route.fallback();

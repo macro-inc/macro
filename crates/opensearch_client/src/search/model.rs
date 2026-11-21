@@ -363,6 +363,18 @@ pub(crate) struct SearchResponse<T> {
     pub took: i32,
     pub timed_out: bool,
     pub _shards: Shards,
+    /// Per-phase milliseconds, returned only when the request asks for
+    /// `phase_took`.
+    #[serde(default)]
+    pub phase_took: Option<PhaseTook>,
+}
+
+/// Wall time of the query and fetch phases of one search, in milliseconds,
+/// as the coordinating node measured them.
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub(crate) struct PhaseTook {
+    pub query: u64,
+    pub fetch: u64,
 }
 
 impl<T> SearchResponse<T> {

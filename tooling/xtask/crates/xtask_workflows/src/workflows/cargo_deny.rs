@@ -8,9 +8,11 @@
 //! packages it adds to `Cargo.lock` (`scripts/cargo_deny_new_advisories.ts`);
 //! [`super::cargo_deny_advisories`] fails on the rest, daily on `main`.
 
-use gh_workflow::{Event, Expression, Job, Run, Step, Use, Workflow, WorkflowCall};
+use gh_workflow::expr::typed::{StepHandle, cancelled};
+use gh_workflow::{Event, Job, Run, Step, Workflow, WorkflowCall, ZizmorRule};
 use xtask_paths::RepoGlob;
 
+use crate::workflows::actions::ActionsCheckout;
 use crate::workflows::{runners, steps};
 
 #[cfg(test)]
@@ -35,6 +37,9 @@ pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!(".github/workflows/cargo_deny.yml"),
 ];
 
+/// The bans/licenses/sources check; later steps read its outcome.
+const BANS: StepHandle<()> = StepHandle::new("bans", ());
+
 /// Build the workflow.
 pub fn cargo_deny() -> Workflow {
     Workflow::new("cargo deny check")
@@ -48,10 +53,13 @@ fn cargo_deny_job() -> Job {
         .runs_on(runners::Runner::Small.to_string())
         // `PR CI` checks out the PR's merge commit, whose first parent is the
         // base: the advisories step reads the base's `Cargo.lock` from it.
-        .add_step(checkout().add_with(("fetch-depth", 2)))
+        .add_step(checkout().fetch_depth(2).step().zizmor_ignore(
+            ZizmorRule::Artipacked,
+            "cargo deny fetches git dependencies",
+        ))
         .add_step(steps::setup_rust_light())
         .add_step(install_cargo_deny())
-        .add_step(deny("bans licenses sources").id("bans"))
+        .add_step(deny("bans licenses sources").id(BANS.id()))
         .add_step(
             Step::new("cargo deny check advisories, for packages this PR adds")
                 .run(steps::node_script(include_str!(
@@ -60,20 +68,14 @@ fn cargo_deny_job() -> Job {
                 .shell("bash")
                 // Report advisories even when bans, licenses or sources fail,
                 // as one `cargo deny check` did, but not when setup failed.
-                .if_condition(Expression::new(
-                    "!cancelled() && steps.bans.outcome != 'skipped'",
-                ))
+                .if_condition((!cancelled()).and(BANS.outcome().ne("skipped")))
                 .add_env(("DENY_ARGS", DENY_ARGS))
                 .add_env(("BASE_REV", "HEAD^1")),
         )
 }
 
-pub(crate) fn checkout() -> Step<Use> {
-    steps::abort_stalled_fetch(Step::new("Checkout Repo").uses(
-        "actions",
-        "checkout",
-        "df4cb1c069e1874edd31b4311f1884172cec0e10",
-    )) // v6
+pub(crate) fn checkout() -> ActionsCheckout {
+    ActionsCheckout::new("Checkout Repo")
 }
 
 /// Put the pinned cargo-deny release on `PATH`, after checking its archive.

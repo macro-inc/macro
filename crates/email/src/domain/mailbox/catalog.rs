@@ -16,6 +16,7 @@ pub struct InboxCatalogFacts {
     pub granted_scopes: Vec<String>,
     pub calendar_disabled: bool,
     pub has_calendar_data: bool,
+    pub mailbox_unavailable: bool,
 }
 pub struct InboxCatalogEntry {
     pub facts: InboxCatalogFacts,
@@ -62,6 +63,7 @@ impl<R: InboxCatalogRepository> InboxCatalogService<R> {
                 let sync_status = EmailSyncStatus::derive(
                     facts.link.is_sync_active,
                     facts.link.needs_reauth,
+                    facts.mailbox_unavailable,
                     facts.latest_backfill_status,
                 );
                 let has_calendar = match facts.link.provider {

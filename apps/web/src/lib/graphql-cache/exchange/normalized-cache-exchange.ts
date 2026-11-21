@@ -1,3 +1,7 @@
+import { perfMark } from '@app/observability/perf-marks';
+import { StaleCacheAuthorityError } from '../authority';
+import { UNKNOWN_CACHE_GENERATION } from '../generation-mirror';
+import { cacheSessionGeneration } from '../session-generation';
 import { externalWriteVersion, predatesExternalWrite } from './external-writes';
 /**
  * urql exchange backed by the normalized wasm cache (via a `CacheHost`).
@@ -64,6 +68,7 @@ import {
   map,
   merge,
   mergeMap,
+  onEnd,
   pipe,
   type Source,
   share,
@@ -122,6 +127,9 @@ const QUERY_MUTATION_VERSION_CONTEXT_KEY =
   'normalizedCacheQueryMutationVersion';
 /** Marks dependency-pushed reads as latency-sensitive worker work. */
 const AFFECTED_READ_CONTEXT_KEY = 'normalizedCacheAffectedRead';
+/** Collects the registered operations a link repair's write changed. */
+const LINK_REPAIR_AFFECTED_OPS_CONTEXT_KEY =
+  'normalizedCacheLinkRepairAffectedOps';
 
 // Below every hashed operation key, so a link repair shares none of them.
 let lastLinkRepairKey = -(2 ** 40);
@@ -137,9 +145,9 @@ function revalidationQuery(
   client: Client,
   document: DocumentNode,
   variables: Record<string, unknown>,
-  isLinkRepair: boolean
+  linkRepairAffectedOps: Set<string> | undefined
 ) {
-  if (!isLinkRepair) {
+  if (!linkRepairAffectedOps) {
     return client.query(document, variables, { requestPolicy: 'network-only' });
   }
   lastLinkRepairKey -= 1;
@@ -147,7 +155,10 @@ function revalidationQuery(
     client.createRequestOperation(
       'query',
       { ...createRequest(document, variables), key: lastLinkRepairKey },
-      { requestPolicy: 'network-only' }
+      {
+        requestPolicy: 'network-only',
+        [LINK_REPAIR_AFFECTED_OPS_CONTEXT_KEY]: linkRepairAffectedOps,
+      }
     )
   );
 }
@@ -437,6 +448,8 @@ function uncertainEnqueueResult(op: Operation, error: Error): OperationResult {
 }
 
 export interface NormalizedCacheExchangeOptions {
+  /** Ends owner and generation subscriptions when a client is replaced. */
+  signal?: AbortSignal;
   /** Advances after writes made outside GraphQL, fencing older network responses. */
   externalMutationVersion?: () => number;
   /**
@@ -525,7 +538,7 @@ export function normalizedCacheExchange(
     let mutationVersion = 0;
     const currentMutationVersion = () =>
       mutationVersion + (options.externalMutationVersion?.() ?? 0);
-    host.onMutationSettled((settlement) => {
+    const stopSettlements = host.onMutationSettled((settlement) => {
       // Another tab's durable queue runner can commit into this same cache.
       if (settlement.status !== 'permanently-failed') mutationVersion += 1;
     });
@@ -726,9 +739,9 @@ export function normalizedCacheExchange(
       );
     };
 
-    const pendingAffectedReads = new Set<Promise<void>>();
-    const trackAffectedRead = (read: Promise<void>): void => {
-      pendingAffectedReads.add(read);
+    const pendingAffectedReads = new Map<Promise<void>, number>();
+    const trackAffectedRead = (key: number, read: Promise<void>): void => {
+      pendingAffectedReads.set(read, key);
       const settled = () => pendingAffectedReads.delete(read);
       void read.then(settled, settled);
     };
@@ -828,7 +841,7 @@ export function normalizedCacheExchange(
         } else if (state && state.networkBoundQueries > 0) {
           state.deferredAffected = true;
           if (!state.replacementFallback)
-            trackAffectedRead(emitAffectedWhileNetworkBound(key));
+            trackAffectedRead(key, emitAffectedWhileNetworkBound(key));
         } else if (
           host.watchQuery &&
           !registrationOnly &&
@@ -836,7 +849,7 @@ export function normalizedCacheExchange(
           !liveQueries.get(key)?.result.error &&
           !liveQueries.get(key)?.result.hasNext
         ) {
-          trackAffectedRead(emitWatchedQuery(key));
+          trackAffectedRead(key, emitWatchedQuery(key));
         } else {
           reexecuteAffected(key, registrationOnly);
         }
@@ -874,8 +887,15 @@ export function normalizedCacheExchange(
       const shared = pipe(ops$, share);
 
       // Async cache reads re-inject network-bound operations here.
-      const { source: forwardQueue$, next: enqueueForward } =
+      const { source: forwardQueue$, next: forwardNext } =
         makeSubject<Operation>();
+      const enqueueForward = (op: Operation) =>
+        forwardNext(
+          makeOperation(op.kind, op, {
+            ...op.context,
+            cacheSessionGeneration: cacheSessionGeneration.capture(),
+          })
+        );
       const hydrationRequests = new Set<number>();
 
       const atMutationVersion = (op: Operation): Operation =>
@@ -966,6 +986,10 @@ export function normalizedCacheExchange(
         forward: enqueueForward,
         writeThrough,
         cacheDocument: (op) => ({
+          generation:
+            typeof op.context.cacheSessionGeneration === 'string'
+              ? op.context.cacheSessionGeneration
+              : UNKNOWN_CACHE_GENERATION,
           query: queryText(op),
           operationName: operationName(op),
           variables: op.variables as Record<string, unknown> | undefined,
@@ -989,8 +1013,11 @@ export function normalizedCacheExchange(
 
       async function revalidateAfterSettlement(
         revalidations: QueryRevalidationWire[],
-        mutation?: Operation
+        mutation?: Operation,
+        affectedOps?: readonly string[],
+        refetchAll = false
       ): Promise<void> {
+        if (refetchAll) refetchActiveQueries();
         const reportError = (error: unknown, operation = mutation) => {
           // Diagnostics cannot turn a durably settled attempt back into a retry.
           if (!operation) return;
@@ -1001,6 +1028,9 @@ export function normalizedCacheExchange(
           }
         };
         const repairs: Promise<void>[] = [];
+        // A failed link leaves its parent's readers out of the operations the
+        // commit changed. The repair's own write is what names them.
+        const repairedOps = new Set<string>();
         async function refresh(revalidation: QueryRevalidationWire) {
           try {
             const variables: unknown = JSON.parse(revalidation.variablesJson);
@@ -1026,7 +1056,7 @@ export function normalizedCacheExchange(
               client,
               document,
               variables as Record<string, unknown>,
-              revalidation.onlyOnLinkFailure === true
+              revalidation.onlyOnLinkFailure ? repairedOps : undefined
             ).toPromise();
             if (result.error)
               reportError(result.error, mutation ?? result.operation);
@@ -1041,13 +1071,33 @@ export function normalizedCacheExchange(
           // Ordinary membership refreshes continue in the background.
           if (revalidation.onlyOnLinkFailure) repairs.push(pending);
         }
-        if (repairs.length === 0 && pendingAffectedReads.size === 0) return;
+        // A committed write names the observers it changed, and each awaited
+        // link repair adds the ones its write changed. An unrelated held
+        // publication must not withhold this mutation's outcome or the next
+        // queue head.
+        const affected = affectedOps ? new Set(affectedOps) : undefined;
+        const pendingPublications = () =>
+          [...pendingAffectedReads]
+            .filter(([, key]) => {
+              const operation = `${host.clientId}:${key}`;
+              return (
+                !affected ||
+                affected.has(operation) ||
+                repairedOps.has(operation)
+              );
+            })
+            .map(([read]) => read);
+        if (repairs.length === 0 && pendingPublications().length === 0) return;
         const deliver = async () => {
           await Promise.all(repairs);
           // Persistence schedules subscriber reads but does not publish their
           // values. Even a healthy commit must hand off optimism to those reads.
-          while (pendingAffectedReads.size > 0) {
-            await Promise.allSettled([...pendingAffectedReads]);
+          for (
+            let pending = pendingPublications();
+            pending.length > 0;
+            pending = pendingPublications()
+          ) {
+            await Promise.allSettled(pending);
           }
         };
         let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -1186,6 +1236,8 @@ export function normalizedCacheExchange(
           return undefined;
         }
         const args = {
+          generation:
+            optimistic.authorizationEpoch ?? cacheSessionGeneration.capture(),
           uuid: optimistic.uuid,
           query: queryText(op),
           operationName: operationName(op),
@@ -1330,9 +1382,15 @@ export function normalizedCacheExchange(
         span?: Span
       ): Promise<boolean> {
         let applied = true;
+        const generation =
+          typeof op.context.cacheSessionGeneration === 'string'
+            ? op.context.cacheSessionGeneration
+            : UNKNOWN_CACHE_GENERATION;
+        const current = () =>
+          isCurrent() && cacheSessionGeneration.isCurrent(generation);
         span?.setAttr('cache.effect_count', effects.length);
         for (const effect of effects) {
-          if (!isCurrent()) return false;
+          if (!current()) return false;
           const effectSpan = span?.span(
             effect.kind === 'write'
               ? 'graphql.subscription.cache_write'
@@ -1341,13 +1399,14 @@ export function normalizedCacheExchange(
           try {
             if (effect.kind === 'write') {
               await host.writeQuery({
+                generation,
                 query: queryText(op),
                 operationName: operationName(op),
                 variables: op.variables as Record<string, unknown> | undefined,
                 data: effect.data,
               });
             } else {
-              await host.deleteRecords([effect.key]);
+              await host.deleteRecords([effect.key], generation);
             }
           } catch (error) {
             applied = false;
@@ -1362,7 +1421,7 @@ export function normalizedCacheExchange(
             effectSpan?.end();
           }
         }
-        return applied && isCurrent();
+        return applied && current();
       }
 
       // Persistence is still ordered/durable, but foreground query consumers do
@@ -1405,6 +1464,10 @@ export function normalizedCacheExchange(
             queryStates.get(op.key) === state && activeOps.has(op.key);
           const writeArgs = {
             opKey: op.key,
+            generation:
+              typeof op.context.cacheSessionGeneration === 'string'
+                ? op.context.cacheSessionGeneration
+                : UNKNOWN_CACHE_GENERATION,
             query: queryText(op),
             operationName: operationName(op),
             variables: op.variables as Record<string, unknown> | undefined,
@@ -1428,6 +1491,12 @@ export function normalizedCacheExchange(
           }
           try {
             const write = await host.writeQuery(writeArgs);
+            const linkRepairAffectedOps: unknown =
+              op.context[LINK_REPAIR_AFFECTED_OPS_CONTEXT_KEY];
+            if (linkRepairAffectedOps instanceof Set) {
+              for (const operation of write.affectedOps)
+                linkRepairAffectedOps.add(operation);
+            }
             const deletion = await deleteReportedRecords(result);
             state.networkRegistrationSatisfied = writeArgs.registerDependencies;
             if (host.watchQuery && isActive()) {
@@ -1459,6 +1528,38 @@ export function normalizedCacheExchange(
             return deletion?.revision ?? write.revision;
           } catch (error) {
             reportError(error);
+            if (
+              error instanceof StaleCacheAuthorityError &&
+              op.context.cacheGenerationRecovery !== true &&
+              isActive() &&
+              state.networkResultVersion === resultVersion
+            ) {
+              // A stale startup hint may render from memory, but never lands
+              // in shared storage. Recover that query once with a fresh read;
+              // an owner notification may already have replaced its observer.
+              await host.authority?.current().catch(reportError);
+              const active = activeOps.get(op.key);
+              if (
+                active &&
+                isActive() &&
+                state.networkRequestsInFlight === 0 &&
+                state.networkResultVersion === resultVersion
+              ) {
+                perfMark('cache.generation-recovery', {
+                  reason: 'write-rejected',
+                });
+                // urql can replace or deduplicate this recovery behind cache
+                // rereads. Dispatch here so this page registers dependencies
+                // and can receive later mutations while its old rows stay up.
+                enqueueQueryForward(
+                  makeOperation('query', active, {
+                    ...active.context,
+                    requestPolicy: 'network-only',
+                    cacheGenerationRecovery: true,
+                  })
+                );
+              }
+            }
             // An old-owner failure can arrive after this write started. Retain
             // only the latest successful response for replacement registration.
             if (
@@ -1492,18 +1593,51 @@ export function normalizedCacheExchange(
 
       async function deleteReportedRecords(result: OperationResult) {
         const op = result.operation;
-        if (result.error || result.hasNext || result.data == null) return;
+        if (result.error || result.hasNext || result.data == null)
+          return { attempted: false, revision: undefined };
         try {
           const keys = options.deletedRecordKeys?.(result) ?? [];
-          if (keys.length) return await host.deleteRecords(keys);
+          if (keys.length === 0)
+            return { attempted: false, revision: undefined };
+          const deletion = await host.deleteRecords(
+            keys,
+            typeof op.context.cacheSessionGeneration === 'string'
+              ? op.context.cacheSessionGeneration
+              : UNKNOWN_CACHE_GENERATION
+          );
+          return { ...deletion, attempted: true };
         } catch (error) {
           options.onCacheError?.(error, op);
         }
+        return { attempted: true, revision: undefined };
+      }
+
+      function refetchActiveQueries() {
+        for (const operation of activeOps.values())
+          client.reexecuteOperation(
+            makeOperation('query', operation, {
+              ...operation.context,
+              requestPolicy:
+                operation.context.requestPolicy === 'cache-only'
+                  ? 'cache-only'
+                  : 'network-only',
+              cacheSessionGeneration: cacheSessionGeneration.capture(),
+            })
+          );
       }
 
       async function writeThrough(
         result: OperationResult
       ): Promise<OperationResult | undefined> {
+        const frameGeneration = result.extensions?.cacheSessionGeneration;
+        if (typeof frameGeneration === 'string')
+          result = {
+            ...result,
+            operation: makeOperation(result.operation.kind, result.operation, {
+              ...result.operation.context,
+              cacheSessionGeneration: frameGeneration,
+            }),
+          };
         const op = result.operation;
         if (
           op.kind === 'mutation' &&
@@ -1513,6 +1647,32 @@ export function normalizedCacheExchange(
         ) {
           mutationVersion += 1;
         }
+        const generation = op.context.cacheSessionGeneration;
+        const stale =
+          typeof generation === 'string' &&
+          !cacheSessionGeneration.isCurrent(generation);
+        if (stale && !queueAttemptOf(op)) {
+          if (op.kind === 'mutation') {
+            refetchActiveQueries();
+            if (optimisticContextOf(op))
+              return withOptimisticMutationDisposition(result, {
+                kind:
+                  result.data != null && !result.error
+                    ? 'committed'
+                    : 'permanently-failed',
+              });
+            return result;
+          }
+          if (op.kind === 'subscription') return undefined;
+          result = {
+            ...result,
+            data: undefined,
+            error: new CombinedError({
+              networkError: new StaleCacheAuthorityError(),
+            }),
+          };
+        }
+
         const output =
           op.kind === 'query'
             ? withResultMetadata(result, { source: 'live-network' })
@@ -1574,6 +1734,10 @@ export function normalizedCacheExchange(
           if (result.data == null) return result;
           try {
             const hydration = await host.hydrateQuery({
+              generation:
+                typeof op.context.cacheSessionGeneration === 'string'
+                  ? op.context.cacheSessionGeneration
+                  : UNKNOWN_CACHE_GENERATION,
               query: cacheQueryText(op),
               operationName: operationName(op),
               variables: op.variables as Record<string, unknown> | undefined,
@@ -1745,21 +1909,48 @@ export function normalizedCacheExchange(
 
       if (!host.disabled) {
         mutationQueue.start();
+      }
+      const cleanups = [unsubscribePush, stopSettlements];
+      if (!host.disabled) {
+        cleanups.push(
+          cacheSessionGeneration.onChanged(() => {
+            if (!cacheSessionGeneration.state().paused) return;
+            cacheGeneration += 1;
+            for (const [key] of activeOps) {
+              liveQueries.delete(key);
+              documentReader.forget(key);
+              const state = queryStates.get(key);
+              if (state) {
+                state.cacheReadVersion += 1;
+                state.retainedReplacementFallback = undefined;
+              }
+            }
+          })
+        );
         // Includes BFCache restoration, even with no active query keys. The
         // host gates claims on initialization; durable leases still decide
         // which head is runnable after reconnecting.
-        host.onCacheGenerationChanged((change) => {
-          cacheGeneration += 1;
-          if (change.storage === 'reset') mutationQueue.resetStorage();
-          liveQueries.clear();
-          documentReader.clear();
-          mutationQueue.wake();
-        });
+        cleanups.push(
+          host.onCacheGenerationChanged((change) => {
+            cacheGeneration += 1;
+            if (change.storage === 'reset') mutationQueue.resetStorage();
+            liveQueries.clear();
+            documentReader.clear();
+            mutationQueue.wake();
+          })
+        );
         if (typeof addEventListener === 'function') {
           addEventListener('online', mutationQueue.wake);
+          cleanups.push(() =>
+            removeEventListener('online', mutationQueue.wake)
+          );
         }
       }
-      void unsubscribePush;
+      const dispose = () => {
+        for (const cleanup of cleanups.splice(0)) cleanup();
+        options.signal?.removeEventListener('abort', dispose);
+      };
+      options.signal?.addEventListener('abort', dispose, { once: true });
       return pipe(
         merge([affectedResults$, cacheResults$, mutationPrep$, forwarded$]),
         map((result) => {
@@ -1803,7 +1994,8 @@ export function normalizedCacheExchange(
           const liveResult = withLiveQueryData({ ...result }, view.data);
           liveQueries.set(result.operation.key, { view, result: liveResult });
           return liveResult;
-        })
+        }),
+        onEnd(dispose)
       );
     };
   };

@@ -130,7 +130,10 @@ The projection selects the fields the features consume and copies nested contact
 labels, and attachment records. It preserves absent versus empty body content,
 provider IDs needed for replies, attachment/CID identities, and project navigation
 metadata. Sync headers and unused transport display settings stay out of the models. `email-compose/queries/inbox-source.ts`
-projects linked-account metadata. Actual service-client operations remain in
+projects linked-account metadata. Its same-viewer snapshot retains the inbox owner,
+draft signal setting, and primary selection alongside display fields during a
+pending or failed catalog refresh. Queued saves and sends use that snapshot;
+an account change or a successful empty catalog clears it. Actual service-client operations remain in
 `src/lib/queries/email`, alongside the existing mutations and cache conventions.
 
 Compose controllers receive named `drafts`, `attachmentStorage`, `delivery`,

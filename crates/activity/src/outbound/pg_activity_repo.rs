@@ -138,6 +138,41 @@ where
     Ok(())
 }
 
+/// Whether an entity's history records more appearance changes than `known`,
+/// through a pool or the owning domain's transaction. Reads at most one entry
+/// past `known`, however long the history, so a domain that counts the changes
+/// it made learns whether anyone else made one.
+pub async fn appearance_changes_exceed<'e, E>(
+    executor: E,
+    entity_type: EntityType,
+    entity_id: &str,
+    known: u32,
+) -> Result<bool, sqlx::Error>
+where
+    E: sqlx::PgExecutor<'e>,
+{
+    let known = i64::from(known);
+    let seen = sqlx::query_scalar!(
+        r#"
+        SELECT count(*) AS "seen!"
+        FROM (
+            SELECT 1
+            FROM activity_events
+            WHERE entity_type = $1
+                AND entity_id = $2
+                AND action = 'appearance_changed'
+            LIMIT $3
+        ) AS recorded
+        "#,
+        entity_type.as_ref(),
+        entity_id,
+        known + 1,
+    )
+    .fetch_one(executor)
+    .await?;
+    Ok(seen > known)
+}
+
 impl ActivityRepo for PgActivityRepo {
     type Err = sqlx::Error;
 

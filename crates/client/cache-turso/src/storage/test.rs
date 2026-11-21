@@ -10,6 +10,7 @@ mod filter_scope_semantics;
 mod mutation_retry;
 mod optimistic_atomicity;
 mod page_retention;
+mod permission_retirement;
 mod predicate_cost;
 mod projection_writes;
 mod search_bucket_cost;
@@ -2284,5 +2285,73 @@ fn injected_memory_io_quota_and_sync_failures_require_reset() {
                 TursoStorageCloseOutcome::ResetRequired(expected)
             );
         }
+    });
+}
+
+#[test]
+fn raw_record_keys_include_unprojected_records_and_preserve_queued_writes() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("permission-retirement").unwrap();
+        let typename = "GraphqlSoupCrmContact";
+        let mut records: Vec<_> = (0..1001)
+            .map(|index| {
+                // Intentionally incomplete: there is no searchable name or timestamp.
+                (
+                    key(&format!("{typename}:{index:04}")),
+                    record("private snapshot"),
+                )
+            })
+            .collect();
+        records.push((key("GraphqlSoupDocument:kept"), record("document")));
+        storage.put_batch(records).await.unwrap();
+        storage
+            .enqueue_mutation(queued("PendingDraft"))
+            .await
+            .unwrap();
+        let mut after = None;
+        let mut removed = 0;
+        loop {
+            let keys = storage
+                .record_keys(typename, after.as_deref(), 1000)
+                .await
+                .unwrap();
+            assert!(keys.len() <= 500);
+            let Some(last) = keys.last() else {
+                break;
+            };
+            after = Some(last.id().unwrap().to_owned());
+            removed += keys.len();
+            storage.delete_batch(&keys).await.unwrap();
+        }
+        assert_eq!(removed, 1001);
+        assert!(
+            storage
+                .record_keys(typename, None, 500)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            storage
+                .get_batch(&[key("GraphqlSoupDocument:kept")])
+                .await
+                .unwrap()[0]
+                .is_some()
+        );
+        assert_eq!(storage.load_mutation_queue().await.unwrap().len(), 1);
+        let plan = driver::query(&storage.connection(),
+            "EXPLAIN QUERY PLAN SELECT id FROM records WHERE __typename = ?1 AND id > ?2 ORDER BY id LIMIT ?3",
+            vec![text(typename), text(""), Value::from_i64(500)]).unwrap();
+        let details = plan
+            .iter()
+            .map(|row| required_text(row, 3).unwrap())
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(
+            details.contains("SEARCH")
+                && !details.contains("SCAN records")
+                && !details.contains("TEMP B-TREE"),
+            "{details}"
+        );
     });
 }

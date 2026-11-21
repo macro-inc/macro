@@ -7,6 +7,7 @@
  */
 
 import type { ActionConfiguration } from './actionConfiguration';
+import type { AgentMcpServer } from './agentMcpServer';
 import type { CreatedItem } from './createdItem';
 
 /**
@@ -16,5 +17,9 @@ export interface CheckRoutineRequest {
   /** What a routine draft's session created for the routine to use, such as
 the database it writes to; kept with its draft for the person to see. */
   created?: CreatedItem[];
+  /** Apps a routine draft's session found the routine needs that its owner
+hasn't connected, for the person to connect before saving. The routine
+itself requires only connected ones. */
+  missingApps?: AgentMcpServer[];
   routine: ActionConfiguration;
 }

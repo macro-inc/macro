@@ -54,6 +54,7 @@ impl MailboxProgressRepository for PgMailboxSync {
                 l.sync_generation AS "sync_generation!",
                 l.is_sync_active AS "sync_active!",
                 l.needs_reauth AS "needs_reauth!",
+                l.mailbox_unavailable_at IS NOT NULL AS "mailbox_unavailable!",
                 q.queued AS "queued!",
                 q.parked AS "parked!",
                 q.abandoned AS "abandoned!",
@@ -121,6 +122,7 @@ impl MailboxProgressRepository for PgMailboxSync {
                 seconds_since_last_import: row.seconds_since_last_import,
                 sync_active: row.sync_active,
                 needs_reauth: row.needs_reauth,
+                mailbox_unavailable: row.mailbox_unavailable,
                 watch_failures: row.watch_failures,
             })
             .collect())

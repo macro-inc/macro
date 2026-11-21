@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/component: networking
+    app.kubernetes.io/instance: alloy-ingest
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: alloy
+    app.kubernetes.io/part-of: alloy
+    app.kubernetes.io/version: v1.22.0
+    helm.sh/chart: alloy-1.16.0
+  name: alloy-ingest
+  namespace: observability
+spec:
+  internalTrafficPolicy: Cluster
+  ports:
+    - name: http-metrics
+      port: 12345
+      protocol: TCP
+      targetPort: 12345
+    - name: otlp-http
+      port: 4318
+      protocol: TCP
+      targetPort: 4318
+  selector:
+    app.kubernetes.io/instance: alloy-ingest
+    app.kubernetes.io/name: alloy
+  type: ClusterIP

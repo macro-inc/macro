@@ -235,9 +235,9 @@ describe('loadChannelPage', () => {
     });
     const host = startedHost([devicePage([], { covered: false, seq: null })]);
     const record = host.channelTimelineCommit.bind(host);
-    host.channelTimelineCommit = async (args) => {
+    host.channelTimelineCommit = async (args, generation) => {
       await committing;
-      return record(args);
+      return record(args, generation);
     };
 
     const loaded = await loadChannelPage(

@@ -1,0 +1,21 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  labels:
+    app.kubernetes.io/instance: aws-load-balancer-controller
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: aws-load-balancer-controller
+    app.kubernetes.io/version: v3.6.3
+    helm.sh/chart: aws-load-balancer-controller-3.6.3
+  name: aws-load-balancer-serving-cert
+  namespace: kube-system
+spec:
+  dnsNames:
+    - aws-load-balancer-webhook-service.kube-system.svc
+    - aws-load-balancer-webhook-service.kube-system.svc.cluster.local
+  duration: 8760h0m0s
+  issuerRef:
+    kind: Issuer
+    name: aws-load-balancer-root-issuer
+  renewBefore: 720h0m0s
+  secretName: aws-load-balancer-tls

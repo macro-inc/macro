@@ -65,7 +65,7 @@ use teams::inbound::toolset::team_toolset;
 pub use build_context::build_anthropic_tool_context_test;
 pub use build_context::{
     build_anthropic_tool_context, build_cognition_tool_context, build_image_generator_from_env,
-    build_tool_service_context_from_env, build_web_search_provider_from_env,
+    build_tool_service_context_from_env, build_web_search_provider_from_env, service_feature_flags,
 };
 pub use deferred::{DeferredToolSet, deferred_tools};
 pub use import_jobs::{IMPORT_JOBS_HANDOVER_TIMEOUT, ImportJobs};

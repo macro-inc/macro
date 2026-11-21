@@ -1,5 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { CacheHost } from '@graphql-cache/index';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { Telemetry } from '@macro-inc/observability';
 import type {
   MessageCursor,
@@ -148,10 +149,13 @@ export async function loadLocalChannelTimelinePage(
       // Opening from the device counts as use, which eviction goes by; a
       // server page records it with its coverage.
       fireAndForget(
-        host.channelTimelineCommit({
-          channelId: read.channelId,
-          touchedAtMs: Date.now(),
-        }),
+        host.channelTimelineCommit(
+          {
+            channelId: read.channelId,
+            touchedAtMs: Date.now(),
+          },
+          cacheSessionGeneration.capture()
+        ),
         SYNC_SURFACE
       );
     }

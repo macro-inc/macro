@@ -2,10 +2,12 @@
 //! and dependency tracking together behind the API the hosts (wasm worker /
 //! Tauri) expose over RPC.
 
+pub mod authority;
 mod calendar;
 mod channel_timeline;
 mod hydration;
 mod people;
+mod retirement;
 pub use channel_timeline::{ChannelCommitResult, ChannelEvictionResult};
 pub use hydration::HydrationScope;
 #[cfg(test)]
@@ -127,6 +129,12 @@ pub enum EngineError<S: std::error::Error + 'static> {
     /// The background response belongs to an obsolete account or generation.
     #[error("cache hydration scope changed")]
     StaleHydrationScope,
+    /// The response or cache operation belongs to an obsolete permission scope.
+    #[error("cache authority changed; obtain a new permission proof")]
+    StaleAuthority,
+    /// A present permission marker cannot be decoded; never treat it as a fresh cache.
+    #[error("cache authority metadata is malformed")]
+    InvalidAuthority,
     /// Contact observations predate another accepted contact write or engine.
     #[error("contact write fence changed")]
     StaleContactFence,
@@ -380,6 +388,16 @@ const MAX_UNCERTAIN_CALENDAR_EVENTS: usize = 256;
 // leaving room for the production operation catalog and fragment variants.
 const DOCUMENT_CACHE_CAPACITY: usize = 128;
 
+/// Application metadata derived from an authoritative normalized response.
+/// Returned records commit in the response's existing storage transaction.
+pub type ResponseRecords = fn(
+    &crate::meta::Schema,
+    &crate::document::Operation,
+    &serde_json::Map<String, Json>,
+    &Json,
+    &RecordUpdates,
+) -> Result<RecordUpdates, NormalizeError>;
+
 pub struct Engine<S: Storage> {
     schema: std::sync::Arc<crate::meta::Schema>,
     live_queries: live_query::LiveQueries,
@@ -393,6 +411,9 @@ pub struct Engine<S: Storage> {
     docs: LruCache<String, Document>,
     deps: DepIndex,
     identity: IdentityState,
+    /// Single-owner authority cache, invalidated alongside the identity witness.
+    authority: std::sync::OnceLock<Option<authority::CacheAuthority>>,
+    response_records: Option<ResponseRecords>,
     /// Ordered optimistic mutation layers hydrated from durable storage.
     optimistic: Vec<OptimisticLayer>,
     optimistic_hydrated: bool,
@@ -426,9 +447,17 @@ impl<S: Storage> Engine<S> {
             docs: LruCache::new(NonZeroUsize::new(DOCUMENT_CACHE_CAPACITY).unwrap()),
             deps: DepIndex::new(),
             identity: IdentityState::NotHydrated,
+            authority: std::sync::OnceLock::new(),
+            response_records: None,
             optimistic: Vec::new(),
             optimistic_hydrated: false,
         }
+    }
+
+    /// Compose host-owned metadata with each admitted response, without another write.
+    pub fn with_response_records(mut self, records: ResponseRecords) -> Self {
+        self.response_records = Some(records);
+        self
     }
 
     /// Returns the current effective-view revision of this engine generation.
@@ -824,11 +853,18 @@ impl<S: Storage> Engine<S> {
             IDENTITY_VALUE_FIELD.to_string(),
             crate::value::CacheValue::String(identity.to_string()),
         );
+        let authority = self
+            .stored_authority()
+            .await?
+            .map(|authority| authority.for_account(Some(identity.to_owned())));
+        let mut records = vec![(EntityKey(IDENTITY_META_KEY.into()), record)];
+        records.extend(authority.as_ref().map(authority::CacheAuthority::record));
         self.storage
-            .put_batch(vec![(EntityKey(IDENTITY_META_KEY.into()), record)])
+            .put_batch(records)
             .await
             .map_err(EngineError::Storage)?;
         self.identity = IdentityState::Bound(identity.to_string());
+        self.authority = std::sync::OnceLock::from(authority);
         Ok(())
     }
 
@@ -1430,6 +1466,9 @@ impl<S: Storage> Engine<S> {
         let normalized =
             normalize_with_dependencies(&self.schema, op, variables, data, &entity_resolvers)?;
         let mut updates = normalized.updates;
+        if let Some(records) = self.response_records {
+            updates.extend(records(&self.schema, op, variables, data, &updates)?);
+        }
         if !allow_contacts
             && updates
                 .keys()
@@ -1454,6 +1493,16 @@ impl<S: Storage> Engine<S> {
                         crate::value::CacheValue::String(observed.into()),
                     );
                     updates.insert(EntityKey(IDENTITY_META_KEY.into()), witness);
+                    // The new authority commits with the account reset. Native
+                    // publication then needs no fallible post-commit storage IO.
+                    let authority = self.stored_authority().await?.map(|mut authority| {
+                        authority.account = Some(observed.to_owned());
+                        authority.generation = Uuid::now_v7();
+                        authority.policy = None;
+                        authority.ready = false;
+                        authority
+                    });
+                    updates.extend(authority.as_ref().map(authority::CacheAuthority::record));
                     let entries: Vec<_> = updates.into_iter().collect();
                     // Identity, records, and old queue removal are one transaction.
                     // There is no reset to publish if any part of it fails.
@@ -1463,6 +1512,7 @@ impl<S: Storage> Engine<S> {
                         .map_err(EngineError::Storage)?;
                     self.external_reset()?;
                     self.identity = IdentityState::Bound(observed.into());
+                    self.authority = std::sync::OnceLock::from(authority);
                     self.optimistic_hydrated = true;
                     for (key, record) in entries {
                         self.hot.put(key, record);
@@ -2512,6 +2562,33 @@ impl<S: Storage> Engine<S> {
         data: &Json,
         projections: Vec<ProjectionMutation>,
     ) -> Result<CommitOptimisticWriteResult, EngineError<S::Error>> {
+        self.settle_optimistic_response(
+            transaction,
+            claim,
+            NetworkWrite {
+                query,
+                operation_name,
+                variables,
+                data,
+                identity: None,
+            },
+            projections,
+            true,
+        )
+        .await
+    }
+
+    /// Finalizes a server outcome, optionally omitting copied response content.
+    /// Callers serialize cache retirement with publication; a stale outcome still
+    /// settles its queue claim and canonical identities without replaying HTTP.
+    pub async fn settle_optimistic_response(
+        &mut self,
+        transaction: OptimisticTransactionId,
+        claim: MutationClaimToken,
+        response: NetworkWrite<'_>,
+        projections: Vec<ProjectionMutation>,
+        publish_snapshot: bool,
+    ) -> Result<CommitOptimisticWriteResult, EngineError<S::Error>> {
         self.hydrate_optimistic().await?;
         let layer = self
             .optimistic
@@ -2530,15 +2607,7 @@ impl<S: Storage> Engine<S> {
             None
         };
         let write_result = match self
-            .commit_optimistic_write_with_projections(
-                transaction,
-                claim,
-                query,
-                operation_name,
-                variables,
-                data,
-                projections,
-            )
+            .commit_optimistic_response(transaction, claim, response, projections, publish_snapshot)
             .await
         {
             Ok(result) => result,
@@ -2570,6 +2639,40 @@ impl<S: Storage> Engine<S> {
         data: &Json,
         projections: Vec<ProjectionMutation>,
     ) -> Result<WriteResult, EngineError<S::Error>> {
+        self.commit_optimistic_response(
+            transaction,
+            claim,
+            NetworkWrite {
+                query,
+                operation_name,
+                variables,
+                data,
+                identity: None,
+            },
+            projections,
+            true,
+        )
+        .await
+    }
+
+    async fn commit_optimistic_response(
+        &mut self,
+        transaction: OptimisticTransactionId,
+        claim: MutationClaimToken,
+        response: NetworkWrite<'_>,
+        mut projections: Vec<ProjectionMutation>,
+        publish_snapshot: bool,
+    ) -> Result<WriteResult, EngineError<S::Error>> {
+        let NetworkWrite {
+            query,
+            operation_name,
+            variables,
+            data,
+            ..
+        } = response;
+        if !publish_snapshot {
+            projections.clear();
+        }
         self.ensure_revision_can_advance()?;
         let mut live_projection_keys = live_query::projection_keys(&self.optimistic);
         live_projection_keys.extend(
@@ -2633,6 +2736,9 @@ impl<S: Storage> Engine<S> {
                 )));
             }
         };
+        if publish_snapshot && let Some(records) = self.response_records {
+            updates.extend(records(&self.schema, op, variables, data, &updates)?);
+        }
         if updates
             .keys()
             .any(|key| key.typename() == Some("GraphqlContact"))
@@ -2641,13 +2747,17 @@ impl<S: Storage> Engine<S> {
         }
         // Recipes and revalidation variables may contain unresolved local IDs.
         // On a binding error, commit only authoritative data and valid aliases.
-        let (mut recipes, mut revalidations) = if identity_errors.is_empty() {
-            (
-                self.optimistic[index].link_patches.clone(),
-                self.optimistic[index].revalidations.clone(),
-            )
+        let mut recipes = if identity_errors.is_empty() && publish_snapshot {
+            self.optimistic[index].link_patches.clone()
         } else {
-            (Vec::new(), Vec::new())
+            Vec::new()
+        };
+        // A retired link recipe cannot repair a parent cache edge. Its authored
+        // query descriptor must still request fresh, server-authorized content.
+        let mut revalidations = if identity_errors.is_empty() {
+            self.optimistic[index].revalidations.clone()
+        } else {
+            Vec::new()
         };
         for patch in &mut recipes {
             identity::remap_patch(patch, &bindings, &identities);
@@ -2677,6 +2787,21 @@ impl<S: Storage> Engine<S> {
         let mut settled_identities = stored_identities;
         settled_identities.extend(identities.clone());
         identity::apply_record_lifecycle(&mut updates, &bindings, &settled_identities);
+        if !publish_snapshot {
+            // The server already accepted this command. Preserve its canonical
+            // IDs and delete tombstones while refusing the obsolete response
+            // content; otherwise a lost response can strand the strict queue.
+            updates.retain(|key, record| {
+                record.fields.retain(|field, _| {
+                    field == identity::ALIAS_FIELD
+                        || field == identity::MUTATION_UUID_FIELD
+                        || field == identity::DELETED_FIELD
+                        || ((field == "id" || field == "__typename")
+                            && settled_identities.values().any(|target| target == key))
+                });
+                !record.fields.is_empty()
+            });
+        }
         let mut candidates = layer_keys(&self.optimistic);
         candidates.extend(updates.keys().cloned());
         let (mut candidates, bases) = self
@@ -3035,6 +3160,7 @@ impl<S: Storage> Engine<S> {
         // durable queue, so both identity and optimism must re-hydrate.
         self.optimistic_hydrated = false;
         self.identity = IdentityState::NotHydrated;
+        self.authority = std::sync::OnceLock::new();
         let affected = self.deps.all_ops();
         self.advance_revision()?;
         Ok(self.revisioned(affected))
@@ -3046,10 +3172,10 @@ impl<S: Storage> Engine<S> {
         self.query_watches.remove(op_id);
     }
 
-    /// Handles records changed *outside* this engine instance (another tab's
-    /// engine in the dedicated-worker fallback topology, or push-driven
-    /// invalidation): evicts them from the hot tier so the next read hits
-    /// storage, and returns the local active operations that depend on them.
+    /// Handles records invalidated from outside a write, such as a push:
+    /// evicts them from the hot tier so the next read hits storage, and returns
+    /// the local active operations that depend on them. One engine owns a
+    /// database at a time, so no other engine instance changes its records.
     pub fn invalidate_keys<'k>(
         &mut self,
         keys: impl IntoIterator<Item = &'k EntityKey<'static>>,
@@ -3123,6 +3249,7 @@ impl<S: Storage> Engine<S> {
         self.deps = DepIndex::new();
         // The wipe below removes the binding record too.
         self.identity = IdentityState::Missing;
+        self.authority = std::sync::OnceLock::from(None);
         self.advance_revision()
     }
 

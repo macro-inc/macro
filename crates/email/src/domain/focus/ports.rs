@@ -14,8 +14,9 @@ use super::models::{
 
 /// Focus storage and the thread reads classification needs.
 pub trait FocusStore: Send + Sync + 'static {
-    /// Where a thread lives and how it stands, or `None` when it no longer
-    /// exists. A single-row read: every email event starts here.
+    /// Where a thread lives, who its inbox is linked to and how it stands, or
+    /// `None` when it no longer exists. A single-row read: every email event
+    /// starts here.
     fn thread_inbox(
         &self,
         thread_id: Uuid,
@@ -42,14 +43,15 @@ pub trait FocusStore: Send + Sync + 'static {
         limit: i64,
     ) -> impl Future<Output = Result<Vec<StaleThread>, Report>> + Send;
 
-    /// Inboxes holding a Focus thread, with their owners: inboxes classified
-    /// before, whose owners may still be in the rollout.
+    /// Inboxes holding a Focus thread, with their owners and the users they are
+    /// linked to: inboxes classified before, which may still be in the rollout.
     fn inboxes_with_focus(
         &self,
     ) -> impl Future<Output = Result<Vec<FocusInboxOwner>, Report>> + Send;
 
-    /// Every inbox whose mail is syncing, with its owner: where an owner who
-    /// joins the rollout is found before any mail of theirs arrives.
+    /// Every inbox whose mail is syncing, with its owner and the users it is
+    /// linked to: where a person who joins the rollout is found before any mail
+    /// of theirs arrives.
     fn syncing_inboxes(&self) -> impl Future<Output = Result<Vec<FocusInboxOwner>, Report>> + Send;
 
     /// The owner's Focus threads still in the inbox with mail since `since`,
@@ -98,11 +100,12 @@ pub trait ProfileSource: Send + Sync + 'static {
 
 /// Who is in the Focus rollout.
 pub trait FocusEnrollment: Send + Sync + 'static {
-    /// Whether `owner`'s inboxes are classified. An error leaves the answer
-    /// unknown, and nothing of theirs is classified until it is known.
+    /// Whether `user` is in the rollout, which classifies every inbox whose
+    /// Focus tab they see: their own and those linked to them. An error leaves
+    /// the answer unknown, and nothing is classified on it until it is known.
     fn is_enrolled(
         &self,
-        owner: &MacroUserIdStr<'static>,
+        user: &MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<bool, Report>> + Send;
 }
 

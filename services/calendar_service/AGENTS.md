@@ -54,6 +54,12 @@ gateway `/calendar` prefix.
 - A calendar whose sync fails is isolated: the job completes, the calendar
   keeps its error and failure count, and nothing retries it before the next
   push or the five-minute poll, whatever `Retry-After` Google sent.
+- Macro's own per-inbox Google gate (`calendar_ratelimit.rs`, 300 calls per
+  `REDIS_RATE_LIMIT_WINDOW_SECS` window, shared by the sync and calendar
+  mutations) is not a calendar failure: the gate answers `Deferred` naming
+  its window, the account round stops there, and the backfill consumer hides
+  the delivery for that long (`Disposition::Defer`) so the next one resumes
+  the round. `crates/calendar_events`' `AGENTS.md` has the round's rules.
 - The router is mounted at both `/` and `/calendar` (`GATEWAY_PATH_PREFIX` in
   `src/api.rs`) because the gateway forwards the path unchanged.
 - The HTTP API and every background worker share one tokio runtime, on a

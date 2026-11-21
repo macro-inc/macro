@@ -245,6 +245,9 @@ function mount(search = '', keepRowsWhileSearching = false) {
       get isLoading() {
         return loading();
       },
+      get hasPageData() {
+        return !loading() && !paused();
+      },
       get isPlaceholderData() {
         return placeholder();
       },
@@ -274,6 +277,9 @@ function mount(search = '', keepRowsWhileSearching = false) {
       const [missing, setMissing] = createSignal(false);
       const lookup: SoupAstItemsQuery = {
         isFetching: false,
+        get hasPageData() {
+          return !retentionLoading() && !missing();
+        },
         get error() {
           return lookupError() ?? null;
         },

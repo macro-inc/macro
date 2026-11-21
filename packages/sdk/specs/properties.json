@@ -97,6 +97,9 @@
           "403": {
             "description": "Team membership required for team scope"
           },
+          "409": {
+            "description": "The name belongs to a built-in property. The body names that property."
+          },
           "500": {
             "description": "Internal server error"
           }

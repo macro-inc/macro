@@ -77,6 +77,7 @@ impl Repository for Arc<Memory> {
         event_type: Uuid,
         start: DateTime<Utc>,
         end: DateTime<Utc>,
+        exclude: Option<Uuid>,
     ) -> Result<i64, Error> {
         let on_day = |time: DateTime<Utc>| time >= start && time < end;
         Ok(self
@@ -86,6 +87,7 @@ impl Repository for Arc<Memory> {
             .values()
             .filter(|r| {
                 r.profile_id == profile
+                    && Some(r.booking.id) != exclude
                     && r.booking.event_type_id == event_type
                     && r.booking.status != BookingStatus::Cancelled
                     && (on_day(r.booking.starts_at)
@@ -1265,6 +1267,64 @@ async fn slots_stay_closed_on_a_full_day_while_a_move_out_of_it_awaits_the_calen
     assert!(
         service
             .slots(p.id, event, next_day)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn reschedule_offers_no_times_on_a_day_already_at_its_limit() {
+    let store = Arc::new(Memory::default());
+    let service = TestService::new(store.clone(), Arc::new(Calendar::default()), Members);
+    let mut p = profile(None);
+    p.event_types[0].daily_limit = Some(1);
+    let p = service.save("admin", None, p).await.unwrap();
+    let event = p.event_types[0].id;
+    let first_day = request();
+    let mut later = request();
+    later.starts_at += Duration::days(1);
+    let moving = service.book(p.id, event, later).await.unwrap();
+    let full_day = first_day.starts_at.date_naive();
+    let own_day = moving.booking.starts_at.date_naive();
+    // Before anyone books it, the other day offers replacement times.
+    assert!(
+        !service
+            .replacement_slots(moving.booking.id, moving.token, full_day, None)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    let full = service.book(p.id, event, first_day).await.unwrap();
+    // The full day offers nothing and refuses the move; the booking's own day
+    // still offers other times, since it never takes a place from itself.
+    assert!(
+        service
+            .replacement_slots(moving.booking.id, moving.token, full_day, None)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        service
+            .host_replacement_slots("admin", moving.booking.id, full_day)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(matches!(
+        service
+            .reschedule(
+                moving.booking.id,
+                moving.token,
+                full.booking.starts_at + Duration::hours(1)
+            )
+            .await,
+        Err(Error::Conflict)
+    ));
+    assert!(
+        !service
+            .replacement_slots(moving.booking.id, moving.token, own_day, None)
             .await
             .unwrap()
             .is_empty()

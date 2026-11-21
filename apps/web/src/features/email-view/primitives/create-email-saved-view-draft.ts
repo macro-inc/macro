@@ -26,6 +26,7 @@ import type { EmailViewState } from '../types';
 export type EmailSavedViewSelection =
   /** A built-in tab; `changed` once its filters leave the tab's own. */
   | { kind: 'default'; changed: boolean }
+  | { kind: 'new'; changed: boolean }
   | { kind: 'loading' }
   | { kind: 'unavailable' }
   | {
@@ -45,6 +46,7 @@ export function createEmailSavedViewDraft(options: {
   source: SavedViewSource;
   selectedId: Accessor<string | undefined>;
   viewerId: Accessor<string | undefined>;
+  creating?: Accessor<boolean>;
   state: Pick<
     EmailViewState,
     'tab' | 'inboxIds' | 'aliasFilter' | 'facets' | 'conditions'
@@ -129,9 +131,11 @@ export function createEmailSavedViewDraft(options: {
           options.source.error(),
           options.source.viewerId(),
           retainedDrafts(),
+          options.creating?.(),
         ] as const,
-      ([id, viewer, record, error, detailViewer]) => {
-        if (!id || !viewer || error || !record || record.id !== id) return;
+      ([id, viewer, record, error, detailViewer, , creating]) => {
+        if (creating || !id || !viewer || error || !record || record.id !== id)
+          return;
         if (detailViewer !== undefined && detailViewer !== viewer) return;
         latestRevision = Math.max(
           latestRevision,
@@ -171,6 +175,7 @@ export function createEmailSavedViewDraft(options: {
   };
   const view = createMemo<EmailSavedViewSelection>(() => {
     const id = options.selectedId();
+    if (options.creating?.()) return { kind: 'new', changed: true };
     if (!id) {
       const baseline = tabBaseline();
       const definition = current();

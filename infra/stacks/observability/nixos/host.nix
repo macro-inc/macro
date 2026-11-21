@@ -9,38 +9,30 @@ let
     util-linux
   ];
   services = [
-    "grafana"
-    "loki"
-    "tempo"
-    "prometheus"
     "alloy"
-    "alloy-ingest"
     "nginx"
     "postgresql"
     "goalert"
     "macro-alerts-relay"
   ];
   secretConsumers = [
-    "grafana.service"
-    "alloy-ingest.service"
-    "nginx.service"
+    "alloy.service"
     "goalert.service"
     "macro-alerts-relay.service"
   ];
+  # Grafana (20001), Loki (20002), Tempo (20003), Prometheus (20004) and OTLP
+  # ingress (20006) moved to the observability cluster. Their directories stay
+  # on the volume under those ids, so an image that runs them again finds its
+  # data: never give those ids to anything else.
   dataUsers = {
-    grafana = 20001;
-    loki = 20002;
-    tempo = 20003;
-    prometheus = 20004;
     alloy = 20005;
-    alloy-ingest = 20006;
     postgres = 20007;
     goalert = 20008;
   };
 in
 {
   imports = [
-    ./services.nix
+    ./goalert.nix
     ./host-telemetry.nix
     ./proxy.nix
   ];
@@ -88,14 +80,9 @@ in
         PrivateTmp = name != "alloy";
         UMask = lib.mkForce "0077";
         TimeoutStopSec = 90;
-        # Grafana uses the role for CloudWatch reads and SNS notifications.
-        IPAddressDeny = lib.optionals (
-          !builtins.elem name [
-            "loki"
-            "tempo"
-            "grafana"
-          ]
-        ) [ "169.254.169.254/32" ];
+        # None of these needs the instance role. The GoAlert backup does and
+        # runs as its own unit (`goalert.nix`).
+        IPAddressDeny = [ "169.254.169.254/32" ];
       };
     })
     // {
@@ -131,14 +118,11 @@ in
         };
       };
       observability-secrets = {
-        description = "Fetch runtime credentials for Grafana and OTLP ingress";
+        description = "Fetch runtime credentials for GoAlert, its relay and host telemetry";
         requires = [ "observability-bootstrap.service" ];
         after = [ "observability-bootstrap.service" ];
         partOf = [ "observability-bootstrap.service" ];
-        path = [
-          pkgs.awscli2
-          pkgs.openssl
-        ];
+        path = [ pkgs.awscli2 ];
         startLimitIntervalSec = 0;
         unitConfig.Upholds = secretConsumers;
         serviceConfig = {

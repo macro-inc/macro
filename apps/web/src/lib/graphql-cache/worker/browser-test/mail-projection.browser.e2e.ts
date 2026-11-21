@@ -21,8 +21,9 @@ test('server-confirmed invitations survive missing cache metadata and confirmed 
         `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
       const key = (n: number) => `GraphqlSoupEmailThread:${id(n)}`;
       const query = `query MailUpdate { user { id soup(input:{initial:{limit:100,emailView:INBOX}}) { items { __typename id ... on GraphqlSoupEmailThread { inboxVisible isRead } } } } }`;
-      const write = (n: number, inboxVisible: boolean) =>
+      const write = async (n: number, inboxVisible: boolean) =>
         host.writeQuery({
+          generation: (await host.authority!.current()).generation,
           query,
           identity: 'offline-mail-viewer',
           data: {
@@ -164,6 +165,7 @@ test('invalid identity binding preserves the server response and completes the m
         const nowMs = Date.now();
         const enqueued = await host.enqueueOptimisticMutation(
           {
+            generation: (await host.authority!.current()).generation,
             uuid: crypto.randomUUID(),
             query,
             data: {
@@ -191,6 +193,7 @@ test('invalid identity binding preserves the server response and completes the m
             generation: enqueued.initialClaim.mutation.leaseGeneration,
           },
           {
+            generation: (await host.authority!.current()).generation,
             query,
             data: {
               saved: {
@@ -522,7 +525,12 @@ test('retained mail applies optimistic flags, rollback and committed actions wit
         };
         const nowMs = Date.now();
         const queued = await host.enqueueOptimisticMutation(
-          { uuid: crypto.randomUUID(), query, data },
+          {
+            generation: (await host.authority!.current()).generation,
+            uuid: crypto.randomUUID(),
+            query,
+            data,
+          },
           { owner: 'test', nowMs, leaseExpiresAtMs: nowMs + 60_000 }
         );
         if (queued.initialClaim.kind !== 'claimed')
@@ -540,6 +548,7 @@ test('retained mail applies optimistic flags, rollback and committed actions wit
           );
         else
           await host.commitOptimisticWrite(queued.transactionId, token, {
+            generation: (await host.authority!.current()).generation,
             query,
             data,
           });
@@ -547,6 +556,7 @@ test('retained mail applies optimistic flags, rollback and committed actions wit
       };
       try {
         await host.writeQuery({
+          generation: (await host.authority!.current()).generation,
           query:
             'query Partial { user { id soup(input:{initial:{limit:1,emailView:INBOX}}) { items { __typename id ... on GraphqlSoupEmailThread { inboxVisible isRead } } } } }',
           identity: 'offline-mail-viewer',

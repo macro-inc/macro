@@ -277,14 +277,16 @@ second failed start, which the server undoes (computer released, charge
 refunded, agent taken back), with **Retry** buying afresh. Other refusals
 (a trial, an invite already in flight, a failed workspace) show in place.
 The new agent appears in **Team → Members** as its own row (name, **Agent**
-tag) with a status in place of a role: **Setting up** with a spinner while its
+tag) with a status on the summary line where a person's role and plan are: **Setting up** with a spinner while its
 computer provisions, with the computer's setup step under it (**Creating the
 computer**, **Starting up**, **Connecting to Macro**), then **Starting**
 (spinner; the computer is up and the agent hasn't reported online yet), then
-**Running**, **Paused**, **Needs attention** or **Released**. A failed
+**Running**, **Paused**, **Not responding** (its computer stopped answering
+after setup, or crashed and is restarting; it comes back by itself),
+**Needs attention** or **Released**. A failed
 computer's row offers owners and admins **Retry**, the computer's own retry,
-so it never buys a second computer. Owners and admins pick a voice later with the
-row's waveform button (**Change voice**): **Save voice** calls
+so it never buys a second computer. Owners and admins pick a voice later from
+the row's ⋯ (**Change voice**), which also holds **Remove agent**: **Save voice** calls
 `PUT /team_agents/{agent}/voice`, which commits `config/voice.json` in the
 agent's repository and applies from its next call; a failed save keeps the
 pick for retry.
@@ -310,8 +312,10 @@ link…" until the computer has made the link, then the link; **Open again**
 once used), then the code field with **Complete sign-in**, which is primary
 only once a code is typed and says "Checking with Claude. This can take a minute." while it runs.
 A failure shows one inline alert with its way out: **Get a new link** (link
-expired, code rejected, timed out), **Try again** (couldn't get a link), or
-paste again (malformed code, computer busy or unreachable). The harness
+expired, code rejected, including the CLI's own "Invalid code", or the
+computer's sign-in timed out), **Try again** (couldn't get a link), or send
+the code again (malformed code, computer busy or unreachable, or the service
+timed out waiting for the computer, which may still have finished). The harness
 tells its two 403s apart: `rollout_disabled` reads "Computers aren't
 available for this account yet." with **Try again** before a link exists;
 after a code was sent the sign-in still waits, so the field stays open to
@@ -333,11 +337,10 @@ short chip) and above the composer; messages still send. **Setting up** (also
 while the agent is **Starting**): "<name>
 is still being set up. It'll answer once it's ready."; a failed setup:
 "<name> isn't running: setup failed." with **Retry** for owners and admins;
-a powered-off computer, or one whose macrod isn't connected: "<name> isn't
+a powered-off computer, or one that is **Not responding**: "<name> isn't
 running: its computer is offline."; a released one: "<name> isn't running
-right now." The state comes from the team's agents and `/harnesses`, the same
-sources as the Members row; members can't see the computer's runtime, so a
-running computer whose macrod dropped shows them no banner.
+right now." The state comes from the team's agents, the same source as the
+Members row, so every member sees the same banner.
 
 Owners and admins remove an agent with its trash button and a destructive
 confirmation, **Remove <name>?** ("Its computer and files are deleted. This
@@ -738,14 +741,19 @@ Max stays active until renewal; **Keep Max plan** cancels a pending downgrade
 without resetting usage. Failed renewal-detail reads offer **Try again**.
 Team members who cannot manage billing see the notice without its action.
 
-`Team → Members` (`/app/settings/team-members`; on a paid team each row shows the seat's plan,
-and admins/owners can move a seat between Pro and Max with the `Seat plan`
-menu; Max upgrades are immediate and prorated, except the first Max seat on a
+`Team → Members` (`/app/settings/team-members`; every row, owner, admin,
+member or agent, is the picture, name, email, one summary line (role, then the
+seat's plan on a paid team) and a ⋯ holding what the viewer can change: a menu
+on desktop and a sheet on touch, like Machines. Admins/owners move a seat
+between Pro and Max under the ⋯'s **Plan**; Max upgrades are immediate and prorated, except the first Max seat on a
 trialing team, which ends the trial and bills Max for a new cycle today.
-Pro downgrades start at renewal.
-**Keep Max** appears only for a confirmed pending downgrade and cancels it;
+Pro downgrades start at renewal, and the row's summary says **Pro at renewal**
+until then.
+**Keep Max** appears in the ⋯ only for a confirmed pending downgrade and cancels it;
 failed scheduled-plan reads offer **Try again**, while teams without applicable
-scheduled plans show no retry notice). CRM (individual email contribution, gated selective sharing rules with JSON,
+scheduled plans show no retry notice). CRM (for owners and admins while
+`enable-crm-member-access-changes` is on, **Who can use CRM** first: each person's
+CRM access switch, the same setting as their ⋯ in Members; individual email contribution, gated selective sharing rules with JSON,
 count preview and history subpages, and team/personal domain exclusions;
 a `Stages` section independent of email contribution for the company Stage options that new pipelines
 also start with, with `Customize`, inline rename, reorder by drag handle or arrow
@@ -965,7 +973,9 @@ row: status dot, name, one muted line, at most one action, and **⋯** (a sheet
 on touch) for the rest. The line is the size and the resources recorded at
 purchase (`Standard · 4 vCPU · 8 GB · 100 GB`), then one state: setup progress
 (`Setting up · Starting up (2 of 3)`, or **Waiting for space on the
-host**), **Starting…** while a power-on runs, **Powered off**, a fault, or how
+host**), **Starting…** while a power-on runs, **Powered off**, **Not responding**
+(past setup but unreachable or restarting after a crash; it comes back by
+itself), a fault, or how
 Claude is paid for (`Claude: Macro credits`, `Signed in with Claude`,
 `Claude: not signed in`; a shimmer while the mode loads). A purchase whose
 charge is still being confirmed (`purchasing`, or the API's billing setup

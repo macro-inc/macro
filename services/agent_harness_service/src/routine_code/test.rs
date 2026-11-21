@@ -166,6 +166,14 @@ struct Programs(std::sync::Mutex<usize>);
 
 #[async_trait::async_trait]
 impl ProgramExecutor for Programs {
+    async fn check_program(
+        &self,
+        _: &code_execution::domain::ExecuteRequest,
+        _: code_execution::domain::ContextShape,
+        _: tokio_util::sync::CancellationToken,
+    ) -> Result<(), code_execution::domain::Outcome> {
+        Ok(())
+    }
     async fn execute_program(
         &self,
         _: code_execution::domain::ExecuteRequest,
@@ -190,6 +198,7 @@ impl ProgramChecker for NoChecks {
         &self,
         _: &[code_execution::domain::SourceFile],
         _: &str,
+        _: code_execution::domain::ProgramImports,
     ) -> Result<Vec<code_execution::domain::Diagnostic>, code_execution::domain::CheckError> {
         Ok(Vec::new())
     }
@@ -332,6 +341,14 @@ struct RunTokens(std::sync::Mutex<Vec<String>>);
 
 #[async_trait::async_trait]
 impl ProgramExecutor for RunTokens {
+    async fn check_program(
+        &self,
+        _: &code_execution::domain::ExecuteRequest,
+        _: code_execution::domain::ContextShape,
+        _: tokio_util::sync::CancellationToken,
+    ) -> Result<(), code_execution::domain::Outcome> {
+        Ok(())
+    }
     async fn execute_program(
         &self,
         _: code_execution::domain::ExecuteRequest,
@@ -500,10 +517,13 @@ mod real_deno {
         let runner = DenoRunner::new(deno.clone(), root.path().join("runs"), 128)
             .await
             .unwrap();
-        let executor = ExecutionService::new(Arc::new(runner), Limits::default()).unwrap();
-        let checker = DenoChecker::new(deno, root.path().join("checks"), 1, 64 * 1024)
-            .await
-            .unwrap();
+        let checker = Arc::new(
+            DenoChecker::new(deno, root.path().join("checks"), 1, 4, 64 * 1024)
+                .await
+                .unwrap(),
+        );
+        let executor =
+            ExecutionService::new(Arc::new(runner), checker.clone(), Limits::default()).unwrap();
         let endpoints = code_execution::domain::SdkEndpoints {
             hosts: ["cognition", "email", "storage"]
                 .map(|name| (name.to_owned(), host.to_owned()))
@@ -512,7 +532,7 @@ mod real_deno {
         };
         let code = SdkRoutineCode::new(
             Arc::new(executor),
-            Arc::new(checker),
+            checker,
             FixedToken,
             endpoints,
             Arc::new(ai_usage::NoOpUsageRecorder),
@@ -1165,11 +1185,15 @@ fn an_area_reads_its_index_guidance_and_declarations_without_imports() {
     assert_eq!(
         files,
         [
+            "src/entities/task-templates/namespace.d.ts",
             "src/entities/tasks/namespace.d.ts",
+            "src/entities/task-templates/task-template.d.ts",
             "src/entities/tasks/task.d.ts"
         ]
     );
     assert!(reference.contains("class TaskNamespace "));
+    assert!(reference.contains("class TaskTemplateNamespace "));
+    assert!(reference.contains("class TaskTemplate "));
     assert!(!reference.lines().any(|line| line.starts_with("import ")));
     assert!(reference.len() <= ONE_AREA_BYTES + IMPORTED_TYPE_BYTES + 256);
 }
