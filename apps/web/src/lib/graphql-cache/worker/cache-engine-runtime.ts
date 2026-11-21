@@ -122,7 +122,8 @@ const withVersion = <
 /**
  * The coordinator protocol says only whether storage survived the open. An
  * in-place upgrade keeps every record, queued write and generation, so it
- * travels as an ordinary existing open and the protocol stays as it is.
+ * travels as an ordinary existing open and the protocol stays as it is. An
+ * outcome this glue doesn't know claims nothing survived.
  */
 const engineOpenOutcome = (outcome: CacheOpenOutcome): EngineOpenOutcome =>
   match(outcome)
@@ -135,7 +136,7 @@ const engineOpenOutcome = (outcome: CacheOpenOutcome): EngineOpenOutcome =>
       'reset-storage-uncertain',
       (same) => same
     )
-    .exhaustive();
+    .exhaustive((): EngineOpenOutcome => 'reset-storage-uncertain');
 
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);

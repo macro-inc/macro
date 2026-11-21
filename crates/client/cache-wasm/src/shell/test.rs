@@ -2881,11 +2881,9 @@ async fn rewrite_closed_as_storage_11(scope: &str) {
     let OpenResult::Ready(session) = owner.open().await.expect("open closed database") else {
         panic!("a closed database is a complete pair")
     };
-    let mut storage = TursoStorage::from_opfs_session(
-        session.connect().expect("connect closed database"),
-        scope,
-    )
-    .expect("closed database initializes");
+    let mut storage =
+        TursoStorage::from_opfs_session(session.connect().expect("connect closed database"), scope)
+            .expect("closed database initializes");
     cache_turso::migration_test_hooks::rewrite_as_storage_11(&mut storage)
         .expect("rewrite as storage 11");
     let TursoStorageCloseOutcome::Healthy(closed) = storage.try_close().expect("close rewrite")

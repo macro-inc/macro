@@ -908,7 +908,8 @@ async fn open_cache_inner(
 
 fn cache_open_result(engine: CacheEngine, report: OpenReport) -> Result<JsValue, JsValue> {
     let result = js_sys::Object::new();
-    let set = |key: &str, value: JsValue| js_sys::Reflect::set(&result, &JsValue::from_str(key), &value);
+    let set =
+        |key: &str, value: JsValue| js_sys::Reflect::set(&result, &JsValue::from_str(key), &value);
     set("engine", JsValue::from(engine))?;
     set("outcome", JsValue::from_str(report.outcome.as_str()))?;
     if let CacheOpenOutcome::UpgradedExisting {
