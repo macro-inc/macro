@@ -64,6 +64,24 @@ fn a_write_refused_a_backfill_write_slot_is_deferred_with_backoff() {
 }
 
 #[test]
+fn a_population_refused_its_teams_slot_is_deferred_for_minutes() {
+    let refused = retryable(
+        crate::domain::backfill_jobs::worker::admit_crm_slot::<()>(Ok(None)).unwrap_err(),
+    );
+
+    let Some(Some(retry_after)) = rate_limit(&refused) else {
+        panic!("deferred with the refusal's delay")
+    };
+    assert!(
+        (Duration::from_secs(600)..=Duration::from_secs(900)).contains(&retry_after),
+        "{retry_after:?}"
+    );
+    // Even the first deferral waits that long, within SQS's 15-minute cap.
+    let seconds = delay_seconds(0, Some(retry_after));
+    assert!((600..=900).contains(&seconds), "{seconds}");
+}
+
+#[test]
 fn other_retryable_failures_keep_waiting_out_the_visibility_timeout() {
     let database = retryable(ProcessingError::Retryable(DetailedError {
         reason: FailureReason::DatabaseQueryFailed,

@@ -89,7 +89,9 @@ enforced by the ordinary backend APIs.
   fields with optional defaults, and revision-guarded writes. Team membership and
   creator/admin management stay server-authorized.
 - `users.search(nameOrEmail)` is one `GET /contacts/search`: the server
-  ranks the caller's contacts and current team (teammates first, at most 20)
+  ranks the caller's contacts and current team (teammates first, then, for a
+  caller on the list-aware directory, `interacted`/`invited` and then email
+  contacts; at most 20; each person carries `lists`)
   and the SDK seeds User handles with each name and agent flag, keeping that
   order. It is not a global directory, and the full `GET /contacts` list stays
   out of the SDK.
@@ -206,6 +208,7 @@ enforced by the ordinary backend APIs.
 
 - Use POST to start channel calls and call-id scoped joins/leaves; the legacy GET starts a call as a side effect.
 - One item's mute, snooze and unmute are `muteNotifications`/`unmuteNotifications` on every favoritable handle; keep mute-all, email unsubscribe and bulk item preferences in the app-only coverage exclusions.
+- `notifications.send` pings people about an entity: it takes a required `body` (at most 280 characters; a ping has no title), a `NotificationLink` handle and `User` handles (`to` omitted pings the caller) and returns `{ notified, skipped }`, never raw ids; a recipient without access or whose inbox would not list the link is skipped with its reason, never shared with.
 - Keep additive `/channel-sections` endpoints app-only; the public channel-label API retains its legacy membership semantics.
 - Keep `external-chat/` provider-neutral; provider-specific reads (WhatsApp community chats) branch on `provider` with an exhaustive match.
 - Use existing entity handles for reads and mutations. Follow the

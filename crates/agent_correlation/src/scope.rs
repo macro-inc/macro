@@ -24,8 +24,8 @@ pub enum SessionScope {
 /// Requests that reach someone else: sending or scheduling mail, invites
 /// and calendar changes guests hear of, posts, reactions, mentions, shares,
 /// channel and call membership, team and booking settings, routines (which
-/// act later), connected apps and their tools, webhooks, and fetching or
-/// searching the web, whose request carries what it's given out. Also the
+/// act later), connected apps and their tools, webhooks, pings, and fetching
+/// or searching the web, whose request carries what it's given out. Also the
 /// requests that start work with the person's full access: a new or warmed
 /// agent session, a session's control, queued prompts and app connections
 /// (which resume it), its tool approvals and review decisions, running or
@@ -80,6 +80,7 @@ const SENDS: &[(&str, &str)] = &[
     ("POST", "/external-chats/{id}/sends"),
     ("POST", "/external-chats/{id}/delivery"),
     ("POST", "/external-chats/{id}/messages/attachments"),
+    ("POST", "/user_notifications/send"),
     ("POST", "/agent-sessions"),
     ("POST", "/agent-sessions/warm"),
     ("POST", "/agent-sessions/{id}/app-connections"),

@@ -319,6 +319,9 @@ impl MailboxSyncRepository for PgMailboxSync {
             ON CONFLICT (link_id,generation,provider_id) DO UPDATE SET
                 revision = email_message_reconciliation.revision + 1,
                 is_import = email_message_reconciliation.is_import AND EXCLUDED.is_import,
+                -- A folder page lists the message, so it is read as a folder
+                -- page's message, wherever it has moved since.
+                from_notification = false,
                 notified_at = COALESCE(EXCLUDED.notified_at, email_message_reconciliation.notified_at),
                 notified_traceparent = CASE WHEN EXCLUDED.notified_at IS NULL
                     THEN email_message_reconciliation.notified_traceparent ELSE EXCLUDED.notified_traceparent END,
@@ -472,7 +475,7 @@ impl MailboxSyncRepository for PgMailboxSync {
                 notified_traceparent = NULL
             FROM candidate c,email_links l
             WHERE q.link_id = c.link_id AND q.generation = c.generation AND q.provider_id = c.provider_id AND l.id = q.link_id
-            RETURNING q.link_id,q.generation,l.grant_generation,q.provider_id,q.revision,q.is_import,q.attempts,q.unfinished_claims,q.notified_at,c.notified_traceparent
+            RETURNING q.link_id,q.generation,l.grant_generation,q.provider_id,q.revision,q.is_import,q.attempts,q.unfinished_claims,q.notified_at,c.notified_traceparent,q.from_notification
         "#,lease_id,!self.imports_paused).fetch_optional(&self.db).await.map_err(db_error)?;
         row.map(|row| {
             Ok(MessageLease {
@@ -488,6 +491,7 @@ impl MailboxSyncRepository for PgMailboxSync {
                 attempts: row.attempts,
                 unfinished_claims: row.unfinished_claims,
                 notification: notification(row.notified_at, row.notified_traceparent),
+                from_notification: row.from_notification,
             })
         })
         .transpose()

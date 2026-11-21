@@ -19,6 +19,7 @@ pub mod email_policy_worker;
 pub mod mailbox_sync_worker;
 /// Outbound infrastructure adapters for email provider capabilities.
 pub mod outbound;
+pub mod outlook_flags;
 pub mod pubsub;
 mod server;
 pub mod util;

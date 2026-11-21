@@ -289,11 +289,13 @@ pub trait ChannelRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<CreatedChannel, Self::Err>> + Send;
 
     /// Add or reactivate a user in every auto-join channel for a team.
+    ///
+    /// Returns the channel ids whose memberships changed.
     fn auto_join_by_team_id<'a>(
         &self,
         team_id: &Uuid,
         user_id: &MacroUserIdStr<'a>,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Vec<Uuid>, Self::Err>> + Send;
 
     /// Soft-leave a user from every active channel membership for a team.
     ///
@@ -336,13 +338,14 @@ pub trait ChannelRepo: Send + Sync + 'static {
     /// Patch a channel.
     ///
     /// `team_id` is the channel's effective team after any requested conversion.
+    /// Returns the members that turning auto-join on added or reactivated.
     fn patch_channel(
         &self,
         channel_id: Uuid,
         user_id: String,
         team_id: Option<Uuid>,
         req: PatchChannelRequest,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Vec<String>, Self::Err>> + Send;
 
     /// Whether the user is an admin or owner of this exact team.
     fn user_is_team_admin<'a>(
@@ -946,6 +949,14 @@ pub trait ChannelContactsDispatcher: Send + Sync + 'static {
     fn enqueue_contacts(
         &self,
         users: HashSet<MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Record that every user and every peer have interacted on Macro, so
+    /// each gains the other in their directory.
+    fn record_interactions(
+        &self,
+        users: Vec<MacroUserIdStr<'static>>,
+        peers: Vec<MacroUserIdStr<'static>>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 

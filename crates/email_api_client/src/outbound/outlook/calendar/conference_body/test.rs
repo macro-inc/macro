@@ -70,6 +70,186 @@ fn a_teams_invitation_keeps_its_meeting_block_and_the_notes_around_it() {
     );
 }
 
+/// The Teams block as Macro's description editor exports it: each part a
+/// paragraph of its own, without the `me-email*` markers.
+fn rewritten_block() -> String {
+    let href = JOIN.replace('&', "&amp;");
+    format!(
+        "<p>Microsoft Teams meeting</p><p><a href=\"{href}\">Join the meeting now</a></p><p>Meeting ID: 123 456 789 0<br>Passcode: abc123</p><p><a href=\"https://aka.ms/JoinTeamsMeeting\">Learn more</a> | <a href=\"https://teams.microsoft.com/meetingOptions/\">Meeting options</a></p>"
+    )
+}
+
+#[test]
+fn a_rewritten_meeting_block_leaves_and_the_notes_around_it_stay() {
+    let saved = format!(
+        "<html><body><div><p>Agenda</p></div><br>{}</body></html>",
+        teams_block()
+    );
+    let edited = format!(
+        "<p>New agenda</p>{}<p>Bring the deck</p>",
+        rewritten_block()
+    );
+
+    assert_eq!(
+        without_meeting(&edited, &saved, JOIN).unwrap(),
+        "<p>New agenda</p><p>Bring the deck</p>"
+    );
+}
+
+#[test]
+fn an_edited_description_still_marked_splits_and_one_without_the_link_stays() {
+    let saved = format!("<p>Agenda</p>{}", teams_block());
+
+    assert_eq!(
+        without_meeting(&format!("<p>New agenda</p>{}", teams_block()), &saved, JOIN).unwrap(),
+        "<p>New agenda</p>"
+    );
+    assert_eq!(
+        without_meeting("<p>Only notes</p>", &saved, JOIN).unwrap(),
+        "<p>Only notes</p>"
+    );
+}
+
+#[test]
+fn the_join_link_in_the_persons_own_text_is_refused() {
+    let saved = format!("<p>Agenda</p>{}", teams_block());
+    let href = JOIN.replace('&', "&amp;");
+    let typed_into = rewritten_block().replace(
+        "Join the meeting now</a></p>",
+        "Join the meeting now</a> early</p>",
+    );
+    let elsewhere = format!(
+        "<p>Use <a href=\"{href}\">this link</a></p><p>Notes</p>{}",
+        rewritten_block()
+    );
+
+    assert!(without_meeting(&typed_into, &saved, JOIN).is_err());
+    assert!(without_meeting(&elsewhere, &saved, JOIN).is_err());
+}
+
+#[test]
+fn line_breaks_graph_puts_between_tags_do_not_keep_meeting_details() {
+    let href = JOIN.replace('&', "&amp;");
+    // Graph's own layout of the block: line breaks between every tag.
+    let block = format!(
+        "<div class=\"me-email-text\">\r\n<div><span>Microsoft Teams meeting</span></div>\r\n<div><a href=\"{href}\">Join the meeting now</a></div>\r\n<div><span>Meeting ID: <span>123 456 789 0</span>\r\n<br>\r\nPasscode: <span>abc123</span></span></div>\r\n</div>"
+    );
+    let saved = format!("<p>Agenda</p>\r\n{block}");
+    let edited = format!(
+        "<p><img src=\"https://example.com/diagram.png\"></p><p>New agenda</p>{}",
+        "<p>Microsoft Teams meeting</p><p><a href=\"HREF\">Join the meeting now</a></p><p>Meeting ID: 123 456 789 0<br>Passcode: abc123</p>"
+            .replace("HREF", &href)
+    );
+
+    assert_eq!(
+        without_meeting(&edited, &saved, JOIN).unwrap(),
+        "<p><img src=\"https://example.com/diagram.png\"></p><p>New agenda</p>"
+    );
+}
+
+#[test]
+fn meeting_details_left_apart_from_the_block_are_refused() {
+    let saved = format!("<p>Agenda</p>{}", teams_block());
+    let edited = format!(
+        "<p>Meeting ID: 123 456 789 0<br>Passcode: abc123</p><p>Notes</p>{}",
+        rewritten_block()
+    );
+
+    assert!(without_meeting(&edited, &saved, JOIN).is_err());
+}
+
+#[test]
+fn an_image_the_person_put_in_a_meeting_paragraph_is_refused_not_dropped() {
+    let saved = format!("<p>Agenda</p>{}", teams_block());
+    let edited = rewritten_block().replace(
+        "<p>Microsoft Teams meeting</p>",
+        "<p>Microsoft Teams meeting<img src=\"https://example.com/diagram.png\"></p>",
+    );
+
+    assert!(without_meeting(&format!("<p>Notes</p>{edited}"), &saved, JOIN).is_err());
+}
+
+#[test]
+fn the_saved_block_goes_back_where_the_rewritten_one_was() {
+    let saved = format!("<p>Agenda</p>{}", teams_block());
+    let edited = format!("<p>Before</p>{}<p>After</p>", rewritten_block());
+
+    assert_eq!(
+        with_saved_meeting(&edited, &saved, JOIN).unwrap(),
+        format!("<p>Before</p>{}<p>After</p>", teams_block())
+    );
+}
+
+#[test]
+fn a_description_too_large_to_parse_is_refused_not_kept() {
+    let saved = format!("<p>Agenda</p>{}", teams_block());
+    let (_, crafted, _) = crafted_bodies().remove(0);
+    let edited = format!("{}{crafted}", rewritten_block());
+
+    let error = with_saved_meeting(&edited, &saved, JOIN).unwrap_err();
+
+    assert!(error.is_refused());
+}
+
+#[test]
+fn an_image_the_person_adds_inside_a_block_with_its_own_image_is_kept() {
+    let href = JOIN.replace('&', "&amp;");
+    let logo = "https://statics.teams.example/logo.png";
+    let block = format!(
+        "<div class=\"me-email-text\"><div><img src=\"{logo}\"></div><div><a href=\"{href}\">Join the meeting now</a></div><div><span>Meeting ID: 123</span></div></div>"
+    );
+    let saved = format!("<p>Agenda</p>{block}");
+    let rewritten = format!(
+        "<p><img src=\"{logo}\"></p><p><a href=\"{href}\">Join the meeting now</a></p><p><img src=\"https://example.com/diagram.png\"></p><p>Meeting ID: 123</p>"
+    );
+
+    // The person's image splits the block, so it cannot be separated.
+    assert!(with_saved_meeting(&rewritten, &saved, JOIN).is_err());
+    // Teams' own image is still the block's.
+    let own = format!(
+        "<p>Notes</p><p><img src=\"{logo}\"></p><p><a href=\"{href}\">Join the meeting now</a></p><p>Meeting ID: 123</p>"
+    );
+    assert_eq!(
+        with_saved_meeting(&own, &saved, JOIN).unwrap(),
+        format!("<p>Notes</p>{block}")
+    );
+}
+
+#[test]
+fn an_image_the_person_puts_beside_the_join_link_is_kept() {
+    let href = JOIN.replace('&', "&amp;");
+    let logo = "https://statics.teams.example/logo.png";
+    let block = format!(
+        "<div class=\"me-email-text\"><div><a href=\"{href}\"><img src=\"{logo}\">Join the meeting now</a></div><div><span>Meeting ID: 123</span></div></div>"
+    );
+    let saved = format!("<p>Agenda</p>{block}");
+    let rewritten = format!(
+        "<p><a href=\"{href}\"><img src=\"https://example.com/diagram.png\">Join the meeting now</a></p><p>Meeting ID: 123</p>"
+    );
+    assert!(with_saved_meeting(&rewritten, &saved, JOIN).is_err());
+
+    let own = format!(
+        "<p>Notes</p><p><a href=\"{href}\"><img src=\"{logo}\">Join the meeting now</a></p><p>Meeting ID: 123</p>"
+    );
+    assert_eq!(
+        with_saved_meeting(&own, &saved, JOIN).unwrap(),
+        format!("<p>Notes</p>{block}")
+    );
+}
+
+#[test]
+fn media_without_a_source_is_never_the_blocks() {
+    let href = JOIN.replace('&', "&amp;");
+    let saved = format!(
+        "<p>Agenda</p><div class=\"me-email-text\"><div><svg></svg></div><div><a href=\"{href}\">Join the meeting now</a></div><div><svg></svg></div><div><span>Meeting ID: 123</span></div></div>"
+    );
+    let rewritten = format!(
+        "<p><a href=\"{href}\">Join the meeting now</a></p><p><img srcset=\" \"></p><p>Meeting ID: 123</p>"
+    );
+
+    assert!(with_saved_meeting(&rewritten, &saved, JOIN).is_err());
+}
+
 #[test]
 fn only_outermost_provider_blocks_are_split_in_document_order() {
     let first = format!(
