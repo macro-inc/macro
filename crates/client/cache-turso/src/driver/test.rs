@@ -396,3 +396,76 @@ fn a_copy_held_back_by_a_reader_runs_again_once_the_reader_ends() {
         "{rest:?}"
     );
 }
+
+#[test]
+fn a_copy_through_a_stale_view_remembers_the_frames_it_copied() {
+    let (a, b) = connection_pair("checkpoint-stale.db");
+    write_pages(&a, 0, 40);
+    let first = a.checkpoint_over(1).unwrap();
+    assert_eq!(first.backfilled_frames, first.wal_frames, "{first:?}");
+
+    // `b` starts the log over and keeps its write open; `a` still sees the
+    // frame count of the log before.
+    write_pages(&b, 40, 1);
+    execute(&b, "BEGIN IMMEDIATE", vec![]).unwrap();
+    execute(&b, "UPDATE t SET label = 'y' WHERE id = 0", vec![]).unwrap();
+    let stale = a.checkpoint_over(1).unwrap();
+    assert!(stale.ran, "{stale:?}");
+    assert_eq!(stale.wal_frames, first.wal_frames, "a's view is stale");
+    assert!(stale.backfilled_frames < first.wal_frames, "{stale:?}");
+
+    // `b` commits into the same log, one frame at a time, up to the count
+    // `a` saw before the restart.
+    execute(&b, "COMMIT", vec![]).unwrap();
+    let mut label = 0;
+    while wal_frames(&b) < first.wal_frames {
+        execute(
+            &b,
+            "UPDATE t SET label = ? WHERE id = 0",
+            vec![Value::build_text(label.to_string())],
+        )
+        .unwrap();
+        label += 1;
+    }
+    assert_eq!(wal_frames(&b), first.wal_frames);
+
+    read_transaction(&a, || query(&a, "SELECT count(*) FROM t", vec![])).unwrap();
+    let pending = a.checkpoint_over(1).unwrap();
+    assert!(
+        pending.ran && pending.backfilled_frames > 0,
+        "frames {b_frames} were never copied: {pending:?}",
+        b_frames = wal_frames(&b)
+    );
+}
+
+#[test]
+fn a_reader_on_the_database_file_makes_the_copy_busy_until_it_ends() {
+    let (writer, reader) = connection_pair("checkpoint-busy.db");
+    write_pages(&writer, 0, 40);
+    let copied = writer.checkpoint_over(1).unwrap();
+    assert_eq!(copied.backfilled_frames, copied.wal_frames, "{copied:?}");
+
+    // Every frame is copied, so the reader reads the database file alone and
+    // the writer cannot start the log over beneath it.
+    execute(&reader, "BEGIN", vec![]).unwrap();
+    query(&reader, "SELECT count(*) FROM t", vec![]).unwrap();
+    write_pages(&writer, 40, 5);
+    let busy = writer.checkpoint_over(1).unwrap();
+    assert_eq!(
+        busy,
+        WalCheckpoint {
+            ran: false,
+            wal_frames: wal_frames(&writer),
+            backfilled_frames: 0
+        }
+    );
+
+    execute(&reader, "COMMIT", vec![]).unwrap();
+    let rest = writer.checkpoint_over(1).unwrap();
+    assert!(rest.ran, "{rest:?}");
+    assert_eq!(
+        rest.backfilled_frames,
+        rest.wal_frames - copied.wal_frames,
+        "{rest:?}"
+    );
+}

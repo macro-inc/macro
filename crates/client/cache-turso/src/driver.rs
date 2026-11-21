@@ -49,8 +49,8 @@ pub(crate) struct Db {
     connection: Arc<Connection>,
     statements: Option<Arc<Mutex<StatementCache>>>,
     /// The WAL (checkpoint sequence, last frame) the last idle checkpoint
-    /// copied completely; until a write changes it, the WAL stays due but
-    /// holds nothing to copy.
+    /// copied completely, as the copy reported it; until a write changes it,
+    /// the WAL stays due but holds nothing to copy.
     copied_wal: Arc<Mutex<Option<(u32, u64)>>>,
 }
 
@@ -121,9 +121,17 @@ impl Db {
             upper_bound_inclusive: None,
         }) {
             Ok(copied) => {
-                if copied.everything_backfilled() {
-                    *copied_wal = position;
-                }
+                // The frame count is this connection's own view and can be
+                // stale; the copy reports the log it actually copied. A log
+                // started over meanwhile records nothing.
+                let generation = self
+                    .connection
+                    .wal_state()
+                    .map_err(|_| TursoStorageError::Database)?
+                    .checkpoint_seq_no;
+                *copied_wal = (copied.everything_backfilled()
+                    && generation == wal.checkpoint_seq_no)
+                    .then_some((generation, copied.wal_max_frame));
                 outcome.ran = true;
                 outcome.backfilled_frames = copied.wal_checkpoint_backfilled;
                 Ok(outcome)
