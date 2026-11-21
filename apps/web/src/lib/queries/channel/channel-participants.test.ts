@@ -259,6 +259,17 @@ it('rejects on a GraphQL failure without reading REST', async () => {
 
   answer({
     data: undefined,
+    error: new CombinedError({
+      graphQLErrors: ['authentication required'],
+      response: { status: 200 },
+    }),
+  });
+  expect(
+    thrownResultErrorHasCode(await rejection(read()), 'UNAUTHORIZED')
+  ).toBe(true);
+
+  answer({
+    data: undefined,
     error: new CombinedError({ graphQLErrors: ['boom'] }),
   });
   await expect(read()).rejects.toBeInstanceOf(CombinedError);

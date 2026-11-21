@@ -168,10 +168,15 @@ function toRole(role: string): ApiParticipantRole {
 }
 
 /** Auth failures carry the codes the query client's retry policy reads, as
- * the REST read's errors did; anything else rejects with the GraphQL error. */
+ * the REST read's errors did; anything else rejects with the GraphQL error.
+ * The `user` field refuses a request without a signed-in user in a 200
+ * response, which REST answered with a 401. */
 function toQueryError(error: CombinedError): Error {
   const status = error.response?.status;
-  if (status === 401)
+  const unauthenticated = error.graphQLErrors.some(
+    (graphqlError) => graphqlError.message === 'authentication required'
+  );
+  if (status === 401 || unauthenticated)
     return new ThrownResultError([
       { code: 'UNAUTHORIZED', message: error.message },
     ]);
