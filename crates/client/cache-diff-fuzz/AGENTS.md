@@ -52,6 +52,14 @@ disk after a reopen must come out the same.
   `idle` ops calling the host's idle point, so only the host's own task checkpoints.
   Stats count `pause.database-written`: pauses during which a copy reached the
   database file. Background tasks the host spawns run on a Tokio runtime.
+- When the cache core splits a hydrate into a stage and a commit (`Engine::stage_hydrate`),
+  build the side with `STAGED_HYDRATE=1` and give it `--stage-hydrates`: each hydrate is
+  staged before the op ahead of it runs and committed at its own turn, or run whole when
+  that op made the stage stale (stats `stage.committed`, `stage.whole-at-commit`).
+- When reads may run while a hydrate writes, add `--concurrent-reads RATE` (0 to 1) to
+  both sides: that share of hydrates runs with reads from other threads, and a read that
+  equals neither the state before the hydrate nor after it fails the seed (stats
+  `split.read-before`, `split.read-after`).
 - `FUZZ_ARGS` goes to both sides; `FUZZ_ARGS_A` and `FUZZ_ARGS_B` to one each, for
   one build under two settings (e.g. `FUZZ_ARGS_B="--hot-capacity 16"` against
   itself: the hot tier is a cache, so its size must change nothing).
