@@ -422,6 +422,11 @@ encrypts the secret before calling it.
 - **Secret.** The client supplies the `whsec_` secret. The MCP server
   encrypts it with its KMS key (purpose `mcp-event-subscription-secret`,
   bound to the user); this service only decrypts it, per delivery.
+- **Stream mode.** `events/stream` stores nothing here: the MCP server reads
+  this service's live event stream (`GET /webhook/events/stream`, scope
+  `user`) as the subscriber, one connection per `stream_groups` entry, and
+  matches each event against the filter itself, so access is the stream's
+  per-event check.
 - **Internal calls.** `inbound/mcp_router.rs`, nested under `/internal` in
   `document_storage_service`: `PUT /mcp/event_subscriptions` and
   `POST /mcp/event_subscriptions/unsubscribe`, internal key plus acting user.

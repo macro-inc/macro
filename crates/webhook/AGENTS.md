@@ -26,7 +26,8 @@ before changing ingestion or delivery behavior.
 - `src/inbound/worker.rs`: the SQS delivery worker.
 - `src/outbound/http_delivery.rs`: signed HTTPS POST to the webhook endpoint.
 - `src/domain/mcp/`: MCP Events subscriptions (README's "MCP Events
-  subscriptions"): `filter.rs` the compiled filter language, `service.rs`
+  subscriptions"): `filter.rs` the compiled filter language, `catalog.rs` one
+  sentence per event name for `events/list` and the filter compiler, `service.rs`
   subscribe, fan-out, delivery and the expiry sweep (run by
   `document_storage_service`'s `src/mcp_subscription_sweep.rs`). Matching reads
   the `mcp_event_subscription_event` index table, which the repository rewrites
@@ -54,13 +55,15 @@ before changing ingestion or delivery behavior.
   `agent_trigger`, `user_events`, `entity_access`, `macro_event_broker`, `kafka_util`,
   `rdkafka`, `rate_limit`, `webhook_signature`, `cursor_api_key` (KMS, `kms`
   feature).
-- Used by: `services/document_storage_service`, `crates/coding_agent_worker`.
+- Used by: `services/document_storage_service`, `crates/coding_agent_worker`,
+  `services/agent_harness_service` (MCP Events: domain types, catalog, KMS cipher).
 
 ## Recipes
 
 - Add a new ingestible event: `src/domain/ingestion.rs` (match rule) →
   `src/inbound/kafka_consumer.rs` and `kafka_stream_consumer.rs`
-  (subscribe/decode) → README's event table. Private call notifications
+  (subscribe/decode) → README's event table → its sentence in
+  `src/domain/mcp/catalog.rs` (a test fails without one). Private call notifications
   match only the named user's personal workspace and stream.
 - Stream audiences: `StreamAudience` in `src/domain/stream.rs`. `ContactsOf`
   (the user plus their contacts) is decided per subscriber by one exact
@@ -73,7 +76,8 @@ before changing ingestion or delivery behavior.
   schedule table (keep them in sync).
 - Let MCP filters compare a new payload field: `McpFilterField` in
   `src/domain/mcp/filter.rs` (its `applies_to` and envelope pointer), then the
-  filter compiler's schema in `agent_harness_service`. Never add free-text
+  filter compiler's prompt and reading in `agent_harness_service`
+  (`src/public_mcp/events/compiler_prompt.md`, `describe.rs`). Never add free-text
   or pattern matching: the filter stays exact so delivery is deterministic.
 
 ## Checks

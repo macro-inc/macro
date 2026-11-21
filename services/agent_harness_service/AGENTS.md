@@ -201,6 +201,23 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   an `SdkHost`, and records how each host's service holds a scoped session's
   credential to its scope: `propagate`, `enforce_signed_scope`, or no Macro
   credential accepted. A new host picks one before it ships.
+  `src/public_mcp/events.rs` + `events/` serve MCP Events
+  (`io.modelcontextprotocol/events`) to every client but ChatGPT:
+  `events/list`, `events/subscribe`/`unsubscribe` (webhook mode) and
+  `events/stream` (push); poll is Unsupported. `macro.events` takes a request
+  in words that the fast model compiles once (`compiler.rs`, prompt in
+  `compiler_prompt.md`, admitted and metered as `Automation`) into
+  `webhook::domain::mcp::filter`; each webhook event name is also a type with
+  optional `ids`. Results carry the filter and `describe.rs`'s reading of it
+  in `_meta` (`com.macro/filter`, `com.macro/interpretation`). Subscriptions
+  live in document storage (`dss.rs`: internal routes, secret sealed with the
+  MCP OAuth KMS key under purpose `mcp-event-subscription-secret`); a refresh
+  sends no filter, so only a new subscription costs a model call, and the
+  same words compile once per user per process. Streams (`stream.rs`) read
+  document storage's live event stream as the user, one connection per
+  distinct `ids`, reconnect with resume, heartbeat every 5–45 s and are capped
+  at five per user per process. Spans: `public_mcp.events`,
+  `mcp_events.compile`, `mcp_events.store.*`, `mcp_events.source.open`.
   `src/public_mcp/analytics.rs` sends PostHog `$mcp_initialize` /
   `$mcp_tool_call` events (PostHog MCP analytics schema) in the background,
   with the user's team as the `team` group. At most 64 sends run at once
