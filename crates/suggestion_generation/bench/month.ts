@@ -106,9 +106,13 @@ const MIN_MONTH_MESSAGES = WINDOW_MESSAGES / 2;
 /** `labels` with INBOX among them: every message of a month is written to the inbox. */
 export const inInbox = (labels: string[]) => (labels.includes('INBOX') ? labels : ['INBOX', ...labels]);
 
-/** The needs only a drafted routine meets, counted once each by id; a need whose drafted routine is blank counts for none. */
-export function draftableNeeds(needs: { id: string; drafted?: string }[]): number {
-  return new Set(needs.filter((need) => need.drafted?.trim()).map((need) => need.id)).size;
+/**
+ * The needs only a drafted routine meets, counted once each by id: a need
+ * whose drafted routine is blank counts for none, and so does one a catalog
+ * routine the catalog has meets on its own.
+ */
+export function draftableNeeds(needs: { id: string; drafted?: string; catalog?: string[] }[]): number {
+  return new Set(needs.filter((need) => need.drafted?.trim() && !(need.catalog ?? []).some((key) => CATALOG[key])).map((need) => need.id)).size;
 }
 
 /** The fewest needs only a drafted routine can meet, so five good drafts are a fair target (5 for sets written before sent mail). */
@@ -447,8 +451,9 @@ ${context}`,
     shown = onKeptStreams(needs);
     const draftable = draftableNeeds(shown);
     if (draftable >= MIN_DRAFTED_NEEDS) break;
-    if (attempt === KEY_TRIES) throw new Error(`${sketch.slug}: ${draftable} of ${shown.length} needs can be met by a drafted routine in each of ${KEY_TRIES} keys, fewer than ${MIN_DRAFTED_NEEDS}`);
-    console.error(`a key left ${draftable} of ${shown.length} needs to drafts, fewer than ${MIN_DRAFTED_NEEDS}; writing its needs again`);
+    // A held-out person's counts are theirs: neither is printed.
+    if (attempt === KEY_TRIES) throw new Error(`each of ${KEY_TRIES} keys left fewer than ${MIN_DRAFTED_NEEDS} needs only a drafted routine meets`);
+    console.error(`a key left fewer than ${MIN_DRAFTED_NEEDS} needs only a drafted routine meets; writing its needs again`);
   }
   const { decoys, misfit } = await write<{ decoys: WrittenRoutinesTruth['decoys']; misfit: string[] }>(
     at,
@@ -473,5 +478,5 @@ ${context}`,
   };
   writeFileSync(join(dir, 'workspace.json'), `${JSON.stringify(workspace, null, 1)}\n`);
   renameSync(dir, join(root, sketch.slug));
-  console.log(`wrote month persona ${sketch.slug}: ${messages.length} messages and ${sent.length} sent in ${streams.length} streams (${streams.filter((s) => s.kind === 'work').length} work), ${placed.needs.length} needs (${placed.needs.filter((n) => !n.catalog.length).length} draft-only)`);
+  console.log('wrote a month persona');
 }

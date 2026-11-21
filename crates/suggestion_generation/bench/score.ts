@@ -75,6 +75,8 @@ export type Attempt = {
   routineMarks?: RoutineMark[];
   /** A month persona's stream jobs judgement, beside `routineMarks`. */
   jobMarks?: JobMark[];
+  /** Its stream jobs judgement failed: its routines are scored all the same, and it is left out of the jobs measure only. */
+  jobError?: string;
   feedMarks?: FeedMarks;
   /** The work list its drafting session read, matched to the persona's streams key. */
   findingMarks?: EntryMark[];
@@ -105,6 +107,12 @@ export type RunFile = {
    * reads the same; absent in runs from before it was recorded.
    */
   personas?: Record<string, string>;
+  /**
+   * Each persona's `keyDigest`: the answer keys its attempts were scored
+   * against, so two runs are set side by side only when scored against the
+   * same keys; absent in runs from before it was recorded (`rescore` adds it).
+   */
+  keys?: Record<string, string>;
   flags: Record<string, boolean>;
   attempts: Attempt[];
 };
@@ -240,9 +248,16 @@ export function scoreFeed(generation: Generation, marks: FeedMarks, truth: FeedT
   };
 }
 
-/** A generation the build failed (see `Generation.buildFailed`): it found nothing. */
-export function failedScore(needs: number): Score {
-  return { score: 0, needs, found: 0, missed: [], suggestions: 0, bad: 0, invented: 0, wrong: {}, quality: null, drafts: 0, goodDrafts: 0, goodPicks: 0 };
+/**
+ * A generation the build failed (see `Generation.buildFailed`): it found
+ * nothing. A month persona's (one with a streams key) also aimed at no work
+ * stream and did no stream's job, so it counts in those measures as well.
+ */
+export function failedScore(needs: number, streams?: StreamsTruth): Score {
+  const failed: Score = { score: 0, needs, found: 0, missed: [], suggestions: 0, bad: 0, invented: 0, wrong: {}, quality: null, drafts: 0, goodDrafts: 0, goodPicks: 0 };
+  if (!streams) return failed;
+  const work = streams.streams.filter((stream) => stream.kind === 'work').length;
+  return { ...failed, aimed: 0, workStreams: work, jobDrafts: 0, jobPicks: 0, jobStreams: 0 };
 }
 
 // ---------- summaries ----------
@@ -277,6 +292,7 @@ export function summary(attempts: Attempt[]) {
   const listsShown = aggregate(done.filter((a) => a.finding && !a.finding.unread), attempts);
   const rated = done.filter((a) => a.score.feedRating !== undefined);
   const listErrors = done.filter((a) => a.findingError).length;
+  const jobbed = done.filter((a) => a.score.jobDrafts !== undefined);
   const total = (f: (list: ListScore) => number) => lists.reduce((sum, list) => sum + f(list), 0);
   return {
     attempts: attempts.length,
@@ -305,13 +321,17 @@ export function summary(attempts: Attempt[]) {
     ...(done.length && done.every((a) => a.score.aimed !== undefined)
       ? { aimed: avg(done.map((a) => a.score.aimed!)), workStreams: avg(done.map((a) => a.score.workStreams!)) }
       : {}),
-    // Runs judged before the stream jobs judgement (v5) have none of these.
-    ...(done.length && done.every((a) => a.score.jobDrafts !== undefined)
+    // Runs judged before the stream jobs judgement (v5) have none of these. Each is over the
+    // attempts that have it: a failed build counts 0, an attempt whose jobs judgement failed is
+    // left out (`jobErrors`), as a bench error is left out of every measure.
+    ...(jobbed.length && done.some((a) => a.jobMarks)
       ? {
-          jobDrafts: avg(done.map((a) => a.score.jobDrafts!)),
-          jobPicks: avg(done.map((a) => a.score.jobPicks!)),
-          jobStreams: avg(done.map((a) => a.score.jobStreams!)),
-          fiveJobDrafts: done.filter((a) => a.score.jobDrafts! >= 5).length,
+          jobDrafts: avg(jobbed.map((a) => a.score.jobDrafts!)),
+          jobPicks: avg(jobbed.map((a) => a.score.jobPicks!)),
+          jobStreams: avg(jobbed.map((a) => a.score.jobStreams!)),
+          fiveJobDrafts: jobbed.filter((a) => a.score.jobDrafts! >= 5).length,
+          jobScored: jobbed.length,
+          jobErrors: done.filter((a) => a.jobError).length,
         }
       : {}),
     failedGenerations: done.filter((a) => a.generation.status !== 'ready').length,
@@ -429,12 +449,14 @@ const goodGet: Record<GoodPart, (attempt: Done) => number | undefined> = {
   jobDrafts: (attempt) => attempt.score.jobDrafts,
 };
 
-/** The good parts every scored attempt of both sides has. */
-const goodParts = (a: Attempt[], b: Attempt[]) =>
-  (Object.keys(GOOD_PARTS) as GoodPart[]).filter((part) => {
-    const done = scored([...a, ...b]);
-    return done.length > 0 && done.every((attempt) => goodGet[part](attempt) !== undefined);
-  });
+/** Whether `attempt` is scored for good part `part`: one whose jobs judgement failed isn't for `jobDrafts`. */
+const hasGood = (part: GoodPart) => (attempt: Attempt) => scored([attempt]).length === 1 && goodGet[part](attempt as Done) !== undefined;
+
+/** The good parts both sides have, each over the attempts scored for it. */
+const goodParts = (a: Attempt[], b: Attempt[]) => (Object.keys(GOOD_PARTS) as GoodPart[]).filter((part) => a.some(hasGood(part)) && b.some(hasGood(part)));
+
+/** B against A for good part `part`, over the attempts of each side scored for it. */
+const goodContrast = (a: Attempt[], b: Attempt[], part: GoodPart) => contrast(a.filter(hasGood(part)), b.filter(hasGood(part)), (attempt) => goodGet[part](attempt)!);
 
 export type Margins = Record<Part, number> & Partial<Record<GoodPart, number>>;
 
@@ -476,7 +498,7 @@ export function verdict(a: Attempt[], b: Attempt[], margins: Margins): Verdict {
   ) as Record<Part, PartVerdict>;
   const good = Object.fromEntries(
     goodParts(a, b).map((part) => {
-      const c = contrast(a, b, (attempt) => goodGet[part](attempt)!);
+      const c = goodContrast(a, b, part);
       const margin = margins[part];
       if (margin === undefined) return [part, { ...c, verdict: 'unmeasured' as const }];
       const better = c.delta > margin && c.interval[0] > 0;
@@ -545,6 +567,6 @@ export function noiseMargins(a: Attempt[], b: Attempt[]) {
   const margin = (c: ReturnType<typeof contrast>) => ({ ...c, margin: Math.max(Math.abs(c.interval[0]), Math.abs(c.interval[1])) });
   return {
     ...(Object.fromEntries((Object.keys(PARTS) as Part[]).map((part) => [part, margin(contrast(a, b, get[part]))])) as Record<Part, ReturnType<typeof margin>>),
-    ...(Object.fromEntries(goodParts(a, b).map((part) => [part, margin(contrast(a, b, (attempt) => goodGet[part](attempt)!))])) as Partial<Record<GoodPart, ReturnType<typeof margin>>>),
+    ...(Object.fromEntries(goodParts(a, b).map((part) => [part, margin(goodContrast(a, b, part))])) as Partial<Record<GoodPart, ReturnType<typeof margin>>>),
   };
 }

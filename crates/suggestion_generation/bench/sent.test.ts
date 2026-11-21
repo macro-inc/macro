@@ -3,7 +3,7 @@ import type { JobMark, RoutineMark } from './judge';
 import { followedUp, replySubject, sentDelay } from './month';
 import { type Inbox, type Persona, type RoutinesTruth, SENT_MESSAGES, SENT_TEXTS, type SentMessage, type StreamsTruth, hasSent, sentMessages, variantOf, windowMessages } from './personas';
 import type { Generation, RoutineRow } from './run';
-import { type Attempt, marginsOf, noiseMargins, scoreRoutines, summary, verdict } from './score';
+import { type Attempt, failedScore, marginsOf, noiseMargins, scoreRoutines, summary, verdict } from './score';
 import { ANCHOR } from './clock';
 
 const HOUR = 60 * 60_000;
@@ -144,5 +144,46 @@ describe('margins for good drafts', () => {
     const noise = noiseMargins(a, a);
     expect(noise.goodDrafts?.margin).toBeGreaterThan(0);
     expect(noise.jobDrafts?.delta).toBe(0);
+  });
+});
+
+describe('the jobs measure over a run', () => {
+  const judged = (persona: string, rep: number, jobDrafts: number): Attempt => ({
+    section: 'routines',
+    label: 't',
+    persona,
+    heldout: false,
+    rep,
+    generation: generation([row(null)]),
+    judgeUsd: 0,
+    jobMarks: jobs(['s1']),
+    score: { score: 0, needs: 1, found: 0, missed: [], suggestions: 1, bad: 0, invented: 0, wrong: {}, quality: null, drafts: 1, goodDrafts: jobDrafts, goodPicks: 0, jobDrafts, jobPicks: 0, jobStreams: jobDrafts },
+  });
+  // Routines judged and scored, its jobs judgement failed: no jobs measure.
+  const jobless = (persona: string, rep: number): Attempt => {
+    const attempt = judged(persona, rep, 0);
+    const { jobDrafts, jobPicks, jobStreams, ...score } = attempt.score!;
+    return { ...attempt, jobMarks: undefined, jobError: 'judge timed out', score };
+  };
+
+  test("counts a failed build of a month persona as doing no stream's job", () => {
+    expect(failedScore(3, streams)).toMatchObject({ jobDrafts: 0, jobPicks: 0, jobStreams: 0, aimed: 0, workStreams: streams.streams.filter((s) => s.kind === 'work').length });
+    expect(failedScore(3).jobDrafts).toBeUndefined();
+    const failed: Attempt = { ...judged('p', 2, 0), jobMarks: undefined, generation: { ...generation([]), buildFailed: true }, score: failedScore(1, streams) };
+    expect(summary([judged('p', 1, 4), failed])).toMatchObject({ jobDrafts: 2, jobScored: 2, jobErrors: 0 });
+  });
+
+  test('leaves an attempt whose jobs judgement failed out of the jobs measure only', () => {
+    const s = summary([judged('p', 1, 4), jobless('p', 2)]);
+    expect(s).toMatchObject({ scored: 2, goodDrafts: 2, jobDrafts: 4, jobScored: 1, jobErrors: 1 });
+  });
+
+  test('compares good drafts by stream job over the attempts that have them', () => {
+    const a = [judged('p', 1, 1), judged('p', 2, 0), judged('q', 1, 1), judged('q', 2, 1)];
+    const b = [judged('p', 1, 5), jobless('p', 2), judged('q', 1, 4), judged('q', 2, 5)];
+    const v = verdict(a, b, marginsOf('10,1,1,1,1'));
+    expect(v.good.jobDrafts?.attempts).toEqual([4, 3]);
+    expect(v.good.goodDrafts?.attempts).toEqual([4, 4]);
+    expect(noiseMargins(a, b).jobDrafts?.attempts).toEqual([4, 3]);
   });
 });

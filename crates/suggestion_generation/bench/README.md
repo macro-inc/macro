@@ -17,8 +17,9 @@ with one number and its parts underneath.
 | `judge.ts` | The model judges and their rubrics. |
 | `catalog.ts` | The routine catalog, read from `routine_program`'s `catalog.rs`, and the check that each answer key places every routine. |
 | `score.ts` | Scores, summaries and the win, loss or noise verdict. |
+| `sides.ts` | One side of a comparison joined from run files, and the checks two sides must pass to be set side by side. |
 | `report.ts` | The summary table. |
-| `heldout.ts` | Writing held-out personas and the ledger of their use. |
+| `heldout.ts` | Writing held-out personas, the ledger of their use and the answer keys each person was first scored against. |
 
 It shares `stack.ts` (the stack, sign-in, the per-stack lock) and `seedId`
 with the routine drafting eval in `crates/scheduled_action/bench/`, and
@@ -110,7 +111,13 @@ workspace and mail as its generations read them: `compare` and `noise` refuse
 two sides that read a persona they share differently or without a digest, no
 side joins runs that do, and `rejudge` refuses a run whose persona has changed
 since, or one from before the digest was kept, so the judge reads what the
-generation read: run that one again instead.
+generation read: run that one again instead. A run records a digest of each
+persona's answer keys too, and `compare` and `noise` refuse two sides scored
+against different keys, or one without the digest: `rescore` the older one,
+which scores it against the keys as they are and records them. `noise`
+measures one build against itself, so it also refuses two runs of different
+or unrecorded commits, or with different flags, and a side is one build: its
+runs share a commit and flags.
 
 ## Running it
 
@@ -196,9 +203,9 @@ bun $B/bench.ts noise <main-a run.json> <main-b run.json>
 would decide nothing. The week-set margins below were measured with the
 judge from before judges were recorded.
 
-A side of `compare`, `noise` or `report` may be several runs of one section
-and set, judged by one recorded judge on personas read the same way, joined by
-commas (`a1.json,a2.json`), read as one. The margins hold at the default size:
+A side of `compare`, `noise` or `report` may be several runs of one build,
+section and set, judged by one recorded judge on personas read the same way and
+scored against the same keys, joined by commas (`a1.json,a2.json`), read as one. The margins hold at the default size:
 a smaller run (fewer seats or reps) is only a look.
 
 ### Held-out personas
@@ -229,7 +236,13 @@ side; timed, rated, or with a work list read, for those measures), and say
 why where they show none. A set written before keys placed every catalog routine (`h2`
 and earlier) can't be read by the `routines` section: write a new one. Don't open their files while tuning. Each run is recorded in the
 set's ledger; after a baseline and one candidate a set is spent and the bench
-says so: make a new one.
+says so: make a new one. The first run, rejudge or rescore of a held-out
+person writes down the answer keys it scored them against (`keys.json` in the
+set), and every later one must score against the same keys, so no key changes
+after a build has run on its person; one that changed stops the bench, saying
+how many people's keys changed but not whose. Nothing the bench prints names a
+held-out person: their slugs, names and domains are left out of its errors and
+progress lines.
 
 ### A month of mail
 

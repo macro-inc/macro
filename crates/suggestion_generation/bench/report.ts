@@ -54,7 +54,7 @@ export function lines(runs: RunFile[]): string[] {
       }
       out.push(`${run.section} (${run.label}): good drafts per generation ${s.goodDrafts.toFixed(2)} of ${s.drafts!.toFixed(2)} drafted, 5 or more in ${s.fiveGoodDrafts} of ${s.scored}; good catalog picks ${s.goodPicks!.toFixed(2)}${aimed}`);
       // The second measure, beside the first, where the run was judged for stream jobs.
-      if (s.jobDrafts !== undefined) out.push(`${run.section} (${run.label}): good drafts by stream job per generation ${s.jobDrafts.toFixed(2)}, 5 or more in ${s.fiveJobDrafts} of ${s.scored}, doing the jobs of ${s.jobStreams!.toFixed(2)} work streams; good catalog picks by stream job ${s.jobPicks!.toFixed(2)}`);
+      if (s.jobDrafts !== undefined) out.push(`${run.section} (${run.label}): good drafts by stream job per generation ${s.jobDrafts.toFixed(2)}, 5 or more in ${s.fiveJobDrafts} of ${s.jobScored}, doing the jobs of ${s.jobStreams!.toFixed(2)} work streams; good catalog picks by stream job ${s.jobPicks!.toFixed(2)}${s.jobErrors ? `; ${s.jobErrors} more whose jobs judgement failed` : ''}`);
     }
     // A held-out person's error can name them: only that it happened is shown.
     for (const attempt of run.attempts.filter((a) => a.benchError)) out.push(attempt.heldout ? `- a held-out generation #${attempt.rep}: bench error` : `- ${attempt.persona}${(attempt.seat ?? 1) > 1 ? `/s${attempt.seat}` : ''} #${attempt.rep}: ${attempt.benchError}`);

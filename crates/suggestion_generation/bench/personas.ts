@@ -216,6 +216,34 @@ function load(dir: string, name: string, heldout: boolean): Persona {
 /** What a generation for `persona` reads (its workspace and mail, as spelled here), as a short digest a rejudge checks it reads the same. */
 export const personaDigest = (persona: Persona) => Bun.hash(JSON.stringify([persona.workspace, persona.inbox])).toString(36);
 
+/** What `persona`'s attempts are scored against (its answer keys, as spelled here), as a short digest two runs compare. */
+export const keyDigest = (persona: Persona) => Bun.hash(JSON.stringify([persona.routinesTruth ?? null, persona.feedTruth ?? null, persona.streamsTruth ?? null])).toString(36);
+
+/** `keyDigest` of each of `people`, by name. */
+export const keyDigests = (people: Persona[]) => Object.fromEntries(people.map((persona) => [persona.name, keyDigest(persona)]));
+
+/** How the bench names `persona` in what it prints: a held-out person never by name. */
+export const who = (persona: Pick<Persona, 'name' | 'heldout'>) => (persona.heldout ? 'a held-out person' : persona.name);
+
+/**
+ * `text` with what names held-out `persona` cut out: their name (and so
+ * their scenario's), and each workspace user's and the mail owner's address,
+ * its local part and domain, and their names. A tune persona's text is kept.
+ */
+export function unnamedPersona(persona: Persona, text: string): string {
+  if (!persona.heldout) return text;
+  const addresses = [persona.inbox.owner.email, ...Object.values(persona.workspace.users).map((user) => user.email)];
+  const users = Object.values(persona.workspace.users) as { name?: string; first_name?: string; last_name?: string }[];
+  const words = [
+    persona.name,
+    ...addresses.flatMap((address) => [address, ...address.split('@')]),
+    ...[persona.inbox.owner.name, ...users.flatMap((user) => [user.name, user.first_name, user.last_name])].flatMap((name) => (name ?? '').split(/\s+/)),
+  ]
+    .filter((word) => word && word.length > 1)
+    .sort((a, b) => b.length - a.length);
+  return [...new Set(words)].reduce((out, word) => out.replace(new RegExp(word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), () => '…'), text);
+}
+
 /** A set's people: its folders, leaving out the hidden ones a held-out writer is still filling. */
 export const folders = (root: string) =>
   existsSync(root)
@@ -232,7 +260,7 @@ export function personas(set: 'tune' | string): Persona[] {
   const listed = join(root, 'people.json');
   if (existsSync(listed)) {
     const missing = (JSON.parse(readFileSync(listed, 'utf8')) as { slug: string }[]).map((person) => person.slug).filter((slug) => !existsSync(join(root, slug)));
-    if (missing.length) throw new Error(`held-out set ${set} is not finished (${missing.join(', ')}); run heldout make ${set} again first`);
+    if (missing.length) throw new Error(`held-out set ${set} is not finished (${missing.length} people not written); run heldout make ${set} again first`);
   }
   const found = folders(root).map((name) => load(join(root, name), name, true));
   if (!found.length) throw new Error(`no held-out set ${set} in ${HELDOUT_DIR}; make one with \`heldout make\``);
@@ -353,7 +381,7 @@ export function scenario(persona: Persona, variant: Variant, now: number): Recor
   const workspace = contentKeys(shiftAll(copy.workspace, days), days);
   const inbox = shiftAll(copy.inbox, days);
   const ownerKey = Object.entries(workspace.users).find(([, user]) => user.email === inbox.owner.email)?.[0];
-  if (!ownerKey) throw new Error(`${persona.name}: no user with the inbox owner's address`);
+  if (!ownerKey) throw new Error(`${who(persona)}: no user with the inbox owner's address`);
   const threads = Object.fromEntries(
     inbox.messages.map((message, index) => {
       const head = [

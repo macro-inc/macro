@@ -7,6 +7,7 @@ import { asWritten, type Inbox, type Persona, recentMessages, type RoutinesTruth
 import { type Generation, readWorkList, rereadList, type RoutineRow, workListOf } from './run';
 import { boundedList, type EntryMark, type FoundStream, mailText, marksProblem, scoreList, scoreWorkList, trimAsRust, type WorkList } from './finding';
 import { draftableNeeds, inInbox, pooled } from './month';
+import { CATALOG } from './catalog';
 import { repeatsEarlier, rosterProblem } from './heldout';
 import { lines, withheldAcross } from './report';
 import { type Attempt, failedScore, marginsOf, type RunFile, scoreRoutines, summary, unreadList, verdict, wholeCount } from './score';
@@ -219,6 +220,15 @@ describe('workListOf', () => {
 
   test('reads the list a drafting session was briefed with', () => {
     expect(workListOf([{ direction: 'to_server', content: { type: 'event', event: 'acp_ready' } }, prompt(list)])).toEqual(list);
+  });
+
+  test("undoes the links a bare list's round trip made of addresses and URLs, and keeps a link written as one", () => {
+    const linked = { ...list, streams: [{ ...list.streams[0], senders: [{ name: 'Mill orders', email: 'orders@mill.example' }], what: 'See https://mill.example/po and [the form](https://mill.example/f)' }] };
+    const text = JSON.stringify(linked)
+      .replace('orders@mill.example', '[orders@mill.example](mailto:orders@mill.example)')
+      .replace('https://mill.example/po', '[https://mill.example/po](https://mill.example/po)');
+    const row = { direction: 'to_runtime', created_at: '2026-11-20 10:00:00+00', content: { type: 'acp', method: 'session/prompt', params: { prompt: [{ type: 'text', text: briefOf(linked).replace(JSON.stringify(linked), text) }] } } };
+    expect(workListOf([row])).toEqual(linked);
   });
 
   test('reads a list in a fenced block as written, escapes and all', () => {
@@ -596,6 +606,11 @@ describe('writing a month', () => {
 
   test('counts each need a drafted routine meets once, and none whose routine is blank', () => {
     expect(draftableNeeds([{ id: 'r1', drafted: 'a task per invoice' }, { id: 'r1', drafted: 'again' }, { id: 'r2', drafted: '  ' }, { id: 'r3' }, { id: 'r4', drafted: 'a lead log' }])).toBe(2);
+  });
+
+  test('counts no need a catalog routine meets on its own, whatever its drafted text', () => {
+    const known = Object.keys(CATALOG)[0];
+    expect(draftableNeeds([{ id: 'r1', drafted: 'a task per invoice', catalog: [known] }, { id: 'r2', drafted: 'a lead log', catalog: ['not_in_the_catalog'] }, { id: 'r3', drafted: 'a digest', catalog: [] }])).toBe(2);
   });
 
   test('starts no job after one fails, and throws once the running ones end', async () => {

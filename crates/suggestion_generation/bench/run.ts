@@ -250,6 +250,16 @@ export function unescapeMarkdown(text: string): string {
 }
 
 /**
+ * `text` with the links a Markdown round trip makes of a bare address or
+ * URL undone: `[x](mailto:x)` and `[x](x)` read as `x`. A link whose text
+ * isn't its target was written as one and stays. A quote the round trip
+ * unescaped leaves the list no longer JSON, which reads as the list's error.
+ */
+export function unlinkMarkdown(text: string): string {
+  return text.replace(/\[([^[\]\n]+)\]\((?:mailto:)?([^)\s]+)\)/g, (link, label: string, target: string) => (label === target ? label : link));
+}
+
+/**
  * The work list one brief carried, if it carried one. The brief starts a
  * line with `WORK_LIST_MARK`, outside any `<untrusted>` block, and the list's
  * block follows that line. The mark inside a block is mail (a subject, say),
@@ -267,7 +277,7 @@ function listIn(row: TranscriptRow): WorkList | undefined {
     if (!block) throw new Error(`a brief says it carries a work list but has no <untrusted> block after it`);
     let list: unknown;
     try {
-      list = JSON.parse(block[1] ?? unescapeMarkdown(block[2]));
+      list = JSON.parse(block[1] ?? unlinkMarkdown(unescapeMarkdown(block[2])));
     } catch (error) {
       throw new Error(`a brief's work list isn't JSON: ${String(error).slice(0, 200)}`);
     }
