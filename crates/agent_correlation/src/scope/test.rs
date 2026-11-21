@@ -255,6 +255,13 @@ fn a_run_that_sends_nothing_reaches_nobody() {
         ("POST", "/v1/documents/permissions_token/01a1"),
         ("POST", "/dss/collab_surfaces/01a1/token"),
         ("POST", "/v1/collab_surfaces/01a1/token"),
+        // Merging or closing a pull request reaches its repository.
+        ("POST", "/auth/github_pull_requests/merge"),
+        ("POST", "/auth/github_pull_requests/state"),
+        // Pushes to other people's open apps, and the account itself.
+        ("POST", "/connection-gateway/message/broadcast"),
+        ("POST", "/dss/user-api-keys"),
+        ("DELETE", "/auth/user/me"),
         ("POST", "/notification/v1/user_notifications/send"),
         ("POST", "/notification/user_notifications/send"),
         ("POST", "/user_notifications/send"),
@@ -351,4 +358,133 @@ fn a_dry_run_reads_and_writes_nothing() {
         assert!(!scope.allows(method, path), "{method} {path}");
     }
     assert!(!scope.allows_sharing());
+}
+
+/// Every write a service's OpenAPI spec declares is classified for a run
+/// that sends nothing: refused, one of the scope's POST reads, or reviewed
+/// as a change to the person's own or shared items in `no_send_writes.txt`.
+/// The refused list is hand-kept, so a new route that reaches someone else
+/// must not slip through unclassified; a reviewed line that no longer names
+/// an allowed write fails too, so the list stays true.
+#[test]
+fn the_no_send_scope_classifies_every_write_in_the_specs() {
+    const SPECS: &[(&str, &str)] = &[
+        (
+            "agent-harness",
+            include_str!("../../../../packages/sdk/specs/agent-harness.json"),
+        ),
+        (
+            "auth",
+            include_str!("../../../../packages/sdk/specs/auth.json"),
+        ),
+        (
+            "calendar",
+            include_str!("../../../../packages/sdk/specs/calendar.json"),
+        ),
+        (
+            "cognition",
+            include_str!("../../../../packages/sdk/specs/cognition.json"),
+        ),
+        (
+            "connection",
+            include_str!("../../../../packages/sdk/specs/connection.json"),
+        ),
+        (
+            "contacts",
+            include_str!("../../../../packages/sdk/specs/contacts.json"),
+        ),
+        (
+            "email",
+            include_str!("../../../../packages/sdk/specs/email.json"),
+        ),
+        (
+            "notification",
+            include_str!("../../../../packages/sdk/specs/notification.json"),
+        ),
+        (
+            "properties",
+            include_str!("../../../../packages/sdk/specs/properties.json"),
+        ),
+        (
+            "scheduled-action",
+            include_str!("../../../../packages/sdk/specs/scheduled-action.json"),
+        ),
+        (
+            "search",
+            include_str!("../../../../packages/sdk/specs/search.json"),
+        ),
+        (
+            "static-files",
+            include_str!("../../../../packages/sdk/specs/static-files.json"),
+        ),
+        (
+            "storage",
+            include_str!("../../../../packages/sdk/specs/storage.json"),
+        ),
+        (
+            "unfurl",
+            include_str!("../../../../packages/sdk/specs/unfurl.json"),
+        ),
+    ];
+    let mut reviewed = std::collections::BTreeSet::new();
+    let mut service = "";
+    for line in include_str!("no_send_writes.txt").lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if let Some(name) = line
+            .strip_prefix('[')
+            .and_then(|rest| rest.strip_suffix(']'))
+        {
+            service = name;
+            continue;
+        }
+        reviewed.insert(format!("{service} {line}"));
+    }
+    let concrete = |path: &str| {
+        path.split('/')
+            .map(|segment| {
+                if segment.starts_with('{') {
+                    "x"
+                } else {
+                    segment
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("/")
+    };
+    let scope = SessionScope::NoSend;
+    let mut unclassified = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
+    for (name, text) in SPECS {
+        let spec: serde_json::Value = serde_json::from_str(text).unwrap();
+        for (path, operations) in spec["paths"].as_object().unwrap() {
+            for method in operations.as_object().unwrap().keys() {
+                let method = method.to_uppercase();
+                if !matches!(method.as_str(), "POST" | "PUT" | "PATCH" | "DELETE") {
+                    continue;
+                }
+                let key = format!("{name} {method} {path}");
+                let allowed = scope.allows(&method, &concrete(path));
+                let read = listed(POST_READS, &method, path);
+                if allowed && !read {
+                    if reviewed.contains(&key) {
+                        seen.insert(key);
+                    } else {
+                        unclassified.push(key);
+                    }
+                }
+            }
+        }
+    }
+    let stale: Vec<_> = reviewed.difference(&seen).collect();
+    assert!(
+        unclassified.is_empty(),
+        "classify each write: refuse it in SENDS, or review it into no_send_writes.txt: {unclassified:#?}"
+    );
+    assert!(
+        stale.is_empty(),
+        "no_send_writes.txt names writes the scope refuses or the specs no longer have: {stale:#?}"
+    );
 }
