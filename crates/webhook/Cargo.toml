@@ -45,6 +45,7 @@ ingestion = [
   "dep:futures",
   "dep:user_events",
   "dep:password_events",
+  "dep:tokio",
   "dep:uuid",
   "ports",
 ]
