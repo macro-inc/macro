@@ -512,6 +512,13 @@ impl CrmService for FakeCrmService {
         panic!("unexpected get_contact_for_team call")
     }
 
+    async fn require_member_access(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+    ) -> Result<(), CrmError> {
+        panic!("unexpected require_member_access call")
+    }
+
     async fn search_contacts(
         &self,
         _access: &CrmTeamReceipt<MemberTeamRole>,

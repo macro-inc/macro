@@ -376,6 +376,13 @@ impl CrmService for FakeCrm {
         unimplemented!("FakeCrm.get_contact_for_team")
     }
 
+    async fn require_member_access(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+    ) -> Result<(), CrmError> {
+        unimplemented!("FakeCrm.require_member_access")
+    }
+
     async fn search_contacts(
         &self,
         _access: &CrmTeamReceipt<MemberTeamRole>,

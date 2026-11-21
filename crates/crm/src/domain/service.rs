@@ -321,6 +321,15 @@ pub trait CrmService: super::email_privacy::EmailPrivacyService {
         access: &CrmContactReceipt<EditAccessLevel>,
     ) -> impl Future<Output = Result<CrmContact, CrmError>> + Send;
 
+    /// Whether the receipt's holder still has CRM access on the team:
+    /// [`CrmError::AccessDenied`] when an admin turned it off. For callers
+    /// that must answer a denial, not an empty list: the listing methods
+    /// below return no rows to a denied caller, as the soup feed wants.
+    fn require_member_access(
+        &self,
+        access: &CrmTeamReceipt<MemberTeamRole>,
+    ) -> impl Future<Output = Result<(), CrmError>> + Send;
+
     /// Batched authorization probe for a CRM-scoped email query. See
     /// [`CompaniesRepository::crm_scope_precheck`].
     fn crm_scope_precheck(
@@ -1185,6 +1194,14 @@ where
     }
 
     #[tracing::instrument(skip_all, fields(team_id = %access.team_id()), err)]
+    async fn require_member_access(
+        &self,
+        access: &CrmTeamReceipt<MemberTeamRole>,
+    ) -> Result<(), CrmError> {
+        access.check_access(&self.companies_repository).await
+    }
+
+    #[tracing::instrument(skip_all, fields(team_id = %access.team_id()), err)]
     async fn crm_scope_precheck(
         &self,
         access: &CrmTeamReceipt<MemberTeamRole>,
@@ -1771,6 +1788,13 @@ impl CrmService for NoOpCrmService {
         _access: &CrmContactReceipt<EditAccessLevel>,
     ) -> Result<CrmContact, CrmError> {
         Err(CrmError::CrmDisabledForTeam)
+    }
+
+    async fn require_member_access(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+    ) -> Result<(), CrmError> {
+        unimplemented!("NoOpCrmService.require_member_access")
     }
 
     async fn crm_scope_precheck(

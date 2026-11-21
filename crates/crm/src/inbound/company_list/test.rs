@@ -272,7 +272,9 @@ async fn get(app: &Router, token: &str, uri: &str) -> (StatusCode, Value) {
     let response = app.clone().oneshot(request).await.unwrap();
     let status = response.status();
     let bytes = to_bytes(response.into_body(), 1 << 20).await.unwrap();
-    (status, serde_json::from_slice(&bytes).unwrap())
+    let body = serde_json::from_slice(&bytes)
+        .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&bytes).into_owned()));
+    (status, body)
 }
 
 fn names(body: &Value) -> Vec<&str> {
@@ -437,4 +439,51 @@ async fn a_team_bot_lists_its_teams_companies(pool: PgPool) {
         list_companies_for_team(&context, &bot_receipt(team), &filters(None, Some(true))).await,
         Err(ListCompaniesError::AdminRequired)
     ));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_member_whose_crm_access_is_off_is_refused_not_given_an_empty_list(pool: PgPool) {
+    seed(&pool).await;
+    sqlx::query("UPDATE team_user SET crm_access = false WHERE user_id = $1")
+        .bind(MEMBER)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let app = app(&pool);
+
+    let (status, listing) = get(&app, "member", "/crm/companies").await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "{listing}");
+    // A bad stage must not answer with the team's stage labels either.
+    let (status, stage) = get(&app, "member", "/crm/companies?stage=zzz").await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "{stage}");
+    assert!(
+        !stage.to_string().contains("Customer"),
+        "a denied member learns no stage labels: {stage}"
+    );
+    let (status, hidden) = get(&app, "member", "/crm/companies?includeHidden=true").await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "{hidden}");
+
+    // Members who still have access are unaffected.
+    let (status, owner) = get(&app, "owner", "/crm/companies").await;
+    assert_eq!(status, StatusCode::OK, "{owner}");
+    assert_eq!(names(&owner), ["Globex", "Acme"]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn unparsable_query_values_are_json_errors(pool: PgPool) {
+    seed(&pool).await;
+    let app = app(&pool);
+
+    for uri in [
+        "/crm/companies?limit=-1",
+        "/crm/companies?limit=70000",
+        "/crm/companies?includeHidden=yes",
+    ] {
+        let (status, body) = get(&app, "member", uri).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{uri}");
+        assert!(
+            body["message"].as_str().is_some_and(|m| !m.is_empty()),
+            "{uri} answers with an ErrorResponse: {body}"
+        );
+    }
 }

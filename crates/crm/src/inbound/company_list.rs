@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use axum::{
     Json, Router,
-    extract::{FromRef, Query, State},
+    extract::{FromRef, Query, State, rejection::QueryRejection},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::get,
@@ -132,6 +132,10 @@ pub struct ListCompaniesParams {
     skip_all,
     fields(
         team_id = tracing::field::Empty,
+        include_hidden = tracing::field::Empty,
+        filtered_by_search = tracing::field::Empty,
+        filtered_by_stage = tracing::field::Empty,
+        filtered_by_owner = tracing::field::Empty,
         returned = tracing::field::Empty,
         total_matching = tracing::field::Empty,
     ),
@@ -140,7 +144,7 @@ pub struct ListCompaniesParams {
 pub async fn handler<C, Eas, P, Auth>(
     access: MacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
     State(state): State<CompanyListState<C, Eas, P, Auth>>,
-    Query(params): Query<ListCompaniesParams>,
+    params: Result<Query<ListCompaniesParams>, QueryRejection>,
 ) -> Result<Json<ListCompaniesResponse>, CompanyListError>
 where
     C: CrmService,
@@ -150,7 +154,14 @@ where
 {
     let receipt = CrmTeamReceipt::from_team_receipt(access.entity_access_receipt)
         .map_err(CompanyListError::Receipt)?;
+    let Query(params) =
+        params.map_err(|rejection| CompanyListError::BadQuery(rejection.body_text()))?;
     tracing::Span::current().record("team_id", tracing::field::display(receipt.team_id()));
+    let span = tracing::Span::current();
+    span.record("include_hidden", params.include_hidden.unwrap_or(false));
+    span.record("filtered_by_search", params.search.is_some());
+    span.record("filtered_by_stage", params.stage.is_some());
+    span.record("filtered_by_owner", params.owner_user_id.is_some());
     let filters = ListCompanies {
         search: params.search,
         stage: params.stage,
@@ -172,6 +183,10 @@ pub enum CompanyListError {
     /// The extractor's receipt is not for a team.
     #[error("could not resolve the caller's team")]
     Receipt(CrmError),
+    /// A query value did not parse (a negative or oversized `limit`, a
+    /// non-boolean `includeHidden`).
+    #[error("{0}")]
+    BadQuery(String),
     /// The listing itself failed.
     #[error(transparent)]
     Listing(ListCompaniesError),
@@ -184,7 +199,10 @@ impl IntoResponse for CompanyListError {
                 tracing::error!(error = ?error, "CRM team receipt rejected");
                 StatusCode::INTERNAL_SERVER_ERROR
             }
-            Self::Listing(ListCompaniesError::AdminRequired) => StatusCode::FORBIDDEN,
+            Self::BadQuery(_) => StatusCode::BAD_REQUEST,
+            Self::Listing(ListCompaniesError::AccessDenied | ListCompaniesError::AdminRequired) => {
+                StatusCode::FORBIDDEN
+            }
             Self::Listing(ListCompaniesError::UnknownStage(_)) => StatusCode::BAD_REQUEST,
             Self::Listing(ListCompaniesError::Failed(error)) => {
                 tracing::error!(error = ?error.internal_error, "could not list CRM companies");

@@ -15,7 +15,9 @@ use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 
 use crate::domain::{
-    auth::CrmTeamReceipt, companies_repo::CrmCompanyListSort, model::CrmCompanyForSoup,
+    auth::CrmTeamReceipt,
+    companies_repo::CrmCompanyListSort,
+    model::{CrmCompanyForSoup, CrmError},
     service::CrmService,
 };
 
@@ -134,7 +136,6 @@ where
         service_context: ServiceContext<CrmToolContext<CSvc, ESvc, PSvc>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
-        tracing::info!(params=?self, "List CRM companies");
         list_team_companies(&service_context, &request_context, self)
             .await
             .map_err(ToolCallError::from)
@@ -144,6 +145,9 @@ where
 /// Why the team's companies could not be listed.
 #[derive(Debug, thiserror::Error)]
 pub enum ListCompaniesError {
+    /// An admin turned the caller's CRM access off.
+    #[error("CRM access is not enabled for this team member")]
+    AccessDenied,
     /// Hidden companies were asked for by a member below admin.
     #[error("include_hidden requires team admin or owner role")]
     AdminRequired,
@@ -203,6 +207,17 @@ where
     ESvc: EntityAccessService,
     PSvc: PropertiesService,
 {
+    // Before any read: the listing below returns no rows to a denied member,
+    // and the stage catalog answers anyone, so a denial must stop here.
+    context
+        .service
+        .require_member_access(team_receipt)
+        .await
+        .map_err(|error| match error {
+            CrmError::AccessDenied => ListCompaniesError::AccessDenied,
+            other => ListCompaniesError::Failed(crm_error(other)),
+        })?;
+
     let include_hidden = filters.include_hidden.unwrap_or(false);
     if include_hidden && !team_receipt.include_hidden() {
         return Err(ListCompaniesError::AdminRequired);
