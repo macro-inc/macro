@@ -101,6 +101,14 @@ per-entity-type search plus a unified search across them — mounted into
   agents, routines, services, Macro API tokens and account-manager
   credentials never draw on it, and neither does `/search/channel`, which
   takes no lane turn either.
+- Search never returns an item in the Trash. The documents and chats indexes
+  keep trashed items until a purge (projects leave the index on trash).
+  Enrichment drops a document, chat or project hit whose row has `deletedAt`,
+  as it drops a hit whose row is gone, so the SDK, the API, the AI tools and
+  the web app get the same results. The web mapper still checks
+  `metadata.deleted_at`: saved AI chats render their stored search results
+  through it, and older ones hold trashed hits. `/search/simple` returns hits
+  unenriched and is not covered.
 - A query is valid from one character (`terms::trimmed_query` rejects only a
   blank or quotes-only one). Short queries stay bounded in the query builders, not here: a
   term under three characters matches as a whole word in document, chat, call

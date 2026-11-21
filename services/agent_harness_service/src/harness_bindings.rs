@@ -22,7 +22,9 @@ use agent_session::domain::model::ReplicaId;
 use bot_id::BotId;
 use harness_id::HarnessId;
 use macro_user_id::user_id::MacroUserIdStr;
-use sqlx::PgPool;
+use sqlx::pool::PoolConnection;
+use sqlx::postgres::PgPoolOptions;
+use sqlx::{PgPool, Postgres};
 use tracing::Instrument as _;
 
 #[cfg(test)]
@@ -35,6 +37,45 @@ const RUNTIME_CONNECTION_LEASE: Duration = Duration::from_secs(30);
 
 /// How often a replica renews the leases of the connections it holds.
 pub const RUNTIME_CONNECTION_RENEW_EVERY: Duration = Duration::from_secs(10);
+
+/// How long a renewal may take in all, waiting for its connection included.
+/// Half the renewal period, so a stalled renewal ends before the next tick
+/// and that one still lands well inside the lease.
+const RENEWAL_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// A renewal's connection, closed on drop unless the renewal finished with
+/// it. Returning a connection cut off mid-query to the pool pings it first,
+/// with no bound, so a silent socket would hold the renewal pool's only
+/// connection and fail every later renewal. sqlx bounds a close to 5 s.
+struct CloseUnlessFinished {
+    connection: PoolConnection<Postgres>,
+    finished: bool,
+}
+
+impl CloseUnlessFinished {
+    fn new(connection: PoolConnection<Postgres>) -> Self {
+        Self {
+            connection,
+            finished: false,
+        }
+    }
+
+    fn as_mut(&mut self) -> &mut PoolConnection<Postgres> {
+        &mut self.connection
+    }
+
+    fn finish(&mut self) {
+        self.finished = true;
+    }
+}
+
+impl Drop for CloseUnlessFinished {
+    fn drop(&mut self) {
+        if !self.finished {
+            self.connection.close_on_drop();
+        }
+    }
+}
 
 /// [`HarnessBindings`] over the `agent_configs` table.
 #[derive(Clone)]
@@ -148,13 +189,32 @@ async fn lock_presence(
 /// with the `harnesses` presence timestamps.
 pub struct PgHarnessPresence {
     pool: PgPool,
+    /// One connection only renewals use. A renewal that queues for the shared
+    /// pool behind a burst of other work lets every lease this replica holds
+    /// lapse, and its live harnesses read offline.
+    renewal_pool: PgPool,
     replica: ReplicaId,
 }
 
 impl PgHarnessPresence {
-    /// Wrap a pool, writing as `replica`.
+    /// Wrap a pool, writing as `replica`. Renewals get their own connection
+    /// to the same database.
     pub fn new(pool: PgPool, replica: ReplicaId) -> Self {
-        Self { pool, replica }
+        let statement_timeout = format!("{}ms", RENEWAL_TIMEOUT.as_millis());
+        let renewal_pool = PgPoolOptions::new()
+            .max_connections(1)
+            .acquire_timeout(RENEWAL_TIMEOUT)
+            .connect_lazy_with(
+                pool.connect_options()
+                    .as_ref()
+                    .clone()
+                    .options([("statement_timeout", statement_timeout.as_str())]),
+            );
+        Self {
+            pool,
+            renewal_pool,
+            replica,
+        }
     }
 }
 
@@ -308,7 +368,7 @@ impl HarnessPresence for PgHarnessPresence {
                 .unzip();
             // An upsert, so a connection whose attach write failed, or whose
             // lapsed row was reaped while this process stalled, comes back.
-            let renewed = sqlx::query!(
+            let renewal = sqlx::query!(
                 r#"
                 INSERT INTO harness_runtime_connection
                     (harness_id, id, replica_id, lease_expires_at)
@@ -323,16 +383,35 @@ impl HarnessPresence for PgHarnessPresence {
                 &connections,
                 self.replica.as_uuid(),
                 RUNTIME_CONNECTION_LEASE.as_secs_f64(),
-            )
-            .fetch_all(&self.pool)
-            .await;
-            let renewed = match renewed {
-                Ok(renewed) => renewed,
-                Err(error) => {
+            );
+            let renewed = async {
+                let mut connection =
+                    CloseUnlessFinished::new(self.renewal_pool.acquire().await?);
+                let rows = renewal.fetch_all(&mut **connection.as_mut()).await?;
+                connection.finish();
+                Ok::<_, sqlx::Error>(rows)
+            };
+            // The pool's own timeouts can't bound a socket that went silent.
+            let renewed = match tokio::time::timeout(RENEWAL_TIMEOUT, renewed).await {
+                Ok(Ok(renewed)) => renewed,
+                Ok(Err(error)) => {
                     let span = tracing::Span::current();
                     span.record("error", tracing::field::display(&error));
                     span.record("otel.status_code", "ERROR");
                     tracing::warn!(error = ?error, replica = %self.replica, "failed to renew harness runtime leases");
+                    return Vec::new();
+                }
+                // If the upsert committed just before the timeout, its restores
+                // are lost and not undone; such a row lapses with its lease.
+                Err(_) => {
+                    let span = tracing::Span::current();
+                    span.record("error", "timed out");
+                    span.record("otel.status_code", "ERROR");
+                    tracing::warn!(
+                        timeout_ms = RENEWAL_TIMEOUT.as_millis(),
+                        replica = %self.replica,
+                        "harness runtime lease renewal timed out"
+                    );
                     return Vec::new();
                 }
             };

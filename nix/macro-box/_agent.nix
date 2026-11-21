@@ -97,6 +97,8 @@ let
     runtime=${cfg.runtime}
     helper=${lib.getExe credentialHelper}
     helper_credentials=/run/credentials/macro-agent.service/agent.env
+    setup_traceparent=/run/macrod/agent-traceparent
+    setup_traceparent_used=${state}/setup-traceparent
   '';
   credentialHelper = pkgs.writeShellApplication {
     name = "git-credential-agent";

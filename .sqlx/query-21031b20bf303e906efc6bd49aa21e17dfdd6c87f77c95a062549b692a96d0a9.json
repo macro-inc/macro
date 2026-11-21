@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Every user and every peer gain each other in their interacted lists. Inputs\n-- are bounded by the producer (10 users x 500 peers per message), so this\n-- writes at most 10,000 rows. A repeat conflicts on the primary key and\n-- returns nothing. Rows go in key order so two messages with overlapping\n-- pairs wait on each other instead of deadlocking.\n--\n-- Interactions are between Macro accounts, so an id without a profile is\n-- skipped: a message that arrives after its user was deleted (and their lists\n-- dropped) cannot add them back. A profile matches by id or, for a legacy\n-- \"User\" id stored with capitals, by its address (User_lower_email_idx); the\n-- rows name the canonical input id. At most two index probes per input id:\n-- each list is materialized so it is checked once, and OFFSET 0 keeps each\n-- check a probe, never a hash of the whole \"User\" table when its statistics\n-- are stale.\nWITH users AS MATERIALIZED (\n    SELECT input.id FROM unnest($1::text[]) AS input (id)\n    WHERE EXISTS (SELECT 1 FROM \"User\" WHERE \"User\".id = input.id OFFSET 0)\n       OR EXISTS (\n           SELECT 1 FROM \"User\" WHERE lower(\"User\".email) = substr(input.id, 7) OFFSET 0\n       )\n), peers AS MATERIALIZED (\n    SELECT input.id FROM unnest($2::text[]) AS input (id)\n    WHERE EXISTS (SELECT 1 FROM \"User\" WHERE \"User\".id = input.id OFFSET 0)\n       OR EXISTS (\n           SELECT 1 FROM \"User\" WHERE lower(\"User\".email) = substr(input.id, 7) OFFSET 0\n       )\n)\nINSERT INTO contact_list_members (user_id, contact_user_id, list_key)\nSELECT pair.user_id, pair.contact_user_id, $3\nFROM users\nCROSS JOIN peers\nCROSS JOIN LATERAL (\n    VALUES (users.id, peers.id), (peers.id, users.id)\n) AS pair (user_id, contact_user_id)\nWHERE users.id <> peers.id\nORDER BY pair.user_id, pair.contact_user_id\nON CONFLICT (user_id, contact_user_id, list_key) DO NOTHING\nRETURNING user_id, contact_user_id\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "contact_user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "TextArray",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "21031b20bf303e906efc6bd49aa21e17dfdd6c87f77c95a062549b692a96d0a9"
+}

@@ -522,6 +522,11 @@ replica. Serialize connect/disconnect effects by harness across replicas and che
 durable live connections before emitting a disconnect, so an old socket cannot
 mark its replacement offline. Keep this lock pool separate from repository pools
 to avoid exhausting the connections needed inside the guarded operation.
+Harness presence lease renewals use one more dedicated connection
+(`harness_bindings.rs`, each renewal bounded to 5 s), so a starved shared pool
+can't lapse the leases of live harnesses. A renewal cut off by that bound closes
+its connection instead of returning it: sqlx's unbounded return ping would let a
+silent socket hold the only slot.
 Routine dispatch waits for the shared HTTP listener and calls its loopback
 address, avoiding an ALB/self-startup race. Shutdown stops scheduling intake and
 cognition workers before draining sessions and pending publishes. Preview
@@ -557,6 +562,12 @@ listener failure shuts down the process so ECS can replace the task.
 - The public MCP server is stateless, so tool calls carry no `clientInfo`; the
   client is identified per call by its `User-Agent` / `x-anthropic-client`
   headers and per session by `$mcp_initialize`.
+- Each public tool call runs in a `public_mcp.call_tool` span (tool name, mode,
+  caller kind, outcome) carrying only opaque caller ids: `fusionauth_user_id`,
+  the OAuth `mcp.client.id` and registered `mcp.client.name`, or `agent_id`,
+  from `mcp_auth_proxy`'s `McpCallerIds`. Never put the Macro user id, an
+  email, on it. Span-reading tests share `test_spans::exported_spans()`, the
+  binary's one global subscriber.
 
 Local MCP uses both configured egress addresses in the in-process catalog;
 the public MCP transport permits its typed service hostname as well as its

@@ -300,6 +300,7 @@ async fn an_enrolled_computer_is_left_alone() {
             root: directory.path().to_owned(),
         },
         &host,
+        |_| (),
     )
     .await
     .unwrap();
@@ -372,6 +373,7 @@ async fn a_marker_as_new_as_the_enrollment_is_left_alone() {
             root: directory.path().to_owned(),
         },
         &FakeHost::default(),
+        |_| (),
     )
     .await
     .unwrap();
@@ -437,6 +439,7 @@ pairing_id = "00000000-0000-0000-0000-00000000000a"
             root: directory.path().to_owned(),
         },
         &FakeHost::default(),
+        |_| (),
     )
     .await
     .unwrap_err();
@@ -449,4 +452,129 @@ pairing_id = "00000000-0000-0000-0000-00000000000a"
         "00000000-0000-0000-0000-00000000000c\n1\n"
     );
     assert_eq!(std::fs::read_to_string(home_file).unwrap(), "keep me");
+}
+
+/// The computer `ENROLLMENT_JSON` enrolls.
+fn computer() -> hosted_runtimes::domain::ids::ComputerId {
+    "00000000-0000-0000-0000-00000000000c".parse().unwrap()
+}
+
+#[tokio::test]
+async fn an_enrollment_naming_an_intake_starts_telemetry_there_over_http() {
+    let directory = tempfile::tempdir().expect("temp dir");
+    let marker = directory.path().join("var/lib/macrod/enrolled");
+    std::fs::create_dir_all(marker.parent().unwrap()).unwrap();
+    std::fs::write(&marker, "00000000-0000-0000-0000-00000000000c\n1\n").unwrap();
+    let source = directory.path().join("enrollment.json");
+    let mut enrollment: serde_json::Value = serde_json::from_str(ENROLLMENT_JSON).unwrap();
+    enrollment["deployment"]["telemetry_url"] = "https://intake.example.com/i/otlp/".into();
+    std::fs::write(&source, enrollment.to_string()).unwrap();
+    let started = RefCell::new(None);
+
+    run_enroll_with_host(
+        EnrollOptions {
+            from: EnrollmentSource::File(source),
+            config: directory.path().join("macrod.toml"),
+            workspace: directory.path().join("work"),
+            agent: "claude-code".to_owned(),
+            root: directory.path().to_owned(),
+        },
+        &FakeHost::default(),
+        |exporter| *started.borrow_mut() = Some(exporter),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        started.into_inner(),
+        Some(Some(crate::telemetry::Exporter::Http {
+            endpoint: "https://intake.example.com/i/otlp".to_owned(),
+            computer: Some(computer()),
+        }))
+    );
+}
+
+#[test]
+fn the_telemetry_settings_are_written_for_the_service_and_removed_without_an_intake() {
+    let directory = tempfile::tempdir().expect("temp dir");
+    let path = directory.path().join("var/lib/macrod/telemetry.env");
+
+    write_telemetry_env(
+        &path,
+        Some(&crate::telemetry::Exporter::Http {
+            endpoint: "https://intake.example.com/i/otlp".to_owned(),
+            computer: Some(computer()),
+        }),
+    )
+    .unwrap();
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        "OTEL_EXPORTER_OTLP_ENDPOINT=https://intake.example.com/i/otlp\n\
+         OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf\n\
+         OTEL_EXPORTER_OTLP_HEADERS=x-macro-computer-id=00000000-0000-0000-0000-00000000000c\n"
+    );
+
+    write_telemetry_env(&path, None).unwrap();
+    assert!(!path.exists());
+    write_telemetry_env(&path, None).unwrap();
+}
+
+/// A failed write of the telemetry settings leaves the computer unenrolled,
+/// so the retry writes them instead of stopping at "already enrolled".
+#[tokio::test]
+async fn a_failed_telemetry_settings_write_is_retried() {
+    let directory = tempfile::tempdir().expect("temp dir");
+    let config = directory.path().join("macrod.toml");
+    // Already claimed, so enrolling needs no server.
+    std::fs::write(
+        &config,
+        r#"
+[macro]
+api_url = "http://127.0.0.1:9/agent-harness"
+storage_url = "http://127.0.0.1:9/dss"
+
+[harness]
+command = "claude-code-acp"
+
+[workspace]
+path = "/"
+
+[credentials]
+harness_id = "00000000-0000-0000-0000-0000000000a1"
+token = "mhns_claimed"
+pairing_id = "00000000-0000-0000-0000-00000000000a"
+"#,
+    )
+    .unwrap();
+    let source = directory.path().join("enrollment.json");
+    let mut enrollment: serde_json::Value = serde_json::from_str(ENROLLMENT_JSON).unwrap();
+    enrollment["deployment"]["telemetry_url"] = "https://intake.example.com/i/otlp/".into();
+    std::fs::write(&source, enrollment.to_string()).unwrap();
+    let marker = directory.path().join("var/lib/macrod/enrolled");
+    let settings = directory.path().join("var/lib/macrod/telemetry.env");
+    // A directory where the settings go makes their write fail.
+    std::fs::create_dir_all(&settings).unwrap();
+    let options = || EnrollOptions {
+        from: EnrollmentSource::File(source.clone()),
+        config: config.clone(),
+        workspace: directory.path().join("work"),
+        agent: "claude-code".to_owned(),
+        root: directory.path().to_owned(),
+    };
+
+    run_enroll_with_host(options(), &FakeHost::default(), |_| ())
+        .await
+        .unwrap_err();
+    assert!(!marker.exists(), "enrollment was marked done");
+
+    std::fs::remove_dir(&settings).unwrap();
+    run_enroll_with_host(options(), &FakeHost::default(), |_| ())
+        .await
+        .unwrap();
+    assert!(marker.exists());
+    assert!(
+        std::fs::read_to_string(&settings)
+            .unwrap()
+            .contains("https://intake.example.com/i/otlp")
+    );
 }

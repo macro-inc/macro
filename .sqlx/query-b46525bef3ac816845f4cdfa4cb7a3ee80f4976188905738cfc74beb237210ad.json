@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- One page of list owners after $1, found by skipping through the primary\n-- key one owner at a time (Postgres 14 has no skip scan), each with the rows\n-- they own when no account matches them. An owner matches an account by id\n-- or by the account's address, so a legacy-cased \"User\" id is never taken\n-- for a deleted account.\nWITH RECURSIVE owners (id) AS (\n    (\n        SELECT m.user_id\n        FROM contact_list_members m\n        WHERE m.user_id > $1\n        ORDER BY m.user_id\n        LIMIT 1\n    )\n    UNION ALL\n    SELECT (\n        SELECT m.user_id\n        FROM contact_list_members m\n        WHERE m.user_id > owners.id\n        ORDER BY m.user_id\n        LIMIT 1\n    )\n    FROM owners\n    WHERE owners.id IS NOT NULL\n),\npage AS (\n    SELECT id FROM owners WHERE id IS NOT NULL LIMIT $2\n)\nSELECT\n    page.id AS \"id!\",\n    CASE\n        WHEN EXISTS (SELECT 1 FROM \"User\" u WHERE u.id = page.id COLLATE \"default\")\n          OR EXISTS (SELECT 1 FROM \"User\" u WHERE lower(u.email) = substr(page.id, 7) COLLATE \"default\")\n        THEN NULL\n        ELSE (SELECT count(*) FROM contact_list_members m WHERE m.user_id = page.id)\n    END AS orphaned_rows\nFROM page\nORDER BY page.id\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "orphaned_rows",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "b46525bef3ac816845f4cdfa4cb7a3ee80f4976188905738cfc74beb237210ad"
+}

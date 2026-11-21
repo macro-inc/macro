@@ -5,7 +5,7 @@
 use macro_service_urls::{
     AgentHarnessEgressUrl, AgentHarnessServiceUrl, ApiGatewayUrl, AppServiceUrl, AuthServiceUrl,
     ConnectionGatewayWebsocketUrl, DocumentCognitionServiceUrl, DocumentStorageServiceUrl,
-    McpServiceUrl, ScheduledActionServiceUrl,
+    McpServiceUrl, ScheduledActionServiceUrl, TelemetryIntakeUrl,
 };
 use team_agents::domain::{models::TeamAgentError, ports::EnrollmentEnvironment};
 
@@ -20,6 +20,9 @@ pub const ANTHROPIC_BASE_URL_KEY: &str = "ANTHROPIC_BASE_URL";
 /// runtime opens `ws(s)://…/stt` and `…/tts` under it.
 pub const SPEECH_URL_KEY: &str = "MACRO_SPEECH_URL";
 
+/// Where the agent's spans go (OTLP/HTTP), the standard OTel variable.
+pub const TELEMETRY_KEY: &str = "OTEL_EXPORTER_OTLP_ENDPOINT";
+
 /// Resolves [`EnrollmentEnvironment`] from the service URL types.
 pub struct AgentAddresses;
 
@@ -27,6 +30,17 @@ pub struct AgentAddresses;
 #[error("{name} must be a computer-reachable URL without credentials, query or fragment")]
 struct UnreachableAddress {
     name: &'static str,
+}
+
+fn is_loopback(url: &macro_service_urls::Url) -> bool {
+    url.host_str().is_some_and(|host| {
+        host.eq_ignore_ascii_case("localhost")
+            || host.ends_with(".localhost")
+            || host
+                .trim_matches(['[', ']'])
+                .parse::<std::net::IpAddr>()
+                .is_ok_and(|ip| ip.is_loopback() || ip.is_unspecified())
+    })
 }
 
 fn checked(name: &'static str, raw: &str, websocket: bool) -> Result<String, TeamAgentError> {
@@ -37,15 +51,9 @@ fn checked(name: &'static str, raw: &str, websocket: bool) -> Result<String, Tea
     } else {
         matches!(url.scheme(), "http" | "https")
     };
-    let host = url.host_str().ok_or_else(invalid)?;
-    let loopback = host.eq_ignore_ascii_case("localhost")
-        || host.ends_with(".localhost")
-        || host
-            .trim_matches(['[', ']'])
-            .parse::<std::net::IpAddr>()
-            .is_ok_and(|ip| ip.is_loopback() || ip.is_unspecified());
+    url.host_str().ok_or_else(invalid)?;
     if !scheme_ok
-        || loopback
+        || is_loopback(&url)
         || !url.username().is_empty()
         || url.password().is_some()
         || url.query().is_some()
@@ -73,6 +81,20 @@ fn browser_url(name: &'static str, raw: &str) -> Result<String, TeamAgentError> 
     Ok(raw.trim_end_matches('/').to_owned())
 }
 
+/// The agent's telemetry intake, or none when it is this machine's loopback,
+/// which a computer can't reach (a local stack without a wired collector).
+fn telemetry(raw: &str) -> Result<Option<(&'static str, String)>, TeamAgentError> {
+    let url = macro_service_urls::Url::parse(raw).map_err(|_| {
+        TeamAgentError::internal(UnreachableAddress {
+            name: TELEMETRY_KEY,
+        })
+    })?;
+    if is_loopback(&url) {
+        return Ok(None);
+    }
+    Ok(Some((TELEMETRY_KEY, checked(TELEMETRY_KEY, raw, false)?)))
+}
+
 fn resolve() -> Result<Vec<(&'static str, String)>, TeamAgentError> {
     let storage = DocumentStorageServiceUrl::new().map_err(TeamAgentError::internal)?;
     let auth = AuthServiceUrl::new().map_err(TeamAgentError::internal)?;
@@ -86,6 +108,8 @@ fn resolve() -> Result<Vec<(&'static str, String)>, TeamAgentError> {
     let egress = checked(AgentHarnessEgressUrl::OVERRIDE_ENV_VAR_NAME, &egress, false)?;
     let app = AppServiceUrl::new().map_err(TeamAgentError::internal)?;
     let app = browser_url(AppServiceUrl::OVERRIDE_ENV_VAR_NAME, &app)?;
+    let intake = TelemetryIntakeUrl::new().map_err(TeamAgentError::internal)?;
+    let telemetry = telemetry(&intake)?;
     Ok(vec![
         (
             DocumentStorageServiceUrl::OVERRIDE_ENV_VAR_NAME,
@@ -143,7 +167,10 @@ fn resolve() -> Result<Vec<(&'static str, String)>, TeamAgentError> {
         (AppServiceUrl::OVERRIDE_ENV_VAR_NAME, app),
         (ANTHROPIC_BASE_URL_KEY, format!("{egress}/brain/anthropic")),
         (SPEECH_URL_KEY, format!("{egress}/brain/inference")),
-    ])
+    ]
+    .into_iter()
+    .chain(telemetry)
+    .collect())
 }
 
 impl EnrollmentEnvironment for AgentAddresses {

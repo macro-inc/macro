@@ -5,8 +5,8 @@ use std::future::Future;
 use rootcause::Report;
 
 use crate::domain::models::{
-    RateLimitConfig, RateLimitKey, RateLimitOk, RateLimitResult, TokenBucketConfig,
-    TokenBucketResult,
+    RateLimitConfig, RateLimitExceeded, RateLimitKey, RateLimitOk, RateLimitResult,
+    TokenBucketConfig, TokenBucketResult,
 };
 
 /// Port for rate limiting operations.
@@ -41,6 +41,22 @@ pub trait TokenBucketPort: Send + Sync + 'static {
         key: RateLimitKey,
         config: TokenBucketConfig,
     ) -> impl Future<Output = Result<TokenBucketResult, Report>> + Send;
+}
+
+/// Port for limits on actions that cost more than one each, such as a send
+/// that counts once per recipient.
+pub trait RateBudgetPort: Send + Sync + 'static {
+    /// Atomically add `cost` to the window's count when all of it fits under
+    /// the limit, returning the count afterwards.
+    ///
+    /// When it does not fit, nothing is added and `Err(RateLimitExceeded)`
+    /// says how long until the window ends. A spend is not rolled back.
+    fn spend(
+        &self,
+        key: RateLimitKey,
+        config: RateLimitConfig,
+        cost: u64,
+    ) -> impl Future<Output = Result<Result<u64, RateLimitExceeded>, Report>> + Send;
 }
 
 /// The external facing service interface.

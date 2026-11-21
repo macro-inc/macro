@@ -78,9 +78,10 @@ dedicated probe user. Required, no fallback. `ENVIRONMENT` picks the gateway
 - Never run two probes as one user at once: each renames the same fixtures, so
   each sees the other's title and counts a miss. The stack deploys with
   `minimumHealthyPercent: 0` for that reason.
-- Every write must remove what it replaces from search for good: a trashed
-  document stays searchable, and the project purge route ignores a project not
-  in the trash (it answers 200), so projects are trashed, then purged.
+- Every write must remove what it replaces for good, not leave it in the
+  Trash: a trashed document stays in the index until it is purged, and the
+  project purge route ignores a project not in the trash (it answers 200), so
+  projects are trashed, then purged.
 - Shutdown deletes the entities the process created. A crash, a kill past the
   stop timeout, or a create that commits after its request timed out leaves
   some behind, titled `Search probe <token>`: at most a document, a
