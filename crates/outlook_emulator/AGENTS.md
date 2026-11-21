@@ -31,7 +31,9 @@ local stack, without Microsoft accounts.
   `$top`. A token from before `expire_delta_tokens`, or older
   than the mailbox's `delta_token_lifetime_days`, answers 410
   `SyncStateNotFound`. A folder's message list takes the same
-  `receivedDateTime` filter.
+  `receivedDateTime` filter, or `sentDateTime ge` or `gt` a time. Every
+  message the emulator holds has a `sentDateTime`, a draft the time it was
+  made, so that filter keeps a recent draft.
 - `POST /subscriptions` posts a validation token to the notification URL and
   the lifecycle URL and stores the subscription only if both echo it. After
   that a message change posts a change notification; `send_lifecycle` posts

@@ -252,3 +252,14 @@ async fn the_newest_few_are_refused_at_once() {
     assert_eq!(tries.get(), 1);
     assert_eq!(started.elapsed(), Duration::ZERO);
 }
+
+#[test]
+fn an_outlook_sent_window_dates_mail_by_when_it_was_sent() {
+    let arrived = "2026-11-02T09:00:05Z".parse().ok();
+    let sent = "2026-11-02T09:00:00Z".parse().ok();
+    assert_eq!(window_date(arrived, sent, true), sent);
+    assert_eq!(window_date(arrived, sent, false), arrived);
+    // Each falls back on the other date when its own is missing.
+    assert_eq!(window_date(arrived, None, true), arrived);
+    assert_eq!(window_date(None, sent, false), sent);
+}

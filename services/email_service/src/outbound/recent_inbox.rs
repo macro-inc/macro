@@ -4,6 +4,7 @@
 use std::future::Future;
 use std::time::Duration;
 
+use chrono::{DateTime, Utc};
 use email::domain::mailbox::{MailboxError, MailboxKey};
 use email::domain::recent_inbox::{
     RecentInboxMailbox, RecentInboxMailboxes, RecentInboxReader, RecentMailFolder, RecentRead,
@@ -117,9 +118,14 @@ where
                 .collect(),
         };
 
+        // Each message is dated the way its provider's list was filtered:
+        // Gmail's `after:` reads the message's internal date, Graph's sent
+        // window its `sentDateTime`.
+        let dated_by_sending =
+            mailbox.provider == UserProvider::Outlook && read.folder == RecentMailFolder::Sent;
         Ok(messages
             .into_iter()
-            .map(|message| summarize(&mailbox.email_address, message))
+            .map(|message| summarize(&mailbox.email_address, message, dated_by_sending))
             .collect())
     }
 }
@@ -236,7 +242,23 @@ where
     }
 }
 
-fn summarize(inbox: &str, message: Message) -> RecentInboxMessage {
+/// The date a window reads a message by: when it was sent where its list was
+/// filtered by that, otherwise its provider's own date (arrival, or Gmail's
+/// internal date), each falling back on the other.
+fn window_date(
+    internal: Option<DateTime<Utc>>,
+    sent: Option<DateTime<Utc>>,
+    dated_by_sending: bool,
+) -> Option<DateTime<Utc>> {
+    if dated_by_sending {
+        sent.or(internal)
+    } else {
+        internal.or(sent)
+    }
+}
+
+fn summarize(inbox: &str, message: Message, dated_by_sending: bool) -> RecentInboxMessage {
+    let received_at = window_date(message.internal_date_ts, message.sent_at, dated_by_sending);
     RecentInboxMessage {
         inbox: inbox.to_owned(),
         from: message.from,
@@ -252,7 +274,7 @@ fn summarize(inbox: &str, message: Message) -> RecentInboxMessage {
             .collect(),
         subject: message.subject,
         snippet: message.snippet,
-        received_at: message.internal_date_ts.or(message.sent_at),
+        received_at,
         labels: message
             .labels
             .into_iter()

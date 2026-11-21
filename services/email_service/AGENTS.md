@@ -340,8 +340,9 @@ the gateway `/email` prefix.
   messages (at most 100), or a window with `days` (at most 30 days and 500
   messages, with snippets on only the newest `texts`). Only a window accepts
   `folder`, which may be `inbox` (the default) or `sent`. A sent window lists
-  Gmail's `SENT` label or Outlook's `sentitems` folder. Both Outlook folders
-  filter and sort by `receivedDateTime`. Each call spends provider quota.
+  Gmail's `SENT` label or Outlook's `sentitems` folder. Outlook's inbox
+  filters and sorts by `receivedDateTime`, its sent folder by `sentDateTime`,
+  and each message is dated the way its list was filtered. Each call spends provider quota.
   Gmail reads three messages at a time. The newest-`limit` read takes the
   live share and is refused at once. A month
   of 500 is bulk work: a dated list (`after:`, each page its own gated
