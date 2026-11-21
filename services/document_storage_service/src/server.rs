@@ -1093,6 +1093,21 @@ async fn run_server() -> anyhow::Result<()> {
         authorization_state.clone(),
     );
 
+    let contacts_service = Arc::new(contacts::domain::service::ContactsDomainService {
+        repository: contacts::outbound::repository::DbContactsRepository::new(db.clone()),
+        notifier: None::<contacts::outbound::gateway::ConnectionGatewayNotifier>,
+    });
+    let contact_lists = Arc::new(contacts::outbound::repository::DbContactsRepository::new(
+        db.clone(),
+    ));
+    // Each viewer's `people` rows, GraphQL directory and SSE contact audience
+    // come from the legacy graph or the list-aware tables, by the per-viewer
+    // `contacts-list-reads` flag; a failed flag read means the legacy graph.
+    let contact_reads = Arc::new(contacts::domain::list_reads::FlaggedContactReads::new(
+        contacts_service,
+        contact_lists.clone(),
+        contacts::domain::list_reads::ContactListReads::new(flags.clone()),
+    ));
     let webhook_stream_feed = webhook::domain::stream::StreamFeed::new(
         webhook::domain::stream::WEBHOOK_STREAM_CHANNEL_CAPACITY,
         webhook::domain::stream::WEBHOOK_STREAM_REPLAY_CAPACITY,
@@ -1101,9 +1116,7 @@ async fn run_server() -> anyhow::Result<()> {
         webhook_stream_feed.clone(),
         entity_access_service.clone(),
         webhook_repository.clone(),
-        crate::outbound::stream_contacts::ContactsStreamChecker::new(Arc::new(
-            contacts::outbound::repository::DbContactsRepository::new(db.clone()),
-        )),
+        crate::outbound::stream_contacts::ContactsStreamChecker::new(contact_reads.clone()),
     );
     let sse_stream_state = webhook::inbound::stream_router::WebhookStreamRouterState::new(
         sse_stream_service,
@@ -2009,21 +2022,6 @@ async fn run_server() -> anyhow::Result<()> {
         )),
     );
 
-    let contacts_service = Arc::new(contacts::domain::service::ContactsDomainService {
-        repository: contacts::outbound::repository::DbContactsRepository::new(db.clone()),
-        notifier: None::<contacts::outbound::gateway::ConnectionGatewayNotifier>,
-    });
-    let contact_lists = Arc::new(contacts::outbound::repository::DbContactsRepository::new(
-        db.clone(),
-    ));
-    // Each viewer's `people` rows and GraphQL directory come from the legacy
-    // graph or the list-aware tables, by the per-viewer `contacts-list-reads`
-    // flag; a failed flag read means the legacy graph.
-    let contact_reads = Arc::new(contacts::domain::list_reads::FlaggedContactReads::new(
-        contacts_service,
-        contact_lists.clone(),
-        contacts::domain::list_reads::ContactListReads::new(flags),
-    ));
     // SQL predicates and follow-up reads use the primary, matching the catalog
     // versions and writes; replica lag must not select stale rows for an edit.
     let sql_service = databases_sql::DatabasesSql::new(

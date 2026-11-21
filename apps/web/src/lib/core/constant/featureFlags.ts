@@ -474,6 +474,14 @@ export const disableCrmContactSearch = defineFlag({
   env: 'DISABLE_CRM_CONTACT_SEARCH',
 });
 
+// Stores each contact's `GraphqlContact.lists` in the local cache. Off in dev
+// too: a server without the field refuses any read that selects it, so this
+// waits for the server to ship it. Override with VITE_ENABLE_CONTACT_LISTS.
+export const enableContactLists = defineFlag({
+  key: 'enable-contact-lists',
+  env: 'ENABLE_CONTACT_LISTS',
+});
+
 // No dev override: the server requires this same remote flag before accepting writes.
 export const enableCrmMemberAccessChanges = defineFlag({
   key: 'enable-crm-member-access-changes',

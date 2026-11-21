@@ -30,6 +30,7 @@ axum = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true }
 contacts = { path = "../../crates/contacts", features = ["axum"] }
+feature_flags = { path = "../../crates/feature_flags" }
 macro_auth = { path = "../../crates/macro_auth" }
 macro_authorization = { path = "../../crates/macro_authorization", features = [
   "postgres",
