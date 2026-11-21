@@ -3,7 +3,6 @@
 
 use std::sync::Arc;
 
-use ai_toolset::RequestContext;
 use axum::{
     Json, Router,
     extract::{FromRef, Query, State},
@@ -21,11 +20,11 @@ use properties::PropertiesService;
 use serde::Deserialize;
 use utoipa::IntoParams;
 
-use crate::domain::service::CrmService;
+use crate::domain::{auth::CrmTeamReceipt, model::CrmError, service::CrmService};
 use crate::inbound::toolset::{
     CrmToolContext,
     list_companies::{
-        ListCompanies, ListCompaniesError, ListCompaniesResponse, list_team_companies,
+        ListCompanies, ListCompaniesError, ListCompaniesResponse, list_companies_for_team,
     },
 };
 
@@ -129,7 +128,15 @@ pub struct ListCompaniesParams {
         (status = 500, body = ErrorResponse),
     ),
 )]
-#[tracing::instrument(skip_all, err)]
+#[tracing::instrument(
+    skip_all,
+    fields(
+        team_id = tracing::field::Empty,
+        returned = tracing::field::Empty,
+        total_matching = tracing::field::Empty,
+    ),
+    err
+)]
 pub async fn handler<C, Eas, P, Auth>(
     access: MacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
     State(state): State<CompanyListState<C, Eas, P, Auth>>,
@@ -141,9 +148,9 @@ where
     P: PropertiesService,
     Auth: MacroAuthorizationService,
 {
-    let Some(user) = access.entity_access_receipt.acting_user_id() else {
-        return Err(CompanyListError::NoUser);
-    };
+    let receipt = CrmTeamReceipt::from_team_receipt(access.entity_access_receipt)
+        .map_err(CompanyListError::Receipt)?;
+    tracing::Span::current().record("team_id", tracing::field::display(receipt.team_id()));
     let filters = ListCompanies {
         search: params.search,
         stage: params.stage,
@@ -151,18 +158,20 @@ where
         include_hidden: params.include_hidden,
         limit: params.limit,
     };
-    list_team_companies(&state.tools, &RequestContext::new(user.clone()), &filters)
+    let listing = list_companies_for_team(&state.tools, &receipt, &filters)
         .await
-        .map(Json)
-        .map_err(CompanyListError::Listing)
+        .map_err(CompanyListError::Listing)?;
+    tracing::Span::current().record("returned", listing.companies.len());
+    tracing::Span::current().record("total_matching", listing.total_matching);
+    Ok(Json(listing))
 }
 
 /// A failed listing, as an HTTP response.
 #[derive(Debug, thiserror::Error)]
 pub enum CompanyListError {
-    /// The caller acts for no user, so has no team CRM.
-    #[error("listing CRM companies needs a signed-in user")]
-    NoUser,
+    /// The extractor's receipt is not for a team.
+    #[error("could not resolve the caller's team")]
+    Receipt(CrmError),
     /// The listing itself failed.
     #[error(transparent)]
     Listing(ListCompaniesError),
@@ -171,7 +180,10 @@ pub enum CompanyListError {
 impl IntoResponse for CompanyListError {
     fn into_response(self) -> Response {
         let status = match &self {
-            Self::NoUser => StatusCode::UNAUTHORIZED,
+            Self::Receipt(error) => {
+                tracing::error!(error = ?error, "CRM team receipt rejected");
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
             Self::Listing(ListCompaniesError::AdminRequired) => StatusCode::FORBIDDEN,
             Self::Listing(ListCompaniesError::UnknownStage(_)) => StatusCode::BAD_REQUEST,
             Self::Listing(ListCompaniesError::Failed(error)) => {

@@ -5,7 +5,7 @@ use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use entity_access::domain::{
-    models::{EntityType, TeamRole},
+    models::{EntityType, MemberTeamRole},
     ports::EntityAccessService,
 };
 use properties::{PropertiesService, PropertyTargetKey};
@@ -15,12 +15,13 @@ use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 
 use crate::domain::{
-    companies_repo::CrmCompanyListSort, model::CrmCompanyForSoup, service::CrmService,
+    auth::CrmTeamReceipt, companies_repo::CrmCompanyListSort, model::CrmCompanyForSoup,
+    service::CrmService,
 };
 
 use super::{
     CrmToolContext, ToolCompanyStage, caller_team_receipt, company_view_receipts, crm_error,
-    extract_company_crm_props, load_stage_option_catalog,
+    extract_company_crm_props, load_stage_option_catalog, team_access_error,
 };
 
 /// Default number of companies returned when `limit` is omitted.
@@ -173,7 +174,7 @@ impl From<ListCompaniesError> for ToolCallError {
 }
 
 /// The caller's team's CRM companies matching `filters`, most recent
-/// interaction first. Shared by the tool and `GET /crm/companies`.
+/// interaction first. The tool's entry point: it resolves the caller's team.
 pub async fn list_team_companies<CSvc, ESvc, PSvc>(
     context: &CrmToolContext<CSvc, ESvc, PSvc>,
     request_context: &RequestContext,
@@ -184,23 +185,42 @@ where
     ESvc: EntityAccessService,
     PSvc: PropertiesService,
 {
-    let (team_receipt, role) =
+    let (team_receipt, _) =
         caller_team_receipt(&*context.entity_access_service, request_context).await?;
+    list_companies_for_team(context, &team_receipt, filters).await
+}
 
+/// The companies of the team `team_receipt` addresses matching `filters`, most
+/// recent interaction first. Shared by the tool and `GET /crm/companies`,
+/// which already holds the extractor's receipt (a member, or a team bot).
+pub async fn list_companies_for_team<CSvc, ESvc, PSvc>(
+    context: &CrmToolContext<CSvc, ESvc, PSvc>,
+    team_receipt: &CrmTeamReceipt<MemberTeamRole>,
+    filters: &ListCompanies,
+) -> Result<ListCompaniesResponse, ListCompaniesError>
+where
+    CSvc: CrmService,
+    ESvc: EntityAccessService,
+    PSvc: PropertiesService,
+{
     let include_hidden = filters.include_hidden.unwrap_or(false);
-    if include_hidden && !matches!(role, TeamRole::Admin | TeamRole::Owner) {
+    if include_hidden && !team_receipt.include_hidden() {
         return Err(ListCompaniesError::AdminRequired);
     }
 
     let limit = usize::from(filters.limit.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT));
-    let user_id: &str = request_context.user_id.0.as_ref();
+    // Only the per-user "viewed at" column reads it; a team bot has no user.
+    let user_id: &str = team_receipt
+        .receipt()
+        .acting_user_id()
+        .map_or("", |user| user.0.as_ref());
 
     // Fetch visible companies (and hidden ones when requested), most
     // recently active first, then filter in memory.
     let mut companies = context
         .service
         .list_companies_for_soup(
-            &team_receipt,
+            team_receipt,
             user_id,
             &[],
             Some(false),
@@ -214,7 +234,7 @@ where
         let hidden = context
             .service
             .list_companies_for_soup(
-                &team_receipt,
+                team_receipt,
                 user_id,
                 &[],
                 Some(true),
@@ -275,9 +295,10 @@ where
     // Access to these companies is proven by the caller's team receipt:
     // the list is the caller's own team's CRM listing.
     let company_access = company_view_receipts(
-        &request_context.user_id,
+        team_receipt.receipt().auth(),
         companies.iter().map(|c| c.company.id),
-    );
+    )
+    .map_err(|e| ListCompaniesError::Failed(team_access_error(e)))?;
     let mut property_ids = vec![
         SystemPropertyKey::STAGE_UUID,
         SystemPropertyKey::COMPANY_OWNER_UUID,
