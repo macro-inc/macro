@@ -235,13 +235,32 @@ impl RunFailure {
 }
 
 pub(crate) fn prepare(connection: &Db, sql: &str) -> Result<Prepared, TursoStorageError> {
+    prepare_turso(connection, sql).map_err(TursoStorageError::turso)
+}
+
+/// Prepares generated SQL that has another plan to fall back on, returning
+/// `None` when Turso's parser refuses it. Turso bounds expression depth by its
+/// parser's recursion and the expression tree's height, so only the parser can
+/// say whether a deep expression fits.
+pub(crate) fn prepare_unless_refused(
+    connection: &Db,
+    sql: &str,
+) -> Result<Option<Prepared>, TursoStorageError> {
+    match prepare_turso(connection, sql) {
+        Ok(prepared) => Ok(Some(prepared)),
+        Err(LimboError::LexerError(_)) => Ok(None),
+        Err(error) => Err(TursoStorageError::turso(error)),
+    }
+}
+
+fn prepare_turso(connection: &Db, sql: &str) -> Result<Prepared, LimboError> {
     let cached = connection
         .statements
         .as_ref()
         .and_then(|statements| statements.lock().ok()?.take(sql));
     let statement = match cached {
         Some(statement) => statement,
-        None => connection.prepare(sql).map_err(TursoStorageError::turso)?,
+        None => connection.prepare(sql)?,
     };
     Ok(Prepared {
         statement: Some(statement),
