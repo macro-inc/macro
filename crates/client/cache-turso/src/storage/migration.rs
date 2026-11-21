@@ -154,13 +154,21 @@ fn upgrade_11_to_12(connection: &Arc<Connection>) -> Result<(), TursoStorageErro
 /// fuzzer. Not part of the production build.
 #[cfg(any(test, feature = "migration-test-hooks"))]
 pub mod test_hooks {
-    use super::super::TursoStorage;
+    use super::super::{
+        QUICK_ACCESS_PROJECTION_VERSION_KEY, TursoStorage, page_retention, people_sql, text,
+    };
     use crate::{TursoStorageError, driver};
+    use cache_core::people::sql::projection;
     use std::cell::Cell;
 
-    /// Rewrites a database of this build as storage 11 wrote it, the inverse
-    /// of the 11 to 12 step, so a test can open it as a file an older build
-    /// left behind.
+    /// Rewrites a database of this build as the last storage 11 build left
+    /// it, so a test can open it as a file an older build left behind: the
+    /// inverse of the 11 to 12 step, plus the derived state that build had
+    /// not reached yet. It stamped Quick Access projection 4 and page
+    /// retention 1, and wrote no local people facts or their stamp, so opening
+    /// the rewrite rebuilds all three, as opening a real storage 11 file does.
+    /// Page compaction then finds pages already in the newer shape, so the
+    /// rewrite costs a lower bound of a real file's first open.
     pub fn rewrite_as_storage_11(storage: &mut TursoStorage) -> Result<(), TursoStorageError> {
         storage.require_healthy()?;
         let connection = storage.connection();
@@ -173,6 +181,41 @@ pub mod test_hooks {
             ] {
                 driver::execute(&connection, sql, Vec::new())?;
             }
+            for (key, value) in [
+                (QUICK_ACCESS_PROJECTION_VERSION_KEY, "4"),
+                (page_retention::VERSION_KEY, "1"),
+            ] {
+                driver::execute(
+                    &connection,
+                    "UPDATE meta SET value = ?2 WHERE key = ?1",
+                    vec![text(key), text(value)],
+                )?;
+            }
+            driver::execute(
+                &connection,
+                "DELETE FROM meta WHERE key = ?",
+                vec![text(people_sql::VERSION_KEY)],
+            )?;
+            driver::execute(
+                &connection,
+                "DELETE FROM index_documents WHERE profile = ?",
+                vec![text(projection::PROFILE)],
+            )?;
+            Ok(())
+        }))
+    }
+
+    /// Adds a table no storage version has, so the next open of this
+    /// database must reset it.
+    pub fn add_unknown_table(storage: &mut TursoStorage) -> Result<(), TursoStorageError> {
+        storage.require_healthy()?;
+        let connection = storage.connection();
+        storage.latch_result(driver::write_transaction(&connection, || {
+            driver::execute(
+                &connection,
+                "CREATE TABLE unknown_to_every_version (value INTEGER)",
+                Vec::new(),
+            )?;
             Ok(())
         }))
     }

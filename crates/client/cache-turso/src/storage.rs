@@ -249,6 +249,12 @@ impl TursoStorage {
         }
     }
 
+    /// Ends the OPFS adoption that brought these files to this identity, now
+    /// that their open succeeded (`turso_opfs::ConnectedOpfsSession::finish_adoption`).
+    pub async fn finish_adoption(&self) -> Result<(), OpfsError> {
+        self.session.finish_adoption().await
+    }
+
     /// Browser-test-artifact-only helper used by the storage-control worker.
     #[cfg(feature = "browser-test-hooks")]
     #[doc(hidden)]
@@ -553,7 +559,10 @@ impl TursoStorageOpenFailure {
     /// Consumes a non-reset failure, closes Turso, and preserves main and WAL.
     ///
     /// This accessor must only be used when [`Self::error`] does not require a
-    /// physical reset. A close failure poisons the worker-local owner.
+    /// physical reset, or to hand files an unfinished OPFS adoption brought
+    /// here back to the identity they came from
+    /// (`turso_opfs::OpfsOwner::return_adoption`) before this identity is
+    /// reset. A close failure poisons the worker-local owner.
     pub fn preserve(self) -> Result<OpfsOwner, OpfsError> {
         let closed = self
             .session
