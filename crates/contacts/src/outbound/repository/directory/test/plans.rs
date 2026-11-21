@@ -256,6 +256,13 @@ async fn directory_reads_stay_bounded_at_100k_in_custom_and_generic_plans(pool: 
         include_str!("../lists.sql"),
     )
     .await;
+    prepare(
+        &mut connection,
+        "directory_inbox_contacts",
+        "text",
+        include_str!("../inbox_contacts.sql"),
+    )
+    .await;
     let requested = requested();
 
     for generic in [false, true] {
@@ -316,6 +323,15 @@ async fn directory_reads_stay_bounded_at_100k_in_custom_and_generic_plans(pool: 
             &format!("EXECUTE directory_lists('{SUBJECT}', ARRAY[{requested}], 'teammates')"),
             374,
             6_000,
+            generic,
+        )
+        .await;
+        // One range read of the subject's inbox rows.
+        check(
+            &mut connection,
+            &format!("EXECUTE directory_inbox_contacts('{SUBJECT}')"),
+            50_000,
+            1_000,
             generic,
         )
         .await;
