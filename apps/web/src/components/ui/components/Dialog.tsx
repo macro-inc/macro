@@ -58,6 +58,12 @@ export type DialogProps = {
   keepOpenOnNavigation?: boolean;
 };
 
+/**
+ * Responsive dialog with shared focus, labels and dismissal behavior.
+ * @do Use Dialog.Title and Dialog.Description to name the surface.
+ * @do Put fixed form actions in one Dialog.Footer inside the owning dialog.
+ * @dont Make actions sticky inside the scrolling body or force phones fullscreen.
+ */
 export function Dialog(props: DialogProps) {
   return (
     <Show
@@ -107,7 +113,7 @@ function DialogDrawer(props: DialogProps) {
           >
             <MobileDrawer.Handle aria-hidden="true" />
             <MobileDrawer.ScrollBody
-              class={footerContent() ? 'pb-0' : undefined}
+              class={footerContent() ? 'pb-0 rounded-b-none' : undefined}
             >
               {/* Give desktop surfaces their natural height so their size-full
                   and overflow-clip styles cannot clip the drawer's scroll body. */}
@@ -234,7 +240,15 @@ function DesktopDialog(props: DialogProps) {
 
 export type DialogFooterProps = ComponentProps<typeof Panel.Footer>;
 
-/** Fixed desktop panel actions, moved outside the phone drawer's scroll body. */
+/**
+ * Fixed desktop panel actions, moved outside the phone drawer's scroll body.
+ * Solid ownership stays with the dialog; phone DOM paints on the drawer glass.
+ * @do Use exactly one footer per dialog, inside the desktop Panel grid.
+ * @do Give a submit button form={id} when its form is in the body.
+ * @do On phones unset desktop dialog width and Panel max-height; let the drawer scroll with Panel.Body scroll={!isMobile()}.
+ * @dont Depend on a Panel ancestor's CSS depth for phone footer materials.
+ * @dont Move the footer outside its dialog's ownership tree.
+ */
 function DialogFooter(props: DialogFooterProps) {
   const drawer = useContext(DialogDrawerContext);
   const content = children(() => <Panel.Footer {...props} />);

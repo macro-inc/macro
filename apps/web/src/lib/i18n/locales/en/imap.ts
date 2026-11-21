@@ -79,7 +79,6 @@ export default {
   watchFolder: 'Watch for new mail alongside Inbox',
   inboxOnly: 'Inbox only',
   close: 'Close',
-  saving: 'Saving…',
   saveSettings: 'Save settings',
   gmailExtensions: 'Gmail extensions',
   bytes: {

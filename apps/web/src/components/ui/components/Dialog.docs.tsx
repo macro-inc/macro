@@ -73,7 +73,7 @@ export default defineDoc({
   status: 'stable',
   import: "import { Dialog, Panel } from '@ui';",
   exports: ['Dialog'],
-  propTypes: ['DialogProps'],
+  propTypes: ['DialogProps', 'DialogFooterProps'],
   demos: [
     {
       id: 'pinned-actions',

@@ -73,13 +73,12 @@ read their code, and follow that pattern rather than inventing a new one.
   ring; only a first tab stop that is a text field keeps it. Name another
   target with `initialFocusEl` or `onInitialFocus`, never an autofocus of your
   own.
-- Actions that must stay in reach while a sheet scrolls sit in its pinned
-  chrome outside `MobileDrawer.ScrollBody`, never in a sticky band inside
-  the scroll. Use `Dialog.Footer` for dialog actions; it renders in the desktop panel
-  and stays pinned outside the phone drawer body. A touch popover split exposes that slot as
-  `drawerHeader` on its panel context; see `MobileEventForm`. Content that
-  grows to fill its sheet (a composer's description) calls `fillDrawer` from
-  that context to open at a fixed height; see `MobileTaskComposer`.
+- Keep actions that must stay in reach in pinned chrome outside
+  `MobileDrawer.ScrollBody`, never in a sticky band inside the scroll.
+  `Dialog.Footer` renders in the desktop panel and stays pinned below the
+  phone drawer body. Touch popover splits expose pinned header actions as
+  `drawerHeader`; see `MobileEventForm`. Content that grows to fill a sheet
+  calls `fillDrawer` on its panel context; see `MobileTaskComposer`.
 - Pick people, projects, tags, or other searchable lists from a touch sheet
   with `PickerSheet` (`components/app/mobile`), not a dropdown: a full-height
   sheet stacked over the current one with Cancel, a title, and Done, and no

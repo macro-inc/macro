@@ -266,10 +266,11 @@ it('keeps the same connection action and label while checking, failing and retry
   mail.connect
     .mockReturnValueOnce(first.promise)
     .mockReturnValueOnce(retry.promise);
+  const close = vi.fn();
   render(() => (
     <ImapConnectDialog
       open
-      onOpenChange={() => {}}
+      onOpenChange={close}
       onResult={() => {}}
       emailAddress="owner@example.com"
     />
@@ -282,11 +283,21 @@ it('keeps the same connection action and label while checking, failing and retry
   await vi.waitFor(() => expect(button.getAttribute('aria-busy')).toBe('true'));
   expect(screen.getByRole('button', { name: 'Connect inbox' })).toBe(button);
   expect(button.textContent).toBe('Connect inbox');
+  expect(screen.getByRole('button', { name: 'Cancel' })).toHaveProperty(
+    'disabled',
+    true
+  );
+  fireEvent.keyDown(document, { key: 'Escape' });
+  expect(close).not.toHaveBeenCalled();
   first.resolve(
     err([{ code: 'IMAP_CONNECTION_REFUSED', message: 'credentials_rejected' }])
   );
   await screen.findByRole('alert');
   expect(button.getAttribute('aria-busy')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Cancel' })).toHaveProperty(
+    'disabled',
+    false
+  );
   fireEvent.input(password, { target: { value: 'corrected-test-password' } });
   fireEvent.click(button);
   await vi.waitFor(() => expect(button.getAttribute('aria-busy')).toBe('true'));
@@ -450,3 +461,37 @@ it.each([
     expect(result).not.toHaveBeenCalledWith('OUTLOOK');
   }
 );
+
+it('shows the actual discovered submission port until the user changes it', async () => {
+  mail.discover.mockResolvedValue(
+    ok({
+      imap: {
+        host: 'imap.example.com',
+        username: 'owner@example.com',
+        port: 993,
+        tls: 'implicit',
+      },
+      smtp: {
+        host: 'smtp.example.com',
+        username: 'owner@example.com',
+        port: 2525,
+        tls: 'implicit',
+      },
+      hostConfirmationRequired: true,
+    })
+  );
+  render(() => (
+    <ImapConnectDialog
+      open
+      onOpenChange={() => {}}
+      onResult={() => {}}
+      emailAddress="owner@example.com"
+    />
+  ));
+  await screen.findByLabelText('Password or app password');
+  fireEvent.click(screen.getByRole('button', { name: 'Server settings' }));
+  const smtp = screen.getByRole('group', { name: 'Outgoing mail (SMTP)' });
+  const connection = within(smtp).getByRole('button', { name: /^Connection/ });
+  expect(connection.textContent).toContain('2525');
+  expect(mail.connect).not.toHaveBeenCalled();
+});

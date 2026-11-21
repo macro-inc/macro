@@ -5,20 +5,22 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Button } from './Button';
 import { Dialog, type DialogProps } from './Dialog';
+import { Panel } from './Panel';
 
-const mobile = vi.hoisted(() => ({ value: true }));
+const mobile = vi.hoisted(() => ({ value: true, keyboard: false }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => mobile.value }));
 vi.mock('@core/mobile/virtualKeyboard', () => ({
-  virtualKeyboardVisible: () => false,
+  virtualKeyboardVisible: () => mobile.keyboard,
 }));
 
 let motionStyles: HTMLStyleElement;
 beforeEach(() => {
   mobile.value = true;
+  mobile.keyboard = false;
   motionStyles = document.createElement('style');
   // jsdom does not load the app CSS; give both primitives concrete motion defaults.
   motionStyles.textContent =
@@ -244,3 +246,109 @@ it('keeps drawer actions outside scrolling content while submitting its form', a
   fireEvent.click(action);
   expect(submitted).toHaveBeenCalledOnce();
 });
+
+it('keeps desktop footer actions inside the dialog after its scrolling body', async () => {
+  mobile.value = false;
+  render(() => (
+    <Dialog open onOpenAutoFocus={(event) => event.preventDefault()}>
+      <Panel>
+        <Panel.Header>
+          <Dialog.Title>Edit details</Dialog.Title>
+        </Panel.Header>
+        <Panel.Body scroll class="dialog-fields">
+          <input aria-label="Name" />
+        </Panel.Body>
+        <Dialog.Footer>
+          <Button>Save details</Button>
+        </Dialog.Footer>
+      </Panel>
+    </Dialog>
+  ));
+  const dialog = await screen.findByRole('dialog', { name: 'Edit details' });
+  const action = screen.getByRole('button', { name: 'Save details' });
+  const body = dialog.querySelector('.dialog-fields');
+  expect(dialog.contains(action)).toBe(true);
+  expect(body?.contains(action)).toBe(false);
+  expect(
+    (body?.compareDocumentPosition(action) ?? 0) &
+      Node.DOCUMENT_POSITION_FOLLOWING
+  ).toBeTruthy();
+});
+
+it('unregisters an unmounted drawer footer and restores body padding', async () => {
+  const [shown, setShown] = createSignal(true);
+  render(() => (
+    <Dialog open onOpenAutoFocus={(event) => event.preventDefault()}>
+      <Dialog.Title>Edit details</Dialog.Title>
+      <p>Scrollable content</p>
+      <Show when={shown()}>
+        <Dialog.Footer>
+          <Button>Save details</Button>
+        </Dialog.Footer>
+      </Show>
+    </Dialog>
+  ));
+  const dialog = await screen.findByRole('dialog', { name: 'Edit details' });
+  const body = dialog.querySelector('[data-drawer-scroll-body]');
+  await screen.findByRole('button', { name: 'Save details' });
+  expect(body?.classList.contains('pb-0')).toBe(true);
+  setShown(false);
+  await waitFor(() =>
+    expect(screen.queryByRole('button', { name: 'Save details' })).toBeNull()
+  );
+  expect(dialog.querySelector('[data-drawer-keyboard-footer]')).toBeNull();
+  expect(body?.classList.contains('pb-0')).toBe(false);
+  setShown(true);
+  await screen.findByRole('button', { name: 'Save details' });
+  expect(screen.getAllByRole('button', { name: 'Save details' })).toHaveLength(
+    1
+  );
+});
+
+it.each([
+  { phone: false, keyboard: false },
+  { phone: true, keyboard: false },
+  { phone: true, keyboard: true },
+])(
+  'preserves native form ownership for keyboard submission ($phone, $keyboard)',
+  async ({ phone, keyboard }) => {
+    mobile.value = phone;
+    mobile.keyboard = keyboard;
+    const submitted = vi.fn();
+    render(() => (
+      <Dialog open onOpenAutoFocus={(event) => event.preventDefault()}>
+        <Panel>
+          <Panel.Header>
+            <Dialog.Title>Edit details</Dialog.Title>
+          </Panel.Header>
+          <Panel.Body>
+            <form
+              id="keyboard-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                submitted();
+              }}
+            >
+              <input aria-label="Name" required value="Test content" />
+            </form>
+          </Panel.Body>
+          <Dialog.Footer>
+            <Button type="submit" form="keyboard-form">
+              Save details
+            </Button>
+          </Dialog.Footer>
+        </Panel>
+      </Dialog>
+    ));
+    const action = await screen.findByRole('button', { name: 'Save details' });
+    const field = screen.getByRole('textbox', { name: 'Name' });
+    if (
+      !(action instanceof HTMLButtonElement) ||
+      !(field instanceof HTMLInputElement)
+    )
+      throw new Error('Expected native form controls');
+    expect(action.form).toBe(field.form);
+    field.form?.requestSubmit(action);
+    expect(submitted).toHaveBeenCalledOnce();
+  }
+);

@@ -217,7 +217,7 @@ function MobileDrawerFixedContent(
   );
 }
 
-/** Place after a min-h-0 flexing thread inside FixedContent. */
+/** Place after the scrolling body in Content, or after a flexing thread in FixedContent. */
 function MobileDrawerKeyboardFooter(props: ComponentProps<'div'>) {
   const [local, rest] = splitProps(props, ['class']);
   return (

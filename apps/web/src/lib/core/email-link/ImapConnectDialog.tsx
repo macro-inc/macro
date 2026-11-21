@@ -50,6 +50,15 @@ function EndpointFields(props: {
 }) {
   const implicit = props.protocol === 'IMAP' ? 993 : 465;
   const startTls = props.protocol === 'IMAP' ? 143 : 587;
+  const tlsForPort = (port: number) => {
+    if (port === implicit) return 'implicit';
+    if (port === startTls) return 'start_tls';
+    return props.endpoint.tls;
+  };
+  const portLabel = (port: number) =>
+    t(tlsForPort(port) === 'implicit' ? 'imap.tlsPort' : 'imap.startTlsPort', {
+      port: String(port),
+    });
   return (
     <fieldset class="flex flex-col gap-2">
       <legend class="mb-1 text-sm font-semibold">
@@ -72,32 +81,23 @@ function EndpointFields(props: {
       </label>
       <Select<number>
         class="grid gap-1 text-sm"
-        options={[implicit, startTls]}
+        options={[...new Set([implicit, startTls, props.endpoint.port])]}
         value={props.endpoint.port}
-        optionTextValue={(port) =>
-          port === implicit
-            ? t('imap.tlsPort', { port: String(port) })
-            : t('imap.startTlsPort', { port: String(port) })
-        }
+        optionTextValue={portLabel}
         disabled={props.disabled}
         disallowEmptySelection
         onChange={(port) => {
           if (port == null) return;
-          props.onChange({
-            ...props.endpoint,
-            port,
-            tls: port === implicit ? 'implicit' : 'start_tls',
-          });
+          const tls = tlsForPort(port);
+          if (port === props.endpoint.port && tls === props.endpoint.tls)
+            return;
+          props.onChange({ ...props.endpoint, port, tls });
         }}
       >
         <Select.Label>{t('imap.connection')}</Select.Label>
         <Select.Trigger>
           <Select.Value<number>>
-            {(state) =>
-              state.selectedOption() === implicit
-                ? t('imap.tlsPort', { port: String(implicit) })
-                : t('imap.startTlsPort', { port: String(startTls) })
-            }
+            {(state) => portLabel(state.selectedOption())}
           </Select.Value>
           <Select.Icon />
         </Select.Trigger>
@@ -397,6 +397,7 @@ function ConnectForm(props: ImapConnectProps) {
       <Button
         type="button"
         variant="ghost"
+        disabled={busy()}
         onClick={() => props.onOpenChange(false)}
       >
         {t('imap.cancel')}
@@ -420,7 +421,9 @@ function ConnectForm(props: ImapConnectProps) {
   return (
     <Dialog
       open={props.open}
-      onOpenChange={props.onOpenChange}
+      onOpenChange={(open) => {
+        if (open || !busy()) props.onOpenChange(open);
+      }}
       position="center"
       class={isMobile() ? undefined : 'w-118'}
     >
