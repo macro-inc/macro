@@ -190,7 +190,7 @@ export function TeamMemberMenu(props: TeamMemberMenuProps) {
   );
 }
 
-/** An agent teammate's Change voice and Remove, behind its ⋯. */
+/** An agent teammate's Change picture, Change voice and Remove, behind its ⋯. */
 export function TeamAgentMenu(props: TeamAgentMenuProps): JSX.Element {
   let trigger: HTMLButtonElement | undefined;
   // Change picture opens its dialog only once the menu has closed and given

@@ -20,7 +20,8 @@ export type AgentHost = { harnessId: string; name: string };
 
 /**
  * An invite that runs the agent on one of the inviter's computers: no size,
- * nothing bought. The backend reads `harnessId` as `computer: {kind: 'own'}`.
+ * nothing bought. No caller sends it yet: `CreateTeamAgent` has no such field
+ * until #11677 adds the host to the backend.
  */
 export type HostInvite = Omit<CreateTeamAgent, 'size'> & { harnessId: string };
 

@@ -252,7 +252,7 @@ export function TeamMemberMenu(props: TeamMemberMenuProps) {
   );
 }
 
-/** An agent teammate's Change voice and Remove in a sheet. */
+/** An agent teammate's Change picture, Change voice and Remove in a sheet. */
 export function TeamAgentMenu(props: TeamAgentMenuProps) {
   const [open, setOpen] = createSignal(false);
   const choose = (action: () => void) => {
