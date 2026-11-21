@@ -63,6 +63,12 @@
 	}
 }
 
+/* Native Android steps loading indicators (see `.skeleton-shimmer` in
+   index.css): the pulse brightens and dims in three steps each way. */
+html[data-platform="android"] .calendar-view [data-calendar-loading-placeholder] {
+	animation-timing-function: steps(3);
+}
+
 .calendar-view .fc {
 	color: var(--color-ink);
 	font-family: inherit;

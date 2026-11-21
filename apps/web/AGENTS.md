@@ -309,6 +309,12 @@ It uses the real records view with a local source and picker to exercise opening
 replacement, cancellation, keyboard editing, and read-only references. Navigation
 adapter tests separately check file types, access failures, and split selection.
 
+Loading indicators (the shimmer, `Spinner`, the indeterminate bar, the
+calendar placeholder and the brand loader) step a few times a second on native
+Android and keep their smooth motion on iOS, desktop and web, with reduced
+motion as before; the backend-free regression poses as each native app:
+`bunx playwright test --config src/lib/core/component/browser-test/loading-motion/playwright.config.ts`.
+
 Poll cards in messages (the real `DocumentCard` around `FormCardView`) have a
 backend-free desktop/phone regression: while loading, the card draws its
 header with the question (the card's name, so it wraps as it will) above a body

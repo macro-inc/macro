@@ -1561,6 +1561,21 @@ html[data-theme-light='true'] :is(.glass-input, .elevated-surface) {
   }
 }
 
+/* Native Android hands every Tauri IPC reply to the UI thread, which is busy
+   for part of each frame the WebView draws. A smooth loading animation draws
+   every frame, so each reply waits about a frame: the indicator slows the
+   data it waits for. On Android, loading indicators move a few times a second
+   instead, since a stepped animation draws a frame only when it moves. The
+   brand loader (SMIL) steps in `LoadingSpinner`. */
+html[data-platform='android'] {
+  --animate-spin: spin 1s steps(8) infinite;
+  --animate-indeterminate-bar: indeterminate-bar 1.1s steps(6) infinite;
+}
+
+html[data-platform='android'] .skeleton-shimmer::after {
+  animation-timing-function: steps(5, jump-none);
+}
+
 @keyframes slideIn {
   from { transform: translateX(calc(100% + 16px)); }
   to   { transform: translateX(0                ); }
