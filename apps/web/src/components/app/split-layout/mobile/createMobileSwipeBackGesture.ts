@@ -15,13 +15,15 @@ type MobileSwipeBackGestureOptions = {
   canGoBack: () => boolean;
   completeGoBack: () => void | Promise<void>;
   width?: () => number;
+  inPaneBack?: { canGoBack(): boolean; goBack(): void };
 };
 
 export function createMobileSwipeBackGesture(
   options: MobileSwipeBackGestureOptions
 ) {
   const [dragOffset, setDragOffset] = createSignal(0);
-  const [isDragging, setIsDragging] = createSignal(false);
+  const [dragging, setDragging] = createSignal<false | 'pane' | 'route'>(false);
+  const isDragging = () => dragging() !== false;
   const [isAnimatingOut, setIsAnimatingOut] = createSignal(false);
 
   let animationTimer: ReturnType<typeof setTimeout> | undefined;
@@ -39,7 +41,7 @@ export function createMobileSwipeBackGesture(
     gesture.reset();
     clearScheduledAnimation();
     batch(() => {
-      setIsDragging(false);
+      setDragging(false);
       setIsAnimatingOut(false);
       setDragOffset(0);
     });
@@ -75,16 +77,29 @@ export function createMobileSwipeBackGesture(
 
   function trigger() {
     if (!options.canGoBack() || isAnimatingOut()) return;
+    if (options.inPaneBack?.canGoBack()) {
+      // Navigation can expose a route step during a pane drag. Clear its offset first.
+      reset();
+      options.inPaneBack.goBack();
+      return;
+    }
     animateComplete();
   }
 
   const gesture = createMobileEdgeSwipe({
     enabled: () => options.canGoBack() && !isAnimatingOut(),
-    onStart: () => setIsDragging(true),
+    onStart: () =>
+      setDragging(options.inPaneBack?.canGoBack() ? 'route' : 'pane'),
     onMove: setDragOffset,
     onEnd(completed) {
+      if (dragging() === 'route') {
+        reset();
+        if (completed && options.inPaneBack?.canGoBack())
+          options.inPaneBack.goBack();
+        return;
+      }
       batch(() => {
-        setIsDragging(false);
+        setDragging(false);
         if (completed) trigger();
         else animateSnapBack();
       });
@@ -116,6 +131,14 @@ export function createMobileSwipeBackGesture(
   }
 
   function styleForSlot(isForeground: boolean) {
+    // An in-pane route has no second pane to reveal; keep the current view
+    // stationary until the gesture commits instead of previewing another pane.
+    if (dragging() === 'route')
+      return {
+        transform: 'none',
+        transition: 'none',
+        'will-change': 'auto',
+      };
     return isForeground ? foregroundStyle() : backgroundStyle();
   }
 

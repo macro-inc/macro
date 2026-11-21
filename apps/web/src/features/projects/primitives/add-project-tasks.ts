@@ -1,6 +1,7 @@
-import { createMemo, createSignal } from 'solid-js';
+import { Telemetry } from '@macro-inc/observability';
+import { createMemo, createSignal, onCleanup } from 'solid-js';
 import type { ProjectsContext } from '../context/projects-context';
-import type { ProjectDetail } from '../core/project';
+import { canEditProject, type ProjectDetail } from '../core/project';
 
 type AssignTasks = ReturnType<ProjectsContext['createCommands']>['assignTasks'];
 
@@ -15,12 +16,7 @@ type Draft = {
   error?: AddProjectTasksError;
 };
 
-/**
- * Picks existing tasks to add to a project. A partial failure keeps only the
- * failed tasks selected, so trying again retries just those. The picks, the
- * error and the pending add belong to the project they were made for, so a
- * late answer never reaches another project.
- */
+/** Failed picks remain selected; stale project or picker completions are ignored. */
 export function createAddProjectTasks(options: {
   project: () => ProjectDetail;
   assignTasks: AssignTasks;
@@ -31,28 +27,53 @@ export function createAddProjectTasks(options: {
     selected: new Set(),
   });
   const [savingFor, setSavingFor] = createSignal<string>();
+  let generation = 0;
+  onCleanup(() => generation++);
   const current = () =>
     draft().projectId === projectId() ? draft() : undefined;
-  const selected = createMemo(() => current()?.selected ?? new Set<string>());
+  const excludedIds = createMemo(() => new Set(options.project().taskIds));
+  const selected = createMemo(
+    () =>
+      new Set(
+        [...(current()?.selected ?? [])].filter((id) => !excludedIds().has(id))
+      )
+  );
   const error = () => current()?.error;
   const saving = () => savingFor() === projectId();
-  const excludedIds = createMemo(() => new Set(options.project().taskIds));
 
-  const reset = () =>
+  const reset = () => {
+    generation++;
+    setSavingFor(undefined);
     setDraft({ projectId: projectId(), selected: new Set<string>() });
+  };
 
-  /** Resolves true once every picked task was added. */
+  /** Resolves true only for a successful assignment in the current picker. */
   const add = async () => {
     const project = projectId();
     const picks = selected();
-    const taskIds = [...picks].filter((id) => !excludedIds().has(id));
-    if (saving() || !taskIds.length) return false;
+    const taskIds = [...picks];
+    if (!canEditProject(options.project()) || saving() || !taskIds.length)
+      return false;
+    const request = generation;
+    const isCurrent = () => request === generation && project === projectId();
     setSavingFor(project);
     setDraft({ projectId: project, selected: picks });
     try {
-      const results = await options.assignTasks(project, taskIds);
+      const results = await Telemetry.span(
+        'project.tasks.assign',
+        async (span) => {
+          span.setAttr('project.id', project);
+          span.setAttr('task.count', taskIds.length);
+          const results = await options.assignTasks(project, taskIds);
+          const failed = results.filter((result) => result.error);
+          span.setAttr('task.failed_count', failed.length);
+          if (failed.length) span.error('Some tasks could not be added');
+          return results;
+        }
+      );
+      if (!isCurrent()) return false;
       const failed = results.filter((result) => result.error);
-      if (!failed.length) return project === projectId();
+      if (!failed.length) return true;
       setDraft({
         projectId: project,
         selected: new Set(failed.map((result) => result.taskId)),
@@ -64,6 +85,7 @@ export function createAddProjectTasks(options: {
       });
       return false;
     } catch (error) {
+      if (!isCurrent()) return false;
       setDraft({
         projectId: project,
         selected: picks,
@@ -74,7 +96,8 @@ export function createAddProjectTasks(options: {
       });
       return false;
     } finally {
-      setSavingFor((pending) => (pending === project ? undefined : pending));
+      if (request === generation)
+        setSavingFor((pending) => (pending === project ? undefined : pending));
     }
   };
 

@@ -37,13 +37,19 @@ export interface PeopleCache {
   snapshot(
     request: ContactSnapshotRequest
   ): Promise<ContactSnapshot | Unsupported>;
-  reconcile(request: ContactReconcile): Promise<CacheRevision>;
+  reconcile(
+    request: ContactReconcile,
+    generation: string
+  ): Promise<CacheRevision>;
   readSql(request: PeopleSqlRequest): Promise<PeopleSqlResult>;
   resolveReferences(
     request: PeopleReferenceRequest
   ): Promise<PeopleReferenceResult | Unsupported>;
   context(scope: PeopleScope): Promise<PeopleContextState | Unsupported>;
-  update(update: PeopleContextUpdate): Promise<CacheRevision>;
+  update(
+    update: PeopleContextUpdate,
+    generation: string
+  ): Promise<CacheRevision>;
   search(request: PeopleSearch): Promise<PeopleSearchResult | Unsupported>;
 }
 export interface PeopleTransport {
@@ -51,14 +57,22 @@ export interface PeopleTransport {
     request: ContactSnapshotRequest,
     traceparent?: string
   ): Promise<unknown>;
-  reconcile(request: ContactReconcile, traceparent?: string): Promise<unknown>;
+  reconcile(
+    request: ContactReconcile,
+    traceparent: string | undefined,
+    generation: string
+  ): Promise<unknown>;
   readSql(request: PeopleSqlRequest, traceparent?: string): Promise<unknown>;
   resolveReferences(
     request: PeopleReferenceRequest,
     traceparent?: string
   ): Promise<unknown>;
   context(scope: PeopleScope, traceparent?: string): Promise<unknown>;
-  update(update: PeopleContextUpdate, traceparent?: string): Promise<unknown>;
+  update(
+    update: PeopleContextUpdate,
+    traceparent: string | undefined,
+    generation: string
+  ): Promise<unknown>;
   search(request: PeopleSearch, traceparent?: string): Promise<unknown>;
 }
 function unsupported(value: unknown): value is Unsupported {
@@ -98,7 +112,7 @@ export function createPeopleCache(transport: PeopleTransport): PeopleCache {
         }
       });
     },
-    async reconcile(request) {
+    async reconcile(request, generation) {
       if (!isContactReconcile(request))
         throw new Error('Invalid contact reconciliation');
       return Telemetry.span('contacts.cache.reconcile', async (span) => {
@@ -109,7 +123,11 @@ export function createPeopleCache(transport: PeopleTransport): PeopleCache {
         span.setAttr('contacts.requested_count', request.requested.length);
         span.setAttr('contacts.present_count', request.present.length);
         try {
-          const value = await transport.reconcile(request, span.traceparent());
+          const value = await transport.reconcile(
+            request,
+            span.traceparent(),
+            generation
+          );
           if (unsupported(value)) throw new Error(CONTACT_SYNC_UNSUPPORTED);
           return parseCacheRevision(value);
         } catch (error) {
@@ -196,7 +214,7 @@ export function createPeopleCache(transport: PeopleTransport): PeopleCache {
         }
       });
     },
-    async update(update) {
+    async update(update, generation) {
       if (!isPeopleContextUpdate(update))
         throw new Error('Invalid contact context update');
       return Telemetry.span('contacts.cache.update', async (span) => {
@@ -210,7 +228,7 @@ export function createPeopleCache(transport: PeopleTransport): PeopleCache {
           span.setAttr('contacts.patch_count', update.action.updates.length);
         try {
           return parseCacheRevision(
-            await transport.update(update, span.traceparent())
+            await transport.update(update, span.traceparent(), generation)
           );
         } catch (error) {
           span.error('Contact context update failed');

@@ -1335,8 +1335,9 @@ pub struct ApiEntityFilterAst {
     pub favorites_only: Option<bool>,
     /// Restrict every entity type to items associated with this CRM record
     /// (wire key `crma`): its Companies or Contacts property names the
-    /// record, or it references the record. A company also matches through
-    /// its contacts. Unknown or inaccessible records answer 404; requests
+    /// record, or it references the record. A task also matches when one of
+    /// its custom entity properties names the record. A company also matches
+    /// through its contacts. Unknown or inaccessible records answer 404; requests
     /// require expanded queries sorted by a timestamp or selected numeric property.
     #[serde(default, rename = "crma", skip_serializing_if = "Option::is_none")]
     pub crm_association: Option<item_filters::ast::crm_association::CrmAssociation>,

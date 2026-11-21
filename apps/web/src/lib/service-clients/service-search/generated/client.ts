@@ -31,6 +31,11 @@ export type unifiedSearchResponse401 = {
   status: 401;
 };
 
+export type unifiedSearchResponse429 = {
+  data: ErrorResponse;
+  status: 429;
+};
+
 export type unifiedSearchResponse500 = {
   data: ErrorResponse;
   status: 500;
@@ -42,6 +47,7 @@ export type unifiedSearchResponseSuccess = unifiedSearchResponse200 & {
 export type unifiedSearchResponseError = (
   | unifiedSearchResponse400
   | unifiedSearchResponse401
+  | unifiedSearchResponse429
   | unifiedSearchResponse500
 ) & {
   headers: Headers;
@@ -108,6 +114,11 @@ export type simpleUnifiedSearchResponse401 = {
   status: 401;
 };
 
+export type simpleUnifiedSearchResponse429 = {
+  data: ErrorResponse;
+  status: 429;
+};
+
 export type simpleUnifiedSearchResponse500 = {
   data: ErrorResponse;
   status: 500;
@@ -120,6 +131,7 @@ export type simpleUnifiedSearchResponseSuccess =
 export type simpleUnifiedSearchResponseError = (
   | simpleUnifiedSearchResponse400
   | simpleUnifiedSearchResponse401
+  | simpleUnifiedSearchResponse429
   | simpleUnifiedSearchResponse500
 ) & {
   headers: Headers;

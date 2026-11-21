@@ -2,8 +2,8 @@
 
 This stack adds one native NixOS/Alloy collector in a private Virginia subnet,
 with no inbound ports or public IP. It monitors the dev writer and replica over
-verified PostgreSQL TLS and forwards metrics to Ohio Prometheus and query
-details to Ohio Loki.
+verified PostgreSQL TLS and forwards metrics to the observability cluster's Mimir and query
+details to its Loki.
 Datadog, application tasks, RDS parameter groups, and production are unchanged.
 
 The collector covers database health plus query-level statistics, normalized SQL,
@@ -14,14 +14,13 @@ separately before expanding it.
 
 ## Deployment order
 
-1. Deploy the **Ohio observability** host first, with the Deploy Observability
-   workflow (see `infra/stacks/observability/README.md`, "Deploying"). This adds
+1. The observability cluster's edge (`infra/k8s/observability/cluster`) serves
    `https://otlp.macro-internal.com/api/v1/write` and
    `/loki/api/v1/push`, exact POST-only endpoints
    protected by HTTP Basic (`metrics`, existing OTLP token) over ALB TLS. It
    exposes no query/administration routes. Existing OTLP bearer access is
-   unchanged. The password is hashed at boot and passed privately to nginx.
-   Grafana gets **Macro PostgreSQL** at `/d/macro-postgres` and
+   unchanged. Its Grafana provisions
+   **Macro PostgreSQL** at `/d/macro-postgres` and
    **Macro PostgreSQL queries** at `/d/macro-postgres-queries`.
 2. As an authorized database administrator, connect **to dev writer / macrodb**
    with TLS and run `psql --file monitoring-role.sql`. Choose a random password
@@ -171,8 +170,8 @@ replacement; stable ownership and volume-ID verification prevent silent
 fallback to root storage. Prometheus remote-write WAL is retained up to 24 hours,
 not an unlimited queue or a guarantee against a whole Virginia failure. Monitor
 volume capacity, measure actual telemetry volume and tune the retention before
-production. Metrics delivered to Ohio use its existing Prometheus retention; query logs use
-Loki's existing 30-day retention. Loki's disk WAL buffers delivery but has no
+production. Metrics delivered to the cluster use its metrics retention; query logs use
+the cluster Loki's retention. Loki's disk WAL buffers delivery but has no
 configured 24-hour cutoff like Prometheus: a sustained outage can fill the
 collector volume. Keep disk monitoring and Datadog in place.
 

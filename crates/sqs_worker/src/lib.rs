@@ -2,7 +2,7 @@ mod change_message_visibility;
 mod delete_message;
 mod receive_messages;
 
-pub use receive_messages::receive_count;
+pub use receive_messages::{queue_wait, receive_count};
 
 #[derive(Clone, Debug)]
 pub struct SQSWorker {

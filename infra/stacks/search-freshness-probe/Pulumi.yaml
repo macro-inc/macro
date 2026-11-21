@@ -1,0 +1,3 @@
+name: search-freshness-probe
+runtime: nodejs
+description: Macro end-to-end search freshness probe

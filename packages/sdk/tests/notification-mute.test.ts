@@ -65,3 +65,67 @@ describe('item notification muting', () => {
     ]);
   });
 });
+
+describe('channel notification settings', () => {
+  test('reads the channel among the user’s settings, defaulting when absent', async () => {
+    const client = {
+      notification: {
+        listChannelNotificationSettings: async () => ({
+          data: {
+            channels: [
+              {
+                channelId: 'channel-1',
+                enabled: ['channel_mention'],
+                overridesSectionMute: true,
+              },
+            ],
+          },
+        }),
+      },
+    } as unknown as MacroClient;
+
+    expect(
+      await Channel.byId(client, 'channel-1').notificationSettings(),
+    ).toEqual({
+      enabled: ['channel_mention'],
+      overridesSectionMute: true,
+    });
+    expect(
+      await Channel.byId(client, 'channel-2').notificationSettings(),
+    ).toEqual({
+      enabled: null,
+      overridesSectionMute: false,
+    });
+  });
+
+  test('sends the channel’s own full set of kinds', async () => {
+    const updates: unknown[] = [];
+    const client = {
+      notification: {
+        updateChannelNotificationSettings: async (options: unknown) => {
+          updates.push(options);
+          return {
+            data: {
+              channelId: 'channel-1',
+              enabled: ['channel_mention'],
+              overridesSectionMute: false,
+            },
+          };
+        },
+      },
+    } as unknown as MacroClient;
+
+    const settings = await Channel.byId(
+      client,
+      'channel-1',
+    ).setNotificationSettings({ enabled: ['channel_mention'] });
+
+    expect(updates).toEqual([
+      {
+        path: { channel_id: 'channel-1' },
+        body: { enabled: ['channel_mention'] },
+      },
+    ]);
+    expect(settings.enabled).toEqual(['channel_mention']);
+  });
+});

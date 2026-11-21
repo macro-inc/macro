@@ -4,7 +4,7 @@ import type { CalendarEventFormController } from '@app/features/calendar/compone
 import { useCalendarOccurrenceData } from '@app/features/calendar/hooks/use-calendar-occurrence-data';
 import { useCalendarSources } from '@app/features/calendar/hooks/use-calendar-sources';
 import type { CalendarPeriodView } from '@app/features/calendar/types';
-import { getDefaultCalendarTimeFormat } from '@app/features/calendar/utils/time-format';
+import { useCalendarPreferences } from '@app/features/calendar/utils/preferences';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { formatLocalDate } from '@core/util/local-date';
 import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
@@ -168,6 +168,7 @@ interface CalendarToolEventPreviewProps {
 
 /** Live day-grid preview for a deferred calendar event tool call. */
 export function CalendarToolEventPreview(props: CalendarToolEventPreviewProps) {
+  const [preferences] = useCalendarPreferences();
   const previewEvent = createMemo(() =>
     buildCalendarToolPreviewEvent({
       id: props.eventId,
@@ -369,7 +370,7 @@ export function CalendarToolEventPreview(props: CalendarToolEventPreviewProps) {
                     collapseEmptyAllDaySlot: true,
                     showWeekends: true,
                     weekStartsOn: 0,
-                    timeFormat: getDefaultCalendarTimeFormat(),
+                    timeFormat: preferences.timeFormat,
                   }}
                   selection={{
                     color: previewColor() ?? 'var(--color-accent)',

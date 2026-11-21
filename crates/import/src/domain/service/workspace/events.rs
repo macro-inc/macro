@@ -18,7 +18,7 @@ use mcp_select::ConnectorSelect;
 use uuid::Uuid;
 
 use super::super::ImportServiceImpl;
-use super::super::notion_workspace::report;
+use super::super::notion_workspace::{notice_import_ids, report};
 use crate::domain::models::{
     ImportSource, NotionImportReport, NotionReportItem, ReviewedRun, RunStatus,
 };
@@ -123,7 +123,9 @@ where
             .repo
             .list(user, Some(self.workspace_source), None)
             .await?;
-        let mut report = report(run.as_ref(), &rows);
+        let ids = notice_import_ids(run.as_ref(), &rows);
+        let notices = self.repo.task_notice_counts(user, &ids).await?;
+        let mut report = report(run.as_ref(), &rows, &notices)?;
         report.on_team = self.repo.user_team_id(user).await?.is_some();
         Ok(report)
     }

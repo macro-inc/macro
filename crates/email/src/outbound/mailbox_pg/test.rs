@@ -3,12 +3,17 @@ use crate::domain::mailbox::live_pass::StreamKind;
 use email_api_client::domain::models::FolderRole;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
+mod claim_order;
 mod crm_cleanup;
 mod import_pacing;
 mod import_reads;
 mod live_pass;
+mod lock_timeouts;
+mod no_mailbox;
+mod notified_reads;
 mod outlook_import;
 mod outlook_subscriptions;
+mod projection_retries;
 mod retries;
 mod unstorable_values;
 
@@ -863,7 +868,7 @@ async fn completed_import_rechecks_attachments_after_later_sent_correspondence(d
     assert_eq!(eligible.len(), 1);
     assert_eq!(
         queued[0].payload["message_id"],
-        eligible[0].message_db_id.to_string()
+        eligible[0].metadata.message_db_id.to_string()
     );
 }
 

@@ -8,6 +8,7 @@ fn an_attached_computer_maps_to_the_agents_state() {
     for (kind, state) in [
         (ComputerStatusKind::SettingUp, ComputerState::SettingUp),
         (ComputerStatusKind::Ready, ComputerState::Ready),
+        (ComputerStatusKind::Unhealthy, ComputerState::Unhealthy),
         (
             ComputerStatusKind::WaitingForCapacity,
             ComputerState::Paused,

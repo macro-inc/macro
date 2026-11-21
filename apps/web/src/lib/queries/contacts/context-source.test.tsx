@@ -153,6 +153,64 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+it("leaves the previous account's cached inboxes alone when its account changes", async () => {
+  const other = 'macro|other@example.com';
+  queryClient.setQueryData(emailKeys.links(VIEWER).queryKey, {
+    links: [
+      {
+        id: 'inbox',
+        macro_id: VIEWER,
+        email_address: 'viewer@example.com',
+        is_primary: true,
+      },
+    ],
+  });
+  queryClient.setQueryData(emailKeys.links(other).queryKey, {
+    links: [
+      {
+        id: 'inbox',
+        macro_id: other,
+        email_address: 'other@example.com',
+        is_primary: true,
+      },
+    ],
+  });
+  queryClient.setQueryData(channelKeys.listChannels(other).queryKey, []);
+  queryClient.setQueryData(channelKeys.activity(other).queryKey, []);
+  const [account, setAccount] = createSignal(currentQueryAccount());
+  function Harness() {
+    createContactContextSource({
+      account,
+      host: () => undefined,
+      generation: () => 0,
+      enabled: () => true,
+    });
+    return null;
+  }
+  render(() => (
+    <QueryClientProvider client={queryClient}>
+      <Harness />
+    </QueryClientProvider>
+  ));
+  await vi.advanceTimersByTimeAsync(0);
+  queryClient.setQueryData(authKeys.userInfo.queryKey, {
+    id: other,
+    authenticated: true,
+  });
+  setAccount(currentQueryAccount());
+  await vi.advanceTimersByTimeAsync(0);
+  expect(queryClient.getQueryData(emailKeys.links(VIEWER).queryKey)).toEqual({
+    links: [
+      {
+        id: 'inbox',
+        macro_id: VIEWER,
+        email_address: 'viewer@example.com',
+        is_primary: true,
+      },
+    ],
+  });
+});
+
 it('rereads its DM overlay for DM changes only while a contact reader is open', async () => {
   const source = mountSource(dmHost());
   await vi.advanceTimersByTimeAsync(0);

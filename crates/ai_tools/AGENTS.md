@@ -30,9 +30,17 @@ execution, display) that don't belong to a single domain.
   are created with their page's dates (`NewDocumentMetadata::created_at` /
   `updated_at`), and folders through
   `ProjectService::create_project_dated_by_contents`, so the copy keeps
-  Notion's dates. Notion tasks are created unshared and reached through their
-  shared folder, while individual tracked tasks (Linear) stay team-shared at
-  creation. `ImportedTargetReader` reads document/folder/database/initiative lifecycle
+  Notion's dates. Reviewed workspace imports carry a typed `ImportVisibility`
+  through document, task, folder and tracker-project creation: personal items
+  get an exact OFF override before insertion; shared items retain defaults.
+  Personal tasks also omit teammate assignees, returning a typed notice for the
+  import report; keep the same verdict on every property pass, including retries.
+  Propagate roster lookup errors on assignee replay so a transient outage cannot
+  clear an omission notice without applying the assignment.
+  Notion tasks have no direct team grant; shared lists grant team access
+  through their folder, while single tracked tasks (Linear) stay team-shared
+  at creation.
+  `ImportedTargetReader` reads document/folder/database/initiative lifecycle
   state through their owning domain ports, independently of viewer permissions;
   root-folder reuse separately checks view access. Transient read failures propagate
   so the import domain does not invalidate a live copy on an outage.
@@ -94,6 +102,9 @@ edit capability but calls no nested model and emits no additional model charge; 
 ## Checks
 
 - `cargo test -p ai_tools` (`SQLX_OFFLINE` unset).
+- Keep import access regressions on the real `ToolEntityCreator` → owning service
+  → PostgreSQL creation path (`tool_context/test/import_link_access`); mock external
+  markdown/sync endpoints rather than rebuilding permission resolution in tests.
 - After adding/changing a tool: `cargo run -p ai_tools --bin gen_tool_schemas`
   and `--bin gen_ai_request_schemas` to refresh generated frontend schemas.
 - `DisplayResults` decodes its view with `dynamic_ui` and returns it; readers render the result, never the arguments. Its schema comes from `dynamic_ui::View`.

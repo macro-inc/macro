@@ -1176,6 +1176,11 @@ export type changeBookingResponse409 = {
   status: 409;
 };
 
+export type changeBookingResponse422 = {
+  data: void;
+  status: 422;
+};
+
 export type changeBookingResponseSuccess = changeBookingResponse200 & {
   headers: Headers;
 };
@@ -1184,6 +1189,7 @@ export type changeBookingResponseError = (
   | changeBookingResponse403
   | changeBookingResponse404
   | changeBookingResponse409
+  | changeBookingResponse422
 ) & {
   headers: Headers;
 };

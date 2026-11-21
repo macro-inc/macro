@@ -13,9 +13,11 @@
 //!   `entity_type`, and `event_type` and `failure` (the last attempt's
 //!   [`Failure`]) for those dropped after their attempts and replay, or
 //!   `failure` (a [`Loss`]) for those that never finished.
-//! - [`FAILED_BULK_ITEMS`]: items OpenSearch failed in the last attempt of an
-//!   event that was queued for a replay or dropped, by `entity_type` and
-//!   `outcome`.
+//! - [`FAILED_BULK_ITEMS`]: items OpenSearch failed inside a `_bulk`
+//!   response in the last attempt of an event that was queued for a replay
+//!   or dropped, by `entity_type`, `outcome` and that attempt's `failure`
+//!   (`overloaded` when it refused items to protect itself, `bulk_items` when
+//!   it failed them otherwise). A refused whole request reports no items.
 //!
 //! [`LAG`] and [`DROPPED`] also carry `delivery`: `kafka`, or `sqs_replay` for
 //! a replay, whose lag counts from the original record.
@@ -196,9 +198,14 @@ impl IndexMetrics {
             EventOutcome::RetryQueued | EventOutcome::Dropped
         ) && record.failed_items > 0
         {
+            let failure = record.failure.unwrap_or(Failure::Error);
             self.failed_bulk_items.add(
                 u64::from(record.failed_items),
-                &[entity_type.clone(), outcome],
+                &[
+                    entity_type.clone(),
+                    outcome,
+                    KeyValue::new(FAILURE, <&'static str>::from(failure)),
+                ],
             );
         }
         if record.outcome == EventOutcome::Dropped {

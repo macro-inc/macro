@@ -107,6 +107,19 @@ DMs, and the shared message store other domains discuss things on.
   re-checked after 5 s and 30 s in a spawned task. Creations recorded under
   another bot (`MACRO_AI_BOT_ID` for Claude/Codex/Cursor MCP tools) or the
   user (projects, chats, calls) never match, and fail safe as unshared.
+- Side effects record who "interacted on Macro" (`interactions_for_event` in
+  `domain/side_effects.rs`, `ChannelContactsDispatcher::record_interactions`):
+  creating a non-DM channel pairs everyone in it unless the Macro system bot
+  created it (the signup support channel), and an add, a join, an approved
+  request or a team auto-join pairs the newcomers with every active member.
+  A DM counts only from a person's message in it, never from its creation,
+  since Macro opens teammate and inbox DMs on its own; bot and guest posts
+  never count, and nothing else posted in a channel does. The two team
+  auto-join paths (`auto_join_by_team_id`, turning auto-join on in
+  `patch_channel`) dispatch `MembersAutoJoined`, which only feeds contacts.
+  Every host wraps the contacts ingress in `contacts::domain::list_writes::ListWritesGate`,
+  so these sends wait for the `contacts-list-writes` flag; the legacy
+  `enqueue_contacts` sync is unchanged.
 - DM invitation emails must stay distinguishable from channel invites (#7964) —
   don't collapse the two email templates.
 - Legacy document/CRM/channel message paths were removed (#6732); don't
