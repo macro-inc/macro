@@ -221,6 +221,18 @@ fn validation_refuses_what_delivery_cannot_evaluate() {
     );
     assert_eq!(long.validate(), Err(McpFilterError::ValueLength));
 
+    let blank =
+        McpEventFilter::for_events(vec!["document.created".to_owned()], Some(vec![" ".to_owned()]));
+    assert_eq!(blank.validate(), Err(McpFilterError::ValueLength));
+
+    // Sixteen ids of the longest length fit each clause's limits but not the
+    // whole filter's.
+    let oversized = McpEventFilter::for_events(
+        vec!["document.created".to_owned()],
+        Some(vec!["x".repeat(MAX_VALUE_LEN); MAX_VALUES]),
+    );
+    assert_eq!(oversized.validate(), Err(McpFilterError::TooLarge));
+
     let mut too_many = my_channel_mentions();
     too_many.any_of = vec![too_many.any_of[0].clone(); MAX_CLAUSES + 1];
     assert_eq!(too_many.validate(), Err(McpFilterError::ClauseCount));

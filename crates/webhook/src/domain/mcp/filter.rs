@@ -13,6 +13,7 @@
 #[path = "filter_test.rs"]
 mod test;
 
+use crate::domain::mcp::models::MAX_FILTER_BYTES;
 use crate::domain::models::{WEBHOOK_EVENT_NAMES, WebhookFilter};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -152,9 +153,12 @@ pub enum McpFilterError {
     /// A condition, or a clause's `ids`, holds no values, or too many.
     #[error("a condition or id list holds 1 to {MAX_VALUES} values")]
     ValueCount,
-    /// A value or id is empty or too long.
-    #[error("values and ids are 1 to {MAX_VALUE_LEN} bytes")]
+    /// A value or id is blank or too long.
+    #[error("values and ids are 1 to {MAX_VALUE_LEN} bytes, not blank")]
     ValueLength,
+    /// The filter is over [`MAX_FILTER_BYTES`] of JSON.
+    #[error("a filter is at most {MAX_FILTER_BYTES} bytes of JSON")]
+    TooLarge,
     /// A condition compares a field an event of its clause does not carry.
     #[error("`{field}` does not apply to `{event}`")]
     FieldNotApplicable {
@@ -184,7 +188,11 @@ impl McpEventFilter {
         if self.any_of.is_empty() || self.any_of.len() > MAX_CLAUSES {
             return Err(McpFilterError::ClauseCount);
         }
-        self.any_of.iter().try_for_each(McpFilterClause::validate)
+        self.any_of.iter().try_for_each(McpFilterClause::validate)?;
+        if serde_json::to_vec(self).map_or(true, |bytes| bytes.len() > MAX_FILTER_BYTES) {
+            return Err(McpFilterError::TooLarge);
+        }
+        Ok(())
     }
 
     /// Every event name some clause can match, sorted and deduplicated.
@@ -328,7 +336,7 @@ fn check_values<'a>(
     if count == 0 || count > MAX_VALUES {
         return Err(McpFilterError::ValueCount);
     }
-    if literals.any(|value| value.is_empty() || value.len() > MAX_VALUE_LEN) {
+    if literals.any(|value| value.trim().is_empty() || value.len() > MAX_VALUE_LEN) {
         return Err(McpFilterError::ValueLength);
     }
     Ok(())
