@@ -245,6 +245,8 @@ export async function makeHeldout(at: Stack, name: string, count: number, month 
     if (people.length < count) throw new Error(`the author sketched ${people.length} of ${count} people; run heldout make again`);
     const unusable = rosterProblems(people);
     if (unusable) throw new Error(`${unusable}; run heldout make again`);
+    // A held-out person is someone no earlier set has, by slug, name or mail domain.
+    if (repeatsEarlier(people, takenIdentities())) throw new Error('a sketched person repeats one from an earlier set (by slug, full name or mail domain); run heldout make again');
     const slugs = people.map((person) => person.slug);
     if (slugs.some((slug) => !/^[a-z]+$/.test(slug)) || new Set(slugs).size !== slugs.length) {
       throw new Error(`the people came back with unusable slugs (${slugs.join(', ')}); run heldout make again`);
@@ -297,6 +299,28 @@ const rosterProblems = (people: (Sketch | MonthSketch)[]) =>
       return problem ? [`${person.slug}: ${problem}`] : [];
     })
     .join('; ') || undefined;
+
+/** Who a person is, as a new one must not repeat: slug, full name and mail domain, lowercased. */
+type Identity = { slug: string; name: string; domain: string };
+
+const identityKeys = (who: Identity) =>
+  [`slug:${who.slug}`, `name:${who.name}`, `domain:${who.domain}`].map((key) => key.trim().toLowerCase()).filter((key) => !key.endsWith(':'));
+
+/** Every person of the tune set and of every held-out set, as identity keys, read without showing anyone. */
+export function takenIdentities(): Set<string> {
+  const sets = existsSync(HELDOUT_DIR) ? readdirSync(HELDOUT_DIR, { withFileTypes: true }).filter((e) => e.isDirectory()) : [];
+  const written = sets.flatMap((set) => {
+    const listed = join(HELDOUT_DIR, set.name, 'people.json');
+    if (!existsSync(listed)) return [];
+    return (JSON.parse(readFileSync(listed, 'utf8')) as Sketch[]).map((s) => ({ slug: s.slug, name: `${s.owner_first} ${s.owner_last}`, domain: s.domain }));
+  });
+  const tune = personas('tune').map((p) => ({ slug: p.name, name: p.inbox.owner.name, domain: p.inbox.owner.email.split('@')[1] ?? '' }));
+  return new Set([...tune, ...written].flatMap(identityKeys));
+}
+
+/** Whether a sketched person shares a slug, full name or mail domain with an earlier one; it says nothing of whom, so a held-out set stays unread. */
+export const repeatsEarlier = (people: Pick<Sketch, 'slug' | 'owner_first' | 'owner_last' | 'domain'>[], taken: Set<string>) =>
+  people.some((s) => identityKeys({ slug: s.slug, name: `${s.owner_first} ${s.owner_last}`, domain: s.domain }).some((key) => taken.has(key)));
 
 /** What the author spent since `started`, in all and per person written. */
 async function reportCost(at: Stack, started: Date, people: number) {

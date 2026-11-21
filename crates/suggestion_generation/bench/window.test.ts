@@ -7,7 +7,7 @@ import { asWritten, type Inbox, type Persona, recentMessages, type RoutinesTruth
 import { type Generation, readWorkList, rereadList, type RoutineRow, workListOf } from './run';
 import { boundedList, type EntryMark, type FoundStream, mailText, marksProblem, scoreList, scoreWorkList, trimAsRust, type WorkList } from './finding';
 import { draftableNeeds, inInbox, pooled } from './month';
-import { rosterProblem } from './heldout';
+import { repeatsEarlier, rosterProblem } from './heldout';
 import { lines, withheldAcross } from './report';
 import { type Attempt, failedScore, marginsOf, type RunFile, scoreRoutines, summary, unreadList, verdict, wholeCount } from './score';
 import { ANCHOR } from './clock';
@@ -628,5 +628,16 @@ describe('writing a month', () => {
     expect(rosterProblem(roster('Ana', 'Bo', 'BO'))).toContain('share a first name');
     expect(rosterProblem(roster('Ana', 'Bo', 'owner'))).toContain('named Owner');
     expect(rosterProblem(roster('Owen', 'Bo', 'Cy'))).toBeUndefined();
+  });
+});
+
+describe('a held-out person is someone no earlier set has', () => {
+  const taken = new Set(['slug:ana', 'name:ana lopez', 'domain:acme.example']);
+  const person = { slug: 'bea', owner_first: 'Bea', owner_last: 'Stone', domain: 'stone.example' };
+  test('a new slug, name and domain pass', () => expect(repeatsEarlier([person], taken)).toBe(false));
+  test('the same slug, full name or mail domain is refused', () => {
+    expect(repeatsEarlier([person, { ...person, slug: 'ana' }], taken)).toBe(true);
+    expect(repeatsEarlier([{ ...person, owner_first: 'ANA', owner_last: 'Lopez' }], taken)).toBe(true);
+    expect(repeatsEarlier([{ ...person, domain: 'Acme.example' }], taken)).toBe(true);
   });
 });
