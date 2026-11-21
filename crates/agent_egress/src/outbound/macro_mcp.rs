@@ -335,15 +335,6 @@ impl MacroApiTokenSigner {
         lifetime_seconds: usize,
         claims: SignedClaims,
     ) -> Result<String, EgressError> {
-        let SignedClaims {
-            agent_id,
-            agent_via,
-            agent_session_id,
-            agent_correlation_id,
-            agent_scope,
-            routine_id,
-            channel_mention_id,
-        } = claims;
         if !(1..=MINTED_TOKEN_LIFETIME_SECONDS).contains(&lifetime_seconds) {
             return Err(EgressError::Internal(rootcause::report!(
                 "invalid token lifetime"
@@ -376,10 +367,38 @@ impl MacroApiTokenSigner {
             ))
         })?;
 
+        self.encode(
+            lifetime_seconds,
+            claims,
+            fusion_root_id.to_string(),
+            macro_user_id,
+            organization_id,
+        )
+    }
+
+    // Kept separate from identity lookup so the exact signing path can be
+    // exercised without a database.
+    fn encode(
+        &self,
+        lifetime_seconds: usize,
+        claims: SignedClaims,
+        fusionauth_id: String,
+        macro_user_id: String,
+        organization_id: Option<i32>,
+    ) -> Result<String, EgressError> {
+        let SignedClaims {
+            agent_id,
+            agent_via,
+            agent_session_id,
+            agent_correlation_id,
+            agent_scope,
+            routine_id,
+            channel_mention_id,
+        } = claims;
         encode_macro_api_token(EncodeMacroApiTokenArgs {
             agent_correlation_id,
             agent_session_id,
-            fusionauth_id: fusion_root_id.to_string(),
+            fusionauth_id,
             macro_user_id,
             organization_id,
             issuer: self.issuer.clone(),

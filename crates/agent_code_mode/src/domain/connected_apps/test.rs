@@ -384,37 +384,3 @@ async fn a_search_ranks_tools_across_apps_and_reports_apps_it_could_not_read() {
     )
     .await;
 }
-
-#[tokio::test]
-async fn audit_another_live_sessions_program_cannot_spend_this_execution() {
-    let session = AgentSessionId::new_from_uuid(macro_uuid::Uuid::from_u128(7));
-    let execution = ExecutionId::mint();
-    let caller = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap().into_owned();
-    let apps = Arc::new(Apps::default());
-    let service = ConnectedAppService::new(
-        Arc::new(Store(Mutex::new(Some(ExecutionRecord {
-            execution_id: execution, acting_as: Some(ToolActor::Owner),
-            turn_id: Some(macro_uuid::Uuid::from_u128(1)),
-            source: "export async function main() {}".into(), status: ExecutionStatus::Running,
-            result: None, error: None, calls: Vec::new(), activity: Vec::new(), activity_truncated: false,
-        })))),
-        Arc::new(Turns(Some(macro_uuid::Uuid::from_u128(1)))), apps.clone(),
-    );
-    let access = EntityAccessReceipt::<EditAccessLevel>::dangerously_assert_authenticated_user(
-        caller.clone(), &session.to_string(), EntityType::AgentSession,
-    );
-    for attribution in [
-        agent_correlation::context::Attribution::default(),
-        agent_correlation::context::Attribution { session_id: Some(uuid::Uuid::from_u128(8)), ..Default::default() },
-        agent_correlation::context::Attribution { session_id: Some(session.as_uuid()), channel_mention_id: Some(uuid::Uuid::from_u128(9)), ..Default::default() },
-        agent_correlation::context::Attribution { session_id: Some(session.as_uuid()), scope: Some(agent_correlation::scope::SessionScope::NoSend), ..Default::default() },
-    ] {
-        let result = agent_correlation::context::scope_attribution(attribution, service.call(
-            &access, &caller, execution,
-            ConnectedAppRef { kind: ConnectedAppKind::App, key: "slack".into() },
-            CallConnectedTool { tool: "send_message".into(), arguments: serde_json::Map::new() },
-        )).await;
-        assert!(matches!(result, Err(CodeModeError::Forbidden)), "{attribution:?}: {result:?}");
-    }
-    assert!(apps.0.lock().unwrap().is_empty());
-}

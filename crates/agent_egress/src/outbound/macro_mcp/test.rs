@@ -289,6 +289,11 @@ fn audit_mention_claims_are_no_send_and_keep_the_original_message() {
     let message = uuid::Uuid::from_u128(901);
     let claims = SignedClaims::channel_mention(bot_id::MACRO_AI_BOT_ID.as_uuid(), message);
     assert_eq!(claims.channel_mention_id, Some(message));
-    assert_eq!(claims.agent_scope, Some(agent_correlation::scope::SessionScope::NoSend));
+    assert_eq!(
+        claims.agent_scope,
+        Some(agent_correlation::scope::SessionScope::NoSend)
+    );
     assert_eq!(claims.agent_session_id, None);
 }
+
+mod mention;
