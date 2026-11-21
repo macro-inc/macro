@@ -2,12 +2,14 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { Button, cn } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { RescheduleForm } from '../components/reschedule-form';
-import type { BookingReceipt } from '../core/types';
+import { bookingAbandoned } from '../core/booking-list';
+import type { Booking, BookingReceipt } from '../core/types';
 
 export function BookingReceiptView(props: {
   receipt?: BookingReceipt;
   unavailable: boolean;
-  cancel: () => Promise<void>;
+  /** Resolves to the booking the cancellation returned. */
+  cancel: () => Promise<Booking>;
   loadSlots: (
     date: string,
     timeZone: string
@@ -25,9 +27,13 @@ export function BookingReceiptView(props: {
     setError('');
     setBusy(true);
     try {
-      await props.cancel();
+      const booking = await props.cancel();
       setRescheduling(false);
       setConfirm(false);
+      if (bookingAbandoned(booking))
+        setError(
+          'The cancellation didn’t reach your host’s calendar. Please try again later.'
+        );
     } catch {
       setError(
         'Cancellation failed. Your booking has not been marked cancelled. Please try again.'
@@ -64,7 +70,9 @@ export function BookingReceiptView(props: {
                   ? '✓'
                   : r().booking.status === 'cancelled'
                     ? '−'
-                    : '◷'}
+                    : bookingAbandoned(r().booking)
+                      ? '!'
+                      : '◷'}
               </div>
               <h1 class="text-2xl font-semibold tracking-tight">
                 {r().booking.status === 'cancelled'
@@ -73,9 +81,11 @@ export function BookingReceiptView(props: {
                     ? 'Booking requested'
                     : r().booking.status === 'confirmed'
                       ? 'You’re booked'
-                      : r().booking.status === 'failed'
-                        ? 'We’re updating your booking'
-                        : 'Booking is processing'}
+                      : bookingAbandoned(r().booking)
+                        ? 'Not added to your host’s calendar'
+                        : r().booking.status === 'failed'
+                          ? 'We’re updating your booking'
+                          : 'Booking is processing'}
               </h1>
               <div class="mt-6 rounded-xl bg-surface-0 p-5">
                 <h2 class="font-semibold">{r().booking.title}</h2>
@@ -110,30 +120,37 @@ export function BookingReceiptView(props: {
                   ? 'Your host will confirm this meeting. The time is held while they review it.'
                   : r().booking.status === 'confirmed'
                     ? 'A calendar invitation has been sent to your email.'
-                    : r().booking.status === 'failed'
-                      ? 'Your time is reserved. We’re retrying the calendar update automatically; keep this page to check its status and avoid making another booking.'
-                      : ''}
+                    : bookingAbandoned(r().booking)
+                      ? 'This booking isn’t confirmed. Cancel it to free the time.'
+                      : r().booking.status === 'failed'
+                        ? 'Your time is reserved. We’re retrying the calendar update automatically; keep this page to check its status and avoid making another booking.'
+                        : ''}
               </p>
               <p class="mt-4 text-xs leading-relaxed text-ink-muted">
-                Keep this private link to reschedule or cancel your booking.
+                {bookingAbandoned(r().booking)
+                  ? 'Keep this private link to cancel your booking.'
+                  : 'Keep this private link to reschedule or cancel your booking.'}
               </p>
               <Show
                 when={
                   r().booking.status === 'confirmed' ||
-                  r().booking.status === 'pending'
+                  r().booking.status === 'pending' ||
+                  bookingAbandoned(r().booking)
                 }
               >
                 <div class="mt-6 flex flex-wrap gap-2 border-t border-edge-muted pt-6">
-                  <Button
-                    variant="secondary"
-                    disabled={busy()}
-                    onClick={() => {
-                      setConfirm(false);
-                      setRescheduling(true);
-                    }}
-                  >
-                    Reschedule
-                  </Button>
+                  <Show when={r().booking.status !== 'failed'}>
+                    <Button
+                      variant="secondary"
+                      disabled={busy()}
+                      onClick={() => {
+                        setConfirm(false);
+                        setRescheduling(true);
+                      }}
+                    >
+                      Reschedule
+                    </Button>
+                  </Show>
                   <Button
                     variant="secondary"
                     disabled={busy()}
@@ -184,7 +201,7 @@ export function BookingReceiptView(props: {
                   onCancel={() => setRescheduling(false)}
                 />
               </Show>
-              <Show when={error()}>
+              <Show when={error() && r().booking.status !== 'cancelled'}>
                 <p role="alert" class="mt-4 text-sm text-failure">
                   {error()}
                 </p>

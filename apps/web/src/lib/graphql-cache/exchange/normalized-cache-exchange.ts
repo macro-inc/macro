@@ -94,13 +94,13 @@ import {
   type EntityResolverConfig,
 } from './entity-resolvers';
 import { isQueryObject, LiveQuery, withLiveQueryData } from './live-query';
+import { createMutationQueueOwner } from './mutation-queue-owner';
 import {
   createMutationQueueRunner,
   QUEUE_LEASE_MS,
   QUEUE_REQUEST_TIMEOUT_MS,
   queueAttemptOf,
   replayDocument,
-  webLockLeaseOwnerLiveness,
   withQueueRequestTimeout,
 } from './mutation-queue-runner';
 import {
@@ -490,6 +490,13 @@ export interface NormalizedCacheExchangeOptions {
   ) => boolean | Promise<boolean>;
   /** Spans, bounded logs, and counters for the durable mutation queue. */
   mutationQueueTelemetry?: MutationQueueTelemetry;
+  /**
+   * Web Locks for the queue's lease owners. The page holds a lock while it
+   * lives, so a page loaded after a reload or close can tell its predecessor
+   * has gone and release the claim it left on the queue head. Without them,
+   * that claim holds the queue until its lease runs out.
+   */
+  mutationQueueLocks?: LockManager;
   /**
    * True for a subscription whose payloads no reader takes from the cache,
    * such as a signal that only tells queries to refetch. Its results are
@@ -945,7 +952,10 @@ export function normalizedCacheExchange(
         }
       };
 
-      const queueOwner = `exchange:${host.clientId}`;
+      const queueOwner = createMutationQueueOwner(
+        host.clientId,
+        options.mutationQueueLocks
+      );
       const queueTelemetry =
         options.mutationQueueTelemetry ?? NOOP_MUTATION_QUEUE_TELEMETRY;
       const mutationQueue = createMutationQueueRunner({
@@ -953,7 +963,6 @@ export function normalizedCacheExchange(
         client,
         options,
         owner: queueOwner,
-        leaseOwnerLiveness: webLockLeaseOwnerLiveness(),
         forward: enqueueForward,
         writeThrough,
         cacheDocument: (op) => ({
@@ -1188,12 +1197,9 @@ export function normalizedCacheExchange(
           clientMetadata: optimistic.clientMetadata,
           uncertainCalendarEventKeys: optimistic.uncertainCalendarEventKeys,
         };
-        // The enqueue may claim the head for this runner.
-        const registration = mutationQueue.ownerRegistration();
-        if (registration) await registration;
         const now = Date.now();
         const claim = {
-          owner: queueOwner,
+          owner: epoch.leaseOwner,
           nowMs: now,
           leaseExpiresAtMs: now + QUEUE_LEASE_MS,
         };
@@ -1224,7 +1230,7 @@ export function normalizedCacheExchange(
             // Fencing the old engine does not remove a committed queue entry.
             // Never forward or retry an enqueue whose reply was lost.
             // The lost reply may have claimed the head for this runner.
-            mutationQueue.wake();
+            mutationQueue.enqueueLost();
             return uncertainEnqueueResult(op, error);
           }
           // Another context holds the database, so the enqueue never reached
@@ -1292,7 +1298,7 @@ export function normalizedCacheExchange(
             options.onCacheError?.(fallbackError, op);
             if (isAdmittedEnqueueUncertainError(fallbackError)) {
               enqueueTelemetry.failed('uncertain');
-              mutationQueue.wake();
+              mutationQueue.enqueueLost();
               return uncertainEnqueueResult(op, fallbackError);
             }
             enqueueTelemetry.failed('rejected');

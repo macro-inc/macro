@@ -44,6 +44,9 @@ jobs:
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
         persist-credentials: 'false'
+      env:
+        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+        GIT_HTTP_LOW_SPEED_TIME: '60'
     - id: set-matrix
       name: Set deployment matrix
       run: |
@@ -72,6 +75,9 @@ jobs:
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
         persist-credentials: 'false'
+      env:
+        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+        GIT_HTTP_LOW_SPEED_TIME: '60'
     - name: Mount /nix cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
@@ -125,6 +131,9 @@ jobs:
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
         persist-credentials: 'false'
+      env:
+        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+        GIT_HTTP_LOW_SPEED_TIME: '60'
     - name: Mount /nix cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
@@ -184,6 +193,9 @@ jobs:
       with:
         persist-credentials: 'false'
         clean: 'false'
+      env:
+        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+        GIT_HTTP_LOW_SPEED_TIME: '60'
     - name: Setup Bun
       uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
       with:
@@ -266,6 +278,9 @@ jobs:
       with:
         persist-credentials: 'false'
         clean: 'false'
+      env:
+        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+        GIT_HTTP_LOW_SPEED_TIME: '60'
     - name: Setup Bun
       uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
       with:
@@ -322,6 +337,9 @@ jobs:
       with:
         persist-credentials: 'false'
         sparse-checkout: .github/
+      env:
+        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+        GIT_HTTP_LOW_SPEED_TIME: '60'
     - name: Run migrations
       uses: ./.github/actions/migrate-cloud-storage-db
       with:
@@ -348,6 +366,9 @@ jobs:
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
         persist-credentials: 'false'
+      env:
+        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+        GIT_HTTP_LOW_SPEED_TIME: '60'
     - id: project-name
       name: Get project name
       uses: ./.github/actions/get-project-name
@@ -423,6 +444,9 @@ jobs:
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
         persist-credentials: 'false'
+      env:
+        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+        GIT_HTTP_LOW_SPEED_TIME: '60'
     - name: Setup Bun
       uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
       with:

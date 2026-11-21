@@ -3,12 +3,14 @@
 // Block sender, sender to Noise and to Signal. Each is another way into a
 // function the list or a menu also reaches. For a Gmail and an Outlook inbox.
 
-import { loadAppSteadily } from './harness/drafts';
+import { graphqlOperation, loadAppSteadily } from './harness/drafts';
 import { expect, test } from './harness/fixtures';
 import { trashFolder } from './harness/journeys';
+import { focusRow, rowIds, watchRowIds } from './harness/list';
 import { followup } from './harness/organise';
 import { anInbox, PROVIDERS } from './harness/providers';
 import { notice } from './harness/send';
+import { holdOperation } from './harness/states-thread';
 import {
   allRead,
   blocked,
@@ -20,7 +22,7 @@ import {
   senderFilters,
 } from './harness/ways-thread';
 import { keyboardInThread } from './harness/ways-thread-more';
-import { did } from './ledger/record';
+import { did, saw } from './ledger/record';
 
 for (const provider of PROVIDERS) {
   test.describe(`the keys of an open thread in ${anInbox(provider)}`, () => {
@@ -63,10 +65,16 @@ for (const provider of PROVIDERS) {
       await expect
         .poll(async () => (await held(mailbox, 'Bin'))?.labels)
         .toContain(trashFolder(provider));
-      // The thread is gone, so the list is back. The list is not asked to
-      // drop its row: a mark read that settles after the Trash can put it
-      // back (handoff thread-trash-undone-by-late-mark-seen).
+      // The thread is gone, so the list is back, without its row.
       await expect(page).toHaveURL(/\/app\/mail$/);
+      await expect
+        .poll(async () =>
+          (await rowIds(page)).filter(
+            (id) => id === ids.Bin || id === ids.Stays
+          )
+        )
+        .toEqual([ids.Stays]);
+      saw('STL-990');
 
       // A thread marked done in its header, opened again from Archived.
       await openFromList(page, ids.Done, 'About Done.');
@@ -106,14 +114,52 @@ for (const provider of PROVIDERS) {
         .toMatchObject({ state: 'pending', condition: 'if_no_reply' });
     });
 
-    // When this fails, u in an open thread is not the thread's own mark
-    // unread: the header still offers Mark as unread, and Shift+U (which
-    // the thread offers only after its own u) leaves the thread unread at
-    // the provider. Today the list's u, registered on the same split scope,
-    // answers the key instead (handoff inline-thread-read-keys-reach-the-list).
-    test('known bug: inline-thread-read-keys-reach-the-list: u marks the open thread unread, Shift+U read again @known-bug', {
-      tag: '@known-bug',
-    }, async ({ page, mailbox }) => {
+    // When this fails, a thread trashed while its mark read is still on its
+    // way stays in the list, read and with no time: the list's refresh after
+    // the Trash leaves it out, and the cache keeps it for the mark read.
+    test('# right after opening a thread takes it out of the list before its mark read lands', async ({
+      page,
+      mailbox,
+    }) => {
+      const ids = await deliverEach(mailbox, ['Bin', 'Stays']);
+      await mailbox.open();
+      const marks = await holdOperation(page, 'MarkEmailThreadSeen', (body) =>
+        body.includes(ids.Bin)
+      );
+
+      await openFromList(page, ids.Bin, 'About Bin.');
+      await expect.poll(marks.held).toBeGreaterThan(0);
+      await page.keyboard.press('Shift+Digit3');
+      did('AL-145');
+      await expect
+        .poll(async () => (await held(mailbox, 'Bin'))?.labels)
+        .toContain(trashFolder(provider));
+      await expect(page).toHaveURL(/\/app\/mail$/);
+      await expect.poll(() => rowIds(page)).toEqual([ids.Stays]);
+      saw('STL-990');
+
+      // The mark read landing late does not bring it back. The star of the
+      // other row waits in the queue behind the mark reads: once it reaches
+      // the service, the cache has settled them.
+      const shown = await watchRowIds(page);
+      await marks.release();
+      await allRead(mailbox, ids.Bin);
+      await focusRow(page, ids.Stays);
+      await page.keyboard.press('s');
+      did('AL-061', 'F-073');
+      await expect.poll(() => favorites(mailbox)).toEqual([ids.Stays]);
+      expect((await shown()).filter((rows) => rows.includes(ids.Bin))).toEqual(
+        []
+      );
+      expect(await rowIds(page)).toEqual([ids.Stays]);
+    });
+
+    // The open thread keeps its Mark as read toggle when its own unread
+    // write reaches the mailbox, so Shift+U can mark it read again.
+    test('u marks the open thread unread, Shift+U read again', async ({
+      page,
+      mailbox,
+    }) => {
       const ids = await deliverEach(mailbox, ['Question', 'Stays']);
       await mailbox.open();
       await openFromList(page, ids.Question, 'About Question.');
@@ -187,22 +233,44 @@ for (const provider of PROVIDERS) {
   });
 }
 
-// Seen every time in an Outlook inbox, and in a Gmail inbox after the list's e.
 test.describe('a reload just after a thread was opened, in an Outlook inbox', () => {
   test.use({ provider: 'OUTLOOK' });
   test.beforeEach(({ page }) => loadAppSteadily(page));
 
-  // When this fails, the page reloaded while opening a thread was still
-  // marking it read, and the next action waits behind that cut-off write:
-  // Mark done takes the row out of Macro's list, but the provider keeps the
-  // thread in the inbox (handoff mutation-queue-lease-after-reload). Waiting
-  // for the read to reach the provider before the reload avoids it. The
-  // read sometimes finishes before the reload on a faster machine, and the
-  // test then passes: `@sometimes`, one pass does not say the bug is gone.
-  test('known bug: mutation-queue-lease-after-reload: Mark done after a reload reaches the provider @known-bug', {
-    tag: ['@known-bug', '@sometimes'],
-  }, async ({ page, mailbox }) => {
+  // When this fails, the reload cut off the mark read of the thread just
+  // opened, and its claim on the mutation queue outlived the page: Mark done
+  // takes the row out of Macro's list, but waits behind that claim, so the
+  // provider keeps the thread in the inbox. Without the release of a departed
+  // page's claim it still passes in about a third of runs, where the new
+  // page finds the head free at once: the page that reloaded put its claim
+  // back before it went.
+  test('Mark done after a reload reaches the provider', async ({
+    page,
+    mailbox,
+  }) => {
     const ids = await deliverEach(mailbox, ['Later', 'Done', 'Stays']);
+    // The first mark read reaches the service, and its answer is held until
+    // the page that sent it has been reloaded away, as a slow one is.
+    let reloaded = () => {};
+    const reload = new Promise<void>((resolve) => {
+      reloaded = resolve;
+    });
+    let cutOff = 0;
+    await page.route(/\/graphql$/, async (route) => {
+      if (
+        cutOff > 0 ||
+        graphqlOperation(route.request()) !== 'MarkEmailThreadSeen'
+      )
+        return route.fallback();
+      cutOff += 1;
+      await route.fetch();
+      await reload;
+      try {
+        await route.abort();
+      } catch {
+        // The reload already cancelled the request.
+      }
+    });
     await mailbox.open();
     await openFromList(page, ids.Later, 'About Later.');
     await page.keyboard.press('h');
@@ -215,7 +283,9 @@ test.describe('a reload just after a thread was opened, in an Outlook inbox', ()
     await expect
       .poll(() => followup(mailbox, ids.Later))
       .toMatchObject({ state: 'pending' });
+    await expect.poll(() => cutOff).toBe(1);
     await mailbox.open();
+    reloaded();
 
     await openFromList(page, ids.Done, 'About Done.');
     await page
@@ -226,5 +296,6 @@ test.describe('a reload just after a thread was opened, in an Outlook inbox', ()
     await expect
       .poll(async () => (await held(mailbox, 'Done'))?.inInbox)
       .toBe(false);
+    saw('STL-991');
   });
 });

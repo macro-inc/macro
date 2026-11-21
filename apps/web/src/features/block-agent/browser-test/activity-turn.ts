@@ -483,7 +483,7 @@ export async function playTurn(options: { speed: number; summarize: boolean }) {
     model.rows.set(id, [
       {
         id,
-        label: 'Working in your workspace',
+        label: 'Working on it',
         detail: null,
         status: 'running',
         card: null,
@@ -512,7 +512,7 @@ export async function playTurn(options: { speed: number; summarize: boolean }) {
       model.rows.set(id, [
         {
           id,
-          label: 'Workspace activity',
+          label: 'A step failed',
           detail: null,
           status: 'failed',
           card: null,

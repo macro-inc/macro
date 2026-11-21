@@ -1,0 +1,55 @@
+[package]
+edition = "2024"
+name = "firecracker_host"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "firecracker-host"
+path = "src/main.rs"
+
+[[bin]]
+name = "firecracker_host_openapi"
+path = "src/openapi.rs"
+
+[features]
+# `serve --crash-at <point>`: the crash harness's builds only.
+crash-points = []
+
+[dependencies]
+axum = { workspace = true, features = ["ws"] }
+chrono = { workspace = true }
+clap = { workspace = true }
+firecracker_host_api = { path = "../../crates/firecracker_host_api", features = ["client", "schema"] }
+futures = { workspace = true }
+http = { workspace = true }
+http-body-util = { workspace = true }
+hyper = { workspace = true, features = ["client", "http1"] }
+hyper-util = { workspace = true, features = ["http1", "http2", "server", "server-auto", "service", "tokio"] }
+memchr = { workspace = true }
+pinned_tls = { path = "../../crates/pinned_tls" }
+opentelemetry = { workspace = true, features = ["metrics", "trace"] }
+macro_entrypoint = { path = "../../crates/macro_entrypoint" }
+macro_env = { path = "../../crates/macro_env" }
+macro_tower_layers = { path = "../../crates/macro_tower_layers" }
+rootcause = { workspace = true }
+rustix = { workspace = true, features = ["event", "fs", "mount", "process"] }
+rustls = { workspace = true, features = ["std"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["fs", "io-util", "macros", "net", "process", "rt-multi-thread", "signal", "sync", "time"] }
+tokio-rustls = { workspace = true }
+tokio-util = { workspace = true, features = ["rt"] }
+toml = { workspace = true }
+tracing = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+utoipa = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+
+[dev-dependencies]
+tower = { workspace = true }
+firecracker_host_api = { path = "../../crates/firecracker_host_api", features = ["client", "schema", "test-support"] }
+tempfile = { workspace = true }

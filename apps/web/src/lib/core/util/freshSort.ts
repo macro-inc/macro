@@ -10,10 +10,13 @@ import {
   type ParsedDuration,
   parsedDurationToMilliseconds,
 } from './dateSearch/dateParser';
-import { fuzzyScoreCommaSpaceSeparated } from './fuzzy';
+import {
+  ANY_SCRIPT_FUZZY_OPTIONS,
+  fuzzyScoreCommaSpaceSeparated,
+} from './fuzzy';
 import { nameMatchQuality, normalizeNameText } from './name-match-score';
 
-const fuzzyEligibility = new uFuzzy({});
+const fuzzyEligibility = new uFuzzy(ANY_SCRIPT_FUZZY_OPTIONS);
 
 interface FuzzyFilterResult<T> {
   original: T;

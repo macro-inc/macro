@@ -7,8 +7,8 @@ use cache_core::engine::{
 };
 use cache_core::predicate::{OptimisticUpsertReconciliation, ProjectionMutation};
 use cache_core::queue::{
-    ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, MutationUpsertResult,
-    NewQueuedMutation, QueuedMutation,
+    ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, MutationLeaseInspection,
+    MutationUpsertResult, NewQueuedMutation, QueuedMutation,
 };
 use cache_core::store::{InMemoryStorage, Storage};
 use cache_core::value::{CacheValue, EntityKey, Record};
@@ -507,8 +507,6 @@ fn mutation_inspection_preserves_metadata_without_claiming_or_changing_leases() 
         let before = engine.storage().load_mutation_queue().await.unwrap();
         let inspected = engine.inspect_mutations().await.unwrap();
         assert_eq!(inspected.len(), 1);
-        assert_eq!(inspected[0].lease_owner, None);
-        assert_eq!(inspected[0].lease_generation, None);
         assert_eq!(inspected[0].transaction_id, id.to_string());
         assert_eq!(inspected[0].client_metadata, Some(metadata.clone()));
         assert_eq!(inspected[0].optimistic_data, data);
@@ -539,13 +537,6 @@ fn mutation_inspection_preserves_metadata_without_claiming_or_changing_leases() 
         let before = engine.storage().load_mutation_queue().await.unwrap();
         let inspected = engine.inspect_mutations().await.unwrap();
         assert_eq!(inspected[0].client_metadata, Some(metadata));
-        // A runner releasing a lease whose owner is gone needs its token.
-        assert_eq!(inspected[0].lease_owner.as_deref(), Some("runner"));
-        assert_eq!(
-            inspected[0].lease_generation,
-            Some(claimed.lease_generation.to_string())
-        );
-        assert_eq!(inspected[0].lease_expires_at_ms, Some(100));
         assert_eq!(
             engine.storage().load_mutation_queue().await.unwrap(),
             before
@@ -562,9 +553,40 @@ fn mutation_inspection_preserves_metadata_without_claiming_or_changing_leases() 
                 .unwrap()
                 .is_none()
         );
+        // The lease names its claim, so a runner can release one whose owner
+        // has gone; settling still needs the owner and generation.
+        assert_eq!(
+            inspected[0].lease,
+            Some(MutationLeaseInspection {
+                owner: "runner".into(),
+                generation: claimed.lease_generation.to_string(),
+                expires_at_ms: 100,
+            })
+        );
         let wire = serde_json::to_value(&inspected[0]).unwrap();
+        assert_eq!(
+            wire["lease"],
+            json!({"owner": "runner", "generation": "1", "expiresAtMs": 100})
+        );
         assert!(wire.get("leaseGeneration").is_none());
-        assert!(wire.get("leaseOwner").is_none());
+
+        engine
+            .defer_optimistic_write(
+                id,
+                MutationClaimToken {
+                    owner: "runner".into(),
+                    generation: claimed.lease_generation,
+                },
+                10,
+                "lease owner left".into(),
+                false,
+            )
+            .await
+            .unwrap();
+        let inspected = engine.inspect_mutations().await.unwrap();
+        assert_eq!(inspected[0].lease, None);
+        let wire = serde_json::to_value(&inspected[0]).unwrap();
+        assert!(wire.get("lease").is_none());
     });
 }
 

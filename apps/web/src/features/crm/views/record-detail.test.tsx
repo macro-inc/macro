@@ -30,8 +30,13 @@ const taskContext = vi.hoisted(() => ({
     return this.records.at(-1);
   },
   contactCompanyId: undefined as string | undefined,
+  companyLoaded: false,
   recordError: (): boolean => false,
 }));
+const createOpenTracker = vi.hoisted(() => vi.fn());
+vi.mock('@core/internal/open-tracker', () => ({ createOpenTracker }));
+const trackedItems = () =>
+  createOpenTracker.mock.calls.map(([block, item]) => [block, item()]);
 vi.mock('../context/crm-context', () => ({
   useCrmContext: () => ({
     createNavigation: () => ({ openWithSplit: vi.fn() }),
@@ -83,16 +88,19 @@ vi.mock('./use-crm', () => ({
         return taskContext.recordError();
       },
     },
-    company: () => undefined,
+    company: () =>
+      taskContext.companyLoaded
+        ? { id: 'company-1', name: 'Acme', domains: [] }
+        : undefined,
     contacts: () => [],
   }),
-  useContactQuery: () => ({
+  useContactQuery: (contactId: () => string) => ({
     isSuccess: !!taskContext.contactCompanyId,
     get isError() {
       return taskContext.recordError();
     },
     data: taskContext.contactCompanyId
-      ? { companyId: taskContext.contactCompanyId }
+      ? { id: contactId(), companyId: taskContext.contactCompanyId }
       : undefined,
   }),
   useIsTeamAdmin: () => () => false,
@@ -215,7 +223,9 @@ afterEach(() => {
   vi.unstubAllGlobals();
   taskContext.records.length = 0;
   taskContext.contactCompanyId = undefined;
+  taskContext.companyLoaded = false;
   taskContext.recordError = () => false;
+  createOpenTracker.mockReset();
 });
 
 /** Stands in for the route: each open hands the detail a new trail. */
@@ -314,8 +324,19 @@ it('registers the actual company detail while mounted and clears it on unmount',
     <Company companyId="company-1" section="files" />
   ));
   expect(taskContext.record?.()).toEqual({ type: 'company', id: 'company-1' });
+  expect(trackedItems()).toEqual([['company', undefined]]);
   result.unmount();
   expect(taskContext.record).toBeUndefined();
+});
+
+it('records an open of a company once it has loaded', async () => {
+  const { Company } =
+    await vi.importActual<typeof import('./company-detail')>(
+      './company-detail'
+    );
+  taskContext.companyLoaded = true;
+  render(() => <Company companyId="company-1" section="files" />);
+  expect(trackedItems()).toEqual([['company', 'company-1']]);
 });
 
 it('registers the actual contact detail with its loaded company', async () => {
@@ -332,6 +353,7 @@ it('registers the actual contact detail with its loaded company', async () => {
     id: 'contact-1',
     companyId: 'company-1',
   });
+  expect(trackedItems()).toEqual([['contact', 'contact-1']]);
   result.unmount();
   expect(taskContext.record).toBeUndefined();
 });
@@ -349,6 +371,7 @@ it('registers an unloaded contact without an unrelated company', async () => {
     id: 'contact-2',
     companyId: undefined,
   });
+  expect(trackedItems()).toEqual([['contact', undefined]]);
   result.unmount();
   expect(taskContext.record).toBeUndefined();
 });

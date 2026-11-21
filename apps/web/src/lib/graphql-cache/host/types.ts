@@ -210,7 +210,7 @@ export interface CacheHost {
   ): Promise<CachedQueryVariantWire[]>;
   /** Enumerates and materializes cached query field variants. */
   inspectQuery(args: InspectQueryArgs): Promise<CachedQueryInstanceWire[]>;
-  /** Read-only queue snapshots, each naming its live lease when it has one. */
+  /** Read-only queue snapshots, each with its current lease when claimed. */
   inspectMutations?(): Promise<MutationInspection[]>;
   /** Claims the oldest runnable mutation; later entries are never skipped. */
   claimNextMutation(

@@ -47,6 +47,8 @@ mod macos_notification_permission;
 pub mod screen_capture;
 mod share_target;
 mod staged_upload;
+#[cfg(test)]
+mod test;
 mod whatsapp_passkey;
 #[cfg(desktop)]
 mod window_state;
@@ -139,15 +141,18 @@ static ALLOWED_DOMAINS: &[&str] = &[
     "http://localhost:3009",
 ];
 
-/// Third-party pages the SPA renders in an iframe. Keep in sync with
-/// `CONNECT_UI_URL` in `apps/web/src/lib/core/pipedream/connect-ui.ts`.
-static EMBEDDED_DOCUMENTS: &[&str] = &["https://pipedream.com/_static/connect.html"];
-
 /// hosts whose `/app` urls are Macro app links. Main-frame navigations to
 /// these are routed through the SPA router instead of loading the remote
 /// site in the webview. Keep in parity with the deep-link hosts in
 /// tauri.conf.json.
 static APP_LINK_HOSTS: &[&str] = &["macro.com", "dev.macro.com", "staging.macro.com"];
+
+/// The navigation policy of every webview the app opens.
+fn navigation_plugin() -> MacroNavigationPlugin {
+    MacroNavigationPlugin::new(ALLOWED_DOMAINS)
+        .expect("Domains must be valid urls")
+        .with_app_link_hosts(APP_LINK_HOSTS)
+}
 
 type Type = std::sync::OnceLock<
     Box<dyn Fn(&str, http::Request<Vec<u8>>, tauri::UriSchemeResponder) + Send + Sync + 'static>,
@@ -233,11 +238,7 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
         }
         (context, windows)
     };
-    let navigation = MacroNavigationPlugin::new(ALLOWED_DOMAINS)
-        .expect("Domains must be valid urls")
-        .with_app_link_hosts(APP_LINK_HOSTS)
-        .with_embedded_documents(EMBEDDED_DOCUMENTS)
-        .expect("Embedded documents must be valid urls");
+    let navigation = navigation_plugin();
     let mut builder = builder;
 
     #[cfg(any(target_os = "ios", target_os = "macos"))]

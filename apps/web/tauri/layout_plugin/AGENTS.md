@@ -23,7 +23,9 @@ attributes. It has no app-data or network access and exposes no commands.
 
 ## Checks
 
-- Compile with Xcode 27.1; guard new APIs with availability checks for iOS 15+.
+- Compile with Xcode 27.1 (the iOS 27.1 SDK); CI pins it, see
+  [Xcode version](../../docs/ios-releases.md#xcode-version). Guard new APIs
+  with availability checks for iOS 15+.
 - Exercise closed, open, rotated, partially folded, and both Split View sides
   on the Duo simulator. Check a conventional iPhone as well.
 - Keep navigation order, unread state, More, search focus, and keyboard access

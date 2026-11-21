@@ -18,3 +18,17 @@ pub struct IndexedProperty {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub date_value: Option<i64>,
 }
+
+/// What a write of an entity's indexed properties did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PropertyUpdate {
+    /// The index holds the entity's documents and took the write. For an
+    /// email thread, a message a concurrent write changed first counts too.
+    Applied,
+    /// The index holds no document for the entity yet, so nothing changed; its
+    /// next full index carries the properties.
+    NotIndexed,
+}
+
+#[cfg(test)]
+mod test;
