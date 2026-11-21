@@ -135,7 +135,7 @@ fn occurrence_carries_the_envelope_and_a_null_cursor() {
     assert_eq!(json["eventId"], event.event_id.as_str());
     assert_eq!(json["name"], "macro.events");
     assert_eq!(json["data"], event.broker_envelope);
-    assert_eq!(json["cursor"], serde_json::Value::Null);
+    assert_eq!(json.get("cursor"), Some(&serde_json::Value::Null));
 }
 
 #[test]
