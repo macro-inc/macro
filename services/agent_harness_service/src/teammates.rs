@@ -27,7 +27,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use agent_harness::domain::ports::{RuntimeConnectionId, TeammateReport};
+use agent_harness::domain::ports::{RuntimeConnectionId, TeammateEvent, TeammateReport};
 use agent_runtime_protocol::domain::schema::v0::{
     AgentEnvironment, HostArch, TeammateHostReport, TeammateImage, TeammateInstall,
     TeammateInstallId, TeammateRunFailure, TeammateRunState, ToServerMessage,
@@ -272,8 +272,8 @@ pub(crate) struct TeammateDelivery {
     /// awaits (a delivery waits on the authentication service), and two at
     /// once could deliver twice. Other machines don't wait on it.
     views: std::sync::Mutex<HashMap<HarnessId, Arc<tokio::sync::Mutex<MachineView>>>>,
-    /// When each install was last redelivered after a `badConfiguration`;
-    /// kept across reconnects.
+    /// When each install was last redelivered after a `badConfiguration`,
+    /// within [`BAD_CONFIGURATION_REDELIVERY`]; kept across reconnects.
     redelivered: std::sync::Mutex<HashMap<TeammateInstallId, tokio::time::Instant>>,
 }
 
@@ -344,7 +344,14 @@ impl TeammateDelivery {
 
     /// One report from a runtime.
     pub(crate) async fn on_report(self: &Arc<Self>, report: TeammateReport) {
-        match report.message {
+        let message = match report.event {
+            TeammateEvent::Message(message) => message,
+            TeammateEvent::Closed => {
+                self.on_closed(report.harness, report.connection).await;
+                return;
+            }
+        };
+        match message {
             ToServerMessage::TeammateHost { report: host } => {
                 self.on_host(report.harness, report.connection, host).await;
             }
@@ -353,6 +360,27 @@ impl TeammateDelivery {
             }
             other => tracing::debug!(message = ?other, "not a teammate report"),
         }
+    }
+
+    /// A dial closed: forget its machine's view, unless a newer dial
+    /// already replaced it.
+    async fn on_closed(&self, harness: HarnessId, connection: RuntimeConnectionId) {
+        let machine = self.view(harness);
+        let view = machine.lock().await;
+        if view.connection.is_some_and(|current| current != connection) {
+            return;
+        }
+        let mut views = self
+            .views
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if views
+            .get(&harness)
+            .is_some_and(|kept| Arc::ptr_eq(kept, &machine))
+        {
+            views.remove(&harness);
+        }
+        drop(view);
     }
 
     async fn on_host(
@@ -453,10 +481,9 @@ impl TeammateDelivery {
             .redelivered
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if redelivered
-            .get(install)
-            .is_some_and(|last| now.duration_since(*last) < BAD_CONFIGURATION_REDELIVERY)
-        {
+        // Only redeliveries still inside the window matter; forget older ones.
+        redelivered.retain(|_, last| now.duration_since(*last) < BAD_CONFIGURATION_REDELIVERY);
+        if redelivered.contains_key(install) {
             tracing::warn!("configuration refused again; not redelivering yet");
             return false;
         }

@@ -303,9 +303,9 @@ impl Machine {
             .on_report(TeammateReport {
                 harness: LAPTOP,
                 connection: self.sockets.connection(),
-                message: ToServerMessage::TeammateHost {
+                event: TeammateEvent::Message(ToServerMessage::TeammateHost {
                     report: host_report(installs),
-                },
+                }),
             })
             .await;
     }
@@ -315,7 +315,7 @@ impl Machine {
             .on_report(TeammateReport {
                 harness: LAPTOP,
                 connection: self.sockets.connection(),
-                message: ToServerMessage::TeammateStatus { install, state },
+                event: TeammateEvent::Message(ToServerMessage::TeammateStatus { install, state }),
             })
             .await;
     }
@@ -373,9 +373,9 @@ async fn a_slow_delivery_to_one_machine_never_holds_up_another() {
         .send(TeammateReport {
             harness: LAPTOP,
             connection,
-            message: ToServerMessage::TeammateHost {
+            event: TeammateEvent::Message(ToServerMessage::TeammateHost {
                 report: host_report(vec![]),
-            },
+            }),
         })
         .unwrap();
     eventually(|| !machine.issuer.issued.lock().unwrap().is_empty()).await;
@@ -383,10 +383,10 @@ async fn a_slow_delivery_to_one_machine_never_holds_up_another() {
         .send(TeammateReport {
             harness: DESKTOP,
             connection,
-            message: ToServerMessage::TeammateStatus {
+            event: TeammateEvent::Message(ToServerMessage::TeammateStatus {
                 install: running(other, 1, 1),
                 state: TeammateRunState::Running,
-            },
+            }),
         })
         .unwrap();
 
@@ -629,4 +629,46 @@ async fn a_runtime_that_hosts_no_teammates_is_sent_none() {
 
     assert!(machine.sockets.sent().is_empty());
     assert!(machine.issuer.issued.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_closed_dial_forgets_its_machine_unless_a_newer_one_replaced_it() {
+    let machine = machine(vec![row(1, 1)], true);
+    machine.connects_with(vec![running(INSTALL, 1, 1)]).await;
+
+    // An older dial's close changes nothing.
+    machine
+        .delivery
+        .on_report(TeammateReport {
+            harness: LAPTOP,
+            connection: RuntimeConnectionId::generate(),
+            event: TeammateEvent::Closed,
+        })
+        .await;
+    assert!(machine.delivery.views.lock().unwrap().contains_key(&LAPTOP));
+
+    machine
+        .delivery
+        .on_report(TeammateReport {
+            harness: LAPTOP,
+            connection: machine.sockets.connection(),
+            event: TeammateEvent::Closed,
+        })
+        .await;
+    assert!(machine.delivery.views.lock().unwrap().is_empty());
+}
+
+#[tokio::test(start_paused = true)]
+async fn redeliveries_older_than_the_window_are_forgotten() {
+    let machine = machine(vec![], true);
+    let first = install_id(INSTALL);
+    let second = install_id(Uuid::from_u128(0x0193_a1b2_0000_7000_8000_0000_0000_02a3));
+    assert!(machine.delivery.may_redeliver(&first));
+
+    tokio::time::advance(BAD_CONFIGURATION_REDELIVERY).await;
+    assert!(machine.delivery.may_redeliver(&second));
+
+    let redelivered = machine.delivery.redelivered.lock().unwrap();
+    assert_eq!(redelivered.len(), 1);
+    assert!(redelivered.contains_key(&second));
 }

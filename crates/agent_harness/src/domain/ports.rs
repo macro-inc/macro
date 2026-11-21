@@ -178,15 +178,24 @@ pub struct RuntimeAccepts {
 }
 
 /// A runtime's report about hosting agent teammates (`TeammateHost` or
-/// `TeammateStatus`), with the dial it came on.
+/// `TeammateStatus`), or the end of its dial, with the dial it came on.
 #[derive(Debug, Clone)]
 pub struct TeammateReport {
     /// The harness whose runtime sent it.
     pub harness: HarnessId,
     /// The dial it came on.
     pub connection: RuntimeConnectionId,
-    /// The report.
-    pub message: agent_runtime_protocol::domain::schema::v0::ToServerMessage,
+    /// What happened.
+    pub event: TeammateEvent,
+}
+
+/// What a [`TeammateReport`] says.
+#[derive(Debug, Clone)]
+pub enum TeammateEvent {
+    /// The runtime sent this.
+    Message(agent_runtime_protocol::domain::schema::v0::ToServerMessage),
+    /// The dial closed; nothing more comes on it.
+    Closed,
 }
 
 /// A harness and one of its runtime connections.

@@ -29,7 +29,7 @@ use tracing::Instrument as _;
 
 use crate::domain::ports::{
     ConnectionRecorded, HarnessBindings, HarnessPresence, RuntimeAccepts, RuntimeConnectionId,
-    RuntimeConnections, TeammateReport,
+    RuntimeConnections, TeammateEvent, TeammateReport,
 };
 
 #[cfg(test)]
@@ -587,11 +587,17 @@ fn forward_teammate_reports(
             let report = TeammateReport {
                 harness,
                 connection,
-                message,
+                event: TeammateEvent::Message(message),
             };
             if reports.send(report).is_err() {
-                break;
+                return;
             }
         }
+        // The dial is gone: delivery forgets what it kept for it.
+        let _ = reports.send(TeammateReport {
+            harness,
+            connection,
+            event: TeammateEvent::Closed,
+        });
     });
 }
