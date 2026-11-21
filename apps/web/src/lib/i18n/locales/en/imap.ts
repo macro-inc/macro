@@ -1,4 +1,5 @@
 export default {
+  useAppPassword: 'Use an app password instead',
   googlePermissions: 'Keep email access enabled on Google’s permission screen.',
   addressUnverified:
     'Connect a verified address associated with your Macro account.',

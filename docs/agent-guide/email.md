@@ -119,12 +119,11 @@ unchanged open inbox without navigating or reloading. Repeat with signal
 notifications disabled.
 
 Open **Settings → Email** to check import progress, reconnect or disconnect.
-Known custom Google Workspace and Microsoft 365 domains use domain-only MX
-hints. Unknown hosts keep the provider chooser; an Outlook hint never bypasses
-the server’s Outlook availability policy.
-
-Google-hosted discovery offers **Continue with Google** with no new IMAP password
-form. Reconnecting an existing IMAP link keeps its bound password workflow.
+Google- and Microsoft-hosted discovery offers consent first when available,
+with **Use an app password instead** as a secondary path. Without provider
+consent availability, the app-password form opens directly. Reconnecting an
+existing IMAP link keeps its bound password workflow and never starts a new
+OAuth link.
 Fastmail opens the direct password flow. Onboarding retains its Google and
 Microsoft actions; a suggested IMAP inbox is an additional secondary choice.
 Phone connection and server-settings dialogs reserve both top and bottom safe

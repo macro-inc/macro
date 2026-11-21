@@ -10,6 +10,7 @@ import {
   isCurrentQueryAccount,
   queryAccountSession,
 } from '@queries/auth/account-scope';
+import { fetchEmailConnectionProviders } from '@queries/auth/outlook-link';
 import { imapConnect, imapDiscover } from '@queries/email/imap';
 import type { Discovery, Endpoint } from '@service-email/generated/schemas';
 import {
@@ -163,6 +164,8 @@ function ConnectForm(props: ImapConnectProps) {
   const [busy, setBusy] = createSignal(false);
   const [error, setError] = createSignal<TranslationKey>();
   const [discovery, setDiscovery] = createSignal<Discovery>();
+  const [oauthAvailable, setOauthAvailable] = createSignal(false);
+  const [passwordSelected, setPasswordSelected] = createSignal(false);
   const [imap, setImap] = createSignal(blankEndpoint(email(), 993));
   const [smtp, setSmtp] = createSignal(blankEndpoint(email(), 465));
   const [separatePassword, setSeparatePassword] = createSignal(false);
@@ -227,6 +230,24 @@ function ConnectForm(props: ImapConnectProps) {
         return;
       }
       const found = result.value;
+      let consentAvailable = false;
+      if (
+        !props.linkId &&
+        (found?.steer === 'gmail' || found?.steer === 'outlook')
+      ) {
+        try {
+          const providers = await fetchEmailConnectionProviders();
+          consentAvailable =
+            found.steer === 'gmail' ? providers.gmail : providers.outlook;
+        } catch {
+          // Provider consent is optional here; an unavailable capability read
+          // keeps the app-password route without authorizing an OAuth flow.
+          parent.setAttr('email.oauth_capability', 'unavailable');
+        }
+      }
+      if (read.signal.aborted || !isCurrentQueryAccount(viewer)) return;
+      setOauthAvailable(consentAvailable);
+      setPasswordSelected(false);
       setDiscovery(found);
       setImap(found?.imap ?? blankEndpoint(address, 993));
       setSmtp(found?.smtp ?? blankEndpoint(address, 465));
@@ -330,6 +351,7 @@ function ConnectForm(props: ImapConnectProps) {
 
   const steer = () => discovery()?.steer?.toLowerCase();
   const oauthProvider = () => {
+    if (props.linkId || !oauthAvailable()) return;
     switch (steer()) {
       case 'gmail':
         return { code: 'GMAIL', name: 'Google' } as const;
@@ -338,8 +360,7 @@ function ConnectForm(props: ImapConnectProps) {
     }
   };
   const canUsePassword = () => {
-    if (steer() === 'gmail') return !!props.linkId;
-    return steer() !== 'outlook' && steer() !== 'none';
+    return steer() !== 'none' && (!oauthProvider() || passwordSelected());
   };
   const helpUrl = () => {
     const value = discovery()?.helpUrl;
@@ -407,14 +428,26 @@ function ConnectForm(props: ImapConnectProps) {
                   {(provider) => (
                     <Button
                       type="button"
-                      variant={canUsePassword() ? 'secondary' : 'primary'}
+                      variant="primary"
                       onClick={() => props.onResult(provider().code)}
                     >
                       {t('imap.continueWith', { provider: provider().name })}
                     </Button>
                   )}
                 </Show>
-                <Show when={steer() === 'gmail' && !props.linkId}>
+                <Show when={oauthProvider() && !passwordSelected()}>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      changeSettings();
+                      setPasswordSelected(true);
+                    }}
+                  >
+                    {t('imap.useAppPassword')}
+                  </Button>
+                </Show>
+                <Show when={steer() === 'gmail' && !!oauthProvider()}>
                   <p class="text-sm text-ink-muted">
                     {t('imap.googlePermissions')}
                   </p>

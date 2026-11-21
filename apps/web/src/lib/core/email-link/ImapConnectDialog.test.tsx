@@ -16,6 +16,7 @@ const mail = vi.hoisted(() => ({
   discover: vi.fn(),
   connect: vi.fn(),
   accountCurrent: vi.fn(),
+  providers: vi.fn(),
 }));
 vi.mock('@core/context/user', () => ({
   useEmail: () => () => 'owner@example.com',
@@ -24,6 +25,9 @@ vi.mock('@queries/auth/account-scope', () => ({
   currentQueryAccount: () => ({ userId: 'owner', session: 1 }),
   isCurrentQueryAccount: mail.accountCurrent,
   queryAccountSession: () => 1,
+}));
+vi.mock('@queries/auth/outlook-link', () => ({
+  fetchEmailConnectionProviders: mail.providers,
 }));
 vi.mock('@service-email/client', () => ({
   emailClient: { imapDiscover: mail.discover, imapConnect: mail.connect },
@@ -40,6 +44,7 @@ beforeEach(() => {
     }
   );
   mail.accountCurrent.mockReturnValue(true);
+  mail.providers.mockResolvedValue({ gmail: true, outlook: true, imap: true });
   mail.discover.mockResolvedValue(
     ok({
       imap: {
@@ -368,6 +373,9 @@ it('keeps an existing Google IMAP reconnect on its bound password flow', async (
     />
   ));
   const password = await screen.findByLabelText('Password or app password');
+  expect(
+    screen.queryByRole('button', { name: 'Continue with Google' })
+  ).toBeNull();
   fireEvent.click(screen.getByRole('checkbox', { name: /I trust/ }));
   fireEvent.input(password, { target: { value: 'synthetic-app-password' } });
   fireEvent.click(screen.getByRole('button', { name: 'Connect inbox' }));
@@ -375,3 +383,68 @@ it('keeps an existing Google IMAP reconnect on its bound password flow', async (
   expect(mail.connect.mock.calls[0][0].linkId).toBe('existing-inbox');
   expect(result).not.toHaveBeenCalledWith('GMAIL');
 });
+
+it.each([
+  ['gmail', 'Google', true],
+  ['gmail', 'Google', false],
+  ['outlook', 'Microsoft', true],
+  ['outlook', 'Microsoft', false],
+] as const)(
+  'connects %s (%s) with an app password when OAuth availability is %s',
+  async (steer, provider, available) => {
+    mail.providers.mockResolvedValue({
+      gmail: steer === 'gmail' ? available : true,
+      outlook: steer === 'outlook' ? available : true,
+      imap: true,
+    });
+    mail.discover.mockResolvedValue(
+      ok({
+        steer,
+        provider,
+        imap: {
+          host: 'imap.example.com',
+          username: 'owner@example.com',
+          port: 993,
+          tls: 'implicit',
+        },
+        smtp: {
+          host: 'smtp.example.com',
+          username: 'owner@example.com',
+          port: 465,
+          tls: 'implicit',
+        },
+        hostConfirmationRequired: true,
+      })
+    );
+    mail.connect.mockResolvedValue(ok({ linkId: 'password-connected-inbox' }));
+    const result = vi.fn();
+    render(() => (
+      <ImapConnectDialog
+        open
+        onOpenChange={() => {}}
+        onResult={result}
+        emailAddress="owner@example.com"
+      />
+    ));
+    if (available) {
+      await screen.findByRole('button', { name: `Continue with ${provider}` });
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Use an app password instead' })
+      );
+    }
+    const password = await screen.findByLabelText('Password or app password');
+    if (!available)
+      expect(
+        screen.queryByRole('button', { name: `Continue with ${provider}` })
+      ).toBeNull();
+    fireEvent.click(screen.getByRole('checkbox', { name: /I trust/ }));
+    fireEvent.input(password, { target: { value: 'synthetic-app-password' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Connect inbox' }));
+    await vi.waitFor(() => expect(result).toHaveBeenCalledWith('connected'));
+    expect(mail.connect.mock.calls[0][0].imap.password).toBe(
+      'synthetic-app-password'
+    );
+    expect(result).not.toHaveBeenCalledWith('GMAIL');
+    expect(result).not.toHaveBeenCalledWith('OUTLOOK');
+  }
+);
