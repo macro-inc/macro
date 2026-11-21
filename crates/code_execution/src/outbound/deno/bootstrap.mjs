@@ -12,38 +12,45 @@ const decoder = new TextDecoder();
 const isArray = Array.isArray;
 const entries = Object.entries;
 const hasOwn = Object.hasOwn;
-// The program runs in this realm and can rewrite any built-in, so the fetch
-// wrapper and the dry-run gate below use only these copies, taken before it
-// loads. This raises the bar for a program that tries to send an unmarked
-// request or a dry run's write; it is not a security boundary. The rest of the
-// bootstrap (frames, loop stops) still uses the live built-ins.
+// The program runs in this realm and can rewrite any built-in, Deno's own
+// fetch internals included (they read prototype accessors and plain objects'
+// inherited fields), so nothing here sends a request. fetcher.mjs does, in a
+// worker started before the program loads: its realm is one the program never
+// reaches, and it marks each request, holds back a dry run's writes and picks
+// the forwarder itself. This realm only reads the program's request into plain
+// data for it, with copies of the built-ins taken now; a program that rewrites
+// them changes only what its own request says, never whether it is checked.
 const uncurry = (method) => Function.prototype.call.bind(method);
 const getter = (prototype, name) => uncurry(Object.getOwnPropertyDescriptor(prototype, name).get);
 const NativeRequest = Request;
-const NativeURL = URL;
+const NativeResponse = Response;
+const NativeWorker = Worker;
 const NativeError = Error;
+const NativeTypeError = TypeError;
+const NativeDOMException = DOMException;
+const denoErrors = {__proto__: null, ...Deno.errors};
+const NativePromise = Promise;
+const defineProperty = Object.defineProperty;
 const requestUrl = getter(Request.prototype, "url");
 const requestMethod = getter(Request.prototype, "method");
 const requestHeaders = getter(Request.prototype, "headers");
-// Forwarding changes the URL, so copy RequestInit through captured getters.
-// Passing the Request itself as options would read program-modified getters.
-const requestInitGetters = [
-  "method", "headers", "body", "redirect", "signal", "cache", "credentials",
-  "integrity", "keepalive", "mode", "referrer", "referrerPolicy",
-].map(name => [name, getter(Request.prototype, name)]);
-const setHeader = uncurry(Headers.prototype.set);
-const urlProtocol = getter(URL.prototype, "protocol");
-const urlPathname = getter(URL.prototype, "pathname");
-const urlHostname = getter(URL.prototype, "hostname");
-const urlPort = getter(URL.prototype, "port");
-const setHas = uncurry(Set.prototype.has);
+const requestSignal = getter(Request.prototype, "signal");
+const requestBody = getter(Request.prototype, "body");
+const requestArrayBuffer = uncurry(Request.prototype.arrayBuffer);
+// Request options the worker's fetch takes, besides method, headers and body.
+const requestOptions = ["redirect", "cache", "credentials", "integrity", "keepalive", "mode", "referrer", "referrerPolicy"]
+  .map(name => [name, getter(Request.prototype, name)]);
+const headersForEach = uncurry(Headers.prototype.forEach);
+const appendHeader = uncurry(Headers.prototype.append);
+const responseHeaders = getter(Response.prototype, "headers");
+const signalAborted = getter(AbortSignal.prototype, "aborted");
+const signalReason = getter(AbortSignal.prototype, "reason");
+const addEventListener = uncurry(EventTarget.prototype.addEventListener);
+const NativeMessageChannel = MessageChannel;
+const postMessage = uncurry(MessagePort.prototype.postMessage);
 const mapGet = uncurry(Map.prototype.get);
 const mapSet = uncurry(Map.prototype.set);
-const regExpExec = uncurry(RegExp.prototype.exec);
-const endsWith = uncurry(String.prototype.endsWith);
-const sliceString = uncurry(String.prototype.slice);
-const startsWith = uncurry(String.prototype.startsWith);
-const nativeFetch = globalThis.fetch.bind(globalThis);
+const mapDelete = uncurry(Map.prototype.delete);
 // Each search is heavy for the search cluster's few threads, so a program that
 // fans searches out makes every other user's search wait behind it. Four at once
 // still lets a program with dozens of searches finish inside its deadline.
@@ -161,84 +168,72 @@ try {
     Deno.unrefTimer(timer);
   }
   sendVerbHeaders(true);
-  const defaultPort = (protocol) => {
-    if (protocol === "https:") return "443";
-    if (protocol === "http:") return "80";
-    return "";
+  // Requests and answers go over a channel, not the worker's own messages:
+  // Deno's loop for those stops for good once the program rewrites
+  // `Function.prototype.call` while one is awaited.
+  const {port1: fetcher, port2} = new NativeMessageChannel();
+  // The worker takes its first message as the run's settings and ignores any
+  // later one, and this is posted before the program loads.
+  new NativeWorker(new URL("./fetcher.mjs", import.meta.url), {type: "module"}).postMessage({
+    port: port2, hosts: context.hosts, operations: operations ?? [], dryRun,
+    traceHeaders: context.traceHeaders ?? {}, forwarder: context.forwarder ?? {},
+  }, [port2]);
+  const pending = new Map();
+  let nextRequest = 0;
+  // `data` is the event's own property, which no prototype rewrite reaches.
+  fetcher.onmessage = ({data}) => {
+    const settle = mapGet(pending, data.id);
+    if (settle === undefined) return;
+    mapDelete(pending, data.id);
+    settle(data);
   };
-  // What `--allow-net` grants: host and port, whatever the scheme (a proxied
-  // client sends `http://host:443/...` over TLS), with `host.` read as `host`.
-  const destinationOf = (url) => {
-    const parsed = new NativeURL(url);
-    let hostname = urlHostname(parsed);
-    if (endsWith(hostname, ".")) hostname = sliceString(hostname, 0, -1);
-    return `${hostname}:${urlPort(parsed) || defaultPort(urlProtocol(parsed))}`;
+  const failure = ({name, message}) => {
+    if (name === "AbortError") return new NativeDOMException(message, name);
+    if (name === "TypeError") return new NativeTypeError(message);
+    // A permission error keeps its class, `Deno.errors.NotCapable`.
+    if (denoErrors[name] !== undefined) return new denoErrors[name](message);
+    return new NativeError(message);
   };
-  const destinations = new Set(Object.values(context.hosts).map(destinationOf));
-  // Each route as the requests to its own service's host and whole path, so
-  // a write whose path merely ends like a read's (`/web/search`) isn't one.
-  const routes = (operations ?? []).flatMap(operation => {
-    const host = context.hosts[operation.key.slice(0, operation.key.indexOf("."))];
-    if (!host) return [];
-    const base = new URL(host).pathname.replace(/\/$/, "");
-    const path = `${base}${operation.path}`.replace(/[.*+?^$()|[\]\\]/g, "\\$&").replace(/\{[^}]+\}/g, "[^/]+");
-    return [{...operation, destination: destinationOf(host), pattern: new RegExp(`^${path}$`)}];
-  });
-  const traceHeaders = entries(context.traceHeaders ?? {})
-    .filter(([name]) => name === "traceparent" || name === "tracestate");
-  // A proxied run reaches only its forwarder, longest service base first.
-  const forwarded = entries(context.forwarder ?? {})
-    .map(([service, local]) => [context.hosts[service].replace(/\/$/, ""), local])
-    .sort(([left], [right]) => right.length - left.length);
   // Async, so a refusal or a throw in here rejects like a failed fetch.
   globalThis.fetch = async (input, init) => {
-    let request = new NativeRequest(input, init);
-    // Every request to an SDK origin, whatever credential it carries.
-    if (setHas(destinations, destinationOf(requestUrl(request)))) {
-      const headers = requestHeaders(request);
-      for (let index = 0; index < traceHeaders.length; index++) {
-        setHeader(headers, traceHeaders[index][0], traceHeaders[index][1]);
-      }
-      // Marks the request as a program's, not a person's in the app, so an API
-      // can ask it to confirm what a person would have chosen by opening it.
-      setHeader(headers, "x-macro-code-execution", "1");
-      // A dry run's backstop: a request to an SDK origin that didn't come
-      // through the gate is sent only if a read matches its route.
-      const method = requestMethod(request);
-      if (dryRun && method !== "GET" && method !== "HEAD") {
-        const destination = destinationOf(requestUrl(request));
-        const path = urlPathname(new NativeURL(requestUrl(request)));
-        let read = false;
-        for (let index = 0; index < routes.length; index++) {
-          const route = routes[index];
-          if (route.method === method && !route.write && route.destination === destination
-            && regExpExec(route.pattern, path) !== null) {
-            read = true;
-            break;
-          }
-        }
-        if (!read) throw new NativeError("A dry run doesn't send changes.");
-        // A redirect would resend the read's method and body somewhere else.
-        // No prototype, so the program can't add options through
-        // `Object.prototype` (a method, or headers without the mark).
-        request = new NativeRequest(request, {__proto__: null, redirect: "error"});
-      }
+    const request = new NativeRequest(input, init);
+    const signal = requestSignal(request);
+    if (signalAborted(signal)) throw signalReason(signal);
+    const headers = [];
+    headersForEach(requestHeaders(request), (value, name) => {
+      headers[headers.length] = [name, value];
+    });
+    const options = {__proto__: null};
+    for (let index = 0; index < requestOptions.length; index++) {
+      options[requestOptions[index][0]] = requestOptions[index][1](request);
     }
-    for (let index = 0; index < forwarded.length; index++) {
-      const base = forwarded[index][0];
-      const local = forwarded[index][1];
-      const url = requestUrl(request);
-      if (url === base || startsWith(url, `${base}/`) || startsWith(url, `${base}?`)) {
-        const options = {__proto__: null};
-        for (let field = 0; field < requestInitGetters.length; field++) {
-          const name = requestInitGetters[field][0];
-          const read = requestInitGetters[field][1];
-          options[name] = read(request);
-        }
-        return nativeFetch(new NativeRequest(`${local}${sliceString(url, base.length)}`, options));
-      }
-    }
-    return nativeFetch(request);
+    // A Request keeps no priority; it is read from the options it was given.
+    if (init !== null && typeof init === "object" && typeof init.priority === "string") options.priority = init.priority;
+    // Read whole, so the request keeps its length, as a direct fetch sends it.
+    const body = requestBody(request) === null ? null : await requestArrayBuffer(request);
+    const id = nextRequest++;
+    const answer = await new NativePromise((resolve, reject) => {
+      mapSet(pending, id, resolve);
+      addEventListener(signal, "abort", () => {
+        if (mapGet(pending, id) === undefined) return;
+        mapDelete(pending, id);
+        postMessage(fetcher, {abort: id});
+        reject(signalReason(signal));
+      });
+      postMessage(fetcher, {
+        id, request: {url: requestUrl(request), method: requestMethod(request), headers, body, options},
+      }, body === null ? [] : [body]);
+    });
+    if (answer.error !== undefined) throw failure(answer.error);
+    const {status, statusText, headers: received, url, redirected, type, body: stream} = answer.response;
+    const response = new NativeResponse(stream, {__proto__: null, status, statusText});
+    // Appended one by one: an init's headers are read through iterators.
+    const answered = responseHeaders(response);
+    for (let index = 0; index < received.length; index++) appendHeader(answered, received[index][0], received[index][1]);
+    defineProperty(response, "url", {value: url});
+    defineProperty(response, "redirected", {value: redirected});
+    defineProperty(response, "type", {value: type});
+    return response;
   };
   const activeRequests = new Set();
   let observedRequests = 0;
@@ -265,7 +260,7 @@ try {
   // fetch (workers), or reach Node's or Deno's internals past the import map.
   // A client from `createHttpClient` can proxy a request to an API under a
   // URL the fetch above doesn't recognize.
-  for (const name of ["connect", "connectTls", "startTls", "listen", "listenTls", "serve", "serveHttp", "upgradeWebSocket", "createHttpClient"]) {
+  for (const name of ["connect", "connectTls", "startTls", "listen", "listenTls", "serve", "serveHttp", "upgradeWebSocket", "createHttpClient", "HttpClient"]) {
     Object.defineProperty(Deno, name, {value: undefined});
   }
   delete Deno[Deno.internal];

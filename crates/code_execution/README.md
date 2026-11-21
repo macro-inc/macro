@@ -176,10 +176,14 @@ WebSocket and EventSource, `Deno[Deno.internal]` and `process`'s
 built-in to a module that throws, except a short list that neither connects,
 starts processes nor loads other built-ins (`NODE_ALLOWED` in
 `src/outbound/deno.rs`); a test fails when the pinned Deno lists a built-in the
-map doesn't know. Like a dry run, this is held inside the process: the
-sandbox's `--allow-net` still reaches the API origins directly, and the program
-shares the realm that sets the header, so an API must not rely on the header
-alone.
+map doesn't know. The program's `fetch` hands each request, as plain data, to
+a worker the bootstrap starts before the program loads (`fetcher.mjs`), which
+sets the header and trace context, holds back a dry run's writes and sends
+it. The program never reaches that worker's realm, so rewriting built-ins,
+Deno's own fetch internals included, changes only what its request says, not
+whether it is marked or checked. Like a dry run, this is still held inside
+the process: the sandbox's `--allow-net` reaches the API origins directly,
+so an API must not rely on the header alone.
 
 A proxied run (`Egress::Proxied`) is the exception: `--allow-net` names only
 a loopback forwarder the runner starts for that run. The program keeps the

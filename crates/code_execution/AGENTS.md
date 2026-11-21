@@ -69,13 +69,22 @@ cancelled or times out. The agent harness picks it per user with the
 fail-closed `enable-code-execution-egress-proxy` flag; `Egress::Direct` (the
 default) is the old path.
 
-The program shares the bootstrap's realm and can rewrite built-ins, so the
-fetch wrapper and the dry-run gate call only copies of them taken before the
-program loads (`uncurry`, `getter` in `bootstrap.mjs`); a new built-in the
-wrapper reads gets a copy and a row in the `PATCHED_FETCHES` test. Forwarded
-requests copy RequestInit through captured getters, and dry-run read redirect
-refusal applies before forwarding; test both direct and proxied egress. This is
-not a boundary: the server must not trust the header or a dry run alone.
+The program shares the bootstrap's realm and can rewrite any built-in, and
+Deno's own fetch reads prototype accessors (`Request.prototype.headers`,
+`Headers.prototype.has`) and plain objects' inherited fields (its inner
+request's `cacheMode`) as it sends, so nothing in that realm sends a request.
+`src/outbound/deno/fetcher.mjs`, a worker the bootstrap starts and configures
+before the program loads, marks every request, runs the dry-run backstop,
+picks the forwarder and sends it; the program's `fetch` only reads its request
+into plain data (with copies of built-ins taken before the program loads,
+`uncurry`/`getter`) and posts it over a `MessageChannel`, reading request
+bodies whole. Answers come back the same way, with `url`, `redirected` and
+`type` set as own properties. Rewriting `Function.prototype.call` stops Deno
+delivering those answers, so such a program's fetches can hang until the
+deadline; nothing it sends goes unmarked. A built-in the wrapper starts
+reading gets a copy and a row in the `PATCHED_FETCHES` test; test direct and
+proxied egress. This is not a boundary: the server must not trust the header
+or a dry run alone.
 
 `RunEnvironment::endpoints` carries the SDK's hosts and the web app origin; the
 host fills both from `macro_service_urls`. Leaving `webAppUrl` out of

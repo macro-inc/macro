@@ -21,6 +21,7 @@ use tokio_util::{
 
 const BOOTSTRAP: &str = include_str!("deno/bootstrap.mjs");
 const TIMERS: &str = include_str!("deno/timers.mjs");
+const FETCHER: &str = include_str!("deno/fetcher.mjs");
 const UNAVAILABLE: &str = include_str!("deno/unavailable.mjs");
 /// Node built-ins a program may import: none opens a connection or a process,
 /// or loads another built-in. `process` and `module` must stay out: their named
@@ -251,6 +252,9 @@ impl DenoRunner {
             .await
             .map_err(internal)?;
         tokio::fs::write(root.join("timers.mjs"), TIMERS)
+            .await
+            .map_err(internal)?;
+        tokio::fs::write(root.join("fetcher.mjs"), FETCHER)
             .await
             .map_err(internal)?;
         tokio::fs::write(root.join("unavailable.mjs"), UNAVAILABLE)
