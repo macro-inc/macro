@@ -160,7 +160,7 @@ impl From<AddedServer> for ConnectMcpServerResponse {
                 format!("Added {name}. If it needs a sign-in, the user must sign in: {SIGN_IN}")
             }
             (true, false, _) => format!(
-                "{name} was already added but is not signed in. The user must sign in: {SIGN_IN}"
+                "{name} was already added but has no stored sign-in. If it needs one, the user must sign in: {SIGN_IN}"
             ),
             (true, true, false) => format!(
                 "{name} is already connected but turned off. The user can enable it in Settings → Connections."

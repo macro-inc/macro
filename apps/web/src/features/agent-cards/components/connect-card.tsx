@@ -142,10 +142,14 @@ function ConnectServerCard(props: { name: string; url: string }) {
     );
     setBusy(false);
     if (outcome.isErr()) {
-      // The sign-in could not start. A server the list confirms the user has
-      // not added yet is added by hand, filled in; one they already have, or
-      // one the list cannot vouch for yet, gets a message instead.
-      if (server.ready() && !server.listed()) {
+      // The sign-in could not start. Before the server list loads, retry; a
+      // server the list confirms the user has not added yet is added by hand,
+      // filled in; one they already have may need no sign-in at all.
+      if (!server.ready()) {
+        toast.alert(
+          `Could not start a sign-in for ${props.name}. Please try again.`
+        );
+      } else if (!server.listed()) {
         setAdding(true);
       } else {
         toast.alert(

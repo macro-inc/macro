@@ -159,7 +159,7 @@ describe('connect card', () => {
     expect(button.textContent).toBe('Connect');
   });
 
-  it('asks to try again, without the add-server dialog, for a server already added', async () => {
+  it('says a server already added may need no sign-in, without the add-server dialog', async () => {
     mocks.listedServers.add('https://mcp.acme.example/mcp');
     mocks.connectMcpServer.mockRejectedValue(new Error('network'));
     render(() => (
@@ -193,7 +193,7 @@ describe('connect card', () => {
 
     await waitFor(() =>
       expect(mocks.toastAlert).toHaveBeenCalledWith(
-        'Could not start a sign-in for Acme. If it needs none, reply to continue.'
+        'Could not start a sign-in for Acme. Please try again.'
       )
     );
     expect(screen.getByTestId('add-mcp-dialog').dataset.open).toBe('false');

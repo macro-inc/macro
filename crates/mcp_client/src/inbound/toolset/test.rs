@@ -87,6 +87,35 @@ async fn connecting_a_new_server_adds_it_for_the_caller_and_asks_them_to_sign_in
 }
 
 #[tokio::test]
+async fn a_server_added_before_without_a_stored_sign_in_may_need_none() {
+    let store = Arc::new(FakeServerStore::default());
+    let context = McpServerToolContext::wired(ServerDirectory::new(store.clone()));
+    let add = || ConnectMcpServer {
+        url: "https://mcp.deepwiki.example/mcp".to_owned(),
+        server_name: "DeepWiki".to_owned(),
+    };
+    add()
+        .call(
+            ServiceContext(context.clone()),
+            RequestContext::new(owner()),
+        )
+        .await
+        .unwrap();
+
+    let response = add()
+        .call(ServiceContext(context), RequestContext::new(owner()))
+        .await
+        .unwrap();
+
+    assert!(response.already_connected);
+    assert!(!response.authenticated);
+    assert_eq!(
+        response.summary,
+        "DeepWiki was already added but has no stored sign-in. If it needs one, the user must sign in: in an agent session's code mode, present a connect widget with a server target for its URL, whose Connect button signs them in; otherwise tell them to open Settings → Connections and click Connect next to it."
+    );
+}
+
+#[tokio::test]
 async fn an_invalid_url_is_reported_to_the_model() {
     let context =
         McpServerToolContext::wired(ServerDirectory::new(Arc::new(FakeServerStore::default())));
