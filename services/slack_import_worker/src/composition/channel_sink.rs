@@ -219,7 +219,12 @@ impl<A: EntityAccessService> ImportTargets for ChannelImportSink<A> {
         let pair =
             DmPair::new(pair[0].clone(), pair[1].clone()).map_err(|_| ImportError::InvalidInput)?;
         let mut tx = self.pool.begin().await.map_err(retry)?;
-        let Some(id) = channels_pg::find_dm(&mut tx, &pair).await.map_err(retry)? else {
+        // Imports keep the stored roster: a replay finds the channel the first
+        // run reserved, and inspection never meets a removed bot's row.
+        let Some(id) = channels_pg::find_dm(&mut tx, &pair, channels_pg::DmRoster::Stored)
+            .await
+            .map_err(retry)?
+        else {
             return Ok(None);
         };
         Ok(inspect(&mut tx, id, None).await?.map(|(facts, _)| facts))
