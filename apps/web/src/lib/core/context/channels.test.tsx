@@ -310,6 +310,40 @@ describe('direct message peers', () => {
     ]);
     expect([...activity()]).toEqual([['peer', '2026-11-02T00:00:00+00:00']]);
   });
+
+  it('dates a DM by the person in it when it has a bot too', () => {
+    // The REST list sent participants in no set order, so a bot could come
+    // first and take the person's DM activity.
+    const filling = fillingDirectory();
+    let activity!: ReturnType<typeof useDmActivityByUserId>;
+    render(() => (
+      <ChannelDirectoryProvider directory={filling.directory}>
+        {(() => {
+          activity = useDmActivityByUserId();
+          return null;
+        })()}
+      </ChannelDirectoryProvider>
+    ));
+    filling.fill([
+      directoryChannel('dm', {
+        channelType: 'direct_message',
+        updatedAt: '2026-11-02T00:00:00+00:00',
+        participants: [
+          directoryParticipant('viewer'),
+          directoryParticipant('peer'),
+        ],
+        botParticipants: [
+          {
+            botId: 'bot-1',
+            role: 'member',
+            joinedAt: '2026-11-01T00:00:00+00:00',
+            leftAt: null,
+          },
+        ],
+      }),
+    ]);
+    expect([...activity().keys()]).toEqual(['peer']);
+  });
 });
 
 describe('channelMemberIds', () => {
