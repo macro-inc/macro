@@ -244,9 +244,9 @@ pub enum StreamAudience {
         /// Owning workspace id.
         workspace_id: String,
     },
-    /// The user themself and everyone in their contact graph. Decided per
-    /// subscriber with one exact `(subscriber, user)` lookup, never by listing
-    /// the user's contacts.
+    /// The user themself and everyone who has the user in their directory.
+    /// Decided per subscriber with one exact lookup of the user in the
+    /// subscriber's directory, never by listing the user's contacts.
     ContactsOf {
         /// User whose contacts (and self) may see the event.
         user_id: String,
@@ -411,8 +411,10 @@ where
                 let Ok(user) = MacroUserIdStr::try_from(user_id.clone()) else {
                     return Ok(false);
                 };
+                // The subscriber sees the event when the user is in the
+                // subscriber's directory, which need not hold the other way.
                 self.contact_checker
-                    .is_contact(user, self.subscriber.clone())
+                    .is_contact(self.subscriber.clone(), user)
                     .await
                     .map_err(|error| {
                         let error: anyhow::Error = error.into();
