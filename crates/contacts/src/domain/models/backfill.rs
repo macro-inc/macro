@@ -117,3 +117,28 @@ pub struct LegacyEdge {
     /// One referred the other to Macro.
     pub referral: bool,
 }
+
+/// List rows that can outlive the account they belong to. Account deletion
+/// removes them only once `contacts-list-writes` is on, so the backfill sweeps
+/// what deletions left behind while it was off.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OrphanKind {
+    /// `contact_list_members` rows whose owner has no account.
+    ListOwner,
+    /// `contact_inbox_members` rows whose owner has no account.
+    InboxOwner,
+    /// `interacted` rows whose contact has no account. Invited and inbox
+    /// contacts may be addresses without one, so their rows stay.
+    InteractedContact,
+}
+
+/// An owner or contact a sweep page read.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OrphanCheck {
+    /// The id as the list stores it; also the page cursor.
+    pub id: String,
+    /// Their rows of the swept kind when no account matches them; empty when
+    /// one does.
+    pub orphaned_rows: Option<i64>,
+}

@@ -63,7 +63,7 @@ struct Cli {
     page_size: i64,
 
     /// Legacy edges per audit read.
-    #[arg(long, default_value_t = 2000, value_parser = clap::value_parser!(i64).range(1..=5000))]
+    #[arg(long, default_value_t = 500, value_parser = clap::value_parser!(i64).range(1..=5000))]
     edge_page_size: i64,
 
     /// One owner's legacy contacts per inbox read.
@@ -82,8 +82,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Classify every legacy edge direction and project `interacted` rows.
-    /// Writes nothing.
+    /// Count rows left by deleted accounts, classify every legacy edge
+    /// direction and project `interacted` rows. Writes nothing.
     Audit,
     /// Write the lists.
     Backfill {
@@ -105,6 +105,7 @@ enum Command {
 
 #[derive(Clone, Copy, ValueEnum)]
 enum Pass {
+    Orphans,
     Channels,
     DirectMessages,
     Inbox,
@@ -113,6 +114,7 @@ enum Pass {
 impl From<Pass> for BackfillPass {
     fn from(pass: Pass) -> Self {
         match pass {
+            Pass::Orphans => BackfillPass::Orphans,
             Pass::Channels => BackfillPass::Channels,
             Pass::DirectMessages => BackfillPass::DirectMessages,
             Pass::Inbox => BackfillPass::Inbox,
@@ -167,10 +169,15 @@ async fn main() -> Result<(), Report> {
             only,
         } => {
             let passes: BTreeSet<BackfillPass> = if only.is_empty() {
-                [Pass::Channels, Pass::DirectMessages, Pass::Inbox]
-                    .into_iter()
-                    .map(BackfillPass::from)
-                    .collect()
+                [
+                    Pass::Orphans,
+                    Pass::Channels,
+                    Pass::DirectMessages,
+                    Pass::Inbox,
+                ]
+                .into_iter()
+                .map(BackfillPass::from)
+                .collect()
             } else {
                 only.into_iter().map(BackfillPass::from).collect()
             };

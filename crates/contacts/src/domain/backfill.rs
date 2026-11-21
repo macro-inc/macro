@@ -9,6 +9,10 @@
 //!   April 2026 snapshot (`contacts_backfill_outbox`) lists together, and the
 //!   two people of every DM with a message from one of them.
 //! - Teammates are computed at read time, so nothing is written for them.
+//! - Orphans: list rows whose owner has no account, and `interacted` rows
+//!   naming someone with none, are deleted. Account deletion removes rows only
+//!   once `contacts-list-writes` is on, and referral invites wrote `invited`
+//!   rows before that.
 //!
 //! Writes go through [`ContactListRepository`], which is idempotent, so a run
 //! can be repeated or resumed from the start. Nothing is notified: clients
@@ -20,15 +24,16 @@ pub mod channels;
 #[cfg(test)]
 mod test;
 
+use crate::domain::models::backfill::{InboxOwner, OrphanKind};
 use crate::domain::models::list::InboxSource;
-use crate::domain::ports::{ContactListRepository, LegacyDirectorySource};
+use crate::domain::ports::{ContactListRepository, LegacyDirectorySource, OrphanedListRows};
 use audit::{InteractedProjection, LegacyAudit};
 use channels::{ChannelDirectory, ChannelLoader, InteractionWrite};
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use serde::Serialize;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::time::Duration;
 use tracing::Instrument;
 use uuid::Uuid;
@@ -41,6 +46,9 @@ const WRITES_PER_PAUSE: u64 = 100;
 
 /// Failed ids a report names; the rest are counted.
 const FAILURES_NAMED: usize = 100;
+
+/// Rows per orphan delete.
+const ORPHAN_ROWS_PER_DELETE: i64 = 5000;
 
 /// Page sizes, pacing and the support roster.
 #[derive(Clone, Debug)]
@@ -64,6 +72,8 @@ pub struct BackfillSettings {
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BackfillPass {
+    /// Delete rows left by deleted accounts.
+    Orphans,
     /// `interacted` from shared channels and the snapshot.
     Channels,
     /// `interacted` from DMs with a message.
@@ -118,9 +128,24 @@ impl LoadedChannels {
     }
 }
 
+/// One orphan sweep.
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize)]
+pub struct OrphanSweep {
+    /// Owners or contacts read.
+    pub scanned: u64,
+    /// Those with no account and rows of this kind.
+    pub orphans: u64,
+    /// Their rows.
+    pub rows: u64,
+    /// Rows deleted; zero in a dry run or an audit.
+    pub deleted_rows: u64,
+}
+
 /// The audit, made before anything is written.
 #[derive(Clone, Debug, Serialize)]
 pub struct AuditReport {
+    /// Rows left by deleted accounts, by kind; nothing is deleted.
+    pub orphans: BTreeMap<OrphanKind, OrphanSweep>,
     /// What was loaded from channels.
     pub channels: LoadedChannels,
     /// Projected `interacted` rows.
@@ -177,6 +202,8 @@ pub struct BackfillReport {
     pub after: Option<DateTime<Utc>>,
     /// The passes run.
     pub passes: BTreeSet<BackfillPass>,
+    /// The orphan pass, by kind.
+    pub orphans: Option<BTreeMap<OrphanKind, OrphanSweep>>,
     /// What was loaded from channels, when a channel or DM pass ran.
     pub channels: Option<LoadedChannels>,
     /// The channel pass.
@@ -197,7 +224,11 @@ pub struct DirectoryBackfill<S, L> {
     pub settings: BackfillSettings,
 }
 
-impl<S: LegacyDirectorySource, L: ContactListRepository> DirectoryBackfill<S, L> {
+impl<S, L> DirectoryBackfill<S, L>
+where
+    S: LegacyDirectorySource + OrphanedListRows,
+    L: ContactListRepository,
+{
     async fn pause(&self) {
         if !self.settings.pause.is_zero() {
             tokio::time::sleep(self.settings.pause).await;
@@ -262,6 +293,10 @@ impl<S: LegacyDirectorySource, L: ContactListRepository> DirectoryBackfill<S, L>
     /// Classify every legacy edge direction and project `interacted` rows.
     /// Reads only.
     pub async fn audit(&self) -> Result<AuditReport, Report> {
+        let orphans = self
+            .sweep_orphans(true)
+            .instrument(tracing::info_span!("contacts.backfill.orphans"))
+            .await?;
         let channels = self
             .load_channels(None)
             .instrument(tracing::info_span!("contacts.backfill.load_channels"))
@@ -291,6 +326,7 @@ impl<S: LegacyDirectorySource, L: ContactListRepository> DirectoryBackfill<S, L>
         }
 
         Ok(AuditReport {
+            orphans,
             channels: LoadedChannels::new(&channels),
             interacted,
             legacy,
@@ -303,11 +339,20 @@ impl<S: LegacyDirectorySource, L: ContactListRepository> DirectoryBackfill<S, L>
             dry_run: request.dry_run,
             after: request.after,
             passes: request.passes.clone(),
+            orphans: None,
             channels: None,
             interacted_from_channels: None,
             interacted_from_direct_messages: None,
             inbox: None,
         };
+
+        if request.passes.contains(&BackfillPass::Orphans) {
+            let orphans = self
+                .sweep_orphans(request.dry_run)
+                .instrument(tracing::info_span!("contacts.backfill.orphans"))
+                .await?;
+            report.orphans = Some(orphans);
+        }
 
         let wants_channels = request.passes.contains(&BackfillPass::Channels);
         let wants_direct_messages = request.passes.contains(&BackfillPass::DirectMessages);
@@ -346,6 +391,68 @@ impl<S: LegacyDirectorySource, L: ContactListRepository> DirectoryBackfill<S, L>
         }
 
         Ok(report)
+    }
+
+    /// Page through every list owner, inbox owner and listed contact, and
+    /// delete the rows of those with no account, in bounded deletes.
+    async fn sweep_orphans(
+        &self,
+        dry_run: bool,
+    ) -> Result<BTreeMap<OrphanKind, OrphanSweep>, Report> {
+        let mut sweeps = BTreeMap::new();
+        for kind in [
+            OrphanKind::ListOwner,
+            OrphanKind::InboxOwner,
+            OrphanKind::InteractedContact,
+        ] {
+            let mut sweep = OrphanSweep::default();
+            let mut cursor = String::new();
+            loop {
+                let page = self
+                    .source
+                    .orphan_page(kind, &cursor, self.settings.page_size)
+                    .await?;
+                let Some(last) = page.last() else {
+                    break;
+                };
+                cursor = last.id.clone();
+                let full = page.len() as i64 == self.settings.page_size;
+
+                for check in page {
+                    sweep.scanned += 1;
+                    let Some(rows) = check.orphaned_rows.filter(|rows| *rows > 0) else {
+                        continue;
+                    };
+                    sweep.orphans += 1;
+                    sweep.rows += rows as u64;
+                    if !dry_run {
+                        sweep.deleted_rows += self.delete_orphan(kind, &check.id).await?;
+                    }
+                }
+
+                if !full {
+                    break;
+                }
+                self.pause().await;
+            }
+            sweeps.insert(kind, sweep);
+        }
+        Ok(sweeps)
+    }
+
+    async fn delete_orphan(&self, kind: OrphanKind, id: &str) -> Result<u64, Report> {
+        let mut deleted = 0;
+        loop {
+            let rows = self
+                .source
+                .delete_orphan_rows(kind, id, ORPHAN_ROWS_PER_DELETE)
+                .await?;
+            deleted += rows;
+            if rows < ORPHAN_ROWS_PER_DELETE as u64 {
+                return Ok(deleted);
+            }
+            self.pause().await;
+        }
     }
 
     async fn write_interactions(
@@ -431,7 +538,7 @@ impl<S: LegacyDirectorySource, L: ContactListRepository> DirectoryBackfill<S, L>
     /// Returns the legacy contacts read.
     async fn backfill_owner(
         &self,
-        owner: &crate::domain::models::backfill::InboxOwner,
+        owner: &InboxOwner,
         owner_id: &MacroUserIdStr<'static>,
         dry_run: bool,
         counts: &mut WriteCounts,
@@ -492,7 +599,7 @@ impl<S: LegacyDirectorySource, L: ContactListRepository> DirectoryBackfill<S, L>
 
     async fn write_inbox(
         &self,
-        owner: &crate::domain::models::backfill::InboxOwner,
+        owner: &InboxOwner,
         owner_id: &MacroUserIdStr<'static>,
         link_id: Uuid,
         contacts: HashSet<MacroUserIdStr<'static>>,

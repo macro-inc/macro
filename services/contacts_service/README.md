@@ -18,12 +18,17 @@ cargo run -p contacts_service --bin contacts_backfill -- --report backfill.json 
 cargo run -p contacts_service --bin contacts_backfill -- --report repair.json backfill --after 2026-11-20T00:00:00Z --only channels,direct-messages
 ```
 
-- `audit` writes nothing. It classifies each direction of every legacy edge
+- `audit` writes nothing. It counts the rows the `orphans` pass would
+  delete, classifies each direction of every legacy edge
   (teammate, shared channel, DM with a message, inbox; or reverse import,
   empty DM, support channel, referral, disconnected inbox, no surviving
   record) and projects `interacted` rows by channel size and type.
-- `backfill` runs three passes, all by default (`--only` picks some):
-  `channels` pairs every two Macro members of each channel that is not a DM
+- `backfill` runs four passes, all by default (`--only` picks some):
+  `orphans` deletes list rows whose owner has no account and `interacted`
+  rows naming someone with none (account deletion removes rows only once
+  `contacts-list-writes` is on, and referral invites wrote `invited` rows
+  before that; invited and inbox contacts may be addresses without an
+  account, so those rows stay); `channels` pairs every two Macro members of each channel that is not a DM
   or a signup support channel, plus the people the April 2026 snapshot
   (`contacts_backfill_outbox`) lists together; `direct-messages` pairs the two
   people of each DM with a message from one of them; `inbox` writes each
@@ -47,6 +52,8 @@ Order: turn `contacts-list-writes` on, then `audit`, then `backfill
 it starts, including the time before the flag was on. To repair a window
 the live producers may have missed (for example around the flag flip), run
 `backfill --after <a little before it> --only channels,direct-messages`.
+The largest channels dominate the write volume (a 5,000-member channel is
+25 million rows); read the audit's `largest_channels` before the run.
 
 ## Local development SQS component
 ### Setting up local SQS with localstack and docker

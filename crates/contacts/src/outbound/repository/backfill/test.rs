@@ -1,5 +1,6 @@
 use crate::domain::backfill::audit::DirectionClass;
 use crate::domain::backfill::{BackfillPass, BackfillRequest, BackfillSettings, DirectoryBackfill};
+use crate::domain::models::backfill::OrphanKind;
 use crate::outbound::repository::DbContactsRepository;
 use chrono::{TimeZone, Utc};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -226,4 +227,87 @@ async fn after_rederives_only_recent_joins_and_messages(pool: PgPool) {
     );
     assert_eq!(report.interacted_from_direct_messages.unwrap().writes, 0);
     assert!(report.inbox.is_none());
+}
+
+async fn all_list_rows(pool: &PgPool) -> Vec<(String, String, String)> {
+    sqlx::query!(
+        "SELECT user_id, contact_user_id, list_key FROM contact_list_members
+         ORDER BY user_id, contact_user_id, list_key"
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap()
+    .into_iter()
+    .map(|row| (row.user_id, row.contact_user_id, row.list_key))
+    .collect()
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("orphans"))
+)]
+async fn the_orphan_pass_removes_rows_deleted_accounts_left(pool: PgPool) {
+    let backfill = backfill(&pool);
+    let audit = backfill.audit().await.unwrap();
+    let mut request = request(None);
+    request.passes = BTreeSet::from([BackfillPass::Orphans]);
+    request.dry_run = true;
+    let dry_run = backfill.backfill(&request).await.unwrap();
+
+    // Counted, not deleted, by the audit and the dry run.
+    for sweeps in [&audit.orphans, dry_run.orphans.as_ref().unwrap()] {
+        let counts: Vec<_> = sweeps
+            .iter()
+            .map(|(kind, sweep)| (*kind, sweep.orphans, sweep.rows, sweep.deleted_rows))
+            .collect();
+        assert_eq!(
+            counts,
+            vec![
+                (OrphanKind::ListOwner, 1, 2, 0),
+                (OrphanKind::InboxOwner, 1, 2, 0),
+                (OrphanKind::InteractedContact, 1, 1, 0),
+            ]
+        );
+    }
+    assert_eq!(all_list_rows(&pool).await.len(), 9);
+
+    request.dry_run = false;
+    let report = backfill.backfill(&request).await.unwrap();
+
+    let deleted: u64 = report
+        .orphans
+        .unwrap()
+        .values()
+        .map(|s| s.deleted_rows)
+        .sum();
+    assert_eq!(deleted, 5);
+    // The invited row naming ghost and the one naming an outsider stay;
+    // a legacy-cased account keeps its rows.
+    let row = |user: &str, contact: &str, list: &str| {
+        (user.to_owned(), contact.to_owned(), list.to_owned())
+    };
+    assert_eq!(
+        all_list_rows(&pool).await,
+        vec![
+            row("macro|a@example.com", "macro|b@example.com", "interacted"),
+            row("macro|a@example.com", "macro|ghost@example.com", "invited"),
+            row(
+                "macro|a@example.com",
+                "macro|mixed@example.com",
+                "interacted"
+            ),
+            row(
+                "macro|a@example.com",
+                "macro|outsider@example.org",
+                "invited"
+            ),
+            row("macro|b@example.com", "macro|a@example.com", "interacted"),
+            row(
+                "macro|mixed@example.com",
+                "macro|a@example.com",
+                "interacted"
+            ),
+        ]
+    );
+    assert!(inbox_rows(&pool).await.is_empty());
 }

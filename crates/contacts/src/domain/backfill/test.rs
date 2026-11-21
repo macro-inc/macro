@@ -1,6 +1,7 @@
 use super::*;
 use crate::domain::models::backfill::{
     ChannelMember, ChannelRecord, ChannelSnapshot, Inbox, InboxContact, InboxOwner, LegacyEdge,
+    OrphanCheck,
 };
 use crate::domain::models::list::InboxProvider;
 use std::sync::Mutex;
@@ -76,6 +77,21 @@ impl LegacyDirectorySource for InboxOnlySource {
 
     async fn legacy_edge_page(&self, _: i32, _: i64) -> Result<Vec<LegacyEdge>, Report> {
         Ok(Vec::new())
+    }
+}
+
+impl OrphanedListRows for InboxOnlySource {
+    async fn orphan_page(
+        &self,
+        _: OrphanKind,
+        _: &str,
+        _: i64,
+    ) -> Result<Vec<OrphanCheck>, Report> {
+        Ok(Vec::new())
+    }
+
+    async fn delete_orphan_rows(&self, _: OrphanKind, _: &str, _: i64) -> Result<u64, Report> {
+        Ok(0)
     }
 }
 

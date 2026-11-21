@@ -1,10 +1,10 @@
 use super::DbContactsRepository;
 use crate::domain::models::backfill::{
     ChannelMember, ChannelRecord, ChannelSnapshot, ChannelType, Inbox, InboxContact, InboxOwner,
-    LegacyEdge,
+    LegacyEdge, OrphanCheck, OrphanKind,
 };
-use crate::domain::models::list::InboxProvider;
-use crate::domain::ports::LegacyDirectorySource;
+use crate::domain::models::list::{ContactList, InboxProvider};
+use crate::domain::ports::{LegacyDirectorySource, OrphanedListRows};
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::{Report, report};
@@ -215,5 +215,109 @@ impl LegacyDirectorySource for DbContactsRepository {
                 referral: row.referral,
             })
             .collect())
+    }
+}
+
+impl OrphanedListRows for DbContactsRepository {
+    #[tracing::instrument(
+        name = "contacts.backfill.orphan_page",
+        skip(self, after),
+        fields(orphans = tracing::field::Empty),
+        err
+    )]
+    async fn orphan_page(
+        &self,
+        kind: OrphanKind,
+        after: &str,
+        limit: i64,
+    ) -> Result<Vec<OrphanCheck>, Report> {
+        let interacted = ContactList::Interacted.as_ref();
+        let rows: Vec<(String, Option<i64>)> = match kind {
+            OrphanKind::ListOwner => sqlx::query_file!(
+                "src/outbound/repository/backfill/orphan_list_owners.sql",
+                after,
+                limit
+            )
+            .fetch_all(&self.db)
+            .await?
+            .into_iter()
+            .map(|row| (row.id, row.orphaned_rows))
+            .collect(),
+            OrphanKind::InboxOwner => sqlx::query_file!(
+                "src/outbound/repository/backfill/orphan_inbox_owners.sql",
+                after,
+                limit
+            )
+            .fetch_all(&self.db)
+            .await?
+            .into_iter()
+            .map(|row| (row.id, row.orphaned_rows))
+            .collect(),
+            OrphanKind::InteractedContact => sqlx::query_file!(
+                "src/outbound/repository/backfill/orphan_interacted_contacts.sql",
+                after,
+                limit,
+                interacted
+            )
+            .fetch_all(&self.db)
+            .await?
+            .into_iter()
+            .map(|row| (row.id, row.orphaned_rows))
+            .collect(),
+        };
+
+        let orphans = rows.iter().filter(|(_, rows)| rows.is_some()).count();
+        tracing::Span::current().record("orphans", orphans as i64);
+        Ok(rows
+            .into_iter()
+            .map(|(id, orphaned_rows)| OrphanCheck { id, orphaned_rows })
+            .collect())
+    }
+
+    #[tracing::instrument(
+        name = "contacts.backfill.delete_orphan_rows",
+        skip(self, id),
+        fields(deleted = tracing::field::Empty),
+        err
+    )]
+    async fn delete_orphan_rows(
+        &self,
+        kind: OrphanKind,
+        id: &str,
+        limit: i64,
+    ) -> Result<u64, Report> {
+        let result = match kind {
+            OrphanKind::ListOwner => {
+                sqlx::query_file!(
+                    "src/outbound/repository/backfill/delete_list_owner_rows.sql",
+                    id,
+                    limit
+                )
+                .execute(&self.db)
+                .await?
+            }
+            OrphanKind::InboxOwner => {
+                sqlx::query_file!(
+                    "src/outbound/repository/backfill/delete_inbox_owner_rows.sql",
+                    id,
+                    limit
+                )
+                .execute(&self.db)
+                .await?
+            }
+            OrphanKind::InteractedContact => {
+                sqlx::query_file!(
+                    "src/outbound/repository/backfill/delete_interacted_contact_rows.sql",
+                    id,
+                    limit,
+                    ContactList::Interacted.as_ref()
+                )
+                .execute(&self.db)
+                .await?
+            }
+        };
+
+        tracing::Span::current().record("deleted", result.rows_affected() as i64);
+        Ok(result.rows_affected())
     }
 }

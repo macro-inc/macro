@@ -1,5 +1,6 @@
 use crate::domain::models::backfill::{
     ChannelMember, ChannelRecord, ChannelSnapshot, InboxContact, InboxOwner, LegacyEdge,
+    OrphanCheck, OrphanKind,
 };
 use crate::domain::models::contact::{Contact, ContactName, ContactPage};
 use crate::domain::models::invalidation::ContactsInvalidation;
@@ -420,4 +421,26 @@ pub trait LegacyDirectorySource: Send + Sync + 'static {
         after: i32,
         limit: i64,
     ) -> impl Future<Output = Result<Vec<LegacyEdge>, Report>> + Send;
+}
+
+/// Finds and removes list rows left by deleted accounts. Pages are bounded by
+/// the number of owners or contacts read; each delete by its limit.
+pub trait OrphanedListRows: Send + Sync + 'static {
+    /// Owners or contacts after `after`, in id order, each with their rows of
+    /// that kind when they have no account.
+    fn orphan_page(
+        &self,
+        kind: OrphanKind,
+        after: &str,
+        limit: i64,
+    ) -> impl Future<Output = Result<Vec<OrphanCheck>, Report>> + Send;
+
+    /// Delete up to `limit` of `id`'s rows of that kind, unless an account
+    /// matches them now. Returns the rows deleted.
+    fn delete_orphan_rows(
+        &self,
+        kind: OrphanKind,
+        id: &str,
+        limit: i64,
+    ) -> impl Future<Output = Result<u64, Report>> + Send;
 }
