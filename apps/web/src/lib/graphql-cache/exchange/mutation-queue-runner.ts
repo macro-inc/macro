@@ -53,6 +53,7 @@ import {
 } from '@urql/core';
 import { type DocumentNode, Kind, parse } from 'graphql';
 import { match } from 'ts-pattern';
+import { UNKNOWN_CACHE_GENERATION } from '../generation-mirror';
 import type { CacheHost } from '../host/types';
 import type {
   ClaimedMutation,
@@ -61,6 +62,7 @@ import type {
   MutationLease,
   QueryRevalidationWire,
 } from '../protocol';
+import { cacheSessionGeneration } from '../session-generation';
 import type { MutationQueueOwner } from './mutation-queue-owner';
 import {
   failureDetails,
@@ -218,6 +220,7 @@ export function withQueueRequestTimeout(op: Operation): Operation {
   const attempt = queueAttemptOf(op);
   return makeOperation(op.kind, op, {
     ...op.context,
+    cacheSessionGeneration: cacheSessionGeneration.capture(),
     fetch: async (input, init) => {
       const timeoutSignal = AbortSignal.timeout(QUEUE_REQUEST_TIMEOUT_MS);
       const send = () =>
@@ -344,12 +347,15 @@ export type MutationQueueRunnerDeps = {
   ) => Promise<OperationResult | undefined>;
   /** Query text and variables the cache normalizes `op`'s data against. */
   cacheDocument: (op: Operation) => {
+    generation?: string;
     query: string;
     operationName?: string;
     variables?: Record<string, unknown>;
   };
-  /** Evicts records a successful response implies were deleted. */
-  deleteReportedRecords: (result: OperationResult) => Promise<unknown>;
+  /** Returns whether reported deletion may have changed observer membership. */
+  deleteReportedRecords: (
+    result: OperationResult
+  ) => Promise<{ attempted: boolean }>;
   /**
    * Replays explicit deletions mixed into a committed response, in order.
    * Undefined when there is nothing to replay, so settlement does not yield.
@@ -362,7 +368,9 @@ export type MutationQueueRunnerDeps = {
   /** Refreshes queries a settled mutation could not update in place. */
   revalidate: (
     revalidations: QueryRevalidationWire[],
-    mutation?: Operation
+    mutation?: Operation,
+    affectedOps?: readonly string[],
+    refetchAll?: boolean
   ) => Promise<void>;
 };
 
@@ -1090,8 +1098,8 @@ export function createMutationQueueRunner(
       | 'permanently-failed' = 'queued';
     let outcome: MutationAttemptOutcome = 'detached';
     let details: MutationAttemptDetails = {};
+    const response = result.error?.response ?? attempt.response;
     try {
-      const response = result.error?.response ?? attempt.response;
       const httpServerFailure = (response?.status ?? 0) >= 500;
       // A valid GraphQL payload can arrive over HTTP 5xx without an
       // urql error. Never commit it or bypass the retry policy.
@@ -1195,10 +1203,18 @@ export function createMutationQueueRunner(
         if (!transition(attempt, confirm(confirmed))) return detachedResult();
         await recordAttemptResult(attempt, result, false);
         if (!isCurrent(attempt)) return detachedResult();
+        const snapshotGeneration =
+          typeof op.context.cacheSessionGeneration === 'string'
+            ? op.context.cacheSessionGeneration
+            : UNKNOWN_CACHE_GENERATION;
         const committed = await host.commitOptimisticWrite(
           attempt.transactionId,
           claim,
-          { ...deps.cacheDocument(op), data: result.data }
+          {
+            ...deps.cacheDocument(op),
+            data: result.data,
+            generation: snapshotGeneration,
+          }
         );
         if (!transition(attempt, forgetConfirmed)) return detachedResult();
         settled = true;
@@ -1237,18 +1253,39 @@ export function createMutationQueueRunner(
           replacementTransactionId = committed.replacementTransactionId;
           disposition = 'superseded';
           outcome = 'superseded';
-          await deps.deleteReportedRecords(result);
+          if (cacheSessionGeneration.isCurrent(snapshotGeneration))
+            await deps.deleteReportedRecords(result);
+          else
+            await deps.revalidate(
+              committed.revalidations ?? [],
+              op,
+              committed.affectedOps ?? [],
+              true
+            );
         } else {
           disposition = 'committed';
           outcome = 'committed';
-          await deps.deleteReportedRecords(result);
-          if (!isCurrent(attempt)) return detachedResult();
-          const replay = deps.replayExplicitEffects(op, result.data, () =>
-            isCurrent(attempt)
-          );
-          if (replay) await replay;
-          if (isCurrent(attempt))
-            await deps.revalidate(committed.revalidations ?? [], op);
+          if (!cacheSessionGeneration.isCurrent(snapshotGeneration)) {
+            await deps.revalidate(
+              committed.revalidations ?? [],
+              op,
+              committed.affectedOps ?? [],
+              true
+            );
+          } else {
+            const deleted = await deps.deleteReportedRecords(result);
+            if (!isCurrent(attempt)) return detachedResult();
+            const replay = deps.replayExplicitEffects(op, result.data, () =>
+              isCurrent(attempt)
+            );
+            if (replay) await replay;
+            if (isCurrent(attempt))
+              await deps.revalidate(
+                committed.revalidations ?? [],
+                op,
+                deleted.attempted || replay ? undefined : committed.affectedOps
+              );
+          }
         }
       }
     } catch (error) {

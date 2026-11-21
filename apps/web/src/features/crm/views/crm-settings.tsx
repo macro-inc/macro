@@ -2,6 +2,7 @@ import type { ItemDragOverlayData } from '@app/components/app/ItemDragAndDrop';
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { t } from '@app/lib/i18n';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CaretUpIcon from '@icon/system/regular/caret-up.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
@@ -22,6 +23,7 @@ import { For, type JSX, Match, Show, Suspense, Switch } from 'solid-js';
 import {
   SettingsCard,
   SettingsPage,
+  SettingsRow,
   SettingsSection,
 } from '../../settings/primitives';
 import { CrmStageIcon } from '../components/stage-icon';
@@ -500,6 +502,7 @@ function NoTeamState() {
 }
 
 function CrmContent(props: { onOpenThread?: () => void }) {
+  const { accessState, retryAccess, MemberAccess } = useCrmContext();
   const teamQuery = useCurrentTeamQuery();
 
   return (
@@ -511,9 +514,36 @@ function CrmContent(props: { onOpenThread?: () => void }) {
             title="CRM"
             description={t('crm.policySettingsDescription')}
           >
+            <Suspense>
+              <MemberAccess />
+            </Suspense>
             {content}
-            <StagesSection />
-            <EmailSyncSection />
+            <Show when={accessState() === 'error'}>
+              <SettingsSection>
+                <SettingsCard>
+                  <SettingsRow
+                    label={
+                      <span role="alert" class="text-failure">
+                        {t('crm.accessCheckFailed')}
+                      </span>
+                    }
+                  >
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => fireAndForget(retryAccess(), 'crm')}
+                    >
+                      {t('crm.tryAgain')}
+                    </Button>
+                  </SettingsRow>
+                </SettingsCard>
+              </SettingsSection>
+            </Show>
+            {/* Only a proven denial removes them; the server decides the rest. */}
+            <Show when={accessState() !== 'denied'}>
+              <StagesSection />
+              <EmailSyncSection />
+            </Show>
           </SettingsPage>
         )}
       />

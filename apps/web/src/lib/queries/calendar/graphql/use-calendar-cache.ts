@@ -72,7 +72,10 @@ export function useCalendarCache(active: Accessor<boolean>): void {
   createEffect(() => {
     const cacheHost = host();
     if (!cacheHost || !active()) return;
-    const controller = new CalendarSyncController(cacheHost);
+    // A reset drops the covered months the backfill lane already filled.
+    const controller = new CalendarSyncController(cacheHost, {
+      onReset: () => setGeneration((value) => value + 1),
+    });
     setActiveCalendarSyncController(controller);
     const resync = (reason: CalendarStaleReason) => {
       controller.markStale(reason);

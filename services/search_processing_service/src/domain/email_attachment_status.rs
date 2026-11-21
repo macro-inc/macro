@@ -34,7 +34,9 @@ const MAX_PAGE_SIZE: u16 = 1000;
 /// backfills drove the production cluster into its flood-stage write block.
 const DEFAULT_DOCS_PER_SECOND: NonZeroU32 = NonZeroU32::new(100).expect("100 is not zero");
 
-/// Distinct linked documents read per page, from 1 to 1000.
+/// Rows read per page, from 1 to 1000: distinct linked documents for the
+/// email attachment status backfill, indexed messages for the chat message
+/// repair.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(try_from = "u16")]
 pub struct PageSize(u16);

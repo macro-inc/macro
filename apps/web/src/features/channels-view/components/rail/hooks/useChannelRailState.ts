@@ -23,6 +23,23 @@ import {
 
 const LOAD_MORE_THRESHOLD = 300;
 
+/**
+ * Every section holding the channel is muted. With channel Notification
+ * Settings the row shows only mute; its settings get no indicator.
+ */
+function mutedBySections(
+  rail: ReturnType<typeof useChannelsRail>,
+  channelId: string
+): boolean {
+  const settings = rail.channelNotifications;
+  if (!settings.enabled()) return false;
+  // Until its record resolves, the channel's built-in section is unknown,
+  // and its other sections alone could read as all muted.
+  const channel = rail.channelById(channelId);
+  if (!channel) return false;
+  return settings.channel(channelId, channel.channelType).mutedBySections;
+}
+
 export function useChannelRailItemState(
   channelId: Accessor<string>,
   /** The row this item renders as; defaults to the channel's own row. */
@@ -42,14 +59,17 @@ export function useChannelRailItemState(
           ? rail.threadsChannelId() === id
           : rail.selectedChannel()?.id === id,
       focused: rail.list.focus.key() === rowId,
-      muted: isMutedItem(notificationSource.mutedEntities(), {
-        item_id: id,
-        item_type: 'channel',
-      }),
-      mentionsOnly: isMentionsOnlyItem(notificationSource.mutedEntities(), {
-        item_id: id,
-        item_type: 'channel',
-      }),
+      muted:
+        isMutedItem(notificationSource.mutedEntities(), {
+          item_id: id,
+          item_type: 'channel',
+        }) || mutedBySections(rail, id),
+      mentionsOnly:
+        !rail.channelNotifications.enabled() &&
+        isMentionsOnlyItem(notificationSource.mutedEntities(), {
+          item_id: id,
+          item_type: 'channel',
+        }),
       unread: rail.channelActivity.unreadChannelIds().has(id),
       mentions: rail.channelActivity.mentionCount(id),
       callStatus: rail.channelActivity.callStatuses().get(id),
@@ -77,9 +97,12 @@ export function useChannelRailFavoriteItemState(favorite: Accessor<Favorite>) {
         rail.selectedChannel()?.id === current.entityId,
       focused: rail.list.focus.key() === rowId,
       muted:
-        muteItem !== undefined &&
-        isMutedItem(notificationSource.mutedEntities(), muteItem),
+        (muteItem !== undefined &&
+          isMutedItem(notificationSource.mutedEntities(), muteItem)) ||
+        (current.entityType === 'channel' &&
+          mutedBySections(rail, current.entityId)),
       mentionsOnly:
+        !rail.channelNotifications.enabled() &&
         muteItem !== undefined &&
         isMentionsOnlyItem(notificationSource.mutedEntities(), muteItem),
       unread:

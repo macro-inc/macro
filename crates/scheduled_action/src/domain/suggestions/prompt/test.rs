@@ -11,6 +11,7 @@ fn data<'a>(surfaces: &'a [Surface], inbox: &'a [InboxMessage], code: bool) -> B
         agent_model: "test-model",
         code,
         events: true,
+        crm: true,
         guide: "The guide.",
     }
 }
@@ -98,6 +99,21 @@ fn only_a_person_with_event_routines_is_told_to_start_on_mail() {
     assert!(!without.contains("email.message_received"));
     assert!(without.contains("can't start when mail arrives"));
     assert!(!with.contains("{start}") && !without.contains("{start}"));
+}
+
+/// Only a person who may add companies to a team's CRM is told to draft a
+/// routine that adds them: for anyone else the tool would refuse.
+#[test]
+fn only_a_person_with_a_team_crm_is_told_to_add_companies() {
+    let with = brief(&data(&[Surface::Email], &[], false));
+    let without = brief(&BriefData {
+        crm: false,
+        ..data(&[Surface::Email], &[], false)
+    });
+    assert!(with.contains("a company in their CRM for a company that may become a client"));
+    assert!(!without.contains("company in their CRM"));
+    assert!(without.contains("a task for each step they must take, and one task or document"));
+    assert!(!with.contains("{crm}") && !without.contains("{crm}"));
 }
 
 /// The weekly run's tighter limits win over the brief's onboarding counts.

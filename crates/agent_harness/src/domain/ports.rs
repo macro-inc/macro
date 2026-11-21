@@ -153,29 +153,7 @@ pub trait CodingAgentSource: Send + Sync + 'static {
     ) -> impl Future<Output = anyhow::Result<Option<bool>>> + Send;
 }
 
-/// One dial of a harness's runtime; a redial is a new connection.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct RuntimeConnectionId(macro_uuid::Uuid);
-
-impl RuntimeConnectionId {
-    /// Mint the identity of a new dial.
-    #[must_use]
-    pub fn generate() -> Self {
-        Self(macro_uuid::generate_uuid_v7())
-    }
-
-    /// The raw uuid, for persistence.
-    #[must_use]
-    pub fn as_uuid(self) -> macro_uuid::Uuid {
-        self.0
-    }
-}
-
-impl std::fmt::Display for RuntimeConnectionId {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(formatter)
-    }
-}
+pub use agent_session::domain::connection::RuntimeConnectionId;
 
 /// What recording a runtime's connection did to the agents bound to it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -195,6 +173,9 @@ pub struct RuntimeAccepts {
     /// agent teammate.
     pub apply_agent: bool,
 }
+
+/// A harness and one of its runtime connections.
+pub type HarnessConnection = (HarnessId, RuntimeConnectionId);
 
 /// Durable attach/detach bookkeeping for harness runtime connections.
 ///
@@ -222,11 +203,13 @@ pub trait HarnessPresence: Send + Sync + 'static {
     ) -> Pin<Box<dyn Future<Output = ()> + Send>>;
 
     /// These connections are still held by this process, so a crash of this
-    /// process stops vouching for them.
+    /// process stops vouching for them. Returns the ones whose rows were
+    /// missing and had to be written again: one that closed after `live` was
+    /// listed is among them, and the caller closes it again.
     fn renew(
         self: Arc<Self>,
-        live: Vec<(HarnessId, RuntimeConnectionId)>,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send>>;
+        live: Vec<HarnessConnection>,
+    ) -> Pin<Box<dyn Future<Output = Vec<HarnessConnection>> + Send>>;
 }
 
 /// Resolves the runtime configuration for a bot that may receive agent
@@ -498,6 +481,9 @@ pub trait RuntimeConnections: Send + Sync + 'static {
 
     /// Whether this process currently holds `harness`'s physical runtime socket.
     fn is_connected(&self, harness: HarnessId) -> bool;
+
+    /// The dial `harness`'s runtime is connected on in this process, if any.
+    fn connection_of(&self, harness: HarnessId) -> Option<RuntimeConnectionId>;
 
     /// The sessions a runtime dialing in for `harness` reported as live, as
     /// [`HarnessBindings::sessions_on_harness`] resolves them.

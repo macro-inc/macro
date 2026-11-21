@@ -7,7 +7,8 @@ import { RoutineSettingRow } from './routine-editor';
 
 /**
  * The routine's required apps, one row each, and the button that adds them.
- * Only an Ask AI step uses them.
+ * Only an Ask AI step uses them. An app the viewer hasn't connected has a
+ * Connect button on its row: saving needs every one connected.
  */
 export function ConnectionRows(props: {
   apps: RoutineApp[];
@@ -16,39 +17,50 @@ export function ConnectionRows(props: {
   connected: Accessor<ReadonlySet<string> | undefined>;
   onChange(apps: RoutineApp[]): void;
   Picker: RoutineEditorSlots['Apps'];
+  Connect: RoutineEditorSlots['ConnectApp'];
 }) {
   return (
     <>
       <For each={props.apps}>
-        {(app) => (
-          <RoutineSettingRow
-            label={app.server_name}
-            description={
-              props.connected() === undefined ? undefined : props
-                  .connected()
-                  ?.has(app.app_slug) ? (
-                <span class="text-success">Connected</span>
-              ) : (
-                <span class="text-failure">
-                  Not connected. Connect it before the routine runs.
-                </span>
-              )
-            }
-          >
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={`Remove ${app.server_name}`}
-              onClick={() =>
-                props.onChange(
-                  props.apps.filter((other) => other.app_slug !== app.app_slug)
+        {(app) => {
+          /** Undefined until the viewer's connections load. */
+          const connected = () => props.connected()?.has(app.app_slug);
+          return (
+            <RoutineSettingRow
+              label={app.server_name}
+              description={
+                connected() === undefined ? undefined : connected() ? (
+                  <span class="text-success">Connected</span>
+                ) : (
+                  <span class="text-failure">
+                    Not connected. Connect it before the routine runs.
+                  </span>
                 )
               }
             >
-              <XIcon class="size-4" />
-            </Button>
-          </RoutineSettingRow>
-        )}
+              <div class="flex items-center gap-1">
+                <Show when={connected() === false}>
+                  <props.Connect app={app} />
+                </Show>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  class="touch:size-11"
+                  aria-label={`Remove ${app.server_name}`}
+                  onClick={() =>
+                    props.onChange(
+                      props.apps.filter(
+                        (other) => other.app_slug !== app.app_slug
+                      )
+                    )
+                  }
+                >
+                  <XIcon class="size-4" />
+                </Button>
+              </div>
+            </RoutineSettingRow>
+          );
+        }}
       </For>
       {/* One row holds the picker whether or not apps are listed, so it stays
           mounted, and open, across picks. */}

@@ -1,6 +1,7 @@
 import { analytics } from '@app/lib/analytics';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { contentHash } from '@core/util/hash';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { Telemetry } from '@macro-inc/observability';
 import { invalidateUserQuota } from '@queries/auth';
 import { setPreviewOnCreate } from '@queries/preview/preview';
@@ -12,6 +13,7 @@ export async function createSpreadsheetDocument(args?: {
   projectId?: string;
   source?: string;
 }): Promise<string | undefined> {
+  const generation = cacheSessionGeneration.capture();
   const title = args?.title ?? 'Untitled spreadsheet';
   const created = await storageServiceClient.createSpreadsheetDocument({
     documentName: title,
@@ -23,6 +25,7 @@ export async function createSpreadsheetDocument(args?: {
 
   const documentId = created.value.metadata.documentId;
   setPreviewOnCreate({
+    generation,
     itemId: documentId,
     itemType: 'document',
     name: title,

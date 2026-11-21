@@ -48,6 +48,8 @@ const api = {
     host = createWorkerCacheHost({
       scope: `command-scale-${crypto.randomUUID()}`,
     });
+    if (!host.authority) throw new Error('Fixture cache authority is required');
+    const generation = (await host.authority.current()).generation;
     items = [];
     const start = performance.now();
     for (let i = 0; i < size; i++) {
@@ -86,6 +88,7 @@ const api = {
         subType: null,
       }));
       await host.writeQuery({
+        generation,
         query,
         variables: { input: { initial: { limit: offset + 1 } } },
         data: { user: { id: 'fixture-owner', soup: { items: data } } },

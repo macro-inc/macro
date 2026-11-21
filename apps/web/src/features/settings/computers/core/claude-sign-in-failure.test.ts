@@ -48,7 +48,6 @@ describe('claudeSignInRecovery', () => {
   it('needs a new link once the computer has ended the sign-in', () => {
     expect(claudeSignInRecovery('complete', 'expired')).toBe('new_link');
     expect(claudeSignInRecovery('complete', 'invalid_code')).toBe('new_link');
-    expect(claudeSignInRecovery('complete', 'timeout')).toBe('new_link');
     expect(claudeSignInRecovery('complete', 'failed')).toBe('new_link');
   });
 
@@ -56,6 +55,7 @@ describe('claudeSignInRecovery', () => {
     expect(claudeSignInRecovery('complete', 'malformed_code')).toBe('repaste');
     expect(claudeSignInRecovery('complete', 'busy')).toBe('repaste');
     expect(claudeSignInRecovery('complete', 'unreachable')).toBe('repaste');
+    expect(claudeSignInRecovery('complete', 'timeout')).toBe('repaste');
     expect(claudeSignInRecovery('complete', 'rollout_disabled')).toBe(
       'repaste'
     );

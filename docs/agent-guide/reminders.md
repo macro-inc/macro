@@ -10,7 +10,9 @@ On one selected email or an open conversation, press **H**, choose **Remind me**
 in its menu, or activate its bell. The shared command menu's input placeholder
 reads `Type a time, like tomorrow 9am`, followed by time choices: **In 30m**, **Later today** (before 5 PM), **Tomorrow**, and
 **Next week**. Type a future time such as `in 2 hours`, `tomorrow 9am` or
-`next friday at 3` in **Remind me when**.
+`next friday at 3` in **Remind me when**. Shorthand reads too: a quantity
+without `in` (`2 days`, `2h`) and words cut short or misspelled (`nxt mond`,
+`tomor`, `thrusday`).
 Up/Down changes the selection; Enter or clicking a choice saves immediately.
 
 Typed text is read by the `natural_time` crate in the browser, at the browser's

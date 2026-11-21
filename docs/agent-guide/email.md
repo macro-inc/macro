@@ -58,11 +58,15 @@ Full email client. Desktop groups `Signal` and `Noise` under one `Inbox` sidebar
 item, with pill tabs beside the Inbox title in the content header; with the Focus
 flags on, a `Focus` tab leads them. Selecting Inbox from another mailbox opens
 Signal; selecting it while in Focus or Noise keeps that tab.
-The desktop sidebar continues with `Favorites`, `Drafts`, `Sent`, `Scheduled`,
-and `Reminders` (when reminders are enabled), followed by a **Library** section containing `All mail`,
-`Archived`, and `Shared`, then **Saved views** (flagged, see
-[Saved email views](#saved-email-views)). Sidebar number shortcuts follow that
-order; `Tab` and `Shift+Tab` move between the Inbox tabs (from another mailbox,
+By default the desktop sidebar continues with `Favorites`, `Drafts`, `Sent`,
+`Scheduled`, and `Reminders` (when enabled), followed by **Library** (`All mail`,
+`Archived`, `Shared`, `Spam`, and `Trash`) and **Saved views** (flagged, see
+[Saved email views](#saved-email-views)). Drag the Library or Saved views
+heading before or after the unnamed Inbox/Favorites/Drafts/Sent group to change
+their shared local order. The unnamed group has no grip or keyboard move control.
+Accounts stays pinned at the top and is not a drop target. Section order is per
+account and survives reloads. Sidebar number shortcuts retain their default destination
+order. `Tab` and `Shift+Tab` move between the Inbox tabs (from another mailbox,
 `Tab` opens the first, Focus when it shows, else Signal, and `Shift+Tab` Noise).
 This holds while the email list itself has focus, as it does after `Escape`
 closes a thread; only on a control inside the list (a row's sender name,
@@ -178,7 +182,9 @@ text ends in a comma or semicolon, so `a@example.com, b@example.com,` adds both.
 Enter or a click picks the highlighted suggestion; on a complete typed address,
 Enter or Tab adds that address unless an arrow key picked another row. Type,
 paste, or Tab straight after picking one and check that both recipients stay
-and the input is empty.
+and the input is empty. With no highlighted row and no complete address (text
+that matches no one, or results still loading), Tab moves on and clears the
+text, as a click elsewhere does.
 
 Outlook connections support personal Outlook.com and individual Microsoft 365
 inboxes. Choose the inbox explicitly when testing mixed-provider accounts. The
@@ -213,6 +219,8 @@ before sending. If the copy is interrupted, use retry or keep the original.
 A draft the provider could not save can still switch From, which moves it to an
 inbox that may accept it; a draft with an unfinished move or a conflict stays in
 its inbox until that is resolved.
+With the CRM proof endpoint unavailable, a locally authored draft must still
+save locally and report an offline From-inbox move without waiting for CRM proof.
 A draft opened from Drafts then shows its thread in the destination inbox,
 never the not-found page; a draft in compose stays open there. Keep editing
 after the switch and check that no "This draft changed while saving" notice
@@ -317,11 +325,13 @@ passing stores nothing and pushes nothing, so a follow-up coming due, a
 calendar change whose event ends or importance moving shows at the tab's next
 read. Mark
 Done hides the row at once and archives the thread; Undo brings it back. The
-worker classifies an inbox only while its owner has `enable-email-focus` on; a
-delegated inbox follows its owner's flag, not the reader's. An owner who joins
-the rollout gets a filled tab without new mail: within about 6 minutes the
-worker finds them (it looks at every connected inbox each minute, evaluating
-the flag from definitions it polls from PostHog every 5 minutes) and backfills their inbox,
+worker classifies an inbox only while someone whose tab shows it has
+`enable-email-focus` on: its owner, or a user it is linked to, so a mailbox you
+link is classified while you have the flag even when its own account does not.
+A user who joins the rollout gets a filled tab without new mail: within about
+6 minutes the worker finds them (it looks at every connected inbox each minute,
+evaluating the flag from definitions it polls from PostHog every 5 minutes) and
+backfills their inboxes, linked ones included,
 the last 3 days first, then the rest of the 30 without due dates (an older
 thread gets one with its next mail). With nothing classified the tab
 shows the empty state `You're caught up`, whose **See the rest of your inbox** opens Signal.
@@ -623,6 +633,15 @@ context reopen closed IndexedDB connections. Verify a cached read and a subseque
 write after closing the connection, then clear/logout during recovery: old-account
 entries must not return. These caches retry only transaction creation; persistent
 storage failures still follow the existing cache fallback behavior.
+
+Hold or fail `/crm/member-access` during sign-in, then save an inbox signature,
+mark a thread read and unread, toggle its star, move it to a folder, and move
+another thread to Trash. Open Spam and Trash and verify their message rows,
+then restore a message. Open a thread's reminder menu, wait for its choices to
+be enabled, schedule a reminder, and remove it again. Notices, row state, folder contents, and provider labels
+must update, and cached personal thread messages must remain readable. These
+inbox-authorized operations do not depend on CRM access; CRM-shared thread and
+attachment reads still require their access proof.
 
 Performance check: switch Signal → All twice against a large synchronized cache.
 Dense local pages use bounded sort-index candidates rather than sorting the entire
@@ -953,9 +972,14 @@ In new emails, replies, reply-alls, and forwards, `Cmd+Shift+C` (`Ctrl+Shift+C`)
 reveals and focuses Cc and `Cmd+Shift+B` does the same for Bcc, expanding a
 collapsed reply header; inside a composer they never fall through to the
 thread's Copy link. Clicking the Cc or Bcc button also focuses the revealed
-field, so typing goes there instead of to app shortcuts. `bunx playwright test
+field, so typing goes there instead of to app shortcuts. Tab runs To, Cc and
+Bcc when shown, Subject (new emails only), then the body, and Shift+Tab goes
+back; the new email's Cc and Bcc buttons are left out of it. In the body,
+Shift+Tab outdents while there is something to outdent and otherwise leaves.
+`bunx playwright test
 --config src/features/email-compose/browser-test/playwright.app.config.ts` (from
-`apps/web`) checks both shortcuts and both buttons in all four composers.
+`apps/web`) checks both shortcuts and both buttons in all four composers, and
+the Tab order (`tab-order.app.e2e.ts`).
 While an editable field is focused, Escape is handled by that field before the
 close-reply shortcut.
 An edited reply remains a draft when navigating away and returning. Standalone
@@ -1012,10 +1036,15 @@ before suggestions loaded. Name-word prefixes outrank substring matches;
 unlike the name finds the contact, below name matches. Within each name tier, and on empty
 input, personal suggestions are recent-first rather than domain/brevity-weighted.
 A chip shows the name followed by the address in muted ink.
+A quick click or tap in the message body moves the caret where it lands; check
+it by tapping mid-word and on another line of a two-line body, then typing.
 On a phone, focus the message body to fold populated recipient rows. Tap a
 folded To, Cc, or Bcc summary and check that its address input has focus.
 Main new-email and reply/forward To/Cc/Bcc pickers now query bounded personal
 local windows rather than retaining the address book or searching the server.
+Open a composer immediately after sign-in with CRM verification delayed or
+unavailable: personal recipient suggestions must still load. Switching accounts
+while they load must not show the previous account's suggestions.
 Partial synchronization remains visibly incomplete. Each field owns its query;
 scrolling to the end of the suggestions (or PageDown) lists the next page below. Scoped thread addresses remain
 available, but the same address must not appear twice when the directory also
@@ -1466,6 +1495,11 @@ With cached inbox metadata available before viewer information loads, saving a
 new offline draft must still create its Mail thread. The selected inbox supplies
 the owner, including delegated inboxes. If that account metadata is unavailable,
 the save must fail before queueing; retain the editor content for a later retry.
+While an already-visible account catalog is refetching, saving and sending must
+retain the selected inbox's owner and draft setting, including delegated inboxes.
+The primary inbox must remain selected even if it is not first in the catalog.
+Repeat with that refresh unanswered, then switch accounts: the previous viewer's
+inboxes must no longer be available.
 Test this with a previously saved draft as well as a new one: a queued edit must
 block Send and scheduling until a save commits. Reopening a cached draft while
 offline must retain its uploaded attachments and confirmed scheduled time.
@@ -1831,6 +1865,12 @@ live mail with the viewer's access. See `docs/design/saved-views.md`.
   as in Tasks, and **Revert** beside it returns to the tab's own filters and
   every inbox; Sent, Drafts, Scheduled, Reminders, Shared and Focus can't be
   saved. Search text is never saved.
+- **New drafts.** Each creation or duplication immediately selects a fresh draft
+  at the end of Saved views. Saving keeps its position; discarding removes it.
+  Closing the builder retains the draft and its name, sharing, and filters.
+  Leaving a dirty new view, opening a thread, switching views, or closing its pane
+  asks **Discard** or **Keep editing**. Clean drafts and existing saved views do not ask.
+  Browser close and reload use the browser's native unsaved-changes warning.
 - **Open.** The view opens on All with every condition in the Filters
   controls; the header shows its name and a
   `…` menu, and built-in tabs stop looking selected. Changing a filter shows

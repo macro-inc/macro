@@ -10,6 +10,7 @@ import {
   untrack,
 } from 'solid-js';
 import type { Property, PropertyApiValues } from '../types';
+import { copyEntityReferences } from '../utils/copy-entity-references';
 import { withApiValues } from '../utils/transforms';
 import {
   type PropertyEditFn,
@@ -55,6 +56,8 @@ type PendingValue = {
   value: PropertyApiValues;
   propertyDefinitionId: string;
   base?: Property;
+  /** `base`'s value when the save succeeded; a store source changes in place. */
+  baseValue?: string;
 };
 
 /**
@@ -91,15 +94,23 @@ export function Root(props: PropertyRootProps) {
     const current = pending();
     return current &&
       current.propertyDefinitionId === local.property.propertyDefinitionId &&
-      (current.base === undefined || current.base === local.property)
+      (current.base === undefined ||
+        (current.base === local.property &&
+          current.baseValue === JSON.stringify(local.property.value)))
       ? withApiValues(local.property, current.value)
       : local.property;
   });
   const [picked, setPicked] = createSignal<PickedNames>();
 
-  const save: PropertyPickFn = async (saved, value, entityNames) => {
+  const save: PropertyPickFn = async (saved, pick, entityNames) => {
     const onSave = local.onSave;
     if (!onSave) return;
+    // The pick is shown until the source catches up, across the source's own
+    // updates, so it can't keep references that belong to the source.
+    const value: PropertyApiValues =
+      pick.valueType === 'ENTITY' && pick.refs
+        ? { ...pick, refs: copyEntityReferences(pick.refs) }
+        : pick;
     const entry: PendingValue = {
       value,
       propertyDefinitionId: saved.propertyDefinitionId,
@@ -113,7 +124,13 @@ export function Root(props: PropertyRootProps) {
     );
     try {
       await onSave(saved, value);
-      if (pending() === entry) setPending({ ...entry, base: local.property });
+      if (pending() === entry) {
+        setPending({
+          ...entry,
+          base: local.property,
+          baseValue: JSON.stringify(local.property.value),
+        });
+      }
     } catch (error) {
       if (pending() === entry) {
         setPending(undefined);

@@ -22,6 +22,8 @@ read it before changing behaviour.
 - `src/domain/service.rs`: the team-facing `ComputerService` (purchase, offers, purchase_offers, list, power, retry, cancel, release). `purchase_offers` is the buy dialog's listing: one `Billing::purchase_terms` call for every size (today's prorated charge, renewal date, card), never made on the purchase path.
 - `src/domain/enrollment.rs`: the first-boot contract with `macrod enroll`.
 - `src/domain/image.rs`: versioned images and the root/data disk split.
+- `src/domain/size.rs`: `SIZE_SPECS`, every tier's vCPUs, memory, root and
+  `/home` disks and units written out; tests pin them to the fleet's derivations.
 - `src/domain/operator.rs`: the control plane (fleet effects, timers, reconcile,
   macrod presence); wired in `services/agent_harness_service/src/computers.rs`.
 - `src/inbound/axum_router.rs`: `/team/computers*`, mounted by
@@ -125,6 +127,8 @@ read it before changing behaviour.
   `Failure::AgentNotStarted`; a macrod that declared no `apply-agent`
   capability when it dialed applies `Event::MacrodConnectedWithoutAgentHandOff`
   instead, which fails it at once with `Failure::AgentUnsupported` and pages).
+  An `AgentOnline` after the deadline recovers the computer (`Running`,
+  failure cleared); see the recovery rules in the architecture doc.
   A give-up during the first start counts in `first_start_failures`, except
   `Failure::HostLost` (a host outage is not the computer's failure); the first
   leaves the computer for a team retry

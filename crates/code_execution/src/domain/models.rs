@@ -8,11 +8,11 @@ use uuid::Uuid;
 #[serde(transparent)]
 pub struct RunId(pub Uuid);
 
-/// A JavaScript ES module exporting an async `main` function.
+/// A TypeScript ES module exporting an async `main` function.
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ExecuteRequest {
-    /// Complete JavaScript module, including imports and `export async function main`.
+    /// Complete TypeScript module, including imports and `export async function main`.
     pub source: String,
     /// Total budget including queueing and API requests.
     pub timeout_ms: u64,
@@ -42,6 +42,27 @@ pub struct RunEnvironment {
     /// sees only the hosts it may reach.
     #[serde(skip)]
     pub egress: Egress,
+}
+
+/// The handles an attended program's `main` receives besides the SDK, which
+/// decide the `CodeContext` it is type-checked with.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ContextShape {
+    /// `session`: the run belongs to an agent session.
+    pub session: bool,
+    /// `execution`: the run is one of the session's code executions.
+    pub execution: bool,
+}
+
+impl RunEnvironment {
+    /// What `main` receives: `execution` only with `session`, as the
+    /// bootstrap passes them.
+    pub fn shape(&self) -> ContextShape {
+        ContextShape {
+            session: self.session_id.is_some(),
+            execution: self.session_id.is_some() && self.execution_id.is_some(),
+        }
+    }
 }
 
 /// How a program's requests reach the SDK hosts.
@@ -182,7 +203,7 @@ pub enum AdmissionError {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FailureCode {
-    /// Legacy source compilation failure retained for persisted outcomes.
+    /// The program didn't type-check against the SDK, so it never ran.
     Compile,
     /// Program threw or exited without a result.
     Runtime,
@@ -312,13 +333,22 @@ pub struct SourceFile {
     pub source: String,
 }
 
+/// The modules a checked program may import besides its own files.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProgramImports {
+    /// Only `@macro-inc/sdk`, as an unattended program runs with.
+    Sdk,
+    /// `@macro-inc/sdk` and `handlebars`, as an attended program runs with.
+    SdkAndHandlebars,
+}
+
 /// The checker couldn't decide whether a program checks.
 #[derive(Debug, thiserror::Error)]
 pub enum CheckError {
     /// Empty or oversized source.
     #[error("source must be nonempty and within the configured size limit")]
     InvalidSource,
-    /// Every checker slot is busy.
+    /// Every checker slot and queue place is taken.
     #[error("type checking is busy; try again later")]
     Busy,
     /// The checker process failed or ran out of time.

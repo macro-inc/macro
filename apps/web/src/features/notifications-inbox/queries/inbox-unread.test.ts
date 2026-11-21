@@ -137,4 +137,33 @@ describe('createInboxUnread', () => {
     vi.advanceTimersByTime(3_000);
     expect(streams).toHaveLength(2);
   });
+
+  it('starts a reader that joins an open stream from its latest counts', () => {
+    // urql shares one stream among a client's readers and replays nothing
+    // to a reader that joins it later.
+    const stream = makeSubject<unknown>();
+    const client = { subscription: () => stream.source } as unknown as Client;
+    const read = () =>
+      createRoot((dispose) => ({
+        dispose,
+        counts: createInboxUnread({
+          client: () => client,
+          enabled: () => true,
+          onReconnected: () => () => {},
+        }),
+      }));
+    const first = read();
+    stream.next({
+      data: {
+        notificationInboxUnreadUpdates: [{ rowType: 'EMAIL', count: 2 }],
+      },
+    });
+
+    const second = read();
+    expect(second.counts()).toEqual([
+      { type: 'email', passwordRequests: false, count: 2 },
+    ]);
+    first.dispose();
+    second.dispose();
+  });
 });

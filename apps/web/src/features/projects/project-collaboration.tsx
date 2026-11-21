@@ -1,4 +1,7 @@
-import { EntityConversation } from '@core/messages/EntityConversation';
+import {
+  EntityConversation,
+  type EntityConversationProps,
+} from '@core/messages/EntityConversation';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { createMemo, createSignal } from 'solid-js';
 import { projectRouteId } from './core/route';
@@ -9,6 +12,7 @@ export function ProjectDiscussion(props: {
   canWrite: boolean;
   targetId?: string;
   targetRequestKey?: string | number;
+  children?: EntityConversationProps['children'];
 }) {
   const targetId = createMemo(() => props.targetId);
   const targetRequest = createMemo(() => ({
@@ -26,6 +30,7 @@ export function ProjectDiscussion(props: {
       targetRequestKey={props.targetRequestKey}
       targetCleared={clearedTarget() === targetRequest()}
       onClearTarget={() => setClearedTarget(targetRequest())}
+      children={props.children}
       buildLink={(message) =>
         buildSimpleEntityUrl({
           type: 'component',

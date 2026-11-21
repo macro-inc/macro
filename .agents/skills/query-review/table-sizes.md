@@ -8,7 +8,7 @@ are lower-cased as Postgres reports them (`Document` is `document`).
 | Rows | Tables |
 | --- | --- |
 | Over 100 million | `documenttextparts`, `email_message_labels`, `email_message_recipients`, `email_messages`, `email_threads` |
-| 10 to 100 million | `contacts_connections`, `email_attachments_sfs`, `bompart`, `entity_access`, `sharepermission`, `document`, `documentpermission`, `documentinstance`, `documenttext`, `email_contacts` |
+| 10 to 100 million | `contacts_connections`, `email_attachments_sfs`, `bompart`, `entity_access`, `entity_properties`, `sharepermission`, `document`, `documentpermission`, `documentinstance`, `documenttext`, `email_contacts` |
 | 1 to 10 million | `agent_session_log`, `cursor_journal_input`, `frecency_events`, `chatmessage`, `document_email`, `calendar_event_occurrences`, `calendar_change_log`, `userhistory`, `itemlastaccessed`, `email_sfs_mappings`, `calendar_event_attendees`, `documentbom`, `documentview`, `email_message_calendar_invites`, `calendar_event_override_attendees` |
 | 100 thousand to 1 million | `notification`, `ai_usage_observation`, `crm_domain_directory`, `chatpermission`, `chat`, `documentinstancemodificationdata`, `comms_message_threads`, `comms_channel_participants`, `user`, `macro_user`, `crm_companies`, `crm_domains`, `rolesonusers`, `userdocumentviewlocation`, `macro_user_info`, `database_change_rows`, `call_record_transcripts`, `project`, `projectpermission`, `comms_entity_mentions`, `foreign_entity` |
 

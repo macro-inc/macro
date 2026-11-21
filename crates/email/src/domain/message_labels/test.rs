@@ -33,6 +33,8 @@ struct Repository {
     /// Each Outlook message's facts beside its thread.
     facts: Vec<(Uuid, MailboxActionMessage)>,
     command_fails: bool,
+    /// A failed command found the inbox locked past the lock timeout.
+    command_contended: bool,
     commands: Mutex<Vec<Command>>,
 }
 
@@ -46,6 +48,10 @@ struct Command {
 
 impl MessageLabelRepository for Repository {
     type Err = TestError;
+
+    fn is_contended(&self, _: &TestError) -> bool {
+        self.command_contended
+    }
 
     async fn inbox_for_message(
         &self,
@@ -236,6 +242,7 @@ fn service() -> MessageLabelService<Repository, Enqueuer, Broker> {
             staged: Mutex::default(),
             facts: Vec::new(),
             command_fails: false,
+            command_contended: false,
             commands: Mutex::default(),
         },
         enqueuer: Enqueuer {
@@ -583,6 +590,19 @@ async fn outlook_command_that_cannot_be_queued_fails_the_request() {
             .change(request(vec![Uuid::from_u128(3), Uuid::from_u128(4)]))
             .await,
         Err(MessageLabelError::Command(TestError))
+    ));
+}
+
+#[tokio::test]
+async fn outlook_command_behind_a_busy_inbox_is_a_retryable_failure() {
+    let mut service = outlook();
+    service.repository.messages = vec![message(3, 9)];
+    service.repository.facts = vec![(Uuid::from_u128(9), fact(3, true))];
+    service.repository.command_fails = true;
+    service.repository.command_contended = true;
+    assert!(matches!(
+        service.change(request(vec![Uuid::from_u128(3)])).await,
+        Err(MessageLabelError::Contended)
     ));
 }
 

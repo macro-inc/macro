@@ -27,7 +27,7 @@ export type ClaudeSignInRecovery =
   | 'new_link'
   /** Send the same request again. */
   | 'retry'
-  /** Paste the code again; the sign-in is still waiting. */
+  /** Send the code again; the computer may still be signing in or have finished. */
   | 'repaste'
   /** Nothing here gets past it: only a team owner or admin can. */
   | 'none';
@@ -51,9 +51,9 @@ export function claudeSignInFailure(error: unknown): ClaudeSignInFailure {
 
 /**
  * How to recover. Starting a sign-in is safe to repeat, so any failure to
- * start retries; once a code was sent, only a failure that leaves the
- * computer's sign-in waiting lets the user paste again. A caller without
- * the right to change the computer gets no way out at all.
+ * start retries; once a code was sent, let the user send it again if the
+ * computer may still be signing in or have finished without answering. A
+ * caller without the right to change the computer gets no way out at all.
  */
 export function claudeSignInRecovery(
   phase: 'start' | 'complete',
@@ -64,15 +64,20 @@ export function claudeSignInRecovery(
   return (
     match(failure)
       .returnType<ClaudeSignInRecovery>()
+      // A timeout here is the service giving up on the computer, which may
+      // still be storing the credential: sending the code again either signs
+      // in or finds the sign-in over. harnessd's own timeout ends the
+      // sign-in and arrives as expired instead.
       // Outside the rollout: the sign-in still waits, for when access arrives.
       .with(
         'malformed_code',
         'busy',
         'unreachable',
+        'timeout',
         'rollout_disabled',
         () => 'repaste'
       )
-      .with('expired', 'invalid_code', 'timeout', 'failed', () => 'new_link')
+      .with('expired', 'invalid_code', 'failed', () => 'new_link')
       .exhaustive()
   );
 }

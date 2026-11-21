@@ -611,6 +611,8 @@ export function operationCategoryForRequest(
       'teardown',
       'clear',
       'current-storage-generation',
+      'current-authority',
+      'transition-authority',
       'inspect-mutations',
       () => 'lifecycle' as const
     )
