@@ -263,12 +263,42 @@ function Callers(props: { registry: Registry; optionIds: Accessor<string[]> }) {
   const tags = useTagsQuery();
   let tagSetsOut: () => unknown = () => null;
 
+  // A select editor's options: its own query, or the all-definitions
+  // listing's copy while that query has nothing usable.
+  const editorOptions = (id: string) => {
+    const q = props.registry.get(keyId({ k: 'opts', id }));
+    const state = q?.() as ReturnType<typeof observe> | undefined;
+    const fallbackEntry = (all.data ?? []).find(
+      (d) => ('definition' in d ? d.definition.id : d.id) === id
+    );
+    const fallback =
+      fallbackEntry && 'property_options' in fallbackEntry
+        ? fallbackEntry.property_options
+        : [];
+    const usable = state
+      ? usablePropertyOptions(
+          {
+            data: state.data as never,
+            isError: state.isError,
+            isPlaceholderData: state.isPlaceholderData,
+          },
+          fallback
+        )
+      : [];
+    return { state, fallback, usable };
+  };
+
   const read = () => ({
     __sources: {
       defs: [all, system, crmExport].map((q) =>
         q.isSuccess ? plain(q.data) : null
       ),
       tags: tags.isSuccess ? plain(tags.data) : null,
+      // The select editors' tie keys come from the list each one shows.
+      opts: props.optionIds().map((id) => ({
+        id,
+        options: plain(editorOptions(id).usable),
+      })),
     },
     propertyPanel: safe(() => plain(allProperties())),
     filterBar: safe(() => ({
@@ -326,24 +356,8 @@ function Callers(props: { registry: Registry; optionIds: Accessor<string[]> }) {
     })),
     selectEditors: safe(() =>
       props.optionIds().map((id) => {
-        const q = props.registry.get(keyId({ k: 'opts', id }));
-        const state = q?.() as ReturnType<typeof observe> | undefined;
-        const fallbackEntry = (all.data ?? []).find(
-          (d) => ('definition' in d ? d.definition.id : d.id) === id
-        );
-        const fallback =
-          fallbackEntry && 'property_options' in fallbackEntry
-            ? fallbackEntry.property_options
-            : [];
+        const { state, fallback, usable } = editorOptions(id);
         if (!state) return { id, mounted: false };
-        const usable = usablePropertyOptions(
-          {
-            data: state.data as never,
-            isError: state.isError,
-            isPlaceholderData: state.isPlaceholderData,
-          },
-          fallback
-        );
         return {
           id,
           shown: plain(

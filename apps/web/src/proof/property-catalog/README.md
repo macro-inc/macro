@@ -57,7 +57,7 @@ not run the base commit's modules, or a mutant was not applied or not caught.
   nanosecond, only on a row's `created_at`/`updated_at`); `tie-order` (only
   rows whose server sort key is equal swap: definitions by lowercased name,
   options by display order then value, and caller rows only when both sides'
-  catalogs, as the callers read them, give them the same key; an option without a key never ties). Tie
+  lists, as that caller reads them (the select editors their own option lists, every other caller the catalog), give them the same key; an option without a key never ties). Tie
   keys lowercase the way the server sorted that list: definitions with options
   like Rust's `to_lowercase` (JavaScript's `toLowerCase`), plain definitions,
   options and tag options like PostgreSQL's `LOWER` under its libc collation
@@ -67,14 +67,18 @@ not run the base commit's modules, or a mutant was not applied or not caught.
   pass for one. `error-shape` (the same retry decision, a different error
   object; the retry decision is the app's own, computed in the page with
   `thrownResultErrorHasCode`; equality compares the whole message, and each
-  old→new pair is its own signature: both whole messages with ids masked, and
-  whether the two name the same ids); `state`
+  old→new pair is its own signature: both whole messages with each id
+  replaced by its number in order of first appearance across the pair, so a
+  pair that names other ids, or the same ids in other roles, is a signature of
+  its own); `state`
   (query state fields, or a reader missing on one side); and `diff`. Reader
   errors are compared whatever the data did.
 - `MUTANT=drop-row|swap-order|alter-field|stale-cache|skip-live-update` plants a
   fault in the NEW path; `mutants` mode first runs a clean baseline of the same
   shape, and a mutant counts as caught only at a `diff` or `state` signature
-  the baseline does not have, after the fault was applied. `CONTROL=1` runs OLD
+  the baseline does not have, after the fault was applied, at a level that
+  compares what the app read or showed: a settle timeout, a write-replay
+  difference or an uncaught page error never counts as a catch. `CONTROL=1` runs OLD
   against OLD.
 - `LOAD=n` adds `n` other accounts writing and reading on the server, and has
   each fuzzed account's NEW page read both catalogs in the background.

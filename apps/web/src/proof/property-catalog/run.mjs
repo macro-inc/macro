@@ -234,7 +234,7 @@ const readerKind = (id) => {
 // by (from the lists the callers read), and a run of adjacent rows sharing
 // one key is sorted by id. A row whose key is unknown, or differs between the
 // sides, keeps its place.
-function tieGroups(snapshot) {
+function tieGroups(snapshot, source) {
   const g = new Map();
   const put = (id, key) => {
     if (!id || key === null || key === undefined) return;
@@ -260,10 +260,22 @@ function tieGroups(snapshot) {
   // listing sorted another way (plain definitions, by SQL) must not change a
   // caller row's key.
   const src = snapshot?.callers?.__sources;
+  if (source === 'editors') {
+    for (const e of src?.opts ?? []) for (const o of Array.isArray(e?.options) ? e.options : []) put(o?.id, optIn(e.id, o));
+    return g;
+  }
   for (const list of src?.defs ?? []) defs(list);
   tagSets(src?.tags);
   return g;
 }
+// Each caller's rows are keyed by the lists that caller shows: the select
+// editors by their own option lists, every other caller by the catalog.
+const callerGroups = (a, b) => {
+  const catalog = bothSides(tieGroups(a, 'catalog'), tieGroups(b, 'catalog'));
+  const editors = bothSides(tieGroups(a, 'editors'), tieGroups(b, 'editors'));
+  return (caller) => (caller === 'selectEditors' ? editors : catalog);
+};
+const canonCallerSet = (x, groupsFor) => (x && typeof x === 'object' ? Object.fromEntries(Object.keys(x).map((k) => [k, canonCallers(x[k], groupsFor(k))])) : x);
 function canonCallers(x, groupOf) {
   if (Array.isArray(x)) {
     const xs = x.map((v) => canonCallers(v, groupOf));
@@ -397,6 +409,10 @@ const setCtx = (fields) => {
 };
 const sig = (level, cls, kind, d, extra) =>
   `${level}|${cls}|${kind.replace(/[0-9a-f-]{36}/g, '<id>')}|${(d?.path ?? '').replace(/\[\d+\]/g, '[]')}${extra.errorPair ? `|${extra.errorPair}` : ''}`;
+// Levels that report on the harness and the run rather than on data the app
+// read or showed: a timeout, a write outside the tap, an uncaught page error.
+// They are still differences, but never count as catching a mutant.
+const NOT_A_CATCH = new Set(['settle', 'write-replay', 'page-errors']);
 function record(level, kind, cls, a, b, extra = {}, canon = (x) => x) {
   bump(R.classes, level, cls);
   if (cls === 'equal') return;
@@ -411,9 +427,9 @@ function record(level, kind, cls, a, b, extra = {}, canon = (x) => x) {
     bump(R.diffSignatures, s);
     R.totals.differences++;
     if (R.diffs.length < 400) R.diffs.push({ level, kind, class: cls, ...at, ...extra, diff: d });
-    if (R.mutant && cls !== 'error-shape') {
-      // A catch is a difference the clean run does not have, after the fault
-      // was applied at least once.
+    if (R.mutant && cls !== 'error-shape' && !NOT_A_CATCH.has(level)) {
+      // A catch is a difference in what the app read or showed, one the clean
+      // run does not have, after the fault was applied at least once.
       if (R.mutant.applied === 0) R.mutant.beforeApplied++;
       else if (BASELINE.has(s)) R.mutant.ignoredAsInBaseline++;
       else {
@@ -764,16 +780,23 @@ const errorLabel = (e) => (e ? `${e.class}/${JSON.stringify(e.codes)}/${e.httpSt
 // sides' whole messages with ids masked, and whether the ids they name are
 // the same, so a pair that differs in what it says or which ids it names is a
 // signature of its own, closed on its own.
-const idsIn = (e) => [...new Set(String(e?.fullMessage ?? '').match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi) ?? [])].map((x) => x.toLowerCase()).sort();
+// Ids in the pair's two messages are numbered by first appearance across
+// both, so the signature keeps which id fills which role on each side
+// (`<id1> on <id2>` vs `<id2> on <id1>`) without the ids themselves.
+const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+function pairLabel(A, B) {
+  const n = new Map();
+  const mask = (e) => e && { ...e, message: String(e.fullMessage).replace(UUID, (u) => `<id${n.get(u.toLowerCase()) ?? (n.set(u.toLowerCase(), n.size + 1), n.size)}>`) };
+  const a = mask(A);
+  const b = mask(B);
+  return `${errorLabel(a)}=>${errorLabel(b)}`;
+}
 function compareErrors(level, kind, ea, eb, extra = {}) {
   const A = errorView(ea);
   const B = errorView(eb);
   if (J(A) === J(B)) return record(level, `${kind}.error`, 'equal');
-  const ia = idsIn(A);
-  const ib = idsIn(B);
-  const ids = !ia.length && !ib.length ? 'none' : J(ia) === J(ib) ? 'same' : 'differ';
   const cls = (A === null) !== (B === null) || A?.retry !== B?.retry ? 'diff' : 'error-shape';
-  record(level, `${kind}.error`, cls, A, B, { ...extra, errorPair: `${errorLabel(A)}=>${errorLabel(B)}|ids:${ids}` });
+  record(level, `${kind}.error`, cls, A, B, { ...extra, errorPair: pairLabel(A, B) });
 }
 function compareReader(level, id, a, b) {
   R.counts.readerComparisons++;
@@ -789,21 +812,21 @@ function compareReader(level, id, a, b) {
   record(level, `${kind}.data`, classify(a.data, b.data, canon), a.data, b.data, {}, canon);
   compareErrors(level, kind, a.error, b.error);
 }
-function compareCallers(level, a, b, groupOf) {
-  const canon = (x) => canonCallers(x, groupOf);
+function compareCallers(level, a, b, groupsFor) {
   for (const k of new Set([...Object.keys(a ?? {}), ...Object.keys(b ?? {})])) {
     if (k === '__sources') continue;
+    const canon = (x) => canonCallers(x, groupsFor(k));
     R.counts.callerComparisons++;
     record(`${level}:caller`, `caller.${k}`, classify(a?.[k], b?.[k], canon), a?.[k], b?.[k], {}, canon);
   }
 }
 // `expected`: the reader ids that must be in both snapshots.
 function compareSnapshots(level, a, b, expected) {
-  const groupOf = bothSides(tieGroups(a), tieGroups(b));
+  const groupsFor = callerGroups(a, b);
   for (const k of new Set([...Object.keys(a), ...Object.keys(b), ...expected, 'callers'])) {
     if (k === 'callers') {
       if (!a.callers || !b.callers) record(`${level}:caller`, 'callers', 'state', a.callers ?? null, b.callers ?? null, { note: 'callers missing' });
-      else compareCallers(level, a.callers, b.callers, groupOf);
+      else compareCallers(level, a.callers, b.callers, groupsFor);
     } else compareReader(level, k, a[k], b[k]);
   }
 }
@@ -1013,10 +1036,10 @@ async function compareStep(pair, level, op) {
     // staleness: which readers differ live vs fresh, per side. Each side is
     // compared with itself, so only tie order is removed.
     const stale = (live, fr) => {
-      const groupOf = bothSides(tieGroups(live), tieGroups(fr));
+      const groupsFor = callerGroups(live, fr);
       return [...new Set([...Object.keys(live), ...Object.keys(fr)])]
         .filter((k) => {
-          const canon = k === 'callers' ? (x) => canonCallers(x, groupOf) : canonFor(readerKind(k));
+          const canon = k === 'callers' ? (x) => canonCallerSet(x, groupsFor) : canonFor(readerKind(k));
           const pick = (snap) => (k === 'callers' ? { ...snap[k], __sources: undefined } : snap[k]?.data);
           return JT(canon(pick(live))) !== JT(canon(pick(fr)));
         })
