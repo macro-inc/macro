@@ -2162,3 +2162,61 @@ export async function main() {{
     assert!(!fixture.reached.lock().unwrap().is_empty());
     service.shutdown().await;
 }
+
+/// A proxied scoped run can't reach unfurl through its own forwarder
+/// either, even when the forwarder was given an unfurl upstream (the
+/// harness gives a scoped run none); its other requests go through.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_proxied_scoped_run_never_reaches_unfurl_through_its_forwarder() {
+    let (_root, service) = setup(Limits::default()).await;
+    let fixture = unfurl_fixture().await;
+    let source = r#"
+export async function main(context: { forwarder: Record<string, string> }) {
+  const results: string[] = [];
+  for (const url of [
+    `${context.forwarder.unfurl}/proxy?url=x`,
+    `${context.forwarder.unfurl.toUpperCase().replace("HTTP://", "http://")}/proxy?url=x`,
+    `${context.forwarder.unfurl}/`,
+    `${context.forwarder.email}/email/ok`,
+  ]) {
+    try {
+      results.push(String((await fetch(url)).status));
+    } catch (error) {
+      results.push(String(error).includes("can't fetch links") ? "refused" : String(error));
+    }
+  }
+  return { results };
+}
+"#;
+    let job = "eyJhbGciOiJub25lIn0.eyJhZ2VudF9zY29wZSI6ImpvYiJ9.signature";
+    let environment = RunEnvironment {
+        egress: Egress::Proxied,
+        ..unfurl_run(&fixture, job)
+    };
+    let (_, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source: source.into(),
+                    timeout_ms: 10_000,
+                },
+                environment,
+            )
+            .unwrap(),
+    )
+    .await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(
+        value["results"],
+        serde_json::json!(["refused", "refused", "refused", "200"])
+    );
+    assert!(
+        fixture.reached.lock().unwrap().is_empty(),
+        "{:?}",
+        fixture.reached.lock().unwrap()
+    );
+    service.shutdown().await;
+}

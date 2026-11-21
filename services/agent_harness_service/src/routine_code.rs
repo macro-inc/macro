@@ -327,7 +327,8 @@ impl<Credentials: RoutineCredentials> RoutineCode for SdkRoutineCode<Credentials
         let environment = RunEnvironment {
             token,
             trace_headers: crate::code_mode::trace_headers(),
-            endpoints: self.endpoints.clone(),
+            // A dry run's credential signs the dry-run scope.
+            endpoints: crate::code_mode::run_endpoints(&self.endpoints, run.dry_run),
             session_id: None,
             execution_id: None,
             unattended: Some(Unattended {

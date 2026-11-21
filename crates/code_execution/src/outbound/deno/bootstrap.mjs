@@ -182,11 +182,16 @@ try {
     }
     return {origin: originOf(parsed.href).toLowerCase(), segments};
   };
-  const fetchers = [context.hosts.unfurl].filter(Boolean).map(routed);
+  // A proxied run reaches the hosts through its forwarder, whose paths name
+  // each service: unfurl's there is refused like unfurl itself (a scoped
+  // run's host gives it no unfurl upstream to begin with).
+  const forwarderOrigins = new Set(Object.values(context.forwarder ?? {}).map(local => originOf(local).toLowerCase()));
+  const fetchers = [context.hosts.unfurl, context.forwarder?.unfurl].filter(Boolean).map(routed);
   const reachesFetcher = (url) => {
     const {origin, segments} = routed(url);
-    // The gateway serves unfurl under /unfurl on every SDK origin.
-    if (origins.has(origin) && segments[0] === "unfurl") return true;
+    // The gateway serves unfurl under /unfurl on every SDK origin, and a
+    // forwarder serves each service under its name.
+    if ((origins.has(origin) || forwarderOrigins.has(origin)) && segments[0] === "unfurl") return true;
     return fetchers.some(base => base.origin === origin && base.segments.every((segment, index) => segments[index] === segment));
   };
   const refusal = () => new TypeError("A background job or other scoped run can't fetch links through Macro's servers.");

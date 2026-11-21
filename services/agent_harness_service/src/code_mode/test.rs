@@ -1038,3 +1038,26 @@ impl super::jobs::MayDetach for NeverDetach {
         })
     }
 }
+
+/// A scoped run gets no unfurl host, so neither `--allow-net` nor an egress
+/// forwarder has an address for it; an unscoped run keeps it.
+#[test]
+fn a_scoped_run_gets_no_unfurl_host() {
+    let endpoints = SdkEndpoints {
+        hosts: BTreeMap::from([
+            (
+                "unfurl".to_owned(),
+                "https://gateway.example/unfurl".to_owned(),
+            ),
+            (
+                "storage".to_owned(),
+                "https://gateway.example/dss".to_owned(),
+            ),
+        ]),
+        web_app_url: "https://app.example".to_owned(),
+    };
+    let scoped = run_endpoints(&endpoints, true);
+    assert_eq!(scoped.hosts.keys().collect::<Vec<_>>(), ["storage"]);
+    let unscoped = run_endpoints(&endpoints, false);
+    assert_eq!(unscoped.hosts.len(), 2);
+}

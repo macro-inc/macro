@@ -290,7 +290,7 @@ impl RunCredentials {
             environment: RunEnvironment {
                 token,
                 trace_headers: trace_headers(),
-                endpoints: self.endpoints.clone(),
+                endpoints: run_endpoints(&self.endpoints, scope.is_some()),
                 session_id: Some(identity.session.as_uuid()),
                 execution_id: Some(identity.execution.as_uuid()),
                 unattended: None,
@@ -392,6 +392,9 @@ impl UserExecutionCredentials for UserRunCredentials {
             }
             None => None,
         };
+        let scoped = correlation
+            .as_ref()
+            .is_some_and(|signed| signed.scope.is_some());
         // Same lifetime as session runs: the 30-second deadline plus clock margin.
         let token = self
             .signer
@@ -411,13 +414,28 @@ impl UserExecutionCredentials for UserRunCredentials {
         Ok(RunEnvironment {
             token,
             trace_headers: trace_headers(),
-            endpoints: self.endpoints.clone(),
+            endpoints: run_endpoints(&self.endpoints, scoped),
             session_id: None,
             execution_id: None,
             unattended: None,
             egress: self.egress.egress(user).await,
         })
     }
+}
+
+/// The SDK hosts a run reaches. A scoped run (a background job, a hidden
+/// session, a routine's dry run) gets no unfurl host: unfurl fetches what its
+/// caller names from Macro's servers and takes no credential, so with no
+/// host there is neither an address in `--allow-net` nor an upstream in an
+/// egress forwarder. The run bootstrap also refuses unfurl's paths.
+pub(crate) fn run_endpoints(endpoints: &SdkEndpoints, scoped: bool) -> SdkEndpoints {
+    let mut endpoints = endpoints.clone();
+    if scoped {
+        endpoints
+            .hosts
+            .remove(<&'static str>::from(SdkHost::Unfurl));
+    }
+    endpoints
 }
 
 /// The current trace context, for the SDK to forward on authenticated requests.
