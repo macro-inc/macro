@@ -664,6 +664,26 @@ describe('in-memory channel directory', () => {
     expect(ids(await directory.readComplete())).toEqual(['a', 'b']);
   });
 
+  it('reads pages restored from an earlier page again, and only then has their views current', async () => {
+    const network = fakeNetwork([channelRecord('a', { viewedAt: VIEWED_2 })]);
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    // Restored from a page that read them a minute before this one loaded:
+    // still fresh, and older than the view made elsewhere since.
+    queryClient.setQueryData(
+      channelDirectoryPagesQueryOptions(VIEWER, () => network.client).queryKey,
+      [directoryChannel('a', { viewedAt: VIEWED_0 })],
+      { updatedAt: performance.timeOrigin - 60_000 }
+    );
+    const directory = mountMemoryDirectory(network, queryClient);
+    expect(viewedAt(directory, 'a')).toBe(VIEWED_0);
+    expect(directory.viewsCurrent()).toBe(false);
+
+    await vi.waitFor(() => expect(viewedAt(directory, 'a')).toBe(VIEWED_2));
+    expect(directory.viewsCurrent()).toBe(true);
+  });
+
   it('lists and reads every channel newest update first, across pages', async () => {
     const network = fakeNetwork([
       channelRecord('old', { updatedAt: UPDATED_OLD }),

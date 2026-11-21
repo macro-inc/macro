@@ -35,6 +35,7 @@ import { promiseTimeout, until } from '@solid-primitives/promise';
 import { AsyncQueuer, Batcher } from '@tanstack/pacer';
 import {
   hashKey,
+  type Query,
   type QueryClient,
   type QueryKey,
   queryOptions,
@@ -206,7 +207,9 @@ export type ChannelDirectory = {
    * later. No soup update carries a view, so a cached record keeps the one it
    * was read with until a pass of the channel lane rereads it: the cached
    * directory is current once a pass that started after the page loaded has
-   * finished. The in-memory one read its pages in this page. */
+   * finished. The in-memory one is current once its pages were read in this
+   * page: pages restored from an earlier one keep the views they were read
+   * with until they are read again, on mount. */
   viewsCurrent: Accessor<boolean>;
 };
 
@@ -632,6 +635,18 @@ function readsBeforeWrite(client: QueryClient, queryKey: QueryKey) {
   return (writes.readFrom.get(hashKey(queryKey)) ?? 0) < writes.seen;
 }
 
+/** Whether data updated at `updatedAt` was read in this page, not restored
+ * from an earlier page: a restore keeps the time it was read. Pages read
+ * before hold the views of that time. */
+function readInThisPage(updatedAt: number): boolean {
+  return updatedAt >= performance.timeOrigin;
+}
+
+// Restored pages are read again on mount, even while fresh: their views can
+// be older than ones the viewer made elsewhere since.
+const REFETCH_RESTORED_PAGES = (query: Pick<Query, 'state'>) =>
+  readInThisPage(query.state.dataUpdatedAt) ? true : ('always' as const);
+
 /** Every joined channel, paged from the network into memory. For the
  * directory without a cache, and for a full read before the cache is
  * complete. */
@@ -647,6 +662,7 @@ export function channelDirectoryPagesQueryOptions(
       return fetchJoinedChannels(client(), signal);
     },
     staleTime: DIRECTORY_STALE_MS,
+    refetchOnMount: REFETCH_RESTORED_PAGES,
   });
 }
 
@@ -2037,7 +2053,9 @@ export function createMemoryChannelDirectory(
     recordView(channelId, viewedAt) {
       views.record(channelId, viewedAt);
     },
-    viewsCurrent: () => true,
+    // Until the pages load, the rows read by id stand in, read in this page.
+    viewsCurrent: () =>
+      !queryReadyGate(pages) || readInThisPage(pages.dataUpdatedAt),
   };
 }
 
