@@ -36,7 +36,11 @@ fn deserialize_seq<'de, D: Deserializer<'de>>(deserializer: D) -> Result<i64, D:
 pub enum CalendarWatermarkUpdate {
     /// A page read captured `links` before reading its rows. Each link is
     /// lowered to the incoming value, so changes the page may predate are
-    /// replayed by the next delta; links without a value adopt it.
+    /// replayed by the next delta. Links take the incoming value only into a
+    /// watermark not stored yet: a link a stored watermark lacks became
+    /// visible after rows already cached were fetched, and its changes before
+    /// the page are in none of them, so it stays untracked and the next delta,
+    /// which leaves it out, gets the server's reset.
     Merge {
         /// Watermark captured by the page.
         links: Vec<CalendarLinkWatermark>,
@@ -86,8 +90,9 @@ impl CalendarWatermarkUpdate {
 
 /// Applies an update to the stored watermark, then drops removed links.
 ///
-/// A missing stored link places no bound on the incoming value. The result is
-/// ordered by link id.
+/// Without a stored watermark a page's links are adopted as they are; with
+/// one, a merge only lowers the links it already tracks. The result is ordered
+/// by link id.
 pub fn apply_watermark_update(
     stored: Option<&[CalendarLinkWatermark]>,
     update: Option<&CalendarWatermarkUpdate>,
@@ -103,8 +108,11 @@ pub fn apply_watermark_update(
         None => {}
         Some(CalendarWatermarkUpdate::Merge { links }) => {
             for link in links {
-                let value = lower(current.get(&link.link_id).copied(), link.seq);
-                current.insert(link.link_id.clone(), value);
+                let tracked = current.get(&link.link_id).copied();
+                if tracked.is_none() && stored.is_some() {
+                    continue;
+                }
+                current.insert(link.link_id.clone(), lower(tracked, link.seq));
             }
         }
         Some(CalendarWatermarkUpdate::Advance { since, to }) => {

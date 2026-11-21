@@ -6,6 +6,7 @@ import type {
   CalendarRangeCacheResult,
 } from '@graphql-cache/index';
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import { CalendarsDocument } from '@service-storage/graphql/generated/graphql';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import { createClient, fetchExchange } from '@urql/core';
@@ -86,6 +87,24 @@ const changes = (
   ...overrides,
 });
 
+/** Records the attributes of each span the controller opens. */
+function recordSpans() {
+  const spans: { name: string; attributes: Record<string, unknown> }[] = [];
+  vi.spyOn(Telemetry, 'span').mockImplementation(((
+    name: string,
+    run: (span: Pick<Span, 'setAttr'>) => unknown
+  ) => {
+    const attributes: Record<string, unknown> = {};
+    spans.push({ name, attributes });
+    return run({
+      setAttr: (key: string, value: unknown) => {
+        attributes[key] = value;
+      },
+    } as Pick<Span, 'setAttr'>);
+  }) as unknown as typeof Telemetry.span);
+  return spans;
+}
+
 function setup(
   pages: CalendarChangesPage[],
   watermark: Array<{ linkId: string; seq: string }> | null = [
@@ -117,7 +136,10 @@ function setup(
 
 describe('CalendarSyncController', () => {
   beforeEach(() => vi.useFakeTimers());
-  afterEach(() => vi.useRealTimers());
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
 
   it('runs the requested new-generation pass after an old commit is rejected', async () => {
     const { host, fetchChanges, controller } = setup([changes()]);
@@ -265,12 +287,78 @@ describe('CalendarSyncController', () => {
   });
 
   it('skips the delta until a page fetch establishes a watermark', async () => {
-    for (const watermark of [null, []]) {
-      const { host, fetchChanges, controller } = setup([], watermark);
-      await controller.runDelta();
-      expect(fetchChanges).not.toHaveBeenCalled();
-      expect(host.calendarCommit).not.toHaveBeenCalled();
-    }
+    const { host, fetchChanges, controller } = setup([], null);
+    await controller.runDelta();
+    expect(fetchChanges).not.toHaveBeenCalled();
+    expect(host.calendarCommit).not.toHaveBeenCalled();
+  });
+
+  it('keeps rows cached with no inbox while the server still lists none', async () => {
+    const { host, fetchChanges, refetchCalendars, controller } = setup(
+      [changes({ newWatermark: [] })],
+      []
+    );
+    await controller.runDelta();
+    expect(fetchChanges).toHaveBeenCalledExactlyOnceWith([]);
+    expect(host.calendarCommit).not.toHaveBeenCalled();
+    expect(refetchCalendars).not.toHaveBeenCalled();
+  });
+
+  it('resets rows cached with no inbox once the server lists one', async () => {
+    const spans = recordSpans();
+    const { host, fetchChanges, refetchCalendars, controller } = setup(
+      [changes({ newWatermark: [{ linkId: 'link-9', seq: '12' }] })],
+      []
+    );
+    await controller.runDelta();
+    expect(fetchChanges).toHaveBeenCalledExactlyOnceWith([]);
+    expect(host.calendarCommit).toHaveBeenCalledExactlyOnceWith(
+      {
+        reset: true,
+        watermark: { kind: 'merge', links: [{ linkId: 'link-9', seq: '12' }] },
+      },
+      expect.any(String)
+    );
+    expect(refetchCalendars).toHaveBeenCalledOnce();
+    expect(spans.at(-1)).toMatchObject({
+      name: 'calendar.delta_sync',
+      attributes: { 'calendar.delta.reset': 'first_link' },
+    });
+  });
+
+  it('names a reset for a link the cache never tracked', async () => {
+    const spans = recordSpans();
+    const { controller } = setup([
+      changes({
+        resetRequired: true,
+        newWatermark: [
+          { linkId: 'link-1', seq: '5' },
+          { linkId: 'link-3', seq: '40' },
+        ],
+      }),
+    ]);
+    await controller.runDelta();
+    expect(spans.at(-1)?.attributes).toMatchObject({
+      'calendar.delta.reset': 'new_link',
+      'calendar.delta.pages': 1,
+    });
+  });
+
+  it('names a reset past the server retention', async () => {
+    const spans = recordSpans();
+    const { controller } = setup(
+      [
+        changes({
+          resetRequired: true,
+          newWatermark: [{ linkId: 'link-1', seq: '90' }],
+        }),
+      ],
+      [{ linkId: 'link-1', seq: '1' }]
+    );
+    await controller.runDelta();
+    expect(spans.at(-1)?.attributes).toMatchObject({
+      'calendar.delta.reset': 'retention',
+    });
   });
 
   it('debounces pokes into one run', async () => {

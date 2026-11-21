@@ -267,24 +267,67 @@ fn gaps_are_the_uncovered_parts_of_the_request() {
 }
 
 #[test]
-fn page_watermarks_lower_each_link_and_adopt_new_links() {
+fn page_watermarks_lower_each_tracked_link() {
     let stored = [link("a", 10), link("b", 5)];
     let merged = apply_watermark_update(
         Some(&stored),
         Some(&CalendarWatermarkUpdate::Merge {
-            links: vec![link("a", 7), link("b", 9), link("c", 3)],
+            links: vec![link("a", 7), link("b", 9)],
         }),
         &[],
     );
-    assert_eq!(merged, [link("a", 7), link("b", 5), link("c", 3)]);
+    assert_eq!(merged, [link("a", 7), link("b", 5)]);
     let again = apply_watermark_update(
         Some(&merged),
         Some(&CalendarWatermarkUpdate::Merge {
-            links: vec![link("a", 7), link("b", 9), link("c", 3)],
+            links: vec![link("a", 7), link("b", 9)],
         }),
         &[],
     );
     assert_eq!(again, merged, "re-delivery is idempotent");
+}
+
+#[test]
+fn a_first_page_adopts_its_links() {
+    assert_eq!(
+        apply_watermark_update(
+            None,
+            Some(&CalendarWatermarkUpdate::Merge {
+                links: vec![link("a", 4), link("b", 9)],
+            }),
+            &[],
+        ),
+        [link("a", 4), link("b", 9)]
+    );
+}
+
+#[test]
+fn a_page_leaves_a_link_untracked_that_appeared_after_rows_were_cached() {
+    // Rows cached while only `a` was visible hold none of `c`'s changes up
+    // to 30. Adopting 30 would skip them for good; untracked, `c` is left out
+    // of the next delta, and the server resets the cache.
+    let stored = [link("a", 10)];
+    assert_eq!(
+        apply_watermark_update(
+            Some(&stored),
+            Some(&CalendarWatermarkUpdate::Merge {
+                links: vec![link("a", 12), link("c", 30)],
+            }),
+            &[],
+        ),
+        [link("a", 10)]
+    );
+    // Rows cached while no link was visible at all.
+    assert_eq!(
+        apply_watermark_update(
+            Some(&[]),
+            Some(&CalendarWatermarkUpdate::Merge {
+                links: vec![link("c", 30)],
+            }),
+            &[],
+        ),
+        []
+    );
 }
 
 #[test]
