@@ -20,6 +20,10 @@ pub struct GraphqlContact {
     email: String,
     /// Macro profile name, then this viewer's address-book name; null means use email fallback.
     name: Option<String>,
+    /// Keys of the viewer's lists this person is in (`teammates`, `interacted`,
+    /// `invited`, `gmail`, `outlook`; more may be added), each once. Empty for
+    /// the viewer, and for a person in no list.
+    lists: Vec<String>,
 }
 
 impl From<Contact> for GraphqlContact {
@@ -29,6 +33,11 @@ impl From<Contact> for GraphqlContact {
             email: contact.user_id.email_str().to_owned(),
             user_id: contact.user_id.to_string().into(),
             name: contact.name,
+            lists: contact
+                .lists
+                .iter()
+                .map(|list| list.as_ref().to_owned())
+                .collect(),
         }
     }
 }

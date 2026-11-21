@@ -23,6 +23,7 @@ async fn enriched_pages_preserve_profile_precedence_and_private_address_book_nam
             repository: DbContactsRepository::new(pool.clone()),
             notifier: None::<ConnectionGatewayNotifier>,
         }),
+        Arc::new(DbContactsRepository::new(pool.clone())),
         DbContactNames::new(pool.clone()),
     );
     let first = service
@@ -166,6 +167,7 @@ async fn canonical_lookup_keeps_paged_identity_and_viewer_private_names_for_lega
             repository: DbContactsRepository::new(pool.clone()),
             notifier: None::<ConnectionGatewayNotifier>,
         }),
+        Arc::new(DbContactsRepository::new(pool.clone())),
         DbContactNames::new(pool),
     );
     let lookup = ContactLookup::new(
