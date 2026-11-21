@@ -94,7 +94,7 @@ struct Args {
     /// threads while they run; each must answer as the state before the
     /// hydrate or after it, or the seed fails. Not compared: give it to both
     /// sides, so both read the same before and after.
-    #[arg(long, default_value_t = 0.0)]
+    #[arg(long, default_value_t = 0.0, value_parser = share)]
     concurrent_reads: f64,
 }
 
@@ -119,6 +119,19 @@ fn main() -> Result<(), rootcause::Report> {
     tabs.sort_by(|a, b| a.0.cmp(&b.0));
     let docs = sequence::load_docs(&faker, &sources)?;
     std::fs::create_dir_all(&args.out)?;
+    // Each seed's work directory is removed before it runs, so a start inside
+    // it would be deleted before it is copied.
+    if let Some(from) = &args.start_from {
+        std::fs::create_dir_all(&args.work)?;
+        let (from, work) = (from.canonicalize()?, args.work.canonicalize()?);
+        if from.starts_with(&work) {
+            return Err(rootcause::report!(
+                "--start-from {} is inside --work {}",
+                from.display(),
+                work.display()
+            ));
+        }
+    }
     let end = args
         .seed
         .checked_add(args.count)
@@ -256,6 +269,16 @@ fn run(
     // A run that stopped early compared only a prefix: two builds that stop at
     // the same step would otherwise pass. The trace keeps where it stopped.
     outcome.map_err(|error| rootcause::report!("seed {seed} stopped early: {error}"))
+}
+
+/// A share from 0 to 1; NaN and anything outside fail to parse.
+fn share(text: &str) -> Result<f64, String> {
+    let value: f64 = text.parse().map_err(|error| format!("{error}"))?;
+    if (0.0..=1.0).contains(&value) {
+        Ok(value)
+    } else {
+        Err(format!("{value} is not between 0 and 1"))
+    }
 }
 
 /// FNV-1a, so the hash is the same in every build.
