@@ -254,6 +254,7 @@ async fn every_page_size_matches_the_whole_feed(pool: Pool<Postgres>) -> anyhow:
     migrator = "MACRO_DB_MIGRATIONS"
 )]
 async fn only_restricts_to_known_items(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    copy_entities_onto_recipient_rows(&pool).await?;
     let link_ids = [Uuid::parse_str(LINK_1)?];
     let sources = sources();
     let only: Vec<Entity<'static>> = vec![
@@ -278,7 +279,8 @@ async fn only_restricts_to_known_items(pool: Pool<Postgres>) -> anyhow::Result<(
 }
 
 /// Copy each notification's entity onto its recipient rows, as notification
-/// ingress does; the fixtures insert recipient rows without it.
+/// ingress does; the fixtures insert recipient rows without it. Reads of
+/// known items (`only`) find their notifications through these copies.
 async fn copy_entities_onto_recipient_rows(pool: &Pool<Postgres>) -> anyhow::Result<()> {
     sqlx::query!(
         "UPDATE user_notification un \
@@ -307,8 +309,12 @@ fn only_a_probe_changes_the_query() {
                 thread_keyed = thread_keyed(AttentionKeying::ThreadScoped),
                 probe_skips_pending = "",
             ),
+            own_work_latest = format!(
+                include_str!("own_work_latest.sql"),
+                own_work_ae = own_work("ae"),
+                own_work_newer = own_work("newer"),
+            ),
             own_work_ae = own_work("ae"),
-            own_work_newer = own_work("newer"),
             email_inbox_gate = email_inbox_gate(),
             document_gate = document_gate(ID_SQL, None),
             chat_gate = chat_gate(ID_SQL, None),
@@ -407,6 +413,7 @@ async fn filed_entity_only_reads_one_item_of_the_feed(pool: Pool<Postgres>) -> a
 async fn a_probe_lists_what_a_new_notification_would_place(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
+    copy_entities_onto_recipient_rows(&pool).await?;
     let link_ids = [Uuid::parse_str(LINK_1)?];
     let sources = sources();
     let only: Vec<Entity<'static>> = vec![
@@ -892,8 +899,7 @@ async fn a_probe_costs_the_same_however_many_notifications_are_pending(
     let mut probe = req(ATTENTION, &link_ids, &sources);
     probe.only = Some(&only);
     probe.assume_attention = true;
-    let mut page = req(ATTENTION, &link_ids, &sources);
-    page.only = Some(&only);
+    let page = req(ATTENTION, &link_ids, &sources);
 
     // Postgres JIT-compiles a query planned above `jit_above_cost` (100,000
     // by default), which costs a probe hundreds of milliseconds. A probe
@@ -903,5 +909,219 @@ async fn a_probe_costs_the_same_however_many_notifications_are_pending(
     let page_cost = planned_cost(&pool, &page).await;
     assert!(probe_cost < 1_000.0, "probe planned at {probe_cost}");
     assert!(page_cost > 10_000.0, "page planned at {page_cost}");
+    Ok(())
+}
+
+/// One pending notification on a channel that names no thread, so it stays
+/// on the channel under thread-scoped keying.
+async fn notify_on_channel(
+    pool: &Pool<Postgres>,
+    id: &str,
+    channel_id: &str,
+    at: &str,
+) -> anyhow::Result<()> {
+    sqlx::query(
+        "WITH n AS (
+            INSERT INTO notification (id, notification_event_type, event_item_id, event_item_type, service_sender, created_at)
+            VALUES ($2::uuid, 'channel_message_send', $3, 'channel', 'test', $4::timestamp)
+            RETURNING id, created_at
+        )
+        INSERT INTO user_notification (user_id, notification_id, created_at, sent, state, event_item_type, event_item_id, notification_event_type)
+        SELECT $1, id, created_at, TRUE, 'unseen', 'channel', $3, 'channel_message_send' FROM n",
+    )
+    .bind(USER_1)
+    .bind(id)
+    .bind(channel_id)
+    .bind(at)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("work_feed", "attention_channel_keying")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn a_read_of_known_items_matches_the_whole_feed_for_every_item(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    copy_entities_onto_recipient_rows(&pool).await?;
+    // Older than channel-Y's three thread notifications (T30-T32), which
+    // place their threads under thread-scoped keying: the channel itself is
+    // placed by this one.
+    notify_on_channel(
+        &pool,
+        "0190b000-0000-7000-8000-000000000029",
+        CHANNEL_Y,
+        "2024-06-01 10:29:00",
+    )
+    .await?;
+    let link_ids = [Uuid::parse_str(LINK_1)?];
+    let sources = sources();
+    let channel_y = EntityType::Channel.with_entity_string(CHANNEL_Y.to_string());
+    for keying in [AttentionKeying::ThreadScoped, AttentionKeying::FiledEntity] {
+        for own_work in [ATTENTION, WORK] {
+            let mut whole = req(own_work, &link_ids, &sources);
+            whole.keying = keying;
+            let feed = attention_soup_page(&pool, whole).await?;
+            if keying == AttentionKeying::ThreadScoped {
+                let placed = feed
+                    .iter()
+                    .find(|candidate| candidate.entity == channel_y)
+                    .expect("the send places channel-Y");
+                assert_eq!(placed.attention_at.map(|at| at.minute()), Some(29));
+            }
+
+            // Every item of the feed, and some the feed does not hold: one
+            // only ever opened, a channel whose one notification names a
+            // thread, an email thread only ever archived, and a channel and
+            // a thread that do not exist.
+            let mut only: Vec<Entity<'static>> = feed
+                .iter()
+                .map(|candidate| candidate.entity.clone())
+                .collect();
+            for extra in [
+                EntityType::Document.with_entity_string(DOC_F.to_string()),
+                EntityType::Channel.with_entity_string(CHANNEL_X.to_string()),
+                EntityType::EmailThread.with_entity_string(THREAD_A.to_string()),
+                EntityType::Channel.with_entity_string(Uuid::nil().to_string()),
+                EntityType::ChannelMessage.with_entity_string(Uuid::nil().to_string()),
+            ] {
+                if !only.contains(&extra) {
+                    only.push(extra);
+                }
+            }
+            let mut known = req(own_work, &link_ids, &sources);
+            known.keying = keying;
+            known.only = Some(&only);
+            assert_eq!(
+                attention_soup_page(&pool, known).await?,
+                feed,
+                "{keying:?} own_work={own_work}"
+            );
+
+            // And each item alone reads back as itself, with its attention
+            // and its latest own work.
+            for candidate in &feed {
+                let only = vec![candidate.entity.clone()];
+                let mut known = req(own_work, &link_ids, &sources);
+                known.keying = keying;
+                known.only = Some(&only);
+                assert_eq!(
+                    attention_soup_page(&pool, known).await?,
+                    vec![candidate.clone()],
+                    "{keying:?} own_work={own_work}"
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("work_feed", "attention_channel_keying")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn the_whole_feed_holds_own_work_and_thread_scoped_items(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    copy_entities_onto_recipient_rows(&pool).await?;
+    notify_on_channel(
+        &pool,
+        "0190b000-0000-7000-8000-000000000029",
+        CHANNEL_Y,
+        "2024-06-01 10:29:00",
+    )
+    .await?;
+    let link_ids = [Uuid::parse_str(LINK_1)?];
+    let sources = sources();
+    // The items the equivalence above is worth checking on: a channel placed
+    // by a send, a thread, and own work whose latest touch is not its newest
+    // event (doc-A was opened after the edit that places it; thread-S was
+    // archived after the send that places it).
+    let feed = attention_soup_page(&pool, req(WORK, &link_ids, &sources)).await?;
+    for key in [
+        (EntityType::Channel, CHANNEL_Y.to_string()),
+        (EntityType::ChannelMessage, ROOT_R2.to_string()),
+        (EntityType::Document, DOC_A.to_string()),
+        (EntityType::EmailThread, THREAD_S.to_string()),
+    ] {
+        assert!(keys(&feed).contains(&key), "{key:?} not in {feed:?}");
+    }
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("work_feed")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn a_recompute_costs_the_same_however_much_the_viewer_holds(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // A viewer with a long history of their own: 50,000 edits, one item each.
+    sqlx::query(
+        "INSERT INTO activity_events (id, actor_id, subject_id, action, entity_type, entity_id, occurred_at)
+        SELECT gen_random_uuid(), $1, $1, 'edited', 'document', gen_random_uuid()::text,
+               timestamptz '2024-01-01' + i * interval '1 minute'
+        FROM generate_series(1, 50000) AS i",
+    )
+    .bind(USER_1)
+    .execute(&pool)
+    .await?;
+    // And a large inbox: 50,000 pending notifications, a fifth of them on
+    // channels and naming a thread.
+    sqlx::query(
+        "WITH n AS (
+            INSERT INTO notification (id, notification_event_type, event_item_id, event_item_type, service_sender, secondary_event_item_id, secondary_event_item_type)
+            SELECT gen_random_uuid(),
+                   CASE WHEN i % 5 = 0 THEN 'channel_message_reaction' ELSE 'document_mention' END,
+                   gen_random_uuid()::text,
+                   CASE WHEN i % 5 = 0 THEN 'channel' ELSE 'document' END,
+                   'test',
+                   CASE WHEN i % 5 = 0 THEN gen_random_uuid()::text END,
+                   CASE WHEN i % 5 = 0 THEN 'channel_message' END
+            FROM generate_series(1, 50000) AS i
+            RETURNING id, event_item_id, event_item_type, notification_event_type
+        )
+        INSERT INTO user_notification (user_id, notification_id, state, event_item_type, event_item_id, notification_event_type)
+        SELECT $1, id, 'unseen', event_item_type, event_item_id, notification_event_type FROM n",
+    )
+    .bind(USER_1)
+    .execute(&pool)
+    .await?;
+    sqlx::query("ANALYZE").execute(&pool).await?;
+
+    let link_ids = [Uuid::parse_str(LINK_1)?];
+    let sources = sources();
+    let only = vec![
+        EntityType::Document.with_entity_string(DOC_F.to_string()),
+        EntityType::Channel.with_entity_string(CHANNEL_X.to_string()),
+        EntityType::ChannelMessage.with_entity_string(THREAD_M.to_string()),
+    ];
+    let page_cost = planned_cost(&pool, &req(ATTENTION, &link_ids, &sources)).await;
+    assert!(page_cost > 10_000.0, "page planned at {page_cost}");
+
+    // A recompute of known items reads only their notifications and the
+    // viewer's work on them, under either keying, so its plan grows with
+    // neither the inbox nor the history.
+    for keying in [AttentionKeying::ThreadScoped, AttentionKeying::FiledEntity] {
+        for own_work in [ATTENTION, WORK] {
+            let mut recompute = req(own_work, &link_ids, &sources);
+            recompute.keying = keying;
+            recompute.only = Some(&only);
+            let cost = planned_cost(&pool, &recompute).await;
+            eprintln!("recompute {keying:?} own_work={own_work}: {cost} (page {page_cost})");
+            assert!(
+                cost < 2_000.0,
+                "{keying:?} recompute planned at {cost}, page at {page_cost}"
+            );
+        }
+    }
     Ok(())
 }
