@@ -187,3 +187,12 @@ it('keeps the module a later report retained over a stalled compile ahead', asyn
     'https://app.test/engine-b.wasm'
   );
 });
+
+it('stops waiting for the page after its deadline even when the page never answers', async () => {
+  const channel = new MessageChannel();
+  channels.push(channel);
+  // No offerCompiledEngine: a page whose main thread is held never posts.
+  await expect(
+    compiledEngineFromPage(channel.port2, 20).offered
+  ).resolves.toBeUndefined();
+});

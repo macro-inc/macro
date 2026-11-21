@@ -126,10 +126,15 @@ export function offerCompiledEngine(
 
 /** Worker side: the page's offer, and where to report a fresh compile. */
 export function compiledEngineFromPage(
-  port: ExchangePort
+  port: ExchangePort,
+  waitMs: number = PREFETCH_OFFER_WAIT_MS
 ): CompiledEngineExchange {
   const offered = new Promise<CompiledEngine | undefined>((resolve) => {
+    // The page's own deadline needs its main thread, which a long task can
+    // hold; this one runs here, so a healthy worker never waits longer.
+    const deadline = setTimeout(() => resolve(undefined), waitMs);
     port.onmessage = (event) => {
+      clearTimeout(deadline);
       resolve(isCompiledEngine(event.data) ? event.data : undefined);
     };
     port.onmessageerror = () => {

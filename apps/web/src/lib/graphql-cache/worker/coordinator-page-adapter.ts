@@ -731,6 +731,10 @@ export class CacheCoordinatorPageAdapter {
         )
           return;
         this.latestEngineReplacedEpoch = message.ownerEpoch;
+        // Another page's engine replaced the last one, as when this page
+        // registered during a drain: its compile ahead is only memory.
+        if (message.ownerEpoch !== this.ownerEpoch)
+          dropPrefetchedCompiledEngine();
         this.highestOwnerEpochSeen = Math.max(
           this.highestOwnerEpochSeen,
           message.ownerEpoch

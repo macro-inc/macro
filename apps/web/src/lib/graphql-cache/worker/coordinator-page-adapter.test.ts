@@ -1442,6 +1442,22 @@ describe('CacheCoordinatorPageAdapter', () => {
       expect(compile).toHaveBeenCalledTimes(2);
     });
 
+    it("forgets the compile once another page's engine replaces the last one", async () => {
+      const offered = offers();
+      const { adapter, port } = await registered([], compiled);
+      port.receive({
+        ...version,
+        kind: 'engine-replaced',
+        ownerEpoch: 2,
+        openOutcome: 'opened-existing',
+      });
+
+      port.receive(election(3));
+      await vi.waitFor(() => expect(offered).toHaveLength(1));
+      expect(offered[0]).toBeNull();
+      await adapter.dispose({ graceful: false });
+    });
+
     it('keeps the compile while its own engine opens', async () => {
       const offered = offers();
       const { adapter, port } = await registered([], compiled);
