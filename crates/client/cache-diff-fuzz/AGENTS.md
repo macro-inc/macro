@@ -47,7 +47,9 @@ disk after a reopen must come out the same.
 - Upgrade: `UPGRADE=1 fuzz.sh RUN FIRST COUNT OLD NEW`. OLD runs each case and keeps
   its file; both sides then start from that file (`--start-from`) with a probe and
   the case again, so NEW must read and extend what OLD stored exactly as OLD does.
-  Seeds that differ or fail keep the file in `runs/RUN/upgrade/SEED`.
+  Seeds that differ or fail keep the file in `runs/RUN/upgrade/SEED`. When NEW hashes
+  records differently, add `--mask-source-hashes` to `FUZZ_ARGS`: NEW rehashes
+  records OLD stored when the case writes them again, though their content is the same.
 - Rerun one seed: `bin/SIDE --seed N --schema static_assets/schema.graphql --assets
   crates/client/cache-diff-fuzz/assets --out D --work D/w --full`. Use
   `--emit-case` and `--case FILE` to save a case and rerun it. A seed's case

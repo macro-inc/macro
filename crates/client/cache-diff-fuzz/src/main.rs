@@ -62,6 +62,10 @@ struct Args {
     /// Compare stored records by what they decode to, not by their bytes (see `dump::tables`).
     #[arg(long)]
     decoded_records: bool,
+    /// Compare responses without their `sourceHash` (an upgrade to a build that
+    /// hashes records differently rehashes unchanged ones).
+    #[arg(long)]
+    mask_source_hashes: bool,
     /// Records the engine keeps decoded in its hot tier (the host's default when unset).
     #[arg(long)]
     hot_capacity: Option<u32>,
@@ -90,7 +94,7 @@ fn main() -> Result<(), rootcause::Report> {
         .ok_or_else(|| rootcause::report!("--seed plus --count overflows u64"))?;
     for seed in args.seed..end {
         let generated = match &args.case {
-            Some(path) => serde_json::from_str(&std::fs::read_to_string(path)?)?,
+            Some(path) => read_case(path)?,
             None => {
                 let generator = sequence::Gen::new(&faker, &docs, &tabs, seed);
                 let length = args
@@ -145,7 +149,11 @@ fn run(
         sources,
         generated,
         work,
-        args.decoded_records,
+        match (args.decoded_records, args.mask_source_hashes) {
+            (_, true) => normalize::SourceHashes::Masked,
+            (true, false) => normalize::SourceHashes::Labelled,
+            (false, false) => normalize::SourceHashes::Raw,
+        },
         args.hot_capacity,
     )
     .map_err(|error| rootcause::report!("{error}"))?;
@@ -220,4 +228,15 @@ fn fnv(bytes: &[u8]) -> u64 {
     bytes.iter().fold(0xcbf2_9ce4_8422_2325, |hash, byte| {
         (hash ^ u64::from(*byte)).wrapping_mul(0x0000_0100_0000_01b3)
     })
+}
+
+/// A case file. Filters nested to the engine's depth limits are deeper than
+/// serde_json's default recursion limit, so it is lifted here.
+fn read_case(path: &Path) -> Result<sequence::Generated, rootcause::Report> {
+    let text = std::fs::read_to_string(path)?;
+    let mut deserializer = serde_json::Deserializer::from_str(&text);
+    deserializer.disable_recursion_limit();
+    let generated = serde::Deserialize::deserialize(&mut deserializer)?;
+    deserializer.end()?;
+    Ok(generated)
 }

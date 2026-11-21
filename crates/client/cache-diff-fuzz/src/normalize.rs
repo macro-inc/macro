@@ -1,14 +1,26 @@
 //! Makes a response comparable across runs: ids the engine mints (storage and
 //! Mail generations, observation instances, and SHA-256 digests of them) become
 //! `#1`, `#2`, … in order of first appearance, ids that appear in the case's
-//! inputs stay as they are, and the run's directory becomes `<dir>`. With
-//! `source_hashes`, each distinct `sourceHash` becomes `h1`, `h2`, … in order of
-//! first appearance, so two builds that encode records differently must still
-//! agree on which results share a hash and when one changes.
+//! inputs stay as they are, and the run's directory becomes `<dir>`. Response
+//! `sourceHash` values are compared as [`SourceHashes`] says.
 
 use serde_json::Value;
 use std::collections::{BTreeSet, HashMap};
 use std::path::Path;
+
+/// How response `sourceHash` values are compared.
+#[derive(Clone, Copy)]
+pub enum SourceHashes {
+    /// As they are.
+    Raw,
+    /// Each distinct value becomes `h1`, `h2`, … by first appearance, so two builds
+    /// that encode records differently must still agree on which results share a
+    /// hash and when one changes.
+    Labelled,
+    /// All become `h`. For an upgrade, where the newer build rehashes records the
+    /// older one stored without their content changing.
+    Masked,
+}
 
 pub struct Normalizer {
     keep: BTreeSet<String>,
@@ -17,8 +29,8 @@ pub struct Normalizer {
     /// After the responses: ids first seen now get no number, since the order
     /// they are seen in (table rows) is not the order they were made in.
     frozen: bool,
-    /// `sourceHash` values to their labels, when they are labelled.
-    source_hashes: Option<HashMap<String, String>>,
+    source_hashes: SourceHashes,
+    labels: HashMap<String, String>,
 }
 
 /// Keys whose arrays come from hash sets, so their order means nothing.
@@ -28,7 +40,7 @@ impl Normalizer {
     /// `inputs` is everything the case feeds the engine. Any id in it was made
     /// by the generator or the faker, not minted by the engine, so it is kept:
     /// a build that answers with the wrong one of those ids shows up.
-    pub fn new(inputs: &str, root: &Path, source_hashes: bool) -> Self {
+    pub fn new(inputs: &str, root: &Path, source_hashes: SourceHashes) -> Self {
         let keep = id_spans(inputs)
             .map(|(start, width)| inputs[start..start + width].to_owned())
             .collect();
@@ -37,7 +49,8 @@ impl Normalizer {
             minted: HashMap::new(),
             root: root.display().to_string(),
             frozen: false,
-            source_hashes: source_hashes.then(HashMap::new),
+            source_hashes,
+            labels: HashMap::new(),
         }
     }
 
@@ -55,11 +68,16 @@ impl Normalizer {
                 map.into_iter()
                     .map(|(key, value)| {
                         if key == "sourceHash"
-                            && let (Some(labels), Value::String(hash)) =
-                                (&mut self.source_hashes, &value)
+                            && let Value::String(hash) = &value
                         {
-                            let next = format!("h{}", labels.len() + 1);
-                            let label = labels.entry(hash.clone()).or_insert(next).clone();
+                            let label = match self.source_hashes {
+                                SourceHashes::Raw => hash.clone(),
+                                SourceHashes::Labelled => {
+                                    let next = format!("h{}", self.labels.len() + 1);
+                                    self.labels.entry(hash.clone()).or_insert(next).clone()
+                                }
+                                SourceHashes::Masked => "h".to_owned(),
+                            };
                             return (key, Value::String(label));
                         }
                         let mut value = self.value(value);

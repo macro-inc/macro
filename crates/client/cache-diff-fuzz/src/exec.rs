@@ -54,7 +54,7 @@ impl<'a> Exec<'a> {
         docs: &'a BTreeMap<String, String>,
         generated: &'a Generated,
         root: &Path,
-        decoded_records: bool,
+        source_hashes: crate::normalize::SourceHashes,
         hot_capacity: Option<u32>,
     ) -> Result<Self, String> {
         std::fs::create_dir_all(root.join("db-0")).map_err(|error| error.to_string())?;
@@ -72,7 +72,7 @@ impl<'a> Exec<'a> {
                 &uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, viewer.as_bytes()).to_string(),
             );
         }
-        let normalizer = Normalizer::new(&inputs, root, decoded_records);
+        let normalizer = Normalizer::new(&inputs, root, source_hashes);
         let mut exec = Self {
             docs,
             generated,
