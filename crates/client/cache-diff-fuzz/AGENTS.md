@@ -39,7 +39,11 @@ disk after a reopen must come out the same.
 - When a change alters how records are encoded on purpose, compare with
   `FUZZ_ARGS=--decoded-records`: `records.value` is compared as the record each
   side's own codec decodes, and a `search_documents.source_hash` equal to the hash
-  of its record's stored bytes as `h:record`. Every other byte is still compared.
+  of its record's stored bytes as `h:record`. Response `sourceHash` values become
+  `h1`, `h2`, … by first appearance. Every other byte is still compared.
+- `FUZZ_ARGS` goes to both sides; `FUZZ_ARGS_A` and `FUZZ_ARGS_B` to one each, for
+  one build under two settings (e.g. `FUZZ_ARGS_B="--hot-capacity 16"` against
+  itself: the hot tier is a cache, so its size must change nothing).
 - Rerun one seed: `bin/SIDE --seed N --schema static_assets/schema.graphql --assets
   crates/client/cache-diff-fuzz/assets --out D --work D/w --full`. Use
   `--emit-case` and `--case FILE` to save a case and rerun it. A seed's case

@@ -62,6 +62,9 @@ struct Args {
     /// Compare stored records by what they decode to, not by their bytes (see `dump::tables`).
     #[arg(long)]
     decoded_records: bool,
+    /// Records the engine keeps decoded in its hot tier (the host's default when unset).
+    #[arg(long)]
+    hot_capacity: Option<u32>,
 }
 
 fn main() -> Result<(), rootcause::Report> {
@@ -127,8 +130,14 @@ fn run(
         false => None,
     };
     let started = std::time::Instant::now();
-    let mut exec =
-        exec::Exec::new(sources, generated, work).map_err(|error| rootcause::report!("{error}"))?;
+    let mut exec = exec::Exec::new(
+        sources,
+        generated,
+        work,
+        args.decoded_records,
+        args.hot_capacity,
+    )
+    .map_err(|error| rootcause::report!("{error}"))?;
     let outcome = pollster::block_on(exec.run());
     let (lines, mut counters, path, mut normalizer) =
         exec.finish().map_err(|error| match &outcome {

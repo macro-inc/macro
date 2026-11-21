@@ -76,6 +76,8 @@ cp -r "$repo/crates/client/cache-diff-fuzz/assets" "$work/assets"
   echo "schema $(sha256sum < "$work/schema.graphql" | cut -c1-16)"
   echo "assets $(cd "$work/assets" && find . -type f | LC_ALL=C sort | xargs cat | sha256sum | cut -c1-16)"
   echo "fuzz-args ${FUZZ_ARGS:-}"
+  echo "fuzz-args-a ${FUZZ_ARGS_A:-}"
+  echo "fuzz-args-b ${FUZZ_ARGS_B:-}"
 } > "$out/run.txt"
 
 export out work
@@ -86,9 +88,11 @@ one() {
   # shellcheck disable=SC2206
   common=(--seed "$seed" --schema "$work/schema.graphql" --assets "$work/assets" ${FUZZ_ARGS:-})
   status=ok
-  "$work/bin/a" "${common[@]}" --out "$out/a" --work "$work/a" \
+  # shellcheck disable=SC2086
+  "$work/bin/a" "${common[@]}" ${FUZZ_ARGS_A:-} --out "$out/a" --work "$work/a" \
     2> "$out/stderr/$seed.a" || status="a-failed"
-  "$work/bin/b" "${common[@]}" --out "$out/b" --work "$work/b" \
+  # shellcheck disable=SC2086
+  "$work/bin/b" "${common[@]}" ${FUZZ_ARGS_B:-} --out "$out/b" --work "$work/b" \
     2> "$out/stderr/$seed.b" || status="$status b-failed"
   for side in a b; do
     # A finished trace ends with `end`.

@@ -1,7 +1,10 @@
 //! Makes a response comparable across runs: ids the engine mints (storage and
 //! Mail generations, observation instances, and SHA-256 digests of them) become
 //! `#1`, `#2`, … in order of first appearance, ids that appear in the case's
-//! inputs stay as they are, and the run's directory becomes `<dir>`.
+//! inputs stay as they are, and the run's directory becomes `<dir>`. With
+//! `source_hashes`, each distinct `sourceHash` becomes `h1`, `h2`, … in order of
+//! first appearance, so two builds that encode records differently must still
+//! agree on which results share a hash and when one changes.
 
 use serde_json::Value;
 use std::collections::{BTreeSet, HashMap};
@@ -14,6 +17,8 @@ pub struct Normalizer {
     /// After the responses: ids first seen now get no number, since the order
     /// they are seen in (table rows) is not the order they were made in.
     frozen: bool,
+    /// `sourceHash` values to their labels, when they are labelled.
+    source_hashes: Option<HashMap<String, String>>,
 }
 
 /// Keys whose arrays come from hash sets, so their order means nothing.
@@ -23,7 +28,7 @@ impl Normalizer {
     /// `inputs` is everything the case feeds the engine. Any id in it was made
     /// by the generator or the faker, not minted by the engine, so it is kept:
     /// a build that answers with the wrong one of those ids shows up.
-    pub fn new(inputs: &str, root: &Path) -> Self {
+    pub fn new(inputs: &str, root: &Path, source_hashes: bool) -> Self {
         let keep = id_spans(inputs)
             .map(|(start, width)| inputs[start..start + width].to_owned())
             .collect();
@@ -32,6 +37,7 @@ impl Normalizer {
             minted: HashMap::new(),
             root: root.display().to_string(),
             frozen: false,
+            source_hashes: source_hashes.then(HashMap::new),
         }
     }
 
@@ -48,6 +54,14 @@ impl Normalizer {
             Value::Object(map) => Value::Object(
                 map.into_iter()
                     .map(|(key, value)| {
+                        if key == "sourceHash"
+                            && let (Some(labels), Value::String(hash)) =
+                                (&mut self.source_hashes, &value)
+                        {
+                            let next = format!("h{}", labels.len() + 1);
+                            let label = labels.entry(hash.clone()).or_insert(next).clone();
+                            return (key, Value::String(label));
+                        }
                         let mut value = self.value(value);
                         if UNORDERED.contains(&key.as_str())
                             && let Value::Array(items) = &mut value

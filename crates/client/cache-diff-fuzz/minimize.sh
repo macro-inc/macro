@@ -62,8 +62,11 @@ mv "$out/$seed.case.json" "$out/case.json"
 export out
 # run SIDE CASE DIR: runs one side on a case; the trace lands in DIR/SIDE/0.trace.
 run() {
+  local side_args=${FUZZ_ARGS_B:-}
+  [ "$1" = a ] && side_args=${FUZZ_ARGS_A:-}
+  # shellcheck disable=SC2086
   "$out/bin/$1" --seed 0 --schema "$out/schema.graphql" --assets "$out/assets" \
-    --case "$2" --out "$3/$1" --work "$3/w$1" "${@:4}"
+    ${FUZZ_ARGS:-} $side_args --case "$2" --out "$3/$1" --work "$3/w$1" "${@:4}"
 }
 # Exit 0 when both sides finish the case in $1 and their traces differ. A case that makes a
 # side fail is a different finding, not a smaller copy of this one.

@@ -36,6 +36,7 @@ pub struct Exec<'a> {
     root: PathBuf,
     path: PathBuf,
     copies: usize,
+    hot_capacity: Option<u32>,
     handle: Option<EngineHandle>,
     identity: String,
     normalizer: Normalizer,
@@ -53,6 +54,8 @@ impl<'a> Exec<'a> {
         docs: &'a BTreeMap<String, String>,
         generated: &'a Generated,
         root: &Path,
+        decoded_records: bool,
+        hot_capacity: Option<u32>,
     ) -> Result<Self, String> {
         std::fs::create_dir_all(root.join("db-0")).map_err(|error| error.to_string())?;
         let path = root.join("db-0").join("cache.turso");
@@ -69,13 +72,14 @@ impl<'a> Exec<'a> {
                 &uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, viewer.as_bytes()).to_string(),
             );
         }
-        let normalizer = Normalizer::new(&inputs, root);
+        let normalizer = Normalizer::new(&inputs, root, decoded_records);
         let mut exec = Self {
             docs,
             generated,
             root: root.to_path_buf(),
             path,
             copies: 0,
+            hot_capacity,
             handle: None,
             identity: generated.viewer.clone(),
             normalizer,
@@ -108,7 +112,7 @@ impl<'a> Exec<'a> {
         };
         self.handle = Some(EngineHandle::with_schema(
             storage,
-            None,
+            self.hot_capacity,
             cache_core::meta::bundled_schema(),
         ));
         Ok(())
