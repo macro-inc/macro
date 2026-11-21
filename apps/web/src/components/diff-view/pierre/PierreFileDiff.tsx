@@ -151,7 +151,9 @@ export function PierreFileDiff(props: {
   );
 
   // Pierre lights one range per file. It follows the host: the range being
-  // annotated, one the host points at (a focused comment), or none.
+  // annotated, one the host points at (a focused comment or code link), or
+  // none. Not deferred: a range pointed at before this body mounted (a
+  // collapsed or off-screen file) lights on the first render.
   createEffect(
     on(
       () => props.selection,
@@ -167,8 +169,7 @@ export function PierreFileDiff(props: {
             : null,
           { notify: false }
         );
-      },
-      { defer: true }
+      }
     )
   );
 

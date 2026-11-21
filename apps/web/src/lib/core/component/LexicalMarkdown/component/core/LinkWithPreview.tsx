@@ -7,7 +7,7 @@ import { debounce } from '@solid-primitives/scheduled';
 import { cn } from '@ui';
 import { createSignal, type ParentProps, Show } from 'solid-js';
 import { floatWithElement } from '../../directive/floatWithElement';
-import { useAppLinkOpener } from './app-link-opener';
+import { useAppLinkDescriber, useAppLinkOpener } from './app-link-opener';
 
 false && floatWithElement;
 
@@ -23,8 +23,13 @@ export function LinkWithPreview(props: LinkWithPreviewProps) {
     setPreviewOpen(val);
   });
 
-  const [unfurlData] = useUnfurl(props.url);
   const openAppLink = useAppLinkOpener();
+  const describeLink = useAppLinkDescriber();
+  // Only a web page unfurls: a relative link, such as a path to code, never
+  // goes to the unfurl service.
+  const [unfurlData] = useUnfurl(
+    /^https?:\/\//i.test(props.url) ? props.url : undefined
+  );
 
   let linkRef: HTMLAnchorElement | undefined;
 
@@ -68,6 +73,15 @@ export function LinkWithPreview(props: LinkWithPreviewProps) {
             use:floatWithElement={{ element: () => linkRef, spacing: 4 }}
           >
             {(() => {
+              const described = describeLink?.(props.url);
+              if (described) {
+                return (
+                  <LinkHoverCard
+                    unfurled={{ url: props.url, title: described.title }}
+                    subtitle={described.subtitle}
+                  />
+                );
+              }
               const data = unfurlData();
               if (data?.type === 'success') {
                 return <LinkHoverCard unfurled={data.data} />;

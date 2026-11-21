@@ -43,7 +43,9 @@ The host composes the rest:
 - Content under lines (`annotations`, `renderAnnotation`), and the gutter **+**
   for picking lines (`onSelectLines`). `selection` lights one range per file:
   the range being annotated, or one the host points at, such as a focused
-  comment's. Omit these for a read-only diff.
+  comment's. `reveal` names lines to scroll in once the `active` file has
+  scrolled into place (a code link's); keep them in `selection` too, since the
+  lit line is the one found. Omit these for a read-only diff.
 - Toolbar parts, `DiffView.CollapseAll` and `DiffView.StyleToggle`, anywhere
   inside `Root`.
 - Collapse state that persists, by passing `collapse`; the default lives in memory.
