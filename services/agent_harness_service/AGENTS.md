@@ -40,7 +40,10 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   Each call runs in an `internal_mcp.call_tool` span parented from the
   request's `_meta` trace context, which the in-process agent sends
   (`mcp_toolset::TraceContext::Propagate`), so `code_mode.execution` and the
-  sandbox's SDK calls join the session's trace.
+  sandbox's SDK calls join the session's trace. A request whose `_meta`
+  carries `macro.dev/withhold-content` runs inside
+  `genai_telemetry::withhold_content`, and a refusal of its arguments says
+  only what the tool's input wanted (`invalid_arguments`).
 - `src/anthropic_gateway.rs` + `src/anthropic_gateway/`: `/anthropic/v1/messages`
   and `/anthropic/v1/messages/count_tokens` on the egress listener, for runtimes
   on Macro credits (Claude Code on a Macro computer). Both values come from
