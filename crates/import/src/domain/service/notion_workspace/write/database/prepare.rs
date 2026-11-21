@@ -17,10 +17,6 @@ pub(in super::super::super) struct PreparedDatabase {
 }
 
 /// Create the owner-only database, then schema and deterministic saved views.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "reservation needs its source, durable facts, destination and cancellation"
-)]
 #[tracing::instrument(name = "notion.prepare_database", skip_all, fields(source_id = %item.notion_id, database_id = tracing::field::Empty, views = tracing::field::Empty, rows_read_scan = tracing::field::Empty), err)]
 pub(in super::super::super) async fn prepare_database<
     Api: NotionApi,

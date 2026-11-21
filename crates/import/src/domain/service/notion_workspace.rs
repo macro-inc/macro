@@ -624,12 +624,14 @@ where
         // when everything written inside it is; it is shared again on every
         // attempt, which is harmless, so a stop between creating and sharing
         // it heals on resume.
-        // Link-only sources stay in the occurrence map, but must not create
-        // folders or change the placement/sharing of the selected pages.
+        // Link-only data sources must not create folders or change page placement.
+        // Skipped pages still provide ancestor folders for their written children.
         let filing: Vec<_> = set
             .all
             .iter()
-            .filter(|item| item.decision != NotionDecision::Skip)
+            .filter(|item| {
+                item.kind != ImportKind::DataSource || item.decision != NotionDecision::Skip
+            })
             .cloned()
             .collect();
         let layout = write::folder_layout(&filing);

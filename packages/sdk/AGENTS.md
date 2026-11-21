@@ -350,6 +350,8 @@ the existing gateway prefixes.
 
 - Workspace-import report/cancel endpoints remain app-only review plumbing,
   explicitly classified alongside the existing Notion routes in coverage skips.
+  Regenerate cognition types when plan-row metadata changes: `dependencyOf` and
+  `inlineOn` describe linked and inline sources without expanding the import draft.
 
 - `AgentSession.activity()` and invocation handles iterate durable agent-correlated history lazily; session visibility controls the feed.
 

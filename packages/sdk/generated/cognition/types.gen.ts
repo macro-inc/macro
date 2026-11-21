@@ -1234,7 +1234,7 @@ export type NotionAlreadyImported = {
      */
     entityId: string;
     /**
-     * That entity's type (`md`, `project`).
+     * That entity's type (`md`, `project`, `database`).
      */
     entityType: string;
 };
@@ -1400,6 +1400,14 @@ export type NotionImporter = {
 export type NotionPlanItem = {
     alreadyImported?: null | NotionAlreadyImported;
     decision?: null | NotionDecision;
+    /**
+     * Notion objects whose bodies require this external data source.
+     */
+    dependencyOf?: Array<string>;
+    /**
+     * Planned objects whose bodies display this source inline.
+     */
+    inlineOn?: Array<string>;
     /**
      * Titles of the pages above it, outermost first.
      */

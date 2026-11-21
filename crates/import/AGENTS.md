@@ -341,7 +341,9 @@ paths reject workspace-plan rows so approval cannot be bypassed.
   the team claim. A folder's link-only setting does not grant database access.
 - `databases::body_links` builds a separate occurrence map for each page or row;
   `?v` selects the saved view, otherwise the first container tab is assumed and
-  reported. Excluded sources retain `notImported` links. Keep permanently unreadable
+  reported. Excluded sources retain `notImported` links and do not create folders;
+  retain skipped page ancestors for the folder layout of written children.
+  Keep permanently unreadable
   tab slots in list order; a missing default never silently selects the next tab.
   Retain other readable tabs and propagate transient detail failures.
 - Stream rows once, checking cancellation per page, to collect date-range
