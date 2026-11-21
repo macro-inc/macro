@@ -15,7 +15,8 @@ the axum route constructors that declare each handler's category.
   or causes, never by its HTTP method.
 - `src/caller.rs`: who a caller is, resolved from signed claims only.
 - `src/inbound/axum.rs`: `get`/`post`/... take a `Category`; the layer they
-  put on the handler decides from the `Caller` in request extensions.
+  put on the handler decides from the `ResolvedCaller` in request
+  extensions.
 
 ## Scope
 
