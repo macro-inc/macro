@@ -8,6 +8,7 @@ use models_properties::{
     PropertyOwner,
     service::{
         property_definition::PropertyDefinition,
+        property_definition_with_options::PropertyDefinitionWithOptions,
         property_option::{PropertyOption, PropertyOptionValue},
     },
 };
@@ -75,8 +76,32 @@ impl From<&PropertyOwner> for GraphqlPropertyDefinitionOwner {
 pub struct GraphqlPropertyDefinition<R> {
     /// Definition returned by the owning domain service.
     definition: PropertyDefinition,
+    /// Options read with the definition, when the selection asked for them;
+    /// otherwise the options edge loads them on demand.
+    options: Option<Vec<PropertyOption>>,
     /// Reader used only if the options edge is selected.
     reader: PhantomData<R>,
+}
+
+impl<R> GraphqlPropertyDefinition<R> {
+    /// Wrap a definition returned by the properties domain.
+    pub(crate) fn new(definition: PropertyDefinition) -> Self {
+        Self {
+            definition,
+            options: None,
+            reader: PhantomData,
+        }
+    }
+}
+
+impl<R> From<PropertyDefinitionWithOptions> for GraphqlPropertyDefinition<R> {
+    fn from(read: PropertyDefinitionWithOptions) -> Self {
+        Self {
+            definition: read.definition,
+            options: Some(read.property_options),
+            reader: PhantomData,
+        }
+    }
 }
 
 /// A globally identified property definition, independent of any assignment.
@@ -139,6 +164,9 @@ impl<R: EntityPropertyReader> GraphqlPropertyDefinition<R> {
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Vec<GraphqlPropertyOption>> {
+        if let Some(options) = &self.options {
+            return Ok(options.iter().cloned().map(Into::into).collect());
+        }
         load_property_options::<R>(ctx, ID(self.definition.id.to_string())).await
     }
 }
@@ -212,21 +240,26 @@ pub async fn load_property_definitions<R: EntityPropertyReader>(
     scope: GraphqlPropertyDefinitionScope,
     for_entity_type: Option<GraphqlPropertyEntityType>,
 ) -> async_graphql::Result<Vec<GraphqlPropertyDefinition<R>>> {
-    let loader = ctx.data::<DataLoader<EntityPropertiesLoader<R>>>()?;
+    let loader = ctx
+        .data::<DataLoader<EntityPropertiesLoader<R>>>()?
+        .loader();
+    let for_entity_type = for_entity_type.map(GraphqlPropertyEntityType::into_model);
+    // A selection that wants options gets them from the same read as the
+    // definitions, instead of a second, per-definition options batch.
+    if ctx.look_ahead().field("options").exists() {
+        let definitions = loader
+            .definitions_with_options(scope, for_entity_type)
+            .await
+            .map_err(|err| async_graphql::Error::new(err.to_string()))?;
+        return Ok(definitions.into_iter().map(Into::into).collect());
+    }
     let definitions = loader
-        .loader()
-        .definitions(
-            scope,
-            for_entity_type.map(GraphqlPropertyEntityType::into_model),
-        )
+        .definitions(scope, for_entity_type)
         .await
         .map_err(|err| async_graphql::Error::new(err.to_string()))?;
     Ok(definitions
         .into_iter()
-        .map(|definition| GraphqlPropertyDefinition {
-            definition,
-            reader: PhantomData,
-        })
+        .map(GraphqlPropertyDefinition::new)
         .collect())
 }
 

@@ -16,6 +16,20 @@ use uuid::Uuid;
 use super::*;
 use crate::{NoOpEntityPropertyReader, entity_properties_loader};
 
+/// The one option the fake definition carries.
+fn in_progress(property_definition_id: Uuid) -> PropertyOption {
+    let now = chrono::Utc::now();
+    PropertyOption {
+        id: Uuid::from_u128(2),
+        property_definition_id,
+        display_order: 3,
+        value: PropertyOptionValue::String("In Progress".to_owned()),
+        color: None,
+        created_at: now,
+        updated_at: now,
+    }
+}
+
 /// Request reader recording option work for lazy-field assertions.
 struct TestReader(Arc<AtomicUsize>);
 
@@ -47,6 +61,24 @@ impl EntityPropertyReader for TestReader {
         }])
     }
 
+    async fn get_definitions_with_options(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        scope: GraphqlPropertyDefinitionScope,
+        for_entity_type: Option<models_properties::EntityType>,
+    ) -> Result<Vec<PropertyDefinitionWithOptions>, rootcause::Report> {
+        let definitions = self
+            .get_definitions(user_id, scope, for_entity_type)
+            .await?;
+        Ok(definitions
+            .into_iter()
+            .map(|definition| PropertyDefinitionWithOptions {
+                property_options: vec![in_progress(definition.id)],
+                definition,
+            })
+            .collect())
+    }
+
     async fn get_options(
         &self,
         user_id: &MacroUserIdStr<'static>,
@@ -54,26 +86,21 @@ impl EntityPropertyReader for TestReader {
     ) -> Result<HashMap<Uuid, Vec<PropertyOption>>, rootcause::Report> {
         assert_eq!(user_id.as_ref(), "macro|viewer@macro.com");
         self.0.fetch_add(1, Ordering::Relaxed);
-        let now = chrono::Utc::now();
         Ok(property_definition_ids
             .iter()
             .filter_map(|id| match id.as_u128() {
-                1 => Some((
-                    *id,
-                    vec![PropertyOption {
-                        id: Uuid::from_u128(2),
-                        property_definition_id: *id,
-                        display_order: 3,
-                        value: PropertyOptionValue::String("In Progress".to_owned()),
-                        color: None,
-                        created_at: now,
-                        updated_at: now,
-                    }],
-                )),
+                1 => Some((*id, vec![in_progress(*id)])),
                 4 => Some((*id, Vec::new())),
                 _ => None,
             })
             .collect())
+    }
+
+    async fn get_tag_sets(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+    ) -> Result<Vec<properties::domain::model::TagSet>, rootcause::Report> {
+        Ok(Vec::new())
     }
 
     async fn get_properties(
@@ -156,6 +183,21 @@ async fn selected_options_have_distinct_global_identity_and_typed_values() {
         "GraphqlStringPropertyOptionValue"
     );
     assert_eq!(option["value"]["value"], "In Progress");
+}
+
+#[tokio::test]
+async fn selected_options_are_read_with_the_definitions_not_batched_after() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let response = schema(calls.clone())
+        .execute("{ definitions { id options { id } } }")
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().expect("JSON result");
+    assert_eq!(
+        data["definitions"][0]["options"][0]["id"],
+        Uuid::from_u128(2).to_string()
+    );
+    assert_eq!(calls.load(Ordering::Relaxed), 0);
 }
 
 #[tokio::test]
