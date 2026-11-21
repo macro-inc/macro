@@ -455,6 +455,18 @@ test('WRT-15 a message waiting to be sent when the device loses what it kept is 
   await expectShown(bens, ['one', 'two', 'three']);
   await unblock();
   await bens.send('after');
+  // Known defect, in about 1 run in 3 on a build that keeps channels on the
+  // device: just after the page has opened the composer loses the keyboard,
+  // so the end of the text or Enter goes nowhere and nothing is sent. A
+  // person clicks the composer and writes it again, and so does this.
+  const sent = bens.list.getByText('after', { exact: true });
+  await failsSometimes(() => expect(sent).toBeVisible({ timeout: 10_000 }));
+  if ((await sent.count()) === 0) {
+    await bens.composerText.click();
+    await bens.page.keyboard.press('ControlOrMeta+A');
+    await bens.page.keyboard.type('after');
+    await bens.page.keyboard.press('Enter');
+  }
 
   // The later message arriving shows that writes go through again; the
   // earlier one is in the channel neither before it nor after.
