@@ -86,9 +86,9 @@ fn decode_records(
                     match cache_core::codec::decode_record(bytes) {
                         Ok(record) => match serde_json::to_string(&record) {
                             Ok(json) => format!("r:{json}"),
-                            Err(error) => format!("r!{error} {}", render_bytes(bytes)),
+                            Err(error) => format!("r!{error} {}", opaque_bytes(bytes)),
                         },
-                        Err(error) => format!("r!{error} {}", render_bytes(bytes)),
+                        Err(error) => format!("r!{error} {}", opaque_bytes(bytes)),
                     }
                 }
                 other => render(other),
@@ -149,7 +149,7 @@ fn decode_facts(
             |values| {
                 // Undecodable values keep their bytes, so two different ones differ.
                 let facts = match &values[1] {
-                    Value::Blob(blob) => facts_blob::decode(blob).ok_or_else(|| render_bytes(blob)),
+                    Value::Blob(blob) => facts_blob::decode(blob).ok_or_else(|| opaque_bytes(blob)),
                     other => Err(render(other)),
                 };
                 documents.insert(render(&values[0]), facts);
@@ -316,6 +316,15 @@ fn render_bytes(blob: &[u8]) -> String {
             0x20..=0x7e if *byte != b'\\' => char::from(*byte).to_string(),
             _ => format!("\\x{byte:02x}"),
         }))
+        .collect()
+}
+
+/// Bytes that didn't decode, every byte escaped: normalization rewrites ids
+/// and digests it finds in printable text, which could make two different
+/// broken values equal.
+fn opaque_bytes(blob: &[u8]) -> String {
+    std::iter::once("x:".to_owned())
+        .chain(blob.iter().map(|byte| format!("\\x{byte:02x}")))
         .collect()
 }
 
