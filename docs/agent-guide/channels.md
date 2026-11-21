@@ -271,10 +271,11 @@ at the same time take turns every two seconds. In a DM it is the typing row.
 A channel mention's reply in its thread is one message, so the line sits in
 it, and reads `Thinking` whenever the turn is running with no open run, before
 the first step or while the agent writes after one.
-Once a run closes, it folds to a `Used N tools` summary (with
-`· N failed` when a step failed), with a caret after it on hover, that opens
-to compact rows like the session's tool rows: the label, and **Failed** or
-**Interrupted** when a step did not finish.
+Once a run closes, it folds to a `Used N tools` summary, with a caret after it
+on hover, that opens to compact rows like the session's tool rows: the label,
+and **Failed** or **Interrupted** when a step did not finish. The total
+includes failed steps, but the summary shows no separate failure count, since
+an agent often retries a failed step and recovers.
 Documents, sessions, pull requests, and contacts an agent's reply mentions are
 set in the accent color.
 Stored activity snapshots keep the status and label but omit commands and tool

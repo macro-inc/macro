@@ -1461,11 +1461,11 @@ returned JSON, or code-mode wording. An `ExecuteCode` call joins the tool group
 of its turn segment and shows only its observed SDK operations, each a compact
 row (label plus status) counted as one step; `SearchTools`, `LoadTools`,
 `DescribeCodeTools` and `ReadCodeDocs` are hidden and not counted. A group
-never opens on its own, so a step that failed and was recovered from is counted
-on the finished row (**Used 6 tools · 1 failed**) and shown in the expanded
-list; a program that failed or timed out before reporting a step is one failed
-step, one that reported steps counts the ones that failed, and one that was
-cancelled is not counted as failed. While the program
+never opens on its own, and its finished row (**Used 6 tools**) counts failed
+steps in its total but shows no separate failure count: a step that failed and
+was recovered from shows as failed only in the expanded list, and a program
+that failed or timed out before reporting a step is one failed step there.
+While the program
 runs, the group's live line names its observed operations. There is no
 separate API-call count wrapper or per-label aggregation once activity is
 available. Activity refreshes about once per second while a run is active,
@@ -1999,8 +1999,8 @@ dots and the step the agent is on (**Reading AgentMessage.tsx**, **Running bun
 run check**), taking turns every 2s among steps running at once and otherwise
 naming the latest; **Thinking** while the trailing thought streams. No working
 row stacks under it, and an earlier group never shows as working. Once the turn
-moves on, the group settles to **Used N tools**, with failed steps counted in
-the failure color (**· 2 failed**).
+moves on, the group settles to **Used N tools**; failed steps are marked only
+on their own rows inside it.
 
 A subagent row is titled by the call's short description, else the first line
 of its brief, and says **Running**, **Done**, or **Failed**; expanding it shows
