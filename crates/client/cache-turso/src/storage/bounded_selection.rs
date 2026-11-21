@@ -1,10 +1,13 @@
 //! Speculative sort-index windows for single-partition filters. A window that
-//! cannot prove a full page reads on from its last candidate, never re-reading
-//! the ones before, by an amount sized from the hit rate it saw, up to
+//! cannot prove a full page reads on from its last candidate, never returning
+//! the ones before again, by an amount sized from the hit rate it saw, up to
 //! `MAX_CANDIDATES` per fact source. Filters sparser than that fall back to the
 //! set-based SQL plan. Optimistic facts hold only pending local writes, so
 //! their window runs out long before the cap. Both plans run inside the
-//! caller's read transaction over the same snapshot.
+//! caller's read transaction over the same snapshot. Inside a tie a
+//! continuation seeks to the tie's value and steps over the index entries of
+//! the tied candidates already read, at a fraction of a returned candidate's
+//! cost each.
 
 use super::*;
 use predicate_index::{IndexQuery, ReferenceHit};

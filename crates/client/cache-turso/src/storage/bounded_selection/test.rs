@@ -625,6 +625,7 @@ fn widened_windows_match_the_set_based_plan_on_every_page() {
                     );
                 }
             }
+            let (mut pages, mut widened) = (0, 0);
             for predicate in &predicates {
                 for limit in [1u16, 7, 20, 100] {
                     for direction in [SortDirection::Asc, SortDirection::Desc] {
@@ -637,10 +638,29 @@ fn widened_windows_match_the_set_based_plan_on_every_page() {
                                     .uncertain_ids;
                             }
                             for _ in 0..8 {
+                                let expected = reference(&storage.connection(), &page, &excluded);
+                                // `hits` falls back to the reference's own plan,
+                                // so the windows' pages are compared directly.
+                                pages += 1;
+                                if let Some(windowed) =
+                                    try_select(&storage.connection(), &page, &excluded).unwrap()
+                                {
+                                    widened += 1;
+                                    assert_eq!(
+                                        windowed
+                                            .iter()
+                                            .map(|hit| (
+                                                hit.record_key.as_str().to_owned(),
+                                                hit.sort_value
+                                            ))
+                                            .collect::<Vec<_>>(),
+                                        expected,
+                                        "{predicate:?} limit {limit} {direction:?}/{tie:?} shadowed {shadowed}"
+                                    );
+                                }
                                 let actual = hits(&storage.connection(), &page, &excluded);
                                 assert_eq!(
-                                    actual,
-                                    reference(&storage.connection(), &page, &excluded),
+                                    actual, expected,
                                     "{predicate:?} limit {limit} {direction:?}/{tie:?} shadowed {shadowed}"
                                 );
                                 let Some((key, value)) = actual.last() else {
@@ -654,6 +674,10 @@ fn widened_windows_match_the_set_based_plan_on_every_page() {
                     }
                 }
             }
+            assert!(
+                widened * 10 >= pages * 9,
+                "{widened} of {pages} pages from the windows"
+            );
         }
     });
 }
