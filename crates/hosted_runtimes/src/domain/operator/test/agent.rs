@@ -70,6 +70,33 @@ async fn a_connected_agent_computer_gets_its_agent_handed_over() {
     );
 }
 
+/// The hand-off is timed to when macrod took the agent, not to when the
+/// hand-off was queued on the connection.
+#[tokio::test]
+async fn the_agent_counts_as_delivered_once_macrod_took_it() {
+    let operator = operator(FakeFleet::default()).await;
+    let id = connected_agent_computer(&operator).await;
+    let delivered_at = || {
+        operator.repo.computers.lock().unwrap()[&id]
+            .state
+            .setup
+            .as_ref()
+            .and_then(|setup| setup.agent_delivered_at)
+    };
+    assert!(
+        operator.repo.computers.lock().unwrap()[&id]
+            .state
+            .setup
+            .as_ref()
+            .is_some_and(|setup| setup.connected_at.is_some())
+    );
+    assert_eq!(delivered_at(), None);
+
+    operator.run_fleet_effects().await.unwrap();
+
+    assert!(delivered_at().is_some());
+}
+
 #[tokio::test]
 async fn an_agent_already_online_is_not_handed_over_again() {
     let operator = operator(FakeFleet::default()).await;

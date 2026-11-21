@@ -409,7 +409,8 @@ export const sdkChat = ({
 
       // Messages posted while the stream was down (a backend restart or
       // deploy ends it; it reconnects on its own) are never replayed: read
-      // each channel's history after the newest one delivered. A root is
+      // the history of each channel active since, after the newest one
+      // delivered. A root is
       // listed when it was posted or replied to since, so its replies are
       // read too.
       const catchUpFrom = async (after: string): Promise<void> => {
@@ -419,7 +420,7 @@ export const sdkChat = ({
         // Listing the channels failing fails the pass, which is tried again;
         // one channel or thread failing is skipped and reported, so a bad
         // one can't stop every later catch-up.
-        for await (const channel of macro.channels.list()) {
+        for await (const channel of macro.channels.activeSince(after)) {
           const missed: Message[] = [];
           try {
             for await (const root of channel.messagesAfter(after)) {

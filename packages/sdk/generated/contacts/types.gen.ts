@@ -29,7 +29,10 @@ export type GetContactsResponse = {
  */
 export type SearchPeopleResponse = {
     /**
-     * Matches ranked teammates first, then prefix matches, then by name or email.
+     * Matches ranked by group, then prefix matches, then by name or email.
+     * Teammates come first. For a viewer on the list-aware directory,
+     * `interacted` and `invited` people come next, then `gmail` and
+     * `outlook` contacts.
      */
     people: Array<SearchedPerson>;
 };
@@ -46,6 +49,12 @@ export type SearchedPerson = {
      * Whether the person is on the viewer's current team.
      */
     isTeammate: boolean;
+    /**
+     * The keys of the viewer's contact lists the person is in (`teammates`,
+     * `interacted`, `invited`, `gmail`, `outlook`; more may be added). Empty
+     * for the viewer and for a contact only the legacy directory knows.
+     */
+    lists: Array<string>;
     /**
      * Resolved name, as the contact directory shows it; null when unknown.
      */

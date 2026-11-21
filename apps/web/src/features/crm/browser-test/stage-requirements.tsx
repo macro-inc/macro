@@ -28,6 +28,7 @@ const context: CrmContext = {
   PipelineEditor: unused,
   PipelineEntries: unused,
   PipelineSharing: unused,
+  MemberAccess: unused,
   createPipelineTransfer: unused,
   downloadCsv: unused,
   createContactPhoto: unused,

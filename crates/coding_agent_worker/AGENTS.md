@@ -41,9 +41,17 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   `src/daemon/position.rs` drops repeats by event id, and events minted
   before their agent was bound here (before the last agents read that did not
   list it), which belonged to another runtime.
+  A service that sends `x-macro-stream-heartbeat` heartbeats the stream only
+  while its event source progresses; three heartbeats missed in a row with no
+  event (70 s at 20 s) end the stream as stalled, and it reopens from the
+  cursor. Without
+  the header (older service) there is no such deadline. `Daemon::trigger_stream_health`
+  publishes the stream's state (`src/daemon/health.rs`) for the panel.
   A failed runtime dial and a dropped event stream retry after 250 ms,
   doubling to 30 s, each delay jittered (`src/retry_delay.rs`); a runtime
-  connection that held 10 s is redialed at once. The ACP agent starts before
+  connection that held 10 s is redialed at once, and an event stream that
+  held 10 s reopens at the first delay (one closed sooner keeps backing off).
+  The ACP agent starts before
   each dial (and stays ready across failed ones), so a session that arrives
   with the connection does not also wait for the agent's startup.
 - Pass `macrod service --ignore-stdin-eof` under system service managers;
@@ -262,8 +270,18 @@ workspace on session start. The enrollment deployment's egress URL is
 stored as `[macro].egress_url`; computer sessions route first-party MCP and
 Anthropic requests through it without changing custom external MCP addresses.
 
-Service/enrollment telemetry opts in with `OTEL_EXPORTER_OTLP_ENDPOINT`
-(gRPC). Only enrollment spans (`run_enroll`, `macrod.enroll.claim`) export,
-with the marker's computer UUID as a resource attribute. Enrollment joins the
-setup trace from `Enrollment.traceparent`; its claim sends the setup
-`traceparent`. stdout remains the daemon protocol.
+Service telemetry opts in with `OTEL_EXPORTER_OTLP_ENDPOINT` and
+`OTEL_EXPORTER_OTLP_PROTOCOL` (`grpc`, the default, or `http/protobuf`).
+`macrod enroll` exports to the enrollment's `deployment.telemetry_url`
+(OTLP/HTTP) and writes those two variables to `/var/lib/macrod/telemetry.env`,
+which a computer's `macrod.service` loads, with `OTEL_EXPORTER_OTLP_HEADERS`
+naming the computer (`x-macro-computer-id`). The analytics proxy does not
+honour it yet: it is unauthenticated, so the proxy still limits by client IP
+until the id is signed. Only setup spans (`run_enroll`,
+`macrod.enroll.*`, `macrod.agent.apply`) export, with the marker's computer
+UUID as a resource attribute. Enrollment joins the setup trace from
+`Enrollment.traceparent`; its claim sends the setup `traceparent`.
+`ApplyAgent.traceparent` parents `macrod.agent.apply` and is staged once, beside
+the agent's environment and never in it (a redelivery's fresh one would rewrite
+agent.env and restart the agent), at `/run/macro-agent-inbox/setup-traceparent`. stdout remains the daemon
+protocol.

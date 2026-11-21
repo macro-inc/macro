@@ -31,6 +31,7 @@ pub use statistics::ConsumerStatistics;
 use statistics::StatisticsContext;
 
 mod msk_iam;
+pub mod progress;
 mod statistics;
 
 const UNGROUPED_GROUP_PREFIX: &str = "macro-event-broker-independent";
