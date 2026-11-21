@@ -471,3 +471,43 @@ fn optimistic_discard_restores_durable_base_over_turso() {
         assert_eq!(value.get("value"), Some(&CacheValue::String("todo".into())));
     });
 }
+
+#[test]
+fn reads_kept_for_a_write_are_dropped_once_storage_commits() {
+    use cache_core::store::DurableRead;
+    block_on(async {
+        let database = TursoMemoryDatabase::new("engine-kept-reads.db");
+        let mut writer = Engine::new(database.open("engine-kept-reads").unwrap());
+        let original = page("Status", "todo", "user-1");
+        writer
+            .write_query(Some(1), QUERY, Some("Soup"), &query_vars(), &original, None)
+            .await
+            .unwrap();
+        drop(writer);
+
+        // A fresh engine has nothing hot, so the property comes from storage
+        // and is kept for the next write.
+        let mut engine = Engine::new(database.open("engine-kept-reads").unwrap());
+        let property = EntityKey("GraphqlProperty:property-1".into());
+        let reads = engine.pass_reads();
+        let read = reads.read_records(&[property]).await.unwrap();
+        assert!(read[0].is_some());
+        let reads = reads.finish();
+        engine.keep_pass_reads(reads);
+
+        // Clearing commits without the write, so the kept property is stale:
+        // it is no longer stored.
+        engine.clear().await.unwrap();
+        engine
+            .write_query(Some(1), QUERY, Some("Soup"), &query_vars(), &original, None)
+            .await
+            .unwrap();
+        drop(engine);
+        // What the write stored, not what it left hot.
+        let mut reopened = Engine::new(database.open("engine-kept-reads").unwrap());
+        assert_eq!(
+            read_value(&mut reopened).await,
+            ("Status".into(), "todo".into())
+        );
+    });
+}

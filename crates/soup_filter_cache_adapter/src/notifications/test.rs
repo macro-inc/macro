@@ -3,7 +3,7 @@ use cache_core::{
     engine::{BeginOptimisticWrite, Engine, NetworkWrite},
     predicate::{PredicateIndexStorage, PredicateQueryResult, ProjectionState},
     queue::{MutationClaimRequest, MutationClaimToken},
-    store::InMemoryStorage,
+    store::{InMemoryStorage, Storage},
 };
 use predicate_index::{
     IndexQuery, PartitionPredicate, PredicateExpr, SortDirection, ValidatedIndexQuery,

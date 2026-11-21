@@ -33,11 +33,13 @@ mod notifications;
 mod parsed_document;
 pub mod permissions;
 pub mod properties;
+mod write_passes;
 mod write_response;
 pub use notifications::{
     notification_deletion_updates, notification_projection_updates,
     notification_projection_updates_for, optimistic_notification_updates,
 };
+pub use write_passes::{WritePassError, write_passes};
 pub use write_response::WriteResponse;
 
 /// Failure to materialize or compile a Soup filter request.
