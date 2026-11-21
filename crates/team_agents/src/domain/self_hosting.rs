@@ -10,8 +10,9 @@
 //! from can no longer act as the agent.
 
 use agent_runtime_protocol::domain::schema::v0::{
-    ContainerEngineKind, HostArch, HostOs, HostResource, TeammateHostProblem, TeammateHostReport,
-    TeammateImage, TeammateRunFailure, TeammateRunState,
+    ContainerEngineKind, EngineIsolation, HostArch, HostOs, HostResource, InstalledEngine,
+    IsolationProblem, TeammateHostProblem, TeammateHostReport, TeammateImage, TeammateRunFailure,
+    TeammateRunState,
 };
 use chrono::{DateTime, Utc};
 use harness_id::HarnessId;
@@ -525,13 +526,63 @@ pub struct HostEngine {
     pub rootless: bool,
 }
 
+/// A container engine installed on a machine, chosen or not.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct HostInstalledEngine {
+    /// Which engine.
+    pub kind: HostEngineKind,
+    /// Its version, when it answered.
+    pub version: Option<String>,
+    /// Whether it runs without root.
+    pub rootless: bool,
+    /// Whether it can confine a teammate's network.
+    pub isolation: HostEngineIsolation,
+}
+
+/// Whether an engine can confine a teammate's network.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(tag = "state", rename_all = "camelCase")]
+pub enum HostEngineIsolation {
+    /// It put the policy in place and read it back.
+    Enforced,
+    /// It couldn't.
+    Unavailable {
+        /// Why.
+        reason: HostIsolationProblem,
+    },
+    /// Not checked yet: no teammate image on the machine, or the engine
+    /// didn't answer.
+    NotProbed,
+}
+
+/// Why an engine can't confine a teammate's network.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub enum HostIsolationProblem {
+    /// The firewall rules couldn't be loaded.
+    GuardRefused,
+    /// The loaded rules didn't read back as written.
+    ReadbackMismatch,
+    /// The machine's own addresses couldn't be read.
+    HostUnreadable,
+    /// The engine failed a step or took too long.
+    EngineFailed,
+}
+
 /// What a machine last reported about hosting teammates.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct HostReport {
-    /// The container engine found, if any.
+    /// The container engine chosen to run teammates, if any.
     pub engine: Option<HostEngine>,
+    /// Every engine installed, and whether each can confine a teammate's
+    /// network.
+    pub engines: Vec<HostInstalledEngine>,
     /// Operating system.
     pub os: HostPlatformOs,
     /// CPU architecture.
@@ -548,10 +599,7 @@ impl From<&TeammateHostReport> for HostReport {
     fn from(report: &TeammateHostReport) -> Self {
         Self {
             engine: report.engine.as_ref().map(|engine| HostEngine {
-                kind: match engine.kind {
-                    ContainerEngineKind::Docker => HostEngineKind::Docker,
-                    ContainerEngineKind::Podman => HostEngineKind::Podman,
-                },
+                kind: HostEngineKind::from(engine.kind),
                 version: engine.version.clone(),
                 rootless: engine.rootless,
             }),
@@ -569,6 +617,44 @@ impl From<&TeammateHostReport> for HostReport {
             cpus: report.cpus,
             memory_mib: report.memory_mib,
             disk_free_mib: report.disk_free_mib,
+            engines: report
+                .engines
+                .iter()
+                .map(HostInstalledEngine::from)
+                .collect(),
+        }
+    }
+}
+
+impl From<ContainerEngineKind> for HostEngineKind {
+    fn from(kind: ContainerEngineKind) -> Self {
+        match kind {
+            ContainerEngineKind::Docker => Self::Docker,
+            ContainerEngineKind::Podman => Self::Podman,
+        }
+    }
+}
+
+impl From<&InstalledEngine> for HostInstalledEngine {
+    fn from(engine: &InstalledEngine) -> Self {
+        Self {
+            kind: HostEngineKind::from(engine.kind),
+            version: engine.version.clone(),
+            rootless: engine.rootless,
+            isolation: match engine.isolation {
+                EngineIsolation::Enforced => HostEngineIsolation::Enforced,
+                EngineIsolation::Unavailable { reason } => HostEngineIsolation::Unavailable {
+                    reason: match reason {
+                        IsolationProblem::GuardRefused => HostIsolationProblem::GuardRefused,
+                        IsolationProblem::ReadbackMismatch => {
+                            HostIsolationProblem::ReadbackMismatch
+                        }
+                        IsolationProblem::HostUnreadable => HostIsolationProblem::HostUnreadable,
+                        IsolationProblem::EngineFailed => HostIsolationProblem::EngineFailed,
+                    },
+                },
+                EngineIsolation::NotProbed => HostEngineIsolation::NotProbed,
+            },
         }
     }
 }

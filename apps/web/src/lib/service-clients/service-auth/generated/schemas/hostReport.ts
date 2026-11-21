@@ -4,6 +4,8 @@
  * authentication_service
  * OpenAPI spec version: 0.1.0
  */
+
+import type { HostInstalledEngine } from './hostInstalledEngine';
 import type { HostPlatformArch } from './hostPlatformArch';
 import type { HostPlatformOs } from './hostPlatformOs';
 import type { HostReportDiskFreeMib } from './hostReportDiskFreeMib';
@@ -26,6 +28,9 @@ export interface HostReport {
    */
   diskFreeMib?: HostReportDiskFreeMib;
   engine?: HostReportEngine;
+  /** Every engine installed, and whether each can confine a teammate's
+network. */
+  engines: HostInstalledEngine[];
   /**
    * Total memory, in MiB.
    * @minimum 0

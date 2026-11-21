@@ -224,3 +224,47 @@ fn a_start_refused_for_network_isolation_is_stored_as_a_failure_and_named_on_the
         "networkIsolationUnavailable"
     );
 }
+
+#[test]
+fn the_hosts_list_shows_every_installed_engine_and_whether_it_isolates() {
+    use agent_runtime_protocol::domain::schema::v0::{
+        EngineIsolation, InstalledEngine, IsolationProblem,
+    };
+    let report = TeammateHostReport {
+        engines: vec![
+            InstalledEngine {
+                kind: ContainerEngineKind::Docker,
+                version: Some("29.0.1".to_owned()),
+                rootless: false,
+                isolation: EngineIsolation::Unavailable {
+                    reason: IsolationProblem::GuardRefused,
+                },
+            },
+            InstalledEngine {
+                kind: ContainerEngineKind::Podman,
+                version: None,
+                rootless: true,
+                isolation: EngineIsolation::NotProbed,
+            },
+        ],
+        ..docker_linux()
+    };
+
+    assert_eq!(
+        serde_json::to_value(HostReport::from(&report)).unwrap()["engines"],
+        serde_json::json!([
+            {
+                "kind": "docker",
+                "version": "29.0.1",
+                "rootless": false,
+                "isolation": {"state": "unavailable", "reason": "guardRefused"}
+            },
+            {
+                "kind": "podman",
+                "version": null,
+                "rootless": true,
+                "isolation": {"state": "notProbed"}
+            }
+        ])
+    );
+}

@@ -1473,6 +1473,21 @@ export type HostEngine = {
 };
 
 /**
+ * Whether an engine can confine a teammate's network.
+ */
+export type HostEngineIsolation = {
+    state: 'enforced';
+} | {
+    /**
+     * Why.
+     */
+    reason: HostIsolationProblem;
+    state: 'unavailable';
+} | {
+    state: 'notProbed';
+};
+
+/**
  * A container engine, as the Invite dialog shows it.
  */
 export type HostEngineKind = 'docker' | 'podman';
@@ -1481,6 +1496,33 @@ export type HostEngineKind = 'docker' | 'podman';
  * Why a machine can't host a teammate now.
  */
 export type HostIneligibility = 'offline' | 'notReported' | 'noEngine' | 'engineUnreachable' | 'unsupportedPlatform' | 'belowFloor' | 'innerSandboxUnavailable' | 'networkIsolationUnavailable';
+
+/**
+ * A container engine installed on a machine, chosen or not.
+ */
+export type HostInstalledEngine = {
+    /**
+     * Whether it can confine a teammate's network.
+     */
+    isolation: HostEngineIsolation;
+    /**
+     * Which engine.
+     */
+    kind: HostEngineKind;
+    /**
+     * Whether it runs without root.
+     */
+    rootless: boolean;
+    /**
+     * Its version, when it answered.
+     */
+    version?: string | null;
+};
+
+/**
+ * Why an engine can't confine a teammate's network.
+ */
+export type HostIsolationProblem = 'guardRefused' | 'readbackMismatch' | 'hostUnreadable' | 'engineFailed';
 
 /**
  * A CPU architecture, as the Invite dialog shows it.
@@ -1509,6 +1551,11 @@ export type HostReport = {
      */
     diskFreeMib?: number | null;
     engine?: null | HostEngine;
+    /**
+     * Every engine installed, and whether each can confine a teammate's
+     * network.
+     */
+    engines: Array<HostInstalledEngine>;
     /**
      * Total memory, in MiB.
      */

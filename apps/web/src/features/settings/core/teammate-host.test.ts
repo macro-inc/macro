@@ -14,6 +14,7 @@ const host = (overrides: Partial<TeammateHost>): TeammateHost => ({
   experimental: false,
   report: {
     engine: { kind: 'podman', version: '5.2.0', rootless: true },
+    engines: [],
     os: 'linux',
     arch: 'amd64',
     cpus: 8,
