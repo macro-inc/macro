@@ -618,6 +618,21 @@ fn native_cache_bench() {
                 samples.record(&format!("write.{}.same", op.lane), started);
                 idle(&handle, &mut samples).await;
             }
+            // Background refetches: a spread of seed pages, applied once to
+            // settle them over the writes above, then again unchanged.
+            let pages: Vec<&Op> = seed
+                .iter()
+                .filter(|op| !op.write && op.operation_name != "ContactDirectoryBackfill")
+                .collect();
+            let refetches = pages.iter().step_by(pages.len().div_ceil(40).max(1));
+            for step in ["hydrate.replay", "hydrate.same"] {
+                for op in refetches.clone() {
+                    let started = Mark::now();
+                    apply(&handle, &docs, op, &identity).await;
+                    samples.record(step, started);
+                    idle(&handle, &mut samples).await;
+                }
+            }
             rss_kb.push(memory_kb("VmRSS"));
             handle.shutdown().unwrap();
             variant = (variant + 1) % variants;
