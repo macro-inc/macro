@@ -1,4 +1,4 @@
-use crate::api::context::{ApiContext, AuthorizationService};
+use crate::api::context::AuthorizationService;
 
 use axum::{
     Json,
@@ -9,6 +9,7 @@ use axum::{
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use macro_user_id::{cowlike::CowLike, lowercased::Lowercase, user_id::MacroUserId};
 use model::response::ErrorResponse;
+use sqlx::PgPool;
 use utoipa::ToSchema;
 
 #[derive(serde::Deserialize, Debug, ToSchema)]
@@ -62,9 +63,9 @@ impl IntoResponse for GetExistingUsersError {
             (status = 500, body = ErrorResponse),
         ),
     )]
-#[tracing::instrument(skip(ctx, _internal_authorization))]
+#[tracing::instrument(skip(db, _internal_authorization))]
 pub async fn handler(
-    State(ctx): State<ApiContext>,
+    State(db): State<PgPool>,
     _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     extract::Json(GetExistingUsersRequest { user_ids }): extract::Json<GetExistingUsersRequest>,
 ) -> Result<Json<GetExistingUsersResponse>, GetExistingUsersError> {
@@ -79,7 +80,7 @@ pub async fn handler(
         .map_err(|_| GetExistingUsersError::InvalidMacroId)?;
 
     let existing_user_ids =
-        macro_db_client::user::get_all::get_existing_users(&ctx.db, &user_ids).await?;
+        macro_db_client::user::get_all::get_existing_users(&db, &user_ids).await?;
 
     Ok(Json(GetExistingUsersResponse { existing_user_ids }))
 }

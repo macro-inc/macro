@@ -1,9 +1,13 @@
 use axum::{
     Router,
+    extract::FromRef,
     routing::{delete, get, post},
 };
+use macro_authorization::MacroAuthorizationState;
+use sqlx::PgPool;
 
 use crate::api::ApiContext;
+use crate::api::context::AuthorizationService;
 
 use super::user::post_get_names;
 
@@ -21,6 +25,8 @@ mod stripe_inbox_replay;
 
 #[cfg(test)]
 mod fusionauth_fixture;
+#[cfg(test)]
+mod test;
 
 pub fn router() -> Router<ApiContext> {
     Router::new()
@@ -36,7 +42,7 @@ pub fn router() -> Router<ApiContext> {
             get(microsoft_access_token::disconnect_handler),
         )
         .route("/get_names", post(post_get_names::handler_internal))
-        .route("/get_existing_users", get(post_get_existing_users::handler))
+        .merge(existing_users())
         .route("/remove_link", delete(remove_link::handler))
         .route(
             "/revoke_microsoft_grant",
@@ -52,4 +58,19 @@ pub fn router() -> Router<ApiContext> {
             "/stripe_inbox/replay_dead",
             post(stripe_inbox_replay::replay_dead_handler),
         )
+}
+
+/// `POST /get_existing_users`: which of a list of user ids name accounts. It
+/// takes only the database and the authorization state, so a test serves it
+/// without the whole API context.
+fn existing_users<S>() -> Router<S>
+where
+    S: Clone + Send + Sync + 'static,
+    PgPool: FromRef<S>,
+    MacroAuthorizationState<AuthorizationService>: FromRef<S>,
+{
+    Router::new().route(
+        "/get_existing_users",
+        post(post_get_existing_users::handler),
+    )
 }
