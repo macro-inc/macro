@@ -1,8 +1,9 @@
-//! Times the browser's carry-forward and the storage 11 to 12 upgrade on a
-//! retained production-size cache against an ordinary reopen of the same
-//! cache. It needs the two databases that cache-turso's
-//! `upgrade_cost_on_a_retained_cache` keeps (`CACHE_MIGRATION_OUT`), served
-//! with CORS under the URL compiled in as `CACHE_MIGRATION_URL`.
+//! Times the browser's carry-forward and the first open of a storage 11 cache
+//! on a retained production-size cache against an ordinary reopen of the same
+//! cache, and the derived rebuilds that open runs alone. It needs the
+//! databases that cache-turso's `upgrade_cost_on_a_retained_cache` keeps
+//! (`CACHE_MIGRATION_OUT`), served with CORS under the URL compiled in as
+//! `CACHE_MIGRATION_URL`.
 use super::*;
 
 /// The scope the cache bench writes its databases under.
@@ -101,6 +102,19 @@ async fn carry_forward_and_upgrade_cost_on_a_retained_cache() {
             }
         );
 
+        // Storage 12 with the derived state a storage 11 build left: those
+        // rebuilds alone, with no move and no step.
+        remove_opfs_pair(&own).await;
+        load_pair(base, "derived.turso", &own).await;
+        let (rebuilds, report) = timed_open().await;
+        assert_eq!(
+            report,
+            OpenReport {
+                outcome: CacheOpenOutcome::OpenedExisting,
+                carry_forward: None,
+            }
+        );
+
         remove_opfs_pair(&own).await;
         load_pair(base, "older.turso", &older).await;
         let (upgrade, report) = timed_open().await;
@@ -117,8 +131,8 @@ async fn carry_forward_and_upgrade_cost_on_a_retained_cache() {
         assert_eq!(report.outcome, CacheOpenOutcome::OpenedExisting);
         console_log!(
             "run {run} ({bytes} B): reopen at 12 {reopen:.1} ms, move and open at 12 \
-             {move_only:.1} ms, move and upgrade from 11 {upgrade:.1} ms, reopen after \
-             upgrade {after:.1} ms"
+             {move_only:.1} ms, derived rebuilds at 12 {rebuilds:.1} ms, move and upgrade from 11 \
+             {upgrade:.1} ms, reopen after upgrade {after:.1} ms"
         );
     }
     destroy_cache(BENCH_SCOPE.into())

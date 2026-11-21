@@ -157,18 +157,39 @@ pub mod test_hooks {
     use super::super::{
         QUICK_ACCESS_PROJECTION_VERSION_KEY, TursoStorage, page_retention, people_sql, text,
     };
+    use super::{Arc, Connection};
     use crate::{TursoStorageError, driver};
     use cache_core::people::sql::projection;
     use std::cell::Cell;
 
+    /// Derived state a storage 11 build had not reached yet, which opening a
+    /// file it left rebuilds from the retained records.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub enum Storage11DerivedState {
+        /// Quick Access projection 4.
+        QuickAccessProjection,
+        /// Page retention 1.
+        PageRetention,
+        /// No local people facts and no stamp for them.
+        PeopleFacts,
+    }
+
+    impl Storage11DerivedState {
+        /// Every part, in the order an open rebuilds them.
+        pub const ALL: [Self; 3] = [
+            Self::QuickAccessProjection,
+            Self::PageRetention,
+            Self::PeopleFacts,
+        ];
+    }
+
     /// Rewrites a database of this build as the last storage 11 build left
     /// it, so a test can open it as a file an older build left behind: the
-    /// inverse of the 11 to 12 step, plus the derived state that build had
-    /// not reached yet. It stamped Quick Access projection 4 and page
-    /// retention 1, and wrote no local people facts or their stamp, so opening
-    /// the rewrite rebuilds all three, as opening a real storage 11 file does.
-    /// Page compaction then finds pages already in the newer shape, so the
-    /// rewrite costs a lower bound of a real file's first open.
+    /// inverse of the 11 to 12 step, plus every part of
+    /// [`Storage11DerivedState`], so opening the rewrite rebuilds all three, as
+    /// opening a real storage 11 file does. Page compaction then finds pages
+    /// already in the newer shape, so the rewrite costs a lower bound of a real
+    /// file's first open.
     pub fn rewrite_as_storage_11(storage: &mut TursoStorage) -> Result<(), TursoStorageError> {
         storage.require_healthy()?;
         let connection = storage.connection();
@@ -181,28 +202,58 @@ pub mod test_hooks {
             ] {
                 driver::execute(&connection, sql, Vec::new())?;
             }
-            for (key, value) in [
-                (QUICK_ACCESS_PROJECTION_VERSION_KEY, "4"),
-                (page_retention::VERSION_KEY, "1"),
-            ] {
-                driver::execute(
-                    &connection,
-                    "UPDATE meta SET value = ?2 WHERE key = ?1",
-                    vec![text(key), text(value)],
-                )?;
+            for part in Storage11DerivedState::ALL {
+                rewind(&connection, part)?;
             }
-            driver::execute(
-                &connection,
-                "DELETE FROM meta WHERE key = ?",
-                vec![text(people_sql::VERSION_KEY)],
-            )?;
-            driver::execute(
-                &connection,
-                "DELETE FROM index_documents WHERE profile = ?",
-                vec![text(projection::PROFILE)],
-            )?;
             Ok(())
         }))
+    }
+
+    /// Rewinds one part of the derived state to what a storage 11 build left,
+    /// keeping the storage version, so an open measures that part's rebuild
+    /// alone.
+    pub fn rewind_derived_state(
+        storage: &mut TursoStorage,
+        part: Storage11DerivedState,
+    ) -> Result<(), TursoStorageError> {
+        storage.require_healthy()?;
+        let connection = storage.connection();
+        storage.latch_result(driver::write_transaction(&connection, || {
+            rewind(&connection, part)
+        }))
+    }
+
+    fn rewind(
+        connection: &Arc<Connection>,
+        part: Storage11DerivedState,
+    ) -> Result<(), TursoStorageError> {
+        let set = |key: &str, value: &str| {
+            driver::execute(
+                connection,
+                "UPDATE meta SET value = ?2 WHERE key = ?1",
+                vec![text(key), text(value)],
+            )
+            .map(drop)
+        };
+        match part {
+            Storage11DerivedState::QuickAccessProjection => {
+                set(QUICK_ACCESS_PROJECTION_VERSION_KEY, "4")
+            }
+            Storage11DerivedState::PageRetention => set(page_retention::VERSION_KEY, "1"),
+            Storage11DerivedState::PeopleFacts => {
+                driver::execute(
+                    connection,
+                    "DELETE FROM meta WHERE key = ?",
+                    vec![text(people_sql::VERSION_KEY)],
+                )?;
+                driver::execute(
+                    connection,
+                    "DELETE FROM index_documents WHERE profile = ?",
+                    vec![text(projection::PROFILE)],
+                )
+                .map(drop)
+            }
+        }
     }
 
     /// Adds a table no storage version has, so the next open of this

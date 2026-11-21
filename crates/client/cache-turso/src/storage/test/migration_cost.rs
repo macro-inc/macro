@@ -1,8 +1,9 @@
-//! Measures the storage 11 to 12 upgrade on a retained production-size cache
-//! against an ordinary reopen of the same cache, so the upgrade's own cost is
-//! the difference. Not a regular test: it needs a file and runs for minutes.
+//! Measures the first open of a retained production-size cache that a storage
+//! 11 build left, against an ordinary reopen of the same cache, and splits it
+//! into the 11 to 12 step and each derived rebuild that open also runs. Not a
+//! regular test: it needs a file and runs for minutes.
 use super::*;
-use crate::storage::migration::test_hooks;
+use crate::storage::migration::test_hooks::{self, Storage11DerivedState};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -112,7 +113,7 @@ fn file_bytes(path: &Path) -> u64 {
 }
 
 #[test]
-#[ignore = "needs CACHE_MIGRATION_DB=<a cache-bench database> (CACHE_MIGRATION_OUT=<dir> keeps both shapes); run in release with --ignored --nocapture"]
+#[ignore = "needs CACHE_MIGRATION_DB=<a cache-bench database> (CACHE_MIGRATION_OUT=<dir> keeps the shapes the browser measurement loads); run in release with --ignored --nocapture"]
 fn upgrade_cost_on_a_retained_cache() {
     let Some(source) = std::env::var_os("CACHE_MIGRATION_DB").map(PathBuf::from) else {
         return;
@@ -144,24 +145,45 @@ fn upgrade_cost_on_a_retained_cache() {
     let queued = count(&connection, "SELECT count(*) FROM mutation_queue");
     drop(connection);
     storage.try_close().unwrap();
-    copy_pair(&current, &older);
-    let mut storage = TursoFileDatabase::new(&older)
-        .unwrap()
-        .open(BENCH_SCOPE)
-        .unwrap();
-    test_hooks::rewrite_as_storage_11(&mut storage).unwrap();
-    storage.try_close().unwrap();
+    let rewrite = |path: &Path, change: &dyn Fn(&mut TursoStorage)| {
+        copy_pair(&current, path);
+        let mut storage = TursoFileDatabase::new(path)
+            .unwrap()
+            .open(BENCH_SCOPE)
+            .unwrap();
+        change(&mut storage);
+        storage.try_close().unwrap();
+    };
+    rewrite(&older, &|storage| {
+        test_hooks::rewrite_as_storage_11(storage).unwrap();
+    });
+    // The same derived state at storage 12, all of it and one part at a time,
+    // so each rebuild's cost is its open's difference from a reopen.
+    let derived = directory.path().join("derived.turso");
+    rewrite(&derived, &|storage| {
+        for part in Storage11DerivedState::ALL {
+            test_hooks::rewind_derived_state(storage, part).unwrap();
+        }
+    });
+    let parts = Storage11DerivedState::ALL.map(|part| {
+        let path = directory.path().join(format!("{part:?}.turso"));
+        rewrite(&path, &|storage| {
+            test_hooks::rewind_derived_state(storage, part).unwrap();
+        });
+        (part, path)
+    });
     eprintln!(
         "{}: {} bytes, {records} records, {contacts} contacts ({contact_bytes} payload bytes), \
          {documents} search documents, {queued} queued writes",
         source.display(),
         file_bytes(&current),
     );
-    // The browser measurement in cache-wasm loads these two over HTTP.
+    // The browser measurement in cache-wasm loads these over HTTP.
     if let Some(out) = std::env::var_os("CACHE_MIGRATION_OUT").map(PathBuf::from) {
         std::fs::create_dir_all(&out).unwrap();
         copy_pair(&current, &out.join("current.turso"));
         copy_pair(&older, &out.join("older.turso"));
+        copy_pair(&derived, &out.join("derived.turso"));
     }
 
     let database = TursoFileDatabase::new(&live).unwrap();
@@ -175,6 +197,19 @@ fn upgrade_cost_on_a_retained_cache() {
             "run {run}: reopen at 12 {reopen}; open at 11 with upgrade {upgrade}; \
              reopen after upgrade {after}; file after upgrade {} B",
             file_bytes(&live),
+        );
+        copy_pair(&derived, &live);
+        let rebuilds = timed_open(&database);
+        let each = parts
+            .iter()
+            .map(|(part, path)| {
+                copy_pair(path, &live);
+                format!("{part:?} {}", timed_open(&database))
+            })
+            .collect::<Vec<_>>();
+        eprintln!(
+            "run {run} derived rebuilds at 12: all {rebuilds}; {}",
+            each.join("; "),
         );
         let phases = step_phases(&older, &live)
             .into_iter()
