@@ -173,3 +173,6 @@ Regenerate after changing a review type or a type a draft or result reuses; CI
 fails on stale output.
 
 - Create fresh invocation attribution in the credential issuer; managed MCP session provenance comes only from verified request context.
+
+Keep the execution response DTO as the public schema source; backend failures
+record error status at ERROR, while typed admission refusals remain WARN.

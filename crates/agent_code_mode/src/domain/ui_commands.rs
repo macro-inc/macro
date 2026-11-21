@@ -27,7 +27,9 @@ use std::sync::Arc;
 use std::time::Duration;
 use utoipa::ToSchema;
 
-use super::execution_access::{Refusal, check_binding, credential_for_session};
+use super::execution_access::{
+    Refusal, check_binding, credential_for_session, record_backend_error,
+};
 use super::{CodeModeError, ExecutionId, ExecutionStatus, ExecutionStore, ExecutionTurns};
 
 mod routes;
@@ -252,7 +254,7 @@ impl UiCommandService {
     /// Admit only a running execution of the session's current turn, called
     /// by the account that execution was approved to act as, as connected
     /// apps do: a finished, replayed or foreign program cannot send.
-    #[tracing::instrument(skip_all, err(level = tracing::Level::WARN), fields(code_execution_id = %execution, agent_session_id = tracing::field::Empty, refusal = tracing::field::Empty))]
+    #[tracing::instrument(skip_all, fields(code_execution_id = %execution, agent_session_id = tracing::field::Empty, refusal = tracing::field::Empty, error = tracing::field::Empty, otel.status_code = tracing::field::Empty))]
     async fn admit(
         &self,
         access: &EntityAccessReceipt<EditAccessLevel>,
@@ -267,9 +269,17 @@ impl UiCommandService {
             return Err(Refusal::WrongAccount.error());
         }
 
-        let record = self.store.get(session, execution).await?;
+        let record = self
+            .store
+            .get(session, execution)
+            .await
+            .inspect_err(record_backend_error)?;
         check_binding(&record, correlation)?;
-        let active = self.active.active(session).await?;
+        let active = self
+            .active
+            .active(session)
+            .await
+            .inspect_err(record_backend_error)?;
         let (Some(acting_as), Some(turn)) = (record.acting_as, record.turn_id) else {
             return Err(Refusal::NotRunning.error());
         };
@@ -277,7 +287,11 @@ impl UiCommandService {
             return Err(Refusal::NotRunning.error());
         }
 
-        let turn_facts = self.turns.turn(session).await?;
+        let turn_facts = self
+            .turns
+            .turn(session)
+            .await
+            .inspect_err(record_backend_error)?;
         let requester = turn_facts
             .prompter
             .as_ref()
@@ -307,6 +321,8 @@ impl UiCommandService {
             ui.route = tracing::field::Empty,
             ui.client.count = tracing::field::Empty,
             outcome = tracing::field::Empty,
+            error = tracing::field::Empty,
+            otel.status_code = tracing::field::Empty,
         )
     )]
     pub async fn open(
@@ -322,7 +338,10 @@ impl UiCommandService {
             tracing::field::display(admitted.session),
         );
 
-        let outcome = self.dispatch(admitted, input).await?;
+        let outcome = self
+            .dispatch(admitted, input)
+            .await
+            .inspect_err(record_backend_error)?;
         span.record("outcome", outcome_label(&outcome));
         Ok(outcome)
     }

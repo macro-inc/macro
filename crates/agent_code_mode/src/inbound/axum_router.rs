@@ -1,7 +1,7 @@
 //! Session-authorized reads for code execution's existing tool components.
 mod execution_response;
 use crate::domain::{
-    CodeModeError, ExecutionId, ExecutionRecord, SessionCodeMode,
+    CodeModeError, ExecutionId, SessionCodeMode,
     connected_apps::*,
     reviews::*,
     ui_commands::{OpenInApp, UiCommandOutcome, UiCommandService},
@@ -184,7 +184,7 @@ impl IntoResponse for CodeExecutionApiError {
 
 #[utoipa::path(get, path = "/agent-sessions/{session_id}/code-executions/{execution_id}", tag = "agent-sessions", operation_id = "get_code_execution",
     params(("session_id" = Uuid, Path, description = "Owning session"), ("execution_id" = Uuid, Path, description = "Execution receipt identity")),
-    responses((status = 200, body = ExecutionRecord), (status = 401), (status = 403), (status = 404), (status = 500)))]
+    responses((status = 200, body = ExecutionRecordResponse), (status = 401), (status = 403), (status = 404), (status = 500)))]
 /// Fetch one execution only after the caller has obtained view access to its session.
 pub async fn get_code_execution<Access: EntityAccessService, Auth: MacroAuthorizationService>(
     access: AgentSessionAccessLevelExtractor<ViewAccessLevel, Access, Auth>,
