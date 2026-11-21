@@ -1,3 +1,4 @@
+import { type TranslationKey, t } from '@app/lib/i18n';
 import { beginInteraction, TraceFlow, useFlow } from '@app/observability/flow';
 import { startUiOperation } from '@app/observability/ui-operation';
 import { useEmail } from '@core/context/user';
@@ -46,12 +47,10 @@ function EndpointFields(props: {
   return (
     <fieldset class="flex flex-col gap-2">
       <legend class="mb-1 text-sm font-semibold">
-        {props.protocol === 'IMAP'
-          ? 'Incoming mail (IMAP)'
-          : 'Outgoing mail (SMTP)'}
+        {props.protocol === 'IMAP' ? t('imap.incoming') : t('imap.outgoing')}
       </legend>
       <label class="grid gap-1 text-sm">
-        Server name
+        {t('imap.serverName')}
         <Input
           required
           autocapitalize="none"
@@ -66,7 +65,7 @@ function EndpointFields(props: {
         />
       </label>
       <label class="grid gap-1 text-sm">
-        Connection
+        {t('imap.connection')}
         <select
           class="rounded border border-edge-frame bg-control px-3 py-2 text-ink"
           value={props.endpoint.port}
@@ -79,12 +78,16 @@ function EndpointFields(props: {
             });
           }}
         >
-          <option value={implicit}>TLS on port {implicit}</option>
-          <option value={startTls}>STARTTLS on port {startTls}</option>
+          <option value={implicit}>
+            {t('imap.tlsPort', { port: String(implicit) })}
+          </option>
+          <option value={startTls}>
+            {t('imap.startTlsPort', { port: String(startTls) })}
+          </option>
         </select>
       </label>
       <label class="grid gap-1 text-sm">
-        Username
+        {t('imap.username')}
         <Input
           required
           autocapitalize="none"
@@ -102,33 +105,33 @@ function EndpointFields(props: {
   );
 }
 
-function connectionError(code?: string): string {
+function connectionError(code?: string): TranslationKey {
   switch (code) {
     case 'address_unverified':
-      return 'Connect a verified address associated with your Macro account.';
+      return 'imap.addressUnverified';
     case 'provider_conflict':
-      return 'This address already has an inbox connection.';
+      return 'imap.providerConflict';
     case 'connection_changed':
-      return 'This inbox changed while you were connecting. Close this window and open it again.';
+      return 'imap.connectionChanged';
     case 'disabled':
-      return 'New IMAP connections are temporarily unavailable.';
+      return 'imap.disabled';
     case 'credentials_rejected':
-      return 'Sign-in was rejected. Check your username and app password.';
+      return 'imap.credentialsRejected';
     case 'dns_unavailable':
-      return 'Could not find the mail server. Check the server name and try again.';
+      return 'imap.dnsUnavailable';
     case 'tcp_unavailable':
-      return 'Could not reach the mail server. Check its port and try again.';
+      return 'imap.tcpUnavailable';
     case 'tls_unavailable':
-      return 'Could not establish a secure connection. Check the server name and TLS settings.';
+      return 'imap.tlsUnavailable';
     case 'connection_timed_out':
-      return 'The mail server took too long to respond. Try again in a few minutes.';
+      return 'imap.timedOut';
     case 'invalid':
     case 'forbidden':
-      return 'Check the server names, ports and usernames, then confirm the servers.';
+      return 'imap.invalidSettings';
     case 'throttled':
-      return 'Too many attempts. Wait a few minutes before trying again.';
+      return 'imap.throttled';
     default:
-      return 'Could not verify the connection. Check the server settings and try again.';
+      return 'imap.connectionUnavailable';
   }
 }
 
@@ -158,7 +161,7 @@ function ConnectForm(props: ImapConnectProps) {
   );
   const [phase, setPhase] = createSignal<'address' | 'servers'>('address');
   const [busy, setBusy] = createSignal(false);
-  const [error, setError] = createSignal('');
+  const [error, setError] = createSignal<TranslationKey>();
   const [discovery, setDiscovery] = createSignal<Discovery>();
   const [imap, setImap] = createSignal(blankEndpoint(email(), 993));
   const [smtp, setSmtp] = createSignal(blankEndpoint(email(), 465));
@@ -197,7 +200,7 @@ function ConnectForm(props: ImapConnectProps) {
   function changeSettings() {
     setConfirmed(false);
     clearPasswords();
-    setError('');
+    setError(undefined);
     requestId = crypto.randomUUID();
   }
 
@@ -206,7 +209,7 @@ function ConnectForm(props: ImapConnectProps) {
     const address = email().trim();
     setEmail(address);
     setBusy(true);
-    setError('');
+    setError(undefined);
     controller?.abort();
     const read = new AbortController();
     controller = read;
@@ -252,7 +255,7 @@ function ConnectForm(props: ImapConnectProps) {
     )
       return;
     setBusy(true);
-    setError('');
+    setError(undefined);
     const attempt = new AbortController();
     controller = attempt;
     try {
@@ -360,7 +363,7 @@ function ConnectForm(props: ImapConnectProps) {
       >
         <Panel.Header class="px-5">
           <Dialog.Title class="font-semibold">
-            {props.linkId ? 'Reconnect inbox' : 'Connect email'}
+            {props.linkId ? t('imap.reconnect') : t('imap.connectEmail')}
           </Dialog.Title>
         </Panel.Header>
         <Panel.Body scroll class="p-5">
@@ -373,7 +376,7 @@ function ConnectForm(props: ImapConnectProps) {
           >
             <fieldset disabled={busy()} class="flex flex-col gap-4">
               <label class="grid gap-1 text-sm">
-                Email address
+                {t('imap.emailAddress')}
                 <Input
                   type="email"
                   required
@@ -394,7 +397,7 @@ function ConnectForm(props: ImapConnectProps) {
                       setDiscovery(undefined);
                     }}
                   >
-                    Change address
+                    {t('imap.changeAddress')}
                   </Button>
                 </Show>
                 <Show when={oauthProvider()}>
@@ -404,14 +407,15 @@ function ConnectForm(props: ImapConnectProps) {
                       variant="secondary"
                       onClick={() => props.onResult(provider().code)}
                     >
-                      Continue with {provider().name}
+                      {t('imap.continueWith', { provider: provider().name })}
                     </Button>
                   )}
                 </Show>
                 <Show when={steer() === 'none'}>
                   <p class="text-sm text-ink-muted">
-                    {discovery()?.provider} does not provide a mailbox Macro can
-                    connect to directly.
+                    {t('imap.noMailbox', {
+                      provider: discovery()?.provider ?? '',
+                    })}
                   </p>
                 </Show>
                 <Show when={canUsePassword()}>
@@ -425,7 +429,7 @@ function ConnectForm(props: ImapConnectProps) {
                     onToggle={(event) => setManual(event.currentTarget.open)}
                   >
                     <summary class="text-sm font-medium">
-                      Server settings
+                      {t('imap.serverSettings')}
                     </summary>
                     <div class="mt-3 grid gap-4 sm:grid-cols-2">
                       <EndpointFields
@@ -458,11 +462,14 @@ function ConnectForm(props: ImapConnectProps) {
                       }}
                     />
                     <span>
-                      I trust {imap().host || 'the incoming server'}
-                      {imap().host !== smtp().host
-                        ? ` and ${smtp().host || 'the outgoing server'}`
-                        : ''}{' '}
-                      with my mail credentials.
+                      {imap().host === smtp().host
+                        ? t('imap.trustServer', {
+                            server: imap().host || t('imap.incomingServer'),
+                          })
+                        : t('imap.trustServers', {
+                            incoming: imap().host || t('imap.incomingServer'),
+                            outgoing: smtp().host || t('imap.outgoingServer'),
+                          })}
                     </span>
                   </label>
                   <Show when={helpUrl()}>
@@ -473,12 +480,12 @@ function ConnectForm(props: ImapConnectProps) {
                         target="_blank"
                         rel="noopener noreferrer"
                       >
-                        Create an app password
+                        {t('imap.appPasswordHelp')}
                       </a>
                     )}
                   </Show>
                   <div class="grid gap-1 text-sm">
-                    <label for={passwordId}>Password or app password</label>
+                    <label for={passwordId}>{t('imap.password')}</label>
                     <SecretInput
                       id={passwordId}
                       required
@@ -497,11 +504,13 @@ function ConnectForm(props: ImapConnectProps) {
                         setSeparatePassword(event.currentTarget.checked);
                       }}
                     />
-                    Use a separate outgoing password
+                    {t('imap.separatePassword')}
                   </label>
                   <Show when={separatePassword()}>
                     <div class="grid gap-1 text-sm">
-                      <label for={smtpPasswordId}>Outgoing password</label>
+                      <label for={smtpPasswordId}>
+                        {t('imap.outgoingPassword')}
+                      </label>
                       <SecretInput
                         id={smtpPasswordId}
                         required
@@ -516,9 +525,11 @@ function ConnectForm(props: ImapConnectProps) {
               </Show>
               <div class="min-h-[3lh] text-sm">
                 <Show when={error()}>
-                  <p role="alert" class="text-failure">
-                    {error()}
-                  </p>
+                  {(key) => (
+                    <p role="alert" class="text-failure">
+                      {t(key())}
+                    </p>
+                  )}
                 </Show>
               </div>
             </fieldset>
@@ -528,7 +539,7 @@ function ConnectForm(props: ImapConnectProps) {
                 variant="ghost"
                 onClick={() => props.onOpenChange(false)}
               >
-                Cancel
+                {t('imap.cancel')}
               </Button>
               <Show when={phase() === 'address' || canUsePassword()}>
                 <Button
@@ -537,7 +548,9 @@ function ConnectForm(props: ImapConnectProps) {
                   loading={busy()}
                   disabled={phase() === 'servers' && !confirmed()}
                 >
-                  {phase() === 'address' ? 'Find settings' : 'Connect inbox'}
+                  {phase() === 'address'
+                    ? t('imap.findSettings')
+                    : t('imap.connectInbox')}
                 </Button>
               </Show>
             </div>

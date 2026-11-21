@@ -119,6 +119,10 @@ unchanged open inbox without navigating or reloading. Repeat with signal
 notifications disabled.
 
 Open **Settings → Email** to check import progress, reconnect or disconnect.
+The IMAP connection and server settings dialogs use the interface language,
+including connection errors, folder roles and accessible labels. Password fields
+clear after a verification attempt; confirmed non-secret settings remain.
+
 On an owned IMAP inbox, **Server settings** shows the hosts, ports, encryption
 and usernames for both servers. Recent verifications also show the negotiated
 features, the verification time and any outgoing size limit the server supplied.

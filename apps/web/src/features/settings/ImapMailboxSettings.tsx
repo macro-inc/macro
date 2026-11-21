@@ -1,3 +1,4 @@
+import { formatLocale, type TranslationKey, t } from '@app/lib/i18n';
 import { beginInteraction, TraceFlow, useFlow } from '@app/observability/flow';
 import { startUiOperation } from '@app/observability/ui-operation';
 import { isMobile } from '@core/mobile/isMobile';
@@ -32,14 +33,14 @@ import {
 } from 'solid-js';
 import { SettingsButton } from './primitives';
 
-const roleLabels: Record<FolderRole, string> = {
-  inbox: 'Inbox',
-  sent: 'Sent',
-  drafts: 'Drafts',
-  archive: 'Archive',
-  trash: 'Trash',
-  junk: 'Junk',
-  other: 'Other',
+const roleLabels: Record<FolderRole, TranslationKey> = {
+  inbox: 'imap.roleInbox',
+  sent: 'imap.roleSent',
+  drafts: 'imap.roleDrafts',
+  archive: 'imap.roleArchive',
+  trash: 'imap.roleTrash',
+  junk: 'imap.roleJunk',
+  other: 'imap.roleOther',
 };
 const selectableRoles = [
   'sent',
@@ -80,7 +81,7 @@ function VerifiedFeatures(props: { features: ServerFeatures }) {
       props.features.uidPlus && 'UIDPLUS',
       props.features.moveMessages && 'MOVE',
       props.features.objectId && 'OBJECTID',
-      props.features.gmailExtensions && 'Gmail extensions',
+      props.features.gmailExtensions && t('imap.gmailExtensions'),
       props.features.smtpUtf8 && 'SMTPUTF8',
       props.features.eightBitMime && '8BITMIME',
     ]
@@ -91,7 +92,7 @@ function VerifiedFeatures(props: { features: ServerFeatures }) {
       <Show when={labels()}>
         {(names) => (
           <div>
-            <dt class="font-medium">Server features</dt>
+            <dt class="font-medium">{t('imap.features')}</dt>
             <dd class="text-ink-muted">{names()}</dd>
           </div>
         )}
@@ -99,17 +100,21 @@ function VerifiedFeatures(props: { features: ServerFeatures }) {
       <Show when={props.features.sendLimitBytes}>
         {(limit) => (
           <div>
-            <dt class="font-medium">Outgoing message limit</dt>
-            <dd class="text-ink-muted">{limit().toLocaleString()} bytes</dd>
+            <dt class="font-medium">{t('imap.messageLimit')}</dt>
+            <dd class="text-ink-muted">
+              {t('imap.bytes', { count: limit() })}
+            </dd>
           </div>
         )}
       </Show>
       <Show when={props.features.verifiedAt}>
         {(date) => (
           <div>
-            <dt class="font-medium">Connection last verified</dt>
+            <dt class="font-medium">{t('imap.lastVerified')}</dt>
             <dd class="text-ink-muted">
-              <time dateTime={date()}>{new Date(date()).toLocaleString()}</time>
+              <time dateTime={date()}>
+                {new Date(date()).toLocaleString(formatLocale())}
+              </time>
             </dd>
           </div>
         )}
@@ -132,7 +137,7 @@ function SettingsDialog(props: {
   const [excluded, setExcluded] = createSignal<string[]>([]);
   const [watch, setWatch] = createSignal('');
   const [saving, setSaving] = createSignal(false);
-  const [error, setError] = createSignal('');
+  const [error, setError] = createSignal<TranslationKey>();
 
   onCleanup(() => controller.abort());
   createEffect(() => {
@@ -156,9 +161,7 @@ function SettingsDialog(props: {
     if (!current()) return;
     if (result.isErr() || !result.value) {
       parent.error('settings_read_failed');
-      setError(
-        'Mail settings could not be loaded. Close this window and try again.'
-      );
+      setError('imap.readFailed');
       return;
     }
     const value = result.value;
@@ -188,7 +191,7 @@ function SettingsDialog(props: {
       attributes: { 'email.link_id': props.linkId },
     });
     setSaving(true);
-    setError('');
+    setError(undefined);
     try {
       const update: UpdateFolderSettings = {
         expectedRevision: data.revision,
@@ -216,15 +219,10 @@ function SettingsDialog(props: {
       )?.message;
       if (code === 'conflict' || code === 'connection_changed') {
         await operation.span.span('email.imap.settings.reload', read);
-        if (current())
-          setError(
-            'This inbox changed. Review the current settings and save again.'
-          );
+        if (current()) setError('imap.settingsChanged');
       } else {
         setError(
-          code === 'invalid'
-            ? 'Choose one folder for each role. The inbox must stay included.'
-            : 'Could not save mail settings. Try again.'
+          code === 'invalid' ? 'imap.invalidFolders' : 'imap.saveFailed'
         );
       }
       operation.finish('error');
@@ -275,7 +273,7 @@ function SettingsDialog(props: {
       >
         <Panel.Header class="px-5">
           <Dialog.Title class="font-semibold">
-            Mail server settings
+            {t('imap.mailServerSettings')}
           </Dialog.Title>
         </Panel.Header>
         <Panel.Body scroll class="flex flex-col gap-4 p-5">
@@ -286,7 +284,7 @@ function SettingsDialog(props: {
             when={settings()}
             fallback={
               <Show when={!error()}>
-                <p class="text-sm">Loading settings…</p>
+                <p class="text-sm">{t('imap.loadingSettings')}</p>
               </Show>
             }
           >
@@ -294,11 +292,11 @@ function SettingsDialog(props: {
               <>
                 <dl class="grid gap-4 sm:grid-cols-2">
                   <ServerDetails
-                    name="Incoming mail (IMAP)"
+                    name={t('imap.incoming')}
                     endpoint={data().imap}
                   />
                   <ServerDetails
-                    name="Outgoing mail (SMTP)"
+                    name={t('imap.outgoing')}
                     endpoint={data().smtp}
                   />
                 </dl>
@@ -313,7 +311,7 @@ function SettingsDialog(props: {
                     props.onReconnect();
                   }}
                 >
-                  Change login details
+                  {t('imap.changeLogin')}
                 </Button>
                 <Show when={data().helpUrl}>
                   {(url) => (
@@ -323,17 +321,21 @@ function SettingsDialog(props: {
                       rel="noopener noreferrer"
                       target="_blank"
                     >
-                      {data().provider ?? 'Mail provider'} setup instructions
+                      {t('imap.setupInstructions', {
+                        provider: data().provider ?? t('imap.mailProvider'),
+                      })}
                     </a>
                   )}
                 </Show>
                 <fieldset disabled={saving()} class="flex flex-col gap-3">
-                  <legend class="mb-2 font-semibold">Folders</legend>
+                  <legend class="mb-2 font-semibold">
+                    {t('imap.folders')}
+                  </legend>
                   <Show
                     when={data().folders.length}
                     fallback={
                       <p class="text-sm text-ink-muted">
-                        Folders will appear after the first sync.
+                        {t('imap.foldersPending')}
                       </p>
                     }
                   >
@@ -347,13 +349,7 @@ function SettingsDialog(props: {
                     >
                       {(count) => (
                         <p class="text-sm text-ink-muted">
-                          {count()}{' '}
-                          {count() === 1
-                            ? 'included folder was'
-                            : 'included folders were'}{' '}
-                          outside the last sync. Macro syncs up to 200 physical
-                          folders and prioritizes the inbox, assigned roles, and
-                          watched folders.
+                          {t('imap.unsyncedFolders', { count: count() })}
                         </p>
                       )}
                     </Show>
@@ -369,35 +365,38 @@ function SettingsDialog(props: {
                             }
                           >
                             <span class="text-ink-muted">
-                              Outside the latest sync
+                              {t('imap.outsideSync')}
                             </span>
                           </Show>
                           <Show
                             when={folder.detectedRole !== 'inbox'}
                             fallback={
                               <span class="text-ink-muted">
-                                Inbox · Always synced
+                                {t('imap.inboxAlwaysSynced')}
                               </span>
                             }
                           >
                             <div class="flex flex-wrap items-center gap-3">
                               <label class="flex items-center gap-2">
-                                Role
+                                {t('imap.role')}
                                 <FolderSelect
-                                  aria-label={`Role for ${folder.name}`}
+                                  aria-label={t('imap.roleFor', {
+                                    folder: folder.name,
+                                  })}
                                   value={roles()[folder.id] ?? ''}
                                   onChange={(e) =>
                                     changeRole(folder.id, e.currentTarget.value)
                                   }
                                 >
                                   <option value="">
-                                    Automatic ({roleLabels[folder.detectedRole]}
-                                    )
+                                    {t('imap.automaticRole', {
+                                      role: t(roleLabels[folder.detectedRole]),
+                                    })}
                                   </option>
                                   <For each={selectableRoles}>
                                     {(role) => (
                                       <option value={role}>
-                                        {roleLabels[role]}
+                                        {t(roleLabels[role])}
                                       </option>
                                     )}
                                   </For>
@@ -406,7 +405,9 @@ function SettingsDialog(props: {
                               <label class="flex items-center gap-2">
                                 <input
                                   type="checkbox"
-                                  aria-label={`Sync ${folder.name}`}
+                                  aria-label={t('imap.syncNamedFolder', {
+                                    folder: folder.name,
+                                  })}
                                   checked={!excluded().includes(folder.id)}
                                   onChange={(e) => {
                                     if (e.currentTarget.checked)
@@ -424,7 +425,7 @@ function SettingsDialog(props: {
                                     }
                                   }}
                                 />
-                                Sync folder
+                                {t('imap.syncFolder')}
                               </label>
                             </div>
                           </Show>
@@ -432,12 +433,12 @@ function SettingsDialog(props: {
                       )}
                     </For>
                     <label class="flex flex-col gap-1 text-sm">
-                      Watch for new mail alongside Inbox
+                      {t('imap.watchFolder')}
                       <FolderSelect
                         value={watch()}
                         onChange={(e) => setWatch(e.currentTarget.value)}
                       >
-                        <option value="">Inbox only</option>
+                        <option value="">{t('imap.inboxOnly')}</option>
                         <For
                           each={data().folders.filter(
                             (f) =>
@@ -458,13 +459,15 @@ function SettingsDialog(props: {
             )}
           </Show>
           <Show when={error()}>
-            <p role="alert" class="text-sm text-failure">
-              {error()}
-            </p>
+            {(key) => (
+              <p role="alert" class="text-sm text-failure">
+                {t(key())}
+              </p>
+            )}
           </Show>
           <div class="flex justify-end gap-2">
             <Button variant="secondary" onClick={props.close}>
-              Close
+              {t('imap.close')}
             </Button>
             <Button
               variant="primary"
@@ -473,7 +476,7 @@ function SettingsDialog(props: {
                 fireAndForget(save(event), 'imap-save-settings')
               }
             >
-              {saving() ? 'Saving…' : 'Save settings'}
+              {saving() ? t('imap.saving') : t('imap.saveSettings')}
             </Button>
           </div>
         </Panel.Body>
@@ -506,7 +509,7 @@ export function ImapMailboxSettings(props: {
           }
         }}
       >
-        Server settings
+        {t('imap.serverSettings')}
       </SettingsButton>
       <Show when={open()}>
         <TraceFlow
