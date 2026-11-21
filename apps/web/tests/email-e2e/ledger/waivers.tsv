@@ -1,5 +1,4 @@
 id	on	kind	reason
-F-020	outlook	bug	a message deleted at Outlook stays in the thread (outlook-deleted-message-stays-in-thread); its test is kept as a known bug
 F-057	both	needs	the image proxy refuses the private addresses of a stack, so what it fetched cannot be checked at the service; the UI half is tested
 AL-401	-	no-user-path	The token is only declared in tokens.ts; no hotkey is registered with it.
 AL-041	-	no-user-path	EmailInboxFilter is exported but no component imports or renders it.
@@ -10,14 +9,11 @@ STL-409	-	needs	shown only with the GraphQL list off: with it on, the check befo
 STL-400	-	needs	shown only when a failed next page reaches the list. The Mail list pages from the local cache, which often drops a failed page first: a test that failed the request saw the notice in about half of its runs, and Next item did nothing in the others. Needs a way to fail the cache host's paging
 AC-317	-	needs	shown only after a window of recipient suggestions failed. They are read from the local contacts cache, which no stack makes fail: needs a way to fail the cache host's directory reads
 STL-410	-	needs	the tour is off unless the flag service or the build turns in-app tours on, and the suite's bundle does neither
-AL-139	-	bug	u and Shift+U in a thread opened inline reach the list behind it and not the thread (inline-thread-read-keys-reach-the-list); its test is kept as a known bug
-AL-140	-	bug	u and Shift+U in a thread opened inline reach the list behind it and not the thread (inline-thread-read-keys-reach-the-list); its test is kept as a known bug
 AL-500	-	needs	needs the notification service, and no test on the full-stack tier does it yet
 AL-503	-	needs	needs the static file service, and no test on the full-stack tier does it yet
 AL-512	-	needs	needs the calendar service, and no test on the full-stack tier does it yet
 AL-181	-	needs	needs the calendar service, and no test on the full-stack tier does it yet
 STL-070	-	no-user-path	the header that would show the draft badge is never told that its thread is a draft
-STL-077	-	bug	the read toggle of an open thread goes back to Mark as unread after the app's own write (thread-unread-toggle-resets-on-own-write); its test is kept as a known bug
 STL-504	-	needs	needs live updates over the websocket, and no test on the full-stack tier does it yet
 STL-100	-	needs	needs the calendar service (the day agenda), and no test on the full-stack tier does it yet
 STL-518	-	needs	needs the calendar service, and no test on the full-stack tier does it yet
@@ -30,18 +26,14 @@ AL-152	-	needs	needs the AI service, and no test on the full-stack tier does it 
 AL-614	-	needs	needs the notification service, and no test on the full-stack tier does it yet
 AL-620	-	no-user-path	The dialog shows this Copy Link only to a viewer who cannot forward, and every viewer of an email thread can.
 STL-605	-	needs	needs the notification service, and no test on the full-stack tier does it yet
-AC-014	-	bug	a tap on the folded recipients of a phone's new email does not open them (phone-recipient-summary-tap-ignored); its test is kept as a known bug
 AC-319	-	bug	Escape in the phone reply Subject: field does not leave it: the composer puts the focus straight back (phone-reply-subject-escape-keeps-focus); its test is kept as a known bug
 STC-314	-	no-user-path	the recipient picker leaves the user's own address out of its suggestions, and typed or pasted it becomes a plain chip
 STC-046	-	no-user-path	a composer that learns its draft was sent elsewhere closes in the same step that sets this state: the reply composer hides itself, and the standalone one is replaced by the thread
-STC-047	-	bug	a draft deleted in one browser stays editable in another that has it open (deleted-draft-open-elsewhere-stays-editable); its test is kept as a known bug
 AC-067	-	needs	exists only with enable-graphql-soup off, and the bundle of the suite is built with it on, as the app runs: there the sync banner recovers a rejected draft instead
-AC-915	-	bug	a rejected scheduled send that is cancelled in an Outlook inbox stays locked (outlook-cancelled-failed-schedule-stays-locked); its test is kept as a known bug
 STC-031	-	no-user-path	Every composer send goes through the send journal and carries an attempt id, so the legacy unschedule path that raises this never runs.
 STC-043	-	no-user-path	the code that raises this wraps only a call that cannot fail on the spot: every way marking done after a send can fail comes later, and shows as the thread's own notice (STL-075)
 STC-060	-	no-user-path	every way of picking a send time (a preset, the calendar, a typed query) hands over a valid date, so the check that raises this cannot fail
 STC-410	-	no-user-path	both composers refuse edits while a schedule is pending or confirmed, and only become scheduled with nothing unsaved, so a scheduled draft never has a save to refuse
-STC-077	-	bug	undo of a sent or scheduled reply refuses, or wrongly claims, a newer reply (undo-send-refuses-newer-reply, undo-schedule-claims-newer-reply); its test is kept as a known bug
 STC-087	-	needs	shown only when the GraphQL list flag turns on while a composer is open (from the start, the sync banner shows instead); the suite's bundle has the flag on from the start and no flag service to switch it
 STC-100	-	no-user-path	a send queued on this device never carries a send time (scheduling is a separate request), its own Sending rows are hidden, and the server's rows leave sending ones out
 STC-425	-	no-user-path	a send queued on this device has no send time and its accepted row is hidden; the Scheduled row the panel does show is another device's, with Cancel and restore (a different row)
@@ -77,6 +69,5 @@ STX-309	-	needs	needs the AI service, and no test on the full-stack tier does it
 STX-310	-	needs	needs the AI service, and no test on the full-stack tier does it yet
 STX-035	-	needs	needs the calendar service (a calendar sync error), and no test on the full-stack tier does it yet
 STX-319	-	needs	the tour is off unless the flag service turns on enable-in-app-tours, and the suite's bundle has no flag service
-AL-115	-	bug	a touch device lists saved views in the sidebar sheet, whose rows drag with a mouse alone and whose menus have no Move up or Move down, so a touch cannot reorder views (touch-saved-views-reorder); its tests are kept as known bugs
 STL-704	-	bug	the touch list header names the tab a saved view runs on (All) instead of the view (touch-header-saved-view-name); its test is kept as a known bug
 STC-004	-	no-user-path	a touch device composes with the phone composer at every width, which draws no header label; the desktop Mail page shows a new email and a draft from Drafts without a split header, so nothing draws the label or its badges

@@ -644,7 +644,7 @@ pub(super) fn plan_for(mode: Mode, flags: &RunLocalFlags, run: &RunArgs, start: 
         share_app,
         infra_only: false,
         start,
-        computers: run.computers.fleet(super::computers::Fleet::Docker),
+        computers: run.computers.fleet(),
     }
 }
 

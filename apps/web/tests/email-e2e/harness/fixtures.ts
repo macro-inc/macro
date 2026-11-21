@@ -68,6 +68,8 @@ type Options = {
   address: string;
   /** What the mailbox is linked with; the calendar needs the local stack. */
   access: InboxAccess;
+  /** Whether Gmail mailboxes on the local stack start with the emulator's grant. */
+  seedGoogleGrant: boolean;
 };
 
 /**
@@ -133,6 +135,7 @@ export const test = base.extend<
   stackEnv: [{}, { option: true }],
   address: ['ada@example.com', { option: true }],
   access: ['mail', { option: true }],
+  seedGoogleGrant: [true, { option: true }],
 
   evidence: [
     async ({ page, provider, hasTouch }, use, testInfo) => {
@@ -144,7 +147,7 @@ export const test = base.extend<
   ],
 
   mailbox: async (
-    { page, provider, stackEnv, address, access, evidence },
+    { page, provider, stackEnv, address, access, seedGoogleGrant, evidence },
     use,
     testInfo
   ) => {
@@ -157,7 +160,7 @@ export const test = base.extend<
       );
     }
     const stack: EmailStack = local
-      ? new LocalStack(local)
+      ? new LocalStack(local, { seedGoogleGrant })
       : await Stack.start(stackEnv);
     let failed = true;
     try {

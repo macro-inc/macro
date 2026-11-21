@@ -33,7 +33,11 @@ Verified against production web-app spans:
   `@ui.work_to_ready_ms`). Resource attributes are facets too: `@app.platform`
   (`web`, `desktop`, `ios`, `android`), `@app.runtime`, `@os.type`,
   `@version` (group by `@version`; bare `version` returns nothing), and
-  `env` (`prod`, `development`, `dev`).
+  `env` (`prod`, `development`, `dev`). `@version` is the web bundle, which
+  over-the-air updates bring to old binaries; the native binary is
+  `@macro.native.build` (Android versionCode, iOS CFBundleVersion, desktop
+  release build; numeric, so `@macro.native.build:>=28` works). Spans whose
+  web bundle predates it have none.
 - Numeric attributes are measures (`pc75` over `@ui.elapsed_ms` works).
   Booleans arrive as strings: `@agent.session.load.cache_hit:true`.
 - `@duration` is nanoseconds; `ui.*_ms` fields are milliseconds; trace metrics
@@ -150,6 +154,18 @@ return agg(
   [ { facet: "@app.platform", limit: 10 } ]);
 ```
 
+A native fix ships in a binary, not the bundle: split by native build to see
+it. Spans from bundles older than the attribute fall in `unknown`:
+
+```javascript
+return agg(
+  { query: "service:web-app env:prod @app.platform:android operation_name:http.client.request @http.body_outcome:complete" },
+  [ { aggregation: "pc75", metric: "@http.body_ms", type: "total" },
+    { aggregation: "pc95", metric: "@http.body_ms", type: "total" },
+    { aggregation: "count", type: "total" } ],
+  [ { facet: "@macro.native.build", limit: 20, missing: "unknown" } ]);
+```
+
 For `graphql.transport` use `resource_name:graphql.transport
 @graphql.body_outcome:complete` over `@graphql.body_ms`. The
 `macro.web.http.body_ms` and `macro.web.graphql.body_ms` span-based metrics
@@ -170,6 +186,43 @@ return agg(
   [ { facet: "@runtime.session_age_ms",
       histogram: { interval: 600000, min: 0, max: 7200000 }, limit: 20 } ]);
 ```
+
+**Rank what blocks the main thread.** Roots carry the up to three longest
+scripts of their long animation frames (fields in the
+[span model](../../../docs/agent-guide/observability.md#reading-phases)). Sum
+each slot's script time by invoker and source, then merge the slots in code.
+Strip the chunk hash so builds merge, and keep `source_char_position` from an
+exemplar to map back through that build's `<chunk>.js.map`:
+
+```javascript
+const slot = (n) => agg(
+  { query: `service:web-app env:prod @flow.kind:* @ui.long_animation_frame_script_${n}.duration_ms:*` },
+  [ { aggregation: "count", type: "total" },
+    { aggregation: "sum", metric: `@ui.long_animation_frame_script_${n}.duration_ms`, type: "total" },
+    { aggregation: "sum", metric: `@ui.long_animation_frame_script_${n}.forced_style_layout_ms`, type: "total" } ],
+  [ { facet: `@ui.long_animation_frame_script_${n}.invoker`, limit: 30,
+      sort: { type: "measure", aggregation: "sum", metric: `@ui.long_animation_frame_script_${n}.duration_ms`, order: "desc" } },
+    { facet: `@ui.long_animation_frame_script_${n}.source_url`, limit: 30,
+      sort: { type: "measure", aggregation: "sum", metric: `@ui.long_animation_frame_script_${n}.duration_ms`, order: "desc" } } ]);
+const norm = (url) => (url ?? "").replace(/-[A-Za-z0-9_-]{8}\.js$/, ".js");
+const ranked = new Map();
+const slots = await Promise.all([1, 2, 3].map(slot));
+slots.forEach((rows, index) => {
+  const field = (name) => `@ui.long_animation_frame_script_${index + 1}.${name}`;
+  for (const { by, c0, c1, c2 } of rows) {
+    const key = `${by[field("invoker")]} | ${norm(by[field("source_url")])}`;
+    const total = ranked.get(key) ?? { scripts: 0, ms: 0, forcedLayoutMs: 0 };
+    ranked.set(key, { scripts: total.scripts + c0, ms: total.ms + c1, forcedLayoutMs: total.forcedLayoutMs + c2 });
+  }
+});
+return [...ranked].sort((a, b) => b[1].ms - a[1].ms).slice(0, 20);
+```
+
+Add `@ui.operation`, `@route.id` or `@app.platform` to the query to rank one
+flow; add `@ui.long_animation_frame_script_1.source_function` as a group to
+split a chunk. Script time sums the longest scripts of overlapping frames, so
+it ranks what most often holds the thread during flows, not total CPU time;
+the same frame can count on two overlapping roots.
 
 Typing latency: `resource_name:input.typing_burst`, measure
 `@typing.event_duration_p95_ms`, group by `@typing.surface`.

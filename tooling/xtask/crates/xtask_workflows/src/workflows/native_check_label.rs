@@ -10,9 +10,8 @@
 //! required check: it can take up to 25 minutes while waiting, and the release
 //! preconditions ignore it.
 
-use gh_workflow::{
-    Event, Expression, Job, Level, Permissions, PullRequest, PullRequestType, Step, Workflow,
-};
+use gh_workflow::expr::typed::{Expr, Str, github};
+use gh_workflow::{Event, Job, Level, Permissions, PullRequest, PullRequestType, Step, Workflow};
 
 use crate::workflows::runners;
 
@@ -28,14 +27,24 @@ pub fn native_check_label() -> Workflow {
         .add_job("rerun", rerun_job())
 }
 
+fn label() -> Expr<Str> {
+    github().event("label.name")
+}
+
 fn rerun_job() -> Job {
     Job::default()
         .name("Re-run the native check")
         // Fork PRs get a read-only token, which cannot re-run jobs.
-        .cond(Expression::new(
-            "(github.event.label.name == 'skip-ios-update' || github.event.label.name == 'skip-android-update') && \
-             github.event.pull_request.head.repo.full_name == github.repository",
-        ))
+        .cond(
+            label()
+                .eq("skip-ios-update")
+                .or(label().eq("skip-android-update"))
+                .and(
+                    github()
+                        .event::<Str>("pull_request.head.repo.full_name")
+                        .eq(github().repository()),
+                ),
+        )
         .runs_on(runners::Runner::TinyNoCache.to_string())
         .timeout_minutes(30u32)
         .permissions(
@@ -43,13 +52,15 @@ fn rerun_job() -> Job {
                 .actions(Level::Write)
                 .pull_requests(Level::Read),
         )
-        .add_env(("GH_TOKEN", "${{ github.token }}"))
-        .add_env(("GH_REPO", "${{ github.repository }}"))
-        .add_env(("HEAD_SHA", "${{ github.event.pull_request.head.sha }}"))
-        .add_env(("PR_NUMBER", "${{ github.event.pull_request.number }}"))
+        .add_env(("GH_TOKEN", github().token()))
+        .add_env(("GH_REPO", github().repository()))
+        .add_env(("HEAD_SHA", github().event::<Str>("pull_request.head.sha")))
+        .add_env(("PR_NUMBER", github().event::<Str>("pull_request.number")))
         .add_env((
             "JOB_NAME",
-            "${{ github.event.label.name == 'skip-ios-update' && 'iOS Native Check' || 'Android Native Check' }}",
+            label()
+                .eq("skip-ios-update")
+                .then_else("iOS Native Check", "Android Native Check"),
         ))
         .add_step(
             Step::new("Re-run the gate job for this head")

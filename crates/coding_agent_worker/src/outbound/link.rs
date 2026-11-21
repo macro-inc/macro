@@ -1,7 +1,9 @@
 //! The dial-out link to the harness service's runtime gateway.
 
 use agent_runtime_protocol::domain::connection::RuntimeChannel;
-use agent_runtime_protocol::domain::schema::v0::{ACCEPTS_AGENTS_CHANGED, RUNTIME_ACCEPTS_HEADER};
+use agent_runtime_protocol::domain::schema::v0::{
+    ACCEPTS_AGENTS_CHANGED, ACCEPTS_APPLY_AGENT, RUNTIME_ACCEPTS_HEADER,
+};
 use agent_runtime_protocol::outbound::websocket::connect_runtime;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 
@@ -18,10 +20,8 @@ pub async fn dial(
     headers.insert("x-macro-harness-token", token);
     // The service sends the optional messages this daemon handles only
     // because it lists them here.
-    headers.insert(
-        RUNTIME_ACCEPTS_HEADER,
-        tokio_tungstenite::tungstenite::http::HeaderValue::from_static(ACCEPTS_AGENTS_CHANGED),
-    );
+    let accepts = [ACCEPTS_AGENTS_CHANGED, ACCEPTS_APPLY_AGENT].join(",");
+    headers.insert(RUNTIME_ACCEPTS_HEADER, accepts.parse().map_err(bad_header)?);
     let (stream, _response) = tokio_tungstenite::connect_async(request).await?;
     Ok(connect_runtime(stream))
 }

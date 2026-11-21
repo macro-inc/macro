@@ -5,7 +5,7 @@ use email_api_client::domain::ports::{
 };
 use uuid::Uuid;
 
-use super::{ADA, id, message_id, start, token};
+use super::{ADA, folders, id, message_id, start, token};
 use crate::{NewMessage, SeedContact};
 
 const ONE_MESSAGE: &str = "mailboxes:\n  - email: ada@example.com\n    name: Ada Example\n    messages:\n      - subject: Hello\n        from: Grace <grace@example.com>\n";
@@ -26,7 +26,7 @@ async fn message_actions_change_what_the_mailbox_reads_back() {
     let stored = &emulator.messages(ADA).unwrap()[0];
     assert!(stored.is_read && stored.flagged);
 
-    let folders = api.folders(&token).await.unwrap();
+    let folders = folders(&api, &token).await;
     let organization = api
         .organization(&token, Uuid::now_v7(), &hello, &folders)
         .await
@@ -40,7 +40,7 @@ async fn tags_are_written_only_against_the_version_that_was_read() {
     let (emulator, api) = start(ONE_MESSAGE).await;
     let token = token(&emulator, ADA);
     let hello = message_id(&emulator, ADA, "Hello");
-    let folders = api.folders(&token).await.unwrap();
+    let folders = folders(&api, &token).await;
     let read = api
         .message(&token, Uuid::now_v7(), &hello, &folders)
         .await
@@ -90,7 +90,7 @@ async fn archiving_moves_to_archive_or_creates_one_when_the_mailbox_has_none() {
     let messages = emulator.messages(ADA).unwrap();
     assert!(messages[0].folder.starts_with("Macro Archive"));
     assert_eq!(messages[0].folder, messages[1].folder);
-    let folders = api.folders(&token).await.unwrap();
+    let folders = folders(&api, &token).await;
     let archives = folders.iter().filter(|f| f.role == FolderRole::Archive);
     assert_eq!(archives.count(), 1);
 }
@@ -100,7 +100,7 @@ async fn moving_to_a_folder_keeps_the_message_id() {
     let (emulator, api) = start(ONE_MESSAGE).await;
     let token = token(&emulator, ADA);
     let hello = message_id(&emulator, ADA, "Hello");
-    let folders = api.folders(&token).await.unwrap();
+    let folders = folders(&api, &token).await;
     let junk = folders.iter().find(|f| f.role == FolderRole::Junk).unwrap();
 
     let receipt = api

@@ -28,6 +28,8 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   `ahs.harness.hydrated`, `ahs.agent_session.active` (every runtime's actors),
   `ahs.inmem.store_sessions`, `ahs.inmem.live_agents`,
   `ahs.tokio.alive_tasks`); no per-session attributes.
+- `src/cognition/server.rs`: both email-service compositions inject CRM rule
+  discovery; selected Team reads fail closed if a host omits that capability.
 - `src/trigger.rs`: turns channel/webhook triggers into sessions.
 - `src/pull_request_archive.rs`: consumes `macro.github_pull_requests` (group
   `agent-harness-pull-request-archive`) and auto-archives sessions whose
@@ -130,13 +132,16 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
 - `src/computers/claude.rs`: Claude sign-in on Macro computers. All routes
   require the caller's `enable-macro-computers` flag through
   `hosted_runtimes::domain::rollout::ComputerRollout` (missing providers/flags
-  and evaluation errors return 403) and an attached fleet (503).
+  and evaluation errors return 403 with `code: rollout_disabled`; a caller
+  without manage rights gets a 403 with no code) and an attached fleet (503).
   `POST /harnesses/{id}/claude-sign-in` → `{url}`,
   `POST /harnesses/{id}/claude-sign-in/complete` `{code}` → `{signedIn}`
   (a failed sign-in carries a `code` saying how to recover:
   `invalid_code` 422 and `sign_in_expired` 410 need a new sign-in,
   `malformed_code` 400 a fresh paste, `computer_unreachable` 503 and
-  `computer_busy` 409 a retry; a timeout is a bare 504),
+  `computer_busy` 409 a retry; harnessd's own CLI timeout ends the sign-in
+  and answers `sign_in_expired`, while this service timing out on harnessd
+  is a bare 504 that lets the code be sent again),
   `POST /harnesses/{id}/claude-sign-out` → `{mode}`, and
   `GET /harnesses/{id}/claude-mode` → `{mode, account?}` (all manage rights).
   The sign-in link must be `https://claude.com` or `claude.ai` at exactly
@@ -245,8 +250,8 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   page (newest first) without two exact matches goes to the session,
   which also looks up the other kinds. `routine_code.rs` gives the
   session each SDK area it needs
-  (`area_reference`: the area's index, guidance and declarations, then
-  the generated types they import). `scheduling.rs` composes the drafter
+  (`area_reference`: the area's index, guidance and declarations from every
+  namespace in the topic, then the generated types they import). `scheduling.rs` composes the drafter
   after the service with its
   `scheduled_action_draft` store, the session drafter's check lookup
   (`CorrelationSessions`) and activity (`ActivityCreations`), and the
@@ -272,10 +277,15 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   rewritten step, at run time or in the startup sweep) also signs the
   `dry_run` scope (`routine_claims`), so every SDK host refuses its writes
   even when code gets past the dry run inside its process.
+  Entity knobs' items are checked as the owner on save, and in a run when
+  the first code step that uses each starts (`KnobEntityAccess`, people through notifications' user check, and
+  trash and a task's subtype through `RoutineLiveItems` in
+  `src/scheduling.rs`).
   Routine suggestions (`src/scheduling/routine_suggestions.rs`) read the
   newest 100 messages (labels, 500-character snippets) through
-  email_service's internal recent-messages route and the person's connected
-  Pipedream apps. Generations (`crates/suggestion_generation`) run their
+  email_service's internal recent-messages route, the person's connected
+  Pipedream apps, and whether CRM's company tools would let them add a
+  company (a team, and CRM access in it). Generations (`crates/suggestion_generation`) run their
   suggestions and routines sessions hidden on the free tier's model, each kind
   gated on its flag (`enable-suggestions`, `enable-routine-suggestions`).
   `scheduling.rs` sweeps generation sessions a stopped process left open
@@ -442,6 +452,11 @@ replica. Serialize connect/disconnect effects by harness across replicas and che
 durable live connections before emitting a disconnect, so an old socket cannot
 mark its replacement offline. Keep this lock pool separate from repository pools
 to avoid exhausting the connections needed inside the guarded operation.
+Harness presence lease renewals use one more dedicated connection
+(`harness_bindings.rs`, each renewal bounded to 5 s), so a starved shared pool
+can't lapse the leases of live harnesses. A renewal cut off by that bound closes
+its connection instead of returning it: sqlx's unbounded return ping would let a
+silent socket hold the only slot.
 Routine dispatch waits for the shared HTTP listener and calls its loopback
 address, avoiding an ALB/self-startup race. Shutdown stops scheduling intake and
 cognition workers before draining sessions and pending publishes. Preview
@@ -477,6 +492,12 @@ listener failure shuts down the process so ECS can replace the task.
 - The public MCP server is stateless, so tool calls carry no `clientInfo`; the
   client is identified per call by its `User-Agent` / `x-anthropic-client`
   headers and per session by `$mcp_initialize`.
+- Each public tool call runs in a `public_mcp.call_tool` span (tool name, mode,
+  caller kind, outcome) carrying only opaque caller ids: `fusionauth_user_id`,
+  the OAuth `mcp.client.id` and registered `mcp.client.name`, or `agent_id`,
+  from `mcp_auth_proxy`'s `McpCallerIds`. Never put the Macro user id, an
+  email, on it. Span-reading tests share `test_spans::exported_spans()`, the
+  binary's one global subscriber.
 
 Local MCP uses both configured egress addresses in the in-process catalog;
 the public MCP transport permits its typed service hostname as well as its

@@ -116,6 +116,24 @@ impl ModelImages for Pixels {
 struct Executor;
 #[async_trait]
 impl ProgramExecutor for Executor {
+    /// Rejects a program that says `TYPE_ERROR`, as the checker would one
+    /// with a type error.
+    async fn check_program(
+        &self,
+        request: &ExecuteRequest,
+        shape: code_execution::domain::ContextShape,
+        _: CancellationToken,
+    ) -> Result<(), Outcome> {
+        assert!(shape.session && shape.execution);
+        if request.source.contains("TYPE_ERROR") {
+            return Err(code_execution::domain::ExecutionFailure::new(
+                code_execution::domain::FailureCode::Compile,
+                "The program wasn't run: it doesn't type-check against the Macro SDK.",
+            )
+            .into());
+        }
+        Ok(())
+    }
     async fn execute_program(
         &self,
         _: ExecuteRequest,
@@ -156,6 +174,39 @@ fn request() -> ExecuteRequest {
         timeout_ms: 1000,
     }
 }
+/// A program with type errors fails before the owner is asked to approve it
+/// or a credential is minted for it.
+#[tokio::test]
+async fn a_program_with_type_errors_stops_before_credentials() {
+    let (service, credentials, store, _) = service();
+    let session = test_agent_session(AgentSessionId::new_from_uuid(macro_uuid::generate_uuid_v7()));
+    let id = ExecutionId::mint();
+    let result = service
+        .execute(
+            &session,
+            id,
+            ai_toolset::actor::ToolActor::Owner,
+            macro_uuid::Uuid::from_u128(1),
+            ExecuteRequest {
+                source: "export async function main() { return TYPE_ERROR; }".into(),
+                timeout_ms: 1000,
+            },
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(result.status, ExecutionStatus::Failed);
+    assert!(credentials.0.lock().unwrap().is_empty());
+    let record = store.get(session.id, id).await.unwrap();
+    assert_eq!(record.status, ExecutionStatus::Failed);
+    assert!(
+        record
+            .error
+            .unwrap()
+            .contains("doesn't type-check against the Macro SDK")
+    );
+}
+
 #[tokio::test]
 async fn run_uses_session_owner_and_records_source_and_result_without_credential() {
     let (service, credentials, store, _) = service();
@@ -357,6 +408,14 @@ async fn unfinished_journal_reads_and_retries_report_uncertainty_without_replayi
 struct ValueExecutor(serde_json::Value);
 #[async_trait]
 impl ProgramExecutor for ValueExecutor {
+    async fn check_program(
+        &self,
+        _: &ExecuteRequest,
+        _: code_execution::domain::ContextShape,
+        _: CancellationToken,
+    ) -> Result<(), Outcome> {
+        Ok(())
+    }
     async fn execute_program(
         &self,
         _: ExecuteRequest,
@@ -458,6 +517,14 @@ fn a_result_with_extra_top_level_keys_names_them() {
 struct ActivityExecutor;
 #[async_trait]
 impl ProgramExecutor for ActivityExecutor {
+    async fn check_program(
+        &self,
+        _: &ExecuteRequest,
+        _: code_execution::domain::ContextShape,
+        _: CancellationToken,
+    ) -> Result<(), Outcome> {
+        Ok(())
+    }
     async fn execute_program(
         &self,
         _: ExecuteRequest,
@@ -612,6 +679,14 @@ impl ExecutionStore for SlowActivityStore {
 struct CancelActivityExecutor;
 #[async_trait]
 impl ProgramExecutor for CancelActivityExecutor {
+    async fn check_program(
+        &self,
+        _: &ExecuteRequest,
+        _: code_execution::domain::ContextShape,
+        _: CancellationToken,
+    ) -> Result<(), Outcome> {
+        Ok(())
+    }
     async fn execute_program(
         &self,
         _: ExecuteRequest,

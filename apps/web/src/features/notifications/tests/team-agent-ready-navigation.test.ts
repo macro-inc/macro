@@ -58,12 +58,14 @@ vi.mock('../notification-resolvers', () => ({
 vi.mock('@service-storage/client', () => ({
   storageServiceClient: { getOrCreateDirectMessage: mocks.getOrCreate },
 }));
-vi.mock('@queries/auth/cached-user-id', () => ({
-  cachedUserId: () => 'macro|maya@example.com',
+// Signed in as the agent's inviter.
+vi.mock('@queries/auth/account-scope', () => ({
+  currentQueryAccount: () => ({ userId: 'macro|maya@example.com', session: 1 }),
+  isCurrentQueryAccount: (account?: { userId: string }) =>
+    account?.userId === 'macro|maya@example.com',
 }));
 vi.mock('@queries/channel/channels', () => ({
   invalidateListChannels: () => Promise.resolve(),
-  loadChannelList: () => Promise.resolve([]),
 }));
 
 import { ok } from 'neverthrow';

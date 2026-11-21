@@ -16,7 +16,16 @@ Per run (one JSON line in <out>/e2e-<label>.jsonl, devbox epoch seconds):
   t_released      release answered
   trace           computer.setup span tree from Tempo (start/end in epoch s)
   host_computer   the Firecracker host agent's computer JSON (lastLaunch phases)
-  clock_offset    host clock minus control-plane clock
+  clock_offset    host clock minus this machine's clock
+  client_load     /proc/loadavg where e2e.py runs (not the control plane's)
+
+With --agent it invites an agent teammate instead (see agent_run). Against a
+deployed environment, pass the service URLs instead of --stack (--auth-url
+and --storage-url with --agent, --auth-url and --harness-url without);
+--host-cmd and Tempo are optional with --agent (spans are skipped without
+--stack unless --tempo-url is given; the span window is this machine's clock,
+so a skewed server can drop spans at its edges). Its t_*_created fields are
+the server's clock, not this machine's.
 """
 
 import argparse
@@ -278,14 +287,20 @@ def spans_once(tempo: str, names: tuple[str, ...], start: float, end: float) -> 
 
 def messages_from(page, sender: str, after: float) -> list[dict]:
     """Messages by `sender` created after `after`, roots and thread previews alike."""
+    return [message for message in channel_messages(page) if message["sender"] == sender and message["created"] > after]
+
+
+def channel_messages(page) -> list[dict]:
+    """Every message in a timeline page, with its created_at in epoch seconds (server clock)."""
     found = []
 
     def walk(value) -> None:
         if isinstance(value, dict):
-            if value.get("sender_id") == sender and value.get("content") and value.get("created_at"):
+            if value.get("sender_id") and value.get("content") and value.get("created_at"):
                 created = datetime.datetime.fromisoformat(value["created_at"].replace("Z", "+00:00")).timestamp()
-                if created > after:
-                    found.append({"created": created, "content": value["content"], "id": value.get("id")})
+                found.append(
+                    {"created": created, "content": value["content"], "id": value.get("id"), "sender": value["sender_id"]}
+                )
             for item in value.values():
                 walk(item)
         elif isinstance(value, list):
@@ -341,7 +356,8 @@ def agent_run(args, auth: "Api", storage: "Api", run: int) -> dict:
         timeline = f"/messages/channel/{channel}?selection=" + urllib.parse.quote(json.dumps({"limit": 20}))
         while time.time() < deadline:
             _, page = storage.call("GET", timeline)
-            greetings = messages_from(page, agent_id, record["t_buy"])
+            # The agent is new, so anything it sent is the greeting.
+            greetings = messages_from(page, agent_id, 0)
             if greetings:
                 record["t_greeting_seen"] = time.time()
                 record["t_greeting_created"] = greetings[0]["created"]
@@ -357,20 +373,33 @@ def agent_run(args, auth: "Api", storage: "Api", run: int) -> dict:
         )
         while time.time() < deadline:
             _, page = storage.call("GET", timeline)
-            replies = messages_from(page, agent_id, record["t_prompt"])
+            # After our prompt by server time, not this machine's clock, which may be skewed.
+            prompts = [
+                message
+                for message in channel_messages(page)
+                if message["sender"] != agent_id and message["content"] == args.prompt
+            ]
+            if not prompts:
+                time.sleep(POLL)
+                continue
+            record["t_prompt_created"] = prompts[0]["created"]
+            replies = messages_from(page, agent_id, prompts[0]["created"])
             if replies:
                 record["t_reply"] = time.time()
                 record["t_reply_created"] = replies[0]["created"]
                 record["reply"] = replies[0]["content"][:200]
                 break
             time.sleep(POLL)
+        if "t_prompt_created" not in record:
+            raise RuntimeError("our prompt never showed up in the DM timeline")
         if "t_reply" not in record:
             raise RuntimeError("no reply in the DM")
     except Exception as error:  # recorded; the agent is still removed
         record["error"] = str(error)
     finally:
         try:
-            record["spans"] = first_spans(args.tempo_url, AGENT_SPANS, record["t_buy"], time.time())
+            if args.tempo_url != "none":
+                record["spans"] = first_spans(args.tempo_url, AGENT_SPANS, record["t_buy"], time.time())
         except Exception as error:
             record["spans_error"] = str(error)
         if agent_id and not args.keep:
@@ -388,11 +417,14 @@ def agent_run(args, auth: "Api", storage: "Api", run: int) -> dict:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--stack", required=True, help="local stack instance name")
+    parser.add_argument("--stack", help="local stack instance name; service URLs default from its portmap")
     parser.add_argument("--token-file", required=True)
     parser.add_argument("--auth-url", help="authentication_service base; default from portmap")
     parser.add_argument("--harness-url", help="agent_harness_service base; default from portmap")
-    parser.add_argument("--tempo-url", default="http://localhost:3200")
+    parser.add_argument(
+        "--tempo-url",
+        help="default http://localhost:3200 with --stack, else none; 'none' skips span lookups (--agent only)",
+    )
     parser.add_argument("--runs", type=int, default=1)
     parser.add_argument("--size", default="standard")
     parser.add_argument("--label", required=True)
@@ -413,38 +445,62 @@ def main():
         action="store_true",
         help="invite an agent teammate instead of buying a computer: online, DM greeting, reply",
     )
-    parser.add_argument("--storage-url", help="document_storage_service base, for --agent's DM")
+    parser.add_argument("--storage-url", help="document_storage_service base, for --agent's DM; default from portmap")
     parser.add_argument("--out", required=True)
     parser.add_argument(
-        "--host-cmd", required=True, help="command that runs its argument on the fleet host, e.g. 'ssh bench'"
+        "--host-cmd",
+        help="command that runs its argument on the fleet host, e.g. 'ssh bench'; optional with --agent",
     )
     args = parser.parse_args()
-    HOST_CMD[:] = args.host_cmd.split()
+    if not args.host_cmd and not args.agent:
+        parser.error("--host-cmd is required without --agent")
+    if not args.tempo_url:
+        args.tempo_url = "http://localhost:3200" if args.stack else "none"
+    if args.tempo_url == "none" and not args.agent:
+        parser.error("a computer run needs Tempo: pass --tempo-url")
+    if not args.stack:
+        needed = ["--auth-url", "--storage-url"] if args.agent else ["--auth-url", "--harness-url"]
+        missing = [flag for flag in needed if not getattr(args, flag[2:].replace("-", "_"))]
+        if missing:
+            parser.error(f"pass --stack, or {' and '.join(missing)}")
+    if args.host_cmd:
+        HOST_CMD[:] = args.host_cmd.split()
+
+    def host_load() -> list[str] | None:
+        return host("cat /proc/loadavg").split()[:3] if args.host_cmd else None
 
     token = pathlib.Path(args.token_file).read_text().strip()
     auth = Api(
         args.auth_url or f"http://localhost:{host_port(args.stack, 'authentication-service', '8080/tcp')}", token
     )
-    harness = Api(
-        args.harness_url or f"http://localhost:{host_port(args.stack, 'agent_harness_service', '8080/tcp')}", token
-    )
+    def service(url: str | None, name: str) -> "Api":
+        return Api(url or f"http://localhost:{host_port(args.stack, name, '8080/tcp')}", token)
+
+    if args.agent:
+        storage = service(args.storage_url, "document_storage_service")
+    else:
+        harness = service(args.harness_url, "agent_harness_service")
     out = pathlib.Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     with (out / f"e2e-{args.label}.jsonl").open("a") as file:
         for run in range(1, args.runs + 1):
-            load_before = host("cat /proc/loadavg").split()[:3]
+            load_before = host_load()
             if args.agent:
-                record = agent_run(args, auth, Api(args.storage_url, token), run)
+                record = agent_run(args, auth, storage, run)
             else:
                 record = one_run(args, auth, harness, args.tempo_url, run)
             record["host_load_before"] = load_before
-            record["host_load_after"] = host("cat /proc/loadavg").split()[:3]
+            record["host_load_after"] = host_load()
             record["control_plane"] = args.control_plane
-            record["control_plane_load"] = open("/proc/loadavg").read().split()[:3]
-            record["clock_offset"] = clock_offset()
+            record["client_load"] = open("/proc/loadavg").read().split()[:3]
+            record["clock_offset"] = clock_offset() if args.host_cmd else None
             file.write(json.dumps(record) + "\n")
             file.flush()
-            summary = {k: round(v - record["t_buy"], 2) for k, v in record.items() if k.startswith("t_")}
+            summary = {
+                k: round(v - record["t_buy"], 2)
+                for k, v in record.items()
+                if k.startswith("t_") and not k.endswith("_created")
+            }
             print(run, record.get("error", "ok"), summary, flush=True)
             time.sleep(args.gap)
 

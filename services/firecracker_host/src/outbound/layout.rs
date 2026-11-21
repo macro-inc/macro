@@ -26,6 +26,9 @@ use firecracker_host_api::{ComputerId, GoldenKey, GuestImage};
 
 use crate::domain::ports::Jail;
 
+#[cfg(test)]
+mod test;
+
 /// Chroot path of the root drive.
 pub const ROOTFS: &str = "/rootfs.ext4";
 /// Chroot path of the `/home` drive.

@@ -10,6 +10,7 @@ mod effect_signals;
 mod host_scope;
 mod overcommit;
 mod overcommit_scenario;
+mod usage;
 
 use chrono::{Duration, TimeZone};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;

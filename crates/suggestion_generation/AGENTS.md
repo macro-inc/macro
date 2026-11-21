@@ -15,9 +15,10 @@ scheduling runtime.
   connects), `nightly` (the tick, `GenerationService::nightly`, every five
   minutes in the harness) and `manual`
   (`POST /scheduled-action/suggestions/regenerate?timezone=`). A generation is
-  one `suggestion_generation` row, then one suggestions session and routines
-  sessions at once (at onboarding one per `SessionLayout` group, for speed;
-  otherwise one for every surface, for cost), each kind only when its flag is
+  one `suggestion_generation` row, then one suggestions session and one
+  routines session for every surface at once (`SessionLayout`: a session that
+  sees every surface picks the few routines the mail calls for, where split
+  sessions each filled their own), each kind only when its flag is
   on (`enable-suggestions`, `enable-routine-suggestions`).
 - Each session is hidden, the person's, non-billable, and may call its kind's
   tools while its `suggestion_generation_session` row is open. Its brief comes
@@ -129,6 +130,8 @@ scheduling runtime.
   per kind (`routines` at onboarding, `feed` on request); `compare` says
   win, loss or noise (see its README). Run the section a change touches
   before and after changing a brief, a prompt or a session's tools.
+- `bun test crates/suggestion_generation/bench` after changing the bench's
+  persona loading or the order and state it judges attempts in (`judging.ts`).
 
 ## Gotchas
 

@@ -11,6 +11,10 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { openTeamAgentDirectMessage } from '@core/util/open-team-agent-direct-message';
+import {
+  currentQueryAccount,
+  type QueryAccount,
+} from '@queries/auth/account-scope';
 import { fetchHarnesses } from '@queries/harnesses/harnesses';
 import {
   openBillingSettings,
@@ -28,15 +32,22 @@ export function openComputerSetup(computerId: string) {
   if (layout) openRuntimesSettings(layout, {});
 }
 
-/** The DM with an agent teammate, from wherever the app is. */
-export function openAgentDirectMessage(agentUserId: string) {
+/**
+ * The DM with an agent teammate, from wherever the app is, for `account`:
+ * the one signed in when the action was offered.
+ */
+export async function openAgentDirectMessage(
+  agentUserId: string,
+  account: QueryAccount | undefined = currentQueryAccount()
+) {
   const layout = globalSplitManager();
   if (!layout) return;
-  fireAndForget(
-    openTeamAgentDirectMessage(agentUserId, (content) => {
+  await openTeamAgentDirectMessage(
+    agentUserId,
+    (content) => {
       layout.openWithSplit(content, { activate: true, referredFrom: null });
-    }),
-    'notifications'
+    },
+    account
   );
 }
 
@@ -89,8 +100,14 @@ async function showAgentSetupToast(
 ) {
   const canConnectClaude =
     notice.outcome.kind === 'ready' && (await ownsHarness(notice.harnessId));
+  // The notice can outlive a switch to another account in this tab.
+  const shownTo = currentQueryAccount();
   showTeamAgentSetupNotice(notice, agent, {
-    message: () => openAgentDirectMessage(agent.userId),
+    message: () =>
+      fireAndForget(
+        openAgentDirectMessage(agent.userId, shownTo),
+        'notifications'
+      ),
     connectClaude: canConnectClaude
       ? () => openAgentClaude(agent.userId)
       : undefined,
@@ -106,5 +123,8 @@ export function showComputerSetupToast(notice: ComputerSetupNotice) {
     fireAndForget(showAgentSetupToast(notice, agent), 'notifications');
     return;
   }
-  showComputerSetupNotice(notice, () => openComputerSetup(notice.computerId));
+  fireAndForget(
+    showComputerSetupNotice(notice, () => openComputerSetup(notice.computerId)),
+    'notifications'
+  );
 }

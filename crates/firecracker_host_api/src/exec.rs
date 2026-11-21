@@ -16,6 +16,9 @@
 //! [`Frame::Exited`] (after stdout and stderr are drained) or
 //! [`Frame::Failed`] (the program never started, or the guest went away).
 //! Closing the connection early kills the program.
+//!
+//! The host agent puts its trace id in the [`ExecRequest`] it passes on, so
+//! the guest agent's log of an exec is found from the agent's trace.
 
 use std::collections::BTreeMap;
 
@@ -42,6 +45,12 @@ pub struct ExecRequest {
     pub env: BTreeMap<String, String>,
     /// Working directory.
     pub cwd: String,
+    /// The host agent's trace id (W3C hex), for the guest agent to record:
+    /// the guest exports no traces of its own. The host agent always
+    /// replaces what a client sends (with `None` outside a trace); a client
+    /// joins the trace through the exec request's `traceparent` header.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trace_id: Option<String>,
 }
 
 /// One message of the exec protocol.

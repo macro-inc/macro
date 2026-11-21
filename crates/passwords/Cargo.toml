@@ -37,6 +37,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 log = { workspace = true }
 opentelemetry_sdk = { workspace = true, features = ["trace"] }
 opentelemetry-otlp = { workspace = true }
+rsa = { workspace = true }
 url = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }
 macro_db_migrator = { path = "../macro_db_migrator" }

@@ -10,12 +10,19 @@ import { SQL } from 'bun';
 import { seedId } from '../../scheduled_action/bench/setup';
 import { type Stack, call, login } from '../../scheduled_action/bench/stack';
 import { CATALOG } from './catalog';
-import { CONTENT_KINDS, type FeedTruth, type Persona, type RoutinesTruth, type Variant, contentKey, plainKey, recentMessages, scenario, scenarioName, truthAt } from './personas';
+import { CONTENT_KINDS, type FeedTruth, type Persona, type RoutinesTruth, type Variant, asFirstSeat, contentKey, plainKey, recentMessages, renamesExactly, scenario, scenarioName, seatOf, truthAt } from './personas';
 import { shiftDays } from './clock';
 import type { CardRow, Generation, RoutineRow } from './run';
 import { CACHE, seed } from './run';
 
 export const JUDGE_MODEL = 'anthropic/claude-opus-5-5';
+/**
+ * The judge a run's marks come from: its model and a version of what it
+ * reads and how it is asked. Bump the version with any change to a rubric, a
+ * schema or what a judgement reads, so `compare` never weighs the marks of
+ * two judges against each other.
+ */
+export const JUDGE = `${JUDGE_MODEL} v4`;
 /**
  * The accounts the judges call as. Each judges one attempt at a time, so a
  * judgement's cost is the account's spend while it ran; several let
@@ -117,12 +124,15 @@ export async function judgeCost(at: Stack, grader: string, from: Date, to: Date)
 
 const iso = (ms: number) => new Date(ms).toISOString();
 
+/** Mail text with any <mail> or </mail> in it opened by a look-alike, so it can't close the judge's own <mail> tag. A sender's address goes through it with its brackets. */
+const shown = (text: string) => text.replace(/<(\/?mail\b)/gi, '‹$1');
+
 /** The mailbox the generation read: the same copy, so addresses match what it quoted. */
 const inboxDigest = (persona: Persona, variant: Variant, now: number) =>
   recentMessages(persona, variant, now)
     .messages.map(
       (m, i) =>
-        `[${i + 1}] ${m.received_at.slice(0, 16)} from ${m.from.name} <${m.from.email}> | ${m.subject} | labels: ${m.labels.join(', ')}\n${m.snippet}`,
+        `[${i + 1}] ${m.received_at.slice(0, 16)} from ${shown(m.from.name)} ${shown(`<${m.from.email}>`)} | ${shown(m.subject)} | labels: ${m.labels.map(shown).join(', ')}\n${shown(m.snippet)}`,
     )
     .join('\n\n');
 
@@ -213,6 +223,29 @@ export function describeRoutine(row: RoutineRow): string {
   return `drafted routine: ${routine.length > 4000 ? `${routine.slice(0, 4000)}…` : routine}\n${surfaces}\nreason shown: ${row.reason}`;
 }
 
+/**
+ * What a routines judgement reads of `persona`'s seat: its mail and its
+ * suggestions. Every seat copies the first under a domain of its own, so
+ * where renaming the seat's domain to the first seat's loses nothing (all its
+ * text `renamesExactly`, and its mail renamed is the first seat's mail
+ * exactly, though a snippet cut at 500 characters may cut a longer domain's
+ * copy elsewhere), the judge reads the first seat's mail and the suggestions
+ * renamed, so every seat that read the mail at one `now` (in a routines run,
+ * every seat of every rep) and renames this way gives the judge the same mail
+ * word for word (`shared`); the suggestions stay each attempt's own.
+ * Otherwise it reads the seat's own mail.
+ */
+export function routinesEvidence(persona: Persona, generation: Generation): { mail: string; suggestions: string[]; shared: boolean } {
+  const { variant, now } = generation;
+  const own = inboxDigest(persona, variant, now);
+  const described = generation.routines.map(describeRoutine);
+  const firstMail = inboxDigest(seatOf(persona, 1), variant, now);
+  const shared = [own, ...described].every((text) => renamesExactly(persona, variant, text)) && asFirstSeat(persona, variant, own) === firstMail;
+  return shared
+    ? { mail: firstMail, suggestions: described.map((text) => asFirstSeat(persona, variant, text)), shared }
+    : { mail: own, suggestions: described, shared };
+}
+
 export async function judgeRoutines(at: Stack, grader: string, persona: Persona, generation: Generation): Promise<RoutineMark[]> {
   if (!generation.routines.length) return [];
   const truth = truthAt(persona.routinesTruth as RoutinesTruth, generation.now);
@@ -220,35 +253,51 @@ export async function judgeRoutines(at: Stack, grader: string, persona: Persona,
   const catalog = Object.entries(CATALOG)
     .map(([key, entry]) => `- ${key}: ${entry.title}. ${entry.does} (sidebars: ${entry.surfaces.join(', ')})`)
     .join('\n');
-  const suggestions = generation.routines.map((row, i) => `S${i + 1}. ${describeRoutine(row)}`).join('\n\n');
-  const prompt = `Now is ${iso(generation.now)}; the person's time zone is ${generation.timezone}.
+  // What the seats of one `now` share (the person, their mail, the catalog
+  // and the key) goes as instructions after the rubric, which the route caches.
+  const evidence = routinesEvidence(persona, generation);
+  const person = `Now is ${iso(generation.now)}; the person's time zone is ${generation.timezone}.
 
 Who they are: ${persona.inbox.persona}
 
 Their newest mail, newest first:
 <mail>
-${inboxDigest(persona, generation.variant, generation.now)}
+${evidence.mail}
 </mail>
 
 The catalog of ready-made routines:
 ${catalog}
 
 Answer key:
-${JSON.stringify(truth, null, 1)}
-
-The suggestions, in the order they were made:
+${JSON.stringify(truth, null, 1)}`;
+  const suggestions = evidence.suggestions.map((text, i) => `S${i + 1}. ${text}`).join('\n\n');
+  const prompt = `The suggestions, in the order they were made:
 ${suggestions}
 
 Mark every suggestion, S1 to S${generation.routines.length}, in order.`;
-  // A suggestion the judge left unmarked, or marked twice, can't be scored: ask again, then give up.
-  for (let attempt = 0; ; attempt++) {
-    const result = await complete<{ marks: RoutineMark[] }>(at, grader, prompt, ROUTINES_RUBRIC, ROUTINES_SCHEMA);
-    const marks = generation.routines.map((_, i) => result.marks.filter((mark) => mark.suggestion.replace(/^S/, '') === String(i + 1)));
-    const missing = marks.flatMap((found, i) => (found.length === 1 ? [] : [`S${i + 1}`]));
-    if (!missing.length) return marks.map(([mark]) => mark);
-    if (attempt === 1) throw new Error(`the judge didn't mark ${missing.join(', ')} exactly once`);
-  }
+  const judge = async () => {
+    // A suggestion the judge left unmarked, or marked twice, can't be scored: ask again, then give up.
+    for (let attempt = 0; ; attempt++) {
+      const result = await complete<{ marks: RoutineMark[] }>(at, grader, prompt, `${ROUTINES_RUBRIC}\n\n${person}`, ROUTINES_SCHEMA);
+      const marks = generation.routines.map((_, i) => result.marks.filter((mark) => mark.suggestion.replace(/^S/, '') === String(i + 1)));
+      const missing = marks.flatMap((found, i) => (found.length === 1 ? [] : [`S${i + 1}`]));
+      if (!missing.length) return marks.map(([mark]) => mark);
+      if (attempt === 1) throw new Error(`the judge didn't mark ${missing.join(', ')} exactly once`);
+    }
+  };
+  if (!evidence.shared) return judge();
+  // The first seat judged at this `now` writes the shared instructions to
+  // the cache; the others wait for it, then read them from there.
+  const prefix = `${scenarioName(seatOf(persona, 1), generation.variant)} ${generation.now}`;
+  const ahead = warming.get(prefix);
+  if (ahead) return ahead.then(judge, judge);
+  const judged = judge();
+  warming.set(prefix, judged);
+  return judged;
 }
+
+/** The first routines judgement of each persona at each `now`. */
+const warming = new Map<string, Promise<unknown>>();
 
 // ---------- feed ----------
 

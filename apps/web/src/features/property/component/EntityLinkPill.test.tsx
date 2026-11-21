@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { type PropertyEditFn, useProperty } from '../core/context';
 import { Root } from '../core/Root';
@@ -14,11 +15,18 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@core/component/LexicalMarkdown/component/core/BlockLink', () => ({
   openDocument: mocks.openDocument,
 }));
+vi.mock('@app/features/projects/open-project', () => ({
+  openProject: vi.fn(),
+}));
+vi.mock('@components/app/split-layout/layout', () => ({
+  useSplitLayout: () => 'layout',
+}));
 vi.mock('../hooks/usePropertyEntityDisplay', () => ({
   usePropertyEntityDisplay: () => ({
     name: () => 'Acme',
     icon: () => null,
     blockOrFileType: () => mocks.blockType(),
+    nativeProjectId: () => undefined,
     isLoading: () => mocks.loading,
     linkParams: () => undefined,
   }),
@@ -83,6 +91,19 @@ it('opens the item from its name, in a new split on shift', () => {
     true
   );
   expect(screen.getByText('Not editing')).toBeTruthy();
+});
+
+it('leaves focus where it was when the name is clicked', async () => {
+  const user = userEvent.setup();
+  render(() => <input aria-label="Notes" />);
+  renderPill();
+  const notes = screen.getByRole('textbox', { name: 'Notes' });
+  notes.focus();
+
+  await user.click(screen.getByRole('button', { name: 'Open Acme' }));
+
+  expect(document.activeElement).toBe(notes);
+  expect(mocks.openDocument).toHaveBeenCalledOnce();
 });
 
 it('changes the item from the caret without opening it', () => {

@@ -154,14 +154,12 @@ for (const provider of PROVIDERS) {
       expect(await rowIds(page)).toEqual([ids.Stays]);
     });
 
-    // When this fails, u in an open thread is not the thread's own mark
-    // unread: the header still offers Mark as unread, and Shift+U (which
-    // the thread offers only after its own u) leaves the thread unread at
-    // the provider. Today the list's u, registered on the same split scope,
-    // answers the key instead (handoff inline-thread-read-keys-reach-the-list).
-    test('known bug: inline-thread-read-keys-reach-the-list: u marks the open thread unread, Shift+U read again @known-bug', {
-      tag: '@known-bug',
-    }, async ({ page, mailbox }) => {
+    // The open thread keeps its Mark as read toggle when its own unread
+    // write reaches the mailbox, so Shift+U can mark it read again.
+    test('u marks the open thread unread, Shift+U read again', async ({
+      page,
+      mailbox,
+    }) => {
       const ids = await deliverEach(mailbox, ['Question', 'Stays']);
       await mailbox.open();
       await openFromList(page, ids.Question, 'About Question.');

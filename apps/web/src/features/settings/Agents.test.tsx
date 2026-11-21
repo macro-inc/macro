@@ -2,6 +2,7 @@
  * @vitest-environment jsdom
  */
 
+import { runSplitBack } from '@components/app/split-layout/back-interceptor';
 import { Model } from '@core/component/AI/constant/model';
 import { useAgentModelsQueries } from '@queries/agents/models';
 import { useRunnableHarnessesQuery } from '@queries/harnesses/harnesses';
@@ -35,6 +36,10 @@ import {
   selectOptions,
 } from './tests/select-helpers';
 
+const device = vi.hoisted(() => ({ touch: false }));
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => device.touch,
+}));
 const agentsPageProps = {
   onCursor: vi.fn(),
   onSetUpRuntime: vi.fn(),
@@ -326,6 +331,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  device.touch = false;
   avatarMocks.upload.mockReset();
   apiKeyMocks.query.data = undefined;
   apiKeyMocks.save.mockReset();
@@ -379,6 +385,16 @@ const MACROD_HARNESS = {
 } satisfies Harness;
 
 describe('Agents', () => {
+  it('returns from a phone agent editor to its list before navigating away', () => {
+    device.touch = true;
+    updateSearchParams({ createAgent: 'true' });
+    render(() => <Agents {...agentsPageProps} />);
+    expect(screen.getByRole('region', { name: 'New agent' })).toBeTruthy();
+    const goBack = vi.fn();
+    expect(runSplitBack({ canGoBack: () => true, goBack })).toBe(true);
+    expect(screen.queryByRole('region', { name: 'New agent' })).toBeNull();
+    expect(goBack).not.toHaveBeenCalled();
+  });
   it('opens the new-agent form from a link and clears the action on cancel', () => {
     updateSearchParams({ createAgent: 'true' });
     render(() => <Agents {...agentsPageProps} />);

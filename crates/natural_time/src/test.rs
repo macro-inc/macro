@@ -9,6 +9,8 @@ use super::*;
 const FRIDAY: &str = "2026-11-06 10:00";
 /// The same Friday at 7pm.
 const FRIDAY_EVENING: &str = "2026-11-06 19:00";
+/// The same Friday at 8pm, after 7pm.
+const FRIDAY_NIGHT: &str = "2026-11-06 20:00";
 const MONDAY: &str = "2026-11-02 10:00";
 const SATURDAY: &str = "2026-11-07 10:00";
 const SUNDAY: &str = "2026-11-08 10:00";
@@ -193,6 +195,66 @@ fn weekdays_and_their_abbreviations() {
             ("saterday", "2026-11-07"),
             ("sunday", "2026-11-08"),
             ("sun", "2026-11-08"),
+        ],
+    );
+}
+
+#[test]
+fn a_time_on_a_weekday_in_any_order() {
+    let phrases = [
+        "7pm on Friday",
+        "7pm on fri",
+        "7pm on frid",
+        "friday at 7pm",
+        "on friday 7pm",
+    ];
+    for (now, want) in [
+        (MONDAY, "2026-11-06 19:00"),
+        (FRIDAY, "2026-11-06 19:00"),
+        // Today is Friday and 7pm has passed: next Friday.
+        (FRIDAY_NIGHT, "2026-11-13 19:00"),
+    ] {
+        let cases: Vec<_> = phrases.iter().map(|phrase| (*phrase, want)).collect();
+        check(now, Caller::Reminder, &cases);
+    }
+}
+
+#[test]
+fn words_cut_short_or_misspelled() {
+    check(
+        FRIDAY,
+        Caller::TaskDue,
+        &[
+            ("nxt mond", "2026-11-09"),
+            ("next mond", "2026-11-09"),
+            ("mond", "2026-11-09"),
+            ("nex wedn", "2026-11-11"),
+            ("thursd", "2026-11-12"),
+            ("satur", "2026-11-07"),
+            ("this past mond", "2026-11-02"),
+            ("folowing friday", "2026-11-13"),
+            ("upcoming friday", "2026-11-06"),
+            ("prev friday", "2026-10-30"),
+            ("previus friday", "2026-10-30"),
+            ("friday after nxt", "2026-11-20"),
+            ("tomo", "2026-11-07"),
+            ("tomor", "2026-11-07"),
+            ("yester", "2026-11-05"),
+            ("toda", "2026-11-06"),
+            ("septem 12 2027", "2027-09-12"),
+            ("novem 12", "2026-11-12"),
+            ("next wee", "2026-11-13"),
+            ("next mont", "2026-12-31"),
+            ("nxt mo", "2026-12-31"),
+            ("in 3 wks", "2026-11-27"),
+            ("in 2 minuts", "+2m"),
+            ("in 3 hou", "+180m"),
+            ("in 2 monts", "2027-01-06"),
+            // Cut too short to say which word it is.
+            ("yes", "error: Unrecognized"),
+            ("ton", "error: Unrecognized"),
+            ("in 2 mon", "error: Unrecognized"),
+            ("nexy friday", "error: Unrecognized"),
         ],
     );
 }
@@ -548,6 +610,115 @@ fn event_ranges_and_lengths() {
             ("tomorrow for 2 hours", "error: DurationWithoutTime"),
         ],
     );
+}
+
+#[test]
+fn a_quantity_alone_says_when_unless_the_phrase_already_does() {
+    let reminders = [
+        ("2 days", "2026-11-08 09:00 [time]"),
+        ("2 day", "2026-11-08 09:00 [time]"),
+        ("a week", "2026-11-13 09:00 [time]"),
+        ("a couple days", "2026-11-08 09:00 [time]"),
+        ("2 months", "2027-01-06 09:00 [time]"),
+        ("2 hours", "+120m"),
+        ("2h", "+120m"),
+        ("an hour", "+60m"),
+        ("half an hour", "+30m"),
+        ("1h30m", "+90m"),
+        ("30 min", "+30m"),
+        ("2 days 3pm", "2026-11-08 15:00"),
+        ("3pm 2 days", "2026-11-08 15:00"),
+        ("2 days at 3pm", "2026-11-08 15:00"),
+        // Beside a date or time, a quantity is how long, which a reminder
+        // drops as it drops `for 2 days`.
+        ("next monday 2 days", "2026-11-09 09:00 [time]"),
+        ("next monday for 2 days", "2026-11-09 09:00 [time]"),
+        ("from next monday for 2 days", "2026-11-09 09:00 [time]"),
+        ("3pm 2 hours", "2026-11-06 15:00"),
+        ("tomorrow 9-11", "2026-11-07 09:00 [meridiem]"),
+    ];
+    check(FRIDAY, Caller::Reminder, &reminders);
+    check(
+        FRIDAY,
+        Caller::Event,
+        &[
+            ("2 days", "2026-11-08"),
+            ("2 day", "2026-11-08"),
+            ("2 hours", "+120m"),
+            ("2 days 3pm", "2026-11-08 15:00"),
+            ("next monday 2 days", "2026-11-09 → 2026-11-10"),
+            ("2 days next monday", "2026-11-09 → 2026-11-10"),
+            ("next monday for 2 days", "2026-11-09 → 2026-11-10"),
+            ("from next monday for 2 days", "2026-11-09 → 2026-11-10"),
+            ("3pm 2 hours", "2026-11-06 15:00 → 2026-11-06 17:00"),
+            ("tomorrow 3pm 45 min", "2026-11-07 15:00 → 2026-11-07 15:45"),
+            ("2 hours 30 min", "+150m"),
+            (
+                "tomorrow 9-11",
+                "2026-11-07 09:00 → 2026-11-07 11:00 [meridiem]",
+            ),
+            ("tomorrow 2 hours", "error: DurationWithoutTime"),
+            ("for 2 days", "error: Unrecognized"),
+            ("3pm 2 hours for 30 min", "error: Conflict"),
+            ("2 days 2-3pm", "2026-11-08 14:00 → 2026-11-08 15:00"),
+            // A quantity after a range belongs to the whole range.
+            ("2-3pm 2 days", "2026-11-08 14:00 → 2026-11-08 15:00"),
+            ("9 to 11am 2 days", "2026-11-08 09:00 → 2026-11-08 11:00"),
+            ("3-5pm 2 hours", "error: Conflict"),
+            // Beside a date on either side, a day count can only be a length,
+            // which a range can't also have.
+            ("3-5pm next monday 2 days", "error: Conflict"),
+            ("2 days 3pm to monday 5pm", "error: Conflict"),
+            ("2 days next monday", "2026-11-09 → 2026-11-10"),
+            // Weeks beside a weekday would mean that weekday weeks out.
+            ("friday 2 weeks", "error: Conflict"),
+            ("2 weeks on friday", "error: Conflict"),
+            ("a week friday", "error: Conflict"),
+            ("a week next friday", "error: Conflict"),
+            ("next week 2 days", "2026-11-09 → 2026-11-10"),
+        ],
+    );
+    // A quantity counted from something else isn't read rather than misread
+    // as a length on that day.
+    let counted_from = [
+        "2 days from next monday",
+        "2 days before friday",
+        "2 days after friday",
+        "2 days following friday",
+        "2 days folowing friday",
+        "2 days previ friday",
+        "2 days prev friday",
+        "2 days previous friday",
+        "2 days prior to friday",
+        "2 days since monday",
+        "2 days past friday",
+        "2 hours before 3pm",
+        "2 days until friday",
+        "2 days till friday",
+        "2 days til friday",
+        "2 days to friday",
+        "2 days through friday",
+        "2 days thru friday",
+        "2 days - friday",
+        "2 days later",
+        "2 days earlier",
+        // Refused outright, not read again some other way ("2" as 2pm and
+        // "weeks after next" as a week).
+        "2 weeks after next",
+        "1 week after next",
+        "3 months after next",
+        "3 weeks after next friday",
+        // `at` names a time of day, not hours from now.
+        "at 9 h",
+        "at 12 m",
+    ];
+    for caller in [Caller::Reminder, Caller::Event] {
+        let cases: Vec<_> = counted_from
+            .iter()
+            .map(|phrase| (*phrase, "error: Unrecognized"))
+            .collect();
+        check(FRIDAY, caller, &cases);
+    }
 }
 
 #[test]

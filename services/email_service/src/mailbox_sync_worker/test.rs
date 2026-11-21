@@ -2,7 +2,8 @@ use super::*;
 use email::domain::mailbox::MailboxKey;
 use email::outbound::mailbox_pg::PgMailboxSync;
 use email_api_client::domain::models::{
-    MailFolder, MailboxChangePage, MailboxMessage, ProviderId, StreamPosition, StreamToken,
+    MailFolder, MailFolderCatalog, MailboxChangePage, MailboxMessage, ProviderId, RoundStart,
+    StreamPosition, StreamToken,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
@@ -19,14 +20,15 @@ struct Provider {
 }
 
 impl MailboxGateway for Provider {
-    async fn folders(&self, _: MailboxKey) -> Result<Vec<MailFolder>, EmailApiError> {
-        Ok(Vec::new())
+    async fn folders(&self, _: MailboxKey) -> Result<MailFolderCatalog, EmailApiError> {
+        Ok(MailFolderCatalog::Folders(Vec::new()))
     }
     async fn changes(
         &self,
         _: MailboxKey,
         folder: &ProviderId,
         _: Option<&StreamToken>,
+        _: RoundStart,
     ) -> Result<MailboxChangePage, EmailApiError> {
         self.reads.lock().unwrap().push(folder.as_str().to_owned());
         let position = if folder.as_str() == "importing" {
@@ -92,9 +94,10 @@ async fn mailbox(db: &PgPool, folder: &str, synced: bool, due: &str) -> Uuid {
 async fn new_mail_in_a_synced_folder_waits_behind_one_queued_import_message_not_a_cycle(
     db: PgPool,
 ) {
-    let importing = mailbox(&db, "importing", false, "1 minute").await;
-    // Due after the importing folder's first page and before its next one.
-    mailbox(&db, "synced", true, "1 second").await;
+    let importing = mailbox(&db, "importing", false, "7 minutes").await;
+    // Due after the importing folder's first page and before its next one,
+    // which is claimed as if due five minutes earlier than it is.
+    mailbox(&db, "synced", true, "6 minutes").await;
     // Each queued message is read once more and then recorded as gone.
     sqlx::query!(
         r#"

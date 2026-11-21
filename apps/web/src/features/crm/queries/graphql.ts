@@ -5,6 +5,7 @@ import {
   type SearchDocumentWire,
   selectRecords,
 } from '@graphql-cache/index';
+import { crmAccessAllowed } from '@service-storage/crm-access-authority';
 import {
   GraphqlCrmCompanyQuickAccessFieldsFragmentDoc,
   type GraphqlCrmContactFieldsFragment,
@@ -16,6 +17,7 @@ export async function materializeCachedGraphqlCrmCompanies(
   cacheHost: Pick<CacheHost, 'readRecordsByKeys'>,
   documents: SearchDocumentWire[]
 ): Promise<CrmCompanyEntity[]> {
+  if (!crmAccessAllowed()) return [];
   const keys = documents
     .filter((document) =>
       document.recordKey.startsWith('GraphqlSoupCrmCompany:')
@@ -28,6 +30,7 @@ export async function materializeCachedGraphqlCrmCompanies(
     selectRecords(GraphqlCrmCompanyQuickAccessFieldsFragmentDoc),
     keys
   );
+  if (!crmAccessAllowed()) return [];
   return result.records.flatMap(({ recordKey, record }): CrmCompanyEntity[] => {
     if (record.__typename !== 'GraphqlSoupCrmCompany' || record.hidden)
       return [];
@@ -80,6 +83,7 @@ export async function materializeCachedGraphqlCrmContacts(
   cacheHost: Pick<CacheHost, 'readRecordsByKeys'>,
   documents: SearchDocumentWire[]
 ): Promise<CrmContactEntity[]> {
+  if (!crmAccessAllowed()) return [];
   const keys = documents
     .filter((document) =>
       document.recordKey.startsWith('GraphqlSoupCrmContact:')
@@ -91,6 +95,7 @@ export async function materializeCachedGraphqlCrmContacts(
     selectRecords(GraphqlCrmContactFieldsFragmentDoc),
     keys
   );
+  if (!crmAccessAllowed()) return [];
   return result.records.flatMap(({ record }) =>
     record.__typename === 'GraphqlSoupCrmContact' && !record.hidden
       ? [toCrmContactEntity(record)]

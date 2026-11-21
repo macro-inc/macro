@@ -43,6 +43,11 @@ pub enum GetPreviewsCursorError {
 
 impl IntoResponse for GetPreviewsCursorError {
     fn into_response(self) -> Response {
+        if let GetPreviewsCursorError::DatabaseQueryError(EmailErr::EmailRuleLimitExceeded(limit)) =
+            &self
+        {
+            return (StatusCode::SERVICE_UNAVAILABLE, limit.to_string()).into_response();
+        }
         let msg = self.to_string();
 
         let status_code = match self {

@@ -438,6 +438,7 @@ async fn exec(
             ("PATH".to_owned(), GUEST_PATH.to_owned()),
         ]),
         cwd: home.to_owned(),
+        trace_id: None,
     };
     let (mut input, mut output) = client.exec(computer_id, request).await?.split();
 

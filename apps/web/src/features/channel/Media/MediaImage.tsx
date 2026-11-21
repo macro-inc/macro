@@ -84,6 +84,8 @@ function Image(props: {
   fallback?: JSX.Element;
   /** The file couldn't be loaded; the fallback otherwise stays up. */
   onError?: () => void;
+  /** The file loaded. */
+  onLoad?: () => void;
 }) {
   const [loaded, setLoaded] = createSignal(false);
   const hasDimensions = () => (props.width ?? 0) > 0 && (props.height ?? 0) > 0;
@@ -134,7 +136,10 @@ function Image(props: {
         style={props.style}
         loading={props.loading}
         onClick={() => props.onOpen?.()}
-        onLoad={() => setLoaded(true)}
+        onLoad={() => {
+          setLoaded(true);
+          props.onLoad?.();
+        }}
         onError={() => props.onError?.()}
         use:internalDrag={true}
       />

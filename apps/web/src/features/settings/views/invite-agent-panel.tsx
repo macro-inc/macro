@@ -26,7 +26,7 @@ export function InviteAgentPanel(props: {
     teamId: () => props.teamId,
     onAdded: ({ agent }) => {
       props.onInvited();
-      openAgentDirectMessage(agent.userId);
+      fireAndForget(openAgentDirectMessage(agent.userId), 'team-agent.add');
     },
   });
 

@@ -23,11 +23,21 @@ const gatewayLoadBalancer = getGatewayAlb();
 // NOTE: the BASE_NAME for sps does not match the pulumi project name so do not change
 const BASE_NAME = 'search-processing';
 const REPO_ROOT = '../../..';
-// Autoscaling follows CPU, not Kafka lag, and a deploy sets the desired count:
-// keep production at six tasks, one per partition of the email topic, while
-// its backlog drains, so a deploy or a scale-in does not leave the consumer
-// behind the topic's retention and no task carries two partitions' backlog.
-const MIN_TASKS = stack === 'prod' ? 6 : 1;
+// A deploy sets the desired count: keep production at three tasks, so a deploy
+// or a scale-in does not leave the consumer behind the topics' retention;
+// autoscaling adds tasks on CPU and on backlog age.
+const MIN_TASKS = stack === 'prod' ? 3 : 1;
+// Each task publishes the age of the oldest record it has not processed, per
+// lane, as this metric (services/search_processing_service/src/outbound/
+// cloudwatch_backlog.rs), with the dimensions `Environment` and `Lane`.
+const BACKLOG_NAMESPACE = 'Macro/SearchProcessing';
+const BACKLOG_METRIC = 'OldestPendingSeconds';
+// Target age per lane, in seconds. The live backlog monitor warns at 30 s
+// (infra/stacks/monitoring/monitors/search-freshness.ts), so scaling starts
+// there; one slow event does not hold the maximum over it for the three
+// minutes a scale-out needs. Email carries mailbox imports, so any email
+// backlog over a minute scales out.
+const BACKLOG_TARGETS = { live: 30, email: 60 } as const;
 
 type Args = {
   clusterName: pulumi.Output<string> | string;
@@ -107,6 +117,27 @@ export class SearchProcessingService extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    const backlogMetricPolicy = new aws.iam.Policy(
+      `${BASE_NAME}-backlog-metric-policy`,
+      {
+        policy: {
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: ['cloudwatch:PutMetricData'],
+              Resource: '*',
+              Effect: 'Allow',
+              Condition: {
+                StringEquals: { 'cloudwatch:namespace': BACKLOG_NAMESPACE },
+              },
+            },
+          ],
+        },
+        tags: this.tags,
+      },
+      { parent: this }
+    );
+
     const sqsPolicy = new aws.iam.Policy(
       `${BASE_NAME}-sqs-policy`,
       {
@@ -146,6 +177,7 @@ export class SearchProcessingService extends pulumi.ComponentResource {
         managedPolicyArns: [
           docStorageBucketPolicy.arn,
           sqsPolicy.arn,
+          backlogMetricPolicy.arn,
           ...extraManagedPolicyArns,
         ],
       },
@@ -368,7 +400,11 @@ export class SearchProcessingService extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Create an Auto Scaling policy for CPU utilization.
+    // CPU still adds tasks for the SQS backfill and replay workers, which run
+    // in the same tasks. Kafka is judged on how far behind the consumer is: a
+    // consumer stalled behind a backlog is idle, and CPU alone once took it to
+    // one task with millions of events waiting. Target tracking scales in only
+    // when every policy agrees, so either lane's backlog keeps the tasks.
     new aws.appautoscaling.Policy(
       `${BASE_NAME}-scaling-policy-cpu-${stack}`,
       {
@@ -387,6 +423,34 @@ export class SearchProcessingService extends pulumi.ComponentResource {
       },
       { parent: this }
     );
+
+    for (const [lane, targetValue] of Object.entries(BACKLOG_TARGETS)) {
+      new aws.appautoscaling.Policy(
+        `${BASE_NAME}-scaling-policy-${lane}-backlog-${stack}`,
+        {
+          policyType: 'TargetTrackingScaling',
+          resourceId: serviceScalableTarget.resourceId,
+          scalableDimension: serviceScalableTarget.scalableDimension,
+          serviceNamespace: serviceScalableTarget.serviceNamespace,
+          targetTrackingScalingPolicyConfiguration: {
+            targetValue,
+            customizedMetricSpecification: {
+              namespace: BACKLOG_NAMESPACE,
+              metricName: BACKLOG_METRIC,
+              dimensions: [
+                { name: 'Environment', value: stack },
+                { name: 'Lane', value: lane },
+              ],
+              statistic: 'Maximum',
+              unit: 'Seconds',
+            },
+            scaleInCooldown: 300,
+            scaleOutCooldown: 60,
+          },
+        },
+        { parent: this }
+      );
+    }
 
     new aws.appautoscaling.Policy(
       `${BASE_NAME}-scaling-policy-memory-${stack}`,
