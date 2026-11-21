@@ -59,17 +59,25 @@ pub(crate) const HELD_RETRY_AFTER: std::time::Duration = std::time::Duration::fr
 /// Holds every `/brain/*` request of an agent whose computer a person
 /// drives: wraps the one authenticator all brain routes share, so a new
 /// route built on it is held too. Keyed by the agent's user id.
+/// A shutdown answers held requests at once, with the same `Retry-After`:
+/// a deploy stops sooner than the hold's bound.
 pub(crate) struct HeldBrains {
     inner: Arc<dyn BrainAuthenticator>,
     screens: Arc<crate::computers::screen::Screens>,
+    shutdown: tokio_util::sync::CancellationToken,
 }
 
 impl HeldBrains {
     pub(crate) fn new(
         inner: Arc<dyn BrainAuthenticator>,
         screens: Arc<crate::computers::screen::Screens>,
+        shutdown: tokio_util::sync::CancellationToken,
     ) -> Self {
-        Self { inner, screens }
+        Self {
+            inner,
+            screens,
+            shutdown,
+        }
     }
 }
 
@@ -79,12 +87,11 @@ impl BrainAuthenticator for HeldBrains {
             let Some(caller) = self.inner.authenticate(key).await? else {
                 return Ok(None);
             };
-            match self
-                .screens
-                .hold_agent(&caller.user_id, HOLD_BOUND)
-                .await
-                .map_err(|error| rootcause::report!("{error:?}"))?
-            {
+            let held = tokio::select! {
+                held = self.screens.hold_agent(&caller.user_id, HOLD_BOUND) => held,
+                () = self.shutdown.cancelled() => Ok(Hold::TimedOut),
+            };
+            match held.map_err(|error| rootcause::report!("{error:?}"))? {
                 Hold::Free | Hold::Released { .. } => Ok(Some(caller)),
                 Hold::TimedOut => Err(BrainLookupError::Held {
                     retry_after: HELD_RETRY_AFTER,
@@ -174,3 +181,6 @@ impl BrainAuthenticator for PgBrainAuthenticator {
         })
     }
 }
+
+#[cfg(test)]
+mod test;

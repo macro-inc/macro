@@ -1,6 +1,7 @@
 //! Media paths: how a surface's pixels reach the viewer. One
 //! [`ScreenMedia`] per transport; the socket runs one at a time and drops it
-//! on stop. Raw RFB from the viewer passes [`VncMedia`]'s gate; typed
+//! on stop. Raw RFB from the viewer passes [`VncMedia`]'s gate, and Xvnc's
+//! side its server filter (no clipboard to a viewer who doesn't drive); typed
 //! `input` messages go through the socket's RFB injector instead.
 
 use std::future::Future;
@@ -32,6 +33,20 @@ pub enum FromViewer {
     Binary(Bytes),
 }
 
+/// Until when a viewer drives; `None` while it doesn't. Its input passes
+/// only before then, so a lease past its expiry lets no input through even
+/// before the socket re-reads it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct DrivingUntil(pub Option<tokio::time::Instant>);
+
+impl DrivingUntil {
+    /// Whether the viewer drives now.
+    pub fn now(self) -> bool {
+        self.0
+            .is_some_and(|until| tokio::time::Instant::now() < until)
+    }
+}
+
 /// Everything a media path runs with.
 pub struct MediaContext {
     /// The computer.
@@ -42,8 +57,8 @@ pub struct MediaContext {
     pub to_viewer: mpsc::Sender<ToViewer>,
     /// From the viewer.
     pub from_viewer: mpsc::Receiver<FromViewer>,
-    /// Whether this viewer drives right now.
-    pub driving: watch::Receiver<bool>,
+    /// Until when this viewer drives.
+    pub driving: watch::Receiver<DrivingUntil>,
     /// Notified when the driver's input reached the guest through the
     /// media (raw RFB), which keeps the lease alive.
     pub activity: Arc<Notify>,
@@ -82,8 +97,8 @@ pub trait ScreenMedia: Send + Sync + 'static {
     fn run(&self, context: MediaContext) -> MediaRun;
 }
 
-/// Raw RFB from the guest's Xvnc, both ways; the viewer's side passes the
-/// [`RfbGate`].
+/// Raw RFB from the guest's Xvnc, both ways: the viewer's side passes the
+/// [`RfbGate`], the guest's its [`super::rfb::RfbServerFilter`].
 pub struct VncMedia;
 
 impl ScreenMedia for VncMedia {
@@ -100,6 +115,8 @@ impl ScreenMedia for VncMedia {
             } = context;
             let stream = tunnel.open(computer_id, GuestPort::Rfb).await?;
             let (mut guest_reader, mut guest_writer) = tokio::io::split(stream);
+            let mut gate = RfbGate::new();
+            let mut server = gate.server_filter();
             // The two directions run apart: a viewer that reads slowly holds
             // up the guest's frames, never its own input on the way in.
             let to_the_viewer = async {
@@ -109,20 +126,29 @@ impl ScreenMedia for VncMedia {
                     if read == 0 {
                         return Ok(MediaEnd::GuestClosed);
                     }
-                    let frame = Bytes::copy_from_slice(buffer.get(..read).unwrap_or_default());
-                    if to_viewer.send(ToViewer::Binary(frame)).await.is_err() {
+                    let passed = server.filter(
+                        buffer.get(..read).unwrap_or_default(),
+                        driving.borrow().now(),
+                    )?;
+                    if passed.is_empty() {
+                        continue;
+                    }
+                    if to_viewer
+                        .send(ToViewer::Binary(Bytes::from(passed)))
+                        .await
+                        .is_err()
+                    {
                         return Ok(MediaEnd::ViewerClosed);
                     }
                 }
             };
             let to_the_guest = async {
-                let mut gate = RfbGate::new();
                 loop {
                     let Some(message) = from_viewer.recv().await else {
                         return Ok(MediaEnd::ViewerClosed);
                     };
                     let FromViewer::Binary(bytes) = message;
-                    let filtered = gate.filter(&bytes, *driving.borrow())?;
+                    let filtered = gate.filter(&bytes, driving.borrow().now())?;
                     if !filtered.forward.is_empty() {
                         guest_writer.write_all(&filtered.forward).await?;
                     }

@@ -14,7 +14,9 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use computer_screen::domain::models::{Mode, Surface, TicketRequest, TicketSecret, Transport};
+use computer_screen::domain::models::{
+    Caller, Mode, Surface, TicketRequest, TicketSecret, Transport,
+};
 use computer_screen::domain::service::{ScreenError, ScreenService};
 use computer_screen::outbound::lease_changes::PgLeaseChanges;
 use computer_screen::outbound::pg::PgScreenRepo;
@@ -163,7 +165,8 @@ impl IntoResponse for TicketError {
             ScreenError::ProgramRefused
             | ScreenError::AgentRefused
             | ScreenError::NoAccess
-            | ScreenError::DriveNotAllowed => (StatusCode::FORBIDDEN, None),
+            | ScreenError::DriveNotAllowed
+            | ScreenError::AgentNotPausable => (StatusCode::FORBIDDEN, None),
             ScreenError::NotFound => (StatusCode::NOT_FOUND, None),
             ScreenError::NotAComputer => (StatusCode::BAD_REQUEST, None),
             ScreenError::TooManyTickets | ScreenError::TooManySockets => {
@@ -250,7 +253,11 @@ where
         let request = TicketRequest {
             harness_id: path.harness_id,
             user_id: user.macro_user_id.clone(),
-            program: is_program_run(user.attribution(), &headers),
+            caller: if is_program_run(user.attribution(), &headers) {
+                Caller::Program
+            } else {
+                Caller::Person
+            },
             transport: body.transport,
             surface: body.surface,
             mode: body.mode,
@@ -325,6 +332,7 @@ where
         viewers: Arc::clone(&state.viewers),
         reauthorize,
         reauthorize_every: socket::REAUTHORIZE_EVERY,
+        idle: socket::IDLE,
         shutdown: state.shutdown.clone(),
     };
     let traceparent = redeemed.traceparent;

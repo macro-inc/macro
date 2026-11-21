@@ -73,16 +73,23 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   While a person drives the agent's computer, `HeldBrains` (around the one
   `BrainAuthenticator` every `/brain/*` route shares) holds each request until
   the hand-back, woken by `computer_screen`'s lease notifications, for at most
-  5 minutes, then answers 503 `overloaded_error` with `Retry-After: 10`. The
-  hold gates the next request only: tool calls of an answer the agent already
-  has still run. Take-over and hand-back notices (the driver by name, never
-  their id) go last in the last user message of the next
-  `/brain/anthropic/v1/messages` request, after its `tool_result` blocks, as
+  5 minutes (at once on shutdown), then answers 503 `overloaded_error` with
+  `Retry-After: 10`. The agent is also frozen while a person drives (see
+  `guest_files.rs` below), so the hold matters only to an agent that
+  restarted mid-drive. Take-over and hand-back notices (the driver by name,
+  never their id) go only to the agent's main loop: a
+  `/brain/anthropic/v1/messages` request marked `x-macro-agent-loop: main`
+  (the starter agent's `behavior/agent/claude.ts` sets it through
+  `ANTHROPIC_CUSTOM_HEADERS`) that offers tools, so neither the runtime's
+  side queries nor Claude Code's tool-less side calls take them. They go
+  last in its last user message, after its `tool_result` blocks, as
   `<macro-runtime-notice>{json}</macro-runtime-notice>` text blocks with `<`,
-  `>` and `&` escaped (`anthropic_gateway/screen_notices.rs`), and count as
-  delivered only when upstream answered 2xx. They ride whichever brain
-  messages request comes first (a subagent's included) and are not kept in
-  the agent's history: a hint for its next turn, not a record.
+  `>` and `&` escaped (`anthropic_gateway/screen_notices.rs`); each is
+  claimed by one request at a time, deleted when upstream answered 2xx and
+  given back otherwise. A subagent's requests carry the same mark and may
+  take them, and they are not kept in the agent's history: a hint for its
+  next turn, not a record. An agent on its owner's own Claude plan never
+  reaches this gateway, so it gets no notices.
 - `src/speech_gateway.rs` + `src/speech_gateway/`: `/brain/inference/stt` and
   `/brain/inference/tts` WebSockets on the egress listener, for agent
   teammates' calls (`MACRO_SPEECH_URL` in the enrollment). Same brain key,
@@ -188,10 +195,14 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   single-use 60 s ticket;
   `GET /computers/{harness_id}/screen/ws?ticket=` redeems it and runs the
   socket (`socket.rs`): binary frames are raw RFB both ways, text frames JSON
-  control (`takeOver`, `handBack`, `input`, `stop`; server `state`/`error`/
-  `ended`), with access (rollout included) re-checked and the socket marked
-  seen every 30 s (three failed lookups in a row end it); a driver who loses
-  access releases the lease at once. A person opens at most 4 sockets on a
+  control (`takeOver`, `handBack`, `input`, `visibility`, `stop`; server
+  `state`/`error`/`ended`), with access (rollout included) re-checked and the
+  socket marked seen every 30 s and on every take-over (three failed lookups
+  in a row end it); a driver who loses access releases the lease at once.
+  `state.driver` is `{name, isYou}`, never a user id; `state.leaseId` is an
+  opaque id per drive. A socket with no `visibility` `visible: true` (the
+  viewer repeats it) and no input for 10 minutes, or 2 minutes after
+  `visible: false`, ends `idle`, handing back if it drives. A person opens at most 4 sockets on a
   computer, and a computer 16 watching sockets (`tooManySockets`; driving
   sockets don't count against it). Its own task writes the WebSocket
   through a bounded outbox, so a viewer that stops reading never stalls the
@@ -203,10 +214,13 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   most every 15 s; a take-over by the same user moves it to the new socket,
   `state.drivingHere` says which socket holds it, and any socket of the
   driver may hand back. `media.rs` `VncMedia` relays raw RFB from Xvnc (5901)
-  through `rfb.rs` `RfbGate`, which drops input unless this socket drives,
-  strips the ExtendedClipboard encoding (so the clipboard is plain Latin-1
-  ServerCutText/ClientCutText both ways), and fails closed on anything it
-  can't parse; typed `input` goes through
+  through `rfb.rs` `RfbGate`, which drops input unless this socket drives
+  before its lease's expiry, keeps SetEncodings to what `RfbServerFilter` can
+  frame (Raw, CopyRect, ZRLE and pixel-free pseudo-encodings; no
+  ExtendedClipboard, so the clipboard is plain Latin-1), speaks RFB 3.8 only,
+  and fails closed on anything it can't parse; `RfbServerFilter` frames
+  Xvnc's side without decoding pixels and drops ServerCutText unless this
+  socket drives (Xvnc runs with `-SendPrimary=0`); typed `input` goes through
   `RfbInjector`'s own RFB connection (handshake and each input bounded to
   10 s). Xvnc is reached only by a `socat`
   tunnel over `tunnel.rs` `GuestExec` (the operator's `Fleet::exec`,
@@ -216,10 +230,19 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   media stops short, the operator says whether the computer runs, which
   picks `computerOff` or a named error (`tunnelFailed`, `sourceUnavailable`).
   Screens count as in use for hibernation (`in_use.rs`). `guest_files.rs`
+  freezes the agent before a take-over counts (`printf freeze | socat` to
+  the guest's root-owned `/run/macro-agent-pause.sock`, from
+  `nix/macro-box/_agent.nix`; `frozen`/`idle` let it start, anything else
+  refuses it with `agentNotPausable`) and thaws it after (retried, off the
+  request path; one lock per computer, so a late thaw never undoes a newer
+  freeze). An agent computer whose image has no helper answers `failed`. It
   keeps `/home/macro/agent/state/screen-driver` (`human` while someone
-  drives; written by one queued worker, never on a request path) and
-  `state/harness-id` (written from `sign_in_ahead.rs`).
-  Spans: `computer.screen.ticket`/`.session`/`.wake`/`.tunnel`/`.driver_file`.
+  drives; only each computer's latest change, written a few computers at a
+  time by one worker, never on a request path) and `state/harness-id`
+  (written from `sign_in_ahead.rs`). Each replica runs `ScreenService::reap`
+  every minute (lapsed leases, re-thaws).
+  Spans: `computer.screen.ticket`/`.session`/`.wake`/`.tunnel`/`.driver_file`/
+  `.freeze`/`.thaw`, and `ScreenService::reap`'s per round.
 - `src/computers/claude_expiry.rs`: the notices of the operator's
   `ClaudeSignIns` pass (every 60 s), whose sign-ins come from
   `hosted_runtimes::outbound::pg_sign_ins::PgClaudeSignIns` (active Claude

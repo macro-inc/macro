@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -16,8 +17,8 @@ use super::{
     HOLD_RECHECK, Hold, MAX_SOCKETS_PER_VIEWER, MAX_TICKETS_PER_WINDOW, ScreenError, ScreenService,
 };
 use crate::domain::models::{
-    Access, EndReason, Lease, Mode, PendingNotice, Person, RedeemedTicket, Release, ScreenGrant,
-    SessionId, Surface, TakeOver, TicketRequest, TicketSecret, Transport,
+    Access, AgentNotPaused, Caller, EndReason, Lease, Mode, PendingNotice, Person, RedeemedTicket,
+    Release, ScreenGrant, SessionId, Surface, TakeOver, TicketRequest, TicketSecret, Transport,
 };
 use crate::domain::ports::{DriverSignal, People, ScreenAccess, ScreenRepo, TicketHash};
 use crate::outbound::lease_changes::PgLeaseChanges;
@@ -25,16 +26,22 @@ use crate::outbound::pg::{PgScreenError, PgScreenRepo};
 
 const COMPUTER: ComputerId = ComputerId::new_from_uuid(Uuid::from_u128(0xC0));
 
-/// What the guest was told, in order.
+/// What the guest was told, in order; with `.1` set, its agent can't be
+/// frozen.
 #[derive(Clone, Default)]
-struct RecordedSignal(Arc<Mutex<Vec<String>>>);
+struct RecordedSignal(Arc<Mutex<Vec<String>>>, Arc<AtomicBool>);
 
 impl DriverSignal for RecordedSignal {
-    async fn driving(&self, lease: &Lease) {
+    async fn driving(&self, lease: &Lease) -> Result<(), AgentNotPaused> {
         self.0
             .lock()
             .unwrap()
             .push(format!("driving {}", lease.driver.user_id));
+        if self.1.load(Ordering::SeqCst) {
+            Err(AgentNotPaused)
+        } else {
+            Ok(())
+        }
     }
 
     async fn released(&self, _computer: ComputerId) {
@@ -126,16 +133,29 @@ impl ScreenRepo for ObservedRepo {
         lease
     }
 
-    async fn pending_notices(
+    async fn claim_notices(
         &self,
         agent: &MacroUserIdStr<'_>,
         kept: Duration,
+        claim_for: Duration,
     ) -> Result<Vec<PendingNotice>, PgScreenError> {
-        self.inner.pending_notices(agent, kept).await
+        self.inner.claim_notices(agent, kept, claim_for).await
     }
 
     async fn delete_notices(&self, ids: &[Uuid]) -> Result<(), PgScreenError> {
         self.inner.delete_notices(ids).await
+    }
+
+    async fn unclaim_notices(&self, ids: &[Uuid]) -> Result<(), PgScreenError> {
+        self.inner.unclaim_notices(ids).await
+    }
+
+    async fn lapsed_leases(&self) -> Result<Vec<ComputerId>, PgScreenError> {
+        self.inner.lapsed_leases().await
+    }
+
+    async fn released_within(&self, within: Duration) -> Result<Vec<ComputerId>, PgScreenError> {
+        self.inner.released_within(within).await
     }
 
     async fn open_sockets(
@@ -229,7 +249,7 @@ fn request(mode: Mode) -> TicketRequest {
     TicketRequest {
         harness_id: HarnessId::TEST_A,
         user_id: MacroUserIdStr::try_from("macro|alice@example.com".to_owned()).unwrap(),
-        program: false,
+        caller: Caller::Person,
         transport: Transport::Vnc,
         surface: Surface::Desktop,
         mode,
@@ -368,12 +388,71 @@ async fn the_agent_waits_for_the_hand_back(pool: PgPool) {
             "released".to_owned()
         ]
     );
-    let notices = service.pending_notices(&agent()).await.unwrap();
+    let notices = service.claim_notices(&agent()).await.unwrap();
     assert_eq!(notices.len(), 2);
     assert_eq!(notices[1].notice.note.as_deref(), Some("done"));
     let ids: Vec<Uuid> = notices.iter().map(|pending| pending.id).collect();
     service.notices_delivered(&ids).await.unwrap();
-    assert!(service.pending_notices(&agent()).await.unwrap().is_empty());
+    assert!(service.claim_notices(&agent()).await.unwrap().is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_take_over_that_cannot_freeze_the_agent_never_starts(pool: PgPool) {
+    let (service, signal, _) = service(pool.clone()).await;
+    signal.1.store(true, Ordering::SeqCst);
+    let driver = grant(Mode::Drive);
+    let session = service.open_session(&driver).await.unwrap();
+
+    let taken = service.take_over(&driver, session).await;
+
+    assert!(
+        matches!(taken, Err(ScreenError::AgentNotPausable)),
+        "{taken:?}"
+    );
+    assert_eq!(service.lease(COMPUTER).await.unwrap(), None);
+    assert_eq!(
+        *signal.0.lock().unwrap(),
+        vec![
+            "driving macro|alice@example.com".to_owned(),
+            "released".to_owned()
+        ]
+    );
+    // The agent never paused, so it hears of neither end.
+    assert!(service.claim_notices(&agent()).await.unwrap().is_empty());
+    let ended = sqlx::query_scalar!("SELECT end_reason FROM computer_screen_drives")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(ended.as_deref(), Some("refused"));
+}
+
+/// A process that died before thawing leaves the agent frozen; the next
+/// round of reaping thaws it, and releases a lapsed lease nobody read.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reaping_releases_lapsed_leases_and_thaws_recent_ones(pool: PgPool) {
+    let (service, signal, _) = service(pool.clone()).await;
+    let driver = grant(Mode::Drive);
+    let session = service.open_session(&driver).await.unwrap();
+    service.take_over(&driver, session).await.unwrap();
+    sqlx::query!(
+        "UPDATE computer_screen_driver_leases SET expires_at = now() - interval '1 second'"
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    service.reap().await.unwrap();
+
+    assert_eq!(service.lease(COMPUTER).await.unwrap(), None);
+    // Released once by the lapse, and thawed again as a recent release.
+    assert_eq!(
+        *signal.0.lock().unwrap(),
+        vec![
+            "driving macro|alice@example.com".to_owned(),
+            "released".to_owned(),
+            "released".to_owned()
+        ]
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -422,7 +501,7 @@ async fn a_program_never_gets_a_ticket_to_watch_or_drive(pool: PgPool) {
     let (service, _, _) = service(pool).await;
     for mode in [Mode::View, Mode::Drive] {
         let mut asked = request(mode);
-        asked.program = true;
+        asked.caller = Caller::Program;
 
         assert!(matches!(
             service.issue_ticket(asked, None).await,

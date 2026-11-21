@@ -3,6 +3,9 @@
 //! harness's own RFB connection. RFB is RFC 6143; the extensions noVNC sends
 //! are TigerVNC's and QEMU's.
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU8, Ordering};
+
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 
 use super::tunnel::GuestStream;
@@ -18,6 +21,8 @@ const MAX_TEXT_CHARS: usize = 4096;
 const MAX_SCROLL_CLICKS: u32 = 10;
 /// The longest desktop name Xvnc may send in its ServerInit.
 const MAX_NAME_BYTES: u32 = 4096;
+/// The pixel size until the ServerInit or a SetPixelFormat says otherwise.
+const DEFAULT_BITS_PER_PIXEL: u8 = 32;
 
 /// What the viewer's RFB stream broke.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -34,6 +39,12 @@ pub enum GateError {
     /// A length beyond what the gate accepts.
     #[error("RFB message too large")]
     TooLarge,
+    /// A server message type the server side can't size.
+    #[error("unknown RFB server message type {0}")]
+    UnknownServerMessage(u8),
+    /// A rectangle encoding the server side can't frame.
+    #[error("unframeable RFB encoding {0}")]
+    UnknownEncoding(i32),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -47,12 +58,13 @@ enum GateState {
 /// Filters a viewer's client→server RFB stream: the handshake passes (None
 /// security only, shared session forced), and input (KeyEvent,
 /// PointerEvent, ClientCutText, QEMU key events, SetDesktopSize) passes
-/// only while the viewer drives. xvp (power actions) never passes.
-/// Server→client bytes are not parsed.
+/// only while the viewer drives. xvp (power actions) never passes. The
+/// viewer may only ask for encodings [`RfbServerFilter`] can frame.
 #[derive(Debug)]
 pub struct RfbGate {
     state: GateState,
     pending: Vec<u8>,
+    bits_per_pixel: Arc<AtomicU8>,
 }
 
 impl Default for RfbGate {
@@ -79,25 +91,42 @@ enum Verdict {
     /// A ClientInit, forwarded as a shared one so a viewer never
     /// disconnects the others.
     Shared,
-    /// SetEncodings, forwarded without the extended clipboard.
+    /// SetEncodings, forwarded with only [`framable`] encodings.
     Encodings,
+    /// SetPixelFormat, whose pixel size the server side frames by.
+    PixelFormat,
 }
 
-/// TigerVNC's ExtendedClipboard pseudo-encoding (`0xC0A1E5CE`). A viewer
-/// that offers it must answer the server's clipboard caps with a
-/// ClientCutText, which the gate drops while it doesn't drive; the server
-/// then sends selections as extended Provide messages that a view-only
-/// noVNC skips without reading, and its stream desyncs. Without it the
-/// server sends plain ServerCutText, which every viewer reads.
-const EXTENDED_CLIPBOARD: [u8; 4] = 0xC0A1_E5CEu32.to_be_bytes();
+/// The encodings a viewer may ask for: those whose framing
+/// [`RfbServerFilter`] can follow without decoding pixels. Raw, CopyRect,
+/// ZRLE; the DesktopSize, LastRect, Cursor, ExtendedDesktopSize and
+/// DesktopName pseudo-encodings; QEMU's extended key events; and the JPEG
+/// quality and compression levels, which change nothing on the wire here.
+/// Everything else is left out of the viewer's SetEncodings: Tight and
+/// Hextile (unframeable without decoding), TigerVNC's ExtendedClipboard
+/// (`0xC0A1E5CE`: it makes a view-only noVNC desync), fences, continuous
+/// updates, xvp and QEMU audio (server messages a viewer has no use for).
+fn framable(encoding: i32) -> bool {
+    matches!(
+        encoding,
+        0 | 1 | 16 | -223 | -224 | -239 | -258 | -307 | -308 | -256..=-247 | -32..=-23
+    )
+}
 
-/// `message` (a whole SetEncodings) without [`EXTENDED_CLIPBOARD`].
-fn without_extended_clipboard(message: &[u8]) -> Vec<u8> {
+/// `message` (a whole SetEncodings) with only [`framable`] encodings.
+fn framable_encodings(message: &[u8]) -> Vec<u8> {
     let encodings: Vec<&[u8]> = message
         .get(4..)
         .unwrap_or_default()
         .chunks_exact(4)
-        .filter(|encoding| *encoding != EXTENDED_CLIPBOARD)
+        .filter(|encoding| {
+            framable(i32::from_be_bytes([
+                encoding[0],
+                encoding[1],
+                encoding[2],
+                encoding[3],
+            ]))
+        })
         .collect();
     let count = u16::try_from(encodings.len()).unwrap_or(u16::MAX);
     let mut rewritten = vec![2, 0];
@@ -114,7 +143,14 @@ impl RfbGate {
         Self {
             state: GateState::Version,
             pending: Vec::new(),
+            bits_per_pixel: Arc::new(AtomicU8::new(DEFAULT_BITS_PER_PIXEL)),
         }
+    }
+
+    /// The server side of this connection, framed by the pixel format this
+    /// viewer sets.
+    pub fn server_filter(&self) -> RfbServerFilter {
+        RfbServerFilter::new(Arc::clone(&self.bits_per_pixel))
     }
 
     /// Take `input` from the viewer and return what goes on to Xvnc. Bytes
@@ -136,7 +172,13 @@ impl RfbGate {
                 }
                 Verdict::Input | Verdict::Drop => {}
                 Verdict::Shared => forward.push(1),
-                Verdict::Encodings => forward.extend(without_extended_clipboard(message)),
+                Verdict::Encodings => forward.extend(framable_encodings(message)),
+                Verdict::PixelFormat => {
+                    if let Some(&bits) = message.get(4) {
+                        self.bits_per_pixel.store(bits, Ordering::Relaxed);
+                    }
+                    forward.extend_from_slice(message);
+                }
             }
             start += length;
         }
@@ -156,11 +198,12 @@ impl RfbGate {
                 let Some(version) = bytes.get(..12) else {
                     return Ok(None);
                 };
-                self.state = match version {
-                    b"RFB 003.003\n" => GateState::ClientInit,
-                    b"RFB 003.007\n" | b"RFB 003.008\n" => GateState::SecurityChoice,
-                    _ => return Err(GateError::Version),
-                };
+                // 3.8 only: the server side's framing (see [`RfbServerFilter`])
+                // assumes its handshake.
+                if version != b"RFB 003.008\n" {
+                    return Err(GateError::Version);
+                }
+                self.state = GateState::SecurityChoice;
                 Ok(Some((12, Verdict::Pass)))
             }
             GateState::SecurityChoice => match bytes.first() {
@@ -200,7 +243,7 @@ fn message(bytes: &[u8]) -> Result<Option<(usize, Verdict)>, GateError> {
     };
     match kind {
         // SetPixelFormat
-        0 => sized(Some(20), Verdict::Pass),
+        0 => sized(Some(20), Verdict::PixelFormat),
         // SetEncodings
         2 => sized(
             u16_at(bytes, 2).map(|count| 4 + 4 * count),
@@ -254,6 +297,281 @@ fn message(bytes: &[u8]) -> Result<Option<(usize, Verdict)>, GateError> {
             Some(_) => Err(GateError::UnknownMessage(kind)),
         },
         other => Err(GateError::UnknownMessage(other)),
+    }
+}
+
+/// Where the server side is in Xvnc's stream.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ServerState {
+    Version,
+    SecurityTypes,
+    SecurityResult,
+    ServerInit,
+    Message,
+    /// Inside a FramebufferUpdate, with this many rectangles to go.
+    Rectangles(u16),
+    /// The body of a message or rectangle: passed on, or dropped.
+    Body {
+        remaining: u64,
+        keep: bool,
+        then: AfterBody,
+    },
+}
+
+/// What follows a body.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AfterBody {
+    Message,
+    Rectangles(u16),
+}
+
+impl From<AfterBody> for ServerState {
+    fn from(after: AfterBody) -> Self {
+        match after {
+            AfterBody::Message => Self::Message,
+            AfterBody::Rectangles(0) => Self::Message,
+            AfterBody::Rectangles(left) => Self::Rectangles(left),
+        }
+    }
+}
+
+/// What a complete header decides.
+enum Header {
+    /// `needed` bytes are needed to decide.
+    Needs(usize),
+    /// Pass (or drop) the header, then a body of `body` bytes, then go on.
+    Decided {
+        keep: bool,
+        body: u64,
+        then: ServerState,
+    },
+}
+
+/// Frames Xvnc's server→client stream for one viewer and drops its
+/// clipboard (ServerCutText) while the viewer doesn't drive: a person who
+/// only watches never reads what the driver pastes or the agent copies.
+/// Pixel data passes without being decoded or held: only headers are
+/// buffered. The viewer's [`RfbGate`] keeps the encodings to those it can
+/// frame; anything else ends the connection.
+#[derive(Debug)]
+pub struct RfbServerFilter {
+    state: ServerState,
+    header: Vec<u8>,
+    bits_per_pixel: Arc<AtomicU8>,
+}
+
+fn u32_at(bytes: &[u8], at: usize) -> Option<u64> {
+    let quad = bytes.get(at..at + 4)?;
+    Some(u64::from(u32::from_be_bytes([
+        quad[0], quad[1], quad[2], quad[3],
+    ])))
+}
+
+impl RfbServerFilter {
+    fn new(bits_per_pixel: Arc<AtomicU8>) -> Self {
+        Self {
+            state: ServerState::Version,
+            header: Vec::new(),
+            bits_per_pixel,
+        }
+    }
+
+    /// Take `input` from Xvnc and return what goes on to the viewer.
+    pub fn filter(&mut self, mut input: &[u8], driving: bool) -> Result<Vec<u8>, GateError> {
+        let mut forward = Vec::with_capacity(input.len());
+        loop {
+            if let ServerState::Body {
+                remaining,
+                keep,
+                then,
+            } = self.state
+            {
+                let available = u64::try_from(input.len()).unwrap_or(u64::MAX);
+                let taken = remaining.min(available);
+                let split = usize::try_from(taken).unwrap_or(input.len());
+                let (body, rest) = input.split_at(split);
+                if keep {
+                    forward.extend_from_slice(body);
+                }
+                input = rest;
+                if taken < remaining {
+                    self.state = ServerState::Body {
+                        remaining: remaining - taken,
+                        keep,
+                        then,
+                    };
+                    return Ok(forward);
+                }
+                self.state = then.into();
+                continue;
+            }
+            match self.header(driving)? {
+                Header::Needs(needed) => {
+                    let missing = needed.saturating_sub(self.header.len());
+                    if missing == 0 {
+                        continue;
+                    }
+                    if input.is_empty() {
+                        return Ok(forward);
+                    }
+                    let (taken, rest) = input.split_at(missing.min(input.len()));
+                    self.header.extend_from_slice(taken);
+                    input = rest;
+                    if self.header.len() < needed {
+                        return Ok(forward);
+                    }
+                }
+                Header::Decided { keep, body, then } => {
+                    if keep {
+                        forward.extend_from_slice(&self.header);
+                    }
+                    self.header.clear();
+                    self.state = if body == 0 {
+                        then
+                    } else {
+                        let after = match then {
+                            ServerState::Rectangles(left) => AfterBody::Rectangles(left),
+                            _ => AfterBody::Message,
+                        };
+                        ServerState::Body {
+                            remaining: body,
+                            keep,
+                            then: after,
+                        }
+                    };
+                }
+            }
+        }
+    }
+
+    /// What the header so far decides, in the current state.
+    fn header(&mut self, driving: bool) -> Result<Header, GateError> {
+        let header = self.header.as_slice();
+        let pass = |body: u64, then: ServerState| Header::Decided {
+            keep: true,
+            body,
+            then,
+        };
+        Ok(match self.state {
+            ServerState::Body { .. } => unreachable!("bodies are passed before headers"),
+            ServerState::Version => match header.get(..12) {
+                None => Header::Needs(12),
+                Some(b"RFB 003.008\n") => pass(0, ServerState::SecurityTypes),
+                Some(_) => return Err(GateError::Version),
+            },
+            ServerState::SecurityTypes => match header.first() {
+                None => Header::Needs(1),
+                Some(0) => return Err(GateError::Security),
+                Some(&count) => {
+                    let needed = 1 + usize::from(count);
+                    match header.get(1..needed) {
+                        None => Header::Needs(needed),
+                        Some(types) if types.contains(&1) => pass(0, ServerState::SecurityResult),
+                        Some(_) => return Err(GateError::Security),
+                    }
+                }
+            },
+            ServerState::SecurityResult => match u32_at(header, 0) {
+                None => Header::Needs(4),
+                Some(0) => pass(0, ServerState::ServerInit),
+                Some(_) => return Err(GateError::Security),
+            },
+            ServerState::ServerInit => match (header.get(4), u32_at(header, 20)) {
+                (Some(&bits), Some(name)) => {
+                    if name > u64::from(MAX_NAME_BYTES) {
+                        return Err(GateError::TooLarge);
+                    }
+                    self.bits_per_pixel.store(bits, Ordering::Relaxed);
+                    pass(name, ServerState::Message)
+                }
+                _ => Header::Needs(24),
+            },
+            ServerState::Message => match header.first() {
+                None => Header::Needs(1),
+                // FramebufferUpdate
+                Some(0) => match header.get(2..4) {
+                    None => Header::Needs(4),
+                    Some(count) => pass(
+                        0,
+                        AfterBody::Rectangles(u16::from_be_bytes([count[0], count[1]])).into(),
+                    ),
+                },
+                // SetColourMapEntries
+                Some(1) => match header.get(4..6) {
+                    None => Header::Needs(6),
+                    Some(count) => pass(
+                        6 * u64::from(u16::from_be_bytes([count[0], count[1]])),
+                        ServerState::Message,
+                    ),
+                },
+                // Bell
+                Some(2) => pass(0, ServerState::Message),
+                // ServerCutText; a negative length is the extended clipboard's.
+                Some(3) => match header.get(4..8) {
+                    None => Header::Needs(8),
+                    Some(length) => Header::Decided {
+                        keep: driving,
+                        body: u64::from(
+                            i32::from_be_bytes([length[0], length[1], length[2], length[3]])
+                                .unsigned_abs(),
+                        ),
+                        then: ServerState::Message,
+                    },
+                },
+                // EndOfContinuousUpdates
+                Some(150) => pass(0, ServerState::Message),
+                // ServerFence
+                Some(248) => match header.get(8) {
+                    None => Header::Needs(9),
+                    Some(&length) => pass(u64::from(length), ServerState::Message),
+                },
+                Some(&other) => return Err(GateError::UnknownServerMessage(other)),
+            },
+            ServerState::Rectangles(left) => {
+                let Some(rectangle) = header.get(..12) else {
+                    return Ok(Header::Needs(12));
+                };
+                let width = u64::from(u16::from_be_bytes([rectangle[4], rectangle[5]]));
+                let height = u64::from(u16::from_be_bytes([rectangle[6], rectangle[7]]));
+                let encoding =
+                    i32::from_be_bytes([rectangle[8], rectangle[9], rectangle[10], rectangle[11]]);
+                let bytes_per_pixel =
+                    u64::from(self.bits_per_pixel.load(Ordering::Relaxed).div_ceil(8));
+                let next: ServerState = AfterBody::Rectangles(left.saturating_sub(1)).into();
+                match encoding {
+                    // Raw
+                    0 => pass(width * height * bytes_per_pixel, next),
+                    // CopyRect
+                    1 => pass(4, next),
+                    // ZRLE, and DesktopName: a length, then that many bytes.
+                    16 | -307 => match u32_at(header, 12) {
+                        None => Header::Needs(16),
+                        Some(length) => pass(length, next),
+                    },
+                    // Cursor: its pixels, then a bitmask.
+                    -239 => pass(
+                        width * height * bytes_per_pixel + width.div_ceil(8) * height,
+                        next,
+                    ),
+                    // ExtendedDesktopSize: a screen count, padding, the screens.
+                    -308 => match header.get(12) {
+                        None => Header::Needs(16),
+                        Some(&screens) => {
+                            if header.len() < 16 {
+                                Header::Needs(16)
+                            } else {
+                                pass(16 * u64::from(screens), next)
+                            }
+                        }
+                    },
+                    // DesktopSize, QEMU extended key events: no body.
+                    -223 | -258 => pass(0, next),
+                    // LastRect ends the update.
+                    -224 => pass(0, ServerState::Message),
+                    other => return Err(GateError::UnknownEncoding(other)),
+                }
+            }
+        })
     }
 }
 

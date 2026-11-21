@@ -39,7 +39,7 @@ async fn take_notices(
     agent: &MacroUserIdStr<'_>,
 ) -> Result<Vec<AgentNotice>, PgScreenError> {
     let pending = repo
-        .pending_notices(agent, Duration::from_secs(3600))
+        .claim_notices(agent, Duration::from_secs(3600), Duration::from_secs(60))
         .await?;
     let ids: Vec<Uuid> = pending.iter().map(|pending| pending.id).collect();
     repo.delete_notices(&ids).await?;
@@ -486,16 +486,24 @@ async fn a_notice_stays_pending_until_it_is_delivered(pool: PgPool) {
         .unwrap();
     let agent = alice.agent_user_id.clone().unwrap();
 
-    // A request that failed upstream read it but never acknowledged it.
-    let read = repo.pending_notices(&agent, TWO_MINUTES).await.unwrap();
+    // A request that failed upstream claimed it, then gave it back.
+    let read = repo
+        .claim_notices(&agent, TWO_MINUTES, TWO_MINUTES)
+        .await
+        .unwrap();
     assert_eq!(read.len(), 1);
     assert_eq!(read[0].notice.driver_name.as_deref(), Some("Alice"));
-    let again = repo.pending_notices(&agent, TWO_MINUTES).await.unwrap();
+    repo.unclaim_notices(&[read[0].id]).await.unwrap();
+    let again = repo
+        .claim_notices(&agent, TWO_MINUTES, TWO_MINUTES)
+        .await
+        .unwrap();
     assert_eq!(again, read);
 
     repo.delete_notices(&[read[0].id]).await.unwrap();
+    repo.unclaim_notices(&[read[0].id]).await.unwrap();
     assert!(
-        repo.pending_notices(&agent, TWO_MINUTES)
+        repo.claim_notices(&agent, TWO_MINUTES, TWO_MINUTES)
             .await
             .unwrap()
             .is_empty()
@@ -558,4 +566,43 @@ async fn two_tabs_of_one_person_taking_over_at_once_keep_one_drive(pool: PgPool)
         .unwrap();
         assert_eq!(drives, 1, "round {round}: one person, one drive");
     }
+}
+
+/// Two brain requests at once never both carry a notice, and one that
+/// failed gives its notices to the next.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_notice_is_claimed_by_one_request_at_a_time(pool: PgPool) {
+    let repo = PgScreenRepo::new(pool);
+    let alice = grant("alice", Mode::Drive);
+    let agent = alice.agent_user_id.clone().unwrap();
+    let alice_session = session(&repo, &alice).await;
+    repo.take_over(&alice, alice_session, None, TWO_MINUTES)
+        .await
+        .unwrap();
+    let (kept, claim) = (Duration::from_secs(3600), Duration::from_secs(60));
+
+    let (first, second) = tokio::join!(
+        repo.claim_notices(&agent, kept, claim),
+        repo.claim_notices(&agent, kept, claim)
+    );
+    let (first, second) = (first.unwrap(), second.unwrap());
+
+    assert_eq!(first.len() + second.len(), 1, "{first:?} {second:?}");
+    let claimed: Vec<Uuid> = first
+        .iter()
+        .chain(&second)
+        .map(|pending| pending.id)
+        .collect();
+    assert!(
+        repo.claim_notices(&agent, kept, claim)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    repo.unclaim_notices(&claimed).await.unwrap();
+    let again = repo.claim_notices(&agent, kept, claim).await.unwrap();
+    assert_eq!(
+        again.iter().map(|pending| pending.id).collect::<Vec<_>>(),
+        claimed
+    );
 }

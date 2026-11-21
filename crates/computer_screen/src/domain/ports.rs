@@ -10,8 +10,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::models::{
-    Access, EndReason, Lease, Mode, PendingNotice, Person, RedeemedTicket, Release, ScreenGrant,
-    SessionId, TakeOver,
+    Access, AgentNotPaused, EndReason, Lease, Mode, PendingNotice, Person, RedeemedTicket, Release,
+    ScreenGrant, SessionId, TakeOver,
 };
 
 /// The SHA-256 of a ticket secret: all storage ever sees of it.
@@ -124,16 +124,32 @@ pub trait ScreenRepo: Send + Sync + 'static {
         fresh: Duration,
     ) -> impl Future<Output = Result<(u32, u32), Self::Err>> + Send;
 
-    /// The agent's notices not yet delivered, oldest first, at most a few,
-    /// and none older than `kept`.
-    fn pending_notices(
+    /// Claim the agent's notices not yet delivered for `claim_for`, oldest
+    /// first, at most a few, none older than `kept`. Notices another request
+    /// claimed are not returned until that claim runs out, so two requests
+    /// never carry the same notice.
+    fn claim_notices(
         &self,
         agent: &MacroUserIdStr<'_>,
         kept: Duration,
+        claim_for: Duration,
     ) -> impl Future<Output = Result<Vec<PendingNotice>, Self::Err>> + Send;
+
+    /// Computers whose lease lapsed, at most a few hundred.
+    fn lapsed_leases(&self) -> impl Future<Output = Result<Vec<ComputerId>, Self::Err>> + Send;
+
+    /// Computers a drive ended on within `within` that nobody drives now:
+    /// their agent should be running.
+    fn released_within(
+        &self,
+        within: Duration,
+    ) -> impl Future<Output = Result<Vec<ComputerId>, Self::Err>> + Send;
 
     /// Forget notices that reached the agent.
     fn delete_notices(&self, ids: &[Uuid]) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Give claimed notices back: the request carrying them failed.
+    fn unclaim_notices(&self, ids: &[Uuid]) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// Who may use a harness's screen: the harness's permissions and the
@@ -177,10 +193,13 @@ pub trait People: Send + Sync + 'static {
 /// effort and quick: a computer that can't be reached is logged, never an
 /// error, and the caller never waits on the guest.
 pub trait DriverSignal: Send + Sync + 'static {
-    /// A person drives `computer` now.
-    fn driving(&self, lease: &Lease) -> impl Future<Output = ()> + Send;
+    /// A person drives `computer` now: the agent on it is frozen before
+    /// this returns, or [`AgentNotPaused`] says it couldn't be. A computer
+    /// with no agent running has nothing to freeze.
+    fn driving(&self, lease: &Lease) -> impl Future<Output = Result<(), AgentNotPaused>> + Send;
 
-    /// Nobody drives `computer` any more.
+    /// Nobody drives `computer` any more: the agent is thawed, retried off
+    /// the caller's path. Repeating it is harmless.
     fn released(&self, computer: ComputerId) -> impl Future<Output = ()> + Send;
 }
 

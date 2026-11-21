@@ -192,6 +192,8 @@ let
     AmbientCapabilities = "";
     ProtectSystem = "strict";
     ProtectHome = "tmpfs";
+    # macro's group may open it, and the agent runs in that group too.
+    InaccessiblePaths = [ "-${pauseSocket}" ];
     BindPaths = [ home ];
     ReadWritePaths = [ desktopRuntime ];
     PrivateTmp = true;
@@ -302,6 +304,49 @@ let
     load-module module-native-protocol-unix socket=${desktopRuntime}/pulse/native auth-anonymous=1
     load-module module-null-sink sink_name=agent sink_properties=device.description=Agent
     set-default-sink agent
+  '';
+  # Freezes or thaws the agent's unit for a person's take-over of its
+  # screen: one verb per connection to pauseSocket, which only macro's group
+  # may open (the harness, over the fleet's exec) and the sandbox hides. A
+  # restart asked for while frozen waits for the thaw.
+  pauseSocket = "/run/macro-agent-pause.sock";
+  pauseState = "/run/macro-agent-pause";
+  systemctl = lib.getExe' config.systemd.package "systemctl";
+  pauseAgent = pkgs.writeShellScript "macro-agent-pause" ''
+    unit=macro-agent.service
+    state() { ${systemctl} show -P "$1" "$unit" 2>/dev/null; }
+    IFS= read -r -t 5 verb || exit 0
+    mkdir -p ${pauseState}
+    case "$verb" in
+      freeze)
+        touch ${pauseState}/paused
+        case "$(state ActiveState)" in
+          active | activating | reloading) ;;
+          *) echo idle; exit 0 ;;
+        esac
+        ${systemctl} freeze "$unit" >/dev/null 2>&1 || true
+        if [ "$(state FreezerState)" = frozen ]; then echo frozen; else echo failed; fi
+        ;;
+      thaw)
+        rm -f ${pauseState}/paused
+        ${systemctl} thaw "$unit" >/dev/null 2>&1 || true
+        if [ "$(state FreezerState)" = frozen ]; then echo failed; exit 0; fi
+        if [ -e ${pauseState}/restart ]; then
+          rm -f ${pauseState}/restart
+          ${systemctl} restart --no-block "$unit"
+        fi
+        echo running
+        ;;
+      *) echo refused ;;
+    esac
+  '';
+  restartAgent = pkgs.writeShellScript "macro-agent-restart" ''
+    if [ -e ${pauseState}/paused ]; then
+      mkdir -p ${pauseState}
+      touch ${pauseState}/restart
+      exit 0
+    fi
+    exec ${systemctl} restart --no-block macro-agent.service
   '';
   waitForDisplay = pkgs.writeShellScript "wait-for-agent-display" ''
     until [ -S /tmp/.X11-unix/X${toString displayNumber} ]; do sleep 0.2; done
@@ -428,14 +473,38 @@ in
       description = "Restart the agent teammate";
       serviceConfig = {
         Type = "oneshot";
-        ExecStart = "${lib.getExe' config.systemd.package "systemctl"} restart --no-block macro-agent.service";
+        # Not while a person drives: then at the thaw.
+        ExecStart = restartAgent;
+      };
+    };
+
+    systemd.sockets.macro-agent-pause = {
+      description = "Freeze or thaw the agent while a person drives its screen";
+      wantedBy = [ "sockets.target" ];
+      socketConfig = {
+        ListenStream = pauseSocket;
+        SocketUser = "root";
+        SocketGroup = "macro";
+        SocketMode = "0660";
+        Accept = true;
+        MaxConnections = 4;
+      };
+    };
+    systemd.services."macro-agent-pause@" = {
+      description = "Freeze or thaw the agent teammate";
+      serviceConfig = {
+        ExecStart = pauseAgent;
+        StandardInput = "socket";
+        StandardOutput = "socket";
+        StandardError = "journal";
+        RuntimeMaxSec = 30;
       };
     };
 
     # The agent's own desktop for computer use, beside macro's :0. Only :1's
     # filesystem socket is in its /tmp; no abstract one.
     systemd.services.macro-agent-display = desktopService displayDescription {
-      ExecStart = "${pkgs.tigervnc}/bin/Xvnc ${display} -geometry 1920x1080 -depth 24 -rfbport ${toString vncPort} -interface 127.0.0.1 -localhost -SecurityTypes None -UseBlacklist 0 -AlwaysShared -nolisten tcp -nolisten local";
+      ExecStart = "${pkgs.tigervnc}/bin/Xvnc ${display} -geometry 1920x1080 -depth 24 -rfbport ${toString vncPort} -interface 127.0.0.1 -localhost -SecurityTypes None -UseBlacklist 0 -AlwaysShared -SendPrimary=0 -nolisten tcp -nolisten local";
     } { };
     # Whatever its menu starts stays in the sandbox.
     systemd.services.macro-agent-openbox = desktopService "Openbox on the agent teammate's display" {
