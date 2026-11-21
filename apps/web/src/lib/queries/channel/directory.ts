@@ -400,6 +400,13 @@ function overlaidDirectoryState(
   return { records, joined, incomplete, complete: state.complete };
 }
 
+/** Whether a directory state, lacking a channel, shows the viewer out of
+ * it: it lists every channel they joined and holds no part of that one. */
+const lacks =
+  (state: ChannelDirectoryState) =>
+  (channelId: string): boolean =>
+    state.complete && !state.incomplete[channelId];
+
 /**
  * The viewer's own channel writes (`own-writes.ts`) laid over what a
  * directory read, until what it reads shows them.
@@ -408,7 +415,11 @@ function createOwnWriteOverlay(own: OwnChannelWrites, account: QueryAccount) {
   const tracker = createOwnWriteTracker(own, account);
   return {
     apply(state: ChannelDirectoryState) {
-      const pending = tracker.pending(state.records, own.writes());
+      const pending = tracker.pending(
+        state.records,
+        own.writes(),
+        lacks(state)
+      );
       return pending.length === 0
         ? state
         : overlaidDirectoryState(state, pending);
@@ -416,7 +427,11 @@ function createOwnWriteOverlay(own: OwnChannelWrites, account: QueryAccount) {
     /** The joined channels of a full read with the writes laid over it. */
     applyList(channels: readonly DirectoryChannel[]) {
       const state = channelDirectoryState(channels, [], true);
-      const pending = tracker.pendingFor(state.records, untrack(own.writes));
+      const pending = tracker.pendingFor(
+        state.records,
+        untrack(own.writes),
+        lacks(state)
+      );
       return pending.length === 0
         ? channels
         : overlaidDirectoryState(state, pending).joined;
@@ -424,7 +439,7 @@ function createOwnWriteOverlay(own: OwnChannelWrites, account: QueryAccount) {
     /** Whether `state`, the directory's own source, has yet to show one of
      * the writes. */
     behind: (state: ChannelDirectoryState) =>
-      tracker.pending(state.records, own.writes()).length > 0,
+      tracker.pending(state.records, own.writes(), lacks(state)).length > 0,
   };
 }
 

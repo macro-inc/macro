@@ -3856,6 +3856,31 @@ describe("the viewer's own channel writes", () => {
     await vi.waitFor(() => expect(nameOf(directory, 'a')).toBe('channel a'));
   });
 
+  it('shows a rejoin the cache showed before the leave’s read landed, when the cache had already taken the channel out', async () => {
+    const client = queryClient();
+    const { cache, directory, reopen } = mountCachedDirectory([], {
+      queryClient: client,
+    });
+    completeLane('g1');
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+
+    // They left, and the cache took the channel out before the leave's
+    // read was sent; the primary no longer lets them read it.
+    const primary = heldNetwork(fakeNetwork([], { primary: [] }));
+    const write = writeOf(client, primary, ['a']);
+    // Someone adds them back while the read is under way.
+    cache.put(publicChannel('a', UPDATED_NEW, UPDATED_NEW), {
+      sourceHash: 'a-rejoined',
+    });
+    reopen();
+    await vi.waitFor(() => expect(ids(directory.channels())).toEqual(['a']));
+    primary.land();
+    await write;
+
+    await new Promise((done) => setTimeout(done, 20));
+    expect(ids(directory.channels())).toEqual(['a']);
+  });
+
   it('keeps the later of two reads of a channel, whichever lands last', async () => {
     const network = fakeNetwork([
       channelRecord('a', { name: 'before', updatedAt: UPDATED_OLD }),

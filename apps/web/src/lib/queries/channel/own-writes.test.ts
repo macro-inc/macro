@@ -192,6 +192,21 @@ describe('sightWrite', () => {
     expect(seen.lastJoined).toBe(seenOf(later).lastJoined);
     expect(seenOf(undefined)).toBe(UNSEEN);
   });
+
+  it('takes every membership a complete source shows after it showed the viewer out for a rejoin', () => {
+    const rejoined = withViewer(written, '2026-11-03T00:00:00Z');
+    const gone = sightWrite(write(null), UNSEEN, undefined, true);
+    expect(gone.shownGone).toBe(true);
+    expect(behind(write(null), rejoined, gone)).toBe(false);
+    expect(behind(write(withViewer(written)), rejoined, gone)).toBe(false);
+    // Lacking it while still loading says nothing.
+    expect(behind(write(null), rejoined, seenOf(undefined))).toBe(true);
+    // A membership it showed first stays the baseline.
+    const member = withViewer(written, '2026-11-01T00:00:00Z');
+    const seen = sightWrite(write(null), seenOf(member), undefined, true);
+    expect(seen.shownGone).toBe(false);
+    expect(behind(write(null), member, seen)).toBe(true);
+  });
 });
 
 describe('overlayOwnWrites', () => {
@@ -279,6 +294,33 @@ describe('createOwnWriteTracker', () => {
     // went.
     settle(own, { [A]: written });
     expect(tracker.pending({}, own.writes())).toEqual([]);
+  });
+
+  it('shows a rejoin its complete source showed after showing the viewer out, before the leave’s read landed', () => {
+    const own = ownChannelWrites(new QueryClient());
+    const tracker = createOwnWriteTracker(own, ACCOUNT);
+    const complete = () => true;
+    // The leave already reached the source when its read was sent.
+    tracker.pending({}, own.writes(), complete);
+    const sent = own.send(ACCOUNT, [A]);
+    const rejoined = withViewer(written, '2026-11-03T00:00:00Z');
+    tracker.pending({ [A]: rejoined }, own.writes(), complete);
+    sent.settle({ [A]: null });
+    expect(tracker.pending({ [A]: rejoined }, own.writes(), complete)).toEqual(
+      []
+    );
+  });
+
+  it('keeps a leave held over the membership it ended when its source was still loading', () => {
+    const own = ownChannelWrites(new QueryClient());
+    const tracker = createOwnWriteTracker(own, ACCOUNT);
+    tracker.pending({}, own.writes());
+    const sent = own.send(ACCOUNT, [A]);
+    const member = withViewer(written, '2026-11-01T00:00:00Z');
+    tracker.pending({ [A]: member }, own.writes());
+    sent.settle({ [A]: null });
+    const w = own.writes()[A];
+    expect(tracker.pending({ [A]: member }, own.writes())).toEqual([[A, w]]);
   });
 });
 

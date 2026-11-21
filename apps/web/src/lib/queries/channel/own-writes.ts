@@ -171,18 +171,22 @@ type SettledChannels = Readonly<Record<string, DirectoryChannel | null>>;
 
 /** What one directory has seen of a channel since a read of it was sent:
  * whether its source showed a record of it, since when the writer was in
- * the first one it showed (`baseline`), and since when they were in the
- * last one that listed them in it (`lastJoined`). */
+ * the first one it showed (`baseline`), since when they were in the last
+ * one that listed them in it (`lastJoined`), and whether, before it showed
+ * any record, it showed them out of the channel by lacking it while it
+ * listed every channel they joined (`shownGone`). */
 export type WriteSighting = {
   baseline: number | undefined;
   held: boolean;
   lastJoined: number | undefined;
+  shownGone: boolean;
 };
 
 export const UNSEEN: WriteSighting = {
   baseline: undefined,
   held: false,
   lastJoined: undefined,
+  shownGone: false,
 };
 
 /** Since when `userId` is in `channel`: when they joined, or, with no
@@ -195,15 +199,27 @@ function memberSince(channel: DirectoryChannel, userId: string): number {
   return instantMicros(participant?.joinedAt ?? channel.updatedAt);
 }
 
-/** `sighting` with `source` seen too, for a write or read by `writer`. */
+/** `sighting` with `source` seen too, for a write or read by `writer`;
+ * `gone` when the source lacks the channel and lists every channel the
+ * writer joined. A source that showed the writer out of the channel after
+ * the read was sent was past every membership the read could have ended,
+ * so every membership it shows after is newer: the first one it shows is
+ * then no baseline, and a leave's read landing after a rejoin does not take
+ * the rejoin for the membership it ended. Had the write landed first, that
+ * absence would have made it past for good. */
 export function sightWrite(
   writer: { account: QueryAccount },
   sighting: WriteSighting,
-  source: DirectoryChannel | undefined
+  source: DirectoryChannel | undefined,
+  gone = false
 ): WriteSighting {
-  if (!source) return sighting;
+  if (!source)
+    return gone && !sighting.held && !sighting.shownGone
+      ? { ...sighting, shownGone: true }
+      : sighting;
   const since = memberSince(source, writer.account.userId);
-  const baseline = sighting.held ? sighting.baseline : since;
+  const first = sighting.shownGone ? Number.NEGATIVE_INFINITY : since;
+  const baseline = sighting.held ? sighting.baseline : first;
   const lastJoined = source.isParticipant ? since : sighting.lastJoined;
   if (
     sighting.held &&
@@ -211,7 +227,7 @@ export function sightWrite(
     lastJoined === sighting.lastJoined
   )
     return sighting;
-  return { baseline, held: true, lastJoined };
+  return { ...sighting, baseline, held: true, lastJoined };
 }
 
 /** Whether `source` has yet to show the write, given what the directory saw
@@ -277,6 +293,26 @@ export function overlayOwnWrites(
 const sightingKey = (sequence: number, channelId: string) =>
   `${sequence}:${channelId}`;
 
+/** What a source showed: its records, and whether it shows the writer out
+ * of a channel it lacks (a source still loading, or one holding the
+ * channel in part, does not). */
+type Shown = {
+  records: Readonly<Record<string, DirectoryChannel>>;
+  absent: (channelId: string) => boolean;
+};
+
+const NOWHERE = () => false;
+
+const sightIn = (
+  writer: { account: QueryAccount },
+  sighting: WriteSighting,
+  { records, absent }: Shown,
+  channelId: string
+) => {
+  const source = records[channelId];
+  return sightWrite(writer, sighting, source, !source && absent(channelId));
+};
+
 /**
  * One directory's view of the held writes: which of them its source is
  * behind. It remembers what its source showed of each channel from the
@@ -291,25 +327,26 @@ export function createOwnWriteTracker(
   const sightings = new Map<string, WriteSighting>();
   const past = new WeakSet<OwnChannelWrite>();
   // What the source showed last: a read sent since starts from it.
-  let lastShown: Readonly<Record<string, DirectoryChannel>> | undefined;
+  let lastShown: Shown | undefined;
   const mine = ({ account: writer }: { account: QueryAccount }) =>
     writer.userId === account.userId && writer.session === account.session;
   const sightingOf = (
     writer: { account: QueryAccount },
     key: string,
     channelId: string,
-    source: DirectoryChannel | undefined
+    shown: Shown
   ) => {
     const seen =
       sightings.get(key) ??
-      (lastShown ? sightWrite(writer, UNSEEN, lastShown[channelId]) : UNSEEN);
-    return sightWrite(writer, seen, source);
+      (lastShown ? sightIn(writer, UNSEEN, lastShown, channelId) : UNSEEN);
+    return sightIn(writer, seen, shown, channelId);
   };
   const pendingIn = (
-    records: Readonly<Record<string, DirectoryChannel>>,
+    shown: Shown,
     writes: Readonly<Record<string, OwnChannelWrite>>,
     observe: boolean
   ) => {
+    const { records } = shown;
     const watched = new Set<string>();
     if (observe)
       for (const read of own.inFlight()) {
@@ -317,7 +354,7 @@ export function createOwnWriteTracker(
         for (const id of read.channelIds) {
           const key = sightingKey(read.sequence, id);
           watched.add(key);
-          sightings.set(key, sightingOf(read, key, id, records[id]));
+          sightings.set(key, sightingOf(read, key, id, shown));
         }
       }
     const pending: [string, OwnChannelWrite][] = [];
@@ -326,7 +363,7 @@ export function createOwnWriteTracker(
       if (!mine(write) || past.has(write)) continue;
       const key = sightingKey(write.sequence, id);
       const source = records[id];
-      const sighting = sightingOf(write, key, id, source);
+      const sighting = sightingOf(write, key, id, shown);
       if (sourceBehindWrite(write, source, sighting)) {
         if (observe) {
           watched.add(key);
@@ -345,23 +382,26 @@ export function createOwnWriteTracker(
     if (observe) {
       for (const key of sightings.keys())
         if (!watched.has(key)) sightings.delete(key);
-      lastShown = records;
+      lastShown = shown;
     }
     return pending;
   };
   return {
-    /** The writes the directory's own source, `records`, is behind. Each
-     * call is what the directory shows, so it records what it saw. */
+    /** The writes the directory's own source, `records`, is behind;
+     * `absent` says which channels it lacks as a complete source. Each call
+     * is what the directory shows, so it records what it saw. */
     pending: (
       records: Readonly<Record<string, DirectoryChannel>>,
-      writes: Readonly<Record<string, OwnChannelWrite>>
-    ) => pendingIn(records, writes, true),
+      writes: Readonly<Record<string, OwnChannelWrite>>,
+      absent: (channelId: string) => boolean = NOWHERE
+    ) => pendingIn({ records, absent }, writes, true),
     /** The writes a one-time read, `records`, is behind, as the directory's
      * source has seen them; it changes nothing the directory remembers. */
     pendingFor: (
       records: Readonly<Record<string, DirectoryChannel>>,
-      writes: Readonly<Record<string, OwnChannelWrite>>
-    ) => pendingIn(records, writes, false),
+      writes: Readonly<Record<string, OwnChannelWrite>>,
+      absent: (channelId: string) => boolean = NOWHERE
+    ) => pendingIn({ records, absent }, writes, false),
   };
 }
 
