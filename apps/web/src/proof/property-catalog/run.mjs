@@ -1341,7 +1341,9 @@ const real = Object.entries(R.diffSignatures);
 log(`done: ${R.counts.sequences} sequences, ${R.counts.steps} steps, ${R.counts.rawCases} raw cases, ${R.counts.readerComparisons} reader and ${R.counts.callerComparisons} caller comparisons; ${R.totals.differences} differences in ${real.length} signatures; ${R.totals.harnessErrors} harness errors; module checks ${JSON.stringify(R.moduleChecks)}`);
 for (const [s, n] of real.sort((a, b) => b[1] - a[1])) log(`  ${n}x ${s}`);
 const failures = [...R.crashes];
-if (R.counts.sequences < CONFIG.seqs) failures.push(`ran ${R.counts.sequences} of ${CONFIG.seqs} sequences`);
+// A mutant run stops at its first catch; every other run must finish all its sequences.
+const stoppedOnCatch = !!R.mutant?.firstCatch && E.STOP_ON_CATCH !== '0';
+if (R.counts.sequences < CONFIG.seqs && !stoppedOnCatch) failures.push(`ran ${R.counts.sequences} of ${CONFIG.seqs} sequences`);
 if (!R.moduleChecks.old || !R.moduleChecks.neu) failures.push('no module check passed on one side');
 if (R.mutant) {
   log(`mutant ${R.mutant.name}: applied ${R.mutant.applied}, caught ${R.mutant.firstCatch ? `at ${JSON.stringify(R.mutant.firstCatch).slice(0, 300)}` : 'NO'}`);
