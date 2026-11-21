@@ -245,8 +245,9 @@ matches are left unchanged. CRM settings and domain admission still apply.
 
 Company and contact headers group `Copy link` separately from the side-panel toggle.
 Desktop section tabs collapse to icons in narrow panes; each icon keeps a tooltip.
-With the keyboard on the record pane (nothing focused, or after a click on its
-text), Tab, Shift+Tab and the number keys move along them.
+With the keyboard on the record pane (as a record opens, with nothing focused,
+or after a click on its text), Tab, Shift+Tab and the number keys move along
+them.
 On phones and tablets, the current section appears as a labeled header island
 with a caret. When the host collapses it, the section icon and caret keep its
 accessible label. Embedded phone headers put the switcher below the breadcrumb

@@ -44,3 +44,29 @@ test('Tab and the number keys switch tables from the database pane', async ({
   await page.keyboard.press('2');
   await expect(table).toHaveText('people');
 });
+
+// When this fails, Tab or a number key with a range of cells selected (the
+// grid itself has focus) switched the database's tables and dropped the
+// selection.
+test('a range of selected cells keeps its table', async ({ page }) => {
+  const table = page.getByLabel('Table', { exact: true });
+  const from = await page
+    .getByRole('button', { name: /^Name: First\./ })
+    .boundingBox();
+  const to = await page
+    .getByRole('button', { name: /^Notes: Second note\./ })
+    .boundingBox();
+  if (!from || !to) throw new Error('The cells are not on screen.');
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, {
+    steps: 8,
+  });
+  await page.mouse.up();
+  await expect(page.getByRole('grid', { name: 'Tasks' })).toBeFocused();
+
+  await page.keyboard.press('Tab');
+  await expect(table).toHaveText('tasks');
+  await page.keyboard.press('2');
+  await expect(table).toHaveText('tasks');
+});

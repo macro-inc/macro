@@ -184,6 +184,7 @@ export function CrmRecordDetail(props: CrmRecordDetailProps) {
         <div
           ref={container}
           tabindex={-1}
+          data-pane-focus=""
           class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden outline-none"
         >
           <div class="flex h-12 min-w-0 shrink-0 items-center gap-2 px-3 touch:gap-3 touch:border-b touch:border-edge-muted touch:px-4 touch:h-auto touch:min-h-12 touch:pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.5rem)] touch:pb-2 mobile:flex-wrap">

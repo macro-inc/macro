@@ -298,7 +298,8 @@ to Calls, history, and split reuse while that mirror is stale.
 
 A database's table tabs take Tab and the number keys only from the database
 pane: Tab on a selected cell still moves to the next cell and leaves the table
-open (the real table tabs and records grid over the real hotkey engine):
+open, and a dragged range of cells keeps its table (the real table tabs and
+records grid over the real hotkey engine):
 `bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts table-tabs.browser.e2e.ts`.
 
 Links in database text and URL cells open without editing the cell, on desktop
