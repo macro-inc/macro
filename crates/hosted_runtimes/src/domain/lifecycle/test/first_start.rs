@@ -15,6 +15,8 @@ pub(super) fn setting_up() -> ComputerState {
             booting_at: Some(now() - Duration::minutes(2)),
             connected_at: None,
             waited_for_capacity: false,
+            agent_delivered_at: None,
+            agent_online_at: None,
         }),
         ..billed(Phase::Booting)
     }

@@ -1,4 +1,4 @@
-import { type ComponentProps, splitProps } from 'solid-js';
+import { type ComponentProps, Show, splitProps } from 'solid-js';
 import { cn } from '../utils/classname';
 import { CONTROL_SIZE_VARIANTS } from '../utils/controlSizes';
 import { createVariants, type VariantProps } from '../utils/variants';
@@ -112,5 +112,32 @@ export function Badge(props: BadgeProps) {
       })}
       {...others}
     />
+  );
+}
+
+/** A count inside a control, after its icon or label: applied filters,
+ * pending requests, unseen items. Renders nothing at zero.
+ *
+ * @do Put it in the control's own row so the control grows to fit it.
+ * @do Name what the count means in the control's `aria-label` or tooltip.
+ * @dont Do not pin it over a corner of the control or its icon.
+ */
+export function CountBadge(
+  props: Omit<ComponentProps<'span'>, 'children'> & { count: number }
+) {
+  const [local, others] = splitProps(props, ['count', 'class']);
+  return (
+    <Show when={local.count > 0}>
+      <span
+        data-slot="count-badge"
+        class={cn(
+          'inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-accent px-1 text-xxs font-medium leading-none tabular-nums text-button-accent-ink',
+          local.class
+        )}
+        {...others}
+      >
+        {local.count > 99 ? '99+' : local.count}
+      </span>
+    </Show>
   );
 }

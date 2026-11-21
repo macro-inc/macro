@@ -14,6 +14,8 @@ pub use domain::models::{
     RateLimitConfig, RateLimitExceeded, RateLimitKey, RateLimitKeyBuilder, RateLimitResult,
     TokenBucketConfig, TokenBucketResult,
 };
-pub use domain::ports::{RateLimitPort, RateLimitService, TokenBucketPort};
+pub use domain::ports::{RateBudgetPort, RateLimitPort, RateLimitService, TokenBucketPort};
 pub use domain::service::RateLimitServiceImpl;
-pub use outbound::redis::{RedisRateLimitAdapter, RedisRateLimitOps, RedisTokenBucketOps};
+pub use outbound::redis::{
+    RedisRateBudgetOps, RedisRateLimitAdapter, RedisRateLimitOps, RedisTokenBucketOps,
+};
