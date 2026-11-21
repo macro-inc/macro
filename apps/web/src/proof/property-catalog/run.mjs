@@ -513,7 +513,8 @@ function pairOrders(x, p, q, path = '$', out = new Map()) {
     const i = ids.indexOf(p);
     const j = ids.indexOf(q);
     if (i >= 0 && j >= 0) out.set(path, i < j);
-    x.forEach((v, n) => pairOrders(v, p, q, `${path}[${n}]`, out));
+    // a row's own id names its place, so a list keeps its path when rows before it differ
+    x.forEach((v, n) => pairOrders(v, p, q, `${path}[${rowId(v) ?? n}]`, out));
   } else if (x && typeof x === 'object') for (const [k, v] of Object.entries(x)) pairOrders(v, p, q, `${path}.${k}`, out);
   return out;
 }
@@ -536,13 +537,15 @@ function shows(m, level, kind, a, b, norm, rawB) {
   // cache faults: a marked live NEW reader still holding exactly, unnormalized,
   // the data the fault left in the cache (the restored copy, or what a
   // swallowed invalidation would have refreshed), and stale: a cold mount of
-  // the same reader on the same page this step reads otherwise. A refresh
-  // that replaced the fault's data, even with rows only reordered, retires it.
+  // the same reader on the same page this step reads otherwise, successfully,
+  // and exactly as OLD reads live: the whole live difference is NEW's stale
+  // copy. A refresh that replaced the fault's data, even with rows only
+  // reordered, retires it.
   if (/:live$/.test(level))
     return m.readers.some((r) => {
       if (kind !== `reader${r.id}.data` || J(rawB) !== J(r.data)) return false;
       const cold = R.mutant.freshNew?.[r.id];
-      return !!cold && J(norm(cold.data)) !== J(b);
+      return !!cold && readerOk(cold) && J(norm(cold.data)) !== J(b) && J(norm(cold.data)) === J(a);
     });
   return false;
 }

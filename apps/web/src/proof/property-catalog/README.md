@@ -90,8 +90,8 @@ not run the base commit's modules, or a mutant was not applied or not caught.
   exactly that: the dropped row on OLD only, the two rows in the injected
   order on NEW and the server's on OLD in the same list (same path), the field holding the
   injected value on NEW and the server's on OLD, or a live NEW reader still
-  holding exactly (unnormalized) the data the fault left while a cold mount of
-  it on the same page reads otherwise, so a refresh that replaced that data
+  holding exactly (unnormalized) the data the fault left while a successful cold mount of
+  it on the same page reads otherwise, and exactly what OLD reads live, so a refresh that replaced that data
   retires the mark. A real bug that made the same change to
   the same row would also be credited; it would show up as a difference in
   the runs without a mutant. A
