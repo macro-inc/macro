@@ -37,7 +37,7 @@ globalThis.addEventListener("unhandledrejection", (event) => {
   }
   emit({
     type: "error",
-    message: `${reason}\nThis promise rejected before the program awaited or caught it, which ends the run. Await or catch each promise where it starts, or collect them with Promise.allSettled.`,
+    message: `${reason}\nThis promise rejected before the program awaited or caught it, which ends the run. Calls already started, writes included, may have taken effect: check what they did before running anything again. Await or catch each promise where it starts, or collect them with Promise.allSettled.`,
   });
   exit(0);
 });

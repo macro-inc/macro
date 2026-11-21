@@ -791,7 +791,30 @@ async fn reports_a_rejection_nothing_handled_yet() {
     assert!(
         matches!(&outcome, Outcome::Failed { error } if error.code == FailureCode::Runtime
             && error.message.contains("Macro API error 422: The page could not be read")
-            && error.message.contains("Promise.allSettled")),
+            && error.message.contains("Promise.allSettled")
+            && error.message.contains("may have taken effect")),
+        "{outcome:?}"
+    );
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn reports_a_rejection_whose_reason_cannot_become_a_string() {
+    let (_root, service) = setup(Limits::default()).await;
+    let (host, _) = counting_server("{}").await;
+    let hanging = hanging_server().await;
+    // `String()` throws on a null-prototype object, so the reason is inspected.
+    let source = "export async function main({ hosts }) {
+        const early = Promise.reject(Object.assign(Object.create(null), { status: 'page unreadable' }));
+        await fetch(hosts.cognition);
+        return await early;
+    }";
+    let outcome = run_in_session(&service, source, &host, Some(&hanging), 5000).await;
+    assert!(
+        matches!(&outcome, Outcome::Failed { error } if error.code == FailureCode::Runtime
+            && error.message.contains("[Object: null prototype] { status: \"page unreadable\" }")
+            && error.message.contains("may have taken effect")),
         "{outcome:?}"
     );
     service.shutdown().await;
