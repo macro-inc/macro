@@ -206,7 +206,7 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   with the user's team as the `team` group. At most 64 sends run at once
   (more are dropped) and each user's team is cached for 10 minutes.
 - `src/cognition/`: existing chat, completions, and integrations; the library
-  also exports their OpenAPI document. Chat turns and structured completions
+  also exports their OpenAPI document. Legacy chat API turns and structured completions with `toolset: all`
   run only in code mode (`ai_tools::tools_for_chat_code_mode`), through a
   `UserCodeModeService` on chat's own executor budget (8 running, 16 queued)
   that `lib.rs` hands to `cognition::build`; the harness refuses to start

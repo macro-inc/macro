@@ -1,16 +1,24 @@
 # AI Chat (Agents)
 
-## Chat in code mode
+## Legacy chat API in code mode
 
-The standalone and doc-scoped chat answer with
-`ExecuteCode`, `DescribeCodeTools` and `ReadCodeDocs` instead of the direct
-Macro tools. People never see code: an execution reads as **Working on it** / **Finished a step**, and the SDK lookups render nothing.
-Email and calendar drafts still end in the composer card. Tools outside that
-set are not callable by name.
+Legacy chats are read-only in the web app, including mobile. New conversations
+use Agents. The SDK's `Chat.send` and the authenticated
+`POST /stream/chat/message` API can still start a turn; structured completions
+with `toolset: { type: 'all' }` use the same tools.
 
-Verify: ask "how many tasks do I have?" and confirm a **Finished a step** row and an answer with no code or tool names in it, then ask "what
-is Macro?" and confirm it answers from `AboutMacro` rather than calling
-`SelfKnowledge`.
+Those API turns use `ExecuteCode`, `DescribeCodeTools` and `ReadCodeDocs`
+instead of SDK-covered direct Macro tools. Existing chat history renders a run
+as **Working on it** / **Finished a step**, without its program or result;
+SDK lookups render nothing. Email and calendar drafts still use the
+composer-confirmed tools. Tools outside the exposed set cannot be called by name.
+
+Verify through the SDK or API as an authorized test user: ask how many tasks
+they have, then read the saved conversation in the legacy chat view. Confirm a
+**Finished a step** row and an answer without code or tool names. Ask what
+Macro is and confirm the backend reads `AboutMacro` rather than calling
+`SelfKnowledge`. The web chat's read-only notice remains visible; it cannot
+send either prompt.
 
 ## Recently shared in an agent session
 
