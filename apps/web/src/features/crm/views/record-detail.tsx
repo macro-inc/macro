@@ -38,6 +38,7 @@ import {
 import { Company } from './company-detail';
 import { Contact } from './contact-detail';
 import { RecordHeaderActions } from './record-header-actions';
+import { useRecordTabKeys } from './record-tab-keys';
 import { useCompanyQuery, useContactQuery } from './use-crm';
 
 const recordKey = (record: CrmRecordRef) => `${record.type}:${record.id}`;
@@ -93,6 +94,13 @@ export function CrmRecordDetail(props: CrmRecordDetailProps) {
     sectionOf(COMPANY_SECTIONS, props.section);
   const contactSection = (): ContactSection =>
     sectionOf(CONTACT_SECTIONS, props.section);
+  const recordTabsRef = useRecordTabKeys<CrmRecordSection>({
+    sections: () =>
+      current().type === 'contact' ? CONTACT_SECTIONS : COMPANY_SECTIONS,
+    value: () =>
+      current().type === 'contact' ? contactSection() : companySection(),
+    onChange: (section) => props.onSectionChange(section),
+  });
   const returnTo = (index: number) => {
     if (index === trail().length - 1) return;
     props.onOpen(trail().slice(0, index + 1));
@@ -193,6 +201,7 @@ export function CrmRecordDetail(props: CrmRecordDetailProps) {
                     compact={compactTabs()}
                     value={companySection()}
                     onChange={props.onSectionChange}
+                    tabsRef={recordTabsRef}
                   />
                 }
               >
@@ -201,6 +210,7 @@ export function CrmRecordDetail(props: CrmRecordDetailProps) {
                   compact={compactTabs()}
                   value={contactSection()}
                   onChange={props.onSectionChange}
+                  tabsRef={recordTabsRef}
                 />
               </Show>
             </div>

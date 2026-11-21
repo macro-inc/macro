@@ -3,9 +3,9 @@ import { RecordTabs } from './components/record-tabs';
 import { CrmProvider } from './context/crm-context';
 import { COMPANY_SECTIONS, type CompanySection } from './core/record';
 import { createAppCrmContext } from './crm-adapter';
-import { useRecordTabKeys } from './record-tab-keys';
 import { Company as View } from './views/company-detail';
 import { CompanyVisibilityButton as VisibilityButton } from './views/company-visibility-button';
+import { useRecordTabKeys } from './views/record-tab-keys';
 
 export type { CompanySection } from './core/record';
 
@@ -24,7 +24,7 @@ export function CompanyTabs(props: {
   compact?: boolean;
 }) {
   const tabsRef = useRecordTabKeys({
-    sections: COMPANY_SECTIONS,
+    sections: () => COMPANY_SECTIONS,
     value: () => props.value,
     onChange: (section) => props.onChange(section),
   });
