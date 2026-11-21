@@ -302,16 +302,21 @@ describe('GraphQL notified list re-reads', () => {
     vi.restoreAllMocks();
   });
 
-  it('re-reads flat lists ordered by notification, then again after replica lag', async () => {
+  it('re-reads notified lists, grouped ones too, then again after replica lag', async () => {
     updateSoupForNotification(createMockNotification());
     await vi.advanceTimersByTimeAsync(0);
 
     expect(mockRefreshGraphqlLists).toHaveBeenCalledTimes(1);
     const where = mockRefreshGraphqlLists.mock.calls[0]?.[0]?.where;
     expect(where?.({ params: { sort_method: 'notified_at' } })).toBe(true);
+    // A notification changes which rows a grouped notified list holds
+    // (Signal, unseen filters) though not its update-time order.
     expect(
-      where?.({ params: { sort_method: 'notified_at' }, groupBy: {} })
-    ).toBe(false);
+      where?.({
+        params: { sort_method: 'notified_at' },
+        groupBy: { type: 'entity_type' },
+      })
+    ).toBe(true);
     expect(where?.({ params: { sort_method: 'updated_at' } })).toBe(false);
     expect(where?.(undefined)).toBe(false);
 
