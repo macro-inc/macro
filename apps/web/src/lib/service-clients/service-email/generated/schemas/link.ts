@@ -5,9 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { LinkPhotoUrl } from './linkPhotoUrl';
-import type { UserProvider } from './userProvider';
 import type { Settings } from './settings';
 import type { SyncStatus } from './syncStatus';
+import type { UserProvider } from './userProvider';
 
 export interface Link {
   /** Whether the user turned calendar off for this inbox, which also removed

@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { InitConflictResponseOneOf } from './initConflictResponseOneOf';
-import type { InitConflictResponseOneOfThree } from './initConflictResponseOneOfThree';
 import type { InitConflictResponseOneOfFive } from './initConflictResponseOneOfFive';
+import type { InitConflictResponseOneOfThree } from './initConflictResponseOneOfThree';
 
 /**
  * Body of every `409 Conflict` from `/email/init`; `code` says which conflict it

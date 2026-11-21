@@ -5,13 +5,13 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { RefreshEmailEventOneOf } from './refreshEmailEventOneOf';
-import type { RefreshEmailEventOneOfThree } from './refreshEmailEventOneOfThree';
 import type { RefreshEmailEventOneOfFive } from './refreshEmailEventOneOfFive';
-import type { RefreshEmailEventOneOfSeven } from './refreshEmailEventOneOfSeven';
 import type { RefreshEmailEventOneOfNine } from './refreshEmailEventOneOfNine';
+import type { RefreshEmailEventOneOfOnefive } from './refreshEmailEventOneOfOnefive';
 import type { RefreshEmailEventOneOfOneone } from './refreshEmailEventOneOfOneone';
 import type { RefreshEmailEventOneOfOnethree } from './refreshEmailEventOneOfOnethree';
-import type { RefreshEmailEventOneOfOnefive } from './refreshEmailEventOneOfOnefive';
+import type { RefreshEmailEventOneOfSeven } from './refreshEmailEventOneOfSeven';
+import type { RefreshEmailEventOneOfThree } from './refreshEmailEventOneOfThree';
 
 /**
  * Payload for the `refresh_email` connection gateway event: identifies the

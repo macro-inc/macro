@@ -4,8 +4,9 @@
  * email_service
  * OpenAPI spec version: 0.1.0
  */
-import type { Login } from './login';
+
 import type { ImapConnectRequestLinkId } from './imapConnectRequestLinkId';
+import type { Login } from './login';
 
 /**
  * Public input never carries an owner identity or a credential binding.

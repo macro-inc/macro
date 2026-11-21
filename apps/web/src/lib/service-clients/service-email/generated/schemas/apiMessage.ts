@@ -4,15 +4,15 @@
  * email_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ApiMessageAttachment } from './apiMessageAttachment';
+
 import type { ApiAttachmentDraft } from './apiAttachmentDraft';
 import type { ApiAttachmentForwarded } from './apiAttachmentForwarded';
 import type { ApiContactInfo } from './apiContactInfo';
+import type { ApiMessageAttachment } from './apiMessageAttachment';
 import type { ApiMessageBodyHtmlSanitized } from './apiMessageBodyHtmlSanitized';
 import type { ApiMessageBodyMacro } from './apiMessageBodyMacro';
 import type { ApiMessageBodyReplyless } from './apiMessageBodyReplyless';
 import type { ApiMessageBodyText } from './apiMessageBodyText';
-import type { CalendarInvitation } from './calendarInvitation';
 import type { ApiMessageFrom } from './apiMessageFrom';
 import type { ApiMessageGlobalId } from './apiMessageGlobalId';
 import type { ApiMessageInternalDateTs } from './apiMessageInternalDateTs';
@@ -28,6 +28,7 @@ import type { ApiMessageSentAt } from './apiMessageSentAt';
 import type { ApiMessageSizeEstimate } from './apiMessageSizeEstimate';
 import type { ApiMessageSnippet } from './apiMessageSnippet';
 import type { ApiMessageSubject } from './apiMessageSubject';
+import type { CalendarInvitation } from './calendarInvitation';
 
 /**
  * API representation of a fully assembled email message.

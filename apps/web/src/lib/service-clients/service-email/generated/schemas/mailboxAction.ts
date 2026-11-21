@@ -5,11 +5,11 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { MailboxActionOneOf } from './mailboxActionOneOf';
-import type { MailboxActionOneOfThree } from './mailboxActionOneOfThree';
 import type { MailboxActionOneOfFive } from './mailboxActionOneOfFive';
-import type { MailboxActionOneOfSeven } from './mailboxActionOneOfSeven';
 import type { MailboxActionOneOfNine } from './mailboxActionOneOfNine';
 import type { MailboxActionOneOfOneone } from './mailboxActionOneOfOneone';
+import type { MailboxActionOneOfSeven } from './mailboxActionOneOfSeven';
+import type { MailboxActionOneOfThree } from './mailboxActionOneOfThree';
 
 /**
  * Desired organization state. Categories never stand in for folders or flags.

@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CalendarEvent } from './calendarEvent';
-import type { InvitationResolutionOneOfOnethreeKind } from './invitationResolutionOneOfOnethreeKind';
 import type { CalendarOccurrence } from './calendarOccurrence';
+import type { InvitationResolutionOneOfOnethreeKind } from './invitationResolutionOneOfOnethreeKind';
 
 /**
  * Current authorized event and explicit capabilities.

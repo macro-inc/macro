@@ -4,8 +4,9 @@
  * email_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ApiThreadPreviewCursor } from './apiThreadPreviewCursor';
+
 import type { ApiPaginatedThreadCursorNextCursor } from './apiPaginatedThreadCursorNextCursor';
+import type { ApiThreadPreviewCursor } from './apiThreadPreviewCursor';
 
 export interface ApiPaginatedThreadCursor {
   items: ApiThreadPreviewCursor[];

@@ -5,10 +5,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AccessLevel } from './accessLevel';
+import type { ApiMessage } from './apiMessage';
 import type { ApiThreadLatestInboundMessageTs } from './apiThreadLatestInboundMessageTs';
 import type { ApiThreadLatestNonSpamMessageTs } from './apiThreadLatestNonSpamMessageTs';
 import type { ApiThreadLatestOutboundMessageTs } from './apiThreadLatestOutboundMessageTs';
-import type { ApiMessage } from './apiMessage';
 import type { ApiThreadProjectId } from './apiThreadProjectId';
 import type { ApiThreadProviderId } from './apiThreadProviderId';
 

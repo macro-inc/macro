@@ -287,7 +287,6 @@ it('keeps the same connection action and label while checking, failing and retry
   retry.resolve(ok({ linkId: 'connected-inbox' }));
 });
 
-
 it('keeps reconnect secrets empty and forgets an unselected outgoing password', async () => {
   render(() => (
     <ImapConnectDialog
@@ -310,6 +309,9 @@ it('keeps reconnect secrets empty and forgets an unselected outgoing password', 
   fireEvent.input(outgoing, { target: { value: 'temporary-test-secret' } });
   fireEvent.click(separate);
   fireEvent.click(separate);
-  expect(screen.getByLabelText('Outgoing password')).toHaveProperty('value', '');
+  expect(screen.getByLabelText('Outgoing password')).toHaveProperty(
+    'value',
+    ''
+  );
   expect(mail.connect).not.toHaveBeenCalled();
 });

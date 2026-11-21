@@ -4,8 +4,9 @@
  * email_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ForwardCalendarEventRequestBodyText } from './forwardCalendarEventRequestBodyText';
+
 import type { ForwardCalendarEventRecipient } from './forwardCalendarEventRecipient';
+import type { ForwardCalendarEventRequestBodyText } from './forwardCalendarEventRequestBodyText';
 
 /**
  * Who a forwarded invitation goes to, and what its email says.

@@ -4,9 +4,10 @@
  * email_service
  * OpenAPI spec version: 0.1.0
  */
+
+import type { AttendeeResponseStatus } from './attendeeResponseStatus';
 import type { CalendarAttendeeComment } from './calendarAttendeeComment';
 import type { CalendarAttendeeDisplayName } from './calendarAttendeeDisplayName';
-import type { AttendeeResponseStatus } from './attendeeResponseStatus';
 
 /**
  * An attendee on a calendar event.

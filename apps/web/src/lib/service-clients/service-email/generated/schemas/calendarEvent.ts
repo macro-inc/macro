@@ -11,18 +11,18 @@ import type { CalendarEventConferenceUrl } from './calendarEventConferenceUrl';
 import type { CalendarEventCreatorEmail } from './calendarEventCreatorEmail';
 import type { CalendarEventCreatorName } from './calendarEventCreatorName';
 import type { CalendarEventDescription } from './calendarEventDescription';
-import type { EventType } from './eventType';
-import type { GuestPolicy } from './guestPolicy';
 import type { CalendarEventLocation } from './calendarEventLocation';
 import type { CalendarEventOrganizerEmail } from './calendarEventOrganizerEmail';
 import type { CalendarEventOrganizerName } from './calendarEventOrganizerName';
-import type { EventReminders } from './eventReminders';
 import type { CalendarEventSourceContent } from './calendarEventSourceContent';
+import type { EventReminders } from './eventReminders';
 import type { EventStatus } from './eventStatus';
 import type { EventTime } from './eventTime';
 import type { EventTransparency } from './eventTransparency';
-import type { ViewerCapabilities } from './viewerCapabilities';
+import type { EventType } from './eventType';
 import type { EventVisibility } from './eventVisibility';
+import type { GuestPolicy } from './guestPolicy';
+import type { ViewerCapabilities } from './viewerCapabilities';
 
 /**
  * A stable, first-class Macro calendar event entity.

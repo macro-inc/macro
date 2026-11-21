@@ -5,10 +5,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AccountMailSettingsFeatures } from './accountMailSettingsFeatures';
-import type { FolderSetting } from './folderSetting';
 import type { AccountMailSettingsHelpUrl } from './accountMailSettingsHelpUrl';
-import type { Endpoint } from './endpoint';
 import type { AccountMailSettingsProvider } from './accountMailSettingsProvider';
+import type { Endpoint } from './endpoint';
+import type { FolderSetting } from './folderSetting';
 
 /**
  * Sanitized owner-only mailbox configuration. Endpoint has no password field.
