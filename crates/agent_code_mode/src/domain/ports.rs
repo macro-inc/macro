@@ -50,6 +50,9 @@ pub trait ExecutionCredentials: Send + Sync + 'static {
         identity: &ExecutionIdentity,
         acting_user: &MacroUserIdStr<'static>,
     ) -> Result<IssuedRun, CodeModeError>;
+    /// Revoke a job's credential, named by its correlation, once its
+    /// program stopped: a copy of the token makes no request after that.
+    async fn revoke_job(&self, correlation: macro_uuid::Uuid) -> Result<(), CodeModeError>;
     /// Whether this execution may run past its turn as a background job.
     /// A job never asks for an approval after its turn, so implementations
     /// allow it only where launching needs none.

@@ -32,7 +32,11 @@ impl CorrelationRepository for Repository {
             session_id: Uuid::from_u128(2),
             agent_id: Uuid::from_u128(3),
             scope: (id == Uuid::from_u128(6)).then_some(crate::scope::SessionScope::Generation),
+            revoked: false,
         }))
+    }
+    async fn revoke(&self, _: Uuid) -> Result<(), CorrelationError> {
+        unreachable!()
     }
 }
 fn token(correlation: Option<Uuid>, agent: Option<Uuid>) -> String {

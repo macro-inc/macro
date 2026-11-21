@@ -31,6 +31,7 @@ fn job(deadline: chrono::DateTime<chrono::Utc>) -> ExecutionRecord {
             started_at: deadline - chrono::TimeDelta::minutes(10),
             deadline,
             correlation: None,
+            never_ran: false,
         }),
     }
 }

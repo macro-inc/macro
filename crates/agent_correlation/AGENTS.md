@@ -15,7 +15,11 @@ code, not in its prompt. The harness also signs the scope into the credential
 
 ## Start here
 
-- `src/domain.rs`: repository contract and agent-binding validation.
+- `src/domain.rs`: repository contract and agent-binding validation. A
+  correlation can be revoked (`revoke`, `agent_correlations.revoked_at`;
+  the harness revokes a background job's when its program stops):
+  `validate` then refuses it (`Revoked`, 401) while `find` still attributes
+  past work.
 - `src/scope.rs`: session scopes and the requests each allows. `generation`:
   reads by method, its own writes, and `POST_READS`; `no_send` (a background
   run that sends nothing): anything but `SENDS`, the requests that reach
@@ -23,7 +27,12 @@ code, not in its prompt. The harness also signs the scope into the credential
   the person's full access (agent sessions, session control, tool
   approvals, review decisions, running or rewriting
   chat tool calls, and agents, bots, the computers they run on and their
-  credentials); `dry_run` (a routine step's dry run, signed with no
+  credentials, imports and app connections, sync permission tokens, and the
+  account, team, billing and password-vault secrets). Every write in the
+  OpenAPI specs under `packages/sdk/specs` must be refused, a `POST_READS`
+  entry, or reviewed into `src/scope/no_send_writes.txt`
+  (`the_no_send_scope_classifies_every_write_in_the_specs`): a new route
+  fails it until classified; `dry_run` (a routine step's dry run, signed with no
   correlation): reads by method and `POST_READS`, nothing else, held to the
   SDK catalog by the harness test `the_dry_run_scope_is_every_sdk_read_and_no_write`.
   The harness tests

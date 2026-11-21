@@ -701,7 +701,7 @@ impl CodeModeService {
     /// Settle every job a stopped replica left running past its deadline.
     pub async fn sweep_jobs(&self) -> Result<usize, CodeModeError> {
         match &self.jobs {
-            Some(jobs) => jobs.sweep().await,
+            Some(jobs) => jobs.sweep(self.inner.credentials.as_ref()).await,
             None => Ok(0),
         }
     }

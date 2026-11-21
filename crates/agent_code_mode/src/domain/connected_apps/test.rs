@@ -370,6 +370,7 @@ async fn a_running_job_reaches_apps_past_its_turn_as_its_owner() {
             started_at: now,
             deadline: now + chrono::TimeDelta::minutes(10),
             correlation: Some(job_credential),
+            never_ran: false,
         }),
     };
     let apps = Arc::new(Apps::default());
@@ -449,6 +450,7 @@ async fn another_owner_credential_cannot_use_a_running_jobs_id() {
             started_at: now,
             deadline: now + chrono::TimeDelta::minutes(10),
             correlation,
+            never_ran: false,
         }),
     };
     let access = EntityAccessReceipt::<EditAccessLevel>::dangerously_assert_authenticated_user(

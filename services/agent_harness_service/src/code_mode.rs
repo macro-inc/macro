@@ -329,6 +329,16 @@ impl ExecutionCredentials for RunCredentials {
         self.mint(identity, acting_user.clone()).await
     }
 
+    async fn revoke_job(&self, correlation: macro_uuid::Uuid) -> Result<(), CodeModeError> {
+        self.correlations
+            .revoke(correlation)
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, "could not revoke a job credential");
+                CodeModeError::Unavailable
+            })
+    }
+
     async fn may_detach(
         &self,
         identity: &ExecutionIdentity,

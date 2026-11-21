@@ -104,6 +104,9 @@ impl ExecutionCredentials for Credentials {
     ) -> Result<IssuedRun, CodeModeError> {
         Err(CodeModeError::Unavailable)
     }
+    async fn revoke_job(&self, _: macro_uuid::Uuid) -> Result<(), CodeModeError> {
+        Ok(())
+    }
 }
 /// PNG pixels named after their file, owned by the session owner; the file
 /// `missing` cannot be read.

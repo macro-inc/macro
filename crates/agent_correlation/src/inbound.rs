@@ -235,6 +235,7 @@ impl IntoResponse for CorrelationRejection {
                 StatusCode::BAD_REQUEST
             }
             CorrelationError::NotFound => StatusCode::NOT_FOUND,
+            CorrelationError::Revoked => StatusCode::UNAUTHORIZED,
             CorrelationError::AgentMismatch | CorrelationError::OutOfScope => StatusCode::FORBIDDEN,
             CorrelationError::Unavailable(error) => {
                 tracing::error!(?error, "agent correlation lookup failed");

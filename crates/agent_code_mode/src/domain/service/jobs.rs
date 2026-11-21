@@ -193,6 +193,7 @@ impl Jobs {
                 started_at: now,
                 deadline,
                 correlation: None,
+                never_ran: false,
             }),
         };
         let store = &self.runtime.store;
@@ -379,7 +380,10 @@ impl Jobs {
 
     /// Settle jobs a dead replica left running.
     #[tracing::instrument(name = "agent.job.sweep", skip_all, fields(settled = tracing::field::Empty), err)]
-    pub(super) async fn sweep(&self) -> Result<usize, CodeModeError> {
+    pub(super) async fn sweep(
+        &self,
+        credentials: &dyn ExecutionCredentials,
+    ) -> Result<usize, CodeModeError> {
         let grace =
             chrono::TimeDelta::from_std(SWEEP_GRACE).map_err(|_| CodeModeError::Unavailable)?;
         let overdue = self
@@ -389,6 +393,7 @@ impl Jobs {
             .await?;
         let mut settled = 0;
         for (session, mut record) in overdue {
+            revoke(credentials, &record).await;
             super::activity::finish(&mut record.activity);
             record.status = ExecutionStatus::Interrupted;
             record.error = Some(INTERRUPTED.into());
@@ -490,11 +495,15 @@ impl JobRun {
                 ran
             }
         };
+        // The program has stopped: its credential stops too, before the
+        // settle is written.
+        revoke(self.credentials.as_ref(), &self.record).await;
         if stop == Stop::Gone {
             span.record("outcome", "gone");
             return;
         }
         super::activity::finish(&mut self.record.activity);
+        let never_ran = matches!(ran, Progress::NotStarted | Progress::Refused(_));
         let (status, result, error) = match (stop, ran) {
             (_, Progress::Refused(reason)) => (ExecutionStatus::Failed, None, Some(reason.into())),
             // A job that never started says so: nothing it would have
@@ -535,6 +544,9 @@ impl JobRun {
             }
             (_, Progress::Finished(outcome)) => settle(outcome, Reviews::Allowed),
         };
+        if let Some(job) = &mut self.record.job {
+            job.never_ran = never_ran;
+        }
         self.record.status = status;
         self.record.result = result;
         self.record.error = error;
@@ -849,6 +861,17 @@ fn truncate_error(error: &str) -> String {
         &error[..end],
         MAX_SETTLED_ERROR_BYTES / 1024
     )
+}
+
+/// Revoke the credential a job started with, if it started. Best effort:
+/// it expires on its own at the deadline.
+async fn revoke(credentials: &dyn ExecutionCredentials, record: &ExecutionRecord) {
+    let Some(correlation) = record.job.as_ref().and_then(|job| job.correlation) else {
+        return;
+    };
+    if let Err(error) = credentials.revoke_job(correlation).await {
+        tracing::warn!(?error, "could not revoke a background job's credential");
+    }
 }
 
 /// Log the job's state in its session, best effort: views also poll.

@@ -367,7 +367,8 @@ Background code jobs (`agent_code_mode`'s `JobRuntime`) run on their own
 `long_running`: the only executor allowed past five minutes).
 `RunCredentials` approves a job at launch (`approve_job`) and mints its
 no-send credential when it gets a slot (`mint_job`), returning the
-correlation the job is bound to.
+correlation the job is bound to, and revokes that correlation when the job
+stops (`revoke_job`).
 `code_mode/jobs.rs` holds the detach rule (`DetachPolicy`: the owner prompted
 the launching turn, the session is not hidden background work, and the owner
 has `enable-background-code-jobs`), the session facts a job watches, and the

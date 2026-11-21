@@ -282,6 +282,7 @@ struct Credentials {
     refuse_mint: bool,
     approvals: std::sync::atomic::AtomicUsize,
     lifetimes: Mutex<Vec<RunLifetime>>,
+    revoked: Mutex<Vec<macro_uuid::Uuid>>,
 }
 
 impl Credentials {
@@ -331,6 +332,10 @@ impl ExecutionCredentials for Credentials {
             acting_user: acting_user.clone(),
             correlation: Some(JOB_CORRELATION),
         })
+    }
+    async fn revoke_job(&self, correlation: macro_uuid::Uuid) -> Result<(), CodeModeError> {
+        self.revoked.lock().unwrap().push(correlation);
+        Ok(())
     }
     async fn may_detach(&self, _: &ExecutionIdentity) -> Result<Detach, CodeModeError> {
         Ok(match &self.refuse {
@@ -556,6 +561,12 @@ async fn a_background_execution_returns_at_once_and_settles_into_one_waking_even
         Some(JOB_CORRELATION),
         "the job is bound to its own credential"
     );
+    assert!(!job.never_ran);
+    assert_eq!(
+        *harness.credentials.revoked.lock().unwrap(),
+        [JOB_CORRELATION],
+        "its credential is revoked once its program stops"
+    );
 }
 
 /// Where a job may not run, the call runs in the foreground and says why.
@@ -751,7 +762,8 @@ async fn the_sweep_settles_a_dead_replicas_job_once() {
                     title: "Scanning inbox".into(),
                     started_at: long_ago,
                     deadline: long_ago + chrono::TimeDelta::minutes(10),
-                    correlation: None,
+                    correlation: Some(JOB_CORRELATION),
+                    never_ran: false,
                 }),
             },
             false,
@@ -764,6 +776,11 @@ async fn the_sweep_settles_a_dead_replicas_job_once() {
     assert_eq!(settlements.len(), 1);
     assert_eq!(settlements[0].status, JobStatus::Interrupted);
     assert_eq!(harness.rows.statuses(), [JobStatus::Interrupted]);
+    // The dead replica's job credential stops working too.
+    assert_eq!(
+        *harness.credentials.revoked.lock().unwrap(),
+        [JOB_CORRELATION]
+    );
 }
 
 #[tokio::test]
@@ -913,6 +930,8 @@ async fn a_job_that_never_got_a_slot_says_it_did_not_start() {
     assert_eq!(settlement.status, JobStatus::TimedOut);
     assert_eq!(settlement.error.as_deref(), Some(NEVER_STARTED));
     assert_eq!(harness.credentials.minted(), 0);
+    // Its card says it never ran.
+    assert!(harness.rows.record(id).job.unwrap().never_ran);
 }
 
 #[tokio::test]
@@ -931,6 +950,7 @@ async fn a_job_cancelled_while_queued_says_nothing_ran() {
     assert_eq!(settlement.status, JobStatus::Cancelled);
     assert_eq!(settlement.error.as_deref(), Some(CANCELLED_BEFORE_START));
     assert_eq!(harness.credentials.minted(), 0);
+    assert!(harness.credentials.revoked.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

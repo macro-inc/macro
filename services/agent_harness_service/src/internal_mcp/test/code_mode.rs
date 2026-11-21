@@ -71,6 +71,12 @@ impl agent_code_mode::domain::ExecutionCredentials for Credentials {
     ) -> Result<agent_code_mode::domain::IssuedRun, agent_code_mode::domain::CodeModeError> {
         Err(agent_code_mode::domain::CodeModeError::Unavailable)
     }
+    async fn revoke_job(
+        &self,
+        _: macro_uuid::Uuid,
+    ) -> Result<(), agent_code_mode::domain::CodeModeError> {
+        Ok(())
+    }
 }
 
 #[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]

@@ -29,7 +29,7 @@ impl CorrelationRepository for PgCorrelationRepository {
     #[tracing::instrument(skip(self), err)]
     async fn find(&self, id: Uuid) -> Result<Option<Correlation>, CorrelationError> {
         let row = sqlx::query!(
-            "SELECT c.agent_session_id AS session_id, s.bot_id AS agent_id, c.scope FROM agent_correlations c JOIN agent_session s ON s.id = c.agent_session_id WHERE c.id = $1",
+            r#"SELECT c.agent_session_id AS session_id, s.bot_id AS agent_id, c.scope, c.revoked_at IS NOT NULL AS "revoked!" FROM agent_correlations c JOIN agent_session s ON s.id = c.agent_session_id WHERE c.id = $1"#,
             id,
         ).fetch_optional(&self.0).await
             .map_err(|error| CorrelationError::Unavailable(rootcause::report!(error).into_dynamic()))?;
@@ -48,9 +48,22 @@ impl CorrelationRepository for PgCorrelationRepository {
                 session_id: row.session_id,
                 agent_id: row.agent_id,
                 scope,
+                revoked: row.revoked,
             })
         })
         .transpose()
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn revoke(&self, id: Uuid) -> Result<(), CorrelationError> {
+        sqlx::query!(
+            "UPDATE agent_correlations SET revoked_at = now() WHERE id = $1 AND revoked_at IS NULL",
+            id,
+        )
+        .execute(&self.0)
+        .await
+        .map_err(|error| CorrelationError::Unavailable(rootcause::report!(error).into_dynamic()))?;
+        Ok(())
     }
 }
 
@@ -79,8 +92,14 @@ mod tests {
                 session_id: session,
                 agent_id: agent,
                 scope: None,
+                revoked: false,
             })
         );
+        // A revoked credential still attributes, and says it is revoked.
+        repo.revoke(first).await.unwrap();
+        repo.revoke(first).await.unwrap();
+        assert!(repo.find(first).await.unwrap().unwrap().revoked);
+        assert!(!repo.find(second).await.unwrap().unwrap().revoked);
         assert_eq!(
             repo.find(second).await.unwrap().unwrap().scope,
             Some(SessionScope::Generation)

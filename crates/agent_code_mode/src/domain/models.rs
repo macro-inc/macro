@@ -97,6 +97,9 @@ pub struct JobInfo {
     #[schemars(skip)]
     #[schema(ignore)]
     pub correlation: Option<macro_uuid::Uuid>,
+    /// It settled before its program ever started: nothing ran.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub never_ran: bool,
 }
 
 /// The recorded outcome of a program.
