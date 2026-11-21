@@ -4,13 +4,18 @@
 
 import type { InputAttachmentData } from '@channel/Input/types';
 import { createRoot, createSignal } from 'solid-js';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   agentSessionAttachmentsKey,
   agentSessionDraftKey,
   createSessionAttachmentTracker,
   createSessionComposerDraft,
 } from './session-composer-draft';
+
+const toastFailure = vi.hoisted(() => vi.fn());
+vi.mock('@core/component/Toast/Toast', () => ({
+  toast: { failure: toastFailure },
+}));
 
 const note: InputAttachmentData = {
   id: 'file-1',
@@ -291,5 +296,38 @@ describe('session composer drafts', () => {
           .map((file) => file.id)
       ).toEqual(['file-1']);
     });
+  });
+
+  it('gives back only the refused files that still fit under the cap', () => {
+    const file = (n: number): InputAttachmentData => ({
+      id: `file-${n}`,
+      name: `file-${n}.txt`,
+      kind: 'document',
+    });
+    toastFailure.mockClear();
+    let attachments: InputAttachmentData[] = [];
+    withRoot(() => {
+      const tracker = createSessionAttachmentTracker(() => 'session-a');
+      for (let n = 1; n <= 7; n++) tracker.addAttachment(file(n));
+      tracker.restore('session-a', [file(11), file(12), file(13), file(14)]);
+      attachments = tracker.attachments();
+    });
+
+    expect(attachments.map((attachment) => attachment.id)).toEqual([
+      'file-11',
+      'file-12',
+      'file-13',
+      'file-1',
+      'file-2',
+      'file-3',
+      'file-4',
+      'file-5',
+      'file-6',
+      'file-7',
+    ]);
+    expect(toastFailure).toHaveBeenCalledTimes(1);
+    expect(toastFailure).toHaveBeenCalledWith(
+      'Could not attach file-14.txt: attachment limit reached'
+    );
   });
 });

@@ -8,11 +8,15 @@
  * files already in the box.
  */
 
-import { createInputAttachmentTracker } from '@channel/Input/attachment-tracker';
+import {
+  createInputAttachmentTracker,
+  DEFAULT_MAX_ATTACHMENTS,
+} from '@channel/Input/attachment-tracker';
 import type {
   InputAttachmentData,
   InputAttachmentTracker,
 } from '@channel/Input/types';
+import { toast } from '@core/component/Toast/Toast';
 import { createPersistenceKey } from '@queries/persistence';
 import {
   type Accessor,
@@ -135,6 +139,11 @@ function prependMessage(message: string, current: string) {
     .join('\n\n');
 }
 
+/**
+ * A refused message's files back ahead of those attached since, as far as the
+ * draft's cap allows. Like a file attached to a full composer, one that no
+ * longer fits is turned away with the same notice.
+ */
 function addMissing(
   attachments: InputAttachmentData[],
   current: InputAttachmentData[]
@@ -142,7 +151,13 @@ function addMissing(
   const missing = attachments.filter(
     (attachment) => !current.some((kept) => kept.id === attachment.id)
   );
-  return missing.length > 0 ? [...missing, ...current] : undefined;
+  const room = Math.max(0, DEFAULT_MAX_ATTACHMENTS - current.length);
+  for (const attachment of missing.slice(room))
+    toast.failure(
+      `Could not attach ${attachment.name}: attachment limit reached`
+    );
+  const added = missing.slice(0, room);
+  return added.length > 0 ? [...added, ...current] : undefined;
 }
 
 /** Text waiting to be sent into this session. */
