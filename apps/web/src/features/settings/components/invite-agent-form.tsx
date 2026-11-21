@@ -28,6 +28,7 @@ import {
   teamAgentRequest,
 } from '../core/team-agent-draft';
 import { AgentInviteLayoutA } from './agent-invite-layout-a';
+import { TeammateCommand } from './teammate-command';
 
 /**
  * The radio name every computer choice shares, sizes to buy and the
@@ -419,7 +420,9 @@ export function InviteAgentForm(props: {
             </Match>
             <Match when={props.state.kind === 'host_failed' && host()}>
               {(picked) => (
-                <FailureNotice>
+                <FailureNotice
+                  below={<TeammateCommand command="macrod teammate logs" />}
+                >
                   {t('teammateHosts.hostFailed', {
                     name: trimmedName(),
                     host: picked().name,

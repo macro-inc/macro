@@ -87,21 +87,16 @@ export function InviteAgentPanel(props: {
       hosts={
         ownMachines()
           ? (choice) => (
-              <>
-                <p class="text-xs text-ink-muted">
-                  {t('teammateHosts.egressNote')}
-                </p>
-                <AgentHostChoices
-                  hosts={hosts.isSuccess ? hosts.data.hosts : undefined}
-                  failed={hosts.isError}
-                  onRetry={() =>
-                    fireAndForget(hosts.refetch(), 'team-agent.hosts')
-                  }
-                  selected={choice.selected()}
-                  onSelect={choice.onSelect}
-                  disabled={add.state().kind === 'adding'}
-                />
-              </>
+              <AgentHostChoices
+                hosts={hosts.isSuccess ? hosts.data.hosts : undefined}
+                failed={hosts.isError}
+                onRetry={() =>
+                  fireAndForget(hosts.refetch(), 'team-agent.hosts')
+                }
+                selected={choice.selected()}
+                onSelect={choice.onSelect}
+                disabled={add.state().kind === 'adding'}
+              />
             )
           : undefined
       }

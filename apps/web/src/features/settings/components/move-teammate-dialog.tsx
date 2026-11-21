@@ -103,6 +103,9 @@ function MoveTeammate(props: {
               selected={target()?.harnessId}
               onSelect={setChosen}
               disabled={move.isPending}
+              empty={t('teammateHosts.moveNoOtherHost', {
+                name: props.agent.name,
+              })}
             />
           </div>
         </Panel.Body>

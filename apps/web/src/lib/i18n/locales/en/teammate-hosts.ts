@@ -4,8 +4,6 @@ export default {
   ownComputer: 'My own computer',
   ownComputerHint:
     'It runs in a container on one of your computers, with macrod and Docker or Podman. No computer is bought.',
-  egressNote:
-    "An agent on your computer reaches the internet, but not your computer, the other machines on its network, or a cloud VM's metadata service.",
   loadingHosts: 'Looking for your computers…',
   hostsFailed: "Couldn't list your computers.",
   noHosts:
@@ -47,10 +45,13 @@ export default {
   moveFailed: "Couldn't move {{name}}. Try again.",
   runsOn: 'Runs on {{host}}',
   hostFailed:
-    "{{name}} didn't start on {{host}}. Run `macrod teammate logs` there to see why; nothing was bought.",
+    "{{name}} didn't start on {{host}}, and nothing was bought. To see why, run this there:",
   removeBodyOwn:
     "It stops on {{host}}, and its files there are deleted. Its memory stays in its repository. This can't be undone.",
-  ownClaudeHint:
-    'To use your Claude plan, run `macrod teammate sign-in` on {{host}}.',
+  ownClaudeHint: 'To use your Claude plan, run this on {{host}}:',
+  copyCommand: 'Copy command',
+  copyCommandFailed: "Couldn't copy the command.",
+  moveNoOtherHost:
+    'None of your other computers can take {{name}}. Pair another one in Settings → Machines.',
   tryAgain: 'Try again',
 };

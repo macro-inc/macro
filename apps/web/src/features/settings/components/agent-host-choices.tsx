@@ -10,6 +10,7 @@ import {
 } from '../core/teammate-host';
 import { ChoiceRow } from '../primitives';
 import { AGENT_COMPUTER_CHOICE } from './invite-agent-form';
+import { TeammateHostSkeleton } from './teammate-host-picker';
 
 /**
  * The inviter's own machines as rows of the Invite form's computer choice:
@@ -29,14 +30,7 @@ export function AgentHostChoices(props: {
     <Show
       when={props.hosts}
       fallback={
-        <Show
-          when={props.failed}
-          fallback={
-            <p role="status" class="text-sm text-ink-muted">
-              {t('teammateHosts.loadingHosts')}
-            </p>
-          }
-        >
+        <Show when={props.failed} fallback={<TeammateHostSkeleton />}>
           <div
             role="alert"
             class="flex flex-wrap items-center gap-2 text-sm text-ink-muted"
@@ -70,9 +64,7 @@ export function AgentHostChoices(props: {
                   value={`host:${host.harnessId}`}
                   checked={props.selected === host.harnessId}
                   title={host.name}
-                  description={
-                    unavailable() ?? hostEngineLabel(host) ?? host.name
-                  }
+                  description={unavailable() ?? hostEngineLabel(host)}
                   disabled={props.disabled || !!unavailable()}
                   onChange={() =>
                     props.onSelect({

@@ -1,3 +1,4 @@
+import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { t } from '@app/lib/i18n';
 import WarningCircleIcon from '@icon/system/regular/warning-circle.svg';
 import type { TeammateHost } from '@service-auth/team-agents';
@@ -22,19 +23,14 @@ export function TeammateHostPicker(props: {
   selected: string | undefined;
   onSelect: (harnessId: string) => void;
   disabled?: boolean;
+  /** What an empty list says; by default, that no computer can host yet. */
+  empty?: string;
 }) {
   return (
     <Show
       when={props.hosts}
       fallback={
-        <Show
-          when={props.failed}
-          fallback={
-            <p role="status" class="text-sm text-ink-muted">
-              {t('teammateHosts.loadingHosts')}
-            </p>
-          }
-        >
+        <Show when={props.failed} fallback={<TeammateHostSkeleton />}>
           <div
             role="alert"
             class="flex flex-wrap items-center gap-2 text-sm text-ink-muted"
@@ -58,7 +54,9 @@ export function TeammateHostPicker(props: {
           <For
             each={sortedHosts(hosts())}
             fallback={
-              <p class="text-sm text-ink-muted">{t('teammateHosts.noHosts')}</p>
+              <p class="text-sm text-ink-muted">
+                {props.empty ?? t('teammateHosts.noHosts')}
+              </p>
             }
           >
             {(host) => {
@@ -69,9 +67,7 @@ export function TeammateHostPicker(props: {
                   value={host.harnessId}
                   checked={props.selected === host.harnessId}
                   title={host.name}
-                  description={
-                    unavailable() ?? hostEngineLabel(host) ?? host.name
-                  }
+                  description={unavailable() ?? hostEngineLabel(host)}
                   disabled={props.disabled || !!unavailable()}
                   onChange={() => props.onSelect(host.harnessId)}
                   aside={
@@ -94,6 +90,28 @@ export function TeammateHostPicker(props: {
   );
 }
 
+/** Two machine rows, shimmering while the list loads. */
+export function TeammateHostSkeleton() {
+  return (
+    <ListSkeleton.Root
+      label={t('teammateHosts.loadingHosts')}
+      class="flex min-w-0 flex-col gap-2"
+    >
+      <For each={[0, 1]}>
+        {() => (
+          <div class="flex items-start gap-3 rounded-lg border border-edge-muted p-3">
+            <ListSkeleton.Bar class="mt-0.5 size-4 shrink-0" />
+            <div class="flex min-w-0 flex-1 flex-col gap-2 py-0.5">
+              <ListSkeleton.Bar class="h-3 w-24" />
+              <ListSkeleton.Bar class="h-2.5 w-32 max-w-full" />
+            </div>
+          </div>
+        )}
+      </For>
+    </ListSkeleton.Root>
+  );
+}
+
 /**
  * What hosting on one's own machine means, shown before Invite: whoever
  * administers the machine can act as the agent, and the agent's network
@@ -106,9 +124,9 @@ export function TeammateTrustWarning(props: {
   return (
     <div
       role="note"
-      class="flex items-start gap-3 rounded-lg border border-edge-muted p-3"
+      class="flex items-start gap-3 rounded-lg border border-warning/40 bg-warning-bg p-3"
     >
-      <WarningCircleIcon class="mt-0.5 size-4 shrink-0 text-ink-muted" />
+      <WarningCircleIcon class="mt-0.5 size-4 shrink-0 text-warning" />
       <div class="flex min-w-0 flex-col gap-1">
         <p class="text-sm font-medium text-ink">
           {t('teammateHosts.trustTitle', {

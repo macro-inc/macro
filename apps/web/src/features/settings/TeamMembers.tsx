@@ -63,6 +63,7 @@ import { MoveTeammateDialog } from './components/move-teammate-dialog';
 import { TeamAgentRow } from './components/team-agent-row';
 import { TeamInviteRow } from './components/team-invite-row';
 import { TeamMemberRow } from './components/team-member-row';
+import { TeammateCommand } from './components/teammate-command';
 import { TeammateRunsOn } from './components/teammate-runs-on';
 import { teamAgentComputer, teamAgentSetupStep } from './core/team-agent-setup';
 import { ownMachineRemoveBody } from './core/teammate-host';
@@ -619,11 +620,12 @@ export function TeamMembers(props: { team: TeamSummary }) {
                             fallback={<TeamAgentClaude agent={agent} />}
                           >
                             {(host) => (
-                              <p class="text-xs text-ink-muted">
+                              <div class="flex flex-wrap items-center gap-x-1 text-xs text-ink-muted">
                                 {t('teammateHosts.ownClaudeHint', {
                                   host: host(),
                                 })}
-                              </p>
+                                <TeammateCommand command="macrod teammate sign-in" />
+                              </div>
                             )}
                           </Show>
                         </Show>
