@@ -7,7 +7,7 @@
 //! - [`supervisor`]: what the supervisor in macrod does after each exit.
 //! - [`replacement`]: how the container backend swaps an image, and rolls
 //!   back to the previous one.
-//! - [`runner`]: the effects of a boot, behind the [`runner::Git`],
+//! - [`runner`] (Unix only): the effects of a boot, behind the [`runner::Git`],
 //!   [`runner::Fs`] and [`runner::Runtime`] ports.
 //!
 //! [`exit`] holds the one exit-code table both sides read.
@@ -16,5 +16,6 @@
 pub mod boot;
 pub mod exit;
 pub mod replacement;
+#[cfg(unix)]
 pub mod runner;
 pub mod supervisor;

@@ -124,6 +124,15 @@ pub async fn bridge(
         .map_err(|_| BridgeError::Announce(ConnectionError::Closed))?;
     let mut teammates = teammates
         .map(|hosting| open_teammate_link(hosting, to_service.as_ref().expect("just set")));
+    // Teammates are hosted on Unix only; elsewhere the service is told so,
+    // and the Invite form shows the machine with that reason.
+    #[cfg(not(unix))]
+    let _ = to_service
+        .as_ref()
+        .expect("just set")
+        .send(ToServerMessage::TeammateHost {
+            report: unsupported_host_report(),
+        });
 
     let line_turns = turns.clone();
     // Observe protocol traffic without logging credentials in session-start env.
@@ -427,6 +436,29 @@ fn open_teammate_link(
     _to_service: &tokio::sync::mpsc::UnboundedSender<ToServerMessage>,
 ) -> TeammateLink {
     match *teammates {}
+}
+
+/// What a machine that can't host teammates reports.
+#[cfg(not(unix))]
+fn unsupported_host_report() -> agent_runtime_protocol::domain::schema::v0::TeammateHostReport {
+    use agent_runtime_protocol::domain::schema::v0::{
+        HostArch, HostOs, TeammateHostProblem, TeammateHostReport,
+    };
+    TeammateHostReport {
+        engine: None,
+        engines: Vec::new(),
+        os: HostOs::Windows,
+        arch: match std::env::consts::ARCH {
+            "x86_64" => HostArch::Amd64,
+            "aarch64" => HostArch::Arm64,
+            _ => HostArch::Other,
+        },
+        cpus: 0,
+        memory_mib: 0,
+        disk_free_mib: None,
+        problem: Some(TeammateHostProblem::UnsupportedPlatform),
+        installs: Vec::new(),
+    }
 }
 
 /// The next teammate state change to send; never resolves without teammates.

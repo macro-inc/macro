@@ -13,7 +13,6 @@ chrono = { workspace = true }
 clap = { workspace = true, features = ["env"] }
 lazy-regex = { workspace = true }
 nom = { workspace = true }
-rustix = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 strum = { workspace = true }
@@ -23,6 +22,10 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 zeroize = { workspace = true }
+
+# The boot runner (process groups) is Unix only.
+[target.'cfg(unix)'.dependencies]
+rustix = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
