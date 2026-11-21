@@ -502,13 +502,17 @@ impl Engine for CliEngine {
         Ok(netfacts::resolved_addresses(&printed))
     }
 
-    async fn host_prefixes(&self) -> Result<Vec<ipnet::IpNet>, EngineError> {
+    async fn host_network(&self) -> Result<super::engine::HostNetwork, EngineError> {
         let output = run(Path::new("ip"), ["-j", "address", "show"], QUICK_COMMAND).await?;
         if !output.status.success() {
             return Err(failure(&output));
         }
-        let mut prefixes = netfacts::host_prefixes(&String::from_utf8_lossy(&output.stdout))
+        let prefixes = netfacts::host_prefixes(&String::from_utf8_lossy(&output.stdout))
             .map_err(|error| EngineError(format!("the host's addresses: {error}")))?;
+        let mut host = super::engine::HostNetwork {
+            prefixes,
+            to_the_internet: false,
+        };
         // And every route's destination but the defaults, v4 and v6.
         for family in [None, Some("-6")] {
             let mut arguments = vec!["-j"];
@@ -518,12 +522,12 @@ impl Engine for CliEngine {
             if !output.status.success() {
                 return Err(failure(&output));
             }
-            prefixes.extend(
-                netfacts::route_destinations(&String::from_utf8_lossy(&output.stdout))
-                    .map_err(|error| EngineError(format!("the host's routes: {error}")))?,
-            );
+            let routes = netfacts::routes(&String::from_utf8_lossy(&output.stdout))
+                .map_err(|error| EngineError(format!("the host's routes: {error}")))?;
+            host.prefixes.extend(routes.destinations);
+            host.to_the_internet |= routes.to_the_internet;
         }
-        Ok(prefixes)
+        Ok(host)
     }
 
     async fn guard(

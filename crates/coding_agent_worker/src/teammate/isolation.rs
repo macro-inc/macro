@@ -5,7 +5,7 @@
 //! the holder, the facts and the guard.
 
 use super::egress::{self, Allow, NetworkFacts};
-use super::engine::{Engine, EngineError, GuardError, HolderSpec, holder_name};
+use super::engine::{Engine, EngineError, GuardError, HolderSpec, HostNetwork, holder_name};
 use agent_runtime_protocol::domain::schema::v0::{IsolationProblem, TeammateInstallId};
 
 /// Why an install's policy isn't in place.
@@ -154,14 +154,20 @@ async fn facts<EngineImpl: Engine>(
         .network_facts(holder_id, &isolation.networks)
         .await
         .map_err(IsolationError::Engine)?;
-    // A host whose addresses can't be read can't be protected: refused.
-    facts.host_prefixes =
-        engine
-            .host_prefixes()
-            .await
-            .map_err(|error| IsolationError::Unavailable {
-                problem: IsolationProblem::HostUnreadable,
-                detail: error.to_string(),
-            })?;
+    facts.host_prefixes = host_network(engine).await?.prefixes;
     Ok(facts)
+}
+
+/// The host's addresses and routes. A host whose addresses can't be read
+/// can't be protected: refused.
+pub async fn host_network<EngineImpl: Engine>(
+    engine: &EngineImpl,
+) -> Result<HostNetwork, IsolationError> {
+    engine
+        .host_network()
+        .await
+        .map_err(|error| IsolationError::Unavailable {
+            problem: IsolationProblem::HostUnreadable,
+            detail: error.to_string(),
+        })
 }

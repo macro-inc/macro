@@ -255,6 +255,14 @@ macrod reads its table back (`nft -j list table inet macro_teammate`, normalized
 it with the one it rendered. If the rules are missing, changed or can't be
 applied, the start is refused with `failed:
 networkIsolationUnavailable`; it never falls back to an open network. A
+host with no default (or split default) route, v4 or v6, has only routes
+to networks the rules drop, so the agent would run and reach nothing,
+Macro included: its start is refused with `failed: egressBlocked`
+instead, and the same check runs before an adoption. Either refusal is
+tried again with the restart backoff five times (about 30 seconds), then
+the agent is parked: the service shows `failed` with the reason while
+macrod keeps trying, waits doubling from 1 to 10 minutes, and starts it
+on the first try that passes (an engine back up, a VPN reconnected). A
 dockerd, firewalld or host iptables reload doesn't touch rules inside a
 container's namespace. A holder that exits counts as a teammate crash, and recovery runs holder,
 guard, then teammate. A stop removes the holder and the network with the
@@ -653,6 +661,11 @@ What each problem says to the owner:
 | `belowFloor {cpus, memory, disk}` | *This computer needs at least 2 CPUs / 8 GB of memory / 20 GB free.* |
 | `innerSandboxUnavailable` | *This computer's security settings block the teammate's sandbox.* |
 | `networkIsolationUnavailable` | *Can't lock down an agent's network on this machine.* No engine on it could apply and verify the agent's network rules, so it gets no install rather than an open network. |
+
+An install's run failures `networkIsolationUnavailable` and `egressBlocked`
+(*this machine has no route to the internet*) are not final: macrod keeps
+retrying them, up to 10 minutes apart, and the agent's Members row shows
+the reason meanwhile.
 | (no report: older macrod) | *Update macrod to host teammates.* |
 | (offline) | *Offline.* |
 

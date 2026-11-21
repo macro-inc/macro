@@ -82,6 +82,8 @@ struct FakeState {
     /// What the guard does: load and read back as rendered, refuse, or
     /// print this table.
     guard: FakeGuard,
+    /// Whether the host has a default route.
+    to_the_internet: bool,
     /// A Podman installed beside Docker, and its guard.
     podman_guard: Option<FakeGuard>,
     /// The engine `select` made current.
@@ -133,6 +135,7 @@ impl FakeEngine {
                 volume_removal_fails: false,
                 holders: 0,
                 guard: FakeGuard::Loads,
+                to_the_internet: true,
                 podman_guard: None,
                 selected: ContainerEngineKind::Docker,
                 last_ruleset: None,
@@ -335,8 +338,11 @@ impl Engine for FakeEngine {
         })
     }
 
-    async fn host_prefixes(&self) -> Result<Vec<ipnet::IpNet>, EngineError> {
-        Ok(fake_facts().host_prefixes)
+    async fn host_network(&self) -> Result<super::engine::HostNetwork, EngineError> {
+        Ok(super::engine::HostNetwork {
+            prefixes: fake_facts().host_prefixes,
+            to_the_internet: self.state().to_the_internet,
+        })
     }
 
     async fn resolve(
@@ -2406,19 +2412,21 @@ async fn the_agent_starts_only_after_its_holder_and_a_checked_guard() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn a_guard_that_cant_load_the_policy_is_retried_then_given_up() {
+async fn a_guard_that_keeps_refusing_parks_the_agent_and_tries_again_for_good() {
+    use super::supervisor::{ISOLATION_ATTEMPTS, PARKED_MAX_BACKOFF};
+
     let mut fixture = fixture().await;
     fixture.engine.state().guard = FakeGuard::Refuses;
 
     fixture.teammates.handle(run_request(1));
 
-    // Never started open; tried again with backoff, then given up.
+    // Never started open; tried again with backoff, then reported failed.
     let mut states = next_states(&mut fixture.statuses, 2).await;
     assert_eq!(
         states,
         [TeammateRunState::Downloading, TeammateRunState::Starting]
     );
-    for attempt in 1..u32::from(super::supervisor::ISOLATION_ATTEMPTS) {
+    for attempt in 1..u32::from(ISOLATION_ATTEMPTS) {
         states = next_states(&mut fixture.statuses, 2).await;
         assert_eq!(
             states,
@@ -2434,7 +2442,64 @@ async fn a_guard_that_cant_load_the_policy_is_retried_then_given_up() {
             reason: TeammateRunFailure::NetworkIsolationUnavailable
         }]
     );
+
+    // Still tried, further apart but never more than the cap, with the
+    // failure standing.
+    let guards = |engine: &FakeEngine| {
+        engine
+            .calls()
+            .iter()
+            .filter(|call| matches!(call, Call::Guard { loaded: true, .. }))
+            .count()
+    };
+    for _ in 0..8 {
+        let before = guards(&fixture.engine);
+        tokio::time::sleep(PARKED_MAX_BACKOFF + Duration::from_secs(1)).await;
+        assert!(guards(&fixture.engine) > before);
+    }
+    assert!(fixture.statuses.try_recv().is_err());
     assert_eq!(fixture.engine.runs(), 0);
+
+    // The engine came back: the next try starts the agent.
+    fixture.engine.state().guard = FakeGuard::Loads;
+    assert_eq!(
+        next_states(&mut fixture.statuses, 1).await,
+        [TeammateRunState::Running]
+    );
+    assert_eq!(fixture.engine.runs(), 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_host_with_no_route_to_the_internet_reports_egress_blocked_and_waits_for_one() {
+    use super::supervisor::{ISOLATION_ATTEMPTS, PARKED_MAX_BACKOFF};
+
+    let mut fixture = fixture().await;
+    fixture.engine.state().to_the_internet = false;
+
+    fixture.teammates.handle(run_request(1));
+
+    let states = next_states(
+        &mut fixture.statuses,
+        2 * usize::from(ISOLATION_ATTEMPTS) + 1,
+    )
+    .await;
+    assert_eq!(
+        states.last(),
+        Some(&TeammateRunState::Failed {
+            reason: TeammateRunFailure::EgressBlocked
+        })
+    );
+    // Not started: it could reach nothing.
+    assert_eq!(fixture.engine.runs(), 0);
+
+    // The host's route came back (a VPN reconnected).
+    fixture.engine.state().to_the_internet = true;
+    tokio::time::sleep(PARKED_MAX_BACKOFF).await;
+    assert_eq!(
+        next_states(&mut fixture.statuses, 1).await,
+        [TeammateRunState::Running]
+    );
+    assert_eq!(fixture.engine.runs(), 1);
 }
 
 #[tokio::test(start_paused = true)]

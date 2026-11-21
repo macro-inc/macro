@@ -113,8 +113,10 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   mounts, ruleset on stdin, `--rm`), reads the table back with `nft -j` and
   checks it, and only then runs the agent with `--network container:<holder
   id>`. A refused or mismatched policy is `failed: networkIsolationUnavailable`,
-  never an open start; a holder exit is a crash; adoption reads the policy
-  back. `[teammates] engine` (`auto` probes, falling through to the next
+  never an open start; a host with no default route is `failed:
+  egressBlocked`; both are parked after five tries and retried up to 10
+  minutes apart (`supervisor.rs`); a holder exit is a crash; adoption reads
+  the policy back. `[teammates] engine` (`auto` probes, falling through to the next
   engine) and `[[teammates.allow]]` are in `config.rs`. `[macro]
   teammate_network` (local stack only) makes the holder join the stack's
   network and allows just the service host:port pairs in the agent's

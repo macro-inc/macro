@@ -274,9 +274,9 @@ pub trait Engine: Send + Sync + 'static {
         name: &str,
     ) -> impl Future<Output = Result<Vec<std::net::IpAddr>, EngineError>> + Send;
 
-    /// The addresses and on-link prefixes of the machine the engine's
-    /// containers run on, read now.
-    fn host_prefixes(&self) -> impl Future<Output = Result<Vec<IpNet>, EngineError>> + Send;
+    /// The addresses, on-link prefixes and routes of the machine the
+    /// engine's containers run on, read now.
+    fn host_network(&self) -> impl Future<Output = Result<HostNetwork, EngineError>> + Send;
 
     /// Run the guard, a one-shot in the holder's namespace that alone has
     /// `NET_ADMIN`: load `ruleset` with `nft -f -` (none: load nothing),
@@ -288,6 +288,17 @@ pub trait Engine: Send + Sync + 'static {
         image_id: &str,
         ruleset: Option<&str>,
     ) -> impl Future<Output = Result<String, GuardError>> + Send;
+}
+
+/// What the machine's addresses and routes say, for the ruleset.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct HostNetwork {
+    /// Its addresses and on-link prefixes, and every route's destination
+    /// but the defaults: all dropped.
+    pub prefixes: Vec<IpNet>,
+    /// Whether a default (or split default) route goes to the internet, v4
+    /// or v6. Without one the agent reaches nothing its policy leaves it.
+    pub to_the_internet: bool,
 }
 
 /// The holder of an install's network namespace.

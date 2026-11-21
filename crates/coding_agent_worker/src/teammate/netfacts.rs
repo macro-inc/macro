@@ -154,21 +154,38 @@ pub fn host_prefixes(json: &str) -> Result<Vec<IpNet>, String> {
     Ok(prefixes)
 }
 
-/// The destinations of every route but the defaults (and a VPN's split
-/// defaults), from `ip -j route
-/// show table all` (v4) or `ip -j -6 route show table all`: a VPN's or a
-/// static route's network can be an internal one on public addresses, and
-/// the host's own and broadcast routes are its addresses. A destination
-/// without a length is one address.
-pub fn route_destinations(json: &str) -> Result<Vec<IpNet>, String> {
-    let routes: Value = serde_json::from_str(json).map_err(|error| error.to_string())?;
-    let routes = routes.as_array().ok_or("not a list of routes")?;
-    let mut destinations = Vec::new();
-    for route in routes {
+/// A host's routing table, for the ruleset.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Routes {
+    /// The destinations of every route but the defaults (and a VPN's split
+    /// defaults): a VPN's or a static route's network can be an internal
+    /// one on public addresses, and the host's own and broadcast routes are
+    /// its addresses. A destination without a length is one address.
+    pub destinations: Vec<IpNet>,
+    /// Whether a default (or split default) route is there: without one in
+    /// either family the host's routes all go to networks the ruleset
+    /// drops, so the agent reaches nothing.
+    pub to_the_internet: bool,
+}
+
+/// The routes of `ip -j route show table all` (v4) or `ip -j -6 route show
+/// table all`.
+pub fn routes(json: &str) -> Result<Routes, String> {
+    let listed: Value = serde_json::from_str(json).map_err(|error| error.to_string())?;
+    let listed = listed.as_array().ok_or("not a list of routes")?;
+    let mut routes = Routes::default();
+    for route in listed {
         let Some(destination) = route.get("dst").and_then(Value::as_str) else {
             continue;
         };
+        // `unreachable`, `blackhole`, `prohibit` and `throw` routes send
+        // nothing anywhere; a plain one has no type, or `unicast`.
+        let forwards = route
+            .get("type")
+            .and_then(Value::as_str)
+            .is_none_or(|kind| kind == "unicast");
         if destination == "default" {
+            routes.to_the_internet |= forwards;
             continue;
         }
         let net = match destination.parse::<IpNet>() {
@@ -180,11 +197,12 @@ pub fn route_destinations(json: &str) -> Result<Vec<IpNet>, String> {
             ),
         };
         if covers_the_internet(&net) {
+            routes.to_the_internet |= forwards;
             continue;
         }
-        destinations.push(net.trunc());
+        routes.destinations.push(net.trunc());
     }
-    Ok(destinations)
+    Ok(routes)
 }
 
 /// A route a VPN uses in place of the default: OpenVPN's `def1` splits the

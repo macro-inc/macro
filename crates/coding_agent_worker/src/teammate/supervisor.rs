@@ -27,11 +27,19 @@ use super::engine::{
 use super::isolation::{self, Isolation, IsolationError};
 use super::store::Lifecycle;
 
-/// Starts in a row whose egress policy couldn't be put in place before the
-/// supervisor gives up (`failed: networkIsolationUnavailable`); each waits
-/// the policy's backoff, since a guard can fail for a passing reason (an
-/// engine restarting, the image being replaced).
+/// Starts in a row refused for the agent's network (its egress policy not
+/// in place, or no route out) before the agent is parked: reported
+/// `failed` with the reason, and still tried, [`PARKED_BACKOFF`] doubling
+/// up to [`PARKED_MAX_BACKOFF`] apart, since both can pass (an engine
+/// restarting, a VPN reconnecting). Each of the first starts waits the
+/// policy's backoff.
 pub const ISOLATION_ATTEMPTS: u8 = 5;
+
+/// The first wait between tries of a parked agent.
+pub const PARKED_BACKOFF: Duration = Duration::from_secs(60);
+
+/// The longest wait between tries of a parked agent.
+pub const PARKED_MAX_BACKOFF: Duration = Duration::from_secs(10 * 60);
 
 /// How long an agent whose network is gone (its holder ended, or its
 /// policy didn't check out) has to stop: it can't sync anyway.
@@ -194,18 +202,22 @@ pub async fn supervise<EngineImpl: Engine>(
 
     let mut holder: Option<String>;
     let mut isolation_failures: u8 = 0;
+    // The failure reported for a parked agent: tried again quietly.
+    let mut parked: Option<TeammateRunFailure> = None;
     let mut attempt = 0;
     let mut announce_restart = supervision.resume && exited_before && !adopted;
     let mut first_start = true;
     loop {
         match action {
             Action::Start { after, .. } => {
-                if announce_restart {
+                if announce_restart && parked.is_none() {
                     attempt += 1;
                     report(TeammateRunState::Restarting { attempt });
                 }
                 tokio::time::sleep(after).await;
-                report(TeammateRunState::Starting);
+                if parked.is_none() {
+                    report(TeammateRunState::Starting);
+                }
                 // The first start joins the request's trace; a restart is
                 // its own trace, linked to it.
                 let span = tracing::info_span!(
@@ -228,20 +240,17 @@ pub async fn supervise<EngineImpl: Engine>(
                 match started {
                     Ok((previous_exit, started_holder)) => {
                         isolation_failures = 0;
+                        parked = None;
                         span.record("previous_exit", tracing::field::display(previous_exit));
                         holder = Some(started_holder);
                     }
-                    Err(StartError::Isolation(reason)) => {
+                    Err(StartError::Network { failure, reason }) => {
                         // Never an open fallback: the agent doesn't start.
-                        // Tried again with the policy's backoff, a few times.
-                        isolation_failures += 1;
-                        tracing::warn!(install_id = install.install_id.as_str(), generation = install.generation, reason = %reason, attempt = isolation_failures, "the teammate's egress policy is not in place");
-                        if isolation_failures >= ISOLATION_ATTEMPTS {
-                            return failed(
-                                &report,
-                                TeammateRunFailure::NetworkIsolationUnavailable,
-                            );
-                        }
+                        // Tried again with the policy's backoff a few
+                        // times, then parked: failed, and tried again
+                        // further apart for as long as it is kept.
+                        isolation_failures = isolation_failures.saturating_add(1);
+                        tracing::warn!(install_id = install.install_id.as_str(), generation = install.generation, failure = ?failure, reason = %reason, attempt = isolation_failures, "the teammate's network is not usable");
                         let lost = ExitEvent {
                             code: None,
                             requested: false,
@@ -249,6 +258,18 @@ pub async fn supervise<EngineImpl: Engine>(
                         action = lifecycle.policy.exited(lost, clock.now());
                         keep(&lifecycle);
                         announce_restart = true;
+                        if isolation_failures >= ISOLATION_ATTEMPTS {
+                            if parked != Some(failure) {
+                                report(TeammateRunState::Failed { reason: failure });
+                                parked = Some(failure);
+                            }
+                            if let Action::Start { previous, .. } = action {
+                                action = Action::Start {
+                                    after: parked_backoff(isolation_failures),
+                                    previous,
+                                };
+                            }
+                        }
                         continue;
                     }
                     Err(StartError::Engine(error)) => {
@@ -379,12 +400,28 @@ async fn wait<EngineImpl: Engine>(
     }
 }
 
+/// The wait before the next try of an agent parked after `failures` starts
+/// in a row: [`PARKED_BACKOFF`] doubling, at most [`PARKED_MAX_BACKOFF`].
+fn parked_backoff(failures: u8) -> Duration {
+    let doublings = u32::from(failures.saturating_sub(ISOLATION_ATTEMPTS)).min(16);
+    PARKED_BACKOFF
+        .saturating_mul(1 << doublings)
+        .min(PARKED_MAX_BACKOFF)
+}
+
 /// The adopted agent's holder, with its policy read back and checked.
 async fn adopted_holder<EngineImpl: Engine>(
     engine: &EngineImpl,
     supervision: &Supervision,
 ) -> Result<String, String> {
     let install_id = &supervision.install.install_id;
+    if !isolation::host_network(engine)
+        .await
+        .map_err(|error| error.to_string())?
+        .to_the_internet
+    {
+        return Err(NO_WAY_OUT.to_owned());
+    }
     let state = engine
         .container(&holder_name(install_id))
         .await
@@ -592,15 +629,25 @@ async fn fetch_image<EngineImpl: Engine>(
 enum StartError {
     /// The engine failed a step: backed off like a crash.
     Engine(EngineError),
-    /// The egress policy couldn't be put in place: never started open.
-    Isolation(String),
+    /// The agent's network isn't usable: its egress policy couldn't be put
+    /// in place (never started open), or the host has no route out.
+    Network {
+        /// `networkIsolationUnavailable` or `egressBlocked`.
+        failure: TeammateRunFailure,
+        /// What said so.
+        reason: String,
+    },
 }
+
+/// Why a host with no default route can't run an agent.
+const NO_WAY_OUT: &str =
+    "the host has no route to the internet: every destination the policy leaves is unreachable";
 
 impl std::fmt::Display for StartError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Engine(error) => write!(formatter, "{error}"),
-            Self::Isolation(reason) => formatter.write_str(reason),
+            Self::Network { reason, .. } => formatter.write_str(reason),
         }
     }
 }
@@ -644,6 +691,20 @@ async fn start<EngineImpl: Engine>(
         .create_volume(&provider_volume_name(install_id))
         .await?;
 
+    // No route out: the agent would run and reach nothing, Macro included.
+    let host = isolation::host_network(engine)
+        .await
+        .map_err(|error| StartError::Network {
+            failure: TeammateRunFailure::NetworkIsolationUnavailable,
+            reason: error.to_string(),
+        })?;
+    if !host.to_the_internet {
+        return Err(StartError::Network {
+            failure: TeammateRunFailure::EgressBlocked,
+            reason: NO_WAY_OUT.to_owned(),
+        });
+    }
+
     let span = tracing::info_span!(
         "teammate.isolate",
         install_id = install_id.as_str(),
@@ -665,7 +726,10 @@ async fn start<EngineImpl: Engine>(
         Ok(holder_id) => holder_id,
         Err(IsolationError::Engine(error)) => return Err(StartError::Engine(error)),
         Err(error @ IsolationError::Unavailable { .. }) => {
-            return Err(StartError::Isolation(error.to_string()));
+            return Err(StartError::Network {
+                failure: TeammateRunFailure::NetworkIsolationUnavailable,
+                reason: error.to_string(),
+            });
         }
     };
 
