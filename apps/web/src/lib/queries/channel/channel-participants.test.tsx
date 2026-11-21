@@ -137,7 +137,9 @@ function restClient() {
   return testQueryClient.current as QueryClient;
 }
 
-function mount(options: { staleTime?: number; readers?: number } = {}) {
+function mount(
+  options: { staleTime?: number; readers?: number; apart?: boolean } = {}
+) {
   const client = new QueryClient({
     defaultOptions: {
       queries: { retry: false, staleTime: options.staleTime },
@@ -149,11 +151,15 @@ function mount(options: { staleTime?: number; readers?: number } = {}) {
   let add!: ReturnType<typeof useAddParticipantsMutation>;
   let remove!: ReturnType<typeof useRemoveParticipantsMutation>;
   const [channelId, setChannel] = createSignal('channel-1');
+  // A reader on another view, which moves between channels on its own.
+  const [apartId, setApart] = createSignal('channel-1');
+  let apart: ReturnType<typeof useChannelParticipantsQuery> | undefined;
   // A component, so the hooks' reads are not tracked by the render.
   function Harness() {
     // Other components reading the same channel.
     for (let i = 1; i < (options.readers ?? 1); i++)
       useChannelParticipantsQuery(channelId);
+    if (options.apart) apart = useChannelParticipantsQuery(apartId);
     query = useChannelParticipantsQuery(channelId);
     add = useAddParticipantsMutation();
     remove = useRemoveParticipantsMutation();
@@ -165,7 +171,8 @@ function mount(options: { staleTime?: number; readers?: number } = {}) {
     </QueryClientProvider>
   ));
   const ids = () => query.data?.map((participant) => participant.user_id);
-  return { query, add, remove, ids, setChannel };
+  const apartIds = () => apart?.data?.map((participant) => participant.user_id);
+  return { query, add, remove, ids, setChannel, setApart, apartIds };
 }
 
 afterEach(() => {
@@ -1269,6 +1276,105 @@ describe('useChannelParticipantsQuery', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(storage.getChannelParticipants).toHaveBeenCalledTimes(3);
     expect(ids()).not.toContain('a');
+  });
+
+  it('shares the check due for an earlier write with a reader back from another channel', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const owner = participant('owner', '2026-01-01T00:00:00Z', 'owner');
+    setChannels({ 'channel-1': [owner], 'channel-2': [owner] });
+    storage.addParticipantsToChannel.mockResolvedValue(ok({}));
+    storage.getChannelParticipants
+      .mockResolvedValueOnce(
+        ok([
+          restRow('owner', '2026-01-01T00:00:00Z', 'owner'),
+          restRow('a', '2026-01-03T00:00:00Z'),
+        ])
+      )
+      .mockResolvedValue(err([{ code: 'HTTP_ERROR', message: 'offline' }]));
+    const { add, ids, setApart, apartIds } = mount({ apart: true });
+
+    add.mutate({ channelId: 'channel-1', participants: ['a'] });
+    await vi.waitFor(() => expect(add.isSuccess).toBe(true));
+    await vi.waitFor(() => expect(apartIds()).toEqual(['owner', 'a']));
+    setApart('channel-2');
+    // The reader that stayed asks once a's time runs out; the server holds a.
+    await vi.advanceTimersByTimeAsync(31_000);
+    expect(storage.getChannelParticipants).toHaveBeenCalledTimes(1);
+    add.mutate({ channelId: 'channel-1', participants: ['b'] });
+    await vi.waitFor(() => expect(add.variables?.participants).toEqual(['b']));
+    await vi.waitFor(() => expect(add.isSuccess).toBe(true));
+
+    // The other reader comes back: a is due, b is not.
+    setApart('channel-1');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(storage.getChannelParticipants).toHaveBeenCalledTimes(1);
+    expect(apartIds()).toEqual(['owner', 'a', 'b']);
+    expect(ids()).toEqual(['owner', 'a', 'b']);
+  });
+
+  it('asks again when the record answers again as the time to show of a write started over runs out', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const owner = restRow('owner', '2026-01-01T00:00:00Z', 'owner');
+    const added = restRow('new', '2026-01-03T00:00:00Z');
+    storage.getChannelParticipants
+      .mockResolvedValueOnce(ok([owner]))
+      .mockResolvedValueOnce(ok([owner, added]))
+      .mockResolvedValueOnce(err([{ code: 'HTTP_ERROR', message: 'offline' }]))
+      .mockResolvedValue(ok([owner, added]));
+    storage.addParticipantsToChannel.mockResolvedValue(ok({}));
+    const { add, ids } = mount();
+
+    await vi.advanceTimersByTimeAsync(3_100);
+    await vi.waitFor(() => expect(ids()).toEqual(['owner']));
+    add.mutate({ channelId: 'channel-1', participants: ['new'] });
+    await vi.waitFor(() => expect(add.isSuccess).toBe(true));
+    await vi.waitFor(() => expect(ids()).toEqual(['owner', 'new']));
+    setDetail([participant('owner', '2026-01-01T00:00:00Z', 'owner')]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(storage.getChannelParticipants).toHaveBeenCalledTimes(3);
+    expect(ids()).toEqual(['owner', 'new']);
+
+    // The same record answers again just after its time ran out, before the
+    // reader's timer runs.
+    vi.setSystemTime(Date.now() + 31_000);
+    setDetail([participant('owner', '2026-01-01T00:00:00Z', 'owner')]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(ids()).toEqual(['owner', 'new']);
+    await vi.advanceTimersByTimeAsync(31_000);
+    expect(storage.getChannelParticipants).toHaveBeenCalledTimes(4);
+    expect(ids()).toEqual(['owner', 'new']);
+  });
+
+  it('drops a confirmed write a recheck refutes while later record changes still wait', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    setDetail([participant('owner', '2026-01-01T00:00:00Z', 'owner')]);
+    storage.addParticipantsToChannel.mockResolvedValue(ok({}));
+    const owner = restRow('owner', '2026-01-01T00:00:00Z', 'owner');
+    const second = Promise.withResolvers<unknown>();
+    const third = Promise.withResolvers<unknown>();
+    storage.getChannelParticipants
+      .mockResolvedValueOnce(ok([owner, restRow('a', '2026-01-03T00:00:00Z')]))
+      .mockReturnValueOnce(second.promise)
+      .mockReturnValueOnce(third.promise);
+    const { add, ids } = mount();
+
+    add.mutate({ channelId: 'channel-1', participants: ['a'] });
+    await vi.waitFor(() => expect(add.isSuccess).toBe(true));
+    await vi.advanceTimersByTimeAsync(31_000);
+    expect(ids()).toEqual(['owner', 'a']);
+
+    // Someone removes a; the record changes twice before the first recheck answers.
+    setDetail([participant('owner', '2026-01-01T00:00:00Z', 'admin')]);
+    await vi.advanceTimersByTimeAsync(0);
+    setDetail([
+      participant('owner', '2026-01-01T00:00:00Z', 'admin'),
+      participant('other', '2026-01-04T00:00:00Z'),
+    ]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(storage.getChannelParticipants).toHaveBeenCalledTimes(3);
+    second.resolve(ok([owner]));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(ids()).toEqual(['owner', 'other']);
   });
 
   it('lets a remove win over an earlier add whose soup update has not arrived', async () => {
