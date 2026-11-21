@@ -91,6 +91,8 @@ export const bootstrapResponses = new Map<
   ['GET /dss/call/meetings/active', { body: { meetings: [] } }],
   ['GET /dss/instructions', { body: {}, status: 404 }],
   ['GET /dss/crm/settings', { body: {}, status: 403 }],
+  // The fixture user has no team, so the CRM access proof names none.
+  ['GET /dss/crm/member-access', { body: { allowed: false, team_id: null } }],
   ['GET /dss/crm/contacts', { body: { contacts: [] } }],
   [
     'POST /agent-harness/agent-models/load',
