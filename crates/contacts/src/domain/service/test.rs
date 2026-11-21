@@ -42,15 +42,13 @@ impl ContactsRepository for RecordingRepository {
     async fn delete_connections(
         &self,
         connections: Vec<(MacroUserIdStr<'_>, MacroUserIdStr<'_>)>,
-    ) -> Result<Vec<MacroUserIdStr<'static>>, rootcause::Report> {
-        let mut deleted = self.deleted_connections.lock().unwrap();
-        let mut disconnected = HashSet::new();
-        for (first, second) in connections {
-            disconnected.insert(first.clone().into_owned());
-            disconnected.insert(second.clone().into_owned());
-            deleted.push((first.into_owned(), second.into_owned()));
-        }
-        Ok(disconnected.into_iter().collect())
+    ) -> Result<(), rootcause::Report> {
+        self.deleted_connections.lock().unwrap().extend(
+            connections
+                .into_iter()
+                .map(|(first, second)| (first.into_owned(), second.into_owned())),
+        );
+        Ok(())
     }
 }
 

@@ -108,26 +108,32 @@ impl<R: ContactsRepository + ContactListRepository, N: ContactsNotifier>
         Ok(())
     }
 
-    /// Deletes legacy edges and tells everyone who lost one to re-read their
-    /// directory. A removal has no contacts to re-read, so each is unknown.
+    /// Deletes legacy edges and tells both ends of every pair to re-read
+    /// their directory. A removal has no contacts to re-read, so each is
+    /// unknown. Recipients come from the message, not from what the delete
+    /// found, so a redelivery after a crash between the two still notifies.
     async fn process_disconnections(
         &self,
         disconnections: Vec<ContactConnection>,
     ) -> Result<(), Report> {
         tracing::Span::current().record("connections", disconnections.len() as i64);
+        let ends: HashSet<_> = disconnections
+            .iter()
+            .flat_map(|connection| [connection.first.clone(), connection.second.clone()])
+            .collect();
+        tracing::Span::current().record("users", ends.len() as i64);
         let pairs = disconnections
             .into_iter()
             .map(|connection| (connection.first, connection.second))
             .collect();
-        let disconnected = self.repository.delete_connections(pairs).await?;
-        tracing::Span::current().record("users", disconnected.len() as i64);
-        if disconnected.is_empty() {
+        self.repository.delete_connections(pairs).await?;
+
+        if ends.is_empty() {
             return Ok(());
         }
         self.notifier
             .invalidate_contacts_for_users(
-                disconnected
-                    .into_iter()
+                ends.into_iter()
                     .map(ContactsInvalidation::unknown)
                     .collect(),
             )

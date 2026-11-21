@@ -243,6 +243,34 @@ async fn removing_a_member_disconnects_them_from_the_remaining_roster() {
 }
 
 #[tokio::test]
+async fn members_leaving_together_still_disconnect_from_each_other() {
+    // The teammate's removal commits while the member's is in flight, so the
+    // roster after the member's removal no longer holds either of them.
+    let team_id = uuid::Uuid::from_u128(0x6330_000b);
+    let owner = MacroUserIdStr::parse_from_str(OWNER).unwrap();
+    let member = MacroUserIdStr::parse_from_str(MEMBER).unwrap();
+    let mut team_repository =
+        make_enterprise_remove_user_repository(team_id, &member, TeamRole::Member)
+            .with_team(team(team_id))
+            .with_team_members(vec![
+                make_team_member(team_id, TEAMMATE, TeamRole::Member),
+                make_team_member(team_id, MEMBER, TeamRole::Member),
+            ]);
+    team_repository.team_members_after_remove = Some(Vec::new());
+    let contacts_enqueuer = RecordingContactsEnqueuer::default();
+
+    service(team_repository, &contacts_enqueuer)
+        .remove_user_from_team(test_team_receipt::<AdminTeamRole>(team_id, &owner), &member)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        *contacts_enqueuer.disconnections.lock().unwrap(),
+        pairs(&[(MEMBER, OWNER), (MEMBER, TEAMMATE)])
+    );
+}
+
+#[tokio::test]
 async fn deleting_a_team_disconnects_every_pair_of_members() {
     let team_id = uuid::Uuid::from_u128(0x6330_000a);
     let owner = MacroUserIdStr::parse_from_str(OWNER).unwrap();

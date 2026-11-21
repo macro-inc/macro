@@ -39,22 +39,6 @@ where
 {
     type Err = anyhow::Error;
 
-    #[tracing::instrument(skip(self, connections), err)]
-    async fn enqueue_contact_connections(
-        &self,
-        connections: Vec<(MacroUserIdStr<'static>, MacroUserIdStr<'static>)>,
-    ) -> Result<(), Self::Err> {
-        let connections = connections
-            .into_iter()
-            .map(|(first, second)| ContactConnection::new(first, second))
-            .collect();
-
-        self.ingress
-            .enqueue_contact_connections(connections)
-            .await
-            .map_err(|e| anyhow::anyhow!("{e:?}"))
-    }
-
     #[tracing::instrument(skip_all, fields(count = disconnections.len() as i64), err)]
     async fn enqueue_contact_disconnections(
         &self,

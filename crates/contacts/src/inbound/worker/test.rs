@@ -34,9 +34,9 @@ impl ContactsRepository for CountingRepository {
     async fn delete_connections(
         &self,
         _connections: Vec<(MacroUserIdStr<'_>, MacroUserIdStr<'_>)>,
-    ) -> Result<Vec<MacroUserIdStr<'static>>, rootcause::Report> {
+    ) -> Result<(), rootcause::Report> {
         self.writes.fetch_add(1, Ordering::SeqCst);
-        Ok(Vec::new())
+        Ok(())
     }
 }
 

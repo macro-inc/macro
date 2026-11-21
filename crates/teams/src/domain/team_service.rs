@@ -553,8 +553,6 @@ where
         }
 
         let teammate_ids = self.teammate_ids_except(&team_id, user_id).await;
-        self.enqueue_joining_user_contacts(user_id, &teammate_ids)
-            .await;
         self.send_teammates_changed(&team_id, user_id, &teammate_ids)
             .await;
 
@@ -1048,6 +1046,10 @@ where
         } else {
             None
         };
+        // Read before the removal: another member leaving at the same time
+        // is still on this roster, so the pair between the two leavers is
+        // not missed by both removals.
+        let roster_before_removal = self.teammate_ids_except(&team_id, user_id).await;
         let removed_member = match self
             .team_repository
             .remove_user_from_team(&team_id, user_id)
@@ -1196,9 +1198,9 @@ where
         }
 
         let remaining_members = self.teammate_ids_except(&team_id, user_id).await;
-        let ended = remaining_members
-            .iter()
-            .map(|teammate| (user_id.clone().into_owned(), teammate.clone()))
+        let ended = roster_before_removal
+            .into_iter()
+            .map(|teammate| (user_id.clone().into_owned(), teammate))
             .collect();
         self.enqueue_ended_contacts(&team_id, ended).await;
         self.send_teammates_changed(&team_id, user_id, &remaining_members)
@@ -1282,40 +1284,12 @@ where
         teammate_ids
     }
 
-    async fn enqueue_joining_user_contacts(
-        &self,
-        user_id: &MacroUserIdStr<'_>,
-        teammate_ids: &[MacroUserIdStr<'static>],
-    ) {
-        if teammate_ids.is_empty() {
-            return;
-        }
-
-        let joining_user = user_id.clone().into_owned();
-        let connections = teammate_ids
-            .iter()
-            .cloned()
-            .map(|teammate| (joining_user.clone(), teammate))
-            .collect::<Vec<_>>();
-
-        self.contacts_enqueuer
-            .enqueue_contact_connections(connections)
-            .await
-            .inspect_err(|error| {
-                tracing::error!(
-                    error = ?error,
-                    user_id = %user_id,
-                    "failed to enqueue team contact connections"
-                );
-            })
-            .ok();
-    }
-
-    /// Deletes the legacy contact edges joining the team wrote for pairs who
-    /// are no longer teammates, so a membership's contacts end with it. The
-    /// edge may also stand for something else (an inbox, a shared channel);
-    /// those sources write it again the next time they see the pair.
-    /// Best-effort, like the other contacts side effects.
+    /// Deletes the legacy contact edges team joins used to write for pairs
+    /// who are no longer teammates, so a membership's contacts end with it.
+    /// Joins write none now: teammates come from the live roster. The edge
+    /// may also stand for something else (an inbox, a shared channel); those
+    /// sources write it again the next time they see the pair. Best-effort,
+    /// like the other contacts side effects.
     async fn enqueue_ended_contacts(
         &self,
         team_id: &uuid::Uuid,
@@ -2290,8 +2264,6 @@ where
 
         let teammate_ids = self
             .teammate_ids_except(&team_member.team_id, user_id)
-            .await;
-        self.enqueue_joining_user_contacts(user_id, &teammate_ids)
             .await;
         self.send_teammates_changed(&team_member.team_id, user_id, &teammate_ids)
             .await;

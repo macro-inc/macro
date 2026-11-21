@@ -32,12 +32,12 @@ pub trait ContactsRepository: Send + Sync + 'static {
         connections: Vec<(MacroUserIdStr<'_>, MacroUserIdStr<'_>)>,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
-    /// Deletes connection pairs, in either order. Returns the users who lost
-    /// a connection.
+    /// Deletes connection pairs, whichever end is stored first and in any
+    /// ASCII case the stored peer uses.
     fn delete_connections(
         &self,
         connections: Vec<(MacroUserIdStr<'_>, MacroUserIdStr<'_>)>,
-    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Report>> + Send;
+    ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
 /// Writes to directed, list-aware directory membership. Every write is

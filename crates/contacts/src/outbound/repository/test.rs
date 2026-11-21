@@ -30,43 +30,58 @@ async fn test_create_connections_basic(pool: PgPool) -> sqlx::Result<()> {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn test_delete_connections_removes_only_the_named_pairs(pool: PgPool) -> sqlx::Result<()> {
+    // Legacy rows may spell one end in another ASCII case, which can also put
+    // that end first in byte order.
+    sqlx::query!(
+        "INSERT INTO contacts_connections (user1, user2) VALUES
+         ('macro|a@example.com', 'macro|leaver@example.com'),
+         ('macro|ALPHA@example.com', 'macro|leaver@example.com'),
+         ('macro|Zed@example.com', 'macro|leaver@example.com'),
+         ('macro|b@example.com', 'macro|leaver@example.com'),
+         ('macro|a@example.com', 'macro|b@example.com')"
+    )
+    .execute(&pool)
+    .await?;
     let repo = DbContactsRepository::new(pool.clone());
-    repo.create_connections(vec![
+
+    repo.delete_connections(vec![
         (mid("macro|leaver@example.com"), mid("macro|a@example.com")),
-        (mid("macro|leaver@example.com"), mid("macro|b@example.com")),
-        (mid("macro|a@example.com"), mid("macro|b@example.com")),
+        (
+            mid("macro|alpha@example.com"),
+            mid("macro|leaver@example.com"),
+        ),
+        (
+            mid("macro|leaver@example.com"),
+            mid("macro|zed@example.com"),
+        ),
+        (
+            mid("macro|leaver@example.com"),
+            mid("macro|nobody@example.com"),
+        ),
     ])
     .await
     .unwrap();
 
-    // Either order names the same stored pair.
-    let mut disconnected = repo
-        .delete_connections(vec![
-            (mid("macro|leaver@example.com"), mid("macro|a@example.com")),
-            (mid("macro|b@example.com"), mid("macro|leaver@example.com")),
-            (
-                mid("macro|leaver@example.com"),
-                mid("macro|nobody@example.com"),
-            ),
-        ])
-        .await
-        .unwrap();
-    disconnected.sort_by(|a, b| a.as_ref().cmp(b.as_ref()));
-
-    assert_eq!(
-        disconnected,
-        vec![
-            mid("macro|a@example.com"),
-            mid("macro|b@example.com"),
-            mid("macro|leaver@example.com"),
-        ]
-    );
-    let remaining = sqlx::query!("SELECT user1, user2 FROM contacts_connections")
+    let remaining = sqlx::query!("SELECT user1, user2 FROM contacts_connections ORDER BY id")
         .fetch_all(&pool)
         .await?;
-    assert_eq!(remaining.len(), 1);
-    assert_eq!(remaining[0].user1, "macro|a@example.com");
-    assert_eq!(remaining[0].user2, "macro|b@example.com");
+    let remaining: Vec<_> = remaining
+        .into_iter()
+        .map(|row| (row.user1, row.user2))
+        .collect();
+    assert_eq!(
+        remaining,
+        vec![
+            (
+                "macro|b@example.com".to_owned(),
+                "macro|leaver@example.com".to_owned()
+            ),
+            (
+                "macro|a@example.com".to_owned(),
+                "macro|b@example.com".to_owned()
+            ),
+        ]
+    );
     Ok(())
 }
 

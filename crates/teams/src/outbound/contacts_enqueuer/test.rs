@@ -14,7 +14,7 @@ use super::*;
 
 #[derive(Default)]
 struct FakeContactsIngress {
-    connection_batches: Mutex<Vec<Vec<ContactConnection>>>,
+    disconnection_batches: Mutex<Vec<Vec<ContactConnection>>>,
 }
 
 impl ContactsIngress for FakeContactsIngress {
@@ -27,20 +27,20 @@ impl ContactsIngress for FakeContactsIngress {
 
     async fn enqueue_contact_connections(
         &self,
-        connections: Vec<ContactConnection>,
+        _connections: Vec<ContactConnection>,
     ) -> Result<(), Report> {
-        self.connection_batches
-            .lock()
-            .expect("connection batches lock should not be poisoned")
-            .push(connections);
-        Ok(())
+        panic!("teams never writes contact connections")
     }
 
     async fn enqueue_contact_disconnections(
         &self,
-        _disconnections: Vec<ContactConnection>,
+        disconnections: Vec<ContactConnection>,
     ) -> Result<(), Report> {
-        panic!("unexpected contacts disconnections enqueue")
+        self.disconnection_batches
+            .lock()
+            .expect("disconnection batches lock should not be poisoned")
+            .push(disconnections);
+        Ok(())
     }
 }
 
@@ -87,7 +87,7 @@ async fn contacts_ingress_enqueuer_maps_pairs() {
     let third = macro_user_id("macro|third@example.com");
 
     enqueuer
-        .enqueue_contact_connections(vec![
+        .enqueue_contact_disconnections(vec![
             (first.clone(), second.clone()),
             (third.clone(), first.clone()),
         ])
@@ -95,9 +95,9 @@ async fn contacts_ingress_enqueuer_maps_pairs() {
         .expect("contacts enqueue should succeed");
 
     let batches = ingress
-        .connection_batches
+        .disconnection_batches
         .lock()
-        .expect("connection batches lock should not be poisoned");
+        .expect("disconnection batches lock should not be poisoned");
     assert_eq!(
         *batches,
         vec![vec![

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- The viewer's whole legacy directory, without self: the other end of each\n-- edge and the current team. Team joins no longer write edges, so teammates\n-- come from team_user, folded like the list-aware directory.\n--\n-- A legacy edge says nothing about direction, so the directed lists decide,\n-- as in page.sql: a peer is left out when only the peer has the viewer (the\n-- peer's inbox or invite) and nothing says the viewer has the peer (no list\n-- or inbox row of the viewer's). Edges no list explains stay. A teammate\n-- with an edge comes back twice; the caller drops repeats, which is cheaper\n-- than a UNION's locale sort of the whole directory.\nSELECT neighbors.contact\nFROM (\n    SELECT user1 AS contact FROM contacts_connections WHERE user2 = $1\n    UNION ALL\n    SELECT user2 AS contact FROM contacts_connections WHERE user1 = $1\n) AS neighbors\nWHERE NOT (\n    (\n        EXISTS (\n            SELECT 1 FROM contact_inbox_members AS theirs\n            WHERE theirs.user_id = lower(neighbors.contact COLLATE \"C\")\n              AND theirs.contact_user_id = lower($1 COLLATE \"C\")\n        )\n        OR EXISTS (\n            SELECT 1 FROM contact_list_members AS theirs\n            WHERE theirs.user_id = lower(neighbors.contact COLLATE \"C\")\n              AND theirs.contact_user_id = lower($1 COLLATE \"C\")\n              AND theirs.list_key = 'invited'\n        )\n    )\n    AND NOT EXISTS (\n        SELECT 1 FROM contact_list_members AS mine\n        WHERE mine.user_id = lower($1 COLLATE \"C\")\n          AND mine.contact_user_id = lower(neighbors.contact COLLATE \"C\")\n    )\n    AND NOT EXISTS (\n        SELECT 1 FROM contact_inbox_members AS mine\n        WHERE mine.user_id = lower($1 COLLATE \"C\")\n          AND mine.contact_user_id = lower(neighbors.contact COLLATE \"C\")\n    )\n)\nUNION ALL\n-- A user has at most one team, and its roster includes the viewer.\nSELECT lower(teammate.user_id COLLATE \"C\") COLLATE \"default\"\nFROM team_user AS own\nJOIN team_user AS teammate ON teammate.team_id = own.team_id\nWHERE own.user_id IN (\n    -- team_user may hold a legacy mixed-case id for this user. Find it\n    -- through the lower(email) index and keep it only if it folds to the\n    -- canonical id.\n    SELECT $1::text\n    UNION\n    SELECT account.id\n    FROM \"User\" AS account\n    WHERE lower(account.email) = substr($1, length('macro|') + 1)\n      AND lower(account.id COLLATE \"C\") = $1\n)\n  AND teammate.user_id COLLATE \"C\" LIKE 'macro|%'\n  AND lower(teammate.user_id COLLATE \"C\") <> lower($1 COLLATE \"C\")\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "contact",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a69bdebed52a67032183a0f879ea8e948c7ba11240a0b57fcfba6f32554e1449"
+}
