@@ -114,9 +114,9 @@ fn a_rate_limited_connected_app_is_too_many_requests_with_retry_after() {
 async fn a_job_reviews_and_presents_only_in_its_own_session() {
     let own = Uuid::from_u128(7);
     let other = Uuid::from_u128(8);
-    let owner = macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|owner@example.com")
-        .unwrap()
-        .into_owned();
+    let owner =
+        macro_user_id::user_id::MacroUserIdStr::try_from("macro|owner@example.com".to_owned())
+            .unwrap();
     let receipt = |session: Uuid| {
         EntityAccessReceipt::<EditAccessLevel>::dangerously_assert_authenticated_user(
             owner.clone(),
