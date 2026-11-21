@@ -583,7 +583,9 @@ export function TeamMembers(props: { team: TeamSummary }) {
                           onMove={
                             selfHosted() &&
                             isAdminOrOwner() &&
-                            canMoveTeammate(agent, userId(), ownHarnessIds())
+                            canMoveTeammate(agent, userId(), ownHarnessIds(), {
+                              ownsTeam: isOwner(),
+                            })
                               ? () => setMoveAgent(agent)
                               : undefined
                           }

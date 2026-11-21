@@ -35,7 +35,7 @@ describe('installProblemLine', () => {
 
   it('says a parked agent was stopped because its machine may no longer host it', () => {
     expect(installProblemLine({ kind: 'hostRemoved' }, 'demo-laptop')).toBe(
-      "Stopped: demo-laptop's owner can no longer host it for this team. Its chats and memory are kept; an admin can move it to one of their computers."
+      "Stopped: demo-laptop's owner can no longer host it for this team. Its chats and memory are kept; its inviter or the team's owner can move it to one of their computers."
     );
   });
 

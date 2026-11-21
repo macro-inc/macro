@@ -50,7 +50,7 @@ export default {
   failedHostUnsupported:
     "Agents can't run on {{host}}. Move it to another computer.",
   hostRemoved:
-    "Stopped: {{host}}'s owner can no longer host it for this team. Its chats and memory are kept; an admin can move it to one of their computers.",
+    "Stopped: {{host}}'s owner can no longer host it for this team. Its chats and memory are kept; its inviter or the team's owner can move it to one of their computers.",
   rolledBackCrashLoop:
     'Running the previous version: the update kept crashing.',
   rolledBackImageUnavailable:

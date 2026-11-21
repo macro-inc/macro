@@ -80,10 +80,12 @@ export function ownMachineRemoveBody(hostName: string): string {
 }
 
 /**
- * Whether the viewer may move an agent to another of their machines: only
- * the admin who invited it, or the owner of the machine it runs on now. A
- * parked agent (its machine may no longer host it) runs nowhere, so any
- * admin may. The service enforces the same rule.
+ * Whether the viewer, an admin, may move an agent to one of their machines:
+ * only the admin who invited it, or the owner of the machine it runs on now.
+ * A parked agent's new machine gets its key, DMs and shares, so it may be
+ * moved only by its inviter, the team's owner, or the owner of the machine
+ * it was parked off once that machine may host it again (still paired, so
+ * among the viewer's own). The service enforces the same rule.
  */
 export function canMoveTeammate(
   agent: {
@@ -92,12 +94,14 @@ export function canMoveTeammate(
     installProblem?: InstallProblem | null;
   },
   viewerId: string | undefined,
-  ownHarnessIds: readonly string[]
+  ownHarnessIds: readonly string[],
+  viewer: { ownsTeam: boolean }
 ): boolean {
   if (!agent.harnessId || !viewerId) return false;
+  const parked = agent.installProblem?.kind === 'hostRemoved';
   return (
-    agent.installProblem?.kind === 'hostRemoved' ||
     agent.createdBy === viewerId ||
+    (parked && viewer.ownsTeam) ||
     ownHarnessIds.includes(agent.harnessId)
   );
 }

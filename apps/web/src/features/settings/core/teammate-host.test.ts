@@ -82,21 +82,47 @@ describe('teammate hosts', () => {
 
   it('lets only the inviter or the machine it runs on move an agent', () => {
     const agent = { createdBy: 'macro|a@x.test', harnessId: 'laptop-a' };
-    expect(canMoveTeammate(agent, 'macro|a@x.test', [])).toBe(true);
-    expect(canMoveTeammate(agent, 'macro|b@x.test', ['laptop-a'])).toBe(true);
-    expect(canMoveTeammate(agent, 'macro|b@x.test', ['laptop-b'])).toBe(false);
     expect(
-      canMoveTeammate({ ...agent, harnessId: null }, 'macro|a@x.test', [])
+      canMoveTeammate(agent, 'macro|a@x.test', [], { ownsTeam: false })
+    ).toBe(true);
+    expect(
+      canMoveTeammate(agent, 'macro|b@x.test', ['laptop-a'], {
+        ownsTeam: false,
+      })
+    ).toBe(true);
+    expect(
+      canMoveTeammate(agent, 'macro|b@x.test', ['laptop-b'], {
+        ownsTeam: true,
+      })
+    ).toBe(false);
+    expect(
+      canMoveTeammate({ ...agent, harnessId: null }, 'macro|a@x.test', [], {
+        ownsTeam: false,
+      })
     ).toBe(false);
   });
 
-  it('lets any admin move a parked agent, which runs nowhere', () => {
+  it('lets only the inviter, the team owner or the host owner move a parked agent', () => {
     const parked = {
       createdBy: 'macro|a@x.test',
-      harnessId: 'laptop-a',
+      harnessId: 'laptop-b',
       installProblem: { kind: 'hostRemoved' as const },
     };
-    expect(canMoveTeammate(parked, 'macro|b@x.test', ['laptop-b'])).toBe(true);
-    expect(canMoveTeammate(parked, undefined, [])).toBe(false);
+    const viewer = { ownsTeam: false };
+    // Another admin: its new machine would get the agent's DMs and shares.
+    expect(
+      canMoveTeammate(parked, 'macro|c@x.test', ['laptop-c'], viewer)
+    ).toBe(false);
+    expect(canMoveTeammate(parked, 'macro|a@x.test', [], viewer)).toBe(true);
+    expect(
+      canMoveTeammate(parked, 'macro|o@x.test', [], { ownsTeam: true })
+    ).toBe(true);
+    // The machine it was parked off, still paired, its owner an admin again.
+    expect(
+      canMoveTeammate(parked, 'macro|b@x.test', ['laptop-b'], viewer)
+    ).toBe(true);
+    expect(canMoveTeammate(parked, undefined, [], { ownsTeam: true })).toBe(
+      false
+    );
   });
 });
