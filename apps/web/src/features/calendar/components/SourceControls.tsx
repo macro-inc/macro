@@ -2,8 +2,9 @@ import { ViewSidebar } from '@app/components/view-shell';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import RssIcon from '@icon/system/regular/rss.svg';
 import WarningIcon from '@icon/system/regular/warning.svg';
+import { Key } from '@solid-primitives/keyed';
 import { Checkbox, Tooltip } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import type { CalendarSource } from '../types';
 import {
   type CalendarAccountGroup,
@@ -44,17 +45,17 @@ export function SourceControls(props: SourceControlsProps) {
 
   return (
     <ul ref={props.ref} class="flex min-w-0 flex-col gap-(--sidebar-row-gap)">
-      <For each={groups()}>
+      <Key each={groups()} by={(group) => group.key}>
         {(group) => {
           const visibleCount = () =>
-            group.calendars.filter((calendar) => props.isVisible(calendar.id))
+            group().calendars.filter((calendar) => props.isVisible(calendar.id))
               .length;
-          const allVisible = () => visibleCount() === group.calendars.length;
+          const allVisible = () => visibleCount() === group().calendars.length;
           const someVisible = () => visibleCount() > 0 && !allVisible();
-          const expanded = () => expandedKeys().has(group.key);
+          const expanded = () => expandedKeys().has(group().key);
           const setGroupVisible = (visible: boolean) =>
             props.onGroupVisibilityChange(
-              group.calendars.map((calendar) => calendar.id),
+              group().calendars.map((calendar) => calendar.id),
               visible
             );
 
@@ -70,14 +71,14 @@ export function SourceControls(props: SourceControlsProps) {
                 >
                   <Checkbox.Control />
                   <Checkbox.Label class="flex min-w-0 flex-1 items-center gap-2 font-medium">
-                    <CalendarAccountLabel group={group} />
+                    <CalendarAccountLabel group={group()} />
                   </Checkbox.Label>
                 </Checkbox>
                 <span class="absolute right-(--sidebar-action-inset) top-1/2 flex -translate-y-1/2">
                   <ViewSidebar.Control
-                    aria-label={`${expanded() ? 'Collapse' : 'Expand'} ${group.emailAddress}`}
+                    aria-label={`${expanded() ? 'Collapse' : 'Expand'} ${group().emailAddress}`}
                     aria-expanded={expanded()}
-                    onClick={() => toggleExpanded(group.key)}
+                    onClick={() => toggleExpanded(group().key)}
                   >
                     <CaretDownIcon
                       class="size-3 -rotate-90 transition-transform"
@@ -88,13 +89,13 @@ export function SourceControls(props: SourceControlsProps) {
               </div>
               <ViewSidebar.Branch open={expanded()}>
                 <div class="flex min-w-0 flex-col gap-(--sidebar-row-gap)">
-                  <For each={group.calendars}>
+                  <Key each={group().calendars} by={(calendar) => calendar.id}>
                     {(source) => (
                       <Checkbox
                         size="sm"
-                        checked={props.isVisible(source.id)}
+                        checked={props.isVisible(source().id)}
                         onChange={(checked) =>
-                          props.onVisibilityChange(source.id, checked)
+                          props.onVisibilityChange(source().id, checked)
                         }
                         class="flex h-(--sidebar-row-height) w-full min-w-0 gap-3 rounded-lg px-(--sidebar-item-inset) text-sm text-ink-muted hover:bg-hover hover:text-ink touch:h-auto touch:min-h-11 touch:py-1"
                       >
@@ -102,26 +103,26 @@ export function SourceControls(props: SourceControlsProps) {
                         <span class="-mx-[5px] flex shrink-0 touch:-mx-[11px]">
                           <CalendarColorPicker
                             compact
-                            label={`Color for ${source.name} (${source.emailAddress ?? ''})`}
-                            color={source.color}
-                            overridden={source.hasCustomColor === true}
+                            label={`Color for ${source().name} (${source().emailAddress ?? ''})`}
+                            color={source().color}
+                            overridden={source().hasCustomColor === true}
                             onChange={(color) =>
-                              props.onColorChange(source.id, color)
+                              props.onColorChange(source().id, color)
                             }
                           />
                         </span>
                         <Checkbox.Label class="-ml-1 flex min-w-0 flex-1 items-center gap-2">
-                          <CalendarSourceLabel source={source} />
+                          <CalendarSourceLabel source={source()} />
                         </Checkbox.Label>
                       </Checkbox>
                     )}
-                  </For>
+                  </Key>
                 </div>
               </ViewSidebar.Branch>
             </li>
           );
         }}
-      </For>
+      </Key>
     </ul>
   );
 }

@@ -150,6 +150,8 @@ export interface CalendarServer {
   patches: { path: string; eventId: string; body: Record<string, unknown> }[];
   /** The path of every read of the viewer's calendar list. */
   calendarListReads: string[];
+  /** Every calendar color the app saved, in order; `null` resets it. */
+  colorWrites: { calendarId: string; color: string | null }[];
   /** Every replacement the app prepared, and every one it confirmed or discarded. */
   replacements: { action: string; body?: Record<string, unknown> }[];
   /**
@@ -179,6 +181,7 @@ export async function answerCalendar(
     events: initial.events,
     patches: [],
     calendarListReads: [],
+    colorWrites: [],
     replacements: [],
     holdReads: () => {
       const routes: Route[] = [];
@@ -202,9 +205,29 @@ export async function answerCalendar(
     waiting.push(route);
     onHeld?.();
   });
+  // The viewer's own colors, kept apart from the provider's as the server does.
+  const customColors = new Map<string, string>();
   await page.route('**/calendar/calendars', (route) => {
     server.calendarListReads.push(new URL(route.request().url()).pathname);
-    return route.fulfill({ json: { calendars: initial.calendars ?? [] } });
+    const calendars = (initial.calendars ?? []).map((calendar) => {
+      const { id } = calendar as { id: string };
+      return {
+        ...(calendar as object),
+        customColor: customColors.get(id) ?? null,
+      };
+    });
+    return route.fulfill({ json: { calendars } });
+  });
+  await page.route('**/calendar/calendars/*/color', (route) => {
+    const calendarId =
+      new URL(route.request().url()).pathname.split('/').at(-2) ?? '';
+    const { color } = route.request().postDataJSON() as {
+      color: string | null;
+    };
+    server.colorWrites.push({ calendarId, color });
+    if (color === null) customColors.delete(calendarId);
+    else customColors.set(calendarId, color);
+    return route.fulfill({ status: 204, body: '' });
   });
   // A replacement previews the saved event with the request's changes over
   // it, as the provider adapter freezes it, and completes on confirmation.
