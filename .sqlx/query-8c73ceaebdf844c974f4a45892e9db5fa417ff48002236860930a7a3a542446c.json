@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- The ids, of at most the 510 a message names, that have no profile. A\n-- profile matches by id or, for a legacy \"User\" id stored with capitals, by\n-- its address (User_lower_email_idx). At most two index probes each; OFFSET 0\n-- keeps each check a per-id probe, never a hash of the whole \"User\" table\n-- when its statistics are stale.\nSELECT input.id AS \"id!\"\nFROM unnest($1::text[]) AS input (id)\nWHERE NOT EXISTS (SELECT 1 FROM \"User\" WHERE \"User\".id = input.id OFFSET 0)\n  AND NOT EXISTS (\n      SELECT 1 FROM \"User\" WHERE lower(\"User\".email) = substr(input.id, 7) OFFSET 0\n  )\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "8c73ceaebdf844c974f4a45892e9db5fa417ff48002236860930a7a3a542446c"
+}
