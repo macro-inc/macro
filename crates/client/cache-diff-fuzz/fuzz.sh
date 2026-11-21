@@ -19,6 +19,11 @@ jobs=${6:-12}
 repo=$(git rev-parse --show-toplevel)
 home=${CACHE_DIFF_FUZZ_HOME:-$HOME/.cache/cache-diff-fuzz}
 out=$home/runs/$run
+fuzzer() { awk '$1 == "fuzzer" { print $3 }' "$home/bin/$1.side"; }
+if [ "$(fuzzer "$side_a")" != "$(fuzzer "$side_b")" ]; then
+  echo "$side_a and $side_b were built with different fuzzer sources; rebuild one" >&2
+  exit 1
+fi
 mkdir -p "$out/a" "$out/b" "$out/stderr"
 cp "$home/bin/$side_a.side" "$out/a.side"
 cp "$home/bin/$side_b.side" "$out/b.side"

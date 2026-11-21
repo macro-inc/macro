@@ -144,10 +144,13 @@ struct Pools {
 
 #[derive(Clone, Debug)]
 struct Contact {
-    id: String,
+    /// An id the server made up instead of the viewer-scoped contact key; such a
+    /// record never joins the people index.
+    foreign: Option<String>,
     user: String,
     email: String,
-    name: String,
+    /// None sends `name: null`, which the index reads as the email's local part.
+    name: Option<String>,
 }
 
 /// A page written earlier, which a refetch can repeat or change.
@@ -186,6 +189,8 @@ pub struct Gen<'a> {
     uuids: Vec<String>,
     registered: Vec<String>,
     next_register: usize,
+    /// Input nodes one filter may still grow, so a deep, wide filter stays bounded.
+    filter_budget: u32,
     ops: Vec<Op>,
 }
 
@@ -303,6 +308,7 @@ impl<'a> Gen<'a> {
             uuids: Vec::new(),
             registered: Vec::new(),
             next_register: 0,
+            filter_budget: 0,
             ops: Vec::new(),
         };
         let scale = *pick(&mut generator.rng, &[0usize, 1, 1, 2, 2, 3]);
@@ -357,10 +363,12 @@ impl<'a> Gen<'a> {
     }
 
     fn contact(&mut self) -> Contact {
-        let id = self.rng.uuid();
-        self.ids.insert(id.clone());
+        let foreign = self.rng.chance(0.1).then(|| self.rng.uuid());
+        if let Some(id) = &foreign {
+            self.ids.insert(id.clone());
+        }
         let words_count = self.rng.range(1, 3) as usize;
-        let name = words(&mut self.rng, words_count);
+        let name = (!self.rng.chance(0.1)).then(|| words(&mut self.rng, words_count));
         let local = format!("{}.{}", words(&mut self.rng, 1), self.rng.below(1000))
             .replace([' ', '\u{0}', '\t', ',', ':', '\''], "")
             .to_lowercase();
@@ -371,9 +379,12 @@ impl<'a> Gen<'a> {
         };
         let domain = *pick(&mut self.rng, &["example.com", "acme.io", "mail.example.org"]);
         let email = format!("{local}@{domain}");
+        let user = format!("macro|{email}");
+        // The record's email may differ from the user id's in case only.
+        let email = if self.rng.chance(0.05) { email.to_uppercase() } else { email };
         Contact {
-            id,
-            user: format!("macro|{email}"),
+            foreign,
+            user,
             email,
             name,
         }
@@ -423,10 +434,7 @@ impl<'a> Gen<'a> {
             }
         }
         if self.rng.chance(0.6) {
-            for page in 0..self.pools.contacts.len().div_ceil(200) {
-                self.contacts_page(page);
-            }
-            self.people_context();
+            self.people_backfill();
         }
         while self.ops.len() < length {
             self.step();
@@ -444,6 +452,15 @@ impl<'a> Gen<'a> {
             .chain(&self.pools.channels)
             .chain(&self.pools.threads)
             .map(|spec| format!("{}:{}", spec.typename, spec.id))
+            .collect::<Vec<_>>()
+            .into_iter()
+            .chain(
+                self.pools
+                    .contacts
+                    .clone()
+                    .iter()
+                    .map(|contact| format!("GraphqlContact:{}", self.contact_id(contact))),
+            )
             .collect();
         let mail: Vec<String> = self
             .pools
@@ -612,6 +629,9 @@ impl<'a> Gen<'a> {
             "clear" => {
                 self.push(Op::Clear);
                 self.written.clear();
+                if self.rng.chance(0.6) {
+                    self.people_backfill();
+                }
             }
             _ => {
                 // Another account signs in: the app clears the cache first.
@@ -622,6 +642,9 @@ impl<'a> Gen<'a> {
                 self.ids.insert(self.viewer.clone());
                 self.written.clear();
                 self.home();
+                if self.rng.chance(0.6) {
+                    self.people_backfill();
+                }
             }
         }
     }
@@ -841,16 +864,30 @@ impl<'a> Gen<'a> {
         self.push(op);
     }
 
+    /// The id the server gives a contact: the engine's viewer-scoped contact key.
+    fn contact_id(&mut self, contact: &Contact) -> String {
+        let id = match &contact.foreign {
+            Some(id) => id.clone(),
+            None => {
+                let namespace = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, self.viewer.as_bytes());
+                uuid::Uuid::new_v5(&namespace, contact.user.as_bytes()).to_string()
+            }
+        };
+        self.ids.insert(id.clone());
+        id
+    }
+
     fn contacts_page(&mut self, page: usize) {
         const LIMIT: usize = 200;
         let start = (page * LIMIT).min(self.pools.contacts.len());
         let end = (start + LIMIT).min(self.pools.contacts.len());
-        let nodes: Vec<Value> = self.pools.contacts[start..end]
+        let contacts = self.pools.contacts[start..end].to_vec();
+        let nodes: Vec<Value> = contacts
             .iter()
             .map(|contact| {
                 json!({
                     "__typename": "GraphqlContact",
-                    "id": contact.id,
+                    "id": self.contact_id(contact),
                     "userId": contact.user,
                     "email": contact.email,
                     "name": contact.name,
@@ -874,7 +911,7 @@ impl<'a> Gen<'a> {
             let index = self.rng.below(self.pools.contacts.len() as u64) as usize;
             if self.rng.chance(0.5) {
                 let count = self.rng.range(1, 3) as usize;
-                self.pools.contacts[index].name = words(&mut self.rng, count);
+                self.pools.contacts[index].name = Some(words(&mut self.rng, count));
             } else {
                 self.pools.contacts.remove(index);
             }
@@ -883,6 +920,14 @@ impl<'a> Gen<'a> {
                 self.pools.contacts.push(contact);
             }
         }
+    }
+
+    /// Every contact page and a people context, as the app loads them after sign-in.
+    fn people_backfill(&mut self) {
+        for page in 0..self.pools.contacts.len().div_ceil(200) {
+            self.contacts_page(page);
+        }
+        self.people_context();
     }
 
     fn people_context(&mut self) {
@@ -953,8 +998,14 @@ impl<'a> Gen<'a> {
         let mode = pick(&mut self.rng, &["command", "recipient", "mention", "property"]).to_string();
         let query = if self.rng.chance(0.2) && !self.pools.contacts.is_empty() {
             let contact = pick(&mut self.rng, &self.pools.contacts).clone();
-            let cut = 1 + self.rng.below(contact.email.len() as u64) as usize;
-            contact.email[..cut.min(contact.email.len())].to_owned()
+            // A prefix of the email or of the name, cut on a character boundary.
+            let text = match &contact.name {
+                Some(name) if self.rng.chance(0.5) => name.clone(),
+                _ => contact.email.clone(),
+            };
+            let chars = text.chars().count().max(1);
+            let cut = 1 + self.rng.below(chars as u64) as usize;
+            text.chars().take(cut).collect()
         } else {
             self.query_text()
         };
@@ -997,6 +1048,13 @@ impl<'a> Gen<'a> {
         let keys: BTreeSet<&String> = keys.iter().collect();
         for pool in [&mut self.pools.core, &mut self.pools.channels, &mut self.pools.threads] {
             pool.retain(|spec| !keys.contains(&format!("{}:{}", spec.typename, spec.id)));
+        }
+        let contacts = std::mem::take(&mut self.pools.contacts);
+        for contact in contacts {
+            let key = format!("GraphqlContact:{}", self.contact_id(&contact));
+            if !keys.contains(&key) {
+                self.pools.contacts.push(contact);
+            }
         }
     }
 
@@ -1131,6 +1189,7 @@ impl<'a> Gen<'a> {
             }
             included.push(*name);
             if self.rng.chance(0.45) {
+                self.filter_budget = 600;
                 let value = self.input_named(ty, name, 0);
                 filters.insert((*name).to_owned(), value);
             }
@@ -1179,6 +1238,7 @@ impl<'a> Gen<'a> {
         }
         let mut filters = excluded(&["emailFilter"]);
         if self.rng.chance(0.6) {
+            self.filter_budget = 600;
             let tree = self.input_named("GraphqlEmailExpr", "tree", 0);
             filters["emailFilter"] = json!({ "tree": tree });
         } else if self.rng.chance(0.5) {
@@ -1197,6 +1257,7 @@ impl<'a> Gen<'a> {
     /// A random value of a GraphQL input type, drawn from the schema so every
     /// literal the filter grammar has can appear, with ids from this cache.
     fn input_named(&mut self, ty: &str, field: &str, depth: u8) -> Value {
+        self.filter_budget = self.filter_budget.saturating_sub(1);
         let schema = self.faker.schema();
         let Some(definition) = schema.types.get(ty) else {
             return self.scalar(ty, field);
@@ -1214,7 +1275,9 @@ impl<'a> Gen<'a> {
                     .map(|(name, field)| (name.clone(), field.ty.as_ref().clone()))
                     .collect();
                 if object.directives.has("oneOf") {
-                    let deep = depth >= 2;
+                    // Mostly shallow; now and then nested deep, as a long saved filter is.
+                    let deep = depth >= 2
+                        && !(depth < 8 && self.filter_budget > 0 && self.rng.chance(0.25));
                     let choices: Vec<&(Name, Type)> = fields
                         .iter()
                         .filter(|(name, _)| !deep || !matches!(name.as_str(), "and" | "or" | "not"))
@@ -1244,7 +1307,12 @@ impl<'a> Gen<'a> {
                 self.input_named(name.as_str(), field, depth)
             }
             Type::List(item) | Type::NonNullList(item) => {
-                let count = self.rng.range(1, 2);
+                // Mostly one or two items; now and then dozens, which deepens the SQL.
+                let count = if depth <= 4 && self.filter_budget > 64 && self.rng.chance(0.06) {
+                    self.rng.range(8, 64)
+                } else {
+                    self.rng.range(1, 2)
+                };
                 Value::Array((0..count).map(|_| self.input_type(item, field, depth)).collect())
             }
         }
