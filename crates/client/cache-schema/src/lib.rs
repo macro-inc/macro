@@ -1,4 +1,6 @@
-//! Immutable runtime schema metadata, supplied by the frontend bundle.
+//! Immutable runtime schema metadata: the lookup tables the GraphQL cache
+//! derives from the SDL. Split from `cache-core` so `cache-wasm`'s build script
+//! can build the tables without compiling the engine.
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::sync::{Arc, LazyLock};
@@ -118,7 +120,7 @@ impl Schema {
     /// Validate metadata and compute its canonical identity.
     pub fn from_artifact(mut artifact: SchemaArtifact) -> Result<Arc<Self>, SchemaError> {
         if artifact.format_version != 1
-            || artifact.compatibility_epoch != crate::codec::CACHE_SCHEMA_COMPATIBILITY_EPOCH
+            || artifact.compatibility_epoch != CACHE_SCHEMA_COMPATIBILITY_EPOCH
         {
             return Err(SchemaError(
                 "unsupported format or compatibility epoch; a native update is required".into(),
@@ -309,6 +311,15 @@ impl Schema {
                 .is_some_and(|t| t.possible_types.iter().any(|name| name == concrete))
     }
 }
+/// Bump when a GraphQL schema change makes existing normalized records unsafe.
+///
+/// Additive fields do not require a bump: fragment reads only project selected
+/// fields, so older records remain usable until a newly selected field is
+/// fetched. Bump this epoch for incompatible changes to normalized identity,
+/// field storage shape, or other schema-derived cache semantics.
+// File-type facts now preserve raw server text instead of enum-normalizing it.
+// Calendar range tables index cached occurrences, so older caches lack rows.
+pub const CACHE_SCHEMA_COMPATIBILITY_EPOCH: u32 = 4;
 /// SDL embedded in this build. The browser engine's build script turns it into
 /// lookup tables (`cache-wasm/build.rs`); native hosts supply their bundle's SDL;
 /// tests and legacy callers parse it here.

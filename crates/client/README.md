@@ -8,6 +8,7 @@ Normalized GraphQL cache with disk-backed persistence for urql. Design doc:
 | Crate | Purpose |
 |---|---|
 | `cache-core` | Pure engine: normalize/denormalize, LRU hot tier, dependency index, durable ordered optimistic-mutation queue, async `Storage` trait |
+| `cache-schema` | Schema metadata derived from the GraphQL SDL (`cache_core::meta`); kept apart so `cache-wasm`'s build script can build the tables without the engine |
 | `cache-turso` | `Storage` over Turso core — browser WASM and Tauri native hosts |
 | `turso-opfs` | Browser OPFS `IO`/`File` adapter for the dedicated Turso engine worker |
 | `cache-wasm` | wasm-bindgen shell combining the engine, Turso storage, and OPFS adapter for browser worker glue (`apps/web/src/lib/graphql-cache/`) |

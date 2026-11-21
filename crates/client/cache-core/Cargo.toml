@@ -16,8 +16,8 @@ name = "authority_schema"
 required-features = ["schema"]
 
 [dependencies]
-apollo-compiler = { workspace = true }
 apollo-parser = { workspace = true }
+cache-schema = { path = "../cache-schema" }
 chrono = { workspace = true }
 database_sql = { path = "../../database_sql" }
 lru = { workspace = true }
@@ -34,9 +34,6 @@ sha2 = { workspace = true }
 subsequence_match = { path = "../../subsequence_match" }
 thiserror = { workspace = true }
 uuid = { workspace = true }
-
-[build-dependencies]
-sha2 = { workspace = true }
 
 [dev-dependencies]
 database_sql = { path = "../../database_sql", features = ["schema"] }

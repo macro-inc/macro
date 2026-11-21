@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 fn main() {
     println!("cargo:rerun-if-changed=../../../static_assets/schema.graphql");
-    let schema = cache_core::meta::Schema::from_sdl(cache_core::meta::BUNDLED_SCHEMA_SDL)
+    let schema = cache_schema::Schema::from_sdl(cache_schema::BUNDLED_SCHEMA_SDL)
         .expect("the bundled schema parses");
     let tables = postcard::to_allocvec(schema.artifact()).expect("schema tables encode");
     let out = PathBuf::from(std::env::var_os("OUT_DIR").expect("Cargo sets OUT_DIR"));
