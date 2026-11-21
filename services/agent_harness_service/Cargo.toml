@@ -163,7 +163,7 @@ notification = { path = "../../crates/notification", features = ["ai_tool"] }
 onboarding = { path = "../../crates/onboarding" }
 opentelemetry = { workspace = true, features = ["metrics"] }
 # Self-hosted macrod's teammate spans (`src/teammates/telemetry.rs`).
-opentelemetry-proto = { version = "0.31.0", default-features = false, features = ["gen-tonic", "trace"] }
+opentelemetry-proto = { workspace = true, features = ["gen-tonic", "trace"] }
 prost = { workspace = true }
 tonic = { version = "0.14", default-features = false, features = ["channel"] }
 pipedream_mcp = { path = "../../crates/pipedream_mcp" }

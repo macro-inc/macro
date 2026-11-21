@@ -50,7 +50,7 @@ opentelemetry_sdk = { workspace = true, features = ["trace", "rt-tokio"] }
 # OTLP/HTTP for a computer's telemetry intake; rustls, as the guest has no OpenSSL.
 opentelemetry-otlp = { workspace = true, features = ["http-proto", "reqwest-blocking-client", "reqwest-rustls"] }
 prost = { workspace = true }
-opentelemetry-proto = { version = "0.31.0", default-features = false, features = ["gen-tonic-messages", "trace"] }
+opentelemetry-proto = { workspace = true, features = ["gen-tonic-messages", "trace"] }
 tracing-opentelemetry = { workspace = true }
 ratatui = { workspace = true }
 nom = { workspace = true }
