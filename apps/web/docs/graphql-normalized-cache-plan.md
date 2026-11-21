@@ -1467,7 +1467,17 @@ older one. The cached directory also writes it onto the channel's cached record
 moving back the view it read; two tabs stamping one channel at once can leave
 the older view), once the record exists, and again over a later record that
 holds an older view; other tabs see it when they read that record. Without
-the cache another tab shows it once its own pages are read again. A channel
+the cache another tab shows it once its own pages are read again. Views made
+on another device reach no soup update either, so a cached record keeps the
+view it was read with until a pass of the lane rereads it: the cached
+directory's `viewsCurrent()` turns true only once a pass that started after
+the page loaded (`performance.timeOrigin`) has finished in the current storage
+generation, judged by the checkpoint's watermark, which is that pass's start.
+The in-memory directory read its pages in this page, so it always is. Until
+then `useChannelLastViewed` also asks `user.channelViewedAt` when a joined
+channel opens and shows the later of the record's view and the answer (the
+record's on no answer within five seconds); a tab that does not run the
+backfill stays not current until a pass starts after it loaded. A channel
 mention in rendered Markdown waits up to five seconds for a pending lookup.
 
 ## Authoritative Mail membership repair

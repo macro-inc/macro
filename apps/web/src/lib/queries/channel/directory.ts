@@ -69,6 +69,8 @@ import {
 } from '../contacts/cache-scope';
 import { queryReadyGate } from '../gate';
 import {
+  loadSoupBackfillCheckpoint,
+  type SoupBackfillCheckpoint,
   soupBackfillLaneCompleted,
   soupBackfillLaneFailed,
   watchSoupBackfillCheckpoint,
@@ -178,6 +180,12 @@ export type ChannelDirectory = {
    * never moves it back here. Other tabs show it once a read of theirs
    * returns it (the cached directory also stamps the cached record). */
   recordView: (channelId: string, viewedAt: string) => void;
+  /** Whether every record shows the viewer's views as of this page's load or
+   * later. No soup update carries a view, so a cached record keeps the one it
+   * was read with until a pass of the channel lane rereads it: the cached
+   * directory is current once a pass that started after the page loaded has
+   * finished. The in-memory one read its pages in this page. */
+  viewsCurrent: Accessor<boolean>;
 };
 
 export const EMPTY_CHANNEL_DIRECTORY_STATE: ChannelDirectoryState = {
@@ -883,6 +891,10 @@ type CachedDirectoryDeps = {
   pageAll: (signal: AbortSignal) => Promise<FallbackWalk>;
   /** Writes a recorded view onto the channel's cached record. */
   stampView: (channelId: string, viewedAt: string) => Promise<boolean>;
+  /** When this page loaded, in epoch milliseconds: records a pass of the
+   * lane reread after it show views as current as `ChannelDirectory`
+   * promises. `performance.timeOrigin` when left out. */
+  sessionStartedAt?: number;
 };
 
 /** The joined channels paged from the network once the channel lane gave
@@ -912,14 +924,24 @@ type FallbackReason =
   | 'scope_changed';
 
 /** What the channel lane's checkpoint says of the current storage
- * generation. */
-type LaneProgress = { complete: boolean; failed: boolean };
+ * generation. `viewsCurrent`: a pass that started at or after
+ * `sessionStartedAt` has finished, so it reread every record. */
+type LaneProgress = {
+  complete: boolean;
+  failed: boolean;
+  viewsCurrent: boolean;
+};
 
-const LANE_NOT_STARTED: LaneProgress = { complete: false, failed: false };
+const LANE_NOT_STARTED: LaneProgress = {
+  complete: false,
+  failed: false,
+  viewsCurrent: false,
+};
 
 function readLaneProgress(
   userId: string,
-  storageGeneration: string
+  storageGeneration: string,
+  sessionStartedAt: number
 ): LaneProgress {
   const complete = soupBackfillLaneCompleted(
     userId,
@@ -935,7 +957,22 @@ function readLaneProgress(
         CHANNEL_DIRECTORY_CHECKPOINT_ID,
         storageGeneration
       ),
+    viewsCurrent:
+      complete &&
+      laneReadSince(
+        loadSoupBackfillCheckpoint(userId, CHANNEL_DIRECTORY_CHECKPOINT_ID),
+        sessionStartedAt
+      ),
   };
+}
+
+/** Whether the lane's last finished pass started at or after `time`: a
+ * finished pass leaves its own start as the watermark. */
+function laneReadSince(checkpoint: SoupBackfillCheckpoint, time: number) {
+  if (checkpoint.completedAt === null || checkpoint.updatedSince === null)
+    return false;
+  const started = Date.parse(checkpoint.updatedSince);
+  return Number.isFinite(started) && started >= time;
 }
 
 /** A channel's record as the cache showed it after a change, or null once
@@ -1105,6 +1142,11 @@ export function createCachedChannelDirectory(
   // As of the last full read, which alone may promote completeness.
   let lane = LANE_NOT_STARTED;
   let lastRead: ChannelDirectoryRead | undefined;
+  // The lane as the read `lastRead` came from found it.
+  let publishedLane = LANE_NOT_STARTED;
+  const sessionStartedAt = deps.sessionStartedAt ?? performance.timeOrigin;
+  // Written only by `render`, from the read shown.
+  const [viewsCurrent, setViewsCurrent] = createSignal(false);
   // A full read lists every cached record; a keys read rereads only the
   // records a by-id read wrote.
   let wantFull = true;
@@ -1222,6 +1264,7 @@ export function createCachedChannelDirectory(
    * settled (`settle`) reuses the confirmations the last read chose, and
    * the rows too unless a read's outcome adds or removes one. */
   const render = (settle = false) => {
+    setViewsCurrent(lastRead !== undefined && publishedLane.viewsCurrent);
     const network = fallback;
     if (network.status !== 'loaded') {
       show(
@@ -1388,6 +1431,7 @@ export function createCachedChannelDirectory(
 
   const publish = (read: ChannelDirectoryRead) => {
     lastRead = read;
+    publishedLane = lane;
     // Built once, and only when one of them needs it.
     let byId: Map<string, DirectoryChannel> | undefined;
     const records = () => {
@@ -1507,7 +1551,7 @@ export function createCachedChannelDirectory(
       }
       // Read before the scan: a pass that finishes during it may have
       // written records the scan missed, and its save reads again.
-      lane = readLaneProgress(userId, scope);
+      lane = readLaneProgress(userId, scope, sessionStartedAt);
       const read = await index.refresh(scope, signal);
       // The cache may have changed hands while it was read.
       await assertContactCacheScope(host, userId, scope, signal);
@@ -1603,8 +1647,12 @@ export function createCachedChannelDirectory(
     watchSoupBackfillCheckpoint(userId, CHANNEL_DIRECTORY_CHECKPOINT_ID, () => {
       laneStalled();
       if (generation === undefined) return;
-      const next = readLaneProgress(userId, generation);
-      if (next.complete !== lane.complete || next.failed !== lane.failed)
+      const next = readLaneProgress(userId, generation, sessionStartedAt);
+      if (
+        next.complete !== lane.complete ||
+        next.failed !== lane.failed ||
+        next.viewsCurrent !== lane.viewsCurrent
+      )
         refreshNow();
     })
   );
@@ -1661,6 +1709,7 @@ export function createCachedChannelDirectory(
     recordView(channelId, viewedAt) {
       if (views.record(channelId, viewedAt)) stampView(channelId, viewedAt);
     },
+    viewsCurrent,
   };
 }
 
@@ -1735,6 +1784,7 @@ export function createMemoryChannelDirectory(
     recordView(channelId, viewedAt) {
       views.record(channelId, viewedAt);
     },
+    viewsCurrent: () => true,
   };
 }
 
@@ -1747,6 +1797,7 @@ export const EMPTY_CHANNEL_DIRECTORY: ChannelDirectory = {
   failed: () => false,
   retry: () => {},
   recordView: () => {},
+  viewsCurrent: () => true,
 };
 
 /** A complete directory of `channels`, which may change, for tests and
@@ -1763,6 +1814,7 @@ export function staticChannelDirectory(
     failed: () => false,
     retry: () => {},
     recordView: () => {},
+    viewsCurrent: () => true,
   };
 }
 
@@ -1830,5 +1882,6 @@ export function createAppChannelDirectory(): ChannelDirectory {
     retry: () => untrack(directory).retry(),
     recordView: (channelId, viewedAt) =>
       untrack(directory).recordView(channelId, viewedAt),
+    viewsCurrent: () => directory().viewsCurrent(),
   };
 }

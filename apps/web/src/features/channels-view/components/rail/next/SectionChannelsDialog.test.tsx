@@ -40,6 +40,7 @@ function coldDirectory(channels: readonly DirectoryChannel[]) {
     failed: () => false,
     retry: () => {},
     recordView: () => {},
+    viewsCurrent: () => true,
   };
   return { directory, setListed };
 }

@@ -27,6 +27,7 @@ vi.mock('@core/context/channels', async (importOriginal) => ({
     failed: () => false,
     retry: () => {},
     recordView: () => {},
+    viewsCurrent: () => true,
   }),
 }));
 vi.mock('@core/context/user', () => ({

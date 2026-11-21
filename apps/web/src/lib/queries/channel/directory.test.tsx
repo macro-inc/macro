@@ -554,6 +554,8 @@ describe('in-memory channel directory', () => {
       { holdPages: true }
     );
     const directory = mountMemoryDirectory(network);
+    // Every page it shows was read in this page.
+    expect(directory.viewsCurrent()).toBe(true);
 
     expect(directory.lookup(channelUuid('c')).status).toBe('pending');
     await vi.waitFor(() =>
@@ -672,6 +674,8 @@ type CachedDirectoryOptions = {
   unreadable?: readonly string[];
   /** By-id reads answer once this settles. */
   byIdGate?: Promise<void>;
+  /** When the page loaded, for `viewsCurrent`. */
+  sessionStartedAt?: number;
 };
 
 const CACHE_SESSION = 'session-1';
@@ -747,6 +751,7 @@ function mountCachedDirectory(
         written: options.written ?? Promise.resolve(1),
       }),
       stampView,
+      sessionStartedAt: options.sessionStartedAt,
     });
   });
   return {
@@ -798,6 +803,27 @@ function completeLane(generation: string) {
       ...initialSoupBackfillCheckpoint(VIEWER, generation),
       completed: true,
       completedAt: '2026-11-20T00:00:00Z',
+    },
+    CHANNEL_DIRECTORY_CHECKPOINT_ID
+  );
+}
+
+/** Records the lane's checkpoint as a pass that started at `startedAt`
+ * left it: finished, or still paging after an earlier one finished. */
+function lanePass(
+  generation: string,
+  startedAt: string,
+  state: 'running' | 'finished',
+  earlier = '2026-11-19T00:00:00.000Z'
+) {
+  const finished = state === 'finished';
+  saveSoupBackfillCheckpoint(
+    {
+      ...initialSoupBackfillCheckpoint(VIEWER, generation),
+      completed: finished,
+      scanStartedAt: finished ? null : startedAt,
+      updatedSince: finished ? startedAt : earlier,
+      completedAt: finished ? startedAt : earlier,
     },
     CHANNEL_DIRECTORY_CHECKPOINT_ID
   );
@@ -917,6 +943,44 @@ describe('cached channel directory', () => {
     expect(directory.complete()).toBe(false);
     completeLane('g2');
     await vi.waitFor(() => expect(directory.complete()).toBe(true));
+  });
+
+  describe('views as current as the page', () => {
+    const LOADED_AT = '2026-11-21T08:00:00.000Z';
+
+    it('keeps records an earlier pass read stale until a pass that started after the page loaded finishes', async () => {
+      const { cache, directory } = mountCachedDirectory([], {
+        sessionStartedAt: Date.parse(LOADED_AT),
+      });
+      cache.put(channelRecord('a'));
+      // The last session's pass: complete, but older than this page.
+      lanePass('g1', '2026-11-20T08:00:00.000Z', 'finished');
+      await vi.waitFor(() => expect(directory.complete()).toBe(true));
+      expect(directory.viewsCurrent()).toBe(false);
+
+      // This session's pass is paging: still complete, still not current.
+      lanePass('g1', '2026-11-21T08:00:01.000Z', 'running');
+      await new Promise((done) => setTimeout(done, 20));
+      expect(directory.complete()).toBe(true);
+      expect(directory.viewsCurrent()).toBe(false);
+
+      lanePass('g1', '2026-11-21T08:00:01.000Z', 'finished');
+      await vi.waitFor(() => expect(directory.viewsCurrent()).toBe(true));
+    });
+
+    it('is not current again once the storage resets', async () => {
+      const { cache, directory, resetStorage } = mountCachedDirectory([], {
+        sessionStartedAt: Date.parse(LOADED_AT),
+      });
+      cache.put(channelRecord('a'));
+      lanePass('g1', '2026-11-21T08:00:01.000Z', 'finished');
+      await vi.waitFor(() => expect(directory.viewsCurrent()).toBe(true));
+
+      resetStorage('g2');
+      expect(directory.viewsCurrent()).toBe(false);
+      lanePass('g2', '2026-11-21T08:05:00.000Z', 'finished');
+      await vi.waitFor(() => expect(directory.viewsCurrent()).toBe(true));
+    });
   });
 
   it('answers a mistyped channel link as missing and reads only real ids', async () => {

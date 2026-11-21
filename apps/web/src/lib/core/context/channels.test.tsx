@@ -48,10 +48,12 @@ afterEach(() => {
   viewer.id = 'viewer';
 });
 
-/** A directory that fills when the test says so. */
-function fillingDirectory() {
+/** A directory that fills when the test says so; its views are current
+ * unless `viewsCurrent` is false. */
+function fillingDirectory(viewsCurrent = true) {
   const [channels, setChannels] = createSignal<readonly DirectoryChannel[]>([]);
   const [complete, setComplete] = createSignal(false);
+  const [current, setViewsCurrent] = createSignal(viewsCurrent);
   const state = () => channelDirectoryState(channels(), [], complete());
   const directory: ChannelDirectory = {
     channels: () => state().joined,
@@ -61,6 +63,7 @@ function fillingDirectory() {
     failed: () => false,
     retry: () => {},
     recordView: () => {},
+    viewsCurrent: current,
   };
   return {
     directory,
@@ -69,6 +72,7 @@ function fillingDirectory() {
       setComplete(true);
     },
     setChannels,
+    setViewsCurrent,
   };
 }
 
@@ -247,6 +251,87 @@ describe('useChannelLastViewed', () => {
     answer(SERVER_VIEWED);
     await settles();
     expect(lastViewed()).toEqual({ status: 'known', viewedAt: VIEWED });
+  });
+
+  describe('a joined channel whose record may predate this page', () => {
+    const LATER = '2026-11-21T09:00:00+00:00';
+
+    function stale(id: string, viewedAt = VIEWED) {
+      const filling = fillingDirectory(false);
+      filling.fill([directoryChannel(id, { viewedAt })]);
+      return filling;
+    }
+
+    it('waits for the server and shows the view made elsewhere since', async () => {
+      const id = channelUuid('viewed-elsewhere');
+      const answer = heldAnswer();
+      const { lastViewed } = setup(id, stale(id));
+      await settles();
+      expect(serverViews.read).toHaveBeenCalledWith(id);
+      expect(lastViewed()).toEqual({ status: 'pending' });
+      answer(LATER);
+      await settles();
+      expect(lastViewed()).toEqual({ status: 'known', viewedAt: LATER });
+    });
+
+    it("keeps the record's view when the server's is older or absent", async () => {
+      const older = channelUuid('older-answer');
+      serverViews.read.mockReturnValue(okAsync(SERVER_VIEWED));
+      const first = setup(older, stale(older));
+      await settles();
+      expect(first.lastViewed()).toEqual({ status: 'known', viewedAt: VIEWED });
+
+      const none = channelUuid('no-answer');
+      serverViews.read.mockReturnValue(okAsync(null));
+      const second = setup(none, stale(none));
+      await settles();
+      expect(second.lastViewed()).toEqual({
+        status: 'known',
+        viewedAt: VIEWED,
+      });
+    });
+
+    it("falls back to the record's view when the server fails or is slow", async () => {
+      const failing = channelUuid('failing');
+      serverViews.read.mockReturnValue(errAsync(new Error('lookup failed')));
+      const first = setup(failing, stale(failing));
+      await settles();
+      expect(first.lastViewed()).toEqual({ status: 'known', viewedAt: VIEWED });
+
+      vi.useFakeTimers();
+      try {
+        const slow = channelUuid('slow-joined');
+        const answer = heldAnswer();
+        const second = setup(slow, stale(slow));
+        await vi.advanceTimersByTimeAsync(LAST_VIEW_WAIT_MS - 1);
+        expect(second.lastViewed()).toEqual({ status: 'pending' });
+        await vi.advanceTimersByTimeAsync(1);
+        expect(second.lastViewed()).toEqual({
+          status: 'known',
+          viewedAt: VIEWED,
+        });
+        answer(LATER);
+        await vi.advanceTimersByTimeAsync(0);
+        expect(second.lastViewed()).toEqual({
+          status: 'known',
+          viewedAt: VIEWED,
+        });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('stops waiting once a pass rereads the record', async () => {
+      const id = channelUuid('reread');
+      heldAnswer();
+      const filling = stale(id);
+      const { lastViewed } = setup(id, filling);
+      await settles();
+      expect(lastViewed()).toEqual({ status: 'pending' });
+      filling.setChannels([directoryChannel(id, { viewedAt: LATER })]);
+      filling.setViewsCurrent(true);
+      expect(lastViewed()).toEqual({ status: 'known', viewedAt: LATER });
+    });
   });
 
   it('keeps reading the record after the viewer leaves the channel it opened in', async () => {
