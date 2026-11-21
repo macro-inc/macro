@@ -30,15 +30,15 @@ export function createBaseQuery<
   name: string
 ): Result {
   const providerClient = useOptionalUrqlClient();
-  // Requests sent while the enclosing view loads join its trace; see
-  // traceParentExchange.
+  // Requests sent while the enclosing view loads join its trace, unless the
+  // caller names its own parent; see traceParentExchange.
   const flow = useFlowTrace();
   const options = createMemo(() => {
     const input = getOptions();
     const next = crmSnapshotAuthorization().paused
       ? { ...input, enabled: false }
       : input;
-    if (!flow) return next;
+    if (!flow || next.context?.[TRACE_PARENT_CONTEXT_KEY]) return next;
     return {
       ...next,
       context: { ...next.context, [TRACE_PARENT_CONTEXT_KEY]: flow },

@@ -5,17 +5,23 @@ use crate::pubsub::util::cg_refresh_email;
 use crate::util::redis::RedisClient;
 use authentication_service_client::{AuthServiceClient, error::AuthServiceClientError};
 use connection_gateway_client::client::ConnectionGatewayClient;
+use contacts::domain::ports::ContactListIngress;
 use email::domain::mailbox::link_manager::deletion::{
     LinkDeletionAuth, LinkDeletionGmail, LinkDeletionRefresh, LinkDeletionRepository,
     PromotedMailboxCleanup,
 };
 use email_api_client::domain::models::EmailApiError;
+use macro_user_id::user_id::MacroUserIdStr;
 use models_email::{
     api::refresh::RefreshEmailEvent,
     service::{cache::TokenCacheKey, link::Link},
 };
 use sqlx::{PgPool, Postgres, pool::PoolConnection};
+use std::sync::Arc;
 use uuid::Uuid;
+
+#[cfg(test)]
+mod test;
 
 pub(crate) struct PgLinkDeletion(pub PgPool);
 pub(crate) struct PromotedCleanup(PoolConnection<Postgres>);
@@ -70,10 +76,29 @@ impl LinkDeletionAuth for DeletionAuth {
     }
 }
 
-pub(crate) struct DeletionRefresh(pub ConnectionGatewayClient);
+pub(crate) struct DeletionRefresh<C = crate::composition::ContactsProducer> {
+    pub gateway: ConnectionGatewayClient,
+    pub contacts: Arc<C>,
+}
 
-impl LinkDeletionRefresh for DeletionRefresh {
+impl<C: ContactListIngress> LinkDeletionRefresh for DeletionRefresh<C> {
     async fn link_removed(&self, owner: &str, link_id: Uuid) {
-        cg_refresh_email(&self.0, owner, RefreshEmailEvent::LinkRemoved { link_id }).await;
+        cg_refresh_email(
+            &self.gateway,
+            owner,
+            RefreshEmailEvent::LinkRemoved { link_id },
+        )
+        .await;
+    }
+    async fn directory_changed(&self, owner: &MacroUserIdStr<'static>) {
+        // Best effort, like the refresh: the clients' periodic scan drops the
+        // contacts anyway.
+        let _ = self
+            .contacts
+            .directory_changed(vec![owner.clone()], Vec::new())
+            .await
+            .inspect_err(|error| {
+                tracing::error!(?error, "failed to notify contacts of a removed inbox");
+            });
     }
 }

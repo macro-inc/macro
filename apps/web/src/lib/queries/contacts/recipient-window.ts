@@ -4,7 +4,7 @@ import type {
   RecipientSource,
   RecipientSourceInput,
 } from '@core/user/recipient-source';
-import { createMemo } from 'solid-js';
+import { type Accessor, createMemo } from 'solid-js';
 import { readContactDirectory } from './directory';
 import { createContactDirectoryList } from './directory-list';
 import type { createContactDirectoryWindow } from './directory-query';
@@ -15,7 +15,9 @@ export function createContactRecipientSource(
   scope: Parameters<typeof createContactDirectoryWindow>[0],
   input: RecipientSourceInput,
   isSecondaryInbox: (id: string) => boolean,
-  reader: typeof readContactDirectory = readContactDirectory
+  reader: typeof readContactDirectory = readContactDirectory,
+  /** Members of the viewer's team, to rank a page the server did not. */
+  teammates?: Accessor<ReadonlySet<string>>
 ): RecipientSource<'user'> {
   const exclusions = createContactExclusions(
     () => input.excludedIds?.() ?? [],
@@ -24,6 +26,7 @@ export function createContactRecipientSource(
   const directory = createContactDirectoryList(scope, reader, input.enabled, {
     search: input.search,
     resetKey: exclusions.key,
+    teammates,
     policy: () => ({
       mode: 'recipient',
       excluded: exclusions.native(),

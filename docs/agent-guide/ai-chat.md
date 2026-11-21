@@ -585,7 +585,7 @@ the shimmer.
   counts describe loaded rows, not a server total. Phone has its own Archived view.
   Runs of routines with **Show runs in Home and Agents** off (the default) are
   left out until **Show hidden routine runs** is checked in the **Filter
-  conversations** menu, which counts it on the filter badge and unchecks it with
+  conversations** menu, which adds it to the count in the filter button and unchecks it with
   **Clear filters**; runs of routines with it on are always listed. Every
   routine run keeps its clock icon in the desktop row. The list starts without
   hidden runs each time the Agents view opens.

@@ -54,7 +54,7 @@ function Composer() {
     layout.openWithSplit({ type: 'agent', id }, { referredFrom: 'agents' });
   };
   return (
-    <div class="agents-view-portal min-w-0">
+    <div class="agents-view-portal agents-scope min-w-0">
       <NewChatPage
         compact
         autoFocus={false}

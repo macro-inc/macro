@@ -769,3 +769,107 @@ test.describe('shared events in email on OUTLOOK', {
     saw('STL-522');
   });
 });
+
+test.describe('a calendar connected after the calendar was opened', {
+  tag: '@full-stack',
+}, () => {
+  test.use({ provider: 'GMAIL' });
+
+  /** Puts an event at local noon today on a Google mailbox's calendar. */
+  async function eventToday(
+    page: Page,
+    mailbox: Mailbox,
+    address: string,
+    title: string
+  ): Promise<void> {
+    const start = await page.evaluate(() => {
+      const noon = new Date();
+      noon.setHours(12, 0, 0, 0);
+      return noon.toISOString();
+    });
+    const end = new Date(Date.parse(start) + 30 * 60_000).toISOString();
+    const url = `${mailbox.stack.info.gmailUrl}/_emulator/mailboxes/${encodeURIComponent(address)}/calendars/primary/events`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        summary: title,
+        start: { dateTime: start, timeZone: 'UTC' },
+        end: { dateTime: end, timeZone: 'UTC' },
+      }),
+    });
+    if (!response.ok) {
+      throw new Error(`${response.status} ${await response.text()}`);
+    }
+  }
+
+  /** Whether Macro holds an event with this title for the test's user. */
+  async function stored(mailbox: Mailbox, title: string): Promise<number> {
+    const [row] = await mailbox.stack.sql<{ count: number }>(
+      `SELECT count(*)::int AS count FROM calendar_events
+       WHERE owner_id = '${mailbox.user.macroUserId}' AND title = '${title}'`
+    );
+    return row?.count ?? 0;
+  }
+
+  // When this fails, the days the calendar showed while no inbox was
+  // connected stay empty once one is: the local cache keeps them as fetched,
+  // and with no inbox tracked it never asks the server what changed.
+  test('shows the new calendar on a day it showed before', async ({
+    page,
+    mailbox,
+  }) => {
+    const removed = await mailbox.api(
+      `/email/email/links/${mailbox.inbox.linkId}`,
+      { method: 'DELETE' }
+    );
+    expect(removed.status).toBe(204);
+    // The watermark of each page of occurrences the cache fetched.
+    const pages: string[] = [];
+    let lastPageAt = 0;
+    page.on('response', async (response) => {
+      const request = response.request().postData() ?? '';
+      if (!request.includes('"operationName":"CalendarOccurrences"')) return;
+      lastPageAt = Date.now();
+      const text = await response.text().catch(() => '');
+      pages.push(/"watermark":(\[[^\]]*\])/.exec(text)?.[1] ?? 'none');
+    });
+    const days = page.getByRole('region', { name: 'Calendar periods' });
+    await mailbox.open('/app/calendar/day');
+    await expect(days).toBeVisible();
+    // The cache fills a year around today in the background, a month every
+    // two seconds; a user connects later than that.
+    await expect
+      .poll(() => pages.length > 0 && Date.now() - lastPageAt > 6_000, {
+        timeout: 120_000,
+      })
+      .toBe(true);
+    expect(new Set(pages)).toEqual(new Set(['[]']));
+
+    const address = mailbox.stack.address('calendar@example.com');
+    const run = Date.now().toString(36);
+    const before = `Standup ${run}`;
+    await mailbox.stack.seed('GMAIL', 'calendar@example.com', []);
+    await eventToday(page, mailbox, address, before);
+    const inbox = await mailbox.stack.link(
+      mailbox.user,
+      'GMAIL',
+      'calendar@example.com',
+      'mail-and-calendar'
+    );
+    await calendarReady(mailbox, inbox);
+    await expect.poll(() => stored(mailbox, before)).toBe(1);
+
+    // The open day shows it once the server says the calendar changed.
+    await expect(days.getByText(before)).toBeVisible({ timeout: 60_000 });
+
+    // A change after connecting reaches the same day too.
+    const after = `Retro ${run}`;
+    await eventToday(page, mailbox, address, after);
+    await expect
+      .poll(() => stored(mailbox, after), { timeout: 60_000 })
+      .toBe(1);
+    await expect(days.getByText(after)).toBeVisible({ timeout: 60_000 });
+    await expect(days.getByText(before)).toBeVisible();
+  });
+});
