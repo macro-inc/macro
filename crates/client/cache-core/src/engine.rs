@@ -1915,17 +1915,19 @@ impl<S: Storage> Engine<S> {
                 .get_batch(&missing)
                 .await
                 .map_err(EngineError::Storage)?;
-            for (key, record) in missing.into_iter().zip(fetched) {
+            for (key, record) in missing.iter().zip(fetched) {
                 if let Some(r) = record {
-                    staging.insert(key, r);
+                    staging.insert(key.clone(), r);
                 }
             }
         }
-        // The kept records stand for reading storage now, after the batch
+        // The kept records stand for reading storage now, alongside the batch
         // above. Once storage has committed since the passes read them, read
-        // them again.
+        // every record this write takes from storage again, in one batch, as
+        // the write does without kept reads.
         if !from_kept.is_empty() && !kept.as_ref().is_some_and(|kept| self.kept_reads_hold(kept)) {
             kept = None;
+            from_kept.extend(missing);
             let fetched = self
                 .storage
                 .get_batch(&from_kept)
@@ -2064,13 +2066,16 @@ impl<S: Storage> Engine<S> {
                 .map_err(EngineError::Storage)?;
             projected.extend(
                 missing
-                    .into_iter()
+                    .iter()
+                    .cloned()
                     .zip(states)
                     .filter_map(|(key, state)| state.map(|state| (key, state))),
             );
         }
-        // As for records: the kept states stand for reading storage now.
+        // As for records: the kept states stand for reading storage now, and
+        // once they do not, every state is read again in one batch.
         if !from_kept.is_empty() && !kept.is_some_and(|kept| self.kept_reads_hold(kept)) {
+            from_kept.extend(missing);
             let states = self
                 .storage
                 .load_projection_states(&from_kept)
