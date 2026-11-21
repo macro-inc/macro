@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 use tracing::{Instrument, field::Empty};
 use uuid::Uuid;
 
-use crate::anthropic_gateway::brain::BrainAccess;
+use crate::anthropic_gateway::brain::{BrainAccess, BrainRefusal};
 use crate::solver_runs::{
     self, BudgetLimit, RunLimits, RunStart, SolveLedger, SolverRunId, SolverRuns,
 };
@@ -142,7 +142,7 @@ async fn solve<Solver: CaptchaSolver>(
         .await
     {
         Ok(brain) => brain,
-        Err(status) => return refused(status, "unauthorized", "the agent may not solve CAPTCHAs"),
+        Err(refused) => return brain_refused(&span, refused),
     };
     span.record(
         "agent.user.id",
@@ -236,6 +236,19 @@ async fn solve<Solver: CaptchaSolver>(
 }
 
 /// A refusal as `{"error": message, "code"?: code}`, recorded on `span`.
+/// The brain check's refusal; a held agent (a person drives its computer)
+/// is told when to retry.
+fn brain_refused(span: &tracing::Span, refused: BrainRefusal) -> Response {
+    let (outcome, message) = match refused {
+        BrainRefusal::Held { .. } => (
+            "agent_held",
+            "a person is driving the agent's computer; retry after they hand it back",
+        ),
+        _ => ("unauthorized", "the agent may not solve CAPTCHAs"),
+    };
+    refused.with_retry_after(refusal(span, refused.status(), outcome, None, message))
+}
+
 fn refusal(
     span: &tracing::Span,
     status: StatusCode,
@@ -310,15 +323,7 @@ async fn end_run<Solver: CaptchaSolver>(
         .await
     {
         Ok(brain) => brain,
-        Err(status) => {
-            return refusal(
-                &span,
-                status,
-                "unauthorized",
-                None,
-                "the agent may not solve CAPTCHAs",
-            );
-        }
+        Err(refused) => return brain_refused(&span, refused),
     };
     span.record(
         "agent.user.id",
@@ -366,15 +371,7 @@ async fn start_run<Solver: CaptchaSolver>(
         .await
     {
         Ok(brain) => brain,
-        Err(status) => {
-            return refusal(
-                &span,
-                status,
-                "unauthorized",
-                None,
-                "the agent may not solve CAPTCHAs",
-            );
-        }
+        Err(refused) => return brain_refused(&span, refused),
     };
     span.record(
         "agent.user.id",

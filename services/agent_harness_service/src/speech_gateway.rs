@@ -38,7 +38,9 @@ use tokio_tungstenite::{
 };
 use tracing::{Instrument, Span, field::Empty};
 
-use crate::anthropic_gateway::brain::{BrainAccess, BrainAuthenticator, BrainCaller, BrainRollout};
+use crate::anthropic_gateway::brain::{
+    BrainAccess, BrainAuthenticator, BrainCaller, BrainRefusal, BrainRollout,
+};
 use protocol::{ClientEvent, MAX_MESSAGE_BYTES, Operation, STT_BYTES_PER_SECOND, Session};
 
 mod protocol;
@@ -134,7 +136,7 @@ impl SpeechGateway {
     }
 
     /// The agent behind the bearer key, admitted to spend Macro credits.
-    async fn authorize(&self, headers: &HeaderMap) -> Result<BrainCaller, StatusCode> {
+    async fn authorize(&self, headers: &HeaderMap) -> Result<BrainCaller, BrainRefusal> {
         self.access.authorize(headers).await
     }
 
@@ -265,7 +267,13 @@ async fn open(
         .await
     {
         Ok(brain) => brain,
-        Err(status) => return refused(status, "unauthorized"),
+        Err(refusal) => {
+            let outcome = match refusal {
+                BrainRefusal::Held { .. } => "agent_held",
+                _ => "unauthorized",
+            };
+            return refusal.with_retry_after(refused(refusal.status(), outcome));
+        }
     };
     span.record(
         "agent.user.id",

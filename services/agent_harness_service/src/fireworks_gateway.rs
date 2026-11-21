@@ -30,7 +30,10 @@ use futures::StreamExt;
 use serde_json::{Map, Value};
 use tracing::{Instrument, Span, field::Empty};
 
-use crate::anthropic_gateway::{brain::BrainAccess, pump};
+use crate::anthropic_gateway::{
+    brain::{BrainAccess, BrainRefusal},
+    pump,
+};
 use crate::solver_runs::{self, RunRefusal, SolverRunId, SolverRuns};
 use usage::{Observed, SseUsage};
 
@@ -138,6 +141,7 @@ async fn unsupported() -> Response {
         code: None,
         outcome: "unsupported_endpoint",
         message: "Macro's Fireworks gateway serves only /v1/chat/completions".into(),
+        retry_after: None,
     }
     .into_response()
 }
@@ -542,6 +546,8 @@ struct Rejection {
     /// Low-cardinality span outcome.
     outcome: &'static str,
     message: std::borrow::Cow<'static, str>,
+    /// `Retry-After`, for a held agent.
+    retry_after: Option<Duration>,
 }
 
 impl Rejection {
@@ -551,6 +557,7 @@ impl Rejection {
         code: None,
         outcome: "upstream_unreachable",
         message: std::borrow::Cow::Borrowed("Fireworks could not be reached"),
+        retry_after: None,
     };
 
     const NOT_CONFIGURED: Self = Self {
@@ -559,6 +566,7 @@ impl Rejection {
         code: None,
         outcome: "not_configured",
         message: std::borrow::Cow::Borrowed("Macro has no Fireworks key configured"),
+        retry_after: None,
     };
 
     const RUNS_UNAVAILABLE: Self = Self {
@@ -567,6 +575,7 @@ impl Rejection {
         code: None,
         outcome: "runs_unavailable",
         message: std::borrow::Cow::Borrowed("the solver run could not be checked; try again"),
+        retry_after: None,
     };
 
     /// A run the call may not spend: 403 or 429 with the refusal's `code`.
@@ -581,34 +590,45 @@ impl Rejection {
             code: Some(refusal.code()),
             outcome: "run_refused",
             message: refusal.message().into(),
+            retry_after: None,
         }
     }
 
-    /// The brain check's refusal: 401, 403 or 503.
-    fn refused(status: StatusCode) -> Self {
-        let (kind, outcome, message) = match status {
-            StatusCode::UNAUTHORIZED => (
+    /// The brain check's refusal: 401, 403 or 503 (with `Retry-After` when held).
+    fn refused(refusal: BrainRefusal) -> Self {
+        let (kind, outcome, message) = match refusal {
+            BrainRefusal::Unauthenticated => (
                 "authentication_error",
                 "unauthenticated",
                 "send the agent teammate's Macro API key as `Authorization: Bearer`",
             ),
-            StatusCode::FORBIDDEN => (
+            BrainRefusal::Forbidden => (
                 "permission_error",
                 "forbidden",
                 "this agent may not spend Macro credits on Fireworks",
             ),
-            _ => (
+            BrainRefusal::Unavailable => (
                 "api_error",
                 "unavailable",
                 "the agent could not be checked; try again",
             ),
+            BrainRefusal::Held { .. } => (
+                "overloaded_error",
+                "agent_held",
+                "a person is driving this agent's computer; retry after they hand it back",
+            ),
+        };
+        let retry_after = match refusal {
+            BrainRefusal::Held { retry_after } => Some(retry_after),
+            _ => None,
         };
         Self {
-            status,
+            status: refusal.status(),
             kind,
             code: None,
             outcome,
             message: message.into(),
+            retry_after,
         }
     }
 
@@ -619,6 +639,7 @@ impl Rejection {
             code: None,
             outcome: "invalid_request",
             message: message.into(),
+            retry_after: None,
         }
     }
 
@@ -629,18 +650,26 @@ impl Rejection {
             code: None,
             outcome: "model_not_allowed",
             message: format!("only `{KIMI_K3}` is available on Macro credits").into(),
+            retry_after: None,
         }
     }
 }
 
 impl IntoResponse for Rejection {
     fn into_response(self) -> Response {
-        (
+        let mut response = (
             self.status,
             Json(serde_json::json!({
                 "error": { "type": self.kind, "code": self.code, "message": self.message },
             })),
         )
-            .into_response()
+            .into_response();
+        if let Some(retry_after) = self.retry_after {
+            response.headers_mut().insert(
+                axum::http::header::RETRY_AFTER,
+                axum::http::HeaderValue::from(retry_after.as_secs()),
+            );
+        }
+        response
     }
 }

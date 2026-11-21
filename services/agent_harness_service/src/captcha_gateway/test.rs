@@ -17,7 +17,9 @@ use tower::ServiceExt;
 
 use super::solves::{Created, Polled, SolverError, TaskId};
 use super::*;
-use crate::anthropic_gateway::brain::{BrainAuthenticator, BrainCaller, BrainLookup, BrainRollout};
+use crate::anthropic_gateway::brain::{
+    BrainAuthenticator, BrainCaller, BrainLookup, BrainLookupError, BrainRollout,
+};
 use crate::solver_runs::pg::PgSolverRuns;
 
 use crate::solver_runs::test::{AGENT, OTHER_AGENT};
@@ -143,6 +145,43 @@ const ROOMY: RunLimits = RunLimits {
 /// thread-local subscriber misses spans whose callsites another thread hits
 /// at the same time.
 static GATEWAY_CALLSITES: tokio::sync::RwLock<()> = tokio::sync::RwLock::const_new(());
+
+/// Every key is held: a person drives the agent's computer past the bound.
+struct Held;
+
+impl BrainAuthenticator for Held {
+    fn authenticate<'a>(&'a self, _key: &'a str) -> BrainLookup<'a> {
+        Box::pin(async {
+            Err(BrainLookupError::Held {
+                retry_after: std::time::Duration::from_secs(10),
+            })
+        })
+    }
+}
+
+#[tokio::test]
+async fn a_held_agent_is_answered_503_with_retry_after() {
+    let access = BrainAccess {
+        brains: Arc::new(Held),
+        rollout: rollout(true),
+        admission: Arc::new(DisabledAiAdmissionService),
+    };
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        axum::http::header::AUTHORIZATION,
+        axum::http::HeaderValue::from_static("Bearer mak_agent"),
+    );
+    let refused = access.authorize(&headers).await.unwrap_err();
+    assert_eq!(
+        refused,
+        BrainRefusal::Held {
+            retry_after: std::time::Duration::from_secs(10)
+        }
+    );
+    let response = brain_refused(&tracing::Span::none(), refused);
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(response.headers()[axum::http::header::RETRY_AFTER], "10");
+}
 
 /// Both agents exist, so their runs and solves can be stored. Hold the
 /// answer for the whole test.
