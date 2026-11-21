@@ -84,7 +84,8 @@ bound agent (`agent_session.bot_id`, read off the row as `SessionGrant.agent`) a
 their signed `agent_id` claim and retain `agent_session_id` provenance, so
 code mode can mint a fresh invocation correlation. Cache credentials by owner,
 agent, and session. The bot
-never comes from the request. `MacroApiTokenSigner::mint_for_agent` callers
+never comes from the request. Keep owner credentials out of signer spans, including `mint_for`.
+`MacroApiTokenSigner::mint_for_agent` callers
 (code mode) choose the claim themselves, plus an optional signed `agent_via`
 client label (public MCP code mode signs the MCP client's name) and a
 `SignedCorrelation`: the code-mode correlation and its session's scope, signed

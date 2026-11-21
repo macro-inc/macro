@@ -574,6 +574,7 @@ impl AgentHarnessEnv {
 
     fn write(&self, env: &mut BTreeMap<String, String>) {
         env.insert("HARNESS_BOT_ID".into(), self.bot_id.into());
+        env.insert("DENO_BINARY".into(), "/usr/local/bin/deno".into());
         env.insert("DAYTONA_SNAPSHOT".into(), self.snapshot.into());
         env.insert("DAYTONA_API_KEY".into(), String::new());
         env.insert("DEV_DANGEROUS_LOCAL_CONTAINERS".into(), "true".into());

@@ -261,7 +261,7 @@ impl MacroApiTokenSigner {
 
 impl MacroApiTokenSigner {
     /// Mint a fresh owner token with a bounded lifetime for a short execution.
-    #[tracing::instrument(skip_all, err, fields(%owner))]
+    #[tracing::instrument(skip_all, err)]
     pub async fn mint_for(
         &self,
         owner: &MacroUserIdStr<'static>,

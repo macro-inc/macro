@@ -1,6 +1,6 @@
 use sqlx::{Pool, Postgres};
 
-#[tracing::instrument(skip(db))]
+#[tracing::instrument(skip_all, err)]
 pub async fn get_user_organization(
     db: Pool<Postgres>,
     user_id: &str,

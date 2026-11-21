@@ -36,6 +36,8 @@ stacks. Process isolation belongs to
   `agent_harness_service/src/code_mode/images.rs`.
 - `src/domain/user.rs`: `UserCodeMode`, runs as an authenticated user with no
   session, journal or reviews; shares outcome validation with the session path.
+  Its constructor requires `UserCodeModeHost`, recorded on execution spans to
+  distinguish chat from public MCP without credential or personal data.
 - `src/domain/reviews.rs`: review revisions, claims and outcomes.
   `src/domain/reviews/drafts.rs` holds the typed drafts and results: items
   keyed by kind, reusing `SendEmail`, `CreateCalendarEvent` and their

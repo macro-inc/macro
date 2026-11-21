@@ -211,7 +211,7 @@ pub async fn get_user_profile(
 }
 
 /// Gets the user's macro_user_id (UUID) and id (MacroUserIdStr) by email
-#[tracing::instrument(skip(db), err)]
+#[tracing::instrument(skip_all, err)]
 pub async fn get_user_macro_user_id_and_id_by_email(
     db: &sqlx::Pool<sqlx::Postgres>,
     email: &str,

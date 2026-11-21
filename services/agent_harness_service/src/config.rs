@@ -17,6 +17,8 @@ use secretsmanager_client::LocalOrRemoteSecret;
 pub(crate) mod test;
 
 macro_env_var::env_vars!(
+    /// Pinned Deno executable required by every chat execution.
+    pub struct DenoBinary;
     /// Local static file bucket, read only when using local AWS.
     pub struct StaticStorageBucket;
     /// Comma-separated Kafka bootstrap servers.
@@ -137,7 +139,7 @@ pub struct Config {
     pub connect_customer_key: ConnectCustomerKey,
     /// Pinned Deno executable. The in-app chat runs only in code mode, so the
     /// harness refuses to start without it.
-    pub deno_binary: Option<String>,
+    pub deno_binary: DenoBinary,
     /// Default-off quota admission and prospective usage counting.
     #[macro_config_default(ai_usage::AiUsageEnforcement::Disabled)]
     pub enable_ai_usage_enforcement: ai_usage::AiUsageEnforcement,

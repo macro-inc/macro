@@ -79,10 +79,20 @@ impl UserCodeMode for UnconfiguredCodeMode {
     }
 }
 
+/// The authenticated host whose admission budget runs a user program.
+#[derive(Debug, Clone, Copy)]
+pub enum UserCodeModeHost {
+    /// Legacy chat turns and tool-enabled structured completions.
+    Chat,
+    /// Calls from an external MCP client.
+    PublicMcp,
+}
+
 /// User-scoped code mode over an executor whose admission bounds its own traffic.
 pub struct UserCodeModeService {
     executor: Arc<dyn ProgramExecutor>,
     credentials: Arc<dyn UserExecutionCredentials>,
+    host: UserCodeModeHost,
 }
 
 impl UserCodeModeService {
@@ -90,10 +100,12 @@ impl UserCodeModeService {
     pub fn new(
         executor: Arc<dyn ProgramExecutor>,
         credentials: Arc<dyn UserExecutionCredentials>,
+        host: UserCodeModeHost,
     ) -> Self {
         Self {
             executor,
             credentials,
+            host,
         }
     }
 }
@@ -104,6 +116,7 @@ impl UserCodeMode for UserCodeModeService {
         name = "code_mode.user_execution",
         skip_all,
         fields(
+            host = ?self.host,
             source_bytes = request.source.len(),
             timeout_ms = request.timeout_ms,
             status = tracing::field::Empty,

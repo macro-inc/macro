@@ -81,8 +81,11 @@ fn request() -> ExecuteRequest {
 #[tokio::test]
 async fn runs_as_the_authenticated_user_and_returns_data_with_activity() {
     let credentials = Arc::new(Credentials::default());
-    let service =
-        UserCodeModeService::new(Arc::new(Returns(json!({"data": 42}))), credentials.clone());
+    let service = UserCodeModeService::new(
+        Arc::new(Returns(json!({"data": 42}))),
+        credentials.clone(),
+        UserCodeModeHost::PublicMcp,
+    );
 
     let caller = ToolCaller::Agent(bot_id::BotId::new_from_uuid(macro_uuid::Uuid::from_u128(
         0xA1,
@@ -114,6 +117,7 @@ async fn review_references_fail_outside_a_session() {
             json!({"data": 1, "reviews": [{"kind": "email", "id": "x"}]}),
         )),
         Arc::new(Credentials::default()),
+        UserCodeModeHost::PublicMcp,
     );
 
     let receipt = service
@@ -134,8 +138,11 @@ async fn review_references_fail_outside_a_session() {
 #[tokio::test]
 async fn invalid_requests_are_rejected_before_minting_a_credential() {
     let credentials = Arc::new(Credentials::default());
-    let service =
-        UserCodeModeService::new(Arc::new(Returns(json!({"data": 1}))), credentials.clone());
+    let service = UserCodeModeService::new(
+        Arc::new(Returns(json!({"data": 1}))),
+        credentials.clone(),
+        UserCodeModeHost::PublicMcp,
+    );
 
     for request in [
         ExecuteRequest {
@@ -168,6 +175,7 @@ async fn an_empty_reviews_list_is_dropped() {
     let service = UserCodeModeService::new(
         Arc::new(Returns(json!({"data": 1, "reviews": []}))),
         Arc::new(Credentials::default()),
+        UserCodeModeHost::PublicMcp,
     );
 
     let receipt = service
@@ -216,7 +224,11 @@ impl ProgramExecutor for RejectsTypes {
 #[tokio::test]
 async fn a_program_with_type_errors_fails_before_minting_a_credential() {
     let credentials = Arc::new(Credentials::default());
-    let service = UserCodeModeService::new(Arc::new(RejectsTypes), credentials.clone());
+    let service = UserCodeModeService::new(
+        Arc::new(RejectsTypes),
+        credentials.clone(),
+        UserCodeModeHost::PublicMcp,
+    );
 
     let receipt = service
         .execute(

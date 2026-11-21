@@ -209,8 +209,8 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   also exports their OpenAPI document. Legacy chat API turns and structured completions with `toolset: all`
   run only in code mode (`ai_tools::tools_for_chat_code_mode`), through a
   `UserCodeModeService` on chat's own executor budget (8 running, 16 queued)
-  that `lib.rs` hands to `cognition::build`; the harness refuses to start
-  without `DENO_BINARY`.
+  that `lib.rs` hands to `cognition::build`; typed `DenoBinary` is required
+  during config loading, so CI checks missing `DENO_BINARY` before startup.
   `src/cognition/service/integration_analytics.rs` sends PostHog
   `integration_connected` / `integration_disconnected` for native MCP servers
   and Pipedream apps, from the router hooks wired in `src/cognition/server.rs`.

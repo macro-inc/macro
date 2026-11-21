@@ -694,81 +694,79 @@ pub async fn run() -> anyhow::Result<()> {
     .await
     .context("failed to build the in-memory agent tool context")?;
     let code_scratch = tempfile::tempdir()?;
-    let code_runner = match &config.deno_binary {
-        Some(binary) => {
-            let runner = code_execution::outbound::deno::DenoRunner::new(
+    let code_runner = {
+        let binary: &str = config.deno_binary.as_ref();
+        let runner = code_execution::outbound::deno::DenoRunner::new(
+            binary.into(),
+            code_scratch.path().to_owned(),
+            128,
+        )
+        .await
+        .map_err(|error| anyhow::anyhow!("invalid Deno runtime: {error}"))?;
+        let runner: Arc<dyn code_execution::domain::CodeRunner> = Arc::new(runner);
+        // One checker for every executor: each attended program is
+        // type-checked before it runs.
+        let checker: Arc<dyn code_execution::domain::ProgramChecker> = Arc::new(
+            code_execution::outbound::deno::check::DenoChecker::new(
                 binary.into(),
-                code_scratch.path().to_owned(),
-                128,
+                code_scratch.path().join("checks"),
+                CODE_CHECK_SLOTS,
+                CODE_CHECK_QUEUE,
+                code_execution::domain::Limits::default().max_source_bytes,
             )
             .await
-            .map_err(|error| anyhow::anyhow!("invalid Deno runtime: {error}"))?;
-            let runner: Arc<dyn code_execution::domain::CodeRunner> = Arc::new(runner);
-            // One checker for every executor: each attended program is
-            // type-checked before it runs.
-            let checker: Arc<dyn code_execution::domain::ProgramChecker> = Arc::new(
-                code_execution::outbound::deno::check::DenoChecker::new(
-                    binary.into(),
-                    code_scratch.path().join("checks"),
-                    CODE_CHECK_SLOTS,
-                    CODE_CHECK_QUEUE,
-                    code_execution::domain::Limits::default().max_source_bytes,
-                )
-                .await
-                .map_err(|error| anyhow::anyhow!("invalid Deno type checker: {error}"))?,
-            );
-            // Public MCP runs get their own admission budget so external
-            // clients cannot exhaust the slots agent sessions rely on.
-            let public = code_execution::domain::ExecutionService::new(
-                Arc::clone(&runner),
+            .map_err(|error| anyhow::anyhow!("invalid Deno type checker: {error}"))?,
+        );
+        // Public MCP runs get their own admission budget so external
+        // clients cannot exhaust the slots agent sessions rely on.
+        let public = code_execution::domain::ExecutionService::new(
+            Arc::clone(&runner),
+            Arc::clone(&checker),
+            code_execution::domain::Limits {
+                max_running: 4,
+                max_queued: 8,
+                ..Default::default()
+            },
+        )?;
+        // Routines get their own budget too, below the host's priority and
+        // with a CPU limit, so unattended code can't crowd out sessions.
+        let routines = code_execution::domain::ExecutionService::new(
+            Arc::clone(&runner),
+            Arc::clone(&checker),
+            code_execution::domain::Limits {
+                max_running: ROUTINE_CODE_SLOTS,
+                max_queued: 16,
+                max_cpu: Some(std::time::Duration::from_secs(10)),
+                background: true,
+                // A routine step is reviewed code that may update every
+                // row it was given, one call each; only a runaway loop
+                // gets this far.
+                max_calls_per_operation: ROUTINE_CALLS_PER_OPERATION,
+                ..Default::default()
+            },
+        )?;
+        // The in-app chat gets a budget of its own,
+        // so chat traffic cannot exhaust the slots sessions rely on.
+        let chat = code_execution::domain::ExecutionService::new(
+            Arc::clone(&runner),
+            Arc::clone(&checker),
+            code_execution::domain::Limits {
+                max_running: 8,
+                max_queued: 16,
+                ..Default::default()
+            },
+        )?;
+        (
+            code_execution::domain::ExecutionService::new(
+                runner,
                 Arc::clone(&checker),
-                code_execution::domain::Limits {
-                    max_running: 4,
-                    max_queued: 8,
-                    ..Default::default()
-                },
-            )?;
-            // Routines get their own budget too, below the host's priority and
-            // with a CPU limit, so unattended code can't crowd out sessions.
-            let routines = code_execution::domain::ExecutionService::new(
-                Arc::clone(&runner),
-                Arc::clone(&checker),
-                code_execution::domain::Limits {
-                    max_running: ROUTINE_CODE_SLOTS,
-                    max_queued: 16,
-                    max_cpu: Some(std::time::Duration::from_secs(10)),
-                    background: true,
-                    // A routine step is reviewed code that may update every
-                    // row it was given, one call each; only a runaway loop
-                    // gets this far.
-                    max_calls_per_operation: ROUTINE_CALLS_PER_OPERATION,
-                    ..Default::default()
-                },
-            )?;
-            // The in-app chat gets a budget of its own,
-            // so chat traffic cannot exhaust the slots sessions rely on.
-            let chat = code_execution::domain::ExecutionService::new(
-                Arc::clone(&runner),
-                Arc::clone(&checker),
-                code_execution::domain::Limits {
-                    max_running: 8,
-                    max_queued: 16,
-                    ..Default::default()
-                },
-            )?;
-            Some((
-                code_execution::domain::ExecutionService::new(
-                    runner,
-                    Arc::clone(&checker),
-                    code_execution::domain::Limits::default(),
-                )?,
-                public,
-                routines,
-                chat,
-                checker,
-            ))
-        }
-        None => None,
+                code_execution::domain::Limits::default(),
+            )?,
+            public,
+            routines,
+            chat,
+            checker,
+        )
     };
     // One flag client for every per-user agent rollout.
     let feature_flags = config
@@ -802,9 +800,7 @@ pub async fn run() -> anyhow::Result<()> {
     });
     // Chat runs only in code mode, as the signed-in user on chat's own
     // executor, so the harness needs its Deno runtime.
-    let Some((_, _, _, chat_executor, _)) = &code_runner else {
-        anyhow::bail!("the in-app chat runs in code mode: configure DENO_BINARY");
-    };
+    let (_, _, _, chat_executor, _) = &code_runner;
     let chat_code_mode: Arc<dyn agent_code_mode::domain::UserCodeMode> =
         Arc::new(agent_code_mode::domain::UserCodeModeService::new(
             Arc::new(chat_executor.clone()),
@@ -819,6 +815,7 @@ pub async fn run() -> anyhow::Result<()> {
                 endpoints: code_mode::sdk_endpoints()?,
                 scopes: Arc::clone(&session_scopes),
             }),
+            agent_code_mode::domain::UserCodeModeHost::Chat,
         ));
     let cognition_runtime = agent_harness_service::cognition::build(
         agent_harness_service::cognition::config::Config::from_env()?,
@@ -832,28 +829,26 @@ pub async fn run() -> anyhow::Result<()> {
     .context("failed to compose cognition APIs")?;
     let cognition_router = cognition_runtime.router.clone();
     // Routine code steps run as their owner on the routines' executor.
-    let routine_code = match &code_runner {
-        Some((_, _, routines, _, checker)) => Some(
-            routine_code::SdkRoutineCode::new(
-                Arc::new(routines.clone()),
-                Arc::clone(checker),
-                MacroApiTokenSigner::new(
-                    pool.clone(),
-                    config.macro_api_token_issuer.as_ref(),
-                    config.macro_api_token_private_secret_key.as_ref(),
-                ),
-                code_mode::sdk_endpoints()?,
-                Arc::clone(&recorder),
-                tool_context.cognition_tool_context.service.clone(),
-                Arc::new(routine_code::CalendarTimeZones(Arc::clone(
-                    &tool_context.calendar_tool_context.occurrences,
-                ))),
-            )
-            .with_egress(code_egress.clone())
-            .with_slots(ROUTINE_CODE_SLOTS),
-        ),
-        None => None,
-    };
+    let (_, _, routines, _, checker) = &code_runner;
+    let routine_code = Some(
+        routine_code::SdkRoutineCode::new(
+            Arc::new(routines.clone()),
+            Arc::clone(checker),
+            MacroApiTokenSigner::new(
+                pool.clone(),
+                config.macro_api_token_issuer.as_ref(),
+                config.macro_api_token_private_secret_key.as_ref(),
+            ),
+            code_mode::sdk_endpoints()?,
+            Arc::clone(&recorder),
+            tool_context.cognition_tool_context.service.clone(),
+            Arc::new(routine_code::CalendarTimeZones(Arc::clone(
+                &tool_context.calendar_tool_context.occurrences,
+            ))),
+        )
+        .with_egress(code_egress.clone())
+        .with_slots(ROUTINE_CODE_SLOTS),
+    );
     let service_shutdown = tokio_util::sync::CancellationToken::new();
     let (http_listening, http_ready) = tokio::sync::watch::channel(false);
     let scheduling_runtime = scheduling::build(
@@ -883,27 +878,24 @@ pub async fn run() -> anyhow::Result<()> {
     )
     .await
     .map_err(|error| anyhow::anyhow!("{error}"))?;
-    let public_code_mode = match &code_runner {
-        Some((_, public, _, _, _)) => Some(public_mcp::PublicCodeMode {
-            service: Arc::new(agent_code_mode::domain::UserCodeModeService::new(
-                Arc::new(public.clone()),
-                Arc::new(code_mode::UserRunCredentials {
-                    egress: code_egress.clone(),
-                    correlations: agent_correlation::outbound::PgCorrelationRepository(
-                        pool.clone(),
-                    ),
-                    signer: MacroApiTokenSigner::new(
-                        pool.clone(),
-                        config.macro_api_token_issuer.as_ref(),
-                        config.macro_api_token_private_secret_key.as_ref(),
-                    ),
-                    endpoints: code_mode::sdk_endpoints()?,
-                    scopes: Arc::clone(&session_scopes),
-                }),
-            )),
-        }),
-        None => None,
-    };
+    let (_, public, _, _, _) = &code_runner;
+    let public_code_mode = Some(public_mcp::PublicCodeMode {
+        service: Arc::new(agent_code_mode::domain::UserCodeModeService::new(
+            Arc::new(public.clone()),
+            Arc::new(code_mode::UserRunCredentials {
+                egress: code_egress.clone(),
+                correlations: agent_correlation::outbound::PgCorrelationRepository(pool.clone()),
+                signer: MacroApiTokenSigner::new(
+                    pool.clone(),
+                    config.macro_api_token_issuer.as_ref(),
+                    config.macro_api_token_private_secret_key.as_ref(),
+                ),
+                endpoints: code_mode::sdk_endpoints()?,
+                scopes: Arc::clone(&session_scopes),
+            }),
+            agent_code_mode::domain::UserCodeModeHost::PublicMcp,
+        )),
+    });
     let public_mcp_router = public_mcp::router(
         &config,
         &secrets,
@@ -948,9 +940,9 @@ pub async fn run() -> anyhow::Result<()> {
             ),
             scopes: Arc::clone(&session_scopes),
         });
-    let code_executor = code_runner.as_ref().map(|(runner, _, _, _, _)| {
-        Arc::new(runner.clone()) as Arc<dyn code_execution::domain::ProgramExecutor>
-    });
+    let (runner, _, _, _, _) = &code_runner;
+    let code_executor =
+        Some(Arc::new(runner.clone()) as Arc<dyn code_execution::domain::ProgramExecutor>);
     let code_mode_enabled = code_executor.is_some();
     let execution_store: Arc<dyn agent_code_mode::domain::ExecutionStore> = Arc::new(
         agent_code_mode::outbound::postgres::PgExecutionStore::new(pool.clone()),
@@ -2817,14 +2809,13 @@ pub async fn run() -> anyhow::Result<()> {
     typing_heartbeat.abort();
     recovery.abort();
     runtime_commands.abort();
-    if let Some((sessions, public, routines, chat, _)) = &code_runner {
-        tokio::join!(
-            sessions.shutdown(),
-            public.shutdown(),
-            routines.shutdown(),
-            chat.shutdown()
-        );
-    }
+    let (sessions, public, routines, chat, _) = &code_runner;
+    tokio::join!(
+        sessions.shutdown(),
+        public.shutdown(),
+        routines.shutdown(),
+        chat.shutdown()
+    );
     let stop_failures = container_shutdown.shutdown_all().await;
     if stop_failures > 0 {
         tracing::error!(stop_failures, "some sandboxes failed to stop");
