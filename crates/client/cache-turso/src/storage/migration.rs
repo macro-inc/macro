@@ -137,12 +137,14 @@ fn stored_version(connection: &Arc<Connection>) -> Result<u32, TursoStorageError
 
 /// Storage 12 covers search browsing with the text and hash columns and adds
 /// the partial contact payload index; no table or row changed.
+pub(super) const UPGRADE_11_TO_12: [&str; 3] = [
+    "DROP INDEX search_documents_browse_idx",
+    "CREATE INDEX search_documents_browse_idx ON search_documents(profile, bucket, timestamp_ms DESC, __typename, id, search_text, source_hash)",
+    "CREATE INDEX records_contacts_cover_idx ON records (__typename, id, value) WHERE __typename = 'GraphqlContact'",
+];
+
 fn upgrade_11_to_12(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
-    for sql in [
-        "DROP INDEX search_documents_browse_idx",
-        "CREATE INDEX search_documents_browse_idx ON search_documents(profile, bucket, timestamp_ms DESC, __typename, id, search_text, source_hash)",
-        "CREATE INDEX records_contacts_cover_idx ON records (__typename, id, value) WHERE __typename = 'GraphqlContact'",
-    ] {
+    for sql in UPGRADE_11_TO_12 {
         driver::execute(connection, sql, Vec::new())?;
     }
     Ok(())
