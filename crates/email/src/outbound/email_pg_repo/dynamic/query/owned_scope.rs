@@ -13,9 +13,11 @@
 //!   conditions an index serves: the inbox, the filter's thread-level terms
 //!   and the cursor. The *superset* stream sorts the threads the address
 //!   indexes list (`matching_threads`, without mailbox facts), which is cheap
-//!   when the addresses are rare in the mail. The *inbox* stream merges each
-//!   inbox's newest threads from `idx_email_threads_non_spam_link_ts_id`, up
-//!   to a window of threads, which is cheap when they are common.
+//!   when the addresses are rare in the mail. The initial sparse superset
+//!   fetches each distinct match by primary key, so its estimate cannot
+//!   turn those IDs into a filter over the whole mailbox. The *inbox* stream
+//!   merges each inbox's newest threads from `idx_email_threads_non_spam_link_ts_id`,
+//!   up to a window of threads, which is cheap when they are common.
 //! - Each streamed thread then gets the general builder's preview pick, its
 //!   latest message the view and the filter accept, in order, until the page
 //!   fills; a thread with none drops out. The pick is the general builder's
@@ -44,11 +46,11 @@
 //!
 //! A walked thread whose messages miss the addresses costs the pick a read of
 //! each of them, so on a cold cache a window of addresses gone quiet costs
-//! several times their superset. Every statement reads a bounded number of
-//! rows ([`MAX_ROUND_WINDOW`] threads, [`MAX_SUPERSET_CAP`] superset rows),
-//! and the walks and the probes grow geometrically, so a page costs a small
-//! multiple of the cheaper of walking to its last row and reading the
-//! superset. The request as a whole has no bound: a superset past
+//! several times their superset. The windows and emitted probe rows are
+//! capped ([`MAX_ROUND_WINDOW`] threads, [`MAX_SUPERSET_CAP`] superset rows),
+//! and their sizes grow geometrically. These caps do not bound recipients
+//! rejected by a role filter or messages inspected by a thread's preview
+//! pick. The request as a whole has no bound: a superset past
 //! [`MAX_SUPERSET_CAP`] rows leaves only the walk, which goes on to the
 //! page's last row or the end of the inboxes, about what reading that
 //! superset would cost. A page never comes up short to save rounds, so it
@@ -77,6 +79,9 @@ use item_filters::ast::email::EmailLiteral;
 use sqlx::{PgConnection, Postgres, QueryBuilder};
 use tracing::field::Empty;
 use uuid::Uuid;
+
+#[cfg(test)]
+mod stream_plan;
 
 use super::super::SqlFragment;
 use super::super::filters::{
@@ -662,10 +667,28 @@ impl<'a> OwnedRead<'a> {
     ) {
         match stream {
             Stream::Superset | Stream::SparseSuperset => {
-                self.push_stream_select(builder, sort_ts_field);
+                if matches!(stream, Stream::SparseSuperset) {
+                    self.push_stream_columns(builder, sort_ts_field);
+                    // A recipient lookup can change the CTE's estimate enough
+                    // to scan the mailbox. Fetch the proven-small ID set first;
+                    // DISTINCT keeps one thread when several messages match.
+                    builder.push(
+                        r#"
+                    FROM (SELECT DISTINCT thread_id FROM matching_threads) matched
+                    CROSS JOIN LATERAL (
+                        SELECT * FROM email_threads WHERE id = matched.thread_id OFFSET 0
+                    ) AS t
+                    WHERE "#,
+                    );
+                } else {
+                    self.push_stream_select(builder, sort_ts_field);
+                }
                 builder.push("t.link_id = ANY(");
                 builder.push_bind(self.inboxes.clone());
-                builder.push(") AND t.id IN (SELECT thread_id FROM matching_threads)");
+                builder.push(")");
+                if matches!(stream, Stream::Superset) {
+                    builder.push(" AND t.id IN (SELECT thread_id FROM matching_threads)");
+                }
                 self.push_stream_filters(builder, sort_ts_field, below);
                 builder.push(
                     r#"
@@ -705,13 +728,21 @@ impl<'a> OwnedRead<'a> {
     /// A stream's columns, up to its `WHERE`. All Mail's `created_at` and
     /// `updated_at` are its sort date, as in the general builder.
     fn push_stream_select(&self, builder: &mut QueryBuilder<'static, Postgres>, ts: &str) {
+        self.push_stream_columns(builder, ts);
+        builder.push(
+            r#"
+                    FROM email_threads t
+                    WHERE "#,
+        );
+    }
+
+    /// Shared projection for mailbox walks and matched-thread fetches.
+    fn push_stream_columns(&self, builder: &mut QueryBuilder<'static, Postgres>, ts: &str) {
         builder.push(format!(
             r#"
                     SELECT t.id, t.provider_id, t.link_id, t.inbox_visible, t.is_read,
                            t.is_signal, t.project_id,
-                           {ts} AS created_at, {ts} AS updated_at, {ts} AS effective_ts
-                    FROM email_threads t
-                    WHERE "#
+                           {ts} AS created_at, {ts} AS updated_at, {ts} AS effective_ts"#
         ));
     }
 

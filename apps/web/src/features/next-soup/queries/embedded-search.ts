@@ -29,14 +29,16 @@ export function createEmbeddedSearchSource(options: {
   const matches = createMemo(() =>
     createSearchResultFilter(options.filters().type, query())
   );
-  const context = useOptionalSearchContext();
+  const entityPool = useOptionalSearchContext()?.entityPool(
+    () => enabled() && !filtered() && Boolean(options.text().trim())
+  );
   const search = createSearchState({
     surface: () => 'universal-input',
     text: options.text,
     enabled,
     disableLocalSearch: filtered,
     localPool: () =>
-      context?.entityPool().filter((entry) => matches()(entry.data)) ?? [],
+      entityPool?.().filter((entry) => matches()(entry.data)) ?? [],
     buildRequest: (search) => {
       const request = buildSoupSearchRequest(query(), search);
       return { ...request, params: { page_size: 25 } };

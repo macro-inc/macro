@@ -611,6 +611,15 @@ type CompleteSubscriptionRoot {
 	"""
 	notificationInboxUpdates(scope: NotificationInboxScopeInput): [NotificationInboxPatch!]!
 	"""
+	How many unread rows the authenticated user's whole notification
+	inbox holds, by kind: the current counts at once, then the counts
+	again each time they change. Each payload is complete and lists only
+	kinds with an unread row, so an empty list means nothing is unread.
+	The stream ends with an error when its sources end or a count fails,
+	after which the client resubscribes.
+	"""
+	notificationInboxUnreadUpdates: [NotificationInboxUnreadCount!]!
+	"""
 	Changes to the registered work of `accountIds` that the authenticated
 	user can see: entries to show, entries to stop showing, and an
 	invalidation when changes may have been missed or sharing changed.
@@ -743,6 +752,10 @@ input CreateSavedViewInput {
 	Current team to share with, or null for a private definition.
 	"""
 	sharedTeamId: ID
+	"""
+	Initial icon and color metadata, validated on first creation.
+	"""
+	appearance: JSON
 }
 
 """
@@ -4020,6 +4033,12 @@ type GraphqlContact {
 	Macro profile name, then this viewer's address-book name; null means use email fallback.
 	"""
 	name: String
+	"""
+	Keys of the viewer's lists this person is in (`teammates`, `interacted`,
+	`invited`, `gmail`, `outlook`; more may be added), each once. Empty for
+	the viewer, and for a person in no list.
+	"""
+	lists: [String!]!
 }
 
 """
@@ -4627,7 +4646,8 @@ input GraphqlDocumentLiteral @oneOf {
 	emailAttachmentParticipant: GraphqlEmailValue
 	"""
 	Associated with a CRM record through its Companies or Contacts
-	property or a reference to the record. Requires an expanded query
+	property or a reference to the record; a task also through a custom
+	entity property that names the record. Requires an expanded query
 	sorted by a timestamp or task due date.
 	"""
 	crmAssociated: GraphqlCrmAssociation
@@ -5037,6 +5057,10 @@ enum GraphqlEmailSyncStatus {
 	"""
 	NEEDS_REAUTH
 	"""
+	The provider serves no mailbox for the account.
+	"""
+	MAILBOX_UNAVAILABLE
+	"""
 	Synchronization is disabled.
 	"""
 	INACTIVE
@@ -5064,9 +5088,9 @@ type GraphqlEmailThreadFocus {
 	"""
 	needsReply: Boolean!
 	"""
-	The owner sent the latest message and should come back to the thread: it
-	has an open loop or has waited for an answer. Never true together with
-	`needs_reply`.
+	The owner sent the latest message and the thread is back to follow up:
+	no answer came in the wait, or its due day has come. Never true together
+	with `needs_reply`.
 	"""
 	needsFollowUp: Boolean!
 	"""
@@ -6831,7 +6855,7 @@ type GraphqlNewNotification {
 """
 Typed GraphQL union containing every supported notification event payload.
 """
-union GraphqlNotifEvent = GraphqlExternalChatMessageMetadata | GraphqlEntityAccessGrantedMetadata | GraphqlEntityAccessRequestedMetadata | GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlInitiativeDiscussionMetadata | GraphqlCrmDiscussionMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelMessageReactionMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata | GraphqlAgentSessionSettledMetadata | GraphqlAgentSessionWaitingForInputMetadata | GraphqlAgentSessionMentionedMetadata | GraphqlCalendarEventJoinRequestMetadata | GraphqlPasswordAccessRequestedMetadata | GraphqlChannelAccessRequestedMetadata | GraphqlRoutineRunFinishedMetadata | GraphqlAgentSignInExpiryMetadata | GraphqlComputerSetupMetadata | GraphqlWhatsappGroupMessageMetadata | GraphqlRuntimeAccessRemovedMetadata
+union GraphqlNotifEvent = GraphqlExternalChatMessageMetadata | GraphqlEntityAccessGrantedMetadata | GraphqlEntityAccessRequestedMetadata | GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlInitiativeDiscussionMetadata | GraphqlCrmDiscussionMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelMessageReactionMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata | GraphqlAgentSessionSettledMetadata | GraphqlAgentSessionWaitingForInputMetadata | GraphqlAgentSessionMentionedMetadata | GraphqlCalendarEventJoinRequestMetadata | GraphqlPasswordAccessRequestedMetadata | GraphqlChannelAccessRequestedMetadata | GraphqlRoutineRunFinishedMetadata | GraphqlAgentSignInExpiryMetadata | GraphqlComputerSetupMetadata | GraphqlPingMetadata | GraphqlWhatsappGroupMessageMetadata | GraphqlRuntimeAccessRemovedMetadata
 
 """
 A notification associated with a shared entity, including entities outside Soup.
@@ -7022,6 +7046,42 @@ type GraphqlPasswordAccessRequestedMetadata {
 	Item display name when the request was made.
 	"""
 	itemName: String!
+}
+
+"""
+Metadata for a notification its sender wrote.
+"""
+type GraphqlPingMetadata {
+	"""
+	What the sender wrote.
+	"""
+	body: String!
+	"""
+	The linked entity's name when it was sent, when it has one that reads
+	the same to every recipient.
+	"""
+	entityName: String
+	"""
+	The agent whose code sent it, when one did.
+	"""
+	agentId: ID
+	"""
+	The sending agent's name when it was sent.
+	"""
+	agentName: String
+	"""
+	The sending agent's avatar when it was sent.
+	"""
+	agentAvatarUrl: String
+	"""
+	The channel message it opens at, when the sender linked one.
+	"""
+	messageId: ID
+	"""
+	The top-level message the linked message replies to, when it is a
+	reply.
+	"""
+	threadId: ID
 }
 
 """
@@ -7752,6 +7812,10 @@ type GraphqlSavedView {
 	Versioned filter configuration interpreted by the consuming feature.
 	"""
 	config: JSON!
+	"""
+	Icon and color metadata, separate from the filter configuration.
+	"""
+	appearance: JSON
 	"""
 	Team with effective access, or null when the definition is private.
 	"""
@@ -11759,6 +11823,12 @@ type NotificationInboxRow {
 	"""
 	rowType: NotificationInboxRowType!
 	"""
+	Other kinds an inbox scope lists the row under, because what it shows
+	is that too: a thread whose reply mentions the viewer is listed under
+	mentions as well. A clear of any of these kinds takes the row.
+	"""
+	alsoListedAs: [NotificationInboxRowType!]!
+	"""
 	For a thread row, the channel root message or discussion root
 	comment it is about.
 	"""
@@ -11955,6 +12025,21 @@ input NotificationInboxScopeInput {
 	alone. Defaults to false.
 	"""
 	unreadOnly: Boolean
+}
+
+"""
+How many unread rows of one kind the viewer's inbox holds.
+"""
+type NotificationInboxUnreadCount {
+	"""
+	The kind of row.
+	"""
+	rowType: NotificationInboxRowType!
+	"""
+	Its unread rows across the whole inbox. Counting stops soon after
+	100, so present a total of 100 or more as "99+".
+	"""
+	count: Int!
 }
 
 """

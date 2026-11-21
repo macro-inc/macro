@@ -19,7 +19,7 @@ export function PromoCard(props: {
   headline: string;
   pitch: string;
   action: PromoAction;
-  /** Shown beside the main action, splitting the row. */
+  /** Shown beside the main action, splitting the row, or below it when both do not fit. */
   secondaryAction?: PromoAction;
   /** Accessible name for the close button. */
   dismissLabel: string;
@@ -56,11 +56,13 @@ export function PromoCard(props: {
       </div>
       <h2 class="mt-2.5 text-xs font-medium text-ink">{props.headline}</h2>
       <p class="mt-1 text-[11px] leading-4 text-ink-muted">{props.pitch}</p>
-      <div class="mt-3 flex gap-2">
+      {/* Each action keeps its whole label: in a sidebar too narrow for both
+          side by side (a narrow sidebar, larger text), they stack. */}
+      <div class="mt-3 flex flex-wrap gap-2">
         <Button
           variant="secondary"
           size="sm"
-          class="min-w-0 flex-1"
+          class="flex-1"
           onClick={(event) => props.action.onClick(event.currentTarget)}
         >
           {props.action.label}
@@ -70,7 +72,7 @@ export function PromoCard(props: {
             <Button
               variant="secondary"
               size="sm"
-              class="min-w-0 flex-1"
+              class="flex-1"
               onClick={(event) => secondary().onClick(event.currentTarget)}
             >
               {secondary().label}

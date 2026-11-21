@@ -1,0 +1,18 @@
+name: '"Configure buildx with Namespace Cloud" Action For GitHub Actions'
+description: Configure buildx to use the Namespace Cloud build cluster
+inputs:
+  builder-name:
+    description: The name of the local Docker build driver to be configured.
+    default: ''
+  load-to-docker:
+    description: Whether to load images to local docker engine
+    default: 'true'
+  wait-for-builder:
+    description: If true, creates the build clusters eagerly and waits for them to be available
+    default: 'false'
+  experimental:
+    description: A set of experimental configurations passed to builder configuration.
+    default: ''
+  tag:
+    description: If set, select this named builder. Contact <address> to get access.
+    default: ''

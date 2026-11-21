@@ -1,5 +1,4 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
-import { setCachedInputStore } from '@core/store/cacheChatInput';
 import { cache } from '@core/util/cache';
 import {
   type FetchWithTokenErrorCode,
@@ -23,7 +22,6 @@ import type { GetBatchPreviewResponse } from './generated/schemas/getBatchPrevie
 import type { GetChatPermissionsResponse } from './generated/schemas/getChatPermissionsResponse';
 import type { GetChatResponse } from './generated/schemas/getChatResponse';
 import type { GetChatsForAttachmentResponse } from './generated/schemas/getChatsForAttachmentResponse';
-import type { PatchChatRequest } from './generated/schemas/patchChatRequest';
 import type { PipedreamCatalogResponse } from './generated/schemas/pipedreamCatalogResponse';
 import type { PipedreamOverlayResponse } from './generated/schemas/pipedreamOverlayResponse';
 import type { ServerResponse } from './generated/schemas/serverResponse';
@@ -38,7 +36,6 @@ import type { UpdateServerRequest } from './generated/schemas/updateServerReques
 const dcsHost: string = SERVER_HOSTS['cognition-service'];
 
 type WithChatId = { chat_id: string };
-type WithProjectId = { project_id: string };
 
 function dcsFetch(
   url: string,
@@ -56,7 +53,6 @@ function dcsFetch<T extends ObjectLike = never>(
   | Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>> {
   return fetchWithToken<T>(`${dcsHost}${url}`, init);
 }
-type Success = { success: boolean };
 
 type IdMappingResponse = { target_id: string | null };
 
@@ -143,57 +139,6 @@ export const cognitionApiServiceClient = {
     }
   ),
 
-  async editChatProject(args: WithChatId & WithProjectId) {
-    const { chat_id, project_id } = args;
-    return (
-      await dcsFetch<{ success: boolean }>(`/chats/${chat_id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          projectId: project_id,
-        }),
-      })
-    ).map(() => ({ success: true }));
-  },
-
-  async updateChatPermissions(args: PatchChatRequest & WithChatId) {
-    const { chat_id, sharePermission } = args;
-    return await dcsFetch(`/chats/${chat_id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({
-        sharePermission,
-      }),
-    });
-  },
-  async renameChat(args: WithChatId & { new_name: string }) {
-    const { chat_id, new_name } = args;
-    return (
-      await dcsFetch<{ success: boolean }>(`/chats/${chat_id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          name: new_name,
-        }),
-      })
-    ).map(() => ({ success: true }));
-  },
-  async deleteChat(args: WithChatId) {
-    const { chat_id } = args;
-    const result = await dcsFetch(`/chats/${chat_id}`, {
-      method: 'DELETE',
-    });
-
-    setCachedInputStore(chat_id, undefined);
-
-    // delete chat returns a 200 with an empty body on success
-    // which return INVALID_JSON error on response.json()
-    // so we return no error instead to signal success
-    if (
-      result.isErr() &&
-      result.error.some((error) => error.code === 'INVALID_JSON')
-    )
-      result;
-
-    return result;
-  },
   async getChatPermissions(args: { id: string }) {
     const { id } = args;
     return (
@@ -201,23 +146,6 @@ export const cognitionApiServiceClient = {
         method: 'GET',
       })
     ).map((result) => result.permissions);
-  },
-  async permanentlyDeleteChat(args: WithChatId) {
-    const { chat_id } = args;
-
-    setCachedInputStore(chat_id, undefined);
-
-    return await dcsFetch(`/chats/${chat_id}/permanent`, {
-      method: 'DELETE',
-    });
-  },
-  async revertDeleteChat(args: WithChatId) {
-    const { chat_id } = args;
-    return (
-      await dcsFetch<Success>(`/chats/${chat_id}/revert_delete`, {
-        method: 'PUT',
-      })
-    ).map((result) => result);
   },
   async getChatsForAttachment(args: { attachment_id: string }) {
     const { attachment_id } = args;

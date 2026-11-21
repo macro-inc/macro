@@ -28,7 +28,7 @@ import PencilIcon from '@icon/system/regular/pencil-line.svg';
 import StarIcon from '@icon/system/regular/star.svg';
 import TrashIcon from '@icon/system/regular/trash-simple.svg';
 import { NotificationMuteMenu } from '@notifications/components/NotificationMuteMenu';
-import { invalidateProjects } from '@queries/storage/projects';
+import { refreshActiveGraphqlFoldersQueries } from '@queries/storage/graphql-folders';
 import { Show } from 'solid-js';
 import type { DriveFolderMetadata } from './context/drive-source';
 
@@ -58,7 +58,8 @@ export function DriveFolderActions(props: { folder: DriveFolderMetadata }) {
   const deleteFolder = makeDeleteAction({
     userId,
 
-    onDeleted: () => fireAndForget(invalidateProjects(), 'drive-view'),
+    onDeleted: () =>
+      fireAndForget(refreshActiveGraphqlFoldersQueries(), 'drive-view'),
   });
 
   const editFolder = (view: 'rename' | 'moveToProject') => {
@@ -67,7 +68,7 @@ export function DriveFolderActions(props: { folder: DriveFolderMetadata }) {
       entities: [entity()],
 
       onFinish: () => {
-        fireAndForget(invalidateProjects(), 'drive-view');
+        fireAndForget(refreshActiveGraphqlFoldersQueries(), 'drive-view');
         if (view === 'rename') toast.success(t('entityActions.toastRenamed'));
       },
 

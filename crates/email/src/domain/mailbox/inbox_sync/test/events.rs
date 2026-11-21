@@ -233,7 +233,7 @@ async fn retry_and_deferred_debug_logs_include_the_original_display_error_and_pa
                 panic!("retry disposition")
             };
             let fields = [
-                ("error", error.to_string()),
+                ("error", format!("{}: {:#}", error.reason, error.source)),
                 ("payload", format!("{:?}", data.operation)),
             ];
             tracing::subscriber::with_default(output.subscriber(), || {
@@ -251,7 +251,7 @@ async fn retry_and_deferred_debug_logs_include_the_original_display_error_and_pa
             };
             assert!(matches!(log, InboxSyncFailureLog::Deferred));
             let fields = [
-                ("error", error.to_string()),
+                ("error", format!("{}: {:#}", error.reason, error.source)),
                 ("payload", format!("{:?}", data.operation)),
             ];
             tracing::subscriber::with_default(output.subscriber(), || {
@@ -293,7 +293,7 @@ async fn permanent_failures_keep_the_terminal_error_event() {
         "Non-retryable error processing inbox sync message. The message will be deleted.",
         "handle_non_retryable_error",
         [
-            ("error", error.to_string()),
+            ("error", format!("{}: {:#}", error.reason, error.source)),
             ("payload", format!("{:?}", data.operation)),
         ],
     );

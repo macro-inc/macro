@@ -363,7 +363,13 @@ function Peer() {
     ready,
     editorMarkdown: () => editorStateAsMarkdown(editor(), 'internal'),
     loroMarkdown: () => stateToMarkdown(loroJson()),
-    editorJson: () => JSON.stringify(loroSyncState(editor().getEditorState())),
+    // What this editor would write now: searchText follows the stored blocks.
+    editorJson: () =>
+      JSON.stringify(
+        loroSyncState(editor().getEditorState(), {
+          stored: loroManager.doc.toJSON(),
+        })
+      ),
     loroJson,
     blocks: () =>
       editor()

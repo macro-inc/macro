@@ -111,9 +111,14 @@ export function createGroupedSoupLiveQuery(
           ]);
           // Auto-pagination can start during the query's first data emission,
           // before onResult runs. That first response has no old chain to refresh.
+          // The uncached client has no normalized cache, so its results carry
+          // no metadata: each one is a network answer, except urql's replay of
+          // the last one (stale) while a new read is on its way.
+          const source = normalizedCacheResultMetadata(result)?.source;
           if (
             initialResultScope === resultScope &&
-            normalizedCacheResultMetadata(result)?.source === 'live-network'
+            (source === 'live-network' ||
+              (source === undefined && !result.stale))
           )
             refreshContinuations(result.data);
           initialResultScope = resultScope;

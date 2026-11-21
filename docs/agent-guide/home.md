@@ -4,7 +4,9 @@
 
 Touch devices render the Inbox as **Notifications**: a floating Signal/Noise
 pill strip with a leading filter drawer (Status and Type), pull-to-refresh,
-and swipe-left to mark done. On touch, Signal is a pure notification feed — the viewer's own
+and swipe-left to mark done. A swiped row folds away, divider and all, before
+it leaves; a row the feed keeps (the viewer's own work) unfolds again once the
+done settles. The touch list shows no Undo for a done. On touch, Signal is a pure notification feed — the viewer's own
 touched-by-me recents are not merged in; that merge is desktop Home's Signal
 only, so sent mail and AI chats without notifications appear only on desktop.
 Access requests, grants and removals on a paired machine appear as rows about
@@ -23,8 +25,10 @@ Check live Home recency with two accounts: leave the recipient on Home without
 opening the conversation, then send a DM from the other account. The row should
 move into **Last few minutes** and show unread without reloading, whether Home's
 notified-at list is served by REST or by GraphQL Soup (which re-reads it, and
-grouped notified-at lists, after new notifications, at most every two seconds and again three seconds after the
-last, having no local projection for that sort). Read the DM,
+grouped notified-at lists, after a new notification and again three seconds
+after the last one; reads start at least two seconds apart, never two at once,
+and a hidden tab reads when shown; that sort has no local projection).
+Read the DM,
 return to Home, and repeat; also check a row previously marked done and a thread
 reply. Delay the Home list response while allowing single-entity hydration to
 finish: hydration must not cancel the list refresh or leave an old notification
@@ -222,7 +226,20 @@ the details toggle, including tasks, snippets, skills, canvases, PDFs, images,
 code, and videos. Share uses the selected item's permissions and updates when
 switching items; copied links point to the entity rather than the Home feed.
 
+Markdown previews (documents, tasks, snippets, skills) register the same entity
+commands as their standalone pages, so Cmd+K lists **Copy link**, **Copy ID**
+and, for tasks, **Copy branch name** while the preview has focus. They live in
+the preview's own hotkey scope; with focus on the feed, the list's commands act
+on the focused row. Verify with the cursor in the preview's body.
+
 AI chat, agent, and channel message bodies use 15px text, including thread replies.
+Home uses the same unified agent/model selector as the Agents workspace. Switch
+from Auto to Chat or Code to show it. The menu includes custom agents, advertised
+models, Reasoning effort, and supported Speed choices; Auto hides those controls.
+Opening or dismissing the selector preserves Home's separate unsent draft and
+attachments. The saved model, per-model effort, and speed keep their existing
+preference ownership. Inline and standalone agent sessions use that selector too,
+with session-owned changes rather than new-chat preferences.
 Desktop AI chats, agents, and channel composers share Home's rounded composer
 surface: a muted dark fill or a white light-mode surface with a soft shadow,
 15px input text, and circular controls. Composer geometry is scaled to 15/16
@@ -287,6 +304,51 @@ opens the session. They are
 not retracted automatically yet: answering the question or starting the next turn leaves
 the earlier notification until you mark it done. The chip announcement post itself no
 longer notifies the thread. Settings → notifications lists them under `AI`.
+
+## New Home
+
+Desktop only, behind two PostHog flags read together (`features/new-home`).
+New Home's Recents tab is `/app/home` on the Recents tab; its Notifications tab
+is `/app/notifications`.
+
+| `enable-new-home` | `disable-old-home` | Rail | `/home` | `/notifications` | `g h` |
+| --- | --- | --- | --- | --- | --- |
+| off | any | Home, and Notifications with unified notifications | old Home | today's view | old Home |
+| on | off | Home, then **New Home** (house with a plus) right under it; no Notifications entry | old Home; on the Recents tab (`?s0.home.tab=recent` in the first split) New Home | New Home's Notifications tab | New Home |
+| on | on | **New Home** as Home | New Home | New Home's Notifications tab | New Home |
+
+`g i` goes away with New Home on: Notifications is a New Home tab. The rail
+item and `g h` go through `/new-home`, which opens the tab New Home was last
+left on (kept per user), without the preview it had open. Once old Home is
+off, a `/home` link opens Recents.
+New Home is called **New Home** (rail tooltip and split title) while old
+Home is beside it, and **Home** once it replaces it. Touch devices keep
+today's Home and Notifications in every state. `VITE_ENABLE_NEW_HOME` and
+`VITE_DISABLE_OLD_HOME` override the flags locally; New Home is on in dev,
+with old Home beside it.
+
+Under its header (New Chat, then the tab's tools) New Home has Recents and
+Notifications tabs, labels only, or icons only when the list is narrower
+than 280px; the Notifications tab carries the rail's unread dot. Switching
+tabs is a history entry and keeps the list's width: both tabs share one
+saved width, which starts from old Home's. `1` is Recents, `2` and `3` are
+Notifications at All and Unread, and Tab/Shift+Tab step through the three. Both tabs show Home's chat composer
+while nothing is open; a chat started from Notifications opens on Recents.
+
+- **Recents** is Home's list, rows and tools (Filter with Type only, Search,
+  collapse) fed only by the viewer's `touched_by_me` activity, bucketed by
+  the time of their own last touch. Its filters are old Home's (Status
+  aside). Saving a property, or starting to edit a document or task (the
+  first edit after 5 idle minutes, as the server records it), moves the
+  item to the top at once.
+- **Notifications** is the Notifications view with All/Unread beneath the
+  tabs and Display options (sliders) in place of the settings button:
+  **Condensed** (kept per user) and **Notification settings…**. Condensed
+  rows are Home's rows for the same entity: icon and name; the reply icon
+  and "who in #channel" for any row about a thread (replies, mentions,
+  reactions); "who commented on" for a comment. On hover the time shows
+  and Mark done takes the unread dot's place. Condensed rows sit under Home's
+  date dividers, and a condensed stack stays one row.
 
 ## Home — `/app/component/home`
 

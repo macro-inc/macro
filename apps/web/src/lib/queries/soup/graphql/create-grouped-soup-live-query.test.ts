@@ -59,6 +59,8 @@ function setup(filters: GraphqlEntityFilterAst = {}) {
         | 'live-network'
         | 'normalized-cache-hit'
         | 'normalized-cache-patch'
+        | null,
+      stale?: boolean
     ): void;
     fail(): void;
   };
@@ -79,15 +81,17 @@ function setup(filters: GraphqlEntityFilterAst = {}) {
       const execution: Execution = {
         variables: request.variables,
         context,
-        publish: (data, persistence, source = 'live-network') =>
+        publish: (data, persistence, source = 'live-network', stale = false) =>
           subject.next({
             operation,
             data,
             hasNext: false,
-            stale: false,
-            extensions: {
-              __macroNormalizedCache: { source, persistence },
-            },
+            stale,
+            // null: the uncached client, whose results carry no metadata.
+            extensions:
+              source === null
+                ? {}
+                : { __macroNormalizedCache: { source, persistence } },
           }),
         fail: () =>
           subject.next({
@@ -324,6 +328,40 @@ describe('grouped Soup live ownership', () => {
     await refreshed;
     expect(ids(state.query.data())?.[0].ids).toEqual(['a', 'new-b', 'new-c']);
     expect(state.query.paging.hasNextPage('todo')).toBe(false);
+  });
+
+  it('rebuilds loaded continuations after a refresh on the uncached client', async () => {
+    const state = setup();
+    state.executions[0].publish(page([groupedDocument('a')]), undefined, null);
+    const second = state.query.paging.fetchNextPage('todo');
+    state.executions[1].publish(
+      page([groupedDocument('b')], null),
+      undefined,
+      null
+    );
+    await second;
+
+    // urql replays the last result, stale, while the new read is on its way:
+    // that is no new first page.
+    state.executions[0].publish(
+      page([groupedDocument('a')], 'old-second'),
+      undefined,
+      null,
+      true
+    );
+    expect(state.query.paging.isFetchingNextPage('todo')).toBe(false);
+    expect(state.executions).toHaveLength(2);
+    state.executions[0].publish(
+      page([groupedDocument('a')], 'new-second'),
+      undefined,
+      null
+    );
+    expect(state.query.paging.isFetchingNextPage('todo')).toBe(true);
+    const replay = await state.execution(2);
+    expect(replay.variables.input.continuation?.cursor).toBe('new-second');
+    replay.publish(page([groupedDocument('new-b')], null), undefined, null);
+    await state.query.paging.fetchNextPage('todo');
+    expect(ids(state.query.data())?.[0].ids).toEqual(['a', 'new-b']);
   });
 
   it('retains a page whose load-more request was in flight when refresh started', async () => {

@@ -941,7 +941,7 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   };
 
   /**
-   * Recorded activity caused by this session, lazily paginated newest first.
+   * Recorded activity caused by this session, lazily paginated newest first; `maxItems` caps the total.
    *
    * @readonly
    */

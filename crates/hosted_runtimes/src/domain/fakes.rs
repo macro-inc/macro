@@ -1,6 +1,7 @@
 //! In-memory fakes of the ports, for domain tests.
 
 use crate::domain::ids::ComputerId;
+use crate::domain::ports::HostScope;
 use bot_id::BotId;
 use harness_id::HarnessId;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -17,8 +18,8 @@ use crate::domain::lifecycle::{
     Billing, BillingPolicy, Context, Effect, EffectWorker, Event, HostId, provision, transition,
 };
 use crate::domain::models::{
-    Computer, ComputerDisplayMetadata, ComputerRecord, Host, HostAllocation, HostRegistration,
-    NewReservation, PurchaseKey, Reservation, Reserved, SanitizedReason,
+    Computer, ComputerDisplayMetadata, ComputerRecord, Host, HostAllocation, HostRecord,
+    HostRegistration, NewReservation, PurchaseKey, Reservation, Reserved, SanitizedReason,
 };
 use crate::domain::ports::{
     Applied, ComputerRepo, DueTimer, GuestProcess, PendingEffect, ReserveError,
@@ -26,8 +27,11 @@ use crate::domain::ports::{
 use crate::domain::service::Clock;
 use crate::domain::size::ComputerResources;
 
+mod moves;
+mod overcommit;
 #[cfg(test)]
 mod test;
+mod usage;
 
 pub const TEAM: Uuid = Uuid::from_u128(0x0000_0000_0000_4000_8000_0000_0000_00aa);
 pub const HOST: HostId = HostId::new(Uuid::from_u128(0x0000_0000_0000_4000_8000_0000_0000_0001));
@@ -100,6 +104,9 @@ pub struct FakeRepo {
     pub heartbeats: Mutex<Vec<(HostId, DateTime<Utc>)>>,
     pub timers: Mutex<Vec<DueTimer>>,
     pub fail_next_apply: AtomicBool,
+    /// While set, converting a reservation fails as storage would, before
+    /// anything is written, so the purchase leaves its reservation.
+    pub convert_fails: AtomicBool,
     /// `get` calls so far.
     pub gets: AtomicUsize,
     /// The 1-based `get` calls that fail as if no connection could be had.
@@ -114,6 +121,18 @@ pub struct FakeRepo {
     pub agent_counts: Mutex<HashMap<ComputerId, u32>>,
     /// The agent teammate each computer was bought for.
     pub agents: Mutex<HashMap<ComputerId, MacroUserIdStr<'static>>>,
+    /// Host rows besides the home host [`HOST`].
+    pub other_hosts: Mutex<Vec<HostRecord>>,
+    /// Registrations of other hosts, by name.
+    pub registered: Mutex<Vec<crate::domain::models::HostName>>,
+    /// The home host row's `max_concurrent_starts`; one when unset.
+    pub home_max_concurrent_starts: Option<u32>,
+    /// Hosts' overcommit state, hibernations and wake requests.
+    pub overcommit: overcommit::FakeOvercommit,
+    /// Usage readings, each computer's in the order recorded.
+    pub usage: Mutex<HashMap<ComputerId, Vec<crate::domain::usage::StoredSample>>>,
+    /// Moves (`domain::moves`), in the order created.
+    pub moves: Mutex<Vec<crate::domain::moves::ComputerMove>>,
 }
 
 impl crate::domain::agent::ComputerAgents for FakeRepo {
@@ -203,6 +222,7 @@ impl FakeRepo {
                 computer_id: computer.id,
                 effect,
                 attempts: 0,
+                queued_at: now,
             });
             self.effect_run_after.lock().unwrap().insert(id, now);
         }
@@ -304,6 +324,9 @@ impl ComputerRepo for FakeRepo {
         now: DateTime<Utc>,
     ) -> Result<Option<Computer>, FakeError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        if self.convert_fails.load(Ordering::SeqCst) {
+            return Err(FakeError::Storage);
+        }
         let Some(reservation) = self.reservations.lock().unwrap().remove(&reservation_id) else {
             return Ok(None);
         };
@@ -311,6 +334,7 @@ impl ComputerRepo for FakeRepo {
             billing,
             crate::domain::setup::SetupTimeline::started(reservation.created_at),
             reservation.provision_traceparent.clone(),
+            reservation.agent.is_some(),
             Context {
                 host: reservation.host,
                 enrollment_generation: Default::default(),
@@ -319,9 +343,9 @@ impl ComputerRepo for FakeRepo {
                 policy: policy(),
             },
         );
-        let phase = state.phase.clone();
+        let (phase, payment) = (state.phase.clone(), state.payment_progress());
         if let Some(setup) = state.setup.as_mut() {
-            setup.advance(&phase, false, false, now);
+            setup.advance(&phase, false, false, payment, now);
         }
         let mut computer = Computer {
             id: reservation.id,
@@ -337,6 +361,7 @@ impl ComputerRepo for FakeRepo {
             created_by: reservation.created_by,
             created_at: reservation.created_at,
             enrolled_at: None,
+            hibernated_at: None,
             setup_completed_at: None,
             default_agent_id: None,
             image: None,
@@ -440,13 +465,24 @@ impl ComputerRepo for FakeRepo {
             Err(rejected) => return Ok(Some(Applied::Rejected(rejected))),
         };
         // Latch setup milestones like the Postgres applier.
-        let (phase, connected, waiting) = (
+        let (phase, connected, waiting, payment) = (
             state.phase.clone(),
             state.macrod_connected,
             state.waiting_for_capacity(),
+            state.payment_progress(),
         );
+        let agent = crate::domain::setup::AgentProgress {
+            reported_online: matches!(event, Event::AgentOnline),
+            delivered: matches!(event, Event::AgentDelivered),
+        };
         if let Some(setup) = state.setup.as_mut() {
-            setup.advance(&phase, connected, waiting, now);
+            setup.advance(&phase, connected, waiting, payment, now);
+            setup.advance_agent(agent, now);
+        }
+        // Like the Postgres applier: nothing changed, timeline included,
+        // nothing written.
+        if state == computer.state && effects.is_empty() {
+            return Ok(Some(Applied::Changed(Box::new(computer.clone()))));
         }
         computer.state = state;
         self.push_effects(computer, effects, now);
@@ -600,6 +636,7 @@ impl ComputerRepo for FakeRepo {
     async fn lease_effects(
         &self,
         worker: EffectWorker,
+        scope: HostScope,
         limit: u32,
         now: DateTime<Utc>,
         lease_until: DateTime<Utc>,
@@ -607,9 +644,16 @@ impl ComputerRepo for FakeRepo {
         self.calls.fetch_add(1, Ordering::SeqCst);
         let effects = self.effects.lock().unwrap();
         let mut due = self.effect_run_after.lock().unwrap();
+        let computers = self.computers.lock().unwrap();
+        let in_scope = |computer_id: &ComputerId| {
+            computers
+                .get(computer_id)
+                .is_none_or(|computer| scope.includes(computer.host))
+        };
         let selected: Vec<PendingEffect> = effects
             .iter()
             .filter(|pending| pending.effect.worker() == worker)
+            .filter(|pending| in_scope(&pending.computer_id))
             .filter(|pending| due.get(&pending.id).is_none_or(|at| *at <= now))
             .filter(|pending| {
                 !effects.iter().any(|earlier| {
@@ -680,6 +724,12 @@ impl ComputerRepo for FakeRepo {
         self.complete_effect(id).await
     }
 
+    async fn defer_effect(&self, id: i64, run_after: DateTime<Utc>) -> Result<(), FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        self.effect_run_after.lock().unwrap().insert(id, run_after);
+        Ok(())
+    }
+
     async fn retry_effect(
         &self,
         id: i64,
@@ -696,14 +746,25 @@ impl ComputerRepo for FakeRepo {
         Ok(())
     }
 
-    async fn due_timers(&self, now: DateTime<Utc>, limit: u32) -> Result<Vec<DueTimer>, FakeError> {
+    async fn due_timers(
+        &self,
+        scope: HostScope,
+        now: DateTime<Utc>,
+        limit: u32,
+    ) -> Result<Vec<DueTimer>, FakeError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        let computers = self.computers.lock().unwrap();
         Ok(self
             .timers
             .lock()
             .unwrap()
             .iter()
             .filter(|timer| timer.fire_at <= now)
+            .filter(|timer| {
+                computers
+                    .get(&timer.computer_id)
+                    .is_none_or(|computer| scope.includes(computer.host))
+            })
             .take(limit as usize)
             .cloned()
             .collect())
@@ -742,10 +803,21 @@ impl ComputerRepo for FakeRepo {
 
     async fn register_host(&self, registration: HostRegistration) -> Result<Host, FakeError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        let other = self
+            .other_hosts
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|host| host.name == registration.name)
+            .map(|host| host.id);
+        self.registered
+            .lock()
+            .unwrap()
+            .push(registration.name.clone());
         Ok(Host {
-            id: HOST,
-            awake_capacity_units: registration.awake_capacity_units(),
-            sold_capacity_units: registration.sold_capacity_units(),
+            id: other.unwrap_or(HOST),
+            awake_capacity_units: self.awake_units(),
+            sold_capacity_units: self.sold_units,
             name: registration.name,
         })
     }
@@ -754,6 +826,18 @@ impl ComputerRepo for FakeRepo {
         self.calls.fetch_add(1, Ordering::SeqCst);
         self.heartbeats.lock().unwrap().push((host, now));
         Ok(())
+    }
+
+    async fn hosts(&self) -> Result<Vec<HostRecord>, FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        let mut hosts = vec![HostRecord {
+            id: HOST,
+            name: crate::domain::models::HostName::try_new("runtime-dev-1").unwrap(),
+            connection: None,
+            max_concurrent_starts: self.home_max_concurrent_starts.unwrap_or(1),
+        }];
+        hosts.extend(self.other_hosts.lock().unwrap().iter().cloned());
+        Ok(hosts)
     }
 
     async fn allocation(&self) -> Result<Vec<HostAllocation>, FakeError> {
@@ -773,7 +857,7 @@ impl ComputerRepo for FakeRepo {
         Ok(vec![HostAllocation {
             host: Host {
                 id: HOST,
-                name: "fake".to_owned(),
+                name: crate::domain::models::HostName::try_new("fake").unwrap(),
                 awake_capacity_units: self.awake_units(),
                 sold_capacity_units: self.sold_units,
             },
@@ -806,6 +890,9 @@ pub fn state(phase: crate::domain::lifecycle::Phase) -> crate::domain::lifecycle
         capacity_wait: None,
         retried_by_team: false,
         failure: None,
+        awaiting_agent: false,
+        first_start_failures: 0,
+        refund: None,
     }
 }
 
@@ -816,6 +903,7 @@ pub fn deployment() -> crate::domain::enrollment::Deployment {
         document_storage_url: "http://10.210.0.1:8081".parse().unwrap(),
         app_url: "http://10.210.0.1:3000".parse().unwrap(),
         egress_url: "http://10.210.0.1:41027".parse().unwrap(),
+        telemetry_url: None,
     }
 }
 
@@ -888,12 +976,10 @@ pub fn enrollment(computer_id: ComputerId, agent: bool) -> crate::domain::enroll
         name: crate::domain::models::ComputerName::try_new("Fixture computer").unwrap(),
         deployment: deployment(),
         traceparent: None,
-        agent: agent.then(|| crate::domain::agent::AgentEnrollment {
-            agent_user_id: macro_user_id::user_id::MacroUserIdStr::try_from(
-                "macro|agent@example.com".to_owned(),
-            )
-            .unwrap(),
-            env: crate::domain::agent::AgentEnv::default(),
-        }),
+        role: if agent {
+            crate::domain::enrollment::ComputerRole::Agent
+        } else {
+            crate::domain::enrollment::ComputerRole::Person
+        },
     }
 }

@@ -1,5 +1,10 @@
 import type {
+  ChannelNotificationKind,
+  ChannelNotificationSettingsResponse,
+} from '../../../generated/notification/types.gen';
+import type {
   ActivityType,
+  ApiChannelWithLatest,
   ChannelType,
   GetChannelAttachmentsResponses,
   GetChannelParticipantsResponses,
@@ -8,7 +13,7 @@ import type {
   MessageTimelineQuery,
 } from '../../../generated/storage/types.gen';
 import { type RichMessage, toBody } from '../../mentions';
-import { paginate, unwrap } from '../../utils';
+import { iterate, paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { AgentConversation } from '../agent-sessions/conversation';
 import { Bot } from '../bots/bot';
@@ -36,12 +41,43 @@ import type { Thread } from './thread';
 
 type ChannelDetail = GetChannelResponses[200];
 
+const channelTypes: readonly string[] = [
+  'public',
+  'private',
+  'direct_message',
+  'team',
+] satisfies ChannelType[];
+
+function isChannelType(value: string): value is ChannelType {
+  return channelTypes.includes(value);
+}
+
 /** A member of a channel, with their role and join time. */
 export type ChannelParticipant = GetChannelParticipantsResponses[200][number];
 
 /** A file or entity attached to a message in a channel. */
 export type ChannelAttachment =
   GetChannelAttachmentsResponses[200]['items'][number];
+
+/** A user's own notification settings for one channel. */
+export type ChannelNotificationSettings = {
+  /**
+   * The channel's own settings: exactly the kinds it notifies for, whatever
+   * its Chat sections say. `null` when the channel follows its sections.
+   */
+  enabled: ChannelNotificationKind[] | null;
+  /** Whether the channel notifies while every section holding it is muted. */
+  overridesSectionMute: boolean;
+};
+
+function toNotificationSettings(
+  settings: ChannelNotificationSettingsResponse | undefined,
+): ChannelNotificationSettings {
+  return {
+    enabled: settings?.enabled ?? null,
+    overridesSectionMute: settings?.overridesSectionMute ?? false,
+  };
+}
 
 /**
  * A channel.
@@ -175,6 +211,23 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
     return new Channel(client, id);
   }
 
+  /**
+   * A handle seeded from a `GET /comms/channels` record. The listed name is
+   * the stored one, which the detail shows as is except on direct messages and
+   * unnamed private channels; those are named after the members, so they load.
+   */
+  static fromListing(
+    client: MacroClient,
+    record: ApiChannelWithLatest,
+  ): Channel {
+    const named =
+      record.channel_type !== 'direct_message' && !!record.name?.trim();
+    return new Channel(client, record.id).withListed({
+      channel_type: record.channel_type,
+      ...(named ? { channel_name: record.name ?? undefined } : {}),
+    });
+  }
+
   /** Open (creating if needed) the DM channel with a user. */
   static async dm(client: MacroClient, recipient: User): Promise<Channel> {
     const { channel_id } = unwrap(
@@ -274,28 +327,35 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
   }
 
   /**
-   * Root messages in this channel, most recent first, auto-paginated.
+   * Root messages in this channel, most recent first, auto-paginated; `maxItems` caps the total.
    *
    * @readonly
    */
-  messages(opts?: { pageSize?: number }): AsyncGenerator<Message> {
-    return this.timeline({ limit: opts?.pageSize });
+  messages(opts?: {
+    pageSize?: number;
+    maxItems?: number;
+  }): AsyncGenerator<Message> {
+    return iterate('channel.messages', opts, { pageSize: true }, () =>
+      this.timeline({ limit: opts?.pageSize }),
+    );
   }
 
   /**
    * Root messages created or replied to at or after `after`, most recent
-   * first, auto-paginated. Use it to catch up after a disconnect.
+   * first, auto-paginated; `maxItems` caps the total. Use it to catch up after a disconnect.
    *
    * @readonly
    */
   messagesAfter(
     after: Date | string,
-    opts?: { pageSize?: number },
+    opts?: { pageSize?: number; maxItems?: number },
   ): AsyncGenerator<Message> {
-    return this.timeline({
-      activity_after: after instanceof Date ? after.toISOString() : after,
-      limit: opts?.pageSize,
-    });
+    return iterate('channel.messagesAfter', opts, { pageSize: true }, () =>
+      this.timeline({
+        activity_after: after instanceof Date ? after.toISOString() : after,
+        limit: opts?.pageSize,
+      }),
+    );
   }
 
   private timeline(
@@ -337,6 +397,66 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
         body: { channel_name: name },
       }),
     );
+  }
+
+  /**
+   * The user's own notification settings for this channel. A channel either
+   * follows its Chat sections for every kind (on when they don't decide it)
+   * or has its own setting for all of them. These are separate from muting:
+   * a muted channel sends nothing, and unmuting it restores these settings.
+   *
+   * @readonly
+   */
+  async notificationSettings(): Promise<ChannelNotificationSettings> {
+    const { channels } = unwrap(
+      await this.client.notification.listChannelNotificationSettings(),
+    );
+    const settings = channels.find((channel) => channel.channelId === this.id);
+    return toNotificationSettings(settings);
+  }
+
+  /**
+   * Change the user's own notification settings for this channel, as the
+   * app's Notification Settings menu does; nobody else's notifications
+   * change. `enabled` gives the channel its own settings, replacing its
+   * sections' for every kind; `inherit` hands every kind back to its
+   * sections. Pass at most one of the two. Returns the resulting settings.
+   *
+   * @write
+   * @idempotent
+   */
+  async setNotificationSettings(change: {
+    /** Exactly the kinds to receive for this channel, whatever its sections say. */
+    enabled?: ChannelNotificationKind[];
+    /** Follow the channel's sections again for every kind. */
+    inherit?: boolean;
+    /** Keep notifying while every section holding the channel is muted. */
+    overridesSectionMute?: boolean;
+  }): Promise<ChannelNotificationSettings> {
+    const settings = unwrap(
+      await this.client.notification.updateChannelNotificationSettings({
+        path: { channel_id: this.id },
+        body: change,
+      }),
+    );
+    return toNotificationSettings(settings);
+  }
+
+  /**
+   * Remove the user's own notification settings for this channel, including
+   * an old mentions-only setting, so it follows its Chat sections again.
+   * Returns this handle for chaining.
+   *
+   * @write
+   * @idempotent
+   */
+  async resetNotificationSettings(): Promise<this> {
+    unwrap(
+      await this.client.notification.resetChannelNotificationSettings({
+        path: { channel_id: this.id },
+      }),
+    );
+    return this;
   }
 
   /**
@@ -525,13 +645,26 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
   }
 
   /**
-   * The attachments posted in this channel, auto-paginated.
+   * The attachments posted in this channel, auto-paginated; `maxItems` caps the total.
    *
    * @readonly
    */
   attachments(opts?: {
     pageSize?: number;
     /** Filter by type: `static` for images/videos, `dss` for documents. */
+    type?: string;
+    maxItems?: number;
+  }): AsyncGenerator<ChannelAttachment> {
+    return iterate(
+      'channel.attachments',
+      opts,
+      { pageSize: true, type: true },
+      () => this.attachmentPages(opts),
+    );
+  }
+
+  private attachmentPages(opts?: {
+    pageSize?: number;
     type?: string;
   }): AsyncGenerator<ChannelAttachment> {
     return paginate(async (cursor) => {
@@ -563,10 +696,15 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
     return { ...super.toJSON(), url: this.webUrl() };
   }
 
-  /** Search channels by content, most relevant first, auto-paginated. */
+  /** Search channels by content, most relevant first, auto-paginated; `maxItems` caps the total. */
   static search = entitySearch({
     type: 'channel',
     filters: onlyType('channel'),
-    make: (client, hit) => new Channel(client, hit.channel_id),
+    make: (client, hit) =>
+      new Channel(client, hit.channel_id).withListed(
+        isChannelType(hit.channel_type)
+          ? { channel_type: hit.channel_type }
+          : {},
+      ),
   });
 }

@@ -250,7 +250,7 @@ export const thread = {
       id: 'AL-139',
       surface: 'SL-28',
       fn: ['F-069'],
-      action: 'mark as unread (returns to list)',
+      action: 'mark as unread (keeps the thread open)',
       trigger: 'hotkey u',
       source: [HOTKEYS, READ],
       registered: ['entity.action.markUnread'],
@@ -968,6 +968,18 @@ export const thread = {
       note: 'the same toasts are raised from the header and title menu of an open thread (was STL-613)',
     },
     {
+      id: 'STL-991',
+      surface: 'SL-28',
+      fn: ['F-071'],
+      state: 'result: the thread leaves the inbox at the provider',
+      trigger:
+        'Mark done after a reload that cut off the mark read of a thread just opened',
+      source: [
+        'src/lib/graphql-cache/exchange/mutation-queue-runner.ts',
+        'src/lib/graphql-cache/exchange/mutation-queue-owner.ts',
+      ],
+    },
+    {
       id: 'STL-076',
       surface: 'SL-28',
       fn: ['F-069'],
@@ -978,7 +990,7 @@ export const thread = {
         'src/features/email-thread/thread-read-adapter.ts#Marked as unread',
         'src/features/email-thread/thread-read-adapter.ts#Failed to mark as unread',
       ],
-      note: 'the success toast is hidden on mobile; the same toasts are raised from the unread toggle and the title menu (was STL-609, STL-610)',
+      note: 'the unread toggle and title menu report the settled write after the thread closes, including a write queued behind the opening read; the success toast is hidden on mobile (was STL-609, STL-610)',
     },
     {
       id: 'STL-077',
@@ -1221,6 +1233,34 @@ export const thread = {
       needs: 'the calendar service',
     },
     {
+      id: 'STL-523',
+      surface: 'SL-40',
+      fn: ['F-156'],
+      state: '"Syncing your calendar…" at the shared-event action',
+      trigger:
+        'open a shared event before the first writable calendar is discovered',
+      source: [
+        INVITATION,
+        'src/features/calendar/components/CalendarFirstSyncNotice.tsx',
+      ],
+      providers: ['gmail'],
+      needs: 'the calendar service',
+    },
+    {
+      id: 'STL-524',
+      surface: 'SL-28',
+      fn: ['F-114'],
+      state: '"Syncing your calendar…" at the event composer create action',
+      trigger:
+        'create an event from a thread before the first writable calendar is discovered',
+      source: [
+        'src/features/calendar/components/composer/event-form-parts.tsx',
+      ],
+      viewports: ['desktop'],
+      providers: ['gmail'],
+      needs: 'the calendar service',
+    },
+    {
       id: 'STL-100',
       surface: 'SL-40',
       fn: ['F-153'],
@@ -1286,6 +1326,17 @@ export const thread = {
       state: 'saved card without RSVP, Join, Open in calendar or View your day',
       trigger: 'invitation message with the calendar off',
       source: [INVITATION, CARD],
+    },
+    {
+      id: 'STL-522',
+      surface: 'SL-40',
+      fn: ['F-156'],
+      state: '"Adding shared events requires a writable Google calendar."',
+      trigger: 'open a shared event with Outlook as the only calendar',
+      source: ['src/features/calendar-view/components/AddToCalendarButton.tsx'],
+      providers: ['outlook'],
+      flag: 'enable-calendar-add-shared-event',
+      needs: 'the calendar service',
     },
     // SL-43
     {
@@ -1469,6 +1520,20 @@ export const thread = {
         'src/features/email-thread/components/draft-reply-preview.tsx',
         'src/features/email-thread/views/message-container.tsx',
       ],
+    },
+    {
+      id: 'STL-996',
+      surface: 'SL-35',
+      fn: ['F-117'],
+      state:
+        'result: the reader’s synced reply draft reopens in the shared thread',
+      trigger:
+        'reload a thread shared at Edit after a reply saves in the reader’s inbox',
+      source: [
+        'src/features/email-thread/primitives/thread-reply-area.ts',
+        'src/features/email-thread/queries/thread-source.ts',
+      ],
+      viewports: ['desktop'],
     },
     {
       id: 'STL-966',

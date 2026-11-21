@@ -1,5 +1,10 @@
 import { afterEach, expect, test } from 'bun:test';
-import type { ScheduledActionResponse } from '../generated/scheduled-action/types.gen';
+import type {
+  CodeStep,
+  RoutineKnob,
+  ScheduledActionResponse,
+} from '../generated/scheduled-action/types.gen';
+import type { RoutineKnobOptions } from '../src/entities/routines/routine';
 import { Macro } from '../src/macro';
 import { MacroApiError } from '../src/utils';
 
@@ -149,6 +154,81 @@ test('routine creation sends code and Ask AI steps that write as the user', asyn
     },
   ]);
 });
+test('an entity knob takes the handle of the item it names, a task included, and sends its id', async () => {
+  const bodies: unknown[] = [];
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const request = input instanceof Request ? input : new Request(input);
+      bodies.push(await request.json());
+      return Response.json({ ok: true, problems: [], steps: [], routine: {} });
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const macro = new Macro({
+    token: 'user',
+    hosts: { 'scheduled-action': 'https://routines.test' },
+  });
+  await macro.routines.check({
+    name: 'Post open bugs',
+    trigger: { type: 'cron', schedule: '0 0 9 * * MON', timezone: 'UTC' },
+    steps: [
+      {
+        type: 'code',
+        title: 'Post open bugs',
+        source:
+          "export async function main({ knobs }: StepContext) { await knobs.bugs.send('Open bugs'); }",
+        knobs: [
+          {
+            type: 'entity',
+            name: 'bugs',
+            label: 'Channel to post in',
+            entity_types: ['channel'],
+            value: {
+              type: 'channel',
+              entity: macro.channels.byId('channel-1'),
+            },
+          },
+          {
+            type: 'entity',
+            name: 'task',
+            label: 'Task to follow',
+            entity_types: ['task', 'email_thread'],
+            value: { type: 'task', entity: macro.tasks.byId('task-1') },
+          },
+          { type: 'number', name: 'days', label: 'Days', value: 7 },
+        ],
+      },
+    ],
+  });
+  expect(bodies[0]).toMatchObject({
+    routine: {
+      task: {
+        steps: [
+          {
+            knobs: [
+              {
+                type: 'entity',
+                name: 'bugs',
+                label: 'Channel to post in',
+                entity_types: ['channel'],
+                value: { type: 'channel', id: 'channel-1' },
+              },
+              {
+                type: 'entity',
+                name: 'task',
+                label: 'Task to follow',
+                entity_types: ['task', 'email_thread'],
+                value: { type: 'task', id: 'task-1' },
+              },
+              { type: 'number', name: 'days', label: 'Days', value: 7 },
+            ],
+          },
+        ],
+      },
+    },
+  });
+});
+
 test('routine writes invalidate detail only after success', async () => {
   let enabled = true;
   let reads = 0;
@@ -253,6 +333,39 @@ test('routine options carry run visibility and updates that omit it keep it', as
   expect(bodies[1]).not.toHaveProperty('run_visibility');
 });
 
+test('routine options carry the agent’s pick of a look, and updates that omit it keep the stored one', async () => {
+  const bodies: unknown[] = [];
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const request = input instanceof Request ? input : new Request(input);
+      bodies.push(await request.json());
+      return Response.json(record);
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const macro = new Macro({
+    auth: { type: 'bot', token: 'mbot_test' },
+    requestedAs: record.owner,
+    hosts: { 'scheduled-action': 'https://routines.test' },
+  });
+  const options = {
+    name: 'Daily report',
+    trigger: { type: 'cron', schedule: '0 9 * * *', timezone: 'UTC' },
+    prompt: 'Summarize',
+    userPrompt: 'Daily summary',
+  } as const;
+  const appearance = {
+    icon: { kind: 'macro', name: 'chart-bar' },
+    color: 'blue',
+  } as const;
+  const routine = await macro.routines.create({ ...options, appearance });
+  await routine.update(options);
+  await macro.routines.check({ ...options, appearance });
+  expect(bodies[0]).toMatchObject({ appearance });
+  expect(bodies[1]).not.toHaveProperty('appearance');
+  expect(bodies[2]).toMatchObject({ routine: { appearance } });
+});
+
 test('a rejected routine create carries the server validation message', async () => {
   const rejection =
     'invalid routine task; select a model or agent and provide instructions';
@@ -295,4 +408,169 @@ test('MacroApiError messages carry the message or error of a JSON body', () => {
   expect(new MacroApiError(502, 'x'.repeat(600)).message).toBe(
     `Macro API error 502: ${'x'.repeat(500)}…`,
   );
+});
+
+test('routine apps become the task the routine requires them in, only when given', async () => {
+  const bodies: Record<string, unknown>[] = [];
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const request = input instanceof Request ? input : new Request(input);
+      bodies.push(await request.json());
+      return Response.json(record, { status: 201 });
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const macro = new Macro({
+    auth: { type: 'bot', token: 'mbot_test' },
+    requestedAs: record.owner,
+    hosts: { 'scheduled-action': 'https://routines.test' },
+  });
+  const steps = [{ type: 'agent', instructions: 'File it' }] as const;
+  const trigger = {
+    type: 'cron',
+    schedule: '0 0 9 * * *',
+    timezone: 'UTC',
+  } as const;
+  await macro.routines.create({
+    name: 'Bugs',
+    trigger,
+    steps,
+    apps: [{ slug: 'linear', name: 'Linear' }],
+  });
+  const routine = await macro.routines.create({ name: 'Bugs', trigger, steps });
+  await routine.update({ name: 'Bugs', trigger, steps, apps: [] });
+
+  expect(bodies[0].task).toMatchObject({
+    mcp_servers: [{ app_slug: 'linear', server_name: 'Linear' }],
+  });
+  expect(bodies[1].task).not.toHaveProperty('mcp_servers');
+  // An update removes them by naming none.
+  expect(bodies[2].task).toMatchObject({ mcp_servers: [] });
+});
+
+test('a check names the apps a routine needs that are not connected', async () => {
+  const bodies: Record<string, unknown>[] = [];
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const request = input instanceof Request ? input : new Request(input);
+      bodies.push(await request.json());
+      return Response.json({
+        ok: true,
+        problems: [],
+        steps: [],
+        routine: record,
+        missingApps: [{ app_slug: 'notion', server_name: 'Notion' }],
+      });
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const macro = new Macro({
+    auth: { type: 'bot', token: 'mbot_test' },
+    requestedAs: record.owner,
+    hosts: { 'scheduled-action': 'https://routines.test' },
+  });
+  const routine = {
+    name: 'Bugs',
+    trigger: { type: 'cron', schedule: '0 0 9 * * *', timezone: 'UTC' },
+    steps: [{ type: 'agent', instructions: 'File it' }],
+  } as const;
+
+  const check = await macro.routines.check(routine, {
+    missingApps: [{ slug: 'notion', name: 'Notion' }],
+  });
+  await macro.routines.check(routine);
+
+  expect(bodies[0]).toMatchObject({
+    missingApps: [{ app_slug: 'notion', server_name: 'Notion' }],
+  });
+  expect(check.missingApps).toEqual([
+    { app_slug: 'notion', server_name: 'Notion' },
+  ]);
+  // A check naming none sends none, so it reaches a server without them.
+  expect(bodies[1]).not.toHaveProperty('missingApps');
+});
+
+test('a stored code step passes back with its picked items as handles, and its unpicked knobs as null', async () => {
+  const bodies: unknown[] = [];
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const request = input instanceof Request ? input : new Request(input);
+      bodies.push(await request.json());
+      return Response.json(record);
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const macro = new Macro({
+    token: 'user',
+    hosts: { 'scheduled-action': 'https://routines.test' },
+  });
+  // As the routine stores it: entity knobs hold `{ type, id }`, or nothing.
+  const stored: CodeStep = {
+    id: 'step-1',
+    title: 'Post open bugs',
+    source:
+      "export async function main({ knobs }: StepContext) { await knobs.bugs.send('Open bugs'); }",
+    knobs: [
+      {
+        type: 'entity',
+        name: 'bugs',
+        label: 'Channel to post in',
+        entity_types: ['channel'],
+        value: { type: 'channel', id: 'channel-1' },
+      },
+      {
+        type: 'entity',
+        name: 'next',
+        label: 'Task to follow',
+        entity_types: ['task'],
+        value: null,
+      },
+      {
+        type: 'entity',
+        name: 'later',
+        label: 'Project to file in',
+        entity_types: ['project'],
+      },
+    ],
+  };
+  // Each picked item given again as its handle, as a caller passes it back.
+  const handles = (knob: RoutineKnob): RoutineKnobOptions => {
+    if (knob.type !== 'entity') return knob;
+    const { value, ...rest } = knob;
+    return {
+      ...rest,
+      value:
+        value?.type === 'channel'
+          ? { type: 'channel', entity: macro.channels.byId(value.id) }
+          : null,
+    };
+  };
+  const knobs = (stored.knobs ?? []).map(handles);
+  const asStored: RoutineKnobOptions = {
+    type: 'entity',
+    name: 'bugs',
+    label: 'Channel to post in',
+    entity_types: ['channel'],
+    // @ts-expect-error A knob takes the item's handle, never its id.
+    value: { type: 'channel', id: 'channel-1' },
+  };
+  expect(asStored.type).toBe('entity');
+  await macro.routines.byId('routine-1').update({
+    name: 'Post open bugs',
+    trigger: { type: 'cron', schedule: '0 0 9 * * MON', timezone: 'UTC' },
+    steps: [{ type: 'code', ...stored, knobs }],
+  });
+  expect(bodies[0]).toMatchObject({
+    task: {
+      steps: [
+        {
+          knobs: [
+            { name: 'bugs', value: { type: 'channel', id: 'channel-1' } },
+            { name: 'next', value: null },
+            { name: 'later', value: null },
+          ],
+        },
+      ],
+    },
+  });
 });

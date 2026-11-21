@@ -21,6 +21,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+mod auto_join;
 mod deletion;
 
 fn empty_repo() -> MockChannelRepo {
@@ -58,6 +59,8 @@ struct FakeMutationRepoState {
     fail_channel_touches: bool,
     removed_participants: Vec<String>,
     channel_patches: Vec<(PatchChannelRequest, Option<Uuid>)>,
+    /// The team roster an auto-join adds to the channel.
+    team_members: Vec<String>,
 }
 
 impl FakeMutationRepo {
@@ -102,6 +105,7 @@ impl FakeMutationRepo {
                 fail_channel_touches: false,
                 removed_participants: vec![],
                 channel_patches: vec![],
+                team_members: vec![],
             })),
         }
     }
@@ -194,6 +198,7 @@ impl ChannelRepo for FakeMutationRepo {
         Ok(ChannelMetadata {
             channel_type: ChannelType::Private,
             channel_name: "Project".to_string(),
+            named: true,
         })
     }
 
@@ -262,9 +267,25 @@ impl ChannelRepo for FakeMutationRepo {
     async fn auto_join_by_team_id(
         &self,
         _team_id: &Uuid,
-        _user_id: &MacroUserIdStr<'_>,
-    ) -> Result<(), Self::Err> {
-        Ok(())
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Vec<Uuid>, Self::Err> {
+        let mut state = self.state.lock().unwrap();
+        if state
+            .participants
+            .iter()
+            .any(|participant| participant.user_id == user_id.as_ref())
+        {
+            return Ok(Vec::new());
+        }
+        let channel_id = state.channel_id;
+        state.participants.push(ChannelParticipant {
+            channel_id,
+            user_id: user_id.as_ref().to_string(),
+            role: ParticipantRole::Member,
+            joined_at: Utc::now(),
+            left_at: None,
+        });
+        Ok(vec![channel_id])
     }
 
     async fn leave_by_team_id(
@@ -316,13 +337,35 @@ impl ChannelRepo for FakeMutationRepo {
         _user_id: String,
         team_id: Option<Uuid>,
         req: PatchChannelRequest,
-    ) -> Result<(), Self::Err> {
-        self.state
-            .lock()
-            .unwrap()
-            .channel_patches
-            .push((req, team_id));
-        Ok(())
+    ) -> Result<Vec<String>, Self::Err> {
+        let mut state = self.state.lock().unwrap();
+        let enables_auto_join = req.auto_join_team == Some(true);
+        state.channel_patches.push((req, team_id));
+        if !enables_auto_join {
+            return Ok(Vec::new());
+        }
+        let channel_id = state.channel_id;
+        let added: Vec<String> = state
+            .team_members
+            .iter()
+            .filter(|member| {
+                !state
+                    .participants
+                    .iter()
+                    .any(|participant| &participant.user_id == *member)
+            })
+            .cloned()
+            .collect();
+        for user_id in &added {
+            state.participants.push(ChannelParticipant {
+                channel_id,
+                user_id: user_id.clone(),
+                role: ParticipantRole::Member,
+                joined_at: Utc::now(),
+                left_at: None,
+            });
+        }
+        Ok(added)
     }
 
     async fn user_is_team_admin(
@@ -1236,7 +1279,7 @@ async fn team_membership_operations_delegate_to_repo() {
             }
         })
         .once()
-        .returning(|_, _| Box::pin(async { Ok(()) }));
+        .returning(|_, _| Box::pin(async { Ok(vec![]) }));
     repo.expect_leave_by_team_id()
         .withf({
             let user_id = user_id.clone();

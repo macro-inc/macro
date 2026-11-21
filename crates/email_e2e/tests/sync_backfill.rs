@@ -11,8 +11,8 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use email_e2e::redis::AsyncCommands;
 use email_e2e::{
-    DEFAULT_TIMEOUT, Inbox, Mail, Provider, Report, Stack, User, eventually, gmail_emulator,
-    outlook_emulator,
+    DEFAULT_TIMEOUT, Inbox, Mail, Provider, Report, Stack, StackOptions, User, eventually,
+    gmail_emulator, outlook_emulator,
 };
 use rootcause::prelude::*;
 use serde_json::{Value, json};
@@ -41,6 +41,8 @@ struct Letter {
     message_id: Option<String>,
     in_reply_to: Option<String>,
     attachment: Option<(&'static str, &'static str, &'static [u8])>,
+    /// When it was received; the provider's clock when absent.
+    date: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 impl Letter {
@@ -55,6 +57,7 @@ impl Letter {
             message_id: None,
             in_reply_to: None,
             attachment: None,
+            date: None,
         }
     }
 
@@ -80,6 +83,11 @@ impl Letter {
 
     fn reply_to(mut self, message_id: &str) -> Self {
         self.in_reply_to = Some(message_id.to_owned());
+        self
+    }
+
+    fn dated(mut self, date: chrono::DateTime<chrono::Utc>) -> Self {
+        self.date = Some(date);
         self
     }
 }
@@ -125,6 +133,7 @@ fn seed_mailbox(
                                 },
                             )
                             .collect(),
+                        date: letter.date,
                         ..Default::default()
                     }
                 })
@@ -167,6 +176,7 @@ fn seed_mailbox(
                             },
                         )
                         .collect(),
+                    date: letter.date,
                     ..Default::default()
                 })
                 .collect();
@@ -464,6 +474,105 @@ async fn gmail_mail_arriving_during_the_import_is_kept_once() -> Result<(), Repo
 #[tokio::test(flavor = "multi_thread")]
 async fn outlook_mail_arriving_during_the_import_is_kept_once() -> Result<(), Report> {
     mail_arriving_during_the_import_is_kept_once(Provider::Outlook).await
+}
+
+/// Mail that reaches an Outlook inbox while the inbox's import round is
+/// still being read shows in Macro before that import ends, once, with the
+/// import live pass on. When it fails, new mail waits until the whole of its
+/// folder is imported, and a large mailbox looks as if it stopped syncing
+/// after linking.
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_mail_arriving_mid_import_shows_before_the_import_ends() -> Result<(), Report> {
+    let stack = Stack::start_with(StackOptions {
+        outlook_import_live_pass: true,
+        ..StackOptions::default()
+    })
+    .await?;
+    let ada = stack.user("ada").await?;
+    // A day old, so only the new mail is recent enough for the live pass.
+    let yesterday = chrono::Utc::now() - chrono::Duration::days(1);
+    let letters: Vec<Letter> = (1..=150)
+        .map(|number| {
+            Letter::received(&format!("Old {number:03}"), true)
+                .dated(yesterday + chrono::Duration::minutes(number))
+        })
+        .collect();
+    seed_mailbox(&stack, Provider::Outlook, ada.email(), &letters)?;
+
+    // The inbox's import round reads its first page of 100 and no further
+    // page until the scenario lets it: a new round of the inbox, as its live
+    // pass reads, and every other folder sync.
+    let inbox_delta = |error: Option<outlook_emulator::FaultError>, times, continuation| {
+        outlook_emulator::Fault {
+            mailbox: Some(ada.email().to_owned()),
+            route: Some(outlook_emulator::Route::MessagesDelta),
+            folder: Some("inbox".to_owned()),
+            continuation,
+            error,
+            times,
+            ..Default::default()
+        }
+    };
+    let first_page = stack
+        .outlook()
+        .inject_fault(inbox_delta(None, Some(1), false));
+    let held = stack.outlook().inject_fault(inbox_delta(
+        Some(outlook_emulator::FaultError::Unavailable),
+        None,
+        true,
+    ));
+    let inbox = ada.start_link(Provider::Outlook, ada.email()).await?;
+    eventually(
+        "the inbox's first page and the service's subscription",
+        DEFAULT_TIMEOUT,
+        async || {
+            let outlook = stack.outlook();
+            let page_read = outlook.faults().iter().all(|(id, _)| *id != first_page);
+            let subscribed = outlook
+                .subscriptions()
+                .iter()
+                .any(|subscription| subscription.mailbox == ada.email());
+            Ok((page_read && subscribed).then_some(()))
+        },
+    )
+    .await?;
+
+    inbox.deliver(&Mail::new(
+        "Alan <alan@example.com>",
+        "Arrived mid-import",
+        "Sent while the inbox was still being imported.",
+    ))?;
+    let arrived = inbox
+        .wait_for_preview("inbox", "Arrived mid-import")
+        .await?;
+    assert_eq!(arrived["isRead"], false);
+    assert_eq!(
+        inbox.link().await?["sync_status"],
+        SYNCING,
+        "the new mail showed while the import was still running"
+    );
+
+    stack.outlook().remove_fault(held);
+    inbox.wait_until_synced().await?;
+    // A later message is the event after which a duplicate would show: the
+    // round after the import lists the new mail again.
+    inbox.deliver(&Mail::new(
+        "Alan <alan@example.com>",
+        "Arrived afterwards",
+        "Sent once the import was done.",
+    ))?;
+    inbox
+        .wait_for_preview("inbox", "Arrived afterwards")
+        .await?;
+    let in_inbox = inbox.previews("inbox").await?;
+    assert_eq!(named(&in_inbox, "Arrived mid-import"), 1);
+    assert_eq!(in_inbox.len(), 152, "threads in the inbox view");
+    let thread = inbox
+        .thread(arrived["id"].as_str().unwrap_or_default())
+        .await?;
+    assert_eq!(thread["messages"].as_array().map_or(0, Vec::len), 1);
+
+    stack.finish().await
 }
 
 /// Linking a mailbox that is already linked and imported answers the same

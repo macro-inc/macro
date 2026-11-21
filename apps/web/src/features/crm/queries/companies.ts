@@ -1,5 +1,6 @@
 import { NIL_UUID } from '@app/features/next-soup/filters/filter-store';
 import { analytics } from '@app/lib/analytics';
+import { captureQueryAuthorization } from '@app/lib/urql-solid/authorization';
 import { ThrownResultError, throwOnErr } from '@core/util/result';
 import type { CrmCompanyEntity } from '@entity';
 import { Telemetry } from '@macro-inc/observability';
@@ -157,6 +158,7 @@ function wipeCompanyEmailCache(
 export function useCreateCompanyMutation(deps: CrmRecordDependencies) {
   return useMutation(
     () => ({
+      onMutate: () => captureQueryAuthorization(),
       mutationFn: ({ name, domain }: { name: string; domain?: string }) =>
         Telemetry.span('crm.company.create', async (span) => {
           span.setAttr('crm.company.has_domain', !!domain);
@@ -166,8 +168,9 @@ export function useCreateCompanyMutation(deps: CrmRecordDependencies) {
           span.setAttr('crm.company.id', company.id);
           return company;
         }),
-      onSuccess: (data) => {
+      onSuccess: (data, _variables, canCache) => {
         analytics.track('crm_company_created', { companyId: data.id });
+        if (!canCache?.()) return;
         deps.client.setQueryData(crmKeys.company(data.id).queryKey, data);
         return deps.client.invalidateQueries({ queryKey: soupKeys._def });
       },
@@ -186,12 +189,14 @@ export function createCompanyImporter(
 ): CompanyImporter {
   return {
     async create(input) {
+      const canCache = captureQueryAuthorization();
       const created = await deps.storage.createCompany(input);
       if (created.isOk()) {
-        deps.client.setQueryData(
-          crmKeys.company(created.value.id).queryKey,
-          created.value
-        );
+        if (canCache())
+          deps.client.setQueryData(
+            crmKeys.company(created.value.id).queryKey,
+            created.value
+          );
         return 'created';
       }
       if (created.error.some((error) => error.code === 'CONFLICT'))
@@ -213,6 +218,7 @@ export function createCompanyImporter(
 export function useCreateContactMutation(deps: CrmRecordDependencies) {
   return useMutation(
     () => ({
+      onMutate: () => captureQueryAuthorization(),
       mutationFn: ({
         companyId,
         name,
@@ -232,11 +238,12 @@ export function useCreateContactMutation(deps: CrmRecordDependencies) {
           span.setAttr('crm.contact.id', contact.id);
           return contact;
         }),
-      onSuccess: (contact, { companyId }) => {
+      onSuccess: (contact, { companyId }, canCache) => {
         analytics.track('crm_contact_created', {
           companyId,
           contactId: contact.id,
         });
+        if (!canCache?.()) return;
         return Promise.all([
           companyId &&
             deps.client.invalidateQueries({
@@ -265,12 +272,14 @@ export function useSetCompanyNameMutation(deps: CrmRecordDependencies) {
       mutationFn: ({ companyId, name }: { companyId: string; name: string }) =>
         throwOnErr(() => deps.storage.setCompanyName({ companyId, name })),
       onMutate: async ({ companyId, name }) => {
+        const canCache = captureQueryAuthorization();
         const queryKey = crmKeys.company(companyId).queryKey;
         const details = contactDetailsOfCompanyFilter(companyId);
         await Promise.all([
           deps.client.cancelQueries({ queryKey }),
           deps.client.cancelQueries(details),
         ]);
+        if (!canCache()) return;
         const previous = deps.client.getQueryData<CrmCompanyResponse>(queryKey);
         if (previous) {
           deps.client.setQueryData<CrmCompanyResponse>(queryKey, {
@@ -287,12 +296,12 @@ export function useSetCompanyNameMutation(deps: CrmRecordDependencies) {
             company: { ...detail.company, name },
           });
         }
-        return { previous, previousDetails, optimisticName: name };
+        return { previous, previousDetails, optimisticName: name, canCache };
       },
       // Roll back only if the cache still holds this mutation's optimistic
       // name — a stale failure must not clobber a newer rename's update.
       onError: (_err, { companyId }, context) => {
-        if (!context) return;
+        if (!context?.canCache()) return;
         if (context.previous) {
           deps.client.setQueryData<CrmCompanyResponse>(
             crmKeys.company(companyId).queryKey,

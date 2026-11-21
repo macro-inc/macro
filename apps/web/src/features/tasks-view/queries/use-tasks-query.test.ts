@@ -20,7 +20,10 @@ vi.mock('@app/features/soup', async () => ({
   ...(await import('@app/features/soup/collection/rows')),
   ...(await import('@app/features/soup/collection/row-store')),
   ...(await import('@app/features/soup/collection/transforms')),
-  useSearchContext: () => ({ entityPool: () => [], routinePool: () => [] }),
+  useSearchContext: () => ({
+    entityPool: () => () => [],
+    routinePool: () => [],
+  }),
   createSearchState: () => {
     fixture.searchState();
     return {
@@ -514,6 +517,87 @@ it('admits only optimistic CRM tasks that name the record', () => {
       fixture.mapItem.mockReturnValueOnce(crmTask('unrelated', ['globex']));
       expect(options.meta.insertFilter({})).toBe(false);
       fixture.mapItem.mockReturnValueOnce(crmTask('cached'));
+      expect(options.meta.insertFilter({})).toBe(false);
+    } finally {
+      dispose();
+    }
+  });
+});
+
+it('admits optimistic CRM tasks whose custom entity property names the record', () => {
+  fixture.calls = [];
+  fixture.query = {
+    isLoading: false,
+    isPending: false,
+    isPlaceholderData: false,
+    data: { entities: [] },
+  };
+  const taskReferencing = (
+    definition: { is_system: boolean; owner: { scope: string } },
+    entity_type: string,
+    entity_id: string
+  ) =>
+    ({
+      ...crmTask('custom'),
+      properties: [
+        {
+          definition: {
+            id: 'custom-contact',
+            data_type: 'ENTITY',
+            ...definition,
+          },
+          value: {
+            type: 'EntityReference',
+            value: [
+              { entity_type: 'USER', entity_id: 'viewer' },
+              { entity_type, entity_id },
+            ],
+          },
+        },
+      ],
+    }) as unknown as TaskEntityWithProperties;
+  const personal = { is_system: false, owner: { scope: 'user' } };
+  // A row read over GraphQL carries no owner: every definition says system.
+  const overGraphql = { is_system: false, owner: { scope: 'system' } };
+  createRoot((dispose) => {
+    try {
+      crmSource();
+      const options = fixture.calls[0]?.options?.() as {
+        meta: { insertFilter: (item: unknown) => boolean };
+      };
+      fixture.mapItem.mockReturnValueOnce(
+        taskReferencing(personal, 'COMPANY', 'acme')
+      );
+      expect(options.meta.insertFilter({})).toBe(true);
+      fixture.mapItem.mockReturnValueOnce(
+        taskReferencing(overGraphql, 'COMPANY', 'acme')
+      );
+      expect(options.meta.insertFilter({})).toBe(true);
+      // The company's id as a contact, and another company, are not the record.
+      fixture.mapItem.mockReturnValueOnce(
+        taskReferencing(personal, 'CONTACT', 'acme')
+      );
+      expect(options.meta.insertFilter({})).toBe(false);
+      fixture.mapItem.mockReturnValueOnce(
+        taskReferencing(personal, 'COMPANY', 'globex')
+      );
+      expect(options.meta.insertFilter({})).toBe(false);
+      // A built-in property and a database column are not custom properties.
+      fixture.mapItem.mockReturnValueOnce(
+        taskReferencing(
+          { is_system: true, owner: { scope: 'system' } },
+          'COMPANY',
+          'acme'
+        )
+      );
+      expect(options.meta.insertFilter({})).toBe(false);
+      fixture.mapItem.mockReturnValueOnce(
+        taskReferencing(
+          { is_system: false, owner: { scope: 'database' } },
+          'COMPANY',
+          'acme'
+        )
+      );
       expect(options.meta.insertFilter({})).toBe(false);
     } finally {
       dispose();

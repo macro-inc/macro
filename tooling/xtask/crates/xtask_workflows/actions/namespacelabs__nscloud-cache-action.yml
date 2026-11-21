@@ -1,0 +1,29 @@
+name: Cache
+description: Cache artifacts like dependencies and build outputs to a Namespace Cloud cache volume to improve workflow execution time.
+inputs:
+  spacectl-version:
+    description: Version of spacectl CLI to use (e.g., '0.1.0' or 'latest'). If not specified, uses existing binary or fetches latest.
+    required: false
+  spacectl-system-binary:
+    description: 'Whether to use an existing spacectl binary. Options: ''prefer'' (default), ''require'', ''ignore''.'
+    required: false
+  github-token:
+    description: GitHub token for API requests to fetch space releases
+    required: false
+    default: ${{ github.token }}
+  fail-on-cache-miss:
+    description: Fail the workflow if cache entry is not found
+    default: 'false'
+    required: false
+  detect:
+    description: A list of cache modes you want to enable, only if detected. Set to 'true' to detect all available cache modes based on the environment. See `cache` for a list of available cache modes.
+    required: false
+  cache:
+    description: A list of cache modes to enable. Supported options are 'apt,brew,bun,cocoapods,composer,deno,go,golangci-lint,gradle,maven,mise,nix,playwright,pnpm,poetry,python,ruby,rust,swiftpm,uv,xcode,yarn'
+    required: false
+  path:
+    description: A list of files, directories, and wildcard patterns to cache and restore
+    required: false
+outputs:
+  cache-hit:
+    description: A boolean value to indicate an exact match was found for the primary key

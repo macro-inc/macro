@@ -171,9 +171,11 @@ test.describe('a send queued in one browser', () => {
 // sendable in another that has its link open: it never learns the draft is
 // gone.
 // The draft lifecycle is Macro's own: Gmail only.
-test('known bug: deleted-draft-open-elsewhere-stays-editable: a draft deleted in one browser says so in the other @known-bug', {
-  tag: '@known-bug',
-}, async ({ page, mailbox, browser }) => {
+test('a draft deleted in one browser says so in the other', async ({
+  page,
+  mailbox,
+  browser,
+}) => {
   await composeNew(page, mailbox, {
     to: 'grace@example.com',
     subject: 'Deleted elsewhere',
@@ -194,6 +196,7 @@ test('known bug: deleted-draft-open-elsewhere-stays-editable: a draft deleted in
   await expect(
     notice(other.page, 'This draft is no longer available.')
   ).toBeVisible({ timeout: 40_000 });
+  await expect(other.page.getByPlaceholder(/subject/i)).toBeDisabled();
   const otherSend = other.page.getByRole('button', {
     name: 'Send email',
     exact: true,

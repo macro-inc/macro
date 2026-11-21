@@ -73,8 +73,11 @@ other active notifications can keep the entity in the list. Seen/reopen operatio
 update filter membership on the authoritative reply, not from a guessed optimistic
 state. Rollback restores only the failed operation's contribution. `DONE` predicates,
 other entity partitions, and notified-at sorting still use the network path: a
-new notification re-reads mounted notified-at lists, grouped ones too (they
-sort groups by update time but hold rows by notification state).
+new notification re-reads mounted notified-at lists. A flat one replays its
+loaded pages with the notified-at query; a grouped one asks for update time
+(groups sort by it), while its rows carry notification times and its filters
+can select by notification state, so it replays its first page and every
+loaded continuation page.
 
 The Mark done action (`e`, row menu) hides its rows at once from GraphQL lists that
 exclude done items, such as Email Important/Noise and Home Signal, without waiting

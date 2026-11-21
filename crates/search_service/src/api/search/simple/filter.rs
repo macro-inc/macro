@@ -196,12 +196,20 @@ pub(super) async fn email_search(
     // Every inbox the caller can reach (their own plus delegated). Connected
     // secondary inboxes share the owner's user_id; delegated inboxes index
     // under their own, so collect the distinct macro_ids the caller can search.
-    let links = email_db_client::links::get::fetch_inboxes_for_macro_id(&ctx.db, user_id.as_ref())
-        .await
-        .map_err(SearchError::InternalError)?;
-    let mut user_ids: Vec<String> = links.iter().map(|l| l.macro_id.to_string()).collect();
+    let links =
+        email_db_client::links::get::fetch_search_inboxes_for_macro_id(&ctx.db, user_id.as_ref())
+            .await
+            .map_err(SearchError::InternalError)?;
+    let mut user_ids: Vec<String> = links.iter().map(|l| l.macro_id.clone()).collect();
     user_ids.sort();
     user_ids.dedup();
+    // A mailbox being disconnected keeps its documents until its rows are
+    // purged, which can take hours; its mail stops matching from the start.
+    let disconnecting: Vec<String> = links
+        .iter()
+        .filter(|l| l.deleting)
+        .map(|l| l.id.to_string())
+        .collect();
     let inboxes = ViewerInboxes {
         link_ids: links.iter().map(|l| l.id).collect(),
         user_ids,
@@ -231,6 +239,7 @@ pub(super) async fn email_search(
             bcc: filters.bcc.clone(),
             recipients: filters.recipients.clone(),
             link_ids: filters.link_ids.clone(),
+            exclude_link_ids: disconnecting,
             include_labels: filters.include_labels.clone(),
             exclude_labels: filters.exclude_labels.clone(),
             importance: filters.importance,

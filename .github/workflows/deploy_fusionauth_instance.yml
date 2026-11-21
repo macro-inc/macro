@@ -5,13 +5,13 @@ on:
   workflow_dispatch:
     inputs:
       environment:
-        type: choice
-        required: true
-        default: dev
-        options:
-        - dev
-        - prod
         description: The environment to deploy to.
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+        default: dev
 jobs:
   deploy:
     name: Deploy fusionauth-instance

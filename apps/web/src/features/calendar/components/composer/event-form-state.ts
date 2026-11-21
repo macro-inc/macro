@@ -1,8 +1,10 @@
 import type { DateTimeRangeProps } from '@app/components/date-time-range/date-time-range-fields';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
+import { useCalendarFirstSync } from '@queries/calendar/first-sync';
 import type { CalendarUpdateScope } from '@service-email/client';
 import type { JSX } from 'solid-js';
 import { createEffect, createSignal, createUniqueId } from 'solid-js';
+import type { CalendarTimeFormat } from '../../types';
 import type { CalendarEventFormController } from './create-calendar-event-form-controller';
 import type { EventGuestPolicyRowProps } from './EventGuestPolicyRow';
 import type { EventComposerGuestsPillProps } from './EventPropertyPills';
@@ -36,6 +38,8 @@ export interface EventFormProps {
    */
   detailsReadOnlyReason?: string;
   showRecurringEditNotice?: boolean;
+  /** The clock the start and end times read in; the locale's when unset. */
+  timeFormat?: CalendarTimeFormat;
   /** Disable interaction without presenting the form as an in-flight save. */
   disabled?: boolean;
   pending: boolean;
@@ -45,6 +49,15 @@ export interface EventFormProps {
   onDirtyChange?: (dirty: boolean) => void;
   onCancel: () => void;
   onSubmit: (
+    values: EventEditorSubmitValues,
+    scope?: CalendarUpdateScope
+  ) => void;
+  /**
+   * Replaces the event with the form's unsaved edits, for a meeting the
+   * provider keeps on an existing event once the person turns it off. Without
+   * it the meeting cannot be turned off.
+   */
+  onReplace?: (
     values: EventEditorSubmitValues,
     scope?: CalendarUpdateScope
   ) => void;
@@ -67,6 +80,9 @@ export function createEventForm(props: EventFormProps) {
   const state = controller.state;
   const isEdit = () => props.isEdit ?? false;
   const formIsDisabled = () => props.pending || props.disabled === true;
+  const calendarFirstSync = useCalendarFirstSync(
+    () => !isEdit() && controller.calendarOptions().length === 0
+  );
 
   // Recurring edits default to the whole series, matching the long-standing
   // behavior; "this event" writes a single-occurrence exception.
@@ -110,6 +126,10 @@ export function createEventForm(props: EventFormProps) {
     get endDisabled() {
       return fieldIsDisabled('end');
     },
+    get hour12() {
+      if (props.timeFormat === undefined) return undefined;
+      return props.timeFormat === '12-hour';
+    },
     get invalid() {
       return controller.dateRangeError() !== undefined;
     },
@@ -135,6 +155,13 @@ export function createEventForm(props: EventFormProps) {
     ['microsoft_teams', 'existing'].includes(
       controller.initialConferenceChoice()
     );
+  // Outlook cannot remove Teams from an existing event: once the person turns
+  // it off, only a replacement saves the form.
+  const conferenceRemovalPending = () =>
+    conferenceLocked() &&
+    state().conference !== controller.initialConferenceChoice();
+  const undoConferenceRemoval = () =>
+    controller.setField('conference', controller.initialConferenceChoice());
   const isOutOfOffice = () => controller.isOutOfOffice();
   // The decline settings of an edited event are unknown until picked, and the
   // disclosure must not claim behavior nobody chose.
@@ -199,13 +226,18 @@ export function createEventForm(props: EventFormProps) {
   });
   createEffect(() => props.onDirtyChange?.(controller.isDirty()));
 
+  const submittedScope = () =>
+    props.showRecurringEditNotice ? editScope() : undefined;
   const submit = () => {
     const values = controller.submitValues();
+    if (!values || formIsDisabled() || calendarFirstSync()) return;
+    if (conferenceRemovalPending()) return;
+    props.onSubmit(values, submittedScope());
+  };
+  const replace = () => {
+    const values = controller.submitValues();
     if (!values || formIsDisabled()) return;
-    props.onSubmit(
-      values,
-      props.showRecurringEditNotice ? editScope() : undefined
-    );
+    props.onReplace?.(values, submittedScope());
   };
 
   return {
@@ -216,6 +248,7 @@ export function createEventForm(props: EventFormProps) {
     resolveAppLink: useMacroMentionLinkResolver(),
     isEdit,
     formIsDisabled,
+    calendarFirstSync,
     editScope,
     changeEditScope,
     pastEventWarning,
@@ -227,6 +260,8 @@ export function createEventForm(props: EventFormProps) {
     recurrenceDescribedBy,
     capabilities,
     conferenceLocked,
+    conferenceRemovalPending,
+    undoConferenceRemoval,
     isOutOfOffice,
     outOfOfficeNotice,
     showsDeclineMessage,
@@ -234,6 +269,7 @@ export function createEventForm(props: EventFormProps) {
     guests,
     guestPolicy,
     submit,
+    replace,
   };
 }
 

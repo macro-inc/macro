@@ -136,6 +136,8 @@ function GithubCommentMessage(props: {
 }) {
   const messageData = () => toMessageData(props.comment);
   const login = () => props.comment.authorLogin ?? 'github';
+  const headerBadge = () =>
+    props.isReply ? undefined : commentBadge(props.comment);
 
   const [expanded, setExpanded] = createSignal(false);
   const [overflowing, setOverflowing] = createSignal(false);
@@ -163,8 +165,10 @@ function GithubCommentMessage(props: {
           placement="header"
           class="flex items-center gap-1 min-w-0 w-full"
         >
-          <Message.SenderName />
-          <Show when={!props.isReply && commentBadge(props.comment)}>
+          <Message.SenderName
+            class={cn(headerBadge()?.isAnchor && 'max-w-[60%] shrink-0')}
+          />
+          <Show when={headerBadge()}>
             {(badge) => (
               <span
                 class={cn(

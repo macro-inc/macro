@@ -14,7 +14,7 @@ use agent_client_protocol::schema::v1::McpServerHttp;
 use futures::FutureExt as _;
 use futures::future::BoxFuture;
 use http::header::{AUTHORIZATION, HeaderName, HeaderValue};
-use mcp_toolset::{ListedServer, McpServer, RemoteMcpToolSet, client_info};
+use mcp_toolset::{ListedServer, McpServer, RemoteMcpToolSet, TraceContext, client_info};
 use rmcp::ServiceExt as _;
 use rmcp::model::Tool;
 use rmcp::transport::StreamableHttpClientTransport;
@@ -23,7 +23,7 @@ use rmcp::transport::streamable_http_client::{
 };
 use tracing::Instrument as _;
 
-use crate::domain::mcp::McpToolConnector;
+use crate::domain::mcp::{MACRO_INTERNAL_MCP_NAME, McpToolConnector};
 
 #[cfg(test)]
 mod test;
@@ -397,6 +397,13 @@ fn listed_from(cached: &CachedServer) -> ListedServer {
         name: cached.name.clone(),
         client: Arc::clone(&cached.client),
         tools: cached.tools.clone(),
+        // Only the harness's own server is dialed under this name
+        // (`dialable_servers`), so its code executions join the turn's trace.
+        trace_context: if cached.name == MACRO_INTERNAL_MCP_NAME {
+            TraceContext::Propagate
+        } else {
+            TraceContext::Withhold
+        },
     }
 }
 

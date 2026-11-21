@@ -6,7 +6,7 @@
 //! The worker's consumer group is one for every scenario, so these run one
 //! at a time.
 
-use email_e2e::chrono::NaiveDate;
+use email_e2e::chrono::{DateTime, Days, NaiveDate, SubsecRound as _, TimeDelta, Utc};
 use email_e2e::{
     DEFAULT_TIMEOUT, Inbox, Mail, Provider, Report, Stack, StackOptions, User, eventually,
 };
@@ -20,6 +20,18 @@ const FOCUS: &str = "query { user { id emailFocus { id name \
      focus { isFocus category needsReply dueOn } } } }";
 const THREAD_FOCUS: &str = "query($input: EmailThreadInput!) { \
      user { id emailThread(input: $input) { id focus { isFocus category } } } }";
+const THREAD_LABELS: &str = "query($input: EmailThreadInput!) { \
+     user { id emailThread(input: $input) { id focus { isFocus needsReply needsFollowUp } } } }";
+const THREAD_CLASSIFIED_AT: &str = "query($input: EmailThreadInput!) { \
+     user { id emailThread(input: $input) { id focus { classifiedAt } } } }";
+
+/// How long before the scenario's meeting ends, or its wait for an answer
+/// does, from when it starts: long enough for the worker to classify the
+/// mail first, short enough to wait for.
+const ENDS_IN: TimeDelta = TimeDelta::seconds(90);
+/// Days the owner waits on an answer before a thread they wrote last on comes
+/// back to Focus (`FOLLOW_UP_AFTER_DAYS` in `crates/email`'s Focus service).
+const FOLLOW_UP_AFTER: TimeDelta = TimeDelta::days(3);
 
 async fn focus_stack() -> Result<Stack, Report> {
     Stack::start_with(StackOptions {
@@ -77,9 +89,19 @@ async fn wait_until_classified(user: &User, thread_id: &str) -> Result<Value, Re
 
 /// Delivers mail and waits for it in the inbox; answers its thread's id.
 async fn arrives(inbox: &Inbox, from: &str, subject: &str) -> Result<String, Report> {
-    inbox.deliver(&Mail::new(from, subject, "Hello."))?;
+    delivered(inbox, &Mail::new(from, subject, "Hello.")).await
+}
+
+/// Delivers this mail and waits for its thread in the inbox; answers the
+/// thread's id.
+async fn delivered(inbox: &Inbox, mail: &Mail) -> Result<String, Report> {
+    let subject = mail.subject.as_str();
+    inbox.deliver(mail)?;
     let preview = inbox.wait_for_preview("inbox", subject).await?;
-    Ok(preview["id"].as_str().unwrap_or_default().to_owned())
+    let id = preview["id"]
+        .as_str()
+        .ok_or_else(|| rootcause::report!("the preview of {subject} has no thread id"))?;
+    Ok(id.to_owned())
 }
 
 /// The pushes that told the inbox's readers its Focus changed.
@@ -258,4 +280,444 @@ async fn gmail_a_senders_mail_leaves_focus_as_noise_and_returns_as_signal() -> R
 async fn outlook_a_senders_mail_leaves_focus_as_noise_and_returns_as_signal() -> Result<(), Report>
 {
     a_senders_mail_leaves_focus_as_noise_and_returns_as_signal(Provider::Outlook).await
+}
+
+/// Focus reads the mail of an owner only while they have the Focus flag.
+/// Bob does not: his mail never reaches the model, his thread gets no
+/// verdict and his Home stays empty, while Ada's mail, which arrives after
+/// his, is classified and her app told.
+///
+/// When it fails: the worker classifies the mail of an owner the rollout
+/// leaves out, and shows it to the model.
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_mail_of_an_owner_without_the_focus_flag_is_not_classified() -> Result<(), Report> {
+    let stack = focus_stack().await?;
+    let classifier = stack.focus_classifier()?;
+    classifier.put_in_focus_when_mail_contains("Contract renewal");
+    let ada = stack.user("ada").await?;
+    let bob = stack.user("bob").await?;
+    classifier.turn_off_focus_flag_for(bob.email())?;
+    let bobs = bob.link(Provider::Gmail, bob.email()).await?;
+    let adas = ada.link(Provider::Gmail, ada.email()).await?;
+
+    let left_out = arrives(&bobs, MALLORY, "Contract renewal for Bob").await?;
+    eventually(
+        "the worker to leave Bob's mail for his flag",
+        DEFAULT_TIMEOUT,
+        async || Ok(stack.focus_skipped_without_flag(&left_out).then_some(())),
+    )
+    .await?;
+    let wanted = arrives(&adas, MALLORY, "Contract renewal for Ada").await?;
+    let verdict = wait_until_classified(&ada, &wanted).await?;
+    assert_eq!(verdict, json!({ "isFocus": true, "category": "OTHER" }));
+    wait_for_home(&ada, &["Contract renewal for Ada"]).await?;
+    eventually(
+        "a push telling Ada's app Focus changed",
+        DEFAULT_TIMEOUT,
+        async || Ok(focus_pushes(&stack, &adas).into_iter().next()),
+    )
+    .await?;
+
+    assert_eq!(classifier.times_asked_about("for Bob"), 0);
+    assert_eq!(thread_focus(&bob, &left_out).await?, Value::Null);
+    assert_eq!(on_home(&bob).await?, Vec::<Value>::new());
+    assert_eq!(focus_pushes(&stack, &bobs), Vec::<Value>::new());
+
+    stack.finish().await
+}
+
+/// The id of the account that owns the inbox, as the user who linked it
+/// lists it.
+async fn owner_of(user: &User, inbox: &Inbox) -> Result<Value, Report> {
+    let links = user.get("/email/links").await?.ok()?;
+    let link = links["links"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|link| link["id"] == inbox.link_id().to_string().as_str())
+        .ok_or_else(|| rootcause::report!("the inbox is not listed: {links}"))?;
+    Ok(link["macro_id"].clone())
+}
+
+/// A linked inbox follows the Focus flag of the person whose tab lists it.
+/// Ada has the flag and links Bob's mailbox. Bob has a Macro account and no
+/// flag, so the inbox stays Bob's. Mail to it is classified, listed on
+/// Ada's Home, and Ada's app is told. Carol, without the flag, links Dan's
+/// mailbox, and Dan lacks it too: that mail never reaches the model.
+///
+/// When it fails: an inbox linked to someone with the flag gets no Focus
+/// because the worker asks only its owner's flag, or a linked inbox is
+/// classified while nobody whose tab shows it has the flag.
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_a_linked_inbox_follows_the_flag_of_the_user_who_linked_it() -> Result<(), Report> {
+    let stack = focus_stack().await?;
+    let classifier = stack.focus_classifier()?;
+    classifier.put_in_focus_when_mail_contains("Contract renewal");
+    let ada = stack.user("ada").await?;
+    let bob = stack.user("bob").await?;
+    let carol = stack.user("carol").await?;
+    let dan = stack.user("dan").await?;
+    for outside in [&bob, &carol, &dan] {
+        classifier.turn_off_focus_flag_for(outside.email())?;
+    }
+    let bobs = ada.link(Provider::Gmail, bob.email()).await?;
+    let dans = carol.link(Provider::Gmail, dan.email()).await?;
+    assert_eq!(owner_of(&ada, &bobs).await?, bob.macro_id());
+    assert_eq!(owner_of(&carol, &dans).await?, dan.macro_id());
+
+    let left_out = arrives(&dans, MALLORY, "Contract renewal for Dan").await?;
+    eventually(
+        "the worker to leave Dan's mail, linked to Carol, for their flags",
+        DEFAULT_TIMEOUT,
+        async || Ok(stack.focus_skipped_without_flag(&left_out).then_some(())),
+    )
+    .await?;
+    let wanted = arrives(&bobs, MALLORY, "Contract renewal for Bob").await?;
+    let verdict = wait_until_classified(&ada, &wanted).await?;
+    assert_eq!(verdict, json!({ "isFocus": true, "category": "OTHER" }));
+    wait_for_home(&ada, &["Contract renewal for Bob"]).await?;
+    let push = eventually(
+        "a push telling Ada's app Focus changed",
+        DEFAULT_TIMEOUT,
+        async || Ok(focus_pushes(&stack, &bobs).into_iter().next()),
+    )
+    .await?;
+    assert!(
+        push["entities"].to_string().contains(ada.macro_id()),
+        "{push}"
+    );
+
+    assert_eq!(classifier.times_asked_about("for Dan"), 0);
+    assert_eq!(thread_focus(&carol, &left_out).await?, Value::Null);
+    assert_eq!(on_home(&carol).await?, Vec::<Value>::new());
+
+    stack.finish().await
+}
+
+/// What a thread says of its labels in Focus.
+async fn thread_labels(user: &User, thread_id: &str) -> Result<Value, Report> {
+    let read = user
+        .graphql(
+            THREAD_LABELS,
+            &json!({ "input": { "threadId": thread_id } }),
+        )
+        .await?;
+    Ok(read["user"]["emailThread"]["focus"].clone())
+}
+
+/// Waits until the thread's Focus labels are `labels`.
+async fn wait_for_labels(user: &User, thread_id: &str, labels: &Value) -> Result<(), Report> {
+    let mut seen = Value::Null;
+    let waited = eventually(
+        &format!("the thread's Focus labels to be {labels}"),
+        DEFAULT_TIMEOUT,
+        async || {
+            seen = thread_labels(user, thread_id).await?;
+            Ok((&seen == labels).then_some(()))
+        },
+    )
+    .await;
+    waited.map_err(|error| rootcause::report!("{error}; the thread read {seen}"))
+}
+
+/// A calendar file for an update to a single meeting that ends at `ends`.
+fn meeting_update(uid: &str, ends: DateTime<Utc>) -> String {
+    let stamp = |at: DateTime<Utc>| at.format("%Y%m%dT%H%M%SZ").to_string();
+    let starts = ends - TimeDelta::minutes(30);
+    format!(
+        "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Example//EN\r\nMETHOD:REQUEST\r\n\
+         BEGIN:VEVENT\r\nUID:{uid}\r\nSEQUENCE:1\r\nDTSTAMP:{now}\r\n\
+         DTSTART:{start}\r\nDTEND:{end}\r\nSUMMARY:Design review\r\n\
+         ORGANIZER:mailto:{GRACE_ADDRESS}\r\n\
+         ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:ada@example.com\r\n\
+         END:VEVENT\r\nEND:VCALENDAR\r\n",
+        now = stamp(Utc::now()),
+        start = stamp(starts),
+        end = stamp(ends),
+    )
+}
+
+/// A meeting update is in Focus while its meeting is ahead and leaves once
+/// the meeting is over, though the model wants the thread there for its own
+/// sake too.
+///
+/// When it fails: mail about a meeting that is over stays on Home because it
+/// also reads as worth Focus, or the update never shows as Calendar.
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_a_meeting_update_leaves_focus_once_the_meeting_is_over() -> Result<(), Report> {
+    let stack = focus_stack().await?;
+    let classifier = stack.focus_classifier()?;
+    classifier.put_in_focus_when_mail_contains("Design review");
+    let ada = stack.user("ada").await?;
+    let inbox = ada.link(Provider::Gmail, ada.email()).await?;
+
+    // In whole seconds, as the invite carries it.
+    let ends = (Utc::now() + ENDS_IN).trunc_subsecs(0);
+    let update = Mail::new(
+        GRACE,
+        "Updated invitation: Design review",
+        "Moved to this afternoon.",
+    )
+    .with_attachment(
+        "invite.ics",
+        "text/calendar; method=REQUEST",
+        meeting_update("design-review-1@example.net", ends).as_bytes(),
+    );
+    let thread = delivered(&inbox, &update).await?;
+
+    let listed = wait_for_home(&ada, &["Updated invitation: Design review"]).await?;
+    assert!(
+        Utc::now() < ends,
+        "the update was classified after its meeting"
+    );
+    assert_eq!(listed[0]["focus"]["category"], "CALENDAR", "{listed:?}");
+    wait_for_home(&ada, &[]).await?;
+    assert!(
+        Utc::now() >= ends,
+        "the update left Focus before its meeting ended"
+    );
+    assert_eq!(thread_focus(&ada, &thread).await?["isFocus"], false);
+
+    stack.finish().await
+}
+
+/// When the thread's Focus classification was made: `null` until it is
+/// classified.
+async fn classified_at(user: &User, thread_id: &str) -> Result<Value, Report> {
+    let read = user
+        .graphql(
+            THREAD_CLASSIFIED_AT,
+            &json!({ "input": { "threadId": thread_id } }),
+        )
+        .await?;
+    Ok(read["user"]["emailThread"]["focus"]["classifiedAt"].clone())
+}
+
+/// Waits until the thread is classified again, after the classification made
+/// at `before`. The worker classifies a thread again only for a newer message.
+async fn wait_until_classified_again(
+    user: &User,
+    thread_id: &str,
+    before: &Value,
+) -> Result<(), Report> {
+    eventually(
+        "the thread to be classified again",
+        DEFAULT_TIMEOUT,
+        async || Ok((classified_at(user, thread_id).await? != *before).then_some(())),
+    )
+    .await
+}
+
+/// Mail about a meeting whose day is over is out of Focus, though the model
+/// wants it, while mail about a meeting still ahead is in. Notes written once
+/// the meeting is over keep the thread out; a question to the owner after it
+/// is judged on its own and brings the thread back.
+///
+/// When it fails: Home keeps mail about meetings that are over or their
+/// notes, or a thread stays out though it now asks the owner something,
+/// because of the meeting its old mail named.
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_mail_about_a_meeting_that_is_over_is_out_of_focus() -> Result<(), Report> {
+    let stack = focus_stack().await?;
+    let classifier = stack.focus_classifier()?;
+    let today = Utc::now().date_naive();
+    classifier.put_in_focus_when_mail_contains("Quarterly planning");
+    classifier.put_in_focus_when_mail_contains("Board prep");
+    classifier.event_on_when_mail_contains("Quarterly planning", today - Days::new(2));
+    classifier.event_on_when_mail_contains("Board prep", today + Days::new(2));
+    classifier.ask_the_owner_when_mail_contains("send me the slides");
+    let ada = stack.user("ada").await?;
+    let inbox = ada.link(Provider::Gmail, ada.email()).await?;
+
+    // Written three days ago, about the meeting the day after.
+    let agenda = Mail {
+        message_id: Some("planning-1@example.net".to_owned()),
+        ..Mail::new(GRACE, "Quarterly planning", "The agenda for our meeting.")
+    }
+    .dated(Utc::now() - TimeDelta::days(3));
+    let planning = delivered(&inbox, &agenda).await?;
+    let verdict = wait_until_classified(&ada, &planning).await?;
+    assert_eq!(verdict["isFocus"], false, "{verdict}");
+    arrives(&inbox, MALLORY, "Board prep").await?;
+    wait_for_home(&ada, &["Board prep"]).await?;
+
+    let agenda_classified_at = classified_at(&ada, &planning).await?;
+    let notes = Mail {
+        message_id: Some("planning-2@example.net".to_owned()),
+        ..Mail::new(GRACE, "Re: Quarterly planning", "Notes from the meeting.")
+    }
+    .in_reply_to("planning-1@example.net");
+    inbox.deliver(&notes)?;
+    wait_until_classified_again(&ada, &planning, &agenda_classified_at).await?;
+    assert_eq!(thread_focus(&ada, &planning).await?["isFocus"], false);
+    let listed = on_home(&ada).await?;
+    assert_eq!(
+        listed
+            .iter()
+            .map(|thread| &thread["name"])
+            .collect::<Vec<_>>(),
+        ["Board prep"],
+        "{listed:?}"
+    );
+
+    let question = Mail::new(
+        GRACE,
+        "Re: Quarterly planning",
+        "Could you send me the slides you showed?",
+    )
+    .in_reply_to("planning-2@example.net");
+    inbox.deliver(&question)?;
+    let listed = wait_for_home(&ada, &["Board prep", "Re: Quarterly planning"]).await?;
+    assert_eq!(listed[1]["id"], planning.as_str());
+    wait_for_labels(
+        &ada,
+        &planning,
+        &json!({ "isFocus": true, "needsReply": true, "needsFollowUp": false }),
+    )
+    .await?;
+
+    stack.finish().await
+}
+
+/// The owner's answer, sent from another mail client, takes a thread out of
+/// Focus, and the thread comes back to follow up once it has waited three days
+/// for an answer. Here the answer was sent just under three days ago, so the
+/// wait ends while the scenario looks.
+///
+/// When it fails: a thread the owner already answered stays on Home, or one
+/// that still needs following up never comes back.
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_an_answered_thread_leaves_focus_until_it_needs_following_up() -> Result<(), Report> {
+    let stack = focus_stack().await?;
+    let classifier = stack.focus_classifier()?;
+    classifier.put_in_focus_when_mail_contains("Vendor contract");
+    let ada = stack.user("ada").await?;
+    let inbox = ada.link(Provider::Gmail, ada.email()).await?;
+
+    let asked = Mail {
+        message_id: Some("vendor-1@example.net".to_owned()),
+        ..Mail::new(GRACE, "Vendor contract", "Can you review the draft?")
+    }
+    .dated(Utc::now() - TimeDelta::days(4));
+    let thread = delivered(&inbox, &asked).await?;
+    wait_for_home(&ada, &["Vendor contract"]).await?;
+    wait_for_labels(
+        &ada,
+        &thread,
+        &json!({ "isFocus": true, "needsReply": false, "needsFollowUp": false }),
+    )
+    .await?;
+
+    // In whole seconds, as the Date header carries it.
+    let waited_at = (Utc::now() + ENDS_IN).trunc_subsecs(0);
+    let answer = Mail {
+        to: Some(GRACE.to_owned()),
+        ..Mail::new(
+            ada.email(),
+            "Re: Vendor contract",
+            "Here are my comments. Can you confirm the dates?",
+        )
+    }
+    .in_reply_to("vendor-1@example.net")
+    .dated(waited_at - FOLLOW_UP_AFTER)
+    .sent_from_mailbox();
+    inbox.deliver(&answer)?;
+    wait_for_home(&ada, &[]).await?;
+    assert!(
+        Utc::now() < waited_at,
+        "the answer was classified after the wait"
+    );
+    assert_eq!(thread_focus(&ada, &thread).await?["isFocus"], false);
+
+    wait_for_home(&ada, &["Re: Vendor contract"]).await?;
+    assert!(
+        Utc::now() >= waited_at,
+        "the thread came back before the wait ended"
+    );
+    wait_for_labels(
+        &ada,
+        &thread,
+        &json!({ "isFocus": true, "needsReply": false, "needsFollowUp": true }),
+    )
+    .await?;
+
+    stack.finish().await
+}
+
+/// A thread the owner answered comes back to follow up as soon as its due day
+/// has come, without the three days' wait; one whose due day is ahead stays
+/// out; and one the owner closed with thanks stays out though its day has come.
+///
+/// When it fails: a thread past its due day waits out the full wait for an
+/// answer, one due later comes back at once, or a closed thread comes back.
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_an_answered_thread_comes_back_on_its_due_day_unless_the_answer_closed_it()
+-> Result<(), Report> {
+    let stack = focus_stack().await?;
+    let classifier = stack.focus_classifier()?;
+    let today = Utc::now().date_naive();
+    for (subject, due) in [
+        ("Budget sign-off", today - Days::new(1)),
+        ("Offsite venue", today + Days::new(3)),
+        ("Logo files", today - Days::new(1)),
+    ] {
+        classifier.put_in_focus_when_mail_contains(subject);
+        classifier.due_on_when_mail_contains(subject, due);
+    }
+    let ada = stack.user("ada").await?;
+    let inbox = ada.link(Provider::Gmail, ada.email()).await?;
+
+    let mut threads = Vec::new();
+    for (subject, id) in [
+        ("Budget sign-off", "budget-1@example.net"),
+        ("Offsite venue", "offsite-1@example.net"),
+        ("Logo files", "logo-1@example.net"),
+    ] {
+        let asked = Mail {
+            message_id: Some(id.to_owned()),
+            ..Mail::new(GRACE, subject, "Could you send this over?")
+        }
+        .dated(Utc::now() - TimeDelta::days(2));
+        threads.push(delivered(&inbox, &asked).await?);
+    }
+    wait_for_home(&ada, &["Budget sign-off", "Logo files", "Offsite venue"]).await?;
+
+    for (subject, id, text) in [
+        (
+            "Budget sign-off",
+            "budget-1@example.net",
+            "Nearly done. Can I send it Monday?",
+        ),
+        (
+            "Offsite venue",
+            "offsite-1@example.net",
+            "Checking with the team. Is Thursday fine?",
+        ),
+        ("Logo files", "logo-1@example.net", "Thanks!"),
+    ] {
+        let answer = Mail {
+            to: Some(GRACE.to_owned()),
+            ..Mail::new(ada.email(), &format!("Re: {subject}"), text)
+        }
+        .in_reply_to(id)
+        .sent_from_mailbox();
+        inbox.deliver(&answer)?;
+    }
+    wait_for_labels(
+        &ada,
+        &threads[0],
+        &json!({ "isFocus": true, "needsReply": false, "needsFollowUp": true }),
+    )
+    .await?;
+    wait_for_home(&ada, &["Re: Budget sign-off"]).await?;
+    for left in &threads[1..] {
+        wait_for_labels(
+            &ada,
+            left,
+            &json!({ "isFocus": false, "needsReply": false, "needsFollowUp": false }),
+        )
+        .await?;
+    }
+
+    stack.finish().await
 }

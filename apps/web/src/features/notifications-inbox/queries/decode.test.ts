@@ -43,6 +43,7 @@ const threadRowEntry = () =>
       {
         id: 'channel:ch-a#thread:root',
         rowType: 'CHANNEL_THREAD',
+        alsoListedAs: [],
         revision: 'rev',
         latestAt: '2026-02-01T10:09:00Z',
         unseen: true,
@@ -324,6 +325,30 @@ describe('toInboxGroup', () => {
     });
   });
 
+  it('reads the kinds a row is also listed under, skipping ones this build does not know', () => {
+    const [row] =
+      toInboxGroup(
+        inboxEntry({
+          docId: 'doc-a',
+          sortAt: '2026-02-01T10:09:00Z',
+          rows: [
+            {
+              id: 'document:doc-a#top_level',
+              rowType: 'DISCUSSION_MENTION',
+              alsoListedAs: [
+                'DISCUSSION_MESSAGES',
+                'SUGGESTION' as NotificationInboxRowType,
+              ],
+              latestAt: '2026-02-01T10:09:00Z',
+            },
+          ],
+        })
+      )?.rows ?? [];
+
+    expect(row?.type).toBe('discussion_mention');
+    expect(row?.alsoListedAs).toEqual(['discussion_messages']);
+  });
+
   it('drops an entry without a valid place', () => {
     expect(
       toInboxGroup(inboxEntry({ docId: 'doc-a', sortAt: 'never', rows: [] }))
@@ -355,10 +380,17 @@ describe('encodeInboxScope', () => {
     });
   });
 
-  it('reads every row, new types included, when every type is chosen', () => {
-    expect(encodeInboxScope({ rowTypes: ALL_INBOX_ROW_TYPES })).toEqual({
-      rowTypes: [],
-    });
+  it('reads every row, new types included, only with no category selection', () => {
+    expect(
+      encodeInboxScope({ rowTypes: ALL_INBOX_ROW_TYPES, allKinds: true })
+    ).toEqual({ rowTypes: [] });
+  });
+
+  it('keeps every known kind explicit when every category is selected', () => {
+    const scope = encodeInboxScope({ rowTypes: ALL_INBOX_ROW_TYPES });
+    expect(scope.rowTypes).toHaveLength(ALL_INBOX_ROW_TYPES.length + 1);
+    expect(scope.rowTypes).toContain('EMAIL');
+    expect(scope.rowTypes).toContain('PASSWORD_ACCESS_REQUESTED');
   });
 
   it('narrows the inbox to the chosen rows', () => {
@@ -369,7 +401,11 @@ describe('encodeInboxScope', () => {
 
   it('asks the server for unread rows only when the scope is unread', () => {
     expect(
-      encodeInboxScope({ rowTypes: ALL_INBOX_ROW_TYPES, unreadOnly: true })
+      encodeInboxScope({
+        rowTypes: ALL_INBOX_ROW_TYPES,
+        allKinds: true,
+        unreadOnly: true,
+      })
     ).toEqual({ rowTypes: [], unreadOnly: true });
   });
 });
@@ -459,6 +495,7 @@ describe('toInboxGroup for a runtime', () => {
         {
           id: 'harness:0198a4cc-e138-7670-a308-a6b766602712#access_requested:r-1',
           rowType: 'ACCESS_REQUESTED',
+          alsoListedAs: [],
           revision: 'rev',
           latestAt: '2026-02-01T10:09:00Z',
           unseen: true,
@@ -529,6 +566,7 @@ describe('toInboxGroup for a team', () => {
         {
           id: 'team:0198a4cc-e138-7670-a308-a6b766602799#password_access_requested:request-1',
           rowType: 'ACCESS_REQUESTED',
+          alsoListedAs: [],
           revision: 'rev',
           latestAt: '2026-02-01T10:09:00Z',
           unseen: true,

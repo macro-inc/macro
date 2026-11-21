@@ -47,3 +47,5 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 chrono = { workspace = true }
+feature_flags = { path = "../feature_flags" }
+macro_env = { path = "../macro_env" }

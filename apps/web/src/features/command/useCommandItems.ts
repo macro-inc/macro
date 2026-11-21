@@ -37,7 +37,7 @@ type CommandItem = {
   data: HotkeyCommand;
   displayHotkey?: string;
   displayHotkeySequence?: DisplayHotkeyStep[];
-  /** Its keys run another command here, as Email's g t runs Sent. */
+  /** Its keys run another command here, as a focused view's go-to letter. */
   hideHotkey?: boolean;
 };
 
@@ -279,8 +279,8 @@ function useCommandsList(
     limitToCurrentScope: true,
     ignoreInputFocused: true,
   });
-  // The command each go-to letter runs: a focused view's letter (Email's g t
-  // Sent) runs before the app's, which then shows no keys.
+  // The command each go-to letter runs: a focused view's letter runs before
+  // the app's, which then shows no keys.
   const goToKeyOwners = new Map<ValidHotkey, CommandWithInfo>();
   for (const command of [...goToCommands].sort(
     (a, b) => (b.handlerPriority ?? 0) - (a.handlerPriority ?? 0)

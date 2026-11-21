@@ -512,6 +512,57 @@ async fn parsed_reads_preserve_restored_draft_generation(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../fixtures", scripts("get_thread_summary_info"))
 )]
+async fn parsed_thread_pages_omit_messages_missing_at_the_provider(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use crate::messages::get_parsed::get_paginated_parsed_messages_by_thread_id;
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-00000000001c")?;
+    let thread_id = Uuid::parse_str("00000000-0000-0000-0000-000000000301")?;
+    let shown: std::collections::HashSet<Uuid> =
+        get_paginated_parsed_messages_by_thread_id(&pool, thread_id, 0, 100)
+            .await?
+            .into_iter()
+            .map(|message| message.db_id)
+            .collect();
+    assert!(!shown.is_empty());
+
+    // Outlook no longer has these: a received message deleted there and a
+    // draft discarded there. Both stay as tombstones.
+    for (id, is_draft) in [
+        ("00000000-0000-0000-0000-0000000e0627", false),
+        ("00000000-0000-0000-0000-0000000e0628", true),
+    ] {
+        sqlx::query!(
+            r#"
+            INSERT INTO email_messages (id, thread_id, link_id, is_draft, is_sent, mailbox_state)
+            VALUES ($1, $2, $3, $4, false, '{"in_inbox":true,"provider_missing":true}'::jsonb)
+            "#,
+            Uuid::parse_str(id)?,
+            thread_id,
+            link_id,
+            is_draft
+        )
+        .execute(&pool)
+        .await?;
+    }
+
+    let after: std::collections::HashSet<Uuid> =
+        get_paginated_parsed_messages_by_thread_id(&pool, thread_id, 0, 100)
+            .await?
+            .into_iter()
+            .map(|message| message.db_id)
+            .collect();
+    assert_eq!(
+        after, shown,
+        "a message missing at the provider, draft or not, is left out of its thread"
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("get_thread_summary_info"))
+)]
 async fn get_message_sender_and_pretty_sender_skips_messages_without_sender_contact(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {

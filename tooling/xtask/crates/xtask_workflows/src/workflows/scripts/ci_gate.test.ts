@@ -146,21 +146,34 @@ describe('isOpenRequest', () => {
 });
 
 describe('ciSourceChanges', () => {
-  const base = { '.github': 'aaa', 'tooling/xtask/crates/xtask_workflows': 'bbb' };
+  const base = {
+    '.github': 'aaa',
+    'tooling/xtask/crates/xtask_workflows': 'bbb',
+    'tooling/xtask/crates/gh_workflow': 'ccc',
+  };
 
   test('a fork that left the CI sources alone changes nothing', () => {
     assert.deepEqual(ciSourceChanges({ ...base }, base), []);
   });
 
   test('names each source whose tree differs', () => {
-    assert.deepEqual(ciSourceChanges({ ...base, '.github': 'ccc' }, base), ['.github']);
+    assert.deepEqual(ciSourceChanges({ ...base, '.github': 'eee' }, base), ['.github']);
     assert.deepEqual(
-      ciSourceChanges({ '.github': 'ccc', 'tooling/xtask/crates/xtask_workflows': 'ddd' }, base),
-      ['.github', 'tooling/xtask/crates/xtask_workflows'],
+      ciSourceChanges(
+        { ...base, '.github': 'eee', 'tooling/xtask/crates/gh_workflow': 'fff' },
+        base,
+      ),
+      ['.github', 'tooling/xtask/crates/gh_workflow'],
     );
   });
 
   test('a source missing on either side counts as changed', () => {
+    // A fork that branched before a source existed fails closed until it
+    // merges main.
+    const { 'tooling/xtask/crates/gh_workflow': _, ...beforeVendoring } = base;
+    assert.deepEqual(ciSourceChanges(beforeVendoring, base), [
+      'tooling/xtask/crates/gh_workflow',
+    ]);
     assert.deepEqual(ciSourceChanges({ ...base, '.github': null }, base), ['.github']);
     assert.deepEqual(
       ciSourceChanges(base, { ...base, 'tooling/xtask/crates/xtask_workflows': null }),

@@ -731,6 +731,14 @@ impl ContactsService for FakeContacts {
     async fn add_contact_nodes(&self, _: ContactsNodes) -> Result<(), rootcause::Report> {
         unimplemented!("SQL never adds contacts")
     }
+
+    async fn invite_contact(
+        &self,
+        _: MacroUserIdStr<'static>,
+        _: MacroUserIdStr<'static>,
+    ) -> Result<(), rootcause::Report> {
+        unimplemented!("SQL never adds contacts")
+    }
 }
 
 /// The literals a read's row filter names, in order.

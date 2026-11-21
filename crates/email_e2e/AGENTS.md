@@ -32,12 +32,20 @@ scenarios.
   indexer misses nothing published while it joins, and each indexer goes on
   from where the last one stopped. Events of other scenarios in between
   name mail that is not in this scenario's database and are passed over.
+- `StackOptions { outlook_import_live_pass: true, .. }` turns on the Outlook
+  import live pass (`enable-outlook-import-live-pass`): the email services
+  read the flag from the Macro services stand-in, which answers PostHog's
+  `/flags/` with it on, and `Stack::start_with` returns once the workers'
+  log shows they read it. Off by default, as in production.
 - `StackOptions { focus: true, .. }` adds the real `email_focus_worker`,
   which classifies arriving mail for Focus from the mail's Kafka events, and
-  stand-ins for the two things it asks outside the database
+  stand-ins for the three things it asks outside the database
   (`src/focus.rs`): the model that answers the Focus questions, reached
-  through `OVERRIDE_TYPESAFE_API_URL`, and the agent harness route that reads
-  a thread's due date, through `OVERRIDE_AGENT_HARNESS_SERVICE_URL`. Its
+  through `OVERRIDE_TYPESAFE_API_URL`; the agent harness route that reads
+  the day a thread is due and the day of the meeting it is about, through
+  `OVERRIDE_AGENT_HARNESS_SERVICE_URL`; and PostHog's flag definitions, through `POSTHOG_HOST`, from which it reads
+  whether an inbox's owner, or a user it is linked to, has the
+  `enable-email-focus` flag. Its
   pushes go to the connection gateway stand-in like every other service's.
 - Scenarios run in parallel and share nothing but the servers (Postgres,
   Redis, SQS, Kafka, and OpenSearch for search).
@@ -89,7 +97,7 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
   enqueues on `sfs-delete`), `stack.notify_of_mail_feedback(&notification)`
   (`email_suppression_handler`, one bounce or complaint) and
   `stack.run_refresh()` (`email_refresh_handler`, the hourly link
-  maintenance: a `HealthCheck` on `link-manager` for every syncing Gmail inbox, and
+  maintenance: a `HealthCheck` on `link-maintenance` for every syncing Gmail inbox, and
   a `Refresh` for those whose hour it is, which a scenario cannot count
   on). See `tests/maintenance.rs`. Work of the other crons is enqueued by the
   scenario: `stack.send_to_queue("link-manager" | "sfs-delete", …)`, and on a
@@ -148,13 +156,26 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
   no mail worth Focus until the scenario names text such mail holds,
   `stack.focus_classifier()?.put_in_focus_when_mail_contains("Contract
   renewal")`; `due_on_when_mail_contains` sets the day the harness reads
-  as due, and `times_asked_about(text)` tells whether mail reached the
+  as due and `event_on_when_mail_contains` the day of the meeting it is
+  about, and `times_asked_about(text)` tells whether mail reached the
   model at all; `stack.focus_worker_log()` is what the worker logged. The questions and their order are the product's: the
   stand-in answers yes only to the first, "would the owner want this in
-  Focus". Only inboxes at `example.com` are classified. Classifying follows
+  Focus", and, for text named with `ask_the_owner_when_mail_contains`, to
+  whether the latest message asks the owner something they haven't answered. The worker classifies an inbox only while its owner, or a user it
+  is linked to, has the Focus flag: every user has it unless the scenario turns it off with
+  `turn_off_focus_flag_for(address)` before linking any inbox, since the
+  worker reads the flag on its first look at the inboxes and again only
+  five minutes later. `stack.focus_skipped_without_flag(thread_id)`
+  tells that the worker is done with a thread and left it unclassified
+  because nobody whose tab shows it has the flag; it reads a debug line the
+  stack's `RUST_LOG` for the worker turns on, so a scenario that sets
+  its own `RUST_LOG` loses it. Classifying follows
   the sync, so wait for the list or the thread's `focus`. Keep these
   scenarios in `tests/focus.rs`, whose tests nextest runs one at a time.
 - Mail that must be in the mailbox before it is linked: `stack.seed_mailbox`.
+- Mail written at a given time, for a wait or a day already past: `Mail::dated`;
+  mail the owner sent from another mail client (Gmail's `SENT` label, Outlook's
+  Sent Items): `Mail::sent_from_mailbox`.
 - The labels the owner made at the provider (Gmail labels, Outlook
   categories): `stack.provider_labels(&inbox)` reads them and
   `stack.make_provider_label(&inbox, name)` makes one, through the
@@ -305,9 +326,10 @@ shared with the web app's suite) and backend entry points second.
   `--known-bugs <dir>` (the results of the known-bug jobs), a scenario kept
   for a known bug that passes and is not under `[[intermittent_bug]]`.
   Without `--enforce` the same list is only reported.
-- `PopulateCrmPolicy` is listed for both providers but deferred until the
-  member-rule API initializes consent generations. Replace that deferral with a
-  full-stack generation/retry scenario before enabling selective contribution.
+- `tests/email_policy.rs` exercises `PopulateCrmPolicy` through the real outbox
+  and queue on both providers, including replaced generations and duplicate
+  delivery. It seeds private rule storage; authenticated activation and preview
+  controls are covered in the CRM crate.
 - A new route, resolver, message type or provider method therefore needs,
   in the same change, a scenario that reaches it or an entry in
   `coverage/waivers.toml`; a new function needs a scenario, a row in
@@ -396,10 +418,15 @@ shared with the web app's suite) and backend entry points second.
   `professional_subscriber` role.
 - Kafka topics are shared by every scenario. The email services only need
   the broker to accept what they publish. `document_storage_service` reads
-  topics, which a stack that starts it creates when missing, and its
-  consumers share their groups across scenarios: an event one scenario
-  publishes may be read by another scenario's process, so do not assert on
-  what that service does with Kafka events.
+  topics and exits at startup when one is missing, so every stack creates
+  the missing topics before it starts a service and waits until the broker
+  serves them all: a fresh broker answers that a topic it was just told to
+  create does not exist until it has applied that, which on a CI runner
+  took up to 18 s behind the 50 partitions of `__consumer_offsets` (CI's
+  broker now makes one). Document storage's consumers share their groups
+  across scenarios: an event one scenario publishes may be read by another
+  scenario's process, so do not assert on what that service does with
+  Kafka events.
 - One search indexer at a time: every indexer is in the consumer group
   `search-processing-service`, so two of them split the topics between
   them and each misses the other's share. The `email-e2e-search` test
@@ -409,9 +436,13 @@ shared with the web app's suite) and backend entry points second.
   `email-focus`, so two of them split the mail events between them. The
   `email-e2e-focus` test group runs `tests/focus.rs` serially. The harness
   gives the group an offset before its first worker starts, so mail that
-  arrives while a worker joins is still read; the worker's later sweeps are
-  an hour apart and no scenario sees one. Events of other scenarios name
-  threads that are not in this scenario's database and are passed over.
+  arrives while a worker joins is still read. The worker's later sweeps
+  are an hour apart and no scenario sees one, but it looks at every linked
+  inbox once a minute and backfills those whose owner, or a user they are
+  linked to, has the flag, so a
+  scenario longer than a minute may see a thread classified by that too.
+  Events of other scenarios name threads that are not in this scenario's
+  database and are passed over.
 - A Redis database whose lease ran out is not handed out while any client
   is still connected to it: the services of a scenario that stalled would
   write into the next one's state. A former writer that is not connected at

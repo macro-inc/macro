@@ -200,7 +200,6 @@ fn instructions_are_a_delimited_section_after_the_standing_prompt() {
     let session = AgentSessionId::new();
     let prompt = system_prompt(
         &TOOLS,
-        "",
         session,
         ReplyDelivery::Streamed,
         None,
@@ -230,8 +229,8 @@ fn instructions_are_a_delimited_section_after_the_standing_prompt() {
 
 /// A session nobody watches reads its own short prompt, not the
 /// conversation's preamble and tool guidance, and no pointer to a
-/// ContentSearch it does not have; the rest of its part and its turn's
-/// documentation stay.
+/// ContentSearch it does not have; the rest of its part stays, and its
+/// turn's documentation rides on its request instead.
 #[test]
 fn an_unseen_turn_reads_its_own_short_prompt() {
     let session = AgentSessionId::new();
@@ -242,7 +241,6 @@ fn an_unseen_turn_reads_its_own_short_prompt() {
     };
     let prompt = system_prompt(
         &TOOLS,
-        "<macro_sdk>routines</macro_sdk>",
         session,
         ReplyDelivery::Unseen,
         Some(&identity),
@@ -252,6 +250,7 @@ fn an_unseen_turn_reads_its_own_short_prompt() {
     let text = prompt.to_string();
 
     assert!(text.starts_with(unseen::PROMPT));
+    assert!(text.contains("Never guess a method"));
     assert!(!text.contains(TOOLS));
     assert!(!text.contains(&prompt::agent_session::PROMPT.to_string()));
     assert!(!text.contains("<agent_session>"));
@@ -259,17 +258,16 @@ fn an_unseen_turn_reads_its_own_short_prompt() {
     assert!(text.contains(&prompt::agent_identity::render("Grunk", "grunk")));
     assert!(text.contains("<session_instructions>\nbe terse\n</session_instructions>"));
     assert!(text.contains("<user_memory>\nprefers Rust\n</user_memory>"));
-    assert!(text.ends_with("<macro_sdk>routines</macro_sdk>"));
+    assert!(!text.contains("<macro_sdk>"));
 }
 
 /// Every session one background opener starts gets the same instructions,
 /// so they sit in the cached shared block, read back across those sessions;
-/// only the owner's memory and the turn's documentation come after.
+/// only the owner's memory comes after.
 #[test]
 fn an_unseen_turn_caches_its_instructions_with_the_shared_block() {
     let prompt = system_prompt(
         &TOOLS,
-        "",
         AgentSessionId::new(),
         ReplyDelivery::Unseen,
         None,
@@ -293,7 +291,6 @@ fn an_unseen_turn_caches_its_instructions_with_the_shared_block() {
     );
     let other = system_prompt(
         &TOOLS,
-        "",
         AgentSessionId::new(),
         ReplyDelivery::Unseen,
         None,
@@ -352,7 +349,6 @@ fn identity_opens_the_session_part_and_does_not_need_instructions() {
     };
     let prompt = system_prompt(
         &TOOLS,
-        "",
         session,
         ReplyDelivery::Streamed,
         Some(&identity),
@@ -376,7 +372,6 @@ fn memory_follows_instructions_rather_than_preceding_them() {
     let session = AgentSessionId::new();
     let prompt = system_prompt(
         &TOOLS,
-        "",
         session,
         ReplyDelivery::Streamed,
         None,
@@ -395,8 +390,7 @@ fn memory_follows_instructions_rather_than_preceding_them() {
 }
 
 /// Sessions of every agent differ only after the static Macro prompt, so
-/// the part before it is cached once for all of them, and the turn's SDK
-/// documentation comes after everything the session repeats.
+/// the part before it is cached once for all of them.
 #[test]
 fn sessions_share_everything_before_their_identity() {
     let session = AgentSessionId::new();
@@ -407,7 +401,6 @@ fn sessions_share_everything_before_their_identity() {
     };
     let first = system_prompt(
         &TOOLS,
-        "<macro_sdk>documents</macro_sdk>",
         session,
         ReplyDelivery::Streamed,
         Some(&identity),
@@ -416,7 +409,6 @@ fn sessions_share_everything_before_their_identity() {
     );
     let second = system_prompt(
         &TOOLS,
-        "",
         session,
         ReplyDelivery::Streamed,
         None,
@@ -436,7 +428,7 @@ fn sessions_share_everything_before_their_identity() {
     assert_eq!(
         first.rest(),
         format!(
-            "\n{}\n<session_instructions>\ntask A\n</session_instructions>{agent_session}\n<user_memory>\nprefers Rust\n</user_memory><macro_sdk>documents</macro_sdk>",
+            "\n{}\n<session_instructions>\ntask A\n</session_instructions>{agent_session}\n<user_memory>\nprefers Rust\n</user_memory>",
             prompt::agent_identity::render("Grunk", "grunk"),
         )
     );
@@ -453,7 +445,6 @@ fn no_instructions_means_no_section() {
     let session = AgentSessionId::new();
     let prompt = system_prompt(
         &TOOLS,
-        "",
         session,
         ReplyDelivery::Streamed,
         None,
@@ -473,7 +464,6 @@ fn empty_instructions_add_no_section() {
     let session = AgentSessionId::new();
     let prompt = system_prompt(
         &TOOLS,
-        "",
         session,
         ReplyDelivery::Streamed,
         None,
@@ -490,16 +480,8 @@ fn empty_instructions_add_no_section() {
 #[test]
 fn a_whole_reply_is_told_no_opening_line_was_shown_without_splitting_the_cache() {
     let session = AgentSessionId::new();
-    let streamed = system_prompt(
-        &TOOLS,
-        "",
-        session,
-        ReplyDelivery::Streamed,
-        None,
-        None,
-        None,
-    );
-    let whole = system_prompt(&TOOLS, "", session, ReplyDelivery::Whole, None, None, None);
+    let streamed = system_prompt(&TOOLS, session, ReplyDelivery::Streamed, None, None, None);
+    let whole = system_prompt(&TOOLS, session, ReplyDelivery::Whole, None, None, None);
 
     assert_eq!(streamed.shared(), whole.shared());
     assert!(!streamed.to_string().contains(opener::NOT_OPENED));
@@ -790,6 +772,7 @@ async fn listed_server(
             name: name.to_owned(),
             client: Arc::new(client.unwrap()),
             tools,
+            trace_context: mcp_toolset::TraceContext::Withhold,
         },
     )
 }

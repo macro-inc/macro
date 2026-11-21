@@ -1,4 +1,9 @@
 import type { LocalDraft } from '@app/features/email-compose/core/local-draft';
+import {
+  SearchProvider,
+  type SoupSearchPoolEntry,
+  useSearchContext,
+} from '@app/features/soup/search/context';
 import type {
   CrmCompanyEntity,
   CrmContactEntity,
@@ -28,14 +33,19 @@ import {
   useQuery,
 } from '@tanstack/solid-query';
 import {
+  type Accessor,
   createComponent,
   createMemo,
   createRenderEffect,
   createRoot,
   createSignal,
+  getOwner,
+  type Owner,
+  runWithOwner,
 } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useQuickAccess } from './context';
+import type { createPersonList } from './person-list';
 import { MAX_BROWSE_PAGES_PER_LOAD } from './projected-list';
 import { QuickAccessProvider } from './QuickAccessProvider';
 import { createQuickAccessValue } from './QuickAccessSource';
@@ -45,6 +55,10 @@ import {
   type QuickAccessListOptions,
 } from './types';
 
+vi.mock(
+  '@property',
+  () => import('@app/features/property/editors/selectors/entityUtils')
+);
 const localDrafts = vi.hoisted(() => ({ read: (): LocalDraft[] => [] }));
 vi.mock('@queries/email/local-draft-source', async () => ({
   createLocalDraftSource: (enabled: () => boolean) => ({
@@ -54,6 +68,7 @@ vi.mock('@queries/email/local-draft-source', async () => ({
 }));
 
 const mocks = vi.hoisted(() => ({
+  personPolicies: [] as Parameters<typeof createPersonList>[0]['policy'][],
   search: vi.fn<(args: SearchCacheArgs) => Promise<SearchCachePage>>(),
   history: [] as HistoryItem[],
   channels: vi.fn<() => ApiChannelWithLatest[]>(() => []),
@@ -71,13 +86,18 @@ const mocks = vi.hoisted(() => ({
   initiatives: [] as InitiativeEntity[],
   databases: [] as ListedDatabase[],
   schedules: [] as ScheduledAction[],
+  crmAllowed: (): boolean => true,
   cacheEnabled: true,
+  historyReading: undefined as (() => boolean) | undefined,
   queries: {} as Partial<
     Record<
       'history' | 'channels' | 'recently-viewed',
       () => UseQueryResult<unknown[]>
     >
   >,
+}));
+vi.mock('@service-storage/crm-access-authority', () => ({
+  crmAccessAllowed: () => mocks.crmAllowed(),
 }));
 vi.mock('@core/context/user', () => ({
   useIsAuthenticated: () => () => true,
@@ -97,16 +117,22 @@ vi.mock('@core/context/channels', () => ({
 vi.mock('@queries/contacts/use-directory', () => ({
   useContactDirectoryScope: () => () => ({ userId: 'viewer' }),
 }));
+vi.mock('@queries/team/roster', () => ({
+  useTeammateIds: () => () => new Set<string>(),
+}));
 vi.mock('./person-list', () => ({
-  createPersonList: () => ({
-    items: () => [],
-    totalCount: () => 0,
-    hasMore: () => false,
-    isLoading: () => false,
-    isLoadingMore: () => false,
-    error: () => undefined,
-    loadMore: async () => {},
-  }),
+  createPersonList: (options: Parameters<typeof createPersonList>[0]) => {
+    mocks.personPolicies.push(options.policy);
+    return {
+      items: () => [],
+      totalCount: () => 0,
+      hasMore: () => false,
+      isLoading: () => false,
+      isLoadingMore: () => false,
+      error: () => undefined,
+      loadMore: async () => {},
+    };
+  },
 }));
 vi.mock('@core/context/emailLinks', () => ({
   useEmailLinksContext: () => ({
@@ -140,13 +166,17 @@ vi.mock('@queries/channel/graphql', () => ({
     ),
 }));
 vi.mock('@queries/history/history', () => ({
-  useHistoryQuery: () =>
-    mocks.queries.history?.() ?? {
-      data: mocks.history,
-      isSuccess: true,
-      isLoading: false,
-      refetch: vi.fn(),
-    },
+  useHistoryQueryWhileRead: (reading: () => boolean) => {
+    mocks.historyReading = reading;
+    return (
+      mocks.queries.history?.() ?? {
+        data: mocks.history,
+        isSuccess: true,
+        isLoading: false,
+        refetch: vi.fn(),
+      }
+    );
+  },
 }));
 vi.mock('@queries/history/graphql', () => ({
   materializeCachedGraphqlHistoryItems: async (
@@ -262,6 +292,7 @@ beforeEach(() => {
   mocks.initiatives = [];
   mocks.databases = [];
   mocks.schedules = [];
+  mocks.crmAllowed = () => true;
   mocks.cacheEnabled = true;
   mocks.queries = {};
   mocks.readRecordsByKeys.mockReset().mockResolvedValue({
@@ -577,7 +608,7 @@ describe('Quick Access source integration', () => {
         retry: false,
       })));
     const client = new QueryClient();
-    const rendered = renderRetainedList(client);
+    const rendered = renderRetainedList(client, { buckets: ['channel', 'dm'] });
     try {
       await vi.waitFor(() => expect(query?.isSuccess).toBe(true));
       vi.useFakeTimers();
@@ -1492,6 +1523,181 @@ describe('Quick Access source integration', () => {
   });
 });
 
+describe('Quick Access shared sources', () => {
+  it('follows recent channels closely only while a list reads the cache and once a minute otherwise, telling history the same', async () => {
+    const [first, setFirst] = createSignal(false);
+    const [second, setSecond] = createSignal(false);
+    setup((source) => [
+      source.useList('channel', 'dm'),
+      source.useList({ buckets: ['channel', 'dm', 'note'], enabled: first }),
+      source.useList({ buckets: ['note'], enabled: second }),
+    ]);
+    vi.useFakeTimers();
+
+    mocks.changed?.();
+    mocks.changed?.();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(mocks.historyReading?.()).toBe(false);
+    expect(mocks.channelRefetch).toHaveBeenCalledOnce();
+
+    setFirst(true);
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(mocks.historyReading?.()).toBe(true);
+    expect(mocks.channelRefetch).toHaveBeenCalledOnce();
+    mocks.changed?.();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.channelRefetch).toHaveBeenCalledTimes(2);
+
+    setSecond(true);
+    setFirst(false);
+    expect(mocks.historyReading?.()).toBe(true);
+
+    setSecond(false);
+    mocks.changed?.();
+    await vi.advanceTimersByTimeAsync(59_000);
+    expect(mocks.historyReading?.()).toBe(false);
+    expect(mocks.channelRefetch).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(mocks.channelRefetch).toHaveBeenCalledTimes(3);
+  });
+
+  it('keeps a channel renamed after the cached list was read', async () => {
+    const channel = cachedChannel('renamed-channel');
+    mocks.cachedChannels = () => [channel];
+    mocks.channels.mockReturnValue([
+      {
+        id: channel.id,
+        name: 'New name',
+        channel_type: 'public',
+        owner_id: 'owner',
+        participants: [],
+        auto_join_team: false,
+        is_participant: true,
+        created_at: channel.createdAt,
+        updated_at: '2030-01-01T00:00:00.000Z',
+      },
+    ]);
+    const list = setup((source) => source.useList('channel'));
+    await vi.waitFor(() =>
+      expect(list.items().map((item) => item.searchText)).toEqual(['New name'])
+    );
+  });
+});
+
+describe('Soup search pool', () => {
+  it('reads the cache only while a search holds the pool, and lists in-memory rows throughout', async () => {
+    mocks.history = [
+      {
+        id: 'recent',
+        type: 'document',
+        fileType: 'md',
+        name: 'Recent',
+        ownerId: 'owner',
+      },
+    ];
+    const [text, setText] = createSignal('');
+    let host: Owner | null = null;
+    const Host = () => {
+      useSearchContext().entityPool(() => false);
+      host = getOwner();
+      return null;
+    };
+    const client = new QueryClient();
+    const rendered = render(() =>
+      createComponent(QueryClientProvider, {
+        client,
+        get children() {
+          return createComponent(QuickAccessProvider, {
+            get children() {
+              return createComponent(SearchProvider, {
+                get children() {
+                  return createComponent(Host, {});
+                },
+              });
+            },
+          });
+        },
+      })
+    );
+    let pool: Accessor<SoupSearchPoolEntry[]> = () => [];
+    let unmountSearch = () => {};
+    runWithOwner(host, () =>
+      createRoot((dispose) => {
+        unmountSearch = dispose;
+        pool = useSearchContext().entityPool(() => text().trim() !== '');
+      })
+    );
+    const ids = () => pool().map((entry) => entry.data.id);
+    try {
+      mocks.changed?.();
+      expect(mocks.search).not.toHaveBeenCalled();
+      expect(ids()).toEqual(['recent']);
+
+      mocks.search.mockResolvedValue(page(0, 1));
+      setText('b');
+      await vi.waitFor(() => expect(ids()).toContain('0'));
+      expect(mocks.search).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          buckets: [
+            'channel',
+            'dm',
+            'chat',
+            'document',
+            'note',
+            'project',
+            'task',
+          ],
+          query: '',
+        }),
+        expect.anything()
+      );
+
+      setText('bu');
+      setText('bud');
+      expect(mocks.search).toHaveBeenCalledOnce();
+
+      setText('');
+      expect(mocks.unsubscribe).toHaveBeenCalledOnce();
+      expect(ids()).toEqual(['recent']);
+
+      setText('c');
+      await vi.waitFor(() => expect(ids()).toContain('0'));
+      expect(mocks.search).toHaveBeenCalledTimes(2);
+      unmountSearch();
+      expect(mocks.unsubscribe).toHaveBeenCalledTimes(2);
+      mocks.changed?.();
+      expect(mocks.search).toHaveBeenCalledTimes(2);
+    } finally {
+      rendered.unmount();
+      client.clear();
+    }
+  });
+});
+
+describe('personal people windows', () => {
+  it("passes a surface's list order to its people window, and none without one", () => {
+    mocks.personPolicies = [];
+    const order = [['teammates'], ['interacted', 'invited']];
+    const [listPriority, setListPriority] = createSignal<
+      string[][] | undefined
+    >(order);
+    setup((source) => [
+      source.useList({
+        buckets: ['person'],
+        peopleMode: 'mention',
+        peopleListPriority: listPriority,
+      }),
+      source.useList({ buckets: ['person'], peopleMode: 'command' }),
+    ]);
+    const [mention, command] = mocks.personPolicies;
+    expect(mention()).toMatchObject({ mode: 'mention', listPriority: order });
+    setListPriority(undefined);
+    expect(mention().listPriority).toBeUndefined();
+    expect(command()).toMatchObject({ mode: 'command' });
+    expect(command().listPriority).toBeUndefined();
+  });
+});
+
 describe('CRM contacts', () => {
   const contact: CrmContactEntity = {
     type: 'crm_contact',
@@ -1696,3 +1902,86 @@ it('keeps a cached sender hit when the same thread has an unmatched local draft'
   expect(list.items().map((item) => item.id)).toEqual(['thread-1']);
   expect(list.items()[0].searchText).toContain('teo@example.com');
 });
+
+it('conceals CRM rows and excludes CRM search buckets after access is revoked', async () => {
+  const [allowed, setAllowed] = createSignal(true);
+  mocks.crmAllowed = allowed;
+  mocks.companies = [restCompany];
+  const list = setup((source) =>
+    source.useList({
+      buckets: ['crm_company', 'crm_contact'],
+      searchTerm: () => 'acme',
+    })
+  );
+  await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+  expect(list.items().map((item) => item.id)).toContain(restCompany.id);
+  mocks.search.mockClear();
+  setAllowed(false);
+  expect(list.items()).toEqual([]);
+  await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+  expect(
+    mocks.search.mock.calls.every(
+      ([args]) =>
+        !args.buckets?.some(
+          (bucket: string) =>
+            bucket === 'crm_company' || bucket === 'crm_contact'
+        )
+    )
+  ).toBe(true);
+  setAllowed(true);
+  await vi.waitFor(() =>
+    expect(list.items().map((item) => item.id)).toContain(restCompany.id)
+  );
+});
+
+it.each([false, true])(
+  'retires cached CRM lookups until fresh rows arrive (read while denied: %s)',
+  (readWhileDenied) => {
+    const [allowed, setAllowed] = createSignal(true);
+    mocks.crmAllowed = allowed;
+    mocks.cacheEnabled = false;
+    mocks.companies = [restCompany];
+    mocks.crmContacts = [
+      {
+        type: 'crm_contact',
+        id: 'contact-1',
+        name: 'Contact',
+        ownerId: 'owner',
+        companyId: restCompany.id,
+        email: 'contact@example.com',
+        hidden: false,
+      },
+    ];
+    mocks.history = retainedHistory;
+    const { source, list } = setup((source) => {
+      const list = source.useList('crm_company', 'crm_contact', 'note');
+      list.items();
+      return { source, list };
+    });
+    expect(source.getById(restCompany.id)?.bucket).toBe('crm_company');
+    expect(source.getById('contact-1')?.bucket).toBe('crm_contact');
+    expect(source.getById('older-note')?.bucket).toBe('note');
+    setAllowed(false);
+    if (readWhileDenied) {
+      expect(source.getById(restCompany.id)).toBeUndefined();
+      expect(source.getById('contact-1')).toBeUndefined();
+      expect(list.items().some((item) => item.bucket.startsWith('crm_'))).toBe(
+        false
+      );
+    }
+    expect(source.getById('older-note')?.bucket).toBe('note');
+    setAllowed(true);
+    expect(source.getById(restCompany.id)).toBeUndefined();
+    expect(source.getById('contact-1')).toBeUndefined();
+    mocks.companies = [{ ...restCompany, name: 'Fresh company' }];
+    mocks.crmContacts = [{ ...mocks.crmContacts[0], name: 'Fresh contact' }];
+    list.items();
+    expect(source.getById(restCompany.id)?.data).toMatchObject({
+      name: 'Fresh company',
+    });
+    expect(source.getById('contact-1')?.data).toMatchObject({
+      name: 'Fresh contact',
+    });
+    expect(source.getById('older-note')?.bucket).toBe('note');
+  }
+);

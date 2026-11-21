@@ -97,13 +97,6 @@ export async function removeInbox(mailbox: Mailbox): Promise<void> {
     .not.toContain(mailbox.inbox.email);
 }
 
-/** Marks the inbox as needing its provider grant renewed. */
-export async function lapseGrant(mailbox: Mailbox): Promise<void> {
-  await mailbox.stack.sql(
-    `UPDATE email_links SET needs_reauth = true WHERE id = '${mailbox.inbox.linkId}' RETURNING id`
-  );
-}
-
 /** The tabs of an inbox's signature: Preview, Rich text, HTML. */
 export function signatureTabs(page: Page, address: string): Locator {
   return page.getByRole('tablist', { name: `Signature views for ${address}` });

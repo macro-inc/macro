@@ -1,4 +1,5 @@
 import { TutorialRow } from '@app/features/video-tutorials';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { usePending } from '@app/observability/flow';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
@@ -131,6 +132,8 @@ const savedLayouts = new Map<
 >();
 const MAX_SAVED_LAYOUTS = 20;
 
+type EmailThreadRow = Extract<EmailDataSourceItem, { kind: 'entity' }>;
+
 const isGroupHeaderRow = (row: EmailDataSourceItem) =>
   row.kind === 'group-header';
 
@@ -144,6 +147,7 @@ export function EmailList(props: EmailListProps) {
     selectedThread,
     filterByTag,
   } = useEmailView();
+  const analytics = useAnalytics();
   usePending('email.list.items', () => source.isLoading());
   // The wait is still a wait when the previous rows stay on screen for it.
   const showsPreviousRows = () => source.showsPreviousRows?.() ?? false;
@@ -173,6 +177,19 @@ export function EmailList(props: EmailListProps) {
     );
   }
 
+  // Its place among the listed threads, day headers left out.
+  function trackFocusThreadOpen(row: EmailThreadRow) {
+    if (state.tab !== 'focus') return;
+    // Activating the thread the pane already shows opens nothing new.
+    if (selectedThread()?.id === row.entity.id) return;
+    const threads = source.items().filter((item) => item.kind === 'entity');
+    analytics.track('email_focus_thread_opened', {
+      position: threads.findIndex((thread) => thread.id === row.id),
+      rows: threads.length,
+      sort: state.focusSort,
+    });
+  }
+
   function onActivate({
     item,
     metadata,
@@ -188,6 +205,8 @@ export function EmailList(props: EmailListProps) {
     const sourceRow = source.items().find((row) => row.id === item.id);
 
     if (sourceRow?.kind !== 'entity') return;
+
+    trackFocusThreadOpen(sourceRow);
 
     const newSplit =
       metadata?.newSplit === true || metadata?.event?.shiftKey === true;

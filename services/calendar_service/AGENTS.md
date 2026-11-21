@@ -54,6 +54,12 @@ gateway `/calendar` prefix.
 - A calendar whose sync fails is isolated: the job completes, the calendar
   keeps its error and failure count, and nothing retries it before the next
   push or the five-minute poll, whatever `Retry-After` Google sent.
+- Macro's own per-inbox Google gate (`calendar_ratelimit.rs`, 300 calls per
+  `REDIS_RATE_LIMIT_WINDOW_SECS` window, shared by the sync and calendar
+  mutations) is not a calendar failure: the gate answers `Deferred` naming
+  its window, the account round stops there, and the backfill consumer hides
+  the delivery for that long (`Disposition::Defer`) so the next one resumes
+  the round. `crates/calendar_events`' `AGENTS.md` has the round's rules.
 - The router is mounted at both `/` and `/calendar` (`GATEWAY_PATH_PREFIX` in
   `src/api.rs`) because the gateway forwards the path unchanged.
 - The HTTP API and every background worker share one tokio runtime, on a
@@ -74,12 +80,37 @@ gateway `/calendar` prefix.
   loop count is a code constant, not configuration: one item per account at a
   time keeps it safe at any count, and autoscaling to three tasks runs 24.
   Google's calendar sync runs its 25 backfill workers in the same process.
+- The Outlook projection relay (`calendar.projection_relay`) claims up to
+  `PROJECTION_BATCH` due revisions a round, publishes each to Kafka
+  (`calendar.projection_publish`), and refreshes each inbox the batch changed
+  once. A round that claims fewer waits for the next two-second poll, so a
+  first import or a bulk change refreshes open clients about every two
+  seconds instead of once per event. It is the only topic publish and viewer
+  refresh for an Outlook event's changes, Macro writes included, so it runs
+  while either
+  `OUTLOOK_SYNC_ENABLED` or `OUTLOOK_WRITES_ENABLED` is on (inside
+  `CALENDAR_SYNC_ENABLED`; `config::OutlookLoops`), and startup logs which
+  Outlook loops the task runs.
 - Reauth-required notifications ride the shared `LinkManagerQueue`, consumed by
   `email_service`; don't add a second calendar-specific reconnect notification.
 - Forward `team_ooo_changed` to both inbox and teammate refresh notifications;
   sharing changes and uncertain sync results require `true`. An inbox refresh
   already refreshes its viewers' team views, so its teammate fan-out skips
-  them; a sharing change also refreshes the sharer (`notify_sharers`).
+  them; a sharing change also refreshes the sharer (`sharing_changed`).
+- One inbox refresh is one gateway request (`calendar_events`'
+  `GatewayCalendarRefresh`, composed once in `main.rs` on
+  `event_broker_tracker` and awaited inline by the backfill): the inbox's
+  viewers get `synced` and their teammates
+  `team_sharing_changed`, so a write by a member of a large team costs one
+  request, not one per teammate. A viewer whose sharing setting is `none`
+  shows teammates nothing, so their inbox's changes refresh none of that
+  viewer's teammates; a sharing change reaches every teammate whatever the
+  new setting is.
+- A Google sync nudges viewers only when it changed something
+  (`GoogleBackfillRunReport::changed`): an upsert that created or rewrote a
+  row, a source retired, or a possible out-of-office change. The sync that
+  reads back a write made through Macro finds the row as the write left it
+  and stays quiet, since the write already told everyone.
 
 ## Related
 

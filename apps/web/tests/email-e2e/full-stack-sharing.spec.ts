@@ -78,19 +78,32 @@ for (const provider of PROVIDERS) {
       confirmed('F-158');
     });
 
-    // Known bug thread-share-missing-from-roster: a share made from the
-    // dialog is a grant to the direct-message channel with the person, and
-    // the roster lists only direct grants, so the owner cannot see or take
-    // back what they just shared.
-    test('known bug: thread-share-missing-from-roster: the person shared with is in the roster @known-bug', {
-      tag: '@known-bug',
-    }, async ({ page, mailbox }) => {
+    test('the owner sees the person they shared with and can remove access', async ({
+      page,
+      mailbox,
+    }) => {
       const { agenda, bob } = await shared(page, mailbox);
       await expect
         .poll(() => readStatus(bob, agenda.id), { timeout: 30_000 })
         .toBe(200);
       const dialog = await openShare(page);
-      await expect(dialog.getByText(bob.email)).toBeVisible();
+      const recipient = dialog.getByText(/^bob$/i);
+      await expect(recipient).toBeVisible();
+      const recipientRoster = await askAs(
+        bob,
+        `/dss/threads/${agenda.id}/channel-shares`
+      );
+      expect(recipientRoster.status).toBe(401);
+      await dialog
+        .getByRole('button', { name: 'Can edit', exact: true })
+        .last()
+        .click();
+      await page.getByRole('menuitemradio', { name: 'Remove Access' }).click();
+      did('AL-619');
+      await expect(recipient).toHaveCount(0);
+      await expect
+        .poll(() => readStatus(bob, agenda.id), { timeout: 30_000 })
+        .toBe(401);
     });
   });
 }
