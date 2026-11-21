@@ -234,6 +234,11 @@ function on first call. The module is keyed by the asset URL it was compiled
 from and travels on a port of its own (`worker/compiled-engine.ts`); it cannot
 pass through the coordinator, which is a different agent cluster. If the module
 cannot be passed or instantiated, the worker loads the engine as before.
+The page also compiles the engine before its first worker exists, starting
+before its liveness lock, since a page that becomes owner otherwise downloads
+and compiles only after the lock, the coordinator and the election. A page the
+coordinator registers while another visible tab owns the cache drops that
+compile.
 
 ### 4.2 Multi-consumer strategy (browser only)
 

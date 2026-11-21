@@ -5,6 +5,10 @@ import type { CacheRequest } from './protocol';
 export const CACHE_TELEMETRY_EVENT_NAMES = [
   'graphql_cache.wasm_download',
   'graphql_cache.wasm_compile',
+  // The page's download and compile ahead of its engine worker, which may
+  // never start: a follower tab's compile is dropped unused.
+  'graphql_cache.wasm_prefetch_download',
+  'graphql_cache.wasm_prefetch_compile',
   'graphql_cache.wasm_instantiate',
   'graphql_cache.schema_init',
   'graphql_cache.db_ready',
