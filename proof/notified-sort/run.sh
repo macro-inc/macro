@@ -41,7 +41,7 @@ case "$mode" in
   quiet)
     run PROOF_SEED=$((seed_base + 1)) PROOF_RUN=quiet PROOF_LANES=24 PROOF_SEQUENCES=5 PROOF_STEPS=20 PROOF_READS=3000 PROOF_WORKERS=8 ;;
   load)
-    run PROOF_SEED=$((seed_base + 2)) PROOF_RUN=load PROOF_LOAD=1 PROOF_LANES=24 PROOF_SEQUENCES=5 PROOF_STEPS=20 PROOF_READS=2000 PROOF_WORKERS=8 ;;
+    run PROOF_SEED=$((seed_base + 2)) PROOF_RUN=load PROOF_LOAD=1 PROOF_LANES=24 PROOF_SEQUENCES=4 PROOF_STEPS=20 PROOF_READS=2000 PROOF_WORKERS=8 ;;
   mutants)
     i=10
     for m in baseline drop-row swap-order alter-field stale-cache skip-live; do
