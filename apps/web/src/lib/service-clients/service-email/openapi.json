@@ -4381,6 +4381,7 @@
           "not_found",
           "not_an_agent",
           "already_provisioned",
+          "team_limit",
           "paused",
           "not_ready",
           "send_limit",

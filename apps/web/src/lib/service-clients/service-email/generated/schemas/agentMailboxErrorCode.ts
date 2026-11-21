@@ -16,6 +16,7 @@ export const AgentMailboxErrorCode = {
   not_found: 'not_found',
   not_an_agent: 'not_an_agent',
   already_provisioned: 'already_provisioned',
+  team_limit: 'team_limit',
   paused: 'paused',
   not_ready: 'not_ready',
   send_limit: 'send_limit',

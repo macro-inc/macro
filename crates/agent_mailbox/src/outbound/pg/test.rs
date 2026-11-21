@@ -779,32 +779,35 @@ async fn orphans_are_mailboxes_whose_agent_left_its_team_or_was_deleted(pool: Pg
     let id = active_mailbox(&repository).await;
     let now = Utc::now();
 
-    let while_member = repository.orphaned(now, 10).await.unwrap();
+    let while_member = repository.orphaned(now, None, 10).await.unwrap().0;
     sqlx::query!(r#"DELETE FROM team_user WHERE user_id = $1"#, ADA)
         .execute(&pool)
         .await
         .unwrap();
-    let after_leaving = repository.orphaned(now, 10).await.unwrap();
+    let after_leaving = repository.orphaned(now, None, 10).await.unwrap().0;
     repository
         .transition(id, &[MailboxState::Active], MailboxState::Paused, now)
         .await
         .unwrap();
     let paused_in_grace = repository
-        .orphaned(now - Duration::days(1), 10)
+        .orphaned(now - Duration::days(1), None, 10)
         .await
-        .unwrap();
+        .unwrap()
+        .0;
     let paused_past_grace = repository
-        .orphaned(now + Duration::days(1), 10)
+        .orphaned(now + Duration::days(1), None, 10)
         .await
-        .unwrap();
+        .unwrap()
+        .0;
     sqlx::query!(r#"DELETE FROM "User" WHERE id = $1"#, ADA)
         .execute(&pool)
         .await
         .unwrap();
     let after_deletion = repository
-        .orphaned(now + Duration::days(1), 10)
+        .orphaned(now + Duration::days(1), None, 10)
         .await
-        .unwrap();
+        .unwrap()
+        .0;
 
     let ids = |mailboxes: Vec<AgentMailbox>| {
         mailboxes
@@ -868,4 +871,49 @@ async fn a_released_mailbox_does_not_block_a_reused_provider_id(pool: PgPool) {
             .await
             .unwrap()
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_orphan_check_pages_through_live_mailboxes_by_id(pool: PgPool) {
+    let repository = PgAgentMailboxRepository::new(pool);
+    let mut ids = Vec::new();
+    for number in 0..3 {
+        let agent =
+            MacroUserIdStr::parse_from_str(&format!("macro|agent-{number}@agents.macro.invalid"))
+                .unwrap()
+                .into_owned();
+        let Reservation::New(mailbox) = repository
+            .reserve(
+                &ProvisionRequest {
+                    agent,
+                    ..request(10 + number)
+                },
+                AgentMailboxId::generate(),
+                TEAM,
+                25,
+            )
+            .await
+            .unwrap()
+        else {
+            panic!("expected a new reservation");
+        };
+        ids.push(mailbox.id);
+    }
+    ids.sort_by_key(|id| id.0);
+    let now = Utc::now();
+
+    let (first, after_first) = repository.orphaned(now, None, 2).await.unwrap();
+    let (second, after_second) = repository.orphaned(now, after_first, 2).await.unwrap();
+
+    // No "User" rows at all: every mailbox is an orphan, two a page.
+    assert_eq!(
+        first.iter().map(|mailbox| mailbox.id).collect::<Vec<_>>(),
+        ids[..2]
+    );
+    assert_eq!(after_first, Some(ids[1]));
+    assert_eq!(
+        second.iter().map(|mailbox| mailbox.id).collect::<Vec<_>>(),
+        ids[2..]
+    );
+    assert_eq!(after_second, None);
 }

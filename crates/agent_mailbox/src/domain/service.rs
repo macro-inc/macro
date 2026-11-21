@@ -75,6 +75,9 @@ pub const ORPHAN_GRACE: Duration = Duration::days(1);
 /// Send records the sweep prunes per round (the literal in the repository's query).
 pub const PRUNE_BATCH: u32 = 1000;
 
+/// Live mailboxes the orphan check reads per query.
+pub const ORPHAN_SCAN_PAGE: u16 = 500;
+
 /// Mailboxes the sweep moves on per round.
 pub const SWEEP_BATCH: u16 = 50;
 
@@ -669,48 +672,22 @@ where
         now: DateTime<Utc>,
     ) -> Result<SweepReport, AgentMailboxError> {
         let released_before = now - ORPHAN_GRACE;
-        let orphans = self
-            .repository
-            .orphaned(released_before, SWEEP_BATCH)
-            .await
-            .map_err(internal)?;
-
         let mut paused = 0_usize;
         let mut report = SweepReport::default();
-        for mailbox in orphans {
-            let id = mailbox.id;
-            let outcome = match mailbox.state {
-                MailboxState::Paused => self.expire_paused(id, released_before, now).await,
-                MailboxState::Provisioning | MailboxState::Active | MailboxState::Failed => {
-                    let moved = self
-                        .repository
-                        .transition(
-                            id,
-                            &[
-                                MailboxState::Provisioning,
-                                MailboxState::Active,
-                                MailboxState::Failed,
-                            ],
-                            MailboxState::Paused,
-                            now,
-                        )
-                        .await
-                        .map_err(internal);
-                    if matches!(moved, Ok(true)) {
-                        tracing::warn!(agent_mailbox.id = %id, agent_mailbox.team_id = %mailbox.team, "paused an agent mailbox whose agent account or team is gone");
-                        paused += 1;
-                    }
-                    moved.map(|_| ())
-                }
-                MailboxState::Releasing | MailboxState::Released => Ok(()),
-            };
-            match outcome {
-                Ok(()) => report.advanced += 1,
-                Err(AgentMailboxError::Busy) => report.skipped += 1,
-                Err(error) => {
-                    tracing::warn!(agent_mailbox.id = %id, error = %error, "agent mailbox orphan step failed");
-                    report.failed += 1;
-                }
+        let mut after = None;
+        loop {
+            let (orphans, last) = self
+                .repository
+                .orphaned(released_before, after, ORPHAN_SCAN_PAGE)
+                .await
+                .map_err(internal)?;
+            for mailbox in orphans {
+                self.settle_orphan(&mailbox, released_before, now, &mut paused, &mut report)
+                    .await;
+            }
+            match last {
+                Some(last) => after = Some(last),
+                None => break,
             }
         }
 
@@ -719,6 +696,51 @@ where
         span.record("agent_mailbox.orphans.released", report.advanced - paused);
         span.record("agent_mailbox.orphans.failed", report.failed);
         Ok(report)
+    }
+
+    /// Pause one orphan, or release it once paused past the grace.
+    async fn settle_orphan(
+        &self,
+        mailbox: &AgentMailbox,
+        released_before: DateTime<Utc>,
+        now: DateTime<Utc>,
+        paused: &mut usize,
+        report: &mut SweepReport,
+    ) {
+        let id = mailbox.id;
+        let outcome = match mailbox.state {
+            MailboxState::Paused => self.expire_paused(id, released_before, now).await,
+            MailboxState::Provisioning | MailboxState::Active | MailboxState::Failed => {
+                let moved = self
+                    .repository
+                    .transition(
+                        id,
+                        &[
+                            MailboxState::Provisioning,
+                            MailboxState::Active,
+                            MailboxState::Failed,
+                        ],
+                        MailboxState::Paused,
+                        now,
+                    )
+                    .await
+                    .map_err(internal);
+                if matches!(moved, Ok(true)) {
+                    tracing::warn!(agent_mailbox.id = %id, agent_mailbox.team_id = %mailbox.team, "paused an agent mailbox whose agent account or team is gone");
+                    *paused += 1;
+                }
+                moved.map(|_| ())
+            }
+            MailboxState::Releasing | MailboxState::Released => Ok(()),
+        };
+        match outcome {
+            Ok(()) => report.advanced += 1,
+            Err(AgentMailboxError::Busy) => report.skipped += 1,
+            Err(error) => {
+                tracing::warn!(agent_mailbox.id = %id, error = %error, "agent mailbox orphan step failed");
+                report.failed += 1;
+            }
+        }
     }
 
     /// Release a mailbox paused past retention, unless it was resumed since

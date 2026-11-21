@@ -349,12 +349,15 @@ pub trait AgentMailboxRepository: Send + Sync + 'static {
         before: DateTime<Utc>,
     ) -> impl Future<Output = Result<u64, Self::Err>> + Send;
 
-    /// Live mailboxes (not releasing or released) whose agent account is
-    /// gone, is no longer an agent's, or is no longer on the mailbox's team,
-    /// leaving out those paused since `paused_before` or later, at most `limit`.
+    /// Of the next `page` live mailboxes (not releasing or released) by id
+    /// after `after`, those whose agent account is gone, is no longer an
+    /// agent's, or is no longer on the mailbox's team, leaving out those
+    /// paused since `paused_before` or later. Returns them with the last id
+    /// read, `None` once there are no more.
     fn orphaned(
         &self,
         paused_before: DateTime<Utc>,
-        limit: u16,
-    ) -> impl Future<Output = Result<Vec<AgentMailbox>, Self::Err>> + Send;
+        after: Option<AgentMailboxId>,
+        page: u16,
+    ) -> impl Future<Output = Result<(Vec<AgentMailbox>, Option<AgentMailboxId>), Self::Err>> + Send;
 }

@@ -49,9 +49,21 @@ flowchart LR
 - **Send policy.** The agent mailbox's send and reply routes count as sends for
   a session scoped to sending nothing. Every send and reply must quote the owner's approval (`confirmation`),
   whatever credential the agent calls with: every mailbox belongs to an agent
-  account, so this is the rule every other email send from a program follows. Each mailbox is capped at 10 sends an hour and 40 a day, counting
-  sends in flight; the provider's own hourly cap is set to the same 10 as a
-  backstop.
+  account, so this is the rule every other email send from a program follows. Each mailbox is capped at 10 sends an hour, 40 a day and 100 recipients a
+  day; a team's agent mailboxes together at 300 recipients a day; a team has at
+  most 25 live mailboxes. Caps count sends in flight; the provider's own hourly
+  cap is set to the same 10 as a backstop. An agent's team is read from
+  `team_user`; an agent on no team gets no mailbox.
+- **Send keys.** A send's idempotency key is bound to what it says (a SHA-256
+  of kind, target, recipients, subject and body); the same key with a different
+  message is refused. Provider idempotency keys are derived per mailbox and
+  per operation, never passed through.
+- **Audit.** Every send leaves a record of its mailbox, team, key, kind,
+  recipient count, outcome and approval time, kept 400 days. No recipients,
+  subjects, bodies or approval text.
+- **Names.** Role names (`admin`, `postmaster`, `abuse`, the CA domain-validation
+  addresses and the like) are never mailbox names, and display names may not
+  name Macro or an administrator.
 - **Provider content is data.** Headers, the provider's prompt-injection score and
   any provider event never grant access or trigger an action.
 - **No payment.** The provider offers per-call payment when a key is missing; the
@@ -82,6 +94,11 @@ flowchart LR
   mailboxes paused for more than 30 days (rechecked in the write that starts
   the release, so a resume in between wins). A step that fails is set aside
   for five minutes so failing mailboxes never crowd out the rest.
+- Hourly, the sweep pauses any live mailbox whose agent account was deleted,
+  is no longer an agent, or left the mailbox's team, and releases it once it
+  has been paused a day, through the same transitions and fenced teardown.
+- A lost create is matched by its exact owner tag on Macro's side, never by
+  trusting the provider's filter; two inboxes with one owner tag are refused.
 - A send whose outcome is unknown is retried under the same provider
   idempotency key only within an hour (inside the provider's 24-hour replay
   window and the hourly cap); after that it answers

@@ -941,26 +941,37 @@ impl AgentMailboxRepository for FakeRepository {
     async fn orphaned(
         &self,
         paused_before: DateTime<Utc>,
-        limit: u16,
-    ) -> Result<Vec<AgentMailbox>, FakeError> {
+        after: Option<AgentMailboxId>,
+        page: u16,
+    ) -> Result<(Vec<AgentMailbox>, Option<AgentMailboxId>), FakeError> {
         let state = self.0.lock().unwrap();
         let members = state.members.lock().unwrap();
-        let mut orphans: Vec<&StoredRow> = state
+        let mut live: Vec<&StoredRow> = state
             .rows
             .iter()
-            .filter(|row| match row.mailbox.state {
-                MailboxState::Provisioning | MailboxState::Active | MailboxState::Failed => true,
-                MailboxState::Paused => row.mailbox.paused_at.is_some_and(|at| at < paused_before),
-                MailboxState::Releasing | MailboxState::Released => false,
+            .filter(|row| {
+                !matches!(
+                    row.mailbox.state,
+                    MailboxState::Releasing | MailboxState::Released
+                )
+            })
+            .filter(|row| after.is_none_or(|after| row.mailbox.id.0 > after.0))
+            .collect();
+        live.sort_by_key(|row| row.mailbox.id.0);
+        live.truncate(usize::from(page));
+        let last = (live.len() == usize::from(page))
+            .then(|| live.last().map(|row| row.mailbox.id))
+            .flatten();
+        let orphans = live
+            .into_iter()
+            .filter(|row| {
+                row.mailbox.state != MailboxState::Paused
+                    || row.mailbox.paused_at.is_some_and(|at| at < paused_before)
             })
             .filter(|row| members.get(row.mailbox.agent.as_ref()) != Some(&row.mailbox.team))
-            .collect();
-        orphans.sort_by_key(|row| row.updated_at);
-        Ok(orphans
-            .into_iter()
-            .take(usize::from(limit))
             .map(|row| row.mailbox.clone())
-            .collect())
+            .collect();
+        Ok((orphans, last))
     }
 }
 

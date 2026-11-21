@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, request_id, user_id, team_id, provider, requested_local_part, display_name,\n                   provider_mailbox_id, address, grant_id, grant_key_ciphertext,\n                   grant_kms_key_id, grant_encryption_version, state, last_error, paused_at\n            FROM agent_mailboxes AS mailbox\n            WHERE state IN ('provisioning', 'active', 'failed', 'paused')\n              AND (state <> 'paused' OR paused_at < $1)\n              AND NOT EXISTS (\n                  SELECT 1\n                  FROM \"User\" AS account\n                  JOIN team_user ON team_user.user_id = account.id\n                  WHERE account.id = mailbox.user_id\n                    AND account.\"isAgent\"\n                    AND team_user.team_id = mailbox.team_id\n              )\n            ORDER BY updated_at\n            LIMIT $2\n            ",
+  "query": "\n            SELECT id, request_id, user_id, team_id, provider, requested_local_part, display_name,\n                   provider_mailbox_id, address, grant_id, grant_key_ciphertext,\n                   grant_kms_key_id, grant_encryption_version, state, last_error, paused_at,\n                   (state <> 'paused' OR paused_at < $1)\n                   AND NOT EXISTS (\n                       SELECT 1\n                       FROM \"User\" AS account\n                       JOIN team_user ON team_user.user_id = account.id\n                                     AND team_user.team_id = mailbox.team_id\n                       WHERE account.id = mailbox.user_id AND account.\"isAgent\"\n                   ) AS \"orphan!\"\n            FROM agent_mailboxes AS mailbox\n            WHERE state IN ('provisioning', 'active', 'failed', 'paused')\n              -- A plain key bound (nil for the first page), so a generic\n              -- plan seeks the primary key instead of filtering from its start.\n              AND id > $2\n            ORDER BY id\n            LIMIT $3\n            ",
   "describe": {
     "columns": [
       {
@@ -82,11 +82,17 @@
         "ordinal": 15,
         "name": "paused_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 16,
+        "name": "orphan!",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
       "Left": [
         "Timestamptz",
+        "Uuid",
         "Int8"
       ]
     },
@@ -106,8 +112,9 @@
       true,
       false,
       true,
-      true
+      true,
+      null
     ]
   },
-  "hash": "9755058a3670413e8620bc11d67e766c5c3637ec054b60b48e5650e51601d401"
+  "hash": "50c65d0a77edf3f0a7da5516b79be4772c7f3c25acce438314af93f6dbef71af"
 }

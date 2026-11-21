@@ -809,37 +809,69 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
     async fn orphaned(
         &self,
         paused_before: DateTime<Utc>,
-        limit: u16,
-    ) -> Result<Vec<AgentMailbox>, Self::Err> {
-        // An agent account still on the mailbox's team keeps its mailbox;
-        // every other live mailbox is an orphan. team_user rows go with their
-        // user or team (ON DELETE CASCADE), so one join covers both.
-        let rows = sqlx::query_as!(
-            MailboxRow,
+        after: Option<AgentMailboxId>,
+        page: u16,
+    ) -> Result<(Vec<AgentMailbox>, Option<AgentMailboxId>), Self::Err> {
+        // One page of live mailboxes by id, then two point probes each
+        // ("User" by id, team_user by its key), so the check never scans the
+        // account tables. team_user rows go with their user or team (ON DELETE
+        // CASCADE), so one probe covers a deleted account and a deleted team.
+        let rows = sqlx::query!(
             r#"
             SELECT id, request_id, user_id, team_id, provider, requested_local_part, display_name,
                    provider_mailbox_id, address, grant_id, grant_key_ciphertext,
-                   grant_kms_key_id, grant_encryption_version, state, last_error, paused_at
+                   grant_kms_key_id, grant_encryption_version, state, last_error, paused_at,
+                   (state <> 'paused' OR paused_at < $1)
+                   AND NOT EXISTS (
+                       SELECT 1
+                       FROM "User" AS account
+                       JOIN team_user ON team_user.user_id = account.id
+                                     AND team_user.team_id = mailbox.team_id
+                       WHERE account.id = mailbox.user_id AND account."isAgent"
+                   ) AS "orphan!"
             FROM agent_mailboxes AS mailbox
             WHERE state IN ('provisioning', 'active', 'failed', 'paused')
-              AND (state <> 'paused' OR paused_at < $1)
-              AND NOT EXISTS (
-                  SELECT 1
-                  FROM "User" AS account
-                  JOIN team_user ON team_user.user_id = account.id
-                  WHERE account.id = mailbox.user_id
-                    AND account."isAgent"
-                    AND team_user.team_id = mailbox.team_id
-              )
-            ORDER BY updated_at
-            LIMIT $2
+              -- A plain key bound (nil for the first page), so a generic
+              -- plan seeks the primary key instead of filtering from its start.
+              AND id > $2
+            ORDER BY id
+            LIMIT $3
             "#,
             paused_before,
-            i64::from(limit),
+            after.map_or(Uuid::nil(), |id| id.0),
+            i64::from(page),
         )
         .fetch_all(&self.pool)
         .await?;
-        rows.into_iter().map(AgentMailbox::try_from).collect()
+
+        let last = (rows.len() == usize::from(page))
+            .then(|| rows.last().map(|row| AgentMailboxId(row.id)))
+            .flatten();
+        let orphans = rows
+            .into_iter()
+            .filter(|row| row.orphan)
+            .map(|row| {
+                AgentMailbox::try_from(MailboxRow {
+                    id: row.id,
+                    request_id: row.request_id,
+                    user_id: row.user_id,
+                    team_id: row.team_id,
+                    provider: row.provider,
+                    requested_local_part: row.requested_local_part,
+                    display_name: row.display_name,
+                    provider_mailbox_id: row.provider_mailbox_id,
+                    address: row.address,
+                    grant_id: row.grant_id,
+                    grant_key_ciphertext: row.grant_key_ciphertext,
+                    grant_kms_key_id: row.grant_kms_key_id,
+                    grant_encryption_version: row.grant_encryption_version,
+                    state: row.state,
+                    last_error: row.last_error,
+                    paused_at: row.paused_at,
+                })
+            })
+            .collect::<Result<_, _>>()?;
+        Ok((orphans, last))
     }
 }
 

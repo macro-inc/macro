@@ -19,7 +19,7 @@ behind provider-neutral ports. Design: `docs/design/agent-mailboxes.md`.
 
 ## Scope
 
-- Owns: `agent_mailboxes`, `agent_mailbox_sends`, the provider adapter, the
+- Owns: `agent_mailboxes`, `agent_mailbox_sends`, `agent_mailbox_send_audit`, the provider adapter, the
   scoped-key cipher.
 - Not here: when a teammate gets a mailbox and who else sees it → `crates/team_agents`;
   the fake provider → `crates/agent_mailbox_fake_vendor`.
@@ -45,7 +45,14 @@ behind provider-neutral ports. Design: `docs/design/agent-mailboxes.md`.
 - A send whose outcome is unknown keeps its cap slot; a retry reuses the
   provider idempotency key only inside `SEND_RETRY_WINDOW` (one hour, inside both
   the provider's replay window and the hourly cap), then answers
-  `send_outcome_unknown`. Only a definite refusal cancels the reservation.
+  `send_outcome_unknown`. Only a definite refusal of the attempt that made
+  the reservation cancels it; a refused retry leaves it.
+- A send's key is bound to its fingerprint in the audit table, which outlives
+  the dedupe ledger; never key a cap or replay on the key alone.
+- Team-wide caps take a per-team advisory lock before the mailbox row lock;
+  keep that order everywhere.
+- Provider idempotency keys come from `provider_key(mailbox, operation)`;
+  never send the agent's key or a mailbox id raw.
 - Every send and reply needs the owner's quoted approval (`OwnerApproval`),
   decided in the domain: the caller is always an agent account, whatever
   credential it uses.
