@@ -390,8 +390,8 @@ function entityIndex(
     if (fields.length) lines.push(`Fields: ${fields.join(', ')}`);
     // A class built on another entity's concrete class (`Task` on
     // `Document`) names what it inherits, read under its own name, so a turn
-    // that loads only this entity still finds `Task.setProperty`. The
-    // abstract bases every handle shares are left to their own index.
+    // that loads only this entity still finds `Task.setProperty`. A class
+    // whose parent is an abstract base every handle shares lists nothing.
     const inherited =
       parent && !abstractClasses.has(parent)
         ? methods

@@ -226,7 +226,7 @@ export class PropertiesNamespace {
   async createTag(opts: {
     /** The label, e.g. "Urgent". */
     label: string;
-    /** A hex color such as `#46A758`. */
+    /** A hex color such as `#46A758`; defaults to the next color of the tag palette. */
     color?: string;
     /** `user` (the default) for the user's own tags, `team` for their team's shared tags. */
     scope?: TagScope;

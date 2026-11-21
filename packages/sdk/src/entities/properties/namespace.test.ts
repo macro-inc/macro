@@ -180,6 +180,26 @@ describe('PropertiesNamespace.create', () => {
     expect(created[0]?.scope).toBe('team');
   });
 
+  test('a refused body names the options it came from', async () => {
+    const client = {
+      properties: {
+        createPropertyDefinition: async () => ({
+          error:
+            'data_type: invalid type: string "NUMBER", expected internally tagged enum PropertyDataType',
+          response: new Response(null, { status: 422 }),
+        }),
+      },
+    } as unknown as MacroClient;
+    const options = {
+      displayName: 'Hours Spent',
+      dataType: 'NUMBER',
+    } as unknown as Parameters<PropertiesNamespace['create']>[0];
+
+    await expect(
+      new PropertiesNamespace(client).create(options),
+    ).rejects.toThrow('`data_type` is the `dataType` option');
+  });
+
   test('a misspelled option throws instead of making a personal property', async () => {
     const { client, created } = propertiesClient();
     const options = {

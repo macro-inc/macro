@@ -1,4 +1,5 @@
 use super::*;
+use crate::tag_color::TagColor;
 
 impl<R, P, N, B> PropertiesServiceImpl<R, P, N, B>
 where
@@ -43,7 +44,22 @@ where
             ),
         };
 
-        validate_option_color(&definition.data_type, color.as_deref(), color.as_deref())?;
+        // A tag added without a color takes the palette color for its
+        // position, as the tag picker does.
+        let effective_color = match (&definition.data_type, &color) {
+            (DataType::Tag, None) => Some(
+                TagColor::for_position(display_order.unsigned_abs() as usize)
+                    .hex()
+                    .to_owned(),
+            ),
+            _ => color.clone(),
+        };
+        validate_option_color(
+            &definition.data_type,
+            color.as_deref(),
+            effective_color.as_deref(),
+        )?;
+        let color = effective_color;
 
         Ok((display_order, option_value, color))
     }
