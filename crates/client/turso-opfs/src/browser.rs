@@ -426,16 +426,12 @@ impl OpfsOwner {
             })
             .map_err(state_error)?;
         let mut guard = AsyncPoisonGuard::new(self.id, "adoption cancelled before completion");
-        let outcome = with_lock_if_available(
-            &owner_lock_name(previous_identity),
-            move_pair(previous, self.paths.clone()),
-        )
-        .await;
+        let outcome = adopt_into(previous_identity, previous, self.paths.clone()).await;
         REGISTRY
             .with(|registry| registry.borrow_mut().machine.finish_wipe(self.id))
             .map_err(state_error)?;
         guard.disarm();
-        outcome.map(|outcome| outcome.unwrap_or(AdoptOutcome::PreviousInUse))
+        outcome
     }
 }
 
@@ -581,8 +577,15 @@ async fn move_entry(
     )
 }
 
-async fn move_pair(from: Paths, to: Paths) -> Result<AdoptOutcome, OpfsError> {
-    let deadline = BusyDeadline::start();
+/// Checks this owner's paths before touching the previous identity, so the
+/// usual open, where this build's file already exists, costs one lookup and
+/// never contends for an older build's lock. Nothing else can create these
+/// paths meanwhile: this owner holds their lock.
+async fn adopt_into(
+    previous_identity: &str,
+    from: Paths,
+    to: Paths,
+) -> Result<AdoptOutcome, OpfsError> {
     let root = worker_root()
         .await
         .map_err(|error| js_error(OpfsErrorKind::Move, "OPFS move root open", &error))?;
@@ -591,6 +594,20 @@ async fn move_pair(from: Paths, to: Paths) -> Result<AdoptOutcome, OpfsError> {
             return Ok(AdoptOutcome::TargetExists);
         }
     }
+    with_lock_if_available(
+        &owner_lock_name(previous_identity),
+        move_pair(root, from, to),
+    )
+    .await
+    .map(|outcome| outcome.unwrap_or(AdoptOutcome::PreviousInUse))
+}
+
+async fn move_pair(
+    root: FileSystemDirectoryHandle,
+    from: Paths,
+    to: Paths,
+) -> Result<AdoptOutcome, OpfsError> {
+    let deadline = BusyDeadline::start();
     let (Some(main), Some(wal)) = (
         existing_file(&root, from.get(FileRole::Main)).await?,
         existing_file(&root, from.get(FileRole::Wal)).await?,
