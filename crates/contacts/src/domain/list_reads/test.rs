@@ -24,6 +24,8 @@ struct Flags {
     answer: Result<Option<bool>, ()>,
     on: Vec<String>,
     loads: AtomicUsize,
+    /// When set, each load waits for a permit before answering.
+    gate: Option<tokio::sync::Notify>,
 }
 
 impl Flags {
@@ -32,6 +34,7 @@ impl Flags {
             answer,
             on: Vec::new(),
             loads: AtomicUsize::new(0),
+            gate: None,
         }
     }
 }
@@ -39,6 +42,9 @@ impl Flags {
 impl FeatureFlags for &'static Flags {
     async fn load(&self, user_id: &MacroUserIdStr<'_>) -> Result<FlagSnapshot, Report> {
         self.loads.fetch_add(1, Ordering::SeqCst);
+        if let Some(gate) = &self.gate {
+            gate.notified().await;
+        }
         let answer = if self.on.iter().any(|on| on == user_id.as_ref()) {
             Ok(Some(true))
         } else {
@@ -336,4 +342,26 @@ async fn requested_ids_filter_the_legacy_listing_when_the_flag_is_off() {
         .unwrap();
     assert_eq!(found, [user("viewer@example.com")]);
     assert!(reads.lists.lookups.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn concurrent_reads_for_one_viewer_share_one_load() {
+    let mut flags = Flags::new(Ok(Some(true)));
+    flags.gate = Some(tokio::sync::Notify::new());
+    let (reads, flags) = router(flags, Vec::new());
+    let viewer = user("viewer@example.com");
+    let (first, second, ()) = tokio::join!(
+        reads.reads.source_for(&viewer),
+        reads.reads.source_for(&viewer),
+        async {
+            if let Some(gate) = &flags.gate {
+                gate.notify_one();
+            }
+        },
+    );
+    assert_eq!(
+        (first, second),
+        (DirectorySource::Lists, DirectorySource::Lists)
+    );
+    assert_eq!(flags.loads.load(Ordering::SeqCst), 1);
 }

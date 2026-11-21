@@ -17,6 +17,7 @@ use rootcause::Report;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
+use tokio::sync::OnceCell;
 use tokio::time::Instant;
 
 #[cfg(test)]
@@ -42,6 +43,7 @@ pub enum DirectorySource {
 /// The per-viewer flag, with each viewer's answer remembered for
 /// [`DECISION_LIFETIME`]. A failed read is remembered as legacy too, so an
 /// unavailable flag provider costs one timeout per viewer per lifetime.
+/// Concurrent reads for one viewer share a single load.
 pub struct ContactListReads<F> {
     flags: F,
     decisions: Mutex<Decisions>,
@@ -49,9 +51,22 @@ pub struct ContactListReads<F> {
 
 #[derive(Default)]
 struct Decisions {
-    by_viewer: HashMap<String, (Instant, DirectorySource)>,
+    by_viewer: HashMap<String, Arc<Decision>>,
     /// When lapsed answers are next dropped; `None` until the first answer.
     prune_at: Option<Instant>,
+}
+
+/// One viewer's answer for one lifetime, filled by the first read that needs
+/// it; reads that arrive while it loads wait for the same answer.
+struct Decision {
+    started: Instant,
+    source: OnceCell<DirectorySource>,
+}
+
+impl Decision {
+    fn is_current(&self, now: Instant) -> bool {
+        now.duration_since(self.started) < DECISION_LIFETIME
+    }
 }
 
 impl<F> ContactListReads<F> {
@@ -69,38 +84,43 @@ impl<F> ContactListReads<F> {
             .unwrap_or_else(PoisonError::into_inner)
     }
 
-    fn remembered(&self, viewer: &str) -> Option<DirectorySource> {
-        self.decisions()
-            .by_viewer
-            .get(viewer)
-            .filter(|(at, _)| at.elapsed() < DECISION_LIFETIME)
-            .map(|(_, source)| *source)
-    }
-
-    fn remember(&self, viewer: &str, source: DirectorySource) {
+    /// This viewer's current decision, or a new empty one when it has none or
+    /// it has lapsed. The lock is never held across a load.
+    fn decision(&self, viewer: &str) -> Arc<Decision> {
         let now = Instant::now();
         let mut decisions = self.decisions();
+        if let Some(decision) = decisions.by_viewer.get(viewer)
+            && decision.is_current(now)
+        {
+            return decision.clone();
+        }
         // Dropping lapsed answers once per lifetime keeps the map to recent
         // viewers without a scan on every read.
         if decisions.prune_at.is_none_or(|prune_at| prune_at <= now) {
             decisions
                 .by_viewer
-                .retain(|_, (at, _)| now.duration_since(*at) < DECISION_LIFETIME);
+                .retain(|_, decision| decision.is_current(now));
             decisions.prune_at = Some(now + DECISION_LIFETIME);
         }
-        decisions.by_viewer.insert(viewer.to_owned(), (now, source));
+        let decision = Arc::new(Decision {
+            started: now,
+            source: OnceCell::new(),
+        });
+        decisions
+            .by_viewer
+            .insert(viewer.to_owned(), decision.clone());
+        decision
     }
 }
 
 impl<F: FeatureFlags> ContactListReads<F> {
     /// The store this viewer's reads come from now.
     pub async fn source_for(&self, viewer: &MacroUserIdStr<'_>) -> DirectorySource {
-        if let Some(source) = self.remembered(viewer.as_ref()) {
-            return source;
-        }
-        let source = read(&self.flags, viewer).await;
-        self.remember(viewer.as_ref(), source);
-        source
+        *self
+            .decision(viewer.as_ref())
+            .source
+            .get_or_init(|| read(&self.flags, viewer))
+            .await
     }
 }
 
