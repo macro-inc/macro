@@ -290,6 +290,38 @@ participant avatars.
 Ringing conversations keep their existing Answer and Decline actions; these
 use the real incoming-call signal rather than treating every active call as ringing.
 
+### Incoming call banners
+
+On desktop, a ringing channel or DM call also appears as a rounded card centered
+at the top of the window on every page of the app's split layout (not a meeting page, where
+Join could not open the channel), so it can be answered without opening Chat. It
+shows the caller's profile picture (initials when there is none, `?` when the
+caller is unknown) and name, one line saying where they are calling
+(`Calling you` for a DM, a group chat or a meeting invitation, `Calling you in
+#channel` for a channel), and `Decline` and `Join`. The 30-second countdown is a
+bar along the card's top edge. These run the same actions as the Chat sidebar
+row: `Join` opens the channel and joins that call ID, and `Decline` stops the
+ring on the user's other tabs and devices.
+
+Several ringing calls (channel calls and meeting invitations alike) stack like
+notifications: the newest in front, two older ones peeking out underneath, only
+the front card's buttons usable. Clicking the stack (or the `Show all N
+incoming calls` strip under it, which is the keyboard path) fans every call out
+below with its own buttons, under an `N incoming calls` label and `Show less`;
+the stack folds back by itself once the calls it was opened with are gone.
+A call in a conversation that is open on screen (a split, a popover or an
+inline preview such as Chat's; not a background desktop tab) is left out of the
+stack, since that conversation has its own call controls; it comes back as
+soon as the conversation is closed or navigated away from while it still rings.
+Cards sit below the macOS title bar, take no focus, and put the buttons below
+the caller in a narrow window. Phones and tablets (touch) don't show the stack:
+they answer channel calls from Chat and the native call screens, and meeting
+invitations keep their own card at the bottom left.
+Ring one locally with `window.macroDebugIncomingCall({ channelId, createdBy })`
+in a dev build (`macroClearDebugIncomingCalls()` clears them), and a meeting
+invitation with `window.macroDebugMeetingInvitation({ createdBy })`. A new call
+is announced to screen readers; an open stack taller than the screen scrolls.
+
 Only the current call's desktop Chat sidebar row, channel-header duration pill
 and app-rail item use live waveforms; all other call and phone surfaces use the
 original static icon. Live waveforms animate only while someone in the joined
