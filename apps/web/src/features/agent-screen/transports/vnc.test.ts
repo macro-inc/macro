@@ -108,13 +108,13 @@ describe('VNC_TRANSPORT', () => {
   it('runs noVNC in a sandboxed, network-less frame and gives a port only to that frame', async () => {
     const element = document.createElement('div');
     document.body.append(element);
+    const abandon = new AbortController();
     const connecting = VNC_TRANSPORT.connect(
       element,
       TICKET,
       handlers(),
-      new AbortController().signal
+      abandon.signal
     );
-    connecting.catch(() => {});
     FakeSocket.last?.open();
     const frame = await frameIn(element);
 
@@ -141,6 +141,8 @@ describe('VNC_TRANSPORT', () => {
       })
     );
     expect(handed).not.toHaveBeenCalled();
+    abandon.abort();
+    await expect(connecting).rejects.toMatchObject({ name: 'AbortError' });
     element.remove();
   });
 
@@ -247,13 +249,13 @@ describe('VNC_TRANSPORT', () => {
     const element = document.createElement('div');
     document.body.append(element);
     const sizes: { width: number; height: number }[] = [];
+    const abandon = new AbortController();
     const connecting = VNC_TRANSPORT.connect(
       element,
       TICKET,
       { ...handlers(), onFrameSize: (size) => sizes.push(size) },
-      new AbortController().signal
+      abandon.signal
     );
-    connecting.catch(() => {});
     FakeSocket.last?.open();
     const frame = await frameIn(element);
     const port = await frameAsksForPort(frame);
@@ -267,6 +269,8 @@ describe('VNC_TRANSPORT', () => {
     await vi.waitFor(() =>
       expect(sizes).toEqual([{ width: 1920, height: 1080 }])
     );
+    abandon.abort();
+    await expect(connecting).rejects.toMatchObject({ name: 'AbortError' });
     port.close();
     element.remove();
   });

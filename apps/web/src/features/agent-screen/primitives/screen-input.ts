@@ -89,6 +89,29 @@ function wheelPixels(event: WheelEvent): { dx: number; dy: number } {
   return { dx: event.deltaX * unit, dy: event.deltaY * unit };
 }
 
+/** An IME, or a dead key, is composing: what it commits comes as text. */
+function composingKey(event: KeyboardEvent): boolean {
+  return (
+    event.isComposing ||
+    event.keyCode === KEY_CODE_COMPOSING ||
+    event.key === 'Dead'
+  );
+}
+
+/** Ctrl+Alt+Shift held together: the way out of the guest by keyboard alone. */
+function isReleaseChord(event: KeyboardEvent): boolean {
+  return (
+    event.ctrlKey &&
+    event.altKey &&
+    event.shiftKey &&
+    RELEASE_CHORD_KEYS.includes(event.key)
+  );
+}
+
+function isPasteShortcut(event: KeyboardEvent): boolean {
+  return (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'v';
+}
+
 /**
  * The viewer's local viewport (zoom, pan) and everything that turns the
  * person's pointer, wheel and keyboard into guest input. The view binds the
@@ -261,6 +284,68 @@ export function createScreenInput(options: ScreenInputOptions) {
     setViewport(zoomAt(current, viewport(), factor, center));
   };
 
+  /** Ctrl+Alt+Shift leaves the keyboard (focus moves out) without handing back. */
+  function leaveKeyboard(event: KeyboardEvent) {
+    event.preventDefault();
+    cancelEscapeHold();
+    releaseKeys();
+    if (event.currentTarget instanceof HTMLElement) event.currentTarget.blur();
+  }
+
+  /** Esc is held to hand back; a short press still reaches the guest on release. */
+  function holdEscape(event: KeyboardEvent) {
+    event.preventDefault();
+    if (event.repeat || escapeTimer) return;
+    setEscapeHeld(true);
+    escapeTimer = setTimeout(() => {
+      escapeTimer = undefined;
+      setEscapeHeld(false);
+      releaseKeys();
+      options.onHandBackHold();
+    }, HAND_BACK_HOLD_MS);
+  }
+
+  /**
+   * Ctrl+V / Cmd+V: the browser pastes, so the guest gets this computer's
+   * clipboard first (see onPaste). When nothing local arrives (an empty
+   * clipboard, an image, a refused permission), the guest still pastes its
+   * own clipboard.
+   */
+  function armPasteFallback() {
+    clearTimeout(pasteFallback);
+    pasteFallback = setTimeout(() => {
+      pasteFallback = undefined;
+      if (options.sendsInput()) pasteInGuest();
+    }, PASTE_FALLBACK_MS);
+  }
+
+  function tap(keysym: number) {
+    options.send({ kind: 'key', keysym, down: true });
+    options.send({ kind: 'key', keysym, down: false });
+  }
+
+  function pressKey(event: KeyboardEvent, keysym: number, altGraph: boolean) {
+    const modifier = MODIFIER_KEYS.includes(event.key);
+    // macOS sends CapsLock's keydown when it turns on and its keyup when it
+    // turns off: each is one tap, or the guest's caps state drifts.
+    if (isMac && event.key === 'CapsLock') return tap(keysym);
+    // macOS sends no keyup for a key let go while Cmd is down (Cmd+C):
+    // press and release it at once, as noVNC's keyboard does.
+    if (isMac && event.metaKey && !modifier) return tap(keysym);
+    // An AltGr character on Windows arrives with a fake Ctrl held: let the
+    // guest's Ctrl go first, so the character isn't a Ctrl+Alt shortcut.
+    if (altGraph && !modifier) releaseFakeControl();
+    pressedKeys[event.code] = keysym;
+    options.send({ kind: 'key', keysym, down: true });
+  }
+
+  function releaseFakeControl() {
+    const control = pressedKeys.ControlLeft;
+    if (control === undefined) return;
+    delete pressedKeys.ControlLeft;
+    options.send({ kind: 'key', keysym: control, down: false });
+  }
+
   return {
     viewport,
     touchMode,
@@ -305,94 +390,17 @@ export function createScreenInput(options: ScreenInputOptions) {
       if (!options.sendsInput()) return;
       // An IME (or a dead key) is composing in the keyboard field: let it,
       // and send what it commits (onCompositionEnd).
-      if (
-        event.isComposing ||
-        event.keyCode === KEY_CODE_COMPOSING ||
-        event.key === 'Dead'
-      ) {
-        return;
-      }
-
+      if (composingKey(event)) return;
       // Windows reports AltGr as Ctrl+Alt: an AltGr character is not a
       // shortcut, and AltGr+Shift is not the release chord.
       const altGraph = event.getModifierState?.('AltGraph') ?? false;
-
-      // Ctrl+Alt+Shift held together leaves the keyboard (focus moves out)
-      // without handing back: the way out of the guest by keyboard alone.
-      if (
-        !altGraph &&
-        event.ctrlKey &&
-        event.altKey &&
-        event.shiftKey &&
-        RELEASE_CHORD_KEYS.includes(event.key)
-      ) {
-        event.preventDefault();
-        cancelEscapeHold();
-        releaseKeys();
-        if (event.currentTarget instanceof HTMLElement)
-          event.currentTarget.blur();
-        return;
-      }
-
-      // Esc is held to hand back; a short press still reaches the guest on release.
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        if (event.repeat || escapeTimer) return;
-        setEscapeHeld(true);
-        escapeTimer = setTimeout(() => {
-          escapeTimer = undefined;
-          setEscapeHeld(false);
-          releaseKeys();
-          options.onHandBackHold();
-        }, HAND_BACK_HOLD_MS);
-        return;
-      }
-
-      // Ctrl+V / Cmd+V: let the browser paste, so the guest gets this
-      // computer's clipboard first (see onPaste).
-      // When nothing local arrives (an empty clipboard, an image, a refused
-      // permission), the guest still pastes its own clipboard.
-      const pasteShortcut =
-        (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'v';
-      if (pasteShortcut) {
-        clearTimeout(pasteFallback);
-        pasteFallback = setTimeout(() => {
-          pasteFallback = undefined;
-          if (options.sendsInput()) pasteInGuest();
-        }, PASTE_FALLBACK_MS);
-        return;
-      }
+      if (!altGraph && isReleaseChord(event)) return leaveKeyboard(event);
+      if (event.key === 'Escape') return holdEscape(event);
+      if (isPasteShortcut(event)) return armPasteFallback();
       event.preventDefault();
 
       const keysym = keysymFor(event);
-      if (keysym === undefined) return;
-
-      // macOS sends CapsLock's keydown when it turns on and its keyup when it
-      // turns off: each is one tap, or the guest's caps state drifts.
-      if (isMac && event.key === 'CapsLock') {
-        options.send({ kind: 'key', keysym, down: true });
-        options.send({ kind: 'key', keysym, down: false });
-        return;
-      }
-      // macOS sends no keyup for a key let go while Cmd is down (Cmd+C):
-      // press and release it at once, as noVNC's keyboard does.
-      if (isMac && event.metaKey && !MODIFIER_KEYS.includes(event.key)) {
-        options.send({ kind: 'key', keysym, down: true });
-        options.send({ kind: 'key', keysym, down: false });
-        return;
-      }
-      // An AltGr character on Windows arrives with a fake Ctrl held: let the
-      // guest's Ctrl go first, so the character isn't a Ctrl+Alt shortcut.
-      if (altGraph && !MODIFIER_KEYS.includes(event.key)) {
-        const control = pressedKeys.ControlLeft;
-        if (control !== undefined) {
-          delete pressedKeys.ControlLeft;
-          options.send({ kind: 'key', keysym: control, down: false });
-        }
-      }
-
-      pressedKeys[event.code] = keysym;
-      options.send({ kind: 'key', keysym, down: true });
+      if (keysym !== undefined) pressKey(event, keysym, altGraph);
     },
     onKeyUp(event: KeyboardEvent) {
       if (!options.sendsInput()) return;
