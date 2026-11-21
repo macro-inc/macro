@@ -2871,3 +2871,154 @@ async fn calendar_ranges_report_gaps_watermarks_and_uncertain_events_across_the_
     );
     close_and_destroy(&engine, SCOPE).await;
 }
+
+/// Rewrites this build's closed database for `scope` as storage 11 wrote it.
+async fn rewrite_closed_as_storage_11(scope: &str) {
+    let owner = OpfsOwner::acquire(&database_identity(scope))
+        .await
+        .expect("acquire closed database");
+    let OpenResult::Ready(session) = owner.open().await.expect("open closed database") else {
+        panic!("a closed database is a complete pair")
+    };
+    let mut storage = TursoStorage::from_opfs_session(
+        session.connect().expect("connect closed database"),
+        scope,
+    )
+    .expect("closed database initializes");
+    cache_turso::migration_test_hooks::rewrite_as_storage_11(&mut storage)
+        .expect("rewrite as storage 11");
+    let TursoStorageCloseOutcome::Healthy(closed) = storage.try_close().expect("close rewrite")
+    else {
+        panic!("a rewritten database is healthy")
+    };
+    closed
+        .preserve()
+        .expect("preserve rewrite")
+        .release()
+        .await
+        .expect("release rewrite");
+}
+
+async fn read_soup(engine: &CacheEngine) -> serde_json::Value {
+    from_js(
+        resolved(engine.read_query(
+            None,
+            QUERY.into(),
+            Some("Soup".into()),
+            js(variables()),
+            JsValue::UNDEFINED,
+        ))
+        .await,
+    )
+}
+
+async fn queue_depth(engine: &CacheEngine) -> serde_json::Value {
+    let diagnostics: serde_json::Value = from_js(resolved(engine.queue_diagnostics()).await);
+    diagnostics["depth"].clone()
+}
+
+#[wasm_bindgen_test(async)]
+async fn an_older_storage_version_moves_forward_and_upgrades_in_place() {
+    const SCOPE: &str = "cache-wasm-carry-forward";
+    assert_eq!(cache_turso::oldest_upgradable_storage_version(), Some(11));
+    let own = database_identity(SCOPE);
+    let older = cache_database_name(SCOPE, 11);
+    for identity in [&own, &older] {
+        remove_opfs_pair(identity).await;
+    }
+
+    // An older build's database holding a cached query and a queued write.
+    let engine = fresh_engine(SCOPE).await;
+    resolved(engine.write_query(
+        write_context(None),
+        QUERY.into(),
+        Some("Soup".into()),
+        js(variables()),
+        js(soup_data("carried")),
+        Some("identity".into()),
+    ))
+    .await;
+    queue_one_mutation(&engine).await;
+    let generation = test_generation(&engine).await;
+    resolved(engine.close()).await;
+    rewrite_closed_as_storage_11(SCOPE).await;
+    move_opfs_pair(&own, &older).await;
+
+    // While a context of that build holds it, this build starts empty, says
+    // why, and leaves the older database alone.
+    hold_web_lock(&owner_lock_for(&older)).await;
+    let opened = open_cache_with_outcome(SCOPE.into(), None, None, None)
+        .await
+        .expect("open beside a held older database");
+    let field = |key: &str| js_sys::Reflect::get(&opened, &JsValue::from_str(key)).unwrap();
+    assert_eq!(field("outcome"), "opened-new");
+    assert_eq!(field("carryForward"), "older-in-use");
+    assert_eq!(field("carryForwardStorageVersion"), 11);
+    assert!(field("fromStorageVersion").is_undefined());
+    close_opened(&opened).await;
+    release_held_web_lock().await;
+    assert!(opfs_file_exists(&older).await);
+    assert!(opfs_file_exists(&format!("{older}-wal")).await);
+
+    // This build's own file now exists, so it never looks for an older one.
+    let (engine, report) = open_cache_inner(SCOPE.into(), None, false, None, false)
+        .await
+        .expect("reopen this build's database");
+    assert_eq!(
+        report,
+        OpenReport {
+            outcome: CacheOpenOutcome::OpenedExisting,
+            carry_forward: None,
+        }
+    );
+    resolved(engine.close()).await;
+    assert!(opfs_file_exists(&older).await);
+
+    // Once that build has gone and this build has no file, the older
+    // database moves here and is upgraded: same records, queue and generation.
+    remove_opfs_pair(&own).await;
+    let (engine, report) = open_cache_inner(SCOPE.into(), None, false, None, false)
+        .await
+        .expect("open moves the older database forward");
+    assert_eq!(
+        report,
+        OpenReport {
+            outcome: CacheOpenOutcome::UpgradedExisting {
+                from_storage_version: 11
+            },
+            carry_forward: Some(CarryForward::Moved {
+                from_storage_version: 11
+            }),
+        }
+    );
+    assert!(!opfs_file_exists(&older).await);
+    assert!(!opfs_file_exists(&format!("{older}-wal")).await);
+    let read = read_soup(&engine).await;
+    assert_eq!(read["kind"], "hit");
+    assert_eq!(read["data"], soup_data("carried"));
+    assert_eq!(queue_depth(&engine).await, "1");
+    assert_eq!(test_generation(&engine).await, generation);
+    resolved(engine.close()).await;
+
+    // The upgraded file reopens as this build's own.
+    let opened = open_cache_with_outcome(SCOPE.into(), None, None, None)
+        .await
+        .expect("reopen the upgraded database");
+    let field = |key: &str| js_sys::Reflect::get(&opened, &JsValue::from_str(key)).unwrap();
+    assert_eq!(field("outcome"), "opened-existing");
+    assert!(field("carryForward").is_undefined());
+    close_opened(&opened).await;
+
+    // A recovery open never moves an older database in.
+    resolved(open_cache(SCOPE.into(), None).await.unwrap().close()).await;
+    move_opfs_pair(&own, &older).await;
+    let (engine, report) = open_cache_inner(SCOPE.into(), None, true, None, false)
+        .await
+        .expect("recovery open");
+    assert_eq!(report.carry_forward, None);
+    assert_eq!(report.outcome, CacheOpenOutcome::ResetStorageUncertain);
+    resolved(engine.close()).await;
+    assert!(opfs_file_exists(&older).await);
+    remove_opfs_pair(&older).await;
+    destroy_cache(SCOPE.into()).await.expect("destroy cache");
+}

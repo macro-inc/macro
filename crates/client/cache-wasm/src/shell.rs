@@ -36,7 +36,7 @@ use soup_filter_cache_adapter::{
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use turso_opfs::{OpenResult, OpfsError, OpfsErrorKind, OpfsOwner};
+use turso_opfs::{AdoptOutcome, OpenResult, OpfsError, OpfsErrorKind, OpfsOwner};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{JsFuture, future_to_promise};
 
@@ -94,6 +94,11 @@ enum JsReadResult {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum CacheOpenOutcome {
     OpenedExisting,
+    /// An existing database written at an older storage version, upgraded in
+    /// place by its registered steps.
+    UpgradedExisting {
+        from_storage_version: u32,
+    },
     OpenedNew,
     ResetIncompatible,
     ResetCorrupt,
@@ -104,6 +109,7 @@ impl CacheOpenOutcome {
     const fn as_str(self) -> &'static str {
         match self {
             Self::OpenedExisting => "opened-existing",
+            Self::UpgradedExisting { .. } => "upgraded-existing",
             Self::OpenedNew => "opened-new",
             Self::ResetIncompatible => "reset-incompatible",
             Self::ResetCorrupt => "reset-corrupt",
@@ -116,9 +122,63 @@ impl From<TursoStorageOpenOutcome> for CacheOpenOutcome {
     fn from(outcome: TursoStorageOpenOutcome) -> Self {
         match outcome {
             TursoStorageOpenOutcome::OpenedExisting => Self::OpenedExisting,
+            TursoStorageOpenOutcome::UpgradedExisting {
+                from_storage_version,
+            } => Self::UpgradedExisting {
+                from_storage_version,
+            },
             TursoStorageOpenOutcome::OpenedNew => Self::OpenedNew,
         }
     }
+}
+
+/// What happened to an older storage version's database when this build's own
+/// database did not exist yet.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CarryForward {
+    /// It now sits at this build's identity and was opened from there.
+    Moved { from_storage_version: u32 },
+    /// A context of the older build holds it, so this build started empty.
+    OlderInUse { from_storage_version: u32 },
+    /// This browser cannot move OPFS files, so this build started empty.
+    Unsupported { from_storage_version: u32 },
+    /// Moving it failed, so this build started empty or reset.
+    Failed { from_storage_version: u32 },
+}
+
+impl CarryForward {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Moved { .. } => "moved",
+            Self::OlderInUse { .. } => "older-in-use",
+            Self::Unsupported { .. } => "unsupported",
+            Self::Failed { .. } => "failed",
+        }
+    }
+
+    const fn storage_version(self) -> u32 {
+        match self {
+            Self::Moved {
+                from_storage_version,
+            }
+            | Self::OlderInUse {
+                from_storage_version,
+            }
+            | Self::Unsupported {
+                from_storage_version,
+            }
+            | Self::Failed {
+                from_storage_version,
+            } => from_storage_version,
+        }
+    }
+}
+
+/// What an open did to storage, reported to JS without payloads.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct OpenReport {
+    outcome: CacheOpenOutcome,
+    carry_forward: Option<CarryForward>,
 }
 
 fn recovery_outcome(reason: PhysicalResetReason) -> CacheOpenOutcome {
@@ -749,12 +809,42 @@ async fn await_storage_grant(
     }
 }
 
+/// Moves this scope's newest older database to this build's identity when this
+/// build has none yet, so the open upgrades it in place instead of starting
+/// empty. Only storage versions this build can upgrade are tried, newest
+/// first, and the first one that exists decides. Never fails the open: when
+/// the move does not happen, this build starts empty, as it did before
+/// upgrades existed.
+async fn carry_forward(scope: &str, owner: &mut OpfsOwner) -> Option<CarryForward> {
+    let oldest = cache_turso::oldest_upgradable_storage_version()?;
+    for from_storage_version in (oldest..cache_turso::STORAGE_SCHEMA_VERSION).rev() {
+        let previous = cache_database_name(scope, from_storage_version);
+        return match owner.adopt_previous(&previous).await {
+            Ok(AdoptOutcome::NothingToAdopt) => continue,
+            Ok(AdoptOutcome::TargetExists) => None,
+            Ok(AdoptOutcome::Adopted) => Some(CarryForward::Moved {
+                from_storage_version,
+            }),
+            Ok(AdoptOutcome::PreviousInUse) => Some(CarryForward::OlderInUse {
+                from_storage_version,
+            }),
+            Ok(AdoptOutcome::Unsupported) => Some(CarryForward::Unsupported {
+                from_storage_version,
+            }),
+            Err(_) => Some(CarryForward::Failed {
+                from_storage_version,
+            }),
+        };
+    }
+    None
+}
+
 async fn acquire_storage(
     scope: &str,
     recovery_wipe: bool,
     storage_grant: Option<&js_sys::Function>,
     if_available: bool,
-) -> Result<OpenedStorage, JsValue> {
+) -> Result<(OpenedStorage, Option<CarryForward>), JsValue> {
     let identity = database_identity(scope);
     let owner = if if_available {
         OpfsOwner::try_acquire(&identity)
@@ -764,23 +854,27 @@ async fn acquire_storage(
     } else {
         OpfsOwner::acquire(&identity).await.map_err(err_js)?
     };
-    let owner = match storage_grant {
+    let mut owner = match storage_grant {
         Some(grant) => await_storage_grant(owner, grant).await?,
         None => owner,
     };
-    let owner = if recovery_wipe {
-        owner
+    // A recovery open discards this build's files and keeps older ones for
+    // the stale cleanup; it never moves them in.
+    let (owner, carried) = if recovery_wipe {
+        let owner = owner
             .recovery_wipe()
             .await
-            .map_err(|failure| storage_err_js(failure.error()))?
+            .map_err(|failure| storage_err_js(failure.error()))?;
+        (owner, None)
     } else {
-        owner
+        let carried = carry_forward(scope, &mut owner).await;
+        (owner, carried)
     };
     let mut opened = open_storage(scope, owner).await?;
     if recovery_wipe {
         opened.outcome = CacheOpenOutcome::ResetStorageUncertain;
     }
-    Ok(opened)
+    Ok((opened, carried))
 }
 
 async fn open_cache_inner(
@@ -789,9 +883,9 @@ async fn open_cache_inner(
     recovery_wipe: bool,
     storage_grant: Option<js_sys::Function>,
     if_available: bool,
-) -> Result<(CacheEngine, CacheOpenOutcome), JsValue> {
+) -> Result<(CacheEngine, OpenReport), JsValue> {
     validate_hot_capacity(hot_capacity)?;
-    let OpenedStorage { storage, outcome } =
+    let (OpenedStorage { storage, outcome }, carry_forward) =
         acquire_storage(&scope, recovery_wipe, storage_grant.as_ref(), if_available).await?;
     Ok((
         CacheEngine {
@@ -805,22 +899,31 @@ async fn open_cache_inner(
             })),
             ops: Rc::new(RefCell::new(OpInterner::default())),
         },
-        outcome,
+        OpenReport {
+            outcome,
+            carry_forward,
+        },
     ))
 }
 
-fn cache_open_result(engine: CacheEngine, outcome: CacheOpenOutcome) -> Result<JsValue, JsValue> {
+fn cache_open_result(engine: CacheEngine, report: OpenReport) -> Result<JsValue, JsValue> {
     let result = js_sys::Object::new();
-    js_sys::Reflect::set(
-        &result,
-        &JsValue::from_str("engine"),
-        &JsValue::from(engine),
-    )?;
-    js_sys::Reflect::set(
-        &result,
-        &JsValue::from_str("outcome"),
-        &JsValue::from_str(outcome.as_str()),
-    )?;
+    let set = |key: &str, value: JsValue| js_sys::Reflect::set(&result, &JsValue::from_str(key), &value);
+    set("engine", JsValue::from(engine))?;
+    set("outcome", JsValue::from_str(report.outcome.as_str()))?;
+    if let CacheOpenOutcome::UpgradedExisting {
+        from_storage_version,
+    } = report.outcome
+    {
+        set("fromStorageVersion", JsValue::from(from_storage_version))?;
+    }
+    if let Some(carried) = report.carry_forward {
+        set("carryForward", JsValue::from_str(carried.as_str()))?;
+        set(
+            "carryForwardStorageVersion",
+            JsValue::from(carried.storage_version()),
+        )?;
+    }
     Ok(result.into())
 }
 
@@ -855,7 +958,7 @@ pub async fn open_cache_with_outcome(
     on_owner_lock_acquired: Option<js_sys::Function>,
     if_available: Option<bool>,
 ) -> Result<JsValue, JsValue> {
-    let (engine, outcome) = open_cache_inner(
+    let (engine, report) = open_cache_inner(
         scope,
         hot_capacity,
         false,
@@ -863,7 +966,7 @@ pub async fn open_cache_with_outcome(
         if_available.unwrap_or(false),
     )
     .await?;
-    cache_open_result(engine, outcome)
+    cache_open_result(engine, report)
 }
 
 /// Acquires the canonical owner once, recovery-wipes before any Turso open,
@@ -888,7 +991,7 @@ pub async fn open_cache_for_recovery_with_outcome(
     on_owner_lock_acquired: Option<js_sys::Function>,
     if_available: Option<bool>,
 ) -> Result<JsValue, JsValue> {
-    let (engine, outcome) = open_cache_inner(
+    let (engine, report) = open_cache_inner(
         scope,
         hot_capacity,
         true,
@@ -896,7 +999,7 @@ pub async fn open_cache_for_recovery_with_outcome(
         if_available.unwrap_or(false),
     )
     .await?;
-    cache_open_result(engine, outcome)
+    cache_open_result(engine, report)
 }
 
 /// Physical database identity this build opens for `scope`; it also names the
