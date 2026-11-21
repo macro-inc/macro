@@ -8,6 +8,13 @@ the gateway `/email` prefix.
 
 ## Start here
 
+- `api/imap.rs` exposes connection suggestion, discovery and IMAP linking under
+  `/email/links`; `outbound/imap_connection.rs` stores retry-safe promotion
+  attempts. `outbound/email_api/imap.rs` implements the existing mailbox,
+  command, attachment and draft ports through the internal engine client.
+  `imap_runtime.rs` resumes interrupted credential-free connection promotions.
+  Established IMAP work has no service-wide rollout polling.
+
 - `src/main.rs` / `src/lib.rs`: entrypoint and `run()`.
 - `src/api.rs` + `src/api/context.rs`: HTTP surface and `ApiContext`.
 - `src/composition/api.rs`: production API dependencies and service wiring.
@@ -386,3 +393,15 @@ the gateway `/email` prefix.
 - Rules: `.agents/rules/config-and-service-urls.md` · Skill: `new-service`
 
 - Validate optional agent correlation at the HTTP boundary; delayed Gmail completion restores it from the scheduled-message row.
+
+- Durable mailbox refresh effects propagate gateway handoff failures for outbox
+  retry; import completion uses the existing backfill-complete refresh event.
+
+- Preserve typed IMAP verification failures through the public boundary: rejected
+  credentials use 422, DNS/TCP/TLS use 502, and a bounded timeout uses 504.
+  Return only closed domain messages, never provider authentication replies.
+
+IMAP discovery/connect request identities deserialize as EmailStr before domain
+admission. Discovery forwards the validated ownership-checked address, while persisted
+promotion identities are validated once when read. Parse failures map to closed
+errors without logging the address.

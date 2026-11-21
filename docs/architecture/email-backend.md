@@ -44,6 +44,50 @@ acknowledgement and visibility renewal. Backfill's visibility heartbeat remains
 around its operation; link manager's visibility-renewal wrapper remains around
 each delivery. Those are transport lifecycles, distinct from domain retry policy.
 
+## IMAP integration
+
+The [private engine architecture](imap-engine.md) covers protocol, credential,
+connection ownership and deployment boundaries.
+
+IMAP uses the existing durable folder-stream, reconciliation, command, draft
+and projection workflows. Each `PgMailboxSync` worker instance is explicitly
+bound to one provider: an Outlook gateway can never claim IMAP work. Gmail's
+legacy history and queue path stays separate. IMAP skips OAuth token acquisition,
+Graph watches, address-book streams and calendar grants. The engine posts committed
+change or credential-failure hints to `/internal/imap/notifications`; the domain
+ignores stale generations, wakes folder work, and records reconnect state once.
+Periodic polling recovers lost hints.
+
+The email domain's `ImapConnectionService` accepts only the actor's independently
+verified sign-in address. Logging in to an arbitrary mail server does not prove
+control of an email address. Verification and host confirmation run in the
+internal engine; the public API derives the owner from authentication. A durable
+request-id reservation owns an inactive provisional link before engine promotion.
+The engine binding, link activation and initial catalog are replayed after an
+interruption; no passwords are retained in the email service. Completed request
+receipts cannot recreate a disconnected inbox. Gmail, Outlook and IMAP
+initialization serialize address collisions through the same advisory lock.
+
+`enable-imap-connections` is the single user-scoped IMAP enrollment flag for
+suggestion, discovery, verification and connection requests. Established IMAP
+sync and authorized sends, moves and deletes have no PostHog polling or runtime
+rollout snapshot. Ownership, active/reauth state, generation and lease fences,
+and explicit pause/disconnect/delete controls continue to apply. Uncertain send
+outcomes remain observable without resubmission. Outlook's rollout is separate.
+
+The IMAP gateway adapts the internal engine's stable message ids and journal
+positions to the mailbox ports. It decodes MIME, sanitizes HTML, exposes decoded
+attachments and calendar parts, and retains independent Sent provenance. Local
+versioned drafts use the existing coordinator, scheduled delivery and attachment
+materializer. Opaque upload capabilities contain the owning link id and are never
+fetched as user-supplied HTTP URLs. Disconnect records engine credential teardown
+as a prerequisite of local inbox purge.
+
+IMAP keywords have no independent server catalog, so Macro keeps their display
+names locally and writes assignments with the message command flow. Blocking a
+sender is a local intent: reconciliation chooses an existing Junk or Trash folder
+and atomically queues a recoverable move with ingestion, never permanent deletion.
+
 ## Queue workflows
 
 | Worker | Domain owner | Service adapter |
@@ -115,3 +159,25 @@ clean scan does not prove that every outbound helper is free of workflow policy.
 Review these workflows individually. Preserve codecs, row mapping and atomic SQL
 guards where they belong; move use-case decisions through domain ports with
 behavioral coverage.
+
+IMAP engine persistence stores folders, message metadata, remote locations, retained
+journal entries, drafts, draft attachments and uploads in indexed, link-scoped
+`imap_state_entries` rows. Account JSON contains only health and send admission
+counters. Individual message and draft operations load selected keys; initial
+folder scans use a message-id keyset and incremental scans use journal sequences.
+Differential saves update only changed loaded rows under the account lease and
+compare-and-swap revision. Health-only saves bypass the index rows entirely.
+Upload bytes use `bytea`. Full metadata hydration is
+restricted to two concurrent synchronization passes per engine instance.
+
+Organization writes fetch the current headers and flags for one UID, validate the
+observed version, and apply a conditional MODSEQ where supported. UIDPLUS COPYUID
+updates the exact destination locator after MOVE. When a server omits COPYUID, a
+zero-UID destination membership retains the logical identity until the next sync;
+reads and writes retry instead of issuing a command against an invented UID.
+
+Folder exclusions preserve the complete catalog, including role ancestry and
+retained messages. The provider's `syncEnabled` admission flag is persisted in
+`email_mailbox_folders.sync_enabled`; catalog commits create streams only for
+enabled folders and retire paused streams without queuing message rechecks.
+Re-enabling a folder creates a new stream while retaining its known messages.

@@ -397,33 +397,38 @@ for (const provider of PROVIDERS) {
       saw('STX-921');
     });
 
-    // When this fails, the onboarding step cannot connect the work inbox,
-    // does not come back to itself after consent, or does not show the inbox
-    // as connected.
-    test('onboarding connects the work email and shows it connected', async ({
-      page,
-      mailbox,
-    }) => {
-      await removeInbox(mailbox);
-      const again = await mailbox.api('/auth/user/tutorial', {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ tutorialComplete: false }),
+    test.describe('with a provider-hosted sign-in address', () => {
+      const domain = provider === 'GMAIL' ? 'gmail.com' : 'outlook.com';
+      test.use({ address: `macroe2e@${domain}` });
+
+      // When this fails, the onboarding step cannot connect the work inbox,
+      // does not come back to itself after consent, or does not show the inbox
+      // as connected.
+      test('onboarding connects the work email and shows it connected', async ({
+        page,
+        mailbox,
+      }) => {
+        await removeInbox(mailbox);
+        const again = await mailbox.api('/auth/user/tutorial', {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ tutorialComplete: false }),
+        });
+        expect(again.ok).toBe(true);
+
+        await mailbox.open('/app/onboarding?step=work');
+        await page.getByRole('button', { name: ONBOARD[provider] }).click();
+        did(provider === 'GMAIL' ? 'AX-042' : 'AX-043');
+        await consent(page, provider, mailbox.inbox.email);
+
+        await expect(page).toHaveURL(/\/app\/onboarding/, { timeout: 60_000 });
+        await expect(page.getByText('Work email connected')).toBeVisible();
+        saw('STX-214');
+        await expect
+          .poll(() => connectedInboxes(mailbox))
+          .toEqual([mailbox.inbox.email]);
+        confirmed('F-010');
       });
-      expect(again.ok).toBe(true);
-
-      await mailbox.open('/app/onboarding?step=work');
-      await page.getByRole('button', { name: ONBOARD[provider] }).click();
-      did(provider === 'GMAIL' ? 'AX-042' : 'AX-043');
-      await consent(page, provider, mailbox.inbox.email);
-
-      await expect(page).toHaveURL(/\/app\/onboarding/, { timeout: 60_000 });
-      await expect(page.getByText('Work email connected')).toBeVisible();
-      saw('STX-214');
-      await expect
-        .poll(() => connectedInboxes(mailbox))
-        .toEqual([mailbox.inbox.email]);
-      confirmed('F-010');
     });
   });
 }

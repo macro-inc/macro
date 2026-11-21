@@ -96,6 +96,8 @@ sfs_map = []
 sfs_delete = []
 
 [dependencies]
+imap_service_client = { workspace = true }
+mailparse = { workspace = true }
 agent_correlation = { path = "../../crates/agent_correlation", features = ["http", "postgres"] }
 calendar_events = { path = "../../crates/calendar_events", features = ["gateway-refresh", "google", "inbound", "postgres", "schema"] }
 anyhow = { workspace = true }

@@ -1,0 +1,1957 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "imap_engine",
+    "description": "",
+    "license": {
+      "name": ""
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/internal/v1/accounts/{link}": {
+      "put": {
+        "tags": [],
+        "operationId": "connect",
+        "parameters": [
+          {
+            "name": "link",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Binding"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [],
+        "operationId": "disconnect",
+        "parameters": [
+          {
+            "name": "link",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "x-mailbox-binding",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/accounts/{link}/operations": {
+      "post": {
+        "tags": [],
+        "operationId": "operation",
+        "parameters": [
+          {
+            "name": "link",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "x-mailbox-binding",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Operation"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/accounts/{link}/settings": {
+      "get": {
+        "tags": [
+          "account_settings"
+        ],
+        "operationId": "account_mail_settings",
+        "parameters": [
+          {
+            "name": "link",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "x-mailbox-binding",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountMailSettings"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "account_settings"
+        ],
+        "operationId": "update_mail_settings",
+        "parameters": [
+          {
+            "name": "link",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "x-mailbox-binding",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateFolderSettings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountMailSettings"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/discover": {
+      "post": {
+        "tags": [],
+        "operationId": "discover",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscoveryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Discovery"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/verify": {
+      "post": {
+        "tags": [],
+        "operationId": "verify",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Verification"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AccountMailSettings": {
+        "type": "object",
+        "description": "Sanitized owner-only mailbox configuration. Endpoint has no password field.",
+        "required": [
+          "imap",
+          "smtp",
+          "revision",
+          "folders"
+        ],
+        "properties": {
+          "features": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ServerFeatures",
+                "description": "Last verified server capabilities, when recorded at enrollment or reconnect."
+              }
+            ]
+          },
+          "folders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FolderSetting"
+            },
+            "description": "Recently listed folders, including manually excluded folders."
+          },
+          "helpUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Official instructions supplied by the catalog."
+          },
+          "imap": {
+            "$ref": "#/components/schemas/Endpoint",
+            "description": "Incoming mail server, security mode and username."
+          },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Catalog name for the provider, when known."
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Version for compare-and-swap edits."
+          },
+          "smtp": {
+            "$ref": "#/components/schemas/Endpoint",
+            "description": "Submission server, security mode and username."
+          }
+        }
+      },
+      "ActionRequest": {
+        "type": "object",
+        "description": "Conditional desired-state message action.",
+        "required": [
+          "action"
+        ],
+        "properties": {
+          "action": {
+            "description": "Provider-neutral MessageAction, using its existing serde format."
+          },
+          "expectedVersion": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Observed organization version."
+          }
+        }
+      },
+      "AttachmentInput": {
+        "type": "object",
+        "description": "Metadata and bytes for an app attachment.",
+        "required": [
+          "name",
+          "contentType",
+          "contentId",
+          "inline",
+          "dataBase64"
+        ],
+        "properties": {
+          "contentId": {
+            "type": "string",
+            "description": "Durable attachment identity."
+          },
+          "contentType": {
+            "type": "string",
+            "description": "MIME type."
+          },
+          "dataBase64": {
+            "type": "string",
+            "description": "Encoded bytes (empty when creating a resumable upload)."
+          },
+          "inline": {
+            "type": "boolean",
+            "description": "Inline body reference."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display filename."
+          }
+        }
+      },
+      "Binding": {
+        "type": "object",
+        "description": "Exact mailbox credential binding, authorized by the email domain.",
+        "required": [
+          "linkId",
+          "syncGeneration",
+          "grantGeneration"
+        ],
+        "properties": {
+          "grantGeneration": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Credential generation."
+          },
+          "linkId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Mailbox link."
+          },
+          "syncGeneration": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Synchronization generation."
+          }
+        }
+      },
+      "ChangePage": {
+        "type": "object",
+        "description": "One bounded journal page.",
+        "required": [
+          "changed",
+          "removed",
+          "position",
+          "hasMore",
+          "readerRevision"
+        ],
+        "properties": {
+          "changed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Ids to reconcile."
+          },
+          "hasMore": {
+            "type": "boolean",
+            "description": "More pages in this round."
+          },
+          "position": {
+            "type": "string",
+            "description": "Opaque durable position."
+          },
+          "readerRevision": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Reader schema revision."
+          },
+          "removed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Ids removed from this folder only."
+          }
+        }
+      },
+      "Classification": {
+        "type": "object",
+        "description": "Provider feedback is metadata. It is never proof that a matching outbound send succeeded.",
+        "properties": {
+          "autoReply": {
+            "type": "boolean",
+            "description": "RFC 3834 and vendor auto-response markers.",
+            "default": false
+          },
+          "complaint": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Complaint",
+                "description": "RFC 5965 complaint or supported vendor complaint."
+              }
+            ],
+            "default": null
+          },
+          "delivery": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeliveryReport"
+            },
+            "description": "RFC 3464 recipient results, preserving recipients with different outcomes.",
+            "default": []
+          },
+          "originalMessageId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Message-ID of the original message from attached headers, if present.",
+            "default": null
+          }
+        }
+      },
+      "Complaint": {
+        "type": "object",
+        "description": "Fields of an Abuse Reporting Format feedback report.",
+        "properties": {
+          "feedbackType": {
+            "type": "string",
+            "description": "Feedback-Type such as abuse, fraud or opt-out.",
+            "default": ""
+          },
+          "originalMailFrom": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Original envelope sender.",
+            "default": null
+          },
+          "recipients": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Distinct original recipients in provider-reported order.",
+            "default": []
+          },
+          "sourceIp": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Provider's source IP, if supplied.",
+            "default": null
+          }
+        }
+      },
+      "ConnectRequest": {
+        "type": "object",
+        "description": "Promote verified credentials into a persisted account.",
+        "required": [
+          "verificationId",
+          "ownerUserId",
+          "syncGeneration",
+          "grantGeneration"
+        ],
+        "properties": {
+          "grantGeneration": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Credential generation."
+          },
+          "ownerUserId": {
+            "type": "string",
+            "description": "Owner previously bound to verification."
+          },
+          "syncGeneration": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Synchronization generation."
+          },
+          "verificationId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Verification to consume."
+          }
+        }
+      },
+      "DeliveryAction": {
+        "type": "string",
+        "description": "Standard DSN actions.",
+        "enum": [
+          "failed",
+          "delayed",
+          "delivered",
+          "relayed",
+          "expanded"
+        ]
+      },
+      "DeliveryReport": {
+        "type": "object",
+        "description": "Delivery status for one original recipient.",
+        "required": [
+          "recipient",
+          "action"
+        ],
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/DeliveryAction",
+            "description": "Failed, delayed, delivered, relayed, or expanded."
+          },
+          "diagnostic": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Provider's bounded diagnostic."
+          },
+          "recipient": {
+            "type": "string",
+            "description": "Recipient in the report."
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Enhanced delivery status, such as 5.1.1."
+          }
+        }
+      },
+      "Discovery": {
+        "type": "object",
+        "description": "Mailbox-independent provider settings returned without accepting a password.",
+        "required": [
+          "hostConfirmationRequired"
+        ],
+        "properties": {
+          "helpUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Provider's application-password instructions."
+          },
+          "hostConfirmationRequired": {
+            "type": "boolean",
+            "description": "Explicit endpoint confirmation is required before sending any password."
+          },
+          "imap": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Endpoint",
+                "description": "IMAP endpoint proposal."
+              }
+            ]
+          },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Known provider identifier."
+          },
+          "smtp": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Endpoint",
+                "description": "SMTP endpoint proposal."
+              }
+            ]
+          },
+          "steer": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Steer to an existing OAuth provider."
+          }
+        }
+      },
+      "DiscoveryRequest": {
+        "type": "object",
+        "description": "Password-free discovery input.",
+        "required": [
+          "email"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "User's verified sign-in address."
+          }
+        }
+      },
+      "Draft": {
+        "type": "object",
+        "description": "Versioned draft metadata consumed by the existing coordinator.",
+        "required": [
+          "id",
+          "conversationId",
+          "version",
+          "isDraft",
+          "appRevision",
+          "contentFingerprint"
+        ],
+        "properties": {
+          "appRevision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Latest app content revision.",
+            "minimum": 0
+          },
+          "contentFingerprint": {
+            "type": "string",
+            "description": "Content digest excluding attachment metadata."
+          },
+          "conversationId": {
+            "type": "string",
+            "description": "Stable conversation id."
+          },
+          "id": {
+            "type": "string",
+            "description": "Move-stable id shared by the eventual Sent copy."
+          },
+          "isDraft": {
+            "type": "boolean",
+            "description": "False once submission has been accepted."
+          },
+          "version": {
+            "type": "string",
+            "description": "Conditional edit token."
+          }
+        }
+      },
+      "DraftAttachment": {
+        "type": "object",
+        "description": "Provider attachment metadata.",
+        "required": [
+          "id",
+          "name",
+          "size",
+          "inline"
+        ],
+        "properties": {
+          "contentId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Durable content id."
+          },
+          "id": {
+            "type": "string",
+            "description": "Opaque id."
+          },
+          "inline": {
+            "type": "boolean",
+            "description": "Inline reference."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Byte length.",
+            "minimum": 0
+          }
+        }
+      },
+      "DraftInput": {
+        "type": "object",
+        "description": "Durable editable draft content.",
+        "required": [
+          "correlation",
+          "revision",
+          "content"
+        ],
+        "properties": {
+          "content": {
+            "description": "Serialized SendRequest; retains its original source-of-truth type."
+          },
+          "correlation": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable Macro message identity."
+          },
+          "replyTo": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Reply parent when present."
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Monotonic app revision.",
+            "minimum": 0
+          }
+        }
+      },
+      "Endpoint": {
+        "type": "object",
+        "description": "User-confirmed submission or mailbox endpoint.",
+        "required": [
+          "host",
+          "port",
+          "tls",
+          "username"
+        ],
+        "properties": {
+          "host": {
+            "type": "string",
+            "description": "Fully qualified TLS identity."
+          },
+          "port": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Standard submission or mailbox port.",
+            "minimum": 0
+          },
+          "tls": {
+            "$ref": "#/components/schemas/TlsMode",
+            "description": "Required TLS policy."
+          },
+          "username": {
+            "type": "string",
+            "description": "Raw protocol login: providers may require a local part or account ID\nrather than an email address."
+          }
+        }
+      },
+      "Error": {
+        "type": "string",
+        "description": "Only closed, non-sensitive failure classes cross the HTTP boundary.",
+        "enum": [
+          "invalid",
+          "forbidden",
+          "not_found",
+          "conflict",
+          "cursor_outdated",
+          "credentials_rejected",
+          "credentials_unavailable",
+          "connection_unavailable",
+          "dns_unavailable",
+          "tcp_unavailable",
+          "tls_unavailable",
+          "connection_timed_out",
+          "send_rejected",
+          "throttled"
+        ]
+      },
+      "ErrorBody": {
+        "type": "object",
+        "description": "Closed error body for generated callers.",
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/Error",
+            "description": "Closed failure category."
+          },
+          "retryAfterSeconds": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Minimum backoff for a retryable refusal.",
+            "minimum": 0
+          }
+        }
+      },
+      "Folder": {
+        "type": "object",
+        "description": "A physical IMAP folder, with an opaque stable identity.",
+        "required": [
+          "id",
+          "name",
+          "role",
+          "hasChildren"
+        ],
+        "properties": {
+          "hasChildren": {
+            "type": "boolean",
+            "description": "Whether children exist."
+          },
+          "id": {
+            "type": "string",
+            "description": "Opaque account-scoped folder identity."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name; transport preserves the original name separately."
+          },
+          "parentId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Parent when represented by the hierarchy."
+          },
+          "role": {
+            "$ref": "#/components/schemas/FolderRole",
+            "description": "Resolved semantic role."
+          },
+          "syncEnabled": {
+            "type": "boolean",
+            "description": "Catalog entries remain available for filing even when their change stream is disabled."
+          },
+          "totalItems": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Current remote count.",
+            "minimum": 0
+          }
+        }
+      },
+      "FolderRole": {
+        "type": "string",
+        "description": "Physical folder purpose, resolved by the engine.",
+        "enum": [
+          "inbox",
+          "sent",
+          "drafts",
+          "archive",
+          "trash",
+          "junk",
+          "other"
+        ]
+      },
+      "FolderSetting": {
+        "type": "object",
+        "description": "Folder name and the actual and configured routing roles, without message data.",
+        "required": [
+          "id",
+          "name",
+          "detectedRole",
+          "effectiveRole",
+          "excluded",
+          "watched"
+        ],
+        "properties": {
+          "detectedRole": {
+            "$ref": "#/components/schemas/FolderRole",
+            "description": "Automatic role before applying the user's override."
+          },
+          "effectiveRole": {
+            "$ref": "#/components/schemas/FolderRole",
+            "description": "Resolved destination used by the engine."
+          },
+          "excluded": {
+            "type": "boolean",
+            "description": "Whether the user has excluded this folder from message sync."
+          },
+          "id": {
+            "type": "string",
+            "description": "Opaque identifier belonging to this account."
+          },
+          "monitored": {
+            "type": "boolean",
+            "description": "Whether this folder was included in the latest synchronization."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name from the most recent listing."
+          },
+          "roleOverride": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/FolderRole",
+                "description": "Explicit user choice. An absent value uses the detected role."
+              }
+            ]
+          },
+          "watched": {
+            "type": "boolean",
+            "description": "Whether this folder is selected for a dedicated watch."
+          }
+        }
+      },
+      "Login": {
+        "type": "object",
+        "description": "Credentials for one protocol; Debug never includes the password.",
+        "required": [
+          "endpoint",
+          "password"
+        ],
+        "properties": {
+          "endpoint": {
+            "$ref": "#/components/schemas/Endpoint",
+            "description": "Endpoint and account login."
+          },
+          "password": {
+            "$ref": "#/components/schemas/Secret",
+            "description": "Protocol password, kept distinct for providers with separate SMTP credentials."
+          }
+        }
+      },
+      "Message": {
+        "type": "object",
+        "description": "Readable message representation; MIME is decoded by the provider adapter.",
+        "required": [
+          "id",
+          "threadId",
+          "folderId",
+          "flags",
+          "tags",
+          "version",
+          "mimeBase64",
+          "sourceComplete",
+          "receivedAt",
+          "size",
+          "isSent"
+        ],
+        "properties": {
+          "classification": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Classification",
+                "description": "Observed provider delivery/feedback evidence, never a submission acknowledgment."
+              }
+            ]
+          },
+          "draftCorrelation": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Stable Macro id for an app-created sent message."
+          },
+          "flags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Standard IMAP flags."
+          },
+          "folderId": {
+            "type": "string",
+            "description": "Current physical folder."
+          },
+          "id": {
+            "type": "string",
+            "description": "Move-stable link-scoped message id."
+          },
+          "isSent": {
+            "type": "boolean",
+            "description": "Sent provenance survives a move."
+          },
+          "mimeBase64": {
+            "type": "string",
+            "description": "Raw RFC 5322 source, base64 encoded for HTTP transport."
+          },
+          "receivedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Server INTERNALDATE."
+          },
+          "size": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Remote RFC822.SIZE (the full source is downloaded lazily).",
+            "minimum": 0
+          },
+          "sourceComplete": {
+            "type": "boolean",
+            "description": "True only for a full source response or an app-sent fallback snapshot."
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "User keywords."
+          },
+          "threadId": {
+            "type": "string",
+            "description": "Stable conversation id."
+          },
+          "version": {
+            "type": "string",
+            "description": "Optimistic organization version."
+          }
+        }
+      },
+      "Operation": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Refresh and enumerate folders.",
+            "required": [
+              "operation"
+            ],
+            "properties": {
+              "operation": {
+                "type": "string",
+                "enum": [
+                  "folders"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Consume one durable page.",
+            "required": [
+              "folder",
+              "operation"
+            ],
+            "properties": {
+              "folder": {
+                "type": "string",
+                "description": "Folder id."
+              },
+              "operation": {
+                "type": "string",
+                "enum": [
+                  "changes"
+                ]
+              },
+              "position": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Previous opaque position."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Current content or null.",
+            "required": [
+              "id",
+              "operation"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Message id."
+              },
+              "operation": {
+                "type": "string",
+                "enum": [
+                  "message"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Organization snapshot without body download.",
+            "required": [
+              "id",
+              "operation"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Message id."
+              },
+              "operation": {
+                "type": "string",
+                "enum": [
+                  "organization"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Latest inbox snapshots.",
+            "required": [
+              "limit",
+              "operation"
+            ],
+            "properties": {
+              "limit": {
+                "type": "integer",
+                "format": "int32",
+                "description": "Maximum count, capped at 100.",
+                "minimum": 0
+              },
+              "operation": {
+                "type": "string",
+                "enum": [
+                  "recent_inbox"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Decode one MIME part.",
+            "required": [
+              "id",
+              "part",
+              "operation"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Message id."
+              },
+              "operation": {
+                "type": "string",
+                "enum": [
+                  "attachment"
+                ]
+              },
+              "part": {
+                "type": "string",
+                "description": "Dot-separated MIME part path."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Conditional desired-state write.",
+            "required": [
+              "id",
+              "request",
+              "operation"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Message id."
+              },
+              "operation": {
+                "type": "string",
+                "enum": [
+                  "apply"
+                ]
+              },
+              "request": {
+                "$ref": "#/components/schemas/ActionRequest",
+                "description": "Desired action and version."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Draft metadata or null.",
+            "required": [
+              "id",
+              "operation"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Draft id."
+              },
+              "operation": {
+                "type": "string",
+                "enum": [
+                  "get_draft"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Locate drafts by app id.",
+            "required": [
+              "correlation",
+              "operation"
+            ],
+            "properties": {
+              "correlation": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Stable app id."
+              },
+              "operation": {
+                "type": "string",
+                "enum": [
+                  "find_drafts"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Idempotent draft creation.",
+            "required": [
+              "input",
+              "operation"
+            ],
+            "properties": {
+              "input": {
+                "$ref": "#/components/schemas/DraftInput",
+                "description": "Editable content."
+              },
+              "operation": {
+                "type": "string",
+                "enum": [
+                  "create_draft"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Conditional draft edit.",
+            "required": [
+              "id",
+              "version",
+              "input",
+              "operation"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Draft id."
+              },
+              "input": {
+                "$ref": "#/components/schemas/DraftInput",
+                "description": "Content."
+              },
+              "operation": {
+                "type": "string",
+                "enum": [
+                  "update_draft"
+                ]
+              },
+              "version": {
+                "type": "string",
+                "description": "Expected version."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Conditional draft deletion.",
+            "required": [
+              "id",
+              "version",
+              "operation"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Draft id."
+              },
+              "operation": {
+                "type": "string",
+                "enum": [
+                  "delete_draft"
+                ]
+              },
+              "version": {
+                "type": "string",
+                "description": "Expected version."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "List draft attachment metadata.",
+            "required": [
+              "id",
+              "operation"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Draft id."
+              },
+              "operation": {
+                "type": "string",
+                "enum": [
+                  "attachments"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Idempotent attachment add.",
+            "required": [
+              "id",
+              "input",
+              "operation"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Draft id."
+              },
+              "input": {
+                "$ref": "#/components/schemas/AttachmentInput",
+                "description": "Attachment."
+              },
+              "operation": {
+                "type": "string",
+                "enum": [
+                  "add_attachment"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Idempotent attachment removal.",
+            "required": [
+              "id",
+              "attachment",
+              "operation"
+            ],
+            "properties": {
+              "attachment": {
+                "type": "string",
+                "description": "Attachment id."
+              },
+              "id": {
+                "type": "string",
+                "description": "Draft id."
+              },
+              "operation": {
+                "type": "string",
+                "enum": [
+                  "delete_attachment"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Start a link-scoped resumable upload.",
+            "required": [
+              "id",
+              "input",
+              "operation"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Draft id."
+              },
+              "input": {
+                "$ref": "#/components/schemas/AttachmentInput",
+                "description": "Attachment metadata."
+              },
+              "operation": {
+                "type": "string",
+                "enum": [
+                  "create_upload"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Inspect upload progress.",
+            "required": [
+              "id",
+              "operation"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Upload id."
+              },
+              "operation": {
+                "type": "string",
+                "enum": [
+                  "inspect_upload"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Append the next byte range or retry an already accepted range.",
+            "required": [
+              "id",
+              "offset",
+              "total",
+              "bytes",
+              "operation"
+            ],
+            "properties": {
+              "bytes": {
+                "type": "string",
+                "description": "Base64 payload."
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Upload id."
+              },
+              "offset": {
+                "type": "integer",
+                "format": "int64",
+                "description": "First byte of this range.",
+                "minimum": 0
+              },
+              "operation": {
+                "type": "string",
+                "enum": [
+                  "upload_range"
+                ]
+              },
+              "total": {
+                "type": "integer",
+                "format": "int64",
+                "description": "Final length.",
+                "minimum": 0
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Submit once; uncertain admission is sticky across crashes.",
+            "required": [
+              "id",
+              "operation"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Draft id."
+              },
+              "operation": {
+                "type": "string",
+                "enum": [
+                  "submit"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Trigger a remote snapshot now.",
+            "required": [
+              "operation"
+            ],
+            "properties": {
+              "operation": {
+                "type": "string",
+                "enum": [
+                  "sync"
+                ]
+              }
+            }
+          }
+        ],
+        "description": "Typed account operation. The service validates every referenced id inside the link."
+      },
+      "Secret": {
+        "type": "string",
+        "description": "Password held only for one connection or encrypted immediately."
+      },
+      "ServerFeatures": {
+        "type": "object",
+        "description": "Negotiated capability flags. Provider banners and EHLO arguments are never retained.",
+        "properties": {
+          "condstore": {
+            "type": "boolean",
+            "description": "Incoming server advertises CONDSTORE.",
+            "default": false
+          },
+          "eightBitMime": {
+            "type": "boolean",
+            "description": "Submission server accepts 8BITMIME payloads.",
+            "default": false
+          },
+          "gmailExtensions": {
+            "type": "boolean",
+            "description": "Incoming server advertises Gmail's IMAP extension.",
+            "default": false
+          },
+          "idle": {
+            "type": "boolean",
+            "description": "Incoming server advertises IDLE.",
+            "default": false
+          },
+          "moveMessages": {
+            "type": "boolean",
+            "description": "Incoming server supports the MOVE command.",
+            "default": false
+          },
+          "objectId": {
+            "type": "boolean",
+            "description": "Incoming server supplies RFC 8474 object identifiers.",
+            "default": false
+          },
+          "sendLimitBytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Server-advertised positive SIZE limit in bytes.",
+            "default": null,
+            "minimum": 0
+          },
+          "smtpUtf8": {
+            "type": "boolean",
+            "description": "Submission server accepts SMTPUTF8 envelopes.",
+            "default": false
+          },
+          "uidPlus": {
+            "type": "boolean",
+            "description": "Incoming server supports per-UID copy and expunge receipts.",
+            "default": false
+          },
+          "verifiedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When both authenticated endpoints last answered the capability check.",
+            "default": null
+          }
+        }
+      },
+      "SubmissionOutcome": {
+        "type": "string",
+        "description": "Submission acknowledgment. Unknown must never be retried automatically.",
+        "enum": [
+          "accepted",
+          "unknown"
+        ]
+      },
+      "TlsMode": {
+        "type": "string",
+        "description": "Required TLS mode. There is deliberately no plaintext variant.",
+        "enum": [
+          "implicit",
+          "start_tls"
+        ]
+      },
+      "UpdateFolderSettings": {
+        "type": "object",
+        "description": "Replace all routing overrides atomically. A stale revision returns a conflict.",
+        "required": [
+          "expectedRevision",
+          "roleOverrides",
+          "excludedFolderIds"
+        ],
+        "properties": {
+          "excludedFolderIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Empty set re-enables all folders.",
+            "uniqueItems": true
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Version returned by the last settings read."
+          },
+          "roleOverrides": {
+            "type": "object",
+            "description": "Empty map restores automatic folder routing.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/FolderRole"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "watchedFolderIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "At most one extra included folder may hold a live IDLE watcher.",
+            "uniqueItems": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "UploadSession": {
+        "type": "object",
+        "description": "Link-scoped resumable upload checkpoint.",
+        "required": [
+          "id",
+          "expiresAt",
+          "nextOffset"
+        ],
+        "properties": {
+          "attachment": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DraftAttachment",
+                "description": "Completed attachment metadata."
+              }
+            ]
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Expires after this point."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Opaque upload id, never a caller-chosen HTTP target."
+          },
+          "nextOffset": {
+            "type": "integer",
+            "format": "int64",
+            "description": "First missing byte.",
+            "minimum": 0
+          }
+        }
+      },
+      "Verification": {
+        "type": "object",
+        "description": "Short-lived owner-bound credential verification.",
+        "required": [
+          "id",
+          "expiresAt"
+        ],
+        "properties": {
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Expiry after which a new verification is required."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Promotion token, never usable for a different owner."
+          }
+        }
+      },
+      "VerifyRequest": {
+        "type": "object",
+        "description": "Both endpoints required to create an account.",
+        "required": [
+          "userId",
+          "email",
+          "imap",
+          "smtp",
+          "confirmedHosts"
+        ],
+        "properties": {
+          "confirmedHosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Hosts explicitly confirmed by the user before sending credentials."
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "Address already verified by Macro sign-in or a mailbox challenge."
+          },
+          "imap": {
+            "$ref": "#/components/schemas/Login",
+            "description": "IMAP login."
+          },
+          "smtp": {
+            "$ref": "#/components/schemas/Login",
+            "description": "SMTP login."
+          },
+          "userId": {
+            "type": "string",
+            "description": "Authenticated owner, supplied by email_service."
+          }
+        }
+      },
+      "WriteReceipt": {
+        "type": "object",
+        "description": "Acknowledged write identity and version.",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Identity, unchanged after a move."
+          },
+          "version": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Newly observed version."
+          }
+        }
+      }
+    }
+  }
+}

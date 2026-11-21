@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO email_mailbox_commands (id, link_id, generation, actor_id, intent, status)\n                SELECT\n                    $1,\n                    l.id,\n                    l.sync_generation,\n                    l.macro_id,\n                    $4,\n                    'pending'\n                FROM\n                    email_links l\n                WHERE\n                    l.id = $2\n                    AND l.sync_generation = $3\n                    AND NOT EXISTS (\n                        SELECT\n                            1\n                        FROM\n                            email_mailbox_commands c\n                            JOIN email_mailbox_command_targets t ON t.command_id = c.id\n                        WHERE\n                            c.link_id = l.id\n                            AND c.generation = l.sync_generation\n                            AND t.message_id = $5\n                            AND c.intent = $4\n                            AND c.status IN ('pending', 'running', 'confirming'))\n                RETURNING\n                    id\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Jsonb",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "cef1f98ada0ea551b18b470e9dd152e046fa37d49c1c74c82764507c72291a9d"
+}

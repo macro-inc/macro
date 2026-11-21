@@ -2,6 +2,76 @@ use super::*;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn imap_health_without_microsoft_scopes_does_not_lock_and_rejects_retired_generations(
+    db: sqlx::PgPool,
+) {
+    let (_, link) = super::super::test::fixture(&db).await;
+    sqlx::query!(
+        r#"
+        UPDATE
+            email_links
+        SET
+            provider = 'IMAP'
+        WHERE
+            id = $1
+        "#,
+        link,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let repo =
+        PgMailboxSync::new(db.clone()).with_provider(crate::domain::models::UserProvider::Imap);
+    let mailbox = MailboxAccess {
+        sync_generation: 1,
+        link_id: link,
+        grant_generation: 1,
+    };
+    let mut population = db.begin().await.unwrap();
+    sqlx::query!(
+        r#"
+        SELECT
+            id
+        FROM
+            email_links
+        WHERE
+            id = $1 FOR SHARE
+        "#,
+        link,
+    )
+    .fetch_one(&mut *population)
+    .await
+    .unwrap();
+    tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        repo.record(mailbox, CredentialHealth::Available(vec![])),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    population.rollback().await.unwrap();
+    sqlx::query!(
+        r#"
+        UPDATE
+            email_links
+        SET
+            sync_generation = sync_generation + 1
+        WHERE
+            id = $1
+        "#,
+        link,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    assert!(matches!(
+        repo.record(mailbox, CredentialHealth::Available(vec![]))
+            .await,
+        Err(TokenError::ReauthRequired)
+    ));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn reauthorization_is_edge_triggered_and_commits_with_its_notification(db: sqlx::PgPool) {
     let (repo, link) = super::super::test::fixture(&db).await;
     let mailbox = MailboxAccess {

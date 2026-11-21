@@ -74,6 +74,8 @@ pub fn tls_certs_dir() -> PathBuf {
 /// of ours, so they have no modes in the inventory.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Sidecars {
+    /// Run real IMAP/submission and deterministic mail rollout flags for this local instance.
+    pub imap_lab: bool,
     /// Forwards real Gmail watch notifications to the email service. On when
     /// the env carries the forwarder's service-account key.
     pub gmail_forwarder: bool,
@@ -91,6 +93,7 @@ pub struct Sidecars {
 impl Sidecars {
     pub fn from_env(mode: Mode, env: &std::collections::BTreeMap<String, String>) -> Self {
         Sidecars {
+            imap_lab: mode == Mode::Local && env.get("IMAP_LAB").is_some_and(|v| v == "true"),
             gmail_forwarder: mode.spec().runs_local_infra
                 && env
                     .get("GMAIL_FORWARDER_SA_KEY")
@@ -116,12 +119,48 @@ pub fn generate(
     super::tls::issue(instance)?;
     let mut services: IndexMap<String, Option<dct::Service>> = IndexMap::new();
     let mounts = binaries.compose_mounts();
+    let runtime_libraries = binaries.runtime_library_path();
     let runtime_image = runtime_image_tag(super::arch::detect()?)?;
+
+    let imap_lab_ca = if sidecars.imap_lab {
+        Some(
+            std::fs::read_to_string(repo_root().join("docker/imap-lab/generated/ca.pem"))
+                .context("prepare the local IMAP lab with bash docker/imap-lab/prepare.sh")?,
+        )
+    } else {
+        None
+    };
 
     // 1. Rust services → runtime image + mounted binaries.
     for svc in services_for_mode(mode) {
         let mut environment = vec![("PORT", "8080")];
-        if sidecars.outlook_emulator
+        if let Some(libraries) = &runtime_libraries {
+            environment.push(("LD_LIBRARY_PATH", libraries.as_str()));
+        }
+        if sidecars.imap_lab
+            && matches!(
+                svc.compose_name,
+                "authentication-service"
+                    | "email_service"
+                    | "email_pubsub_workers"
+                    | "imap_service"
+            )
+        {
+            if svc.compose_name != "imap_service" {
+                environment.extend([
+                    ("POSTHOG_HOST", "http://imap-lab-flags:8080"),
+                    ("POSTHOG_API_KEY", "local-posthog-project-key"),
+                ]);
+            }
+            if svc.compose_name == "imap_service"
+                && let Some(ca) = imap_lab_ca.as_deref()
+            {
+                environment.extend([
+                    ("IMAP_TEST_TRUST_ROOT_PEM", ca),
+                    ("IMAP_TEST_ENDPOINT_MAP", r#"{"maillab.example.net:993":"imap-lab-dovecot:31993","maillab.example.net:143":"imap-lab-dovecot:31143","maillab.example.net:465":"imap-lab-dovecot:31465","maillab.example.net:587":"imap-lab-dovecot:31587"}"#),
+                ]);
+            }
+        } else if sidecars.outlook_emulator
             && svc.compose_name == microsoft_emulator::AUTHENTICATION_SERVICE
         {
             environment.extend(microsoft_emulator::authentication_service_env());
@@ -163,6 +202,9 @@ pub fn generate(
     if mode.spec().runs_local_infra {
         add_local_infra(&mut services, instance, static_frontend)?;
         add_sdk_webhook_relay(&mut services, instance)?;
+    }
+    if sidecars.imap_lab {
+        add_imap_lab(&mut services);
     }
     // Live Gmail sync: forward watch notifications from the instance's own
     // Pub/Sub subscription to the email service's webhook. Per-instance
@@ -822,6 +864,66 @@ fn override_in_place(service: &mut serde_yaml::Mapping, field: &str) {
     if let Some(existing) = service.remove(field) {
         service.insert(field.into(), override_tag(existing));
     }
+}
+
+/// Test-only listeners on the instance's networks. The browser uses the real
+/// public email API, and Dovecot delivers submission to the instance's Mailpit.
+fn add_imap_lab(services: &mut IndexMap<String, Option<dct::Service>>) {
+    let dir = repo_root().join("docker/imap-lab");
+    // Dovecot owns submission authentication. The app's normal Mailpit advertises
+    // AUTH for FusionAuth and rejects Dovecot's RFC 4954 MAIL FROM AUTH parameter.
+    services.insert(
+        "imap-lab-mailpit".into(),
+        Some(dct::Service {
+            image: Some(MAILPIT_IMAGE.into()),
+            ports: dct::Ports::Short(vec!["127.0.0.1::8025".to_owned()]),
+            networks: net_aliases(&[("services", &["imap-lab-mailpit"])]),
+            ..Default::default()
+        }),
+    );
+    services.insert(
+        "imap-lab-dovecot".into(),
+        Some(dct::Service {
+            image: Some("dovecot/dovecot:2.4.4".into()),
+            ports: dct::Ports::Short(vec!["127.0.0.1::31993".to_owned()]),
+            environment: kv(&[("USER_PASSWORD", "pass")]),
+            volumes: vec![
+                dct::Volumes::Simple(format!(
+                    "{}:/etc/dovecot/conf.d/zz-macro-lab.conf:ro",
+                    dir.join("dovecot.conf").display()
+                )),
+                dct::Volumes::Simple(format!(
+                    "{}:/etc/dovecot/conf.d/zzz-macro-browser-relay.conf:ro",
+                    dir.join("browser-relay.conf").display()
+                )),
+                dct::Volumes::Simple(format!(
+                    "{}:/etc/dovecot/lab-tls/server.pem:ro",
+                    dir.join("generated/server.pem").display()
+                )),
+                dct::Volumes::Simple(format!(
+                    "{}:/etc/dovecot/lab-tls/server.key:ro",
+                    dir.join("generated/server.key").display()
+                )),
+            ],
+            networks: net_aliases(&[("services", &["imap-lab-dovecot"])]),
+            ..Default::default()
+        }),
+    );
+    services.insert(
+        "imap-lab-flags".into(),
+        Some(dct::Service {
+            image: Some(CADDY_IMAGE.into()),
+            volumes: vec![dct::Volumes::Simple(format!(
+                "{}:/etc/caddy/Caddyfile:ro",
+                dir.join("flags.Caddyfile").display()
+            ))],
+            networks: net_aliases(&[
+                ("services", &["imap-lab-flags"]),
+                ("auth", &["imap-lab-flags"]),
+            ]),
+            ..Default::default()
+        }),
+    );
 }
 
 fn kv(pairs: &[(&str, &str)]) -> dct::Environment {

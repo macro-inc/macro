@@ -269,7 +269,7 @@ where
         if !missing_ids.is_empty() {
             tracing::warn!(message_ids=?missing_ids, "unable to find messages in db");
         }
-        if link.provider == UserProvider::Outlook {
+        if link.provider.uses_mailbox_framework() {
             let action = MailboxAction::Category {
                 name: label.provider_label_id,
                 present: request.add,

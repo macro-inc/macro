@@ -48,6 +48,7 @@ impl ServiceProcess {
             .context("could not open the service's log file")?;
         let child = Command::new(&binary)
             .env_clear()
+            .envs(native_library_path())
             .envs(env)
             // The services load any `.env` at or above their working directory;
             // the root has none.
@@ -164,4 +165,12 @@ pub(crate) fn binary_dir() -> Result<PathBuf, Report> {
         .and_then(Path::parent)
         .map(Path::to_path_buf)
         .ok_or_else(|| report!("could not find the build directory; set {BIN_DIR_ENV}"))
+}
+
+/// Nix dev binaries need their native libraries even though service configuration
+/// is isolated. Inherit this one loader setting, never the parent's service keys.
+fn native_library_path() -> impl Iterator<Item = (&'static str, std::ffi::OsString)> {
+    std::env::var_os("LD_LIBRARY_PATH")
+        .map(|value| ("LD_LIBRARY_PATH", value))
+        .into_iter()
 }

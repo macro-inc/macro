@@ -264,6 +264,15 @@ export const emailExcluded = [
   'getReadReceiptPixel',
   'healthCheckLinks',
   'healthHandler',
+  // Interactive account enrollment accepts passwords only in Macro's connection dialog.
+  'imapConnect',
+  // Mail server setup and folder routing belong to the owner's mailbox settings UI.
+  'getImapMailboxSettings',
+  'updateImapMailboxSettings',
+  'imapDiscover',
+  // Internal authenticated wakeup from imap_service to email_service.
+  'imapNotification',
+  'imapSuggestion',
   'initUser',
   'listBackfillGmail',
   'patchSettings',

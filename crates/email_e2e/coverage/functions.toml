@@ -1,12 +1,13 @@
 # Which backend entry points perform each email function.
 #
-# One table per function of the shared function list (F-001 .. F-192), in id
+# One table per function in the shared list and imap-functions.tsv, in id
 # order. An atom is "<kind> <key>" exactly as in columns 1 and 2 of
 # entrypoints.tsv, optionally followed by " where <cond>, <cond>".
 #
 #   by      the function is performed when ONE of these is seen in a scenario
 #   gmail   and, on a Gmail inbox, ALL of these are seen in the same scenario
 #   outlook the same for an Outlook inbox
+#   imap    the same for IMAP; a nonempty list declares IMAP applicability
 #   also    other entry points that take part; they map entry points to
 #           functions and are not needed for "performed"
 #   ui      the function happens in the browser; the value says why no
@@ -17,7 +18,7 @@
 #   bug     a known product bug keeps the function open; the value is its
 #           short id. The function is never proved or claimed, and checks
 #           and proofs that name it are not looked at, until the line goes.
-#   bug_on  the one provider (gmail or outlook) the bug is on, when the
+#   bug_on  the one provider (gmail, outlook or imap) the bug is on, when the
 #           function works on the other; both when absent.
 #
 # Conditions:
@@ -1243,6 +1244,13 @@ by = [
 ]
 gmail = ["provider gmail:messages.modify"]
 outlook = ["provider outlook:messages.move"]
+
+[F-198]  # Discover and connect a verified IMAP and SMTP mailbox
+imap = ["http GET /email/links/suggestion", "http POST /email/links/imap/discover", "http POST /email/links/imap"]
+also = ["http POST /internal/imap/notifications"]
+
+[F-199]  # Read and change owner-only IMAP server and folder settings
+imap = ["http GET /email/links/{link_id}/imap/settings", "http PATCH /email/links/{link_id}/imap/settings"]
 
 # --------------------------------------------------------------- plumbing
 

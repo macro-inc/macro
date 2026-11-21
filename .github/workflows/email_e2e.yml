@@ -22,6 +22,7 @@ on:
       - flake.lock
       - .config/nextest.toml
       - .github/workflows/email_e2e.yml
+      - docker/imap-lab/**
   schedule:
     - cron: 0 21 * * * # cron is UTC: 21:00 UTC is 4pm EST and 5pm EDT.
   workflow_dispatch:
@@ -558,6 +559,8 @@ jobs:
           # test build resolves; default features, because `local_auth` changes how the
           # API authenticates.
           cargo test --no-run "${flags[@]}" -p email_service --test service_binary_builds
+          # The private protocol process used by real-server IMAP scenarios.
+          cargo build "${flags[@]}" -p imap_service --bin imap_service
           # The scheduled-send sweep, which scenarios run as the cron does.
           cargo build "${flags[@]}" -p email_scheduled_handler
           # The other lambdas scenarios run: the sweep of abandoned sign-ins, the
@@ -576,6 +579,8 @@ jobs:
             # The search indexer, without the PDF text extraction the scenarios do not use.
             cargo build "${flags[@]}" -p search_processing_service --bin search_processing_service --features no_pdf
           fi
+      - name: start the real IMAP and SMTP lab
+        run: bash docker/imap-lab/start.sh
       - name: run the email end-to-end scenarios
         run: |
           set -euo pipefail
@@ -1489,6 +1494,8 @@ jobs:
           # test build resolves; default features, because `local_auth` changes how the
           # API authenticates.
           cargo test --no-run "${flags[@]}" -p email_service --test service_binary_builds
+          # The private protocol process used by real-server IMAP scenarios.
+          cargo build "${flags[@]}" -p imap_service --bin imap_service
           # The scheduled-send sweep, which scenarios run as the cron does.
           cargo build "${flags[@]}" -p email_scheduled_handler
           # The other lambdas scenarios run: the sweep of abandoned sign-ins, the
@@ -2458,6 +2465,8 @@ jobs:
           # test build resolves; default features, because `local_auth` changes how the
           # API authenticates.
           cargo test --no-run "${flags[@]}" -p email_service --test service_binary_builds
+          # The private protocol process used by real-server IMAP scenarios.
+          cargo build "${flags[@]}" -p imap_service --bin imap_service
           # The scheduled-send sweep, which scenarios run as the cron does.
           cargo build "${flags[@]}" -p email_scheduled_handler
           # The other lambdas scenarios run: the sweep of abandoned sign-ins, the

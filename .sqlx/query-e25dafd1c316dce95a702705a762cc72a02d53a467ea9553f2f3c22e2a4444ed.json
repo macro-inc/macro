@@ -1,0 +1,66 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                                    SELECT\n                                        kind,\n                                        key,\n                                        folder_id,\n                                        message_id,\n                                        sequence,\n                                        received_at,\n                                        document,\n                                        body\n                                    FROM\n                                        imap_state_entries\n                                    WHERE\n                                        link_id = $1\n                                        AND kind = 'change'\n                                        AND folder_id = $2\n                                        AND (sequence >\n                                                $3\n                                                OR sequence =\n                                                    (\n                                                        SELECT\n                                                            min(sequence)\n                                                        FROM\n                                                            imap_state_entries\n                                                        WHERE\n                                                            link_id = $1\n                                                            AND kind = 'change'\n                                                            AND folder_id = $2))\n                                            ORDER BY\n                                                sequence\n                                            LIMIT 502\n                                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "folder_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "message_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "sequence",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "received_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "document",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 7,
+        "name": "body",
+        "type_info": "Bytea"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "e25dafd1c316dce95a702705a762cc72a02d53a467ea9553f2f3c22e2a4444ed"
+}

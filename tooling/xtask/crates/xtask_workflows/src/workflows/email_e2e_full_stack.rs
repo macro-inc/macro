@@ -70,6 +70,7 @@ fn tier() -> Job {
         .add_env(("SCCACHE_IDLE_TIMEOUT", "0"))
         .add_env(("EMAIL_E2E_INSTANCE", INSTANCE))
         .add_env(("EMAIL_E2E_BROWSER_WORKERS", "4"))
+        .add_env(("IMAP_LAB_REQUIRED", "true"))
         .add_step(steps::checkout(false, false))
         .add_step(steps::mount_cache_volume())
         .add_step(steps::reuse_cargo_target())

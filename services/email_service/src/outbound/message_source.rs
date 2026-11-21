@@ -15,6 +15,7 @@ use models_email::service::link::UserProvider;
 
 pub struct ProviderMessageSource<R, T, L> {
     pub gmail: GmailApi,
+    pub imap: super::email_api::imap::ImapMailboxGateway,
     pub outlook: MailboxApiService<R, T, L>,
 }
 impl<R, T, L> MessageSourceBytes for ProviderMessageSource<R, T, L>
@@ -28,6 +29,11 @@ where
             UserProvider::Gmail => self
                 .gmail
                 .get_raw_message(record.link.id, &record.message_provider_id)
+                .await
+                .map_err(provider_error),
+            UserProvider::Imap => self
+                .imap
+                .mime(record.mailbox, &record.message_provider_id)
                 .await
                 .map_err(provider_error),
             UserProvider::Outlook => {

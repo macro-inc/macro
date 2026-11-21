@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                id\n            FROM\n                email_links\n            WHERE\n                provider = $1::text::email_user_provider_enum\n            ORDER BY\n                created_at,\n                id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "ca3df68f667ca84518c40d8ca019dbb1ad7aa5d7f815ce8105dc98bfe06a8b76"
+}

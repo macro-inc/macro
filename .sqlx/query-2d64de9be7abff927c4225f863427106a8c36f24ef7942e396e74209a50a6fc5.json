@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                DELETE FROM email_links\n                WHERE id = $1\n                    AND macro_id = $2\n                    AND NOT is_sync_active\n                    AND sync_generation = $3\n                    AND disconnect_requested_at IS NULL\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2d64de9be7abff927c4225f863427106a8c36f24ef7942e396e74209a50a6fc5"
+}

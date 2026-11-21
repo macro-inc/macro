@@ -119,6 +119,7 @@ impl ServiceRequest {
 
 #[derive(Clone)]
 struct Routes {
+    imap: bool,
     http: reqwest::Client,
     gmail_authentication: String,
     outlook_authentication: String,
@@ -211,6 +212,7 @@ impl MacroServices {
         gmail_url: &str,
         outlook_url: &str,
         uploads_url: &str,
+        imap: bool,
     ) -> Result<Self, Report> {
         let requests = Arc::new(Mutex::new(Vec::new()));
         let gmail_token_requests = GmailTokenRequests::default();
@@ -219,6 +221,7 @@ impl MacroServices {
         let document_storage = RealService::default();
         let cancel = CancellationToken::new();
         let routes = Routes {
+            imap,
             http: reqwest::Client::builder()
                 .timeout(FORWARD_TIMEOUT)
                 .build()
@@ -581,12 +584,19 @@ fn stand_in_answer(
 }
 
 /// PostHog's flag evaluation, in the shape `feature_flags::outbound::posthog`
-/// reads: the Outlook import live pass is on.
-async fn flags() -> axum::Json<Value> {
+/// reads. IMAP enrollment is active only for stacks running the IMAP lab.
+async fn flags(State(routes): State<Routes>) -> axum::Json<Value> {
     let mut flags = serde_json::Map::new();
     flags.insert(
         LIVE_IMPORT_PASS_FLAG.to_owned(),
         serde_json::json!({ "key": LIVE_IMPORT_PASS_FLAG, "enabled": true }),
     );
+    if routes.imap {
+        let key = "enable-imap-connections";
+        flags.insert(
+            key.to_owned(),
+            serde_json::json!({ "key": key, "enabled": true }),
+        );
+    }
     axum::Json(serde_json::json!({ "flags": flags, "errorsWhileComputingFlags": false }))
 }

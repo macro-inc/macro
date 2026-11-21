@@ -103,7 +103,10 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
   const userId = useUserId();
   const startAddInbox = useAddInboxFlow();
   const calendars = () => (calendarsQuery.isSuccess ? calendarsQuery.data : []);
-  const links = () => (linksQuery.isSuccess ? linksQuery.data.links : []);
+  const links = () =>
+    linksQuery.isSuccess
+      ? linksQuery.data.links.filter((link) => link.provider !== 'IMAP')
+      : [];
   const loadingCalendars = () =>
     calendarsQuery.isPending || linksQuery.isPending;
   const calendarLoadFailed = () => calendarsQuery.isError || linksQuery.isError;

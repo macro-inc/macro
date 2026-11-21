@@ -54,6 +54,10 @@ the Soup-backed thread list, and saved email views.
   is explicitly pinned above those sections.
 - Saved-view creation uses the shared `create-saved-view-creation` lifecycle and route-owned `SavedViewDraftHost` leave protection.
 
+The first-visit panel in `components/EmailEmptyState.tsx` uses the authenticated
+inbox suggestion and the shared picker in `@core/email-link`. IMAP opens the
+credential form directly; desktop and phone use the same field validation.
+
 ## Gotchas
 
 - Append each new or duplicated view as a selected draft after saved email views; retain builder name, sharing, and filters until Save or Discard, and confirm leaving dirty new drafts without prompting for saved-view edits.

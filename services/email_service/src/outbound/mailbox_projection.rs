@@ -68,6 +68,24 @@ fn database_failed(error: &dyn std::fmt::Debug, cause: Option<&sqlx::Error>) -> 
     })
 }
 
+/// Durable refreshes retry a refused gateway handoff. Delivery may repeat;
+/// readers coalesce these idempotent invalidations and catch up on reconnect.
+async fn refresh_email_durable(
+    gateway: &connection_gateway_client::client::ConnectionGatewayClient,
+    viewer: &str,
+    event: RefreshEmailEvent,
+) -> Result<(), MailboxError> {
+    if cfg!(feature = "connection_gateway") {
+        let payload = serde_json::to_value(event)
+            .map_err(|_| MailboxError::Effect(EffectFailure::Downstream))?;
+        gateway.refresh_email(viewer, payload).await.map_err(|_| {
+            tracing::warn!("mailbox refresh gateway handoff failed");
+            MailboxError::Effect(EffectFailure::Downstream)
+        })?;
+    }
+    Ok(())
+}
+
 impl<A, I, B, N, C> MailboxProjectionEffects for MailboxEffects<A, I, B, N, C>
 where
     A: MailboxAttachmentAccess,
@@ -129,12 +147,30 @@ where
         viewers: &HashSet<MacroUserIdStr<'static>>,
     ) -> Result<(), MailboxError> {
         for viewer in viewers {
-            crate::pubsub::util::cg_refresh_email(
+            refresh_email_durable(
                 &self.gateway,
                 viewer.as_ref(),
                 RefreshEmailEvent::UpsertMessage { link_id },
             )
-            .await;
+            .await?;
+        }
+        Ok(())
+    }
+    async fn import_completed(
+        &self,
+        link_id: Uuid,
+        viewers: &HashSet<MacroUserIdStr<'static>>,
+    ) -> Result<(), MailboxError> {
+        for viewer in viewers {
+            refresh_email_durable(
+                &self.gateway,
+                viewer.as_ref(),
+                RefreshEmailEvent::Backfill {
+                    link_id,
+                    status: models_email::api::refresh::BackfillStatus::Complete,
+                },
+            )
+            .await?;
         }
         Ok(())
     }

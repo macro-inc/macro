@@ -103,7 +103,11 @@ vi.mock('@service-storage/websocket', () => ({
   createWebSocketJob: vi.fn(),
 }));
 vi.mock('@service-connection/websocket', () => ({
-  ws: { addEventListener: vi.fn(), send: vi.fn() },
+  ws: {
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    send: vi.fn(),
+  },
   state: () => 'closed',
   createConnectionBlockWebsocketEffect: vi.fn(),
   createConnectionWebsocketEffect: vi.fn(),

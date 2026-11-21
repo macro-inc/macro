@@ -96,11 +96,32 @@ pub(super) async fn insert_message_in_transaction(
 ) -> Result<Option<SettledDraftIds>, EmailErr> {
     // Match the mailbox workers' link -> message lock order, and revalidate the
     // actor at the transaction that accepts an Outlook write.
-    let mailbox = sqlx::query!(r#"
-        SELECT macro_id,
-            ($2::text = macro_id OR EXISTS (SELECT 1 FROM macro_user_links u WHERE u.link_id = email_links.id AND u.primary_macro_id = $2)) AS authorized
-        FROM email_links WHERE id = $1 AND provider = 'OUTLOOK' FOR SHARE
-    "#,link_id,input.actor_id).fetch_optional(&mut **tx).await.map_err(anyhow::Error::from)?;
+    let mailbox = sqlx::query!(
+        r#"
+        SELECT
+            macro_id,
+            ($2::text = macro_id
+                OR EXISTS (
+                    SELECT
+                        1
+                    FROM
+                        macro_user_links u
+                    WHERE
+                        u.link_id = email_links.id
+                        AND u.primary_macro_id = $2)) AS authorized
+        FROM
+            email_links
+        WHERE
+            id = $1
+            AND provider IN ('OUTLOOK', 'IMAP')
+            FOR SHARE
+        "#,
+        link_id,
+        input.actor_id,
+    )
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(anyhow::Error::from)?;
     if mailbox
         .as_ref()
         .is_some_and(|mailbox| mailbox.authorized != Some(true))
@@ -376,39 +397,156 @@ pub(super) async fn snapshot_outlook_draft(
     link_id: Uuid,
     actor: &str,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query!(r#"
-        INSERT INTO email_mailbox_drafts (message_id,link_id,generation,actor_id,desired_content,base_version,provider_id)
-        SELECT m.id,m.link_id,l.sync_generation,$3,
-            jsonb_build_object('db_id',m.id,'provider_id',m.provider_id,'replying_to_id',m.replying_to_id,
-                'provider_thread_id',m.provider_thread_id,'thread_db_id',m.thread_id,'subject',COALESCE(m.subject,''),
-                'body_text',m.body_text,'body_html',m.body_html_sanitized,'body_macro',m.body_macro,'headers_json',m.headers_jsonb,
-                'actor_id',$3::text,'send_time',(SELECT send_time FROM email_scheduled_messages WHERE message_id = m.id),
-                'to',COALESCE(recipients.to_addresses,'[]'::jsonb),'cc',COALESCE(recipients.cc_addresses,'[]'::jsonb),'bcc',COALESCE(recipients.bcc_addresses,'[]'::jsonb),
-                '_attachments',jsonb_build_object(
-                    'uploads',COALESCE((SELECT jsonb_agg(to_jsonb(a) ORDER BY a.id) FROM email_attachments_drafts a WHERE a.draft_id = m.id AND NOT a.upload_pending),'[]'::jsonb),
-                    'forwarded',COALESCE((SELECT jsonb_agg(jsonb_build_object('id',a.id,'filename',a.filename,'mime_type',a.mime_type,'content_id',a.content_id,
-                        'provider_attachment_id',a.provider_attachment_id,'provider_id',source.provider_id,'link_id',source.link_id,'thread_id',source.thread_id,'grant_generation',sl.grant_generation) ORDER BY a.id)
-                        FROM email_attachments_fwd f JOIN email_attachments a ON a.id = f.attachment_id JOIN email_messages source ON source.id = a.message_id JOIN email_links sl ON sl.id = source.link_id
-                        WHERE f.message_id = m.id),'[]'::jsonb),
-                    'removals',COALESCE((SELECT jsonb_agg(CASE WHEN r.provider_id IS NOT NULL THEN jsonb_build_object('kind','provider_id','value',r.provider_id) ELSE jsonb_build_object('kind','content_id','value',r.content_id) END ORDER BY r.id)
-                        FROM email_draft_attachment_removals r WHERE r.message_id = m.id),'[]'::jsonb))),
-            COALESCE((SELECT versions[cardinality(versions)] FROM email_draft_organization_versions v
-                WHERE v.message_id=m.id AND m.provider_version=ANY(v.versions)),m.provider_version),m.provider_id
-        FROM email_messages m JOIN email_links l ON l.id = m.link_id
-        CROSS JOIN LATERAL (
-            SELECT jsonb_agg(jsonb_build_object('email',c.email_address,'name',COALESCE(r.name,c.name))) FILTER (WHERE r.recipient_type = 'TO') AS to_addresses,
-                jsonb_agg(jsonb_build_object('email',c.email_address,'name',COALESCE(r.name,c.name))) FILTER (WHERE r.recipient_type = 'CC') AS cc_addresses,
-                jsonb_agg(jsonb_build_object('email',c.email_address,'name',COALESCE(r.name,c.name))) FILTER (WHERE r.recipient_type = 'BCC') AS bcc_addresses
-            FROM email_message_recipients r JOIN email_contacts c ON c.id = r.contact_id WHERE r.message_id = m.id
-        ) recipients
-        WHERE m.id = $1 AND m.link_id = $2 AND l.provider = 'OUTLOOK'
-        ON CONFLICT (message_id) DO UPDATE SET
-            revision = email_mailbox_drafts.revision + 1,desired_content = EXCLUDED.desired_content,actor_id = EXCLUDED.actor_id,
-            checkpoint = CASE WHEN email_mailbox_drafts.state = 'synced' OR (email_mailbox_drafts.state='failed' AND email_mailbox_drafts.error_code='invalid_content') THEN NULL ELSE email_mailbox_drafts.checkpoint END,
-            error_code = CASE WHEN email_mailbox_drafts.state='failed' AND email_mailbox_drafts.error_code='invalid_content' THEN NULL ELSE email_mailbox_drafts.error_code END,
-            state = CASE WHEN email_mailbox_drafts.state IN ('synced','failed','cancelled') THEN 'pending' ELSE email_mailbox_drafts.state END,
-            available_at = now(),updated_at = now()
-    "#,message_id,link_id,actor).execute(&mut *tx).await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO email_mailbox_drafts (message_id, link_id, generation, actor_id, desired_content, base_version, provider_id)
+        SELECT
+            m.id,
+            m.link_id,
+            l.sync_generation,
+            $3,
+            jsonb_build_object(
+                'db_id', m.id,
+                'provider_id', m.provider_id,
+                'replying_to_id', m.replying_to_id,
+                'provider_thread_id', m.provider_thread_id,
+                'thread_db_id', m.thread_id,
+                'subject', COALESCE(m.subject, ''),
+                'body_text', m.body_text,
+                'body_html', m.body_html_sanitized,
+                'body_macro', m.body_macro,
+                'headers_json', m.headers_jsonb,
+                'actor_id', $3::text,
+                'send_time', (
+                    SELECT
+                        send_time
+                    FROM email_scheduled_messages
+                    WHERE
+                        message_id = m.id),
+                'to', COALESCE(recipients.to_addresses, '[]'::jsonb),
+                'cc', COALESCE(recipients.cc_addresses, '[]'::jsonb),
+                'bcc', COALESCE(recipients.bcc_addresses, '[]'::jsonb),
+                '_attachments', jsonb_build_object(
+                    'uploads', COALESCE((
+                        SELECT
+                            jsonb_agg(to_jsonb (a)
+                        ORDER BY a.id)
+                        FROM email_attachments_drafts a
+                        WHERE
+                            a.draft_id = m.id
+                            AND NOT a.upload_pending), '[]'::jsonb),
+                    'forwarded', COALESCE((
+                        SELECT
+                            jsonb_agg(
+                                jsonb_build_object(
+                                    'id', a.id,
+                                    'filename', a.filename,
+                                    'mime_type', a.mime_type,
+                                    'content_id', a.content_id,
+                                    'provider_attachment_id', a.provider_attachment_id,
+                                    'provider_id', source.provider_id,
+                                    'link_id', source.link_id,
+                                    'thread_id', source.thread_id,
+                                    'grant_generation', sl.grant_generation
+                                )
+                                ORDER BY a.id
+                            )
+                        FROM email_attachments_fwd f
+                        JOIN email_attachments a ON a.id = f.attachment_id
+                        JOIN email_messages source ON source.id = a.message_id
+                        JOIN email_links sl ON sl.id = source.link_id
+                        WHERE
+                            f.message_id = m.id), '[]'::jsonb),
+                    'removals', COALESCE((
+                        SELECT
+                            jsonb_agg(
+                                CASE WHEN r.provider_id IS NOT NULL THEN
+                                    jsonb_build_object(
+                                        'kind', 'provider_id',
+                                        'value', r.provider_id
+                                    )
+                                ELSE
+                                    jsonb_build_object(
+                                        'kind', 'content_id',
+                                        'value', r.content_id
+                                    )
+                                END ORDER BY r.id
+                            )
+                        FROM email_draft_attachment_removals r
+                        WHERE
+                            r.message_id = m.id), '[]'::jsonb)
+                )
+            ),
+            COALESCE((
+                SELECT
+                    versions[cardinality(versions)]
+                FROM email_draft_organization_versions v
+                WHERE
+                    v.message_id = m.id
+                    AND m.provider_version = ANY (v.versions)), m.provider_version),
+            m.provider_id
+        FROM
+            email_messages m
+            JOIN email_links l ON l.id = m.link_id
+            CROSS JOIN LATERAL (
+                SELECT
+                    jsonb_agg(
+                        jsonb_build_object(
+                            'email', c.email_address,
+                            'name', COALESCE(r.name, c.name)
+                        )
+                    ) FILTER (WHERE r.recipient_type = 'TO') AS to_addresses,
+                    jsonb_agg(
+                        jsonb_build_object(
+                            'email', c.email_address,
+                            'name', COALESCE(r.name, c.name)
+                        )
+                    ) FILTER (WHERE r.recipient_type = 'CC') AS cc_addresses,
+                    jsonb_agg(
+                        jsonb_build_object(
+                            'email', c.email_address,
+                            'name', COALESCE(r.name, c.name)
+                        )
+                    ) FILTER (WHERE r.recipient_type = 'BCC') AS bcc_addresses
+                FROM
+                    email_message_recipients r
+                    JOIN email_contacts c ON c.id = r.contact_id
+                WHERE
+                    r.message_id = m.id) recipients
+        WHERE
+            m.id = $1
+            AND m.link_id = $2
+            AND l.provider IN ('OUTLOOK', 'IMAP')
+        ON CONFLICT (message_id)
+            DO UPDATE SET
+                revision = email_mailbox_drafts.revision + 1,
+                desired_content = EXCLUDED.desired_content,
+                actor_id = EXCLUDED.actor_id,
+                checkpoint = CASE WHEN email_mailbox_drafts.state = 'synced'
+                    OR (email_mailbox_drafts.state = 'failed'
+                        AND email_mailbox_drafts.error_code = 'invalid_content') THEN
+                    NULL
+                ELSE
+                    email_mailbox_drafts.checkpoint
+                END,
+                error_code = CASE WHEN email_mailbox_drafts.state = 'failed'
+                    AND email_mailbox_drafts.error_code = 'invalid_content' THEN
+                    NULL
+                ELSE
+                    email_mailbox_drafts.error_code
+                END,
+                state = CASE WHEN email_mailbox_drafts.state IN ('synced', 'failed', 'cancelled') THEN
+                    'pending'
+                ELSE
+                    email_mailbox_drafts.state
+                END,
+                available_at = now(),
+                updated_at = now()
+        "#,
+        message_id,
+        link_id,
+        actor,
+    ).execute(&mut *tx).await?;
     sqlx::query!(
         "DELETE FROM email_draft_organization_versions WHERE message_id=$1",
         message_id

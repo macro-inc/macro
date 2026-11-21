@@ -1,0 +1,118 @@
+//! One explicitly requested extra-folder watcher; primary plus command plus watcher never exceeds three IMAP sockets.
+use super::*;
+use std::time::Duration;
+use tokio_util::{sync::CancellationToken, task::TaskTracker};
+use tracing::Instrument;
+
+pub(super) struct Watcher {
+    folder_id: String,
+    path: String,
+    pub(super) stop: CancellationToken,
+    task: tokio::task::JoinHandle<()>,
+}
+impl Engine {
+    pub(super) async fn refresh_watcher(
+        &self,
+        binding: Binding,
+        owner: Uuid,
+        wake: &Arc<tokio::sync::Notify>,
+        tasks: &TaskTracker,
+        stopped: &CancellationToken,
+        current: &mut Option<Watcher>,
+    ) -> Result<(), Error> {
+        let requested = if let Some(settings) = &self.settings {
+            settings
+                .preferences(binding)
+                .await?
+                .watched_folder_ids
+                .into_iter()
+                .next()
+        } else {
+            None
+        };
+        let target = if let Some(id) = requested {
+            let account = self
+                .repository
+                .acquire_scoped(binding, StateSelection::Catalog)
+                .await?;
+            let target = account
+                .state
+                .folders
+                .get(&id)
+                .filter(|folder| folder.folder.role != FolderRole::Inbox)
+                .map(|folder| (id, folder.path.clone()));
+            self.repository.release(&account).await?;
+            target
+        } else {
+            None
+        };
+        if current.as_ref().is_some_and(|watcher| {
+            target
+                .as_ref()
+                .is_some_and(|(id, path)| *id == watcher.folder_id && *path == watcher.path)
+                && !watcher.task.is_finished()
+        }) {
+            return Ok(());
+        }
+        if let Some(previous) = current.take() {
+            previous.stop.cancel();
+            let _ = tokio::time::timeout(Duration::from_secs(10), previous.task).await;
+        }
+        let Some((folder_id, path)) = target else {
+            return Ok(());
+        };
+        let cancel = stopped.child_token();
+        let done = cancel.clone();
+        let wire_path = path.clone();
+        let transport = self.transport.clone();
+        let repository = self.repository.clone();
+        let cipher = self.cipher.clone();
+        let changed = wake.clone();
+        let watched_id = folder_id.clone();
+        let task = tasks.spawn(async move {
+            let mut failures = 0u32;
+            loop {
+                if done.is_cancelled() { return; }
+                match repository.claim_owner(binding, owner).await { Ok(true) => {}, _ => return }
+                let result = async {
+                    let (user, ciphertext) = repository.credentials(binding).await?;
+                    let credentials = cipher.decrypt(binding.link_id, &user, &ciphertext).await?;
+                    // Credentials live only for this socket attempt, never its retry delay.
+                    tokio::select! {
+                        biased;
+                        _ = done.cancelled() => Ok(()),
+                        result = transport.wait_folder(&credentials, &wire_path, 120) => result,
+                    }
+                }.instrument(tracing::info_span!(parent: None, "imap.watch_folder", link_id = %binding.link_id, folder_id = %watched_id)).await;
+                match result {
+                    Ok(()) => {
+                        failures = 0;
+                        tokio::select! {
+                            biased;
+                            _ = done.cancelled() => return,
+                            _ = tokio::time::sleep(Duration::from_millis(450)) => {},
+                        }
+                        changed.notify_one();
+                    }
+                    Err(Error::CredentialsRejected | Error::Forbidden | Error::NotFound | Error::Conflict) => return,
+                    Err(_) => {
+                        failures = failures.saturating_add(1);
+                        let retry = 2u64.pow(failures.min(8)).min(300);
+                        tokio::select! {
+                            biased;
+                            _ = done.cancelled() => return,
+                            _ = tokio::time::sleep(Duration::from_secs(retry)) => {},
+                        }
+                    }
+                }
+            }
+        });
+        *current = Some(Watcher {
+            folder_id,
+            path,
+            stop: cancel,
+            task,
+        });
+        Ok(())
+    }
+}

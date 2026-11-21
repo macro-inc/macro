@@ -20,6 +20,11 @@ root with `bun run --cwd apps/web gen-api <service-name>` before running
 
 `just coverage` lists `UNCOVERED <service>.<endpoint>`.
 
+Review new generated writes against [session scopes](../../../crates/agent_correlation/AGENTS.md),
+including skipped endpoints, and run `cargo test -p agent_harness_service --lib
+code_mode::test::a_run_that_sends_nothing_is_refused_every_send_in_the_sdk` from
+the repository root: code mode imports API operations independently of SDK wrappers.
+
 A wrapped endpoint also needs a verb in `src/utils/verbs.ts`, from the closed
 `SdkVerb` set: what it does to a resource (`edited`), or `read`, `listed`,
 `searched`, `queried` or `checked` when it changes nothing, including a POST that

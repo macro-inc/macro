@@ -63,31 +63,96 @@ impl PgMailboxSync {
 impl MailboxCommandRepository for PgMailboxSync {
     async fn claim_command(&self, lease_id: Uuid) -> Result<Option<CommandLease>, MailboxError> {
         let mut tx = self.mutation_claim_transaction().await?;
-        let row = sqlx::query!(r#"
+        let row = sqlx::query!(
+            r#"
             WITH candidate AS (
-                SELECT c.id FROM email_mailbox_commands c JOIN email_links l ON l.id = c.link_id
-                WHERE l.is_sync_active AND l.mailbox_unavailable_at IS NULL AND l.provider = 'OUTLOOK' AND c.generation = l.sync_generation
-                    AND c.status IN ('pending','running') AND c.available_at <= now()
-                    AND (c.lease_until IS NULL OR c.lease_until < now())
-                    AND c.intent->>'kind' IN ('read','flagged','archived','trashed','junk','category')
-                    AND (c.intent->>'kind'<>'category' OR NOT EXISTS(SELECT 1 FROM email_mailbox_settings_work s
-                        WHERE s.link_id=c.link_id AND s.kind='create_label' AND s.resource_key=c.intent->'value'->>'name'
-                        AND s.completed_revision<s.revision))
-                    AND NOT EXISTS (SELECT 1 FROM email_mailbox_command_targets target JOIN email_mailbox_drafts draft ON draft.message_id=target.message_id
-                        WHERE target.command_id=c.id AND draft.lease_until>now() AND draft.lease_id IS NOT NULL)
-                    AND NOT EXISTS (SELECT 1 FROM email_mailbox_commands prior
-                        WHERE prior.link_id = c.link_id AND prior.generation = c.generation
-                            AND prior.status IN ('pending','running','confirming')
+                SELECT
+                    c.id
+                FROM
+                    email_mailbox_commands c
+                    JOIN email_links l ON l.id = c.link_id
+                WHERE
+                    l.is_sync_active
+                    AND l.mailbox_unavailable_at IS NULL
+                    AND l.provider = $2::text::email_user_provider_enum
+                    AND c.generation = l.sync_generation
+                    AND c.status IN ('pending', 'running')
+                    AND c.available_at <= now()
+                    AND (c.lease_until IS NULL
+                        OR c.lease_until < now())
+                    AND c.intent ->> 'kind' IN ('read', 'flagged', 'archived', 'trashed', 'junk', 'category')
+                    AND (c.intent ->> 'kind' <> 'category'
+                        OR NOT EXISTS (
+                            SELECT
+                                1
+                            FROM
+                                email_mailbox_settings_work s
+                            WHERE
+                                s.link_id = c.link_id
+                                AND s.kind = 'create_label'
+                                AND s.resource_key = c.intent -> 'value' ->> 'name'
+                                AND s.completed_revision < s.revision))
+                    AND NOT EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            email_mailbox_command_targets target
+                            JOIN email_mailbox_drafts draft ON draft.message_id = target.message_id
+                        WHERE
+                            target.command_id = c.id
+                            AND draft.lease_until > now()
+                            AND draft.lease_id IS NOT NULL OFFSET 0)
+                    AND NOT EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            email_mailbox_commands prior
+                        WHERE
+                            prior.link_id = c.link_id
+                            AND prior.generation = c.generation
+                            AND prior.status IN ('pending', 'running', 'confirming')
                             AND prior.accepted_order < c.accepted_order
-                            AND EXISTS(SELECT 1 FROM email_mailbox_command_targets earlier JOIN email_mailbox_command_targets current
-                                ON current.message_id=earlier.message_id WHERE earlier.command_id=prior.id AND current.command_id=c.id))
-                ORDER BY c.available_at,c.id LIMIT 1 FOR UPDATE OF c SKIP LOCKED
+                            AND EXISTS (
+                                SELECT
+                                    1
+                                FROM
+                                    email_mailbox_command_targets earlier
+                                    JOIN email_mailbox_command_targets current ON current.message_id = earlier.message_id
+                                WHERE
+                                    earlier.command_id = prior.id
+                                    AND current.command_id = c.id))
+                ORDER BY
+                    c.available_at,
+                    c.id
+                LIMIT 1
+                FOR UPDATE
+                    OF c SKIP LOCKED
             )
-            UPDATE email_mailbox_commands c SET lease_id = $1,lease_until = now() + interval '3 minutes',
-                status = 'running',attempts = attempts + 1,updated_at = now()
-            FROM candidate q,email_links l WHERE c.id = q.id AND l.id = c.link_id
-            RETURNING c.id,c.link_id,c.generation,l.grant_generation,c.intent,c.attempts
-        "#,lease_id).fetch_optional(&mut *tx).await.map_err(db_error)?;
+            UPDATE
+                email_mailbox_commands c
+            SET
+                lease_id = $1,
+                lease_until = now() + interval '3 minutes',
+                status = 'running',
+                attempts = attempts + 1,
+                updated_at = now()
+            FROM
+                candidate q,
+                email_links l
+            WHERE
+                c.id = q.id
+                AND l.id = c.link_id
+            RETURNING
+                c.id,
+                c.link_id,
+                c.generation,
+                l.grant_generation,
+                c.intent,
+                c.attempts
+            "#,
+            lease_id,
+            self.provider.as_str(),
+        ).fetch_optional(&mut *tx).await.map_err(db_error)?;
         tx.commit().await.map_err(db_error)?;
         row.map(|row| {
             Ok(CommandLease {

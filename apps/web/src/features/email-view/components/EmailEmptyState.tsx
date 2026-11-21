@@ -6,7 +6,9 @@ import EmptyStateInboxTrayGraphic from '@design/empty-state-inbox-tray.svg';
 import EmptyStateNoFilterMatchGraphic from '@design/empty-state-no-filter-match.svg';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
 import { FOCUS_WINDOW_DAYS } from '@queries/email/focus';
-import { EmptyStatePanel, FilteredHiddenBanner } from '@ui';
+import { useEmailLinksQuery, useInboxSuggestion } from '@queries/email/link';
+import { queryReadyGate } from '@queries/gate';
+import { EmptyStatePanel, FilteredHiddenBanner, Spinner } from '@ui';
 import { Match, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
 import { canSearchEmailTab } from '../constants';
@@ -84,7 +86,46 @@ export function EmailEmptyState() {
   const { state, setInboxIds, setTab, filtersChanged, clearFilters } =
     useEmailView();
   const emailActive = useEmailLinksStatus();
+  const links = useEmailLinksQuery();
+  const syncing = () =>
+    queryReadyGate(links) &&
+    links.data.links.some(
+      (link) =>
+        link.is_sync_active &&
+        !link.needs_reauth &&
+        link.sync_status === 'SYNCING' &&
+        (state.inboxIds === undefined || state.inboxIds.includes(link.id)) &&
+        (!state.aliasFilter || state.aliasFilter.inboxId === link.id)
+    );
   const startAddInbox = useAddInboxFlow();
+  const suggestion = useInboxSuggestion(() => !emailActive());
+  const offer = () => {
+    if (!queryReadyGate(suggestion) || suggestion.data.offer === 'none') return;
+    return suggestion.data;
+  };
+  const connectSuggested = () => {
+    const suggested = offer();
+    if (!suggested) return startAddInbox();
+    switch (suggested.offer) {
+      case 'gmail':
+        return startAddInbox({
+          provider: 'GMAIL',
+          emailAddress: suggested.email,
+        });
+      case 'outlook':
+        return startAddInbox({
+          provider: 'OUTLOOK',
+          emailAddress: suggested.email,
+        });
+      case 'imap':
+        return startAddInbox({
+          provider: 'IMAP',
+          emailAddress: suggested.email,
+        });
+      default:
+        return startAddInbox();
+    }
+  };
   // Scheduled has no search or filters; text typed on another tab stays behind.
   const searchText = () =>
     canSearchEmailTab(state.tab) ? state.search.trim() : '';
@@ -98,12 +139,24 @@ export function EmailEmptyState() {
         <EmptyStatePanel
           centered
           graphic={EmptyStateEmailGraphic}
-          title="Connect your email"
-          description="Bring your inbox into Macro to triage signal from noise, reply faster, and let agents work alongside your mail."
+          title={offer() ? `Connect ${offer()?.email}` : 'Connect your email'}
+          description={
+            offer()
+              ? 'Read and reply to messages from this inbox in Macro.'
+              : 'Bring your inbox into Macro to triage signal from noise, reply faster, and let agents work alongside your mail.'
+          }
           primaryAction={{
             label: 'Connect email',
-            onClick: () => fireAndForget(startAddInbox(), 'add-inbox'),
+            onClick: () => fireAndForget(connectSuggested(), 'add-inbox'),
           }}
+          secondaryAction={
+            offer()
+              ? {
+                  label: 'Use a different account',
+                  onClick: () => fireAndForget(startAddInbox(), 'add-inbox'),
+                }
+              : undefined
+          }
           documentationUrl={EMAIL_DOCS_URL}
         />
       </Match>
@@ -119,6 +172,21 @@ export function EmailEmptyState() {
             onClick: () => setInboxIds(undefined),
           }}
         />
+      </Match>
+
+      <Match when={syncing()}>
+        <div class="h-full w-full" role="status" aria-live="polite">
+          <EmptyStatePanel
+            centered
+            graphic={EmptyStateInboxTrayGraphic}
+            title="Syncing your inbox"
+            description="Your existing mail will appear here as it syncs. You can keep using Macro while it finishes."
+          >
+            <div class="mt-3 flex justify-center">
+              <Spinner decorative />
+            </div>
+          </EmptyStatePanel>
+        </div>
       </Match>
 
       <Match when={searchText()}>

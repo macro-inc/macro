@@ -651,6 +651,12 @@ service_url! {
             dev: "https://dev-gateway.macro.com/email",
             prod: "https://gateway.macro.com/email",
         },
+        /// Internal IMAP/SMTP engine API; every operation requires service authentication.
+        pub ImapServiceUrl {
+            local: "http://localhost:8113",
+            dev: "http://engine.imap-dev.macro.internal:8080",
+            prod: "http://engine.imap-prod.macro.internal:8080",
+        },
         /// Calendar service API URL. The calendar write authority once
         /// `calendar_service` owns provider mutations; its API is mounted at
         /// the root and under the `/calendar` gateway prefix.
@@ -842,5 +848,14 @@ service_url! {
         local: "http://localhost:8101/preview",
         dev: "https://dev-gateway.macro.com/preview",
         prod: "https://gateway.macro.com/preview",
+    }
+}
+
+service_url! {
+    /// Base for the anonymous Thunderbird mail provider settings directory.
+    pub struct ThunderbirdAutoconfigUrl {
+        local: "https://autoconfig.thunderbird.net/v1.1/",
+        dev: "https://autoconfig.thunderbird.net/v1.1/",
+        prod: "https://autoconfig.thunderbird.net/v1.1/",
     }
 }

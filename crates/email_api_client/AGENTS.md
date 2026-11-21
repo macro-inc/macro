@@ -59,6 +59,10 @@ Outlook (Microsoft Graph) outbound adapters.
 
 ## Gotchas
 
+- `SendRequest::build_mime` accepts stored bracketed or bare reply/reference IDs
+  and removes their surrounding pair before mail-builder supplies RFC delimiters;
+  keep the stable outgoing Message-ID contract bare.
+
 - The Microsoft gate's `Import` budget stops below the shared limits (two of
   the three slots, 7,500 of the 9,000 window), so an import never takes the
   last slot or the window's tail from calendar and live sync. A refused import

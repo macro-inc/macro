@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                macro_id,\n                provider = 'IMAP' AS \"uses_imap!\",\n                is_sync_active\n                AND disconnect_requested_at IS NULL\n                AND deleting_at IS NULL AS \"active!\",\n                sync_generation,\n                grant_generation\n            FROM\n                email_links\n            WHERE\n                id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "macro_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "uses_imap!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "active!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "sync_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "grant_generation",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null,
+      false,
+      false
+    ]
+  },
+  "hash": "d1e81d0f037e00223ff99ab11098b027a430fdbf03c38a8094c7bf16678f8424"
+}

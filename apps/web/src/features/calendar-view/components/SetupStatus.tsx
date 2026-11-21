@@ -41,7 +41,10 @@ const SETUP_MESSAGES = {
 
 function isWorkingCalendar(link: EmailLink) {
   return (
-    link.is_sync_active && !link.needs_calendar_permission && !link.needs_reauth
+    link.provider !== 'IMAP' &&
+    link.is_sync_active &&
+    !link.needs_calendar_permission &&
+    !link.needs_reauth
   );
 }
 
@@ -64,7 +67,7 @@ function useCalendarSetup() {
   const ownLinks = () =>
     linksQuery.isSuccess
       ? (linksQuery.data?.links ?? []).filter(
-          (link) => link.macro_id === userId()
+          (link) => link.macro_id === userId() && link.provider !== 'IMAP'
         )
       : [];
 

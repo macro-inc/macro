@@ -8545,10 +8545,14 @@
       "EmailConnectionProviders": {
         "type": "object",
         "description": "What the provider selector offers the requesting user.",
-        "required": ["gmail", "outlook"],
+        "required": ["gmail", "imap", "outlook"],
         "properties": {
           "gmail": {
             "type": "boolean"
+          },
+          "imap": {
+            "type": "boolean",
+            "description": "Whether the user may connect a mailbox with IMAP and SMTP."
           },
           "outlook": {
             "type": "boolean",

@@ -621,6 +621,53 @@ async fn a_failure_that_cannot_be_recorded_still_names_its_attachment(db: PgPool
     );
 }
 
+#[cfg(feature = "connection_gateway")]
+#[tokio::test]
+async fn durable_refresh_retries_a_refused_gateway_handoff() {
+    use wiremock::matchers::method;
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    let gateway = MockServer::start().await;
+    let client = connection_gateway_client::client::ConnectionGatewayClient::new(
+        "test".to_owned(),
+        gateway.uri(),
+    );
+    Mock::given(method("POST"))
+        .respond_with(
+            ResponseTemplate::new(503).set_body_json(serde_json::json!({"error": "unavailable"})),
+        )
+        .mount(&gateway)
+        .await;
+    assert!(matches!(
+        refresh_email_durable(
+            &client,
+            "viewer",
+            RefreshEmailEvent::Backfill {
+                link_id: Uuid::from_u128(1),
+                status: models_email::api::refresh::BackfillStatus::Complete,
+            }
+        )
+        .await,
+        Err(MailboxError::Effect(EffectFailure::Downstream))
+    ));
+    gateway.reset().await;
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"receipts": []})))
+        .expect(1)
+        .mount(&gateway)
+        .await;
+    refresh_email_durable(
+        &client,
+        "viewer",
+        RefreshEmailEvent::Backfill {
+            link_id: Uuid::from_u128(1),
+            status: models_email::api::refresh::BackfillStatus::Complete,
+        },
+    )
+    .await
+    .unwrap();
+}
+
 fn correspondence(provider: UserProvider) -> CorrespondenceProjection {
     CorrespondenceProjection {
         link_id: LINK_ID,
@@ -643,6 +690,7 @@ async fn correspondents_are_connected_and_join_the_owners_list_for_the_inbox_pro
     for (provider, list) in [
         (UserProvider::Outlook, InboxProvider::Outlook),
         (UserProvider::Gmail, InboxProvider::Gmail),
+        (UserProvider::Imap, InboxProvider::Imap),
     ] {
         let lists = Arc::new(RecordingContactLists::default());
         let effects = effects_with_contacts(

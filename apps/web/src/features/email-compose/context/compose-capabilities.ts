@@ -10,7 +10,6 @@ import type { LocalDraft } from '../core/local-draft';
 import type { DraftFormAttachment } from '../primitives/email-form-state';
 
 export interface EmailInbox extends SenderInbox {
-  provider?: 'GMAIL' | 'OUTLOOK';
   settings: {
     signature?: string | null;
     signature_on_replies_forwards?: boolean | null;

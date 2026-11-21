@@ -9,7 +9,11 @@ import ClaudeIcon from '@icon/claude-color.svg';
 import GmailIcon from '@icon/gmail-color.svg';
 import OutlookIcon from '@icon/outlook-color.svg';
 import DesktopIcon from '@icon/system/regular/desktop.svg';
-import { useOutlookAvailable } from '@queries/auth/outlook-link';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg?component-solid';
+import {
+  useImapAvailable,
+  useOutlookAvailable,
+} from '@queries/auth/outlook-link';
 import { useUserTeamsQuery } from '@queries/team/teams';
 import type { Team as TeamSummary } from '@service-auth/generated/schemas/team';
 import {
@@ -69,23 +73,43 @@ function emailItem(
   links: Accessor<EmailLink[]>,
   actions: IntegrationItem['Actions']
 ): IntegrationItem {
+  const details = {
+    GMAIL: {
+      id: 'gmail',
+      name: 'Gmail',
+      icon: <GmailIcon />,
+      description:
+        'Sync Gmail or Google Workspace inboxes into Email and Calendar.',
+    },
+    OUTLOOK: {
+      id: 'outlook',
+      name: 'Outlook',
+      icon: <OutlookIcon />,
+      description:
+        'Sync Outlook.com or Microsoft 365 inboxes into Email and Calendar.',
+    },
+    IMAP: {
+      id: 'imap',
+      name: 'IMAP / SMTP',
+      icon: <EnvelopeIcon />,
+      description: 'Read and send email through your existing mail server.',
+    },
+  }[provider];
   const outlook = provider === 'OUTLOOK';
   return {
-    id: outlook ? 'outlook' : 'gmail',
-    name: outlook ? 'Outlook' : 'Gmail',
+    id: details.id,
+    name: details.name,
     badge: outlook ? <OutlookBetaBadge /> : undefined,
     kind: 'native',
-    icon: outlook ? <OutlookIcon /> : <GmailIcon />,
+    icon: details.icon,
     get description() {
       if (links().length > 0)
         return links()
           .map((link) => link.email_address)
           .join(', ');
-      return outlook
-        ? 'Sync Outlook.com or Microsoft 365 inboxes into Email and Calendar.'
-        : 'Sync Gmail or Google Workspace inboxes into Email and Calendar.';
+      return details.description;
     },
-    categories: ['Email', 'Calendar'],
+    categories: provider === 'IMAP' ? ['Email'] : ['Email', 'Calendar'],
     get status() {
       if (
         links().some(
@@ -115,22 +139,27 @@ export function useEmailItems(
   const { query } = useEmailLinks();
   const connectInbox = useConnectInbox();
   const outlookOffered = useOutlookAvailable();
+  const imapOffered = useImapAvailable();
   const links = () => (query.isSuccess ? query.data.links : []);
   const linksFor = (provider: EmailLink['provider']) =>
-    links().filter((link) =>
-      provider === 'OUTLOOK'
-        ? link.provider === 'OUTLOOK'
-        : link.provider !== 'OUTLOOK'
-    );
+    links().filter((link) => link.provider === provider);
   const actionsFor = (provider: EmailLink['provider']) => () => (
     <>
-      <Show when={provider !== 'OUTLOOK' || outlookOffered()}>
+      <Show
+        when={
+          provider === 'GMAIL' ||
+          (provider === 'OUTLOOK' && outlookOffered()) ||
+          (provider === 'IMAP' && imapOffered())
+        }
+      >
         <ConnectAction
           label={linksFor(provider).length > 0 ? 'Add account' : 'Connect'}
           ariaLabel={
             provider === 'OUTLOOK'
               ? 'Connect an Outlook account'
-              : 'Connect a Google Workspace account'
+              : provider === 'IMAP'
+                ? 'Connect an IMAP inbox'
+                : 'Connect a Google Workspace account'
           }
           onClick={() => connectInbox(provider)}
         />
@@ -155,10 +184,13 @@ export function useEmailItems(
     () => linksFor('OUTLOOK'),
     actionsFor('OUTLOOK')
   );
-  return () =>
-    outlookOffered() || linksFor('OUTLOOK').length > 0
-      ? [gmail, outlook]
-      : [gmail];
+  const imap = emailItem('IMAP', () => linksFor('IMAP'), actionsFor('IMAP'));
+  return () => {
+    const items = [gmail];
+    if (outlookOffered() || linksFor('OUTLOOK').length) items.push(outlook);
+    if (imapOffered() || linksFor('IMAP').length) items.push(imap);
+    return items;
+  };
 }
 
 /**

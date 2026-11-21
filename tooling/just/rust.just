@@ -42,13 +42,14 @@ build:
 # repository's `bun install` or CODE_MODE_ASSETS_DIR. Arguments go to
 # nextest, e.g. `just email-e2e gmail::` or `just email-e2e --stress-count 20`.
 email-e2e *args:
-    SQLX_OFFLINE=true cargo build -p email_service --bin email_service --bin pubsub_workers -p email_scheduled_handler --bin email_scheduled_handler -p user_link_cleanup_handler --bin user_link_cleanup_handler -p email_sfs_delete_handler --bin email_sfs_delete_handler -p email_suppression_handler --bin email_suppression_handler -p email_refresh_handler --bin email_refresh_handler -p calendar_service --bin calendar_service -p document_storage_service --bin document_storage_service -p email_focus_worker --bin email_focus_worker -p search_processing_service --bin search_processing_service --features search_processing_service/no_pdf
+    bash docker/imap-lab/start.sh
+    SQLX_OFFLINE=true cargo build -p imap_service --bin imap_service -p email_service --bin email_service --bin pubsub_workers -p email_scheduled_handler --bin email_scheduled_handler -p user_link_cleanup_handler --bin user_link_cleanup_handler -p email_sfs_delete_handler --bin email_sfs_delete_handler -p email_suppression_handler --bin email_suppression_handler -p email_refresh_handler --bin email_refresh_handler -p calendar_service --bin calendar_service -p document_storage_service --bin document_storage_service -p email_focus_worker --bin email_focus_worker -p search_processing_service --bin search_processing_service --features search_processing_service/no_pdf
     SQLX_OFFLINE=true cargo nextest run -P email-e2e -p email_e2e {{ args }}
 
 # The scenarios kept for known, unfixed bugs (`#[ignore = "known bug: <class id>"]`):
 # which still fail, and which now pass and should start gating.
 email-e2e-known-bugs *args:
-    SQLX_OFFLINE=true cargo build -p email_service --bin email_service --bin pubsub_workers -p email_scheduled_handler --bin email_scheduled_handler -p user_link_cleanup_handler --bin user_link_cleanup_handler -p email_sfs_delete_handler --bin email_sfs_delete_handler -p email_suppression_handler --bin email_suppression_handler -p email_refresh_handler --bin email_refresh_handler -p calendar_service --bin calendar_service -p document_storage_service --bin document_storage_service -p email_focus_worker --bin email_focus_worker -p search_processing_service --bin search_processing_service --features search_processing_service/no_pdf
+    SQLX_OFFLINE=true cargo build -p imap_service --bin imap_service -p email_service --bin email_service --bin pubsub_workers -p email_scheduled_handler --bin email_scheduled_handler -p user_link_cleanup_handler --bin user_link_cleanup_handler -p email_sfs_delete_handler --bin email_sfs_delete_handler -p email_suppression_handler --bin email_suppression_handler -p email_refresh_handler --bin email_refresh_handler -p calendar_service --bin calendar_service -p document_storage_service --bin document_storage_service -p email_focus_worker --bin email_focus_worker -p search_processing_service --bin search_processing_service --features search_processing_service/no_pdf
     SQLX_OFFLINE=true crates/email_e2e/scripts/known_bugs.sh {{ args }}
 
 # What the last `just email-e2e` run covers: the functions of email and the
@@ -62,7 +63,7 @@ email-e2e-coverage *args:
 # what `email-e2e` needs and the web app's `bun install`. Arguments go to
 # Playwright, e.g. `just email-e2e-browser reply` or `--repeat-each 5`.
 email-e2e-browser *args:
-    SQLX_OFFLINE=true cargo build -p email_service --bin email_service --bin pubsub_workers -p email_scheduled_handler --bin email_scheduled_handler -p document_storage_service --bin document_storage_service -p email_e2e --bin email_e2e_stacks
+    SQLX_OFFLINE=true cargo build -p imap_service --bin imap_service -p email_service --bin email_service --bin pubsub_workers -p email_scheduled_handler --bin email_scheduled_handler -p document_storage_service --bin document_storage_service -p email_e2e --bin email_e2e_stacks
     just apps/web/build-email-e2e
     just apps/web/test-email-e2e-browser {{ args }}
 
@@ -75,6 +76,13 @@ email-e2e-full-stack *args:
     just run_local --no-doppler --instance email-e2e --no-frontend --traces off --no-computers
     just apps/web/build-email-e2e
     just apps/web/test-email-e2e-full-stack email-e2e {{ args }}
+
+# Exercise real inbound IMAP and outbound SMTP through the desktop and mobile web UI.
+imap-e2e-browser *args:
+    bash docker/imap-lab/prepare.sh
+    just run_local --no-doppler --instance imap-mail --no-frontend --traces off --no-computers --env-file docker/imap-lab/browser-profile
+    just apps/web/build-email-e2e
+    IMAP_LAB_REQUIRED=true just apps/web/test-email-e2e-full-stack imap-mail full-stack-imap {{ args }}
 
 # Build dev service Docker images to pre-warm the cache used by root `run_local`.
 build_dev_service_images:

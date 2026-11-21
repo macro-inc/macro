@@ -16,6 +16,7 @@ types, the `EmailThread` edge resolvers, and draft mutations.
   and content, keyed by thread/message id.
 - `src/user_query.rs` / `src/user_objects.rs`: viewer-scoped email settings
   (labels, links, sync status) separate from message content.
+- `GraphqlEmailProvider` includes IMAP; account credentials never enter GraphQL objects.
 
 ## Scope
 

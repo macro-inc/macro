@@ -19,6 +19,7 @@ pub(super) async fn link_by_fusionauth_and_macro_id(
     let provider: DbUserProvider = match provider {
         UserProvider::Gmail => DbUserProvider::Gmail,
         UserProvider::Outlook => DbUserProvider::Outlook,
+        UserProvider::Imap => DbUserProvider::Imap,
     };
 
     let db_link = sqlx::query_as!(
@@ -53,6 +54,7 @@ pub(super) async fn link_by_fusionauth_email_provider(
     let provider: DbUserProvider = match provider {
         UserProvider::Gmail => DbUserProvider::Gmail,
         UserProvider::Outlook => DbUserProvider::Outlook,
+        UserProvider::Imap => DbUserProvider::Imap,
     };
 
     let db_link = sqlx::query_as!(
@@ -220,6 +222,7 @@ impl DbInboxDetailsRow {
             provider: match self.provider {
                 DbUserProvider::Gmail => UserProvider::Gmail,
                 DbUserProvider::Outlook => UserProvider::Outlook,
+                DbUserProvider::Imap => UserProvider::Imap,
             },
             is_sync_active: self.is_sync_active,
             needs_reauth: self.needs_reauth,
@@ -236,8 +239,9 @@ impl DbInboxDetailsRow {
                 DbEmailBackfillStatus::Cancelled => EmailBackfillStatus::Cancelled,
                 DbEmailBackfillStatus::Failed => EmailBackfillStatus::Failed,
             }),
-            needs_calendar_permission: !GoogleScopeSet::from_scopes(self.google_granted_scopes)
-                .has_calendar_capability(),
+            needs_calendar_permission: matches!(self.provider, DbUserProvider::Gmail)
+                && !GoogleScopeSet::from_scopes(self.google_granted_scopes)
+                    .has_calendar_capability(),
             calendar_disabled: self.calendar_disabled,
             has_calendar_data: self.has_calendar_data,
             created_at: self.created_at,
@@ -256,58 +260,120 @@ pub(super) async fn inbox_details_for_macro_id(
     let rows = sqlx::query_as!(
         DbInboxDetailsRow,
         r#"
-        SELECT l.id as "id!", l.macro_id as "macro_id!",
-               l.email_address as "email_address!",
-               l.provider as "provider!: _",
-               l.is_sync_active as "is_sync_active!",
-               l.needs_reauth as "needs_reauth!",
-               l.mailbox_unavailable_at IS NOT NULL as "mailbox_unavailable!",
-               l.is_primary as "is_primary!",
-               l.created_at as "created_at!",
-               l.updated_at as "updated_at!",
-               s.signature_on_replies_forwards as "signature_on_replies_forwards?",
-               s.signature,
-               CASE WHEN l.provider = 'OUTLOOK' THEN
-                   CASE WHEN NOT EXISTS (SELECT 1 FROM email_sync_streams ss WHERE ss.link_id = l.id AND ss.generation = l.sync_generation AND ss.kind IN ('folder_catalog','mail_folder'))
-                       THEN 'Init'::email_backfill_job_status
-                   WHEN EXISTS (SELECT 1 FROM email_sync_streams ss WHERE ss.link_id = l.id AND ss.generation = l.sync_generation AND ss.kind IN ('folder_catalog','mail_folder') AND NOT ss.initial_complete)
-                       OR EXISTS (SELECT 1 FROM email_message_reconciliation mr WHERE mr.link_id = l.id AND mr.generation = l.sync_generation AND mr.is_import AND mr.available_at <> 'infinity')
-                       THEN 'InProgress'::email_backfill_job_status
-                   ELSE 'Complete'::email_backfill_job_status END
-               ELSE bj.status END as "latest_backfill_status?: _",
-               c.sfs_photo_url as "photo_url?",
-               COALESCE(g.granted_scopes, '{}') AS "google_granted_scopes!",
-               (g.calendar_disabled_at IS NOT NULL) AS "calendar_disabled!",
-               EXISTS (
-                   SELECT 1 FROM calendar_accounts ca WHERE ca.email_link_id = l.id
-               ) AS "has_calendar_data!"
+        SELECT
+            l.id as "id!",
+            l.macro_id as "macro_id!",
+            l.email_address as "email_address!",
+            l.provider as "provider!: _",
+            l.is_sync_active as "is_sync_active!",
+            l.needs_reauth as "needs_reauth!",
+            l.mailbox_unavailable_at IS NOT NULL as "mailbox_unavailable!",
+            l.is_primary as "is_primary!",
+            l.created_at as "created_at!",
+            l.updated_at as "updated_at!",
+            s.signature_on_replies_forwards as "signature_on_replies_forwards?",
+            s.signature,
+            CASE WHEN l.provider IN ('OUTLOOK', 'IMAP') THEN
+                CASE WHEN NOT EXISTS (
+                    SELECT
+                        1
+                    FROM
+                        email_sync_streams ss
+                    WHERE
+                        ss.link_id = l.id
+                        AND ss.generation = l.sync_generation
+                        AND ss.kind IN ('folder_catalog', 'mail_folder')) THEN
+                    'Init'::email_backfill_job_status
+                WHEN EXISTS (
+                    SELECT
+                        1
+                    FROM
+                        email_sync_streams ss
+                    WHERE
+                        ss.link_id = l.id
+                        AND ss.generation = l.sync_generation
+                        AND ss.kind IN ('folder_catalog', 'mail_folder')
+                        AND NOT ss.initial_complete)
+                    OR EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            email_message_reconciliation mr
+                        WHERE
+                            mr.link_id = l.id
+                            AND mr.generation = l.sync_generation
+                            AND mr.is_import
+                            AND mr.available_at <> 'infinity') THEN
+                    'InProgress'::email_backfill_job_status
+                ELSE
+                    'Complete'::email_backfill_job_status
+                END
+            ELSE
+                bj.status
+            END as "latest_backfill_status?: _",
+            c.sfs_photo_url as "photo_url?",
+            COALESCE(g.granted_scopes, '{}') AS "google_granted_scopes!",
+            (g.calendar_disabled_at IS NOT NULL) AS "calendar_disabled!",
+            EXISTS (
+                SELECT
+                    1
+                FROM
+                    calendar_accounts ca
+                WHERE
+                    ca.email_link_id = l.id) AS "has_calendar_data!"
         FROM (
-            SELECT el.id, el.macro_id, el.email_address, el.provider,
-                   el.is_sync_active, el.needs_reauth, el.is_primary,
-                   el.created_at, el.updated_at, el.sync_generation, el.mailbox_unavailable_at
-            FROM email_links el
-            WHERE el.macro_id = $1
+            SELECT
+                el.id,
+                el.macro_id,
+                el.email_address,
+                el.provider,
+                el.is_sync_active,
+                el.needs_reauth,
+                el.is_primary,
+                el.created_at,
+                el.updated_at,
+                el.sync_generation,
+                el.mailbox_unavailable_at
+            FROM
+                email_links el
+            WHERE
+                el.macro_id = $1
             UNION
-            SELECT el.id, el.macro_id, el.email_address, el.provider,
-                   el.is_sync_active, el.needs_reauth, el.is_primary,
-                   el.created_at, el.updated_at, el.sync_generation, el.mailbox_unavailable_at
-            FROM email_links el
-            JOIN macro_user_links mul ON el.id = mul.link_id
-            WHERE mul.primary_macro_id = $1
-        ) l
-        LEFT JOIN email_link_google_scopes g ON g.link_id = l.id
-        LEFT JOIN email_settings s ON s.link_id = l.id
-        LEFT JOIN LATERAL (
-            SELECT status FROM email_backfill_jobs
-            WHERE link_id = l.id
-            ORDER BY created_at DESC
-            LIMIT 1
-        ) bj ON true
-        LEFT JOIN email_contacts c
-            ON c.link_id = l.id AND LOWER(c.email_address) = LOWER(l.email_address)
-        ORDER BY l.created_at DESC
+            SELECT
+                el.id,
+                el.macro_id,
+                el.email_address,
+                el.provider,
+                el.is_sync_active,
+                el.needs_reauth,
+                el.is_primary,
+                el.created_at,
+                el.updated_at,
+                el.sync_generation,
+                el.mailbox_unavailable_at
+            FROM
+                email_links el
+                JOIN macro_user_links mul ON el.id = mul.link_id
+            WHERE
+                mul.primary_macro_id = $1) l
+            LEFT JOIN email_link_google_scopes g ON g.link_id = l.id
+            LEFT JOIN email_settings s ON s.link_id = l.id
+            LEFT JOIN LATERAL (
+                SELECT
+                    status
+                FROM
+                    email_backfill_jobs
+                WHERE
+                    link_id = l.id
+                ORDER BY
+                    created_at DESC
+                LIMIT 1) bj ON true
+            LEFT JOIN email_contacts c ON c.link_id = l.id
+                AND LOWER(c.email_address) = LOWER(l.email_address)
+            ORDER BY
+                l.created_at DESC
         "#,
-        macro_id.as_ref()
+        macro_id.as_ref(),
     )
     .fetch_all(pool)
     .await?;

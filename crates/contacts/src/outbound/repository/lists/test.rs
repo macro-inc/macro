@@ -531,3 +531,73 @@ async fn an_interaction_that_arrives_after_a_deletion_adds_nobody_back(pool: PgP
         ]
     );
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("inboxes"))
+)]
+async fn imap_inbox_contacts_keep_their_provider_owner_and_legacy_edge(pool: PgPool) {
+    sqlx::query!(
+        r#"
+        UPDATE email_links
+        SET provider = 'IMAP'
+        WHERE id = $1
+        "#,
+        FIRST_INBOX,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let service = service(&pool);
+    let message = DirectoryChange::InboxContacts {
+        inbox: InboxSource {
+            owner: mid("macro|a@example.com"),
+            link_id: FIRST_INBOX,
+            provider: InboxProvider::Imap,
+        },
+        contacts: vec![mid("macro|b@example.com")],
+    };
+    // Exercise the queue's serialized wire value as well as its domain effect.
+    let wire = serde_json::to_vec(&message).unwrap();
+    let received = serde_json::from_slice(&wire).unwrap();
+    service.process_message(received).await.unwrap();
+
+    let rows = sqlx::query!(
+        r#"
+        SELECT user_id, contact_user_id, link_id, list_key
+        FROM contact_inbox_members
+        "#,
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].user_id, "macro|a@example.com");
+    assert_eq!(rows[0].contact_user_id, "macro|b@example.com");
+    assert_eq!(rows[0].link_id, FIRST_INBOX);
+    assert_eq!(rows[0].list_key, "imap");
+    let edges = sqlx::query!(
+        r#"
+        SELECT user1, user2
+        FROM contacts_connections
+        "#,
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(edges.len(), 1);
+    assert_eq!(edges[0].user1, "macro|a@example.com");
+    assert_eq!(edges[0].user2, "macro|b@example.com");
+
+    sqlx::query!(
+        r#"
+        DELETE FROM email_links
+        WHERE id = $1
+        "#,
+        FIRST_INBOX,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(inbox_rows(&pool).await.is_empty());
+}

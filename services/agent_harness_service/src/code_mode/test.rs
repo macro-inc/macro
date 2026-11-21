@@ -355,6 +355,11 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         "email.healthCheckLinks",
         "email.initUser",
         "email.patchSettings",
+        // Owner-only folder preferences, like sync/settings above; no mail is sent.
+        "email.updateImapMailboxSettings",
+        // An internal-key-only wakeup: user credentials cannot invoke it, and
+        // its effect is sync/credential health, not submission.
+        "email.imapNotification",
         "email.resyncLink",
         "email.updateThreadProject",
         "email.updateThreadState",

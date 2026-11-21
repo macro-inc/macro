@@ -88,9 +88,52 @@ starts it and brings up the native controls. When it ends, the last frame dims u
 focus) hides it on that device for good (`localStorage`
 `email-tutorial-row-dismissed`). It is outside the virtualized rows, so list
 keyboard focus skips it.
-Compose via the `Email` button (or `Create` → `Email E`). On a fresh local user it
-shows `Connect your email`; Gmail/Google Workspace and enabled Outlook connections
-use provider consent. Most functionality needs a connected account. Search is `Ctrl+F` within the surface: it focuses the list header's search field, and when a thread or a new email has replaced the list it is left to the browser's find. Outside a text field, `/` opens the app's Search view from Email in every state, as in every other view. The Email sidebar has no search field.
+Compose via the `Email` button (or `Create` → `Email E`). A fresh account
+shows **Connect your email** or offers the verified sign-in address. Gmail,
+Google Workspace and enabled Outlook connections offer provider consent.
+When availability succeeds with just one consent provider and no IMAP choice,
+consent starts directly. A failed availability read keeps the retry action and
+never starts a provider automatically.
+When IMAP is available, open the incoming/outgoing server form, confirm both
+servers, enter the password or app password, then choose **Connect inbox**.
+Phones show the same fields full-screen.
+Incoming and outgoing passwords use the shared masked secret input. Reconnect
+starts with empty secret fields; revealing a field shows only newly typed text.
+Turning off a separate outgoing password forgets that typed value.
+During verification, **Connect inbox** stays in place with a loading indicator.
+Check idle, checking, refusal and retry on desktop and phone: the action keeps
+its label and width, and error copy wraps without being clipped.
+A verified sign-in refusal shows **Sign-in was rejected. Check your username
+and app password.** The provider's **Create an app password** link stays
+available. Server settings and confirmation remain; re-enter the cleared
+password and retry. DNS, TCP, TLS and timeout failures show their own guidance
+instead of guessing that a password was wrong.
+**Connect new** and **Add another inbox** open the provider chooser immediately.
+If providers cannot load, **Try again** retries the read without starting an
+OAuth flow. Check that retry restores the offered providers and that calendar
+connections never offer IMAP.
+Keep the inbox open after connecting a test account with existing mail: it
+shows **Syncing your inbox**, then imported rows without a reload. After the
+import finishes, deliver another test message and verify it appears in the
+unchanged open inbox without navigating or reloading. Repeat with signal
+notifications disabled.
+
+Open **Settings → Email** to check import progress, reconnect or disconnect.
+The IMAP connection and server settings dialogs use the interface language,
+including connection errors, folder roles and accessible labels. Password fields
+clear after a verification attempt; confirmed non-secret settings remain.
+
+On an owned IMAP inbox, **Server settings** shows the hosts, ports, encryption
+and usernames for both servers. Recent verifications also show the negotiated
+features, the verification time and any outgoing size limit the server supplied.
+**Change login details** verifies replacement credentials for the same inbox.
+
+Under **Folders**, choose a role, include or exclude a folder, or watch one
+additional folder for new mail. Inbox is always included. **Outside the latest
+sync** identifies an included folder absent from the most recent pass. Choose
+**Save settings** to apply changes.
+
+Most functionality needs a connected account. Search is `Ctrl+F` within the surface: it focuses the list header's search field, and when a thread or a new email has replaced the list it is left to the browser's find. Outside a text field, `/` opens the app's Search view from Email in every state, as in every other view. The Email sidebar has no search field.
 
 ### Wide search (flagged)
 
@@ -194,7 +237,8 @@ sharing an inbox or thread inside Macro remains available.
 
 A Microsoft 365 tenant that lets only administrators consent sends the user
 back to an `Admin approval required` dialog with `Copy admin approval link`
-(a tenant-wide approval link for IT) and `Connect a different account`.
+(a tenant-wide approval link for IT) and `Connect a different account`. The
+copy action becomes available once the signed-in session and its approval link load.
 Cancelling on the provider's consent screen returns to the previous view
 silently. An administrator who opens the approval link returns to
 `Approved. Try connecting again.` with the connect dialog open. On native
@@ -1336,7 +1380,11 @@ notice that stays on screen until the send ends and changes in place: **Undo**
 leaves at the deadline, and **Sending…** then becomes **Email sent** only after
 delivery; it never closes and reopens while the send is in motion. A send
 that makes no progress for 30 seconds (retrying, or waiting on sign-in) lets
-its notice expire, and a new one follows it once the server accepts it. This holds
+its notice expire, and a new one follows it once the server accepts it. After
+the undo deadline, a send with no progress for 30 seconds shows **Delivery
+unconfirmed** while confirmation continues. Repeated unchanged status polls
+must not restart that deadline; a later confirmed delivery becomes **Email sent**.
+This holds
 when another Mail tab delivers or cancels the send first, and a cancelled reply
 still returns its thread to Inbox. When the server cannot say how such a send
 ended, the notice closes. A send that fails after it was queued turns the

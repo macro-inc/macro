@@ -17,7 +17,7 @@ import type { ReplyComposerOptions } from './reply-composer';
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
-const providers = ['GMAIL', 'OUTLOOK'] as const;
+const providers = ['GMAIL', 'OUTLOOK', 'IMAP'] as const;
 const teammate: EmailRecipient = {
   kind: 'custom',
   id: 'teammate@example.com',
@@ -528,6 +528,39 @@ it.each(providers)(
         'open 2 success: Sending… [Undo]',
         'update 2 success: Email sent',
       ]);
+    } finally {
+      reply.dispose();
+    }
+  }
+);
+
+it.each(providers)(
+  '%s: repeated unchanged polls cannot keep an accepted send spinning forever',
+  async (provider) => {
+    const { context, report } = outbox(provider);
+    const notices = recordNotices(context);
+    const reply = mountReplyComposer(context);
+    try {
+      await reply.sendEmail();
+      const accepted = {
+        state: 'accepted',
+        undoUntil: new Date(Date.now()).toISOString(),
+      } as const;
+      report(accepted);
+      for (let poll = 0; poll < 5; poll++) {
+        await vi.advanceTimersByTimeAsync(5_000);
+        report(accepted);
+      }
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(notices.log.at(-1)).toContain('alert: Delivery unconfirmed');
+      report({ state: 'pending' });
+      for (let poll = 0; poll < 6; poll++) {
+        await vi.advanceTimersByTimeAsync(5_000);
+        report({ state: 'pending' });
+      }
+      expect(notices.log.at(-1)).toContain('alert: Delivery unconfirmed');
+      report({ state: 'sent' });
+      expect(notices.log.at(-1)).toContain('success: Email sent');
     } finally {
       reply.dispose();
     }

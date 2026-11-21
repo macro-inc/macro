@@ -34,11 +34,32 @@ pub(super) async fn enqueue(
     let mut tx = super::begin(pool).await?;
     // Serialize acceptance per mailbox and recheck the scoped delegation edge at
     // commit, so an access revocation cannot create new pending work.
-    let binding = sqlx::query!(r#"
-        SELECT l.sync_generation FROM email_links l WHERE l.id = $1 AND l.provider = 'OUTLOOK' AND l.is_sync_active
-            AND (l.macro_id = $2 OR EXISTS (SELECT 1 FROM macro_user_links u WHERE u.link_id = l.id AND u.primary_macro_id = $2))
+    let binding = sqlx::query!(
+        r#"
+        SELECT
+            l.sync_generation
+        FROM
+            email_links l
+        WHERE
+            l.id = $1
+            AND l.provider IN ('OUTLOOK', 'IMAP')
+            AND l.is_sync_active
+            AND (l.macro_id = $2
+                OR EXISTS (
+                    SELECT
+                        1
+                    FROM
+                        macro_user_links u
+                    WHERE
+                        u.link_id = l.id
+                        AND u.primary_macro_id = $2))
         FOR UPDATE
-    "#,link_id,actor.as_ref()).fetch_one(&mut *tx).await?;
+        "#,
+        link_id,
+        actor.as_ref(),
+    )
+    .fetch_one(&mut *tx)
+    .await?;
     if let MailboxAction::Category { name, .. } = action {
         let available=sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM email_labels l WHERE l.link_id=$1 AND l.provider_label_id=$2 AND l.type='User'
             AND NOT EXISTS(SELECT 1 FROM email_mailbox_settings_work w WHERE w.link_id=l.link_id AND w.kind='delete_label' AND w.resource_key=l.provider_label_id AND w.completed_revision<w.revision)) AS "available!""#,link_id,name).fetch_one(&mut *tx).await?;

@@ -2110,3 +2110,27 @@ legacy header does not reserve an empty band. The responsive vault fixture is ex
 per-file worker (`lib/core/password-import`); the parsed export lives only in
 the import primitive's closure while the dialog is open, and sessionStorage
 holds only the import id. See the [Passwords walkthrough](../../docs/agent-guide/passwords.md).
+
+- Refresh mounted email list readers from matching `refresh_email` events through
+  their data source, for both GraphQL and REST. Coalesce bursts, fence deferred
+  work by account/session/scope, and catch up on reconnect/visibility. Show
+  first-sync progress instead of an empty-inbox claim while selected links sync.
+
+- Open generic email-provider selection immediately with loading and explicit
+  retry on availability errors; never silently start Gmail on a failed read.
+  Once availability succeeds, start the sole consent provider directly when
+  IMAP is not offered; retain the chooser when there are multiple choices.
+  Chooser capabilities omit the optional admin-consent callback and use a
+  separate account/session cache variant from signed approval links.
+
+- Use the shared SecretInput with current-password autocomplete for IMAP/SMTP;
+  reconnect secrets start empty and switching off a separate outgoing secret
+  clears its typed value.
+
+- Keep confirmed IMAP server settings after verification refusal, clear secret
+  fields, and offer the catalog app-password help link. Render only whitelisted
+  error guidance; a connection failure must never imply a rejected password.
+
+- Keep IMAP connect action labels mounted through verification with Button
+  loading, and reserve a wrapping error area so refusal/retry does not shift
+  the footer. Avoid fixed action widths or clipped error copy.

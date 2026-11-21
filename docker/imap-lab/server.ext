@@ -1,0 +1,4 @@
+subjectAltName=DNS:maillab.example.net,DNS:localhost
+extendedKeyUsage=serverAuth
+basicConstraints=CA:FALSE
+keyUsage=critical,digitalSignature,keyEncipherment

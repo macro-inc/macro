@@ -277,6 +277,9 @@ fn names_a_route(path: &str) -> bool {
 fn default_providers(key: &str, file: &str) -> Providers {
     let named_in = |text: &str| {
         let text = text.to_lowercase();
+        if text.contains("imap") && !text.contains("gmail") && !text.contains("outlook") {
+            return Some(Providers::Imap);
+        }
         match (text.contains("gmail"), text.contains("outlook")) {
             (true, false) => Some(Providers::Gmail),
             (false, true) => Some(Providers::Outlook),

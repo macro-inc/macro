@@ -8,6 +8,11 @@ tools — hexagonal, heavily feature-gated.
 
 ## Start here
 
+- `domain/mailbox/imap_connection.rs`: verified-address IMAP connection policy,
+  durable promotion recovery and enrollment; its ports keep credentials and SQL
+  outside the email domain. Provider-bound repositories isolate IMAP and
+  Outlook work without a shared rollout snapshot.
+
 - `src/domain/service.rs` + `src/domain/ports.rs`: the domain service and the
   traits its adapters implement.
 - `src/domain/message_reads.rs` (feature `mailbox`): synced message/thread
@@ -90,7 +95,8 @@ tools — hexagonal, heavily feature-gated.
   (`domain/event_forward.rs`): that same file, or, for an organizer outside
   Google, a real invitation (`METHOD:REQUEST`) sent as the message's calendar
   body to the recipients and the organizer, whichever the calendar decides.
-- Provider protocol implementations live in `email_api_client`; HTTP/queue
+- Gmail/Graph API adapters live in `email_api_client`; IMAP/SMTP protocol
+  implementations live in `imap_engine`, behind `imap_service`. HTTP/queue
   hosting lives in `services/email_service`; HTML parsing/sanitization lives in
   `email_utils`. PostgreSQL adapters in this crate and `email_db_client` perform
   database I/O; domain modules call their ports.
@@ -369,6 +375,11 @@ tools — hexagonal, heavily feature-gated.
   inbox's whole folder.
 - Restore Outlook junk drafts to Drafts without Inbox membership; continue rejecting
   attempts to mark clean drafts as junk.
+- Draft claims inspect one indexed eligible head per provider mailbox, then lock only
+  the winner with every eligibility fence repeated; retry a locked head’s successor,
+  yielding without a claim after 32 contended candidates until the next worker round.
+  Keep separate normal/recovery index predicates and correlated command-lease probes
+  so paused writes and mixed-provider backlogs do not scan unrelated drafts.
 - Include a reader’s cross-inbox reply draft on a shared thread at Edit only
   when it belongs to an inbox in the reader’s Drafts scope. Apply the same
   rule to full and parsed thread reads.
@@ -381,7 +392,8 @@ tools — hexagonal, heavily feature-gated.
   keep relational guards in SQL. Compose `ScheduledDeliveryService` once while
   keeping claims and transactions per delivery. Scheduled page validation and
   expansion sequencing live in `domain/scheduled/drafts.rs`.
-- Durable send admission supports Gmail and Outlook; Outlook delivery stays with its provider coordinator.
+- Durable send admission supports Gmail, Outlook and IMAP; Outlook and IMAP delivery use the mailbox draft coordinator.
+- Treat a typed pre-DATA send rejection as terminal failure and keep uncertain-send reconciliation bounded even when provider reads fail.
 - Carry the captured `draft_generation` through every draft mutation; advance it on send acceptance/cancellation under the message lock and preserve attempt tombstones after message deletion.
 
 - Gmail thread label writes stage each thread's DB change, then enqueue one
@@ -547,9 +559,11 @@ tools — hexagonal, heavily feature-gated.
 - Open every `mailbox_pg` transaction with `PgMailboxSync::begin`, which sets a
   5 s `lock_timeout`, so a write queued behind a long lock holder (a CRM
   population share-locks its link) fails instead of holding a pooled
-  connection; a locking read runs in one too. Pre-checks that a write repeats
+  connection; a locking read runs in one too. Retain the 15 s statement bound
+  on mutation/projection claims and backlog scans. Pre-checks that a write repeats
   under the lock (settings access) and credential health that has not changed
-  read without the lock, so reads and Graph calls never wait on it. The
+  read without the lock, so reads and provider calls never wait on it; compare
+  Microsoft scope snapshots only for Outlook. The
   timeout is SQLSTATE 55P03
   (`MailboxError::is_lock_timeout`, `InboxLifecycleError::Contended`) and every
   caller retries it: lease release or expiry, message backoff, redelivery, a
@@ -718,7 +732,9 @@ tools — hexagonal, heavily feature-gated.
   it too, and with the same grant, which starts no new generation, makes
   the same work and discovery due itself; keep the two wakes alike. Any
   other discovery failure, a 5xx included, stays a provider error. The
-  inbox's sync status reads `MailboxUnavailable`.
+  inbox's sync status reads `MailboxUnavailable`. Keep an IMAP private-catalog
+  404 as `NotFound` and a successful empty catalog as `Folders([])`; neither
+  is Graph's missing-mailbox diagnosis.
 - Process deleted-user bindings in the domain by link id, custodian before
   owner, then actor id, retaining one binding per link and actor; the repository
   returns each binding's kind so custody cleanup runs before an owner disconnect
@@ -772,3 +788,31 @@ tools — hexagonal, heavily feature-gated.
 - Rules: `.agents/rules/rust/architecture.md`
 
 - Persist agent correlation with scheduled delivery and organization projection payloads, then restore it when publishing delayed activity.
+
+Keep paused folders in the complete role catalog with `sync_enabled = false`.
+Pause or remove only their folder streams: treating an exclusion as deletion
+reclassifies retained Trash descendants and schedules unwanted body downloads.
+
+- Persist `ImportCompleted` in the projection outbox in the same transaction as
+  `import_completed_at`, once per link/generation, including empty imports.
+  Refresh mounted readers before slower message projection effects and retry
+  failed gateway handoffs independently of new-message notification policy.
+
+
+Mailbox claim queues carry parent-derived provider routing metadata. Keep both
+the queue index predicate and the authoritative link/provider/generation/health
+checks, and keep claim transactions bounded by their statement timeout.
+
+IMAP enrollment inputs and durable promotion attempts carry EmailStr identities.
+After ownership comparison, discovery retains the submitted spelling and
+verification uses the actor's canonical email part; catalog domains are case-folded. Do not normalize mailbox identity
+or replace raw IMAP/SMTP protocol usernames with sign-in address types.
+
+IMAP uses only the existing user-scoped connection enrollment flag. Once linked,
+sync, authorized sends and organization writes run independently of PostHog.
+Keep ownership, active/reauth state, generation/lease fences and explicit
+pause, disconnect and deletion admission. Outlook's rollout remains separate.
+
+Attempt message-list refresh before slower projection effects, but retain a failed
+refresh for retry after independent contacts, notifications, search and attachment
+effects run. A websocket outage must not suppress those projections.

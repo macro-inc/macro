@@ -10,6 +10,7 @@ type JsonResult = {
   status: string;
   retry: number;
   duration: number;
+  attachments?: { name: string; contentType: string; body?: string }[];
   error?: { message?: string };
 };
 type JsonSpec = {

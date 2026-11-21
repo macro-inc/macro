@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM imap_account_owners\n            WHERE link_id = $1\n                AND owner_id = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "270313c7b4c764985cbcbe30c7d5ece707505934eb57fa06712278026e6d66da"
+}

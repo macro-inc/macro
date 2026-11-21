@@ -206,7 +206,7 @@ impl<R: MailboxSettingsRepository, G: MailboxSettingsGateway> MailboxSettingsSer
             return Err(MailboxError::InvalidInput("invalid label name"));
         }
         let mailbox = self.repository.accessible(actor, link).await?;
-        if mailbox.provider == UserProvider::Outlook {
+        if mailbox.provider.uses_mailbox_framework() {
             return self
                 .repository
                 .queue_label_creation(actor, mailbox, name)
@@ -264,6 +264,11 @@ impl<R: MailboxSettingsRepository, G: MailboxSettingsGateway> MailboxSettingsSer
         let intents = self.repository.sender_intents(mailbox).await?;
         let mut result = match mailbox.provider {
             UserProvider::Gmail => self.gateway.gmail_blocked(mailbox).await?,
+            UserProvider::Imap => intents
+                .iter()
+                .filter(|intent| intent.desired)
+                .map(|intent| intent.sender.clone())
+                .collect(),
             UserProvider::Outlook => self
                 .gateway
                 .sender_rules(mailbox)
@@ -352,7 +357,7 @@ impl<R: MailboxSettingsRepository, G: MailboxSettingsGateway> MailboxSettingsSer
                 self.repository.commit_created_label(lease, label).await
             }
             "delete_label" => {
-                if lease.mailbox.provider == UserProvider::Outlook {
+                if lease.mailbox.provider.uses_mailbox_framework() {
                     let messages = self
                         .gateway
                         .category_messages(lease.mailbox, &lease.resource)
@@ -385,6 +390,9 @@ impl<R: MailboxSettingsRepository, G: MailboxSettingsGateway> MailboxSettingsSer
                 self.gateway
                     .gmail_set_block(lease.mailbox, &lease.resource, lease.desired)
                     .await?;
+                self.repository.finish_settings(lease, true, 0, None).await
+            }
+            "sender_block" if lease.mailbox.provider == UserProvider::Imap => {
                 self.repository.finish_settings(lease, true, 0, None).await
             }
             "sender_block" => {

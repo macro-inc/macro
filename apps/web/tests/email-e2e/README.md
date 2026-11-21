@@ -193,7 +193,9 @@ nix develop -c just apps/web/test-email-e2e-full-stack email-e2e reply   # only 
   test names its script with `scriptName`. `modelRequests(name)` answers
   what the assistant sent, tool declarations included.
   `full-stack-assistant.spec.ts` drafts an email for review and reads mail
-  through scripted tool calls this way.
+  through scripted tool calls this way. Type the entry point of each scripted
+  ExecuteCode program with the ambient `CodeContext` so the real checker can
+  validate the SDK calls before execution.
 - The tier writes its evidence to `ledger-results/full-stack/`, and the
   report counts it together with the per-test run's. What only the tier
   covers is listed in `ledger/full-stack-only.tsv` (`ledger/README.md`):
@@ -301,3 +303,27 @@ apps/web/test-email-fixtures-browser` runs the ones that cover an email or
 calendar bug class; the recipe lists them. The CI job runs it beside this
 suite. `src/features/calendar/browser-test` mounts the calendar over scripted
 `/calendar` routes until `calendar_service` is part of the stack.
+
+The full-stack onboarding tests use unique synthetic addresses in the local Gmail
+and Outlook emulators’ native domains to exercise the direct provider buttons.
+An unknown domain uses the IMAP suggestion when that rollout is enabled.
+
+### IMAP and SMTP
+
+Run `just imap-e2e-browser` for the desktop and phone IMAP enrollment and reply
+cases. This tier uses the authenticated local stack, a Dovecot IMAP and
+submission server, and Mailpit. The independent test client appends the inbound
+message over IMAP and reads the resulting SMTP reply through Mailpit. The
+full-stack CI job requires both layouts to save and reopen folder settings,
+reconnect the same account, and record the visible confirmations and real
+browser API requests in the coverage ledger.
+
+To inspect enrollment in local Tempo, run the same no-Doppler stack with
+`--traces lgtm` and build the full-stack web bundle with
+`VITE_ENABLE_BROWSER_OTEL=true`, `VITE_OTEL_ENV=local` and
+`VITE_OTEL_EXPORTER_URL=/i/otlp/v1/traces`. Run
+`just apps/web/test-email-e2e-full-stack imap-mail full-stack-imap`.
+Each case records its enrollment trace ID in the Playwright JSON report's
+`imap-enrollment-trace` attachment. Look up that ID in local Tempo to follow
+the browser request through the email and IMAP services. Playwright's network
+trace stays off because the enrollment request contains the lab password.

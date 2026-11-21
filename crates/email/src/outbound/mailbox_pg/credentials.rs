@@ -25,17 +25,53 @@ impl MailboxCredentialHealthRepository for PgMailboxSync {
             CredentialHealth::Available(scopes) => scopes,
             CredentialHealth::ReauthorizationRequired => &[],
         };
-        let stored = sqlx::query!(r#"SELECT l.needs_reauth,
-            EXISTS(SELECT 1 FROM email_link_microsoft_scopes s WHERE s.link_id = l.id AND s.grant_generation = $2
-                AND s.granted_scopes IS NOT DISTINCT FROM $4) AS "scopes_stored!",
-            NOT EXISTS(SELECT 1 FROM email_mailbox_custodians c WHERE c.link_id = l.id AND c.grant_id = l.grant_id
-                AND c.grant_generation = $2 AND c.granted_scopes IS DISTINCT FROM $4) AS "custodians_stored!"
-            FROM email_links l WHERE l.id = $1 AND l.grant_generation = $2 AND l.is_sync_active AND l.provider = 'OUTLOOK' AND l.sync_generation = $3"#,
-            mailbox.link_id,mailbox.grant_generation,mailbox.sync_generation,scopes)
-            .fetch_optional(&self.db).await.map_err(failed)?.ok_or(TokenError::ReauthRequired)?;
+        let stored = sqlx::query!(
+            r#"
+            SELECT
+                l.needs_reauth,
+                EXISTS (
+                    SELECT
+                        1
+                    FROM
+                        email_link_microsoft_scopes s
+                    WHERE
+                        s.link_id = l.id
+                        AND s.grant_generation = $2
+                        AND s.granted_scopes IS NOT DISTINCT FROM $4) AS "scopes_stored!",
+                NOT EXISTS (
+                    SELECT
+                        1
+                    FROM
+                        email_mailbox_custodians c
+                    WHERE
+                        c.link_id = l.id
+                        AND c.grant_id = l.grant_id
+                        AND c.grant_generation = $2
+                        AND c.granted_scopes IS DISTINCT FROM $4) AS "custodians_stored!"
+            FROM
+                email_links l
+            WHERE
+                l.id = $1
+                AND l.grant_generation = $2
+                AND l.is_sync_active
+                AND l.provider = $5::text::email_user_provider_enum
+                AND l.sync_generation = $3
+            "#,
+            mailbox.link_id,
+            mailbox.grant_generation,
+            mailbox.sync_generation,
+            scopes,
+            self.provider.as_str(),
+        )
+        .fetch_optional(&self.db)
+        .await
+        .map_err(failed)?
+        .ok_or(TokenError::ReauthRequired)?;
         let unchanged = match &health {
             CredentialHealth::Available(_) => {
-                !stored.needs_reauth && stored.scopes_stored && stored.custodians_stored
+                !stored.needs_reauth
+                    && (self.provider != crate::domain::models::UserProvider::Outlook
+                        || (stored.scopes_stored && stored.custodians_stored))
             }
             CredentialHealth::ReauthorizationRequired => stored.needs_reauth,
         };
@@ -43,10 +79,34 @@ impl MailboxCredentialHealthRepository for PgMailboxSync {
             return Ok(());
         }
         let mut tx = self.begin().await.map_err(failed)?;
-        let current = sqlx::query!("SELECT sync_generation,needs_reauth FROM email_links WHERE id = $1 AND grant_generation = $2 AND is_sync_active AND provider = 'OUTLOOK' AND sync_generation = $3 FOR UPDATE",mailbox.link_id,mailbox.grant_generation,mailbox.sync_generation)
-            .fetch_optional(&mut *tx).await.map_err(failed)?.ok_or(TokenError::ReauthRequired)?;
+        let current = sqlx::query!(
+            r#"
+            SELECT
+                sync_generation,
+                needs_reauth
+            FROM
+                email_links
+            WHERE
+                id = $1
+                AND grant_generation = $2
+                AND is_sync_active
+                AND provider = $4::text::email_user_provider_enum
+                AND sync_generation = $3
+            FOR UPDATE
+            "#,
+            mailbox.link_id,
+            mailbox.grant_generation,
+            mailbox.sync_generation,
+            self.provider.as_str(),
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(failed)?
+        .ok_or(TokenError::ReauthRequired)?;
         let reauth = matches!(health, CredentialHealth::ReauthorizationRequired);
-        if let CredentialHealth::Available(scopes) = &health {
+        if let CredentialHealth::Available(scopes) = &health
+            && self.provider == crate::domain::models::UserProvider::Outlook
+        {
             let changed = sqlx::query!(r#"INSERT INTO email_link_microsoft_scopes(link_id,grant_generation,granted_scopes) VALUES ($1,$2,$3)
                 ON CONFLICT(link_id) DO UPDATE SET grant_generation = EXCLUDED.grant_generation,granted_scopes = EXCLUDED.granted_scopes,updated_at = now()
                 WHERE email_link_microsoft_scopes.grant_generation <> EXCLUDED.grant_generation OR email_link_microsoft_scopes.granted_scopes IS DISTINCT FROM EXCLUDED.granted_scopes"#,

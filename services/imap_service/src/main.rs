@@ -1,0 +1,130 @@
+use imap_engine::{
+    domain::service::Engine,
+    inbound::http::{ApiState, router},
+    outbound::{
+        crypto::KmsCipher,
+        discovery::MailDiscovery,
+        network::{Connector, LocalEndpoints},
+        notifications::HttpNotifier,
+        postgres::PgRepository,
+        protocol::ProtocolTransport,
+    },
+};
+use macro_config::ConfigLoader;
+use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
+use macro_env::Environment;
+use std::{collections::BTreeMap, sync::Arc, time::Duration};
+use tokio_util::{sync::CancellationToken, task::TaskTracker};
+mod config;
+mod scheduler;
+
+#[tokio::main]
+async fn main() -> Result<(), rootcause::Report> {
+    let telemetry = MacroEntrypoint::default().init();
+    if rustls::crypto::CryptoProvider::get_default().is_none() {
+        rustls::crypto::aws_lc_rs::default_provider()
+            .install_default()
+            .map_err(|_| rootcause::report!("TLS provider initialization failed"))?;
+    }
+    // async-imap logs raw protocol commands through log::trace, including LOGIN.
+    log::set_max_level(log::LevelFilter::Warn);
+    let config = ConfigLoader::load::<config::Config>()?;
+    if config.internal_auth_key.trim().is_empty() {
+        return Err(rootcause::report!("INTERNAL_AUTH_KEY must be nonempty"));
+    }
+    let local =
+        !config.imap_test_endpoint_map.is_empty() || !config.imap_test_trust_root_pem.is_empty();
+    if local && !matches!(config.environment, Environment::Local) {
+        return Err(rootcause::report!(
+            "IMAP test overrides require local environment"
+        ));
+    }
+    let addresses = if config.imap_test_endpoint_map.is_empty() {
+        BTreeMap::new()
+    } else {
+        serde_json::from_str(&config.imap_test_endpoint_map)?
+    };
+    let endpoints = LocalEndpoints {
+        addresses,
+        trust_root_pem: if config.imap_test_trust_root_pem.is_empty() {
+            None
+        } else {
+            Some(config.imap_test_trust_root_pem)
+        },
+    };
+    let connector = Connector::new(endpoints)?;
+    let pool = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(10)
+        .after_connect(|connection, _| {
+            Box::pin(async move {
+                sqlx::query!(
+                    r#"
+                    SET statement_timeout = '30s'
+                    "#,
+                )
+                .execute(connection)
+                .await?;
+                Ok(())
+            })
+        })
+        .connect(config.database_url.as_ref())
+        .await?;
+    let mut configuration_notifications = sqlx::postgres::PgListener::connect_with(&pool).await?;
+    configuration_notifications
+        .listen("imap_config_changed")
+        .await?;
+    let aws = macro_aws_config::get_macro_aws_config().await;
+    let notifier = HttpNotifier::new(
+        macro_service_urls::EmailServiceUrl::new_for_environment(config.environment)?.to_string(),
+        config.internal_auth_key.to_string(),
+    )?;
+    let repository = Arc::new(PgRepository::new(pool));
+    let engine = Arc::new(
+        Engine::new(
+            repository.clone(),
+            Arc::new(KmsCipher::new(
+                aws_sdk_kms::Client::new(&aws),
+                config.imap_credential_kms_key_id.to_string(),
+            )),
+            Arc::new(ProtocolTransport::new(connector).with_settings(repository.clone())),
+        )
+        .with_settings(repository)
+        .with_notifier(Arc::new(notifier))
+        .with_discovery(Arc::new(MailDiscovery::new(
+            macro_service_urls::ThunderbirdAutoconfigUrl::new_for_environment(config.environment)?,
+        ))),
+    );
+    let cancel = CancellationToken::new();
+    let tasks = TaskTracker::new();
+    tasks.spawn(scheduler::configuration_notifications(
+        configuration_notifications,
+        engine.clone(),
+        cancel.clone(),
+    ));
+    let actor_tasks = tasks.clone();
+    tasks.spawn(scheduler::run(engine.clone(), cancel.clone(), actor_tasks));
+    let state = ApiState {
+        engine,
+        internal_key: config.internal_auth_key.to_string(),
+    };
+    let app = router(state)
+        .layer(
+            macro_tower_layers::MacroRequestIdAndTracingLayer::new(Duration::from_secs(1))
+                .into_inner(),
+        )
+        .layer(axum::extract::DefaultBodyLimit::max(40 * 1024 * 1024));
+    let listener = tokio::net::TcpListener::bind(("0.0.0.0", config.port)).await?;
+    tracing::info!("imap_service is up and running");
+    let stopping = cancel.clone();
+    axum::serve(listener, app)
+        .with_graceful_shutdown(async move {
+            shutdown_signal().await;
+            stopping.cancel();
+        })
+        .await?;
+    cancel.cancel();
+    tasks.close();
+    tokio::time::timeout(Duration::from_secs(30), tasks.wait()).await?;
+    telemetry.shutdown();
+    Ok(())
+}

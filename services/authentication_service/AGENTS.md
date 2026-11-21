@@ -266,6 +266,9 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   `README.md` before changing signup behavior.
 - Denial responses and policy errors must never disclose configured allowlist
   addresses; never paste operational addresses into code, logs, or docs.
+- Advertise IMAP in `/link/email/providers` only when the requesting Macro user’s
+  `enable-imap-connections` flag is enabled. Missing or unavailable flags leave
+  IMAP off; the email service checks the same rollout on enrollment.
 - New Outlook connections need the deployment switch
   `OUTLOOK_CONNECTIONS_ENABLED` and the user's PostHog flag `enable-outlook`
   (`src/domain/microsoft.rs`), read with `crates/feature_flags` for the Macro

@@ -400,7 +400,8 @@ previous scroll position. `API Keys` is desktop-only and has no row here; `Accou
 access can be revoked from a phone.
 **Close settings** at the top right, Escape, an
 outside tap, or a downward swipe dismisses the sheet. A tap that dismisses a
-menu opened inside the sheet leaves the sheet itself open. Opening Settings again
+menu opened inside the sheet leaves the sheet itself open. Tapping controls in a
+dialog opened from Settings also keeps the current settings page behind it. Opening Settings again
 starts at the main page; explicit links (for example Account) open their
 section directly. Existing settings URLs open the requested section in the sheet
 and restore the underlying app route. The header stays visible while forms

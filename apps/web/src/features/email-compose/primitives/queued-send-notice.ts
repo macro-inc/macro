@@ -39,6 +39,8 @@ export function announceQueuedSend(options: {
   let offeringUndo = false;
   let undoRequested = false;
   let accepted = false;
+  let lastProgress: string | undefined;
+  let lastUndoUntil: string | undefined;
   let undoDeadline: ReturnType<typeof setTimeout> | undefined;
   let stall: ReturnType<typeof setTimeout> | undefined;
 
@@ -112,7 +114,15 @@ export function announceQueuedSend(options: {
     if (!inMotion) return;
     stall = setTimeout(() => {
       inMotion = false;
-      if (notice != null) sending(sendingMessage, offeringUndo);
+      if (notice != null) {
+        if (accepted && !offeringUndo) {
+          show('alert', 'Delivery unconfirmed', {
+            subtext: 'Check your sent mail. We will not resend automatically.',
+          });
+        } else {
+          sending(sendingMessage, offeringUndo);
+        }
+      }
     }, STALLED_SEND_MS);
   };
   // Delivery has begun: Undo goes, and the notice waits for the outcome.
@@ -126,14 +136,19 @@ export function announceQueuedSend(options: {
   sending(options.queuedOffline ? 'Email queued to send' : 'Sending…', true);
   if (!options.sendAttemptId) return;
   watchForStall();
-  options.delivery.watchSend?.(options.sendAttemptId, (progress) =>
+  options.delivery.watchSend?.(options.sendAttemptId, (progress) => {
+    const changed = progress.state !== lastProgress;
+    lastProgress = progress.state;
     match(progress)
       .with({ state: 'pending' }, () => {
+        if (!changed) return;
         // After acceptance, pending means delivery or cancellation has begun.
         if (accepted) closeUndo();
         else watchForStall();
       })
       .with({ state: 'accepted' }, ({ undoUntil }) => {
+        if (!changed && undoUntil === lastUndoUntil) return;
+        lastUndoUntil = undoUntil;
         accepted = true;
         if (undoRequested) return;
         // A send that waited has just been accepted: its notice may have
@@ -170,6 +185,6 @@ export function announceQueuedSend(options: {
         })
       )
       .with({ state: 'untracked' }, withdraw)
-      .exhaustive()
-  );
+      .exhaustive();
+  });
 }

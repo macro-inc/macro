@@ -331,6 +331,18 @@ test-email-e2e-full-stack instance *ARGS:
     export EMAIL_E2E_STACK_SQS_URL="$queues"
     export EMAIL_E2E_STACK_MODEL_URL="http://localhost:$model"
     export EMAIL_E2E_STACK_NO_DOPPLER=true
+    dovecot=$(docker ps -q --filter "label=com.docker.compose.project=$project" --filter "label=com.docker.compose.service=imap-lab-dovecot")
+    if [ -z "$dovecot" ] && [ "${IMAP_LAB_REQUIRED:-}" = true ]; then
+        echo "The IMAP browser tier requires this instance’s Dovecot sidecar" >&2
+        exit 1
+    fi
+    if [ -n "$dovecot" ]; then
+        imaps=$(docker port "$dovecot" 31993/tcp | sed 's/.*://')
+        relay=$(docker ps -q --filter "label=com.docker.compose.project=$project" --filter "label=com.docker.compose.service=imap-lab-mailpit")
+        mailpit=$(docker port "$relay" 8025/tcp | sed 's/.*://')
+        export IMAP_LAB_IMAPS_PORT="$imaps"
+        export EMAIL_E2E_STACK_MAILPIT_URL="http://localhost:$mailpit"
+    fi
     env -u LD_LIBRARY_PATH bunx playwright test --config tests/email-e2e/playwright.config.ts {{ARGS}}
 
 # The coverage ledger of the email UI, from the last run of the browser suite

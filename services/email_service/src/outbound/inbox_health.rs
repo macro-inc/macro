@@ -1,7 +1,7 @@
 use contacts::domain::ports::{ContactListIngress, ContactsIngress};
 use email::domain::mailbox::{MailboxError, health::*};
 use email_api_client::domain::{
-    models::{AccessToken, EmailApiError, MailboxAccess, TokenError, TokenFreshness},
+    models::{EmailApiError, MailboxAccess, TokenError, TokenFreshness},
     ports::MailboxTokenSource,
 };
 use macro_event_broker::MacroEventBroker;
@@ -37,6 +37,7 @@ impl InboxHealthRepository for PgInboxHealth {
             provider: match row.provider.as_str() {
                 "GMAIL" => UserProvider::Gmail,
                 "OUTLOOK" => UserProvider::Outlook,
+                "IMAP" => UserProvider::Imap,
                 _ => return Err(MailboxError::Persistence),
             },
             is_sync_active: row.is_sync_active,
@@ -77,6 +78,7 @@ impl InboxHealthRepository for PgInboxHealth {
 
 pub struct ProviderInboxHealth<T, B, C> {
     pub gmail: crate::outbound::email_api::GmailApi,
+    pub imap: super::email_api::imap::ImapMailboxGateway,
     pub outlook: T,
     pub db: sqlx::PgPool,
     pub queue: sqs_client::SQS,
@@ -90,12 +92,23 @@ impl<T: MailboxTokenSource, B: MacroEventBroker, C: ContactsIngress + ContactLis
         &self,
         binding: &InboxHealthBinding,
         freshness: TokenFreshness,
-    ) -> Result<AccessToken, EmailApiError> {
+    ) -> Result<(), EmailApiError> {
         match binding.link.provider {
-            UserProvider::Gmail => {
-                self.gmail
-                    .get_access_token(binding.link.id, freshness)
+            UserProvider::Gmail => self
+                .gmail
+                .get_access_token(binding.link.id, freshness)
+                .await
+                .map(|_| ()),
+            UserProvider::Imap => {
+                use email::domain::mailbox::{MailboxGateway, MailboxKey};
+                self.imap
+                    .folders(MailboxKey {
+                        link_id: binding.link.id,
+                        sync_generation: binding.sync_generation,
+                        grant_generation: binding.grant_generation,
+                    })
                     .await
+                    .map(|_| ())
             }
             UserProvider::Outlook => self
                 .outlook
@@ -108,6 +121,7 @@ impl<T: MailboxTokenSource, B: MacroEventBroker, C: ContactsIngress + ContactLis
                     freshness,
                 )
                 .await
+                .map(|_| ())
                 .map_err(|error| match error {
                     TokenError::ReauthRequired => EmailApiError::AuthRequired,
                     _ => EmailApiError::Transient {

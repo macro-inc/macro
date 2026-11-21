@@ -114,7 +114,9 @@ fn open_entries(model: &Model) -> Vec<&EntryRow> {
     model
         .entry_rows
         .iter()
-        .filter(|row| is_gap(row.gmail.as_ref()) || is_gap(row.outlook.as_ref()))
+        .filter(|row| {
+            is_gap(row.gmail.as_ref()) || is_gap(row.outlook.as_ref()) || is_gap(row.imap.as_ref())
+        })
         .collect()
 }
 
@@ -265,7 +267,9 @@ pub(crate) fn markdown(model: &Model) -> String {
     let functions = backend_functions(model);
     let unproved = functions
         .iter()
-        .filter(|row| is_gap(row.gmail.as_ref()) || is_gap(row.outlook.as_ref()))
+        .filter(|row| {
+            is_gap(row.gmail.as_ref()) || is_gap(row.outlook.as_ref()) || is_gap(row.imap.as_ref())
+        })
         .count();
     let _ = writeln!(
         out,
@@ -309,6 +313,33 @@ pub(crate) fn markdown(model: &Model) -> String {
         let _ = writeln!(out, "\nThe rest are in the report artifact.");
     }
     let _ = writeln!(out, "\n</details>");
+    if model.functions_imap.total > 0 || model.entry_points.iter().any(|k| k.imap.total > 0) {
+        let _ = writeln!(
+            out,
+            "\n### IMAP coverage\n\n| Functions | total | proved | claimed | performed only | waived | open |\n| --- | ---: | ---: | ---: | ---: | ---: | ---: |\n| IMAP | {} |\n",
+            tally_cells(&model.functions_imap)
+        );
+        let _ = writeln!(out, "| Function | IMAP |\n| --- | --- |");
+        for row in model.functions.iter().filter(|r| r.imap.is_some()) {
+            let _ = writeln!(
+                out,
+                "| {} {} | {} |",
+                row.id,
+                row.function,
+                summary_cell(row, row.imap.as_ref())
+            );
+        }
+        let _ = writeln!(out, "\n| Entry point | IMAP |\n| --- | --- |");
+        for row in model.entry_rows.iter().filter(|r| r.imap.is_some()) {
+            let _ = writeln!(
+                out,
+                "| `{} {}` | {} |",
+                row.kind,
+                row.key,
+                status_word(row.imap.as_ref())
+            );
+        }
+    }
     out
 }
 
@@ -590,7 +621,7 @@ pub(crate) fn html(model: &Model) -> String {
     );
     html_list(
         &mut out,
-        "Scenarios that linked no inbox (they count for both providers)",
+        "Scenarios that linked no inbox (they count for each provider)",
         &model.suite.no_inbox,
     );
     html_list(
@@ -603,5 +634,35 @@ pub(crate) fn html(model: &Model) -> String {
         "Scenarios that passed and left no record",
         &model.suite.unrecorded,
     );
+    if model.functions_imap.total > 0 || model.entry_points.iter().any(|k| k.imap.total > 0) {
+        let _ = write!(
+            out,
+            "<h2>IMAP coverage</h2><table><tr><th>provider</th><th>total</th><th>proved</th><th>claimed</th><th>performed only</th><th>waived</th><th>open</th></tr>{}</table><table><tr><th>function</th><th>IMAP</th></tr>",
+            html_tally("IMAP", &model.functions_imap)
+        );
+        for row in model.functions.iter().filter(|r| r.imap.is_some()) {
+            let _ = write!(
+                out,
+                "<tr><th>{} {}</th>{}</tr>",
+                escape(&row.id),
+                escape(&row.function),
+                html_cell(row.imap.as_ref())
+            );
+        }
+        let _ = write!(
+            out,
+            "</table><table><tr><th>entry point</th><th>IMAP</th></tr>"
+        );
+        for row in model.entry_rows.iter().filter(|r| r.imap.is_some()) {
+            let _ = write!(
+                out,
+                "<tr><th>{} {}</th>{}</tr>",
+                escape(&row.kind),
+                escape(&row.key),
+                html_cell(row.imap.as_ref())
+            );
+        }
+        let _ = write!(out, "</table>");
+    }
     PAGE.replace(BODY_SLOT, &out)
 }

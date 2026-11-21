@@ -128,8 +128,7 @@ impl<R: DraftContentRepository, B: DraftContentBytes, A: EntityAccessService>
                     .await?;
                 if record.blob.is_none()
                     && (!record.link.is_sync_active
-                        || (record.link.provider
-                            == models_email::service::link::UserProvider::Outlook
+                        || (record.link.provider.uses_mailbox_framework()
                             && record.mailbox.grant_generation != *generation))
                 {
                     return Err(EmailApiError::AuthRequired.into());

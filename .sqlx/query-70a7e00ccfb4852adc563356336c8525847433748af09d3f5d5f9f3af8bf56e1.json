@@ -1,0 +1,73 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH candidate AS (\n                SELECT\n                    s.id\n                FROM\n                    email_links l\n                    JOIN email_mailbox_settings_work s ON s.link_id = l.id\n                WHERE (l.provider = 'GMAIL'\n                    OR (s.kind = 'catalog'\n                        AND $2)\n                    OR (s.kind <> 'catalog'\n                        AND $3))\n                AND (l.provider = $4::text::email_user_provider_enum\n                    OR (l.provider = 'GMAIL'\n                        AND $4 = 'OUTLOOK'))\n                AND l.is_sync_active\n                AND l.disconnect_requested_at IS NULL\n                AND l.mailbox_unavailable_at IS NULL\n                AND s.next_run_at <= now()\n                AND (s.kind = 'catalog'\n                    OR s.revision > s.completed_revision)\n                AND (s.lease_until IS NULL\n                    OR s.lease_until < now())\n                AND (s.kind <> 'delete_label'\n                    OR NOT EXISTS (\n                        SELECT\n                            1\n                        FROM\n                            email_mailbox_commands c\n                        WHERE\n                            c.link_id = s.link_id\n                            AND c.generation = l.sync_generation\n                            AND c.status IN ('pending', 'running', 'confirming')\n                            AND c.intent ->> 'kind' = 'category'\n                            AND c.intent -> 'value' ->> 'name' = s.resource_key))\n                AND NOT EXISTS (\n                    SELECT\n                        1\n                    FROM\n                        email_mailbox_settings_work busy\n                    WHERE\n                        busy.link_id = l.id\n                        AND busy.lease_until > now())\n            ORDER BY\n                s.next_run_at,\n                s.id\n            LIMIT 1\n            FOR UPDATE\n                OF l,\n                s SKIP LOCKED\n            )\n            UPDATE\n                email_mailbox_settings_work s\n            SET\n                lease_id = $1,\n                lease_until = now() + interval '3 minutes',\n                attempts = attempts + 1\n            FROM\n                candidate c,\n                email_links l\n            WHERE\n                s.id = c.id\n                AND l.id = s.link_id\n            RETURNING\n                s.id,\n                s.link_id,\n                s.revision,\n                s.kind,\n                s.resource_key,\n                s.desired,\n                l.sync_generation,\n                l.grant_generation,\n                l.provider::text AS \"provider!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "resource_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "desired",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "sync_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "grant_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 8,
+        "name": "provider!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Bool",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "70a7e00ccfb4852adc563356336c8525847433748af09d3f5d5f9f3af8bf56e1"
+}

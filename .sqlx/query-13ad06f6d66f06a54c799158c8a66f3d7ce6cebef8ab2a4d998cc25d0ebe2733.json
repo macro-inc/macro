@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                                SELECT\n                                    kind,\n                                    key,\n                                    folder_id,\n                                    message_id,\n                                    sequence,\n                                    received_at,\n                                    document,\n                                    body\n                                FROM\n                                    imap_state_entries\n                                WHERE\n                                    link_id = $1\n                                    AND kind = 'upload'\n                                    AND key = $2\n                                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "folder_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "message_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "sequence",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "received_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "document",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 7,
+        "name": "body",
+        "type_info": "Bytea"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "13ad06f6d66f06a54c799158c8a66f3d7ce6cebef8ab2a4d998cc25d0ebe2733"
+}

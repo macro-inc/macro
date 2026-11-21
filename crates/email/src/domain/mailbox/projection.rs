@@ -26,6 +26,7 @@ mod test;
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ProjectionEvent {
     LinkChanged,
+    ImportCompleted,
     AttachmentRecheck {
         message_id: Uuid,
     },
@@ -194,6 +195,11 @@ pub trait MailboxProjectionEffects: Send + Sync + 'static {
         event: EmailMacroEvent,
     ) -> impl Future<Output = Result<(), MailboxError>> + Send;
     fn refresh(
+        &self,
+        link_id: Uuid,
+        viewers: &HashSet<MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = Result<(), MailboxError>> + Send;
+    fn import_completed(
         &self,
         link_id: Uuid,
         viewers: &HashSet<MacroUserIdStr<'static>>,
@@ -390,6 +396,14 @@ impl<R: MailboxProjectionRepository, E: MailboxProjectionEffects> MailboxProject
         };
         match &lease.event {
             ProjectionEvent::LinkChanged => {}
+            ProjectionEvent::ImportCompleted => {
+                if lease.from_current_generation {
+                    self.effects
+                        .import_completed(context.link.id, &context.viewers)
+                        .await?;
+                    effects.refreshes += 1;
+                }
+            }
             ProjectionEvent::ReauthorizationRequired => {
                 // A reconnect can obsolete a queued warning before delivery.
                 if lease.from_current_generation && context.link.needs_reauth {
@@ -505,6 +519,17 @@ impl<R: MailboxProjectionRepository, E: MailboxProjectionEffects> MailboxProject
                 };
                 let message = &current.message;
                 let import = *is_import || !lease.from_current_generation;
+                // Persisted mail is already readable. List freshness must not
+                // wait for notification policy, CRM or attachment side effects.
+                let refresh = self
+                    .effects
+                    .refresh(context.link.id, &context.viewers)
+                    .await;
+                if refresh.is_ok() {
+                    effects.refreshes += 1;
+                }
+                // A websocket outage must not suppress independent message
+                // projections. Retain its error for the durable retry below.
                 if current.is_present {
                     if !message.is_draft {
                         if version == &current.version {
@@ -530,10 +555,6 @@ impl<R: MailboxProjectionRepository, E: MailboxProjectionEffects> MailboxProject
                     }
                 }
                 self.reindex(&context.link, *thread_id, effects).await?;
-                self.effects
-                    .refresh(context.link.id, &context.viewers)
-                    .await?;
-                effects.refreshes += 1;
                 if current.is_present {
                     let started = Instant::now();
                     self.effects
@@ -541,7 +562,7 @@ impl<R: MailboxProjectionRepository, E: MailboxProjectionEffects> MailboxProject
                         .await?;
                     effects.attachment_upload_ms += elapsed_ms(started);
                 }
-                return Ok(());
+                return refresh;
             }
         }
         self.effects
@@ -586,6 +607,7 @@ impl ProjectionEvent {
     fn kind(&self) -> &'static str {
         match self {
             Self::LinkChanged => "link_changed",
+            Self::ImportCompleted => "import_completed",
             Self::AttachmentRecheck { .. } => "attachment_recheck",
             Self::ReauthorizationRequired => "reauthorization_required",
             Self::ContactsChanged { .. } => "contacts_changed",

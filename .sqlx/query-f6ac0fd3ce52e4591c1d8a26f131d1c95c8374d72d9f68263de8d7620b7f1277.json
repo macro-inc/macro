@@ -1,0 +1,53 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                f.provider_id,\n                f.parent_id,\n                f.display_name,\n                f.role,\n                f.total_item_count,\n                f.sync_enabled\n            FROM\n                email_mailbox_folders f\n                JOIN email_links l ON l.id = f.link_id\n            WHERE\n                f.link_id = $1\n                AND l.sync_generation = $2\n                AND l.is_sync_active\n                AND f.deleted_at IS NULL\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "provider_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "parent_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "display_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "role",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "total_item_count",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "sync_enabled",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "f6ac0fd3ce52e4591c1d8a26f131d1c95c8374d72d9f68263de8d7620b7f1277"
+}

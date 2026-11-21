@@ -126,6 +126,8 @@ pub enum Port {
     /// The model emulator's control API, where a test scripts the assistant's
     /// model.
     ModelEmulator = 8482,
+    /// Internal IMAP/SMTP engine. Appended to preserve existing instance offsets.
+    Imap = 8113,
 }
 
 impl Port {

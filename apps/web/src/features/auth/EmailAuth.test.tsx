@@ -6,7 +6,7 @@ import {
   waitFor,
 } from '@solidjs/testing-library';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
-import type { JSX } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -36,7 +36,8 @@ vi.mock('@app/features/inbox/AddInboxDialog', () => ({
   openAddInboxDialog: mocks.openAddInbox,
 }));
 vi.mock('@queries/auth/outlook-link', () => ({
-  fetchEmailConnectionProviders: mocks.fetchProviders,
+  useEmailConnectionProviders: (enabled: () => boolean) => () =>
+    enabled() ? mocks.fetchProviders() : undefined,
 }));
 vi.mock('@core/email-link', () => ({
   useEmailLinks: () => ({
@@ -122,7 +123,7 @@ beforeEach(() => {
   mocks.linkId = 'oauth-link';
   mocks.tutorialComplete = true;
   mocks.searchParams = { link_id: mocks.linkId };
-  mocks.fetchProviders.mockResolvedValue({
+  mocks.fetchProviders.mockReturnValue({
     gmail: true,
     outlook: true,
     outlook_admin_consent_url:
@@ -310,6 +311,23 @@ describe('consent that ended without a grant', () => {
     expect(mocks.restore).toHaveBeenCalledWith('oauth-link');
   });
 
+  it('enables approval when the callback account becomes available after the dialog opens', async () => {
+    const [url, restore] = createSignal<string>();
+    mocks.fetchProviders.mockImplementation(() => ({
+      outlook_admin_consent_url: url(),
+    }));
+    mocks.searchParams = {
+      email_link_error: 'admin_consent_required',
+      provider: 'outlook',
+    };
+    render(() => <EmailLinkCallback />);
+    expect(await screen.findByText('Admin approval required')).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toBe('loading');
+    restore('restored-approval');
+    await screen.findByText('restored-approval');
+    expect(mocks.init).not.toHaveBeenCalled();
+  });
+
   it('reopens the connect dialog for a different account', async () => {
     mocks.searchParams = {
       link_id: 'oauth-link',
@@ -325,7 +343,7 @@ describe('consent that ended without a grant', () => {
   });
 
   it('leaves the copy action unavailable when the approval link cannot load', async () => {
-    mocks.fetchProviders.mockRejectedValue(new Error('offline'));
+    mocks.fetchProviders.mockReturnValue(undefined);
     mocks.searchParams = {
       link_id: 'oauth-link',
       email_link_error: 'admin_consent_required',

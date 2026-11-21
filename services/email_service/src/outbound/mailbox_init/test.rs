@@ -296,7 +296,7 @@ async fn gmail_reservation_counts_outlook_and_allows_only_verified_reconnect(db:
     ));
     assert!(matches!(
         lock_gmail_connection(&mut tx, owner.1.as_ref(), "outlook@example.com").await,
-        Err(InitializationError::PaymentRequired)
+        Err(InitializationError::IdentityConflict)
     ));
     lock_gmail_connection(&mut tx, owner.1.as_ref(), "GMAIL@example.com")
         .await

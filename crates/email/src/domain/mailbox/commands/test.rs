@@ -14,6 +14,7 @@ fn restoring_junk_chooses_drafts_for_drafts_and_inbox_for_received_mail() {
     let folders: Vec<_> = [("drafts", FolderRole::Drafts), ("inbox", FolderRole::Inbox)]
         .into_iter()
         .map(|(id, role)| MailFolder {
+            sync_enabled: true,
             id: ProviderId::try_from(id.to_string()).unwrap(),
             parent_id: None,
             name: id.into(),
@@ -46,6 +47,7 @@ fn restoring_junk_chooses_drafts_for_drafts_and_inbox_for_received_mail() {
 #[test]
 fn restoring_a_conversation_leaves_its_drafts_in_drafts() {
     let folders = vec![MailFolder {
+        sync_enabled: true,
         id: ProviderId::try_from("inbox".to_string()).unwrap(),
         parent_id: None,
         name: "inbox".into(),

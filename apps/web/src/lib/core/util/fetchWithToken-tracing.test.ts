@@ -123,3 +123,71 @@ it('restores a queued mutation parent for default and override callbacks after a
   ).toBeUndefined();
   client.clear();
 });
+
+it('propagates the IMAP interaction through the four email endpoints after an async boundary without recording setup values', async () => {
+  const { emailClient } = await import('@service-email/client');
+  const request = vi
+    .fn<typeof fetch>()
+    .mockImplementation(async () => Response.json({}));
+  vi.stubGlobal('fetch', request);
+  const link = '00000000-0000-4000-8000-000000000001';
+  const email = 'owner@example.net';
+  const password = 'fixture-only-secret';
+  const signal = new AbortController().signal;
+  const action = Telemetry.span('email.imap.test');
+  const login = {
+    endpoint: {
+      host: 'mail.example.net',
+      port: 993,
+      tls: 'implicit' as const,
+      username: email,
+    },
+    password,
+  };
+
+  await Promise.resolve();
+  await emailClient.imapDiscover(email, signal, action);
+  await emailClient.imapConnect(
+    {
+      requestId: link,
+      email,
+      imap: login,
+      smtp: { ...login, endpoint: { ...login.endpoint, port: 465 } },
+      confirmedHosts: [login.endpoint.host],
+    },
+    signal,
+    action
+  );
+  await emailClient.getImapMailboxSettings(link, signal, action);
+  await emailClient.updateImapMailboxSettings(
+    link,
+    {
+      expectedRevision: 0,
+      roleOverrides: {},
+      excludedFolderIds: [],
+      watchedFolderIds: [],
+    },
+    signal,
+    action
+  );
+  action.end();
+
+  const spans = exporter.getFinishedSpans();
+  const root = spans.find((s) => s.name === 'email.imap.test')!;
+  const requests = spans.filter((s) => s.name.startsWith('http '));
+  expect(requests).toHaveLength(4);
+  for (const child of requests) {
+    expect(child.parentSpanContext?.spanId).toBe(root.spanContext().spanId);
+    const recorded = JSON.stringify([
+      child.name,
+      child.attributes,
+      child.events,
+    ]);
+    for (const value of [email, password, login.endpoint.host])
+      expect(recorded).not.toContain(value);
+  }
+  for (const [, init] of request.mock.calls)
+    expect(new Headers(init?.headers).get('traceparent')?.split('-')[1]).toBe(
+      root.spanContext().traceId
+    );
+});

@@ -295,6 +295,8 @@ async fn main() -> anyhow::Result<()> {
         sqs_client.clone(),
         RateBudget::Live,
     );
+    let imap_gateway =
+        email_service::composition::imap_gateway(db.clone(), config.internal_api_key.as_ref())?;
     let outlook_repository = email_api_client::OutlookApiClientRepository::with_gate(Arc::new(
         email_service::outbound::email_api::RedisMicrosoftRequestGate::new(
             redis_conn.clone(),
@@ -398,6 +400,7 @@ async fn main() -> anyhow::Result<()> {
     );
     worker_tracker.spawn(email_service::mailbox_sync_worker::run_lifecycle(
         email_service::composition::inbox_lifecycle(
+            imap_gateway.client.clone(),
             outlook_repository,
             db.clone(),
             auth_service_client.clone(),
@@ -460,6 +463,8 @@ async fn main() -> anyhow::Result<()> {
         email::domain::mailbox::settings::MailboxSettingsService::new(
             mailbox_repository.clone(),
             email_service::outbound::mailbox_settings::ProviderMailboxSettings {
+                db: db.clone(),
+                imap: imap_gateway.clone(),
                 gmail: email_api_live.clone(),
                 outlook: outlook_api.clone(),
             },
@@ -491,6 +496,7 @@ async fn main() -> anyhow::Result<()> {
             repository: email::outbound::EmailPgRepo::new(db.clone()),
             bytes: email_service::outbound::mailbox_drafts::MailboxDraftContent {
                 provider: email_service::outbound::attachment_access::ProviderAttachmentBytes {
+                    imap: imap_gateway.clone(),
                     s3: s3_client.clone(),
                     bucket: config.attachment_bucket.to_string(),
                     gmail: email_api_live.clone(),
@@ -527,6 +533,78 @@ async fn main() -> anyhow::Result<()> {
             ),
         )
         .with_writes_enabled(config.outlook_writes_enabled),
+        worker_cancellation_token.clone(),
+    ));
+    let imap_flags = email_service::composition::imap_enrollment(&config)?;
+    worker_tracker.spawn(email_service::imap_runtime::recover(
+        email::domain::mailbox::imap_connection::ImapConnectionService {
+            repository: email_service::outbound::imap_connection::PgImapConnections(db.clone()),
+            gateway: email_service::outbound::imap_connection::ImapConnectionClient(
+                imap_gateway.client.clone(),
+            ),
+            enrollment: imap_flags.clone(),
+        },
+        worker_cancellation_token.clone(),
+    ));
+    let imap_repository = email::outbound::mailbox_pg::PgMailboxSync::new(db.clone())
+        .with_provider(email::domain::models::UserProvider::Imap);
+    worker_tracker.spawn(email_service::mailbox_sync_worker::run(
+        email::domain::mailbox::MailboxSyncService::new(
+            imap_repository.clone(),
+            imap_gateway.clone(),
+            imap_gateway.clone(),
+            imap_repository.clone(),
+        ),
+        worker_cancellation_token.clone(),
+    ));
+    worker_tracker.spawn(email_service::mailbox_sync_worker::run_settings(
+        email::domain::mailbox::settings::MailboxSettingsService::new(
+            imap_repository.clone(),
+            email_service::outbound::mailbox_settings::ProviderMailboxSettings {
+                db: db.clone(),
+                imap: imap_gateway.clone(),
+                gmail: email_api_live.clone(),
+                outlook: outlook_api.clone(),
+            },
+        ),
+        worker_cancellation_token.clone(),
+    ));
+    worker_tracker.spawn(email_service::mailbox_sync_worker::run_commands(
+        email::domain::mailbox::commands::MailboxCommandService::new(
+            imap_repository.clone(),
+            imap_gateway.clone(),
+        ),
+        worker_cancellation_token.clone(),
+    ));
+    worker_tracker.spawn(email_service::mailbox_sync_worker::run_drafts(
+        email::domain::mailbox::drafts::MailboxDraftService::new(
+            imap_repository.clone(),
+            imap_gateway.clone(),
+            email::domain::read_receipts::ReadReceiptMaterializer::new(
+                draft_content.clone(),
+                read_receipts.clone(),
+            ),
+        ),
+        worker_cancellation_token.clone(),
+    ));
+    worker_tracker.spawn(email_service::mailbox_sync_worker::run_projections(
+        email::domain::mailbox::projection::MailboxProjectionService::new(
+            imap_repository.clone(),
+            email_service::outbound::mailbox_projection::MailboxEffects {
+                db: db.clone(),
+                attachments: imap_gateway.clone(),
+                invitations: email::outbound::invitation_pg::InvitationPgRepository(db.clone()),
+                broker: macro_event_broker.clone(),
+                notification: notification_ingress_service.clone(),
+                contacts: contacts_ingress.clone(),
+                queue: sqs_client.clone(),
+                gateway: connection_gateway_client.clone(),
+                dss: dss_client.clone(),
+                sfs: sfs_client.clone(),
+                properties: system_properties_service.clone(),
+                notifications_enabled: config.notifications_enabled,
+            },
+        ),
         worker_cancellation_token.clone(),
     ));
     worker_tracker.spawn(email_service::mailbox_sync_worker::run_projections(
@@ -755,6 +833,7 @@ async fn main() -> anyhow::Result<()> {
     let connection_gateway_client_link_manager = connection_gateway_client.clone();
     let notification_ingress_service_link_manager = notification_ingress_service.clone();
     let macro_event_broker_link_manager = macro_event_broker.clone();
+    let imap_gateway_link_manager = imap_gateway.clone();
     let contacts_ingress_link_manager = contacts_ingress.clone();
     let cancellation_token = worker_cancellation_token.clone();
     // daily link_manager operations for user contacts and inbox subscriptions
@@ -763,6 +842,7 @@ async fn main() -> anyhow::Result<()> {
             link_manager_worker,
             db_link_manager,
             email_api_link_manager,
+            imap_gateway_link_manager,
             auth_service_client_link_manager,
             redis_client_link_manager,
             sqs_client_link_manager,

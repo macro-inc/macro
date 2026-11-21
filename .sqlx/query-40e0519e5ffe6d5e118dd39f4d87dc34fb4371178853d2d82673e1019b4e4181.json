@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH candidate AS (\n                SELECT\n                    o.id\n                FROM\n                    email_mailbox_lifecycle_outbox o\n                WHERE\n                    o.available_at <= now()\n                    AND (o.payload ->> 'kind' = 'gmail_history') IN (false, true)\n                    AND (o.lease_until IS NULL\n                        OR o.lease_until < now())\n                    AND NOT EXISTS (\n                        SELECT\n                            1\n                        FROM\n                            email_mailbox_lifecycle_outbox prerequisite\n                        WHERE\n                            prerequisite.link_id = o.link_id\n                            AND ((o.payload ->> 'kind' = 'revoke_microsoft_grant'\n                                    AND prerequisite.payload ->> 'kind' = 'cleanup_microsoft_watches')\n                                OR (o.payload ->> 'kind' = 'delete_mailbox'\n                                    AND prerequisite.payload ->> 'kind' IN ('cleanup_microsoft_watches', 'revoke_microsoft_grant', 'disconnect_imap'))))\n                ORDER BY\n                    (o.payload ->> 'kind' = 'gmail_history'),\n                    o.available_at,\n                    o.id\n                LIMIT 1\n                FOR UPDATE\n                    OF o SKIP LOCKED\n            )\n            UPDATE\n                email_mailbox_lifecycle_outbox o\n            SET\n                lease_id = $1,\n                lease_until = now() + interval '3 minutes',\n                attempts = attempts + 1\n            FROM\n                candidate c\n            WHERE\n                o.id = c.id\n            RETURNING\n                o.id,\n                o.link_id,\n                o.payload\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "payload",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "40e0519e5ffe6d5e118dd39f4d87dc34fb4371178853d2d82673e1019b4e4181"
+}

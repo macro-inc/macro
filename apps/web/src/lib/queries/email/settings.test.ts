@@ -286,32 +286,39 @@ describe('email settings account reconciliation', () => {
   });
 });
 
-it('warms an empty sender catalog before first composition and reopens it offline', async () => {
-  const catalog = setupCatalog(null);
-  const disposeBackground = createRoot((dispose) => {
-    useMailAccountsQuery(() => true);
-    return dispose;
-  });
-  await catalog.persisted;
-  expect(catalog.stored()).toEqual(accounts('Old signature'));
-  disposeBackground();
-  catalog.goOffline();
-  catalog.newClient();
-  const composer = mountComposerAccounts();
-  const loaded = Promise.withResolvers<void>();
-  const stop = createRoot((dispose) => {
-    createEffect(() => {
-      if (composer.inboxes.inboxes().length) loaded.resolve();
+it.each(['GMAIL', 'OUTLOOK', 'IMAP'] as const)(
+  'warms an empty %s sender catalog before first composition and reopens it offline',
+  async (provider) => {
+    const catalog = setupCatalog(null);
+    const response = accounts('Old signature');
+    response.user.emailLinks[0].provider = provider;
+    catalog.setServer(response);
+    const disposeBackground = createRoot((dispose) => {
+      useMailAccountsQuery(() => true);
+      return dispose;
     });
-    return dispose;
-  });
-  try {
-    await loaded.promise;
-    expect(composer.inboxes.inboxes()[0]?.id).toBe('inbox-1');
-    expect(composer.inboxes.inboxes()[0]?.email_address).toBe(
-      'self@example.com'
-    );
-  } finally {
-    stop();
+    await catalog.persisted;
+    expect(catalog.stored()).toEqual(response);
+    disposeBackground();
+    catalog.goOffline();
+    catalog.newClient();
+    const composer = mountComposerAccounts();
+    const loaded = Promise.withResolvers<void>();
+    const stop = createRoot((dispose) => {
+      createEffect(() => {
+        if (composer.inboxes.inboxes().length) loaded.resolve();
+      });
+      return dispose;
+    });
+    try {
+      await loaded.promise;
+      expect(composer.inboxes.inboxes()[0]).toMatchObject({
+        id: 'inbox-1',
+        email_address: 'self@example.com',
+        provider,
+      });
+    } finally {
+      stop();
+    }
   }
-});
+);

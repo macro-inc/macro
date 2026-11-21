@@ -257,3 +257,12 @@ its membership, mailbox and thread foreign keys cascade deletion. The CRM domain
 owns writes and owner-only listing; `crm_email_thread_excluded` is the independent
 veto used by the shared eligibility function and mirrored in set-based ingestion
 and the inline Team reader, including selected contribution.
+
+
+Mailbox stream and message-reconciliation work derives its provider from its
+parent link for older writers too. Preserve the composite provider foreign keys
+and PostgreSQL's update cascade when changing link providers; they protect
+repeatable-read races that an ordinary parent trigger cannot see. Provider-prefixed
+claim indexes retain the older unprefixed indexes during rolling updates. If a
+concurrent build is interrupted, inspect `pg_index.indisvalid` and remove only
+that invalid index before retrying its migration.

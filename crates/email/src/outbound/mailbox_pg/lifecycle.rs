@@ -35,6 +35,7 @@ async fn snapshot(
         provider: match row.provider.as_str() {
             "GMAIL" => UserProvider::Gmail,
             "OUTLOOK" => UserProvider::Outlook,
+            "IMAP" => UserProvider::Imap,
             _ => return Err(InboxLifecycleError::Unavailable),
         },
         promoted: row.promoted,
@@ -157,6 +158,17 @@ impl InboxLifecycleRepository for PgMailboxSync {
                         )
                         .await?;
                     }
+                }
+                if current.provider == UserProvider::Imap {
+                    enqueue(
+                        &mut tx,
+                        link,
+                        InboxLifecycleEffect::DisconnectImap {
+                            sync_generation: current.sync_generation,
+                            grant_generation: current.grant_generation,
+                        },
+                    )
+                    .await?;
                 }
                 // Frozen Gmail work cannot publish stale changes after disconnect.
                 sqlx::query!("DELETE FROM email_mailbox_lifecycle_outbox WHERE link_id=$1 AND payload->>'kind' IN ('gmail_history','gmail_backfill')",link)
@@ -293,7 +305,7 @@ impl InboxLifecycleRepository for PgMailboxSync {
                     }
                 }
             }
-            UserProvider::Outlook => {
+            UserProvider::Outlook | UserProvider::Imap => {
                 let stream=sqlx::query!("SELECT id,initial_complete FROM email_sync_streams WHERE link_id = $1 AND generation = $2 AND kind = 'folder_catalog' LIMIT 1",link,current.sync_generation).fetch_optional(&mut *tx).await.map_err(failed)?;
                 let in_progress=sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM email_sync_streams WHERE link_id = $1 AND generation = $2 AND kind IN ('folder_catalog','mail_folder') AND NOT initial_complete)
                     OR EXISTS(SELECT 1 FROM email_message_reconciliation WHERE link_id = $1 AND generation = $2 AND is_import AND available_at <> 'infinity') AS "running!""#,link,current.sync_generation).fetch_one(&mut *tx).await.map_err(failed)?;
@@ -319,7 +331,7 @@ impl InboxLifecycleRepository for PgMailboxSync {
             }
         };
         tx.commit().await.map_err(failed)?;
-        if current.provider == UserProvider::Outlook && !result.already_in_progress {
+        if current.provider.uses_mailbox_framework() && !result.already_in_progress {
             crate::domain::mailbox::progress::log_import_started(link, current.sync_generation);
         }
         Ok(result)
@@ -357,9 +369,29 @@ impl InboxLifecycleRepository for PgMailboxSync {
             .collect()
     }
     async fn ready_for_delete(&self, link: Uuid) -> Result<bool, InboxLifecycleError> {
-        sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM email_links l WHERE l.id=$1 AND NOT l.is_sync_active
-            AND l.disconnect_requested_at IS NOT NULL AND NOT EXISTS(SELECT 1 FROM email_mailbox_lifecycle_outbox o
-                WHERE o.link_id=l.id AND o.payload->>'kind' IN ('cleanup_microsoft_watches','revoke_microsoft_grant'))) AS "ready!""#,link)
+        sqlx::query_scalar!(
+            r#"
+            SELECT
+                EXISTS (
+                    SELECT
+                        1
+                    FROM
+                        email_links l
+                    WHERE
+                        l.id = $1
+                        AND NOT l.is_sync_active
+                        AND l.disconnect_requested_at IS NOT NULL
+                        AND NOT EXISTS (
+                            SELECT
+                                1
+                            FROM
+                                email_mailbox_lifecycle_outbox o
+                            WHERE
+                                o.link_id = l.id
+                                AND o.payload ->> 'kind' IN ('cleanup_microsoft_watches', 'revoke_microsoft_grant', 'disconnect_imap'))) AS "ready!"
+            "#,
+            link,
+        )
             .fetch_one(&self.db).await.map_err(failed)
     }
     async fn claim_effect(
@@ -368,15 +400,54 @@ impl InboxLifecycleRepository for PgMailboxSync {
     ) -> Result<Option<InboxLifecycleLease>, MailboxError> {
         // Naming both values of the claim index's leading expression lets `available_at <= now()`
         // end the scan. Without it, Postgres before 18 reads every backed-off row on each poll.
-        let row=sqlx::query!(r#"WITH candidate AS (SELECT o.id FROM email_mailbox_lifecycle_outbox o WHERE o.available_at <= now()
-            AND (o.payload->>'kind' = 'gmail_history') IN (false,true)
-            AND (o.lease_until IS NULL OR o.lease_until < now())
-            AND NOT EXISTS (SELECT 1 FROM email_mailbox_lifecycle_outbox prerequisite WHERE prerequisite.link_id=o.link_id
-                AND ((o.payload->>'kind'='revoke_microsoft_grant' AND prerequisite.payload->>'kind'='cleanup_microsoft_watches')
-                    OR (o.payload->>'kind'='delete_mailbox' AND prerequisite.payload->>'kind' IN ('cleanup_microsoft_watches','revoke_microsoft_grant'))))
-            ORDER BY (o.payload->>'kind' = 'gmail_history'),o.available_at,o.id LIMIT 1 FOR UPDATE OF o SKIP LOCKED)
-            UPDATE email_mailbox_lifecycle_outbox o SET lease_id = $1,lease_until = now() + interval '3 minutes',attempts = attempts + 1
-            FROM candidate c WHERE o.id = c.id RETURNING o.id,o.link_id,o.payload"#,lease_id).fetch_optional(&self.db).await.map_err(db_error)?;
+        let row=sqlx::query!(
+            r#"
+            WITH candidate AS (
+                SELECT
+                    o.id
+                FROM
+                    email_mailbox_lifecycle_outbox o
+                WHERE
+                    o.available_at <= now()
+                    AND (o.payload ->> 'kind' = 'gmail_history') IN (false, true)
+                    AND (o.lease_until IS NULL
+                        OR o.lease_until < now())
+                    AND NOT EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            email_mailbox_lifecycle_outbox prerequisite
+                        WHERE
+                            prerequisite.link_id = o.link_id
+                            AND ((o.payload ->> 'kind' = 'revoke_microsoft_grant'
+                                    AND prerequisite.payload ->> 'kind' = 'cleanup_microsoft_watches')
+                                OR (o.payload ->> 'kind' = 'delete_mailbox'
+                                    AND prerequisite.payload ->> 'kind' IN ('cleanup_microsoft_watches', 'revoke_microsoft_grant', 'disconnect_imap'))))
+                ORDER BY
+                    (o.payload ->> 'kind' = 'gmail_history'),
+                    o.available_at,
+                    o.id
+                LIMIT 1
+                FOR UPDATE
+                    OF o SKIP LOCKED
+            )
+            UPDATE
+                email_mailbox_lifecycle_outbox o
+            SET
+                lease_id = $1,
+                lease_until = now() + interval '3 minutes',
+                attempts = attempts + 1
+            FROM
+                candidate c
+            WHERE
+                o.id = c.id
+            RETURNING
+                o.id,
+                o.link_id,
+                o.payload
+            "#,
+            lease_id,
+        ).fetch_optional(&self.db).await.map_err(db_error)?;
         row.map(|row| {
             Ok(InboxLifecycleLease {
                 id: row.id,

@@ -2223,6 +2223,150 @@
         }
       }
     },
+    "/email/links/imap": {
+      "post": {
+        "tags": ["crate::api::imap"],
+        "operationId": "imap_connect",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImapConnectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/links/imap/discover": {
+      "post": {
+        "tags": ["crate::api::imap"],
+        "operationId": "imap_discover",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImapDiscoverRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Discovery"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/links/suggestion": {
+      "get": {
+        "tags": ["crate::api::imap"],
+        "operationId": "imap_suggestion",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapSuggestion"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/email/links/{link_id}": {
       "delete": {
         "tags": ["Links"],
@@ -2360,6 +2504,112 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/links/{link_id}/imap/settings": {
+      "get": {
+        "tags": ["crate::api::imap_settings"],
+        "operationId": "get_imap_mailbox_settings",
+        "parameters": [
+          {
+            "name": "link_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountMailSettings"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["crate::api::imap_settings"],
+        "operationId": "update_imap_mailbox_settings",
+        "parameters": [
+          {
+            "name": "link_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateFolderSettings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountMailSettings"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
                 }
               }
             }
@@ -3936,6 +4186,33 @@
         }
       }
     },
+    "/internal/imap/notifications": {
+      "post": {
+        "tags": ["crate::api::internal::imap"],
+        "operationId": "imap_notification",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Notification"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": ""
+          },
+          "503": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/opens/{token}": {
       "get": {
         "tags": ["email"],
@@ -3969,6 +4246,52 @@
         "type": "string",
         "description": "Ordered from least to most access top -> bottom",
         "enum": ["view", "comment", "edit", "owner"]
+      },
+      "AccountMailSettings": {
+        "type": "object",
+        "description": "Sanitized owner-only mailbox configuration. Endpoint has no password field.",
+        "required": ["imap", "smtp", "revision", "folders"],
+        "properties": {
+          "features": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ServerFeatures",
+                "description": "Last verified server capabilities, when recorded at enrollment or reconnect."
+              }
+            ]
+          },
+          "folders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FolderSetting"
+            },
+            "description": "Recently listed folders, including manually excluded folders."
+          },
+          "helpUrl": {
+            "type": ["string", "null"],
+            "description": "Official instructions supplied by the catalog."
+          },
+          "imap": {
+            "$ref": "#/components/schemas/Endpoint",
+            "description": "Incoming mail server, security mode and username."
+          },
+          "provider": {
+            "type": ["string", "null"],
+            "description": "Catalog name for the provider, when known."
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Version for compare-and-swap edits."
+          },
+          "smtp": {
+            "$ref": "#/components/schemas/Endpoint",
+            "description": "Submission server, security mode and username."
+          }
+        }
       },
       "AddDraftAttachmentRequest": {
         "type": "object",
@@ -5285,6 +5608,28 @@
         "description": "Progress/terminal state of a backfill job for [`RefreshEmailEvent::Backfill`].",
         "enum": ["progress", "complete", "failed"]
       },
+      "Binding": {
+        "type": "object",
+        "description": "Exact mailbox credential binding, authorized by the email domain.",
+        "required": ["linkId", "syncGeneration", "grantGeneration"],
+        "properties": {
+          "grantGeneration": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Credential generation."
+          },
+          "linkId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Mailbox link."
+          },
+          "syncGeneration": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Synchronization generation."
+          }
+        }
+      },
       "BlockSenderRequest": {
         "type": "object",
         "description": "Request to block a sender.",
@@ -5898,6 +6243,51 @@
           }
         }
       },
+      "Discovery": {
+        "type": "object",
+        "description": "Mailbox-independent provider settings returned without accepting a password.",
+        "required": ["hostConfirmationRequired"],
+        "properties": {
+          "helpUrl": {
+            "type": ["string", "null"],
+            "description": "Provider's application-password instructions."
+          },
+          "hostConfirmationRequired": {
+            "type": "boolean",
+            "description": "Explicit endpoint confirmation is required before sending any password."
+          },
+          "imap": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Endpoint",
+                "description": "IMAP endpoint proposal."
+              }
+            ]
+          },
+          "provider": {
+            "type": ["string", "null"],
+            "description": "Known provider identifier."
+          },
+          "smtp": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Endpoint",
+                "description": "SMTP endpoint proposal."
+              }
+            ]
+          },
+          "steer": {
+            "type": ["string", "null"],
+            "description": "Steer to an existing OAuth provider."
+          }
+        }
+      },
       "EmlFile": {
         "type": "string",
         "format": "binary"
@@ -5905,6 +6295,31 @@
       "EmptyResponse": {
         "type": "object",
         "description": "Empty response is required due to custom fetch forcing `response.json()`"
+      },
+      "Endpoint": {
+        "type": "object",
+        "description": "User-confirmed submission or mailbox endpoint.",
+        "required": ["host", "port", "tls", "username"],
+        "properties": {
+          "host": {
+            "type": "string",
+            "description": "Fully qualified TLS identity."
+          },
+          "port": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Standard submission or mailbox port.",
+            "minimum": 0
+          },
+          "tls": {
+            "$ref": "#/components/schemas/TlsMode",
+            "description": "Required TLS policy."
+          },
+          "username": {
+            "type": "string",
+            "description": "Account login."
+          }
+        }
       },
       "ErrorResponse": {
         "type": "object",
@@ -6029,6 +6444,64 @@
         "type": "string",
         "description": "Visibility of event details.",
         "enum": ["default", "public", "private", "confidential"]
+      },
+      "FolderRole": {
+        "type": "string",
+        "description": "Physical folder purpose, resolved by the engine.",
+        "enum": ["inbox", "sent", "drafts", "archive", "trash", "junk", "other"]
+      },
+      "FolderSetting": {
+        "type": "object",
+        "description": "Folder name and the actual and configured routing roles, without message data.",
+        "required": [
+          "id",
+          "name",
+          "detectedRole",
+          "effectiveRole",
+          "excluded",
+          "watched"
+        ],
+        "properties": {
+          "detectedRole": {
+            "$ref": "#/components/schemas/FolderRole",
+            "description": "Automatic role before applying the user's override."
+          },
+          "effectiveRole": {
+            "$ref": "#/components/schemas/FolderRole",
+            "description": "Resolved destination used by the engine."
+          },
+          "excluded": {
+            "type": "boolean",
+            "description": "Whether the user has excluded this folder from message sync."
+          },
+          "id": {
+            "type": "string",
+            "description": "Opaque identifier belonging to this account."
+          },
+          "monitored": {
+            "type": "boolean",
+            "description": "Whether this folder was included in the latest synchronization."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name from the most recent listing."
+          },
+          "roleOverride": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/FolderRole",
+                "description": "Explicit user choice. An absent value uses the detected role."
+              }
+            ]
+          },
+          "watched": {
+            "type": "boolean",
+            "description": "Whether this folder is selected for a dedicated watch."
+          }
+        }
       },
       "ForwardCalendarEventError": {
         "type": "object",
@@ -6211,6 +6684,90 @@
           "canSeeOtherGuests": {
             "type": "boolean",
             "description": "Whether guests may see the guest list."
+          }
+        }
+      },
+      "ImapConnectRequest": {
+        "type": "object",
+        "description": "Public input never carries an owner identity or a credential binding.",
+        "required": ["requestId", "email", "imap", "smtp", "confirmedHosts"],
+        "properties": {
+          "confirmedHosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Endpoints the user explicitly approved before credentials leave Macro."
+          },
+          "email": {
+            "type": "string",
+            "description": "Must be an address Macro has independently verified for the actor."
+          },
+          "imap": {
+            "$ref": "#/components/schemas/Login",
+            "description": "IMAP login."
+          },
+          "linkId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Required by a reconnect surface to reject stale settings dialogs."
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "One id retained when retrying a connect request after a lost response."
+          },
+          "smtp": {
+            "$ref": "#/components/schemas/Login",
+            "description": "SMTP login."
+          }
+        }
+      },
+      "ImapConnectResponse": {
+        "type": "object",
+        "required": ["linkId"],
+        "properties": {
+          "linkId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "ImapConnectionErrorResponse": {
+        "type": "object",
+        "required": ["code", "message"],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "ImapConnectionOffer": {
+        "type": "string",
+        "description": "Provider offered without making a network request on the user's behalf.",
+        "enum": ["none", "gmail", "outlook", "imap"]
+      },
+      "ImapDiscoverRequest": {
+        "type": "object",
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string"
+          }
+        }
+      },
+      "ImapSuggestion": {
+        "type": "object",
+        "required": ["email", "offer"],
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "offer": {
+            "$ref": "#/components/schemas/ImapConnectionOffer"
           }
         }
       },
@@ -6744,6 +7301,21 @@
           }
         }
       },
+      "Login": {
+        "type": "object",
+        "description": "Credentials for one protocol; Debug never includes the password.",
+        "required": ["endpoint", "password"],
+        "properties": {
+          "endpoint": {
+            "$ref": "#/components/schemas/Endpoint",
+            "description": "Endpoint and account login."
+          },
+          "password": {
+            "$ref": "#/components/schemas/Secret",
+            "description": "Protocol password, kept distinct for providers with separate SMTP credentials."
+          }
+        }
+      },
       "MailboxAction": {
         "oneOf": [
           {
@@ -7119,6 +7691,21 @@
           }
         }
       },
+      "Notification": {
+        "type": "object",
+        "description": "Fenced wakeup or credential-health update for the email domain.",
+        "required": ["binding", "credentialsRejected"],
+        "properties": {
+          "binding": {
+            "$ref": "#/components/schemas/Binding",
+            "description": "Exact mailbox binding that produced the change."
+          },
+          "credentialsRejected": {
+            "type": "boolean",
+            "description": "A confirmed credential refusal; false is a normal journal wakeup."
+          }
+        }
+      },
       "ParsedMessage": {
         "type": "object",
         "required": [
@@ -7437,6 +8024,10 @@
         "description": "The user-visible delivery state of an unsent scheduled message.",
         "enum": ["pending", "sending", "failed", "unconfirmed"]
       },
+      "Secret": {
+        "type": "string",
+        "description": "Password held only for one connection or encrypted immediately."
+      },
       "SendMessageRequest": {
         "type": "object",
         "description": "Request body for sending a message (backward-compatible with `{ message: MessageToSend }`).",
@@ -7456,6 +8047,65 @@
           "message": {
             "$ref": "#/components/schemas/ApiDraftOutput",
             "description": "The created message."
+          }
+        }
+      },
+      "ServerFeatures": {
+        "type": "object",
+        "description": "Negotiated capability flags. Provider banners and EHLO arguments are never retained.",
+        "properties": {
+          "condstore": {
+            "type": "boolean",
+            "description": "Incoming server advertises CONDSTORE.",
+            "default": false
+          },
+          "eightBitMime": {
+            "type": "boolean",
+            "description": "Submission server accepts 8BITMIME payloads.",
+            "default": false
+          },
+          "gmailExtensions": {
+            "type": "boolean",
+            "description": "Incoming server advertises Gmail's IMAP extension.",
+            "default": false
+          },
+          "idle": {
+            "type": "boolean",
+            "description": "Incoming server advertises IDLE.",
+            "default": false
+          },
+          "moveMessages": {
+            "type": "boolean",
+            "description": "Incoming server supports the MOVE command.",
+            "default": false
+          },
+          "objectId": {
+            "type": "boolean",
+            "description": "Incoming server supplies RFC 8474 object identifiers.",
+            "default": false
+          },
+          "sendLimitBytes": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Server-advertised positive SIZE limit in bytes.",
+            "default": null,
+            "minimum": 0
+          },
+          "smtpUtf8": {
+            "type": "boolean",
+            "description": "Submission server accepts SMTPUTF8 envelopes.",
+            "default": false
+          },
+          "uidPlus": {
+            "type": "boolean",
+            "description": "Incoming server supports per-UID copy and expunge receipts.",
+            "default": false
+          },
+          "verifiedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When both authenticated endpoints last answered the capability check.",
+            "default": null
           }
         }
       },
@@ -7670,6 +8320,11 @@
           }
         }
       },
+      "TlsMode": {
+        "type": "string",
+        "description": "Required TLS mode. There is deliberately no plaintext variant.",
+        "enum": ["implicit", "start_tls"]
+      },
       "TransferDraftRequest": {
         "type": "object",
         "description": "Reuse the same operation ID when retrying after a lost response.",
@@ -7763,6 +8418,45 @@
             "minimum": 0
           }
         }
+      },
+      "UpdateFolderSettings": {
+        "type": "object",
+        "description": "Replace all routing overrides atomically. A stale revision returns a conflict.",
+        "required": ["expectedRevision", "roleOverrides", "excludedFolderIds"],
+        "properties": {
+          "excludedFolderIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Empty set re-enables all folders.",
+            "uniqueItems": true
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Version returned by the last settings read."
+          },
+          "roleOverrides": {
+            "type": "object",
+            "description": "Empty map restores automatic folder routing.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/FolderRole"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "watchedFolderIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "At most one extra included folder may hold a live IDLE watcher.",
+            "uniqueItems": true
+          }
+        },
+        "additionalProperties": false
       },
       "UpdateLabelBatchRequest": {
         "type": "object",
@@ -7943,7 +8637,7 @@
       },
       "UserProvider": {
         "type": "string",
-        "enum": ["GMAIL", "OUTLOOK"]
+        "enum": ["GMAIL", "OUTLOOK", "IMAP"]
       },
       "Value": {},
       "ViewerCapabilities": {

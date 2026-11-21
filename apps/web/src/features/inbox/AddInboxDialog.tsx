@@ -1,8 +1,10 @@
 import { useAddInboxFlow } from '@core/email-link';
-import { EmailProviderDialog } from '@core/email-link/ProviderDialog';
-import { fetchEmailConnectionProviders } from '@queries/auth/outlook-link';
+import {
+  type EmailProvider,
+  EmailProviderSelectionDialog,
+} from '@core/email-link/ProviderDialog';
 import type { ConsentScopes } from '@service-auth/client';
-import { createEffect, createSignal, onCleanup } from 'solid-js';
+import { createSignal, onCleanup } from 'solid-js';
 
 type AddInboxRequest = {
   /** The permissions to ask consent for; the mailbox alone when omitted. */
@@ -27,34 +29,15 @@ export const openAddInboxDialog = (options?: AddInboxRequest) =>
 export const isAddInboxDialogOpen = () => request() !== null;
 
 /**
- * Confirmation step before the add-inbox OAuth redirect. Confirming kicks off
- * `useAddInboxFlow`, which navigates the page to the chosen provider's consent screen.
+ * Provider selection before adding an inbox. Confirming starts the selected
+ * consent flow or the IMAP/SMTP server form through `useAddInboxFlow`.
  */
 export function AddInboxDialog() {
   const addInbox = useAddInboxFlow();
   const [pending, setPending] = createSignal(false);
-  // Undefined until the providers read settles. The dialog waits for it, so
-  // Outlook never flashes in for a user it isn't offered to, or pops in late.
-  const [outlookAvailable, setOutlookAvailable] = createSignal<boolean>();
-  createEffect(() => {
-    if (!isAddInboxDialogOpen()) return;
-    let current = true;
-    setOutlookAvailable(undefined);
-    void fetchEmailConnectionProviders()
-      .then((providers) => {
-        if (current) setOutlookAvailable(providers.outlook);
-      })
-      .catch(() => {
-        if (current) setOutlookAvailable(false);
-      });
-    onCleanup(() => {
-      current = false;
-    });
-  });
-
   onCleanup(() => setRequest(null));
 
-  const handleConfirm = async (provider: 'GMAIL' | 'OUTLOOK') => {
+  const handleConfirm = async (provider: EmailProvider) => {
     if (pending()) return;
     setPending(true);
     // On web this navigates away; on native iOS the OAuth completes in place
@@ -68,14 +51,14 @@ export function AddInboxDialog() {
   };
 
   return (
-    <EmailProviderDialog
-      open={isAddInboxDialogOpen() && outlookAvailable() !== undefined}
+    <EmailProviderSelectionDialog
+      open={isAddInboxDialogOpen()}
       onOpenChange={(open) => {
         if (!open) setRequest(null);
       }}
       onSelect={handleConfirm}
       disabled={pending()}
-      outlookAvailable={outlookAvailable() === true}
+      mailOnly={!request()?.scopes || request()?.scopes === 'gmail'}
     />
   );
 }

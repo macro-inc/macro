@@ -64,6 +64,52 @@ async fn routine_outlook_confirmation_reads_as_sending_until_delivery_is_unknown
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn definite_pre_data_refusal_reports_failed_and_is_not_claimed_again(db: PgPool) {
+    let (sync, repo, lease, link) = submitted_send(&db).await;
+    let attempt = pending_attempt(&repo, link).await.attempt_id;
+    sync.fail_draft(&lease, DraftFailure::SendRejected)
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.read_send_attempt(&actor(), link, attempt, None)
+            .await
+            .unwrap()
+            .unwrap()
+            .status,
+        SendAttemptStatus::Failed,
+    );
+    assert!(
+        sync.claim_draft(Uuid::now_v7(), DraftClaimMode::All)
+            .await
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn confirmed_delivery_reports_sent_and_is_not_claimed_again(db: PgPool) {
+    let (sync, repo, lease, link) = submitted_send(&db).await;
+    let attempt = pending_attempt(&repo, link).await.attempt_id;
+    let mut cp = checkpoint(&lease, DraftStage::Confirming);
+    cp.draft.as_mut().unwrap().is_draft = false;
+    sync.confirm_sent(&lease, &cp).await.unwrap();
+    assert_eq!(
+        repo.read_send_attempt(&actor(), link, attempt, None)
+            .await
+            .unwrap()
+            .unwrap()
+            .status,
+        SendAttemptStatus::Sent,
+    );
+    assert!(
+        sync.claim_draft(Uuid::now_v7(), DraftClaimMode::All)
+            .await
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn cancelling_while_outlook_confirms_is_too_late(db: PgPool) {
     let (_, repo, lease, link) = submitted_send(&db).await;
     let attempt = pending_attempt(&repo, link).await.attempt_id;

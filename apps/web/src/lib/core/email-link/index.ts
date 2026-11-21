@@ -11,6 +11,11 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform } from '@core/util/platform';
 import { Telemetry } from '@macro-inc/observability';
 import { useInitGmailLink } from '@queries/auth';
+import {
+  currentQueryAccount,
+  isCurrentQueryAccount,
+  type QueryAccount,
+} from '@queries/auth/account-scope';
 import { useInitOutlookLink } from '@queries/auth/outlook-link';
 import { invalidateUserInfo } from '@queries/auth/user-info';
 import { invalidateEmailLinks, useEmailLinksQuery } from '@queries/email/link';
@@ -41,7 +46,7 @@ import {
   INBOX_IDENTITY_CONFLICT_MESSAGE,
   type InboxAddition,
 } from './link-outcome';
-import { selectEmailProvider } from './ProviderDialog';
+import { type EmailProvider, selectEmailProvider } from './ProviderDialog';
 import { rememberInboxLinkReturn } from './return-layout';
 import { requestShareInboxConfirmation } from './share-conflict';
 
@@ -255,7 +260,7 @@ const TOO_MANY_PENDING_LINKS_MESSAGE =
 
 type AddInboxOptions = {
   scopes?: ConsentScopes;
-  provider?: 'GMAIL' | 'OUTLOOK';
+  provider?: EmailProvider;
   reconnectLinkId?: string;
   emailAddress?: string;
 };
@@ -413,10 +418,42 @@ export function useAddInboxFlow() {
     };
   };
 
-  return async (options?: AddInboxOptions) => {
+  const connectImap = async (
+    viewer: QueryAccount | undefined,
+    options?: AddInboxOptions
+  ): Promise<void> => {
+    const { openImapConnection } = await import('./ImapConnectDialog');
+    if (!isCurrentQueryAccount(viewer)) return;
+    const result = await openImapConnection(
+      owner,
+      options?.emailAddress,
+      options?.reconnectLinkId
+    );
+    if (!isCurrentQueryAccount(viewer)) return;
+    if (result === 'payment_required') showPaywall(PaywallKey.MULTI_INBOX);
+    if (result === 'connected') {
+      invalidateEmailLinks();
+      await invalidateUserInfo();
+      toast.success(
+        options?.reconnectLinkId ? 'Inbox reconnected' : 'Inbox connected'
+      );
+    }
+    if (result === 'GMAIL' || result === 'OUTLOOK') {
+      return connectInbox({
+        provider: result,
+        emailAddress: options?.emailAddress,
+      });
+    }
+  };
+
+  const connectInbox = async (options?: AddInboxOptions): Promise<void> => {
+    const viewer = currentQueryAccount();
     const scopes = options?.scopes ?? 'gmail';
-    const provider = options?.provider ?? (await selectEmailProvider(owner));
+    const provider =
+      options?.provider ??
+      (await selectEmailProvider(owner, scopes === 'gmail'));
     if (!provider) return;
+    if (provider === 'IMAP') return connectImap(viewer, options);
     const addition = await plainAddition(provider, scopes, options);
     if (isNativeMobilePlatform()) {
       await startNativeFlow(
@@ -473,6 +510,7 @@ export function useAddInboxFlow() {
       toast.failure('Failed to start inbox connection');
     }
   };
+  return connectInbox;
 }
 
 /**

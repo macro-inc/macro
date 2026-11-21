@@ -186,6 +186,7 @@ export class LocalStack implements EmailStack {
   /** Which emulator holds a mailbox this test made. */
   private readonly providers = new Map<string, Provider>();
   private readonly users = new Map<string, SignedInUser>();
+  private readonly nativeAddressSuffix = randomBytes(16).toString('hex');
   private readonly linked: { user: SignedInUser; linkId: string }[] = [];
   /**
    * This test's own domain, as long as `example.com`: the app cuts a long
@@ -217,7 +218,15 @@ export class LocalStack implements EmailStack {
    * `ada@example.com`. The test's people keep their names and share a domain.
    */
   address(address: string): string {
-    return `${address.split('@')[0]}@${this.domain}`;
+    const [name, domain] = address.split('@');
+    // The catalog recognizes these native providers by domain. Their emulators
+    // share this local stack, so keep the domain and isolate the local part.
+    if (domain === 'gmail.com' || domain === 'outlook.com') {
+      return name.endsWith(this.nativeAddressSuffix)
+        ? address
+        : `${name}${this.nativeAddressSuffix}@${domain}`;
+    }
+    return `${name}@${this.domain}`;
   }
 
   private emulator(provider: Provider): string {

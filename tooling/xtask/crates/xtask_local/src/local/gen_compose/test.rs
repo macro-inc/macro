@@ -1,6 +1,29 @@
 use super::*;
 
 #[test]
+fn imap_submission_has_an_independent_unauthenticated_relay() {
+    let mut services = IndexMap::new();
+    add_imap_lab(&mut services);
+    let compose = serde_yaml::to_value(dct::Compose {
+        services: dct::Services(services),
+        ..Default::default()
+    })
+    .unwrap();
+    let relay = &compose["services"]["imap-lab-mailpit"];
+    assert_eq!(relay["image"], MAILPIT_IMAGE);
+    assert_eq!(relay["ports"][0], "127.0.0.1::8025");
+    assert!(relay["environment"].is_null());
+    assert!(
+        compose["services"]["imap-lab-dovecot"]["volumes"]
+            .as_sequence()
+            .unwrap()
+            .iter()
+            .filter_map(|volume| volume.as_str())
+            .any(|volume| volume.ends_with(":/etc/dovecot/conf.d/zzz-macro-browser-relay.conf:ro"))
+    );
+}
+
+#[test]
 fn passwords_vault_persists_in_isolated_local_storage_without_dev_credentials() {
     for name in [None, Some("passwords-isolation")] {
         let instance = Instance::derive(name, None).unwrap();
