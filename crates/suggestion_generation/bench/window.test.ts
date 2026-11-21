@@ -4,10 +4,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { RoutineMark } from './judge';
 import { asWritten, type Inbox, type Persona, recentMessages, type RoutinesTruth, type StreamsTruth, variantOf, windowMessages } from './personas';
-import { type Generation, readWorkList, rereadList, type RoutineRow, workListOf } from './run';
+import { type Generation, readWorkList, rereadList, type RoutineRow, unlinkMarkdown, workListOf } from './run';
 import { boundedList, type EntryMark, type FoundStream, mailText, marksProblem, scoreList, scoreWorkList, trimAsRust, type WorkList } from './finding';
 import { draftableNeeds, inInbox, pooled } from './month';
-import { rosterProblem } from './heldout';
+import { CATALOG } from './catalog';
+import { repeatsEarlier, rosterProblem, rosterProblems } from './heldout';
 import { lines, withheldAcross } from './report';
 import { type Attempt, failedScore, marginsOf, type RunFile, scoreRoutines, summary, unreadList, verdict, wholeCount } from './score';
 import { ANCHOR } from './clock';
@@ -219,6 +220,47 @@ describe('workListOf', () => {
 
   test('reads the list a drafting session was briefed with', () => {
     expect(workListOf([{ direction: 'to_server', content: { type: 'event', event: 'acp_ready' } }, prompt(list)])).toEqual(list);
+  });
+
+  test("undoes the links a bare list's round trip made of addresses and URLs, and keeps a link written as one", () => {
+    const linked = { ...list, streams: [{ ...list.streams[0], senders: [{ name: 'Mill orders', email: 'orders@mill.example' }], what: 'See https://mill.example/po and [the form](https://mill.example/f)' }] };
+    const text = JSON.stringify(linked)
+      .replace('orders@mill.example', '[orders@mill.example](mailto:orders@mill.example)')
+      .replace('https://mill.example/po', '[https://mill.example/po](https://mill.example/po)');
+    const row = { direction: 'to_runtime', created_at: '2026-11-20 10:00:00+00', content: { type: 'acp', method: 'session/prompt', params: { prompt: [{ type: 'text', text: briefOf(linked).replace(JSON.stringify(linked), text) }] } } };
+    expect(workListOf([row])).toEqual(linked);
+  });
+
+  test("undoes the link elements a bare list's round trip made of domains and URLs", () => {
+    const element = (url: string, text: string) => `<m-link>${JSON.stringify({ url, text, title: '' })}</m-link>`;
+    const linked = { ...list, streams: [{ ...list.streams[0], what: 'Submissions from mill.example and https://mill.example/po' }] };
+    const text = JSON.stringify(linked).replace('mill.example and', `${element('https://mill.example', 'mill.example')} and`).replace('https://mill.example/po', element('https://mill.example/po', 'https://mill.example/po'));
+    const row = { direction: 'to_runtime', created_at: '2026-11-20 10:00:00+00', content: { type: 'acp', method: 'session/prompt', params: { prompt: [{ type: 'text', text: briefOf(linked).replace(JSON.stringify(linked), text) }] } } };
+    expect(workListOf([row])).toEqual(linked);
+    // A URL linked to another target is a link, the target kept whole.
+    expect(unlinkMarkdown(element('https://example.com/incoming/', 'https://example.com/incoming'))).toBe('[https://example.com/incoming](https://example.com/incoming/)');
+    expect(unlinkMarkdown(element('https://example.com/incoming', 'https://example.com/incoming'))).toBe('https://example.com/incoming');
+    // A slash added to a bare host is the host's own link; one added to a path is another target.
+    expect(unlinkMarkdown(element('https://example.com/', 'example.com'))).toBe('example.com');
+    expect(unlinkMarkdown(element('https://example.com/incoming/', 'example.com/incoming'))).toBe('[example.com/incoming](https://example.com/incoming/)');
+    expect(unlinkMarkdown(element('https://example.com?route=orders/', 'example.com?route=orders'))).toBe('[example.com?route=orders](https://example.com?route=orders/)');
+    expect(unlinkMarkdown(element('https://example.com#orders/', 'example.com#orders'))).toBe('[example.com#orders](https://example.com#orders/)');
+    // A host with a port has no scheme.
+    expect(unlinkMarkdown(element('https://www.example.com:8443/incoming', 'www.example.com:8443/incoming'))).toBe('www.example.com:8443/incoming');
+    expect(unlinkMarkdown(element('mailto:ops@example.com', 'ops@example.com'))).toBe('ops@example.com');
+    // An element that isn't one stays as it was.
+    expect(unlinkMarkdown('<m-link>{not json}</m-link>')).toBe('<m-link>{not json}</m-link>');
+    // One written as a link, its text not its target, stays the Markdown link it was written as.
+    expect(unlinkMarkdown(`Use ${element('https://mill.example/form', 'the form')} daily`)).toBe('Use [the form](https://mill.example/form) daily');
+    expect(unlinkMarkdown(element('mailto:orders@mill.example', 'orders@mill.example'))).toBe('orders@mill.example');
+    expect(unlinkMarkdown(element('https://mill.example/', 'mill.example'))).toBe('mill.example');
+  });
+
+  test('reads a list in a fenced block as written, escapes and all', () => {
+    const odd = { ...list, streams: [{ ...list.streams[0], name: 'Orders & returns', what: 'Pay INV\\_7 by "Friday"' }] };
+    const fenced = `Draft routines.\n\nThe streams of work a step found in the user's last 30 days of mail, those they would most regret missing first:\n<untrusted>\n\n\`\`\`json\n${JSON.stringify(odd).replace(/&/g, '\\u0026')}\n\`\`\`\n\n</untrusted>`;
+    const row = { direction: 'to_runtime', created_at: '2026-11-20 10:00:00+00', content: { type: 'acp', method: 'session/prompt', params: { prompt: [{ type: 'text', text: fenced }] } } };
+    expect(workListOf([row])).toEqual(odd);
   });
 
   test('reads the earliest brief, whatever order the rows came in', () => {
@@ -552,6 +594,16 @@ describe('the finding score of a run', () => {
     expect(none).not.toContain('entries naming none');
     const two = lines([{ ...run, attempts: [heldout('p1', { finding: list }), heldout('p2', { finding: list })] }]).join('\n');
     expect(two).toContain('named 100%');
+    // A list read before its build failed was judged as read: beside another, the two show.
+    const failed = (persona: string) => heldout(persona, { generation: { ...generation([]), status: 'generating', buildFailed: true }, score: failedScore(3), finding: list });
+    const timedOut = lines([{ ...run, attempts: [heldout('p1', { finding: list }), heldout('p2', { finding: unread }), failed('p3')] }]).join('\n');
+    expect(timedOut).toContain('work lists read in 2 of 3 generations');
+    expect(timedOut).not.toContain('fewer than 2');
+    // With one of two people built, the scores are withheld but the two read lists show.
+    const half = lines([{ ...run, attempts: [heldout('p1', { finding: list }), failed('p2')] }]).join('\n');
+    expect(half).toContain('fewer than 2: their aggregate would show one person');
+    expect(half).toContain('work lists read in 2 of 2 generations');
+    expect(half).not.toContain('good drafts per generation');
   });
 
   test('shows a held-out time or quality only over two people who have one', () => {
@@ -591,6 +643,13 @@ describe('writing a month', () => {
     expect(draftableNeeds([{ id: 'r1', drafted: 'a task per invoice' }, { id: 'r1', drafted: 'again' }, { id: 'r2', drafted: '  ' }, { id: 'r3' }, { id: 'r4', drafted: 'a lead log' }])).toBe(2);
   });
 
+  test('counts no need a catalog routine meets on its own, whatever its drafted text', () => {
+    const known = Object.keys(CATALOG)[0];
+    expect(draftableNeeds([{ id: 'r1', drafted: 'a task per invoice', catalog: [known] }, { id: 'r2', drafted: 'a lead log', catalog: ['not_in_the_catalog'] }, { id: 'r3', drafted: 'a digest', catalog: [] }])).toBe(2);
+    // A name every object answers to is no catalog routine.
+    expect(draftableNeeds([{ id: 'r1', drafted: 'a lead log', catalog: ['constructor', 'toString', '__proto__'] }])).toBe(1);
+  });
+
   test('starts no job after one fails, and throws once the running ones end', async () => {
     const started: number[] = [];
     const finished: number[] = [];
@@ -628,5 +687,27 @@ describe('writing a month', () => {
     expect(rosterProblem(roster('Ana', 'Bo', 'BO'))).toContain('share a first name');
     expect(rosterProblem(roster('Ana', 'Bo', 'owner'))).toContain('named Owner');
     expect(rosterProblem(roster('Owen', 'Bo', 'Cy'))).toBeUndefined();
+  });
+
+  test("says how many sketched people can't be written, naming none", () => {
+    const roster = (slug: string, owner: string, ...firsts: string[]) => ({ slug, owner_first: owner, colleagues: firsts.map((first) => ({ first, last: 'A', role: '' })) });
+    const problems = rosterProblems([roster('ana-lopez', 'Ana', 'ana'), roster('bo-stone', 'Bo', 'Cy'), roster('cy-reed', 'Cy', 'owner')]);
+    expect(problems).toStartWith('2 of 3 sketched people:');
+    for (const name of ['ana', 'bo', 'cy-reed', 'lopez']) expect(problems!.toLowerCase()).not.toContain(name);
+    expect(rosterProblems([roster('bo-stone', 'Bo', 'Cy')])).toBeUndefined();
+  });
+});
+
+describe('a held-out person is someone no earlier set has', () => {
+  const taken = new Set(['slug:ana', 'name:ana lopez', 'domain:acme.example']);
+  const person = { slug: 'bea', owner_first: 'Bea', owner_last: 'Stone', domain: 'stone.example' };
+  test('a new slug, name and domain pass', () => expect(repeatsEarlier([person], taken)).toEqual([]));
+  test('the same slug, full name or mail domain is refused, saying which', () => {
+    expect(repeatsEarlier([{ ...person, slug: 'ana' }], taken)).toEqual(['slug']);
+    expect(repeatsEarlier([{ ...person, owner_first: 'ANA', owner_last: 'Lopez' }], taken)).toEqual(['name']);
+    expect(repeatsEarlier([{ ...person, domain: 'Acme.example' }], taken)).toEqual(['domain']);
+    // Two people of one set are two people too.
+    expect(repeatsEarlier([person, { ...person, slug: 'cy', owner_first: 'Cy' }], taken)).toEqual(['domain']);
+    expect(repeatsEarlier([person, { slug: 'cy', owner_first: 'Cy', owner_last: 'Moss', domain: 'moss.example' }], taken)).toEqual([]);
   });
 });
