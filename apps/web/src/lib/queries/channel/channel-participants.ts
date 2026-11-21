@@ -68,6 +68,8 @@ type SettledChange = {
   confirmed: boolean;
   /** The check whose answer said so (0 until one does). */
   confirmedBy: number;
+  /** When a recheck that failed asks once more (unset until one fails). */
+  retryAt?: number;
   /**
    * People it no longer decides: a change here that finished later touched
    * them, or the server said it does not hold for them.
@@ -535,13 +537,15 @@ function afterExpiry(
 
 /**
  * A confirmed change whose recheck has not answered: the newest answer decides
- * who shows. A failed recheck asks once more when the time to show runs out
- * after the first check since the record changed was sent, as a change asked
- * about early does: a reader that was on another channel missed checks another
- * reader still waits on. The time is the shared check's, so the readers that
- * rode it share the next one too, and the one more check cannot move it.
- * If that fails too, the newest answer decides for good, once every check sent since
- * the confirmation has answered: one still out may be newer than it.
+ * who shows. A failed recheck asks once more, as a change asked about early
+ * does: a reader that was on another channel missed checks another reader
+ * still waits on. It asks when the time to show runs out after the newest check
+ * that failed before then was sent: the readers that rode a failed check share
+ * that time, so they share the next check too, and the one more check, which
+ * is sent at that time, cannot move it. The time is kept, so questions evicted
+ * since cannot bring it back. If that check fails too, the newest answer
+ * decides for good, once every check sent since the confirmation has answered:
+ * one still out may be newer than it.
  */
 function whileRechecking(
   shown: ParticipantChange,
@@ -569,20 +573,21 @@ function whileRechecking(
       askAt: says.kind === 'unasked' ? expires : undefined,
     };
   if (expires === seen.checkFrom) {
-    const firstAt = Math.min(
-      ...context.questions
-        .filter(
-          (q) =>
-            q.channelId === shown.channelId &&
-            q.at >= expires &&
-            q.sent > seen.checkAfter
-        )
-        .map((q) => q.at)
-    );
-    const retryAt = firstAt + CHANNEL_PARTICIPANTS_MUTATION_GC_MS;
+    const kept = seen.retryAt ?? Number.POSITIVE_INFINITY;
+    const failedAt = context.questions
+      .filter(
+        (q) =>
+          q.channelId === shown.channelId &&
+          q.at >= expires &&
+          q.at < kept &&
+          q.sent > seen.checkAfter
+      )
+      .map((q) => q.at + CHANNEL_PARTICIPANTS_MUTATION_GC_MS);
+    const retryAt = Math.max(...failedAt, seen.retryAt ?? 0);
+    const retrying = { ...seen, retryAt };
     return context.now < retryAt
-      ? { seen, shown: stillShown(shown, refuted), askAt: retryAt }
-      : afterExpiry(shown, seen, retryAt, context);
+      ? { seen: retrying, shown: stillShown(shown, refuted), askAt: retryAt }
+      : afterExpiry(shown, retrying, retryAt, context);
   }
   if (refuted.length === shown.userIds.length) return undefined;
   return {
@@ -610,6 +615,7 @@ function recheckOnChange(
     rechecking: true,
     checkFrom: context.now,
     checkAfter: context.sent,
+    retryAt: undefined,
   };
 }
 
