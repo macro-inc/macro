@@ -308,6 +308,7 @@ fn searchable_text_leaves_out_what_cards_and_lines_keep_behind_a_disclosure() {
             status: ToolApprovalStatus::Approved,
             resolved_by: None,
             remembered: false,
+            approver: None,
         },
         MessagePart::Control {
             control: Control::SetModel {
