@@ -5220,7 +5220,7 @@ export interface ToolNewEntry {
    */
   email?: string | null;
   /**
-   * Fields to fill in on the new entry, e.g. [{"field": "Stage", "value": "Lead"}, {"field": "Owner", "value": "me"}]. In a pipeline that tracks a record, Outcome is Open, Won or Lost independently of Stage, and each monetary field has a separate currency field (e.g. Revenue currency): set its three-letter option code with the amount. New entries default to Open and USD. In a generic pipeline, e.g. [{"field": "Name", "value": "Launch site"}].
+   * Fields to fill in on the new entry, e.g. [{"field": "Stage", "value": "Lead"}, {"field": "Owner", "value": "me"}]. In a pipeline that tracks a record, Outcome is Open, Won, Lost or Declined (the team turned the deal down: closed, not lost) independently of Stage, and each monetary field has a separate currency field (e.g. Revenue currency): set its three-letter option code with the amount. New entries default to Open and USD. In a generic pipeline, e.g. [{"field": "Name", "value": "Launch site"}].
    */
   set?: ToolFieldValue[];
 }
@@ -10144,7 +10144,7 @@ export interface WordDocumentResponse {
   content: string;
 }
 /**
- * Export a CRM pipeline's deals (entries) to a CSV file saved in the user's Macro files: Company and Domain (or Contact and Email), then one column per field, with people as emails. Monetary amounts and their currency codes occupy separate columns, and Outcome exports as Open, Won or Lost. Use it to back up a pipeline, move it to another team (ImportPipelineCsv reads the same file), or share it as a spreadsheet; to answer questions about deals, use FindPipelineEntries instead. Returns the file's documentId and how many entries it holds.
+ * Export a CRM pipeline's deals (entries) to a CSV file saved in the user's Macro files: Company and Domain (or Contact and Email), then one column per field, with people as emails. Monetary amounts and their currency codes occupy separate columns, and Outcome exports as Open, Won, Lost or Declined. Use it to back up a pipeline, move it to another team (ImportPipelineCsv reads the same file), or share it as a spreadsheet; to answer questions about deals, use FindPipelineEntries instead. Returns the file's documentId and how many entries it holds.
  */
 export interface ExportPipelineCsv {
   /**
@@ -12704,7 +12704,7 @@ export interface NotificationItem {
   senderId?: string | null;
 }
 /**
- * List the user's CRM pipelines (deal pipelines, sales pipelines, hiring or partner pipelines) with their stages and fields. A pipeline holds entries (deals); each entry tracks one CRM company or contact and has its own fields, such as Stage, Outcome, Owner, Revenue and Revenue currency. Outcome is Open/Won/Lost independently of Stage; monetary amounts use their paired currency field (USD by default). A generic pipeline has no `tracks`: its entries are free-form rows of fields, with no company or contact. Each pipeline lists its id, whether it tracks companies or contacts, the user's access, and its fields in order with their types; a select field lists its options, so Stage lists the pipeline's stages from first to last. Call this first whenever the user talks about deals, a pipeline, a stage, or moving a company or contact along, then use FindPipelineEntries, AddToPipeline and UpdatePipelineEntries with the returned pipelineId and field names. When the user names no pipeline and there is exactly one, use it; when several could match, ask which one.
+ * List the user's CRM pipelines (deal pipelines, sales pipelines, hiring or partner pipelines) with their stages and fields. A pipeline holds entries (deals); each entry tracks one CRM company or contact and has its own fields, such as Stage, Outcome, Owner, Revenue and Revenue currency. Outcome is Open, Won, Lost or Declined independently of Stage: Declined is a deal the team turned down, closed but not lost, so leave it out of lost counts and win rates; monetary amounts use their paired currency field (USD by default). A generic pipeline has no `tracks`: its entries are free-form rows of fields, with no company or contact. Each pipeline lists its id, whether it tracks companies or contacts, the user's access, and its fields in order with their types; a select field lists its options, so Stage lists the pipeline's stages from first to last. Call this first whenever the user talks about deals, a pipeline, a stage, or moving a company or contact along, then use FindPipelineEntries, AddToPipeline and UpdatePipelineEntries with the returned pipelineId and field names. When the user names no pipeline and there is exactly one, use it; when several could match, ask which one.
  */
 export type ListPipelines = {};
 /**
@@ -16262,7 +16262,7 @@ export interface ToolEntryUpdate {
    */
   recordId?: string | null;
   /**
-   * Fields to set, e.g. [{"field": "Stage", "value": "Negotiation"}, {"field": "Revenue", "value": "48000"}]. Leave value out to empty an ordinary field; Outcome and currency cannot be empty. Outcome is Open, Won or Lost independently of Stage. Monetary fields have a separate currency field (e.g. Revenue currency); set its three-letter option code with the amount.
+   * Fields to set, e.g. [{"field": "Stage", "value": "Negotiation"}, {"field": "Revenue", "value": "48000"}]. Leave value out to empty an ordinary field; Outcome and currency cannot be empty. Outcome is Open, Won, Lost or Declined independently of Stage; Declined means the team turned the deal down: closed, not lost. Monetary fields have a separate currency field (e.g. Revenue currency); set its three-letter option code with the amount.
    */
   set: ToolFieldValue[];
 }

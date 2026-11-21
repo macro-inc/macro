@@ -54,7 +54,6 @@ vi.mock('@app/components/view-shell', () => ({
   ListSortDropdown: () => null,
   ListGroupDropdown: () => null,
   ListFilterDropdown: () => null,
-  ListFilterCountBadge: () => null,
   ViewLayoutDropdown: (props: {
     label: string;
     layouts: ('list' | 'board' | 'gantt')[];
