@@ -18,7 +18,7 @@ use xtask_paths::RuntimePath;
 
 use crate::workflows::actions::{DenolandSetupDeno, DornyPathsFilter};
 use crate::workflows::{
-    runners,
+    attestation, runners,
     steps::{self, FluentBuilder},
     vars,
 };
@@ -110,7 +110,8 @@ const DOPPLER_BINS: StepHandle<DopplerBinsOutputs> = StepHandle::new(
 /// Build the workflow.
 pub fn code_check_cloud_storage() -> Workflow {
     Workflow::new("cloud storage code check")
-        .on(Event::default().workflow_call(WorkflowCall::default()))
+        .on(Event::default()
+            .workflow_call(attestation::takes_attestations(WorkflowCall::default())))
         .map(vars::with_global_env)
         .add_job(PATH_CHECK, path_check())
         .add_job(CHECK, check())
@@ -193,6 +194,14 @@ fn rebuild_all_reason() -> Expr<Str> {
 /// fmt + unused dependencies + clippy.
 fn check() -> Job {
     steps::gated_job(&PATH_CHECK.outputs.should_run)
+        .cond(
+            PATH_CHECK
+                .outputs
+                .should_run
+                .read()
+                .is_set()
+                .and(attestation::not_attested("cloud-storage/check")),
+        )
         .timeout_minutes(20u32)
         .runs_on(runners::Runner::Large.with_cache_tag(vars::CI_CACHE_TAG))
         .add_env(("CARGO_TARGET_REBUILD_ALL", rebuild_all_reason()))
@@ -359,7 +368,11 @@ pub(crate) fn with_test_compile_env(job: Job) -> Job {
 fn build_service_bins() -> Job {
     steps::gated_job(&PATH_CHECK.outputs.should_run)
         .timeout_minutes(20u32)
-        .cond(build_service_bins_condition())
+        .cond(
+            build_service_bins_condition().and(attestation::not_attested(
+                "cloud-storage/build-service-bins",
+            )),
+        )
         .runs_on(runners::Runner::Large.with_cache_tag(vars::CI_CACHE_TAG))
         .add_env(("CARGO_TARGET_REBUILD_ALL", rebuild_all_reason()))
         .add_env(("RUST_PACKAGES", PATH_CHECK.outputs.rust_packages.read()))
@@ -481,7 +494,7 @@ fn paths_filter() -> Step<gh_workflow::Use> {
     .id(FILTER.id())
 }
 
-/// Compute the changed-file set and write it to `/tmp/changed-files`. Stacked
+/// Compute the changed-file set and write it to `$RUNNER_TEMP/changed-files`. Stacked
 /// PRs whose merge commit sits on another branch get their history deepened
 /// until it reaches the base branch. If no merge-base turns up, we leave the
 /// list empty, which makes downstream steps fall back to "everything": run all

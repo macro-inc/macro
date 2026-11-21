@@ -13,7 +13,7 @@ use gh_workflow::{Event, Job, Run, Step, Use, Workflow, WorkflowCall, ZizmorRule
 use xtask_paths::RepoGlob;
 
 use crate::workflows::actions::ActionsCheckout;
-use crate::workflows::{runners, steps, vars};
+use crate::workflows::{attestation, runners, steps, vars};
 
 /// Files whose change makes `PR CI` call this workflow.
 pub const PATHS: &[RepoGlob<'static>] = &[
@@ -35,7 +35,8 @@ pub const PATHS: &[RepoGlob<'static>] = &[
 /// Build the workflow.
 pub fn cargo_workspace_dependency_check() -> Workflow {
     Workflow::new("cargo workspace dependency check")
-        .on(Event::default().workflow_call(WorkflowCall::default()))
+        .on(Event::default()
+            .workflow_call(attestation::takes_attestations(WorkflowCall::default())))
         .add_job("dependency-check", dependency_check())
         .add_job("hakari-and-dep-closures", hakari_and_dep_closures())
 }
@@ -70,6 +71,9 @@ fn dependency_check() -> Job {
 /// drift. Regenerate locally with `just hakari` from the repository root.
 fn hakari_and_dep_closures() -> Job {
     rust_ci_job()
+        .cond(attestation::not_attested(
+            "workspace-dependencies/hakari-and-dep-closures",
+        ))
         .add_step(deps_check())
         .add_step(steps::teardown_nix())
         .add_step(steps::seal_cargo_target())

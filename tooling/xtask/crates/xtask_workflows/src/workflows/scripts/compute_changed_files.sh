@@ -28,10 +28,10 @@ else
 
   if [ -z "$compare_rev" ]; then
     echo "Unable to find merge-base for origin/${GITHUB_BASE_REF}; falling back to full test suite" >&2
-    : > /tmp/changed-files
+    : > "$RUNNER_TEMP/changed-files"
     exit 0
   fi
 fi
 
-printf '%s\n' "$compare_rev" > /tmp/base-revision
-git diff --name-only --no-renames "$compare_rev" "$GITHUB_SHA" > /tmp/changed-files
+printf '%s\n' "$compare_rev" > "$RUNNER_TEMP/base-revision"
+git -c core.quotePath=false diff --name-only --no-renames "$compare_rev" "$GITHUB_SHA" > "$RUNNER_TEMP/changed-files"

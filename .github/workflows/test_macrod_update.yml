@@ -2,12 +2,18 @@
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/test_macrod_update.rs
 name: Test macrod update
 on:
-  workflow_call: {}
+  workflow_call:
+    inputs:
+      attested:
+        description: JSON list of the checks PR CI accepted an attestation for, by id
+        type: string
+        default: '[]'
   workflow_dispatch: {}
 permissions:
   contents: read
 jobs:
   linux:
+    if: '!contains(fromJSON(inputs.attested || ''[]''), ''macrod-update/linux'')'
     name: macrod update (linux)
     runs-on: namespace-profile-linux-rust-ci
     timeout-minutes: 20

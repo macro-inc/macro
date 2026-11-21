@@ -9,7 +9,12 @@ env:
   RUST_BACKTRACE: '1'
   RUSTFLAGS: -C link-arg=-fuse-ld=lld
 on:
-  workflow_call: {}
+  workflow_call:
+    inputs:
+      attested:
+        description: JSON list of the checks PR CI accepted an attestation for, by id
+        type: string
+        default: '[]'
 jobs:
   path-check:
     runs-on: namespace-profile-linux-small;overrides.cache-tag=sccache-ci
@@ -115,13 +120,13 @@ jobs:
 
             if [ -z "$compare_rev" ]; then
               echo "Unable to find merge-base for origin/${GITHUB_BASE_REF}; falling back to full test suite" >&2
-              : > /tmp/changed-files
+              : > "$RUNNER_TEMP/changed-files"
               exit 0
             fi
           fi
 
-          printf '%s\n' "$compare_rev" > /tmp/base-revision
-          git diff --name-only --no-renames "$compare_rev" "$GITHUB_SHA" > /tmp/changed-files
+          printf '%s\n' "$compare_rev" > "$RUNNER_TEMP/base-revision"
+          git -c core.quotePath=false diff --name-only --no-renames "$compare_rev" "$GITHUB_SHA" > "$RUNNER_TEMP/changed-files"
         shell: bash
       - name: Mount nextest-filter and cargo registry cache
         if: steps.filter.outputs.should_run == 'true' && ((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository)
@@ -246,18 +251,18 @@ jobs:
             exit 0
           }
 
-          if [ ! -s /tmp/changed-files ]; then
+          if [ ! -s "$RUNNER_TEMP/changed-files" ]; then
             echo "Unknown or empty change set; running all tests"
             emit all false
           fi
 
-          if grep -qE '^(rust-toolchain\.toml|\.cargo/.*|\.config/.*)$' /tmp/changed-files; then
+          if grep -qE '^(rust-toolchain\.toml|\.cargo/.*|\.config/.*)$' "$RUNNER_TEMP/changed-files"; then
             echo "Toolchain or cargo config change detected; running all tests"
             emit all false
           fi
 
           clippy_config_changed=false
-          if grep -qx 'clippy\.toml' /tmp/changed-files; then
+          if grep -qx 'clippy\.toml' "$RUNNER_TEMP/changed-files"; then
             clippy_config_changed=true
           fi
 
@@ -265,7 +270,7 @@ jobs:
           # there), so `.sqlx` contents cannot change test outcomes. Clippy is the
           # offline SQLx check (`SQLX_OFFLINE=true`), so a snapshot-only diff must
           # still compile against the cache rather than skip the check job.
-          if ! grep -qvE '^\.sqlx/' /tmp/changed-files; then
+          if ! grep -qvE '^\.sqlx/' "$RUNNER_TEMP/changed-files"; then
             echo "Only .sqlx changes detected; clippy all, skip live-Postgres tests"
             emit all true
           fi
@@ -289,7 +294,7 @@ jobs:
             fi
           fi
 
-          packages="$("$filter_bin" /tmp/changed-files "$(< /tmp/base-revision)" "$metadata_file")"
+          packages="$("$filter_bin" "$RUNNER_TEMP/changed-files" "$(< "$RUNNER_TEMP/base-revision")" "$metadata_file")"
 
           # Losing the upload costs the next job about 15 s, not a failure.
           if [ -n "$metadata_url" ] && [ "$metadata_restored" = false ] && [ -f "$metadata_file" ]; then
@@ -321,7 +326,7 @@ jobs:
   check:
     needs:
       - path-check
-    if: needs.path-check.outputs.should_run == 'true'
+    if: needs.path-check.outputs.should_run == 'true' && !contains(fromJSON(inputs.attested || '[]'), 'cloud-storage/check')
     runs-on: namespace-profile-linux-large-build;overrides.cache-tag=sccache-ci
     env:
       CARGO_TARGET_REBUILD_ALL: ${{ needs.path-check.outputs.query_data == 'true' && 'the pull request changes query data' || '' }}
@@ -1171,13 +1176,13 @@ jobs:
 
             if [ -z "$compare_rev" ]; then
               echo "Unable to find merge-base for origin/${GITHUB_BASE_REF}; falling back to full test suite" >&2
-              : > /tmp/changed-files
+              : > "$RUNNER_TEMP/changed-files"
               exit 0
             fi
           fi
 
-          printf '%s\n' "$compare_rev" > /tmp/base-revision
-          git diff --name-only --no-renames "$compare_rev" "$GITHUB_SHA" > /tmp/changed-files
+          printf '%s\n' "$compare_rev" > "$RUNNER_TEMP/base-revision"
+          git -c core.quotePath=false diff --name-only --no-renames "$compare_rev" "$GITHUB_SHA" > "$RUNNER_TEMP/changed-files"
         shell: bash
       - name: Mount Namespace cache volume
         uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
@@ -1594,7 +1599,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          doppler_config_bins="$(cargo run --manifest-path tooling/xtask/Cargo.toml -- doppler-bins /tmp/changed-files)"
+          doppler_config_bins="$(cargo run --manifest-path tooling/xtask/Cargo.toml -- doppler-bins "$RUNNER_TEMP/changed-files")"
           {
             echo 'doppler_config_bins<<__DOPPLER_CONFIG_BINS__'
             if [ -n "$doppler_config_bins" ]; then
@@ -3022,7 +3027,7 @@ jobs:
   build-service-bins:
     needs:
       - path-check
-    if: needs.path-check.outputs.should_run == 'true' && needs.path-check.outputs.skip_tests != 'true' && (needs.path-check.outputs.rust_packages == 'all' || contains(needs.path-check.outputs.rust_packages, 'document_storage_service') || contains(needs.path-check.outputs.rust_packages, 'email_service') || contains(needs.path-check.outputs.rust_packages, 'authentication_service'))
+    if: needs.path-check.outputs.should_run == 'true' && needs.path-check.outputs.skip_tests != 'true' && (needs.path-check.outputs.rust_packages == 'all' || contains(needs.path-check.outputs.rust_packages, 'document_storage_service') || contains(needs.path-check.outputs.rust_packages, 'email_service') || contains(needs.path-check.outputs.rust_packages, 'authentication_service')) && !contains(fromJSON(inputs.attested || '[]'), 'cloud-storage/build-service-bins')
     runs-on: namespace-profile-linux-large-build;overrides.cache-tag=sccache-ci
     env:
       CARGO_TARGET_REBUILD_ALL: ${{ needs.path-check.outputs.query_data == 'true' && 'the pull request changes query data' || '' }}

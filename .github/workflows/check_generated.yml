@@ -2,9 +2,15 @@
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/check_generated.rs
 name: check generated workflows
 on:
-  workflow_call: {}
+  workflow_call:
+    inputs:
+      attested:
+        description: JSON list of the checks PR CI accepted an attestation for, by id
+        type: string
+        default: '[]'
 jobs:
   check-workflows:
+    if: '!contains(fromJSON(inputs.attested || ''[]''), ''generated-workflows/check-workflows'')'
     runs-on: namespace-profile-linux-small
     timeout-minutes: 15
     steps:
@@ -26,6 +32,7 @@ jobs:
       - name: verify kafka cluster topics are up to date
         run: cargo run --manifest-path tooling/xtask/Cargo.toml -- kafka-topics --check
   lint-workflows:
+    if: '!contains(fromJSON(inputs.attested || ''[]''), ''generated-workflows/lint-workflows'')'
     runs-on: namespace-profile-linux-small
     timeout-minutes: 15
     steps:

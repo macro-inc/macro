@@ -17705,6 +17705,10 @@
     "xtask": [
       "tooling/xtask"
     ],
+    "xtask_attest": [
+      "crates/workspace-hack",
+      "tooling/xtask/crates/xtask_attest"
+    ],
     "xtask_deps": [
       "tooling/xtask/crates/xtask_deps",
       "tooling/xtask/crates/xtask_graph",
