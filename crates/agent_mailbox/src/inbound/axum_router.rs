@@ -92,6 +92,7 @@ impl IntoResponse for AgentMailboxHttpError {
                 StatusCode::FORBIDDEN
             }
             AgentMailboxErrorCode::AlreadyProvisioned
+            | AgentMailboxErrorCode::TeamLimit
             | AgentMailboxErrorCode::Paused
             | AgentMailboxErrorCode::NotReady
             | AgentMailboxErrorCode::SendOutcomeUnknown => StatusCode::CONFLICT,

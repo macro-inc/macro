@@ -1,9 +1,11 @@
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
 use super::*;
+use crate::domain::models::SendKind;
 
 const ADA: &str = "macro|ada-1@agents.macro.invalid";
 const TTL: Duration = Duration::minutes(3);
+const TEAM: TeamId = TeamId(Uuid::from_u128(0x7ea));
 
 fn ada() -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str(ADA).unwrap().into_owned()
@@ -35,7 +37,7 @@ fn token(value: u128) -> LeaseToken {
 
 async fn new_mailbox(repository: &PgAgentMailboxRepository) -> AgentMailboxId {
     let Reservation::New(mailbox) = repository
-        .reserve(&request(1), AgentMailboxId::generate())
+        .reserve(&request(1), AgentMailboxId::generate(), TEAM, 25)
         .await
         .unwrap()
     else {
@@ -73,15 +75,15 @@ async fn reserve_is_idempotent_and_allows_one_live_mailbox_per_agent(pool: PgPoo
     let repository = PgAgentMailboxRepository::new(pool);
 
     let first = repository
-        .reserve(&request(1), AgentMailboxId::generate())
+        .reserve(&request(1), AgentMailboxId::generate(), TEAM, 25)
         .await
         .unwrap();
     let again = repository
-        .reserve(&request(1), AgentMailboxId::generate())
+        .reserve(&request(1), AgentMailboxId::generate(), TEAM, 25)
         .await
         .unwrap();
     let other = repository
-        .reserve(&request(2), AgentMailboxId::generate())
+        .reserve(&request(2), AgentMailboxId::generate(), TEAM, 25)
         .await
         .unwrap();
 
@@ -229,7 +231,7 @@ async fn a_release_records_a_late_create_and_finishes_under_the_lease(pool: PgPo
     assert!(repository.live_mailbox(&ada()).await.unwrap().is_none());
     assert!(matches!(
         repository
-            .reserve(&request(2), AgentMailboxId::generate())
+            .reserve(&request(2), AgentMailboxId::generate(), TEAM, 25)
             .await
             .unwrap(),
         Reservation::New(_)
@@ -317,13 +319,34 @@ async fn the_sweep_skips_deferred_mailboxes_until_their_time(pool: PgPool) {
     );
 }
 
+fn attempt(key: u128, recipients: u32) -> SendAttempt {
+    SendAttempt {
+        idempotency_key: Uuid::from_u128(key),
+        kind: SendKind::Message,
+        recipient_count: recipients,
+        fingerprint: [u8::try_from(key).unwrap(); 32],
+    }
+}
+
+const ROOMY: SendLimits = SendLimits {
+    per_hour: 100,
+    per_day: 100,
+    recipients_per_day: 1000,
+    team_recipients_per_day: 1000,
+};
+
+async fn mailbox(repository: &PgAgentMailboxRepository, id: AgentMailboxId) -> AgentMailbox {
+    repository.mailbox(id).await.unwrap().unwrap()
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn sends_dedupe_by_key_stop_at_the_caps_and_expire_unknown_outcomes(pool: PgPool) {
     let repository = PgAgentMailboxRepository::new(pool);
-    let id = active_mailbox(&repository).await;
+    let ada = mailbox(&repository, active_mailbox(&repository).await).await;
     let limits = SendLimits {
         per_hour: 2,
         per_day: 3,
+        ..ROOMY
     };
     let now = Utc::now();
     let replayable = now - Duration::hours(23);
@@ -334,9 +357,8 @@ async fn sends_dedupe_by_key_stop_at_the_caps_and_expire_unknown_outcomes(pool: 
 
     let first = repository
         .reserve_send(
-            id,
-            Uuid::from_u128(1),
-            SendKind::Message,
+            &ada,
+            &attempt(1, 1),
             limits,
             now - Duration::hours(2),
             replayable,
@@ -344,25 +366,17 @@ async fn sends_dedupe_by_key_stop_at_the_caps_and_expire_unknown_outcomes(pool: 
         .await
         .unwrap();
     repository
-        .complete_send(id, Uuid::from_u128(1), &sent)
+        .complete_send(ada.id, Uuid::from_u128(1), &sent)
         .await
         .unwrap();
     let replay = repository
-        .reserve_send(
-            id,
-            Uuid::from_u128(1),
-            SendKind::Message,
-            limits,
-            now,
-            replayable,
-        )
+        .reserve_send(&ada, &attempt(1, 1), limits, now, replayable)
         .await
         .unwrap();
     let second = repository
         .reserve_send(
-            id,
-            Uuid::from_u128(2),
-            SendKind::Reply,
+            &ada,
+            &attempt(2, 1),
             limits,
             now - Duration::minutes(30),
             replayable,
@@ -370,49 +384,28 @@ async fn sends_dedupe_by_key_stop_at_the_caps_and_expire_unknown_outcomes(pool: 
         .await
         .unwrap();
     let in_flight_retry = repository
-        .reserve_send(
-            id,
-            Uuid::from_u128(2),
-            SendKind::Reply,
-            limits,
-            now,
-            replayable,
-        )
+        .reserve_send(&ada, &attempt(2, 1), limits, now, replayable)
         .await
         .unwrap();
     let expired_retry = repository
-        .reserve_send(id, Uuid::from_u128(2), SendKind::Reply, limits, now, now)
+        .reserve_send(&ada, &attempt(2, 1), limits, now, now)
         .await
         .unwrap();
     let third = repository
-        .reserve_send(
-            id,
-            Uuid::from_u128(3),
-            SendKind::Message,
-            limits,
-            now,
-            replayable,
-        )
+        .reserve_send(&ada, &attempt(3, 1), limits, now, replayable)
         .await
         .unwrap();
     let over_day = repository
-        .reserve_send(
-            id,
-            Uuid::from_u128(4),
-            SendKind::Message,
-            limits,
-            now,
-            replayable,
-        )
+        .reserve_send(&ada, &attempt(4, 1), limits, now, replayable)
         .await
         .unwrap();
 
-    assert_eq!(first, SendReservation::Proceed);
+    assert_eq!(first, SendReservation::Proceed { fresh: true });
     assert_eq!(replay, SendReservation::AlreadySent(sent));
-    assert_eq!(second, SendReservation::Proceed);
-    assert_eq!(in_flight_retry, SendReservation::Proceed);
+    assert_eq!(second, SendReservation::Proceed { fresh: true });
+    assert_eq!(in_flight_retry, SendReservation::Proceed { fresh: false });
     assert_eq!(expired_retry, SendReservation::OutcomeUnknown);
-    assert_eq!(third, SendReservation::Proceed);
+    assert_eq!(third, SendReservation::Proceed { fresh: true });
     let SendReservation::LimitReached { retry_at } = over_day else {
         panic!("expected a limit, got {over_day:?}")
     };
@@ -420,41 +413,277 @@ async fn sends_dedupe_by_key_stop_at_the_caps_and_expire_unknown_outcomes(pool: 
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_key_reused_for_a_different_message_is_refused_even_after_a_refusal(pool: PgPool) {
+    let repository = PgAgentMailboxRepository::new(pool);
+    let ada = mailbox(&repository, active_mailbox(&repository).await).await;
+    let now = Utc::now();
+    let replayable = now - Duration::hours(1);
+    let original = attempt(1, 1);
+    let different = SendAttempt {
+        fingerprint: [9; 32],
+        ..original.clone()
+    };
+
+    repository
+        .reserve_send(&ada, &original, ROOMY, now, replayable)
+        .await
+        .unwrap();
+    let while_pending = repository
+        .reserve_send(&ada, &different, ROOMY, now, replayable)
+        .await
+        .unwrap();
+    repository
+        .cancel_send(ada.id, original.idempotency_key)
+        .await
+        .unwrap();
+    let after_refusal = repository
+        .reserve_send(&ada, &different, ROOMY, now, replayable)
+        .await
+        .unwrap();
+    let same_again = repository
+        .reserve_send(&ada, &original, ROOMY, now, replayable)
+        .await
+        .unwrap();
+
+    assert_eq!(while_pending, SendReservation::KeyReused);
+    assert_eq!(after_refusal, SendReservation::KeyReused);
+    assert_eq!(same_again, SendReservation::Proceed { fresh: true });
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn recipients_count_against_the_mailbox_and_the_team(pool: PgPool) {
+    let repository = PgAgentMailboxRepository::new(pool.clone());
+    let ada = mailbox(&repository, active_mailbox(&repository).await).await;
+    // A second agent mailbox on the same team.
+    let ben = MacroUserIdStr::parse_from_str("macro|ben-2@agents.macro.invalid")
+        .unwrap()
+        .into_owned();
+    let Reservation::New(ben) = repository
+        .reserve(
+            &ProvisionRequest {
+                agent: ben,
+                ..request(2)
+            },
+            AgentMailboxId::generate(),
+            TEAM,
+            25,
+        )
+        .await
+        .unwrap()
+    else {
+        panic!("expected a new reservation");
+    };
+    let limits = SendLimits {
+        recipients_per_day: 10,
+        team_recipients_per_day: 15,
+        ..ROOMY
+    };
+    let now = Utc::now();
+    let replayable = now - Duration::hours(1);
+
+    let ada_first = repository
+        .reserve_send(&ada, &attempt(1, 8), limits, now, replayable)
+        .await
+        .unwrap();
+    let ada_over = repository
+        .reserve_send(&ada, &attempt(2, 3), limits, now, replayable)
+        .await
+        .unwrap();
+    let ben_fits = repository
+        .reserve_send(&ben, &attempt(3, 7), limits, now, replayable)
+        .await
+        .unwrap();
+    let ben_over_team = repository
+        .reserve_send(&ben, &attempt(4, 1), limits, now, replayable)
+        .await
+        .unwrap();
+
+    assert_eq!(ada_first, SendReservation::Proceed { fresh: true });
+    assert!(
+        matches!(ada_over, SendReservation::LimitReached { .. }),
+        "{ada_over:?}"
+    );
+    assert_eq!(ben_fits, SendReservation::Proceed { fresh: true });
+    let SendReservation::LimitReached { retry_at } = ben_over_team else {
+        panic!("expected the team cap, got {ben_over_team:?}")
+    };
+    // Postgres keeps microseconds.
+    assert_eq!((retry_at - (now + Duration::days(1))).num_milliseconds(), 0);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_team_gets_at_most_its_limit_of_live_mailboxes(pool: PgPool) {
+    let repository = PgAgentMailboxRepository::new(pool);
+    let first = new_mailbox(&repository).await;
+    let ben = MacroUserIdStr::parse_from_str("macro|ben-2@agents.macro.invalid")
+        .unwrap()
+        .into_owned();
+    let ben_request = ProvisionRequest {
+        agent: ben,
+        ..request(2)
+    };
+
+    let full = repository
+        .reserve(&ben_request, AgentMailboxId::generate(), TEAM, 1)
+        .await
+        .unwrap();
+    repository
+        .transition(
+            first,
+            &[MailboxState::Provisioning],
+            MailboxState::Releasing,
+            Utc::now(),
+        )
+        .await
+        .unwrap();
+    let still_full = repository
+        .reserve(&ben_request, AgentMailboxId::generate(), TEAM, 1)
+        .await
+        .unwrap();
+    let lease = token(5);
+    repository
+        .claim(first, lease, Utc::now(), TTL)
+        .await
+        .unwrap()
+        .unwrap();
+    repository
+        .finish_release(first, lease, Utc::now())
+        .await
+        .unwrap();
+    let freed = repository
+        .reserve(&ben_request, AgentMailboxId::generate(), TEAM, 1)
+        .await
+        .unwrap();
+    let retry_of_first = repository
+        .reserve(&request(1), AgentMailboxId::generate(), TEAM, 1)
+        .await
+        .unwrap();
+
+    assert_eq!(full, Reservation::TeamFull);
+    assert_eq!(
+        still_full,
+        Reservation::TeamFull,
+        "a releasing mailbox still counts"
+    );
+    assert!(matches!(freed, Reservation::New(_)));
+    assert!(
+        matches!(retry_of_first, Reservation::Existing(_)),
+        "a full team still answers an old request with its own mailbox"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_audit_records_each_send_without_its_content_and_outlives_the_ledger(pool: PgPool) {
+    let repository = PgAgentMailboxRepository::new(pool.clone());
+    let ada = mailbox(&repository, active_mailbox(&repository).await).await;
+    let now = Utc::now();
+    let replayable = now - Duration::hours(1);
+    let sent = SentMessage {
+        id: ProviderMessageId("sent-1".to_owned()),
+        thread_id: None,
+    };
+
+    repository
+        .reserve_send(&ada, &attempt(1, 3), ROOMY, now, replayable)
+        .await
+        .unwrap();
+    repository
+        .complete_send(ada.id, Uuid::from_u128(1), &sent)
+        .await
+        .unwrap();
+    repository
+        .reserve_send(&ada, &attempt(2, 1), ROOMY, now, replayable)
+        .await
+        .unwrap();
+    repository
+        .cancel_send(ada.id, Uuid::from_u128(2))
+        .await
+        .unwrap();
+    repository
+        .reserve_send(&ada, &attempt(3, 2), ROOMY, now, replayable)
+        .await
+        .unwrap();
+    repository
+        .reserve_send(&ada, &attempt(3, 2), ROOMY, now, replayable)
+        .await
+        .unwrap();
+    repository
+        .prune_sends(now + Duration::seconds(1))
+        .await
+        .unwrap();
+
+    let audit = sqlx::query!(
+        r#"
+        SELECT idempotency_key, team_id, kind, recipient_count, outcome, provider_message_id, attempts
+        FROM agent_mailbox_send_audit
+        WHERE mailbox_id = $1
+        ORDER BY idempotency_key
+        "#,
+        ada.id.0,
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    let rows: Vec<_> = audit
+        .iter()
+        .map(|row| {
+            (
+                row.idempotency_key,
+                row.team_id,
+                row.kind.as_str(),
+                row.recipient_count,
+                row.outcome.as_str(),
+                row.provider_message_id.as_deref(),
+                row.attempts,
+            )
+        })
+        .collect();
+    assert_eq!(
+        rows,
+        vec![
+            (
+                Uuid::from_u128(1),
+                TEAM.0,
+                "message",
+                3,
+                "sent",
+                Some("sent-1"),
+                1
+            ),
+            (Uuid::from_u128(2), TEAM.0, "message", 1, "refused", None, 1),
+            (Uuid::from_u128(3), TEAM.0, "message", 2, "pending", None, 2),
+        ]
+    );
+    let pruned = repository
+        .prune_send_audit(now + Duration::seconds(1))
+        .await
+        .unwrap();
+    assert_eq!(pruned, 3);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_cancelled_send_frees_its_slot_and_old_records_are_pruned(pool: PgPool) {
     let repository = PgAgentMailboxRepository::new(pool);
-    let id = active_mailbox(&repository).await;
+    let ada = mailbox(&repository, active_mailbox(&repository).await).await;
     let limits = SendLimits {
         per_hour: 10,
         per_day: 10,
+        ..ROOMY
     };
     let now = Utc::now();
     let replayable = now - Duration::hours(23);
 
     repository
-        .reserve_send(
-            id,
-            Uuid::from_u128(1),
-            SendKind::Message,
-            limits,
-            now,
-            replayable,
-        )
+        .reserve_send(&ada, &attempt(1, 1), limits, now, replayable)
         .await
         .unwrap();
     repository
-        .cancel_send(id, Uuid::from_u128(1))
+        .cancel_send(ada.id, Uuid::from_u128(1))
         .await
         .unwrap();
     for key in 2..5 {
         repository
-            .reserve_send(
-                id,
-                Uuid::from_u128(key),
-                SendKind::Message,
-                limits,
-                now,
-                replayable,
-            )
+            .reserve_send(&ada, &attempt(key, 1), limits, now, replayable)
             .await
             .unwrap();
     }
@@ -471,28 +700,126 @@ async fn a_cancelled_send_frees_its_slot_and_old_records_are_pruned(pool: PgPool
     assert_eq!(nothing_left, 0);
 }
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn only_agent_accounts_are_agents(pool: PgPool) {
+async fn seed_account(pool: &PgPool, id: &str, number: u128, is_agent: bool) {
+    let email = id.trim_start_matches("macro|");
     sqlx::query!(
-        r#"INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, 'ada', 'ada-1@agents.macro.invalid', 'cus_ada')"#,
-        Uuid::from_u128(1),
+        r#"INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, $2, $3, $4)"#,
+        Uuid::from_u128(number),
+        format!("user-{number}"),
+        email,
+        format!("cus_{number}"),
     )
-    .execute(&pool)
+    .execute(pool)
     .await
     .unwrap();
     sqlx::query!(
-        r#"INSERT INTO "User" (id, email, macro_user_id, "isAgent") VALUES ($1, 'ada-1@agents.macro.invalid', $2, TRUE)"#,
-        ADA,
-        Uuid::from_u128(1),
+        r#"INSERT INTO "User" (id, email, macro_user_id, "isAgent") VALUES ($1, $2, $3, $4)"#,
+        id,
+        email,
+        Uuid::from_u128(number),
+        is_agent,
     )
-    .execute(&pool)
+    .execute(pool)
     .await
     .unwrap();
-    let directory = PgAgentDirectory::new(pool);
-    let person = MacroUserIdStr::parse_from_str("macro|person@example.com").unwrap();
+}
 
-    assert!(directory.is_agent(&ada()).await.unwrap());
-    assert!(!directory.is_agent(&person).await.unwrap());
+async fn seed_team(pool: &PgPool, team: TeamId, owner: &str, members: &[&str]) {
+    sqlx::query!(
+        r#"INSERT INTO team (id, name, owner_id) VALUES ($1, 'Team', $2)"#,
+        team.0,
+        owner,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    for member in members {
+        sqlx::query!(
+            r#"INSERT INTO team_user (user_id, team_id, team_role) VALUES ($1, $2, 'member')"#,
+            member,
+            team.0,
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+}
+
+const OWNER: &str = "macro|owner@example.com";
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn only_agent_accounts_on_a_team_have_one(pool: PgPool) {
+    seed_account(&pool, OWNER, 1, false).await;
+    seed_account(&pool, ADA, 2, true).await;
+    seed_account(&pool, "macro|loner@agents.macro.invalid", 3, true).await;
+    seed_team(&pool, TEAM, OWNER, &[OWNER, ADA]).await;
+    let directory = PgAgentDirectory::new(pool);
+    let owner = MacroUserIdStr::parse_from_str(OWNER).unwrap();
+    let loner = MacroUserIdStr::parse_from_str("macro|loner@agents.macro.invalid").unwrap();
+
+    assert_eq!(directory.agent_team(&ada()).await.unwrap(), Some(TEAM));
+    assert_eq!(
+        directory.agent_team(&owner).await.unwrap(),
+        None,
+        "a person is not an agent"
+    );
+    assert_eq!(
+        directory.agent_team(&loner).await.unwrap(),
+        None,
+        "an agent on no team"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn orphans_are_mailboxes_whose_agent_left_its_team_or_was_deleted(pool: PgPool) {
+    seed_account(&pool, OWNER, 1, false).await;
+    seed_account(&pool, ADA, 2, true).await;
+    seed_team(&pool, TEAM, OWNER, &[OWNER, ADA]).await;
+    let repository = PgAgentMailboxRepository::new(pool.clone());
+    let id = active_mailbox(&repository).await;
+    let now = Utc::now();
+
+    let while_member = repository.orphaned(now, 10).await.unwrap();
+    sqlx::query!(r#"DELETE FROM team_user WHERE user_id = $1"#, ADA)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let after_leaving = repository.orphaned(now, 10).await.unwrap();
+    repository
+        .transition(id, &[MailboxState::Active], MailboxState::Paused, now)
+        .await
+        .unwrap();
+    let paused_in_grace = repository
+        .orphaned(now - Duration::days(1), 10)
+        .await
+        .unwrap();
+    let paused_past_grace = repository
+        .orphaned(now + Duration::days(1), 10)
+        .await
+        .unwrap();
+    sqlx::query!(r#"DELETE FROM "User" WHERE id = $1"#, ADA)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let after_deletion = repository
+        .orphaned(now + Duration::days(1), 10)
+        .await
+        .unwrap();
+
+    let ids = |mailboxes: Vec<AgentMailbox>| {
+        mailboxes
+            .into_iter()
+            .map(|mailbox| mailbox.id)
+            .collect::<Vec<_>>()
+    };
+    assert!(while_member.is_empty());
+    assert_eq!(ids(after_leaving), vec![id]);
+    assert!(
+        paused_in_grace.is_empty(),
+        "a paused orphan waits out its grace"
+    );
+    assert_eq!(ids(paused_past_grace), vec![id]);
+    assert_eq!(ids(after_deletion), vec![id]);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -518,7 +845,7 @@ async fn a_released_mailbox_does_not_block_a_reused_provider_id(pool: PgPool) {
     );
 
     let Reservation::New(second) = repository
-        .reserve(&request(2), AgentMailboxId::generate())
+        .reserve(&request(2), AgentMailboxId::generate(), TEAM, 25)
         .await
         .unwrap()
     else {

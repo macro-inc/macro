@@ -25,6 +25,9 @@ pub(crate) type AgentMailboxSvc = AgentMailboxService<
 /// How often the sweep runs.
 const SWEEP_INTERVAL: Duration = Duration::from_secs(60);
 
+/// Sweep rounds between orphan checks: hourly at one round a minute.
+const ORPHAN_SWEEP_EVERY: u32 = 60;
+
 /// The agent mailbox service. Without a provisioning key it answers
 /// `not_configured`; with one it needs its KMS key, or startup fails.
 pub(crate) fn agent_mailboxes(
@@ -71,15 +74,24 @@ pub(crate) fn spawn_sweep(
 ) {
     tracker.spawn(async move {
         let mut interval = tokio::time::interval(SWEEP_INTERVAL);
+        let mut rounds: u32 = 0;
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {
             tokio::select! {
                 () = cancel.cancelled() => break,
                 _ = interval.tick() => {}
             }
-            if let Err(error) = service.sweep(chrono::Utc::now()).await {
+            let now = chrono::Utc::now();
+            if let Err(error) = service.sweep(now).await {
                 tracing::warn!(error = %error, "agent mailbox sweep round failed");
             }
+            // The orphan check reads every live mailbox, so it runs hourly.
+            if rounds % ORPHAN_SWEEP_EVERY == 0
+                && let Err(error) = service.sweep_orphans(now).await
+            {
+                tracing::warn!(error = %error, "agent mailbox orphan sweep failed");
+            }
+            rounds += 1;
         }
     });
 }

@@ -39,6 +39,7 @@ macro_user_id = { path = "../macro_user_id" }
 reqwest = { workspace = true, optional = true }
 rootcause = { workspace = true }
 serde = { workspace = true, optional = true }
+sha2 = { workspace = true }
 sqlx = { workspace = true, optional = true }
 strum = { workspace = true }
 thiserror = { workspace = true }

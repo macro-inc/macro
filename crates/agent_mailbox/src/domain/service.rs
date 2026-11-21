@@ -17,7 +17,8 @@ use crate::domain::models::{
     AgentMailbox, AgentMailboxError, AgentMailboxId, AgentMailboxView, CreateMailbox, MailMessage,
     MailboxState, MessageList, MessagePage, OutgoingMessage, OwnerApproval, ProviderMailboxId,
     ProviderMessageId, ProvisionRequest, ProvisionedMailbox, ProvisioningFailure, ReplyMessage,
-    Reservation, SendKind, SendLimits, SendReservation, SentMessage, StoredGrant, VendorMode,
+    Reservation, SendAttempt, SendKind, SendLimits, SendReservation, SentMessage, StoredGrant,
+    VendorMode,
 };
 use crate::domain::ports::{
     AgentDirectory, AgentMailboxRepository, LeaseToken, MailboxClient, MailboxKeyCipher,
@@ -59,6 +60,18 @@ pub const SWEEP_RETRY_DELAY: Duration = Duration::minutes(5);
 /// still counted in the windows it lands in.
 pub const SEND_RETRY_WINDOW: Duration = Duration::hours(1);
 
+/// Send audit records (ids, counts and timestamps, never content) are kept
+/// this long, to trace a complaint about a sent message to its mailbox, team
+/// and approval time.
+pub const SEND_AUDIT_RETENTION: Duration = Duration::days(400);
+
+/// Most live agent mailboxes one team may have.
+pub const MAX_TEAM_MAILBOXES: u32 = 25;
+
+/// A mailbox whose agent account or team went away is paused at once and
+/// released after this long.
+pub const ORPHAN_GRACE: Duration = Duration::days(1);
+
 /// Send records the sweep prunes per round (the literal in the repository's query).
 pub const PRUNE_BATCH: u32 = 1000;
 
@@ -82,6 +95,20 @@ pub struct SweepReport {
     pub advanced: usize,
     /// Mailboxes whose step failed; the next round retries them.
     pub failed: usize,
+    /// Mailboxes another attempt held; it finishes them.
+    pub skipped: usize,
+}
+
+/// A digest of a send's parts, each length-prefixed so no two different
+/// sends share one.
+fn fingerprint(parts: &[&[u8]]) -> [u8; 32] {
+    use sha2::Digest;
+    let mut hasher = sha2::Sha256::new();
+    for part in parts {
+        hasher.update((part.len() as u64).to_be_bytes());
+        hasher.update(part);
+    }
+    hasher.finalize().into()
 }
 
 /// The idempotency key sent to the provider for one operation on one
@@ -157,18 +184,24 @@ where
         &self,
         request: ProvisionRequest,
     ) -> Result<AgentMailboxView, AgentMailboxError> {
-        let is_agent = self
-            .directory
-            .is_agent(&request.agent)
-            .await
-            .map_err(internal)?;
-        if !is_agent {
-            return Err(AgentMailboxError::NotAnAgent);
+        if let Some(name) = &request.display_name {
+            validate_display_name(name)?;
         }
+        let team = self
+            .directory
+            .agent_team(&request.agent)
+            .await
+            .map_err(internal)?
+            .ok_or(AgentMailboxError::NotAnAgent)?;
 
         let reservation = self
             .repository
-            .reserve(&request, AgentMailboxId::generate())
+            .reserve(
+                &request,
+                AgentMailboxId::generate(),
+                team,
+                MAX_TEAM_MAILBOXES,
+            )
             .await
             .map_err(internal)?;
         let mailbox = match reservation {
@@ -182,6 +215,7 @@ where
             }
             Reservation::Existing(mailbox) => mailbox,
             Reservation::AgentHasMailbox(_) => return Err(AgentMailboxError::AlreadyProvisioned),
+            Reservation::TeamFull => return Err(AgentMailboxError::TeamLimit),
         };
         tracing::Span::current().record("agent_mailbox.id", mailbox.id.to_string());
 
@@ -596,6 +630,8 @@ where
             };
             match outcome {
                 Ok(()) => report.advanced += 1,
+                // Another replica holds it and finishes it; not a failure.
+                Err(AgentMailboxError::Busy) => report.skipped += 1,
                 Err(error) => {
                     tracing::warn!(agent_mailbox.id = %id, error = %error, "agent mailbox sweep step failed");
                     self.repository
@@ -611,10 +647,77 @@ where
             .prune_sends(now - SEND_RECORD_RETENTION)
             .await
             .map_err(internal)?;
+        self.repository
+            .prune_send_audit(now - SEND_AUDIT_RETENTION)
+            .await
+            .map_err(internal)?;
 
         let span = tracing::Span::current();
         span.record("agent_mailbox.sweep.advanced", report.advanced);
         span.record("agent_mailbox.sweep.failed", report.failed);
+        Ok(report)
+    }
+
+    /// The safety net under the teammate lifecycle: pause every live mailbox
+    /// whose agent account is gone, is no longer an agent's, or left the
+    /// mailbox's team, and release it once it has been paused for
+    /// [`ORPHAN_GRACE`]. Goes through the same transitions and fenced
+    /// teardown as a release, so repeating it is harmless.
+    #[tracing::instrument(skip_all, fields(agent_mailbox.orphans.paused, agent_mailbox.orphans.released, agent_mailbox.orphans.failed), err)]
+    pub async fn sweep_orphans(
+        &self,
+        now: DateTime<Utc>,
+    ) -> Result<SweepReport, AgentMailboxError> {
+        let released_before = now - ORPHAN_GRACE;
+        let orphans = self
+            .repository
+            .orphaned(released_before, SWEEP_BATCH)
+            .await
+            .map_err(internal)?;
+
+        let mut paused = 0_usize;
+        let mut report = SweepReport::default();
+        for mailbox in orphans {
+            let id = mailbox.id;
+            let outcome = match mailbox.state {
+                MailboxState::Paused => self.expire_paused(id, released_before, now).await,
+                MailboxState::Provisioning | MailboxState::Active | MailboxState::Failed => {
+                    let moved = self
+                        .repository
+                        .transition(
+                            id,
+                            &[
+                                MailboxState::Provisioning,
+                                MailboxState::Active,
+                                MailboxState::Failed,
+                            ],
+                            MailboxState::Paused,
+                            now,
+                        )
+                        .await
+                        .map_err(internal);
+                    if matches!(moved, Ok(true)) {
+                        tracing::warn!(agent_mailbox.id = %id, agent_mailbox.team_id = %mailbox.team, "paused an agent mailbox whose agent account or team is gone");
+                        paused += 1;
+                    }
+                    moved.map(|_| ())
+                }
+                MailboxState::Releasing | MailboxState::Released => Ok(()),
+            };
+            match outcome {
+                Ok(()) => report.advanced += 1,
+                Err(AgentMailboxError::Busy) => report.skipped += 1,
+                Err(error) => {
+                    tracing::warn!(agent_mailbox.id = %id, error = %error, "agent mailbox orphan step failed");
+                    report.failed += 1;
+                }
+            }
+        }
+
+        let span = tracing::Span::current();
+        span.record("agent_mailbox.orphans.paused", paused);
+        span.record("agent_mailbox.orphans.released", report.advanced - paused);
+        span.record("agent_mailbox.orphans.failed", report.failed);
         Ok(report)
     }
 
@@ -760,8 +863,20 @@ where
         let (mailbox, provider_mailbox, key) = self.usable(agent).await?;
         tracing::Span::current().record("agent_mailbox.id", mailbox.id.to_string());
 
+        let attempt = SendAttempt {
+            idempotency_key,
+            kind: SendKind::Message,
+            recipient_count: u32::try_from(message.to.len() + message.cc.len()).unwrap_or(u32::MAX),
+            fingerprint: fingerprint(&[
+                b"message",
+                message.to.join("\n").as_bytes(),
+                message.cc.join("\n").as_bytes(),
+                message.subject.as_bytes(),
+                message.text_body.as_bytes(),
+            ]),
+        };
         let sent = self
-            .with_reserved_send(&mailbox, idempotency_key, SendKind::Message, async || {
+            .with_reserved_send(&mailbox, &attempt, async || {
                 self.vendor
                     .send(
                         &provider_mailbox,
@@ -796,7 +911,13 @@ where
         self.confined_message(&mailbox, &provider_mailbox, &key, message)
             .await?;
 
-        self.with_reserved_send(&mailbox, idempotency_key, SendKind::Reply, async || {
+        let attempt = SendAttempt {
+            idempotency_key,
+            kind: SendKind::Reply,
+            recipient_count: 1,
+            fingerprint: fingerprint(&[b"reply", message.0.as_bytes(), reply.text_body.as_bytes()]),
+        };
+        self.with_reserved_send(&mailbox, &attempt, async || {
             self.vendor
                 .reply(
                     &provider_mailbox,
@@ -818,31 +939,30 @@ where
     async fn with_reserved_send(
         &self,
         mailbox: &AgentMailbox,
-        idempotency_key: Uuid,
-        kind: SendKind,
+        attempt: &SendAttempt,
         send: impl AsyncFnOnce() -> Result<SentMessage, ProviderError>,
     ) -> Result<SentMessage, AgentMailboxError> {
         let now = Utc::now();
+        let idempotency_key = attempt.idempotency_key;
         let reservation = self
             .repository
-            .reserve_send(
-                mailbox.id,
-                idempotency_key,
-                kind,
-                self.limits,
-                now,
-                now - SEND_RETRY_WINDOW,
-            )
+            .reserve_send(mailbox, attempt, self.limits, now, now - SEND_RETRY_WINDOW)
             .await
             .map_err(internal)?;
-        match reservation {
-            SendReservation::Proceed => {}
+        let fresh = match reservation {
+            SendReservation::Proceed { fresh } => fresh,
+            SendReservation::KeyReused => {
+                return Err(AgentMailboxError::Invalid(
+                    "this idempotency key was already used for a different message; use a new key"
+                        .to_owned(),
+                ));
+            }
             SendReservation::AlreadySent(sent) => return Ok(sent),
             SendReservation::OutcomeUnknown => return Err(AgentMailboxError::SendOutcomeUnknown),
             SendReservation::LimitReached { retry_at } => {
                 return Err(AgentMailboxError::SendLimit { retry_at });
             }
-        }
+        };
 
         match send().await {
             Ok(sent) => {
@@ -853,6 +973,9 @@ where
                 Ok(sent)
             }
             Err(ProviderError::Unavailable) => Err(AgentMailboxError::Unavailable),
+            // A refused retry of an unknown-outcome send keeps that send's
+            // reservation: the first attempt may still have gone out.
+            Err(error) if !fresh => Err(mail_error(error)),
             Err(error) => {
                 self.repository
                     .cancel_send(mailbox.id, idempotency_key)
@@ -876,6 +999,41 @@ fn require_approval(approval: &OwnerApproval) -> Result<(), AgentMailboxError> {
     } else {
         Err(AgentMailboxError::ConfirmationRequired)
     }
+}
+
+/// Longest display name, in characters.
+pub const MAX_DISPLAY_NAME_CHARS: usize = 64;
+
+/// Words a From display name may not contain, so an agent can't pass for
+/// Macro or a domain's administrator.
+const RESERVED_DISPLAY_WORDS: &[&str] = &[
+    "abuse",
+    "admin",
+    "administrator",
+    "hostmaster",
+    "macro",
+    "noreply",
+    "no-reply",
+    "postmaster",
+    "security",
+    "webmaster",
+];
+
+fn validate_display_name(name: &str) -> Result<(), AgentMailboxError> {
+    let invalid = |reason: &str| Err(AgentMailboxError::Invalid(format!("display name {reason}")));
+    if name.trim().is_empty() || name.chars().count() > MAX_DISPLAY_NAME_CHARS {
+        return invalid(&format!("must be 1 to {MAX_DISPLAY_NAME_CHARS} characters"));
+    }
+    if name.chars().any(char::is_control) {
+        return invalid("may not contain control characters");
+    }
+    let reserved = name
+        .split(|character: char| !character.is_alphanumeric() && character != '-')
+        .any(|word| RESERVED_DISPLAY_WORDS.contains(&word.to_lowercase().as_str()));
+    if reserved {
+        return invalid("may not name Macro or an administrator role");
+    }
+    Ok(())
 }
 
 fn validate_body(body: &str) -> Result<(), AgentMailboxError> {

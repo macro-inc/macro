@@ -170,7 +170,10 @@ impl MailboxKms for AwsMailboxKms {
             .set_encryption_context(Some(encryption_context))
             .send()
             .await
-            .map_err(|_| MailboxKmsError)?;
+            .map_err(|error| {
+                tracing::warn!(error = %aws_sdk_kms::error::DisplayErrorContext(&error), "agent mailbox kms encrypt failed");
+                MailboxKmsError
+            })?;
         let ciphertext = response.ciphertext_blob.ok_or(MailboxKmsError)?;
         // The response names the full key ARN even when configured by alias.
         let kms_key_id = response.key_id.unwrap_or_else(|| self.kms_key_id.clone());
@@ -192,7 +195,10 @@ impl MailboxKms for AwsMailboxKms {
             .set_encryption_context(Some(encryption_context))
             .send()
             .await
-            .map_err(|_| MailboxKmsError)?;
+            .map_err(|error| {
+                tracing::warn!(error = %aws_sdk_kms::error::DisplayErrorContext(&error), "agent mailbox kms decrypt failed");
+                MailboxKmsError
+            })?;
         let plaintext = response.plaintext.ok_or(MailboxKmsError)?;
         Ok(Zeroizing::new(plaintext.into_inner()))
     }

@@ -8,7 +8,7 @@ use crate::domain::models::{
     AgentMailbox, AgentMailboxId, CreateMailbox, EncryptedMailboxKey, MailMessage, MailboxKey,
     MailboxState, MessageList, MessagePage, OutgoingMessage, ProviderGrantId, ProviderMailboxId,
     ProviderMessageId, ProvisionRequest, ProvisionedMailbox, ProvisioningFailure, ReplyMessage,
-    Reservation, SendKind, SendLimits, SendReservation, SentMessage, StoredGrant,
+    Reservation, SendAttempt, SendLimits, SendReservation, SentMessage, StoredGrant, TeamId,
 };
 
 /// How a provider call failed, in the terms the service decides on.
@@ -153,11 +153,12 @@ pub trait AgentDirectory: Send + Sync + 'static {
     /// The error type.
     type Err: std::error::Error + Send + Sync + 'static;
 
-    /// Whether this account is an agent's.
-    fn is_agent(
+    /// The team of this account when it is an agent's and on a team; `None`
+    /// for anyone else.
+    fn agent_team(
         &self,
         user: &MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<TeamId>, Self::Err>> + Send;
 }
 
 /// A claim on one mailbox's provider-side operations, held by one attempt.
@@ -175,12 +176,15 @@ pub trait AgentMailboxRepository: Send + Sync + 'static {
     /// The error type.
     type Err: std::error::Error + Send + Sync + 'static;
 
-    /// Find the row for this request, or create one with `id` when the agent has
-    /// no live mailbox.
+    /// Find the row for this request, or create one with `id` for `team` when
+    /// the agent has no live mailbox and the team has fewer than
+    /// `team_mailbox_limit` live ones.
     fn reserve(
         &self,
         request: &ProvisionRequest,
         id: AgentMailboxId,
+        team: TeamId,
+        team_mailbox_limit: u32,
     ) -> impl Future<Output = Result<Reservation, Self::Err>> + Send;
 
     /// One mailbox by id, in any state.
@@ -299,20 +303,22 @@ pub trait AgentMailboxRepository: Send + Sync + 'static {
         until: DateTime<Utc>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Count a send against the caps, or find it already sent. A retry of a
-    /// send whose outcome is unknown proceeds without counting twice while
-    /// it started after `replayable_since`, and is refused as unknown after.
+    /// Count a send against the mailbox's and its team's caps, or find it
+    /// already sent, and open its audit record. A key reused with a different
+    /// fingerprint is `KeyReused`. A retry of a send whose outcome is unknown
+    /// proceeds (not fresh) without counting twice while it started after
+    /// `replayable_since`, and is refused as unknown after.
     fn reserve_send(
         &self,
-        mailbox: AgentMailboxId,
-        idempotency_key: Uuid,
-        kind: SendKind,
+        mailbox: &AgentMailbox,
+        attempt: &SendAttempt,
         limits: SendLimits,
         now: DateTime<Utc>,
         replayable_since: DateTime<Utc>,
     ) -> impl Future<Output = Result<SendReservation, Self::Err>> + Send;
 
-    /// Record the provider's acceptance of a reserved send.
+    /// Record the provider's acceptance of a reserved send, in the ledger and
+    /// its audit record.
     fn complete_send(
         &self,
         mailbox: AgentMailboxId,
@@ -320,7 +326,8 @@ pub trait AgentMailboxRepository: Send + Sync + 'static {
         sent: &SentMessage,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Drop a reserved send the provider definitely did not accept, freeing its slot.
+    /// Drop a fresh reservation the provider definitely did not accept,
+    /// freeing its slot; its audit record stays, marked refused.
     fn cancel_send(
         &self,
         mailbox: AgentMailboxId,
@@ -334,4 +341,20 @@ pub trait AgentMailboxRepository: Send + Sync + 'static {
         &self,
         before: DateTime<Utc>,
     ) -> impl Future<Output = Result<u64, Self::Err>> + Send;
+
+    /// Delete up to [`PRUNE_BATCH`](crate::domain::service::PRUNE_BATCH) send
+    /// audit records created before `before`. Returns how many went.
+    fn prune_send_audit(
+        &self,
+        before: DateTime<Utc>,
+    ) -> impl Future<Output = Result<u64, Self::Err>> + Send;
+
+    /// Live mailboxes (not releasing or released) whose agent account is
+    /// gone, is no longer an agent's, or is no longer on the mailbox's team,
+    /// leaving out those paused since `paused_before` or later, at most `limit`.
+    fn orphaned(
+        &self,
+        paused_before: DateTime<Utc>,
+        limit: u16,
+    ) -> impl Future<Output = Result<Vec<AgentMailbox>, Self::Err>> + Send;
 }

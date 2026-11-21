@@ -7,6 +7,8 @@ CREATE TABLE agent_mailboxes (
     request_id UUID NOT NULL UNIQUE,
     -- The agent's own Macro account; only it reads and sends.
     user_id TEXT NOT NULL,
+    -- The agent's team when the mailbox was made; team-wide caps count by it.
+    team_id UUID NOT NULL,
     provider TEXT NOT NULL CHECK (provider IN ('dead_simple')),
     requested_local_part TEXT,
     display_name TEXT,
@@ -50,6 +52,11 @@ CREATE UNIQUE INDEX agent_mailboxes_live_user_idx
     ON agent_mailboxes (user_id)
     WHERE state <> 'released';
 
+-- The per-team cap on live mailboxes.
+CREATE INDEX agent_mailboxes_live_team_idx
+    ON agent_mailboxes (team_id)
+    WHERE state <> 'released';
+
 -- One live row per provider mailbox; a released row keeps its id for the
 -- record without blocking a provider that reuses ids.
 CREATE UNIQUE INDEX agent_mailboxes_provider_mailbox_idx
@@ -63,12 +70,17 @@ CREATE INDEX agent_mailboxes_sweep_idx
     ON agent_mailboxes (updated_at)
     WHERE state IN ('provisioning', 'releasing', 'paused');
 
--- Sends from an agent mailbox: idempotency and the per-mailbox caps. A row
--- without a provider message id is in flight (outcome unknown) and counts.
+-- Sends from an agent mailbox: idempotency and the per-mailbox and per-team
+-- caps. A row without a provider message id is in flight (outcome unknown)
+-- and counts.
 CREATE TABLE agent_mailbox_sends (
     mailbox_id UUID NOT NULL REFERENCES agent_mailboxes (id) ON DELETE CASCADE,
     idempotency_key UUID NOT NULL,
+    team_id UUID NOT NULL,
     kind TEXT NOT NULL CHECK (kind IN ('message', 'reply')),
+    recipient_count INTEGER NOT NULL CHECK (recipient_count > 0),
+    -- SHA-256 of what the send says, so a key is never reused for another message.
+    fingerprint BYTEA NOT NULL CHECK (octet_length(fingerprint) = 32),
     provider_message_id TEXT,
     provider_thread_id TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -78,6 +90,36 @@ CREATE TABLE agent_mailbox_sends (
 CREATE INDEX agent_mailbox_sends_window_idx
     ON agent_mailbox_sends (mailbox_id, created_at);
 
+CREATE INDEX agent_mailbox_sends_team_window_idx
+    ON agent_mailbox_sends (team_id, created_at);
+
 -- Pruning records past their retention.
 CREATE INDEX agent_mailbox_sends_created_idx
     ON agent_mailbox_sends (created_at);
+
+-- What each agent mailbox sent and when its owner's approval was given, kept
+-- long after the dedupe ledger is pruned. Ids, counts and timestamps only:
+-- no recipients, subjects, bodies or approval text.
+CREATE TABLE agent_mailbox_send_audit (
+    mailbox_id UUID NOT NULL REFERENCES agent_mailboxes (id),
+    idempotency_key UUID NOT NULL,
+    team_id UUID NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('message', 'reply')),
+    recipient_count INTEGER NOT NULL CHECK (recipient_count > 0),
+    fingerprint BYTEA NOT NULL CHECK (octet_length(fingerprint) = 32),
+    -- pending: reserved, outcome not known yet; sent: the provider accepted
+    -- it; refused: the provider definitely did not.
+    outcome TEXT NOT NULL CHECK (outcome IN ('pending', 'sent', 'refused')),
+    provider_message_id TEXT,
+    attempts INTEGER NOT NULL DEFAULT 1,
+    -- Every send needs the owner's approval, so the reservation is the
+    -- moment the approval was presented.
+    approved_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (mailbox_id, idempotency_key),
+    CHECK ((outcome = 'sent') = (provider_message_id IS NOT NULL))
+);
+
+-- Pruning audit records past their retention.
+CREATE INDEX agent_mailbox_send_audit_approved_idx
+    ON agent_mailbox_send_audit (approved_at);

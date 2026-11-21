@@ -9,7 +9,7 @@ use uuid::Uuid;
 use super::*;
 use crate::domain::models::{
     AgentMailboxId, EncryptedMailboxKey, LocalPart, MailMessage, MailboxKey, MailboxProvider,
-    MessageDirection, OwnerApproval, ProviderGrantId,
+    MessageDirection, OwnerApproval, ProviderGrantId, TeamId,
 };
 use crate::domain::ports::LeaseToken;
 
@@ -393,15 +393,17 @@ impl MailboxKeyCipher for FakeCipher {
     }
 }
 
-struct FakeDirectory {
-    agents: Vec<String>,
-}
+/// Agent accounts and their teams, shared by the directory and the
+/// repository's orphan query, as `"User"` and `team_user` are.
+type Members = Arc<Mutex<HashMap<String, TeamId>>>;
+
+struct FakeDirectory(Members);
 
 impl AgentDirectory for FakeDirectory {
     type Err = FakeError;
 
-    async fn is_agent(&self, user: &MacroUserIdStr<'_>) -> Result<bool, FakeError> {
-        Ok(self.agents.iter().any(|agent| agent == user.as_ref()))
+    async fn agent_team(&self, user: &MacroUserIdStr<'_>) -> Result<Option<TeamId>, FakeError> {
+        Ok(self.0.lock().unwrap().get(user.as_ref()).copied())
     }
 }
 
@@ -414,15 +416,30 @@ struct StoredRow {
 
 struct SendRow {
     mailbox: AgentMailboxId,
+    team: TeamId,
     key: Uuid,
+    recipients: u32,
     at: DateTime<Utc>,
     sent: Option<SentMessage>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct AuditRow {
+    mailbox: AgentMailboxId,
+    key: Uuid,
+    recipients: u32,
+    fingerprint: [u8; 32],
+    outcome: &'static str,
+    attempts: u32,
+    approved_at: DateTime<Utc>,
 }
 
 #[derive(Default)]
 struct RepositoryState {
     rows: Vec<StoredRow>,
     sends: Vec<SendRow>,
+    audit: Vec<AuditRow>,
+    members: Members,
     /// Resume this mailbox right after the sweep reads its batch, as a
     /// person resuming it between the read and the release would.
     resume_after_sweep_read: Option<AgentMailboxId>,
@@ -469,6 +486,8 @@ impl AgentMailboxRepository for FakeRepository {
         &self,
         request: &ProvisionRequest,
         id: AgentMailboxId,
+        team: TeamId,
+        team_mailbox_limit: u32,
     ) -> Result<Reservation, FakeError> {
         let mut state = self.0.lock().unwrap();
         if let Some(row) = state
@@ -483,10 +502,19 @@ impl AgentMailboxRepository for FakeRepository {
         }) {
             return Ok(Reservation::AgentHasMailbox(row.mailbox.clone()));
         }
+        let team_live = state
+            .rows
+            .iter()
+            .filter(|row| row.mailbox.team == team && row.mailbox.state != MailboxState::Released)
+            .count();
+        if team_live >= team_mailbox_limit as usize {
+            return Ok(Reservation::TeamFull);
+        }
         let mailbox = AgentMailbox {
             id,
             request_id: request.request_id,
             agent: request.agent.clone(),
+            team,
             provider: MailboxProvider::DeadSimple,
             requested_local_part: request.requested_local_part.clone(),
             display_name: request.display_name.clone(),
@@ -729,50 +757,127 @@ impl AgentMailboxRepository for FakeRepository {
 
     async fn reserve_send(
         &self,
-        mailbox: AgentMailboxId,
-        idempotency_key: Uuid,
-        _kind: SendKind,
+        mailbox: &AgentMailbox,
+        attempt: &SendAttempt,
         limits: SendLimits,
         now: DateTime<Utc>,
         replayable_since: DateTime<Utc>,
     ) -> Result<SendReservation, FakeError> {
         let mut state = self.0.lock().unwrap();
+        let key = attempt.idempotency_key;
+        if state.audit.iter().any(|audit| {
+            audit.mailbox == mailbox.id
+                && audit.key == key
+                && audit.fingerprint != attempt.fingerprint
+        }) {
+            return Ok(SendReservation::KeyReused);
+        }
         if let Some(existing) = state
             .sends
             .iter()
-            .find(|send| send.mailbox == mailbox && send.key == idempotency_key)
+            .find(|send| send.mailbox == mailbox.id && send.key == key)
         {
-            return Ok(match &existing.sent {
+            let reservation = match &existing.sent {
                 Some(sent) => SendReservation::AlreadySent(sent.clone()),
-                None if existing.at >= replayable_since => SendReservation::Proceed,
+                None if existing.at >= replayable_since => {
+                    SendReservation::Proceed { fresh: false }
+                }
                 None => SendReservation::OutcomeUnknown,
-            });
+            };
+            if reservation == (SendReservation::Proceed { fresh: false }) {
+                let audit = state
+                    .audit
+                    .iter_mut()
+                    .find(|audit| audit.mailbox == mailbox.id && audit.key == key)
+                    .unwrap();
+                audit.attempts += 1;
+            }
+            return Ok(reservation);
         }
-        let mut counted: Vec<DateTime<Utc>> = state
+
+        let in_window = |send: &&SendRow, window: Duration| send.at > now - window;
+        let mut retry_at: Option<DateTime<Utc>> = None;
+        let ours: Vec<&SendRow> = state
             .sends
             .iter()
-            .filter(|send| send.mailbox == mailbox)
-            .map(|send| send.at)
+            .filter(|send| send.mailbox == mailbox.id)
             .collect();
-        counted.sort();
-        for (window, cap) in [
-            (Duration::hours(1), limits.per_hour),
-            (Duration::days(1), limits.per_day),
-        ] {
-            let in_window: Vec<_> = counted.iter().filter(|at| **at > now - window).collect();
-            if in_window.len() >= cap as usize {
-                return Ok(SendReservation::LimitReached {
-                    retry_at: *in_window[0] + window,
-                });
-            }
+        let hour: Vec<&&SendRow> = ours
+            .iter()
+            .filter(|send| in_window(send, Duration::hours(1)))
+            .collect();
+        if hour.len() >= limits.per_hour as usize {
+            retry_at = retry_at.max(
+                hour.iter()
+                    .map(|send| send.at)
+                    .min()
+                    .map(|at| at + Duration::hours(1)),
+            );
         }
+        let day: Vec<&&SendRow> = ours
+            .iter()
+            .filter(|send| in_window(send, Duration::days(1)))
+            .collect();
+        let day_recipients: u32 = day.iter().map(|send| send.recipients).sum();
+        if day.len() >= limits.per_day as usize
+            || day_recipients + attempt.recipient_count > limits.recipients_per_day
+        {
+            retry_at = retry_at.max(
+                day.iter()
+                    .map(|send| send.at)
+                    .min()
+                    .map(|at| at + Duration::days(1)),
+            );
+        }
+        let team_day: Vec<&SendRow> = state
+            .sends
+            .iter()
+            .filter(|send| send.team == mailbox.team)
+            .filter(|send| in_window(send, Duration::days(1)))
+            .collect();
+        let team_recipients: u32 = team_day.iter().map(|send| send.recipients).sum();
+        if team_recipients + attempt.recipient_count > limits.team_recipients_per_day {
+            retry_at = retry_at.max(
+                team_day
+                    .iter()
+                    .map(|send| send.at)
+                    .min()
+                    .map(|at| at + Duration::days(1)),
+            );
+        }
+        if let Some(retry_at) = retry_at {
+            return Ok(SendReservation::LimitReached { retry_at });
+        }
+
         state.sends.push(SendRow {
-            mailbox,
-            key: idempotency_key,
+            mailbox: mailbox.id,
+            team: mailbox.team,
+            key,
+            recipients: attempt.recipient_count,
             at: now,
             sent: None,
         });
-        Ok(SendReservation::Proceed)
+        match state
+            .audit
+            .iter_mut()
+            .find(|audit| audit.mailbox == mailbox.id && audit.key == key)
+        {
+            Some(audit) => {
+                audit.outcome = "pending";
+                audit.attempts += 1;
+                audit.approved_at = now;
+            }
+            None => state.audit.push(AuditRow {
+                mailbox: mailbox.id,
+                key,
+                recipients: attempt.recipient_count,
+                fingerprint: attempt.fingerprint,
+                outcome: "pending",
+                attempts: 1,
+                approved_at: now,
+            }),
+        }
+        Ok(SendReservation::Proceed { fresh: true })
     }
 
     async fn complete_send(
@@ -788,6 +893,13 @@ impl AgentMailboxRepository for FakeRepository {
             .find(|send| send.mailbox == mailbox && send.key == idempotency_key)
             .unwrap();
         send.sent = Some(sent.clone());
+        if let Some(audit) = state
+            .audit
+            .iter_mut()
+            .find(|audit| audit.mailbox == mailbox && audit.key == idempotency_key)
+        {
+            audit.outcome = "sent";
+        }
         Ok(())
     }
 
@@ -797,9 +909,18 @@ impl AgentMailboxRepository for FakeRepository {
         idempotency_key: Uuid,
     ) -> Result<(), FakeError> {
         let mut state = self.0.lock().unwrap();
-        state
-            .sends
-            .retain(|send| !(send.mailbox == mailbox && send.key == idempotency_key));
+        let before = state.sends.len();
+        state.sends.retain(|send| {
+            !(send.mailbox == mailbox && send.key == idempotency_key && send.sent.is_none())
+        });
+        if state.sends.len() != before
+            && let Some(audit) = state
+                .audit
+                .iter_mut()
+                .find(|audit| audit.mailbox == mailbox && audit.key == idempotency_key)
+        {
+            audit.outcome = "refused";
+        }
         Ok(())
     }
 
@@ -808,6 +929,38 @@ impl AgentMailboxRepository for FakeRepository {
         let count = state.sends.len();
         state.sends.retain(|send| send.at >= before);
         Ok((count - state.sends.len()) as u64)
+    }
+
+    async fn prune_send_audit(&self, before: DateTime<Utc>) -> Result<u64, FakeError> {
+        let mut state = self.0.lock().unwrap();
+        let count = state.audit.len();
+        state.audit.retain(|audit| audit.approved_at >= before);
+        Ok((count - state.audit.len()) as u64)
+    }
+
+    async fn orphaned(
+        &self,
+        paused_before: DateTime<Utc>,
+        limit: u16,
+    ) -> Result<Vec<AgentMailbox>, FakeError> {
+        let state = self.0.lock().unwrap();
+        let members = state.members.lock().unwrap();
+        let mut orphans: Vec<&StoredRow> = state
+            .rows
+            .iter()
+            .filter(|row| match row.mailbox.state {
+                MailboxState::Provisioning | MailboxState::Active | MailboxState::Failed => true,
+                MailboxState::Paused => row.mailbox.paused_at.is_some_and(|at| at < paused_before),
+                MailboxState::Releasing | MailboxState::Released => false,
+            })
+            .filter(|row| members.get(row.mailbox.agent.as_ref()) != Some(&row.mailbox.team))
+            .collect();
+        orphans.sort_by_key(|row| row.updated_at);
+        Ok(orphans
+            .into_iter()
+            .take(usize::from(limit))
+            .map(|row| row.mailbox.clone())
+            .collect())
     }
 }
 
@@ -825,8 +978,12 @@ fn user(id: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str(id).unwrap().into_owned()
 }
 
+const ADA_TEAM: TeamId = TeamId(Uuid::from_u128(0xa));
+const BEN_TEAM: TeamId = TeamId(Uuid::from_u128(0xb));
+
 struct World {
     service: Service,
+    members: Members,
     repository: FakeRepository,
     vendor: FakeVendor,
     cipher: FakeCipher,
@@ -834,20 +991,24 @@ struct World {
 
 fn world() -> World {
     let repository = FakeRepository::default();
+    let members = repository.0.lock().unwrap().members.clone();
+    members
+        .lock()
+        .unwrap()
+        .extend([(ADA.to_owned(), ADA_TEAM), (BEN.to_owned(), BEN_TEAM)]);
     let vendor = FakeVendor::default();
     let cipher = FakeCipher::default();
     let service = AgentMailboxService::new(
         repository.clone(),
         vendor.clone(),
         cipher.clone(),
-        FakeDirectory {
-            agents: vec![ADA.to_owned(), BEN.to_owned()],
-        },
+        FakeDirectory(members.clone()),
         VendorMode::Fake,
         SendLimits::DEFAULT,
     );
     World {
         service,
+        members,
         repository,
         vendor,
         cipher,
@@ -1001,7 +1162,8 @@ async fn a_lost_create_response_is_recovered_without_a_second_mailbox() {
         report,
         SweepReport {
             advanced: 1,
-            failed: 0
+            failed: 0,
+            skipped: 0,
         }
     );
     assert_eq!(
@@ -1616,7 +1778,8 @@ async fn a_release_the_provider_keeps_failing_steps_aside_for_the_rest() {
         first,
         SweepReport {
             advanced: 1,
-            failed: 1
+            failed: 1,
+            skipped: 0,
         }
     );
     assert_eq!(world.repository.row(ada.id).state, MailboxState::Released);
@@ -1625,7 +1788,8 @@ async fn a_release_the_provider_keeps_failing_steps_aside_for_the_rest() {
         second,
         SweepReport {
             advanced: 0,
-            failed: 0
+            failed: 0,
+            skipped: 0,
         },
         "the deferred release waits"
     );
@@ -1638,7 +1802,8 @@ async fn a_release_the_provider_keeps_failing_steps_aside_for_the_rest() {
         later,
         SweepReport {
             advanced: 1,
-            failed: 0
+            failed: 0,
+            skipped: 0,
         }
     );
     assert_eq!(world.repository.row(ben.id).state, MailboxState::Released);
@@ -1916,4 +2081,318 @@ async fn every_provider_operation_gets_its_own_idempotency_key() {
         !keys.contains(&agent_key),
         "an agent's own key never reaches the provider unscoped"
     );
+}
+
+fn approved() -> OwnerApproval {
+    OwnerApproval(Some("Send it.".to_owned()))
+}
+
+#[tokio::test]
+async fn a_send_key_reused_for_a_different_message_is_refused_and_sends_nothing() {
+    let world = world();
+    world
+        .service
+        .provision(request(ADA, 1, "ada"))
+        .await
+        .unwrap();
+    let key = Uuid::from_u128(7);
+    world
+        .service
+        .send(&user(ADA), approved(), key, outgoing("First"))
+        .await
+        .unwrap();
+
+    let reused = world
+        .service
+        .send(&user(ADA), approved(), key, outgoing("Second"))
+        .await;
+    let replayed = world
+        .service
+        .send(&user(ADA), approved(), key, outgoing("First"))
+        .await;
+
+    assert!(
+        matches!(reused, Err(AgentMailboxError::Invalid(_))),
+        "{reused:?}"
+    );
+    assert!(
+        replayed.is_ok(),
+        "the same message under the same key is a replay"
+    );
+    assert_eq!(world.vendor.0.lock().unwrap().send_calls, 1);
+}
+
+#[tokio::test]
+async fn a_refused_retry_of_an_unknown_send_keeps_its_reservation() {
+    let world = world();
+    world
+        .service
+        .provision(request(ADA, 1, "ada"))
+        .await
+        .unwrap();
+    let key = Uuid::from_u128(8);
+    world.vendor.fail_next("send", ProviderError::Unavailable);
+    world.vendor.fail_next("send", ProviderError::Rejected);
+
+    let unknown = world
+        .service
+        .send(&user(ADA), approved(), key, outgoing("Hi"))
+        .await;
+    let refused_retry = world
+        .service
+        .send(&user(ADA), approved(), key, outgoing("Hi"))
+        .await;
+
+    assert!(matches!(unknown, Err(AgentMailboxError::Unavailable)));
+    assert!(matches!(refused_retry, Err(AgentMailboxError::Rejected)));
+    let state = world.repository.0.lock().unwrap();
+    assert_eq!(
+        state.sends.len(),
+        1,
+        "the first attempt may have gone out; its slot stays taken"
+    );
+    assert_eq!(state.audit[0].outcome, "pending");
+    assert_eq!(state.audit[0].attempts, 2);
+}
+
+#[tokio::test]
+async fn every_send_leaves_an_audit_record_of_counts_and_times() {
+    let world = world();
+    world
+        .service
+        .provision(request(ADA, 1, "ada"))
+        .await
+        .unwrap();
+    let mut two_recipients = outgoing("Hi");
+    two_recipients.cc = vec!["other@example.com".to_owned()];
+    world.vendor.fail_next("send", ProviderError::Rejected);
+
+    let _ = world
+        .service
+        .send(&user(ADA), approved(), Uuid::from_u128(1), outgoing("Hi"))
+        .await;
+    world
+        .service
+        .send(&user(ADA), approved(), Uuid::from_u128(2), two_recipients)
+        .await
+        .unwrap();
+
+    let audit = world.repository.0.lock().unwrap().audit.clone();
+    let summary: Vec<_> = audit
+        .iter()
+        .map(|row| (row.key, row.recipients, row.outcome))
+        .collect();
+    assert_eq!(
+        summary,
+        vec![
+            (Uuid::from_u128(1), 1, "refused"),
+            (Uuid::from_u128(2), 2, "sent")
+        ]
+    );
+}
+
+#[tokio::test]
+async fn sends_stop_at_the_teams_daily_recipient_cap_across_its_mailboxes() {
+    let world = world();
+    // Four mailboxes on one team, each well under its own 100-recipient cap.
+    let agents: Vec<String> = (0..4)
+        .map(|number| format!("macro|team-agent-{number}@agents.macro.invalid"))
+        .collect();
+    for (number, agent) in agents.iter().enumerate() {
+        world
+            .members
+            .lock()
+            .unwrap()
+            .insert(agent.clone(), ADA_TEAM);
+        world
+            .service
+            .provision(request(
+                agent,
+                500 + number as u128,
+                &format!("team{number}"),
+            ))
+            .await
+            .unwrap();
+    }
+    let mut wide = outgoing("Hi");
+    wide.to = (0..20).map(|n| format!("person{n}@example.com")).collect();
+
+    let mut outcomes = Vec::new();
+    for (index, agent) in agents.iter().cycle().take(16).enumerate() {
+        let key = Uuid::from_u128(100 + index as u128);
+        outcomes.push(
+            world
+                .service
+                .send(&user(agent), approved(), key, wide.clone())
+                .await
+                .is_ok(),
+        );
+    }
+
+    // 300 recipients a day per team: 15 sends of 20, whichever mailbox.
+    assert_eq!(outcomes.iter().filter(|ok| **ok).count(), 15);
+    assert!(!outcomes[15]);
+}
+
+#[tokio::test]
+async fn a_mailbox_stops_at_its_own_daily_recipient_cap() {
+    let world = world();
+    world
+        .service
+        .provision(request(ADA, 1, "ada"))
+        .await
+        .unwrap();
+    let mut wide = outgoing("Hi");
+    wide.to = (0..20).map(|n| format!("person{n}@example.com")).collect();
+
+    let mut sent = 0;
+    for key in 0..6 {
+        if world
+            .service
+            .send(&user(ADA), approved(), Uuid::from_u128(key), wide.clone())
+            .await
+            .is_ok()
+        {
+            sent += 1;
+        }
+    }
+
+    assert_eq!(sent, 5, "100 recipients a day: five sends of 20");
+}
+
+#[tokio::test]
+async fn a_team_gets_no_more_than_its_mailbox_limit() {
+    let world = world();
+    for number in 0..u128::from(MAX_TEAM_MAILBOXES) {
+        let agent = format!("macro|agent-{number}@agents.macro.invalid");
+        world
+            .members
+            .lock()
+            .unwrap()
+            .insert(agent.clone(), ADA_TEAM);
+        world
+            .service
+            .provision(request(&agent, 1000 + number, "agent"))
+            .await
+            .unwrap();
+    }
+    world
+        .members
+        .lock()
+        .unwrap()
+        .insert(BEN.to_owned(), ADA_TEAM);
+
+    let over = world.service.provision(request(BEN, 2, "ben")).await;
+
+    assert!(
+        matches!(over, Err(AgentMailboxError::TeamLimit)),
+        "{over:?}"
+    );
+}
+
+#[tokio::test]
+async fn an_agent_on_no_team_gets_no_mailbox() {
+    let world = world();
+    world.members.lock().unwrap().remove(BEN);
+
+    let refused = world.service.provision(request(BEN, 2, "ben")).await;
+
+    assert!(matches!(refused, Err(AgentMailboxError::NotAnAgent)));
+}
+
+#[tokio::test]
+async fn a_mailbox_whose_agent_left_its_team_is_paused_then_released_after_the_grace() {
+    let world = world();
+    world
+        .service
+        .provision(request(ADA, 1, "ada"))
+        .await
+        .unwrap();
+    world
+        .service
+        .provision(request(BEN, 2, "ben"))
+        .await
+        .unwrap();
+    world.members.lock().unwrap().remove(ADA);
+    let now = Utc::now();
+
+    world.service.sweep_orphans(now).await.unwrap();
+    let paused = world.service.status(&user(ADA)).await.unwrap();
+    world.service.sweep_orphans(now).await.unwrap();
+    let still_paused = world.service.status(&user(ADA)).await.unwrap();
+    world
+        .service
+        .sweep_orphans(now + ORPHAN_GRACE + Duration::minutes(1))
+        .await
+        .unwrap();
+
+    assert_eq!(paused.state, MailboxState::Paused);
+    assert_eq!(
+        still_paused.state,
+        MailboxState::Paused,
+        "repeating within the grace changes nothing"
+    );
+    assert!(matches!(
+        world.service.status(&user(ADA)).await,
+        Err(AgentMailboxError::NotFound)
+    ));
+    assert_eq!(
+        world.service.status(&user(BEN)).await.unwrap().state,
+        MailboxState::Active,
+        "a mailbox whose agent is still on its team is left alone"
+    );
+    assert_eq!(world.vendor.live_mailbox_count(), 1);
+}
+
+#[tokio::test]
+async fn a_sweep_step_another_attempt_holds_is_skipped_not_deferred() {
+    let world = world();
+    let ada = world
+        .service
+        .provision(request(ADA, 1, "ada"))
+        .await
+        .unwrap();
+    world.repository.with_row(ada.id, |row| {
+        row.mailbox.state = MailboxState::Releasing;
+        row.lease = Some((
+            LeaseToken(Uuid::from_u128(99)),
+            Utc::now() + Duration::minutes(3),
+        ));
+    });
+
+    let report = world.service.sweep(Utc::now()).await.unwrap();
+
+    assert_eq!(report.skipped, 1);
+    assert_eq!(report.failed, 0);
+    assert_eq!(
+        world.repository.with_row(ada.id, |row| row.next_sweep_at),
+        None
+    );
+}
+
+#[tokio::test]
+async fn display_names_that_pass_for_macro_or_an_administrator_are_refused() {
+    let world = world();
+    for name in [
+        "Macro Security",
+        "admin",
+        "Ada\r\nBcc: x@example.com",
+        &"a".repeat(65),
+        " ",
+    ] {
+        let request = ProvisionRequest {
+            display_name: Some(name.to_owned()),
+            ..request(ADA, 1, "ada")
+        };
+        let refused = world.service.provision(request).await;
+        assert!(
+            matches!(refused, Err(AgentMailboxError::Invalid(_))),
+            "{name:?}: {refused:?}"
+        );
+    }
+    let fine = ProvisionRequest {
+        display_name: Some("Ada, research assistant".to_owned()),
+        ..request(ADA, 1, "ada")
+    };
+    assert!(world.service.provision(fine).await.is_ok());
 }

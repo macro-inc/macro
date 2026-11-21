@@ -12,8 +12,8 @@ use uuid::Uuid;
 use crate::domain::models::{
     AgentMailbox, AgentMailboxId, EncryptedMailboxKey, LocalPart, MailboxProvider, MailboxState,
     ProviderGrantId, ProviderMailboxId, ProviderMessageId, ProvisionRequest, ProvisionedMailbox,
-    ProvisioningFailure, Reservation, SendKind, SendLimits, SendReservation, SentMessage,
-    StoredGrant,
+    ProvisioningFailure, Reservation, SendAttempt, SendLimits, SendReservation, SentMessage,
+    StoredGrant, TeamId,
 };
 use crate::domain::ports::{AgentDirectory, AgentMailboxRepository, LeaseToken};
 
@@ -45,6 +45,7 @@ struct MailboxRow {
     id: Uuid,
     request_id: Uuid,
     user_id: String,
+    team_id: Uuid,
     provider: String,
     requested_local_part: Option<String>,
     display_name: Option<String>,
@@ -110,6 +111,7 @@ impl TryFrom<MailboxRow> for AgentMailbox {
             id: AgentMailboxId(row.id),
             request_id: row.request_id,
             agent,
+            team: TeamId(row.team_id),
             provider,
             requested_local_part,
             display_name: row.display_name,
@@ -131,7 +133,7 @@ impl PgAgentMailboxRepository {
         let row = sqlx::query_as!(
             MailboxRow,
             r#"
-            SELECT id, request_id, user_id, provider, requested_local_part, display_name,
+            SELECT id, request_id, user_id, team_id, provider, requested_local_part, display_name,
                    provider_mailbox_id, address, grant_id, grant_key_ciphertext,
                    grant_kms_key_id, grant_encryption_version, state, last_error, paused_at
             FROM agent_mailboxes
@@ -153,28 +155,56 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
         &self,
         request: &ProvisionRequest,
         id: AgentMailboxId,
+        team: TeamId,
+        team_mailbox_limit: u32,
     ) -> Result<Reservation, Self::Err> {
-        // Both unique indexes (request id, one live mailbox per user) settle
-        // races: a losing insert does nothing, and the reads below say why.
+        let mut transaction = self.pool.begin().await?;
+        // One provisioning decision at a time per team, so two agents can't
+        // both take the team's last mailbox.
+        lock_team(&mut transaction, team).await?;
+
+        if let Some(existing) = self.by_request(request.request_id).await? {
+            transaction.commit().await?;
+            return Ok(Reservation::Existing(existing));
+        }
+        if let Some(other) = self.live_mailbox(&request.agent).await? {
+            transaction.commit().await?;
+            return Ok(Reservation::AgentHasMailbox(other));
+        }
+        let live = sqlx::query_scalar!(
+            r#"SELECT count(*) AS "count!" FROM agent_mailboxes WHERE team_id = $1 AND state <> 'released'"#,
+            team.0,
+        )
+        .fetch_one(&mut *transaction)
+        .await?;
+        if live >= i64::from(team_mailbox_limit) {
+            transaction.commit().await?;
+            return Ok(Reservation::TeamFull);
+        }
+
+        // Both unique indexes (request id, one live mailbox per user) still
+        // settle a race with a request outside this team's lock.
         let inserted = sqlx::query_as!(
             MailboxRow,
             r#"
-            INSERT INTO agent_mailboxes (id, request_id, user_id, provider, requested_local_part, display_name, state)
-            VALUES ($1, $2, $3, $4, $5, $6, 'provisioning')
+            INSERT INTO agent_mailboxes (id, request_id, user_id, team_id, provider, requested_local_part, display_name, state)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, 'provisioning')
             ON CONFLICT DO NOTHING
-            RETURNING id, request_id, user_id, provider, requested_local_part, display_name,
+            RETURNING id, request_id, user_id, team_id, provider, requested_local_part, display_name,
                       provider_mailbox_id, address, grant_id, grant_key_ciphertext,
                       grant_kms_key_id, grant_encryption_version, state, last_error, paused_at
             "#,
             id.0,
             request.request_id,
             request.agent.as_ref(),
+            team.0,
             MailboxProvider::DeadSimple.as_ref(),
             request.requested_local_part.as_ref().map(LocalPart::as_str),
             request.display_name.as_deref(),
         )
-        .fetch_optional(&self.pool)
+        .fetch_optional(&mut *transaction)
         .await?;
+        transaction.commit().await?;
         if let Some(row) = inserted {
             return Ok(Reservation::New(row.try_into()?));
         }
@@ -193,7 +223,7 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
         let row = sqlx::query_as!(
             MailboxRow,
             r#"
-            SELECT id, request_id, user_id, provider, requested_local_part, display_name,
+            SELECT id, request_id, user_id, team_id, provider, requested_local_part, display_name,
                    provider_mailbox_id, address, grant_id, grant_key_ciphertext,
                    grant_kms_key_id, grant_encryption_version, state, last_error, paused_at
             FROM agent_mailboxes
@@ -213,7 +243,7 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
         let row = sqlx::query_as!(
             MailboxRow,
             r#"
-            SELECT id, request_id, user_id, provider, requested_local_part, display_name,
+            SELECT id, request_id, user_id, team_id, provider, requested_local_part, display_name,
                    provider_mailbox_id, address, grant_id, grant_key_ciphertext,
                    grant_kms_key_id, grant_encryption_version, state, last_error, paused_at
             FROM agent_mailboxes
@@ -241,7 +271,7 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
             WHERE id = $1
               AND state <> 'released'
               AND (lease_token IS NULL OR lease_expires_at < $3)
-            RETURNING id, request_id, user_id, provider, requested_local_part, display_name,
+            RETURNING id, request_id, user_id, team_id, provider, requested_local_part, display_name,
                       provider_mailbox_id, address, grant_id, grant_key_ciphertext,
                       grant_kms_key_id, grant_encryption_version, state, last_error, paused_at
             "#,
@@ -461,7 +491,7 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
         let rows = sqlx::query_as!(
             MailboxRow,
             r#"
-            SELECT id, request_id, user_id, provider, requested_local_part, display_name,
+            SELECT id, request_id, user_id, team_id, provider, requested_local_part, display_name,
                       provider_mailbox_id, address, grant_id, grant_key_ciphertext,
                       grant_kms_key_id, grant_encryption_version, state, last_error, paused_at
             FROM agent_mailboxes
@@ -493,26 +523,44 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
         Ok(())
     }
 
-    #[tracing::instrument(skip_all, fields(agent_mailbox.id = %mailbox), err)]
+    #[tracing::instrument(skip_all, fields(agent_mailbox.id = %mailbox.id, agent_mailbox.team_id = %mailbox.team), err)]
     async fn reserve_send(
         &self,
-        mailbox: AgentMailboxId,
-        idempotency_key: Uuid,
-        kind: SendKind,
+        mailbox: &AgentMailbox,
+        attempt: &SendAttempt,
         limits: SendLimits,
         now: DateTime<Utc>,
         replayable_since: DateTime<Utc>,
     ) -> Result<SendReservation, Self::Err> {
         let mut transaction = self.pool.begin().await?;
 
-        // One send decision at a time per mailbox, so two concurrent sends
-        // cannot both take the last slot.
+        // One send decision at a time per team and per mailbox, so two
+        // concurrent sends cannot both take the last slot. Always the team
+        // first, then the mailbox.
+        lock_team(&mut transaction, mailbox.team).await?;
         sqlx::query!(
             "SELECT id FROM agent_mailboxes WHERE id = $1 FOR UPDATE",
-            mailbox.0
+            mailbox.id.0
         )
         .fetch_one(&mut *transaction)
         .await?;
+
+        // The audit record outlives the ledger, so a key stays bound to its
+        // message even after a refusal freed the ledger row.
+        let audited = sqlx::query_scalar!(
+            r#"
+            SELECT fingerprint FROM agent_mailbox_send_audit
+            WHERE mailbox_id = $1 AND idempotency_key = $2
+            "#,
+            mailbox.id.0,
+            attempt.idempotency_key,
+        )
+        .fetch_optional(&mut *transaction)
+        .await?;
+        if audited.is_some_and(|fingerprint| fingerprint != attempt.fingerprint) {
+            transaction.commit().await?;
+            return Ok(SendReservation::KeyReused);
+        }
 
         let existing = sqlx::query!(
             r#"
@@ -520,21 +568,36 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
             FROM agent_mailbox_sends
             WHERE mailbox_id = $1 AND idempotency_key = $2
             "#,
-            mailbox.0,
-            idempotency_key,
+            mailbox.id.0,
+            attempt.idempotency_key,
         )
         .fetch_optional(&mut *transaction)
         .await?;
         if let Some(existing) = existing {
-            transaction.commit().await?;
-            return Ok(match existing.provider_message_id {
+            let reservation = match existing.provider_message_id {
                 Some(id) => SendReservation::AlreadySent(SentMessage {
                     id: ProviderMessageId(id),
                     thread_id: existing.provider_thread_id,
                 }),
-                None if existing.created_at >= replayable_since => SendReservation::Proceed,
+                None if existing.created_at >= replayable_since => {
+                    sqlx::query!(
+                        r#"
+                        UPDATE agent_mailbox_send_audit
+                        SET attempts = attempts + 1, updated_at = $3
+                        WHERE mailbox_id = $1 AND idempotency_key = $2
+                        "#,
+                        mailbox.id.0,
+                        attempt.idempotency_key,
+                        now,
+                    )
+                    .execute(&mut *transaction)
+                    .await?;
+                    SendReservation::Proceed { fresh: false }
+                }
                 None => SendReservation::OutcomeUnknown,
-            });
+            };
+            transaction.commit().await?;
+            return Ok(reservation);
         }
 
         let hour_start = now - Duration::hours(1);
@@ -544,45 +607,87 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
             SELECT count(*) FILTER (WHERE created_at > $2) AS "hour_count!",
                    min(created_at) FILTER (WHERE created_at > $2) AS hour_oldest,
                    count(*) AS "day_count!",
+                   coalesce(sum(recipient_count), 0) AS "day_recipients!",
                    min(created_at) AS day_oldest
             FROM agent_mailbox_sends
             WHERE mailbox_id = $1 AND created_at > $3
             "#,
-            mailbox.0,
+            mailbox.id.0,
             hour_start,
             day_start,
         )
         .fetch_one(&mut *transaction)
         .await?;
+        let team_window = sqlx::query!(
+            r#"
+            SELECT coalesce(sum(recipient_count), 0) AS "recipients!",
+                   min(created_at) AS oldest
+            FROM agent_mailbox_sends
+            WHERE team_id = $1 AND created_at > $2
+            "#,
+            mailbox.team.0,
+            day_start,
+        )
+        .fetch_one(&mut *transaction)
+        .await?;
 
-        let hour_full = window.hour_count >= i64::from(limits.per_hour);
-        let day_full = window.day_count >= i64::from(limits.per_day);
-        let retry_at = if hour_full {
-            window.hour_oldest.map(|oldest| oldest + Duration::hours(1))
-        } else if day_full {
-            window.day_oldest.map(|oldest| oldest + Duration::days(1))
-        } else {
-            None
-        };
+        let recipients = i64::from(attempt.recipient_count);
+        let mut retry_at = None;
+        if window.hour_count >= i64::from(limits.per_hour) {
+            retry_at = retry_at.max(window.hour_oldest.map(|oldest| oldest + Duration::hours(1)));
+        }
+        if window.day_count >= i64::from(limits.per_day)
+            || window.day_recipients + recipients > i64::from(limits.recipients_per_day)
+        {
+            retry_at = retry_at.max(window.day_oldest.map(|oldest| oldest + Duration::days(1)));
+        }
+        if team_window.recipients + recipients > i64::from(limits.team_recipients_per_day) {
+            retry_at = retry_at.max(team_window.oldest.map(|oldest| oldest + Duration::days(1)));
+        }
         if let Some(retry_at) = retry_at {
             transaction.commit().await?;
             return Ok(SendReservation::LimitReached { retry_at });
         }
 
+        let recipient_count = i32::try_from(attempt.recipient_count).unwrap_or(i32::MAX);
         sqlx::query!(
             r#"
-            INSERT INTO agent_mailbox_sends (mailbox_id, idempotency_key, kind, created_at)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO agent_mailbox_sends
+                (mailbox_id, idempotency_key, team_id, kind, recipient_count, fingerprint, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             "#,
-            mailbox.0,
-            idempotency_key,
-            kind.as_ref(),
+            mailbox.id.0,
+            attempt.idempotency_key,
+            mailbox.team.0,
+            attempt.kind.as_ref(),
+            recipient_count,
+            &attempt.fingerprint[..],
+            now,
+        )
+        .execute(&mut *transaction)
+        .await?;
+        sqlx::query!(
+            r#"
+            INSERT INTO agent_mailbox_send_audit
+                (mailbox_id, idempotency_key, team_id, kind, recipient_count, fingerprint,
+                 outcome, approved_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, $7)
+            ON CONFLICT (mailbox_id, idempotency_key) DO UPDATE
+            SET outcome = 'pending', attempts = agent_mailbox_send_audit.attempts + 1,
+                approved_at = $7, updated_at = $7
+            "#,
+            mailbox.id.0,
+            attempt.idempotency_key,
+            mailbox.team.0,
+            attempt.kind.as_ref(),
+            recipient_count,
+            &attempt.fingerprint[..],
             now,
         )
         .execute(&mut *transaction)
         .await?;
         transaction.commit().await?;
-        Ok(SendReservation::Proceed)
+        Ok(SendReservation::Proceed { fresh: true })
     }
 
     async fn complete_send(
@@ -591,6 +696,7 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
         idempotency_key: Uuid,
         sent: &SentMessage,
     ) -> Result<(), Self::Err> {
+        let mut transaction = self.pool.begin().await?;
         sqlx::query!(
             r#"
             UPDATE agent_mailbox_sends
@@ -602,8 +708,21 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
             sent.id.0,
             sent.thread_id,
         )
-        .execute(&self.pool)
+        .execute(&mut *transaction)
         .await?;
+        sqlx::query!(
+            r#"
+            UPDATE agent_mailbox_send_audit
+            SET outcome = 'sent', provider_message_id = $3, updated_at = now()
+            WHERE mailbox_id = $1 AND idempotency_key = $2
+            "#,
+            mailbox.0,
+            idempotency_key,
+            sent.id.0,
+        )
+        .execute(&mut *transaction)
+        .await?;
+        transaction.commit().await?;
         Ok(())
     }
 
@@ -612,7 +731,8 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
         mailbox: AgentMailboxId,
         idempotency_key: Uuid,
     ) -> Result<(), Self::Err> {
-        sqlx::query!(
+        let mut transaction = self.pool.begin().await?;
+        let deleted = sqlx::query!(
             r#"
             DELETE FROM agent_mailbox_sends
             WHERE mailbox_id = $1 AND idempotency_key = $2 AND provider_message_id IS NULL
@@ -620,8 +740,22 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
             mailbox.0,
             idempotency_key,
         )
-        .execute(&self.pool)
+        .execute(&mut *transaction)
         .await?;
+        if deleted.rows_affected() == 1 {
+            sqlx::query!(
+                r#"
+                UPDATE agent_mailbox_send_audit
+                SET outcome = 'refused', updated_at = now()
+                WHERE mailbox_id = $1 AND idempotency_key = $2 AND outcome = 'pending'
+                "#,
+                mailbox.0,
+                idempotency_key,
+            )
+            .execute(&mut *transaction)
+            .await?;
+        }
+        transaction.commit().await?;
         Ok(())
     }
 
@@ -649,9 +783,81 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
         .await?;
         Ok(result.rows_affected())
     }
+
+    async fn prune_send_audit(&self, before: DateTime<Utc>) -> Result<u64, Self::Err> {
+        // Bounded like prune_sends: a literal limit, oldest first.
+        let result = sqlx::query!(
+            r#"
+            DELETE FROM agent_mailbox_send_audit AS audit
+            USING (
+                SELECT mailbox_id, idempotency_key
+                FROM agent_mailbox_send_audit
+                WHERE approved_at < $1
+                ORDER BY approved_at
+                LIMIT 1000
+            ) AS expired
+            WHERE audit.mailbox_id = expired.mailbox_id
+              AND audit.idempotency_key = expired.idempotency_key
+            "#,
+            before,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected())
+    }
+
+    async fn orphaned(
+        &self,
+        paused_before: DateTime<Utc>,
+        limit: u16,
+    ) -> Result<Vec<AgentMailbox>, Self::Err> {
+        // An agent account still on the mailbox's team keeps its mailbox;
+        // every other live mailbox is an orphan. team_user rows go with their
+        // user or team (ON DELETE CASCADE), so one join covers both.
+        let rows = sqlx::query_as!(
+            MailboxRow,
+            r#"
+            SELECT id, request_id, user_id, team_id, provider, requested_local_part, display_name,
+                   provider_mailbox_id, address, grant_id, grant_key_ciphertext,
+                   grant_kms_key_id, grant_encryption_version, state, last_error, paused_at
+            FROM agent_mailboxes AS mailbox
+            WHERE state IN ('provisioning', 'active', 'failed', 'paused')
+              AND (state <> 'paused' OR paused_at < $1)
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM "User" AS account
+                  JOIN team_user ON team_user.user_id = account.id
+                  WHERE account.id = mailbox.user_id
+                    AND account."isAgent"
+                    AND team_user.team_id = mailbox.team_id
+              )
+            ORDER BY updated_at
+            LIMIT $2
+            "#,
+            paused_before,
+            i64::from(limit),
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter().map(AgentMailbox::try_from).collect()
+    }
 }
 
-/// Reads whether an account is an agent's from `"User"`.
+/// Take the team's send and provisioning lock for this transaction.
+async fn lock_team(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    team: TeamId,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "SELECT pg_advisory_xact_lock(hashtextextended('agent_mailbox_team:' || $1::text, 0))",
+        team.0.to_string(),
+    )
+    .execute(&mut **transaction)
+    .await?;
+    Ok(())
+}
+
+/// Reads an agent account's team from `"User"` and `team_user`.
 #[derive(Clone)]
 pub struct PgAgentDirectory {
     pool: PgPool,
@@ -667,13 +873,18 @@ impl PgAgentDirectory {
 impl AgentDirectory for PgAgentDirectory {
     type Err = sqlx::Error;
 
-    async fn is_agent(&self, user: &MacroUserIdStr<'_>) -> Result<bool, Self::Err> {
-        let is_agent = sqlx::query_scalar!(
-            r#"SELECT "isAgent" FROM "User" WHERE id = $1"#,
+    async fn agent_team(&self, user: &MacroUserIdStr<'_>) -> Result<Option<TeamId>, Self::Err> {
+        let team = sqlx::query_scalar!(
+            r#"
+            SELECT team_user.team_id
+            FROM "User" AS account
+            JOIN team_user ON team_user.user_id = account.id
+            WHERE account.id = $1 AND account."isAgent"
+            "#,
             user.as_ref()
         )
         .fetch_optional(&self.pool)
         .await?;
-        Ok(is_agent.unwrap_or(false))
+        Ok(team.map(TeamId))
     }
 }

@@ -26,6 +26,16 @@ impl std::fmt::Display for AgentMailboxId {
     }
 }
 
+/// The team an agent account belongs to; caps that span mailboxes count per team.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct TeamId(pub Uuid);
+
+impl std::fmt::Display for TeamId {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(formatter)
+    }
+}
+
 /// The provider's id for a mailbox.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct ProviderMailboxId(pub String);
@@ -210,7 +220,7 @@ impl LocalPart {
 }
 
 /// An agent's mailbox as Macro records it.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AgentMailbox {
     /// Macro's id.
     pub id: AgentMailboxId,
@@ -218,6 +228,8 @@ pub struct AgentMailbox {
     pub request_id: Uuid,
     /// The agent's own Macro account, which alone may use the mailbox.
     pub agent: MacroUserIdStr<'static>,
+    /// The agent's team when the mailbox was made.
+    pub team: TeamId,
     /// Who hosts it.
     pub provider: MailboxProvider,
     /// The local part Macro asked for.
@@ -296,7 +308,7 @@ pub struct ProvisionRequest {
 }
 
 /// What `reserve` found or made for a provision request.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Reservation {
     /// A new mailbox row for this request.
     New(AgentMailbox),
@@ -304,6 +316,8 @@ pub enum Reservation {
     Existing(AgentMailbox),
     /// The agent already has a live mailbox from a different request.
     AgentHasMailbox(AgentMailbox),
+    /// The team already has its most live mailboxes.
+    TeamFull,
 }
 
 /// A mailbox the provider created.
@@ -434,12 +448,33 @@ pub enum SendKind {
     Reply,
 }
 
+/// One send as the ledger records it: what it is, never what it says.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SendAttempt {
+    /// The agent's idempotency key.
+    pub idempotency_key: Uuid,
+    /// A new message or a reply.
+    pub kind: SendKind,
+    /// Recipients, `to` and `cc` together; a reply counts one.
+    pub recipient_count: u32,
+    /// A digest of everything the send says (kind, target, recipients,
+    /// subject, body), so one key can't be reused for a different message.
+    pub fingerprint: [u8; 32],
+}
+
 /// What `reserve_send` decided.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SendReservation {
-    /// Go ahead: a new send, or a retry of one whose outcome is unknown and
-    /// still inside the provider's idempotency replay window.
-    Proceed,
+    /// Go ahead. `fresh` when this attempt made the reservation; otherwise it
+    /// retries one whose outcome is unknown, still inside the provider's
+    /// idempotency replay window, and must leave that reservation in place
+    /// whatever the provider answers.
+    Proceed {
+        /// This attempt made the reservation.
+        fresh: bool,
+    },
+    /// The key was already used for a different message.
+    KeyReused,
     /// An earlier attempt with this key may have been sent, and the provider
     /// no longer dedupes it: sending again could send twice.
     OutcomeUnknown,
@@ -452,20 +487,27 @@ pub enum SendReservation {
     },
 }
 
-/// Per-mailbox send caps, counting sends accepted or in flight.
+/// Send caps, counting sends accepted or in flight.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SendLimits {
-    /// Per rolling hour.
+    /// Messages per mailbox per rolling hour.
     pub per_hour: u32,
-    /// Per rolling 24 hours.
+    /// Messages per mailbox per rolling 24 hours.
     pub per_day: u32,
+    /// Recipients per mailbox per rolling 24 hours.
+    pub recipients_per_day: u32,
+    /// Recipients across all of a team's agent mailboxes per rolling 24 hours.
+    pub team_recipients_per_day: u32,
 }
 
 impl SendLimits {
-    /// The caps v1 ships with: 10 an hour, 40 a day.
+    /// The caps v1 ships with: per mailbox 10 messages an hour, 40 a day and
+    /// 100 recipients a day; per team 300 recipients a day.
     pub const DEFAULT: Self = Self {
         per_hour: 10,
         per_day: 40,
+        recipients_per_day: 100,
+        team_recipients_per_day: 300,
     };
 }
 
@@ -514,11 +556,14 @@ pub enum AgentMailboxError {
     #[error("not found")]
     NotFound,
     /// Mailboxes are only for agent accounts.
-    #[error("only an agent account can have a mailbox")]
+    #[error("only an agent account on a team can have a mailbox")]
     NotAnAgent,
     /// The agent already has a mailbox from another request.
     #[error("this agent already has a mailbox")]
     AlreadyProvisioned,
+    /// The agent's team has its most live mailboxes.
+    #[error("this team has reached its agent mailbox limit")]
+    TeamLimit,
     /// The mailbox is paused.
     #[error("this mailbox is paused")]
     Paused,

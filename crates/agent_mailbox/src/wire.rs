@@ -18,10 +18,12 @@ pub const FAKE_VENDOR_NOTICE: &str = "fake vendor, not live";
 pub enum AgentMailboxErrorCode {
     /// No mailbox, or the message is not in it. `404`.
     NotFound,
-    /// Only agent accounts get mailboxes. `403`.
+    /// Only agent accounts on a team get mailboxes. `403`.
     NotAnAgent,
     /// The agent has a mailbox from another request. `409`.
     AlreadyProvisioned,
+    /// The agent's team has its most live mailboxes. `409`.
+    TeamLimit,
     /// The mailbox is paused. `409`.
     Paused,
     /// The mailbox is not ready, or creating it failed. `409`.
@@ -55,6 +57,7 @@ impl AgentMailboxErrorCode {
             AgentMailboxError::NotFound => Self::NotFound,
             AgentMailboxError::NotAnAgent => Self::NotAnAgent,
             AgentMailboxError::AlreadyProvisioned => Self::AlreadyProvisioned,
+            AgentMailboxError::TeamLimit => Self::TeamLimit,
             AgentMailboxError::Paused => Self::Paused,
             AgentMailboxError::NotReady(_) => Self::NotReady,
             AgentMailboxError::SendLimit { .. } => Self::SendLimit,
