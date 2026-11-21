@@ -44,7 +44,9 @@ CREATE TABLE team_agent_installs (
     -- A move or removal waiting for the machine to stop the agent (its last
     -- push) before its credentials are revoked.
     checkpoint TEXT CHECK (checkpoint IN ('moving', 'removing')),
-    move_to_harness_id UUID REFERENCES harnesses (id) ON DELETE CASCADE,
+    -- RESTRICT: a hard-deleted target must not silently drop the install;
+    -- the move is finished or cancelled first.
+    move_to_harness_id UUID REFERENCES harnesses (id) ON DELETE RESTRICT,
     checkpoint_started_at TIMESTAMPTZ,
     created_by TEXT REFERENCES "User" (id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),

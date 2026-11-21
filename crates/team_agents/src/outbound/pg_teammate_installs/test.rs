@@ -753,3 +753,29 @@ async fn the_teams_owner_may_host_without_a_member_row(pool: PgPool) {
     );
     assert!(installs.unentitled_installs(10).await.unwrap().is_empty());
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_move_targets_hard_delete_is_refused_instead_of_dropping_the_install(pool: PgPool) {
+    fixture(&pool).await;
+    let installs = PgTeammateInstalls::new(pool.clone());
+    installs
+        .create(&new_install(INSTALL, LAPTOP))
+        .await
+        .unwrap();
+    installs
+        .begin_checkpoint(
+            &user(AGENT),
+            Checkpoint::Moving {
+                to: HarnessId::new_from_uuid(DESKTOP),
+            },
+        )
+        .await
+        .unwrap();
+
+    let deleted = sqlx::query!("DELETE FROM harnesses WHERE id = $1", DESKTOP)
+        .execute(&pool)
+        .await;
+
+    assert!(deleted.is_err(), "{deleted:?}");
+    assert!(installs.by_id(INSTALL).await.unwrap().is_some());
+}
