@@ -387,7 +387,10 @@ encrypts the secret before calling it.
   candidates and 20 MiB of filters per query), fetching only each candidate's
   id, owner and filter, under a 5 s statement timeout. Its foreign key is
   the subscription's `(id, user_id)`, not `"User"`, so writes take no lock on
-  the user row and a renamed user id cascades through both tables. The quota
+  the user row and a renamed user id cascades through both tables. The
+  subscription id and the secret's KMS binding keep the old user id, so a
+  renamed user's subscriptions stop delivering (decryption fails, five
+  attempts) until they expire; nothing in production renames users. The quota
   count and the endpoint check read the `(user_id, expires_at)` index, so a
   backlog of expired rows costs them nothing.
 - **Filter.** `domain/mcp/filter.rs`: an OR of clauses, each exact event
@@ -424,8 +427,12 @@ encrypts the secret before calling it.
   A subscribe without a filter refreshes a live row; for a new key it answers
   `422 filter_required`, and the MCP server compiles one and retries.
 - **Rolling deploys.** A worker from before this change acknowledges an MCP
-  queue message as malformed, so deliveries queued during the rollout window
-  can be lost. Acceptable for a new feature with no subscribers before it ships.
+  queue message as malformed and deletes it. Rows are created only through the
+  internal subscribe call, whose one caller is the MCP server, so roll this
+  service out to every task before the MCP server: until a row exists, fan-out
+  queues nothing. Rolling this service back loses MCP deliveries queued while
+  old and new tasks overlap, including ones the remaining new tasks publish
+  during it; ordinary webhook messages are unaffected.
 
 ## Operations
 
