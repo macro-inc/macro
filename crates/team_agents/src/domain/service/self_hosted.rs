@@ -274,8 +274,10 @@ where
         }
         // Whoever runs the agent's machine could act as the agent, so only
         // its inviter or that machine's owner may send it somewhere else. A
-        // parked agent runs nowhere and has no machine owner: any admin may
-        // host it.
+        // parked agent's new machine gets its key, DMs and shares, and any
+        // admin could park it by removing its host, so only its inviter, the
+        // team's owner, or its machine's owner once that machine may host it
+        // again.
         let invited_it = record.created_by.as_ref() == Some(&caller);
         let hosts_it = || async {
             Ok::<_, TeamAgentError>(
@@ -286,9 +288,21 @@ where
                     .any(|host| host.harness_id == current.harness_id),
             )
         };
-        if !current.parked() && !invited_it && !hosts_it().await? {
+        let allowed = if invited_it {
+            true
+        } else if current.parked() {
+            self.installs.owns_team(record.team_id, &caller).await?
+                || (hosts_it().await?
+                    && self
+                        .installs
+                        .host_entitled(current.harness_id, record.team_id)
+                        .await?)
+        } else {
+            hosts_it().await?
+        };
+        if !allowed {
             return Err(TeamAgentError::Forbidden(
-                "only the agent's inviter or its machine's owner can move it",
+                "only the agent's inviter, the team's owner or its machine's owner can move it",
             ));
         }
         self.require_own_host(&caller, harness).await?;

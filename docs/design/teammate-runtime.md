@@ -728,9 +728,12 @@ repo token and the machine stops it, at its next delivery at once, and
 otherwise within a minute, from a sweep the auth service runs every 60 seconds
 over installs on such machines. A parked agent keeps its account, seat, DMs
 and repository. Members shows it stopped, saying its machine can no longer
-host it, and any admin of the team may move it to a machine of theirs (the
-same machine again after a brief demotion or a re-pair). Nothing restarts it
-by itself. Deleting the team takes every agent off its machine first
+host it. Its new machine gets its key, DMs and shares, and any admin can
+park it by removing its host, so only its inviter, the team's owner, or the
+owner of the machine it was parked off, once an admin again with that machine
+still paired, may move it to a machine of theirs (the same machine again
+after a brief demotion); no other admin. After a re-pair the machine is new,
+so its inviter or the team's owner moves it. Nothing restarts it by itself. Deleting the team takes every agent off its machine first
 (revoked, stopped, install deleted); the database refuses to delete a team
 or machine that still has an install. Hosted team agents keep their own
 computers.

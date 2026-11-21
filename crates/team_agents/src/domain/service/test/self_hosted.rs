@@ -702,26 +702,82 @@ async fn the_sweep_parks_agents_only_on_the_machines_that_may_no_longer_host_the
     assert_eq!(service.offboard_unentitled_hosts().await.unwrap(), 0);
 }
 
+/// The team's owner, an admin who neither invited the agent nor hosts it.
+const TEAM_OWNER: &str = "macro|owner@example.com";
+
+fn team_owner() -> EntityAccessReceipt<AdminTeamRole> {
+    EntityAccessReceipt::dangerously_assert_authenticated_user(
+        user(TEAM_OWNER),
+        TEAM,
+        EntityType::Team,
+    )
+}
+
+/// `agent`'s install, parked off `harness` by the sweep.
+async fn parked_off(service: &Service, agent: &TeamAgent, harness: HarnessId) {
+    service.installs.update(
+        |row| row.agent == agent.user_id,
+        |row| row.harness_id = harness,
+    );
+    service.installs.unentitled.lock().unwrap().push(harness);
+    service.offboard_unentitled_hosts().await.unwrap();
+    assert!(install_of(service, agent).parked());
+}
+
 #[tokio::test]
-async fn any_admin_may_host_a_parked_agent_on_a_machine_of_theirs() {
+async fn another_admin_cant_take_over_a_parked_agent() {
     let (service, journal, _) = self_hosted_service();
     let agent = service.create(receipt(), own(LAPTOP)).await.unwrap();
-    service.installs.unentitled.lock().unwrap().push(LAPTOP);
-    service.offboard_unentitled_hosts().await.unwrap();
-    let parked = install_of(&service, &agent);
+    parked_off(&service, &agent, LAPTOP).await;
+    let before = journal.entries().len();
 
-    // Neither its inviter nor its machine's owner; LAPTOP is still
-    // connected, but runs nothing, so nothing is waited for.
-    let moved = service
+    // Neither its inviter, nor the team's owner, nor its machine's owner:
+    // its new machine would get the agent's key, DMs and shares.
+    let result = service
         .move_install(
             other_admin(),
             &agent.user_id,
             MoveTeammate { harness_id: THEIRS },
         )
+        .await;
+
+    assert!(
+        matches!(result, Err(TeamAgentError::Forbidden(_))),
+        "{result:?}"
+    );
+    assert_eq!(journal.entries().len(), before, "nothing checkpointed");
+    assert!(install_of(&service, &agent).parked());
+}
+
+#[tokio::test]
+async fn the_teams_owner_may_host_a_parked_agent_on_a_machine_of_theirs() {
+    const OWNERS: HarnessId = HarnessId::new_from_uuid(Uuid::from_u128(0x0d05));
+    let (service, journal, _) = self_hosted_service();
+    service.installs.hosts.lock().unwrap().push((
+        user(TEAM_OWNER),
+        host(OWNERS, "Owner's", true, Some(docker_linux())),
+    ));
+    service
+        .installs
+        .team_owners
+        .lock()
+        .unwrap()
+        .push(user(TEAM_OWNER));
+    let agent = service.create(receipt(), own(LAPTOP)).await.unwrap();
+    parked_off(&service, &agent, LAPTOP).await;
+    let parked = install_of(&service, &agent);
+
+    // LAPTOP is still connected, but runs nothing, so nothing is waited for.
+    let moved = service
+        .move_install(
+            team_owner(),
+            &agent.user_id,
+            MoveTeammate { harness_id: OWNERS },
+        )
         .await
         .unwrap();
 
-    assert_eq!(moved.harness_id, Some(THEIRS));
+    assert_eq!(moved.harness_id, Some(OWNERS));
     assert_eq!(moved.install_problem, None);
     let install = install_of(&service, &agent);
     assert!(!install.parked());
@@ -729,15 +785,45 @@ async fn any_admin_may_host_a_parked_agent_on_a_machine_of_theirs() {
     assert_ne!(install.install_id, parked.install_id);
     assert_eq!(
         journal.entries().last().unwrap(),
-        &format!("runtimes.changed {THEIRS}")
+        &format!("runtimes.changed {OWNERS}")
     );
     let issued = service
-        .issue_install(THEIRS, install.install_id, None)
+        .issue_install(OWNERS, install.install_id, None)
         .await
         .unwrap()
         .expect("the new machine gets the agent");
     assert_eq!(issued.generation, parked.generation + 1);
     assert_kept(&service, &journal);
+}
+
+#[tokio::test]
+async fn a_parked_agents_host_owner_may_host_it_again_only_once_entitled_again() {
+    let (service, _, _) = self_hosted_service();
+    let agent = service.create(receipt(), own(LAPTOP)).await.unwrap();
+    // Hosted on the other admin's machine, which then loses its right.
+    parked_off(&service, &agent, THEIRS).await;
+    let move_back = || {
+        service.move_install(
+            other_admin(),
+            &agent.user_id,
+            MoveTeammate { harness_id: THEIRS },
+        )
+    };
+
+    // Still demoted (or the machine unpaired): refused.
+    let refused = move_back().await;
+    assert!(
+        matches!(refused, Err(TeamAgentError::Forbidden(_))),
+        "{refused:?}"
+    );
+    assert!(install_of(&service, &agent).parked());
+
+    // An admin again, the machine still paired.
+    service.installs.unentitled.lock().unwrap().clear();
+    let moved = move_back().await.unwrap();
+
+    assert_eq!(moved.harness_id, Some(THEIRS));
+    assert!(!install_of(&service, &agent).parked());
 }
 
 #[tokio::test]

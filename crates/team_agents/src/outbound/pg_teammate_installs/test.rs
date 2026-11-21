@@ -984,3 +984,23 @@ async fn a_team_with_installs_cant_be_deleted_until_they_are(pool: PgPool) {
         .await
         .unwrap();
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn only_the_teams_owner_owns_it(pool: PgPool) {
+    fixture(&pool).await;
+    insert_user(
+        &pool,
+        OTHER_ADMIN,
+        "other-admin@example.com",
+        Uuid::from_u128(0x0193_a1b2_0000_7000_8000_0000_0000_0013),
+    )
+    .await;
+    let installs = PgTeammateInstalls::new(pool.clone());
+
+    assert!(installs.owns_team(TEAM, &user(ADMIN)).await.unwrap());
+    make_admin(&pool, OTHER_ADMIN, "admin").await;
+    assert!(!installs.owns_team(TEAM, &user(OTHER_ADMIN)).await.unwrap());
+    assert!(!installs.owns_team(Uuid::nil(), &user(ADMIN)).await.unwrap());
+    make_admin(&pool, OTHER_ADMIN, "owner").await;
+    assert!(installs.owns_team(TEAM, &user(OTHER_ADMIN)).await.unwrap());
+}

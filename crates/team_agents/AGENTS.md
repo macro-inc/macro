@@ -141,8 +141,11 @@ sweep (`offboard_unentitled_hosts`) parks its agents: `park` waits for a
 delivery in flight and sets `parked_at` and `revoke_pending`, then the
 credentials are revoked; `installs_on` leaves a parked install out, so its
 machine stops it. A parked agent keeps its account, seat, DMs and repository,
-lists as `paused` with `installProblem: hostRemoved`, and any admin of the team
-may move it to a machine of theirs (or back to the same one). The same sweep
+lists as `paused` with `installProblem: hostRemoved`, and may be moved (to a
+machine of the mover's, or back to the same one) only by its inviter, the
+team's owner (`owns_team`), or the owner of the machine it was parked off once
+`host_entitled` again; never by another admin, who could otherwise park it by
+removing its host and take its key, DMs and shares. The same sweep
 retries every revoke still pending. Deleting a team first runs
 `TeamInstallRelease::release_team` (team deletion's
 `release_teammate_installs`): park, revoke, delete each install, nudge its

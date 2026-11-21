@@ -465,6 +465,36 @@ impl TeammateInstalls for PgTeammateInstalls {
         Ok(row.map(HostFacts::from))
     }
 
+    #[tracing::instrument(skip(self, user), err)]
+    async fn owns_team(
+        &self,
+        team_id: Uuid,
+        user: &MacroUserIdStr<'_>,
+    ) -> Result<bool, TeamAgentError> {
+        // As host_entitled counts an owner: the team's owner_id, or a member
+        // row with the owner role.
+        sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS (
+                SELECT 1 FROM team t
+                WHERE t.id = $1
+                  AND (
+                      t.owner_id = $2
+                      OR EXISTS (
+                          SELECT 1 FROM team_user tu
+                          WHERE tu.team_id = $1 AND tu.user_id = $2 AND tu.team_role = 'owner'
+                      )
+                  )
+            ) AS "owns!"
+            "#,
+            team_id,
+            user.as_ref(),
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(TeamAgentError::internal)
+    }
+
     #[tracing::instrument(skip(self), err)]
     async fn host_entitled(
         &self,

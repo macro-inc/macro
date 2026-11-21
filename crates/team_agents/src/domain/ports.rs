@@ -330,6 +330,13 @@ pub trait TeammateInstalls: Send + Sync + 'static {
         harness: HarnessId,
     ) -> impl Future<Output = Result<Option<HostFacts>, TeamAgentError>> + Send;
 
+    /// Whether `user` owns `team_id`.
+    fn owns_team(
+        &self,
+        team_id: Uuid,
+        user: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<bool, TeamAgentError>> + Send;
+
     /// Whether `harness` may still host an agent of `team_id`: it is paired
     /// (not deleted) and its owner is still an owner or admin of the team.
     fn host_entitled(

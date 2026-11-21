@@ -490,6 +490,8 @@ struct FakeInstalls {
     agent_reads: Arc<std::sync::atomic::AtomicUsize>,
     /// Machines that may no longer host their team's agents.
     unentitled: Arc<Mutex<Vec<HarnessId>>>,
+    /// Owners of the team.
+    team_owners: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
 }
 
 impl FakeInstalls {
@@ -677,6 +679,15 @@ impl TeammateInstalls for FakeInstalls {
             .filter(|(host_owner, _)| host_owner.as_ref() == owner.as_ref())
             .map(|(_, host)| host.clone())
             .collect())
+    }
+
+    async fn owns_team(&self, _: Uuid, user: &MacroUserIdStr<'_>) -> Result<bool, TeamAgentError> {
+        Ok(self
+            .team_owners
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|owner| owner.as_ref() == user.as_ref()))
     }
 
     async fn host_entitled(&self, harness: HarnessId, _: Uuid) -> Result<bool, TeamAgentError> {
