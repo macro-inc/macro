@@ -342,8 +342,8 @@ changes to application routes, components, or providers.
 `vite preview` uses the same directory-index mapping for extensionless public
 URLs as the production CDN. `/crm` must serve `dist/crm/index.html`, never the
 homepage hydration entry. Unknown preview routes return 404. The build smoke
-check verifies phone touch entry and exit for every product demo, in addition
-to homepage hydration, first-paint colors, and live theme changes in its shell
+check verifies that every product page's app screens render without horizontal
+overflow on a phone, in addition to homepage hydration, first-paint colors, and live theme changes in its shell
 and native previews.
 
 ## Feature-page pattern

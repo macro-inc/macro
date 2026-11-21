@@ -46,6 +46,8 @@ export function FeatureScreenshot(props: { screen: FeatureScreen }) {
           ref={viewport}
           class="feature-screenshot-viewport"
           tabIndex={scrollable() ? 0 : undefined}
+          role={scrollable() ? 'group' : undefined}
+          aria-label={scrollable() ? 'App screen, scrolls sideways' : undefined}
         >
           <div class="feature-screenshot-canvas">
             <img
@@ -55,7 +57,6 @@ export function FeatureScreenshot(props: { screen: FeatureScreen }) {
               alt={props.screen.alt}
               loading="lazy"
               decoding="async"
-              onLoad={showFocus}
             />
             <Show when={props.screen.focus}>
               {(focus) => (

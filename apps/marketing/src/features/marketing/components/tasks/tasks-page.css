@@ -1,4 +1,4 @@
-/* Tasks page prose and the task components blog posts reuse. */
+/* Tasks page prose and hero, plus task component rules that load with this route. */
 .tasks-page .product-prose a {
 	color: #ddd;
 	text-decoration: underline;
