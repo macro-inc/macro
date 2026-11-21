@@ -1431,7 +1431,7 @@ async function step(pair, g, gen) {
       const d = g.pick(cat.own);
       const ok = sql(`UPDATE property_definitions SET display_name = :'v', updated_at = now() WHERE id = :'id'`, { v: gen.name(), id: d.definition.id });
       bump(R.ops, 'sqlRename', ok ? 'ok' : 'rejected');
-      cover('odd value', 'renamed definition');
+      if (ok) cover('odd value', 'renamed definition');
       await readAfterWrite(acct.neu, op, { definitionId: d.definition.id }, null);
       return null;
     }
@@ -1441,7 +1441,7 @@ async function step(pair, g, gen) {
       const t = g.pick(tagOpts);
       const ok = sql(`UPDATE property_options SET color = NULL, updated_at = now() WHERE id = :'id'`, { id: t.id });
       bump(R.ops, 'sqlNullColor', ok ? 'ok' : 'rejected');
-      cover('odd value', 'null color');
+      if (ok) cover('odd value', 'null color');
       await readAfterWrite(acct.neu, op, { propertyDefinitionId: t.propertyDefinitionId }, null);
       return null;
     }

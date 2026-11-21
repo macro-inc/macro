@@ -60,6 +60,7 @@ for (const dir of fs.readdirSync(OUT).sort()) {
     otherWrites: r.otherWrites,
     pageErrors: r.pageErrors,
     sqlFailures: r.sqlFailures,
+    sqlRefusals: r.sqlRefusals ?? {},
     collation: r.collation && { strings: r.collation.strings, skippedWithNul: r.collation.skippedWithNul, mismatches: r.collation.mismatches?.length ?? null, error: r.collation.error ?? null },
     load: r.load,
     volume: r.volume ?? null,
