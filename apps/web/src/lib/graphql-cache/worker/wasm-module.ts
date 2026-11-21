@@ -191,6 +191,11 @@ export interface CacheEngine {
     identity: string | undefined,
     hydrationScope?: HydrationScope
   ): Promise<void>;
+  /**
+   * Optional, between the halves: computes the kept hydrate's write without
+   * writing, so `commitHydrate` only writes. Reads may run before and after.
+   */
+  stageHydrate?(): Promise<void>;
   commitHydrate?(): Promise<CacheEngineHydrationResult>;
   inspectMutations(): Promise<MutationInspection[]>;
   enqueueOptimisticMutation(

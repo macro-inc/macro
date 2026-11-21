@@ -727,9 +727,9 @@ export class CacheWorkerCore {
   }
 
   /**
-   * Runs the reads that arrived while a hydrate read its projections, before
-   * its write. A hydrate runs in wasm without yielding, so a read sent
-   * meanwhile used to wait for both halves; now it waits for one.
+   * Runs the reads that arrived while a step of a hydrate ran, before its
+   * next step. A hydrate runs in wasm without yielding, so a read sent
+   * meanwhile used to wait for all of it; now it waits for one step.
    */
   private async runReadsBeforeHydrateCommit(): Promise<void> {
     // A failed request forgets the authority so the next one checks it
@@ -791,6 +791,13 @@ export class CacheWorkerCore {
       request.hydrationScope
     );
     await this.runReadsBeforeHydrateCommit();
+    const stage = engine.stageHydrate?.bind(engine);
+    if (stage) {
+      // Most of the write is reading what it merges into: done here, it
+      // leaves the commit short for the reads that wait on it.
+      await stage();
+      await this.runReadsBeforeHydrateCommit();
+    }
     return await commit();
   }
 

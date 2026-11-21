@@ -3047,6 +3047,69 @@ async fn a_prepared_hydrate_lets_reads_run_then_commits_as_hydrate_query_does() 
     close_and_destroy(&engine, SCOPE).await;
 }
 
+/// A staged hydrate lets reads run while its write is computed, then
+/// commits what the whole hydrate commits. One that would bind the account
+/// is not staged and runs whole at commit.
+#[wasm_bindgen_test(async)]
+async fn a_staged_hydrate_lets_reads_run_then_commits_as_hydrate_query_does() {
+    const SCOPE: &str = "cache-wasm-staged-hydrate";
+    for bound in [true, false] {
+        let engine = fresh_engine(SCOPE).await;
+        if bound {
+            resolved(write_soup(&engine, "doc-bound")).await;
+        }
+        let whole: serde_json::Value = from_js(resolved(hydrate_backfill(&engine)).await);
+        let whole_state = hydrated_state(&engine).await;
+        close_and_destroy(&engine, SCOPE).await;
+
+        let engine = fresh_engine(SCOPE).await;
+        if bound {
+            resolved(write_soup(&engine, "doc-bound")).await;
+        }
+        let read = || {
+            engine.read_query(
+                None,
+                SOUP_BACKFILL_WITH_PROJECTION_QUERY.into(),
+                Some("SoupBackfill".into()),
+                backfill_variables(),
+                JsValue::UNDEFINED,
+            )
+        };
+        resolved(prepare_backfill(&engine)).await;
+        resolved(read()).await;
+        resolved(engine.stage_hydrate()).await;
+        // A read after the staging still sees the cache as it was before.
+        let between: serde_json::Value = from_js(resolved(read()).await);
+        assert_eq!(between["kind"], "miss");
+        let split: serde_json::Value = from_js(resolved(engine.commit_hydrate()).await);
+        assert_eq!(split, whole, "bound {bound}");
+        let state = engine.state.lock().await;
+        assert_eq!(
+            (
+                state.projection_reads,
+                state.staged_commits,
+                state.stages_kept
+            ),
+            (1, usize::from(bound), usize::from(bound)),
+            "bound {bound}"
+        );
+        drop(state);
+        assert_eq!(hydrated_state(&engine).await, whole_state, "bound {bound}");
+
+        let error = JsFuture::from(engine.stage_hydrate())
+            .await
+            .expect_err("nothing left to stage");
+        assert_eq!(
+            js_sys::Reflect::get(&error, &"message".into())
+                .unwrap()
+                .as_string()
+                .unwrap(),
+            "no prepared hydrate to stage"
+        );
+        close_and_destroy(&engine, SCOPE).await;
+    }
+}
+
 #[wasm_bindgen_test(async)]
 async fn a_write_between_prepare_and_commit_makes_the_commit_read_projections_again() {
     const SCOPE: &str = "cache-wasm-prepared-hydrate-moved";
@@ -3272,27 +3335,57 @@ async fn assert_page_commit_is_hydrate_after(
     let whole_rows = projection_rows(&engine, documents).await;
     close_and_destroy(&engine, scope).await;
 
-    let engine = fresh_engine(scope).await;
-    run_steps(&engine, before).await;
-    resolved(engine.prepare_hydrate(
-        SOUP_BACKFILL_WITH_PROJECTION_QUERY.into(),
-        Some("SoupBackfill".into()),
-        backfill_variables(),
-        page(),
-        Some("user-1".into()),
-        JsValue::UNDEFINED,
-    ))
-    .await;
-    run_steps(&engine, between).await;
-    let reads = engine.state.lock().await.projection_reads;
-    let mut split: serde_json::Value = from_js(resolved(engine.commit_hydrate()).await);
-    assert_eq!(split["projectionsReread"], true);
-    assert_eq!(engine.state.lock().await.projection_reads, reads + 1);
-    split.as_object_mut().unwrap().remove("projectionsReread");
-    assert_eq!(split, whole);
-    assert_eq!(hydrated_state(&engine).await, whole_state);
-    assert_eq!(projection_rows(&engine, documents).await, whole_rows);
-    close_and_destroy(&engine, scope).await;
+    // Staged before `between`, the write is stale by the commit; staged
+    // after it, there is nothing to stage. Either way the commit is whole.
+    for stage in [None, Some(false), Some(true)] {
+        let engine = fresh_engine(scope).await;
+        run_steps(&engine, before).await;
+        // Staging runs only on a cache bound to the hydrate's identity.
+        let stageable = stage == Some(false)
+            && from_js::<Option<String>>(resolved(engine.bound_identity()).await).as_deref()
+                == Some("user-1");
+        resolved(engine.prepare_hydrate(
+            SOUP_BACKFILL_WITH_PROJECTION_QUERY.into(),
+            Some("SoupBackfill".into()),
+            backfill_variables(),
+            page(),
+            Some("user-1".into()),
+            JsValue::UNDEFINED,
+        ))
+        .await;
+        if stage == Some(false) {
+            resolved(engine.stage_hydrate()).await;
+        }
+        run_steps(&engine, between).await;
+        if stage == Some(true) {
+            resolved(engine.stage_hydrate()).await;
+        }
+        let reads = engine.state.lock().await.projection_reads;
+        let mut split: serde_json::Value = from_js(resolved(engine.commit_hydrate()).await);
+        assert_eq!(split["projectionsReread"], true, "staged {stage:?}");
+        let state = engine.state.lock().await;
+        assert_eq!(state.projection_reads, reads + 1, "staged {stage:?}");
+        assert_eq!(state.staged_commits, 0, "staged {stage:?}");
+        assert_eq!(
+            state.stages_kept,
+            usize::from(stageable),
+            "staged {stage:?}"
+        );
+        drop(state);
+        split.as_object_mut().unwrap().remove("projectionsReread");
+        assert_eq!(split, whole, "staged {stage:?}");
+        assert_eq!(
+            hydrated_state(&engine).await,
+            whole_state,
+            "staged {stage:?}"
+        );
+        assert_eq!(
+            projection_rows(&engine, documents).await,
+            whole_rows,
+            "staged {stage:?}"
+        );
+        close_and_destroy(&engine, scope).await;
+    }
 }
 
 #[wasm_bindgen_test(async)]
@@ -3303,6 +3396,15 @@ async fn a_notification_moved_between_prepare_and_commit_leaves_its_old_document
     assert_page_commit_is_hydrate_after(
         "cache-wasm-prepared-hydrate-moved-notification",
         &[],
+        &[Step::Notified(OTHER_DOCUMENT, "UNSEEN")],
+        notified_backfill_page,
+        &[OTHER_DOCUMENT, BACKFILL_ITEM],
+    )
+    .await;
+    // On a bound cache, where the hydrate stages its write before it.
+    assert_page_commit_is_hydrate_after(
+        "cache-wasm-prepared-hydrate-moved-notification-bound",
+        &[Step::Soup("doc-bound", "user-1")],
         &[Step::Notified(OTHER_DOCUMENT, "UNSEEN")],
         notified_backfill_page,
         &[OTHER_DOCUMENT, BACKFILL_ITEM],
@@ -3372,6 +3474,12 @@ async fn a_write_of_the_same_document_between_prepare_and_commit_loses_to_the_co
     assert_commit_is_hydrate_after(
         "cache-wasm-prepared-hydrate-same-document",
         &[],
+        &[Step::Backfill(20)],
+    )
+    .await;
+    assert_commit_is_hydrate_after(
+        "cache-wasm-prepared-hydrate-same-document-bound",
+        &[Step::Soup("doc-bound", "user-1")],
         &[Step::Backfill(20)],
     )
     .await;

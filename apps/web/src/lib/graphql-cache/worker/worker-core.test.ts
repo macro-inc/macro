@@ -3782,6 +3782,47 @@ describe('CacheWorkerCore', () => {
       ]);
     });
 
+    it('runs the reads sent while a hydrate stages its write before the write', async () => {
+      const order: string[] = [];
+      const { engine, release } = splitEngine(order);
+      const stageStarted = Promise.withResolvers<void>();
+      const releaseStage = Promise.withResolvers<void>();
+      const staged = {
+        ...engine,
+        stageHydrate: vi.fn(async () => {
+          order.push('stage');
+          stageStarted.resolve();
+          await releaseStage.promise;
+        }),
+      };
+      const { core, port, messages } = await start(staged);
+      release();
+
+      const sent = [core.handleRequest(port, hydrate(2, 'first'))];
+      await stageStarted.promise;
+      sent.push(
+        core.handleRequest(port, {
+          generation: TEST_AUTHORITY_GENERATION,
+          id: 3,
+          kind: 'write',
+          query: 'query Current { current }',
+          data: { current: true },
+        }),
+        core.handleRequest(port, read(4, 'client:visible'))
+      );
+      releaseStage.resolve();
+      await Promise.all(sent);
+
+      expect(order).toEqual([
+        'prepare:first',
+        'stage',
+        'read:client:visible',
+        'commit',
+        'write',
+      ]);
+      expect(messages.filter((message) => !message.ok)).toEqual([]);
+    });
+
     it('writes with hydrateQuery when the engine cannot split a hydrate', async () => {
       const order: string[] = [];
       const { engine } = splitEngine(order);

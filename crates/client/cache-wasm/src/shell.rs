@@ -6,8 +6,8 @@ use cache_core::codec::{
 use cache_core::deps::OpId;
 use cache_core::engine::{
     BeginOptimisticWrite, CommitOptimisticWriteResult, DeferOptimisticWriteResult, Engine,
-    EngineError, HydrationScope, InitialClaimOutcome, NetworkWrite, QueryRegistration, ReadResult,
-    RollbackOptimisticWriteResult, WriteResult,
+    EngineError, HydrationScope, HydrationWriteResult, InitialClaimOutcome, NetworkWrite,
+    QueryRegistration, ReadResult, RollbackOptimisticWriteResult, StagedHydrate, WriteResult,
 };
 use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
@@ -227,6 +227,8 @@ struct PreparedHydrate {
     request: HydrateRequest,
     projections: Vec<ProjectionMutation>,
     wal_position: Option<WalPosition>,
+    /// The write itself, computed at `wal_position` by `stageHydrate`.
+    staged: Option<StagedHydrate>,
 }
 
 #[derive(Deserialize)]
@@ -546,6 +548,12 @@ struct CacheState {
     /// How many times a hydrate computed its projections (tests only).
     #[cfg(test)]
     projection_reads: usize,
+    /// How many hydrates committed the write they staged (tests only).
+    #[cfg(test)]
+    staged_commits: usize,
+    /// How many hydrates staged a write (tests only).
+    #[cfg(test)]
+    stages_kept: usize,
 }
 
 impl CacheState {
@@ -584,6 +592,7 @@ impl CacheState {
     fn forget_prepared_projections(&mut self) {
         if let Some(prepared) = &mut self.prepared_hydrate {
             prepared.wal_position = None;
+            prepared.staged = None;
         }
     }
 
@@ -661,11 +670,45 @@ impl CacheState {
             request,
             projections,
             wal_position,
+            staged: None,
         })
     }
 
+    /// Computes a prepared hydrate's write while it only reads. It stages
+    /// nothing when storage changed since the prepare, or the engine says the
+    /// hydrate must run whole; the commit then does what it always did.
+    async fn stage_hydrate(&mut self, prepared: &mut PreparedHydrate) {
+        prepared.staged = None;
+        if prepared.wal_position.is_none() || self.wal_position() != prepared.wal_position {
+            return;
+        }
+        let request = &prepared.request;
+        let write = NetworkWrite {
+            query: &request.query,
+            operation_name: request.operation_name.as_deref(),
+            variables: &request.variables,
+            data: &request.data,
+            identity: request.identity.as_deref(),
+        };
+        let Some(engine) = self.engine.as_mut() else {
+            return;
+        };
+        let staged = engine
+            .stage_hydrate(write, request.scope.as_ref(), &prepared.projections)
+            .await;
+        // Staging only reads, so the WAL cannot have moved; check anyway.
+        if self.wal_position() == prepared.wal_position {
+            #[cfg(test)]
+            {
+                self.stages_kept += usize::from(staged.is_some());
+            }
+            prepared.staged = staged;
+        }
+    }
+
     /// Writes a prepared hydrate. When a write committed since its
-    /// projections were read, it reads them again first.
+    /// projections were read, it reads them again first. A staged write
+    /// commits as it is while storage and the engine are unchanged.
     async fn commit_hydrate(
         &mut self,
         prepared: PreparedHydrate,
@@ -676,8 +719,24 @@ impl CacheState {
             request,
             mut projections,
             wal_position,
+            staged,
         } = prepared;
         let projections_reread = wal_position.is_none() || self.wal_position() != wal_position;
+        if !projections_reread
+            && let Some(staged) = staged
+            && self.engine_mut()?.staged_hydrate_current(&staged)
+        {
+            let result = self
+                .engine_mut()?
+                .commit_staged_hydrate(staged, projections)
+                .await;
+            let result = self.engine_result(result)?;
+            #[cfg(test)]
+            {
+                self.staged_commits += 1;
+            }
+            return self.hydration_result(result, false, ops).await;
+        }
         if projections_reread {
             projections = self.hydrate_projections(&request).await?;
         }
@@ -708,7 +767,15 @@ impl CacheState {
             }
         };
         let result = self.engine_result(result)?;
+        self.hydration_result(result, projections_reread, ops).await
+    }
 
+    async fn hydration_result(
+        &mut self,
+        result: HydrationWriteResult,
+        projections_reread: bool,
+        ops: &RefCell<OpInterner>,
+    ) -> Result<JsHydrationWriteResult, JsValue> {
         // A failed optional proof must still deliver the committed write and broad invalidation.
         let unchanged_views = self
             .engine_mut()?
@@ -1029,6 +1096,10 @@ async fn open_cache_inner(
                 prepared_hydrate: None,
                 #[cfg(test)]
                 projection_reads: 0,
+                #[cfg(test)]
+                staged_commits: 0,
+                #[cfg(test)]
+                stages_kept: 0,
             })),
             ops: Rc::new(RefCell::new(OpInterner::default())),
         },
@@ -2013,6 +2084,28 @@ impl CacheEngine {
             state.ensure_callable()?;
             let request = HydrateRequest::parse(query, operation_name, variables, data, identity)?;
             let prepared = state.prepare_hydrate(request, hydration_scope).await?;
+            state.prepared_hydrate = Some(prepared);
+            Ok(JsValue::UNDEFINED)
+        })
+    }
+
+    /// Optional, between `prepareHydrate` and `commitHydrate`: reads what the
+    /// kept hydrate merges into and computes its write, without writing, so
+    /// the commit only writes. The host may run requests that only read
+    /// before and after it. A write since the prepare leaves nothing staged,
+    /// and a staged write the commit can't use (anything changed since) is
+    /// dropped: the commit then writes the hydrate whole, as it always did.
+    #[wasm_bindgen(js_name = stageHydrate)]
+    pub fn stage_hydrate(&self) -> js_sys::Promise {
+        let state = self.state.clone();
+        future_to_promise(async move {
+            let mut state = state.lock().await;
+            state.ensure_callable()?;
+            let mut prepared = state
+                .prepared_hydrate
+                .take()
+                .ok_or_else(|| err_js("no prepared hydrate to stage"))?;
+            state.stage_hydrate(&mut prepared).await;
             state.prepared_hydrate = Some(prepared);
             Ok(JsValue::UNDEFINED)
         })
