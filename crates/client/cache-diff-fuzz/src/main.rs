@@ -2,7 +2,7 @@
 //! from a seed, drives the native host engine with them, and writes a trace
 //! of every response and of the tables left on disk. Two builds of this
 //! binary (before and after a change) given the same seed must write the
-//! same trace; `diff-fuzz.sh` runs both and compares.
+//! same trace; `fuzz.sh` runs both and compares.
 
 mod dump;
 mod exec;

@@ -809,10 +809,12 @@ impl<'a> Gen<'a> {
             ));
         }
         let pool = self.lane_pool(&lane);
-        let mut index = 0;
-        for spec in pool.iter_mut().filter(|spec| ids.contains(&spec.id)) {
+        for (index, spec) in pool
+            .iter_mut()
+            .filter(|spec| ids.contains(&spec.id))
+            .enumerate()
+        {
             let (change, moved, time) = times[index.min(times.len() - 1)];
-            index += 1;
             if change {
                 spec.revision += 1;
             }
@@ -981,7 +983,8 @@ impl<'a> Gen<'a> {
         let mut out = String::new();
         for index in 0..tokens {
             if index > 0 {
-                out.push_str(*pick(&mut self.rng, &[" ", " ", ",", "  ", "\t", ", "]));
+                let gap = *pick(&mut self.rng, &[" ", " ", ",", "  ", "\t", ", "]);
+                out.push_str(gap);
             }
             let word = words(&mut self.rng, 1);
             let chars: Vec<char> = word.chars().collect();

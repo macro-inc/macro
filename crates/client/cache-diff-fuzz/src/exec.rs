@@ -27,6 +27,9 @@ pub struct Line {
     pub value: Value,
 }
 
+/// What a closed run leaves: its trace, its counters, the cache file and the normalizer.
+pub type Finished = (Vec<Line>, BTreeMap<String, u64>, PathBuf, Normalizer);
+
 pub struct Exec<'a> {
     docs: &'a BTreeMap<String, String>,
     generated: &'a Generated,
@@ -806,9 +809,7 @@ impl<'a> Exec<'a> {
     }
 
     /// Closes the engine and dumps every table of the file it leaves behind.
-    pub fn finish(
-        mut self,
-    ) -> Result<(Vec<Line>, BTreeMap<String, u64>, PathBuf, Normalizer), String> {
+    pub fn finish(mut self) -> Result<Finished, String> {
         let handle = self.handle.take().expect("engine is open");
         handle.shutdown()?;
         Ok((self.lines, self.counters, self.path, self.normalizer))
