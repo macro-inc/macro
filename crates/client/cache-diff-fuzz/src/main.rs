@@ -70,7 +70,9 @@ fn main() -> Result<(), rootcause::Report> {
     let tabs: serde_json::Map<String, Value> = serde_json::from_str(&std::fs::read_to_string(
         args.assets.join("mail-tabs.json"),
     )?)?;
-    let tabs: Vec<(String, Value)> = tabs.into_iter().collect();
+    // Sorted, so the pick does not depend on whether serde_json keeps insertion order.
+    let mut tabs: Vec<(String, Value)> = tabs.into_iter().collect();
+    tabs.sort_by(|a, b| a.0.cmp(&b.0));
     let docs = sequence::load_docs(&faker, &sources)?;
     std::fs::create_dir_all(&args.out)?;
     let end = args

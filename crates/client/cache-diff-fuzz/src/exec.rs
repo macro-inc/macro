@@ -56,7 +56,14 @@ impl<'a> Exec<'a> {
     ) -> Result<Self, String> {
         std::fs::create_dir_all(root.join("db-0")).map_err(|error| error.to_string())?;
         let path = root.join("db-0").join("cache.turso");
-        let inputs = serde_json::to_string(generated).map_err(|error| error.to_string())?;
+        let mut inputs = serde_json::to_string(generated).map_err(|error| error.to_string())?;
+        // Ids derived from the case are kept too: the people index partition is
+        // a UUIDv5 of the viewer, and a build that stored another one must differ.
+        inputs.push(' ');
+        inputs.push_str(
+            &uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, generated.viewer.as_bytes())
+                .to_string(),
+        );
         let normalizer = Normalizer::new(&inputs, root);
         let mut exec = Self {
             docs,
