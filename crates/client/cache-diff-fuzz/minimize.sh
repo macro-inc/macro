@@ -24,11 +24,6 @@ home=${CACHE_DIFF_FUZZ_HOME:-$HOME/.cache/cache-diff-fuzz}
 for side in "$side_a" "$side_b"; do
   [ -x "$home/bin/$side" ] && [ -f "$home/bin/$side.side" ] || { echo "no built side $side" >&2; exit 2; }
 done
-if [ "$(awk '$1 == "fuzzer" { print $3 }' "$home/bin/$side_a.side")" \
-  != "$(awk '$1 == "fuzzer" { print $3 }' "$home/bin/$side_b.side")" ]; then
-  echo "$side_a and $side_b were not built from the same fuzzer sources; rebuild one" >&2
-  exit 1
-fi
 mkdir -p "$home/min"
 # One minimizer per seed at a time; the lock lasts as long as this shell.
 exec 9> "$home/min/$seed.lock"
@@ -36,9 +31,16 @@ flock -n 9 || { echo "another minimize.sh is working on seed $seed" >&2; exit 1;
 out=$home/min/$seed
 rm -rf "${out:?}"
 mkdir -p "$out/try" "$out/bin"
-# Copies, so a rebuild or an edit meanwhile cannot change what either side runs on.
-cp "$home/bin/$side_a" "$out/bin/a"
-cp "$home/bin/$side_b" "$out/bin/b"
+# Copies, so a rebuild or an edit meanwhile cannot change what either side runs on. Each
+# binary is copied with its stamp under the side's lock, so the two come from one build.
+flock -s "$home/bin/$side_a.lock" sh -c 'cp "$1.side" "$2.side" && cp "$1" "$2"' _ "$home/bin/$side_a" "$out/bin/a"
+flock -s "$home/bin/$side_b.lock" sh -c 'cp "$1.side" "$2.side" && cp "$1" "$2"' _ "$home/bin/$side_b" "$out/bin/b"
+hash_a=$(awk '$1 == "fuzzer" { print $3 }' "$out/bin/a.side")
+hash_b=$(awk '$1 == "fuzzer" { print $3 }' "$out/bin/b.side")
+if [ -z "$hash_a" ] || [ "$hash_a" != "$hash_b" ]; then
+  echo "$side_a and $side_b were not built from the same fuzzer sources; rebuild one" >&2
+  exit 1
+fi
 cp "$repo/static_assets/schema.graphql" "$out/schema.graphql"
 cp -r "$repo/crates/client/cache-diff-fuzz/assets" "$out/assets"
 
@@ -104,8 +106,14 @@ rm -rf "${out:?}/try" "${out:?}/work"
 run a "$out/case.json" "$out" --full
 run b "$out/case.json" "$out" --full
 rm -rf "${out:?}/wa" "${out:?}/wb"
-if cmp -s "$out/a/0.trace" "$out/b/0.trace"; then
-  echo "seed $seed: the minimal case no longer differs on a rerun (nondeterministic?)" >&2
+# The same test as for every candidate: both traces finished, and they differ.
+witness=2
+if [ "$(tail -n 1 "$out/a/0.trace")" = end ] && [ "$(tail -n 1 "$out/b/0.trace")" = end ]; then
+  witness=0
+  cmp -s "$out/a/0.trace" "$out/b/0.trace" || witness=$?
+fi
+if [ "$witness" -ne 1 ]; then
+  echo "seed $seed: the minimal case does not differ on a rerun (nondeterministic?)" >&2
   exit 1
 fi
 echo "seed $seed: minimal case $out/case.json ($(jq '.ops | length' "$out/case.json") ops)"

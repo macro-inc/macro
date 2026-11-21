@@ -51,8 +51,9 @@ mkdir -p "$out/a" "$out/b" "$out/stderr" "$work/bin"
 for side in a b; do
   name=$side_a
   [ "$side" = b ] && name=$side_b
-  cp "$home/bin/$name.side" "$out/$side.side"
-  cp "$home/bin/$name" "$work/bin/$side"
+  # Under the side's lock, so the binary and its stamp come from the same build.
+  flock -s "$home/bin/$name.lock" sh -c 'cp "$1.side" "$2" && cp "$1" "$3"' _ \
+    "$home/bin/$name" "$out/$side.side" "$work/bin/$side"
 done
 hash_a=$(awk '$1 == "fuzzer" { print $3 }' "$out/a.side")
 hash_b=$(awk '$1 == "fuzzer" { print $3 }' "$out/b.side")
