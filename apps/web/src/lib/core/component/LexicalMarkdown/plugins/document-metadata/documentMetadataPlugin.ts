@@ -6,6 +6,7 @@ import {
   $hasUpdateTag,
   $setState,
   createState,
+  HISTORIC_TAG,
   type LexicalEditor,
   NODE_STATE_KEY,
   RootNode,
@@ -37,6 +38,8 @@ export const LOAD_STATE_TAG = 'load-state';
 // document's Updated time when it was only opened.
 const NOT_LOCAL_EDIT_TAGS = [
   LOAD_STATE_TAG,
+  // Replay restores its snapshot unchanged and can have a frozen selection.
+  HISTORIC_TAG,
   COLLABORATION_TAG,
   LOCAL_STATUS_TAG,
 ];
