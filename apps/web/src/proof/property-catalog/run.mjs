@@ -379,6 +379,7 @@ const R = {
   staleness: { byOp: {}, mismatches: 0 },
   visibility: { checks: 0, oldMissing: 0, newMissing: 0, readFailures: 0 },
   harnessErrors: [],
+  settleTimeouts: [], // every settle timeout, whole (first 1,000)
   diffs: [], // first 400 real differences with context
   diffSignatures: {}, // signature -> count
   examples: {}, // class -> first few examples
@@ -475,6 +476,7 @@ function record(level, kind, cls, a, b, extra = {}, canon = (x) => x) {
   const d = cls === 'diff' || cls === 'state' ? firstDiff(norm(a), norm(b)) : firstDiff(a, b);
   const at = { ...here() };
   if (ex.length < 5) ex.push({ kind, ...at, ...extra, diff: d });
+  if (level === 'settle' && R.settleTimeouts.length < 1000) R.settleTimeouts.push({ kind, ...at, ...extra, diff: d });
   let shown = null;
   if (cls === 'diff' || cls === 'error-shape' || cls === 'state') {
     const s = sig(level, cls, kind, d, extra);
@@ -852,11 +854,21 @@ async function openSide(storageState, side, label) {
   const inflight = new Map();
   const isModule = (r) => /^\/(src|node_modules|@)/.test(new URL(r.url()).pathname);
   page.on('request', (r) => !isModule(r) && inflight.set(r, { method: r.method(), path: maskPath(new URL(r.url()).pathname), at: Date.now() }));
-  page.on('requestfinished', (r) => inflight.delete(r));
+  // API requests that finished lately, with their status and duration, so a
+  // settle timeout shows how long the attempts before the one in flight took.
+  const finished = [];
+  page.on('requestfinished', async (r) => {
+    const x = inflight.get(r);
+    inflight.delete(r);
+    if (!x) return;
+    const status = await r.response().then((res) => res?.status() ?? null, () => null);
+    finished.push({ ...x, status, ms: Date.now() - x.at, end: Date.now() });
+    if (finished.length > 30) finished.shift();
+  });
   page.on('requestfailed', (r) => inflight.delete(r));
   page.on('response', (r) => r.status() >= 400 && /\/(src|node_modules|@)/.test(r.url()) && note(`${r.status()} ${new URL(r.url()).pathname.slice(0, 90)}`));
   page.on('console', (m) => m.type() === 'error' && !/Vite server|Failed to load resource/.test(m.text()) && note(`console ${m.text().slice(0, 120)}`));
-  const s = { ctx: bctx, page, tap, side, label, old, sameUserLoad, inflight };
+  const s = { ctx: bctx, page, tap, side, label, old, sameUserLoad, inflight, finished };
   await loadHarness(s);
   return s;
 }
@@ -1190,7 +1202,10 @@ async function setKeys(pair, keys) {
 function withWaitedOn(s, t) {
   if (!t.timedOut) return t;
   const now = Date.now();
-  return { ...t, waitedOn: { busy: t.busy ?? null, inflight: [...s.inflight.values()].map((x) => ({ method: x.method, path: x.path, ms: now - x.at })), net: (s.netlog ?? []).slice(-8) } };
+  const recent = s.finished
+    .filter((x) => now - x.end <= t.ms + 1000)
+    .map((x) => ({ method: x.method, path: x.path, status: x.status, startedAgoMs: now - x.at, ms: x.ms }));
+  return { ...t, waitedOn: { busy: t.busy ?? null, inflight: [...s.inflight.values()].map((x) => ({ method: x.method, path: x.path, ms: now - x.at })), recent, net: (s.netlog ?? []).slice(-8) } };
 }
 async function settleAll(pair) {
   // what a side that timed out waited on is sampled as its settle returns

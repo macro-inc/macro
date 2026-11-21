@@ -202,11 +202,14 @@ The counts measure work attempted, not successes, and are not interchangeable:
   and `harnessReloadRetries` counts the reloads made. A write whose request is
   lost fails on both sides alike.
 - A settle timeout (level `settle`) records what that side was still waiting
-  on, as `waitedOn` in `diffs` and `examples`: its busy queries and readers
-  (`busy`, taken in the page at the timeout), every non-module request of that
-  page still in flight with its age (`inflight`), and the page's last eight
-  network notes (failed requests, failed module responses, console errors:
-  `net`). `inflight` and `net` are taken when that side's call returns, which
+  on, as `waitedOn` in `settleTimeouts` (every one, uncapped up to 1,000),
+  `diffs` and `examples`: its busy queries and readers (`busy`, taken in the
+  page at the timeout), every non-module request of that page still in flight
+  with its age (`inflight`; a request whose end Playwright never reported stays
+  there), the API requests that finished during the wait with their status,
+  start and duration (`recent`), and the page's last eight network notes
+  (failed requests, failed module responses, console errors: `net`).
+  `inflight`, `recent` and `net` are taken when that side's call returns, which
   for a fresh mount is after the mount was torn down.
 - `out/` can hold Playwright error dumps with the local session cookie; it is
   gitignored, and nothing from it is published unscanned.
