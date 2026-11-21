@@ -2,6 +2,7 @@
  * @vitest-environment jsdom
  */
 
+import { dmWorkAccount } from '@app/features/agent-work/core/work-visibility';
 import {
   type ChannelDirectory,
   channelDirectoryState,
@@ -25,6 +26,7 @@ vi.mock('./user', () => ({
 
 import {
   ChannelDirectoryProvider,
+  channelMemberIds,
   directMessagePeer,
   useChannel,
   useChannelCanCall,
@@ -176,5 +178,44 @@ describe('direct message peers', () => {
       directoryChannel('group', { updatedAt: '2026-11-03T00:00:00+00:00' }),
     ]);
     expect([...activity()]).toEqual([['peer', '2026-11-02T00:00:00+00:00']]);
+  });
+});
+
+describe('channelMemberIds', () => {
+  const bot = (botId: string) => ({
+    botId,
+    role: 'member' as const,
+    joinedAt: '2026-11-01T00:00:00+00:00',
+    leftAt: null,
+  });
+
+  it('lists people, then bots as principals, as the REST list did', () => {
+    const channel = directoryChannel('group', {
+      participants: [
+        directoryParticipant('viewer'),
+        directoryParticipant('peer'),
+      ],
+      botParticipants: [bot('bot-1')],
+    });
+    expect(channelMemberIds(channel)).toEqual(['viewer', 'peer', 'bot|bot-1']);
+  });
+
+  it('keeps a DM with a person and a bot from reading as an agent DM', () => {
+    const channel = directoryChannel('dm', {
+      channelType: 'direct_message',
+      participants: [
+        directoryParticipant('viewer'),
+        directoryParticipant('agent'),
+      ],
+      botParticipants: [bot('bot-1')],
+    });
+    expect(
+      dmWorkAccount({
+        isDirectMessage: true,
+        participantIds: channelMemberIds(channel),
+        viewerId: 'viewer',
+        isAgentAccount: (id) => id === 'agent',
+      })
+    ).toBeUndefined();
   });
 });

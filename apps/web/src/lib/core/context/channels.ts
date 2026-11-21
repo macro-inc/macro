@@ -87,6 +87,17 @@ export function useChannelType(
   return createMemo(() => channel()?.channelType);
 }
 
+/** Every member's id, people first, then bots as `bot|` principals: the
+ * members a call or a DM's Work counts, as the REST list sent them. */
+export function channelMemberIds(channel: DirectoryChannel): string[] {
+  return [
+    ...channel.participants.map(({ userId }) => userId),
+    ...channel.botParticipants.map(
+      ({ botId }) => `${BOT_PRINCIPAL_PREFIX}${botId}`
+    ),
+  ];
+}
+
 /** The person (or `bot|` principal) a DM is with, from the viewer's side. */
 export function directMessagePeer(
   channel: DirectoryChannel,

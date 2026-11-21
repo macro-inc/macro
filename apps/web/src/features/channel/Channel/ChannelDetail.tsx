@@ -40,6 +40,7 @@ import {
 } from '@components/app/split-layout/layoutUtils';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import {
+  channelMemberIds,
   useChannel,
   useChannelCanCall,
   useChannelName,
@@ -402,6 +403,10 @@ function ChannelDetailContent(props: ChannelDetailProps) {
   const orchestrator = useGlobalBlockOrchestrator();
   const channelId = props.channelId;
   const conversationChannel = useChannel(channelId);
+  const memberIds = () => {
+    const channel = conversationChannel();
+    return channel ? channelMemberIds(channel) : [];
+  };
   const canCall = useChannelCanCall(channelId);
   const conversationType = useChannelType(channelId);
   const channelName = useChannelName(channelId, props.fallbackName);
@@ -539,11 +544,7 @@ function ChannelDetailContent(props: ChannelDetailProps) {
         </DebugSuspense>
         <DmWorkProvider
           isDirectMessage={conversationType() === 'direct_message'}
-          participantIds={
-            conversationChannel()?.participants.map(
-              (participant) => participant.userId
-            ) ?? []
-          }
+          participantIds={memberIds()}
         >
           <ChannelDetailLayout
             scrollBehindHeader={activeTab() === 'messages'}
