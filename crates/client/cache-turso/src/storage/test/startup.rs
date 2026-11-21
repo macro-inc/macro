@@ -331,3 +331,54 @@ fn failed_swap_keeps_the_migrated_database() {
         storage.try_close().unwrap();
     });
 }
+
+#[test]
+fn used_database_reopens_with_the_pinned_schema_digest() {
+    block_on(async {
+        let directory = tempfile::tempdir().unwrap();
+        let database = TursoFileDatabase::new(directory.path().join("cache.turso")).unwrap();
+        let mut storage = database.open("scope").unwrap();
+        let created = schema_digest(&storage.connection()).unwrap();
+        storage
+            .put_batch(vec![(key("Thing:1"), record("kept"))])
+            .await
+            .unwrap();
+        storage.enqueue_mutation(queued("Pending")).await.unwrap();
+        storage.try_close().unwrap();
+
+        let storage = database.open("scope").unwrap();
+        let reopened = schema_digest(&storage.connection()).unwrap();
+        validate_frozen_schema(&storage.connection()).unwrap();
+        validate_statements(&storage.connection()).unwrap();
+        assert_eq!(created, reopened);
+        assert_eq!(
+            reopened,
+            Some(FRESH_SCHEMA_DIGEST),
+            "update FRESH_SCHEMA_DIGEST to {:#034x}",
+            reopened.unwrap_or_default(),
+        );
+    });
+}
+
+#[test]
+fn fresh_schema_passes_every_open_check() {
+    let storage = TursoStorage::open_in_memory("scope").unwrap();
+    let connection = storage.connection();
+    assert!(has_fresh_schema(&connection).unwrap());
+    validate_frozen_schema(&connection).unwrap();
+    validate_statements(&connection).unwrap();
+}
+
+#[test]
+fn changed_schema_takes_the_full_checks_on_reopen() {
+    block_on(async {
+        let directory = tempfile::tempdir().unwrap();
+        let database = TursoFileDatabase::new(directory.path().join("cache.turso")).unwrap();
+        let storage = database.open("scope").unwrap();
+        raw_execute(&storage, "DROP INDEX search_documents_browse_idx", vec![]);
+        assert!(!has_fresh_schema(&storage.connection()).unwrap());
+        storage.try_close().unwrap();
+
+        expect_reset_reason(database.open("scope"), PhysicalResetReason::Compatibility);
+    });
+}
