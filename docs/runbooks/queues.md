@@ -30,6 +30,9 @@ abnormally.
 - A sudden rise in enqueues (`aws.sqs.number_of_messages_sent`) on the backfill
   queue means many mailboxes started backfilling at once, which also loads
   MacroDB.
+- The link-maintenance queue backs up every morning while the daily sweep
+  purges unused and inactive inboxes; that is expected. Inbox removals people
+  ask for use the refresh queue, a work queue, and should not wait.
 - Levers: scale the consumer if the database has headroom; otherwise throttle
   the producer or pause the backfill until the database recovers.
 
