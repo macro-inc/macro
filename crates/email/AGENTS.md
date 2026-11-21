@@ -812,3 +812,7 @@ IMAP uses only the existing user-scoped connection enrollment flag. Once linked,
 sync, authorized sends and organization writes run independently of PostHog.
 Keep ownership, active/reauth state, generation/lease fences and explicit
 pause, disconnect and deletion admission. Outlook's rollout remains separate.
+
+Attempt message-list refresh before slower projection effects, but retain a failed
+refresh for retry after independent contacts, notifications, search and attachment
+effects run. A websocket outage must not suppress those projections.

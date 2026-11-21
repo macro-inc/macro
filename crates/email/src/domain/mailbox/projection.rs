@@ -516,10 +516,15 @@ impl<R: MailboxProjectionRepository, E: MailboxProjectionEffects> MailboxProject
                 let import = *is_import || !lease.from_current_generation;
                 // Persisted mail is already readable. List freshness must not
                 // wait for notification policy, CRM or attachment side effects.
-                self.effects
+                let refresh = self
+                    .effects
                     .refresh(context.link.id, &context.viewers)
-                    .await?;
-                effects.refreshes += 1;
+                    .await;
+                if refresh.is_ok() {
+                    effects.refreshes += 1;
+                }
+                // A websocket outage must not suppress independent message
+                // projections. Retain its error for the durable retry below.
                 if current.is_present {
                     if !message.is_draft {
                         if version == &current.version {
@@ -552,7 +557,7 @@ impl<R: MailboxProjectionRepository, E: MailboxProjectionEffects> MailboxProject
                         .await?;
                     effects.attachment_upload_ms += elapsed_ms(started);
                 }
-                return Ok(());
+                return refresh;
             }
         }
         self.effects

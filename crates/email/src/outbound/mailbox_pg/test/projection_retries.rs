@@ -1,10 +1,13 @@
 //! When a projection event that keeps failing, or keeps ending unfinished,
 //! is given up, and what is left of it.
 
-use super::fixture;
+use super::{fixture, page, snapshot};
 use crate::domain::events::EmailMacroEvent;
+use crate::domain::mailbox::live_pass::StreamKind;
 use crate::domain::mailbox::projection::*;
-use crate::domain::mailbox::{MailboxError, MailboxKey};
+use crate::domain::mailbox::{
+    MailboxError, MailboxIngest, MailboxKey, MailboxSyncRepository, MessageRetry,
+};
 use crate::telemetry_capture::Telemetry;
 use email_api_client::domain::models::{EmailApiError, RateLimitOrigin};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -20,6 +23,9 @@ use uuid::Uuid;
 struct FailingRefresh {
     error: fn() -> MailboxError,
     refreshes: Arc<AtomicUsize>,
+    contacts: Arc<AtomicUsize>,
+    attachments: Arc<AtomicUsize>,
+    published: Arc<AtomicUsize>,
 }
 
 impl FailingRefresh {
@@ -27,6 +33,9 @@ impl FailingRefresh {
         Self {
             error,
             refreshes: Arc::new(AtomicUsize::new(0)),
+            contacts: Arc::new(AtomicUsize::new(0)),
+            attachments: Arc::new(AtomicUsize::new(0)),
+            published: Arc::new(AtomicUsize::new(0)),
         }
     }
 }
@@ -40,6 +49,7 @@ impl MailboxProjectionEffects for FailingRefresh {
         self.refresh(link, viewers).await
     }
     async fn publish(&self, _: EmailMacroEvent) -> Result<(), MailboxError> {
+        self.published.fetch_add(1, Ordering::SeqCst);
         Ok(())
     }
     async fn refresh(
@@ -54,6 +64,7 @@ impl MailboxProjectionEffects for FailingRefresh {
         Ok(())
     }
     async fn contacts(&self, _: CorrespondenceProjection) -> Result<(), MailboxError> {
+        self.contacts.fetch_add(1, Ordering::SeqCst);
         Ok(())
     }
     async fn attachments(
@@ -62,6 +73,7 @@ impl MailboxProjectionEffects for FailingRefresh {
         _: &ProjectionContext,
         _: bool,
     ) -> Result<(), MailboxError> {
+        self.attachments.fetch_add(1, Ordering::SeqCst);
         Ok(())
     }
     async fn invitations(
@@ -346,4 +358,62 @@ async fn a_retry_recorded_after_the_lease_ran_out_still_counts_as_unfinished(db:
         .unwrap()
         .unwrap();
     assert_eq!((next.attempts, next.unfinished_claims), (2, 1));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn failed_refresh_preserves_independent_message_effects_and_durable_retry(db: PgPool) {
+    let telemetry = Telemetry::default();
+    let _guard = telemetry.install();
+    let (repo, link) = fixture(&db).await;
+    let stream = repo
+        .claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
+        .await
+        .unwrap()
+        .unwrap();
+    repo.commit_page(&stream, &page()).await.unwrap();
+    let work = repo.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
+    repo.ingest(
+        &work,
+        snapshot(link, work.provider_id.as_str(), Default::default(), "v1"),
+    )
+    .await
+    .unwrap();
+    let event = repo
+        .claim_projection(Uuid::now_v7())
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(matches!(event.event, ProjectionEvent::Message { .. }));
+    repo.finish_projection(
+        &event,
+        Some(MessageRetry::After {
+            seconds: 0,
+            counted: false,
+        }),
+    )
+    .await
+    .unwrap();
+    let effects = FailingRefresh::new(downstream);
+    let contacts = effects.contacts.clone();
+    let attachments = effects.attachments.clone();
+    let published = effects.published.clone();
+    let service = MailboxProjectionService::new(repo, effects);
+
+    for attempt in 1..=2 {
+        assert!(matches!(
+            service.project_once().await,
+            Err(MailboxError::Effect(_))
+        ));
+        assert_eq!(attempts(&db, event.id).await, Some(attempt));
+        assert_eq!(contacts.load(Ordering::SeqCst), attempt as usize);
+        assert_eq!(attachments.load(Ordering::SeqCst), attempt as usize);
+        assert!(published.load(Ordering::SeqCst) >= attempt as usize);
+        make_due(&db, event.id).await;
+    }
+    let spans = telemetry.spans("outlook.sync.project");
+    assert_eq!(spans.len(), 2);
+    for span in spans {
+        assert_eq!(span["outlook.refreshes"], "0");
+        assert_eq!(span["outlook.reindex_events"], "1");
+    }
 }
