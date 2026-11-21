@@ -1,6 +1,8 @@
+import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
+import XIcon from '@icon/system/regular/x.svg';
 import type { AgentFace } from '@macro-inc/agent-faces';
 import { Button, Dialog, Panel } from '@ui';
 import { createSignal, Match, onCleanup, Show, Switch } from 'solid-js';
@@ -42,9 +44,21 @@ export function ChangePictureDialog(props: {
       class="w-[28rem]"
     >
       <Panel depth={2} class="max-h-[85vh] w-full rounded-xl text-ink">
-        {/* No close button: the title, body and footer share one inset. */}
-        <Panel.Header class="gap-2 px-5">
-          <Dialog.Title as="span" class="m-0 flex-1 p-0 text-base font-medium">
+        {/* A phone sheet has no close button, so its title takes the body's
+            inset. */}
+        <Panel.Header class="gap-2 px-3 mobile:px-5">
+          <Dialog.CloseButton
+            as={Button}
+            variant="ghost"
+            size="icon-sm"
+            aria-label={t('common.close')}
+          >
+            <XIcon class="pointer-events-none size-4 shrink-0 touch:size-6" />
+          </Dialog.CloseButton>
+          <Dialog.Title
+            as="span"
+            class="m-0 flex-1 truncate p-0 text-base font-medium"
+          >
             {t('agentFaces.pictureTitle', { name: props.name })}
           </Dialog.Title>
         </Panel.Header>
@@ -52,9 +66,12 @@ export function ChangePictureDialog(props: {
           <Switch fallback={<ChangePictureBody {...props} />}>
             <Match when={props.pictureState === 'loading'}>
               <Panel.Body>
-                <p role="status" class="px-5 py-5 text-sm text-ink-muted">
-                  {t('agentFaces.loading')}
-                </p>
+                <ListSkeleton.Root
+                  label={t('agentFaces.loading')}
+                  class="flex justify-center px-5 py-5"
+                >
+                  <ListSkeleton.Bar class="size-24" />
+                </ListSkeleton.Root>
               </Panel.Body>
             </Match>
             <Match when={props.pictureState === 'error'}>

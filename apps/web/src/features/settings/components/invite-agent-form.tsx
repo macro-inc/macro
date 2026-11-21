@@ -15,7 +15,10 @@ import {
   Switch,
 } from 'solid-js';
 import { match } from 'ts-pattern';
-import { ComputerSizePicker } from '../computers/components/computer-size-picker';
+import {
+  ComputerSizePicker,
+  ComputerSizeSkeleton,
+} from '../computers/components/computer-size-picker';
 import { FailureNotice } from '../computers/components/failure-notice';
 import { formatQuote, sizeLabel } from '../computers/core/computer-display';
 import type { AddAgentState, AddRefusal } from '../core/team-agent-add';
@@ -323,11 +326,7 @@ export function InviteAgentForm(props: {
             fallback={
               <Show
                 when={props.offersFailed}
-                fallback={
-                  <p role="status" class="text-sm text-ink-muted">
-                    {t('teamAgents.loadingSizes')}
-                  </p>
-                }
+                fallback={<ComputerSizeSkeleton />}
               >
                 <div
                   role="alert"

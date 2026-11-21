@@ -26,7 +26,6 @@ export default {
   voiceSaveFailed:
     "Couldn't save the voice. Your choice is still selected; try again.",
   giveItAComputer: 'Give it a computer',
-  loadingSizes: 'Loading computer sizes…',
   sizesFailed: "Couldn't load computer sizes.",
   tryAgain: 'Try again',
   add: 'Add {{name}}',
