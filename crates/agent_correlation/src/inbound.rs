@@ -148,15 +148,22 @@ fn narrowest(first: Option<SessionScope>, second: Option<SessionScope>) -> Optio
 /// Hold the request to the scopes the tokens beside the authenticating one
 /// sign or are stored with (`state`, when there is a database to look their
 /// correlations up in), and name the narrowest of them.
+#[derive(Default)]
+struct OtherTokenScopes {
+    scope: Option<SessionScope>,
+    signed_scope: bool,
+}
+
 async fn other_tokens_scope(
     state: Option<&CorrelationState>,
     others: &[MacroApiToken],
     parts: &Parts,
-) -> Result<Option<SessionScope>, CorrelationRejection> {
-    let mut scope = None;
+) -> Result<OtherTokenScopes, CorrelationRejection> {
+    let mut scopes = OtherTokenScopes::default();
     for token in others {
         let signed = checked_signed_scope(Some(token), parts)?;
-        scope = narrowest(scope, signed.known());
+        scopes.signed_scope |= !matches!(signed, SignedScope::Unscoped);
+        scopes.scope = narrowest(scopes.scope, signed.known());
         let Some(state) = state else {
             continue;
         };
@@ -166,10 +173,10 @@ async fn other_tokens_scope(
             if !stored.allows(parts.method.as_str(), parts.uri.path()) {
                 return Err(CorrelationRejection(CorrelationError::OutOfScope));
             }
-            scope = narrowest(scope, Some(stored));
+            scopes.scope = narrowest(scopes.scope, Some(stored));
         }
     }
-    Ok(scope)
+    Ok(scopes)
 }
 
 /// The scope `token` signs, or a refusal when the request is outside it. The
@@ -332,7 +339,9 @@ async fn propagate_request(
     // Handlers read the scope stored with the correlation, else the one the
     // credential signs (the harness signs the stored one).
     // The routine claim needs no lookup: the token's signature is its authority.
-    let signed_scope = !matches!(signed, SignedScope::Unscoped) || others_scope.is_some();
+    let signed_scope = !matches!(signed, SignedScope::Unscoped)
+        || others_scope.signed_scope
+        || others_scope.scope.is_some();
     let attribution = Attribution {
         signed_scope,
         correlation_id,
@@ -342,7 +351,7 @@ async fn propagate_request(
             correlation
                 .and_then(|(_, correlation)| correlation.scope)
                 .or(signed.known()),
-            others_scope,
+            others_scope.scope,
         ),
         verb: correlation_id.and_then(|_| sdk_verb(&parts)),
     };

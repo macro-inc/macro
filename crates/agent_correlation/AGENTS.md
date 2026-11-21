@@ -92,6 +92,8 @@ code, not in its prompt. The harness also signs the scope into the credential
 
 - Never read correlation or a routine from an unsigned header or use them as
   authority.
+- Preserve signed scope presence from every verified credential, including
+  unknown scopes on secondary tokens, when refusing all scoped callers.
 - `scope` sets only a correlation and clears any routine; use
   `scope_attribution` to carry both. A bare `tokio::spawn` drops both; wrap
   request work in `capture`.

@@ -223,3 +223,30 @@ async fn a_historical_record_without_an_issued_binding_is_refused() {
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
     assert_eq!(fixture.apps.effects.load(Ordering::SeqCst), 0);
 }
+
+#[tokio::test]
+async fn an_unknown_scope_on_a_secondary_verified_token_still_refuses_apps() {
+    let fixture = Arc::new(Fixture::new(true));
+    let primary = token(Some(302), None, None, None);
+    let secondary = token(None, Some("future_scope"), None, None);
+    let response = app(fixture.clone())
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(APPS)
+                .header("authorization", format!("Bearer {primary}"))
+                .header(
+                    "cookie",
+                    format!(
+                        "{}={secondary}",
+                        macro_auth::credential::access_token_cookie_name()
+                    ),
+                )
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(fixture.apps.effects.load(Ordering::SeqCst), 0);
+}

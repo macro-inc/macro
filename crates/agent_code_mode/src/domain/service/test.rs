@@ -642,7 +642,7 @@ impl ExecutionStore for SlowActivityStore {
         session: AgentSessionId,
         record: &ExecutionRecord,
     ) -> Result<(), CodeModeError> {
-        if record.status == ExecutionStatus::Running {
+        if record.status == ExecutionStatus::Running && !record.activity.is_empty() {
             self.saving.notify_one();
             std::future::pending::<()>().await;
         }

@@ -194,7 +194,20 @@ impl CodeModeService {
         }
         // Admission of connected-app calls must see this exact issued credential
         // before the runner can make its first request. A failed save starts nothing.
-        self.0.store.save(identity.session, &record).await?;
+        let saved = tokio::select! {
+            biased;
+            () = cancel.cancelled() => None,
+            saved = self.0.store.save(identity.session, &record) => Some(saved),
+        };
+        match saved {
+            Some(result) => result?,
+            None => {
+                record.status = ExecutionStatus::Cancelled;
+                record.error = Some("Execution cancelled before starting.".into());
+                self.0.store.save(identity.session, &record).await?;
+                return Ok((receipt(&record), None));
+            }
+        }
         let (progress, mut updates) = tokio::sync::mpsc::channel(512);
         let execution =
             executor.execute_program_with_progress(request, environment, cancel.clone(), progress);
