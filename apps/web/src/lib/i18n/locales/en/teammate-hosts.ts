@@ -5,7 +5,7 @@ export default {
   ownComputerHint:
     'It runs in a container on one of your computers, with macrod and Docker or Podman. No computer is bought.',
   egressNote:
-    'An agent on your computer can reach whatever its network can reach, including other machines on it and, on a cloud VM, its metadata service.',
+    "An agent on your computer reaches the internet, but not your computer, the other machines on its network, or a cloud VM's metadata service.",
   loadingHosts: 'Looking for your computers…',
   hostsFailed: "Couldn't list your computers.",
   noHosts:
@@ -30,7 +30,7 @@ export default {
   hostRootless: 'rootless',
   trustTitle: 'Anyone with admin on {{host}} can act as {{name}}',
   trustBody:
-    "They can read {{name}}'s files and credentials. {{name}} can reach whatever {{host}}'s network can reach, including other machines on it and, on a cloud VM, its metadata service.",
+    "They can read {{name}}'s files and credentials. {{name}} reaches the internet, but not {{host}} or the other machines on its network.",
   ownComputerCaption:
     '{{name}} gets its own account and runs on {{host}}. It says hi once it starts.',
   chooseHost: 'Choose one of your computers to continue.',
