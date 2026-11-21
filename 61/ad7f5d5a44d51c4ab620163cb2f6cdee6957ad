@@ -1,0 +1,21 @@
+apps/web/tests/native/fixtures/bootstrap.ts
+  s_3aae898ae5b385::t_c8dd60735f9ff3 3-4,45-51,121-128
+apps/web/tests/native/fixtures/server.test.ts
+  s_3aae898ae5b385::t_19afd4e502fd8f 477-491
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "61ad7f5d5a44d51c4ab620163cb2f6cdee6957ad",
+  "prompts": {},
+  "sessions": {
+    "s_3aae898ae5b385": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0b791c86-67bf-46cf-a81e-b454a33d6b14",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
