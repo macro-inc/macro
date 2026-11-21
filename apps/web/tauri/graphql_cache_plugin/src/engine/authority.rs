@@ -51,6 +51,21 @@ impl EngineHandle {
         self
     }
 
+    /// A read on this handle stops waiting for the engine, failing, once
+    /// [`Self::abandon`] names `request_id`. Without an id it always waits.
+    pub fn abandonable(mut self, request_id: Option<String>) -> Self {
+        self.abandon = request_id
+            .and_then(|id| self.abandons.register(id))
+            .map(std::sync::Arc::new);
+        self
+    }
+
+    /// Gives up the read registered with `request_id`, if it still waits for
+    /// the engine. Takes no lock the engine holds.
+    pub fn abandon(&self, request_id: &str) {
+        self.abandons.abandon(request_id);
+    }
+
     async fn check_generation(&self, state: &mut EngineState) -> Result<(), String> {
         // Prepare legacy callers too, before any response is committed. Identity
         // binding updates this authority in the same durable batch as its witness.
@@ -74,7 +89,23 @@ impl EngineHandle {
     }
 
     pub(super) async fn ready_read(&self) -> Result<AccessGuard<'_, EngineState>, String> {
-        let mut state = self.inner.read().await;
+        let mut state = match &self.abandon {
+            None => self.inner.read().await,
+            // Giving up the wait is safe: `read` leaves the queue on drop and
+            // wakes whoever it would have. A read abandoned as it got the
+            // engine gives it back before reading.
+            Some(abandon) => {
+                let state = tokio::select! {
+                    biased;
+                    () = abandon.abandoned() => None,
+                    state = self.inner.read() => Some(state),
+                };
+                match state {
+                    Some(state) if !abandon.is_abandoned() => state,
+                    _ => return Err(super::abandon::ABANDONED.into()),
+                }
+            }
+        };
         self.resume_retirement(&mut state).await?;
         Ok(state)
     }

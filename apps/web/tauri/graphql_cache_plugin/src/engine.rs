@@ -33,6 +33,7 @@ use soup_filter_cache_adapter::WritePassStep;
 use std::collections::HashMap;
 use std::sync::Arc;
 use uuid::Uuid;
+mod abandon;
 mod access;
 use access::{AccessGuard, EngineAccess};
 mod authority;
@@ -416,6 +417,10 @@ pub struct EngineHandle {
     // Shared by cloned handles, changed when the native engine is reopened.
     // Revisions alone may repeat across process restarts.
     mail_generation: String,
+    // Reads now running with a request id, shared by cloned handles.
+    abandons: Arc<abandon::Abandons>,
+    // Per-command: this read's registration, when it came with a request id.
+    abandon: Option<Arc<abandon::Registration>>,
 }
 
 #[cfg(test)]
@@ -502,6 +507,8 @@ impl EngineHandle {
         EngineHandle {
             generation: None,
             authority_listener: None,
+            abandons: Arc::default(),
+            abandon: None,
             mail_generation: soup_filter_cache_adapter::mail::new_generation(),
             inner,
         }

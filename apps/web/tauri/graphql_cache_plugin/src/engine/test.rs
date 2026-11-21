@@ -933,3 +933,46 @@ fn a_failed_staging_read_fails_the_native_hydrate_instead_of_retrying_it_whole()
         panic!("a failed hydrate writes nothing");
     };
 }
+
+#[test]
+fn an_abandoned_read_stops_waiting_for_the_engine() {
+    tauri::async_runtime::block_on(async {
+        let handle = spawn_handle();
+        let read = |id: &str| {
+            let reader = handle.clone().abandonable(Some(id.to_owned()));
+            tauri::async_runtime::spawn(async move {
+                reader.current_authority("scope-1").await.map(drop)
+            })
+        };
+        let held = handle.inner.write().await;
+        let abandoned: Vec<_> = (0..3).map(|n| read(&format!("gone-{n}"))).collect();
+        let waited_for = read("kept");
+        let unnamed = {
+            let reader = handle.clone();
+            tauri::async_runtime::spawn(async move {
+                reader.current_authority("scope-1").await.map(drop)
+            })
+        };
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        assert_eq!(handle.abandons.running(), 4);
+        for n in 0..3 {
+            handle.abandon(&format!("gone-{n}"));
+        }
+        handle.abandon("never-sent");
+        // They give up while the engine is still held.
+        for task in abandoned {
+            let outcome = tokio::time::timeout(std::time::Duration::from_secs(5), task)
+                .await
+                .expect("an abandoned read stops waiting")
+                .unwrap();
+            assert_eq!(outcome, Err(abandon::ABANDONED.to_owned()));
+        }
+        drop(held);
+        assert_eq!(waited_for.await.unwrap(), Ok(()));
+        assert_eq!(unnamed.await.unwrap(), Ok(()));
+        assert_eq!(handle.abandons.running(), 0);
+        // An abandon after the read finished changes nothing for the next one.
+        handle.abandon("kept");
+        assert_eq!(read("kept").await.unwrap(), Ok(()));
+    });
+}

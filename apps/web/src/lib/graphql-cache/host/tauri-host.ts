@@ -131,6 +131,7 @@ const CALENDAR_COMMIT_COMMAND = 'graphql_cache_calendar_commit';
 const INSPECT_MUTATIONS_COMMAND = 'graphql_cache_inspect_mutations';
 
 const INIT_COMMAND = 'graphql_cache_init_with_schema';
+const ABANDON_COMMAND = 'graphql_cache_abandon';
 
 // The only commands a caller stops waiting for: a read falls back to the
 // network, and a hung init would block every request. Tauri cannot cancel a
@@ -261,6 +262,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
   // Only identical in-flight reads share a result. Any intervening command or
   // native notification is a barrier: never reuse a read across a write/reset.
   const pendingReads = new Map<string, Promise<ReadResult>>();
+  let requestSequence = 0;
   const liveQueries = new Map<
     string,
     { descriptor: string; registrationId?: string }
@@ -276,6 +278,15 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     const keys = [...pendingAffected];
     pendingAffected.clear();
     for (const cb of affectedSubscribers) cb(keys);
+  }
+
+  // Tells the native side this caller stopped waiting for a read.
+  async function abandon(requestId: string) {
+    try {
+      await invoke(ABANDON_COMMAND, { requestId });
+    } catch {
+      // Older binaries lack the command; the read then runs as before.
+    }
   }
 
   async function request<T>(
@@ -294,10 +305,18 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     span.setAttr('graphql_cache.ipc.command', command);
     const traceparent = span.traceparent();
     const wireArgs = traceparent ? { ...args, traceparent } : args;
+    // A timed read carries an id, so the native side can drop it from the
+    // engine's queue once this caller stops waiting (Tauri cannot cancel a
+    // command). Binaries without the abandon command ignore the id.
+    const requestId =
+      TIMED_COMMANDS.has(command) && command !== INIT_COMMAND
+        ? `${clientId}:${++requestSequence}`
+        : undefined;
+    const sentArgs = requestId ? { ...wireArgs, requestId } : wireArgs;
     const deadline = { timedOut: false, pageStallMs: 0 };
     const authorityGeneration = authorityObserver.snapshot()?.generation;
     try {
-      const operation = span.run(() => invoke<T>(command, wireArgs));
+      const operation = span.run(() => invoke<T>(command, sentArgs));
       const value = await (TIMED_COMMANDS.has(command)
         ? withRequestDeadline(command, operation, requestTimeoutMs, deadline)
         : operation);
@@ -313,6 +332,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         'graphql_cache.ipc.outcome',
         deadline.timedOut ? 'timeout' : 'error'
       );
+      if (deadline.timedOut && requestId) void abandon(requestId);
       span.error(
         deadline.timedOut
           ? 'Native cache request timed out'

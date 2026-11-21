@@ -964,12 +964,14 @@ fn spawn_read(
 }
 
 /// The handle a read with this request id runs on.
-fn reading(handle: &EngineHandle, _request_id: String) -> EngineHandle {
-    handle.clone()
+fn reading(handle: &EngineHandle, request_id: String) -> EngineHandle {
+    handle.clone().abandonable(Some(request_id))
 }
 
 /// What a caller does with a read it stopped waiting for.
-fn abandon(_handle: &EngineHandle, _request_id: &str) {}
+fn abandon(handle: &EngineHandle, request_id: &str) {
+    handle.abandon(request_id);
+}
 
 /// Readers that each wait up to `CACHE_BENCH_STALL_DEADLINE_MS` (100) for a
 /// read, then give up and send the next, while the engine is held for
