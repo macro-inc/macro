@@ -2297,6 +2297,36 @@
                 }
               }
             }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -6317,7 +6347,7 @@
           },
           "username": {
             "type": "string",
-            "description": "Account login."
+            "description": "Raw protocol login: providers may require a local part or account ID\nrather than an email address."
           }
         }
       },
@@ -6701,6 +6731,7 @@
           },
           "email": {
             "type": "string",
+            "format": "email",
             "description": "Must be an address Macro has independently verified for the actor."
           },
           "imap": {
@@ -6755,7 +6786,8 @@
         "required": ["email"],
         "properties": {
           "email": {
-            "type": "string"
+            "type": "string",
+            "format": "email"
           }
         }
       },

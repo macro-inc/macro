@@ -1158,7 +1158,8 @@ export type Endpoint = {
      */
     tls: TlsMode;
     /**
-     * Account login.
+     * Raw protocol login: providers may require a local part or account ID
+     * rather than an email address.
      */
     username: string;
 };
@@ -3307,6 +3308,9 @@ export type ImapConnectErrors = {
     409: ImapConnectionErrorResponse;
     422: ImapConnectionErrorResponse;
     429: ImapConnectionErrorResponse;
+    502: ImapConnectionErrorResponse;
+    503: ImapConnectionErrorResponse;
+    504: ImapConnectionErrorResponse;
 };
 
 export type ImapConnectError = ImapConnectErrors[keyof ImapConnectErrors];
