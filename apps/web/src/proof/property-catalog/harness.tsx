@@ -33,12 +33,15 @@ import {
 import { selectablePropertyOptions } from '@property/utils/select-options';
 import { toPropertyDefinitionDomain } from '@property/utils/transforms';
 import { queryClient } from '@queries/client';
+import * as definitionsModule from '@queries/properties/definitions';
 import {
+  fetchPropertyDefinitionWithOptions,
   useCreatePropertyDefinitionMutation,
   useDeletePropertyDefinitionMutation,
   useListPropertiesQuery,
 } from '@queries/properties/definitions';
 import { propertiesKeys } from '@queries/properties/keys';
+import * as optionsModule from '@queries/properties/options';
 import {
   useAddPropertyOptionMutation,
   useDeletePropertyOptionMutation,
@@ -46,6 +49,7 @@ import {
   useUpdatePropertyOptionMutation,
 } from '@queries/properties/options';
 import { usablePropertyOptions } from '@queries/properties/options-data';
+import * as tagsModule from '@queries/properties/tags';
 import {
   useCreateTagMutation,
   useDeletePropertyOptionMutation as useDeleteTagMutation,
@@ -119,6 +123,12 @@ function errorShape(error: unknown) {
     class: e.constructor?.name ?? typeof error,
     codes: Array.isArray(e.errors) ? e.errors.map((x) => x.code ?? null) : null,
     httpStatus: e.response?.status ?? null,
+    graphqlCodes: Array.isArray(e.graphQLErrors)
+      ? e.graphQLErrors.map(
+          (g) =>
+            (g as { extensions?: { code?: string } }).extensions?.code ?? null
+        )
+      : null,
   };
 }
 
@@ -131,6 +141,10 @@ type QueryLike = {
   isFetched: boolean;
   isPlaceholderData: boolean;
   isLoading: boolean;
+  isStale: boolean;
+  isRefetching: boolean;
+  isRefetchError: boolean;
+  isLoadingError: boolean;
   failureCount: number;
   data: unknown;
   error: unknown;
@@ -146,6 +160,10 @@ function observe(q: QueryLike) {
     isFetched: q.isFetched,
     isPlaceholderData: q.isPlaceholderData,
     isLoading: q.isLoading,
+    isStale: q.isStale,
+    isRefetching: q.isRefetching,
+    isRefetchError: q.isRefetchError,
+    isLoadingError: q.isLoadingError,
     failureCount: q.failureCount,
     data: plain(q.data),
     error: errorShape(q.error),
@@ -227,9 +245,18 @@ function Callers(props: { registry: Registry; optionIds: Accessor<string[]> }) {
     scope: 'all',
     includeOptions: true,
   }));
+  // The catalog the callers derive from, read for the runner's tie-order
+  // check only (which rows the server sorts as equal); never compared.
+  const tags = useTagsQuery();
   let tagSetsOut: () => unknown = () => null;
 
   const read = () => ({
+    __sources: {
+      defs: [all, system, crmExport].map((q) =>
+        q.isSuccess ? plain(q.data) : null
+      ),
+      tags: tags.isSuccess ? plain(tags.data) : null,
+    },
     propertyPanel: safe(() => plain(allProperties())),
     filterBar: safe(() => ({
       settled: filterTags.settled(),
@@ -480,6 +507,7 @@ async function fresh(keys: Key[], boundMs: number) {
 }
 
 let staleCache: [readonly unknown[], unknown][] = [];
+let skippedInvalidations = 0;
 
 declare global {
   interface Window {
@@ -506,10 +534,36 @@ window.__h = {
   },
   // Mutant hooks: break the new path on purpose to show the comparison sees it.
   authenticated: () => authenticated(),
+  // Which query modules this page runs: the runner checks that the OLD page
+  // runs the base commit's copies (run.sh marks them) and NEW the head's.
+  moduleSides: () =>
+    Object.fromEntries(
+      [
+        ['definitions', definitionsModule],
+        ['options', optionsModule],
+        ['tags', tagsModule],
+      ].map(([name, mod]) => [
+        name,
+        Reflect.get(mod as object, '__PROOF_MODULE__') ?? 'head',
+      ])
+    ),
+  // The property editor's imperative read after it creates a definition.
+  imperative: {
+    fetchDefinitionWithOptions: (id: string) =>
+      result(() => fetchPropertyDefinitionWithOptions(id)),
+  },
   mutant: {
     skipLiveUpdate() {
-      queryClient.invalidateQueries = (() =>
-        Promise.resolve()) as typeof queryClient.invalidateQueries;
+      queryClient.invalidateQueries = (() => {
+        skippedInvalidations++;
+        return Promise.resolve();
+      }) as typeof queryClient.invalidateQueries;
+    },
+    // Invalidations the mutant swallowed since the last call.
+    takeSkipped() {
+      const n = skippedInvalidations;
+      skippedInvalidations = 0;
+      return n;
     },
     // Stale cache: remember every property query's data before a write and
     // put it back after the page settles, as a cache that missed the write.
