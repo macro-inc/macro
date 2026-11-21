@@ -125,7 +125,7 @@ impl From<StoreError> for EventsError {
                 McpSubscriptionErrorBody::CallbackEndpointError { reason } => {
                     Self::CallbackEndpoint(reason)
                 }
-                McpSubscriptionErrorBody::FilterRequired | McpSubscriptionErrorBody::Internal => {
+                McpSubscriptionErrorBody::Internal => {
                     Self::Internal(rootcause::Report::new(StoreError::Refused(body)).into_dynamic())
                 }
             },
@@ -289,7 +289,7 @@ impl McpEvents {
             event_type: request.name,
             arguments: request.arguments,
             endpoint_url: request.url,
-            filter: Some(compiled.filter),
+            filter: compiled.filter,
             secret: request.secret,
             secret_ciphertext,
             ttl: request.ttl,

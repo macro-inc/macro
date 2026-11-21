@@ -154,17 +154,8 @@ impl SubscriptionStore for FakeStore {
             &request.arguments,
             &request.endpoint_url,
         );
-        let mut stored = self.stored.lock().unwrap();
-        let filter = match (stored.get(&key), &request.filter) {
-            (Some(filter), _) => filter.clone(),
-            (None, Some(filter)) => filter.clone(),
-            (None, None) => {
-                return Err(StoreError::Refused(
-                    McpSubscriptionErrorBody::FilterRequired,
-                ));
-            }
-        };
-        stored.insert(key, filter.clone());
+        let filter = request.filter.clone();
+        self.stored.lock().unwrap().insert(key, filter.clone());
         Ok(McpSubscribeResult {
             id: McpSubscriptionId::from_stored("sub_1".to_owned()),
             refresh_before: chrono::DateTime::from_timestamp(1_800_000_000, 0).unwrap(),
@@ -503,7 +494,7 @@ async fn a_confirmed_filter_subscribes_without_a_model_call() {
     {
         let subscribes = fixture.store.subscribes.lock().unwrap();
         assert_eq!(subscribes.len(), 1);
-        assert_eq!(subscribes[0].filter, Some(channel_mentions()));
+        assert_eq!(subscribes[0].filter, channel_mentions());
         assert_eq!(subscribes[0].arguments, confirmed());
         assert_eq!(subscribes[0].secret_ciphertext, ciphertext());
         assert_eq!(subscribes[0].ttl, McpTtlRequest::Default);
@@ -561,7 +552,7 @@ async fn a_named_type_sends_its_filter_without_a_model_call() {
     );
     let subscribes = fixture.store.subscribes.lock().unwrap();
     assert_eq!(subscribes.len(), 1);
-    assert_eq!(subscribes[0].filter, Some(expected.clone()));
+    assert_eq!(subscribes[0].filter, expected.clone());
     assert!(fixture.compiler.queries.lock().unwrap().is_empty());
     assert_eq!(
         result["_meta"][INTERPRETATION_META],
