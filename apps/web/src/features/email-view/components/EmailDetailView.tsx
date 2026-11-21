@@ -24,7 +24,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { buildEntityData } from '@entity';
 import { useThreadQuery } from '@queries/email/thread';
 import { representativeThreadMessage } from '@queries/email/thread-subject';
-import { createEffect, createMemo, type JSX, Show } from 'solid-js';
+import { createEffect, createMemo, type JSX, onCleanup, Show } from 'solid-js';
 import { emailDetailSearch } from '../email-route';
 import { useEmailView } from '../email-view-context';
 import { useEmailReaderPane } from '../reader-pane';
@@ -105,6 +105,24 @@ export function EmailDetailView(props: {
   });
   const listNavigation = useEmailDetailListNavigation(threadId);
   const hotkeyScope = () => keyScope;
+  // The rendered thread's own Escape step, while it is on screen.
+  let cancelThread: (() => boolean) | undefined;
+  // Registered here rather than with the thread's keys so Escape still goes
+  // back to the list when the thread failed to load and never rendered.
+  registerScopeSignalHotkey(hotkeyScope, {
+    hotkey: 'escape',
+    description: 'Collapse message or back to list',
+    // Escape unwinds thread state first (reply, expanded body, focused
+    // message). Once nothing is left to unwind it goes back to the list
+    // this thread was opened from.
+    keyDownHandler: () => {
+      if (cancelThread?.()) return true;
+      (pane?.focusList ?? closeThread)();
+      return true;
+    },
+    hotkeyToken: TOKENS.email.cancelReply,
+    hide: true,
+  });
   const host: EmailThreadHost = {
     returnToList: closeThread,
     listNavigation,
@@ -121,19 +139,9 @@ export function EmailDetailView(props: {
         hotkeyToken: TOKENS.block.focus,
         hide: true,
       });
-      registerScopeSignalHotkey(hotkeyScope, {
-        hotkey: 'escape',
-        description: 'Collapse message or back to list',
-        // Escape unwinds thread state first (reply, expanded body, focused
-        // message). Once nothing is left to unwind it goes back to the list
-        // this thread was opened from.
-        keyDownHandler: () => {
-          if (handlers.cancel()) return true;
-          (pane?.focusList ?? closeThread)();
-          return true;
-        },
-        hotkeyToken: TOKENS.email.cancelReply,
-        hide: true,
+      cancelThread = handlers.cancel;
+      onCleanup(() => {
+        if (cancelThread === handlers.cancel) cancelThread = undefined;
       });
     },
   };
