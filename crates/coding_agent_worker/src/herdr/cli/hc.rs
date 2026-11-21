@@ -257,6 +257,8 @@ impl Core {
         let deadline = tokio::time::Instant::now() + AGENT_READY_TIMEOUT;
         let mut screen = String::new();
         let mut settled = 0u32;
+        // Whether the latest poll read `working`: a status that later goes
+        // away is no longer a busy agent.
         let mut working = false;
         while tokio::time::Instant::now() < deadline {
             tokio::time::sleep(AGENT_READY_POLL).await;
@@ -264,6 +266,7 @@ impl Core {
             if terminal.state != "live" {
                 return Err(HerdrError::Ended);
             }
+            working = false;
             if let Some(status) = &terminal.status {
                 if status.state != "working" {
                     return Ok(());
@@ -356,8 +359,9 @@ pub(super) fn parse_terminal(command: &str, output: &str) -> Result<Terminal, He
     })
 }
 
-/// Why an agent that reports status was not ready in time: still `working`
-/// is a busy agent, never reporting at all is one stopped on a dialog.
+/// Why an agent that reports status was not ready in time: one whose latest
+/// status reads `working` is busy; one with no status is taken, as before, to
+/// be stopped on a dialog.
 pub(super) fn not_ready(working: bool) -> HerdrError {
     if working {
         HerdrError::Busy
