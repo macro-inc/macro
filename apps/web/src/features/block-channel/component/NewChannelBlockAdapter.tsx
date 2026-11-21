@@ -1,4 +1,7 @@
-import { DmScreenIsland } from '@app/features/agent-screen/dm-screen-button';
+import {
+  DmScreenButton,
+  useDmScreenHarnessId,
+} from '@app/features/agent-screen/dm-screen-button';
 import { channelsSearch } from '@app/features/channels-view/channels-route';
 import {
   ChatWithAgentIcon,
@@ -155,6 +158,7 @@ function NewTop(props: { channelId: string }) {
   const channelName = useChannelName(props.channelId);
   const channelType = useChannelType(props.channelId);
   const channel = useChannel(props.channelId);
+  const screenHarnessId = useDmScreenHarnessId(props.channelId);
   const userId = useUserId();
   const renameAction = makeRenameAction({ userId });
   const participantsQuery = useChannelParticipantsQuery(() => props.channelId);
@@ -309,7 +313,13 @@ function NewTop(props: { channelId: string }) {
       <Show when={!isActivePhoneCall()}>
         <SplitHeaderRight>
           {/* An agent teammate's DM: Screen opens its computer. */}
-          <DmScreenIsland channelId={props.channelId} />
+          <Show when={screenHarnessId()}>
+            {(harnessId) => (
+              <HeaderIsland class="px-1">
+                <DmScreenButton harnessId={harnessId()} />
+              </HeaderIsland>
+            )}
+          </Show>
         </SplitHeaderRight>
       </Show>
       {/* Hidden once the user has joined — the call surface owns the UI. */}

@@ -10,7 +10,6 @@ import { ViewShell } from '@app/components/view-shell';
 import { AccountManagerRequestButton } from '@app/features/account-manager/account-manager-request-button';
 import {
   DmScreenButton,
-  DmScreenIsland,
   useDmScreenHarnessId,
 } from '@app/features/agent-screen/dm-screen-button';
 import {
@@ -330,6 +329,7 @@ function DesktopChannelDetailTopBar(
 
 function TouchChannelDetailTopBar(props: ChannelDetailHeaderProps) {
   const channel = useChannel(props.channelId);
+  const screenHarnessId = useDmScreenHarnessId(props.channelId);
   const channelName = useChannelName(props.channelId, props.fallbackName);
   const channelType = useChannelType(props.channelId);
   const call = useCall(() => props.channelId);
@@ -365,7 +365,13 @@ function TouchChannelDetailTopBar(props: ChannelDetailHeaderProps) {
       </HeaderIsland>
       <div class="ml-auto flex shrink-0 items-center gap-2">
         <DebugSuspense name="ChannelDetail.touch-screen">
-          <DmScreenIsland channelId={props.channelId} />
+          <Show when={screenHarnessId()}>
+            {(harnessId) => (
+              <HeaderIsland class="px-1">
+                <DmScreenButton harnessId={harnessId()} />
+              </HeaderIsland>
+            )}
+          </Show>
         </DebugSuspense>
         <Show
           when={ENABLE_CALLS && !channel()?.agent_dm && !call.isInThisChannel()}

@@ -11,7 +11,6 @@ const mocks = vi.hoisted(() => ({
 // The agent screen's DM button has its own tests (agent-screen/dm-screen-button).
 vi.mock('@app/features/agent-screen/dm-screen-button', () => ({
   DmScreenButton: () => null,
-  DmScreenIsland: () => null,
   useDmScreenHarnessId: () => () => undefined,
 }));
 vi.mock('@app/components/view-shell', () => ({

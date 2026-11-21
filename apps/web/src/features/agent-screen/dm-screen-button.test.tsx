@@ -1,11 +1,8 @@
+import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import { fireEvent, render, screen } from '@solidjs/testing-library';
 import { Show } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  DmScreenButton,
-  DmScreenIsland,
-  useDmScreenHarnessId,
-} from './dm-screen-button';
+import { DmScreenButton, useDmScreenHarnessId } from './dm-screen-button';
 
 const state = vi.hoisted(() => ({
   participants: [] as string[],
@@ -78,7 +75,12 @@ describe('DM Screen button', () => {
   it("shows its own header island in the touch header of a team agent teammate's DM", () => {
     document.documentElement.dataset.touchDevice = 'true';
     state.participants = ['user-alice', 'user-ada-agent'];
-    render(() => <DmScreenIsland channelId="dm-1" />);
+    // As both touch headers compose it: its own island in the header.
+    render(() => (
+      <HeaderIsland class="px-1">
+        <DmHeader />
+      </HeaderIsland>
+    ));
 
     fireEvent.click(screen.getByRole('button', { name: 'Screen' }));
     expect(state.openWithSplit).toHaveBeenCalledTimes(1);

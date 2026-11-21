@@ -1,12 +1,11 @@
 import { t } from '@app/lib/i18n';
 import { useChannelParticipants } from '@channel/use-channel-participants';
 import { HeaderActionButton } from '@components/app/HeaderActionButton';
-import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import { useChannel, useChannelType } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import DesktopIcon from '@icon/system/regular/desktop.svg';
 import { ChannelType } from '@service-storage/generated/schemas/channelType';
-import { type Accessor, Show } from 'solid-js';
+import type { Accessor } from 'solid-js';
 import {
   useAgentScreenHarnessId,
   useOpenAgentScreen,
@@ -56,23 +55,5 @@ export function DmScreenButton(props: {
         <DesktopIcon class="pointer-events-none size-3.5 shrink-0 touch:size-6" />
       }
     />
-  );
-}
-
-/**
- * The DM header's Screen on touch: its own header island, shown only in an
- * agent teammate's DM. Both touch headers (the channel detail's and the
- * channel block's) render it.
- */
-export function DmScreenIsland(props: { channelId: string }) {
-  const harnessId = useDmScreenHarnessId(props.channelId);
-  return (
-    <Show when={harnessId()}>
-      {(id) => (
-        <HeaderIsland class="px-1">
-          <DmScreenButton harnessId={id()} />
-        </HeaderIsland>
-      )}
-    </Show>
   );
 }
