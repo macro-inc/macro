@@ -1988,11 +1988,16 @@ export async function main({ macro, knobs }: any) {
     service.shutdown().await;
 }
 
-/// Each built-in the bootstrap's fetch wrapper once read at call time,
-/// rewritten one at a time around a fetch to HOST with METHOD. The program
-/// returns what each fetch met.
+/// Each built-in the bootstrap's fetch wrapper reads or once read at call
+/// time, rewritten one at a time around a fetch to HOST with METHOD. The
+/// program returns what each fetch met. `Function.prototype.call` has its own
+/// test: rewriting it stops Deno delivering the worker's answers.
 const PATCHED_FETCHES: &str = r#"
 const decoy = "http://decoy.invalid/";
+const headersSymbol = Object.getOwnPropertySymbols(Request.prototype).find(symbol => symbol.description === "headers");
+const realHeaders = Object.getOwnPropertyDescriptor(Request.prototype, "headers").get;
+const realHas = Headers.prototype.has;
+const realDelete = Headers.prototype.delete;
 const patches = [
   ["Set.prototype.has", Set.prototype, "has", {value: () => false}],
   ["Headers.prototype.set", Headers.prototype, "set", {value: function () {}}],
@@ -2004,6 +2009,17 @@ const patches = [
   ["Request.prototype.url", Request.prototype, "url", {get: () => decoy}],
   ["Request.prototype.method", Request.prototype, "method", {get: () => "GET"}],
   ["Request.prototype.headers", Request.prototype, "headers", {get: () => new Headers()}],
+  ["Request.prototype.headers, stripping the mark", Request.prototype, "headers", {get() {
+    const headers = realHeaders.call(this);
+    realDelete.call(headers, "x-macro-code-execution");
+    return headers;
+  }}],
+  ["Request.prototype[Symbol(headers)]", Request.prototype, headersSymbol, {get: () => new Headers(), set() {}}],
+  ["Headers.prototype.has", Headers.prototype, "has", {value(name) {
+    realDelete.call(this, "x-macro-code-execution");
+    return realHas.call(this, name);
+  }}],
+  ["Headers.prototype.forEach", Headers.prototype, "forEach", {value() {}}],
   ["URL", globalThis, "URL", {value: class { origin = "http://decoy.invalid"; hostname = "decoy.invalid"; pathname = "/"; }}],
   ["URL.prototype.origin", URL.prototype, "origin", {get: () => "http://decoy.invalid"}],
   ["URL.prototype.hostname", URL.prototype, "hostname", {get: () => "decoy.invalid", set() {}}],
@@ -2013,9 +2029,23 @@ const patches = [
   ["RegExp.prototype.test", RegExp.prototype, "test", {value: () => true}],
   ["RegExp.prototype.exec", RegExp.prototype, "exec", {value: () => []}],
   ["Array.prototype.some", Array.prototype, "some", {value: () => true}],
+  ["Array.prototype[Symbol.iterator]", Array.prototype, Symbol.iterator, {value: function* () {}}],
+  ["Map.prototype.get", Map.prototype, "get", {value: () => undefined}],
+  ["Map.prototype.set", Map.prototype, "set", {value() { return this; }}],
+  ["Object.prototype.cacheMode", Object.prototype, "cacheMode", {get() {
+    // Runs with Deno's inner request as `this`, which a direct fetch sends.
+    if (Array.isArray(this.headerList)) {
+      this.headerList = this.headerList.filter(([name]) => name.toLowerCase() !== "x-macro-code-execution");
+    }
+    return undefined;
+  }, set(value) {
+    Object.defineProperty(this, "cacheMode", {value, writable: true, configurable: true, enumerable: true});
+  }}],
+  ["MessagePort.prototype.postMessage", MessagePort.prototype, "postMessage", {value() {}}],
+  ["EventTarget.prototype.addEventListener", EventTarget.prototype, "addEventListener", {value() {}}],
+  ["AbortSignal.prototype.aborted", AbortSignal.prototype, "aborted", {get: () => true}],
   ["Object.entries", Object, "entries", {value: () => []}],
   ["Promise.reject", Promise, "reject", {value: () => Promise.resolve(new Response("{}"))}],
-  ["Function.prototype.call", Function.prototype, "call", {value: () => true}],
   ["Function.prototype.apply", Function.prototype, "apply", {value: () => true}],
   ["Function.prototype.bind", Function.prototype, "bind", {value: () => () => true}],
 ];
@@ -2032,7 +2062,8 @@ export async function main() {
     } catch (error) {
       result = String(error);
     } finally {
-      Object.defineProperty(target, key, original);
+      if (original) Object.defineProperty(target, key, original);
+      else delete target[key];
     }
     results[name] = result;
   }
@@ -2096,17 +2127,7 @@ async fn rewritten_built_ins_do_not_unmark_requests() {
             panic!("{outcome:?}");
         };
         for (name, result) in value.as_object().unwrap() {
-            if name == "Function.prototype.call" || name == "URL.prototype.port" {
-                // Deno's own fetch may break before it connects; either way the
-                // server assertion below shows nothing unmarked went out.
-                let result = result.as_str().unwrap();
-                assert!(
-                    result == "sent 200" || result.starts_with("TypeError"),
-                    "{result}"
-                );
-            } else {
-                assert_eq!(result, "sent 200", "{name}");
-            }
+            assert_eq!(result, "sent 200", "{name}");
         }
         assert_eq!(
             tokio::time::timeout(Duration::from_secs(5), server)
@@ -2167,6 +2188,247 @@ async fn rewritten_built_ins_do_not_let_a_dry_run_write() {
         );
     }
     assert_eq!(server.await.unwrap(), Vec::<String>::new());
+    service.shutdown().await;
+}
+
+/// Serve every request with `answer` until stopped, and return each request
+/// as it arrived.
+async fn recording_server(
+    answer: fn(&str) -> String,
+) -> (
+    String,
+    tokio::sync::oneshot::Sender<()>,
+    tokio::task::JoinHandle<Vec<String>>,
+) {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let host = format!("http://{}", listener.local_addr().unwrap());
+    let (stop, mut stopped) = tokio::sync::oneshot::channel::<()>();
+    let server = tokio::spawn(async move {
+        let mut sent = Vec::new();
+        loop {
+            let (mut stream, _) = tokio::select! {
+                accepted = listener.accept() => accepted.unwrap(),
+                _ = &mut stopped => break,
+            };
+            let request = read_request(&mut stream).await;
+            stream
+                .write_all(answer(&request).as_bytes())
+                .await
+                .unwrap();
+            sent.push(request);
+        }
+        sent
+    });
+    (host, stop, server)
+}
+
+fn ok_json(_request: &str) -> String {
+    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}".into()
+}
+
+/// The request line's method and whether the request carries the mark.
+fn method_and_mark(request: &str) -> (&str, bool) {
+    (
+        request.split(' ').next().unwrap(),
+        request
+            .to_ascii_lowercase()
+            .contains("x-macro-code-execution: 1\r\n"),
+    )
+}
+
+/// A program rewrites what Deno's own fetch reads from the request it sends:
+/// a field of its inner request that Deno sets or reads, through
+/// `Object.prototype`. Here a GET becomes an unmarked DELETE.
+const INNER_REQUEST_REWRITE: &str = r#"
+export async function main() {
+  let writes = 0;
+  Object.defineProperty(Object.prototype, "cacheMode", {configurable: true, get() { return undefined; }, set(value) {
+    Object.defineProperty(this, "cacheMode", {value, writable: true, configurable: true, enumerable: true});
+    if (++writes === 2) {
+      const list = this.headerList;
+      for (let index = list.length - 1; index >= 0; index--) {
+        if (list[index][0].toLowerCase() === "x-macro-code-execution") list.splice(index, 1);
+      }
+      this.method = "DELETE";
+    }
+  }});
+  try {
+    const response = await fetch("HOST/decisions", {cache: "default", headers: {authorization: "Bearer fixture-run-token"}});
+    return `sent ${response.status}`;
+  } catch (error) {
+    return String(error);
+  } finally {
+    delete Object.prototype.cacheMode;
+  }
+}
+"#;
+
+/// Deno's fetch can't be made to send a request other than the one the
+/// wrapper checked and marked, in a dry run or not.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn rewriting_deno_s_inner_request_neither_unmarks_nor_writes() {
+    for dry_run in [false, true] {
+        let (_root, service) = setup(Limits::default()).await;
+        let (host, stop, server) = recording_server(ok_json).await;
+        let (_, outcome) = run_unattended(
+            &service,
+            &INNER_REQUEST_REWRITE.replace("HOST", &host),
+            unattended(
+                "fixture-run-token",
+                &[("cognition", host.clone())],
+                serde_json::json!({}),
+                dry_run,
+            ),
+        )
+        .await;
+        stop.send(()).unwrap();
+        assert!(
+            matches!(&outcome, Outcome::Succeeded { value } if value == "sent 200"),
+            "{outcome:?}"
+        );
+        let sent = server.await.unwrap();
+        assert_eq!(
+            sent.iter().map(|request| method_and_mark(request)).collect::<Vec<_>>(),
+            vec![("GET", true)],
+            "dry run {dry_run}"
+        );
+        service.shutdown().await;
+    }
+}
+
+/// Rewriting `Function.prototype.call` stops Deno delivering the worker's
+/// answers to the program, so its fetches may never settle; what does go out
+/// is still marked.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn rewriting_call_never_unmarks_a_request() {
+    let (_root, service) = setup(Limits::default()).await;
+    let (host, stop, server) = recording_server(ok_json).await;
+    let source = r#"
+export async function main() {
+  await fetch("HOST/first");
+  const call = Object.getOwnPropertyDescriptor(Function.prototype, "call");
+  Object.defineProperty(Function.prototype, "call", {configurable: true, writable: true, value: () => true});
+  try {
+    return `sent ${(await fetch("HOST/second")).status}`;
+  } catch (error) {
+    return String(error);
+  } finally {
+    Object.defineProperty(Function.prototype, "call", call);
+  }
+}
+"#
+    .replace("HOST", &host);
+    let (_, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source,
+                    timeout_ms: 3_000,
+                },
+                RunEnvironment {
+                    token: "fixture-run-token".into(),
+                    endpoints: SdkEndpoints {
+                        hosts: BTreeMap::from([("cognition".into(), host.clone())]),
+                        ..SdkEndpoints::default()
+                    },
+                    ..RunEnvironment::default()
+                },
+            )
+            .unwrap(),
+    )
+    .await;
+    stop.send(()).unwrap();
+    assert!(
+        matches!(&outcome, Outcome::TimedOut | Outcome::Succeeded { .. }),
+        "{outcome:?}"
+    );
+    let sent = server.await.unwrap();
+    assert!(!sent.is_empty());
+    for request in &sent {
+        assert!(method_and_mark(request).1, "{request}");
+    }
+    service.shutdown().await;
+}
+
+fn fidelity_answer(request: &str) -> String {
+    let path = request.split(' ').nth(1).unwrap();
+    match path {
+        "/moved" => "HTTP/1.1 302 Found\r\nLocation: /final\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".into(),
+        "/empty" => "HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n".into(),
+        _ => {
+            let body = request.split("\r\n\r\n").nth(1).unwrap_or_default();
+            let body = if body.is_empty() { "final" } else { body };
+            format!(
+                "HTTP/1.1 201 Created\r\nX-Answer: one\r\nSet-Cookie: a=1\r\nSet-Cookie: b=2\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            )
+        }
+    }
+}
+
+/// A response the worker fetched reads like Deno's own: status, headers,
+/// body, the URL it ended at and whether it was redirected; a request keeps
+/// its body and length, and an aborted fetch rejects with the signal's reason.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn fetch_through_the_worker_keeps_requests_and_responses_whole() {
+    let (_root, service) = setup(Limits::default()).await;
+    let (host, stop, server) = recording_server(fidelity_answer).await;
+    let source = r#"
+export async function main() {
+  const moved = await fetch("HOST/moved");
+  const posted = await fetch("HOST/echo", {method: "POST", body: JSON.stringify({a: 1})});
+  const empty = await fetch("HOST/empty");
+  const controller = new AbortController();
+  controller.abort(new Error("stopped"));
+  const aborted = await fetch("HOST/never", {signal: controller.signal}).then(() => "sent", error => error.message);
+  return {
+    moved: {status: moved.status, url: moved.url, redirected: moved.redirected, type: moved.type,
+      answer: moved.headers.get("x-answer"), cookies: moved.headers.getSetCookie(), text: await moved.text()},
+    posted: {status: posted.status, redirected: posted.redirected, body: await posted.json()},
+    empty: {status: empty.status, body: empty.body},
+    aborted,
+  };
+}
+"#
+    .replace("HOST", &host);
+    let (_, outcome) = run_unattended(
+        &service,
+        &source,
+        unattended(
+            "fixture-run-token",
+            &[("cognition", host.clone())],
+            serde_json::json!({}),
+            false,
+        ),
+    )
+    .await;
+    stop.send(()).unwrap();
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(
+        value,
+        serde_json::json!({
+            "moved": {
+                "status": 201, "url": format!("{host}/final"), "redirected": true, "type": "basic",
+                "answer": "one", "cookies": ["a=1", "b=2"], "text": "final",
+            },
+            "posted": {"status": 201, "redirected": false, "body": {"a": 1}},
+            "empty": {"status": 204, "body": null},
+            "aborted": "stopped",
+        })
+    );
+    let sent = server.await.unwrap();
+    let posted = sent
+        .iter()
+        .find(|request| request.starts_with("POST /echo "))
+        .unwrap()
+        .to_ascii_lowercase();
+    assert!(posted.contains("content-length: 7\r\n"), "{posted}");
+    assert!(!sent.iter().any(|request| request.contains("/never")));
     service.shutdown().await;
 }
 
