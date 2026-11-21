@@ -2451,8 +2451,7 @@ describe('registration acknowledgement', () => {
       verifyTabLockHeld: async () => true,
       watchTabLock: () => () => undefined,
     });
-  const registered = (port: FakePort) =>
-    messagesOfKind(port, 'registered');
+  const registered = (port: FakePort) => messagesOfKind(port, 'registered');
 
   it("tells a joining tab when another visible tab's engine runs", async () => {
     const router = newRouter();
