@@ -7,7 +7,13 @@ test('long model names wrap inside their own rows in search results', async ({
   await page.getByRole('button', { name: 'Model' }).click();
   await expect(page.getByRole('textbox')).toBeFocused();
   await page.keyboard.type('open');
-  await expect(page.getByText('9 matching models')).toBeVisible();
+  const label = page.getByText('9 matching models');
+  await expect(label).toBeVisible();
+  // The group label keeps its full height (h-7) under the same squeeze.
+  const labelHeight = await label.evaluate(
+    (element) => element.getBoundingClientRect().height
+  );
+  expect(labelHeight).toBeGreaterThanOrEqual(28);
 
   const rows = page.getByRole('menuitem');
   const count = await rows.count();
