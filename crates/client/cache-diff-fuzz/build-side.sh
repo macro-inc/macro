@@ -13,7 +13,8 @@ name=$1
 base=$2
 shift 2
 repo=$(git rev-parse --show-toplevel)
-crate=$repo/crates/client/cache-diff-fuzz
+# FUZZER_SRC builds from a snapshot of the fuzzer, so the working copy can change meanwhile.
+crate=${FUZZER_SRC:-$repo/crates/client/cache-diff-fuzz}
 home=${CACHE_DIFF_FUZZ_HOME:-$HOME/.cache/cache-diff-fuzz}
 tree=$home/sides/$name
 mkdir -p "$home/bin" "$home/sides"
