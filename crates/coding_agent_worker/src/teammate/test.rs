@@ -1193,7 +1193,7 @@ fn free_disk_is_read_from_posix_df() {
 /// throwaway busybox image standing in for the teammate image. Run with
 /// `cargo test -p coding_agent_worker teammate -- --ignored`.
 #[tokio::test]
-#[ignore = "needs a container engine and the busybox image"]
+#[ignore = "needs a container engine and the teammate image (teammate-runtime:latest)"]
 async fn the_real_engine_runs_the_container_confined_and_deletes_it_on_stop() {
     use super::cli::CliEngine;
 
@@ -1280,7 +1280,9 @@ async fn the_real_engine_runs_the_container_confined_and_deletes_it_on_stop() {
                 .is_some_and(|option| option.starts_with("seccomp=")))
     );
     assert_eq!(inspected["Config"]["User"], "1000:1000");
-    assert_eq!(host_config["NetworkMode"], name.as_str());
+    // Only the holder's network namespace, joined by its id.
+    let holder_id = inspect(program, "container", &format!("{name}-net"), "{{.Id}}");
+    assert_eq!(host_config["NetworkMode"], format!("container:{holder_id}"));
     assert_eq!(host_config["ShmSize"], 1024_i64 * 1024 * 1024);
     assert_eq!(
         inspected["Config"]["Labels"]["macro.teammate.delivery"],
@@ -1731,7 +1733,12 @@ const RUNS_UNTIL_STOPPED: &str = r#"["sh", "-c", "trap 'exit 0' TERM; sleep 1000
 /// An agent stand-in that crashes at once.
 const CRASHES: &str = r#"["sh", "-c", "exit 1"]"#;
 
-/// Build a throwaway image from busybox with `command`; its id. Each test
+/// The teammate image the real-engine tests build on: it has the guard's
+/// nftables and `sh` (`nix run .#teammate-runtime-image` loads it).
+const TEAMMATE_IMAGE: &str = "teammate-runtime:latest";
+
+/// Build a throwaway image from the teammate image with `command` as its
+/// entrypoint; its id. Each test
 /// uses its own `role`: the tests run at once, and each removes its tags.
 fn test_image(program: &str, role: &str, command: &str) -> String {
     use std::io::Write as _;
@@ -1745,7 +1752,7 @@ fn test_image(program: &str, role: &str, command: &str) -> String {
         .unwrap();
     write!(
         build.stdin.take().unwrap(),
-        "FROM busybox:latest\nCMD {command}\n"
+        "FROM {TEAMMATE_IMAGE}\nENTRYPOINT {command}\n"
     )
     .unwrap();
     let output = build.wait_with_output().unwrap();
@@ -1765,7 +1772,7 @@ fn inspect(program: &str, object: &str, name: &str, format: &str) -> String {
 /// one that can't be fetched both go back to the settled image, on the same
 /// volume. Takes over two minutes (the 120 s trial).
 #[tokio::test]
-#[ignore = "needs a container engine and the busybox image; takes over two minutes"]
+#[ignore = "needs a container engine and the teammate image (teammate-runtime:latest); takes over two minutes"]
 async fn the_real_engine_swaps_images_rolls_back_and_keeps_the_volume() {
     use super::cli::CliEngine;
 
@@ -2683,4 +2690,141 @@ fn the_list_header_names_every_engine_and_the_one_that_runs_teammates() {
         super::command::engines_line(&report),
         "engines: docker 29.5.1: isolation unavailable (guardRefused) · podman 5.2.0 rootless: isolation ok (runs teammates)"
     );
+}
+
+/// The egress policy against a real engine: from inside a running teammate,
+/// as uid 1000, the public internet answers and every private, metadata and
+/// host destination is dropped, and the agent can't change the rules.
+#[tokio::test]
+#[ignore = "needs a container engine, the teammate image (teammate-runtime:latest) and the internet"]
+async fn the_real_engine_enforces_the_egress_policy() {
+    use super::cli::CliEngine;
+
+    let engine = CliEngine::new();
+    let info = engine.info().await.expect("a container engine answers");
+    let program = if info.kind == ContainerEngineKind::Docker {
+        "docker"
+    } else {
+        "podman"
+    };
+    let up_id = test_image(program, "egress-up", RUNS_UNTIL_STOPPED);
+
+    let directory = tempfile::tempdir().unwrap();
+    let store = Store::new(directory.path().join("teammates/harness-test"));
+    let install_id = TeammateInstallId::new(format!("egress-{}", std::process::id())).unwrap();
+    let install = TeammateInstall {
+        install_id: install_id.clone(),
+        generation: 1,
+        delivery: 1,
+    };
+    let seccomp = super::store::write_file(
+        directory.path(),
+        "teammate-seccomp.json",
+        super::SECCOMP_PROFILE.as_bytes(),
+    )
+    .unwrap();
+    // A listener on the host the teammate must not reach.
+    let listener = std::net::TcpListener::bind("0.0.0.0:0").unwrap();
+    let host_port = listener.local_addr().unwrap().port();
+    let teammates = Teammates::new(
+        engine,
+        store,
+        Platform::current(),
+        seccomp,
+        Egress::default(),
+    );
+    let mut statuses = teammates.subscribe();
+    teammates.detect().await;
+    teammates.handle(TeammateRequest::Run {
+        install: install.clone(),
+        image: TeammateImage {
+            repository: "localhost:1/macro-teammate-test".to_owned(),
+            image_id: up_id,
+        },
+        environment: environment(),
+        traceparent: None,
+    });
+    assert_eq!(
+        next_states(&mut statuses, 3).await,
+        [
+            TeammateRunState::Downloading,
+            TeammateRunState::Starting,
+            TeammateRunState::Running
+        ]
+    );
+
+    let name = format!("macro-teammate-{}", install_id.as_str());
+    let in_teammate = |script: &str| {
+        std::process::Command::new(program)
+            .args(["exec", &name, "bash", "-c", script])
+            .output()
+            .unwrap()
+    };
+    let connects = |address: &str, port: u16| {
+        in_teammate(&format!(
+            "timeout 4 bash -c 'echo > /dev/tcp/{address}/{port}'"
+        ))
+        .status
+        .success()
+    };
+    assert_eq!(
+        String::from_utf8_lossy(&in_teammate("id -u").stdout).trim(),
+        "1000"
+    );
+    assert!(connects("1.1.1.1", 443), "the public internet is reachable");
+    assert!(
+        in_teammate("timeout 8 curl -sS -o /dev/null https://example.com")
+            .status
+            .success(),
+        "a name resolves and its public address answers"
+    );
+    let gateway = inspect(
+        program,
+        "network",
+        &name,
+        "{{range .IPAM.Config}}{{.Gateway}}{{end}}",
+    );
+    let host_addresses = super::netfacts::host_prefixes(&String::from_utf8_lossy(
+        &std::process::Command::new("ip")
+            .args(["-j", "address", "show"])
+            .output()
+            .unwrap()
+            .stdout,
+    ))
+    .unwrap();
+    let host_address = host_addresses
+        .iter()
+        .find(|net| net.prefix_len() == 32 && !net.addr().is_loopback())
+        .map(|net| net.addr().to_string())
+        .expect("the host has an IPv4 address");
+    for (address, port) in [
+        ("169.254.169.254", 80),
+        (gateway.as_str(), host_port),
+        (host_address.as_str(), host_port),
+        ("10.0.0.1", 80),
+        ("192.168.0.1", 80),
+        ("100.100.100.100", 80),
+    ] {
+        assert!(!connects(address, port), "{address}:{port} was reachable");
+    }
+    // The agent can't undo it.
+    assert!(!in_teammate("nft flush ruleset").status.success());
+    assert!(!in_teammate("nft add table inet escape").status.success());
+
+    teammates.handle(TeammateRequest::Stop {
+        install,
+        traceparent: None,
+    });
+    while statuses.recv().await.unwrap().state != TeammateRunState::Stopped {}
+    assert!(
+        inspect(program, "container", &format!("{name}-net"), "{{.Id}}").is_empty(),
+        "the holder is left"
+    );
+    let _ = std::process::Command::new(program)
+        .args([
+            "rmi",
+            &format!("macro-teammate-test-egress-up:{}", std::process::id()),
+        ])
+        .output();
+    drop(listener);
 }

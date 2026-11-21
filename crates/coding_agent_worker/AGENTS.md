@@ -270,11 +270,12 @@ external chat replies depend on it. Direct session controls still mint IDs.
 - Windows is built natively on a Namespace Windows runner by
   `build_agent_daemon_on_tag` (MSVC, static CRT). Run that workflow with
   `workflow_dispatch` on your branch to check a Windows-affecting change.
-- Teammate containers against the real engine (needs Docker or Podman and
-  `busybox:latest` loaded): `cargo test -p coding_agent_worker teammate --
-  --ignored`; it builds throwaway images from busybox, creates and deletes
-  its own containers, networks and volumes, and takes over two minutes (the
-  image trial).
+- Teammate containers against the real engine (needs Docker or Podman, the
+  teammate image loaded as `teammate-runtime:latest`, and the internet):
+  `cargo test -p coding_agent_worker --bins the_real_engine -- --ignored
+  --test-threads=1`; they build throwaway images from the teammate image,
+  create and delete their own containers, holders, networks and volumes, check
+  the egress policy from inside a teammate, and take about three minutes.
 - `cargo tree -p coding_agent_worker -i rdkafka-sys --target x86_64-unknown-linux-musl`
   must find nothing: librdkafka breaks the static and Windows builds.
 
