@@ -1,4 +1,5 @@
 import { AddCustomMcpDialog } from '@app/features/settings/connections/add-custom-mcp-dialog';
+import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
 import {
@@ -56,20 +57,20 @@ export function ConnectCardView(props: {
             when={!props.connected}
             fallback={
               <Badge variant="success" size="xs">
-                Connected
+                {t('connectCards.connected')}
               </Badge>
             }
           >
             <Button
               size="sm"
               variant="primary"
-              aria-label={`Connect ${props.name}`}
+              aria-label={t('connectCards.connectName', { name: props.name })}
               loading={props.busy ?? false}
               disabled={props.disabled}
               title={props.disabled ? props.disabledReason : undefined}
               onClick={props.onConnect}
             >
-              Connect
+              {t('connectCards.connect')}
             </Button>
           </Show>
         }
@@ -111,9 +112,7 @@ function useConnectAccess() {
     session,
     disabled: () => session?.disabled() ?? outsideAndBlocked(),
     reason: () =>
-      outsideAndBlocked()
-        ? "Only the session's owner can connect this"
-        : undefined,
+      outsideAndBlocked() ? t('connectCards.ownerOnly') : undefined,
   };
 }
 
@@ -135,7 +134,7 @@ function ConnectAppCard(props: { name: string; appSlug: string }) {
     );
     setBusy(false);
     if (outcome.isErr()) {
-      toast.alert(`Could not connect ${props.name}. Please try again.`);
+      toast.alert(t('connectCards.connectFailed', { name: props.name }));
       return;
     }
     announce(props.name, outcome.value);
@@ -144,7 +143,7 @@ function ConnectAppCard(props: { name: string; appSlug: string }) {
   return (
     <ConnectCardView
       name={props.name}
-      kind="App"
+      kind={t('connectCards.app')}
       icon={<PipedreamConnectorIcon appSlug={props.appSlug} class="size-5" />}
       connected={connections.ready() && connections.slugs().has(props.appSlug)}
       busy={busy()}
@@ -189,8 +188,8 @@ function ConnectServerCard(props: { name: string; url: string }) {
       // Macro refused its page, or it needs none and works without one.
       toast.alert(
         outcome.error.kind === 'unsafe'
-          ? "This server's sign-in page isn't secure (not https), so Macro won't open it"
-          : `Could not start a sign-in for ${props.name}. If it needs none, reply to continue.`
+          ? t('connectCards.signInPageInsecure')
+          : t('connectCards.signInMayNeedNone', { name: props.name })
       );
       return;
     }
@@ -202,9 +201,7 @@ function ConnectServerCard(props: { name: string; url: string }) {
   // in to it until the user has seen where it points.
   function onConnect() {
     if (!server.ready()) {
-      toast.alert(
-        `Could not start a sign-in for ${props.name}. Please try again.`
-      );
+      toast.alert(t('connectCards.signInTryAgain', { name: props.name }));
     } else if (!server.listed()) {
       setAdding(true);
     } else {
@@ -216,14 +213,16 @@ function ConnectServerCard(props: { name: string; url: string }) {
     <>
       <ConnectCardView
         name={props.name}
-        kind={`MCP server · ${serverHost(props.url) ?? 'invalid address'}`}
+        kind={t('connectCards.mcpServer', {
+          host: serverHost(props.url) ?? t('connectCards.invalidAddress'),
+        })}
         icon={<Plug class="size-[18px]" />}
         connected={server.ready() && server.connected()}
         busy={busy()}
         disabled={disabled() || serverHost(props.url) === undefined}
         disabledReason={
           serverHost(props.url) === undefined
-            ? "This server's address isn't valid"
+            ? t('connectCards.addressInvalid')
             : reason()
         }
         onConnect={onConnect}
@@ -231,7 +230,11 @@ function ConnectServerCard(props: { name: string; url: string }) {
       <AddCustomMcpDialog
         open={adding()}
         onOpenChange={setAdding}
-        title={(url) => `Add ${serverHost(url) ?? 'invalid address'}?`}
+        title={(url) =>
+          t('connectCards.addHost', {
+            host: serverHost(url) ?? t('connectCards.invalidAddress'),
+          })
+        }
         initialName={props.name}
         initialUrl={props.url}
       />
@@ -241,9 +244,9 @@ function ConnectServerCard(props: { name: string; url: string }) {
 
 function announce(name: string, outcome: PipedreamConnectOutcome) {
   if (outcome === 'connected') {
-    toast.success(`${name} connected. Reply when you are ready to continue.`);
+    toast.success(t('connectCards.connectedReply', { name }));
   }
   if (outcome === 'unsupported') {
-    toast.alert('Connectors are not available on this deployment');
+    toast.alert(t('connectCards.unsupported'));
   }
 }

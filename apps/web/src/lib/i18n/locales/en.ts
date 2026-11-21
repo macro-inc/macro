@@ -14,6 +14,7 @@ import commandMenu from './en/command-menu';
 import commands from './en/commands';
 import common from './en/common';
 import computers from './en/computers';
+import connectCards from './en/connect-cards';
 import create from './en/create';
 import crm from './en/crm';
 import databaseAnswers from './en/database-answers';
@@ -66,6 +67,7 @@ export default {
   commands,
   common,
   computers,
+  connectCards,
   create,
   crm,
   databaseAnswers,
