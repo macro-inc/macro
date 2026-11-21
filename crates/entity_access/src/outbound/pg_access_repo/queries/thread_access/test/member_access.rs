@@ -60,16 +60,10 @@ async fn member_crm_revocation_removes_only_the_requesters_crm_grant(pool: PgPoo
     .execute(&pool)
     .await
     .unwrap();
-    let owner = user(OWNER);
     assert_eq!(
-        get_thread_access(
-            &pool,
-            &thread,
-            &SourceIds(vec![OWNER.to_string()]),
-            Some(&*owner)
-        )
-        .await
-        .unwrap(),
+        get_thread_access(&pool, &thread, Viewer::User(OWNER))
+            .await
+            .unwrap(),
         Some(AccessLevel::Owner)
     );
 }

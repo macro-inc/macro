@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            share_permission.\"linkShareAccessLevel\" AS \"access_level!: AccessLevel\",\n            owner_team.team_id AS \"owner_team_id!\"\n        FROM \"SharePermission\" share_permission\n        JOIN (\n            SELECT share_permission_id, user_id AS created_by FROM call_entities WHERE id = $1\n        ) call_item ON call_item.share_permission_id = share_permission.id\n        JOIN team_user owner_team\n          ON owner_team.user_id = call_item.created_by\n         AND EXISTS (SELECT FROM entity_access_source_matches(owner_team.team_id::text, $2, NULL))\n        WHERE share_permission.\"linkShare\" = 'TEAM'\n          AND share_permission.\"linkShareAccessLevel\" IS NOT NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "access_level!: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "owner_team_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "6c77cc7739b67a0997d43a5f6a3070d1d01bc79ed1ae970a1a0181cf8a299cf6"
+}

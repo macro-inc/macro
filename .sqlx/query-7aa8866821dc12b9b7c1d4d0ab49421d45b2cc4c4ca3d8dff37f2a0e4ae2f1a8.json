@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT p.id, ea.access_level AS \"access_level!: AccessLevel\"\n           FROM crm_pipeline_entities p JOIN entity_access ea ON ea.entity_id = p.id AND ea.entity_type = 'crm_pipeline'\n           WHERE ea.source_id = ANY(ARRAY(\n               SELECT s.source FROM entity_access_viewer_sources($1, NULL) s(source)\n               WHERE NOT EXISTS (\n                   SELECT FROM team_user crm_denied\n                   WHERE crm_denied.user_id = $1 AND crm_denied.team_id::text = s.source\n                     AND (crm_denied.crm_access OR crm_denied.team_role <> 'member') IS NOT TRUE)))",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "access_level!: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "7aa8866821dc12b9b7c1d4d0ab49421d45b2cc4c4ca3d8dff37f2a0e4ae2f1a8"
+}

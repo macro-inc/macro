@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT access_level FROM (\n            -- Source 1: entity_access source_id match\n            SELECT\n                access_level::text FROM entity_access\n            WHERE entity_id = $1\n            AND entity_type = 'call'\n            AND EXISTS (SELECT FROM entity_access_source_matches(source_id, $2, $3))\n\n            UNION ALL\n            -- Source 2: call link share permission\n            SELECT\n                share_permission.\"linkShareAccessLevel\"::text AS access_level\n            FROM \"SharePermission\" share_permission\n            JOIN (\n                SELECT share_permission_id, user_id AS created_by FROM call_entities WHERE id = $1\n            ) call_item ON call_item.share_permission_id = share_permission.id\n            WHERE share_permission.\"linkShareAccessLevel\" IS NOT NULL\n              AND (\n                  share_permission.\"linkShare\" = 'PUBLIC'\n                  OR (\n                      share_permission.\"linkShare\" = 'TEAM'\n                      AND EXISTS (\n                          SELECT 1\n                          FROM team_user owner_team\n                          WHERE owner_team.user_id = call_item.created_by\n                            AND EXISTS (SELECT FROM entity_access_source_matches(owner_team.team_id::text, $2, $3))\n                      )\n                  )\n              )\n        ) AS combined_access\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "access_level",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "79d9d27ab5b2d6b85761413f0d948748c5ffdeaa62c9b5a8f12a2c23feefb70e"
+}

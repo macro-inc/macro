@@ -13,16 +13,10 @@ async fn private_thread_revokes_crm_grant_without_revoking_mailbox_ownership(poo
         team, OWNER, thread
     ).execute(&pool).await.unwrap();
     assert_eq!(access_as_requester(&pool, &thread).await, None);
-    let owner = user(OWNER);
     assert_eq!(
-        get_thread_access(
-            &pool,
-            &thread,
-            &SourceIds(vec![OWNER.to_string()]),
-            Some(&*owner)
-        )
-        .await
-        .unwrap(),
+        get_thread_access(&pool, &thread, Viewer::User(OWNER))
+            .await
+            .unwrap(),
         Some(AccessLevel::Owner)
     );
     sqlx::query!("DELETE FROM crm_email_thread_exclusions WHERE team_id = $1 AND user_id = $2 AND thread_id = $3", team, OWNER, thread).execute(&pool).await.unwrap();

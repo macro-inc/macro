@@ -1,21 +1,36 @@
-//! Pipeline grants, resolved through the caller's current sharing sources.
+//! Pipeline grants, matched against the caller's current memberships.
+//!
+//! A team grant counts only while the caller may use CRM in that team
+//! (`team_user.crm_access`, or a role above member). Direct and channel grants
+//! don't depend on it. Each statement checks a grant's source with
+//! `entity_access_source_matches` and then rules out a team the caller may not
+//! use CRM in, which is one `team_user` probe by the caller's id.
 
-use super::SourceIds;
+#[cfg(test)]
+mod test;
+
+use super::Viewer;
 use crate::domain::models::AccessLevel;
+use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use sqlx::PgPool;
 use std::collections::{BTreeMap, HashMap};
 use uuid::Uuid;
 
 /// Highest grant on each pipeline, including trashed pipelines for restoration.
-pub async fn list_pipeline_access(
+pub(crate) async fn list_pipeline_access(
     pool: &PgPool,
-    sources: &SourceIds,
+    user_id: &MacroUserId<Lowercase<'_>>,
 ) -> Result<Vec<(Uuid, AccessLevel)>, sqlx::Error> {
     let rows = sqlx::query!(
         r#"SELECT p.id, ea.access_level AS "access_level!: AccessLevel"
            FROM crm_pipeline_entities p JOIN entity_access ea ON ea.entity_id = p.id AND ea.entity_type = 'crm_pipeline'
-           WHERE ea.source_id = ANY($1)"#,
-        &sources.0,
+           WHERE ea.source_id = ANY(ARRAY(
+               SELECT s.source FROM entity_access_viewer_sources($1, NULL) s(source)
+               WHERE NOT EXISTS (
+                   SELECT FROM team_user crm_denied
+                   WHERE crm_denied.user_id = $1 AND crm_denied.team_id::text = s.source
+                     AND (crm_denied.crm_access OR crm_denied.team_role <> 'member') IS NOT TRUE)))"#,
+        user_id.as_ref(),
     ).fetch_all(pool).await?;
     let mut grants = BTreeMap::<Uuid, AccessLevel>::new();
     for row in rows {
@@ -28,10 +43,10 @@ pub async fn list_pipeline_access(
 }
 
 /// Resolve one pipeline without enumerating the caller's other pipelines.
-pub async fn get_pipeline_access(
+pub(crate) async fn get_pipeline_access(
     pool: &PgPool,
     id: Uuid,
-    sources: &SourceIds,
+    viewer: Viewer<'_>,
 ) -> Result<Option<AccessLevel>, sqlx::Error> {
     let mut tx = Box::pin(pool.begin()).await?;
     sqlx::query!("SET LOCAL statement_timeout = '15s'")
@@ -39,9 +54,15 @@ pub async fn get_pipeline_access(
         .await?;
     let levels = sqlx::query_scalar!(
         "SELECT ea.access_level::text FROM entity_access ea
-         WHERE ea.entity_id = $1 AND ea.entity_type = 'crm_pipeline' AND ea.source_id = ANY($2)",
+         WHERE ea.entity_id = $1 AND ea.entity_type = 'crm_pipeline'
+           AND EXISTS (SELECT FROM entity_access_source_matches(ea.source_id, $2, $3))
+           AND NOT EXISTS (
+               SELECT FROM team_user crm_denied
+               WHERE crm_denied.user_id = $2 AND crm_denied.team_id::text = ea.source_id
+                 AND (crm_denied.crm_access OR crm_denied.team_role <> 'member') IS NOT TRUE)",
         id,
-        &sources.0,
+        viewer.id(),
+        viewer.scope_team(),
     )
     .fetch_all(&mut *tx)
     .await?;
@@ -49,51 +70,15 @@ pub async fn get_pipeline_access(
     super::database_access::highest_access_level(&levels)
 }
 
-/// Fresh sharing sources for a CRM pipeline read. Team grants follow current
-/// CRM authority; direct and channel grants remain independent of that setting.
-#[tracing::instrument(skip_all, err)]
-pub async fn user_sources(pool: &PgPool, viewer: Option<&str>) -> Result<SourceIds, sqlx::Error> {
-    let Some(viewer) = viewer else {
-        return Ok(SourceIds(Vec::new()));
-    };
-    let mut tx = Box::pin(pool.begin()).await?;
-    sqlx::query!("SET LOCAL statement_timeout = '15s'")
-        .execute(&mut *tx)
-        .await?;
-    // Parameterize the channel lookup through one viewer so stale statistics
-    // cannot turn a frequently seen user's request into a membership-table scan.
-    let sources = sqlx::query_scalar!(
-        r#"SELECT cp.channel_id::text AS "source_id!"
-           FROM (SELECT $1::text AS user_id OFFSET 0) viewer
-           CROSS JOIN LATERAL (
-               SELECT cp.channel_id
-               FROM comms_channel_participants cp
-               WHERE cp.user_id = viewer.user_id AND cp.left_at IS NULL
-               OFFSET 0
-           ) cp
-           UNION ALL
-           SELECT tu.team_id::text FROM team_user tu
-           WHERE tu.user_id = $1 AND (tu.crm_access OR tu.team_role <> 'member')
-           UNION ALL
-           SELECT $1"#,
-        viewer,
-    )
-    .fetch_all(&mut *tx)
-    .await?;
-    tx.commit().await?;
-    Ok(SourceIds(sources))
-}
-
 /// Highest grant on each of `ids`, reading only those pipelines' grants.
 /// Pipelines without a grant are left out.
-pub async fn get_pipelines_access(
+pub(crate) async fn get_pipelines_access(
     pool: &PgPool,
     ids: &[Uuid],
-    sources: &SourceIds,
+    viewer: Viewer<'_>,
 ) -> Result<HashMap<Uuid, AccessLevel>, sqlx::Error> {
-    // Probes each pipeline's few grants, fenced so a generic plan doesn't
-    // start from the caller's sources instead: a member of many channels has
-    // hundreds of them.
+    // Probes each pipeline's few grants by entity, then each grant's source
+    // against the caller's memberships, as `get_pipeline_access` does.
     let rows = sqlx::query!(
         r#"SELECT grant_row.entity_id AS "entity_id!",
                   grant_row.access_level AS "access_level!: AccessLevel"
@@ -104,9 +89,14 @@ pub async fn get_pipelines_access(
                WHERE ea.entity_id = pipeline.id AND ea.entity_type = 'crm_pipeline'
                OFFSET 0
            ) AS grant_row
-           WHERE grant_row.source_id = ANY($2)"#,
+           WHERE EXISTS (SELECT FROM entity_access_source_matches(grant_row.source_id, $2, $3))
+             AND NOT EXISTS (
+                 SELECT FROM team_user crm_denied
+                 WHERE crm_denied.user_id = $2 AND crm_denied.team_id::text = grant_row.source_id
+                   AND (crm_denied.crm_access OR crm_denied.team_role <> 'member') IS NOT TRUE)"#,
         ids,
-        &sources.0,
+        viewer.id(),
+        viewer.scope_team(),
     )
     .fetch_all(pool)
     .await?;

@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH requested AS MATERIALIZED (\n            SELECT DISTINCT p.project_id\n            FROM unnest($3::text[]) AS p(project_id)\n        ),\n        granted AS MATERIALIZED (\n            SELECT r.project_id\n            FROM requested r\n            WHERE EXISTS (\n                SELECT 1\n                FROM entity_access ea\n                WHERE ea.entity_id::text = r.project_id\n                  AND ea.entity_type = 'project'\n                  AND EXISTS (SELECT FROM entity_access_source_matches(ea.source_id, $1, NULL))\n                OFFSET 0\n            )\n        )\n        SELECT f.id AS \"thread_id!\", f.link_id AS \"link_id!\"\n        FROM requested r\n        CROSS JOIN LATERAL (\n            SELECT t.id, t.link_id\n            FROM email_threads t\n            WHERE t.project_id = r.project_id\n              AND (cardinality($7::uuid[]) = 0 OR t.id = ANY($7))\n              AND CASE\n                  WHEN t.link_id = ANY($2) THEN $4\n                  WHEN r.project_id IN (SELECT g.project_id FROM granted g) THEN TRUE\n                  ELSE $5 AND EXISTS (\n                      SELECT 1\n                      FROM entity_access ea\n                      WHERE ea.entity_id = t.id\n                        AND ea.entity_type = 'email_thread'\n                        AND ea.source_id = ANY(ARRAY(\n                            SELECT s.source_id\n                            FROM entity_access_viewer_sources($1, NULL) AS s(source_id)\n                        ))\n                  )\n              END\n            LIMIT $6\n        ) f\n        LIMIT $6\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "link_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray",
+        "TextArray",
+        "Bool",
+        "Bool",
+        "Int8",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "6405166ac51623ca3ee3897a7f75bbe91e6dde5772ecd4ceca97124a7ecfaed3"
+}

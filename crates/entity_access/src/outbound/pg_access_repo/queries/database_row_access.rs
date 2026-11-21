@@ -2,7 +2,9 @@
 
 #[cfg(feature = "explain_binary")]
 use crate::domain::models::AccessGrant;
-use crate::{domain::models::AccessLevel, outbound::pg_access_repo::queries::SourceIds};
+use crate::{domain::models::AccessLevel, outbound::pg_access_repo::queries::Viewer};
+#[cfg(feature = "explain_binary")]
+use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use sqlx::PgPool;
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -10,17 +12,17 @@ use uuid::Uuid;
 #[cfg(test)]
 mod test;
 
-/// The highest access level `source_ids` hold on a database row: a row has
+/// The highest access level a viewer holds on a database row: a row has
 /// no grants of its own, so this is its database's access, including Edit
 /// through a live form over that database and View through a live form that
 /// shares its responses.
-#[tracing::instrument(err, skip(pool, source_ids))]
-pub async fn get_database_row_access(
+#[tracing::instrument(err, skip(pool, viewer))]
+pub(crate) async fn get_database_row_access(
     pool: &PgPool,
     row_id: &Uuid,
-    source_ids: &SourceIds,
+    viewer: Viewer<'_>,
 ) -> Result<Option<AccessLevel>, sqlx::Error> {
-    if source_ids.0.is_empty() {
+    if viewer.is_anonymous() {
         return Ok(None);
     }
 
@@ -33,7 +35,7 @@ pub async fn get_database_row_access(
         JOIN entity_access ea ON ea.entity_id = d.database_id
         WHERE r.id = $1
         AND ea.entity_type = 'database'
-        AND ea.source_id = ANY($2)
+        AND EXISTS (SELECT FROM entity_access_source_matches(ea.source_id, $2, $3))
 
         UNION ALL
 
@@ -45,7 +47,7 @@ pub async fn get_database_row_access(
         JOIN entity_access ea ON ea.entity_id = f.id AND ea.entity_type = 'form'
         WHERE r.id = $1
         AND f.trashed_at IS NULL
-        AND ea.source_id = ANY($2)
+        AND EXISTS (SELECT FROM entity_access_source_matches(ea.source_id, $2, $3))
         AND ea.access_level IN ('edit', 'owner')
 
         UNION ALL
@@ -59,11 +61,12 @@ pub async fn get_database_row_access(
         WHERE r.id = $1
         AND f.trashed_at IS NULL
         AND f.responses_visible
-        AND ea.source_id = ANY($2)
+        AND EXISTS (SELECT FROM entity_access_source_matches(ea.source_id, $2, $3))
         AND ea.access_level = 'view'
         "#,
         row_id,
-        &source_ids.0,
+        viewer.id(),
+        viewer.scope_team(),
     )
     .fetch_all(pool)
     .await?;
@@ -75,13 +78,13 @@ pub async fn get_database_row_access(
 /// sources, including Edit through a live form over the row's database and
 /// View through a live form that shares its responses.
 #[tracing::instrument(err, skip_all, fields(row_count = row_ids.len()))]
-pub async fn get_database_rows_access(
+pub(crate) async fn get_database_rows_access(
     pool: &PgPool,
     row_ids: &[Uuid],
-    source_ids: &SourceIds,
+    viewer: Viewer<'_>,
 ) -> Result<HashMap<Uuid, AccessLevel>, sqlx::Error> {
     let mut highest: HashMap<Uuid, AccessLevel> = HashMap::new();
-    if row_ids.is_empty() || source_ids.0.is_empty() {
+    if row_ids.is_empty() || viewer.is_anonymous() {
         return Ok(highest);
     }
     let rows = sqlx::query!(
@@ -93,7 +96,7 @@ pub async fn get_database_rows_access(
         JOIN entity_access ea ON ea.entity_id = d.database_id
         WHERE r.id = ANY($1)
         AND ea.entity_type = 'database'
-        AND ea.source_id = ANY($2)
+        AND EXISTS (SELECT FROM entity_access_source_matches(ea.source_id, $2, $3))
 
         UNION ALL
 
@@ -105,7 +108,7 @@ pub async fn get_database_rows_access(
         JOIN entity_access ea ON ea.entity_id = f.id AND ea.entity_type = 'form'
         WHERE r.id = ANY($1)
         AND f.trashed_at IS NULL
-        AND ea.source_id = ANY($2)
+        AND EXISTS (SELECT FROM entity_access_source_matches(ea.source_id, $2, $3))
         AND ea.access_level IN ('edit', 'owner')
 
         UNION ALL
@@ -119,11 +122,12 @@ pub async fn get_database_rows_access(
         WHERE r.id = ANY($1)
         AND f.trashed_at IS NULL
         AND f.responses_visible
-        AND ea.source_id = ANY($2)
+        AND EXISTS (SELECT FROM entity_access_source_matches(ea.source_id, $2, $3))
         AND ea.access_level = 'view'
         "#,
         row_ids,
-        &source_ids.0,
+        viewer.id(),
+        viewer.scope_team(),
     )
     .fetch_all(pool)
     .await?;
@@ -158,14 +162,14 @@ pub async fn get_database_row_database(
 
 /// List the grants behind a database row's access: those of its database.
 #[cfg(feature = "explain_binary")]
-#[tracing::instrument(err, skip(pool, source_ids))]
+#[tracing::instrument(err, skip(pool, user_id))]
 pub async fn explain_database_row_access(
     pool: &PgPool,
     row_id: &Uuid,
-    source_ids: &SourceIds,
+    user_id: &MacroUserId<Lowercase<'_>>,
 ) -> Result<Vec<AccessGrant>, sqlx::Error> {
     let Some(database_id) = get_database_row_database(pool, row_id).await? else {
         return Ok(vec![]);
     };
-    super::database_access::explain_database_access(pool, &database_id, source_ids).await
+    super::database_access::explain_database_access(pool, &database_id, user_id).await
 }

@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT access_level::text\n        FROM entity_access\n        WHERE entity_id = $1\n        AND entity_type = 'form'\n        AND EXISTS (SELECT FROM entity_access_source_matches(source_id, $2, $3))\n\n        UNION ALL\n\n        SELECT 'view'\n        FROM forms\n        WHERE id = $1\n        AND audience = 'public'\n        AND trashed_at IS NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "access_level",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "6564b3d3fd024cdc4c16e1144d1e586ad80159e130924eabd7ed9a5afaad452e"
+}

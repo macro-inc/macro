@@ -1,6 +1,6 @@
 //! Email threads shared with a caller through `entity_access` grants.
 
-use crate::outbound::pg_access_repo::queries::SourceIds;
+use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -16,32 +16,31 @@ pub struct SharedEmailThread {
     pub link_id: Uuid,
 }
 
-/// Email threads granted to any of the caller's sources (their user id, the
-/// channels they are in, their teams), as the Email list's Shared view reads
-/// them, leaving out threads in `own_link_ids`: those the caller reads through
-/// their own or a delegated inbox. Non-empty `requested_ids` narrow the result
-/// to those threads. At most `limit` threads come back.
+/// Email threads granted to the caller, a channel they are in or one of their
+/// teams, as the Email list's Shared view reads them, leaving out threads in
+/// `own_link_ids`: those the caller reads through their own or a delegated
+/// inbox. Non-empty `requested_ids` narrow the result to those threads. At
+/// most `limit` threads come back.
 ///
-/// The grants are read one source at a time and each thread is then found by
-/// id: with stale statistics the planner otherwise scans every grant, or every
-/// thread, and joins the rest.
+/// The grants are read one of the caller's sources at a time and each thread
+/// is then found by id: with stale statistics the planner otherwise scans
+/// every grant, or every thread, and joins the rest.
 #[tracing::instrument(
     err,
-    skip(pool, source_ids, own_link_ids, requested_ids),
+    skip(pool, user_id, own_link_ids, requested_ids),
     fields(
-        source_id_count = source_ids.0.len(),
         requested_count = requested_ids.len(),
         shared_count = tracing::field::Empty,
     )
 )]
 pub async fn shared_email_threads(
     pool: &PgPool,
-    source_ids: &SourceIds,
+    user_id: &MacroUserId<Lowercase<'_>>,
     own_link_ids: &[Uuid],
     requested_ids: &[Uuid],
     limit: i64,
 ) -> Result<Vec<SharedEmailThread>, sqlx::Error> {
-    if source_ids.0.is_empty() || limit <= 0 {
+    if limit <= 0 {
         return Ok(Vec::new());
     }
     let mut tx = Box::pin(pool.begin()).await?;
@@ -53,7 +52,7 @@ pub async fn shared_email_threads(
         r#"
         WITH granted AS MATERIALIZED (
             SELECT DISTINCT ea.entity_id
-            FROM unnest($1::text[]) AS sources(source_id)
+            FROM entity_access_viewer_sources($1, NULL) AS sources(source_id)
             CROSS JOIN LATERAL (
                 SELECT ea.entity_id
                 FROM entity_access ea
@@ -74,7 +73,7 @@ pub async fn shared_email_threads(
         WHERE t.link_id <> ALL($2)
         LIMIT $4
         "#,
-        &source_ids.0,
+        user_id.as_ref(),
         own_link_ids,
         requested_ids,
         limit,
@@ -89,26 +88,31 @@ pub async fn shared_email_threads(
 /// The email threads in the given Drive folders (`email_threads.project_id`)
 /// that the caller may read, as the Email list's project candidates admit
 /// them: their own threads in a folder (`include_own`), every thread in a
-/// folder granted to one of their sources whatever inbox holds it, and, with
-/// `include_thread_shares`, threads in a folder shared with them through a
-/// grant on the thread. With `include_own` false the caller's own inboxes are
-/// left out entirely, as the list's Shared-only view leaves them out.
-/// Non-empty `requested_ids` narrow each folder's threads before the limit
-/// applies, so a requested thread is never cut off by the rest of its folder.
-/// At most `limit` threads come back.
+/// folder granted to the caller, a channel they are in or one of their teams,
+/// whatever inbox holds it, and, with `include_thread_shares`, threads in a
+/// folder shared with them through a grant on the thread. With `include_own`
+/// false the caller's own inboxes are left out entirely, as the list's
+/// Shared-only view leaves them out. Non-empty `requested_ids` narrow each
+/// folder's threads before the limit applies, so a requested thread is never
+/// cut off by the rest of its folder. At most `limit` threads come back.
 ///
-/// Each folder's grant is checked once, one source at a time. Each folder's
-/// threads are read through `idx_email_threads_project_id` and stop at
-/// `limit`, so a large granted folder is not read whole; a thread belongs to
-/// one folder, so no thread comes back twice. A thread share is one probe of
-/// `entity_access_entity_id_entity_type_idx` per thread outside the caller's
-/// inboxes in a folder not granted to them, so the cost follows the folder,
-/// not how many threads are shared with the caller.
+/// Each folder's grants are read once through
+/// `idx_entity_access_entity_text_type_source` and matched against the
+/// caller's memberships. Each folder's threads are read through
+/// `idx_email_threads_project_id` and stop at `limit`, so a large granted
+/// folder is not read whole; a thread belongs to one folder, so no thread
+/// comes back twice. A thread share outside the caller's inboxes, in a folder
+/// not granted to them, is matched against the caller's sources, listed once
+/// in the statement, so Postgres may read the caller's email-thread grants
+/// once through `idx_entity_access_source_type_entity_plain` or probe each
+/// thread through `entity_access_entity_id_entity_type_idx`. Matching each of
+/// a thread's grants with `entity_access_source_matches` instead makes
+/// Postgres hash every email-thread grant, or probe every thread of a large
+/// folder shared with no one.
 #[tracing::instrument(
     err,
-    skip(pool, source_ids, own_link_ids, project_ids, requested_ids),
+    skip(pool, user_id, own_link_ids, project_ids, requested_ids),
     fields(
-        source_id_count = source_ids.0.len(),
         project_count = project_ids.len(),
         requested_count = requested_ids.len(),
         thread_count = tracing::field::Empty,
@@ -120,7 +124,7 @@ pub async fn shared_email_threads(
 )]
 pub async fn project_email_threads(
     pool: &PgPool,
-    source_ids: &SourceIds,
+    user_id: &MacroUserId<Lowercase<'_>>,
     own_link_ids: &[Uuid],
     project_ids: &[String],
     requested_ids: &[Uuid],
@@ -147,15 +151,11 @@ pub async fn project_email_threads(
             FROM requested r
             WHERE EXISTS (
                 SELECT 1
-                FROM unnest($1::text[]) AS sources(source_id)
-                CROSS JOIN LATERAL (
-                    SELECT 1
-                    FROM entity_access ea
-                    WHERE ea.source_id = sources.source_id
-                      AND ea.entity_type = 'project'
-                      AND ea.entity_id::text = r.project_id
-                    LIMIT 1
-                ) g
+                FROM entity_access ea
+                WHERE ea.entity_id::text = r.project_id
+                  AND ea.entity_type = 'project'
+                  AND EXISTS (SELECT FROM entity_access_source_matches(ea.source_id, $1, NULL))
+                OFFSET 0
             )
         )
         SELECT f.id AS "thread_id!", f.link_id AS "link_id!"
@@ -173,14 +173,17 @@ pub async fn project_email_threads(
                       FROM entity_access ea
                       WHERE ea.entity_id = t.id
                         AND ea.entity_type = 'email_thread'
-                        AND ea.source_id = ANY($1)
+                        AND ea.source_id = ANY(ARRAY(
+                            SELECT s.source_id
+                            FROM entity_access_viewer_sources($1, NULL) AS s(source_id)
+                        ))
                   )
               END
             LIMIT $6
         ) f
         LIMIT $6
         "#,
-        &source_ids.0,
+        user_id.as_ref(),
         own_link_ids,
         project_ids,
         include_own,
@@ -196,26 +199,27 @@ pub async fn project_email_threads(
 }
 
 /// Which of `thread_ids`, outside `own_link_ids`, sit in a Drive folder
-/// granted to one of the caller's sources, with the inbox holding each: the
-/// threads the caller reads through a folder share, as the Email list's
-/// project candidates admit them. Each id is one primary-key lookup and a
-/// check of its folder's grant.
+/// granted to the caller, a channel they are in or one of their teams, with
+/// the inbox holding each: the threads the caller reads through a folder
+/// share, as the Email list's project candidates admit them. Each id is one
+/// primary-key lookup and one probe of its folder's grants through
+/// `idx_entity_access_entity_text_type_source`, each matched against the
+/// caller's memberships, so the cost does not grow with them.
 #[tracing::instrument(
     err,
-    skip(pool, source_ids, own_link_ids, thread_ids),
+    skip(pool, user_id, own_link_ids, thread_ids),
     fields(
-        source_id_count = source_ids.0.len(),
         requested_count = thread_ids.len(),
         shared_count = tracing::field::Empty,
     )
 )]
 pub async fn project_shared_email_threads(
     pool: &PgPool,
-    source_ids: &SourceIds,
+    user_id: &MacroUserId<Lowercase<'_>>,
     own_link_ids: &[Uuid],
     thread_ids: &[Uuid],
 ) -> Result<Vec<SharedEmailThread>, sqlx::Error> {
-    if source_ids.0.is_empty() || thread_ids.is_empty() {
+    if thread_ids.is_empty() {
         return Ok(Vec::new());
     }
     let mut tx = Box::pin(pool.begin()).await?;
@@ -237,18 +241,14 @@ pub async fn project_shared_email_threads(
           AND t.link_id <> ALL($2)
           AND EXISTS (
               SELECT 1
-              FROM unnest($1::text[]) AS sources(source_id)
-              CROSS JOIN LATERAL (
-                  SELECT 1
-                  FROM entity_access ea
-                  WHERE ea.source_id = sources.source_id
-                    AND ea.entity_type = 'project'
-                    AND ea.entity_id::text = t.project_id
-                  LIMIT 1
-              ) g
+              FROM entity_access ea
+              WHERE ea.entity_id::text = t.project_id
+                AND ea.entity_type = 'project'
+                AND EXISTS (SELECT FROM entity_access_source_matches(ea.source_id, $1, NULL))
+              OFFSET 0
           )
         "#,
-        &source_ids.0,
+        user_id.as_ref(),
         own_link_ids,
         thread_ids,
     )

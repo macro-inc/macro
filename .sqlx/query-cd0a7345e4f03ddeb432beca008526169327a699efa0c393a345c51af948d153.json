@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT grant_row.entity_id AS \"entity_id!\",\n                  grant_row.access_level AS \"access_level!: AccessLevel\"\n           FROM UNNEST($1::uuid[]) AS pipeline(id)\n           CROSS JOIN LATERAL (\n               SELECT ea.entity_id, ea.access_level, ea.source_id\n               FROM entity_access ea\n               WHERE ea.entity_id = pipeline.id AND ea.entity_type = 'crm_pipeline'\n               OFFSET 0\n           ) AS grant_row\n           WHERE EXISTS (SELECT FROM entity_access_source_matches(grant_row.source_id, $2, $3))\n             AND NOT EXISTS (\n                 SELECT FROM team_user crm_denied\n                 WHERE crm_denied.user_id = $2 AND crm_denied.team_id::text = grant_row.source_id\n                   AND (crm_denied.crm_access OR crm_denied.team_role <> 'member') IS NOT TRUE)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "access_level!: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "cd0a7345e4f03ddeb432beca008526169327a699efa0c393a345c51af948d153"
+}
