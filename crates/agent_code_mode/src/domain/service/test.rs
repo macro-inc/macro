@@ -893,8 +893,9 @@ fn with_js_tools(service: CodeModeService, on: bool) -> CodeModeService {
 
 fn js_tools_request() -> ExecuteRequest {
     ExecuteRequest {
-        source: "return await tools.storage.get_document_markdown({ path: { document_id: \"d\" } })"
-            .into(),
+        source:
+            "return await tools.storage.get_document_markdown({ path: { document_id: \"d\" } })"
+                .into(),
         timeout_ms: 1000,
         language: code_execution::domain::Language::JsTools,
     }
@@ -949,7 +950,11 @@ async fn js_tools_programs_are_refused_before_credentials_without_the_rollout() 
         Arc::clone(&service.0.turns),
         Arc::new(Pixels),
     );
-    assert!(!with_js_tools(no_runner, true).js_tools_enabled(&session).await);
+    assert!(
+        !with_js_tools(no_runner, true)
+            .js_tools_enabled(&session)
+            .await
+    );
 }
 
 #[tokio::test]
@@ -960,7 +965,9 @@ async fn js_tools_runs_record_language_and_fingerprint_and_retries_match_languag
     assert!(service.js_tools_enabled(&session).await);
     assert!(service.permissions_enabled(&session).await);
     let id = ExecutionId::mint();
-    let receipt = run(&service, &session, id, js_tools_request()).await.unwrap();
+    let receipt = run(&service, &session, id, js_tools_request())
+        .await
+        .unwrap();
     assert_eq!(receipt.execution_id, id);
     let record = store.get(session.id, id).await.unwrap();
     assert_eq!(record.language, ProgramLanguage::JsTools);
@@ -973,7 +980,9 @@ async fn js_tools_runs_record_language_and_fingerprint_and_retries_match_languag
     assert_eq!(stored["sdkFingerprint"], "@opencode/codemode@0+fixture");
 
     // The same ID and source is the saved run only in the same language.
-    let retry = run(&service, &session, id, js_tools_request()).await.unwrap();
+    let retry = run(&service, &session, id, js_tools_request())
+        .await
+        .unwrap();
     assert_eq!(retry.execution_id, id);
     assert_eq!(credentials.0.lock().unwrap().len(), 1);
     let mut javascript = js_tools_request();
@@ -1061,10 +1070,7 @@ async fn a_program_its_permissions_stop_is_recorded_as_failed_with_why() {
             .await
             .expect("a receipt, not an error");
         assert_eq!(receipt.status, ExecutionStatus::Failed);
-        assert_eq!(
-            receipt.error.as_deref(),
-            Some("This program did not run.")
-        );
+        assert_eq!(receipt.error.as_deref(), Some("This program did not run."));
         assert_eq!(receipt.permission, permission);
         assert_eq!(receipt.result, None);
         let record = store.get(session.id, receipt.execution_id).await.unwrap();

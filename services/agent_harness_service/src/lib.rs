@@ -1026,30 +1026,30 @@ pub async fn run() -> anyhow::Result<()> {
         })
     });
     let session_code_mode = agent_code_mode::domain::CodeModeService::new(
-            code_executor,
-            Arc::new(code_mode::RunCredentials {
-                egress: code_egress.clone(),
-                correlations: agent_correlation::outbound::PgCorrelationRepository(pool.clone()),
-                signer: MacroApiTokenSigner::new(
-                    pool.clone(),
-                    config.macro_api_token_issuer.as_ref(),
-                    config.macro_api_token_private_secret_key.as_ref(),
-                ),
-                gate: owner_tool_gate.clone(),
-                endpoints: code_mode::sdk_endpoints()?,
-                scopes: Arc::clone(&session_scopes),
-                permissions: permission_gate.clone(),
-            }),
-            execution_store,
-            execution_turns,
-            Arc::new(code_mode::images::StaticFileModelImages(
-                static_file_service_client::StaticFileServiceClient::with_timeout(
-                    config.internal_api_key.clone(),
-                    macro_service_urls::StaticFileServiceUrl::new()?.to_string(),
-                    std::time::Duration::from_secs(10),
-                ),
-            )),
-        );
+        code_executor,
+        Arc::new(code_mode::RunCredentials {
+            egress: code_egress.clone(),
+            correlations: agent_correlation::outbound::PgCorrelationRepository(pool.clone()),
+            signer: MacroApiTokenSigner::new(
+                pool.clone(),
+                config.macro_api_token_issuer.as_ref(),
+                config.macro_api_token_private_secret_key.as_ref(),
+            ),
+            gate: owner_tool_gate.clone(),
+            endpoints: code_mode::sdk_endpoints()?,
+            scopes: Arc::clone(&session_scopes),
+            permissions: permission_gate.clone(),
+        }),
+        execution_store,
+        execution_turns,
+        Arc::new(code_mode::images::StaticFileModelImages(
+            static_file_service_client::StaticFileServiceClient::with_timeout(
+                config.internal_api_key.clone(),
+                macro_service_urls::StaticFileServiceUrl::new()?.to_string(),
+                std::time::Duration::from_secs(10),
+            ),
+        )),
+    );
     // JavaScript tools programs, for owners with agent permissions, which
     // gate every one of them.
     let session_code_mode = match js_tools_fingerprint {

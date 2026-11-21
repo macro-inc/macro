@@ -457,10 +457,7 @@ async fn sessions_without_javascript_tools_see_todays_tools() {
                 toolsets.len() - 1
             }
         };
-        sessions.insert(
-            format!("permissions={permissions}"),
-            index.into(),
-        );
+        sessions.insert(format!("permissions={permissions}"), index.into());
     }
     let snapshot = serde_json::json!({ "sessions": sessions, "toolsets": toolsets });
     let actual = serde_json::to_string_pretty(&snapshot).unwrap() + "\n";

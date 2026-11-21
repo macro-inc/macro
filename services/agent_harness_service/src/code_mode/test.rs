@@ -1166,9 +1166,7 @@ async fn the_permission_gate_refuses_holds_or_limits_a_run(pool: sqlx::PgPool) {
     };
 
     // Flag off, or JavaScript: exactly today's run, never analyzed.
-    for (rollout, language) in [
-        (true, ProgramLanguage::Javascript),
-    ] {
+    for (rollout, language) in [(true, ProgramLanguage::Javascript)] {
         let parts = gate(analysis(), &[], ToolApprovalStatus::Approved, rollout);
         let analyzer = parts.analyzer.clone();
         let (issued, asked) = issue(parts, language).await;
@@ -1254,7 +1252,6 @@ async fn the_permission_gate_refuses_holds_or_limits_a_run(pool: sqlx::PgPool) {
         ])
     );
     assert_eq!(correlations().await, before + 1);
-
 }
 
 /// The gate applies per language: the permissions flag for JavaScript tools

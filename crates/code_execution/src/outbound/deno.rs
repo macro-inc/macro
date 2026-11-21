@@ -674,11 +674,9 @@ async fn bridge(
         language: js_tools.then(|| language.as_str()),
         js_tools: js_tools.then(|| JsToolsLimits {
             // Milliseconds as a u32 stay a safe JavaScript integer.
-            timeout_ms: u32::try_from(
-                remaining.saturating_sub(JS_TOOLS_REPORT_MARGIN).as_millis(),
-            )
-            .unwrap_or(u32::MAX)
-            .max(1),
+            timeout_ms: u32::try_from(remaining.saturating_sub(JS_TOOLS_REPORT_MARGIN).as_millis())
+                .unwrap_or(u32::MAX)
+                .max(1),
             max_tool_calls: JS_TOOLS_MAX_TOOL_CALLS,
             max_output_bytes: limits.max_frame_bytes,
         }),

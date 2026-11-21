@@ -84,9 +84,7 @@ describe('AgentPermissionsPage', () => {
   it('says plainly which programs the settings cover and what they miss', async () => {
     renderPage();
     expect(
-      await screen.findByText(
-        'Applies to JS tools programs only, for now.'
-      )
+      await screen.findByText('Applies to JS tools programs only, for now.')
     ).toBeTruthy();
     expect(
       screen.getByText(

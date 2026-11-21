@@ -268,7 +268,8 @@ async fn service(
     let store = Arc::new(Store::default());
     let service = CodeModeService::new(
         Some(Arc::new(
-            ExecutionService::new(Arc::new(runner), Arc::new(Unchecked), Limits::default()).unwrap(),
+            ExecutionService::new(Arc::new(runner), Arc::new(Unchecked), Limits::default())
+                .unwrap(),
         )),
         credentials.clone(),
         store.clone(),
