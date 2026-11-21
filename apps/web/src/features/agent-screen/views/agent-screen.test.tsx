@@ -520,3 +520,18 @@ describe('Stop watching', () => {
     unmount();
   });
 });
+
+describe('pasting while others watch', () => {
+  it('warns the driver that watchers can see a paste, only while someone else watches', async () => {
+    vi.useFakeTimers();
+    const connections: Connection[] = [];
+    const { unmount } = renderView(AgentScreen, connections);
+    await vi.advanceTimersByTimeAsync(0);
+
+    connections[0].handlers.onState(state(true));
+    expect(screen.queryByText('Watchers can see what you paste')).toBeNull();
+    connections[0].handlers.onState({ ...state(true), viewers: 2 });
+    expect(screen.getByText('Watchers can see what you paste')).toBeTruthy();
+    unmount();
+  });
+});

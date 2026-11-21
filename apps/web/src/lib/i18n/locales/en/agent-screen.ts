@@ -34,6 +34,7 @@ export default {
   holdEscToHandBack: 'Hold Esc to hand back',
   leaveKeyboardHint: 'Ctrl+Alt+Shift leaves the keyboard',
   leaveKeyboardHintMac: 'Control+Option+Shift leaves the keyboard',
+  watchersSeePaste: 'Watchers can see what you paste',
   keyboardFor: 'Keyboard for {{name}}’s desktop',
   stopWatching: 'Stop watching',
   popOut: 'Pop out',
