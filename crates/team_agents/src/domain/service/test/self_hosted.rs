@@ -493,3 +493,43 @@ async fn listing_reads_every_agents_install_in_one_query() {
         1
     );
 }
+
+/// Another admin of the team, who owns [`THEIRS`].
+const OTHER_ADMIN: &str = "macro|someone@example.com";
+
+fn other_admin() -> EntityAccessReceipt<AdminTeamRole> {
+    EntityAccessReceipt::dangerously_assert_authenticated_user(
+        user(OTHER_ADMIN),
+        TEAM,
+        EntityType::Team,
+    )
+}
+
+#[tokio::test]
+async fn only_the_inviter_or_the_hosts_owner_may_move_an_agent() {
+    let (service, journal, _) = self_hosted_service();
+    let agent = service.create(receipt(), own(LAPTOP)).await.unwrap();
+    let before = journal.entries().len();
+
+    let result = service
+        .move_install(
+            other_admin(),
+            &agent.user_id,
+            MoveTeammate { harness_id: THEIRS },
+        )
+        .await;
+
+    assert!(
+        matches!(result, Err(TeamAgentError::Forbidden(_))),
+        "{result:?}"
+    );
+    assert_eq!(journal.entries().len(), before, "nothing checkpointed");
+    let install = service
+        .installs
+        .for_agent(&agent.user_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(install.harness_id, LAPTOP);
+    assert_eq!(install.checkpoint, None);
+}

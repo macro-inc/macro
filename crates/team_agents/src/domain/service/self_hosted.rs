@@ -212,6 +212,23 @@ where
         if current.harness_id == harness && current.checkpoint.is_none() {
             return Ok(Self::installed_agent(record, &current));
         }
+        // Whoever runs the agent's machine could act as the agent, so only
+        // its inviter or that machine's owner may send it somewhere else.
+        let invited_it = record.created_by.as_ref() == Some(&caller);
+        let hosts_it = || async {
+            Ok::<_, TeamAgentError>(
+                self.installs
+                    .hosts_of(&caller)
+                    .await?
+                    .iter()
+                    .any(|host| host.harness_id == current.harness_id),
+            )
+        };
+        if !invited_it && !hosts_it().await? {
+            return Err(TeamAgentError::Forbidden(
+                "only the agent's inviter or its machine's owner can move it",
+            ));
+        }
         self.require_own_host(&caller, harness).await?;
 
         let install = self
