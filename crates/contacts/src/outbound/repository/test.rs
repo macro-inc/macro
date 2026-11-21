@@ -44,7 +44,10 @@ async fn test_delete_connections_removes_only_the_named_pairs(pool: PgPool) -> s
         .delete_connections(vec![
             (mid("macro|leaver@example.com"), mid("macro|a@example.com")),
             (mid("macro|b@example.com"), mid("macro|leaver@example.com")),
-            (mid("macro|leaver@example.com"), mid("macro|nobody@example.com")),
+            (
+                mid("macro|leaver@example.com"),
+                mid("macro|nobody@example.com"),
+            ),
         ])
         .await
         .unwrap();
