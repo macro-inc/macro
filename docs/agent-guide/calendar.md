@@ -1633,3 +1633,13 @@ Calendar's New menus explain Event, Call, and Booking link with icons and muted 
 
 On touch, Calendar workspace controls float within the calendar pane, beside the
 sidebar, with an explicit safe-area top gutter. They do not cover the sidebar title.
+
+## Classic mention restrictions
+
+Classic Macro replies in channels and document discussions may create an event
+without guests. They cannot invite guests afterward, change or cancel existing
+events, RSVP, accept join requests, or confirm event replacements: these paths
+can email participants. Verify that a guestless confirmed create followed by
+`inviteGuests` returns 403 on the invitation and sends nothing. The same
+restriction applies to attendee patches, ordinary event patches, deletes and
+RSVPs. Calendar reads and adding a shared-event snapshot stay available.

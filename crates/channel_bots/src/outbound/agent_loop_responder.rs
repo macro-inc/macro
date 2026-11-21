@@ -20,6 +20,12 @@ pub struct AgentLoopResponder {
 }
 
 impl AgentLoopResponder {
+    /// Configure the turn runner while retaining the mention-bound tools and reply path.
+    pub fn with_agent_loop(mut self, agent_loop: AgentLoop) -> Self {
+        self.agent_loop = agent_loop;
+        self
+    }
+
     /// Create a responder from a pre-configured tool context and toolset.
     pub fn new(tool_context: ToolServiceContext, tools: ChannelBotTools) -> Self {
         Self {

@@ -222,7 +222,10 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   (`CreateConfirmedCalendarEvent`, `calendar.createConfirmed`): the only
   immediate send or create open to an agent's program besides a review.
   A channel-mention program is refused the send and any event with guests
-  (their invitations are email); an event without guests is created.
+  (their invitations are email), checked on the same typed arguments the tool
+  executes; an event without guests is created. Calendar mutation routes also
+  refuse mention programs' existing-event updates, cancellations, RSVPs, guest
+  invitations, join-request answers and replacement confirmations.
   A scoped hidden session's or a channel-mention program's chat messages and
   structured completions take no tools
   (`tool_selection::tools_refused_to_current_session`): tools run with the

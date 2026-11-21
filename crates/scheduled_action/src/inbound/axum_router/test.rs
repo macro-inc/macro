@@ -1296,3 +1296,26 @@ async fn a_program_cannot_create_a_routine_that_writes_as_its_owner() {
     let (status, body) = request(&app, "POST", "/scheduled-actions", "owner", owner_identity).await;
     assert_ne!(body, json!(refusal), "{status}");
 }
+
+#[tokio::test]
+async fn a_channel_mention_program_can_check_a_routine_without_saving_it() {
+    let app = router_with(service(false), FakeEntityAccessService::owner_only());
+    let mention = agent_correlation::context::Attribution {
+        channel_mention_id: Some(macro_uuid::Uuid::from_u128(1)),
+        ..Default::default()
+    };
+    let (status, _) = agent_correlation::context::scope_attribution(mention, async {
+        request(
+            &app,
+            "POST",
+            "/scheduled-actions/check",
+            "owner",
+            json!({"routine": cron_action()}),
+        )
+        .await
+    })
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let (_, saved) = request(&app, "GET", "/scheduled-actions", "owner", Value::Null).await;
+    assert_eq!(saved, json!([]));
+}

@@ -14,6 +14,7 @@ decides whether to trigger, authorizes, and delivers a reply.
 - `src/outbound/fast_model_trigger_classifier.rs`: Haiku-based implicit-trigger
   classifier used when there's no explicit mention.
 - `src/outbound/agent_loop_responder.rs`: drives the agent loop to produce a reply.
+  `with_agent_loop` configures the runner while preserving mention-bound tools.
 - `src/outbound/code_mode.rs`: every reply runs code mode (`ChannelBotTools`).
   The direct tools are `ai_tools::tools_for_channel_bot_code_mode` (SDK-covered
   and Anthropic sandbox tools dropped) plus `agent_code_mode`'s user `ExecuteCode`,

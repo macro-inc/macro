@@ -24,6 +24,11 @@ use std::sync::{Arc, Mutex, RwLock};
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument as _;
 
+#[cfg(any(test, feature = "test-utils"))]
+type TestAgentBuilder = dyn Fn(ToolServerHandle, &SystemPrompt, usize, Option<u64>, GenAiContext) -> ProviderAgent
+    + Send
+    + Sync;
+
 const DEFAULT_MAX_TURNS: usize = 200;
 
 /// Factory for creating per-request agent sessions.
@@ -56,6 +61,8 @@ pub struct AgentLoop {
     /// The router this loop's model calls use instead of the shared one, when
     /// a caller-supplied key pays for them (see [`Self::with_provider_api_key`]).
     router: Option<ModelRouter<MeteredHttpClient>>,
+    #[cfg(any(test, feature = "test-utils"))]
+    test_agent: Option<Arc<TestAgentBuilder>>,
 }
 
 impl AgentLoop {
@@ -82,7 +89,31 @@ impl AgentLoop {
             genai_telemetry: true,
             stream_tool_calls: false,
             router: None,
+            #[cfg(any(test, feature = "test-utils"))]
+            test_agent: None,
         }
+    }
+
+    /// Use a scripted completion model for a downstream host's composed tests.
+    /// The real session wiring and tool dispatch still run, without a provider call.
+    #[cfg(any(test, feature = "test-utils"))]
+    pub fn with_test_model<M>(mut self, model: M) -> Self
+    where
+        M: rig_core::completion::CompletionModel + Clone + 'static,
+    {
+        self.test_agent = Some(Arc::new(
+            move |handle, prompt, max_turns, max_tokens, telemetry| {
+                ProviderAgent::test(
+                    model.clone(),
+                    &prompt.joined(),
+                    max_turns,
+                    max_tokens,
+                    handle,
+                    telemetry,
+                )
+            },
+        ));
+        self
     }
 
     /// Run the model's calls on `api_key` instead of the deployment's key for
@@ -242,6 +273,10 @@ impl AgentLoop {
             system_prompt,
             usage_ctx,
             |handle, prompt, tool_search, max_turns, max_tokens, telemetry| {
+                #[cfg(any(test, feature = "test-utils"))]
+                if let Some(build) = &self.test_agent {
+                    return build(handle, prompt, max_turns, max_tokens, telemetry);
+                }
                 let router = match &self.router {
                     Some(router) => router,
                     None => ModelRouter::shared().expect("failed to initialize model router"),

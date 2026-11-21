@@ -1,3 +1,5 @@
+mod channel_bot;
+
 use super::*;
 use crate::cognition::api::context::test::{authorized_request, test_api_context};
 use axum::{Router, routing::post};
@@ -151,14 +153,4 @@ async fn a_channel_mention_program_never_invites_guests_even_when_confirmed(pool
     .unwrap();
     assert_eq!(refused.status(), StatusCode::FORBIDDEN);
     assert_eq!(message(refused).await, CHANNEL_MENTION_INVITE_REFUSAL);
-}
-
-#[test]
-fn only_an_event_with_attendees_invites_guests() {
-    assert!(invites_guests(
-        br#"{"attendees":[{"email":"ada@example.com"}]}"#
-    ));
-    assert!(!invites_guests(br#"{"attendees":[]}"#));
-    assert!(!invites_guests(br#"{"title":"Focus"}"#));
-    assert!(!invites_guests(b"not json"));
 }

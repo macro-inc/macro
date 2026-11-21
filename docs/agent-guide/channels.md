@@ -749,7 +749,8 @@ harness. The channel shows a thinking placeholder followed by the final answer
 and links; execution steps are not rendered. Verify a mention that creates a
 test document and confirm the linked document exists under the mentioning
 account. Classic mentions cannot send or schedule email, invite calendar guests,
-change sharing, or create routines or agent sessions; requests for those actions
+change sharing, update or cancel existing calendar events, RSVP, accept calendar
+join requests, or create routines or agent sessions; requests for those actions
 should explain the limitation without performing them. This applies on desktop
 and mobile and requires the real harness executor for an end-to-end check.
 

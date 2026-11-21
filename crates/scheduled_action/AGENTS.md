@@ -442,7 +442,8 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
 - A channel-mention bot's program may not write here
   (`axum_router::refuse_channel_mention_writes` on the actions and template
   routers): a routine it created, changed or ran would get a token without the
-  mention, and so without its email refusal. Reads stay open.
+  mention, and so without its email refusal. Reads and the read-only
+  `POST /scheduled-actions/check` stay open.
 - A task's `mcp_servers` (beside a program's `steps`, or on an old
   single-agent task) are apps the routine requires, handed to its agent step;
   a program with apps needs one. The owner must have each connected:

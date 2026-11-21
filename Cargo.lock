@@ -692,6 +692,7 @@ dependencies = [
  "bots",
  "calendar_events",
  "call",
+ "channel_bots",
  "channels",
  "chat",
  "chrono",
@@ -798,6 +799,7 @@ dependencies = [
  "readonly_pool",
  "redis",
  "reqwest 0.13.4",
+ "rig-core",
  "rmcp",
  "roles_and_permissions",
  "rootcause",
@@ -4020,6 +4022,7 @@ dependencies = [
 name = "calendar_events"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "ai_toolset",
  "anyhow",
  "async-trait",

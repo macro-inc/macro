@@ -297,6 +297,7 @@ impl AuthorizationPolicy for AccountHolderOrInternal {
         }
         // A channel-mention bot's program must not mint a credential that
         // sheds its signed mention (and with it the email refusal).
+        // Bot credentials remain allowed: bot tokens have no inbox and cannot send email.
         if agent_correlation::context::current_channel_mention().is_some() {
             return Err(forbidden());
         }

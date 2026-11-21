@@ -1,5 +1,7 @@
 mod add_shared_calendar_event;
 mod copies;
+#[cfg(feature = "inbound")]
+mod mention;
 mod read_calendar_event;
 
 use std::sync::Mutex;
