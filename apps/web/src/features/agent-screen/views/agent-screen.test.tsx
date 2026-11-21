@@ -146,6 +146,7 @@ function renderView(
           input,
           setContainerSize: () => {},
           driverName: () => 'Alice',
+          retry: () => session.retry(),
           turnOn: () => undefined,
         }}
       />
@@ -497,6 +498,26 @@ describe('the first Take over', () => {
       })
     );
     expect(openSearch).not.toHaveBeenCalled();
+    unmount();
+  });
+});
+
+describe('a revoked drive', () => {
+  it('offers View screen again', async () => {
+    vi.useFakeTimers();
+    const connections: Connection[] = [];
+    const { unmount } = renderView(AgentScreen, connections);
+    await vi.advanceTimersByTimeAsync(0);
+    connections[0].handlers.onState(state(true));
+
+    connections[0].handlers.onEnded('accessRevoked');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(
+      screen.getByText('You no longer have access to this screen')
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'View screen again' }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(connections).toHaveLength(2);
     unmount();
   });
 });

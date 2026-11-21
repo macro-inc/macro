@@ -14,6 +14,12 @@ export type AgentScreenModel = {
   setContainerSize: (size: Size) => void;
   /** The driver's display name, while someone drives. */
   driverName: Accessor<string | undefined>;
+  /**
+   * Connect again (Try again, View screen again). After access was revoked,
+   * first refreshes what this person may do, so a demoted driver comes back
+   * with a view ticket rather than be refused a drive one.
+   */
+  retry: () => void;
   /** Turns the computer on; present only for those who may. */
   turnOn: Accessor<(() => void) | undefined>;
 };

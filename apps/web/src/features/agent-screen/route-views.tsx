@@ -13,7 +13,10 @@ import {
   useComputersQuery,
   useSetComputerPowerMutation,
 } from '@queries/computers/computers';
-import { useHarnessesQuery } from '@queries/harnesses/harnesses';
+import {
+  invalidateHarnesses,
+  useHarnessesQuery,
+} from '@queries/harnesses/harnesses';
 import { ResultAsync } from 'neverthrow';
 import { createSignal, Show } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -111,6 +114,11 @@ function AgentScreenModelProvider(props: {
   // Keys and buttons held in the guest are let go before any hand-back.
   session.setInputReleaser(() => input.releaseAll());
 
+  const viewAgain = async () => {
+    await invalidateHarnesses();
+    session.retry();
+  };
+
   const turnOn = async () => {
     const target = computer();
     if (!target) return;
@@ -140,6 +148,14 @@ function AgentScreenModelProvider(props: {
         driver.name ||
         t('agentScreen.someoneElse')
       );
+    },
+    retry: () => {
+      const status = session.store.status;
+      if (status.kind !== 'ended' || status.reason !== 'accessRevoked') {
+        session.retry();
+        return;
+      }
+      fireAndForget(viewAgain(), 'agent-screen.view-again');
     },
     turnOn: () =>
       canDrive() && computer()

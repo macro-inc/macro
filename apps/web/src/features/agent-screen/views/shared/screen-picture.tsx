@@ -79,7 +79,7 @@ export function ScreenPicture(props: {
         status={session.store.status}
         agentName={props.model.agentName()}
         onTurnOn={props.model.turnOn()}
-        onRetry={() => session.retry()}
+        onRetry={() => props.model.retry()}
       />
       {props.children}
     </ScreenStage>
