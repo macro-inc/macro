@@ -11,6 +11,21 @@ use macro_user_id::lowercased::Lowercase;
 use macro_user_id::user_id::MacroUserId;
 use messages::domain::models::Message;
 
+#[test]
+fn contended_message_writes_remain_retryable_with_their_cause() {
+    let error = message_error(MessageError::Contended(rootcause::report!(
+        "admission timeout"
+    )));
+    let HarnessError::ReplyBusy(cause) = error else {
+        panic!("message contention must remain a retryable reply failure");
+    };
+    let Some(MessageError::Contended(cause)) = cause.downcast_current_context::<MessageError>()
+    else {
+        panic!("the retryable reply must retain its typed message error");
+    };
+    assert!(cause.to_string().contains("admission timeout"));
+}
+
 fn announcement() -> SessionAnnouncement {
     SessionAnnouncement {
         reply_message_id: None,

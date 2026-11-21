@@ -18,6 +18,7 @@ fn posted(parent: MessageParent, bot: bool) -> MessageEvent {
         message.sender_id = channel_sender::ChannelSender::new_from_bot(bot_id::MACRO_AI_BOT_ID);
     }
     MessageEvent {
+        seq: None,
         parent,
         actor: message.sender_id.as_ref().to_owned(),
         nonce: None,
@@ -102,6 +103,7 @@ async fn attributed_posts_and_completed_replies_reach_the_local_detector() {
     ] {
         publisher
             .publish(MessageEvent {
+                seq: None,
                 parent: message.parent.clone(),
                 actor: message.sender_id.as_ref().to_owned(),
                 nonce: None,

@@ -23,6 +23,11 @@ queries used across Rust services.
 
 `activity_events.agent_verb` is nullable so older writers and historical rows remain valid during a rolling deploy.
 
+`channel_change_counters` and `channel_change_log` are owned by
+`crates/channel_change_db_utils`; callers append inside their message, activity,
+or call transaction. The additive tables have no entity foreign keys, and
+retention keeps counters after pruning old log rows.
+
 `agent_session_notification` is an additive leased outbox owned by
 `agent_session`. Review adapters use its transaction-aware producer port;
 notification frames have their own log direction. Session deletion cascades

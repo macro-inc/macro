@@ -165,6 +165,8 @@ realtime appearance events do not re-ingest history.
   standalone.
 - The markdown backfill binary defaults to dry-run; the `_apply`/prod `just`
   recipes require a typed confirmation before writing.
+- Preserve shared `MessageError` text and retry guidance in Discussion tools
+  and the text-comment route's safe 503 with `Retry-After: 1`.
 - `domain/released_attachments.rs` trashes email attachments whose mail is
   gone, draining `released_email_attachment_documents` (filled by a trigger
   when a statement deletes a document's `document_email` rows) in batches of

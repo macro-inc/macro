@@ -32,6 +32,7 @@ references into Macro as channels. It sends no emails or notifications.
 
 ## Gotchas
 
+- Acquire channel message-write admission before the historical write transaction and hold it through checkpoint commit. Reference repair discovers its candidate without a fence, then rechecks its identity under the write fence after admission; skip changed, locked or ineligible jobs with a worker-owned keyset cursor that survives capped passes and resets only at the end of the keyspace.
 - `tests/archive_import/process_recovery.rs` exercises killing the process
   mid-import; `kill_boundaries.sql` encodes the exact points it resumes from —
   a new write step likely needs a new boundary there.

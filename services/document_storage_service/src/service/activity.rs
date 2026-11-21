@@ -3,7 +3,8 @@
 //! DSS is the one place that legitimately knows every domain, so it declares
 //! which topics feed activity and dispatches each decoded event to the
 //! owning domain's mapping. All semantics live in the domain crates; all
-//! machinery lives in the `activity` crate. These arms are pure wiring.
+//! machinery lives in the `activity` crate. This module also composes the
+//! shared activity and channel-log writes into one transaction.
 
 use activity::Ingest;
 use agent_session::domain::events::AgentSessionLifecycleMacroEvent;
@@ -41,6 +42,9 @@ mod source {
     );
 }
 pub(crate) use source::ActivitySourceEvent;
+
+mod persistence;
+pub(crate) use persistence::PgChannelActivityRepo;
 
 mod timeline;
 pub(crate) use timeline::TimelinePublisher;

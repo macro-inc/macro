@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH saved AS MATERIALIZED (\n                SELECT current_setting('lock_timeout') AS value\n            ), configured AS MATERIALIZED (\n                SELECT set_config('lock_timeout', CASE\n                    WHEN value::interval > interval '0'\n                        AND value::interval < interval '5 seconds' THEN value\n                    ELSE '5s' END, true) AS value\n                FROM saved\n            ), pending AS MATERIALIZED (\n                SELECT channel_id, activity_id,\n                       row_number() OVER (PARTITION BY channel_id ORDER BY ordinal) AS position,\n                       count(*) OVER (PARTITION BY channel_id) AS total\n                FROM UNNEST($1::uuid[], $2::uuid[]) WITH ORDINALITY\n                    AS input(channel_id, activity_id, ordinal)\n            ), advanced AS (\n                INSERT INTO channel_change_counters (channel_id, seq)\n                SELECT channel_id, total FROM pending CROSS JOIN configured\n                WHERE configured.value IS NOT NULL\n                GROUP BY channel_id, total ORDER BY channel_id\n                ON CONFLICT (channel_id) DO UPDATE\n                SET seq = channel_change_counters.seq + EXCLUDED.seq,\n                    updated_at = clock_timestamp()\n                RETURNING channel_id, seq\n            ), logged AS (\n                INSERT INTO channel_change_log (channel_id, seq, kind, activity_id)\n                SELECT pending.channel_id, advanced.seq - pending.total + pending.position,\n                       2, pending.activity_id\n                FROM pending JOIN advanced USING (channel_id)\n                ORDER BY pending.channel_id, pending.position\n                RETURNING activity_id, seq\n            ), restored AS MATERIALIZED (\n                SELECT set_config('lock_timeout', saved.value, true) AS value\n                FROM saved CROSS JOIN (SELECT count(*) AS completed FROM logged) done\n                WHERE done.completed > 0\n            )\n            SELECT logged.activity_id AS \"activity_id!\", logged.seq AS \"seq!\"\n            FROM logged CROSS JOIN restored WHERE restored.value IS NOT NULL\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "activity_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "seq!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "c450d059f30c38e7199acfddff81d053fbd11cf5b1def6f93f8334c0c03105a7"
+}

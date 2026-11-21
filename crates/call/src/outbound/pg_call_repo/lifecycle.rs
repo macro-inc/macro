@@ -10,6 +10,7 @@ impl PgCallRepo {
         require_empty: bool,
         program_only_before: Option<DateTime<Utc>>,
     ) -> Result<Option<ArchivedCall>, CallError> {
+        let (admitted_channel, _permit) = admit_channel_write(&self.pool, call_id).await?;
         let mut tx = self.pool.begin().await?;
         // The live share-with-team intent is translated into canonical team
         // sharing below, so take the shared guard before moving any rows.
@@ -224,6 +225,12 @@ impl PgCallRepo {
         .fetch_optional(tx.as_mut())
         .await?
         .unwrap_or(false);
+        let channel_id = if channel_thread {
+            call.channel_id
+        } else {
+            None
+        };
+        check_admitted_channel(admitted_channel, channel_id)?;
 
         // Delete the ephemeral call (cascades to call_participants and call_transcripts).
         sqlx::query!(
@@ -247,9 +254,64 @@ impl PgCallRepo {
             channel_thread,
         };
 
+        if channel_thread && let Some(channel_id) = archived.channel_id {
+            channel_change_db_utils::append_in(
+                &mut tx,
+                channel_id,
+                channel_change_db_utils::Change::Message(*call_id),
+            )
+            .await?;
+        }
         tx.commit().await?;
         Ok(Some(archived))
     }
+}
+
+/// Capture the call-owned discussion identity before deletion triggers remove it.
+pub(super) async fn channel_thread_in<'e>(
+    executor: impl sqlx::Executor<'e, Database = sqlx::Postgres>,
+    call_id: &Uuid,
+) -> Result<Option<Uuid>, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"SELECT channel_id AS "channel_id!" FROM call_entities
+           WHERE id = $1 AND discussion = 'channel_thread' AND channel_id IS NOT NULL"#,
+        call_id,
+    )
+    .fetch_optional(executor)
+    .await
+}
+
+/// Discover the channel without retaining a connection while admission waits.
+pub(super) async fn admit_channel_write(
+    pool: &sqlx::PgPool,
+    call_id: &Uuid,
+) -> Result<(Option<Uuid>, Option<message_write_gate::WritePermit>), sqlx::Error> {
+    let channel_id = channel_thread_in(pool, call_id).await?;
+    let permit = if let Some(channel_id) = channel_id {
+        Some(
+            message_write_gate::acquire("channel", &channel_id.to_string())
+                .await
+                .map_err(|error| {
+                    sqlx::Error::Io(std::io::Error::new(std::io::ErrorKind::TimedOut, error))
+                })?,
+        )
+    } else {
+        None
+    };
+    Ok((channel_id, permit))
+}
+
+/// A discovery race must retry without writing under another channel's permit.
+pub(super) fn check_admitted_channel(
+    admitted: Option<Uuid>,
+    current: Option<Uuid>,
+) -> Result<(), sqlx::Error> {
+    if admitted != current {
+        return Err(sqlx::Error::Protocol(
+            "call discussion changed before write admission".to_owned(),
+        ));
+    }
+    Ok(())
 }
 
 pub(super) async fn lock_active_call(

@@ -186,6 +186,10 @@ async fn a_failed_read_is_not_mistaken_for_a_gone_message() {
             MessageError::Repository(rootcause::report!("connection reset")),
             false,
         ),
+        (
+            MessageError::Contended(rootcause::report!("channel counter lock timed out")),
+            false,
+        ),
     ] {
         let mut source = MockMessageReader::new();
         source

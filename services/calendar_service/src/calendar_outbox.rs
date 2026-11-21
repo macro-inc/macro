@@ -10,6 +10,7 @@ use calendar_events::domain::{
     service::GoogleCalendarSyncScheduler,
 };
 use chrono::Utc;
+use messages::domain::changes::{ChannelChangeLogPruner, ChannelChangeLogRetention};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -25,22 +26,24 @@ struct OutboxRow {
 
 /// Continuously schedule due syncs, reap wedged jobs, publish calendar outbox
 /// rows to calendar's own backfill queue, and hourly prune the calendar
-/// change log and turn off Google calendars whose grant lacks the calendar
-/// capability.
+/// and channel change logs and turn off Google calendars whose grant lacks
+/// the calendar capability.
 ///
 /// A row lock is held through each SQS publish. A crash after publish but
 /// before commit can duplicate a message, so every consumer remains
 /// idempotent by calendar job id.
-pub async fn run<R, P>(
+pub async fn run<R, P, C>(
     db: PgPool,
     queue: CalendarBackfillQueueClient,
     scheduler: GoogleCalendarSyncScheduler<R>,
     retention: CalendarChangeLogRetention<P>,
+    channel_retention: ChannelChangeLogRetention<C>,
     calendar_sync_enabled: bool,
     cancellation_token: tokio_util::sync::CancellationToken,
 ) where
     R: GoogleCalendarSyncRepository,
     P: CalendarChangeLogPruner,
+    C: ChannelChangeLogPruner,
 {
     let mut next_retention = tokio::time::Instant::now();
     loop {
@@ -50,12 +53,20 @@ pub async fn run<R, P>(
         // With calendar sync disabled, outbox rows keep accumulating
         // unpublished and due syncs never re-arm — enabling the flag later
         // resumes everything without a migration.
+        let prune = tokio::time::Instant::now() >= next_retention;
         if calendar_sync_enabled {
-            let prune = tokio::time::Instant::now() >= next_retention;
             run_round(&db, &queue, &scheduler, &retention, prune).await;
-            if prune {
-                next_retention = tokio::time::Instant::now() + CHANGE_LOG_RETENTION_INTERVAL;
-            }
+        }
+        if prune {
+            // Channels do not depend on the calendar switch.
+            channel_retention
+                .run_once(Utc::now())
+                .await
+                .inspect_err(|error| {
+                    tracing::error!(error = ?error, "failed to prune the channel change log");
+                })
+                .ok();
+            next_retention = tokio::time::Instant::now() + CHANGE_LOG_RETENTION_INTERVAL;
         }
         tokio::select! {
             _ = tokio::time::sleep(std::time::Duration::from_secs(5)) => {}
