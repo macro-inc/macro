@@ -17,7 +17,8 @@ the axum route constructors that declare each handler's category.
   `resolve_caller`, which reads one from signed claims only, narrowest
   reading winning.
 - `src/inbound/axum.rs`: `get`/`post`/... take a `Category`; the layer they
-  put on the handler decides from the `Caller` in request extensions.
+  put on the handler decides from the `ResolvedCaller` in request
+  extensions.
 
 ## Scope
 
@@ -45,18 +46,46 @@ the axum route constructors that declare each handler's category.
   until the refusal it duplicates is enforced.
 - `agent_correlation`'s `propagate`, `enforce_signed_scope` and
   `refuse_signed_scopes` put the `ResolvedCaller` (and `propagate` the
-  service's `ActiveRollout`) in request extensions. On a service without
-  them the layer decides nothing (`Verdict::Unresolved`). A request with
-  nothing verified and nothing signed is `Unresolved` too; its route refuses
-  it itself.
+  service's `ActiveRollout`) in request extensions. A categorized route with
+  no `ResolvedCaller` is refused 403 `no_caller` (`Verdict::Unresolved`),
+  except `Category::Public`, so a service resolves a caller for every request,
+  before routing, before it categorizes a route; no route does yet. A token
+  that doesn't verify resolves no caller.
 - `Rollout` names, per caller, the categories whose observed refusals are
   enforced, applied where the route is decided. No flag feeds it yet; with
   none, `NoRollout` enforces nothing beyond the table.
 - An internal key is resolved from its header, not verified: never let a
   `Category::Internal` route rely on the policy alone. Keep its internal-key
   extractor.
+- A route can't be forced into the table at runtime: one built with
+  `axum::routing` instead of these constructors never runs the layer. A
+  service's categorization PR adds a test that calls `undeclared_routes` over
+  the routes from its OpenAPI document and its `route_service` mounts, and
+  bans raw routing in its crates.
+- `ScopedUnknown` reads by method only (a POST is refused even on a `Read`
+  route), as `agent_correlation`'s scope holds it; `ScopedDryRun` reads by
+  declared category, so a search sent as a POST goes on. `ChannelMention`
+  is held to what `ScopedNoSend` is; never resolve a channel mention to
+  `Program`.
 - Chain methods with `merge`: `MethodRouter`'s own `.get`/`.post` add a
   handler with no category.
 - The layer can't reach the `http.request` span (other middleware opens
   spans in between), so it hands its fields to `macro_tower_layers` in the
   response's `ResponseSpanFields`.
+- **Routes the table can't express.** A cell is one category per route, so
+  two kinds of route stay outside it:
+  - body-dependent checks, such as `refuse_sharing` and `may_share` on a
+    route that only sometimes changes who an item is shared with. They keep
+    their own check; the route takes the category of what it does without the
+    field.
+  - multiplexed routes (DSS GraphQL runs any mutation over one path). They
+    take the most sensitive category any request to them can reach, and a
+    test pins it when they are categorized.
+- **Unscoped programs may use egress.** The `program` x `egress` cell is
+  observed, not allowed, by design: agents fetch and search the web today, so
+  the rollout must not enforce that cell without a replacement path. The
+  no-send, generation, dry-run, unknown and channel-mention callers are
+  refused egress.
+- Cells that must not be enforced without a replacement path: `program` x
+  `egress`, and `bot` and `harness` x `connect` and `approval_gate` (the
+  computers pair and approve through them today).

@@ -106,10 +106,25 @@ impl CustomOnResponse {
 
 const HTTP_REQUEST_SPAN_TARGET: &str = "macro_http_request";
 
+/// The span fields the request span itself owns: a layer's
+/// [`ResponseSpanFields`] never overwrite them.
+const CORE_SPAN_FIELDS: &[&str] = &[
+    "otel.kind",
+    "http.request.method",
+    "http.route",
+    "url.path",
+    "request.id",
+    "http.response.status_code",
+    "latency_ms",
+    "otel.status_code",
+    "otel.status_description",
+];
+
 /// Fields a layer below the request span asks it to record, put in the
 /// response's extensions by layers that other middleware's spans keep from
 /// reaching it (such as `route_policy`'s). Only names [`MakeHttpRequestSpan`]
-/// declares are recorded.
+/// declares are recorded, and never the core fields it records itself
+/// (route, path, method, status, latency).
 #[derive(Clone, Debug, Default)]
 pub struct ResponseSpanFields(pub Vec<(&'static str, &'static str)>);
 
@@ -196,7 +211,9 @@ impl<B> OnResponse<B> for CustomOnResponse {
         span.record("latency_ms", latency_ms);
         if let Some(fields) = response.extensions().get::<ResponseSpanFields>() {
             for (name, value) in &fields.0 {
-                span.record(*name, *value);
+                if !CORE_SPAN_FIELDS.contains(name) {
+                    span.record(*name, *value);
+                }
             }
         }
 

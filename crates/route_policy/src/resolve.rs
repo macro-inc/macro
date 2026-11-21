@@ -17,6 +17,9 @@ pub struct CallerEvidence {
     pub program: bool,
     /// The narrowest scope any verified token in the request is held to.
     pub scope: ScopeEvidence,
+    /// Some verified token is a channel mention's. No token carries that claim
+    /// yet; the mention PR sets it, and a mention never resolves as `Program`.
+    pub channel_mention: bool,
     /// The request carries the code-execution header. A program can drop
     /// it, so it may only narrow.
     pub code_execution: bool,
@@ -51,9 +54,10 @@ pub enum ScopeEvidence {
     NoSend,
     /// A suggestion generation session.
     Generation,
-    /// Reads only: a routine step's dry run, or a scope this build doesn't
-    /// know.
-    ReadOnly,
+    /// A routine step's dry run: reads, by declared category.
+    DryRun,
+    /// A scope this build doesn't know: reads by method only. The narrowest.
+    Unknown,
 }
 
 impl ScopeEvidence {
@@ -71,8 +75,13 @@ pub fn resolve_caller(evidence: CallerEvidence) -> Option<Caller> {
     match evidence.scope {
         ScopeEvidence::NoSend => return Some(Caller::ScopedNoSend),
         ScopeEvidence::Generation => return Some(Caller::ScopedGeneration),
-        ScopeEvidence::ReadOnly => return Some(Caller::ScopedReadOnly),
+        ScopeEvidence::DryRun => return Some(Caller::ScopedDryRun),
+        ScopeEvidence::Unknown => return Some(Caller::ScopedUnknown),
         ScopeEvidence::Unscoped => {}
+    }
+
+    if evidence.channel_mention {
+        return Some(Caller::ChannelMention);
     }
 
     if evidence.program {

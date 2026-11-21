@@ -4,6 +4,7 @@ const PERSON: CallerEvidence = CallerEvidence {
     authenticated: Authenticated::Session,
     program: false,
     scope: ScopeEvidence::Unscoped,
+    channel_mention: false,
     code_execution: false,
 };
 
@@ -88,7 +89,8 @@ fn any_scope_is_narrower_than_any_program() {
     for (scope, caller) in [
         (ScopeEvidence::NoSend, Caller::ScopedNoSend),
         (ScopeEvidence::Generation, Caller::ScopedGeneration),
-        (ScopeEvidence::ReadOnly, Caller::ScopedReadOnly),
+        (ScopeEvidence::DryRun, Caller::ScopedDryRun),
+        (ScopeEvidence::Unknown, Caller::ScopedUnknown),
     ] {
         assert_eq!(
             resolve_caller(CallerEvidence {
@@ -103,10 +105,10 @@ fn any_scope_is_narrower_than_any_program() {
 }
 
 #[test]
-fn the_narrowest_scope_is_read_only_then_generation_then_no_send() {
+fn the_narrowest_scope_is_unknown_then_dry_run_then_generation_then_no_send() {
     assert_eq!(
-        ScopeEvidence::NoSend.narrowest(ScopeEvidence::ReadOnly),
-        ScopeEvidence::ReadOnly
+        ScopeEvidence::NoSend.narrowest(ScopeEvidence::DryRun),
+        ScopeEvidence::DryRun
     );
     assert_eq!(
         ScopeEvidence::Generation.narrowest(ScopeEvidence::NoSend),
@@ -115,5 +117,38 @@ fn the_narrowest_scope_is_read_only_then_generation_then_no_send() {
     assert_eq!(
         ScopeEvidence::Unscoped.narrowest(ScopeEvidence::NoSend),
         ScopeEvidence::NoSend
+    );
+}
+
+#[test]
+fn an_unknown_scope_is_narrower_than_a_dry_run() {
+    assert_eq!(
+        ScopeEvidence::DryRun.narrowest(ScopeEvidence::Unknown),
+        ScopeEvidence::Unknown
+    );
+}
+
+#[test]
+fn a_channel_mention_is_never_a_program_and_any_scope_still_wins() {
+    let mention = CallerEvidence {
+        authenticated: Authenticated::ApiCredential,
+        program: true,
+        channel_mention: true,
+        ..PERSON
+    };
+    assert_eq!(resolve_caller(mention), Some(Caller::ChannelMention));
+    assert_eq!(
+        resolve_caller(CallerEvidence {
+            code_execution: true,
+            ..mention
+        }),
+        Some(Caller::ChannelMention)
+    );
+    assert_eq!(
+        resolve_caller(CallerEvidence {
+            scope: ScopeEvidence::Generation,
+            ..mention
+        }),
+        Some(Caller::ScopedGeneration)
     );
 }

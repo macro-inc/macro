@@ -204,7 +204,7 @@ async fn the_rollout_enforces_an_observed_category_it_names() {
 }
 
 #[tokio::test]
-async fn a_request_with_no_resolved_caller_is_not_decided() {
+async fn a_request_with_no_resolved_caller_is_refused_and_the_handler_does_not_run() {
     let request = Request::builder()
         .method(Method::POST)
         .uri("/v1/keys")
@@ -213,6 +213,7 @@ async fn a_request_with_no_resolved_caller_is_not_decided() {
 
     let response = router().oneshot(request).await.unwrap();
 
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
     assert_eq!(
         response
             .extensions()
@@ -224,7 +225,124 @@ async fn a_request_with_no_resolved_caller_is_not_decided() {
         ])
     );
     let body = response.into_body().collect().await.unwrap().to_bytes();
-    assert_eq!(&body[..], b"unresolved");
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&body).unwrap(),
+        serde_json::json!({
+            "message": "Macro couldn't tell who sent this request. Sign in and try again.",
+            "code": "no_caller",
+            "category": "credential_mint",
+        })
+    );
+}
+
+#[tokio::test]
+async fn a_public_route_takes_no_caller() {
+    let router = Router::new().route("/health", get(Category::Public, handled));
+    let request = Request::builder()
+        .method(Method::GET)
+        .uri("/health")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = router.oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    assert_eq!(&body[..], b"public");
+}
+
+#[tokio::test]
+async fn an_unknown_scope_reads_by_method_only() {
+    let router = Router::new().route(
+        "/search",
+        post(Category::Read, handled).merge(get(Category::Read, handled)),
+    );
+    for (method, status) in [
+        (Method::GET, StatusCode::OK),
+        (Method::HEAD, StatusCode::OK),
+        (Method::POST, StatusCode::FORBIDDEN),
+    ] {
+        let mut request = Request::builder()
+            .method(method.clone())
+            .uri("/search")
+            .body(Body::empty())
+            .unwrap();
+        request
+            .extensions_mut()
+            .insert(resolved(Caller::ScopedUnknown));
+        let response = router.clone().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), status, "{method}");
+    }
+
+    // A dry run reads by declared category: its POST read goes on.
+    let mut request = Request::builder()
+        .method(Method::POST)
+        .uri("/search")
+        .body(Body::empty())
+        .unwrap();
+    request
+        .extensions_mut()
+        .insert(resolved(Caller::ScopedDryRun));
+    assert_eq!(
+        router.oneshot(request).await.unwrap().status(),
+        StatusCode::OK
+    );
+}
+
+#[tokio::test]
+async fn a_channel_mention_is_refused_what_a_run_that_sends_nothing_is() {
+    let router = Router::new()
+        .route("/messages", post(Category::Send, handled))
+        .route("/notes", post(Category::Write, handled));
+    let mut send = Request::builder()
+        .method(Method::POST)
+        .uri("/messages")
+        .body(Body::empty())
+        .unwrap();
+    send.extensions_mut()
+        .insert(ResolvedCaller(Caller::ChannelMention));
+    send.extensions_mut()
+        .insert(ActiveRollout(std::sync::Arc::new(Enforce(
+            CategorySet::default().with(Category::Send),
+        ))));
+    assert_eq!(
+        router.clone().oneshot(send).await.unwrap().status(),
+        StatusCode::FORBIDDEN
+    );
+    let mut write = Request::builder()
+        .method(Method::POST)
+        .uri("/notes")
+        .body(Body::empty())
+        .unwrap();
+    write
+        .extensions_mut()
+        .insert(resolved(Caller::ChannelMention));
+    assert_eq!(
+        router.oneshot(write).await.unwrap().status(),
+        StatusCode::OK
+    );
+}
+
+#[tokio::test]
+async fn the_route_walker_names_the_routes_that_declare_no_category() {
+    let router = Router::new()
+        .route("/declared", get(Category::Read, handled))
+        .route("/raw", axum::routing::get(|| async { "raw" }))
+        .route(
+            "/chained",
+            get(Category::Read, handled).post(|| async { "no category" }),
+        );
+    let undeclared = undeclared_routes(
+        router,
+        &[
+            (Method::GET, "/declared"),
+            (Method::GET, "/raw"),
+            (Method::POST, "/chained"),
+            (Method::GET, "/chained"),
+        ],
+    )
+    .await;
+    assert_eq!(undeclared, ["GET /raw", "POST /chained"]);
 }
 
 #[tokio::test]
