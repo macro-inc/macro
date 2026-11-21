@@ -250,6 +250,9 @@ fn a_run_that_sends_nothing_reaches_nobody() {
             "/agent-sessions/a/code-executions/b/connected-apps/slack/send/calls",
         ),
         ("POST", "/team/invite"),
+        // A bearer token for a document, valid an hour after the run.
+        ("POST", "/dss/documents/permissions_token/01a1"),
+        ("POST", "/v1/documents/permissions_token/01a1"),
     ] {
         assert!(!scope.allows(method, path), "{method} {path}");
     }
