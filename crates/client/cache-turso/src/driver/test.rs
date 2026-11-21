@@ -417,15 +417,16 @@ fn a_copy_through_a_stale_view_remembers_the_frames_it_copied() {
     // `b` commits into the same log, one frame at a time, up to the count
     // `a` saw before the restart.
     execute(&b, "COMMIT", vec![]).unwrap();
-    let mut label = 0;
-    while wal_frames(&b) < first.wal_frames {
+    for label in 0..first.wal_frames {
+        if wal_frames(&b) >= first.wal_frames {
+            break;
+        }
         execute(
             &b,
             "UPDATE t SET label = ? WHERE id = 0",
             vec![Value::build_text(label.to_string())],
         )
         .unwrap();
-        label += 1;
     }
     assert_eq!(wal_frames(&b), first.wal_frames);
 
