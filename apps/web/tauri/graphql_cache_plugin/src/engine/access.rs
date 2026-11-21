@@ -65,11 +65,13 @@ impl<T> EngineAccess<T> {
         {
             return None;
         }
+        // Wrapped only once both are held: dropping a bare turn after a
+        // failed try wakes no one, so a waiter cannot spin on its own wake.
         let turn = self.turn.try_lock().ok()?;
         let value = self.value.try_lock().ok()?;
         Some(AccessGuard {
             value,
-            _turn: Some(turn),
+            _turn: Some(self.held(turn)),
             _release: ReleaseNotice {
                 available: &self.available,
                 quiet: None,
@@ -88,6 +90,13 @@ impl<T> EngineAccess<T> {
         !self.quiet.armed.load(Ordering::SeqCst) && self.quiet.holds.open() == 0
     }
 
+    fn held<'a>(&'a self, turn: MutexGuard<'a, ()>) -> Turn<'a> {
+        Turn {
+            _turn: turn,
+            _wake: Wake(&self.available),
+        }
+    }
+
     fn release_notice(&self) -> ReleaseNotice<'_> {
         ReleaseNotice {
             available: &self.available,
@@ -103,7 +112,7 @@ impl<T> EngineAccess<T> {
     pub(super) async fn lock(&self) -> AccessGuard<'_, T> {
         let _wait = AcquisitionWait::new();
         let _waiting = Counted::new(&self.turn_waiting);
-        let turn = self.turn.lock().await;
+        let turn = self.held(self.turn.lock().await);
         AccessGuard {
             value: self.value.lock().await,
             _turn: Some(turn),
@@ -152,7 +161,7 @@ impl<T> EngineAccess<T> {
             {
                 let guard = AccessGuard {
                     value,
-                    _turn: Some(turn),
+                    _turn: Some(self.held(turn)),
                     _release: self.release_notice(),
                 };
                 if epoch != self.write_epoch.load(Ordering::SeqCst) {
@@ -208,7 +217,7 @@ impl Drop for AcquisitionWait {
 // release notice, so a woken waiter finds both free.
 pub(super) struct AccessGuard<'a, T> {
     value: MutexGuard<'a, T>,
-    _turn: Option<MutexGuard<'a, ()>>,
+    _turn: Option<Turn<'a>>,
     _release: ReleaseNotice<'a>,
 }
 
@@ -243,7 +252,7 @@ impl<'a, T> AccessGuard<'a, T> {
 /// A command's turn, kept while reads use the engine.
 pub(super) struct HeldTurn<'a, T> {
     access: &'a EngineAccess<T>,
-    turn: MutexGuard<'a, ()>,
+    turn: Turn<'a>,
     _release: ReleaseNotice<'a>,
 }
 
@@ -274,6 +283,20 @@ impl<T> DerefMut for AccessGuard<'_, T> {
         &mut self.value
     }
 }
+/// A held turn. Releasing it, even from a command cancelled while it waited
+/// for the engine, wakes warming hydrates and idle work, which wait for
+/// releases by notification rather than in the turn's queue.
+struct Turn<'a> {
+    _turn: MutexGuard<'a, ()>,
+    _wake: Wake<'a>,
+}
+struct Wake<'a>(&'a Notify);
+impl Drop for Wake<'_> {
+    fn drop(&mut self) {
+        self.0.notify_waiters();
+    }
+}
+
 // Struct fields drop in declaration order: unlock before waking waiters.
 struct ReleaseNotice<'a> {
     available: &'a Notify,
@@ -646,6 +669,52 @@ mod test {
             command.as_mut().await.push("command");
             read.await.push("read");
             assert_eq!(*access.lock().await, ["hydrate", "command", "read"]);
+        });
+    }
+
+    struct Woken(AtomicBool);
+    impl std::task::Wake for Woken {
+        fn wake(self: Arc<Self>) {
+            self.0.store(true, Ordering::SeqCst);
+        }
+    }
+
+    /// A command cancelled after taking its turn, while it waits for the engine,
+    /// still wakes a warming hydrate that waits for the turn.
+    #[test]
+    fn a_cancelled_command_wakes_hydrates_waiting_for_its_turn() {
+        pollster::block_on(async {
+            let access = EngineAccess::new(0);
+            let read = access.read().await;
+            let mut command = Box::pin(access.lock());
+            assert!(
+                pending(command.as_mut()),
+                "it holds the turn and waits for the engine"
+            );
+            let woken = Arc::new(Woken(AtomicBool::new(false)));
+            let waker = std::task::Waker::from(woken.clone());
+            let mut warming = std::pin::pin!(access.hydrate());
+            assert!(
+                warming
+                    .as_mut()
+                    .poll(&mut std::task::Context::from_waker(&waker))
+                    .is_pending()
+            );
+            drop(read);
+            woken.0.store(false, Ordering::SeqCst);
+            assert!(
+                warming
+                    .as_mut()
+                    .poll(&mut std::task::Context::from_waker(&waker))
+                    .is_pending(),
+                "the command still holds the turn"
+            );
+            drop(command);
+            assert!(
+                woken.0.load(Ordering::SeqCst),
+                "releasing the turn wakes it"
+            );
+            assert!(warming.await.is_ok());
         });
     }
 
