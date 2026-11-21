@@ -747,7 +747,7 @@ fn service_with_flags(flag: bool, computers: FakeComputers) -> (Service, Journal
                 ..FakeInstalls::default()
             },
             runtimes: FakeRuntimes(journal.clone()),
-            images: any_image,
+            images: Arc::new(any_image),
             public_environment: Box::new(PublicAddresses),
         },
     );

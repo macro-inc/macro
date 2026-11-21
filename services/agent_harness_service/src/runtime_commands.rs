@@ -228,6 +228,10 @@ enum RuntimeBusEvent {
     Command(Box<RuntimeCommandRequest>),
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "each is a separate capability of the bus consumer; tests pass them one by one"
+)]
 pub(crate) async fn consume_runtime_commands<Harness>(
     redis: redis::Client,
     replica: ReplicaId,

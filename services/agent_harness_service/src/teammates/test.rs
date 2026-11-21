@@ -47,11 +47,14 @@ fn current_image(_: HostArch) -> Option<TeammateImage> {
     })
 }
 
+/// A recorded status: the install, its delivery and the state.
+type RecordedStatus = (Uuid, (u64, u64), InstallRunState);
+
 #[derive(Default)]
 struct FakeStore {
     rows: Mutex<Vec<TeammateInstallRecord>>,
     reports: Mutex<Vec<HarnessId>>,
-    statuses: Mutex<Vec<(Uuid, (u64, u64), InstallRunState)>>,
+    statuses: Mutex<Vec<RecordedStatus>>,
 }
 
 impl InstallStore for FakeStore {
@@ -261,7 +264,7 @@ fn machine(rows: Vec<TeammateInstallRecord>, hosts_teammates: bool) -> Machine {
         Arc::clone(&store) as Arc<dyn InstallStore>,
         Arc::clone(&issuer) as Arc<dyn InstallIssuer>,
         Arc::clone(&sockets) as Arc<dyn TeammateSockets>,
-        current_image,
+        Arc::new(current_image),
     );
     Machine {
         delivery,

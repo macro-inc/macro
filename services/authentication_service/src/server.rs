@@ -788,7 +788,7 @@ async fn run_server() -> anyhow::Result<()> {
                 harness_url.clone(),
                 &internal_key,
             )?,
-            images: team_agents::domain::self_hosting::TeammateRuntimeImage::for_arch,
+            images: crate::outbound::teammate_runtimes::teammate_runtime_images(),
             public_environment: Box::new(crate::outbound::agent_addresses::PublicAgentAddresses(
                 config.environment,
             )),

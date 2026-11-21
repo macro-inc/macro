@@ -72,16 +72,10 @@ impl TeammateRuntimeImage {
     /// The same for arm64.
     pub const OVERRIDE_ARM64: &str = "OVERRIDE_TEAMMATE_RUNTIME_IMAGE_ARM64";
 
-    /// The image for `arch`, if one is built for it: a local stack's
-    /// override, else the pinned constant.
-    pub fn for_arch(arch: HostArch) -> Option<TeammateImage> {
-        static OVERRIDES: std::sync::OnceLock<LocalImages> = std::sync::OnceLock::new();
-        let overrides = OVERRIDES.get_or_init(|| {
-            LocalImages::read(macro_env::Environment::new_or_prod(), |name| {
-                std::env::var(name).ok()
-            })
-        });
-        Self::resolve(arch, overrides)
+    /// The images machines run: a local stack's `overrides`, read once at
+    /// startup, else the pinned constants.
+    pub fn images(overrides: LocalImages) -> RuntimeImages {
+        std::sync::Arc::new(move |arch| Self::resolve(arch, &overrides))
     }
 
     /// The image for `arch` given a stack's `overrides`.
@@ -159,9 +153,9 @@ fn parse_image(value: &str) -> Option<TeammateImage> {
     })
 }
 
-/// The images machines run, by architecture: [`TeammateRuntimeImage::for_arch`]
+/// The images machines run, by architecture: [`TeammateRuntimeImage::images`]
 /// outside tests.
-pub type RuntimeImages = fn(HostArch) -> Option<TeammateImage>;
+pub type RuntimeImages = std::sync::Arc<dyn Fn(HostArch) -> Option<TeammateImage> + Send + Sync>;
 
 /// Where an install's container is, as its machine last said, for the
 /// install's current generation.
@@ -424,7 +418,11 @@ impl HostEligibility {
     /// engine and no problem, an image is built for its architecture, and
     /// it meets the hardware floor (checked here again, not only by macrod).
     /// Unknown free disk is left to macrod.
-    pub fn of(connected: bool, report: Option<&TeammateHostReport>, images: RuntimeImages) -> Self {
+    pub fn of(
+        connected: bool,
+        report: Option<&TeammateHostReport>,
+        images: impl Fn(HostArch) -> Option<TeammateImage>,
+    ) -> Self {
         if !connected {
             return Self::not(HostIneligibility::Offline);
         }
@@ -681,7 +679,7 @@ pub struct TeammateHost {
 
 impl TeammateHost {
     /// The machine as the Invite dialog shows it.
-    pub fn new(facts: HostFacts, images: RuntimeImages) -> Self {
+    pub fn new(facts: HostFacts, images: impl Fn(HostArch) -> Option<TeammateImage>) -> Self {
         let eligibility = HostEligibility::of(facts.connected, facts.report.as_ref(), images);
         let report = facts.report.as_ref().map(HostReport::from);
         let experimental = report.as_ref().is_some_and(|report| {

@@ -1525,7 +1525,7 @@ pub async fn run() -> anyhow::Result<()> {
             config.authentication_service_secret_key.as_ref(),
         )?),
         Arc::clone(&runtimes) as Arc<dyn teammates::TeammateSockets>,
-        team_agents::domain::self_hosting::TeammateRuntimeImage::for_arch,
+        teammates::teammate_runtime_images(),
     );
     let (teammate_reports, teammate_report_receiver) = tokio::sync::mpsc::unbounded_channel();
     runtimes.report_teammates_to(teammate_reports);

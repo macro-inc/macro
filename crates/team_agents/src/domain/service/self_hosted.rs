@@ -68,7 +68,7 @@ where
             .find(|host| host.harness_id == harness)
             // Someone else's machine looks the same as no machine.
             .ok_or(TeamAgentError::NotFound)?;
-        let eligibility = HostEligibility::of(host.connected, host.report.as_ref(), self.images);
+        let eligibility = HostEligibility::of(host.connected, host.report.as_ref(), &*self.images);
         if eligibility.ok {
             Ok(())
         } else {

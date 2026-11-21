@@ -112,7 +112,7 @@ pub struct SelfHosting<Installs, Runtimes> {
     /// Delivery nudges.
     pub runtimes: Runtimes,
     /// The runtime image for each architecture:
-    /// [`super::self_hosting::TeammateRuntimeImage::for_arch`].
+    /// [`super::self_hosting::TeammateRuntimeImage::images`].
     pub images: RuntimeImages,
     /// Public addresses for own machines.
     pub public_environment: Box<dyn EnrollmentEnvironment>,
@@ -935,7 +935,7 @@ where
         Ok(TeammateHosts {
             hosts: hosts
                 .into_iter()
-                .map(|facts| TeammateHost::new(facts, self.images))
+                .map(|facts| TeammateHost::new(facts, &*self.images))
                 .collect(),
         })
     }

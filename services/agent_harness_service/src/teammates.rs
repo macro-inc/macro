@@ -52,6 +52,32 @@ use uuid::Uuid;
 
 pub(crate) mod auth_installs;
 pub(crate) mod telemetry;
+
+macro_env_var::maybe_env_vars! {
+    /// A local stack's x86-64 teammate runtime image,
+    /// `<repository>@sha256:<hex>`; ignored outside `ENVIRONMENT=local`.
+    struct OverrideTeammateRuntimeImageAmd64;
+    /// The same for arm64.
+    struct OverrideTeammateRuntimeImageArm64;
+}
+
+/// The teammate runtime images, with a local stack's overrides read once,
+/// at startup.
+pub(crate) fn teammate_runtime_images() -> team_agents::domain::self_hosting::RuntimeImages {
+    use team_agents::domain::self_hosting::{LocalImages, TeammateRuntimeImage};
+    let amd64 = OverrideTeammateRuntimeImageAmd64::new().map(|value| value.to_string());
+    let arm64 = OverrideTeammateRuntimeImageArm64::new().map(|value| value.to_string());
+    let overrides = LocalImages::read(macro_env::Environment::new_or_prod(), |name| {
+        if name == TeammateRuntimeImage::OVERRIDE_AMD64 {
+            amd64.clone()
+        } else if name == TeammateRuntimeImage::OVERRIDE_ARM64 {
+            arm64.clone()
+        } else {
+            None
+        }
+    });
+    TeammateRuntimeImage::images(overrides)
+}
 #[cfg(test)]
 mod test;
 
@@ -604,7 +630,7 @@ impl TeammateDelivery {
         arch: Option<HostArch>,
         row: TeammateInstallRecord,
     ) -> TeammateInstallRecord {
-        let Some(image) = arch.and_then(self.images) else {
+        let Some(image) = arch.and_then(|arch| (self.images)(arch)) else {
             return row;
         };
         if row

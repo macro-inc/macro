@@ -119,9 +119,11 @@ is held until the `CountedDelivery` is released), mints under that lock so
 racing replicas mint in delivery order (`replace_key`, same brain key name),
 releases (kept even when minting failed, so the runtime stays behind and gets
 the next delivery) and returns the image
-(`TeammateRuntimeImage::for_arch`, a per-architecture constant; a local
+(`TeammateRuntimeImage::images`, a per-architecture constant; a local
 stack may override it with `OVERRIDE_TEAMMATE_RUNTIME_IMAGE_{AMD64,ARM64}` =
-`<repository>@sha256:<hex>`, ignored outside `ENVIRONMENT=local`) and the
+`<repository>@sha256:<hex>`, ignored outside `ENVIRONMENT=local`; each
+service reads them once at startup with `maybe_env_vars!` and injects the
+result) and the
 environment with public addresses (`MACRO_TEAMMATE_INSTALL_ID`, no
 `MACRO_COMPUTER_ID`; on a local stack, the in-network `OVERRIDE_*` addresses a
 local Macro computer gets, since the teammate joins the stack's network). A move (`POST /team_agents/{agent}/install`) or removal
