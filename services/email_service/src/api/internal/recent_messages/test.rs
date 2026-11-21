@@ -80,7 +80,22 @@ fn days_ask_for_a_window_with_text_on_the_newest() {
             folder: RecentMailFolder::Inbox,
             days: 7,
             limit: DEFAULT_RECENT_MESSAGES,
-            texts: DEFAULT_RECENT_MESSAGES,
+            texts: u16::MAX,
+            snippet_chars: DEFAULT_SNIPPET_CHARS,
+        })
+    );
+
+    // `limit=0` reads one message, which still carries its snippet.
+    let Query(query) = Query::try_from_uri(&"/?days=7&limit=0".parse().unwrap()).unwrap();
+    let (_, read) = parse_request("macro|owner@example.com".to_owned(), query).unwrap();
+
+    assert_eq!(
+        read,
+        Read::Window(WindowRead {
+            folder: RecentMailFolder::Inbox,
+            days: 7,
+            limit: 0,
+            texts: u16::MAX,
             snippet_chars: DEFAULT_SNIPPET_CHARS,
         })
     );
@@ -101,7 +116,7 @@ fn a_window_accepts_explicit_inbox_or_sent() {
                 folder,
                 days: 30,
                 limit: DEFAULT_RECENT_MESSAGES,
-                texts: DEFAULT_RECENT_MESSAGES,
+                texts: u16::MAX,
                 snippet_chars: DEFAULT_SNIPPET_CHARS,
             })
         );

@@ -57,8 +57,8 @@ pub struct WindowRead {
     pub days: u16,
     /// 1 to [`MAX_WINDOW_MESSAGES`].
     pub limit: u16,
-    /// How many of the newest carry a snippet, at most `limit`; the rest
-    /// carry none.
+    /// How many of the newest carry a snippet; one at or past `limit`
+    /// gives every kept message its snippet, and the rest carry none.
     pub texts: u16,
     /// 1 to [`MAX_SNIPPET_CHARS`].
     pub snippet_chars: u16,

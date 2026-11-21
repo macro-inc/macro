@@ -330,6 +330,24 @@ async fn a_sent_window_merges_mailboxes_and_keeps_text_for_only_the_newest() {
         *service.reader.reads.lock().unwrap(),
         vec![read(10), read(10), read(2), read(2)]
     );
+
+    // A limit of 0 reads one message, and a `texts` past the limit gives
+    // it its snippet.
+    let one = service
+        .read_window(
+            &owner,
+            WindowRead {
+                folder: RecentMailFolder::Sent,
+                days: 10,
+                limit: 0,
+                texts: u16::MAX,
+                snippet_chars: MAX_SNIPPET_CHARS,
+            },
+            at("2026-11-20T00:00:00Z") + Duration::hours(12),
+        )
+        .await
+        .unwrap();
+    assert_eq!(subjects(one), vec![text("Today")]);
 }
 
 #[tokio::test]
