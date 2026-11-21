@@ -660,10 +660,11 @@ impl MailTransport for ProtocolTransport {
         from: &str,
         recipients: &[String],
         mime: &[u8],
+        pre_body_deadline: tokio::time::Instant,
     ) -> Result<TransportSubmission, Error> {
         match timeout(
             Duration::from_secs(8 * 60),
-            self.submit_inner(c, from, recipients, mime),
+            self.submit_inner(c, from, recipients, mime, pre_body_deadline),
         )
         .await
         {

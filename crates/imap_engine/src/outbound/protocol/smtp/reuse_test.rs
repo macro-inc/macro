@@ -57,6 +57,29 @@ pub(super) async fn pooled_connection() -> (
     (transport, credentials, peer, listener)
 }
 
+#[tokio::test(start_paused = true)]
+async fn an_expired_admission_budget_never_touches_the_pooled_socket() {
+    use tokio::io::AsyncReadExt;
+
+    let (transport, credentials, mut peer, listener) = pooled_connection().await;
+    drop(listener);
+    assert_eq!(
+        transport
+            .submit_inner(
+                &credentials,
+                "owner@example.net",
+                &["recipient@example.net".into()],
+                b"From: owner@example.net\r\n\r\nbody\r\n",
+                tokio::time::Instant::now() - Duration::from_secs(1),
+            )
+            .await,
+        Err(Error::SendUnavailable)
+    );
+    drop(transport);
+    let mut received = Vec::new();
+    assert_eq!(peer.read_to_end(&mut received).await.unwrap(), 0);
+}
+
 #[tokio::test]
 async fn pooled_session_is_checked_before_mail_and_a_real_rcpt_refusal_stays_definite() {
     let (transport, credentials, peer, listener) = pooled_connection().await;
@@ -87,6 +110,7 @@ async fn pooled_session_is_checked_before_mail_and_a_real_rcpt_refusal_stays_def
             "owner@example.net",
             &["recipient@example.net".into()],
             b"From: owner@example.net\r\nTo: recipient@example.net\r\nSubject: synthetic\r\n\r\nbody\r\n",
+            tokio::time::Instant::now() + SUBMISSION_PRE_BODY_BUDGET,
         )
         .await;
     assert_eq!(result, Err(Error::SendRejected));
@@ -136,6 +160,7 @@ async fn an_idle_closed_pool_and_two_failed_fresh_connections_report_no_submissi
                 "owner@example.net",
                 &["recipient@example.net".into()],
                 b"From: owner@example.net\r\nSubject: synthetic\r\n\r\nbody\r\n",
+                tokio::time::Instant::now() + SUBMISSION_PRE_BODY_BUDGET,
             )
             .await,
         Err(Error::SendUnavailable)
@@ -196,6 +221,7 @@ async fn a_lost_reply_after_data_never_opens_a_fresh_connection() {
                 "owner@example.net",
                 &["recipient@example.net".into()],
                 b"From: owner@example.net\r\nSubject: synthetic\r\n\r\nbody\r\n",
+                tokio::time::Instant::now() + SUBMISSION_PRE_BODY_BUDGET,
             )
             .await,
         Ok(SubmissionOutcome::Unknown)
@@ -243,6 +269,7 @@ async fn stalled_envelopes_share_one_budget_and_do_not_start_a_short_retry() {
                     "owner@example.net",
                     &["recipient@example.net".into()],
                     b"From: owner@example.net\r\nSubject: synthetic\r\n\r\nbody\r\n",
+                    tokio::time::Instant::now() + SUBMISSION_PRE_BODY_BUDGET,
                 )
                 .await
         });
@@ -266,7 +293,7 @@ async fn stalled_envelopes_share_one_budget_and_do_not_start_a_short_retry() {
         );
         assert_eq!(
             fresh_connections, 0,
-            "do not open a fresh connection with less than30s left"
+            "do not open a fresh connection with less than 30s left"
         );
     }
 }

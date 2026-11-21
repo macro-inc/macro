@@ -53,7 +53,7 @@ negative or lost final response after the body remains Unknown rather than
 being retried as a fresh send. SMTP telemetry records only phase and reply class.
 Pooled SMTP sessions receive a three-second RSET check before reuse. A transport
 failure before any message-body byte gets one fresh-connection retry using the same frozen MIME
-and send identity. Connection setup and envelope commands share one 60-second
+and send identity. Admission, connection setup and envelope commands share one 60-second
 deadline; a retry needs at least 30 seconds remaining. Body IO lies outside that
 deadline and remains uncertain on failure. Exhausted pre-body connection failures return the closed
 `SendUnavailable` category: the email coordinator fails that attempt visibly,
@@ -65,7 +65,9 @@ settlement. Recovery of that fact fails the attempt without reading or submittin
 again. HTTP/GraphQL status adds an optional reason without changing existing issue
 enum values. Only the current send-rejection issue projects that reason; a
 deliberate retry or another failure does not expose an old checkpoint reason.
-Legacy rows have an unknown reason. The current UI reads this detail
+Legacy rows have an unknown reason. A permit wait that expires before inspecting
+the prior durable submission remains a generic connectivity failure. SMTP attempt
+and outcome span fields are written once at completion; stale-probe errors log at WARN. The current UI reads this detail
 from its existing HTTP status query; existing GraphQL fragments stay unchanged.
 Read-only reconciliation targets the requested draft and requires one exact
 Message-ID header in Sent; substring search hits, duplicate IDs and a missing

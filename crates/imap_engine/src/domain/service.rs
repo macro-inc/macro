@@ -234,11 +234,18 @@ impl Engine {
     #[tracing::instrument(skip_all, fields(link_id = %binding.link_id), err)]
     pub async fn execute(&self, binding: Binding, operation: Operation) -> Result<Value, Error> {
         // Admit before loading the account index so a reconnect wave cannot buffer thousands of mailboxes.
-        let _capacity = self
-            .operation_capacity
-            .acquire()
-            .await
-            .map_err(|_| Error::ConnectionUnavailable)?;
+        let submission_deadline = tokio::time::Instant::now() + SUBMISSION_PRE_BODY_BUDGET;
+        let admission = self.operation_capacity.acquire();
+        let capacity = if matches!(operation, Operation::Submit { .. }) {
+            // A queued request has not inspected its prior durable submission,
+            // so an expired wait remains a conservative connectivity error.
+            tokio::time::timeout_at(submission_deadline, admission)
+                .await
+                .map_err(|_| Error::ConnectionUnavailable)?
+        } else {
+            admission.await
+        };
+        let _capacity = capacity.map_err(|_| Error::ConnectionUnavailable)?;
         let _synchronization_capacity = if matches!(operation, Operation::Sync) {
             Some(
                 self.synchronization_capacity
@@ -255,7 +262,9 @@ impl Engine {
             self.repository.release(&account).await?;
             return Err(Error::CredentialsRejected);
         }
-        let result = self.execute_leased(&mut account, operation).await;
+        let result = self
+            .execute_leased(&mut account, operation, submission_deadline)
+            .await;
         // Always release after a failed command. Persisting a send's Unknown marker happened before IO.
         let release = self.repository.release(&account).await;
         match result {
@@ -336,7 +345,12 @@ impl Engine {
         }
         Ok(())
     }
-    async fn execute_leased(&self, a: &mut Account, op: Operation) -> Result<Value, Error> {
+    async fn execute_leased(
+        &self,
+        a: &mut Account,
+        op: Operation,
+        submission_deadline: tokio::time::Instant,
+    ) -> Result<Value, Error> {
         match op {
             Operation::Folders => {
                 if a.state.folders.is_empty() {
@@ -572,7 +586,7 @@ impl Engine {
                 self.repository.save(a).await?;
                 value(result)
             }
-            Operation::Submit { id } => self.submit(a, &id).await,
+            Operation::Submit { id } => self.submit(a, &id, submission_deadline).await,
         }
     }
 }

@@ -138,7 +138,12 @@ impl Engine {
         }
         Ok(())
     }
-    pub(super) async fn submit(&self, a: &mut Account, id: &str) -> Result<Value, Error> {
+    pub(super) async fn submit(
+        &self,
+        a: &mut Account,
+        id: &str,
+        submission_deadline: tokio::time::Instant,
+    ) -> Result<Value, Error> {
         let draft = a.state.drafts.get(id).ok_or(Error::NotFound)?;
         if let Some(outcome) = &draft.submission {
             return value(outcome);
@@ -213,9 +218,13 @@ impl Engine {
         draft.submission = Some(SubmissionOutcome::Unknown);
         a.state.sends_today = a.state.sends_today.saturating_add(1);
         self.repository.save(a).await?;
-        let submission = self
-            .transport
-            .submit(&c, &send.from.email, &recipients, &mime);
+        let submission = self.transport.submit(
+            &c,
+            &send.from.email,
+            &recipients,
+            &mime,
+            submission_deadline,
+        );
         tokio::pin!(submission);
         let mut heartbeat = tokio::time::interval(std::time::Duration::from_secs(60));
         heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);

@@ -2,6 +2,8 @@ use super::*;
 use chrono::TimeZone;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+mod admission;
+
 #[test]
 fn moving_and_uidvalidity_reset_preserve_identity_and_emit_folder_removals() {
     let received = Utc.timestamp_opt(1_700_000_000, 0).unwrap();
@@ -388,6 +390,7 @@ pub(crate) struct UncertainTransport {
     pub(crate) repository: Arc<MemoryRepository>,
     pub(crate) submissions: std::sync::atomic::AtomicU32,
     pub(crate) deadline: AtomicBool,
+    pub(crate) submission_deadline: std::sync::Mutex<Option<tokio::time::Instant>>,
     pub(crate) sent_found: std::sync::Mutex<std::collections::BTreeSet<String>>,
 }
 #[async_trait::async_trait]
@@ -439,8 +442,10 @@ impl MailTransport for UncertainTransport {
         _: &str,
         _: &[String],
         _: &[u8],
+        pre_body_deadline: tokio::time::Instant,
     ) -> Result<TransportSubmission, Error> {
         assert!(self.repository.saved_unknown.load(Ordering::Acquire));
+        *self.submission_deadline.lock().unwrap() = Some(pre_body_deadline);
         self.submissions.fetch_add(1, Ordering::AcqRel);
         Ok(TransportSubmission {
             outcome: SubmissionOutcome::Unknown,
@@ -483,6 +488,7 @@ async fn uncertain_send_is_persisted_before_io_and_is_not_sent_again_after_resta
         submissions: std::sync::atomic::AtomicU32::new(0),
         deadline: AtomicBool::new(false),
         sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
+        submission_deadline: std::sync::Mutex::new(None),
     });
     let binding = Binding {
         link_id: Uuid::now_v7(),
@@ -610,6 +616,7 @@ async fn a_send_deadline_pauses_other_attempts_but_never_replays_the_unknown_one
         submissions: std::sync::atomic::AtomicU32::new(0),
         deadline: AtomicBool::new(true),
         sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
+        submission_deadline: std::sync::Mutex::new(None),
     });
     let binding = Binding {
         link_id: Uuid::now_v7(),
@@ -807,6 +814,7 @@ async fn ambiguous_sent_append_is_fenced_across_restart_even_with_blind_search_a
         submissions: std::sync::atomic::AtomicU32::new(0),
         deadline: AtomicBool::new(false),
         sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
+        submission_deadline: std::sync::Mutex::new(None),
     });
     let binding = Binding {
         link_id: Uuid::now_v7(),
@@ -922,6 +930,7 @@ async fn an_actor_that_loses_its_first_owner_claim_exits_instead_of_holding_capa
         submissions: std::sync::atomic::AtomicU32::new(0),
         deadline: AtomicBool::new(false),
         sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
+        submission_deadline: std::sync::Mutex::new(None),
     });
     let engine = Engine::new(repository, Arc::new(TestCipher), transport.clone());
     let binding = Binding {

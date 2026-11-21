@@ -182,7 +182,8 @@ async fn real_tls_accounts_are_isolated_and_flags_move_and_smtp_work() {
                 &credentials,
                 &user,
                 &["recipient@example.net".into()],
-                mime.as_bytes()
+                mime.as_bytes(),
+                tokio::time::Instant::now() + SUBMISSION_PRE_BODY_BUDGET,
             )
             .await
             .unwrap()
@@ -302,7 +303,8 @@ async fn smtp_pool_reuses_one_connection_but_never_another_binding() {
                     &credentials,
                     &owner,
                     &["recipient@example.net".into()],
-                    mime.as_bytes()
+                    mime.as_bytes(),
+                    tokio::time::Instant::now() + SUBMISSION_PRE_BODY_BUDGET,
                 )
                 .await
                 .unwrap()
@@ -322,7 +324,8 @@ async fn smtp_pool_reuses_one_connection_but_never_another_binding() {
                 &other,
                 &owner,
                 &["recipient@example.net".into()],
-                b"From: test@example.net\r\n\r\nprivate"
+                b"From: test@example.net\r\n\r\nprivate",
+                tokio::time::Instant::now() + SUBMISSION_PRE_BODY_BUDGET,
             )
             .await
             .is_err()
@@ -382,7 +385,8 @@ async fn real_smtp_temporary_and_permanent_refusals_do_not_submit_data() {
                     &credentials,
                     &owner,
                     &["recipient@example.net".into()],
-                    b"From: sender@example.net\r\n\r\nRefused"
+                    b"From: sender@example.net\r\n\r\nRefused",
+                    tokio::time::Instant::now() + SUBMISSION_PRE_BODY_BUDGET,
                 )
                 .await
                 .unwrap_err(),
@@ -641,7 +645,8 @@ async fn real_stalwart_roundtrip_preserves_source_flags_move_and_sent_copy() {
                 &credentials,
                 user,
                 &["stalwart-bob@example.net".into()],
-                source.as_bytes()
+                source.as_bytes(),
+                tokio::time::Instant::now() + SUBMISSION_PRE_BODY_BUDGET,
             )
             .await
             .unwrap()

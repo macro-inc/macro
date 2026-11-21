@@ -3,7 +3,6 @@ use super::*;
 use mailparse::MailHeaderMap;
 use std::{collections::BTreeMap, time::Instant};
 
-const PRE_BODY_BUDGET: Duration = Duration::from_secs(60);
 const MIN_RETRY_BUDGET: Duration = Duration::from_secs(30);
 
 #[derive(Default)]
@@ -79,6 +78,9 @@ mod reuse_test;
 
 #[cfg(test)]
 mod retry_test;
+
+#[cfg(test)]
+mod telemetry_test;
 
 pub(super) struct Pooled {
     stream: Stream,
@@ -206,93 +208,101 @@ impl ProtocolTransport {
         from: &str,
         recipients: &[String],
         mime: &[u8],
+        deadline: tokio::time::Instant,
     ) -> Result<SubmissionOutcome, Error> {
-        if !from.eq_ignore_ascii_case(&c.email)
-            || recipients.is_empty()
-            || recipients.len() > 100
-            || !address(from)
-            || recipients.iter().any(|s| !address(s))
-        {
-            return Err(Error::Forbidden);
-        }
-        let wire = without_bcc(mime)?;
-        let key = Self::smtp_key(c);
-        let deadline = tokio::time::Instant::now() + PRE_BODY_BUDGET;
-        let span = tracing::Span::current();
-        span.record("smtp.outcome", "not_submitted");
-        // Both attempts use the same frozen MIME and durable send record. The
-        // transport returns Unknown once message-body IO starts, so that path exits here
-        // without reconnecting or submitting those bytes a second time.
-        for attempt in 0..2 {
-            span.record("smtp.attempt", i64::from(attempt + 1));
-            let connection = match tokio::time::timeout_at(deadline, async {
-                if attempt == 0 {
-                    self.take_smtp(c).await.map(|(_, connection)| connection)
-                } else {
-                    self.open_smtp(c).await
-                }
-            })
-            .await
+        let mut attempts = 0_i64;
+        let result = async {
+            if !from.eq_ignore_ascii_case(&c.email)
+                || recipients.is_empty()
+                || recipients.len() > 100
+                || !address(from)
+                || recipients.iter().any(|s| !address(s))
             {
-                Ok(connection) => connection,
-                Err(_) => Err(Error::SendUnavailable),
-            };
-            let result = match connection {
-                Ok(mut connection) => {
-                    match deliver(
-                        &mut connection.stream,
-                        &connection.extensions,
-                        from,
-                        recipients,
-                        &wire,
-                        deadline,
-                    )
-                    .await
-                    {
-                        Ok(outcome) => {
-                            span.record(
-                                "smtp.outcome",
+                return Err(Error::Forbidden);
+            }
+            let wire = without_bcc(mime)?;
+            let key = Self::smtp_key(c);
+            // Both attempts use the same frozen MIME and durable send record. The
+            // transport returns Unknown once message-body IO starts, so that path exits here
+            // without reconnecting or submitting those bytes a second time.
+            for attempt in 0..2 {
+                if tokio::time::Instant::now() >= deadline {
+                    return Err(Error::SendUnavailable);
+                }
+                attempts = i64::from(attempt + 1);
+                let connection = match tokio::time::timeout_at(deadline, async {
+                    if attempt == 0 {
+                        self.take_smtp(c).await.map(|(_, connection)| connection)
+                    } else {
+                        self.open_smtp(c).await
+                    }
+                })
+                .await
+                {
+                    Ok(connection) => connection,
+                    Err(_) => Err(Error::SendUnavailable),
+                };
+                let result = match connection {
+                    Ok(mut connection) => {
+                        match deliver(
+                            &mut connection.stream,
+                            &connection.extensions,
+                            from,
+                            recipients,
+                            &wire,
+                            deadline,
+                        )
+                        .await
+                        {
+                            Ok(outcome) => {
                                 if outcome == SubmissionOutcome::Accepted {
-                                    "accepted"
-                                } else {
-                                    "unknown"
-                                },
-                            );
-                            if outcome == SubmissionOutcome::Accepted {
-                                connection.messages = connection.messages.saturating_add(1);
-                                connection.last_used = Instant::now();
-                                if let Some(key) = key {
-                                    let mut pool = self.smtp_pool.lock().await;
-                                    if pool.len() < 64 || pool.contains_key(&key) {
-                                        pool.insert(key, connection);
+                                    connection.messages = connection.messages.saturating_add(1);
+                                    connection.last_used = Instant::now();
+                                    if let Some(key) = key {
+                                        let mut pool = self.smtp_pool.lock().await;
+                                        if pool.len() < 64 || pool.contains_key(&key) {
+                                            pool.insert(key, connection);
+                                        }
                                     }
                                 }
+                                return Ok(outcome);
                             }
-                            return Ok(outcome);
+                            Err(error) => error,
                         }
-                        Err(error) => error,
                     }
+                    Err(error) => error,
+                };
+                let error = definite_submission_error(result);
+                if error != Error::SendUnavailable
+                    || attempt == 1
+                    || deadline.saturating_duration_since(tokio::time::Instant::now())
+                        < MIN_RETRY_BUDGET
+                {
+                    return Err(error);
                 }
-                Err(error) => error,
-            };
-            let error = definite_submission_error(result);
-            if error != Error::SendUnavailable
-                || attempt == 1
-                || deadline.saturating_duration_since(tokio::time::Instant::now())
-                    < MIN_RETRY_BUDGET
-            {
-                return Err(error);
+                tracing::warn!(
+                    smtp.retry_count = 1_i64,
+                    "Retrying unavailable SMTP connection before any message body byte"
+                );
             }
-            tracing::warn!(
-                smtp.retry_count = 1_i64,
-                "Retrying unavailable SMTP connection before any message body byte"
-            );
+            Err(Error::SendUnavailable)
         }
-        Err(Error::SendUnavailable)
+        .await;
+        let outcome = match &result {
+            Ok(SubmissionOutcome::Accepted) => "accepted",
+            Ok(SubmissionOutcome::Unknown) => "unknown",
+            Err(_) => "not_submitted",
+        };
+        // Some exporters retain the first write. Publish final fields once,
+        // after both attempts settle, so a success cannot retain failure data.
+        let span = tracing::Span::current();
+        span.record("smtp.attempt", attempts);
+        span.record("smtp.outcome", outcome);
+        result
     }
 }
 
-#[tracing::instrument(name = "smtp.connection.reuse", skip_all, fields(smtp.phase = "rset"), err)]
+#[tracing::instrument(name = "smtp.connection.reuse", skip_all, fields(smtp.phase = "rset"), err(level = "warn"))]
 async fn check_reuse<S: AsyncRead + AsyncWrite + Unpin>(stream: &mut S) -> Result<(), Error> {
     timeout(Duration::from_secs(3), command(stream, b"RSET\r\n", 250))
         .await
@@ -349,6 +359,9 @@ async fn deliver<S: AsyncRead + AsyncWrite + Unpin>(
     wire: &str,
     deadline: tokio::time::Instant,
 ) -> Result<SubmissionOutcome, Error> {
+    if tokio::time::Instant::now() >= deadline {
+        return Err(Error::SendUnavailable);
+    }
     let utf8 = international_headers(wire)?
         || !from.is_ascii()
         || recipients.iter().any(|r| !r.is_ascii());
@@ -393,6 +406,9 @@ async fn deliver<S: AsyncRead + AsyncWrite + Unpin>(
     })
     .await
     .map_err(|_| Error::SendUnavailable)??;
+    if tokio::time::Instant::now() >= deadline {
+        return Err(Error::SendUnavailable);
+    }
     // Admission was persisted before IO. Lost DATA delivery acknowledgments remain Unknown.
     if stream.write_all(&data).await.is_err() {
         tracing::warn!(

@@ -290,12 +290,14 @@ pub trait MailTransport: Send + Sync {
         action: RemoteAction,
     ) -> Result<RemoteWriteReceipt, Error>;
     /// SMTP submit once. The caller persisted Unknown before invoking this.
+    /// Preserve the admission deadline through every pre-body connection attempt.
     async fn submit(
         &self,
         credentials: &Credentials,
         from: &str,
         recipients: &[String],
         mime: &[u8],
+        pre_body_deadline: tokio::time::Instant,
     ) -> Result<TransportSubmission, Error>;
     /// Reconcile Sent by Message-ID; only the durably admitted first attempt may APPEND.
     /// False preserves pending reconciliation and the readable fallback without another APPEND.

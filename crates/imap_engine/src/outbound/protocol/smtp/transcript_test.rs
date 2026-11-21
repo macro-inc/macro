@@ -69,7 +69,7 @@ async fn exchange(
         from,
         &[recipient.into()],
         wire,
-        tokio::time::Instant::now() + PRE_BODY_BUDGET,
+        tokio::time::Instant::now() + SUBMISSION_PRE_BODY_BUDGET,
     )
     .await;
     drop(client);
@@ -176,7 +176,7 @@ async fn refusal_before_data_is_definite_and_any_negative_final_reply_is_unknown
             "sender@example.com",
             &["recipient@example.com".into()],
             ASCII,
-            tokio::time::Instant::now() + PRE_BODY_BUDGET,
+            tokio::time::Instant::now() + SUBMISSION_PRE_BODY_BUDGET,
         )
         .await;
         assert_eq!(outcome, expected);
@@ -340,7 +340,7 @@ async fn recipient_refusal_returns_without_waiting_for_connection_cleanup() {
                 "owner@example.net",
                 &["recipient@example.net".into()],
                 ASCII,
-                tokio::time::Instant::now() + PRE_BODY_BUDGET,
+                tokio::time::Instant::now() + SUBMISSION_PRE_BODY_BUDGET,
             ),
         )
         .await

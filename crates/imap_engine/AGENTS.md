@@ -68,7 +68,7 @@ accepts bearer access to a remote mail server.
   synchronization and IDLE cycle on a fresh independent connection.
 - Check a pooled SMTP socket with bounded RSET before reuse. Retry a transport
   failure once on a fresh socket only before any message-body byte; keep the frozen send identity.
-  The connection and envelope share a 60-second deadline; skip a retry with less than 30 seconds left.
+  Start the shared 60-second deadline at request admission and retain it through connection and envelope commands; skip a retry with less than 30 seconds left.
   Return typed `SendUnavailable` when neither attempt submitted message data.
 - Drain STORE completion codes explicitly: RFC7162 `MODIFIED` means Conflict even
   when the tagged status is OK.
@@ -99,3 +99,5 @@ case or plus suffixes when deriving a protocol username.
 The engine accepts authenticated, lifecycle-fenced bindings without rollout
 switches. The email host owns the existing user-scoped enrollment flag; sync,
 send and organization operations never depend on a PostHog response.
+
+Record final SMTP attempt/outcome span fields once after settlement; expected pooled-session probe failures log at WARN. An expired admission wait cannot establish a prior send outcome.

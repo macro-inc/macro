@@ -12,6 +12,9 @@ use zeroize::ZeroizeOnDrop;
 pub const MAX_FOLDER_CATALOG: usize = 1000;
 /// Maximum ordinary physical folders scanned per account.
 pub const MAX_MONITORED_FOLDERS: usize = 200;
+/// Shared admission-to-envelope budget; body transmission remains uncertainty-fenced.
+pub(crate) const SUBMISSION_PRE_BODY_BUDGET: std::time::Duration =
+    std::time::Duration::from_secs(60);
 
 /// Exact mailbox credential binding, authorized by the email domain.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]

@@ -64,6 +64,8 @@ fn tls_config() -> (Arc<ServerConfig>, String) {
 
 #[tokio::test]
 async fn failed_probes_and_pre_body_eof_reconnect_over_tls_without_changing_the_message() {
+    let telemetry = super::telemetry_test::FieldWrites::default();
+    let _capture = telemetry.install();
     let (tls, root) = tls_config();
     for failure in [
         "probe-421",
@@ -193,6 +195,7 @@ async fn failed_probes_and_pre_body_eof_reconnect_over_tls_without_changing_the_
                 "owner@example.net",
                 &["recipient@example.net".into()],
                 MIME,
+                tokio::time::Instant::now() + SUBMISSION_PRE_BODY_BUDGET,
             )
             .await;
         retired.await.unwrap();
@@ -207,6 +210,19 @@ async fn failed_probes_and_pre_body_eof_reconnect_over_tls_without_changing_the_
             assert_eq!(transport.smtp_pool.lock().await.len(), 1);
         }
     }
+    let spans = telemetry.spans();
+    assert_eq!(spans.len(), 5);
+    for (fields, (attempt, outcome)) in spans.iter().zip([
+        ("1", "accepted"),
+        ("1", "accepted"),
+        ("2", "accepted"),
+        ("2", "accepted"),
+        ("1", "not_submitted"),
+    ]) {
+        assert_eq!(fields["smtp.attempt"], [attempt]);
+        assert_eq!(fields["smtp.outcome"], [outcome]);
+    }
+    assert_eq!(telemetry.probe_errors(), [tracing::Level::WARN; 3]);
 }
 
 #[tokio::test(start_paused = true)]
@@ -255,7 +271,7 @@ async fn the_pre_body_deadline_never_cancels_a_body_already_submitted() {
             "owner@example.net",
             &["recipient@example.net".into()],
             std::str::from_utf8(MIME).unwrap(),
-            started + PRE_BODY_BUDGET,
+            started + SUBMISSION_PRE_BODY_BUDGET,
         )
         .await
     });

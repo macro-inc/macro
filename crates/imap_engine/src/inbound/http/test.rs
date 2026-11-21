@@ -21,6 +21,7 @@ async fn actual_router_rejects_missing_wrong_and_empty_keys() {
             submissions: AtomicU32::new(0),
             deadline: AtomicBool::new(false),
             sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
+            submission_deadline: std::sync::Mutex::new(None),
         });
         let engine = Arc::new(Engine::new(repository, Arc::new(TestCipher), transport));
         let app = router(ApiState {
