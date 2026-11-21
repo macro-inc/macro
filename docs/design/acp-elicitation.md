@@ -319,8 +319,12 @@ branch:
 - `scripts/convert_stdio_recording.py` turns a stdio recorder's log into a
   fold fixture.
 
-Second pass, same branch — Macro's own user tools reviewed through
-elicitation (see [User tools reviewed in the turn](#user-tools-reviewed-in-the-turn)):
+Historical second pass — Macro's own user tools were reviewed through
+elicitation (see [User tools reviewed in the turn](#user-tools-reviewed-in-the-turn)).
+This path has been retired: sessions now stage saved reviews from ExecuteCode
+through `execution.reviews`, rather than finishing native user tools in the
+turn. The implementation below records the former design; its runtime
+reviewer and finisher have been removed. AskUser continues to use elicitation.
 
 - `agent`: `AgentLoop::with_user_tool_finisher`. The stream bridge's
   `on_tool_result` hands a `"PendingUserExecution"` answer to the finisher
@@ -365,6 +369,10 @@ Still to do: request scope, more than one outstanding question per session
 sandboxed harnesses.
 
 ## User tools reviewed in the turn
+
+Historical design: code-mode sessions now use saved reviews through
+`execution.reviews`; the native in-turn finisher described here is retired.
+Saved elicitation records still render for transcript compatibility.
 
 Macro's user tools (`SendEmail`, `CreateCalendarEvent`) are registered with
 `add_user_tool`: calling one returns `"PendingUserExecution"` and does
