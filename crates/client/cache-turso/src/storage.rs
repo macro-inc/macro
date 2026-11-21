@@ -64,11 +64,21 @@ const SEARCH_REBUILD_RECORDS: &str =
 const SEARCH_REBUILD_RECORDS_AFTER: &str =
     "SELECT id, value FROM records WHERE __typename = ?1 AND id > ?2 ORDER BY id LIMIT ?3";
 
+#[cfg(feature = "migration-test-hooks")]
+pub use migration::test_hooks as migration_test_hooks;
+pub use migration::{oldest_upgradable_storage_version, storage_version_upgradable};
+
 /// Coarse outcome of validating a Turso database.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TursoStorageOpenOutcome {
     /// Existing compatible storage was validated and preserved.
     OpenedExisting,
+    /// Existing storage written at an older storage version was upgraded in
+    /// place, keeping its records and queued writes, then validated.
+    UpgradedExisting {
+        /// The storage version the database was written at.
+        from_storage_version: u32,
+    },
     /// A fresh physical database was initialized.
     OpenedNew,
 }
@@ -228,16 +238,12 @@ impl TursoStorage {
         let result = initialize(&connection, scope, fresh);
         drop(connection);
         match result {
-            Ok(_) => Ok((
+            Ok(initialized) => Ok((
                 Self {
                     health: AtomicU8::new(0),
                     session,
                 },
-                if fresh {
-                    TursoStorageOpenOutcome::OpenedNew
-                } else {
-                    TursoStorageOpenOutcome::OpenedExisting
-                },
+                initialized.outcome(fresh),
             )),
             Err(error) => Err(TursoStorageOpenFailure { error, session }),
         }
@@ -772,7 +778,7 @@ fn open_native_database(
         .map_err(TursoStorageError::turso)
         .map_err(|error| if fresh { error } else { error.initialization() })?;
     let migrated = match initialize(&connection, scope, fresh) {
-        Ok(migrated) => migrated,
+        Ok(initialized) => initialized.format_migrated,
         Err(error) => {
             if connection.close().is_err() {
                 return Err(TursoStorageError::reset(
@@ -3307,13 +3313,36 @@ fn migrate_previous_format(
     .map_err(TursoStorageError::initialization)
 }
 
-/// Validates or initializes a database. Returns whether a previous format was
-/// carried forward, which native owners compact after opening.
+/// What opening an existing or fresh database changed.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct Initialized {
+    /// A previous cache format was carried forward; native owners compact
+    /// after opening.
+    format_migrated: bool,
+    /// The storage version an older database was upgraded from.
+    storage_upgraded_from: Option<u32>,
+}
+
+impl Initialized {
+    #[cfg(target_arch = "wasm32")]
+    fn outcome(self, fresh: bool) -> TursoStorageOpenOutcome {
+        match (fresh, self.storage_upgraded_from) {
+            (true, _) => TursoStorageOpenOutcome::OpenedNew,
+            (false, Some(from_storage_version)) => TursoStorageOpenOutcome::UpgradedExisting {
+                from_storage_version,
+            },
+            (false, None) => TursoStorageOpenOutcome::OpenedExisting,
+        }
+    }
+}
+
+/// Validates or initializes a database, first upgrading one written at an
+/// older storage version in place.
 fn initialize(
     connection: &Arc<Connection>,
     scope: &str,
     fresh: bool,
-) -> Result<bool, TursoStorageError> {
+) -> Result<Initialized, TursoStorageError> {
     enable_foreign_keys(connection).map_err(TursoStorageError::initialization)?;
     if fresh {
         driver::write_transaction(connection, || {
@@ -3343,11 +3372,14 @@ fn initialize(
         .map_err(TursoStorageError::initialization)?;
         enable_foreign_keys(connection).map_err(TursoStorageError::initialization)?;
         validate_frozen_schema(connection)?;
-        return Ok(false);
+        return Ok(Initialized::default());
     }
 
     // Ordinary reopen only validates compatibility and pending writes. A changed
     // derived projection performs one bounded rebuild before serving queries.
+    // An older storage version is upgraded first, so the checks below hold the
+    // upgraded file to exactly what a fresh file has.
+    let storage_upgraded_from = migration::upgrade(connection)?;
     validate_frozen_schema(connection)?;
     let metadata = driver::query(
         connection,
@@ -3380,7 +3412,7 @@ fn initialize(
             previous_namespace = Some(value.to_owned());
         }
     }
-    let migrated = match previous_namespace {
+    let format_migrated = match previous_namespace {
         Some(previous_namespace) => {
             migrate_previous_format(connection, scope, &previous_namespace)?;
             true
@@ -3432,7 +3464,10 @@ fn initialize(
     ensure_search_projection_version(connection)?;
     calendar::ensure_projection_version(connection)?;
     people_sql::open(connection)?;
-    Ok(migrated)
+    Ok(Initialized {
+        format_migrated,
+        storage_upgraded_from,
+    })
 }
 
 fn save_search_projection_version(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
@@ -5467,6 +5502,7 @@ mod calendar;
 mod conjunction;
 mod contact_search;
 mod integrity;
+mod migration;
 mod mutation_retry;
 mod name_search;
 mod page_retention;
