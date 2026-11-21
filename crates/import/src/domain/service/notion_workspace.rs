@@ -402,7 +402,6 @@ where
         let span = tracing::info_span!(
             "workspace_import.plan",
             source = self.workspace_source.as_ref(),
-            %user,
             sharing = sharing.as_ref(),
             already_in_macro = tracing::field::Empty,
             stopped = tracing::field::Empty,
@@ -571,9 +570,8 @@ where
 
     /// Write the plan's pending objects and record the outcome on the run.
     #[tracing::instrument(
-        skip(self, set),
+        skip(self, user, set),
         fields(
-            %user,
             review_id = %set.review_id,
             items = set.all.len(),
             pending = set.pending.len(),
