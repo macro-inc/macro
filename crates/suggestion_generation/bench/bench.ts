@@ -604,7 +604,7 @@ async function main() {
 options: --instance sugbench --set tune|<held-out set> --personas a,b --label local
          --seats <copies of each persona> --reps <rounds> (default: the section's size)
          --concurrency <generations at once> (default: the section's) --out <file>
-         --margins score,found,bad (compare: what noise measured on two runs of main)
+         --margins score,found,bad[,goodDrafts,jobDrafts] (compare: what noise measured on two runs of main)
          --flags a,b (flags to turn on besides the section's) --model, --thinking low, --prompt <file> (find)`);
   }
 }
