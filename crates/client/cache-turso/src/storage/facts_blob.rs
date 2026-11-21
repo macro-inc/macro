@@ -1,5 +1,5 @@
-//! One complete index document's facts as a single value on its
-//! `index_documents` row, so a candidate's predicate is tested by reading that
+//! One complete index document's facts as a single value in
+//! `index_document_facts`, so a candidate's predicate is tested by reading one
 //! row instead of seeking the fact tables once per fact. The fact tables stay
 //! the authority for set-based lookups by attribute and value.
 //!

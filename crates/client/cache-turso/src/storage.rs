@@ -75,7 +75,7 @@ pub enum TursoStorageOpenOutcome {
     OpenedNew,
 }
 
-const CREATE_SCHEMA: [&str; 29] = [
+const CREATE_SCHEMA: [&str; 30] = [
     "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
     "CREATE TABLE records (__typename TEXT NOT NULL, id TEXT NOT NULL, value BLOB NOT NULL, PRIMARY KEY (__typename, id))",
     "CREATE TABLE search_documents (profile TEXT NOT NULL, __typename TEXT NOT NULL, id TEXT NOT NULL, bucket TEXT NOT NULL, search_text TEXT NOT NULL, timestamp_ms INTEGER NOT NULL, source_hash TEXT NOT NULL, PRIMARY KEY (profile, __typename, id))",
@@ -84,9 +84,10 @@ const CREATE_SCHEMA: [&str; 29] = [
     "CREATE INDEX mutation_queue_created_at_ms_idx ON mutation_queue(created_at_ms)",
     "CREATE UNIQUE INDEX mutation_queue_current_uuid_idx ON mutation_queue(uuid) WHERE superseded = 0",
     "CREATE TABLE optimistic_layers (mutation_id INTEGER PRIMARY KEY, optimistic_data_json TEXT NOT NULL, normalized_updates BLOB NOT NULL, FOREIGN KEY (mutation_id) REFERENCES mutation_queue(id) ON DELETE CASCADE)",
-    "CREATE TABLE index_documents (id INTEGER PRIMARY KEY, record_key TEXT NOT NULL, profile TEXT NOT NULL, partition TEXT NOT NULL, state INTEGER NOT NULL, facts BLOB)",
+    "CREATE TABLE index_documents (id INTEGER PRIMARY KEY, record_key TEXT NOT NULL, profile TEXT NOT NULL, partition TEXT NOT NULL, state INTEGER NOT NULL)",
     "CREATE UNIQUE INDEX index_documents_record_key_idx ON index_documents(record_key)",
     "CREATE INDEX index_documents_scope_idx ON index_documents(profile, partition, state, id)",
+    INDEX_DOCUMENT_FACTS_TABLE,
     "CREATE TABLE exact_facts (document_id INTEGER NOT NULL, attribute TEXT NOT NULL, value BLOB NOT NULL, PRIMARY KEY (document_id, attribute, value), FOREIGN KEY (document_id) REFERENCES index_documents(id) ON DELETE CASCADE)",
     "CREATE INDEX exact_facts_lookup_idx ON exact_facts(attribute, value, document_id)",
     "CREATE TABLE integer_facts (document_id INTEGER NOT NULL, attribute TEXT NOT NULL, value INTEGER NOT NULL, PRIMARY KEY (document_id, attribute, value), FOREIGN KEY (document_id) REFERENCES index_documents(id) ON DELETE CASCADE)",
@@ -121,9 +122,14 @@ const SEARCH_WRITE_BATCH_SIZE: usize = 100;
 const SEARCH_LOAD: &str = "SELECT __typename, id, bucket, search_text, timestamp_ms, source_hash FROM search_documents INDEXED BY search_documents_browse_idx WHERE profile = ?1 AND bucket = ?2";
 const SEARCH_BROWSE: &str = "SELECT __typename, id, bucket, search_text, timestamp_ms, source_hash FROM search_documents INDEXED BY search_documents_browse_idx WHERE profile = ?1 AND bucket = ?2 ORDER BY timestamp_ms DESC, __typename ASC, id ASC LIMIT ?3";
 const SEARCH_BROWSE_AFTER: &str = "SELECT __typename, id, bucket, search_text, timestamp_ms, source_hash FROM search_documents INDEXED BY search_documents_browse_idx WHERE profile = ?1 AND bucket = ?2 AND (timestamp_ms < ?3 OR (timestamp_ms = ?3 AND (__typename > ?4 OR (__typename = ?4 AND id > ?5)))) ORDER BY timestamp_ms DESC, __typename ASC, id ASC LIMIT ?6";
-const INDEX_DOCUMENT_UPSERT: &str = "INSERT INTO index_documents (record_key, profile, partition, state, facts) VALUES (?1, ?2, ?3, ?4, ?5) ON CONFLICT (record_key) DO UPDATE SET profile = excluded.profile, partition = excluded.partition, state = excluded.state, facts = excluded.facts RETURNING id";
+const INDEX_DOCUMENT_UPSERT: &str = "INSERT INTO index_documents (record_key, profile, partition, state) VALUES (?1, ?2, ?3, ?4) ON CONFLICT (record_key) DO UPDATE SET profile = excluded.profile, partition = excluded.partition, state = excluded.state RETURNING id";
+// A complete document's facts as one blob, in a table of its own so the
+// document rows that every window and lookup walks stay narrow.
+const INDEX_DOCUMENT_FACTS_TABLE: &str = "CREATE TABLE index_document_facts (document_id INTEGER PRIMARY KEY, facts BLOB NOT NULL, FOREIGN KEY (document_id) REFERENCES index_documents(id) ON DELETE CASCADE)";
+const INDEX_DOCUMENT_FACTS_UPSERT: &str = "INSERT INTO index_document_facts (document_id, facts) VALUES (?1, ?2) ON CONFLICT (document_id) DO UPDATE SET facts = excluded.facts";
 const INDEX_DOCUMENT_FACTS_UPDATE: &str =
-    "UPDATE index_documents SET facts = ?2 WHERE record_key = ?1 RETURNING id";
+    "UPDATE index_document_facts SET facts = ?2 WHERE document_id = ?1";
+const INDEX_DOCUMENT_FACTS_DELETE: &str = "DELETE FROM index_document_facts WHERE document_id = ?1";
 const INDEX_DOCUMENT_ID: &str = "SELECT id FROM index_documents WHERE record_key = ?1";
 const INDEX_DOCUMENT_DELETE: &str = "DELETE FROM index_documents WHERE record_key = ?1";
 const INDEX_FACTS_DELETE: [&str; 3] = [
@@ -2482,25 +2488,27 @@ fn write_fact_delta(
     old: &predicate_index::IndexDocument,
     next: &predicate_index::IndexDocument,
 ) -> Result<(), TursoStorageError> {
-    // The blob is canonical, so equal blobs mean only the fact order changed.
-    let blob = facts_blob::encode(next);
-    let rows = if blob == facts_blob::encode(old) {
-        driver::query(
-            connection,
-            INDEX_DOCUMENT_ID,
-            vec![text(record_key.as_str())],
-        )?
-    } else {
-        driver::query(
-            connection,
-            INDEX_DOCUMENT_FACTS_UPDATE,
-            vec![text(record_key.as_str()), Value::from_blob(blob)],
-        )?
-    };
+    let rows = driver::query(
+        connection,
+        INDEX_DOCUMENT_ID,
+        vec![text(record_key.as_str())],
+    )?;
     let document_id = match rows.as_slice() {
         [row] if row.len() == 1 => required_i64(row, 0)?,
         _ => return Err(invariant()),
     };
+    // The blob is canonical, so equal blobs mean only the fact order changed.
+    let blob = facts_blob::encode(next);
+    if blob != facts_blob::encode(old) {
+        require_changed(
+            driver::execute(
+                connection,
+                INDEX_DOCUMENT_FACTS_UPDATE,
+                vec![Value::from_i64(document_id), Value::from_blob(blob)],
+            )?,
+            1,
+        )?;
+    }
     let exact = |fact: &predicate_index::ExactFact| {
         vec![
             Value::from_i64(document_id),
@@ -2578,13 +2586,29 @@ fn upsert_index_document(
             text(profile.token().as_str()),
             text(partition.as_str()),
             Value::from_i64(state),
-            facts.map_or(Value::Null, Value::from_blob),
         ],
     )?;
-    match rows.as_slice() {
-        [row] if row.len() == 1 => required_i64(row, 0),
-        _ => Err(invariant()),
+    let document_id = match rows.as_slice() {
+        [row] if row.len() == 1 => required_i64(row, 0)?,
+        _ => return Err(invariant()),
+    };
+    // A complete document has exactly one facts row; any other state has none.
+    let changed = match facts {
+        Some(blob) => driver::execute(
+            connection,
+            INDEX_DOCUMENT_FACTS_UPSERT,
+            vec![Value::from_i64(document_id), Value::from_blob(blob)],
+        )?,
+        None => driver::execute(
+            connection,
+            INDEX_DOCUMENT_FACTS_DELETE,
+            vec![Value::from_i64(document_id)],
+        )?,
+    };
+    if changed < 0 {
+        return Err(invariant());
     }
+    Ok(document_id)
 }
 
 fn delete_index_facts(connection: &Db, document_id: i64) -> Result<(), TursoStorageError> {
@@ -2618,7 +2642,7 @@ fn load_projection_states(
     let rows = driver::query(
         connection,
         &format!(
-            "SELECT record_key, profile, partition, state, facts FROM index_documents WHERE record_key IN ({placeholders})"
+            "SELECT d.record_key, d.profile, d.partition, d.state, f.facts FROM index_documents AS d LEFT JOIN index_document_facts AS f ON f.document_id = d.id WHERE d.record_key IN ({placeholders})"
         ),
         keys.iter().map(|key| text(key.as_str())).collect(),
     )?;
@@ -3440,7 +3464,7 @@ fn migrate_previous_format(
 const FACTS_UPGRADE_BATCH: i64 = 512;
 
 /// Brings a schema 12 database to this schema in place: schema 12 kept each
-/// document's facts only in the fact tables, so the new facts column is added
+/// document's facts only in the fact tables, so the new facts table is created
 /// and filled from them. Records, queued mutations, optimistic layers and their
 /// projections are all kept. It is one write transaction, so an interrupted
 /// upgrade leaves schema 12 whole and runs again on the next open; a failure
@@ -3457,18 +3481,14 @@ fn upgrade_schema(connection: &Db) -> Result<(), TursoStorageError> {
         _ => return Ok(()),
     }
     driver::write_transaction(connection, || {
-        driver::execute(
-            connection,
-            "ALTER TABLE index_documents ADD COLUMN facts BLOB",
-            Vec::new(),
-        )?;
+        driver::execute(connection, INDEX_DOCUMENT_FACTS_TABLE, Vec::new())?;
         let mut statement = driver::prepare(
             connection,
             "SELECT id, record_key, profile, partition FROM index_documents WHERE id > ?1 AND state = 0 ORDER BY id LIMIT ?2",
         )?;
-        let mut update = driver::prepare(
+        let mut insert = driver::prepare(
             connection,
-            "UPDATE index_documents SET facts = ?2 WHERE id = ?1",
+            "INSERT INTO index_document_facts (document_id, facts) VALUES (?1, ?2)",
         )?;
         let mut after = i64::MIN;
         loop {
@@ -3505,7 +3525,7 @@ fn upgrade_schema(connection: &Db) -> Result<(), TursoStorageError> {
                 let document = documents.get(record_key).ok_or_else(invariant)?;
                 require_changed(
                     driver::execute_prepared(
-                        &mut update,
+                        &mut insert,
                         vec![
                             Value::from_i64(*id),
                             Value::from_blob(facts_blob::encode(document)),
@@ -4000,10 +4020,20 @@ const INDEX_DOCUMENT_COLUMNS: &[ColumnSpec] = &[
         default_zero: false,
         primary_key_position: 0,
     },
+];
+
+const INDEX_DOCUMENT_FACTS_COLUMNS: &[ColumnSpec] = &[
+    ColumnSpec {
+        name: "document_id",
+        declared_type: "INTEGER",
+        not_null: false,
+        default_zero: false,
+        primary_key_position: 1,
+    },
     ColumnSpec {
         name: "facts",
         declared_type: "BLOB",
-        not_null: false,
+        not_null: true,
         default_zero: false,
         primary_key_position: 0,
     },
@@ -4158,6 +4188,11 @@ fn validate_frozen_schema(connection: &Db) -> Result<(), TursoStorageError> {
     validate_table_columns(connection, "mutation_queue", MUTATION_COLUMNS)?;
     validate_table_columns(connection, "optimistic_layers", OPTIMISTIC_COLUMNS)?;
     validate_table_columns(connection, "index_documents", INDEX_DOCUMENT_COLUMNS)?;
+    validate_table_columns(
+        connection,
+        "index_document_facts",
+        INDEX_DOCUMENT_FACTS_COLUMNS,
+    )?;
     validate_table_columns(connection, "exact_facts", EXACT_FACT_COLUMNS)?;
     validate_table_columns(connection, "integer_facts", INTEGER_FACT_COLUMNS)?;
     validate_table_columns(connection, "sort_facts", SORT_FACT_COLUMNS)?;
@@ -4179,6 +4214,7 @@ fn validate_frozen_schema(connection: &Db) -> Result<(), TursoStorageError> {
     validate_search_indexes(connection)?;
     validate_mutation_queue_indexes(connection)?;
     validate_table_indexes(connection, "optimistic_layers", &[])?;
+    validate_table_indexes(connection, "index_document_facts", &[])?;
     validate_predicate_indexes(connection)?;
     validate_optimistic_predicate_indexes(connection)?;
     validate_table_indexes(
@@ -4192,6 +4228,7 @@ fn validate_frozen_schema(connection: &Db) -> Result<(), TursoStorageError> {
     validate_table_constraints(connection, "mutation_queue", true)?;
     validate_table_constraints(connection, "optimistic_layers", false)?;
     validate_table_constraints(connection, "index_documents", false)?;
+    validate_table_constraints(connection, "index_document_facts", false)?;
     validate_table_constraints(connection, "exact_facts", false)?;
     validate_table_constraints(connection, "integer_facts", false)?;
     validate_table_constraints(connection, "sort_facts", false)?;
@@ -4206,6 +4243,7 @@ fn validate_frozen_schema(connection: &Db) -> Result<(), TursoStorageError> {
     validate_no_foreign_keys(connection, "mutation_queue")?;
     validate_no_foreign_keys(connection, "index_documents")?;
     validate_optimistic_foreign_key(connection)?;
+    validate_fact_foreign_key(connection, "index_document_facts", "index_documents")?;
     validate_fact_foreign_key(connection, "exact_facts", "index_documents")?;
     validate_fact_foreign_key(connection, "integer_facts", "index_documents")?;
     validate_fact_foreign_key(connection, "sort_facts", "index_documents")?;
@@ -4246,6 +4284,7 @@ fn validate_allowed_schema_objects(connection: &Db) -> Result<(), TursoStorageEr
     .map_err(TursoStorageError::initialization)?;
     let expected = [
         "exact_facts",
+        "index_document_facts",
         "index_documents",
         "integer_facts",
         "meta",

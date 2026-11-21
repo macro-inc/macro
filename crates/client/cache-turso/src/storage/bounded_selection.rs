@@ -4,7 +4,10 @@
 //! cannot prove a full page reads on from its last candidate, never returning
 //! the ones before again, by an amount sized from the hit rate it saw, up to
 //! `MAX_CANDIDATES` per fact source. Filters sparser than that fall back to the
-//! set-based SQL plan. Optimistic facts hold only pending local writes, so
+//! set-based SQL plan. An authority candidate's predicate is tested in Rust on
+//! the facts blob of its document, so that window serves a predicate of any
+//! depth; the optimistic window tests predicates in SQL and is refused for
+//! one deeper than the expression limit. Optimistic facts hold only pending local writes, so
 //! their window runs out long before the cap; when the snapshot holds none,
 //! neither that window nor the per-candidate shadow probe runs. Both plans run
 //! inside the caller's read transaction over the same snapshot. Inside a tie a
@@ -219,7 +222,8 @@ fn candidate_sql(
     let sql = match source {
         // An authority candidate in scope brings its facts blob, and its own
         // partition's predicate is tested on it in Rust: one row read instead
-        // of a fact-table seek per fact the predicate names.
+        // of a fact-table seek per fact the predicate names. A candidate out
+        // of scope never reads its blob.
         conjunction::FactSource::Authority => {
             let partitions = searched_partitions(query)
                 .map(|partition| {
@@ -229,7 +233,7 @@ fn candidate_sql(
                 .collect::<Vec<_>>()
                 .join(", ");
             format!(
-                "{candidates} SELECT d.record_key, s.value, s.document_id, d.partition, CASE WHEN d.profile = ? AND d.state = 0{shadow} AND d.partition IN ({partitions}) THEN d.facts END FROM candidates AS s CROSS JOIN {documents} AS d ON d.id = s.document_id"
+                "{candidates} SELECT d.record_key, s.value, s.document_id, d.partition, CASE WHEN d.profile = ? AND d.state = 0{shadow} AND d.partition IN ({partitions}) THEN (SELECT f.facts FROM index_document_facts AS f WHERE f.document_id = d.id) END FROM candidates AS s CROSS JOIN {documents} AS d ON d.id = s.document_id"
             )
         }
         conjunction::FactSource::Optimistic => {

@@ -297,7 +297,7 @@ fn a_changed_document_writes_only_its_changed_facts() {
             .await
             .unwrap();
         // One exact fact and one sort value replaced, one integer fact added,
-        // and the document row's facts blob; the unchanged relation fact is
+        // and the document's facts blob; the unchanged relation fact is
         // left alone.
         assert_eq!(storage.connection().total_changes() - before, 6);
         assert_eq!(

@@ -346,8 +346,8 @@ fn failed_swap_keeps_the_migrated_database() {
     });
 }
 
-/// A schema 12 cache kept facts only in the fact tables. Opening it adds the
-/// facts column and fills it from them in place, over more documents than one
+/// A schema 12 cache kept facts only in the fact tables. Opening it creates the
+/// facts table and fills it from them in place, over more documents than one
 /// upgrade batch: records, pending writes and their optimistic projections all
 /// survive without a reset, and documents and pages read as before.
 #[test]
@@ -456,11 +456,7 @@ fn schema_12_cache_is_upgraded_in_place_and_keeps_pending_writes() {
                 PredicateQueryResult::Optimistic(keys) if keys.len() == 50
             ));
         }
-        raw_execute(
-            &storage,
-            "ALTER TABLE index_documents DROP COLUMN facts",
-            vec![],
-        );
+        raw_execute(&storage, "DROP TABLE index_document_facts", vec![]);
         raw_execute(
             &storage,
             "UPDATE meta SET value = '12' WHERE key = 'storage_schema_version'",
@@ -480,7 +476,7 @@ fn schema_12_cache_is_upgraded_in_place_and_keeps_pending_writes() {
         assert_eq!(
             raw_scalar(
                 &storage,
-                "SELECT count(*) FROM index_documents WHERE (state = 0) <> (facts IS NOT NULL)"
+                "SELECT (SELECT count(*) FROM index_documents AS d WHERE (d.state = 0) <> EXISTS (SELECT 1 FROM index_document_facts AS f WHERE f.document_id = d.id)) + (SELECT count(*) FROM index_document_facts AS f WHERE NOT EXISTS (SELECT 1 FROM index_documents AS d WHERE d.id = f.document_id))"
             ),
             0
         );
