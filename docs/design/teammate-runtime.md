@@ -667,13 +667,13 @@ What each problem says to the owner:
 | `belowFloor {cpus, memory, disk}` | *This computer needs at least 2 CPUs / 8 GB of memory / 20 GB free.* |
 | `innerSandboxUnavailable` | *This computer's security settings block the teammate's sandbox.* |
 | `networkIsolationUnavailable` | *Can't lock down an agent's network on this machine.* No engine on it could apply and verify the agent's network rules, so it gets no install rather than an open network. |
+| (no report: older macrod) | *Update macrod to host teammates.* |
+| (offline) | *Offline.* |
 
 An install's run failures `networkIsolationUnavailable` and `egressBlocked`
 (*this machine has no route to the internet*) are not final: macrod keeps
 retrying them, up to 10 minutes apart, and the agent's Members row shows
 the reason meanwhile.
-| (no report: older macrod) | *Update macrod to host teammates.* |
-| (offline) | *Offline.* |
 
 The hardware floor is 2 CPUs, 8 GiB of memory and 20 GiB free, with the
 container limited to 2 CPUs, 4 GiB and 512 processes. It is checked against
