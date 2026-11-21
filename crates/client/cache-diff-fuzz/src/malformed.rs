@@ -38,7 +38,11 @@ pub fn break_one(data: &mut Value, choice: u64) {
         }
         (2, parent, last) => {
             if let Some(value) = child(parent, last) {
-                *value = Value::Null;
+                // Nulling a null would replay the response unchanged.
+                *value = match value {
+                    Value::Null => wrong_type(value),
+                    _ => Value::Null,
+                };
             }
         }
         (_, parent, last) => {
@@ -56,10 +60,18 @@ pub fn break_one(data: &mut Value, choice: u64) {
 
 fn collect(value: &Value, path: &mut Vec<Step>, out: &mut Vec<Vec<Step>>) {
     let children: Vec<(Step, &Value)> = match value {
-        Value::Object(map) => map
-            .iter()
-            .map(|(key, child)| (Step::Key(key.clone()), child))
-            .collect(),
+        // Sorted, so the pick does not depend on whether serde_json keeps insertion order.
+        Value::Object(map) => {
+            let mut children: Vec<(Step, &Value)> = map
+                .iter()
+                .map(|(key, child)| (Step::Key(key.clone()), child))
+                .collect();
+            children.sort_by(|(a, _), (b, _)| match (a, b) {
+                (Step::Key(a), Step::Key(b)) => a.cmp(b),
+                _ => std::cmp::Ordering::Equal,
+            });
+            children
+        }
         Value::Array(items) => items
             .iter()
             .enumerate()
@@ -76,7 +88,8 @@ fn collect(value: &Value, path: &mut Vec<Step>, out: &mut Vec<Vec<Step>>) {
 }
 
 fn walk<'a>(value: &'a mut Value, path: &[Step]) -> Option<&'a mut Value> {
-    path.iter().try_fold(value, |value, step| child(value, step))
+    path.iter()
+        .try_fold(value, |value, step| child(value, step))
 }
 
 fn child<'a>(value: &'a mut Value, step: &Step) -> Option<&'a mut Value> {

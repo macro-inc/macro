@@ -475,6 +475,8 @@ impl<'a> Gen<'a> {
         self.push(Op::Idle);
         self.push(Op::Probe);
         let mut probe_keys: BTreeMap<String, Vec<String>> = BTreeMap::new();
+        // Contacts are not Soup items (the engine skips them by type here); the
+        // people probes and the table dump check them.
         let soup: Vec<String> = self
             .pools
             .core
@@ -482,17 +484,6 @@ impl<'a> Gen<'a> {
             .chain(&self.pools.channels)
             .chain(&self.pools.threads)
             .map(|spec| format!("{}:{}", spec.typename, spec.id))
-            .collect::<Vec<_>>()
-            .into_iter()
-            .chain(
-                self.pools
-                    .contacts
-                    .clone()
-                    .iter()
-                    .map(|contact| format!("GraphqlContact:{}", self.contact_id(contact))),
-            )
-            .collect::<Vec<_>>()
-            .into_iter()
             .chain(self.departed.iter().cloned())
             .collect();
         let mail: Vec<String> = self
@@ -508,9 +499,15 @@ impl<'a> Gen<'a> {
             )
             .collect();
         let mut seen = BTreeSet::new();
-        let soup: Vec<String> = soup.into_iter().filter(|key| seen.insert(key.clone())).collect();
+        let soup: Vec<String> = soup
+            .into_iter()
+            .filter(|key| seen.insert(key.clone()))
+            .collect();
         let mut seen = BTreeSet::new();
-        let mail: Vec<String> = mail.into_iter().filter(|key| seen.insert(key.clone())).collect();
+        let mail: Vec<String> = mail
+            .into_iter()
+            .filter(|key| seen.insert(key.clone()))
+            .collect();
         probe_keys.insert("SoupItemFields".into(), soup);
         probe_keys.insert("MailItemFields".into(), mail);
         Generated {
@@ -992,9 +989,7 @@ impl<'a> Gen<'a> {
                 let count = self.rng.range(1, 3) as usize;
                 self.pools.contacts[index].name = Some(words(&mut self.rng, count));
             } else {
-                let contact = self.pools.contacts.remove(index);
-                let key = format!("GraphqlContact:{}", self.contact_id(&contact));
-                self.departed.push(key);
+                self.pools.contacts.remove(index);
             }
             if self.rng.chance(0.5) {
                 let contact = self.contact();
@@ -1136,7 +1131,11 @@ impl<'a> Gen<'a> {
     /// Deleted keys leave the server too, so later pages stop carrying them.
     fn forget(&mut self, keys: &[String]) {
         let keys: BTreeSet<&String> = keys.iter().collect();
-        self.departed.extend(keys.iter().map(|key| (*key).clone()));
+        self.departed.extend(
+            keys.iter()
+                .filter(|key| !key.starts_with("GraphqlContact:"))
+                .map(|key| (*key).clone()),
+        );
         for pool in [
             &mut self.pools.core,
             &mut self.pools.channels,

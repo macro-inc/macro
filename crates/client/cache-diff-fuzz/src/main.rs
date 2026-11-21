@@ -125,9 +125,12 @@ fn run(
     let mut exec =
         exec::Exec::new(sources, generated, work).map_err(|error| rootcause::report!("{error}"))?;
     let outcome = pollster::block_on(exec.run());
-    let (lines, mut counters, path, mut normalizer) = exec
-        .finish()
-        .map_err(|error| rootcause::report!("{error}"))?;
+    let (lines, mut counters, path, mut normalizer) =
+        exec.finish().map_err(|error| match &outcome {
+            // The run's own failure is the one worth reporting.
+            Err(cause) => rootcause::report!("{cause} (then: {error})"),
+            Ok(()) => rootcause::report!("{error}"),
+        })?;
     for line in &lines {
         let text = serde_json::to_string(&line.value)?;
         writeln!(
@@ -160,6 +163,10 @@ fn run(
         }
     }
     writeln!(trace, "end")?;
+    trace.flush()?;
+    if let Some(full) = &mut full {
+        full.flush()?;
+    }
     let mut kinds: BTreeMap<String, u64> = BTreeMap::new();
     for op in &generated.ops {
         let value = serde_json::to_value(op)?;
@@ -177,7 +184,9 @@ fn run(
         args.out.join(format!("{seed}.stats.json")),
         serde_json::to_vec(&stats)?,
     )?;
-    Ok(())
+    // A run that stopped early compared only a prefix: two builds that stop at
+    // the same step would otherwise pass. The trace keeps where it stopped.
+    outcome.map_err(|error| rootcause::report!("seed {seed} stopped early: {error}"))
 }
 
 /// FNV-1a, so the hash is the same in every build.

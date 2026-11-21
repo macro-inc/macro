@@ -22,7 +22,8 @@ disk after a reopen must come out the same.
   writes the tables after a final reopen, each value tagged with its type.
 - A reset on open (`open_or_reset` deleting a file it can't read) and a failed
   idle checkpoint are recorded, not hidden: the first goes into the trace, the
-  second fails the seed.
+  second stops the run. A run that stops early writes `abort` to its trace and
+  exits non-zero, so `fuzz.sh` counts the seed as failed.
 
 ## Recipes
 
