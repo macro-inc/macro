@@ -130,15 +130,22 @@ export function compiledEngineFromPage(
   waitMs: number = PREFETCH_OFFER_WAIT_MS
 ): CompiledEngineExchange {
   const offered = new Promise<CompiledEngine | undefined>((resolve) => {
+    // One outcome only: an offer that arrives after the deadline must not
+    // answer the page, whose `null` would discard what this worker reports.
+    const settle = (engine: CompiledEngine | undefined): void => {
+      clearTimeout(deadline);
+      port.onmessage = null;
+      port.onmessageerror = null;
+      resolve(engine);
+    };
     // The page's own deadline needs its main thread, which a long task can
     // hold; this one runs here, so a healthy worker never waits longer.
-    const deadline = setTimeout(() => resolve(undefined), waitMs);
+    const deadline = setTimeout(() => settle(undefined), waitMs);
     port.onmessage = (event) => {
-      clearTimeout(deadline);
-      resolve(isCompiledEngine(event.data) ? event.data : undefined);
+      settle(isCompiledEngine(event.data) ? event.data : undefined);
     };
     port.onmessageerror = () => {
-      resolve(undefined);
+      settle(undefined);
       // Tell the page to stop offering a module this worker cannot receive.
       try {
         port.postMessage(null);

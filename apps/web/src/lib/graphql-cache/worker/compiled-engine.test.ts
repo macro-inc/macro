@@ -196,3 +196,22 @@ it('stops waiting for the page after its deadline even when the page never answe
     compiledEngineFromPage(channel.port2, 20).offered
   ).resolves.toBeUndefined();
 });
+
+it('does not answer an offer that arrives after the deadline, so its report stays', async () => {
+  const channel = new MessageChannel();
+  channels.push(channel);
+  const received: unknown[] = [];
+  channel.port1.onmessage = (event) => received.push(event.data);
+  const worker = compiledEngineFromPage(channel.port2, 20);
+  await expect(worker.offered).resolves.toBeUndefined();
+  worker.report({
+    assetUrl: 'https://app.test/engine-b.wasm',
+    module: await WebAssembly.compile(EMPTY_WASM),
+  });
+  // A late offer the worker cannot receive.
+  channel.port2.onmessageerror?.(new MessageEvent('messageerror'));
+  await vi.waitFor(() => expect(received).toHaveLength(1));
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  expect(received).toHaveLength(1);
+  expect(received[0]).not.toBeNull();
+});
