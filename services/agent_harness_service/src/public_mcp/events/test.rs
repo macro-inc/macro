@@ -1,0 +1,1096 @@
+use super::catalog::{EVENT_TYPES, MAX_QUERY_CHARS, QUERY_EVENT, selection};
+use super::compiler::{CompileError, FilterCompiler, parse_outcome};
+use super::dss::{
+    EventSource, SourceError, SourceEvent, SourceItem, SourceStream, StoreError, SubscriptionStore,
+    source_item,
+};
+use super::protocol::{FILTER_META, INTERPRETATION_META, RequestScope, handle};
+use super::stream::{NotificationSink, SUBSCRIPTION_ID_META, SinkClosed};
+use super::{Compiled, MAX_STREAMS_PER_USER, McpEvents, SecretSealer, Selection};
+use futures::StreamExt as _;
+use futures::channel::mpsc;
+use macro_user_id::user_id::MacroUserIdStr;
+use rmcp::ErrorData as McpError;
+use rmcp::model::CustomResult;
+use serde_json::{Value, json};
+use std::collections::{HashMap, VecDeque};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+use tokio_util::sync::CancellationToken;
+use webhook::domain::mcp::filter::{
+    McpEventFilter, McpFieldCondition, McpFilterClause, McpFilterField, McpFilterValue,
+};
+use webhook::domain::mcp::models::{
+    McpEndpointFailure, McpSecretCiphertext, McpSubscribeRequest, McpSubscribeResult,
+    McpSubscriptionErrorBody, McpSubscriptionId, McpTtlRequest, McpUnsubscribeRequest,
+};
+use webhook::domain::models::{WEBHOOK_EVENT_NAMES, WebhookFilter};
+use webhook_signature::standard::SigningSecret;
+
+const ME: &str = "macro|me@example.com";
+const OTHER: &str = "macro|other@example.com";
+const SECRET: &str = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw";
+const CHANNEL: &str = "0193a5b2-0000-7000-8000-000000000001";
+const OTHER_CHANNEL: &str = "0193a5b2-0000-7000-8000-000000000002";
+const MENTIONS: &str = "I want all @ mentions in channels";
+
+fn me() -> MacroUserIdStr<'static> {
+    MacroUserIdStr::parse_from_str(ME).unwrap()
+}
+
+fn literal(value: &str) -> McpFilterValue {
+    McpFilterValue::Literal {
+        value: value.to_owned(),
+    }
+}
+
+/// "@ mentions of me in channels", as the compiler should give it.
+fn channel_mentions() -> McpEventFilter {
+    McpEventFilter {
+        any_of: vec![McpFilterClause {
+            events: vec!["message.mentioned".to_owned()],
+            ids: None,
+            all_of: vec![
+                McpFieldCondition {
+                    field: McpFilterField::ParentType,
+                    one_of: vec![literal("channel")],
+                },
+                McpFieldCondition {
+                    field: McpFilterField::MentionedId,
+                    one_of: vec![McpFilterValue::Me],
+                },
+            ],
+        }],
+    }
+}
+
+/// A broker envelope of `message.mentioned`.
+fn mention(parent_type: &str, parent_id: &str, mentioned: &str) -> Value {
+    json!({
+        "event_type": "message.mentioned",
+        "schema_version": 1,
+        "metadata": {
+            "parent": {"type": parent_type, "id": parent_id},
+            "sender": OTHER,
+            "mentioned": {"entity_type": "user", "entity_id": mentioned},
+        },
+    })
+}
+
+fn event(name: &str, envelope: Value) -> SourceEvent {
+    SourceEvent {
+        event_id: uuid::Uuid::now_v7().to_string(),
+        name: name.to_owned(),
+        envelope,
+    }
+}
+
+#[derive(Default)]
+struct FakeCompiler {
+    queries: Mutex<Vec<String>>,
+    answer: Mutex<Option<CompileError>>,
+}
+
+#[async_trait::async_trait]
+impl FilterCompiler for FakeCompiler {
+    async fn compile(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        query: &str,
+    ) -> Result<McpEventFilter, CompileError> {
+        self.queries.lock().unwrap().push(query.to_owned());
+        match self.answer.lock().unwrap().take() {
+            Some(error) => Err(error),
+            None => Ok(channel_mentions()),
+        }
+    }
+}
+
+/// Keeps subscriptions by name, arguments and URL, as the service does.
+#[derive(Default)]
+struct FakeStore {
+    stored: Mutex<HashMap<(String, String, String), McpEventFilter>>,
+    subscribes: Mutex<Vec<McpSubscribeRequest>>,
+    unsubscribes: Mutex<Vec<McpUnsubscribeRequest>>,
+    refuse: Mutex<Option<McpSubscriptionErrorBody>>,
+}
+
+fn key(event_type: &str, arguments: &Value, url: &str) -> (String, String, String) {
+    (event_type.to_owned(), arguments.to_string(), url.to_owned())
+}
+
+#[async_trait::async_trait]
+impl SubscriptionStore for FakeStore {
+    async fn subscribe(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        request: &McpSubscribeRequest,
+    ) -> Result<McpSubscribeResult, StoreError> {
+        self.subscribes.lock().unwrap().push(request.clone());
+        if let Some(body) = self.refuse.lock().unwrap().take() {
+            return Err(StoreError::Refused(body));
+        }
+        let key = key(
+            &request.event_type,
+            &request.arguments,
+            &request.endpoint_url,
+        );
+        let mut stored = self.stored.lock().unwrap();
+        let filter = match (stored.get(&key), &request.filter) {
+            (Some(filter), _) => filter.clone(),
+            (None, Some(filter)) => filter.clone(),
+            (None, None) => {
+                return Err(StoreError::Refused(
+                    McpSubscriptionErrorBody::FilterRequired,
+                ));
+            }
+        };
+        stored.insert(key, filter.clone());
+        Ok(McpSubscribeResult {
+            id: McpSubscriptionId::from_stored("sub_1".to_owned()),
+            refresh_before: chrono::DateTime::from_timestamp(1_800_000_000, 0).unwrap(),
+            filter,
+        })
+    }
+
+    async fn unsubscribe(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        request: &McpUnsubscribeRequest,
+    ) -> Result<(), StoreError> {
+        self.unsubscribes.lock().unwrap().push(request.clone());
+        let key = key(
+            &request.event_type,
+            &request.arguments,
+            &request.endpoint_url,
+        );
+        match self.stored.lock().unwrap().remove(&key) {
+            Some(_) => Ok(()),
+            None => Err(StoreError::Refused(McpSubscriptionErrorBody::NotFound)),
+        }
+    }
+}
+
+/// Hands out the streams a test queued for each `ids`, then streams that
+/// never yield.
+#[derive(Default)]
+struct FakeSource {
+    queued: Mutex<HashMap<Option<Vec<String>>, VecDeque<SourceStream>>>,
+    opens: Mutex<Vec<(WebhookFilter, Option<String>)>>,
+    fail_open: Mutex<bool>,
+}
+
+type SourceSender = mpsc::UnboundedSender<Result<SourceItem, SourceError>>;
+
+impl FakeSource {
+    /// Queue a stream for `ids` and return its sender.
+    fn queue(&self, ids: Option<Vec<String>>) -> SourceSender {
+        let (sender, receiver) = mpsc::unbounded();
+        self.queued
+            .lock()
+            .unwrap()
+            .entry(ids)
+            .or_default()
+            .push_back(receiver.boxed());
+        sender
+    }
+}
+
+#[async_trait::async_trait]
+impl EventSource for FakeSource {
+    async fn open(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        filter: &WebhookFilter,
+        resume_after: Option<&str>,
+    ) -> Result<SourceStream, SourceError> {
+        self.opens
+            .lock()
+            .unwrap()
+            .push((filter.clone(), resume_after.map(str::to_owned)));
+        if *self.fail_open.lock().unwrap() {
+            return Err(SourceError(rootcause::report!("source down")));
+        }
+        Ok(self
+            .queued
+            .lock()
+            .unwrap()
+            .get_mut(&filter.ids)
+            .and_then(VecDeque::pop_front)
+            .unwrap_or_else(|| futures::stream::pending().boxed()))
+    }
+}
+
+#[derive(Default)]
+struct FakeSealer {
+    sealed: Mutex<u32>,
+}
+
+fn ciphertext() -> McpSecretCiphertext {
+    McpSecretCiphertext {
+        ciphertext: b"sealed".to_vec(),
+        kms_key_id: "key".to_owned(),
+        encryption_version: 1,
+    }
+}
+
+#[async_trait::async_trait]
+impl SecretSealer for FakeSealer {
+    async fn seal(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: &SigningSecret,
+    ) -> Result<McpSecretCiphertext, rootcause::Report> {
+        *self.sealed.lock().unwrap() += 1;
+        Ok(ciphertext())
+    }
+}
+
+/// The notifications a stream sent, in order.
+struct Sink(mpsc::UnboundedSender<(&'static str, Value)>);
+
+impl NotificationSink for Sink {
+    async fn send(&self, method: &'static str, params: Value) -> Result<(), SinkClosed> {
+        self.0
+            .unbounded_send((method, params))
+            .map_err(|_| SinkClosed)
+    }
+}
+
+struct Fixture {
+    compiler: Arc<FakeCompiler>,
+    store: Arc<FakeStore>,
+    source: Arc<FakeSource>,
+    sealer: Arc<FakeSealer>,
+    events: McpEvents,
+}
+
+fn fixture() -> Fixture {
+    let compiler = Arc::new(FakeCompiler::default());
+    let store = Arc::new(FakeStore::default());
+    let source = Arc::new(FakeSource::default());
+    let sealer = Arc::new(FakeSealer::default());
+    let events = McpEvents::new(
+        compiler.clone(),
+        store.clone(),
+        source.clone(),
+        sealer.clone(),
+    );
+    Fixture {
+        compiler,
+        store,
+        source,
+        sealer,
+        events,
+    }
+}
+
+fn no_extensions() -> rmcp::model::Extensions {
+    rmcp::model::Extensions::new()
+}
+
+/// Run one request that is not a stream.
+async fn call(
+    events: &McpEvents,
+    method: &str,
+    params: Value,
+    extensions: &rmcp::model::Extensions,
+) -> Result<CustomResult, McpError> {
+    let (sender, _receiver) = mpsc::unbounded();
+    let sink = Sink(sender);
+    handle(
+        events,
+        method,
+        Some(params),
+        RequestScope {
+            user: me(),
+            request_id: json!(7),
+            extensions,
+            sink: &sink,
+            cancel: CancellationToken::new(),
+            span: tracing::Span::none(),
+        },
+    )
+    .await
+}
+
+fn subscribe_params(name: &str, arguments: Value) -> Value {
+    json!({
+        "name": name,
+        "arguments": arguments,
+        "delivery": {"mode": "webhook", "url": "https://agent.example/hook", "secret": SECRET},
+    })
+}
+
+// --- selection ------------------------------------------------------------
+
+#[test]
+fn a_query_is_trimmed_and_bounded() {
+    assert_eq!(
+        selection(QUERY_EVENT, &json!({"query": "  my mentions  "})).unwrap(),
+        Selection::Query("my mentions".to_owned())
+    );
+    assert!(selection(QUERY_EVENT, &json!({"query": "   "})).is_err());
+    let long = "a".repeat(MAX_QUERY_CHARS + 1);
+    assert!(selection(QUERY_EVENT, &json!({"query": long})).is_err());
+    assert!(selection(QUERY_EVENT, &json!({})).is_err());
+    assert!(selection(QUERY_EVENT, &json!({"query": "x", "extra": 1})).is_err());
+}
+
+#[test]
+fn a_named_type_takes_optional_ids() {
+    assert_eq!(
+        selection("message.posted", &json!({})).unwrap(),
+        Selection::Event {
+            name: "message.posted",
+            ids: None
+        }
+    );
+    assert_eq!(
+        selection("message.posted", &json!({"ids": [CHANNEL]})).unwrap(),
+        Selection::Event {
+            name: "message.posted",
+            ids: Some(vec![CHANNEL.to_owned()])
+        }
+    );
+    assert!(selection("message.posted", &json!({"ids": []})).is_err());
+    assert!(selection("message.posted", &json!({"ids": [""]})).is_err());
+    let many: Vec<String> = (0..17).map(|index| index.to_string()).collect();
+    assert!(selection("message.posted", &json!({"ids": many})).is_err());
+    assert!(selection("message.posted", &json!({"query": "x"})).is_err());
+}
+
+#[test]
+fn an_unknown_type_is_not_found() {
+    assert!(matches!(
+        selection("message.teleported", &json!({})),
+        Err(super::EventsError::UnknownEvent)
+    ));
+}
+
+// --- events/list ----------------------------------------------------------
+
+#[tokio::test]
+async fn list_offers_the_query_type_and_every_webhook_event() {
+    let fixture = fixture();
+    let CustomResult(listed) = call(&fixture.events, "events/list", json!({}), &no_extensions())
+        .await
+        .unwrap();
+    assert_eq!(listed["resultType"], "complete");
+    let types = listed["events"].as_array().unwrap();
+    assert_eq!(types.len(), WEBHOOK_EVENT_NAMES.len() + 1);
+    assert_eq!(types[0]["name"], QUERY_EVENT);
+    assert_eq!(types[0]["inputSchema"]["required"], json!(["query"]));
+    for entry in types {
+        assert_eq!(entry["delivery"], json!(["push", "webhook"]));
+        assert!(!entry["description"].as_str().unwrap().is_empty());
+        assert_eq!(entry["inputSchema"]["additionalProperties"], false);
+        assert!(entry["payloadSchema"]["properties"]["metadata"].is_object());
+    }
+    assert_eq!(&*EVENT_TYPES, types);
+}
+
+#[tokio::test]
+async fn unknown_methods_and_poll_are_refused() {
+    let fixture = fixture();
+    let unknown = call(
+        &fixture.events,
+        "events/teleport",
+        json!({}),
+        &no_extensions(),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(unknown.code, rmcp::model::ErrorCode::METHOD_NOT_FOUND);
+    let poll = call(&fixture.events, "events/poll", json!({}), &no_extensions())
+        .await
+        .unwrap_err();
+    assert_eq!(poll.code.0, -32026);
+    assert_eq!(poll.data.unwrap()["value"], "poll");
+}
+
+// --- events/subscribe -----------------------------------------------------
+
+#[tokio::test]
+async fn a_new_query_subscription_compiles_once_and_returns_the_filter() {
+    let fixture = fixture();
+    let CustomResult(result) = call(
+        &fixture.events,
+        "events/subscribe",
+        subscribe_params(QUERY_EVENT, json!({"query": MENTIONS})),
+        &no_extensions(),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(result["id"], "sub_1");
+    assert_eq!(result["refreshBefore"], "2027-01-15T08:00:00Z");
+    assert_eq!(result["cursor"], Value::Null);
+    assert_eq!(result["truncated"], false);
+    assert_eq!(
+        result["_meta"][FILTER_META],
+        serde_json::to_value(channel_mentions()).unwrap()
+    );
+    assert_eq!(
+        result["_meta"][INTERPRETATION_META],
+        "`message.mentioned` events where the message is in a `channel` and the mentioned item is you."
+    );
+    assert_eq!(*fixture.compiler.queries.lock().unwrap(), vec![MENTIONS]);
+    assert_eq!(*fixture.sealer.sealed.lock().unwrap(), 1);
+    // The service is asked without a filter first, so a refresh costs no
+    // model call; it asks for one only for a new subscription.
+    let subscribes = fixture.store.subscribes.lock().unwrap();
+    assert_eq!(subscribes.len(), 2);
+    assert_eq!(subscribes[0].filter, None);
+    assert_eq!(subscribes[1].filter, Some(channel_mentions()));
+    assert_eq!(subscribes[1].secret_ciphertext, ciphertext());
+    assert_eq!(subscribes[1].ttl, McpTtlRequest::Default);
+    assert_eq!(subscribes[1].endpoint_url, "https://agent.example/hook");
+}
+
+#[tokio::test]
+async fn a_refresh_keeps_the_stored_filter_without_a_model_call() {
+    let fixture = fixture();
+    let params = subscribe_params(QUERY_EVENT, json!({"query": MENTIONS}));
+    call(
+        &fixture.events,
+        "events/subscribe",
+        params.clone(),
+        &no_extensions(),
+    )
+    .await
+    .unwrap();
+    // A changed compiler must not change an existing subscription.
+    *fixture.compiler.answer.lock().unwrap() = Some(CompileError::Refused("changed".to_owned()));
+
+    let CustomResult(refreshed) = call(
+        &fixture.events,
+        "events/subscribe",
+        params,
+        &no_extensions(),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        refreshed["_meta"][FILTER_META],
+        serde_json::to_value(channel_mentions()).unwrap()
+    );
+    assert_eq!(fixture.compiler.queries.lock().unwrap().len(), 1);
+    assert_eq!(fixture.store.subscribes.lock().unwrap().len(), 3);
+}
+
+#[tokio::test]
+async fn a_named_type_sends_its_filter_without_a_model_call() {
+    let fixture = fixture();
+    let CustomResult(result) = call(
+        &fixture.events,
+        "events/subscribe",
+        subscribe_params("message.posted", json!({"ids": [CHANNEL]})),
+        &no_extensions(),
+    )
+    .await
+    .unwrap();
+
+    let expected = McpEventFilter::for_events(
+        vec!["message.posted".to_owned()],
+        Some(vec![CHANNEL.to_owned()]),
+    );
+    let subscribes = fixture.store.subscribes.lock().unwrap();
+    assert_eq!(subscribes.len(), 1);
+    assert_eq!(subscribes[0].filter, Some(expected.clone()));
+    assert!(fixture.compiler.queries.lock().unwrap().is_empty());
+    assert_eq!(
+        result["_meta"][INTERPRETATION_META],
+        format!("`message.posted` events for `{CHANNEL}`.")
+    );
+}
+
+#[tokio::test]
+async fn ttl_absent_null_and_given_are_told_apart() {
+    for (ttl, expected) in [
+        (None, McpTtlRequest::Default),
+        (Some(Value::Null), McpTtlRequest::NoExpiry),
+        (Some(json!(60_000)), McpTtlRequest::Millis { value: 60_000 }),
+    ] {
+        let fixture = fixture();
+        let mut params = subscribe_params("message.posted", json!({}));
+        if let Some(ttl) = ttl {
+            params["ttlMs"] = ttl;
+        }
+        call(
+            &fixture.events,
+            "events/subscribe",
+            params,
+            &no_extensions(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(fixture.store.subscribes.lock().unwrap()[0].ttl, expected);
+    }
+    let fixture = fixture();
+    let mut params = subscribe_params("message.posted", json!({}));
+    params["ttlMs"] = json!(-1);
+    let error = call(
+        &fixture.events,
+        "events/subscribe",
+        params,
+        &no_extensions(),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(error.code.0, -32602);
+}
+
+#[tokio::test]
+async fn subscribe_refuses_what_it_cannot_deliver() {
+    let fixture = fixture();
+    let mut push = subscribe_params("message.posted", json!({}));
+    push["delivery"]["mode"] = json!("push");
+    let error = call(&fixture.events, "events/subscribe", push, &no_extensions())
+        .await
+        .unwrap_err();
+    assert_eq!(error.code.0, -32026);
+
+    let mut weak = subscribe_params("message.posted", json!({}));
+    weak["delivery"]["secret"] = json!("whsec_c2hvcnQ=");
+    let error = call(&fixture.events, "events/subscribe", weak, &no_extensions())
+        .await
+        .unwrap_err();
+    assert_eq!(error.code.0, -32602);
+    assert!(!error.message.contains("c2hvcnQ"));
+
+    let error = call(
+        &fixture.events,
+        "events/subscribe",
+        subscribe_params("message.teleported", json!({})),
+        &no_extensions(),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(error.code.0, -32023);
+    assert_eq!(error.data.unwrap()["kind"], "event");
+    assert!(fixture.store.subscribes.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_request_the_filter_cannot_express_is_refused() {
+    let fixture = fixture();
+    *fixture.compiler.answer.lock().unwrap() = Some(CompileError::Refused(
+        "matching message text is not supported".to_owned(),
+    ));
+    let error = call(
+        &fixture.events,
+        "events/subscribe",
+        subscribe_params(QUERY_EVENT, json!({"query": "messages that say hello"})),
+        &no_extensions(),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(error.code.0, -32602);
+    assert!(
+        error
+            .message
+            .contains("matching message text is not supported")
+    );
+}
+
+#[tokio::test]
+async fn a_user_out_of_ai_usage_is_told_so() {
+    let fixture = fixture();
+    *fixture.compiler.answer.lock().unwrap() = Some(CompileError::NotAdmitted(
+        ai_billing::AiAdmissionError::Unavailable,
+    ));
+    let error = call(
+        &fixture.events,
+        "events/subscribe",
+        subscribe_params(QUERY_EVENT, json!({"query": MENTIONS})),
+        &no_extensions(),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(error.code.0, -32025);
+    assert_eq!(error.data.unwrap()["limit"], "ai_usage");
+}
+
+#[tokio::test]
+async fn service_refusals_keep_their_codes() {
+    for (body, code) in [
+        (
+            McpSubscriptionErrorBody::ResourceExhausted { max: 50 },
+            -32025,
+        ),
+        (
+            McpSubscriptionErrorBody::CallbackEndpointError {
+                reason: McpEndpointFailure::ChallengeFailed,
+            },
+            -32027,
+        ),
+        (
+            McpSubscriptionErrorBody::InvalidParams {
+                message: "url must be https".to_owned(),
+            },
+            -32602,
+        ),
+        (McpSubscriptionErrorBody::Internal, -32603),
+    ] {
+        let fixture = fixture();
+        *fixture.store.refuse.lock().unwrap() = Some(body);
+        let error = call(
+            &fixture.events,
+            "events/subscribe",
+            subscribe_params("message.posted", json!({})),
+            &no_extensions(),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(error.code.0, code);
+    }
+}
+
+#[tokio::test]
+async fn a_mismatched_name_header_is_refused() {
+    let fixture = fixture();
+    let (parts, ()) = http::Request::builder()
+        .header("mcp-name", "message.posted")
+        .body(())
+        .unwrap()
+        .into_parts();
+    let mut extensions = rmcp::model::Extensions::new();
+    extensions.insert(parts);
+    let error = call(
+        &fixture.events,
+        "events/subscribe",
+        subscribe_params(QUERY_EVENT, json!({"query": MENTIONS})),
+        &extensions,
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(error.code.0, -32020);
+
+    call(
+        &fixture.events,
+        "events/subscribe",
+        subscribe_params("message.posted", json!({})),
+        &extensions,
+    )
+    .await
+    .unwrap();
+}
+
+// --- events/unsubscribe ---------------------------------------------------
+
+#[tokio::test]
+async fn unsubscribe_removes_by_name_arguments_and_url() {
+    let fixture = fixture();
+    call(
+        &fixture.events,
+        "events/subscribe",
+        subscribe_params("message.posted", json!({})),
+        &no_extensions(),
+    )
+    .await
+    .unwrap();
+    let params = json!({
+        "name": "message.posted",
+        "arguments": {},
+        "delivery": {"url": "https://agent.example/hook"},
+    });
+    let CustomResult(result) = call(
+        &fixture.events,
+        "events/unsubscribe",
+        params.clone(),
+        &no_extensions(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(result, json!({"resultType": "complete"}));
+
+    let again = call(
+        &fixture.events,
+        "events/unsubscribe",
+        params,
+        &no_extensions(),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(again.code.0, -32023);
+    assert_eq!(again.data.unwrap()["kind"], "subscription");
+}
+
+// --- compiling ------------------------------------------------------------
+
+#[tokio::test]
+async fn the_same_words_compile_once_per_user() {
+    let fixture = fixture();
+    let query = Selection::Query(MENTIONS.to_owned());
+    let first = fixture.events.compile(&me(), &query).await.unwrap();
+    let second = fixture.events.compile(&me(), &query).await.unwrap();
+    assert_eq!(first, second);
+    assert_eq!(first, Compiled::new(channel_mentions()));
+    assert_eq!(fixture.compiler.queries.lock().unwrap().len(), 1);
+
+    let other = MacroUserIdStr::parse_from_str(OTHER).unwrap();
+    fixture.events.compile(&other, &query).await.unwrap();
+    assert_eq!(fixture.compiler.queries.lock().unwrap().len(), 2);
+}
+
+#[test]
+fn the_model_answer_is_validated() {
+    let filter = parse_outcome(json!({
+        "outcome": "filter",
+        "filter": serde_json::to_value(channel_mentions()).unwrap(),
+    }))
+    .unwrap();
+    assert_eq!(filter, channel_mentions());
+
+    assert!(matches!(
+        parse_outcome(json!({"outcome": "refuse", "reason": "names are not ids"})),
+        Err(CompileError::Refused(reason)) if reason == "names are not ids"
+    ));
+    // A filter delivery cannot evaluate is a refusal, never a subscription.
+    assert!(matches!(
+        parse_outcome(json!({
+            "outcome": "filter",
+            "filter": {"anyOf": [{"events": ["message.teleported"]}]},
+        })),
+        Err(CompileError::Refused(_))
+    ));
+    assert!(matches!(
+        parse_outcome(json!({"outcome": "maybe"})),
+        Err(CompileError::Internal(_))
+    ));
+}
+
+#[test]
+fn the_reading_names_every_alternative() {
+    let filter = McpEventFilter {
+        any_of: vec![
+            McpFilterClause {
+                events: vec!["message.posted".to_owned(), "message.edited".to_owned()],
+                ids: Some(vec![CHANNEL.to_owned(), OTHER_CHANNEL.to_owned()]),
+                all_of: vec![McpFieldCondition {
+                    field: McpFilterField::Actor,
+                    one_of: vec![literal(OTHER), McpFilterValue::Me],
+                }],
+            },
+            McpFilterClause {
+                events: vec!["document.created".to_owned()],
+                ids: None,
+                all_of: vec![],
+            },
+        ],
+    };
+    assert_eq!(
+        super::describe::describe(&filter),
+        format!(
+            "Any of: `message.posted` or `message.edited` events for `{CHANNEL}` or \
+             `{OTHER_CHANNEL}` where the author is `{OTHER}` or you; or `document.created` events."
+        )
+    );
+}
+
+// --- the live source ------------------------------------------------------
+
+#[test]
+fn source_frames_become_events_or_heartbeats() {
+    assert_eq!(
+        source_item("heartbeat", "{}".to_owned(), None).unwrap(),
+        SourceItem::Heartbeat
+    );
+    let envelope = mention("channel", CHANNEL, ME);
+    assert_eq!(
+        source_item("message.mentioned", envelope.to_string(), Some("e1")).unwrap(),
+        SourceItem::Event(SourceEvent {
+            event_id: "e1".to_owned(),
+            name: "message.mentioned".to_owned(),
+            envelope,
+        })
+    );
+    assert!(source_item("message.mentioned", "{}".to_owned(), None).is_err());
+    assert!(source_item("message.mentioned", "not json".to_owned(), Some("e1")).is_err());
+}
+
+// --- events/stream --------------------------------------------------------
+
+/// Run `events/stream` beside `script`, which reads its notifications and
+/// cancels it.
+async fn stream_with<F>(
+    events: &McpEvents,
+    params: Value,
+    script: impl FnOnce(mpsc::UnboundedReceiver<(&'static str, Value)>, CancellationToken) -> F,
+) -> Result<CustomResult, McpError>
+where
+    F: Future<Output = ()>,
+{
+    let (sender, receiver) = mpsc::unbounded();
+    let sink = Sink(sender);
+    let cancel = CancellationToken::new();
+    let extensions = no_extensions();
+    let (result, ()) = tokio::join!(
+        handle(
+            events,
+            "events/stream",
+            Some(params),
+            RequestScope {
+                user: me(),
+                request_id: json!(7),
+                extensions: &extensions,
+                sink: &sink,
+                cancel: cancel.clone(),
+                span: tracing::Span::none(),
+            },
+        ),
+        script(receiver, cancel.clone()),
+    );
+    result
+}
+
+async fn next(
+    receiver: &mut mpsc::UnboundedReceiver<(&'static str, Value)>,
+) -> (&'static str, Value) {
+    receiver.next().await.unwrap()
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_stream_delivers_only_what_its_filter_matches() {
+    let fixture = fixture();
+    let source = fixture.source.queue(None);
+    let wanted = event("message.mentioned", mention("channel", CHANNEL, ME));
+    let wanted_id = wanted.event_id.clone();
+
+    let result = stream_with(
+        &fixture.events,
+        json!({"name": QUERY_EVENT, "arguments": {"query": MENTIONS}, "heartbeatMs": 10_000}),
+        |mut receiver, cancel| async move {
+            let (method, active) = next(&mut receiver).await;
+            assert_eq!(method, "notifications/events/active");
+            assert_eq!(active["heartbeatMs"], 10_000);
+            assert_eq!(active["cursor"], Value::Null);
+            assert_eq!(active["truncated"], false);
+            assert_eq!(active["_meta"][SUBSCRIPTION_ID_META], 7);
+            assert_eq!(
+                active["_meta"][FILTER_META],
+                serde_json::to_value(channel_mentions()).unwrap()
+            );
+            assert!(active["_meta"][INTERPRETATION_META].is_string());
+
+            // A document mention and a mention of someone else are not sent.
+            for envelope in [
+                mention("document", CHANNEL, ME),
+                mention("channel", CHANNEL, OTHER),
+            ] {
+                source
+                    .unbounded_send(Ok(SourceItem::Event(event("message.mentioned", envelope))))
+                    .unwrap();
+            }
+            source
+                .unbounded_send(Ok(SourceItem::Event(wanted.clone())))
+                .unwrap();
+            let (method, occurrence) = next(&mut receiver).await;
+            assert_eq!(method, "notifications/events/event");
+            assert_eq!(occurrence["eventId"], wanted_id);
+            assert_eq!(occurrence["name"], QUERY_EVENT);
+            assert_eq!(occurrence["data"], wanted.envelope);
+            assert_eq!(occurrence["cursor"], Value::Null);
+            assert_eq!(occurrence["_meta"][SUBSCRIPTION_ID_META], 7);
+            let timestamp: chrono::DateTime<chrono::Utc> =
+                serde_json::from_value(occurrence["timestamp"].clone()).unwrap();
+            let (seconds, _) = uuid::Uuid::parse_str(&wanted_id)
+                .unwrap()
+                .get_timestamp()
+                .unwrap()
+                .to_unix();
+            assert_eq!(timestamp.timestamp(), i64::try_from(seconds).unwrap());
+
+            cancel.cancel();
+        },
+    )
+    .await;
+
+    let CustomResult(result) = result.unwrap();
+    assert_eq!(
+        result,
+        json!({"resultType": "complete", "_meta": {SUBSCRIPTION_ID_META: 7}})
+    );
+    let opens = fixture.source.opens.lock().unwrap();
+    assert_eq!(
+        *opens,
+        vec![(
+            WebhookFilter {
+                events: vec!["message.mentioned".to_owned()],
+                ids: None
+            },
+            None
+        )]
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_quiet_stream_sends_heartbeats() {
+    let fixture = fixture();
+    let started = tokio::time::Instant::now();
+    stream_with(
+        &fixture.events,
+        // Below the floor: granted the shortest heartbeat.
+        json!({"name": "message.posted", "heartbeatMs": 10}),
+        |mut receiver, cancel| async move {
+            let (_, active) = next(&mut receiver).await;
+            assert_eq!(active["heartbeatMs"], 5_000);
+            let (method, heartbeat) = next(&mut receiver).await;
+            assert_eq!(method, "notifications/events/heartbeat");
+            assert_eq!(heartbeat["_meta"][SUBSCRIPTION_ID_META], 7);
+            assert_eq!(started.elapsed(), Duration::from_secs(5));
+            cancel.cancel();
+        },
+    )
+    .await
+    .unwrap();
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_lost_source_reports_an_error_and_resumes_after_its_last_event() {
+    let fixture = fixture();
+    let first = fixture.source.queue(None);
+    let second = fixture.source.queue(None);
+    let posted = event("message.posted", json!({"metadata": {}}));
+    let posted_id = posted.event_id.clone();
+    let resumed_after = posted_id.clone();
+    let after = event("message.posted", json!({"metadata": {}}));
+    let after_id = after.event_id.clone();
+
+    stream_with(
+        &fixture.events,
+        json!({"name": "message.posted"}),
+        |mut receiver, cancel| async move {
+            next(&mut receiver).await;
+            first
+                .unbounded_send(Ok(SourceItem::Event(posted.clone())))
+                .unwrap();
+            assert_eq!(next(&mut receiver).await.1["eventId"], posted_id);
+            first
+                .unbounded_send(Err(SourceError(rootcause::report!("reset"))))
+                .unwrap();
+            let (method, error) = next(&mut receiver).await;
+            assert_eq!(method, "notifications/events/error");
+            assert_eq!(error["error"]["message"], "UpstreamError");
+            // The same event again (a resume overlap) is dropped.
+            second
+                .unbounded_send(Ok(SourceItem::Event(posted.clone())))
+                .unwrap();
+            second.unbounded_send(Ok(SourceItem::Event(after))).unwrap();
+            let (method, occurrence) = next(&mut receiver).await;
+            assert_eq!(method, "notifications/events/event");
+            assert_eq!(occurrence["eventId"], after_id);
+            cancel.cancel();
+        },
+    )
+    .await
+    .unwrap();
+
+    let opens = fixture.source.opens.lock().unwrap();
+    assert_eq!(opens.len(), 2);
+    assert_eq!(opens[1].1.as_deref(), Some(resumed_after.as_str()));
+}
+
+#[tokio::test]
+async fn each_distinct_ids_gets_its_own_source() {
+    let fixture = fixture();
+    let both = McpEventFilter {
+        any_of: vec![
+            McpFilterClause {
+                events: vec!["message.posted".to_owned()],
+                ids: Some(vec![CHANNEL.to_owned()]),
+                all_of: vec![],
+            },
+            McpFilterClause {
+                events: vec!["message.posted".to_owned()],
+                ids: Some(vec![OTHER_CHANNEL.to_owned()]),
+                all_of: vec![],
+            },
+        ],
+    };
+    let sources = super::stream::open_sources(
+        &(fixture.source.clone() as Arc<dyn EventSource>),
+        &me(),
+        &both,
+    )
+    .await
+    .unwrap();
+    assert_eq!(sources.len(), 2);
+    let opened: Vec<_> = fixture
+        .source
+        .opens
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|(filter, _)| filter.ids.clone())
+        .collect();
+    assert_eq!(
+        opened,
+        vec![
+            Some(vec![CHANNEL.to_owned()]),
+            Some(vec![OTHER_CHANNEL.to_owned()])
+        ]
+    );
+}
+
+#[tokio::test]
+async fn a_stream_that_cannot_open_its_source_fails_before_any_notification() {
+    let fixture = fixture();
+    *fixture.source.fail_open.lock().unwrap() = true;
+    let result = stream_with(
+        &fixture.events,
+        json!({"name": "message.posted"}),
+        |mut receiver, _| async move {
+            assert!(receiver.try_recv().is_err(), "nothing was sent");
+        },
+    )
+    .await;
+    assert_eq!(result.unwrap_err().code.0, -32603);
+}
+
+#[tokio::test]
+async fn streams_per_user_are_capped_and_released() {
+    let fixture = fixture();
+    let slots: Vec<_> = (0..MAX_STREAMS_PER_USER)
+        .map(|_| fixture.events.claim_stream(&me()).unwrap())
+        .collect();
+    let refused = call(
+        &fixture.events,
+        "events/stream",
+        json!({"name": "message.posted"}),
+        &no_extensions(),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(refused.code.0, -32025);
+    assert_eq!(refused.data.unwrap()["limit"], "streams");
+
+    let other = MacroUserIdStr::parse_from_str(OTHER).unwrap();
+    assert!(fixture.events.claim_stream(&other).is_ok());
+    drop(slots);
+    assert!(fixture.events.claim_stream(&me()).is_ok());
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_client_that_leaves_ends_the_stream() {
+    let fixture = fixture();
+    let result = stream_with(
+        &fixture.events,
+        json!({"name": "message.posted"}),
+        |receiver, _| async move { drop(receiver) },
+    )
+    .await;
+    assert!(result.is_ok());
+    // Its slot is free again.
+    let slots: Vec<_> = (0..MAX_STREAMS_PER_USER)
+        .map(|_| fixture.events.claim_stream(&me()))
+        .collect();
+    assert!(slots.iter().all(Result::is_ok));
+}
+
+/// Events over fakes, for the tool service's wire tests.
+pub(crate) fn fake_events() -> Arc<McpEvents> {
+    Arc::new(fixture().events)
+}

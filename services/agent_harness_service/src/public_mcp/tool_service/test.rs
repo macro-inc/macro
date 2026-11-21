@@ -501,7 +501,22 @@ mod code_mode {
         method: &str,
         params: serde_json::Value,
     ) -> serde_json::Value {
+        rpc_with(app, user, caller, method, params, &[]).await
+    }
+
+    /// An RPC as `caller` with extra headers.
+    async fn rpc_with(
+        app: axum::Router,
+        user: &str,
+        caller: Option<ToolCaller>,
+        method: &str,
+        params: serde_json::Value,
+        headers: &[(&str, &str)],
+    ) -> serde_json::Value {
         let mut request = Request::builder();
+        for (name, value) in headers {
+            request = request.header(*name, *value);
+        }
         if let Some(caller) = caller {
             request = request.extension(caller);
         }
@@ -1020,5 +1035,113 @@ mod code_mode {
             "{failed}"
         );
         assert!(error.contains("at main.ts:1:"), "{failed}");
+    }
+
+    fn discover_params() -> serde_json::Value {
+        serde_json::json!({"_meta": {
+            "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+            "io.modelcontextprotocol/clientCapabilities": {},
+        }})
+    }
+
+    fn events_app() -> axum::Router {
+        let mut config =
+            StreamableHttpServerConfig::default().with_allowed_hosts(["localhost".to_owned()]);
+        config.legacy_session_mode = false;
+        config.json_response = true;
+        let events = crate::public_mcp::events::test::fake_events();
+        let service = StreamableHttpService::new(
+            move || Ok(catalog_service().with_events(events.clone())),
+            Arc::new(LocalSessionManager::default()),
+            config,
+        );
+        axum::Router::new()
+            .nest_service("/mcp", service)
+            .layer(axum::middleware::from_fn(
+                |mut request: axum::extract::Request, next: axum::middleware::Next| async move {
+                    let user = request.headers()["x-user"].to_str().unwrap().to_owned();
+                    request
+                        .extensions_mut()
+                        .insert(MacroUserIdStr::try_from_email(&user).unwrap());
+                    next.run(request).await
+                },
+            ))
+    }
+
+    #[tokio::test]
+    async fn every_client_but_chatgpt_is_offered_events() {
+        let app = events_app();
+        let initialize = serde_json::json!({
+            "protocolVersion": "2025-06-18",
+            "capabilities": {},
+            "clientInfo": {"name": "test", "version": "1"},
+        });
+        for (caller, offered) in [
+            (Some(ToolCaller::ApiKey), true),
+            (mcp_client("Claude"), true),
+            (mcp_client("ChatGPT"), false),
+            (Some(ToolCaller::McpClient { name: None }), false),
+        ] {
+            let label = format!("{caller:?}");
+            for (method, params, headers) in [
+                ("initialize", initialize.clone(), &[][..]),
+                (
+                    "server/discover",
+                    discover_params(),
+                    &[
+                        ("mcp-protocol-version", "2026-07-28"),
+                        ("mcp-method", "server/discover"),
+                    ][..],
+                ),
+            ] {
+                let answer =
+                    rpc_with(app.clone(), USER, caller.clone(), method, params, headers).await;
+                let extension = &answer["result"]["capabilities"]["extensions"]["io.modelcontextprotocol/events"];
+                assert_eq!(extension.is_object(), offered, "{label} {method}: {answer}");
+            }
+            let listed = rpc_as(
+                app.clone(),
+                USER,
+                caller.clone(),
+                "events/list",
+                serde_json::json!({}),
+            )
+            .await;
+            if offered {
+                assert_eq!(
+                    listed["result"]["events"][0]["name"], "macro.events",
+                    "{label}"
+                );
+            } else {
+                assert_eq!(listed["error"]["code"], -32601, "{label}: {listed}");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn a_server_without_events_offers_none() {
+        let app = app(Arc::new(Runs::default()));
+        let discovered = rpc_with(
+            app.clone(),
+            USER,
+            Some(ToolCaller::ApiKey),
+            "server/discover",
+            discover_params(),
+            &[
+                ("mcp-protocol-version", "2026-07-28"),
+                ("mcp-method", "server/discover"),
+            ],
+        )
+        .await;
+        assert!(
+            discovered["result"]["capabilities"]
+                .get("extensions")
+                .is_none_or(|extensions| extensions
+                    .get("io.modelcontextprotocol/events")
+                    .is_none()),
+            "{discovered}"
+        );
+        let listed = rpc(app, USER, "events/list", serde_json::json!({})).await;
+        assert_eq!(listed["error"]["code"], -32601, "{listed}");
     }
 }

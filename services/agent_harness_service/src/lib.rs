@@ -894,6 +894,10 @@ pub async fn run() -> anyhow::Result<()> {
                 )
             })
             .unwrap_or_default(),
+        public_mcp::EventFilterModels {
+            admission: admission.clone(),
+            recorder: recorder.clone(),
+        },
     )
     .await
     .context("failed to compose public MCP")?;
