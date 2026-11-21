@@ -392,6 +392,45 @@ async fn an_unattended_program_runs_without_another_check() {
     assert!(checker.checked.lock().unwrap().is_empty());
 }
 
+/// JS tools programs aren't TypeScript: their run parses and analyzes them,
+/// so the type checker never sees one, before or at the run.
+#[tokio::test]
+async fn a_js_tools_program_is_never_type_checked() {
+    let runner = Arc::new(Echoes(AtomicUsize::new(0)));
+    let checker = Arc::new(Answers {
+        answer: || Err(CheckError::Internal),
+        checked: Default::default(),
+    });
+    let service =
+        ExecutionService::new(runner.clone(), checker.clone(), Limits::default()).unwrap();
+    let request = ExecuteRequest {
+        source: "return await tools.storage.get_document({ path: { id: \"d\" } })".into(),
+        timeout_ms: 10_000,
+        language: Language::JsTools,
+    };
+    assert!(
+        service
+            .precheck(&request, ContextShape::default(), CancellationToken::new())
+            .await
+            .is_ok()
+    );
+    let outcome = finish(
+        service
+            .execute(
+                request,
+                RunEnvironment {
+                    allowed_operations: Some(Vec::new()),
+                    ..RunEnvironment::default()
+                },
+            )
+            .unwrap(),
+    )
+    .await;
+    assert!(matches!(outcome, Outcome::Succeeded { .. }), "{outcome:?}");
+    assert_eq!(runner.0.load(Ordering::SeqCst), 1);
+    assert!(checker.checked.lock().unwrap().is_empty());
+}
+
 #[test]
 fn every_operation_gets_at_least_one_call() {
     assert!(matches!(
