@@ -27,6 +27,7 @@ export const CACHE_TELEMETRY_EVENT_NAMES = [
   'graphql_cache.origin_storage_pressure',
   'graphql_cache.linear_memory',
   'graphql_cache.queue_diagnostics',
+  'graphql_cache.wal_checkpoint',
   'graphql_cache.navigation',
   'graphql_cache.aggregate',
 ] as const;

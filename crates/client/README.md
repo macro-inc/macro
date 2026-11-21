@@ -515,6 +515,22 @@ Parameters, results, raw SQL, and user identity are not exported. Logging uses
 an anonymous span context. A throwing JS telemetry callback cannot change query
 results. Native hosts are unchanged unless they install their own telemetry sink.
 
+## Idle WAL checkpoint
+
+Turso copies the WAL into the database file inside the COMMIT that takes it to
+1,000 frames, so one write pays for the others. After a request that can
+write, the browser engine worker calls `checkpointIfDue` once nothing has run
+for 100 ms, and cache-turso copies from 500 frames there instead. Each request
+that runs re-arms the wait, so the reads a page sends after an open or a
+write run first. A request that arrives during a copy waits for it, as it
+waited for the write that used to carry it; a drain cancels a copy not yet
+started and waits for one under way.
+
+A copy that ran is reported as `graphql_cache.wal_checkpoint` with
+`cache.duration_ms` and `cache.count` (frames copied). A failed copy is reported
+with its error class and retried at the next idle point; it leaves the WAL
+whole and does not reset the cache.
+
 ## Key policy
 
 **Presence-of-id convention**: an output object type with an `id: ID!`
