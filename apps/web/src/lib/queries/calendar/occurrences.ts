@@ -249,12 +249,15 @@ export function useCalendarOccurrencesQuery(
     const queryKey = calendarKeys.occurrences(userId ?? '', range)._ctx.graphql
       .queryKey;
     onCleanup(
-      subscribeToVisibleCacheChanges(host, () =>
-        activeQueryClient.invalidateQueries(
+      subscribeToVisibleCacheChanges(host, () => {
+        // A read now would only reach REST again, which a change in the
+        // cache cannot bring forward.
+        if (activeCalendarSyncController()?.canCatchUp() === false) return;
+        return activeQueryClient.invalidateQueries(
           { queryKey },
           { cancelRefetch: false }
-        )
-      )
+        );
+      })
     );
   });
 

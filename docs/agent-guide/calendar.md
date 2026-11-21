@@ -165,7 +165,9 @@ waits for the next poke; one can fail while another tab hands over the
 database. A cache that cannot be brought forward (`behind`) reads REST
 (fallback `behind`, also logged) without fetching the week's gaps, and answers
 from its older copy of a covered week only if REST fails too
-(`calendar.read.older_cache`). A cache that no REST read has overtaken reads
+(`calendar.read.older_cache`). While a failed delta backs off or has used its
+retries, a change in the cache does not refetch the viewports, since they
+would only read REST again. A cache that no REST read has overtaken reads
 no REST and runs no extra delta, even after a failed one. Without this, an
 event REST had shown, such as one just created, would drop off the grid until
 a later delta.

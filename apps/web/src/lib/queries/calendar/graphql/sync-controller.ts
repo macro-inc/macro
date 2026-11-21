@@ -138,6 +138,20 @@ export class CalendarSyncController {
   }
 
   /**
+   * Whether a read now could answer from the cache: it is caught up, a delta
+   * is running, or one may start. False while a failed delta backs off or has
+   * used its retries, when the read would go to REST.
+   */
+  canCatchUp(): boolean {
+    return (
+      this.caughtUp() ||
+      this.running !== undefined ||
+      this.failures === 0 ||
+      this.retryDue()
+    );
+  }
+
+  /**
    * Brings the cache forward before a read answers from it, when it may be
    * older than what is on screen. A running pass is joined, and run again
    * only if it read the server before the latest REST answer. After a failed

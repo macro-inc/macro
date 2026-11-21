@@ -507,6 +507,22 @@ describe('CalendarSyncController catching up a read', () => {
     controller.dispose();
   });
 
+  it('lets reads try the cache only while a delta can bring it forward', async () => {
+    const { fetchChanges, controller } = setup([changes()]);
+    fetchChanges.mockRejectedValueOnce(new Error('owner handoff'));
+    expect(controller.canCatchUp()).toBe(true);
+    recordCalendarRestAnswer();
+    expect(controller.canCatchUp()).toBe(true);
+    await expect(controller.runDelta()).rejects.toThrow('owner handoff');
+
+    expect(controller.canCatchUp()).toBe(false);
+    vi.setSystemTime(Date.now() + DELTA_RETRY_BASE_MS);
+    expect(controller.canCatchUp()).toBe(true);
+    await expect(controller.catchUp()).resolves.toBe('retried');
+    expect(controller.canCatchUp()).toBe(true);
+    controller.dispose();
+  });
+
   it('does not count a run cut short by disposal as caught up', async () => {
     const { host, controller } = setup([changes()]);
     const state = Promise.withResolvers<CalendarRangeCacheResult>();

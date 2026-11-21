@@ -212,6 +212,7 @@ function staleCoveredCache() {
       watermark: [{ linkId: 'link-1', seq: '437' }],
     };
   };
+  const changeListeners = new Set<(revision: string) => void>();
   const host = {
     calendarRange: vi.fn(range),
     calendarCommit: vi.fn(async (commit: CalendarCommitArgs) => {
@@ -224,7 +225,10 @@ function staleCoveredCache() {
         changed: [],
       };
     }),
-    onCacheChanged: () => () => {},
+    onCacheChanged: (listener: (revision: string) => void) => {
+      changeListeners.add(listener);
+      return () => changeListeners.delete(listener);
+    },
     readRecordsByKeys: vi.fn(async ({ keys }: { keys: string[] }) => ({
       revision: '2' as never,
       records: keys.flatMap((recordKey) => {
@@ -251,7 +255,10 @@ function staleCoveredCache() {
     refetchCalendars: async () => undefined,
   });
   setActiveCalendarSyncController(controller);
-  return { host, state, fetchChanges, controller };
+  const cacheChanged = () => {
+    for (const listener of changeListeners) listener('3');
+  };
+  return { host, state, fetchChanges, controller, cacheChanged };
 }
 
 describe('calendar week after REST showed what the cache missed', () => {
@@ -290,6 +297,47 @@ describe('calendar week after REST showed what the cache missed', () => {
     expect(eventIds(query.data)).toEqual(['event-1', 'event-2']);
     expect(mocks.listOccurrences).toHaveBeenCalledTimes(2);
     expect(cache.state.keys).toContain(occurrenceKey(created));
+    cache.controller.dispose();
+    warn.mockRestore();
+  });
+
+  it('rereads nothing from REST on cache changes while a failed delta backs off', async () => {
+    vi.useFakeTimers();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const cache = staleCoveredCache();
+    cacheHost = cache.host;
+    mocks.listOccurrences.mockResolvedValue(
+      ok({
+        items: [existing, created].map(mapCalendarOccurrence),
+        syncStatus: 'ready' as const,
+        hasMore: false,
+        nextCursor: null,
+      })
+    );
+    const query = renderWeek();
+    await vi.waitFor(() =>
+      expect(eventIds(query.data)).toEqual(['event-1', 'event-2'])
+    );
+    await expect(cache.controller.runDelta()).rejects.toThrow();
+    cache.state.handoff = false;
+
+    for (let change = 0; change < 5; change += 1) {
+      cache.cacheChanged();
+      await vi.advanceTimersByTimeAsync(300);
+    }
+    expect(mocks.listOccurrences).toHaveBeenCalledOnce();
+    expect(eventIds(query.data)).toEqual(['event-1', 'event-2']);
+
+    // Once the retry brings the cache forward, cache changes read it again.
+    cache.state.deltaFails = false;
+    await vi.advanceTimersByTimeAsync(DELTA_RETRY_BASE_MS);
+    cache.cacheChanged();
+    await vi.advanceTimersByTimeAsync(300);
+    await vi.waitFor(() =>
+      expect(cache.host.readRecordsByKeys).toHaveBeenCalled()
+    );
+    expect(eventIds(query.data)).toEqual(['event-1', 'event-2']);
+    expect(mocks.listOccurrences).toHaveBeenCalledOnce();
     cache.controller.dispose();
     warn.mockRestore();
   });
