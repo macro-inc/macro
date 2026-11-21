@@ -20,7 +20,7 @@ export const channelActivityKey = (id: string) =>
  * Microseconds since the epoch of an RFC 3339 timestamp. `Date` keeps only
  * milliseconds, and the server orders by the stored microseconds.
  */
-function timestampMicros(timestamp: string): bigint | undefined {
+export function timestampMicros(timestamp: string): bigint | undefined {
   const seconds = Date.parse(timestamp.replace(TIMESTAMP_FRACTION, ''));
   if (Number.isNaN(seconds)) return undefined;
   const fraction = (TIMESTAMP_FRACTION.exec(timestamp)?.[1] ?? '')
@@ -39,15 +39,6 @@ export function rootSortKey(createdAt: string, id: string): string | undefined {
   return `${micros.toString().padStart(MICROS_DIGITS, '0')}-${id.toLowerCase()}`;
 }
 
-/** The sort key of a reply posted live, which has no import order. */
-export function liveReplySortKey(
-  createdAt: string,
-  id: string
-): string | undefined {
-  const position = rootSortKey(createdAt, id);
-  return position && `${LIVE_REPLY_ORDER}-${position}`;
-}
-
 export function sortKeyFromCursor(cursor: MessageCursor): string | undefined {
   return rootSortKey(cursor.created_at, cursor.id);
 }
@@ -64,4 +55,29 @@ export function cursorFromSortKey(sortKey: string): MessageCursor | undefined {
     created_at: date.toISOString().replace('Z', `${subMillis}Z`),
     id: match[2],
   };
+}
+
+/**
+ * How far past its own time a message the server has not placed yet sorts.
+ * Larger than any gap between this device's clock and the server's.
+ */
+const UNPLACED_AHEAD_MICROS = 366n * 24n * 60n * 60n * 1_000_000n;
+
+/**
+ * The sort key of a message this device sent and the server has not placed.
+ * The server gives a message the time it arrives, which is later than the
+ * time it was written and than every message already placed, so until then
+ * the message sorts after all placed ones, in the order it was written.
+ */
+export function unplacedSortKey(
+  createdAt: string,
+  id: string,
+  reply: boolean
+): string | undefined {
+  const micros = timestampMicros(createdAt);
+  if (micros === undefined || micros < 0n) return undefined;
+  const position = `${(micros + UNPLACED_AHEAD_MICROS)
+    .toString()
+    .padStart(MICROS_DIGITS, '0')}-${id.toLowerCase()}`;
+  return reply ? `${LIVE_REPLY_ORDER}-${position}` : position;
 }

@@ -93,7 +93,7 @@ export function ChannelThread(props: ThreadProps) {
   const loadedReplies = () => queryReplies() ?? [];
   const canScrollToTargetReply = () => queryReplies() !== undefined;
 
-  const { activeReplies, visibleReplyCount, displayReplies } =
+  const { activeReplies, visibleReplyCount, displayReplies, showsPreviewOnly } =
     createThreadReplyView({
       preview: () => thread().preview,
       loaded: queryReplies,
@@ -214,7 +214,7 @@ export function ChannelThread(props: ThreadProps) {
   const rootRailVisible = () =>
     !props.hideRail && (hasReplies() || hasInlineReplyInput());
   const shouldShowCollapsedIndicator = () =>
-    !isReplyingToThread() && !props.isExpanded() && collapsedRepliesCount() > 0;
+    !isReplyingToThread() && showsPreviewOnly() && collapsedRepliesCount() > 0;
   const replyAction = () => props.getMessageActions?.(props.data())?.onReply;
   const shouldShowReplyButton = () =>
     (hasReplies() || hasRootSlot()) &&

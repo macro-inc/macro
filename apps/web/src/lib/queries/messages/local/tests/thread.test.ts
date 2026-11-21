@@ -2,12 +2,13 @@ import {
   CHANNEL_TIMELINE_HEAD,
   CHANNEL_TIMELINE_START,
 } from '@graphql-cache/index';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   type ChannelThreadServerPage,
   loadChannelMessage,
   loadChannelThread,
 } from '../thread';
+import { resetUnheldReads, unheldReads } from '../unheld-reads';
 import {
   CHANNEL_ID,
   devicePage,
@@ -32,6 +33,11 @@ const threadPage = (
   newerCursor: null,
   seq: '9',
   ...overrides,
+});
+
+beforeEach(() => {
+  localStorage.clear();
+  resetUnheldReads();
 });
 
 describe('loadChannelThread', () => {
@@ -106,6 +112,35 @@ describe('loadChannelThread', () => {
         seq: { kind: 'lower', seq: '8' },
       },
     ]);
+  });
+
+  it('notes a thread being fetched until the device holds it', async () => {
+    const host = fakeHost([devicePage([], { covered: false })]);
+    const noted: unknown[] = [];
+    const fetchPage = vi.fn(async () => {
+      // A reload here leaves the thread to the next page.
+      noted.push(...unheldReads());
+      return threadPage({ replies });
+    });
+
+    await loadChannelThread(host, CHANNEL_ID, root.id, fetchPage);
+
+    expect(noted).toEqual([{ channelId: CHANNEL_ID, rootId: root.id }]);
+    expect(host.commits).toHaveLength(1);
+    expect(unheldReads()).toEqual([]);
+  });
+
+  it('keeps a thread noted when its request fails', async () => {
+    const host = fakeHost([devicePage([], { covered: false })]);
+    const fetchPage = vi.fn(async () => {
+      throw new Error('offline');
+    });
+
+    await expect(
+      loadChannelThread(host, CHANNEL_ID, root.id, fetchPage)
+    ).rejects.toThrow('offline');
+
+    expect(unheldReads()).toEqual([{ channelId: CHANNEL_ID, rootId: root.id }]);
   });
 
   it('leaves channels to REST on an engine without channel timelines', async () => {

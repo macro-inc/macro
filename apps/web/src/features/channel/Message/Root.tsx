@@ -80,7 +80,10 @@ export function Root(props: RootProps) {
 
   return (
     <div
-      class={cn('group/message relative touch:no-select-children', local.class)}
+      class={cn(
+        'group/message relative touch:no-select-children has-[[data-message-unsent]]:opacity-60',
+        local.class
+      )}
       data-message
       data-message-id={local.message.id}
       data-selected={local.selected ? '' : undefined}

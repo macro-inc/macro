@@ -39,6 +39,11 @@
  * engine refuses the release once the claim has moved on. Inspections read the
  * whole queue, so the pump looks at most once per poll, plus twice for each
  * owner it saw leave: after the grace, and after a refused release.
+ *
+ * An enqueue claims the head for its runner inside the host. When its answer
+ * is lost, the head stays leased to this page and nothing sends it, so a
+ * claim refused after an enqueue lost its answer also releases a lease this
+ * page took, has no enqueue on its way for, and is not sending under.
  */
 
 import { anyAbortSignal } from '@core/util/abort-signal';
@@ -103,6 +108,16 @@ const DEFERRED_ADMISSION_RETRY_MS = 1_000;
 // bound keeps a broken head from holding the queue.
 const MAX_ADMISSION_FAILURES = 3;
 const MAX_MUTATION_SERVER_FAILURES = 10;
+const RETRY_LATER_CODE = 'SERVICE_UNAVAILABLE';
+
+/** Whether every error says the server was busy and wrote nothing. */
+function askedToRetry(error: CombinedError | undefined): boolean {
+  const errors = error?.graphQLErrors ?? [];
+  return (
+    errors.length > 0 &&
+    errors.every((refusal) => refusal.extensions.code === RETRY_LATER_CODE)
+  );
+}
 const MUTATION_LIFECYCLE_TIMEOUT_MS = 2_000;
 
 async function boundedMutationLifecycle<T>(work: () => Promise<T>): Promise<T> {
@@ -383,6 +398,11 @@ export type MutationQueueRunner = {
   epoch: () => ClaimEpoch;
   /** False once a storage reset has retired `epoch`. */
   isCurrent: (epoch: StorageEpoch) => boolean;
+  /**
+   * Marks an enqueue as on its way to the host, which may claim the head for
+   * this runner. Call the answer once the enqueue resolved or failed.
+   */
+  enqueueStarted: () => () => void;
   /** Holds a durably enqueued caller until the strict queue routes it. */
   admit: (
     op: Operation,
@@ -394,6 +414,8 @@ export type MutationQueueRunner = {
     result: OperationResult,
     attempt: QueueAttemptContext
   ) => Promise<OperationResult>;
+  /** An enqueue got no answer: it may have leased the head to this page. */
+  enqueueLost: () => void;
   /** Schedules the first drain. */
   start: () => void;
   /** Probes the queue now, keeping the request until a claim can run. */
@@ -411,6 +433,7 @@ export function createMutationQueueRunner(
   const liveQueuedOps = new Map<string, LiveQueuedOperation>();
   let storageGeneration = 0;
   let activeAttempt: AttemptToken | undefined;
+  let enqueuesInFlight = 0;
   // Queue IDs advance in order; retries advance their lease.
   // Keep the watermark after settlement so a late claim cannot revive an old head.
   let latestClaim:
@@ -429,6 +452,11 @@ export function createMutationQueueRunner(
   let drainRequested = false;
   let deferredUntil: number | undefined;
   let drainTimer: ReturnType<typeof setTimeout> | undefined;
+  let drainDueAt = 0;
+  // An enqueue lost its answer: it may have leased the head to this page.
+  let unroutedSuspected = false;
+  // Every owner this page has claimed under.
+  const ownOwners = new Set<string>();
   // Lease owners whose page this runner is waiting to see go.
   const watchedOwners = new Set<string>();
   // When a drain last inspected the queue for a held head.
@@ -465,14 +493,21 @@ export function createMutationQueueRunner(
     return true;
   }
 
-  function scheduleDrain(delayMs = 0): void {
-    if (drainTimer !== undefined) clearTimeout(drainTimer);
+  function scheduleDrain(delayMs = 0, keepSooner = false): void {
+    const dueAt = Date.now() + (drainRequested ? 0 : delayMs);
+    if (drainTimer !== undefined) {
+      // A poll must not replace a drain already due sooner: a write that
+      // settled while the claim was being checked asked for that one.
+      if (keepSooner && drainDueAt <= dueAt) return;
+      clearTimeout(drainTimer);
+    }
+    drainDueAt = dueAt;
     drainTimer = setTimeout(
       () => {
         drainTimer = undefined;
         fireAndForget(drainQueue(), 'graphql-cache-mutation-queue');
       },
-      drainRequested ? 0 : delayMs
+      Math.max(0, dueAt - Date.now())
     );
   }
 
@@ -790,7 +825,11 @@ export function createMutationQueueRunner(
       resolveLiveOperationsAsQueued();
       return;
     }
-    if (drainRunning) return;
+    if (drainRunning) {
+      // The running drain may already be past its claim: run once more after.
+      drainRequested = true;
+      return;
+    }
     drainRunning = true;
     drainRequested = false;
     try {
@@ -807,7 +846,7 @@ export function createMutationQueueRunner(
       }
       const epoch: ClaimEpoch = {
         storageGeneration,
-        leaseOwner: owner.claimOwner(),
+        leaseOwner: claimOwner(),
       };
       const claimed = await host.claimNextMutation(
         epoch.leaseOwner,
@@ -815,6 +854,10 @@ export function createMutationQueueRunner(
         now + QUEUE_LEASE_MS
       );
       if (!claimed) {
+        if (await releaseUnroutedLease(epoch)) {
+          drainRequested = true;
+          return;
+        }
         resolveLiveOperationsAsQueued();
         // Not this runner's backoff: another runner may hold the head.
         if (deferredUntil === undefined)
@@ -827,7 +870,8 @@ export function createMutationQueueRunner(
             : Math.min(
                 EMPTY_QUEUE_POLL_MS,
                 Math.max(0, deferredUntil - Date.now())
-              )
+              ),
+          true
         );
         return;
       }
@@ -838,11 +882,50 @@ export function createMutationQueueRunner(
       // Enqueue already succeeded, so callers must observe these as
       // queued even if the runner cannot currently inspect the head.
       resolveLiveOperationsAsQueued();
-      scheduleDrain(EMPTY_QUEUE_POLL_MS);
+      scheduleDrain(EMPTY_QUEUE_POLL_MS, true);
     } finally {
       drainRunning = false;
       if (drainRequested) scheduleDrain();
     }
+  }
+
+  /** The owner for a claim made now, remembered as this page's. */
+  function claimOwner(): string {
+    const current = owner.claimOwner();
+    ownOwners.add(current);
+    return current;
+  }
+
+  /**
+   * Releases the head's lease when this page took it and sends nothing under
+   * it: an enqueue claimed the head and its answer was lost. The head is then
+   * claimable now instead of when the lease lapses. It keeps its optimism and
+   * is sent again; the server makes a repeated request safe.
+   */
+  async function releaseUnroutedLease(epoch: StorageEpoch): Promise<boolean> {
+    // Inspections read the whole queue: look only after a lost answer.
+    if (!unroutedSuspected || !host.inspectMutations) return false;
+    // An enqueue on its way may be the one that took the lease.
+    if (enqueuesInFlight > 0) return false;
+    // A look that fails keeps the suspicion for the next drain.
+    const head = await inspectHeadClaim();
+    unroutedSuspected = false;
+    if (!head || !ownOwners.has(head.lease.owner)) return false;
+    if (
+      activeAttempt?.transactionId === head.transactionId &&
+      activeAttempt.leaseGeneration === head.lease.generation
+    )
+      return false;
+    if (!isCurrent(epoch)) return false;
+    // Fenced by the lease itself: a head claimed again meanwhile is kept.
+    await host.deferOptimisticWrite(
+      head.transactionId,
+      { owner: head.lease.owner, generation: head.lease.generation },
+      Date.now(),
+      'Lease was never routed'
+    );
+    telemetry.skipped('lease-unrouted');
+    return true;
   }
 
   /**
@@ -1128,9 +1211,12 @@ export function createMutationQueueRunner(
         }
         if (!isCurrent(attempt)) return detachedResult();
         // urql represents HTTP 5xx as networkError too. Count actual
-        // server responses, never connection failures or timeouts.
+        // server responses, never connection failures or timeouts, and
+        // never a server that did nothing and asked for another try.
         const serverFailure =
-          httpServerFailure || (result.error?.graphQLErrors.length ?? 0) > 0;
+          httpServerFailure ||
+          ((result.error?.graphQLErrors.length ?? 0) > 0 &&
+            !askedToRetry(result.error));
         const exhausted =
           retry &&
           serverFailure &&
@@ -1340,8 +1426,21 @@ export function createMutationQueueRunner(
   }
 
   return {
-    epoch: () => ({ storageGeneration, leaseOwner: owner.claimOwner() }),
+    epoch: () => ({ storageGeneration, leaseOwner: claimOwner() }),
     isCurrent,
+    enqueueStarted: () => {
+      enqueuesInFlight += 1;
+      let ended = false;
+      return () => {
+        if (ended) return;
+        ended = true;
+        enqueuesInFlight -= 1;
+      };
+    },
+    enqueueLost: () => {
+      unroutedSuspected = true;
+      wakeDrain();
+    },
     admit,
     settle,
     start: () => {

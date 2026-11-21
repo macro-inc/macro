@@ -1,4 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import { sleep } from '@core/util/sleep';
 import type { CacheHost } from '@graphql-cache/index';
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { Telemetry } from '@macro-inc/observability';
@@ -10,7 +11,13 @@ import { fetchCached } from '../../calendar/graphql/network';
 import { queryClient } from '../../client';
 import { messageKeys } from '../keys';
 import { channelCacheHost } from './flag';
+import { forgetPendingChannelPages, resetPendingChannelPages } from './pages';
 import { channelActivityKey, channelMessageKey } from './sort-key';
+import {
+  forgetUnstoredPush,
+  noteUnstoredPush,
+  unstoredPushChannels,
+} from './unstored-pushes';
 
 export type ChannelCatchUpHost = Pick<
   CacheHost,
@@ -37,15 +44,23 @@ export type ChannelCatchUp =
 
 /** The server keeps 1000 changes replayable, 200 a page. */
 const MAX_CHANGE_PAGES = 6;
-/** Pushes inside this window share one request for their changes. */
+/** Pushes that closely follow one being stored share one request. */
 const PUSH_SETTLE_MS = 250;
 const MAX_PUSH_RERUNS = 3;
+/** How many times one device read is made again for pushes that keep arriving. */
+export const MAX_PUSH_REREADS = 3;
+/** How long a device read waits for the device to take a push. */
+const PUSH_STORE_WAIT_MS = 2_000;
 
 interface ChannelSyncState {
   /** Sequence numbers pushed since the last catch-up. */
   pushed: Set<string>;
   running?: Promise<ChannelCatchUp>;
   timer?: ReturnType<typeof setTimeout>;
+  /** Settled once the device has been asked to take the pushes noted so far. */
+  storing?: { promise: Promise<void>; done: () => void };
+  /** The sequence the device was last caught up through. */
+  stored?: bigint;
 }
 
 const channels = new Map<string, ChannelSyncState>();
@@ -166,13 +181,14 @@ function allPushed(state: ChannelSyncState, from: string, to: string): boolean {
 
 function forgetPushed(state: ChannelSyncState, through: string): void {
   const end = BigInt(through);
+  state.stored = end;
   for (const seq of state.pushed) {
     if (BigInt(seq) <= end) state.pushed.delete(seq);
   }
 }
 
 /** Re-reads the channel's loaded pages and threads, now from the device. */
-function refreshChannelViews(channelId: string): void {
+export function refreshChannelViews(channelId: string): void {
   const parent = { type: 'channel' as const, id: channelId };
   queryClient.invalidateQueries({
     queryKey: [...messageKeys.messages._def, parent],
@@ -197,16 +213,21 @@ export async function catchUpAndRefresh(
   for (let run = 0; run < MAX_PUSH_RERUNS; run += 1) {
     if (outcome.kind === 'reset') {
       state.pushed.clear();
+      state.stored = undefined;
       refresh = true;
     } else if (outcome.kind === 'applied') {
       refresh ||= !allPushed(state, outcome.from, outcome.seq);
     }
+    // Nothing is kept for a channel the device does not hold.
+    if (outcome.kind === 'not-held') state.pushed.clear();
     if (outcome.kind !== 'applied' && outcome.kind !== 'current') break;
     forgetPushed(state, outcome.seq);
     // A push that landed after this run read the log needs another.
     if (state.pushed.size === 0) break;
     outcome = await catchUpChannel(host, channelId, fetchChanges);
   }
+  // A reload from here on finds the device holding all the views were pushed.
+  if (state.pushed.size === 0) forgetUnstoredPush(channelId);
   if (refresh) refreshChannelViews(channelId);
   return outcome;
 }
@@ -217,19 +238,143 @@ export async function catchUpAndRefresh(
  * shows up as a gap and is recovered with it.
  */
 export function noteChannelPush(channelId: string, seq: number | string): void {
+  forgetPendingChannelPages(channelId);
   const host = channelCacheHost();
   if (!host) return;
   const state = stateOf(channelId);
   state.pushed.add(String(seq));
+  noteUnstoredPush(channelId);
+  // A reload can come at any moment, so a quiet channel's push is stored at
+  // once; one that arrives while another is being stored waits to share.
+  armStore(host, channelId, state, state.storing ? PUSH_SETTLE_MS : 0);
+}
+
+function armStore(
+  host: ChannelCatchUpHost,
+  channelId: string,
+  state: ChannelSyncState,
+  delayMs: number
+): void {
   if (state.timer !== undefined) return;
+  let done = () => {};
+  const promise = new Promise<void>((resolve) => {
+    done = resolve;
+  });
+  const storing = { promise, done };
+  state.storing = storing;
   state.timer = setTimeout(() => {
     state.timer = undefined;
-    fireAndForget(catchUpAndRefresh(host, channelId), 'channel-local-sync');
-  }, PUSH_SETTLE_MS);
+    fireAndForget(
+      storePushes(host, channelId, state, storing),
+      'channel-local-sync'
+    );
+  }, delayMs);
+}
+
+async function storePushes(
+  host: ChannelCatchUpHost,
+  channelId: string,
+  state: ChannelSyncState,
+  storing: NonNullable<ChannelSyncState['storing']>
+): Promise<void> {
+  try {
+    await catchUpAndRefresh(host, channelId);
+  } finally {
+    // A push noted during the run has its own wait.
+    if (state.storing === storing) state.storing = undefined;
+    storing.done();
+  }
+}
+
+/**
+ * Whether a device read is to be made again, not shown: the open views were
+ * pushed a change the read is older than. The device takes a push a moment
+ * after the views do, from the server's log, so this waits until it has, and
+ * answers false when it has not within the wait, since reading again would
+ * bring the same. `heldSeq` is the sequence the read was made at, when it is
+ * known; a read at or past every pushed change is already current.
+ */
+export async function pushesStored(
+  channelId: string,
+  heldSeq?: string | null
+): Promise<boolean> {
+  const state = channels.get(channelId);
+  if (!state) return false;
+  const held = heldSeq == null ? undefined : BigInt(heldSeq);
+  // The device took a push while this read was being made.
+  if (held !== undefined && state.stored !== undefined && held < state.stored) {
+    return true;
+  }
+  const storing = state.storing;
+  if (!storing) return false;
+  if (held !== undefined) {
+    const ahead = [...state.pushed].some((seq) => BigInt(seq) > held);
+    if (!ahead) return false;
+  }
+  return Promise.race([settled(storing.promise), gaveUp()]);
+}
+
+async function settled(storing: Promise<void>): Promise<boolean> {
+  await storing;
+  return true;
+}
+
+async function gaveUp(): Promise<boolean> {
+  await sleep(PUSH_STORE_WAIT_MS);
+  return false;
+}
+
+/**
+ * Catches up the channels a page that is gone was pushed a change for and did
+ * not see the device store.
+ */
+export async function storeUnstoredPushes(
+  host: ChannelCatchUpHost,
+  fetchChanges?: FetchChannelChanges
+): Promise<void> {
+  for (const channelId of unstoredPushChannels()) {
+    try {
+      await catchUpAndRefresh(host, channelId, fetchChanges);
+    } catch {
+      // Offline or a failed request: it stays noted for the next try.
+    }
+  }
+}
+
+/**
+ * The device lost everything it held: its storage was reset under this page.
+ * Forgets what the page knew of it and has the pages and threads of the open
+ * channels read again, so the device holds what is on screen once more; a
+ * channel not on screen is read again when it is next opened. Without this a
+ * channel read before the reset opens offline with nothing.
+ */
+export function rereadChannelsAfterStorageReset(): void {
+  resetChannelSync();
+  resetPendingChannelPages();
+  for (const queryKey of [
+    messageKeys.messages._def,
+    messageKeys.threadReplies._def,
+  ]) {
+    queryClient.invalidateQueries({ queryKey, predicate: readsChannel });
+  }
+}
+
+/** Whether a message query reads a channel; its parent follows the key scope. */
+function readsChannel(query: { queryKey: readonly unknown[] }): boolean {
+  const parent = query.queryKey[2];
+  return (
+    typeof parent === 'object' &&
+    parent !== null &&
+    'type' in parent &&
+    parent.type === 'channel'
+  );
 }
 
 /** Forgets every channel's sync state; for account changes and tests. */
 export function resetChannelSync(): void {
-  for (const state of channels.values()) clearTimeout(state.timer);
+  for (const state of channels.values()) {
+    clearTimeout(state.timer);
+    state.storing?.done();
+  }
   channels.clear();
 }

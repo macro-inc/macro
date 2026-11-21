@@ -20,6 +20,7 @@ import type { MessageThread } from '@service-storage/messages';
 import { fetchCached } from '../../calendar/graphql/network';
 import { mapChannelMessage, mapChannelRoot } from './map';
 import { channelMessageKey } from './sort-key';
+import { forgetUnheldRead, noteUnheldRead } from './unheld-reads';
 
 export type ChannelThreadHost = Pick<
   CacheHost,
@@ -120,6 +121,8 @@ async function fetchServerThread(
   rootId: string,
   fetchPage: FetchChannelThreadPage
 ): Promise<MessageThread | undefined> {
+  // A reload before the commit below leaves the thread to the next page.
+  noteUnheldRead({ channelId, rootId });
   const generation = cacheSessionGeneration.capture();
   const first = await fetchPage({
     channelId,
@@ -132,7 +135,11 @@ async function fetchServerThread(
   for (const direction of ['before', 'after'] as const) {
     let cursor = direction === 'before' ? first.olderCursor : first.newerCursor;
     while (cursor !== null) {
-      if (pages >= MAX_THREAD_PAGES) return undefined;
+      if (pages >= MAX_THREAD_PAGES) {
+        // Too long for the device to hold: it reads over REST.
+        forgetUnheldRead({ channelId, rootId });
+        return undefined;
+      }
       const page = await fetchPage({
         channelId,
         rootId,
@@ -159,6 +166,7 @@ async function fetchServerThread(
     },
     generation
   );
+  forgetUnheldRead({ channelId, rootId });
   // Sort keys compare bytewise in display order.
   const ordered = [...replies.keys()]
     .sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))
@@ -182,10 +190,12 @@ export async function loadChannelThread(
     span.setAttr('thread.root_id', rootId);
     const device = await readDeviceThread(host, channelId, rootId);
     if (device === 'unsupported') {
+      forgetUnheldRead({ channelId, rootId });
       span.setAttr('thread.source', 'unsupported');
       return undefined;
     }
     if (device !== 'miss') {
+      forgetUnheldRead({ channelId, rootId });
       span.setAttr('thread.source', 'device');
       span.setAttr('thread.replies', device.replies.length);
       return { thread: device, source: 'device' as const };

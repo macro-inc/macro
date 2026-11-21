@@ -153,7 +153,11 @@ entire cache in browser memory. With 10s of thousands of cached objects
     a claim only while it still holds the owner it claimed under. Claims made
     without Web Locks, before the lock is granted, while hidden, or by older
     bundles keep their full lease, as do claims on a native app built before
-    inspections carried the lease.
+    inspections carried the lease. An enqueue claims the head inside the
+    host; when its answer is lost the head stays leased to this page with
+    nothing sending it, so the next refused claim releases a lease this page
+    took, has no enqueue on its way for, and is not sending under
+    (`releaseUnroutedLease`).
 
 ### Open questions
 

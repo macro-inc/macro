@@ -65,6 +65,8 @@ export type MutationAttemptOutcome =
 export type MutationQueueSkipReason =
   | 'host-disabled'
   | 'claim-failed'
+  /** This runner held the head's lease without sending it; it was released. */
+  | 'lease-unrouted'
   | 'recovery-signed-out'
   | 'recovery-session-inactive'
   | 'recovery-inspection-unavailable'

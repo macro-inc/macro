@@ -1261,9 +1261,12 @@ export function normalizedCacheExchange(
         });
         let enqueue: EnqueueOptimisticMutationResult;
         let linkPatchesDegraded = false;
+        const enqueueEnded = mutationQueue.enqueueStarted();
         try {
           enqueue = await host.enqueueOptimisticMutation(args, claim);
+          enqueueEnded();
         } catch (error) {
+          enqueueEnded();
           if (!mutationQueue.isCurrent(epoch)) {
             enqueueTelemetry.failed('storage-changed');
             return uncertainEnqueueResult(
@@ -1278,6 +1281,8 @@ export function normalizedCacheExchange(
             options.onCacheError?.(error, op);
             // Fencing the old engine does not remove a committed queue entry.
             // Never forward or retry an enqueue whose reply was lost.
+            // The lost reply may have claimed the head for this runner.
+            mutationQueue.enqueueLost();
             return uncertainEnqueueResult(op, error);
           }
           // Another context holds the database, so the enqueue never reached
@@ -1309,6 +1314,7 @@ export function normalizedCacheExchange(
           );
           console.warn(`[graphql-cache] ${degraded.message}`, error);
           options.onCacheError?.(degraded, op);
+          const fallbackEnded = mutationQueue.enqueueStarted();
           try {
             enqueue = await host.enqueueOptimisticMutation(
               {
@@ -1329,7 +1335,9 @@ export function normalizedCacheExchange(
               },
               claim
             );
+            fallbackEnded();
           } catch (fallbackError) {
+            fallbackEnded();
             if (!mutationQueue.isCurrent(epoch)) {
               enqueueTelemetry.failed('storage-changed');
               return uncertainEnqueueResult(
@@ -1342,6 +1350,7 @@ export function normalizedCacheExchange(
             options.onCacheError?.(fallbackError, op);
             if (isAdmittedEnqueueUncertainError(fallbackError)) {
               enqueueTelemetry.failed('uncertain');
+              mutationQueue.enqueueLost();
               return uncertainEnqueueResult(op, fallbackError);
             }
             enqueueTelemetry.failed('rejected');

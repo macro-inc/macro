@@ -8,15 +8,31 @@ import type {
   MessageTimelinePage,
 } from '@service-storage/messages';
 import { onlineManager } from '@tanstack/solid-query';
-import { catchUpAndRefresh, catchUpChannel } from './catch-up';
+import {
+  catchUpAndRefresh,
+  catchUpChannel,
+  MAX_PUSH_REREADS,
+  pushesStored,
+  refreshChannelViews,
+} from './catch-up';
 import { channelCacheAnswered, channelCacheHost } from './flag';
 import {
   type ChannelPageRequest,
   type LoadedChannelPage,
   loadChannelPage,
+  pageHasPendingWrites,
 } from './pages';
+import { PREWARM_PAGE_SIZE } from './prewarm';
 import { sortKeyFromCursor } from './sort-key';
 import { loadChannelMessage, loadChannelThread } from './thread';
+import {
+  forgetUnheldRead,
+  noteUnheldRead,
+  type UnheldRead,
+  unheldReadsLeft,
+} from './unheld-reads';
+import { pageHasQueuedReplies } from './unsettled-replies';
+import { watchWaitingWrites } from './waiting-writes';
 
 const SYNC_SURFACE = 'channel-local-sync';
 
@@ -66,20 +82,29 @@ function reportFallback(error: unknown, signal?: AbortSignal): void {
 }
 
 /**
- * Once a server page is on the device: when the device already held the
- * channel at an older sequence, replays what changed since so the other
- * stretches it holds are current too.
+ * Once a server page is on the device: shows the person's writes still
+ * waiting in the device queue, which the server's page cannot carry (after a
+ * reload, the server usually answers first), and, when the device already
+ * held the channel at an older sequence, replays what changed since so the
+ * other stretches it holds are current too.
  */
-async function refreshIfBehind(
+async function settleServerPage(
   host: CacheHost,
-  channelId: string,
+  request: ChannelPageRequest,
   loaded: Extract<LoadedChannelPage, { source: 'server' }>,
   anchored: boolean
 ): Promise<void> {
   const storedSeq = await loaded.stored;
-  if (anchored || storedSeq === null) return;
+  if (storedSeq === null) return;
+  if (
+    (await pageHasPendingWrites(host, request)) ||
+    (await pageHasQueuedReplies(host, request.channelId, loaded.page))
+  ) {
+    refreshChannelViews(request.channelId);
+  }
+  if (anchored) return;
   if (BigInt(loaded.serverSeq) > BigInt(storedSeq)) {
-    await catchUpAndRefresh(host, channelId);
+    await catchUpAndRefresh(host, request.channelId);
   }
 }
 
@@ -93,6 +118,7 @@ export async function loadLocalChannelTimelinePage(
 ): Promise<MessageTimelinePage | undefined> {
   const host = channelCacheHost();
   if (!host) return undefined;
+  watchWaitingWrites();
   const request = pageRequest(read);
   if (!request) return undefined;
   const anchored = request.before !== undefined || request.after !== undefined;
@@ -108,10 +134,21 @@ export async function loadLocalChannelTimelinePage(
         reportFallback(error, read.signal);
       }
     }
-    const loaded = await loadChannelPage(host, request, {
+    let loaded = await loadChannelPage(host, request, {
       signal: read.signal,
     });
     if (loaded === 'unsupported' || loaded === 'not-ready') return undefined;
+    // The views may already show a push this device page is older than.
+    for (let reread = 0; reread < MAX_PUSH_REREADS; reread += 1) {
+      if (loaded.source !== 'device') break;
+      if (!(await pushesStored(read.channelId, loaded.storedSeq))) break;
+      read.signal?.throwIfAborted();
+      const again = await loadChannelPage(host, request, {
+        signal: read.signal,
+      });
+      if (again === 'unsupported' || again === 'not-ready') return undefined;
+      loaded = again;
+    }
     if (!anchored && loaded.source === 'device') {
       // Opening from the device counts as use, which eviction goes by; a
       // server page records it with its coverage.
@@ -128,7 +165,7 @@ export async function loadLocalChannelTimelinePage(
     }
     if (loaded.source === 'server') {
       fireAndForget(
-        refreshIfBehind(host, read.channelId, loaded, anchored),
+        settleServerPage(host, request, loaded, anchored),
         SYNC_SURFACE
       );
     } else if (!anchored && (!read.revalidate || !caughtUp)) {
@@ -141,16 +178,104 @@ export async function loadLocalChannelTimelinePage(
   }
 }
 
+/** Threads being given to the device, so one read twice is fetched once. */
+const threadsBeingHeld = new Set<string>();
+
+/** Has the device hold a thread the views were answered over REST. */
+async function holdChannelThread(
+  host: CacheHost,
+  channelId: string,
+  rootId: string
+): Promise<void> {
+  const key = `${channelId}:${rootId}`;
+  if (threadsBeingHeld.has(key)) return;
+  threadsBeingHeld.add(key);
+  // The host may take seconds to start; a reload meanwhile leaves the thread
+  // to the next page.
+  noteUnheldRead({ channelId, rootId });
+  try {
+    await loadChannelThread(host, channelId, rootId);
+  } catch (error) {
+    reportDeviceFault(error);
+  } finally {
+    threadsBeingHeld.delete(key);
+  }
+}
+
+async function holdUnheldRead(
+  host: CacheHost,
+  { channelId, rootId }: UnheldRead
+): Promise<void> {
+  if (rootId !== undefined) {
+    await loadChannelThread(host, channelId, rootId);
+    return;
+  }
+  const loaded = await loadChannelPage(host, {
+    channelId,
+    limit: PREWARM_PAGE_SIZE,
+  });
+  if (loaded !== 'unsupported' && loaded !== 'not-ready') {
+    if (loaded.source === 'server') await loaded.stored;
+  }
+}
+
+/**
+ * Has the device hold the channel pages and threads a page that is gone
+ * showed from the server and did not see the device store.
+ */
+let holdingUnheldReads: Promise<void> | undefined;
+
+/** One pass at a time: a second caller waits on the pass already running. */
+export function holdUnheldReads(host: CacheHost): Promise<void> {
+  holdingUnheldReads ??= (async () => {
+    try {
+      await holdUnheldReadsLeft(host);
+    } finally {
+      holdingUnheldReads = undefined;
+    }
+  })();
+  return holdingUnheldReads;
+}
+
+async function holdUnheldReadsLeft(host: CacheHost): Promise<void> {
+  for (const read of unheldReadsLeft()) {
+    // Offline it stays noted for the pass after the reconnect.
+    if (!onlineManager.isOnline()) return;
+    try {
+      await holdUnheldRead(host, read);
+      forgetUnheldRead(read, true);
+    } catch {
+      if (!onlineManager.isOnline()) return;
+      // A channel this person cannot read (the note may be another
+      // account's) or a failed request. Neither is tried again or reported:
+      // the prewarm keeps what is still wanted.
+      forgetUnheldRead(read, true);
+    }
+  }
+}
+
 /** A channel thread through the device cache; undefined to read over REST. */
 export async function loadLocalChannelThread(
   channelId: string,
   rootId: string
 ): Promise<MessageThread | undefined> {
   const host = channelCacheHost();
-  // A host still starting would hold the open up; REST answers meanwhile.
-  if (!host || !channelCacheAnswered(host)) return undefined;
+  if (!host) return undefined;
+  if (!channelCacheAnswered(host)) {
+    // A host still starting would hold the open up; REST answers meanwhile.
+    // The views keep that answer, so the device is given the thread as well,
+    // or it would not hold a thread the person read.
+    fireAndForget(holdChannelThread(host, channelId, rootId), SYNC_SURFACE);
+    return undefined;
+  }
   try {
-    const loaded = await loadChannelThread(host, channelId, rootId);
+    let loaded = await loadChannelThread(host, channelId, rootId);
+    // The views may already show a push this device thread is older than.
+    for (let reread = 0; reread < MAX_PUSH_REREADS; reread += 1) {
+      if (loaded?.source !== 'device') break;
+      if (!(await pushesStored(channelId))) break;
+      loaded = await loadChannelThread(host, channelId, rootId);
+    }
     if (loaded?.source === 'device') {
       fireAndForget(catchUpAndRefresh(host, channelId), SYNC_SURFACE);
     }

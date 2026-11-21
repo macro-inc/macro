@@ -4,7 +4,11 @@ import type {
 } from '@tanstack/solid-query';
 
 /** A query surface built on a TanStack query, such as a feature contract. */
-type QueryLike = { readonly isPending: boolean; readonly data: unknown };
+type QueryLike = {
+  readonly isPending: boolean;
+  readonly isLoadingError?: boolean;
+  readonly data: unknown;
+};
 
 export function queryReadyGate<T>(
   query: UseQueryResult<T> | UseInfiniteQueryResult<T>
@@ -17,5 +21,8 @@ export function queryReadyGate<Q extends QueryLike>(
 export function queryReadyGate(query: QueryLike): boolean {
   // Disabled and paused queries are pending without being loading. Reading
   // their data still suspends, so check the broader initial-pending state.
-  return !query.isPending && query.data !== undefined;
+  // A query that failed before it had data has none to read, and reading it
+  // suspends again each time the query takes new options.
+  if (query.isPending || query.isLoadingError) return false;
+  return query.data !== undefined;
 }

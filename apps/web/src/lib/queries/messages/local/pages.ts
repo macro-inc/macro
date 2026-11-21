@@ -35,10 +35,15 @@ import {
   channelMessageKey,
   cursorFromSortKey,
 } from './sort-key';
+import { forgetUnheldRead, noteUnheldRead } from './unheld-reads';
+import { listQueuedReplies, withUnsettledReplies } from './unsettled-replies';
 
 export type ChannelPageHost = Pick<
   CacheHost,
-  'channelTimeline' | 'channelTimelineCommit' | 'readRecordsByKeys'
+  | 'channelTimeline'
+  | 'channelTimelineCommit'
+  | 'readRecordsByKeys'
+  | 'inspectMutations'
 >;
 
 export type ChannelServerPage = ChannelTimelineQuery['user']['channelTimeline'];
@@ -120,6 +125,9 @@ const loadsInFlight = new Map<
   string,
   Promise<LoadedChannelPage | ChannelPageUnavailable>
 >();
+// How many pushes each channel has taken: a server page fetched before one
+// lacks its change and is not kept for the next reader.
+const channelPushes = new Map<string, number>();
 // Channels whose latest page the device is known to hold. Asking the device
 // costs a turn of a busy main thread, so the latest page of any other channel
 // is requested at the same time as it is looked up.
@@ -200,19 +208,42 @@ type DeviceRead =
 
 /** Answers a page from the device, or says why the server must. */
 export async function readDeviceChannelPage(
-  host: Pick<CacheHost, 'channelTimeline' | 'readRecordsByKeys'>,
+  host: Pick<
+    CacheHost,
+    'channelTimeline' | 'readRecordsByKeys' | 'inspectMutations'
+  >,
   request: ChannelPageRequest
 ): Promise<DeviceRead> {
   const result = await host.channelTimeline(cacheArgs(request));
   if (result.kind === 'unsupported') return { kind: 'unsupported' };
   if (!result.covered) return { kind: 'miss', storedSeq: result.seq };
+  // Listed beside the records, so the page waits on the slower of the two.
+  const queued = listQueuedReplies(host, request.channelId);
   const records = await readTimelineRecords(host, result.keys);
   if (!records) return { kind: 'miss', storedSeq: result.seq };
   return {
     kind: 'page',
-    page: timelinePage(records, result.olderCursor, result.newerCursor),
+    // A root's record does not show a reply this device has just written.
+    page: await withUnsettledReplies(
+      host,
+      request.channelId,
+      timelinePage(records, result.olderCursor, result.newerCursor),
+      queued
+    ),
     storedSeq: result.seq,
   };
+}
+
+/**
+ * Whether writes still waiting in the device queue shape this page. A page
+ * the server answered cannot show them; one read from the device does.
+ */
+export async function pageHasPendingWrites(
+  host: Pick<CacheHost, 'channelTimeline'>,
+  request: ChannelPageRequest
+): Promise<boolean> {
+  const result = await host.channelTimeline(cacheArgs(request));
+  return result.kind !== 'unsupported' && result.covered && result.optimistic;
 }
 
 /**
@@ -356,6 +387,7 @@ async function loadPage(
   span: Span
 ): Promise<LoadedChannelPage | ChannelPageUnavailable> {
   const cacheHost = host as CacheHost;
+  const pushesBefore = channelPushes.get(request.channelId);
   // The session the page is read under: a later one must not store it.
   const generation = cacheSessionGeneration.capture();
   const pendingKey = JSON.stringify(cacheArgs(request));
@@ -421,7 +453,10 @@ async function loadPage(
     heldChannels.delete(request.channelId);
   }
   if (device?.kind === 'page') {
-    if (latest) heldChannels.add(request.channelId);
+    if (latest) {
+      heldChannels.add(request.channelId);
+      forgetUnheldRead({ channelId: request.channelId });
+    }
     span.setAttr('page.source', 'device');
     span.setAttr('page.entries', device.page.entries.length);
     return {
@@ -432,6 +467,9 @@ async function loadPage(
   }
   const { page: server, cached } = fetched ?? (await fetchServer());
   const coverage = serverPageCoverage(request, server);
+  // The views show this page before the device holds it, and the host may
+  // still be starting; a reload meanwhile leaves it to the next page.
+  if (latest && coverage) noteUnheldRead({ channelId: request.channelId });
   const store = async (): Promise<string | null> => {
     await cached;
     // The page won a race against a host that had not answered: record it
@@ -439,6 +477,7 @@ async function loadPage(
     const held = device ?? (await read);
     if (held.kind === 'unsupported') {
       markChannelCacheUnsupported(cacheHost);
+      forgetUnheldRead({ channelId: request.channelId });
       return null;
     }
     markChannelCacheAnswered(cacheHost);
@@ -452,7 +491,10 @@ async function loadPage(
       generation
     );
     if (committed.kind !== 'committed') return held.storedSeq;
-    if (latest && coverage) heldChannels.add(request.channelId);
+    if (latest && coverage) {
+      heldChannels.add(request.channelId);
+      forgetUnheldRead({ channelId: request.channelId });
+    }
     return committed.channelSeq;
   };
   const stored = store();
@@ -464,7 +506,10 @@ async function loadPage(
     serverSeq: server.seq,
     stored,
   };
-  pendingServerPages.set(pendingKey, loaded);
+  // Only this load's own readers get a page a push has since outdated.
+  if (channelPushes.get(request.channelId) === pushesBefore) {
+    pendingServerPages.set(pendingKey, loaded);
+  }
   const forget = () => {
     if (pendingServerPages.get(pendingKey) === loaded) {
       pendingServerPages.delete(pendingKey);
@@ -480,9 +525,26 @@ async function loadPage(
   return loaded;
 }
 
+/**
+ * Forgets the channel's server pages still being written and its loads still
+ * running. One fetched before a change that has since been pushed lacks it,
+ * and the read made again to recover that change must not be answered with
+ * the same page.
+ */
+export function forgetPendingChannelPages(channelId: string): void {
+  channelPushes.set(channelId, (channelPushes.get(channelId) ?? 0) + 1);
+  for (const pages of [pendingServerPages, loadsInFlight]) {
+    for (const key of pages.keys()) {
+      const args: ChannelTimelineCacheArgs = JSON.parse(key);
+      if (args.channelId === channelId) pages.delete(key);
+    }
+  }
+}
+
 /** Forgets pages still being written; for account changes and tests. */
 export function resetPendingChannelPages(): void {
   pendingServerPages.clear();
   loadsInFlight.clear();
+  channelPushes.clear();
   heldChannels.clear();
 }

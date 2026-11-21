@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   cursorFromSortKey,
-  liveReplySortKey,
   rootSortKey,
   sortKeyFromCursor,
+  unplacedSortKey,
 } from '../sort-key';
 
 const ID = '0198c0de-0000-7000-8000-00000000000a';
@@ -43,8 +43,21 @@ describe('channel sort keys', () => {
     expect(cursorFromSortKey(`~-00001793527200123456-${ID}`)).toBeUndefined();
   });
 
-  it('sorts a live reply after imported ones', () => {
-    const live = liveReplySortKey('2026-11-01T10:00:00Z', ID);
-    expect(live && live > `00000000000000000009-${live.slice(2)}`).toBe(true);
+  it('sorts an unplaced message after every placed one, in the order written', () => {
+    const placed = rootSortKey('2026-11-01T10:00:05Z', ID);
+    const first = unplacedSortKey('2026-11-01T10:00:00Z', ID, false);
+    const second = unplacedSortKey('2026-11-01T10:00:01Z', ID, false);
+    expect(placed && first && second && placed < first && first < second).toBe(
+      true
+    );
+    expect(first && cursorFromSortKey(first)).toBeDefined();
+  });
+
+  it('sorts an unplaced reply after live and imported ones', () => {
+    const reply = unplacedSortKey('2026-11-01T10:00:00Z', ID, true);
+    const live = `~-${rootSortKey('2026-11-01T10:00:05Z', ID)}`;
+    expect(reply && reply > live && live > `00000000000000000009-${ID}`).toBe(
+      true
+    );
   });
 });

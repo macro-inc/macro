@@ -12,6 +12,7 @@ import { queryClient } from '../client';
 import { consumeNonce } from '../nonce';
 import { MessageNonceKeys, messageKeys } from './keys';
 import { noteChannelPush } from './local/catch-up';
+import { channelCacheHost } from './local/flag';
 import { normalizeMessageSender } from './message-sender';
 import {
   getCachedThreadState,
@@ -30,9 +31,28 @@ import {
   insertActivitiesIntoMessageTimeline,
   invalidateMessageTimeline,
   type MessageTimelineData,
+  placeTopLevelMessageInMessageTimeline,
   setMessageTimelineData,
 } from './timeline';
 import { handleCommsTyping } from './typing';
+import { optimisticIdOf, SEND_MESSAGE_MUTATION_KEY } from './unsent';
+
+/**
+ * The sends this session is still waiting on, other than `deliveredId`: the
+ * server has not placed them, so they stay after every placed message.
+ */
+function waitingSendIds(deliveredId: string): Set<string> {
+  const ids = new Set<string>();
+  const sending = queryClient.getMutationCache().findAll({
+    mutationKey: SEND_MESSAGE_MUTATION_KEY,
+    status: 'pending',
+  });
+  for (const mutation of sending) {
+    const id = optimisticIdOf(mutation.state.variables);
+    if (id !== undefined && id !== deliveredId) ids.add(id);
+  }
+  return ids;
+}
 
 /**
  * A refetch can have read before this committed event, including on a page that
@@ -98,6 +118,41 @@ function noteCommittedChannelChange(
 ) {
   if (parent.type === 'channel' && typeof seq === 'number') {
     noteChannelPush(parent.id, seq);
+  }
+}
+
+/**
+ * Applies the answer to this person's own send or edit that went through the
+ * device queue. That answer passes through the device before it reaches the
+ * views, which may by then show a reaction someone else made since: the
+ * answer predates it, so the reactions on screen stay.
+ * A delivered root message also moves to where the server placed it: messages
+ * pushed while it waited were put below it, though the server holds them first.
+ */
+export function applyQueuedWrite(
+  message: Message,
+  change: 'posted' | 'edited'
+) {
+  const shown = getTargetMessage(
+    message.parent,
+    resolveMessageTarget({
+      parent: message.parent,
+      messageId: message.id,
+      threadId: message.thread_id ?? undefined,
+    })
+  );
+  applyMessage(
+    shown ? { ...message, reactions: shown.reactions } : message,
+    change
+  );
+  if (change === 'posted' && !message.thread_id) {
+    setMessageTimelineData(message.parent, (data) =>
+      placeTopLevelMessageInMessageTimeline(
+        data,
+        message.id,
+        waitingSendIds(message.id)
+      )
+    );
   }
 }
 
@@ -189,6 +244,23 @@ export function applyMessage(
     }
   } else {
     patchTargetMessage(parent, target, normalized);
+  }
+  // With the device queue a person's own message can wait above a pushed one
+  // with a later time, and a waiting row another window wrote is given the
+  // server's time by the push of its delivery.
+  if (
+    change === 'posted' &&
+    target.kind !== 'thread_reply' &&
+    parent.type === 'channel' &&
+    channelCacheHost()
+  ) {
+    setMessageTimelineData(parent, (data) =>
+      placeTopLevelMessageInMessageTimeline(
+        data,
+        message.id,
+        waitingSendIds(message.id)
+      )
+    );
   }
   softInvalidateTargetCaches(parent, target);
   fireAndForget(restartPendingChannelTimeline(parent), 'messages-sync');

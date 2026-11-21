@@ -6,11 +6,17 @@ mod inputs;
 mod objects;
 mod reads;
 mod user_query;
+mod writes;
 
 pub use inputs::{ChannelChangesInput, ChannelThreadInput, ChannelTimelineInput};
 pub use objects::*;
 pub use reads::ChannelGraphqlContext;
 pub use user_query::GraphqlChannelQuery;
+pub use writes::{
+    ChannelAttachmentInput, ChannelMentionInput, ChannelMessageMutationRoot, ChannelWriteActor,
+    DeleteChannelMessageInput, EditChannelMessageInput, ReactToChannelMessageInput,
+    SendChannelMessageInput,
+};
 
 #[cfg(test)]
 mod test;
@@ -234,8 +240,8 @@ fn message_error(error: messages::domain::ports::MessageError) -> async_graphql:
             "SERVICE_UNAVAILABLE",
         ),
         MessageError::Repository(error) => {
-            tracing::error!(error = ?error, "channel read failed");
-            ("channel read is unavailable", "INTERNAL_SERVER_ERROR")
+            tracing::error!(error = ?error, "channel message request failed");
+            ("channel messages are unavailable", "INTERNAL_SERVER_ERROR")
         }
     };
     async_graphql::Error::new(message).extend_with(|_, e| e.set("code", code))

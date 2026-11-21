@@ -130,7 +130,7 @@ export function AppProviders(props: ParentProps) {
   useQuerySync(userId);
   useSoupBackfills(userId);
   useCalendarCache(() => userId() !== undefined);
-  useChannelCache(() => userId() !== undefined);
+  useChannelCache(userId);
   useWarmPromptDismissals(userId);
   useResumeFolderUploads(userId);
   useInterfaceLanguageSync();

@@ -48,8 +48,12 @@ wasm-bindgen shell exposing `cache-core` + `cache-turso` + `turso-opfs` as a
 
 ## Gotchas
 
+- Bump this crate's `version` when a change here, in `cache-core` or in
+  `cache-turso` changes what the web host reads or sends: a checkout rebuilds
+  its engine only on a version change (`just ensure-cache-wasm`; `bun run build`
+  never does), and the bump is what the native release gate reads
+  (`apps/web/docs/ios-releases.md`).
 - Keep first account binding without a stored policy generation-neutral, including after reopening OPFS; policy-bearing binding and account replacement retain the shared core's fence.
-
 - Preserve successful hydration replies when optional window-proof computation
   fails; empty proofs retain broad invalidation after the durable write.
 - Pass the existing entity-filter `baseline` to Mail pagination too; `retainedKeys`

@@ -41,6 +41,21 @@ describe('thread preview and explicit expansion', () => {
     }
   });
 
+  it('shows the preview only while an expanded thread has no replies loaded', () => {
+    const view = fixture();
+    try {
+      expect(view.showsPreviewOnly()).toBe(true);
+      view.setExpanded(true);
+      // Offline, a thread the device does not hold stays this way.
+      expect(view.displayReplies()).toEqual(preview);
+      expect(view.showsPreviewOnly()).toBe(true);
+      view.setLoaded(replies);
+      expect(view.showsPreviewOnly()).toBe(false);
+    } finally {
+      view.dispose();
+    }
+  });
+
   it('does not reveal a cached full thread on mount or remount', () => {
     for (let mount = 0; mount < 2; mount++) {
       const view = fixture(replies);

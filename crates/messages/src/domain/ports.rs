@@ -313,6 +313,14 @@ pub enum AttachmentChange {
         /// New attachments to append.
         add: Vec<NewAttachment>,
     },
+    /// `Delta` for callers that replay an edit until they hear an answer: an
+    /// added entity the message already holds is not attached a second time.
+    DeltaOnce {
+        /// Existing attachment UUIDs to remove.
+        remove: Vec<Uuid>,
+        /// New attachments to append unless already held.
+        add: Vec<NewAttachment>,
+    },
 }
 
 /// Partial updates share the same authorship, reference, and delivery rules as edits.
