@@ -129,11 +129,16 @@ fn refuse_account_manager_route(parts: &mut Parts) -> Result<(), MacroAuthorizat
         parts.method,
         ::axum::http::Method::GET | ::axum::http::Method::HEAD | ::axum::http::Method::OPTIONS
     );
+    let preflight = parts.method == ::axum::http::Method::OPTIONS;
     let decision = match parts.extensions.get::<ActiveRollout>() {
-        Some(ActiveRollout(rollout)) => {
-            RouteDecision::new(caller, decided.category, safe_method, rollout.as_ref())
-        }
-        None => RouteDecision::new(caller, decided.category, safe_method, &NoRollout),
+        Some(ActiveRollout(rollout)) => RouteDecision::new(
+            caller,
+            decided.category,
+            safe_method,
+            preflight,
+            rollout.as_ref(),
+        ),
+        None => RouteDecision::new(caller, decided.category, safe_method, preflight, &NoRollout),
     };
     parts.extensions.insert(decision);
     let Verdict::Refused(refusal) = decision.verdict else {
