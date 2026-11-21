@@ -226,8 +226,6 @@ struct PreparedHydrate {
     request: HydrateRequest,
     projections: Vec<ProjectionMutation>,
     wal_position: Option<WalPosition>,
-    /// The identity the cache was bound to when the projections were read.
-    bound_identity: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -574,13 +572,18 @@ impl CacheState {
         let Some(observed) = identity else {
             return Ok(true);
         };
-        let bound = self.bound_identity().await?;
+        let result = self.engine_mut()?.current_identity().await;
+        let bound = self.engine_result(result)?;
         Ok(bound.as_deref().is_none_or(|bound| bound == observed))
     }
 
-    async fn bound_identity(&mut self) -> Result<Option<String>, JsValue> {
-        let result = self.engine_mut()?.current_identity().await;
-        self.engine_result(result)
+    /// Storage may have changed in a way this connection's WAL position
+    /// does not show (another instance reset it, or the database was
+    /// replaced): a kept hydrate reads its projections again when it commits.
+    fn forget_prepared_projections(&mut self) {
+        if let Some(prepared) = &mut self.prepared_hydrate {
+            prepared.wal_position = None;
+        }
     }
 
     /// Where the WAL ends, or `None` when it can't be read, which makes a
@@ -650,13 +653,11 @@ impl CacheState {
         request: HydrateRequest,
     ) -> Result<PreparedHydrate, JsValue> {
         let wal_position = self.wal_position();
-        let bound_identity = self.bound_identity().await?;
         let projections = self.hydrate_projections(&request).await?;
         Ok(PreparedHydrate {
             request,
             projections,
             wal_position,
-            bound_identity,
         })
     }
 
@@ -672,18 +673,7 @@ impl CacheState {
             request,
             mut projections,
             wal_position,
-            bound_identity,
         } = prepared;
-        // A write that bound the cache to another identity than this
-        // hydrate's wiped what it was read against, and would have wiped it
-        // had the hydrate run first. Writing it now would undo that write or
-        // file its data under the new identity, so it is dropped.
-        let bound_now = self.bound_identity().await?;
-        if bound_now != bound_identity && bound_now.as_deref() != request.identity.as_deref() {
-            return Err(err_js(
-                "the cache was rebound since the hydrate was prepared",
-            ));
-        }
         let projections_reread = wal_position.is_none() || self.wal_position() != wal_position;
         if projections_reread {
             projections = self.hydrate_projections(&request).await?;
@@ -2006,11 +1996,10 @@ impl CacheEngine {
     /// The first half of `hydrateQuery`: converts the response and reads the
     /// projection rows it changes, without writing. The engine keeps the
     /// result for `commitHydrate`, replacing any it kept before. Between the
-    /// two the host may run requests that only read. A write in between makes
-    /// the commit read the projections again; a clear, an external reset, an
-    /// authority transition, a physical reset or a close drops the kept
-    /// hydrate, and the commit then rejects. So does a write in between that
-    /// bound the cache to an identity other than the hydrate's.
+    /// two the host may run requests that only read. Whatever runs between,
+    /// the commit writes the response as `hydrateQuery` would at that moment:
+    /// after a write, a clear, a reset or an authority transition it reads
+    /// the projections again first. A close drops the kept hydrate.
     #[wasm_bindgen(js_name = prepareHydrate)]
     pub fn prepare_hydrate(
         &self,
@@ -2041,8 +2030,9 @@ impl CacheEngine {
     }
 
     /// Writes the hydrate `prepareHydrate` kept and resolves like
-    /// `hydrateQuery`. If a write committed in between, it reads the
-    /// projections again first and the result says `projectionsReread`.
+    /// `hydrateQuery` issued now. When storage may have changed since the
+    /// prepare, it reads the projections again first and the result says
+    /// `projectionsReread`.
     #[wasm_bindgen(js_name = commitHydrate)]
     pub fn commit_hydrate(&self) -> js_sys::Promise {
         let state = self.state.clone();
@@ -2637,7 +2627,7 @@ impl CacheEngine {
         let ops = self.ops.clone();
         future_to_promise(async move {
             let mut state = state.lock().await;
-            state.prepared_hydrate = None;
+            state.forget_prepared_projections();
             let result = state.engine_mut()?.external_reset();
             let affected = state.engine_result(result)?;
             to_js(&JsAffectedOperationsResult {
@@ -2667,7 +2657,7 @@ impl CacheEngine {
         let state = self.state.clone();
         future_to_promise(async move {
             let mut state = state.lock().await;
-            state.prepared_hydrate = None;
+            state.forget_prepared_projections();
             let result = state.engine_mut()?.clear().await;
             let revision = state.engine_result(result)?;
             to_js(&JsRevisionResult {
@@ -2684,7 +2674,7 @@ impl CacheEngine {
         let state = self.state.clone();
         future_to_promise(async move {
             let mut state = state.lock().await;
-            state.prepared_hydrate = None;
+            state.forget_prepared_projections();
             let engine = state.engine.take().ok_or_else(|| {
                 if state.reset_required {
                     err_js("cache engine requires worker replacement")

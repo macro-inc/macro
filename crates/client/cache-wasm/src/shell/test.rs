@@ -3102,103 +3102,153 @@ async fn a_failed_prepare_leaves_nothing_to_commit() {
     close_and_destroy(&engine, SCOPE).await;
 }
 
-/// `hydrated_state` without the revisions, which count the dropped
-/// hydrate's write in the order it is compared with.
-async fn stored_state(engine: &CacheEngine) -> serde_json::Value {
-    let mut state = hydrated_state(engine).await;
-    state.as_object_mut().unwrap().remove("revision");
-    if let Some(owned) = state["owned"].as_object_mut() {
-        owned.remove("revision");
+/// A call run before or between the halves of a hydrate.
+#[derive(Clone, Copy)]
+enum Step {
+    /// A Soup page holding one document, for an identity.
+    Soup(&'static str, &'static str),
+    /// The backfill page again, with its document updated at another time.
+    Backfill(i64),
+    Clear,
+    ExternalReset,
+}
+
+async fn run_steps(engine: &CacheEngine, steps: &[Step]) {
+    for step in steps {
+        match *step {
+            Step::Soup(document_id, identity) => {
+                resolved(engine.write_query(
+                    write_context(None),
+                    QUERY.into(),
+                    Some("Soup".into()),
+                    js(variables()),
+                    js(soup_data(document_id)),
+                    Some(identity.into()),
+                ))
+                .await;
+            }
+            Step::Backfill(updated_at) => {
+                resolved(engine.hydrate_query(
+                    SOUP_BACKFILL_WITH_PROJECTION_QUERY.into(),
+                    Some("SoupBackfill".into()),
+                    backfill_variables(),
+                    js(serde_json::json!({
+                        "user": {
+                            "id": "user-1",
+                            "soup": {
+                                "nextCursor": "next",
+                                "items": [projected_document_item(
+                                    BACKFILL_ITEM,
+                                    "macro|user@example.com",
+                                    false,
+                                    None,
+                                    updated_at,
+                                )]
+                            }
+                        }
+                    })),
+                    Some("user-1".into()),
+                    JsValue::UNDEFINED,
+                ))
+                .await;
+            }
+            Step::Clear => {
+                resolved(engine.clear()).await;
+            }
+            Step::ExternalReset => {
+                resolved(engine.external_reset()).await;
+            }
+        }
     }
-    state
 }
 
-fn write_soup_as(engine: &CacheEngine, document_id: &str, identity: &str) -> js_sys::Promise {
-    engine.write_query(
-        write_context(None),
-        QUERY.into(),
-        Some("Soup".into()),
-        js(variables()),
-        js(soup_data(document_id)),
-        Some(identity.into()),
-    )
-}
-
-#[wasm_bindgen_test(async)]
-async fn a_clear_between_prepare_and_commit_drops_the_prepared_hydrate() {
-    const SCOPE: &str = "cache-wasm-prepared-hydrate-cleared";
-    // The response predates the clear: run first, the clear would have
-    // removed it, so the split one must leave what that order leaves.
-    let engine = fresh_engine(SCOPE).await;
-    resolved(write_soup(&engine, "doc-before-clear")).await;
-    resolved(hydrate_backfill(&engine)).await;
-    resolved(engine.clear()).await;
-    let expected = stored_state(&engine).await;
-    close_and_destroy(&engine, SCOPE).await;
-
-    let engine = fresh_engine(SCOPE).await;
-    resolved(write_soup(&engine, "doc-before-clear")).await;
-    resolved(prepare_backfill(&engine)).await;
-    resolved(engine.clear()).await;
-    assert!(JsFuture::from(engine.commit_hydrate()).await.is_err());
-    assert_eq!(stored_state(&engine).await, expected);
-    close_and_destroy(&engine, SCOPE).await;
-}
-
-#[wasm_bindgen_test(async)]
-async fn a_write_that_rebinds_the_cache_between_prepare_and_commit_drops_the_hydrate() {
-    const SCOPE: &str = "cache-wasm-prepared-hydrate-rebound";
-    // Run first, the hydrate would have been wiped by the rebind; run after
-    // it, it would bind the cache back to its own identity and wipe the
-    // rebinding write. The split one must leave what the first order leaves.
-    let engine = fresh_engine(SCOPE).await;
-    resolved(write_soup(&engine, "doc-before-rebind")).await;
-    resolved(hydrate_backfill(&engine)).await;
-    let rebound: serde_json::Value =
-        from_js(resolved(write_soup_as(&engine, "doc-of-user-2", "user-2")).await);
-    assert_eq!(rebound["reset"], true);
-    let expected = stored_state(&engine).await;
-    close_and_destroy(&engine, SCOPE).await;
-
-    let engine = fresh_engine(SCOPE).await;
-    resolved(write_soup(&engine, "doc-before-rebind")).await;
-    resolved(prepare_backfill(&engine)).await;
-    resolved(write_soup_as(&engine, "doc-of-user-2", "user-2")).await;
-    let error = JsFuture::from(engine.commit_hydrate())
-        .await
-        .expect_err("the hydrate was read against another identity");
-    assert_eq!(
-        js_sys::Reflect::get(&error, &"message".into())
-            .unwrap()
-            .as_string()
-            .unwrap(),
-        "the cache was rebound since the hydrate was prepared"
-    );
-    let identity: Option<String> = from_js(resolved(engine.bound_identity()).await);
-    assert_eq!(identity.as_deref(), Some("user-2"));
-    assert_eq!(stored_state(&engine).await, expected);
-    close_and_destroy(&engine, SCOPE).await;
-}
-
-#[wasm_bindgen_test(async)]
-async fn a_write_that_rebinds_the_cache_to_the_hydrates_identity_keeps_the_hydrate() {
-    const SCOPE: &str = "cache-wasm-prepared-hydrate-rebound-to-own";
-    // The hydrate rebinds the cache to user-1 whichever order it runs in.
-    let engine = fresh_engine(SCOPE).await;
-    resolved(write_soup_as(&engine, "doc-of-user-2", "user-2")).await;
-    resolved(write_soup(&engine, "doc-of-user-1")).await;
+/// Whatever runs between the halves, the commit answers and leaves the cache
+/// as `hydrateQuery` issued after it does.
+async fn assert_commit_is_hydrate_after(scope: &str, before: &[Step], between: &[Step]) {
+    let engine = fresh_engine(scope).await;
+    run_steps(&engine, before).await;
+    run_steps(&engine, between).await;
     let whole: serde_json::Value = from_js(resolved(hydrate_backfill(&engine)).await);
-    let expected = hydrated_state(&engine).await;
-    close_and_destroy(&engine, SCOPE).await;
+    let whole_state = hydrated_state(&engine).await;
+    close_and_destroy(&engine, scope).await;
 
-    let engine = fresh_engine(SCOPE).await;
-    resolved(write_soup_as(&engine, "doc-of-user-2", "user-2")).await;
+    let engine = fresh_engine(scope).await;
+    run_steps(&engine, before).await;
     resolved(prepare_backfill(&engine)).await;
-    resolved(write_soup(&engine, "doc-of-user-1")).await;
+    run_steps(&engine, between).await;
+    let reads = engine.state.lock().await.projection_reads;
     let mut split: serde_json::Value = from_js(resolved(engine.commit_hydrate()).await);
     assert_eq!(split["projectionsReread"], true);
+    assert_eq!(engine.state.lock().await.projection_reads, reads + 1);
     split.as_object_mut().unwrap().remove("projectionsReread");
     assert_eq!(split, whole);
-    assert_eq!(hydrated_state(&engine).await, expected);
-    close_and_destroy(&engine, SCOPE).await;
+    assert_eq!(hydrated_state(&engine).await, whole_state);
+    close_and_destroy(&engine, scope).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_clear_between_prepare_and_commit_commits_as_a_hydrate_after_it() {
+    assert_commit_is_hydrate_after(
+        "cache-wasm-prepared-hydrate-cleared",
+        &[Step::Soup("doc-before-clear", "user-1")],
+        &[Step::Clear],
+    )
+    .await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn an_external_reset_between_prepare_and_commit_commits_as_a_hydrate_after_it() {
+    assert_commit_is_hydrate_after(
+        "cache-wasm-prepared-hydrate-external-reset",
+        &[Step::Soup("doc-before-reset", "user-1")],
+        &[Step::ExternalReset],
+    )
+    .await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn rebinding_writes_between_prepare_and_commit_commit_as_a_hydrate_after_them() {
+    // To another identity, which the hydrate's own identity then resets.
+    assert_commit_is_hydrate_after(
+        "cache-wasm-prepared-hydrate-rebound",
+        &[Step::Soup("doc-of-user-1", "user-1")],
+        &[Step::Soup("doc-of-user-2", "user-2")],
+    )
+    .await;
+    // Away and back again: two resets the identity alone would not show.
+    assert_commit_is_hydrate_after(
+        "cache-wasm-prepared-hydrate-rebound-back",
+        &[Step::Soup("doc-of-user-1", "user-1")],
+        &[
+            Step::Soup("doc-of-user-2", "user-2"),
+            Step::Soup("doc-of-user-1-again", "user-1"),
+        ],
+    )
+    .await;
+    // To the hydrate's own identity, from another one.
+    assert_commit_is_hydrate_after(
+        "cache-wasm-prepared-hydrate-rebound-to-own",
+        &[Step::Soup("doc-of-user-2", "user-2")],
+        &[Step::Soup("doc-of-user-1", "user-1")],
+    )
+    .await;
+    // A first binding of an unbound cache.
+    assert_commit_is_hydrate_after(
+        "cache-wasm-prepared-hydrate-first-bind",
+        &[],
+        &[Step::Soup("doc-binds-user-2", "user-2")],
+    )
+    .await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_write_of_the_same_document_between_prepare_and_commit_loses_to_the_commit() {
+    // The hydrate's document, updated at another time: the commit is the
+    // last write of it, and its sort position is the commit's.
+    assert_commit_is_hydrate_after(
+        "cache-wasm-prepared-hydrate-same-document",
+        &[],
+        &[Step::Backfill(20)],
+    )
+    .await;
 }
