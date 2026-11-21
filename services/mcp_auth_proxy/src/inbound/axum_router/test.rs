@@ -1846,3 +1846,35 @@ async fn a_program_cannot_drive_the_sign_in_broker() {
     );
     assert_eq!(send(&flow.harness, health).await.status, StatusCode::OK);
 }
+
+#[tokio::test]
+async fn mcp_preflight_allows_the_mcp_routing_headers() {
+    let app = Router::new()
+        .route("/mcp", get(|| async { "ok" }))
+        .layer(super::mcp_cors_layer());
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("OPTIONS")
+                .uri("/mcp")
+                .header(header::ORIGIN, "https://client.example")
+                .header(header::ACCESS_CONTROL_REQUEST_METHOD, "POST")
+                .header(
+                    header::ACCESS_CONTROL_REQUEST_HEADERS,
+                    "mcp-method, mcp-name, mcp-protocol-version",
+                )
+                .body(Body::empty())
+                .expect("request builds"),
+        )
+        .await
+        .expect("router should respond");
+    let allowed = response
+        .headers()
+        .get(header::ACCESS_CONTROL_ALLOW_HEADERS)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    for name in ["mcp-method", "mcp-name", "mcp-protocol-version"] {
+        assert!(allowed.contains(name), "{name} missing from {allowed}");
+    }
+}
