@@ -397,9 +397,13 @@ where
     pub async fn apply_agent(
         &self,
         environment: agent_runtime_protocol::domain::schema::v0::AgentEnvironment,
+        traceparent: Option<String>,
     ) -> Result<(), TransportError> {
         self.outbound
-            .send(ToRuntimeMessage::ApplyAgent { environment })
+            .send(ToRuntimeMessage::ApplyAgent {
+                environment,
+                traceparent,
+            })
             .await
     }
 

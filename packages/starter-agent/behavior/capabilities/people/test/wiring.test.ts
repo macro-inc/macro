@@ -43,7 +43,8 @@ const conversation = (dm: boolean): Conversation => ({
 const history = (recent: readonly Entry[]): History => ({
   recent: async () => recent,
   record: async () => undefined,
-  wait: async () => undefined,
+  recorded: async () => false,
+  wait: async () => true,
   answered: async () => undefined,
   waiting: async () => [],
 });

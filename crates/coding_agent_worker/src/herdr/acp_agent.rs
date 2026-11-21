@@ -164,8 +164,6 @@ pub(crate) struct AdapterOptions {
     pub state_dir: Option<PathBuf>,
     /// Native model ID for new sessions.
     pub model: Option<String>,
-    /// Sessions use dispatcher-managed worktrees.
-    pub managed_worktrees: bool,
     /// The agent TUI sessions run.
     pub kind: TuiAgent,
     /// Passed to Claude Code as `--permission-mode`.
@@ -243,7 +241,7 @@ pub async fn run(options: AdapterOptions) -> rootcause::Result<()> {
         }
     });
 
-    let herdr = HerdrSession::detect();
+    let herdr = HerdrSession::detect()?;
     let home = environment::Home::new().and_then(|home| home.value().map(PathBuf::from));
     let state_dir = options
         .state_dir
@@ -1014,15 +1012,6 @@ impl Adapter {
     ) -> Result<Live, RpcError> {
         let kind = self.options.kind;
         let label = title_from(first_prompt).unwrap_or_else(|| kind.herdr_kind().to_owned());
-        let source = if self.options.managed_worktrees {
-            Some(
-                crate::outbound::git::primary_worktree(&session.cwd)
-                    .await
-                    .map_err(|error| RpcError::internal(error.to_string()))?,
-            )
-        } else {
-            None
-        };
 
         let model = lock(&session.model).clone();
         let mut args = Vec::new();
@@ -1076,7 +1065,6 @@ impl Adapter {
                 cwd: &session.cwd,
                 label: &label,
                 focus: !self.options.no_focus,
-                worktree_source: source.as_deref(),
                 environment: environment.as_deref(),
                 args: &args,
             })

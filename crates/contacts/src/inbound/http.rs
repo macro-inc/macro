@@ -1,4 +1,3 @@
-use crate::domain::models::messages::ContactsNodes;
 use crate::domain::models::people::{PeopleSearchLimit, PeopleSearchQuery, PersonMatch};
 use crate::domain::ports::{ContactsService, PeopleSearchService};
 use axum::extract::{FromRef, FromRequestParts, Json, Query, State};
@@ -10,13 +9,13 @@ use axum_extra::extract::Cached;
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use rate_limit::domain::models::RateLimitOk;
 use rate_limit::inbound::{RateLimitExtractable, rate_limit_middleware};
 use rate_limit::{RateLimitConfig, RateLimitKey, RateLimitResult, RateLimitService};
 use rootcause::Report;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::instrument;
@@ -95,10 +94,7 @@ pub struct SearchPeopleResponse {
     (status = 401, body=String),
     (status = 500, body=String)))
 ]
-#[instrument(
-    skip_all,
-    fields(actor = %authorization.acting_entity())
-)]
+#[instrument(skip_all)]
 pub async fn search_people_handler<S: PeopleSearchService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<S>>,
     Cached(authorization): Cached<MacroAuthorizationExtractor<Auth, UserOrInternal>>,
@@ -135,10 +131,7 @@ pub async fn search_people_handler<S: PeopleSearchService, Auth: MacroAuthorizat
     (status = 404, body=String),
     (status = 500, body=String)))
 ]
-#[instrument(
-    skip(authorization, contacts),
-    fields(actor = %authorization.acting_entity())
-)]
+#[instrument(skip_all)]
 pub async fn handler<S: ContactsService, Auth: MacroAuthorizationService>(
     State(contacts): State<Arc<S>>,
     authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
@@ -165,11 +158,7 @@ pub async fn handler<S: ContactsService, Auth: MacroAuthorizationService>(
     (status = 401, body=String),
     (status = 500, body=String)))
 ]
-#[instrument(
-    skip(service, authorization),
-    fields(actor = %authorization.acting_entity()),
-    err
-)]
+#[instrument(skip_all, err)]
 pub async fn add_contact_handler<S: ContactsService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<S>>,
     Cached(authorization): Cached<MacroAuthorizationExtractor<Auth, UserOrInternal>>,
@@ -178,12 +167,10 @@ pub async fn add_contact_handler<S: ContactsService, Auth: MacroAuthorizationSer
     let user = authorization.authorization.user;
 
     service
-        .add_contact_nodes(ContactsNodes {
-            users: HashSet::from([user.macro_user_id.clone(), body.user_id]),
-        })
+        .invite_contact(user.macro_user_id.clone().into_owned(), body.user_id)
         .await
         .map_err(|e| {
-            tracing::error!(error=?e, "failed to create contact connection");
+            tracing::error!(error=?e, "failed to record invited contact");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
     Ok(StatusCode::NO_CONTENT)

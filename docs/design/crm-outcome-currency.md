@@ -7,7 +7,8 @@ external deal proposal. It creates no project or separate deal entity.
 ## Outcome
 
 Every pipeline that tracks a company or contact has a protected single-select
-Outcome field: Open, Won, Lost. A generic pipeline is a free-form table and has
+Outcome field: Open, Won, Lost, Declined. Declined is a deal the team turned
+down: closed, but not lost, so it counts apart from Lost. A generic pipeline is a free-form table and has
 no Outcome or currency fields, at creation or after the backfill. Outcome uses the ordinary table, board, record and Add deal editors,
 filters, grouping, CSV and agent field APIs. Outcome is independent of Stage;
 changing it does not move a row. Stage requirements validate at the same
@@ -86,6 +87,17 @@ also still rename or remove an option of a system field; an insert whose
 default label is gone is saved without that default instead of being refused. A trigger on `database_rows` would instead charge every row insert
 of every database for a CRM default. Mobile uses the existing responsive field
 editors and Add deal form.
+
+Declined came later, in its own migration. It adds the option after the last
+one of each tracked pipeline's Outcome field, one pipeline per transaction,
+journaled like the backfill, with the palette color an appended option takes
+at that position; beside options the backfill left uncolored it stays
+uncolored. It takes a pipeline writer's locks and an option append's with `SKIP
+LOCKED`, so a pipeline in use is passed by instead of failing the migration on
+a lock timeout. A pipeline it passes by, or one an older service creates during
+that rollout, keeps three options until the statement runs again; it is
+idempotent and adds nothing to a field that has Declined. Existing entries keep
+their outcome, so a deal marked Lost before Declined existed stays Lost.
 
 This feature is part of the existing CRM rollout; no additional milestone or
 feature flag is needed.

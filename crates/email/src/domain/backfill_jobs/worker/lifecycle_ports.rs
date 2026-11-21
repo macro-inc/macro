@@ -176,10 +176,10 @@ pub trait BackfillLifecycleEffects: Send + Sync {
         link_id: Uuid,
         progress: BackfillProgress,
     ) -> impl Future<Output = ()> + Send;
-    /// Publish ordered contact connections using the existing ingress.
+    /// Record the inbox's contacts, in order, as known to its owner through it.
     fn connect_contacts(
         &self,
-        owner: &MacroUserIdStr<'static>,
+        link: &Link,
         contacts: Vec<MacroUserIdStr<'static>>,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
 }

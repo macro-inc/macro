@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM email_messages WHERE link_id = $1 AND provider_id = $2) AS \"stored!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "stored!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "24c14322582272ee5c0ed9e9eb06c057806b935af455540cb42f5999cc768522"
+}

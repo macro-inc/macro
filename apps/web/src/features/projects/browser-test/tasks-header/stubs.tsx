@@ -45,7 +45,9 @@ export function TasksControls(props: { inline?: boolean }) {
         triggerLabel="Open task filters"
         inline={props.inline}
         label="Task list controls"
-        activeCount={0}
+        activeCount={Number(
+          new URLSearchParams(location.search).get('filters') ?? 0
+        )}
         onClear={() => {}}
       >
         <p>Filters</p>

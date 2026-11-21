@@ -503,6 +503,30 @@ tools — hexagonal, heavily feature-gated.
   it. Subscription upkeep and webhook deliveries open
   `outlook.subscription.maintain` and `outlook.subscription.notify`; each
   lifecycle event logs "outlook subscription lifecycle event".
+- A change notification names its message (`resourceData.id`, an immutable
+  id: every Graph request asks for them). With `NotifiedMessageReads` on (the
+  email-service API sets it from `enable-outlook-notified-message-reads`),
+  `accept_notification` also queues that message as live work in the same
+  transaction (`queue_notified_message`, `from_notification = true`), so the
+  next message turn reads it instead of waiting for its folder's claim. A row
+  already queued for the message takes the newer revision: one row per
+  message. Nothing is queued while a folder of the mailbox is in its import
+  round (its pages queue import work, and a live read of an unstored old
+  message would notify as new mail), or while the mailbox has
+  `NOTIFIED_READS_AHEAD` live rows due. The checks read
+  `email_sync_streams_link_import_rounds` and
+  `email_message_reconciliation_live_queued`; keep their predicates and the
+  query's identical. Message claims take live rows first in arrival order,
+  so that is how far one mailbox's notifications can put others' new mail
+  and every import behind its own. A notified read of a message in a folder
+  the catalog does not list (hidden, or made since the last discovery) that
+  is not stored settles as `unsynced` without storing it, since no folder
+  page would list it; a stored one is read as its folder's page would, and a
+  folder page that lists the message clears `from_notification`. The
+  reconcile span records `outlook.from_notification`, and with
+  `outlook.notification_lag_ms` it times notification to stored; the notify
+  span counts `outlook.messages_queued`. Off, a notification only wakes the
+  folders.
 - Subscription upkeep (`domain/mailbox/watches.rs`) counts failed runs in a
   row in `email_mailbox_watch_work.failures` and backs off by it
   (`upkeep_retry`): a refusal up to the 12 h renewal cadence, a transient
