@@ -5,24 +5,45 @@
 #
 # IDLE_CHECKPOINT=1 builds the side with the host's idle point (the side must
 # have TursoStorage::checkpoint_if_due). TARGET=x builds in target-x instead of
-# target-NAME, so sides that differ little share one. The binary lands in
-# $CACHE_DIFF_FUZZ_HOME/bin/NAME, and $CACHE_DIFF_FUZZ_HOME/bin/NAME.side records the commits it was built from.
+# target-NAME, so sides that differ little share one; builds that share a target
+# take turns. The binary lands in $CACHE_DIFF_FUZZ_HOME/bin/NAME, and
+# $CACHE_DIFF_FUZZ_HOME/bin/NAME.side records the commits it was built from. A
+# failed build leaves neither, and removes its worktree.
 set -euo pipefail
 
+if [ $# -lt 2 ]; then
+  echo "usage: build-side.sh NAME BASE [BRANCH...]" >&2
+  exit 2
+fi
 name=$1
 base=$2
 shift 2
+case "$name${TARGET:-}" in
+  '' | */* | *..*) echo "NAME and TARGET must be plain names" >&2; exit 2 ;;
+esac
 repo=$(git rev-parse --show-toplevel)
 # FUZZER_SRC builds from a snapshot of the fuzzer, so the working copy can change meanwhile.
 crate=${FUZZER_SRC:-$repo/crates/client/cache-diff-fuzz}
 home=${CACHE_DIFF_FUZZ_HOME:-$HOME/.cache/cache-diff-fuzz}
 tree=$home/sides/$name
+target=$home/target-${TARGET:-$name}
 mkdir -p "$home/bin" "$home/sides"
+rm -f "$home/bin/$name" "$home/bin/$name.side"
 
 if [ -d "$tree" ]; then
   git -C "$repo" worktree remove --force "$tree"
 fi
 git -C "$repo" worktree add --quiet --detach "$tree" "$base"
+built=0
+trap '[ "$built" = 1 ] || git -C "$repo" worktree remove --force "$tree" 2> /dev/null || true' EXIT
+fuzzer_commit=$(git -C "$repo" rev-parse HEAD)
+stamp=$(mktemp)
+{
+  echo "base $(git -C "$repo" rev-parse "$base")"
+  for branch in "$@"; do
+    echo "branch $branch $(git -C "$repo" rev-parse "$branch")"
+  done
+} > "$stamp"
 for branch in "$@"; do
   git -C "$tree" merge --quiet --no-edit "$branch"
 done
@@ -38,27 +59,30 @@ if [ -n "${MUTATE_FILE:-}" ]; then
   fi
 fi
 
-# The fuzzer itself is the same on every side: this checkout's copy.
-rm -rf "$tree/crates/client/cache-diff-fuzz"
+# The fuzzer itself is the same on every side: this checkout's copy, hashed as copied.
+rm -rf "${tree:?}/crates/client/cache-diff-fuzz"
 cp -r "$crate" "$tree/crates/client/cache-diff-fuzz"
+fuzzer_hash=$(cd "$tree/crates/client/cache-diff-fuzz" \
+  && find . -type f -not -path './target/*' | LC_ALL=C sort | xargs cat | sha256sum | cut -c1-16)
 if ! grep -q '"crates/client/cache-diff-fuzz"' "$tree/Cargo.toml"; then
   sed -i 's|^  "crates/client/cache-core",$|  "crates/client/cache-core",\n  "crates/client/cache-diff-fuzz",|' "$tree/Cargo.toml"
 fi
 
+# Sides that share a target take turns, so one never copies another's binary. `-o` keeps
+# the lock out of long-lived children such as an sccache server.
 (
   cd "$tree"
-  CACHE_DIFF_FUZZ_IDLE_CHECKPOINT=${IDLE_CHECKPOINT:-0} CARGO_TARGET_DIR=$home/target-${TARGET:-$name} \
-    cargo build --quiet --release -p cache-diff-fuzz
+  export CACHE_DIFF_FUZZ_IDLE_CHECKPOINT=${IDLE_CHECKPOINT:-0} CARGO_TARGET_DIR=$target out=$home/bin/$name.tmp
+  flock -o "$target.lock" bash -c 'cargo build --quiet --release -p cache-diff-fuzz && cp "$CARGO_TARGET_DIR/release/cache-diff-fuzz" "$out"'
 )
-cp "$home/target-${TARGET:-$name}/release/cache-diff-fuzz" "$home/bin/$name"
 {
-  echo "base $(git -C "$repo" rev-parse "$base")"
-  for branch in "$@"; do
-    echo "branch $branch $(git -C "$repo" rev-parse "$branch")"
-  done
+  cat "$stamp"
   echo "tree $(git -C "$tree" rev-parse HEAD)"
   echo "idle-checkpoint ${IDLE_CHECKPOINT:-0}"
-  [ -n "${MUTATE_FILE:-}" ] && echo "mutate $MUTATE_FILE $MUTATE_PERL"
-  echo "fuzzer $(git -C "$repo" rev-parse HEAD) $(cd "$crate" && find . -type f -not -path './target/*' | sort | xargs cat | sha256sum | cut -c1-16)"
+  if [ -n "${MUTATE_FILE:-}" ]; then echo "mutate $MUTATE_FILE $MUTATE_PERL"; fi
+  echo "fuzzer $fuzzer_commit $fuzzer_hash"
 } > "$home/bin/$name.side"
+rm -f "$stamp"
+mv "$home/bin/$name.tmp" "$home/bin/$name"
+built=1
 cat "$home/bin/$name.side"
