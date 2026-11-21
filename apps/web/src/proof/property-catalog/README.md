@@ -191,16 +191,18 @@ The counts measure work attempted, not successes, and are not interchangeable:
 - Chromium aborts every request in flight when the machine's network
   interfaces change (`ERR_NETWORK_CHANGED`; on a machine where other stacks'
   containers add and remove virtual interfaces all the time), and one lost
-  module fails the page's whole module graph. Once the page's load event has
-  fired, a module request that failed or answered 4xx/5xx reloads the page
-  without waiting for the readiness timeout (after a backoff of 2 s times the
-  attempt), up to 8 loads; each failed load is in `harnessErrors`, and
-  `harnessReloadRetries` counts the reloads made. A write whose request is
+  module fails the page's whole module graph. A page that is not ready yet,
+  after its load event, and has had a module request fail or answer 4xx/5xx is
+  reloaded without waiting for the readiness timeout (after a backoff of 2 s
+  times the attempt), up to 8 loads; each failed load is in `harnessErrors`,
+  and `harnessReloadRetries` counts the reloads made. A write whose request is
   lost fails on both sides alike.
 - A settle timeout (level `settle`) records what that side was still waiting
   on, as `waitedOn` in `diffs` and `examples`: its busy queries and readers
-  (`busy`, taken in the page at the timeout), and its API requests in flight
-  with their age (`inflight`) and last failed requests (`net`), taken when
-  that side's settle returns.
+  (`busy`, taken in the page at the timeout), every non-module request of that
+  page still in flight with its age (`inflight`), and the page's last eight
+  network notes (failed requests, failed module responses, console errors:
+  `net`). `inflight` and `net` are taken when that side's call returns, which
+  for a fresh mount is after the mount was torn down.
 - `out/` can hold Playwright error dumps with the local session cookie; it is
   gitignored, and nothing from it is published unscanned.

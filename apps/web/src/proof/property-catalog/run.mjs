@@ -892,9 +892,9 @@ async function loadHarness(s) {
       const msg = `${s.label}: harness not ready (attempt ${attempt}) ${JSON.stringify(st)}: ${e.message.slice(0, 100)}; last requests: ${JSON.stringify(s.netlog.slice(-8))}`;
       harnessError(msg);
       if (attempt >= LOAD_ATTEMPTS) throw new Error(msg);
-      R.harnessReloadRetries = (R.harnessReloadRetries ?? 0) + 1;
       log(msg.slice(0, 300));
       await sleep(2000 * attempt);
+      R.harnessReloadRetries = (R.harnessReloadRetries ?? 0) + 1;
     }
   }
   const sides = await ev(s, 'moduleSides');
