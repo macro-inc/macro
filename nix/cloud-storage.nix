@@ -596,6 +596,21 @@
           packageName = "seed_cli";
           binaries = [ "seed_cli" ];
         }
+        {
+          serviceName = "local-gmail-emulator";
+          packageName = "gmail_emulator";
+          binaries = [ "gmail_emulator" ];
+        }
+        {
+          serviceName = "local-outlook-emulator";
+          packageName = "outlook_emulator";
+          binaries = [ "outlook_emulator" ];
+        }
+        {
+          serviceName = "local-model-emulator";
+          packageName = "model_emulator";
+          binaries = [ "model_emulator" ];
+        }
       ];
 
       deployBinaryCargoExtraArgs =
