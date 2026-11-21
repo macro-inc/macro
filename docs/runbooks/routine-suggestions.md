@@ -32,7 +32,7 @@ event with its `trigger`:
 | --- | --- |
 | Generations | Spans: `resource_name:suggestion.generation`, by `@suggestion.generation.outcome` and `@suggestion.generation.trigger` |
 | A generation's sessions | Spans: `resource_name:suggestion.session` in its trace; `@suggestion.session.kind`, `.ended`, `.tool_calls`, `.turns` |
-| Finding the work | Spans: `resource_name:routine.find_work`, by `@routine.find_work.outcome` (`found`, `none`, `failed`, `timed_out`, `cancelled`, `heartbeat_lost`) and `.streams` |
+| Finding the work | Spans: `resource_name:routine.find_work`, by `@routine.find_work.outcome` (`found`, `none`, `failed`, `timed_out`, `cancelled`, `heartbeat_lost`) and `.streams`; an error status for `failed`, `timed_out` and `heartbeat_lost` |
 | Its suggest calls | Spans: `resource_name:routine.suggestions.suggest`; `@routine.suggestion.ok`, `@routine.suggestion.problems` |
 | Outcome logs | Logs: `service:agent-harness-service @event:routine_suggestions.generated`, by `@outcome` |
 | Rejected suggestions | Logs: `@event:routine_suggestions.suggested @ok:false` |

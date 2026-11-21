@@ -1064,9 +1064,9 @@ where
             agent.session.id = %session,
             routine.find_work.outcome = tracing::field::Empty,
             routine.find_work.streams = tracing::field::Empty,
+            otel.status_code = tracing::field::Empty,
         );
         async {
-            let span = tracing::Span::current();
             let found = tokio::select! {
                 biased;
                 () = stop.shutdown.cancelled() => Err("cancelled"),
@@ -1096,12 +1096,15 @@ where
                 }
                 Err(outcome) => {
                     span.record("routine.find_work.outcome", outcome);
-                    span.record("otel.status_code", "ERROR");
+                    // The process shutting down is not the step failing.
+                    if outcome != "cancelled" {
+                        span.record("otel.status_code", "ERROR");
+                    }
                     None
                 }
             }
         }
-        .instrument(span)
+        .instrument(span.clone())
         .await
     }
 

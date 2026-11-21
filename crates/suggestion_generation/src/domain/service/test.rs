@@ -2336,3 +2336,125 @@ async fn loading_the_app_counts_paid_people_with_suggestions_on() {
         .unwrap();
     assert!(off.repo.seen.lock().unwrap().is_empty());
 }
+
+/// Records the `otel.status_code` each span is given, by span name. A span
+/// that doesn't declare the field never hands its value to a subscriber.
+#[derive(Clone, Default)]
+struct StatusCodes(std::sync::Arc<Mutex<StatusCodesSeen>>);
+
+#[derive(Default)]
+struct StatusCodesSeen {
+    names: HashMap<u64, &'static str>,
+    codes: Vec<(&'static str, String)>,
+}
+
+impl StatusCodes {
+    fn of(&self, span: &str) -> Vec<String> {
+        self.0
+            .lock()
+            .unwrap()
+            .codes
+            .iter()
+            .filter(|(name, _)| *name == span)
+            .map(|(_, code)| code.clone())
+            .collect()
+    }
+}
+
+struct StatusCode(Option<String>);
+
+impl tracing::field::Visit for StatusCode {
+    fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+        if field.name() == "otel.status_code" {
+            self.0 = Some(value.to_owned());
+        }
+    }
+
+    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+        if field.name() == "otel.status_code" {
+            self.0 = Some(format!("{value:?}"));
+        }
+    }
+}
+
+impl tracing::Subscriber for StatusCodes {
+    fn enabled(&self, _: &tracing::Metadata<'_>) -> bool {
+        true
+    }
+
+    fn new_span(&self, span: &tracing::span::Attributes<'_>) -> tracing::span::Id {
+        let mut seen = self.0.lock().unwrap();
+        let id = u64::try_from(seen.names.len()).unwrap() + 1;
+        seen.names.insert(id, span.metadata().name());
+        let mut code = StatusCode(None);
+        span.record(&mut code);
+        if let Some(code) = code.0 {
+            seen.codes.push((span.metadata().name(), code));
+        }
+        tracing::span::Id::from_u64(id)
+    }
+
+    fn record(&self, span: &tracing::span::Id, values: &tracing::span::Record<'_>) {
+        let mut code = StatusCode(None);
+        values.record(&mut code);
+        if let Some(code) = code.0 {
+            let mut seen = self.0.lock().unwrap();
+            let name = seen.names[&span.into_u64()];
+            seen.codes.push((name, code));
+        }
+    }
+
+    fn record_follows_from(&self, _: &tracing::span::Id, _: &tracing::span::Id) {}
+
+    fn event(&self, _: &tracing::Event<'_>) {}
+
+    fn enter(&self, _: &tracing::span::Id) {}
+
+    fn exit(&self, _: &tracing::span::Id) {}
+}
+
+/// Finding the work ends its span in error when the step fails or runs out
+/// of time, and not when the process shuts down under it.
+#[tokio::test(start_paused = true)]
+async fn the_finding_span_is_an_error_when_the_step_fails_or_times_out_but_not_on_shutdown() {
+    // A callsite registers on first use, and while one capture is the only
+    // subscriber, tracing asks the registering thread's own default whether
+    // it is wanted: a test beside this one that reaches the path first, with
+    // no subscriber, marks its spans unwanted until a capture next registers.
+    // So the path runs once under a capture, and each case's capture then
+    // registers with its spans already known.
+    {
+        let _guard = tracing::subscriber::set_default(StatusCodes::default());
+        build_finding(true, true, finishes, Some(true), Some(Finding::Fails))
+            .onboard()
+            .await
+            .unwrap();
+    }
+    for (finding, shut_down, codes) in [
+        (Finding::Fails, false, vec!["ERROR"]),
+        (Finding::Hangs, false, vec!["ERROR"]),
+        (Finding::Hangs, true, vec![]),
+        (Finding::Found(6), false, vec![]),
+    ] {
+        let seen = StatusCodes::default();
+        let _guard = tracing::subscriber::set_default(seen.clone());
+        tracing::callsite::rebuild_interest_cache();
+        let h = build_finding(true, true, finishes, Some(true), Some(finding));
+        if shut_down {
+            h.service
+                .start(&user(), GenerationTrigger::Onboarding, chrono_tz::UTC)
+                .await
+                .unwrap();
+            tokio::time::sleep(Duration::from_secs(10)).await;
+            h.shutdown.cancel();
+            h.service.wait().await;
+        } else {
+            h.onboard().await.unwrap();
+        }
+        assert_eq!(
+            seen.of("routine.find_work"),
+            codes,
+            "{finding:?}, shut down: {shut_down}"
+        );
+    }
+}
