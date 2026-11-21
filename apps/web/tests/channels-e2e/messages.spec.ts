@@ -1,11 +1,5 @@
 import { conversationRow } from './harness/channel';
-import {
-  arrivesLive,
-  expect,
-  failsSometimes,
-  missedLive,
-  test,
-} from './harness/fixtures';
+import { arrivesLive, expect, failsSometimes, test } from './harness/fixtures';
 import { Conversation } from './harness/messages';
 
 // If this fails, a message sent with Enter is lost, doubled or misplaced for
@@ -86,15 +80,12 @@ test('MSG-03 a quick back-and-forth between two people reads in the same order f
   await Promise.all([mine.open(), bens.open()]);
 
   // Each answers as soon as the other's message is in front of them.
-  // Known defect on main: an open page sometimes never shows a message the
-  // other person sent, without a reload. After the first miss the exchange
-  // goes on without waiting, and the reload below must show all of it.
-  let missed = false;
-  const sees = async (view: Conversation, text: string) => {
-    if (!missed) {
-      missed = await missedLive(() => expect(view.message(text)).toBeVisible());
-    }
-  };
+  // Known defect on main: an open page sometimes does not show a message the
+  // other person sent until it is reloaded. Each wait and reload that makes
+  // up for one takes time the test would not otherwise need.
+  test.setTimeout(180_000);
+  const sees = (view: Conversation, text: string) =>
+    arrivesLive(view, view.message(text));
   await mine.send('ada 1');
   await sees(bens, 'ada 1');
   await bens.send('ben 1');
@@ -119,20 +110,35 @@ test('MSG-03 a quick back-and-forth between two people reads in the same order f
     'Ada Owner: ada 4',
     'Ben Member: ben 4',
   ];
-  // Before the reload, the same defect may leave messages out of a page. It
-  // excuses nothing else: what the page does show is in order, each once.
-  for (const view of [mine, bens]) {
+  // Before the reload, the same defect may leave the other person's messages
+  // out of a page. It excuses nothing else: what the page does show is in
+  // order, each once, with every message of its own person.
+  for (const [view, own] of [
+    [mine, 'Ada Owner: '],
+    [bens, 'Ben Member: '],
+  ] as const) {
+    let shown: string[] = [];
     try {
-      await expect.poll(() => view.topLevelByAuthor()).toEqual(exchange);
+      await expect
+        .poll(async () => {
+          shown = await view.topLevelByAuthor();
+          return shown;
+        })
+        .toEqual(exchange);
     } catch (error) {
-      const shown = await view.topLevelByAuthor();
-      const rest = [...exchange];
-      const inOrder = shown.every((line) => {
-        const at = rest.indexOf(line);
-        rest.splice(0, at + 1);
-        return at !== -1;
+      const rest = [...shown];
+      const missing = exchange.filter((line) => {
+        if (rest[0] !== line) {
+          return true;
+        }
+        rest.shift();
+        return false;
       });
-      if (!inOrder || shown.length === exchange.length) {
+      const onlyTheirsMissing =
+        rest.length === 0 &&
+        missing.length > 0 &&
+        missing.every((line) => !line.startsWith(own));
+      if (!onlyTheirsMissing) {
         throw error;
       }
       await failsSometimes(async () => {
@@ -170,7 +176,7 @@ test('MSG-04 a message written on several lines with Shift+Enter keeps its lines
   for (const view of [mine, bens]) {
     const message = view.list.locator('[data-message]');
     if (view === bens) {
-      await arrivesLive(view, () => expect(message).not.toHaveCount(0));
+      await arrivesLive(view, message.first());
     }
     await expect(message).toHaveCount(1);
     await expect.poll(() => view.lines(message)).toEqual(lines);
@@ -208,9 +214,7 @@ test('MSG-05 formatting, a link, emoji and other scripts read the same for both 
   ];
   for (const view of [mine, bens]) {
     if (view === bens) {
-      await arrivesLive(view, () =>
-        expect(view.list.locator('[data-message]')).not.toHaveCount(0)
-      );
+      await arrivesLive(view, view.list.locator('[data-message]').first());
     }
     await expect.poll(() => view.topLevel()).toEqual(read);
     await expect(

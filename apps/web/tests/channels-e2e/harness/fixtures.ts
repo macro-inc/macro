@@ -3,6 +3,8 @@ import {
   type BrowserContext,
   type BrowserContextOptions,
   test as base,
+  expect,
+  type Locator,
   type Page,
 } from '@playwright/test';
 import { Api } from './api';
@@ -107,7 +109,7 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
   },
 });
 
-export { expect } from '@playwright/test';
+export { expect };
 
 /**
  * Runs a check that a known product defect fails only some of the time, so
@@ -137,40 +139,41 @@ export function knownDefect(): void {
 }
 
 /**
- * `failsSometimes`, saying whether the check failed, for a test that has
- * something stricter to do when it did.
+ * Waits for what someone else just did to show on an open page, and says
+ * whether it never did. A known defect on main sometimes keeps a live change
+ * off an open page; the tests it has been seen in are listed in
+ * `ledger/intermittent-defects.tsv`. Only absence is excused and recorded, as
+ * `failsSometimes` records it: when the wait fails with the thing on the
+ * page (twice, or hidden), the test fails.
  */
-export async function missedLive(check: () => Promise<void>): Promise<boolean> {
-  let missed = false;
-  await failsSometimes(async () => {
-    try {
-      await check();
-    } catch (error) {
-      missed = true;
+export async function missedLive(arriving: Locator): Promise<boolean> {
+  try {
+    await expect(arriving).toBeVisible();
+    return false;
+  } catch (error) {
+    if ((await arriving.count()) > 0) {
       throw error;
     }
-  });
-  return missed;
+    await failsSometimes(async () => {
+      throw error;
+    });
+    return true;
+  }
 }
 
 /**
- * A check that an open page shows, without a reload, what someone else just
- * did. A known defect on main sometimes keeps a live change off an open page;
- * the tests it has been seen in are listed in
- * `ledger/intermittent-defects.tsv`. When the check fails, the failure is
- * recorded as `failsSometimes` records it, the page is reloaded, and the
- * check must then hold, so a change that is lost still fails the test. Pass
- * only the arrival (the message is there); what it says and how it looks
- * stay ordinary checks after this one.
+ * `missedLive`, then a reload that must show what was missed, so a change
+ * that is lost still fails the test. What the arrived thing says and how it
+ * looks stay ordinary checks after this one.
  */
 export async function arrivesLive(
   view: { page: Page; shown(): Promise<void> },
-  check: () => Promise<void>
+  arriving: Locator
 ): Promise<void> {
-  if (!(await missedLive(check))) {
+  if (!(await missedLive(arriving))) {
     return;
   }
   await view.page.reload();
   await view.shown();
-  await check();
+  await expect(arriving).toBeVisible();
 }

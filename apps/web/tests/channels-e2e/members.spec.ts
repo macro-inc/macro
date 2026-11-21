@@ -66,9 +66,14 @@ test('MEM-01 a person invited from the app gets the channel at once, with what w
   // Known defect on main: an open page sometimes never shows a message
   // someone else sent, without a reload. The reload comes after the reply,
   // and must show both.
-  const missed = await missedLive(() =>
-    cyView.expectEndsWith(['said before one', 'said before two', 'said after'])
-  );
+  const missed = await missedLive(cyView.message('said after'));
+  if (!missed) {
+    await cyView.expectEndsWith([
+      'said before one',
+      'said before two',
+      'said after',
+    ]);
+  }
   await cyView.send('thanks for the invite');
   await view.expectEndsWith(['said after', 'thanks for the invite']);
   if (missed) {
@@ -175,8 +180,9 @@ test('MEM-04 a removed person never sees what is said after, and after a reload 
   await benView.open();
 
   await ada.removeParticipants(channel.id, [people.cy]);
-  await arrivesLive(benView, () =>
-    expect(systemLine(benPage, 'Ada Owner removed Cy Teammate')).toBeVisible()
+  await arrivesLive(
+    benView,
+    systemLine(benPage, 'Ada Owner removed Cy Teammate')
   );
   await ada.post(channel.id, 'not for cy');
 

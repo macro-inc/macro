@@ -1,5 +1,5 @@
 import { ChannelView } from './harness/channel';
-import { expect, missedLive, test } from './harness/fixtures';
+import { expect, failsSometimes, test } from './harness/fixtures';
 import { historyText } from './harness/history';
 
 // If this fails, scrolling back through a long channel loses, repeats or
@@ -113,11 +113,17 @@ test('SCROLL-04 scrolled up, a message from someone else does not move what is b
   // sometimes does not grow when a message arrives. Then the reading
   // position must still be where it was, and a reload must show the
   // message; the rest of the test needs the list to have grown.
-  const missed = await missedLive(() =>
-    expect
-      .poll(() => view.list.evaluate((list) => list.scrollHeight))
-      .toBeGreaterThan(height)
-  );
+  let missed = false;
+  await failsSometimes(async () => {
+    try {
+      await expect
+        .poll(() => view.list.evaluate((list) => list.scrollHeight))
+        .toBeGreaterThan(height);
+    } catch (error) {
+      missed = true;
+      throw error;
+    }
+  });
   if (missed) {
     expect(await view.topVisible()).toEqual(reading);
     await page.reload();

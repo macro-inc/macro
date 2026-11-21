@@ -73,9 +73,10 @@ lists the tests with a check a defect fails only in some runs, wrapped in
 `failsSometimes`; the checker reports each run in which one showed. When the
 check is that an open page shows what someone else just did, and it has been seen to fail, use `arrivesLive`: it records the miss the same way,
 then reloads the page and requires the check, so a change that is lost still
-fails the run. Give it the arrival alone, and keep what the message says as
-ordinary checks. `missedLive` is for a test that has to do something of its
-own after a miss.
+fails the run. It takes the locator of what should arrive and excuses only
+its absence; what the message says stays an ordinary check. `missedLive` is
+the same without the reload, for a test that has to do something of its own
+after a miss.
 
 ```sh
 bun tests/channels-e2e/ledger/check.ts                      # ledger against the tests

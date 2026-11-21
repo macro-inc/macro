@@ -174,8 +174,10 @@ test('CMP-05 a person picked from the @ menu is named in the message for both pe
 
   for (const each of [view, benView]) {
     const message = each.message('@Ben can you look?');
-    const shows = () => expect(message).toBeVisible();
-    await (each === benView ? arrivesLive(each, shows) : shows());
+    if (each === benView) {
+      await arrivesLive(each, message);
+    }
+    await expect(message).toBeVisible();
     await expect(personMentions(message)).toHaveText(['@Ben']);
     await expect(personMentions(message)).toHaveAttribute(
       'data-user-id',
