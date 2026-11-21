@@ -39,7 +39,7 @@ import { compareHomeDom } from './lib/dom.ts';
 import { generateReads, type ReadCase } from './lib/gen.ts';
 import { applyMutant, MUTANTS, revertMutant } from './lib/mutants.ts';
 import { queueNotify } from './lib/notify.ts';
-import { project, rowsDiff, sameRows, type Row } from './lib/project.ts';
+import { discrepancies, project, rowsDiff, sameRows, type Row } from './lib/project.ts';
 import { Rng } from './lib/rng.ts';
 import { seedWorld, sender } from './lib/setup.ts';
 import { stackFromEnv, type User } from './lib/stack.ts';
@@ -416,6 +416,9 @@ async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
         const domTab = s % 2 === 0 ? 'signal' : 'noise';
         await Promise.all(lanes.dom.map((lane) => reloadLane(lane, `${lane.app.origin}/app/home?s0.home.tab=${domTab}`)));
 
+        // Per spec and side: each discrepancy of the mounted list, and the step
+        // (kind/entity kind) that first produced it.
+        const origins = specs.map(() => [new Map<string, string>(), new Map<string, string>()]);
         for (let k = 0; k < stepsPerSequence; k++) {
           const kind = ctx.rng.weighted(STEP_WEIGHTS) as StepKind;
           const step = await runStep(ctx, kind);
@@ -477,6 +480,7 @@ async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
           // A lane whose requests the browser failed for a network change in the
           // window may miss the bound for that reason alone: say so in the class.
           const changed = lanes.live.map((lane) => (networkChangedSince(lane, liveStart) ? ':after-network-change' : ''));
+          const missNotes: string[] = [];
           for (let i = 0; i < specs.length; i++) {
             const tag = specs[i].groupBy ? 'grouped' : i < 2 ? 'home' : 'random';
             for (const side of [0, 1]) {
@@ -484,23 +488,49 @@ async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
               liveTimes[key] ??= [];
               liveTimes[key].push(reached[i][side] ?? -1);
             }
-            const [o, n] = reached[i];
-            if (o !== null && n === null) {
-              tallyInto(classes, [classify({ signature: `live:${tag}:new-not-within-bound${changed[1]}`, kind: 'order', detail: `${JSON.stringify(at)} ${rowsDiff(lastLive[i][1] ?? [], raw[i][1]) ?? ''}` })], 'sequences');
-            } else if (o === null && n !== null) {
-              // Main's REST cache prepends a notified entity to cached lists without
-              // asking the server (closure R1): told apart when those rows are the
-              // only difference from main's own fresh read.
-              const oldLive = lastLive[i][0] ?? [];
-              const extra = oldLive.filter((r) => !raw[i][0].some((x) => x.key === r.key));
-              const insertedOnly = extra.length > 0 && sameRows(oldLive.filter((r) => !extra.includes(r)), raw[i][0]);
-              const why = insertedOnly ? 'old-lists-rows-its-read-lacks' : `old-not-within-bound${changed[0]}`;
-              tallyInto(classes, [classify({ signature: `live:${tag}:${why}`, kind: 'order', detail: `${JSON.stringify(at)} ${rowsDiff(lastLive[i][0] ?? [], raw[i][0]) ?? ''}` })], 'sequences');
-            } else if (o === null && n === null) {
-              tallyInto(classes, [classify({ signature: `live:${tag}:both-not-within-bound${changed[0] || changed[1]}`, kind: 'order', detail: JSON.stringify(at) })], 'sequences');
+            // Each side's mounted list against its own fresh read, as tokens
+            // (lib/project.ts discrepancies), each remembered with the step
+            // that first produced it: a list left behind by one write stays
+            // behind through later steps, and is attributed to that write.
+            const freshAgree = sameRows(raw[i][0], raw[i][1]);
+            const tokens = [0, 1].map((side) => (reached[i][side] !== null ? [] : lastLive[i][side] ? discrepancies(lastLive[i][side]!, raw[i][side]) : ['unread']));
+            for (const side of [0, 1]) {
+              const seen = origins[i][side];
+              for (const token of [...seen.keys()]) if (!tokens[side].includes(token)) seen.delete(token);
+              for (const token of tokens[side]) if (!seen.has(token)) seen.set(token, `${kind}/${step.entityKind ?? '-'}`);
+            }
+            const [tOld, tNew] = tokens;
+            const origin = (side: number, token: string) => origins[i][side].get(token) ?? `${kind}/${step.entityKind ?? '-'}`;
+            const note = (side: number, list: string[]) => list.map((t) => `${t}<${origin(side, t)}`).join(' ').slice(0, 600);
+            const emit = (signature: string, detail: string) => tallyInto(classes, [classify({ signature, kind: 'order', detail: `${JSON.stringify(at)} ${detail}` })], 'sequences');
+            for (const side of [0, 1]) if (tokens[side].length) missNotes.push(`spec${i} ${side ? "new" : "old"} ${note(side, tokens[side])}`);
+            const unsettled = [0, 1].filter((side) => reached[i][side] === null && tokens[side].length === 0);
+            for (const side of unsettled) emit(`live:${tag}:${side ? 'new' : 'old'}-unsettled${changed[side]}`, 'the list matched its read but never settled');
+            // The branch missed something main did not: never closed.
+            const newOnly = tNew.filter((t) => !tOld.includes(t) || t === 'unread');
+            if (newOnly.length) emit(`live:${tag}:new-not-within-bound${changed[1]}`, note(1, newOnly));
+            else if (tOld.length || tNew.length) {
+              if (!freshAgree) emit(`live:${tag}:fresh-reads-differ`, `${note(0, tOld)} | ${note(1, tNew)}`);
+              else {
+                // Shared tokens: both lists are behind in the same way, row for
+                // row. Old-only tokens: main is behind where the branch shows
+                // exactly what main shows after a reload.
+                const rowOf = (side: number, key: string) => JSON.stringify(lastLive[i][side]?.find((r) => r.key === key) ?? null);
+                const alike = tNew.every((t) => t === 'order' || rowOf(0, t.slice(t.indexOf(':') + 1)) === rowOf(1, t.slice(t.indexOf(':') + 1)));
+                for (const label of new Set(tNew.map((t) => origin(0, t)))) {
+                  emit(alike ? `live:${tag}:both-stale-alike:${label}` : `live:${tag}:both-not-within-bound${changed[0] || changed[1]}`, note(0, tNew.filter((t) => origin(0, t) === label)));
+                }
+                if (tOld.includes('unread')) emit(`live:${tag}:old-unread${changed[0]}`, 'no snapshot of the mounted list');
+                const oldOnly = tOld.filter((t) => !tNew.includes(t) && t !== 'unread');
+                for (const label of new Set(oldOnly.map((t) => origin(0, t)))) {
+                  emit(`live:${tag}:old-behind:${label}${changed[0]}`, note(0, oldOnly.filter((t) => origin(0, t) === label)));
+                }
+              }
             }
           }
           checks.live = reached;
+          // Where each missed live list parts from its fresh read, for the record.
+          if (missNotes.length) checks.liveMisses = missNotes;
 
           // 3. Reload: a new document on each side reads every spec.
           await Promise.all(lanes.reload.map((lane) => reloadLane(lane, undefined, { probe: true })));
@@ -532,6 +562,24 @@ async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
               diffs = (await compareHomeDom(stack, user, rows[0], rows[1], `seq home touch ${domTab}`)).map(classify);
               if (diffs.every((d) => closureOf(d.cls))) break;
             } while (Date.now() < deadline);
+            // Still apart: reload both and read again. When the reloaded sides
+            // agree and the branch's mounted Home already showed its reload,
+            // main's mounted Home was behind its own reload, and the
+            // differences become one class for that. Anything else stays.
+            const open = diffs.filter((d) => !closureOf(d.cls));
+            if (open.length && !open.some((d) => d.cls.includes('dom:timeout'))) {
+              await Promise.all(lanes.dom.map((lane) => reloadLane(lane)));
+              const again = await Promise.allSettled(lanes.dom.map((lane) => settledDom(lane)));
+              if (again.every((r) => r.status === 'fulfilled')) {
+                const reloaded = again.map((r) => (r as PromiseFulfilledResult<DomRow[]>).value);
+                const sides = (await compareHomeDom(stack, user, reloaded[0], reloaded[1], `seq home touch ${domTab} reload`)).map(classify);
+                const newHeld = (await compareHomeDom(stack, user, reloaded[1], rows[1], 'held')).length === 0;
+                checks.domReload = { sides: sides.map((d) => d.cls), newHeld };
+                if (sides.every((d) => closureOf(d.cls)) && newHeld) {
+                  diffs = [...diffs.filter((d) => closureOf(d.cls)), classify({ signature: `seq home touch ${domTab} dom:old-behind-reload`, kind: 'dom', detail: open.map((d) => `${d.cls}: ${d.detail}`).join(' | ').slice(0, 600) })];
+                }
+              }
+            }
             tallyInto(classes, diffs, 'sequences');
             checks.dom = { rows: [rows[0].length, rows[1].length], classes: diffs.map((d) => d.cls) };
           }

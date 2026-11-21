@@ -11,7 +11,7 @@ import { compareSnapshots, refCheck, type Snapshot } from './compare.ts';
 import { parseRowId } from './dom.ts';
 import { generateReads } from './gen.ts';
 import { MUTANTS } from './mutants.ts';
-import { instant, project, sameRows } from './project.ts';
+import { discrepancies, instant, project, sameRows } from './project.ts';
 import { Rng } from './rng.ts';
 import { buildWorld } from './world.ts';
 
@@ -161,17 +161,32 @@ describe('mutants', () => {
 });
 
 describe('live closures', () => {
-  it('close only main-side live misses whose sole difference is rows main inserted, never a branch miss', () => {
-    expect(closureOf('live:random:old-lists-rows-its-read-lacks')?.id).toBe('R1');
-    expect(closureOf('live:home:old-lists-rows-its-read-lacks')?.id).toBe('R1');
+  it('close main falling behind and both sides behind alike, never the branch alone', () => {
+    expect(closureOf('live:random:old-behind:notify/calendar')?.id).toBe('B1');
+    expect(closureOf('live:home:old-behind:rename/task')?.id).toBe('B1');
+    expect(closureOf('seq home touch signal dom:old-behind-reload')?.id).toBe('B1');
+    expect(closureOf('live:grouped:both-stale-alike:done/document')?.id).toBe('S1');
     for (const open of [
-      'live:random:old-not-within-bound',
       'live:random:new-not-within-bound',
       'live:home:new-not-within-bound:after-network-change',
+      'live:home:old-behind:done/document:after-network-change',
       'live:random:both-not-within-bound',
-      'live:random:new-lists-rows-its-read-lacks',
+      'live:random:fresh-reads-differ',
+      'live:home:new-unsettled',
+      'live:home:old-unread',
+      'seq home touch signal dom:row-id',
     ]) {
       expect(closureOf(open), open).toBeUndefined();
     }
+  });
+
+  it('name each way a mounted list parts from its read', () => {
+    const row = (key: string, notifiedAt = 't1', name = key) => ({ key, notifiedAt, name });
+    const fresh = [row('a'), row('b'), row('c')];
+    expect(discrepancies(fresh, fresh)).toEqual([]);
+    expect(discrepancies([row('x'), ...fresh], fresh)).toEqual(['extra:x']);
+    expect(discrepancies(fresh.slice(1), fresh)).toEqual(['missing:a']);
+    expect(discrepancies([fresh[1], fresh[0], fresh[2]], fresh)).toEqual(['order']);
+    expect(discrepancies([row('a', 't0'), row('b', 't1', 'old'), row('c')], fresh)).toEqual(['notifiedAt:a', 'name:b']);
   });
 });

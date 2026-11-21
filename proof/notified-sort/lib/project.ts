@@ -33,3 +33,29 @@ export function rowsDiff(a: Row[], b: Row[]): string | null {
   }
   return null;
 }
+
+/**
+ * How a mounted list parts from a fresh read of it, as tokens: a row it shows
+ * that the read lacks (`extra:<key>`), a row the read has that it lacks
+ * (`missing:<key>`), a shared row under another name or notification time
+ * (`name:<key>`, `notifiedAt:<key>`), and `order` when the shared rows sit in
+ * another order. No tokens means the list shows what the read shows.
+ */
+export function discrepancies(live: Row[], fresh: Row[]): string[] {
+  const freshByKey = new Map(fresh.map((r) => [r.key, r]));
+  const liveKeys = new Set(live.map((r) => r.key));
+  const tokens: string[] = [];
+  for (const row of live) {
+    const other = freshByKey.get(row.key);
+    if (!other) tokens.push(`extra:${row.key}`);
+    else {
+      if (JSON.stringify(row.name) !== JSON.stringify(other.name)) tokens.push(`name:${row.key}`);
+      if (row.notifiedAt !== other.notifiedAt) tokens.push(`notifiedAt:${row.key}`);
+    }
+  }
+  for (const row of fresh) if (!liveKeys.has(row.key)) tokens.push(`missing:${row.key}`);
+  const sharedLive = live.filter((r) => freshByKey.has(r.key)).map((r) => r.key);
+  const sharedFresh = fresh.filter((r) => liveKeys.has(r.key)).map((r) => r.key);
+  if (sharedLive.join('\n') !== sharedFresh.join('\n')) tokens.push('order');
+  return tokens;
+}
