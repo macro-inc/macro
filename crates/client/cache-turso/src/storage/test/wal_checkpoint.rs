@@ -241,3 +241,33 @@ fn a_due_wal_with_nothing_new_to_copy_keeps_the_page_cache() {
     assert_holds(&storage, last);
     assert_eq!(io.reads(), before, "the idle call dropped cached pages");
 }
+
+#[test]
+fn the_wal_position_moves_with_every_committed_write_and_only_then() {
+    let io = FaultIo::new();
+    let mut storage = due(&io, "wal-position.db");
+    let start = storage.wal_position().unwrap();
+    // Reads and a checkpoint commit nothing.
+    assert_holds(&storage, DUE_WRITES - 1);
+    assert!(storage.checkpoint_if_due().unwrap().ran);
+    assert_eq!(storage.wal_position().unwrap(), start);
+
+    // The write after a complete copy starts the log over; even one that
+    // ended on the same frame would sit in a new log.
+    write(&mut storage, AFTER).unwrap();
+    let restarted = storage.wal_position().unwrap();
+    let restarted_frames = wal_frames(&storage);
+    assert_ne!(restarted, start);
+    write(&mut storage, AFTER + 1).unwrap();
+    assert_ne!(storage.wal_position().unwrap(), restarted);
+
+    // The same write after the next copy ends on the same frame of a new
+    // log: only the log's sequence tells the two positions apart.
+    for later in 2..=DUE_WRITES {
+        write(&mut storage, AFTER + later).unwrap();
+    }
+    assert!(storage.checkpoint_if_due().unwrap().ran);
+    write(&mut storage, AFTER).unwrap();
+    assert_eq!(wal_frames(&storage), restarted_frames);
+    assert_ne!(storage.wal_position().unwrap(), restarted);
+}

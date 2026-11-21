@@ -95,6 +95,8 @@ export interface CacheOpenResult {
 export type CacheEngineHydrationResult = WriteResult &
   HydrationSearchChanges & {
     data: unknown | null;
+    /** A write committed between `prepareHydrate` and `commitHydrate`. */
+    projectionsReread?: true;
   };
 
 export interface CacheEngine {
@@ -176,6 +178,20 @@ export interface CacheEngine {
     identity: string | undefined,
     hydrationScope?: HydrationScope
   ): Promise<CacheEngineHydrationResult>;
+  /**
+   * `hydrateQuery` in two halves: `prepareHydrate` reads what the response
+   * changes and writes nothing, `commitHydrate` writes it. Between them the
+   * worker runs only requests that read. Optional for compatibility engines.
+   */
+  prepareHydrate?(
+    query: string,
+    operationName: string | undefined,
+    variables: Record<string, unknown> | undefined,
+    data: unknown,
+    identity: string | undefined,
+    hydrationScope?: HydrationScope
+  ): Promise<void>;
+  commitHydrate?(): Promise<CacheEngineHydrationResult>;
   inspectMutations(): Promise<MutationInspection[]>;
   enqueueOptimisticMutation(
     originOpId: string | undefined,

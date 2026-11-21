@@ -31,6 +31,7 @@ impl CacheEngine {
         future_to_promise(async move {
             let expected = expected.parse::<uuid::Uuid>().map_err(err_js)?;
             let mut state = state.lock().await;
+            state.forget_prepared_projections();
             let result = soup_filter_cache_adapter::permissions::transition_crm_authority(
                 state.engine_mut()?,
                 &identity,

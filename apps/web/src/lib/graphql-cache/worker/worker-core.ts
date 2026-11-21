@@ -44,6 +44,7 @@ import {
 import { cacheDatabaseIdentity } from './coordinator-protocol';
 import {
   type CacheEngine,
+  type CacheEngineHydrationResult,
   type CacheOpenOutcome,
   type CacheOpenResult,
   type CacheWalCheckpoint,
@@ -549,7 +550,11 @@ export class CacheWorkerCore {
       }
     }
 
-    index = this.pickPastFences(index, segmentEnd);
+    index = this.pickPastFences(
+      index,
+      this.queue[index]?.priority ?? Number.NEGATIVE_INFINITY,
+      segmentEnd
+    );
 
     const [queued] = this.queue.splice(index, 1);
     if (!queued) return;
@@ -665,25 +670,128 @@ export class CacheWorkerCore {
    * A row read that ranks with the search crosses the same fences; it carries
    * no operation, and no local change was queued ahead of it when it arrived.
    */
-  private pickPastFences(selectedIndex: number, segmentEnd: number): number {
+  private pickPastFences(
+    selectedIndex: number,
+    selectedPriority: number,
+    segmentEnd: number
+  ): number {
     let index = selectedIndex;
+    let priority = selectedPriority;
     let searchEnd = this.queue.findIndex((queued) =>
       stopsTypedSearch(queued.request)
     );
     if (searchEnd === -1) searchEnd = this.queue.length;
     for (let i = segmentEnd; i < searchEnd; i += 1) {
       const candidate = this.queue[i];
-      const selected = this.queue[index];
       if (
         candidate &&
-        selected &&
         candidate.priority === TYPED_SEARCH_PRIORITY &&
-        candidate.priority > selected.priority
+        candidate.priority > priority
       ) {
         index = i;
+        priority = candidate.priority;
       }
     }
     return index;
+  }
+
+  /**
+   * The queued request to run while a hydrate's write waits, when it only
+   * reads: the one `drainQueue` would pick were that write still queued
+   * first. Every authoritative write queued keeps its place behind it, and
+   * anything that is not a read waits for it.
+   */
+  private pickReadBeforeHydrateCommit(): number | undefined {
+    let segmentEnd = this.queue.findIndex((queued) =>
+      isOrderingBarrier(queued.request)
+    );
+    if (segmentEnd === -1) segmentEnd = this.queue.length;
+    let index = -1;
+    let priority = BACKGROUND_HYDRATION_PRIORITY;
+    for (let i = 0; i < segmentEnd; i += 1) {
+      const candidate = this.queue[i];
+      if (
+        candidate &&
+        !isAuthoritativeWrite(candidate.request) &&
+        candidate.priority > priority
+      ) {
+        index = i;
+        priority = candidate.priority;
+      }
+    }
+    index = this.pickPastFences(index, priority, segmentEnd);
+    const picked = this.queue[index];
+    return picked && isReadOnlyCacheRequest(picked.request.kind)
+      ? index
+      : undefined;
+  }
+
+  /**
+   * Runs the reads that arrived while a hydrate read its projections, before
+   * its write. A hydrate runs in wasm without yielding, so a read sent
+   * meanwhile used to wait for both halves; now it waits for one.
+   */
+  private async runReadsBeforeHydrateCommit(): Promise<void> {
+    // A failed request forgets the authority so the next one checks it
+    // again, in case it committed a transition. A read commits nothing, so
+    // the hydrate's notifications keep the authority it ran under.
+    const authority = this.executingAuthority;
+    for (let yields = 0; yields < MAX_ARRIVAL_YIELDS; yields += 1) {
+      try {
+        await new Promise<void>((resume) => this.afterArrivedMessages(resume));
+      } catch {
+        // Without a way to yield, the reads wait for the write.
+        return;
+      }
+      let ran = false;
+      for (
+        let index = this.pickReadBeforeHydrateCommit();
+        index !== undefined;
+        index = this.pickReadBeforeHydrateCommit()
+      ) {
+        const [queued] = this.queue.splice(index, 1);
+        if (!queued) break;
+        ran = true;
+        try {
+          const result = await this.dispatch(queued.request);
+          for (const waiter of queued.waiters) waiter.resolve(result);
+        } catch (error) {
+          this.executingAuthority = authority;
+          for (const waiter of queued.waiters) waiter.reject(error);
+        }
+      }
+      // More may have arrived while these ran.
+      if (!ran) return;
+    }
+  }
+
+  /** A hydrate, its write held back for the reads that arrive meanwhile. */
+  private async hydrate(
+    request: Extract<CacheRequest, { kind: 'hydrate' }>
+  ): Promise<CacheEngineHydrationResult> {
+    const engine = this.requireEngine();
+    const prepare = engine.prepareHydrate?.bind(engine);
+    const commit = engine.commitHydrate?.bind(engine);
+    if (!prepare || !commit) {
+      return await engine.hydrateQuery(
+        request.query,
+        request.operationName,
+        request.variables,
+        request.data,
+        request.identity,
+        request.hydrationScope
+      );
+    }
+    await prepare(
+      request.query,
+      request.operationName,
+      request.variables,
+      request.data,
+      request.identity,
+      request.hydrationScope
+    );
+    await this.runReadsBeforeHydrateCommit();
+    return await commit();
   }
 
   /**
@@ -949,14 +1057,7 @@ export class CacheWorkerCore {
         return result;
       })
       .with({ kind: 'hydrate' }, async (request) => {
-        const result = await this.requireEngine().hydrateQuery(
-          request.query,
-          request.operationName,
-          request.variables,
-          request.data,
-          request.identity,
-          request.hydrationScope
-        );
+        const result = await this.hydrate(request);
         result.revision = parseCacheRevision(result.revision);
         // Only cache-only consumers opt into hydration. Do not invalidate
         // foreground Soup queries or switch their authority mid-backfill.

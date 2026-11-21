@@ -11,7 +11,7 @@ use cache_core::engine::{
 };
 use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
-use cache_core::predicate::PredicateQueryResult;
+use cache_core::predicate::{PredicateQueryResult, ProjectionMutation};
 use cache_core::query_inspection::QueryInspection;
 use cache_core::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationUpsertKind,
@@ -22,7 +22,7 @@ use cache_core::store::QueueDiagnosticsAvailability;
 use cache_core::value::EntityKey;
 use cache_turso::{
     PhysicalResetReason, QueuedMutationCount, TursoStorage, TursoStorageCloseOutcome,
-    TursoStorageError, TursoStorageOpenOutcome, count_queued_mutations,
+    TursoStorageError, TursoStorageOpenOutcome, WalPosition, count_queued_mutations,
 };
 use predicate_index::RecordKey;
 use serde::{Deserialize, Serialize};
@@ -183,7 +183,50 @@ struct JsHydrationWriteResult {
     revalidations: Vec<QueryRevalidation>,
     #[serde(skip_serializing_if = "Option::is_none")]
     mutation_uuid: Option<String>,
+    /// A write committed between `prepareHydrate` and `commitHydrate`, so the
+    /// commit read the projections again.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    projections_reread: bool,
     data: Option<serde_json::Value>,
+}
+
+/// A hydrate as the host sent it.
+struct HydrateRequest {
+    query: String,
+    operation_name: Option<String>,
+    variables: serde_json::Map<String, serde_json::Value>,
+    data: serde_json::Value,
+    identity: Option<String>,
+    /// Parsed after the projections are read, so a request that is wrong in
+    /// both ways fails on its projections first, as `hydrateQuery` always did.
+    scope: Option<HydrationScope>,
+}
+
+impl HydrateRequest {
+    fn parse(
+        query: String,
+        operation_name: Option<String>,
+        variables: JsValue,
+        data: JsValue,
+        identity: Option<String>,
+    ) -> Result<Self, JsValue> {
+        Ok(Self {
+            query,
+            operation_name,
+            variables: parse_variables(variables)?,
+            data: serde_wasm_bindgen::from_value(data).map_err(err_js)?,
+            identity,
+            scope: None,
+        })
+    }
+}
+
+/// A hydrate's projections, read before its write, and where the WAL ended
+/// when they were read.
+struct PreparedHydrate {
+    request: HydrateRequest,
+    projections: Vec<ProjectionMutation>,
+    wal_position: Option<WalPosition>,
 }
 
 #[derive(Deserialize)]
@@ -497,6 +540,12 @@ struct CacheState {
     scope: String,
     hot_capacity: Option<u32>,
     reset_required: bool,
+    /// A hydrate whose projections were computed and whose write is still to
+    /// run (`prepareHydrate`, then `commitHydrate`).
+    prepared_hydrate: Option<PreparedHydrate>,
+    /// How many times a hydrate computed its projections (tests only).
+    #[cfg(test)]
+    projection_reads: usize,
 }
 
 impl CacheState {
@@ -527,6 +576,163 @@ impl CacheState {
         let result = self.engine_mut()?.current_identity().await;
         let bound = self.engine_result(result)?;
         Ok(bound.as_deref().is_none_or(|bound| bound == observed))
+    }
+
+    /// Storage may have changed in a way this connection's WAL position
+    /// does not show (another instance reset it, or the database was
+    /// replaced): a kept hydrate reads its projections again when it commits.
+    fn forget_prepared_projections(&mut self) {
+        if let Some(prepared) = &mut self.prepared_hydrate {
+            prepared.wal_position = None;
+        }
+    }
+
+    /// Where the WAL ends, or `None` when it can't be read, which makes a
+    /// prepared hydrate read its projections again.
+    fn wal_position(&self) -> Option<WalPosition> {
+        let engine = self.engine.as_ref()?;
+        turso_storage(engine.storage()).wal_position().ok()
+    }
+
+    /// The projection rows a hydrate's response changes. It only reads
+    /// storage, so requests that only read may run between it and the write.
+    async fn hydrate_projections(
+        &mut self,
+        request: &HydrateRequest,
+    ) -> Result<Vec<ProjectionMutation>, JsValue> {
+        #[cfg(test)]
+        {
+            self.projection_reads += 1;
+        }
+        let mut projections = authoritative_projection_mutations(
+            &self.engine_mut()?.schema_snapshot(),
+            &request.query,
+            request.operation_name.as_deref(),
+            &request.data,
+        )
+        .map_err(err_js)?;
+        let reuse_stored_identity = self
+            .can_reuse_stored_identity(request.identity.as_deref())
+            .await?;
+        // The passes below share one normalization of the response.
+        let response_schema = self.engine_mut()?.schema_snapshot();
+        let response = WriteResponse::new(
+            &response_schema,
+            &request.query,
+            request.operation_name.as_deref(),
+            &request.variables,
+            &request.data,
+        );
+        if reuse_stored_identity {
+            projections.extend(
+                notification_projection_updates_for(self.engine_mut()?.storage(), &response)
+                    .await
+                    .map_err(err_js)?,
+            );
+        }
+        projections.extend(
+            soup_filter_cache_adapter::mail::projection_updates_for_response(
+                self.engine_mut()?.storage(),
+                &response,
+                reuse_stored_identity,
+            )
+            .await
+            .map_err(|error| self.mail_projection_error(error))?,
+        );
+        soup_filter_cache_adapter::properties::augment_authoritative_response(
+            self.engine_mut()?.storage(),
+            &response,
+            reuse_stored_identity,
+            projections,
+        )
+        .await
+        .map_err(|error| self.mail_projection_error(error))
+    }
+
+    async fn prepare_hydrate(
+        &mut self,
+        mut request: HydrateRequest,
+        hydration_scope: JsValue,
+    ) -> Result<PreparedHydrate, JsValue> {
+        let wal_position = self.wal_position();
+        let projections = self.hydrate_projections(&request).await?;
+        request.scope = serde_wasm_bindgen::from_value(hydration_scope).map_err(err_js)?;
+        Ok(PreparedHydrate {
+            request,
+            projections,
+            wal_position,
+        })
+    }
+
+    /// Writes a prepared hydrate. When a write committed since its
+    /// projections were read, it reads them again first.
+    async fn commit_hydrate(
+        &mut self,
+        prepared: PreparedHydrate,
+        ops: &RefCell<OpInterner>,
+    ) -> Result<JsHydrationWriteResult, JsValue> {
+        self.ensure_callable()?;
+        let PreparedHydrate {
+            request,
+            mut projections,
+            wal_position,
+        } = prepared;
+        let projections_reread = wal_position.is_none() || self.wal_position() != wal_position;
+        if projections_reread {
+            projections = self.hydrate_projections(&request).await?;
+        }
+        let write = NetworkWrite {
+            query: &request.query,
+            operation_name: request.operation_name.as_deref(),
+            variables: &request.variables,
+            data: &request.data,
+            identity: request.identity.as_deref(),
+        };
+        let result = match &request.scope {
+            Some(scope) => {
+                self.engine_mut()?
+                    .hydrate_query_in_scope(write, scope, projections)
+                    .await
+            }
+            None => {
+                self.engine_mut()?
+                    .hydrate_query_with_projections(
+                        write.query,
+                        write.operation_name,
+                        write.variables,
+                        write.data,
+                        write.identity,
+                        projections,
+                    )
+                    .await
+            }
+        };
+        let result = self.engine_result(result)?;
+
+        // A failed optional proof must still deliver the committed write and broad invalidation.
+        let unchanged_views = self
+            .engine_mut()?
+            .unchanged_observed_windows()
+            .await
+            .unwrap_or_default();
+        Ok(JsHydrationWriteResult {
+            unchanged_views,
+            search_changed_buckets: result.search_changed_buckets,
+            revision: result.write_result.revision.to_string(),
+            revision_advanced: result.write_result.revision_advanced,
+            changed: result
+                .write_result
+                .changed
+                .into_iter()
+                .map(|key| key.0.into_owned())
+                .collect(),
+            affected_ops: ops.borrow().names(result.write_result.affected_ops),
+            reset: result.write_result.reset,
+            revalidations: result.write_result.revalidations,
+            mutation_uuid: result.write_result.mutation_uuid,
+            projections_reread,
+            data: result.data,
+        })
     }
 
     fn engine_result<T>(
@@ -820,6 +1026,9 @@ async fn open_cache_inner(
                 scope,
                 hot_capacity,
                 reset_required: false,
+                prepared_hydrate: None,
+                #[cfg(test)]
+                projection_reads: 0,
             })),
             ops: Rc::new(RefCell::new(OpInterner::default())),
         },
@@ -1774,109 +1983,56 @@ impl CacheEngine {
         future_to_promise(async move {
             let mut state = state.lock().await;
             state.ensure_callable()?;
-            let variables = parse_variables(variables)?;
-            let data: serde_json::Value = serde_wasm_bindgen::from_value(data).map_err(err_js)?;
-            let mut projections = authoritative_projection_mutations(
-                &state.engine_mut()?.schema_snapshot(),
-                &query,
-                operation_name.as_deref(),
-                &data,
-            )
-            .map_err(err_js)?;
-            let reuse_stored_identity =
-                state.can_reuse_stored_identity(identity.as_deref()).await?;
-            // The passes below share one normalization of the response.
-            let response_schema = state.engine_mut()?.schema_snapshot();
-            let response = WriteResponse::new(
-                &response_schema,
-                &query,
-                operation_name.as_deref(),
-                &variables,
-                &data,
-            );
-            if reuse_stored_identity {
-                projections.extend(
-                    notification_projection_updates_for(state.engine_mut()?.storage(), &response)
-                        .await
-                        .map_err(err_js)?,
-                );
-            }
-            projections.extend(
-                soup_filter_cache_adapter::mail::projection_updates_for_response(
-                    state.engine_mut()?.storage(),
-                    &response,
-                    reuse_stored_identity,
-                )
-                .await
-                .map_err(|error| state.mail_projection_error(error))?,
-            );
-            let projections =
-                soup_filter_cache_adapter::properties::augment_authoritative_response(
-                    state.engine_mut()?.storage(),
-                    &response,
-                    reuse_stored_identity,
-                    projections,
-                )
-                .await
-                .map_err(|error| state.mail_projection_error(error))?;
-            let scope: Option<HydrationScope> =
-                serde_wasm_bindgen::from_value(hydration_scope).map_err(err_js)?;
-            let result = match scope {
-                Some(scope) => {
-                    state
-                        .engine_mut()?
-                        .hydrate_query_in_scope(
-                            NetworkWrite {
-                                query: &query,
-                                operation_name: operation_name.as_deref(),
-                                variables: &variables,
-                                data: &data,
-                                identity: identity.as_deref(),
-                            },
-                            &scope,
-                            projections,
-                        )
-                        .await
-                }
-                None => {
-                    state
-                        .engine_mut()?
-                        .hydrate_query_with_projections(
-                            &query,
-                            operation_name.as_deref(),
-                            &variables,
-                            &data,
-                            identity.as_deref(),
-                            projections,
-                        )
-                        .await
-                }
-            };
-            let result = state.engine_result(result)?;
+            let request = HydrateRequest::parse(query, operation_name, variables, data, identity)?;
+            let prepared = state.prepare_hydrate(request, hydration_scope).await?;
+            to_js(&state.commit_hydrate(prepared, &ops).await?)
+        })
+    }
 
-            // A failed optional proof must still deliver the committed write and broad invalidation.
-            let unchanged_views = state
-                .engine_mut()?
-                .unchanged_observed_windows()
-                .await
-                .unwrap_or_default();
-            to_js(&JsHydrationWriteResult {
-                unchanged_views,
-                search_changed_buckets: result.search_changed_buckets,
-                revision: result.write_result.revision.to_string(),
-                revision_advanced: result.write_result.revision_advanced,
-                changed: result
-                    .write_result
-                    .changed
-                    .into_iter()
-                    .map(|key| key.0.into_owned())
-                    .collect(),
-                affected_ops: ops.borrow().names(result.write_result.affected_ops),
-                reset: result.write_result.reset,
-                revalidations: result.write_result.revalidations,
-                mutation_uuid: result.write_result.mutation_uuid,
-                data: result.data,
-            })
+    /// The first half of `hydrateQuery`: converts the response and reads the
+    /// projection rows it changes, without writing. The engine keeps the
+    /// result for `commitHydrate`, replacing any it kept before. Between the
+    /// two the host may run requests that only read. Whatever runs between,
+    /// the commit writes the response as `hydrateQuery` would at that moment:
+    /// after a write, a clear, a reset or an authority transition it reads
+    /// the projections again first. A close drops the kept hydrate.
+    #[wasm_bindgen(js_name = prepareHydrate)]
+    pub fn prepare_hydrate(
+        &self,
+        query: String,
+        operation_name: Option<String>,
+        variables: JsValue,
+        data: JsValue,
+        identity: Option<String>,
+        hydration_scope: JsValue,
+    ) -> js_sys::Promise {
+        let state = self.state.clone();
+        future_to_promise(async move {
+            let mut state = state.lock().await;
+            state.prepared_hydrate = None;
+            state.ensure_callable()?;
+            let request = HydrateRequest::parse(query, operation_name, variables, data, identity)?;
+            let prepared = state.prepare_hydrate(request, hydration_scope).await?;
+            state.prepared_hydrate = Some(prepared);
+            Ok(JsValue::UNDEFINED)
+        })
+    }
+
+    /// Writes the hydrate `prepareHydrate` kept and resolves like
+    /// `hydrateQuery` issued now. When storage may have changed since the
+    /// prepare, it reads the projections again first and the result says
+    /// `projectionsReread`.
+    #[wasm_bindgen(js_name = commitHydrate)]
+    pub fn commit_hydrate(&self) -> js_sys::Promise {
+        let state = self.state.clone();
+        let ops = self.ops.clone();
+        future_to_promise(async move {
+            let mut state = state.lock().await;
+            let prepared = state
+                .prepared_hydrate
+                .take()
+                .ok_or_else(|| err_js("no prepared hydrate to commit"))?;
+            to_js(&state.commit_hydrate(prepared, &ops).await?)
         })
     }
 
@@ -2460,6 +2616,7 @@ impl CacheEngine {
         let ops = self.ops.clone();
         future_to_promise(async move {
             let mut state = state.lock().await;
+            state.forget_prepared_projections();
             let result = state.engine_mut()?.external_reset();
             let affected = state.engine_result(result)?;
             to_js(&JsAffectedOperationsResult {
@@ -2489,6 +2646,7 @@ impl CacheEngine {
         let state = self.state.clone();
         future_to_promise(async move {
             let mut state = state.lock().await;
+            state.forget_prepared_projections();
             let result = state.engine_mut()?.clear().await;
             let revision = state.engine_result(result)?;
             to_js(&JsRevisionResult {
@@ -2505,6 +2663,7 @@ impl CacheEngine {
         let state = self.state.clone();
         future_to_promise(async move {
             let mut state = state.lock().await;
+            state.forget_prepared_projections();
             let engine = state.engine.take().ok_or_else(|| {
                 if state.reset_required {
                     err_js("cache engine requires worker replacement")
@@ -2542,6 +2701,7 @@ impl CacheEngine {
         let state = self.state.clone();
         future_to_promise(async move {
             let mut state = state.lock().await;
+            state.prepared_hydrate = None;
             let engine = state.engine.take().ok_or_else(|| {
                 if state.reset_required {
                     err_js("cache engine requires worker replacement")
