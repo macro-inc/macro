@@ -9,8 +9,10 @@ import {
   type ContactDirectoryBackfillQuery,
   type ContactDirectoryBackfillQueryVariables,
   type ContactDirectoryBackfillResult,
+  ContactDirectoryBackfillWithListsDocument,
   ContactDirectoryByUserIdsDocument,
   type ContactDirectoryByUserIdsQuery,
+  ContactDirectoryByUserIdsWithListsDocument,
   ContactDirectoryPageDocument,
   type ContactDirectoryPageQuery,
   type ContactDirectoryPageQueryVariables,
@@ -23,21 +25,46 @@ import {
   graphqlSoupTransportDocument,
 } from './graphql-soup';
 
-const DOCUMENT = print(ContactDirectoryBackfillDocument);
-const TRANSPORT_DOCUMENT = graphqlSoupTransportDocument(DOCUMENT);
 const PAGE_SIZE = 500;
+
+/** The cache-writing reads, with and without each contact's `lists`. A server
+ * without the field refuses any read that selects it, so callers pick. */
+export type ContactListSelection = { lists?: boolean };
+
+function backfillDocument(lists: boolean) {
+  const query = print(
+    lists
+      ? ContactDirectoryBackfillWithListsDocument
+      : ContactDirectoryBackfillDocument
+  );
+  return {
+    query,
+    transport: graphqlSoupTransportDocument(query),
+    operationName: lists
+      ? 'ContactDirectoryBackfillWithLists'
+      : 'ContactDirectoryBackfill',
+  };
+}
+
+const BACKFILL = {
+  plain: backfillDocument(false),
+  lists: backfillDocument(true),
+};
 
 /** Membership-scoped exact lookup; empty input is never a directory listing. */
 export async function fetchContactDirectoryByIds(
   userIds: string[],
-  signal: AbortSignal
+  signal: AbortSignal,
+  selection: ContactListSelection = {}
 ): Promise<ContactDirectoryByUserIdsQuery> {
   signal.throwIfAborted();
   if (userIds.length > PAGE_SIZE)
     throw new Error('Contact lookup exceeds its batch bound');
   const result = await getGraphqlSoupNetworkClient()
     .query(
-      ContactDirectoryByUserIdsDocument,
+      selection.lists
+        ? ContactDirectoryByUserIdsWithListsDocument
+        : ContactDirectoryByUserIdsDocument,
       { userIds },
       {
         requestPolicy: 'network-only',
@@ -97,10 +124,13 @@ export async function hydrateGraphqlContacts(
   host: Pick<CacheHost, 'hydrateQuery' | 'disabled' | 'people'>,
   scope: HydrationScope,
   after: string | null,
-  signal: AbortSignal
+  signal: AbortSignal,
+  selection: ContactListSelection = {}
 ): Promise<ContactDirectoryBackfillResult> {
   return Telemetry.span('contacts.hydrate_page', async (span) => {
     signal.throwIfAborted();
+    const document = selection.lists ? BACKFILL.lists : BACKFILL.plain;
+    span.setAttr('contacts.lists', selection.lists === true);
     if (host.disabled)
       throw new Error('Contact hydration requires an active cache');
     const guarded = await captureContactWriteScope(host, scope, signal);
@@ -113,7 +143,7 @@ export async function hydrateGraphqlContacts(
       .query<
         ContactDirectoryBackfillQuery,
         ContactDirectoryBackfillQueryVariables
-      >(TRANSPORT_DOCUMENT, variables, {
+      >(document.transport, variables, {
         requestPolicy: 'network-only',
         fetchOptions: { signal },
       })
@@ -128,8 +158,8 @@ export async function hydrateGraphqlContacts(
     const hydrated = await span.span('contacts.persist_page', () =>
       host.hydrateQuery({
         generation: result.operation.context.cacheSessionGeneration,
-        query: DOCUMENT,
-        operationName: 'ContactDirectoryBackfill',
+        query: document.query,
+        operationName: document.operationName,
         variables,
         data,
         identity: data.user.id,

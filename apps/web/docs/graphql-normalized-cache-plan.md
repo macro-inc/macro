@@ -1392,7 +1392,7 @@ Invalidations coalesce on a 15-minute cadence without interrupting active scans;
 hourly passes refresh names. Scan omissions never delete records. The same lane
 then scans at most 500 raw cached contact records per keyset window and verifies
 scoped IDs through the existing exact lookup. Only validated requested-ID omissions
-permit removal. Checkpoint v2 tracks hydration/verification and completes only
+permit removal. Checkpoint v2 (v3 while `enable-contact-lists` selects contact lists) tracks hydration/verification and completes only
 after the verification pass; failures/interruption resume at the last committed
 cursor. No directory-sized seen set or extra synchronization endpoint is used.
 
