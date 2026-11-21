@@ -42,7 +42,10 @@ impl Exec<'_> {
                 });
                 self.staged.push((index, staged));
             }
-            Err(_) => self.count("stage.refused"),
+            // Counted by the step that refused, so a storage error at the
+            // snapshot shows apart from an authority or fence the op ahead
+            // had not set up yet. The hydrate runs whole at its turn either way.
+            Err(step) => self.count(step),
         }
     }
 
@@ -53,13 +56,16 @@ impl Exec<'_> {
         variables: &serde_json::Map<String, Value>,
         data: &Value,
         contacts: bool,
-    ) -> Result<crate::host::engine::fuzz_hooks::FuzzStagedHydrate, String> {
-        let handle = self.stamped().await?;
+    ) -> Result<crate::host::engine::fuzz_hooks::FuzzStagedHydrate, &'static str> {
+        let handle = self
+            .stamped()
+            .await
+            .map_err(|_| "stage.refused.authority")?;
         let scope = match contacts {
-            true => Some(self.scope(true).await?),
+            true => Some(self.scope(true).await.map_err(|_| "stage.refused.fence")?),
             false => None,
         };
-        let query = self.doc(doc)?;
+        let query = self.doc(doc).map_err(|_| "stage.refused.document")?;
         handle
             .fuzz_stage_hydrate(HydrateRequest {
                 query: &query,
@@ -70,6 +76,7 @@ impl Exec<'_> {
                 scope: scope.as_ref(),
             })
             .await
+            .map_err(|_| "stage.refused.snapshot")
     }
 
     /// Whether the hydrate at `index` runs with reads issued while it runs.

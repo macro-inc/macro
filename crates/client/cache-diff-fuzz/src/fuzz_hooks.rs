@@ -56,6 +56,9 @@ impl EngineHandle {
     ) -> Result<FuzzStagedHydrate, String> {
         let mut state = self.snapshot_hydration().await?;
         let engine = &mut state.engine;
+        // The position before anything is read: a write between here and the
+        // commit moves it, whatever the stage read.
+        let wal = engine.storage().wal_position().ok();
         let projections = match super::soup::write_projections(
             engine,
             request.query,
@@ -71,12 +74,11 @@ impl EngineHandle {
                 return Ok(FuzzStagedHydrate {
                     projections: Vec::new(),
                     staged: None,
-                    wal: None,
+                    wal,
                     error: Some(error.to_string()),
                 });
             }
         };
-        let wal = engine.storage().wal_position().ok();
         let staged = engine
             .stage_hydrate(
                 super::NetworkWrite {
@@ -105,7 +107,7 @@ impl EngineHandle {
     /// Does what the browser host's `commitHydrate` does with a staged write:
     /// commits it while storage is where it was staged and the engine says it
     /// is current. `None` when it can't, and the hydrate runs whole; a stage
-    /// that failed answers with its error.
+    /// that failed answers with its error while storage has not moved since.
     pub(crate) async fn fuzz_commit_staged_hydrate(
         &self,
         staged: FuzzStagedHydrate,
@@ -116,19 +118,21 @@ impl EngineHandle {
             wal,
             error,
         } = staged;
-        if let Some(error) = error {
-            return Some(Err(error));
-        }
-        let staged = staged?;
         let mut state = match self.snapshot_hydration().await {
             Ok(state) => state,
             Err(error) => return Some(Err(error)),
         };
         let super::EngineState { engine, ops, .. } = &mut *state;
-        if wal.is_none()
-            || engine.storage().wal_position().ok() != wal
-            || !engine.staged_hydrate_current(&staged)
-        {
+        // A stage that storage moved past since (or that read no position)
+        // proves nothing about the hydrate at its turn, failed or not.
+        if wal.is_none() || engine.storage().wal_position().ok() != wal {
+            return None;
+        }
+        if let Some(error) = error {
+            return Some(Err(error));
+        }
+        let staged = staged?;
+        if !engine.staged_hydrate_current(&staged) {
             return None;
         }
         let result = match engine.commit_staged_hydrate(staged, projections).await {
