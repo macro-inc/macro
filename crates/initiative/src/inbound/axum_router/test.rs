@@ -847,6 +847,7 @@ async fn page_passes_filters_and_returns_rows_with_progress() {
                     "status": status.to_string(),
                     "priority": null,
                     "assignees": [USER_ID],
+                    "startDate": null,
                     "dueDate": "2026-09-15T12:00:00Z",
                     "completed": false,
                 },
