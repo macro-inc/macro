@@ -73,6 +73,8 @@ pub enum OpfsErrorKind {
     Remove,
     /// Asynchronously recreating a removed OPFS path failed.
     Recreate,
+    /// Moving an older identity's paths to this owner's paths failed.
+    Move,
     /// Browser storage reported that its quota was full.
     StorageFull,
     /// The worker-local session is poisoned and cannot be reused.
@@ -386,6 +388,240 @@ impl OpfsOwner {
         self.release().await?;
         removed
     }
+
+    /// Moves the complete main/WAL pair of `previous_identity`, an identity an
+    /// older build opened, to this owner's paths, so this owner opens it as
+    /// existing storage instead of starting empty.
+    ///
+    /// The previous identity's exclusive Web Lock is taken only if it is free
+    /// and is held for the whole move, so no context of the older build has the
+    /// files open. Main and WAL move together under their new names, so no
+    /// checkpoint is needed and every committed frame moves with them. Nothing
+    /// moves when this owner's paths already hold a file, when the previous
+    /// pair is incomplete, or when this browser cannot move OPFS entries.
+    ///
+    /// When the WAL move fails after the main file moved, the main file is
+    /// moved back. A process stopped between the two moves leaves one path at
+    /// each identity; opening either then requires a reset, as an interrupted
+    /// creation does, so the files are discarded rather than mispaired.
+    pub async fn adopt_previous(
+        &mut self,
+        previous_identity: &str,
+    ) -> Result<AdoptOutcome, OpfsError> {
+        let previous = approved_paths(previous_identity)?;
+        if previous == self.paths {
+            return Err(OpfsError::new(
+                OpfsErrorKind::InvalidName,
+                "an owner cannot adopt its own identity",
+            ));
+        }
+        // The wipe phase blocks every other use of this owner's paths in this
+        // worker while entries move into them.
+        REGISTRY
+            .with(|registry| {
+                registry
+                    .borrow_mut()
+                    .machine
+                    .start_wipe(self.id, self.paths.clone())
+            })
+            .map_err(state_error)?;
+        let mut guard = AsyncPoisonGuard::new(self.id, "adoption cancelled before completion");
+        let outcome = with_lock_if_available(
+            &owner_lock_name(previous_identity),
+            move_pair(previous, self.paths.clone()),
+        )
+        .await;
+        REGISTRY
+            .with(|registry| registry.borrow_mut().machine.finish_wipe(self.id))
+            .map_err(state_error)?;
+        guard.disarm();
+        outcome.map(|outcome| outcome.unwrap_or(AdoptOutcome::PreviousInUse))
+    }
+}
+
+/// What [`OpfsOwner::adopt_previous`] did.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AdoptOutcome {
+    /// The previous identity's pair now sits at this owner's paths.
+    Adopted,
+    /// This owner's paths already hold a file; nothing moved.
+    TargetExists,
+    /// The previous identity has no complete pair; nothing moved.
+    NothingToAdopt,
+    /// Another context holds or awaits the previous identity's lock; nothing
+    /// moved.
+    PreviousInUse,
+    /// This browser cannot move OPFS entries; nothing moved.
+    Unsupported,
+}
+
+impl AdoptOutcome {
+    fn from_js(value: &JsValue) -> Option<Self> {
+        match value.as_string()?.as_str() {
+            "adopted" => Some(Self::Adopted),
+            "target-exists" => Some(Self::TargetExists),
+            "nothing" => Some(Self::NothingToAdopt),
+            "unsupported" => Some(Self::Unsupported),
+            _ => None,
+        }
+    }
+
+    const fn as_js(self) -> &'static str {
+        match self {
+            Self::Adopted => "adopted",
+            Self::TargetExists => "target-exists",
+            Self::NothingToAdopt => "nothing",
+            Self::PreviousInUse => "in-use",
+            Self::Unsupported => "unsupported",
+        }
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Stops an adoption between its two moves, as a stopped process would.
+    static STOP_BETWEEN_MOVES: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Runs `operation` while holding `lock_name` exclusively, only if the lock is
+/// free now. Returns `None`, without running it, when the lock is taken. The
+/// lock is released when the operation settles.
+async fn with_lock_if_available(
+    lock_name: &str,
+    operation: impl std::future::Future<Output = Result<AdoptOutcome, OpfsError>> + 'static,
+) -> Result<Option<AdoptOutcome>, OpfsError> {
+    let worker = js_sys::global()
+        .dyn_into::<DedicatedWorkerGlobalScope>()
+        .map_err(|error| js_error(OpfsErrorKind::Lock, "DedicatedWorker lock scope", &error))?;
+    let manager = Reflect::get(worker.navigator().as_ref(), &JsValue::from_str("locks"))
+        .map_err(|error| js_error(OpfsErrorKind::Lock, "Web Lock manager", &error))?;
+    let request = Reflect::get(&manager, &JsValue::from_str("request"))
+        .and_then(|value| value.dyn_into::<Function>())
+        .map_err(|error| js_error(OpfsErrorKind::Lock, "Web Lock request function", &error))?;
+    let options = Object::new();
+    for (key, value) in [
+        ("mode", JsValue::from_str("exclusive")),
+        ("ifAvailable", JsValue::TRUE),
+    ] {
+        Reflect::set(options.as_ref(), &JsValue::from_str(key), &value)
+            .map_err(|error| js_error(OpfsErrorKind::Lock, "Web Lock options", &error))?;
+    }
+    let mut operation = Some(operation);
+    let callback = Closure::wrap(Box::new(move |lock: JsValue| -> Promise {
+        if lock.is_null() || lock.is_undefined() {
+            return Promise::resolve(&JsValue::from_str(AdoptOutcome::PreviousInUse.as_js()));
+        }
+        let Some(operation) = operation.take() else {
+            return Promise::reject(&JsValue::from_str("Web Lock callback ran twice"));
+        };
+        wasm_bindgen_futures::future_to_promise(async move {
+            operation
+                .await
+                .map(|outcome| JsValue::from_str(outcome.as_js()))
+                .map_err(|error| JsValue::from_str(&error.to_string()))
+        })
+    }) as Box<dyn FnMut(JsValue) -> Promise>);
+    let pending = request
+        .call3(
+            &manager,
+            &JsValue::from_str(lock_name),
+            options.as_ref(),
+            callback.as_ref().unchecked_ref(),
+        )
+        .and_then(|value| value.dyn_into::<Promise>())
+        .map_err(|error| js_error(OpfsErrorKind::Lock, "Web Lock request", &error))?;
+    let settled = JsFuture::from(pending).await;
+    drop(callback);
+    let value = settled.map_err(|error| js_error(OpfsErrorKind::Move, "OPFS adoption", &error))?;
+    match value.as_string().as_deref() {
+        Some("in-use") => Ok(None),
+        _ => AdoptOutcome::from_js(&value).map(Some).ok_or_else(|| {
+            OpfsError::new(OpfsErrorKind::Move, "OPFS adoption returned no outcome")
+        }),
+    }
+}
+
+async fn existing_file(
+    root: &FileSystemDirectoryHandle,
+    path: &str,
+) -> Result<Option<FileSystemFileHandle>, OpfsError> {
+    match JsFuture::from(root.get_file_handle(path)).await {
+        Ok(file) => file
+            .dyn_into::<FileSystemFileHandle>()
+            .map(Some)
+            .map_err(|error| js_error(OpfsErrorKind::Move, "OPFS entry kind", &error)),
+        Err(error) if is_not_found(&error) => Ok(None),
+        Err(error) => Err(js_error(OpfsErrorKind::Move, "OPFS entry lookup", &error)),
+    }
+}
+
+/// Renames `file` within `root`; `None` when this browser has no
+/// `FileSystemHandle.move`.
+async fn move_entry(
+    root: &FileSystemDirectoryHandle,
+    file: &FileSystemFileHandle,
+    name: &str,
+    deadline: BusyDeadline,
+) -> Option<Result<(), OpfsError>> {
+    let move_function = Reflect::get(file.as_ref(), &JsValue::from_str("move"))
+        .ok()?
+        .dyn_into::<Function>()
+        .ok()?;
+    let name = JsValue::from_str(name);
+    Some(
+        retry_busy_entry(deadline, || {
+            move_function
+                .call2(file.as_ref(), root.as_ref(), &name)
+                .and_then(|value| value.dyn_into::<Promise>())
+                .unwrap_or_else(|error| Promise::reject(&error))
+        })
+        .await
+        .map(|_| ())
+        .map_err(|error| entry_error(OpfsErrorKind::Move, "OPFS entry move", &error)),
+    )
+}
+
+async fn move_pair(from: Paths, to: Paths) -> Result<AdoptOutcome, OpfsError> {
+    let deadline = BusyDeadline::start();
+    let root = worker_root()
+        .await
+        .map_err(|error| js_error(OpfsErrorKind::Move, "OPFS move root open", &error))?;
+    for role in FileRole::ALL {
+        if existing_file(&root, to.get(role)).await?.is_some() {
+            return Ok(AdoptOutcome::TargetExists);
+        }
+    }
+    let (Some(main), Some(wal)) = (
+        existing_file(&root, from.get(FileRole::Main)).await?,
+        existing_file(&root, from.get(FileRole::Wal)).await?,
+    ) else {
+        return Ok(AdoptOutcome::NothingToAdopt);
+    };
+    let Some(moved) = move_entry(&root, &main, to.get(FileRole::Main), deadline).await else {
+        return Ok(AdoptOutcome::Unsupported);
+    };
+    moved?;
+    #[cfg(test)]
+    if STOP_BETWEEN_MOVES.with(|stop| stop.replace(false)) {
+        return Err(OpfsError::new(
+            OpfsErrorKind::Move,
+            "injected stop between moves",
+        ));
+    }
+    let wal_moved = move_entry(&root, &wal, to.get(FileRole::Wal), deadline)
+        .await
+        .unwrap_or_else(|| {
+            Err(OpfsError::new(
+                OpfsErrorKind::Move,
+                "FileSystemHandle.move disappeared between moves",
+            ))
+        });
+    if let Err(error) = wal_moved {
+        // Put the main file back so the previous pair stays whole.
+        let _ = move_entry(&root, &main, from.get(FileRole::Main), deadline).await;
+        return Err(error);
+    }
+    Ok(AdoptOutcome::Adopted)
 }
 
 impl Drop for OpfsOwner {

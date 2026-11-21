@@ -15,6 +15,7 @@ use web_sys::{FileSystemGetDirectoryOptions, FileSystemGetFileOptions, FileSyste
 
 wasm_bindgen_test_configure!(run_in_dedicated_worker);
 
+mod adopt;
 mod write_batch;
 
 #[derive(Debug)]
