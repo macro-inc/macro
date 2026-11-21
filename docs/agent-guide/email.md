@@ -139,6 +139,8 @@ On an owned IMAP inbox, **Server settings** shows the hosts, ports, encryption
 and usernames for both servers. Recent verifications also show the negotiated
 features, the verification time and any outgoing size limit the server supplied.
 **Change login details** verifies replacement credentials for the same inbox.
+It remains available if the saved password or server settings cannot be read;
+reconnect the existing inbox instead of creating another link.
 
 Under **Folders**, choose a role, include or exclude a folder, or watch one
 additional folder for new mail. Inbox is always included. **Outside the latest

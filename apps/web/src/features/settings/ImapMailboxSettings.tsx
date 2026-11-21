@@ -287,6 +287,16 @@ function SettingsDialog(props: {
           <Dialog.Description class="ph-no-capture text-sm text-ink-muted">
             {props.emailAddress}
           </Dialog.Description>
+          <Button
+            variant="secondary"
+            class="self-start"
+            onClick={() => {
+              props.close();
+              props.onReconnect();
+            }}
+          >
+            {t('imap.changeLogin')}
+          </Button>
           <Show
             when={settings()}
             fallback={
@@ -310,16 +320,7 @@ function SettingsDialog(props: {
                 <Show when={data().features}>
                   {(features) => <VerifiedFeatures features={features()} />}
                 </Show>
-                <Button
-                  variant="secondary"
-                  class="self-start"
-                  onClick={() => {
-                    props.close();
-                    props.onReconnect();
-                  }}
-                >
-                  {t('imap.changeLogin')}
-                </Button>
+
                 <Show when={data().helpUrl}>
                   {(url) => (
                     <a

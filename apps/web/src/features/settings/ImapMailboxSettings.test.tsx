@@ -159,3 +159,22 @@ it('reloads the settings version on conflict before a second edit', async () => 
     )
   );
 });
+
+it('lets the owner reconnect an existing inbox when saved settings cannot be read', async () => {
+  api.read.mockResolvedValue(
+    err([{ code: 'UNKNOWN', message: 'credentials_unavailable' }])
+  );
+  const reconnect = vi.fn();
+  render(() => (
+    <ImapMailboxSettings
+      linkId="owned"
+      emailAddress="owner@example.com"
+      onReconnect={reconnect}
+    />
+  ));
+  fireEvent.click(screen.getByRole('button', { name: 'Server settings' }));
+  await screen.findByRole('alert');
+  fireEvent.click(screen.getByRole('button', { name: 'Change login details' }));
+  expect(reconnect).toHaveBeenCalledTimes(1);
+  expect(api.update).not.toHaveBeenCalled();
+});
