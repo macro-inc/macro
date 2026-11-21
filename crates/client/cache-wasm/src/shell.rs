@@ -236,8 +236,6 @@ impl HydrateRequest {
 /// when they were read.
 struct PreparedHydrate {
     request: HydrateRequest,
-    /// The hydration scope as the host sent it, until the passes ran.
-    scope: Option<JsValue>,
     /// The projection passes still to run, one per `stepHydrate`.
     passes: Option<WritePasses>,
     projections: Vec<ProjectionMutation>,
@@ -248,17 +246,6 @@ struct PreparedHydrate {
     wal_position: Option<WalPosition>,
     /// The write itself, computed at `wal_position` by `stageHydrate`.
     staged: Option<StagedHydrate>,
-}
-
-impl PreparedHydrate {
-    /// Parses the scope once the projections are read, so a request that is
-    /// wrong in both ways fails on its projections first.
-    fn parse_scope(&mut self) -> Result<(), JsValue> {
-        if let Some(scope) = self.scope.take() {
-            self.request.scope = serde_wasm_bindgen::from_value(scope).map_err(err_js)?;
-        }
-        Ok(())
-    }
 }
 
 #[derive(Deserialize)]
@@ -677,18 +664,33 @@ impl CacheState {
     /// projection passes run later, one per `step_hydrate`.
     async fn prepare_hydrate(
         &mut self,
-        request: HydrateRequest,
+        mut request: HydrateRequest,
         hydration_scope: JsValue,
     ) -> Result<PreparedHydrate, JsValue> {
+        // Read now: the host may change its scope object after this resolves.
+        let scope = serde_wasm_bindgen::from_value(hydration_scope);
         let wal_position = self.wal_position();
         let engine = self.engine_mut()?;
         let schema = engine.schema_snapshot();
         // A response that fails to normalize fails the write, which reports it.
         let normalized = engine.normalize_network(None, request.write()).ok();
-        let passes = self.hydrate_passes(&request).await?;
+        let mut passes = self.hydrate_passes(&request).await?;
+        request.scope = match scope {
+            Ok(scope) => scope,
+            Err(error) => {
+                // A request wrong in both ways fails on its projections
+                // first, as the whole hydrate does.
+                let response = write_response(&schema, &request, normalized.as_ref());
+                loop {
+                    let step = passes.step(self.engine_mut()?, &response).await;
+                    if let WritePassStep::Done(_) = self.write_passes_result(step)? {
+                        return Err(err_js(error));
+                    }
+                }
+            }
+        };
         Ok(PreparedHydrate {
             request,
-            scope: Some(hydration_scope),
             passes: Some(passes),
             projections: Vec::new(),
             normalized,
@@ -724,7 +726,6 @@ impl CacheState {
         if let WritePassStep::Done(projections) = self.write_passes_result(step)? {
             prepared.projections = projections;
             prepared.passes = None;
-            prepared.parse_scope()?;
         }
         Ok(true)
     }
@@ -801,7 +802,6 @@ impl CacheState {
                 .hydrate_projections(&prepared.request, normalized.as_ref())
                 .await?;
         }
-        prepared.parse_scope()?;
         let PreparedHydrate {
             request,
             projections,

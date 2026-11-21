@@ -3131,6 +3131,58 @@ async fn a_staged_hydrate_lets_reads_run_then_commits_as_hydrate_query_does() {
     }
 }
 
+/// `prepareHydrate` reads the scope it is given when called: a host that
+/// changes the object afterwards changes nothing, and a malformed scope
+/// rejects the prepare, keeping nothing to commit.
+#[wasm_bindgen_test(async)]
+async fn a_prepared_hydrate_keeps_the_scope_it_was_given() {
+    const SCOPE: &str = "cache-wasm-prepared-hydrate-scope";
+    let scoped = |engine: &CacheEngine, scope: &JsValue| {
+        engine.prepare_hydrate(
+            SOUP_BACKFILL_WITH_PROJECTION_QUERY.into(),
+            Some("SoupBackfill".into()),
+            backfill_variables(),
+            backfill_page(),
+            Some("user-1".into()),
+            scope.clone(),
+        )
+    };
+    let scope_of = |generation: String| {
+        js(serde_json::json!({ "storageGeneration": generation, "identity": "user-1" }))
+    };
+    let engine = fresh_engine(SCOPE).await;
+    let generation: String = from_js(resolved(engine.current_storage_generation()).await);
+    let whole: serde_json::Value = from_js(
+        resolved(engine.hydrate_query(
+            SOUP_BACKFILL_WITH_PROJECTION_QUERY.into(),
+            Some("SoupBackfill".into()),
+            backfill_variables(),
+            backfill_page(),
+            Some("user-1".into()),
+            scope_of(generation),
+        ))
+        .await,
+    );
+    let whole_state = hydrated_state(&engine).await;
+    close_and_destroy(&engine, SCOPE).await;
+
+    let engine = fresh_engine(SCOPE).await;
+    let generation: String = from_js(resolved(engine.current_storage_generation()).await);
+    let scope = scope_of(generation);
+    resolved(scoped(&engine, &scope)).await;
+    js_sys::Reflect::set(&scope, &"storageGeneration".into(), &"not a uuid".into()).unwrap();
+    while from_js::<bool>(resolved(engine.step_hydrate()).await) {}
+    let split: serde_json::Value = from_js(resolved(engine.commit_hydrate()).await);
+    assert_eq!(split, whole);
+    assert_eq!(hydrated_state(&engine).await, whole_state);
+
+    JsFuture::from(scoped(&engine, &scope))
+        .await
+        .expect_err("a malformed scope rejects the prepare");
+    assert!(engine.state.lock().await.prepared_hydrate.is_none());
+    close_and_destroy(&engine, SCOPE).await;
+}
+
 /// A hydrate stepped one projection pass at a time lets reads run after
 /// each, sees no change from them, and commits what the whole hydrate
 /// commits, staged or not.
