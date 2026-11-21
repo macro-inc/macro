@@ -237,6 +237,9 @@ describe('workListOf', () => {
     const text = JSON.stringify(linked).replace('mill.example and', `${element('https://mill.example', 'mill.example')} and`).replace('https://mill.example/po', element('https://mill.example/po', 'https://mill.example/po'));
     const row = { direction: 'to_runtime', created_at: '2026-11-20 10:00:00+00', content: { type: 'acp', method: 'session/prompt', params: { prompt: [{ type: 'text', text: briefOf(linked).replace(JSON.stringify(linked), text) }] } } };
     expect(workListOf([row])).toEqual(linked);
+    // A URL linked to another target is a link, the target kept whole.
+    expect(unlinkMarkdown(element('https://example.com/incoming/', 'https://example.com/incoming'))).toBe('[https://example.com/incoming](https://example.com/incoming/)');
+    expect(unlinkMarkdown(element('https://example.com/incoming', 'https://example.com/incoming'))).toBe('https://example.com/incoming');
     // An element that isn't one stays as it was.
     expect(unlinkMarkdown('<m-link>{not json}</m-link>')).toBe('<m-link>{not json}</m-link>');
     // One written as a link, its text not its target, stays the Markdown link it was written as.
@@ -583,6 +586,11 @@ describe('the finding score of a run', () => {
     expect(none).not.toContain('entries naming none');
     const two = lines([{ ...run, attempts: [heldout('p1', { finding: list }), heldout('p2', { finding: list })] }]).join('\n');
     expect(two).toContain('named 100%');
+    // A list read before its build failed was judged as read: beside another, the two show.
+    const failed = (persona: string) => heldout(persona, { generation: { ...generation([]), status: 'generating', buildFailed: true }, score: failedScore(3), finding: list });
+    const timedOut = lines([{ ...run, attempts: [heldout('p1', { finding: list }), heldout('p2', { finding: unread }), failed('p3')] }]).join('\n');
+    expect(timedOut).toContain('work lists read in 2 of 3 generations');
+    expect(timedOut).not.toContain('fewer than 2');
   });
 
   test('shows a held-out time or quality only over two people who have one', () => {

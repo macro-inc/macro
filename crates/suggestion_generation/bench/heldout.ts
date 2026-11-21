@@ -38,12 +38,6 @@ export function fixKeys(set: string, keys: Record<string, string>, dir = HELDOUT
   withLock(`${path}.lock`, waitMs, () => fixKeysHeld(set, keys, path));
 }
 
-/** The answer key digests of held-out set `set` fixed so far, by person. */
-export function fixedKeys(set: string, dir = HELDOUT_DIR): Record<string, string> {
-  const path = join(dir, set, 'keys.json');
-  return existsSync(path) ? (JSON.parse(readFileSync(path, 'utf8')) as { keys: Record<string, string> }).keys : {};
-}
-
 /**
  * Run `then` holding the lock file `lock`, waiting up to `waitMs` for
  * another holder. A holder removes it when done, a failure too; only a

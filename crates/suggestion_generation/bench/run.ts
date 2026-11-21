@@ -264,8 +264,10 @@ export function unlinkMarkdown(text: string): string {
       try {
         const link = JSON.parse(body) as { url?: unknown; text?: unknown };
         if (typeof link.text !== 'string' || typeof link.url !== 'string') return element;
-        const spelled = [link.text, `https://${link.text}`, `http://${link.text}`, `mailto:${link.text}`];
-        return spelled.some((target) => link.url === target || link.url === `${target}/`) ? link.text : `[${link.text}](${link.url})`;
+        // A text with a scheme of its own is a URL, linked as written; any other is an address or a domain.
+        const t = link.text;
+        const spelled = /^[a-z][a-z0-9+.-]*:/i.test(t) ? [t] : [t, `https://${t}`, `https://${t}/`, `http://${t}`, `http://${t}/`, `mailto:${t}`];
+        return spelled.includes(link.url) ? t : `[${t}](${link.url})`;
       } catch {
         return element;
       }

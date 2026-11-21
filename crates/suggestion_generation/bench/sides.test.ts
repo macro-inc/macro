@@ -6,7 +6,7 @@ import { fixKeys, unnamed } from './heldout';
 import { type Persona, keyDigest, unnamedPersona, who } from './personas';
 import type { Generation } from './run';
 import type { Attempt, RunFile } from './score';
-import { comparable, joinRuns, sameBuild, staleKeys } from './sides';
+import { comparable, joinRuns, sameBuild, staleKeys, unrecordedKeys } from './sides';
 
 const attempt = (persona: string, rep: number, heldout = false): Attempt => ({
   section: 'routines',
@@ -59,7 +59,7 @@ describe('one side of a comparison', () => {
 
   test('refuses runs scored against different answer keys, or one without them', () => {
     expect(() => joinRuns('a,b', [run(), run({ keys: { ana: 'changed', bo: 'kb' } })])).toThrow("different answer keys for ana");
-    expect(() => joinRuns('a,b', [run(), run({ keys: undefined })])).toThrow('rescore it');
+    expect(() => joinRuns('a,b', [run(), run({ keys: undefined })])).toThrow('rejudge it');
   });
 
   test('never names a held-out person', () => {
@@ -159,6 +159,13 @@ describe('a rescore', () => {
 
   test('refuses marks judged against other keys than the ones it would score against', () => {
     expect(staleKeys(run({ keys: { ana: 'ka', bo: 'kb' } }), [persona('ana'), persona('bo')], { ana: 'ka', bo: 'changed' })).toBe(1);
+  });
+
+  test('never judges again a held-out run that recorded no keys for its people', () => {
+    const held = (name: string) => ({ name, heldout: true }) as Persona;
+    expect(unrecordedKeys(run({ keys: undefined }), [held('ana'), persona('bo')])).toBe(1);
+    expect(unrecordedKeys(run({ keys: { ana: 'ka' } }), [held('ana'), held('bo')])).toBe(1);
+    expect(unrecordedKeys(run({ keys: { ana: 'ka', bo: 'kb' } }), [held('ana'), held('bo')])).toBe(0);
   });
 
   test("refuses a run that can't show which keys its marks were judged against", () => {

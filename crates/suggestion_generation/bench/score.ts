@@ -301,8 +301,10 @@ export function summary(attempts: Attempt[]) {
   const last = over((a) => a.generation.lastMs);
   const qualities = over((a) => a.score.quality);
   const lists = done.flatMap((a) => (a.finding ? [a.finding] : []));
-  // A list the session never read scores as an empty one, so it can't make another person's list an aggregate.
-  const listsShown = aggregate(done.filter((a) => a.finding && !a.finding.unread), attempts);
+  // A list the session never read scores as an empty one, so it can't make another person's list an
+  // aggregate; one read before its build failed was judged as read, and counts its person.
+  const listPeople = new Set(done.filter((a) => a.heldout && a.finding && !a.finding.unread).map((a) => a.persona)).size;
+  const listsShown = !attempts.some((a) => a.heldout) || listPeople >= MIN_HELDOUT_PEOPLE;
   const rated = done.filter((a) => a.score.feedRating !== undefined);
   const listErrors = done.filter((a) => a.findingError).length;
   const jobbed = done.filter((a) => a.score.jobDrafts !== undefined);
@@ -364,7 +366,7 @@ export function summary(attempts: Attempt[]) {
             found: total((list) => list.found) / Math.max(1, total((list) => list.work)),
             unreal: total((list) => list.unreal) / lists.length,
             listed: total((list) => list.listed) / lists.length,
-          } : { withheld: new Set(done.filter((a) => a.heldout && a.finding && !a.finding.unread).map((a) => a.persona)).size, errors: listErrors },
+          } : { withheld: listPeople, errors: listErrors },
         }
       : {}),
     firstMedianMs: quantile(first, 0.5),

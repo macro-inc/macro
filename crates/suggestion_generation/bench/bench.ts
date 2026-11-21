@@ -8,7 +8,7 @@ import { parseArgs } from 'node:util';
 
 import { type Stack, call, exclusive, login, sdk, searchIndexer, stack } from '../../scheduled_action/bench/stack';
 import { keyGaps } from './catalog';
-import { fixedKeys, fixKeys, makeHeldout, spend, spent } from './heldout';
+import { fixKeys, makeHeldout, spend, spent } from './heldout';
 import { NO_LIST, judgeList, marksProblem, runFinding, scoreWorkList } from './finding';
 import { JUDGE, asGrader, judgeCost, judgeFeed, judgeJobs, judgeRoutines, seedGraders } from './judge';
 import { seedId } from '../../scheduled_action/bench/setup';
@@ -18,7 +18,7 @@ import { UNJUDGED, type Waiting, judgeWaiting } from './judging';
 import { lines as reportLines, withheld, withheldAcross } from './report';
 import { CACHE, type Trigger, generate, prepare, rereadList } from './run';
 import { type Attempt, type RunFile, type Score, type Section, MIN_HELDOUT_PEOPLE, PARTS, contrast, failedScore, marginsOf, noiseMargins, scoreFeed, scoreRoutines, shareEnough, summary, unreadList, verdict, wholeCount } from './score';
-import { comparable, joinRuns, sameBuild, staleKeys } from './sides';
+import { comparable, joinRuns, sameBuild, staleKeys, unrecordedKeys } from './sides';
 import { startStub, stopStub, stubDir, writeFlags } from './stub';
 
 type SectionSpec = {
@@ -397,12 +397,11 @@ async function rejudge(path: string, values: Record<string, string | undefined>)
     const gaps = judged.flatMap((persona) => (persona.routinesTruth ? keyGaps(persona.routinesTruth) : ['is missing']).map((gap) => `${who(persona)}'s routines answer key ${gap}`));
     if (gaps.length) throw new Error(gaps.join('\n'));
   }
-  // A held-out person's keys are fixed before any build runs on them: a run that recorded none,
-  // of a person whose keys were never fixed, may have run before a change to them.
+  // A held-out person's keys hold from before any build runs on them. A run that recorded none
+  // may have run on keys changed since, whenever they were fixed: it isn't judged again.
   if (run.set !== 'tune') {
-    const fixed = fixedKeys(run.set);
-    const unknown = judged.filter((persona) => persona.heldout && !run.keys?.[persona.name] && !Object.hasOwn(fixed, persona.name)).length;
-    if (unknown) throw new Error(`${path}: ${unknown} held-out people of this run were scored before their answer keys were recorded or fixed, so whether a key changed after their builds ran is unknown: it isn't judged again`);
+    const unknown = unrecordedKeys(run, judged);
+    if (unknown) throw new Error(`${path}: ${unknown} held-out people of this run were scored before their answer keys were recorded, so whether a key changed after their builds ran is unknown: it isn't judged again`);
   }
   const keys = keysNow(run, judged);
   const findsWork = !!run.flags?.[FIND_WORK_FLAG];

@@ -117,9 +117,8 @@ against different keys, or one without the digest: `rejudge` the older one,
 which records the keys it judges against. A judge's marks name the key's
 entries by id, so `rescore` keeps them only for the keys the run recorded,
 as they are now; a run with other keys, or none recorded, is rejudged. A
-held-out run that recorded no keys, of people whose keys were never fixed
-(below), isn't judged again: whether a key changed after its builds ran is
-unknown. `noise` measures one build against itself, so it
+held-out run that recorded no keys isn't judged again: whether a key changed
+after its builds ran is unknown. `noise` measures one build against itself, so it
 also refuses two runs of different or unrecorded commits, or with different
 or unrecorded flags, and a side is one build: its runs share a known commit
 and flags.
@@ -255,7 +254,8 @@ people's keys changed but not whose. Nothing the bench prints names a
 held-out person: their slugs, names and domains are left out of its errors and
 progress lines, and a measure (the stream jobs one too) shows only over two
 held-out people or more, each with a generation that built: a failed build
-is a known 0 that says nothing of its person.
+is a known 0 that says nothing of its person (a work list it read before
+failing was judged as read, and counts).
 
 ### A month of mail
 

@@ -51,8 +51,8 @@ export function joinRuns(arg: string, runs: RunFile[]): RunFile {
       if ((personas.get(name) ?? digest) !== digest) throw new Error(`${arg} joins runs that read ${named(runs, name)}'s workspace or mail differently`);
       personas.set(name, digest);
       const key = keyOf(run, name);
-      if (!key) throw new Error(`${arg} joins a run with no digest of ${named(runs, name)}'s answer keys: rescore it to record the keys it is scored against`);
-      if ((keys.get(name) ?? key) !== key) throw new Error(`${arg} joins runs scored against different answer keys for ${named(runs, name)}: rescore the older one`);
+      if (!key) throw new Error(`${arg} joins a run with no digest of ${named(runs, name)}'s answer keys: rejudge it to record the keys it is scored against`);
+      if ((keys.get(name) ?? key) !== key) throw new Error(`${arg} joins runs scored against different answer keys for ${named(runs, name)}: rejudge the older one`);
       keys.set(name, key);
     }
   }
@@ -108,6 +108,15 @@ export function sameBuild(a: RunFile, b: RunFile) {
  * are now (`keys`). A run from before keys were recorded can't show which
  * keys its marks were judged against, so it is rejudged.
  */
+/**
+ * How many held-out people of `run` it recorded no answer keys for. Such a
+ * run may have run on keys changed since, whenever they were fixed, so it
+ * isn't judged again.
+ */
+export function unrecordedKeys(run: RunFile, people: Persona[]): number {
+  return people.filter((persona) => persona.heldout && !run.keys?.[persona.name]).length;
+}
+
 export function staleKeys(run: RunFile, people: Persona[], keys: Record<string, string>): number {
   return people.filter((persona) => run.keys?.[persona.name] !== keys[persona.name]).length;
 }
