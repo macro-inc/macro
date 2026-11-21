@@ -1,10 +1,11 @@
+import { responseGeneration } from '@graphql-cache/exchange/session-exchange';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import type { Client } from '@urql/core';
 import { pipe, subscribe } from 'wonka';
 
 export type AttentionFeedUpdatesHandlers<Patch> = {
   /** One server batch, to apply together. */
-  patches: (patches: readonly Patch[]) => void;
+  patches: (patches: readonly Patch[], generation: string) => void;
   /** The stream errored or ended: changes may be missed until resubscribed. */
   interrupted: () => void;
 };
@@ -45,7 +46,7 @@ export function subscribeToAttentionFeedUpdates<
       }
       const patches = result.data ? updates.patches(result.data) : undefined;
       if (!patches || patches.length === 0) return;
-      handlers.patches(patches);
+      handlers.patches(patches, responseGeneration(result));
     })
   );
   return () => {

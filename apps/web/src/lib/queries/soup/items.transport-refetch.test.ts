@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const testState = vi.hoisted(() => ({
   restPending: false,
   restNextPageError: false,
+  restPlaceholder: false,
+  restData: undefined as SoupAstItemsData | undefined,
 }));
 const restRefetch = vi.hoisted(() => vi.fn(async () => undefined));
 const fetchSoup = vi.hoisted(() => vi.fn());
@@ -23,6 +25,7 @@ function makeGraphqlQuery(enabled: boolean) {
     isFetchNextPageError: vi.fn(() => false),
     isPlaceholderData: vi.fn(() => false),
     hasNextPage: vi.fn(() => false),
+    hasPageData: vi.fn(() => false),
     fetchNextPage: vi.fn(async () => undefined),
     resetToInitialPage: vi.fn(),
     refresh: vi.fn(async () => undefined),
@@ -62,14 +65,18 @@ vi.mock('@service-storage/client', () => ({
 vi.mock('@tanstack/solid-query', () => ({
   infiniteQueryOptions: vi.fn((options: unknown) => options),
   useInfiniteQuery: vi.fn(() => ({
-    data: undefined,
+    get data() {
+      return testState.restData;
+    },
     error: null,
     get isPending() {
       return testState.restPending;
     },
     isLoading: false,
     isFetching: false,
-    isPlaceholderData: false,
+    get isPlaceholderData() {
+      return testState.restPlaceholder;
+    },
     isFetchingNextPage: false,
     get isFetchNextPageError() {
       return testState.restNextPageError;
@@ -131,6 +138,8 @@ describe('Soup refetch transport selection', () => {
   beforeEach(() => {
     testState.restPending = false;
     testState.restNextPageError = false;
+    testState.restPlaceholder = false;
+    testState.restData = undefined;
     vi.clearAllMocks();
   });
 
@@ -144,6 +153,15 @@ describe('Soup refetch transport selection', () => {
     const query = mountGroupedQuery(false, 'rest');
     expect(query.isLoading).toBe(false);
     expect(query.isPending).toBe(true);
+  });
+
+  it('does not treat REST placeholder data as a resolved current page', () => {
+    testState.restData = { entities: [], groups: undefined };
+    testState.restPlaceholder = true;
+    const query = mountGroupedQuery(false, 'rest');
+    expect(query.hasPageData).toBe(false);
+    testState.restPlaceholder = false;
+    expect(query.hasPageData).toBe(true);
   });
 
   it('reports continuation-page failures from the selected transport', () => {

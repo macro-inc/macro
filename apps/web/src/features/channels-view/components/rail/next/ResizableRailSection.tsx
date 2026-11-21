@@ -1,4 +1,5 @@
 import { createPointerAutoScroll } from '@app/components/drag-drop/create-pointer-auto-scroll';
+import { SectionDropIndicator } from '@app/components/view-shell/SectionDropIndicator';
 import { t } from '@app/lib/i18n';
 import { useUserId } from '@core/context/user';
 import { createElementSize } from '@solid-primitives/resize-observer';
@@ -150,17 +151,7 @@ export function ResizableRailSection(props: {
           class="pointer-events-none absolute inset-y-0 -left-(--sidebar-gutter) right-0 -z-10 rounded-lg bg-surface ring-1 ring-edge-muted"
         />
       </Show>
-      <Show when={props.dropEdge}>
-        {(edge) => (
-          <div
-            class="pointer-events-none absolute inset-x-0 z-10 h-0.5 rounded-full bg-accent"
-            classList={{
-              'top-0': edge() === 'top',
-              'bottom-0': edge() === 'bottom',
-            }}
-          />
-        )}
-      </Show>
+      <SectionDropIndicator edge={props.dropEdge} />
       {props.header}
       <Show when={props.open || props.showCollapsedRows}>
         <div

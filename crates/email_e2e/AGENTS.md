@@ -44,7 +44,8 @@ scenarios.
   through `OVERRIDE_TYPESAFE_API_URL`; the agent harness route that reads
   a thread's due date, through `OVERRIDE_AGENT_HARNESS_SERVICE_URL`; and
   PostHog's flag definitions, through `POSTHOG_HOST`, from which it reads
-  whether an inbox's owner has the `enable-email-focus` flag. Its
+  whether an inbox's owner, or a user it is linked to, has the
+  `enable-email-focus` flag. Its
   pushes go to the connection gateway stand-in like every other service's.
 - Scenarios run in parallel and share nothing but the servers (Postgres,
   Redis, SQS, Kafka, and OpenSearch for search).
@@ -96,7 +97,7 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
   enqueues on `sfs-delete`), `stack.notify_of_mail_feedback(&notification)`
   (`email_suppression_handler`, one bounce or complaint) and
   `stack.run_refresh()` (`email_refresh_handler`, the hourly link
-  maintenance: a `HealthCheck` on `link-manager` for every syncing Gmail inbox, and
+  maintenance: a `HealthCheck` on `link-maintenance` for every syncing Gmail inbox, and
   a `Refresh` for those whose hour it is, which a scenario cannot count
   on). See `tests/maintenance.rs`. Work of the other crons is enqueued by the
   scenario: `stack.send_to_queue("link-manager" | "sfs-delete", …)`, and on a
@@ -158,13 +159,13 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
   as due, and `times_asked_about(text)` tells whether mail reached the
   model at all; `stack.focus_worker_log()` is what the worker logged. The questions and their order are the product's: the
   stand-in answers yes only to the first, "would the owner want this in
-  Focus". The worker classifies an inbox only while its owner has the
-  Focus flag: every owner has it unless the scenario turns it off with
+  Focus". The worker classifies an inbox only while its owner, or a user it
+  is linked to, has the Focus flag: every user has it unless the scenario turns it off with
   `turn_off_focus_flag_for(address)` before linking any inbox, since the
   worker reads the flag on its first look at the inboxes and again only
   five minutes later. `stack.focus_skipped_without_flag(thread_id)`
   tells that the worker is done with a thread and left it unclassified
-  because its owner does not have the flag; it reads a debug line the
+  because nobody whose tab shows it has the flag; it reads a debug line the
   stack's `RUST_LOG` for the worker turns on, so a scenario that sets
   its own `RUST_LOG` loses it. Classifying follows
   the sync, so wait for the list or the thread's `focus`. Keep these
@@ -432,7 +433,8 @@ shared with the web app's suite) and backend entry points second.
   gives the group an offset before its first worker starts, so mail that
   arrives while a worker joins is still read. The worker's later sweeps
   are an hour apart and no scenario sees one, but it looks at every linked
-  inbox once a minute and backfills those whose owner has the flag, so a
+  inbox once a minute and backfills those whose owner, or a user they are
+  linked to, has the flag, so a
   scenario longer than a minute may see a thread classified by that too.
   Events of other scenarios name threads that are not in this scenario's
   database and are passed over.

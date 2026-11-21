@@ -73,7 +73,7 @@ impl FolderReimportRepository for PgMailboxSync {
         revision: i16,
         last_phase: bool,
     ) -> Result<Option<u64>, MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         // The link lock orders this after catalog commits and page commits, as
         // resync is.
         let current = sqlx::query_scalar!(r#"

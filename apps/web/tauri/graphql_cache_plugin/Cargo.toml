@@ -13,8 +13,10 @@ serde_json = "1"
 tauri = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }
+uuid = { workspace = true, features = ["serde"] }
 
 [dev-dependencies]
 pollster = { workspace = true }
+tauri = { workspace = true, features = ["test"] }
 tempfile = "3"
 soup-filter-projection = { path = "../../../../crates/soup_filter_projection", default-features = false }

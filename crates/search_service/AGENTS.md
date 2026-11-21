@@ -33,7 +33,8 @@ per-entity-type search plus a unified search across them — mounted into
 
 - Depends on: `opensearch_client`, `models_opensearch`, `macro_db_client`,
   `entity_access`, `properties`, `crm`, `item_filters`, `calendar_events`
-  (domain only, no features, for its Macro call rule and label port).
+  (domain only, no features, for its Macro call rule and label port),
+  `rate_limit` (its token bucket, for the API-key search allowance).
 - Used by: `document_storage_service` (mounts `search_router`); called
   through `search_service_client`.
 
@@ -58,6 +59,56 @@ per-entity-type search plus a unified search across them — mounted into
   (`term_len`, `search.terms`, `search.search_on`). The unified
   search span is built by `simple_unified::unified_search_span`, which a test
   reads back; add a field there, not by instrumenting the request.
+- A unified search (`/search`, `/search/simple`, on both DSS mounts) waits
+  for its caller's turn in `domain::search_lanes` after the request's own
+  checks (query, paging, cursor, terms, sessions, email filters; ids a source
+  parses when it runs, such as channel and CRM company ids, are checked in the
+  turn) and before it reads anything: per process, three searches in
+  flight for the person's app session (the mention menu sends three one-type
+  searches per term) and two for every other caller, the rest waiting in
+  arrival order, and one still waiting after
+  20 s answered 429 (`SearchError::Busy`, `Retry-After`). OpenSearch has few
+  search threads per node, and one caller's burst of heavy searches filled
+  them for everyone. The caller (`api::search::caller::search_caller`) is the
+  user plus who acts: a signed agent (one lane across all its sessions for
+  that user) or routine, else the credential's kind: the app session, a
+  service searching for them (`Internal`: the AI tools, an agent's native
+  search tools, routine drafting), or an API credential. So a person's app
+  searches never wait behind a program's or a service's. The turn covers the
+  CRM membership read (so a receipt is never older than its search) and the
+  Postgres and OpenSearch search, not enrichment; the span records
+  `search.lane`, `search.lane_wait_ms` and `search.lane_outcome`
+  (`immediate`, `queued`, `refused`). Lanes are per process, so a caller's
+  bound grows with the replica count; DSS builds one `SearchLanes` for both
+  mounts. The internal mount runs under `connection_drop_prevention_handler`,
+  so a service search whose caller gave up keeps its place in the service's
+  lane and runs to the end.
+- Before its turn, a unified search sent with a user API key
+  (`CredentialOrigin::UserApiKey`, `search.caller = user_api_key`) draws on
+  its account's search allowance (`domain::search_allowance`): one token
+  bucket per account in Redis, shared by all its keys and every process, of
+  200 searches that refills one a second. An empty bucket answers 429
+  (`SearchError::RateLimited`, `Retry-After` in whole seconds) without
+  waiting in the lane. The lanes bound searches in flight per process; the
+  bucket bounds the rate across processes, which lanes cannot. It is a safety
+  net, sized from production traces so today's busiest keys, which search in
+  batches that a fixed 60-a-minute window would refuse, never reach it;
+  measure before tightening it. A bucket that errors or does not answer
+  within 500 ms lets the search run. A limited search is not logged as an
+  error. The span records `search.rate_limit` (`allowed`, `limited`,
+  `unavailable`), `search.rate_limit_remaining` (searches the account may
+  still send at once) and `search.rate_limit_wait_ms`. App sessions,
+  agents, routines, services, Macro API tokens and account-manager
+  credentials never draw on it, and neither does `/search/channel`, which
+  takes no lane turn either.
+- Search never returns an item in the Trash. The documents and chats indexes
+  keep trashed items until a purge (projects leave the index on trash).
+  Enrichment drops a document, chat or project hit whose row has `deletedAt`,
+  as it drops a hit whose row is gone, so the SDK, the API, the AI tools and
+  the web app get the same results. The web mapper still checks
+  `metadata.deleted_at`: saved AI chats render their stored search results
+  through it, and older ones hold trashed hits. `/search/simple` returns hits
+  unenriched and is not covered.
 - A query is valid from one character (`terms::trimmed_query` rejects only a
   blank or quotes-only one). Short queries stay bounded in the query builders, not here: a
   term under three characters matches as a whole word in document, chat, call

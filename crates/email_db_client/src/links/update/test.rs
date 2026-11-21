@@ -82,3 +82,88 @@ async fn set_needs_reauth_on_missing_link_is_not_a_transition(
     assert!(!set_link_needs_reauth(&pool, missing).await?);
     Ok(())
 }
+
+/// Holds the link the way a CRM contact population does for its whole
+/// transaction.
+async fn share_lock(
+    pool: &Pool<Postgres>,
+    id: Uuid,
+) -> anyhow::Result<sqlx::Transaction<'static, Postgres>> {
+    let mut population = pool.begin().await?;
+    sqlx::query!("SELECT id FROM email_links WHERE id = $1 FOR SHARE", id)
+        .fetch_one(&mut *population)
+        .await?;
+    Ok(population)
+}
+
+fn is_lock_timeout(error: &anyhow::Error) -> bool {
+    error
+        .downcast_ref::<sqlx::Error>()
+        .and_then(|error| error.as_database_error())
+        .and_then(|error| error.code())
+        .is_some_and(|code| code == "55P03")
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_reauth_mark_behind_a_population_gives_up_and_the_next_one_notifies_once(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let id = insert_test_link(&pool, "busy@reauth.test").await?;
+
+    let population = share_lock(&pool, id).await?;
+    let blocked = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        set_link_needs_reauth(&pool, id),
+    )
+    .await
+    .expect("the mark waited past its lock timeout");
+    assert!(
+        matches!(&blocked, Err(error) if is_lock_timeout(error)),
+        "{blocked:?}"
+    );
+    let link = fetch_link_by_id(&pool, id).await?.expect("link exists");
+    assert!(!link.needs_reauth);
+    population.rollback().await?;
+
+    // The next failed fetch marks the link and reports the transition that
+    // fans out the notification; a repeat reports none.
+    assert!(set_link_needs_reauth(&pool, id).await?);
+    assert!(!set_link_needs_reauth(&pool, id).await?);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_reauth_clear_behind_a_population_gives_up_and_the_next_one_clears(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let id = insert_test_link(&pool, "busy-clear@reauth.test").await?;
+    set_link_needs_reauth(&pool, id).await?;
+
+    let population = share_lock(&pool, id).await?;
+    let blocked = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        clear_link_needs_reauth(&pool, id),
+    )
+    .await
+    .expect("the clear waited past its lock timeout");
+    assert!(
+        matches!(&blocked, Err(error) if is_lock_timeout(error)),
+        "{blocked:?}"
+    );
+    assert!(
+        fetch_link_by_id(&pool, id)
+            .await?
+            .expect("link exists")
+            .needs_reauth
+    );
+    population.rollback().await?;
+
+    clear_link_needs_reauth(&pool, id).await?;
+    assert!(
+        !fetch_link_by_id(&pool, id)
+            .await?
+            .expect("link exists")
+            .needs_reauth
+    );
+    Ok(())
+}

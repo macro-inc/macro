@@ -10,6 +10,74 @@ use uuid::Uuid;
 
 const OWNER: &str = "macro|owner@example.com";
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn concurrent_population_scans_leave_the_mailbox_available_to_writers(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    for count in [1, 4] {
+        let team = Uuid::now_v7();
+        let address = format!("owner{count}@example.com");
+        let owner = format!("macro|{address}");
+        seed_team(&pool, team, &owner).await?;
+        enable_crm_for_team(&pool, team).await?;
+        let link = insert_email_link(&pool, &owner, &address).await?;
+        consent_to_mailbox(&pool, team, link).await?;
+        let now = Utc::now();
+        let mut parked = Vec::new();
+        let mut gates = Vec::new();
+        for index in 0..count {
+            let email = format!("contact{index}@example.com");
+            insert_interaction(&pool, link, &email, now, true).await?;
+            let gate = std::sync::Arc::new(super::ContactWriteGate::default());
+            let mut repo = CompaniesRepositoryImpl::new(pool.clone());
+            repo.after_eligible_scan = Some(gate.clone());
+            parked.push(tokio::spawn(async move {
+                repo.populate_contact(&team, &link, "example.com", &email, None, now, now, true)
+                    .await
+            }));
+            gates.push(gate);
+        }
+        for gate in &gates {
+            tokio::time::timeout(Duration::from_secs(10), gate.entered.notified()).await?;
+        }
+
+        // The scan has completed, but no population has started writing. Both
+        // the old exclusive sync guard and the shared sync guard must fit here.
+        let mut writer = pool.begin().await?;
+        let exclusive = sqlx::query!(
+            "SELECT id FROM email_links WHERE id = $1 FOR UPDATE NOWAIT",
+            link
+        )
+        .fetch_one(&mut *writer)
+        .await;
+        writer.rollback().await?;
+        let mut writer = pool.begin().await?;
+        let shared = sqlx::query!(
+            "SELECT id FROM email_links WHERE id = $1 FOR SHARE NOWAIT",
+            link
+        )
+        .fetch_one(&mut *writer)
+        .await;
+        writer.rollback().await?;
+
+        for gate in gates {
+            gate.resume.notify_one();
+        }
+        for population in parked {
+            tokio::time::timeout(Duration::from_secs(10), population).await???;
+        }
+        assert!(
+            exclusive.is_ok(),
+            "{count} populations blocked an exclusive writer: {exclusive:?}"
+        );
+        assert!(
+            shared.is_ok(),
+            "{count} populations blocked a shared writer: {shared:?}"
+        );
+    }
+    Ok(())
+}
+
 /// Whether another transaction holds the advisory lock on `key`.
 async fn advisory_lock_held(pool: &PgPool, key: &str) -> anyhow::Result<bool> {
     let mut tx = pool.begin().await?;

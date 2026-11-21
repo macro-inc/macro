@@ -97,6 +97,52 @@ export const planning = () =>
     endsAt: '2030-01-03T16:00:00Z',
   });
 
+/** An Outlook calendar the viewer writes, whose meetings are Teams meetings. */
+export const outlookCalendar = () => ({
+  id: 'calendar-1',
+  provider: 'outlook',
+  name: 'Calendar',
+  color: '#0078d4',
+  emailAddress: 'viewer@example.com',
+  emailLinkId: 'link-1',
+  isPrimary: true,
+  isSubscription: false,
+  isWritable: true,
+  defaultReminders: [],
+  capabilities: {
+    autoDecline: true,
+    emailReminders: false,
+    customRecurrence: false,
+    removeConference: false,
+    resetRsvp: false,
+    guestPolicy: false,
+    conferenceProvider: 'microsoft_teams',
+  },
+});
+
+/** A Teams meeting with one guest, on Friday 4 January 2030, on `outlookCalendar`. */
+export const designReview = () => {
+  const item = organizedEvent({
+    id: 'event-design',
+    title: 'Design review',
+    startsAt: '2030-01-04T15:00:00Z',
+    endsAt: '2030-01-04T16:00:00Z',
+    calendarIds: ['calendar-1'],
+  });
+  item.event.conferenceUrl = 'https://teams.microsoft.com/l/meetup-join/abc';
+  item.event.conferenceProvider = 'microsoft_teams';
+  item.event.attendees = [
+    {
+      email: 'guest@example.com',
+      isOrganizer: false,
+      isOptional: false,
+      isSelf: false,
+      responseStatus: 'accepted',
+    },
+  ];
+  return item;
+};
+
 export interface CalendarServer {
   /** The events every occurrence read answers with. */
   events: WireItem[];
@@ -104,6 +150,8 @@ export interface CalendarServer {
   patches: { path: string; eventId: string; body: Record<string, unknown> }[];
   /** The path of every read of the viewer's calendar list. */
   calendarListReads: string[];
+  /** Every replacement the app prepared, and every one it confirmed or discarded. */
+  replacements: { action: string; body?: Record<string, unknown> }[];
   /**
    * Leaves occurrence reads unanswered from now on. Resolves `held` with the
    * first one, and `release` answers them all and later ones.
@@ -119,7 +167,7 @@ export interface CalendarServer {
  */
 export async function answerCalendar(
   page: Page,
-  initial: { events: WireItem[] }
+  initial: { events: WireItem[]; calendars?: unknown[] }
 ): Promise<CalendarServer> {
   await serveFromNode(page);
   let waiting: Route[] | undefined;
@@ -131,6 +179,7 @@ export async function answerCalendar(
     events: initial.events,
     patches: [],
     calendarListReads: [],
+    replacements: [],
     holdReads: () => {
       const routes: Route[] = [];
       waiting = routes;
@@ -155,7 +204,42 @@ export async function answerCalendar(
   });
   await page.route('**/calendar/calendars', (route) => {
     server.calendarListReads.push(new URL(route.request().url()).pathname);
-    return route.fulfill({ json: { calendars: [] } });
+    return route.fulfill({ json: { calendars: initial.calendars ?? [] } });
+  });
+  // A replacement previews the saved event with the request's changes over
+  // it, as the provider adapter freezes it, and completes on confirmation.
+  let replacement: Record<string, unknown> | undefined;
+  await page.route('**/calendar/events/*/replacement', (route) => {
+    const body = route.request().postDataJSON() as Record<string, unknown>;
+    server.replacements.push({ action: 'prepare', body });
+    const eventId = new URL(route.request().url()).pathname.split('/').at(-2);
+    const item = server.events.find((entry) => entry.event.id === eventId);
+    if (!item) return route.fulfill({ status: 404, json: {} });
+    const changes = (body.changes ?? {}) as Record<string, unknown>;
+    const attendees = changes.attendees ?? item.event.attendees;
+    replacement = {
+      operationId: 'replacement-1',
+      status: 'needs_confirmation',
+      title: changes.title ?? item.event.title,
+      time: changes.time ?? item.event.time,
+      attendeeCount: Array.isArray(attendees) ? attendees.length : 0,
+      isSeries: (item.event.recurrenceLines as string[]).length > 0,
+      removeConference: body.removeConference,
+      completedSteps: 0,
+      totalSteps: 2,
+    };
+    return route.fulfill({ json: replacement });
+  });
+  await page.route('**/calendar/replacements/*/confirm', (route) => {
+    server.replacements.push({ action: 'confirm' });
+    return route.fulfill({
+      json: { ...replacement, status: 'complete', completedSteps: 2 },
+    });
+  });
+  await page.route('**/calendar/replacements/*', (route) => {
+    if (route.request().method() !== 'DELETE') return route.fallback();
+    server.replacements.push({ action: 'discard' });
+    return route.fulfill({ status: 204, body: '' });
   });
   await page.route('**/calendar/events/*', (route) => {
     const request = route.request();

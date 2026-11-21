@@ -6,7 +6,7 @@ use super::*;
 use crate::domain::setup::SetupTimeline;
 
 /// A billed computer booting for the first time.
-fn setting_up() -> ComputerState {
+pub(super) fn setting_up() -> ComputerState {
     ComputerState {
         setup: Some(SetupTimeline {
             reserved_at: now() - Duration::minutes(5),
@@ -15,13 +15,15 @@ fn setting_up() -> ComputerState {
             booting_at: Some(now() - Duration::minutes(2)),
             connected_at: None,
             waited_for_capacity: false,
+            agent_delivered_at: None,
+            agent_online_at: None,
         }),
         ..billed(Phase::Booting)
     }
 }
 
 /// [`setting_up`], bought for an agent teammate that hasn't reported online.
-fn agent_setting_up() -> ComputerState {
+pub(super) fn agent_setting_up() -> ComputerState {
     ComputerState {
         awaiting_agent: true,
         ..setting_up()
@@ -29,7 +31,7 @@ fn agent_setting_up() -> ComputerState {
 }
 
 /// Apply `event` and latch setup milestones as the repository does.
-fn apply(state: &ComputerState, event: Event) -> (ComputerState, Vec<Effect>) {
+pub(super) fn apply(state: &ComputerState, event: Event) -> (ComputerState, Vec<Effect>) {
     let (mut next, effects) = transition(state, &event, context(true)).unwrap();
     let (phase, connected, waiting) = (
         next.phase.clone(),

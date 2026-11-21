@@ -135,5 +135,10 @@ impl EntityAppearance {
     }
 }
 
+/// The names `AppearanceIcon::Macro` may take: Macro's icon catalog, in order.
+pub fn macro_icon_names() -> &'static [&'static str] {
+    icons::ICON_NAMES
+}
+
 #[cfg(test)]
 mod test;
