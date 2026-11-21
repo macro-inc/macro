@@ -94,6 +94,10 @@ it('keeps native work open through two paint opportunities for long-task deliver
     frames.clear();
     for (const callback of callbacks) callback(time);
   }
+  expect(paste?.ends).toBe(0);
+  vi.advanceTimersByTime(149);
+  expect(paste?.ends).toBe(0);
+  vi.advanceTimersByTime(1);
   expect(paste?.ends).toBe(1);
   expect(paste?.attrs['editor.long_task.supported']).toBe(false);
   expect(paste?.attrs['editor.long_task.count']).toBeUndefined();
@@ -116,6 +120,10 @@ it('measures only ancestor scrolling and ends its frame loop after the quiet win
   owner.dispatchEvent(new Event('scroll'));
   vi.advanceTimersByTime(180);
   const scroll = spans.find((s) => s.name === 'editor.scroll');
+  expect(scroll?.ends).toBe(0);
+  vi.advanceTimersByTime(149);
+  expect(scroll?.ends).toBe(0);
+  vi.advanceTimersByTime(1);
   expect(scroll?.ends).toBe(1);
   expect(scroll?.attrs).toMatchObject({
     'document.id': 'fixture-document',
@@ -135,6 +143,10 @@ it('bounds continuous scroll windows and cancels the active span on dispose', ()
     vi.advanceTimersByTime(100);
   }
   expect(spans.filter((s) => s.name === 'editor.scroll')).toHaveLength(1);
+  expect(spans.find((s) => s.name === 'editor.scroll')?.ends).toBe(0);
+  vi.advanceTimersByTime(149);
+  expect(spans.find((s) => s.name === 'editor.scroll')?.ends).toBe(0);
+  vi.advanceTimersByTime(1);
   expect(spans.find((s) => s.name === 'editor.scroll')?.ends).toBe(1);
   owner.dispatchEvent(new Event('scroll'));
   dispose();

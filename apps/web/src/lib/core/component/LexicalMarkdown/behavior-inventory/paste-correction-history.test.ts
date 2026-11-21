@@ -1,21 +1,23 @@
 import {
-  $createParagraphNode,
   $getRoot,
   $getSelection,
   $isRangeSelection,
   CAN_UNDO_COMMAND,
   COMMAND_PRIORITY_CRITICAL,
-  HISTORY_MERGE_TAG,
-  HISTORY_PUSH_TAG,
+  HISTORIC_TAG,
   type LexicalEditor,
   PASTE_COMMAND,
   REDO_COMMAND,
   RootNode,
   type SerializedEditorState,
+  type SerializedParagraphNode,
   UNDO_COMMAND,
 } from 'lexical';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { documentMetadataPlugin } from '../plugins/document-metadata/documentMetadataPlugin';
+import {
+  documentMetadataPlugin,
+  LOAD_STATE_TAG,
+} from '../plugins/document-metadata/documentMetadataPlugin';
 import { createPluginManager } from '../plugins/pluginManager';
 import { MARKDOWN_VERSION_COUNTER } from '../version';
 import { behaviorEditor } from './editor';
@@ -44,43 +46,6 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-// Observe the actual queue without replacing callbacks or flushing editor
-// updates early. Each fence follows the callback's already scheduled Lexical
-// commit; descendants keep the causal correction chain outstanding.
-function queuedCorrections() {
-  const schedule = globalThis.queueMicrotask;
-  let complete: (() => void) | undefined;
-  const drained = new Promise<void>((resolve) => {
-    complete = resolve;
-  });
-  let outstanding = 0;
-  let scheduled = 0;
-  const observer = vi
-    .spyOn(globalThis, 'queueMicrotask')
-    .mockImplementation((callback) => {
-      outstanding += 1;
-      scheduled += 1;
-      schedule(() => {
-        try {
-          callback();
-        } finally {
-          schedule(() => {
-            outstanding -= 1;
-            if (outstanding === 0) {
-              if (!complete) throw new Error('Missing microtask completion');
-              complete();
-            }
-          });
-        }
-      });
-    });
-  return {
-    drained,
-    scheduled: () => scheduled,
-    restore: () => observer.mockRestore(),
-  };
-}
-
 function selection(editor: LexicalEditor) {
   return editor.getEditorState().read(() => {
     const value = $getSelection();
@@ -100,151 +65,210 @@ function selection(editor: LexicalEditor) {
   });
 }
 
-describe('actual OFF paste correction history', () => {
-  it('distinguishes the main paste from drained metadata corrections and restores one undo step through redo', async () => {
-    const commits: { state: SerializedEditorState; tags: string[] }[] = [];
-    const rootMutations: string[] = [];
-    let canUndo = false;
-    const { editor } = behaviorEditor((actual) => {
-      const plugins = createPluginManager(actual, 'markdown')
-        .history(400)
-        .richText();
-      actual.update(
-        () => $getRoot().append($createParagraphNode()).selectEnd(),
-        {
-          discrete: true,
-          tag: HISTORY_PUSH_TAG,
-        }
-      );
-      plugins.use(documentMetadataPlugin({}));
-      // Finish transform registration before the user paste. With no mutation
-      // observer yet, metadata remains at its actual untouched default.
-      actual.read(() => {});
-      // Real mutation collection is a prerequisite of this production policy.
-      plugins.use((current) =>
-        current.registerMutationListener(
-          RootNode,
-          (mutations) => {
-            rootMutations.push(...mutations.values());
-          },
-          { skipInitialization: true }
-        )
-      );
-      plugins.use((current) =>
-        current.registerUpdateListener(({ editorState, tags }) => {
-          commits.push({ state: editorState.toJSON(), tags: [...tags] });
-        })
-      );
-      plugins.use((current) =>
-        current.registerCommand(
-          CAN_UNDO_COMMAND,
-          (value) => {
-            canUndo = value;
-            return false;
-          },
-          COMMAND_PRIORITY_CRITICAL
-        )
-      );
-      return () => plugins.cleanup();
+function pasteEditor(stamped: boolean) {
+  const commits: { state: SerializedEditorState; tags: string[] }[] = [];
+  const rootMutations: string[] = [];
+  let canUndo = false;
+  const { editor } = behaviorEditor((actual) => {
+    const plugins = createPluginManager(actual, 'markdown')
+      .history(400)
+      .richText();
+    plugins.use(documentMetadataPlugin({}));
+    const paragraph: SerializedParagraphNode = {
+      children: [],
+      direction: null,
+      format: '',
+      indent: 0,
+      type: 'paragraph',
+      version: 1,
+      textFormat: 0,
+      textStyle: '',
+    };
+    actual.setEditorState(
+      actual.parseEditorState({
+        root: {
+          children: [paragraph],
+          direction: null,
+          format: '',
+          indent: 0,
+          type: 'root',
+          version: 1,
+          ...(stamped
+            ? { $: { documentMetadata: { version: MARKDOWN_VERSION_COUNTER } } }
+            : {}),
+        },
+      }),
+      { tag: LOAD_STATE_TAG }
+    );
+    // Only the document-changing load gets LOAD_STATE_TAG. Tagging this
+    // selection-only update would carry the tag into the user's next paste.
+    actual.update(() => $getRoot().getFirstChildOrThrow().selectEnd(), {
+      discrete: true,
     });
-    const before = editor.getEditorState().toJSON();
-    const beforeSelection = selection(editor);
-    const event = new ClipboardEvent('paste', { cancelable: true });
-    Object.defineProperty(event, 'clipboardData', {
-      value: {
-        getData: (type: string) => (type === 'text/plain' ? 'correct me' : ''),
-        types: ['text/plain'],
-        files: [],
-        items: [],
-      },
-    });
-    const corrections = queuedCorrections();
-    expect(editor.dispatchCommand(PASTE_COMMAND, event)).toBe(true);
-    editor.read(() => {});
-    const main = editor.getEditorState().toJSON();
-    expect(event.defaultPrevented).toBe(true);
-    expect(main).toEqual({
-      root: {
+    actual.read(() => {});
+    plugins.use((current) =>
+      current.registerMutationListener(
+        RootNode,
+        (mutations) => rootMutations.push(...mutations.values()),
+        { skipInitialization: true }
+      )
+    );
+    plugins.use((current) =>
+      current.registerUpdateListener(({ editorState, tags }) => {
+        commits.push({ state: editorState.toJSON(), tags: [...tags] });
+      })
+    );
+    plugins.use((current) =>
+      current.registerCommand(
+        CAN_UNDO_COMMAND,
+        (value) => {
+          canUndo = value;
+          return false;
+        },
+        COMMAND_PRIORITY_CRITICAL
+      )
+    );
+    return () => plugins.cleanup();
+  });
+  return { editor, commits, rootMutations, canUndo: () => canUndo };
+}
+
+function paste(editor: LexicalEditor) {
+  const event = new ClipboardEvent('paste', { cancelable: true });
+  Object.defineProperty(event, 'clipboardData', {
+    value: {
+      getData: (type: string) => (type === 'text/plain' ? 'correct me' : ''),
+      types: ['text/plain'],
+      files: [],
+      items: [],
+    },
+  });
+  expect(editor.dispatchCommand(PASTE_COMMAND, event)).toBe(true);
+  editor.read(() => {});
+  expect(event.defaultPrevented).toBe(true);
+}
+
+const pastedState = {
+  root: {
+    children: [
+      {
         children: [
           {
-            children: [
-              {
-                detail: 0,
-                format: 0,
-                mode: 'normal',
-                style: '',
-                text: 'correct me',
-                type: 'text',
-                version: 1,
-              },
-            ],
-            direction: null,
-            format: '',
-            indent: 0,
-            type: 'paragraph',
+            detail: 0,
+            format: 0,
+            mode: 'normal',
+            style: '',
+            text: 'correct me',
+            type: 'text',
             version: 1,
-            textFormat: 0,
-            textStyle: '',
           },
         ],
         direction: null,
         format: '',
         indent: 0,
-        type: 'root',
+        type: 'paragraph',
         version: 1,
+        textFormat: 0,
+        textStyle: '',
       },
-    });
-    expect(commits[0]?.state).toEqual(main);
-    expect(commits[0]?.tags).toContain('paste');
-    expect(commits[0]?.tags).not.toContain(HISTORY_MERGE_TAG);
-    expect(main.root.$).toEqual(before.root.$);
-    expect(corrections.scheduled()).toBeGreaterThan(0);
-    await corrections.drained;
-    corrections.restore();
-    const drained = editor.getEditorState().toJSON();
-    expect(drained).toEqual({
-      ...main,
+    ],
+    direction: null,
+    format: '',
+    indent: 0,
+    type: 'root',
+    version: 1,
+    $: { documentMetadata: { version: MARKDOWN_VERSION_COUNTER } },
+  },
+};
+
+describe('actual OFF paste correction history', () => {
+  it('keeps an already-stamped paste in one history step through undo and redo', () => {
+    const { editor, commits, rootMutations, canUndo } = pasteEditor(true);
+    // Source parses an existing metadata slot with absent environment tags
+    // as null; a newly authored stamp below contains only its version.
+    const pasted = {
+      ...pastedState,
       root: {
-        ...main.root,
+        ...pastedState.root,
         $: {
-          ...main.root.$,
-          documentMetadata: { version: MARKDOWN_VERSION_COUNTER },
+          documentMetadata: {
+            version: MARKDOWN_VERSION_COUNTER,
+            environmentTags: null,
+          },
         },
       },
-    });
-    expect(drained).not.toEqual(main);
-    expect(commits).toHaveLength(4);
-    expect(rootMutations).toHaveLength(3);
-    expect(
-      commits
-        .slice(1)
-        .every((commit) => commit.tags.includes(HISTORY_MERGE_TAG))
-    ).toBe(true);
-    expect(rootMutations).toContain('updated');
-    expect(editor.read(() => $getRoot().getTextContent())).toBe('correct me');
+    };
+    const before = editor.getEditorState().toJSON();
+    const beforeSelection = selection(editor);
+    const scheduled = vi.spyOn(globalThis, 'queueMicrotask');
+    paste(editor);
+    expect(editor.getEditorState().toJSON()).toEqual(pasted);
+    expect(commits).toEqual([{ state: pasted, tags: ['paste'] }]);
+    expect(rootMutations).toEqual([]);
+    expect(scheduled).not.toHaveBeenCalled();
     const atEnd = selection(editor);
     expect(atEnd.anchor).toEqual({ ...atEnd.focus, offset: 10, type: 'text' });
-    expect(atEnd.focus.offset).toBe(10);
-    expect(canUndo).toBe(true);
+    expect(canUndo()).toBe(true);
 
-    const undoCorrections = queuedCorrections();
     expect(editor.dispatchCommand(UNDO_COMMAND, undefined)).toBe(true);
     editor.read(() => {});
-    expect(undoCorrections.scheduled()).toBeGreaterThan(0);
-    await undoCorrections.drained;
-    undoCorrections.restore();
     expect(editor.getEditorState().toJSON()).toEqual(before);
     expect(selection(editor)).toEqual(beforeSelection);
-    expect(canUndo).toBe(false);
+    expect(canUndo()).toBe(false);
+    expect(commits).toHaveLength(3);
+    expect(rootMutations).toEqual(['updated']);
 
-    const redoCorrections = queuedCorrections();
     expect(editor.dispatchCommand(REDO_COMMAND, undefined)).toBe(true);
     editor.read(() => {});
-    expect(redoCorrections.scheduled()).toBeGreaterThan(0);
-    await redoCorrections.drained;
-    redoCorrections.restore();
-    expect(editor.getEditorState().toJSON()).toEqual(drained);
+    expect(editor.getEditorState().toJSON()).toEqual(pasted);
     expect(selection(editor)).toEqual(atEnd);
-    expect(canUndo).toBe(true);
+    expect(canUndo()).toBe(true);
+    expect(commits).toHaveLength(5);
+    expect(
+      commits.slice(1).every((commit) => commit.tags.includes(HISTORIC_TAG))
+    ).toBe(true);
+    expect(rootMutations).toEqual(['updated', 'updated']);
+  });
+
+  it('stamps a legacy root in the paste commit and undoes to its exact stored absence', () => {
+    const { editor, commits, rootMutations, canUndo } = pasteEditor(false);
+    const before = editor.getEditorState().toJSON();
+    const beforeSelection = selection(editor);
+    expect(before.root).not.toHaveProperty('$');
+    const scheduled = vi.spyOn(globalThis, 'queueMicrotask');
+    paste(editor);
+    expect(editor.getEditorState().toJSON()).toEqual(pastedState);
+    expect(commits).toEqual([{ state: pastedState, tags: ['paste'] }]);
+    expect(rootMutations).toEqual(['updated']);
+    expect(scheduled).not.toHaveBeenCalled();
+    expect(canUndo()).toBe(true);
+
+    expect(editor.dispatchCommand(UNDO_COMMAND, undefined)).toBe(true);
+    editor.read(() => {});
+    expect(editor.getEditorState().toJSON()).toEqual(before);
+    expect(selection(editor)).toEqual(beforeSelection);
+    expect(canUndo()).toBe(false);
+    expect(commits).toHaveLength(3);
+    expect(rootMutations).toEqual(['updated', 'updated']);
+  });
+
+  // Known Source snapshot-history failure (mac-wasm-rust.22):
+  // https://github.com/macro-inc/macro/pull/11792. Keep the real
+  // redo assertion until the separate producer fix lands and is integrated.
+  it.fails('restores the first legacy-root paste through redo (Source #11792)', () => {
+    const { editor } = pasteEditor(false);
+    const before = editor.getEditorState().toJSON();
+    expect(before.root).not.toHaveProperty('$');
+    paste(editor);
+    const atEnd = selection(editor);
+    expect(editor.getEditorState().toJSON()).toEqual(pastedState);
+    expect(editor.dispatchCommand(UNDO_COMMAND, undefined)).toBe(true);
+    editor.read(() => {});
+    expect(editor.getEditorState().toJSON()).toEqual(before);
+
+    expect(editor.dispatchCommand(REDO_COMMAND, undefined)).toBe(true);
+    editor.read(() => {});
+    expect(editor.getEditorState().toJSON()).toEqual(pastedState);
+    expect(selection(editor)).toEqual(atEnd);
   });
 });

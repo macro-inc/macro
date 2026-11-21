@@ -136,17 +136,16 @@ vi.mock('@app/features/routines/routine-mentions', () => ({
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track: vi.fn() }),
 }));
-// HostedMentionsMenu reads main's contact-search kill switch through
-// PostHog, which the app always provides; this fixture has no provider, so
-// the switch reads as off, its production default.
+// The shared menu reads both contact feature flags. This fixture keeps both
+// off and refuses flags outside those actual dependencies.
 vi.mock('@app/lib/analytics/posthog', async (importOriginal) => {
-  const { disableCrmContactSearch } = await import(
+  const { disableCrmContactSearch, enableContactLists } = await import(
     '@core/constant/featureFlags'
   );
   return {
     ...(await importOriginal<typeof import('@app/lib/analytics/posthog')>()),
     useFeatureFlag: (flag: unknown) => {
-      if (flag !== disableCrmContactSearch)
+      if (flag !== disableCrmContactSearch && flag !== enableContactLists)
         throw new Error('Unexpected PostHog flag in this fixture');
       return () => ({ enabled: false, loading: false });
     },

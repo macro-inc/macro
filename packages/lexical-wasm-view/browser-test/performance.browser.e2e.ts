@@ -47,7 +47,7 @@ test('real native paste, reconcile and scroll export sampled facade spans withou
   await page.mouse.wheel(0, 200);
   await page.evaluate(() => window.editorPerformance.flush());
   await page.evaluate(() => window.editorPerformance.stopScroll());
-  const result = await page.evaluate(() => window.editorPerformance.flush());
+  const result = await page.evaluate(() => window.editorPerformance.finish());
   await writeFile(
     test.info().outputPath('editor-performance-otlp.json'),
     JSON.stringify(result.batches)

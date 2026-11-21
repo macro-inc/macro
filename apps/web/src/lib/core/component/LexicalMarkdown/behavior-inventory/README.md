@@ -287,23 +287,27 @@ interaction acceptance require the separate browser fixtures.
 ## Paste correction and history oracle
 
 `paste-correction-history.test.ts` combines the actual rich-text paste handler,
-Macro document-metadata corrector and plugin-manager snapshot history, over the
-production node registry and replacements. Transform registration finishes before
-the user command; a public mutation observer then enables the corrector's real
-`mutatedNodes` prerequisite. Native microtask completion fences observe the
-actual queued callbacks without replacing them, advancing a fake clock, polling,
-or forcing correction commits early.
+Macro document-metadata Root transform and plugin-manager snapshot history over
+the production node registry and replacements. A real parsed stored state is
+loaded with `LOAD_STATE_TAG`; the selection-only update stays untagged so it
+cannot carry a load exemption into the next user edit.
 
-The source case distinguishes the main plain-text paste from the drained root
-metadata/version correction, compares complete JSON, retains caret offset 10,
-and restores the original state/selection in one undo and the drained state in
-one redo. The observed paste chain has four update notifications and three root
-mutations; subsequent notifications carry the history-merge tag. It exercises
-the `markdown` snapshot-history branch, not collaborative Loro history or
-physical clipboard/keyboard input. Separate mutation controls omit the actual
-corrector or substitute the captured main snapshot as completion; both must fail
-these unchanged assertions. This is an OFF source oracle, not native/ON or
-mega-paste acceptance.
+The current Source policy stamps the version in the same commit as the first
+local edit. The fixture asserts complete paste JSON, the single paste update,
+root mutation observations and no deferred metadata correction. An already
+stamped document restores its exact state and caret in one undo and redo; a
+legacy root without metadata receives its stamp in the paste commit and undoes
+to its exact stored absence. This replaces the obsolete four-update, deferred
+metadata-correction assumption after the Source policy changed.
+
+Legacy-root redo currently throws from the Source Root transform when writing
+through a frozen selection. The actual redo/state assertion remains visible as
+`test.fails`, tracked by [#11792](https://github.com/macro-inc/macro/pull/11792)
+(`mac-wasm-rust.22`); remove the marker only after the
+separate producer fix lands and is integrated. This fixture exercises the
+`markdown` snapshot-history branch, not collaborative Loro history or physical
+clipboard/keyboard input. It is OFF Source evidence, not native/ON or mega-paste
+acceptance.
 
 `html-paste-nodes.test.ts` records actual OFF RichText copy-to-HTML and paste
 for every configured node type using the production node replacements and theme.

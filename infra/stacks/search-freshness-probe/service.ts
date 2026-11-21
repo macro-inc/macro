@@ -116,7 +116,10 @@ export class SearchFreshnessProbe extends pulumi.ComponentResource {
         imagePath: REPO_ROOT,
         dockerfile: 'docker/Dockerfile',
         platform: { family: 'linux', architecture: 'amd64' },
-        buildArgs: { SERVICE_NAME: 'search_freshness_probe' },
+        buildArgs: {
+          SERVICE_NAME: 'search_freshness_probe',
+          PACKAGE_NAME: 'search_freshness_probe',
+        },
         tags,
       },
       child

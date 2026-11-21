@@ -37,7 +37,7 @@ const config: TelemetryInitConfig<'perf'> = {
   },
 };
 await Telemetry.init(config);
-initializeUiOperationTelemetry();
+const disposeTelemetry = initializeUiOperationTelemetry();
 await init();
 const root = document.getElementById('editor');
 if (!root) throw new Error('Missing editor root');
@@ -95,6 +95,16 @@ Object.assign(window, {
       await Telemetry.flush();
       return { batches, errors };
     },
+    async finish() {
+      // End the fixture lifecycle after the final paint. The app observer
+      // drains its delayed timing reports before the exporter is flushed.
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+      );
+      disposeTelemetry();
+      await Telemetry.flush();
+      return { batches, errors };
+    },
     stopScroll,
     blockNextPaste() {
       // Test-only browser work proves delivery after the current task ends.
@@ -118,6 +128,7 @@ declare global {
     editorPerformance: {
       model(): string;
       flush(): Promise<{ batches: string[]; errors: string[] }>;
+      finish(): Promise<{ batches: string[]; errors: string[] }>;
       stopScroll(): void;
       blockNextPaste(): void;
     };
