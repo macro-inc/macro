@@ -36,8 +36,9 @@ stack generator owns the container, instance volumes, and generated credentials.
 
 ## Gotchas
 
-- Make the bind-mounted public `start.sh` and `local.hcl` readable by the
-  container's `openbao` user; private checkouts may need temporary read permission.
+- xtask stages `start.sh` and `local.hcl` into `infra/local/generated/<instance>/openbao/`
+  with mode 0644 and mounts those copies, so private (umask 077) checkouts work;
+  add any new mounted config file to `passwords_vault::CONFIG_FILES`.
 
 - Preserve `/openbao/file/data`, `seal.key`, and `bootstrap.json` together on the
   named volume; Postgres stores metadata only and cannot reconstruct lost
