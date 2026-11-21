@@ -136,6 +136,7 @@ impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Events {
 /// DEBUG wire log of each request carries the arguments either way.
 #[tokio::test(flavor = "current_thread")]
 async fn a_withheld_turns_misfit_call_leaves_its_value_in_no_event() {
+    use tracing_subscriber::layer::SubscriberExt as _;
     let events = Events::default();
     let _guard = tracing::subscriber::set_default(
         tracing_subscriber::registry()
