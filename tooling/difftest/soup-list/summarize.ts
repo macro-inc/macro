@@ -40,6 +40,8 @@ function summarize(r: Json) {
       }, {}),
       /** GraphQL differs from REST identically on main and the branch. */
       preexisting: fuzz.reduce((n, f) => n + (f.preexisting?.length ?? 0), 0),
+      /** Background GraphQL reads of the app's own lists seen during fallback cases. */
+      shellRequests: sum('shellRequests'),
     },
     callers: {
       cases: r.callers?.cases ?? 0,

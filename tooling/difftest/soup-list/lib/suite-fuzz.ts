@@ -37,6 +37,8 @@ export type FuzzResult = {
   reasons: Record<string, number>;
   /** Translatable cases where GraphQL's rows differ from REST's, identically on main. */
   preexisting: FuzzFailure[];
+  /** GraphQL Soup reads the app's own lists sent during fallback cases (excluded from them). */
+  shellRequests?: number;
 };
 
 
@@ -159,8 +161,22 @@ async function runCase(session: UserSession, c: AstCase, result: FuzzResult, cov
       if (a['soup.fallback.cancelled'])
         fail('span-cancelled', `a settled read was traced as cancelled: ${JSON.stringify(spans)} status ${JSON.stringify(status)} rest ${restError}`);
     }
-    if (requests.some((r) => r.kind === 'graphql'))
-      fail('graphql-on-fallback', `untranslatable but sent GraphQL ${requests.filter((r) => r.kind === 'graphql').map((r) => r.op).join(',')}: ${JSON.stringify(requests.filter((r) => r.kind === 'graphql').map((r) => ({ ms: r.at - started, input: (() => { try { return JSON.parse(r.body ?? '{}').variables?.input; } catch { return null; } })() }))).slice(0, 4000)}`);
+    // The branch's own app lists (quick access, slash-menu PRs, recently
+    // viewed) read GraphQL Soup in the background and refetch at any moment;
+    // a request whose input the page already sent before this case is one of
+    // those, not the reader under test.
+    const inputOf = (r: { body?: string }) => {
+      try {
+        return JSON.stringify(JSON.parse(r.body ?? '{}').variables?.input ?? null);
+      } catch {
+        return 'unparsed';
+      }
+    };
+    const shellInputs = new Set(session.requests.new.slice(0, reqFrom).filter((r) => r.kind === 'graphql').map(inputOf));
+    const caseGraphql = requests.filter((r) => r.kind === 'graphql' && !shellInputs.has(inputOf(r)));
+    result.shellRequests = (result.shellRequests ?? 0) + requests.filter((r) => r.kind === 'graphql').length - caseGraphql.length;
+    if (caseGraphql.length)
+      fail('graphql-on-fallback', `untranslatable but sent GraphQL ${caseGraphql.map((r) => r.op).join(',')}: ${JSON.stringify(caseGraphql.map((r) => ({ ms: r.at - started, input: JSON.parse(inputOf(r)) }))).slice(0, 4000)}`);
     if (restError || newError) {
       if (restError !== newError) fail('error', `branch error ${newError} vs REST error ${restError}`);
       else {
