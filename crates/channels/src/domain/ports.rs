@@ -321,7 +321,9 @@ pub trait ChannelRepo: Send + Sync + 'static {
         channel_ids: &[Uuid],
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Atomically find or create an exact two-member DM under a normalized pair lock.
+    /// Atomically find or create the pair's DM under a normalized pair lock: a
+    /// direct message with rows of exactly the two of them, or, for live
+    /// creation, one both are still in whose other rows are members who left.
     /// Reuse preserves all settings, roles and timestamps, including historical leavers.
     /// Historical callers must authorize reuse before writing history into the target.
     fn ensure_dm(
@@ -330,7 +332,10 @@ pub trait ChannelRepo: Send + Sync + 'static {
         creation: super::historical::DmCreation,
     ) -> impl Future<Output = Result<super::historical::EnsuredChannel, Self::Err>> + Send;
 
-    /// Fetch an existing exact two-member DM, deterministically choosing the oldest.
+    /// The DM `user_id` is still in that their get-or-create would reuse, by
+    /// the rows [`Self::ensure_dm`] counts: of several, one both are in, then one only `recipient_id`
+    /// left, then the oldest, then the lowest id. `None` when `user_id` is in
+    /// none.
     fn maybe_get_dm<'a>(
         &self,
         user_id: MacroUserIdStr<'a>,
@@ -628,8 +633,9 @@ pub trait ChannelService: Send + Sync + 'static {
     }
 
     /// The direct message between `user_id` and `recipient_id` that
-    /// [`Self::get_or_create_dm`] would reuse, without creating one: `None`
-    /// when they have none, or when they are the same person.
+    /// [`Self::get_or_create_dm`] by `user_id` would reuse, while `user_id` is
+    /// still in it, without creating one: `None` when they have none `user_id`
+    /// is in, or when they are the same person.
     fn find_direct_message(
         &self,
         _user_id: MacroUserIdStr<'static>,

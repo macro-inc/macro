@@ -138,7 +138,8 @@ request data and run the `contacts` schema tests after changes.
 `GraphqlUser.channelViewedAt(channelId)` flatten `graphql_channel`'s viewer
 reads, which go through `ChannelQueryContext` in request data; DSS HTTP and
 websocket requests insert it. The DM lookup returns the DM get-or-create would
-reuse and never creates one. `channelViewedAt` is the viewer's own activity
+reuse while the viewer is still in it, null otherwise, and never creates
+one. `channelViewedAt` is the viewer's own activity
 row, so it answers for channels they left, which the channel list no longer
 holds.
 

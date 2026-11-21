@@ -2944,6 +2944,7 @@ impl ChannelRepo for PgChannelsRepo {
         user_id: MacroUserIdStr<'_>,
         recipient_id: MacroUserIdStr<'_>,
     ) -> Result<Option<Uuid>, Self::Err> {
+        let viewer = user_id.clone();
         let pair = crate::domain::dm::DmPair::new(user_id, recipient_id)?;
         // The read follows both people's memberships; bound it a little above
         // the 12 s timeout of the GraphQL clients that ask.
@@ -2951,7 +2952,8 @@ impl ChannelRepo for PgChannelsRepo {
         sqlx::query!("SET LOCAL statement_timeout = '15s'")
             .execute(&mut *tx)
             .await?;
-        let channel_id = historical::find_dm(&mut tx, &pair, historical::DmRoster::Listed).await?;
+        let channel_id =
+            historical::find_dm(&mut tx, &pair, historical::DmRoster::Joined(&viewer)).await?;
         tx.commit().await?;
         Ok(channel_id)
     }
