@@ -1,5 +1,5 @@
 use super::catalog::{EVENT_TYPES, MAX_QUERY_CHARS, QUERY_EVENT, selection};
-use super::compiler::{CompileError, FilterCompiler, parse_outcome};
+use super::compiler::{CompileError, FilterCompiler, parse_check, parse_outcome};
 use super::dss::{
     EventSource, SourceError, SourceEvent, SourceItem, SourceStream, StoreError, SubscriptionStore,
     source_item,
@@ -867,6 +867,22 @@ fn the_model_answer_is_validated() {
 }
 
 #[test]
+fn a_filter_whose_reading_differs_from_the_request_is_refused() {
+    assert!(parse_check(json!({"outcome": "matches"})).is_ok());
+    assert!(matches!(
+        parse_check(json!({
+            "outcome": "differs",
+            "difference": "It would also deliver mentions in documents.",
+        })),
+        Err(CompileError::Refused(reason)) if reason.contains("also deliver mentions in documents")
+    ));
+    assert!(matches!(
+        parse_check(json!({"outcome": "close enough"})),
+        Err(CompileError::Internal(_))
+    ));
+}
+
+#[test]
 fn the_reading_names_every_alternative() {
     let filter = McpEventFilter {
         any_of: vec![
@@ -1057,15 +1073,19 @@ async fn a_lost_source_reports_an_error_and_resumes_after_its_last_event() {
     let fixture = fixture();
     let first = fixture.source.queue(None);
     let second = fixture.source.queue(None);
-    let posted = event("message.posted", json!({"metadata": {}}));
-    let posted_id = posted.event_id.clone();
-    let resumed_after = posted_id.clone();
+    let resumed_after = Arc::new(Mutex::new(String::new()));
+    let posted_id_out = Arc::clone(&resumed_after);
 
     stream_with(
         &fixture.events,
         json!({"name": "message.posted"}),
         |mut receiver, cancel| async move {
             next(&mut receiver).await;
+            // Minted after the stream opened, so only the deduper can drop
+            // its repeat.
+            let posted = event("message.posted", json!({"metadata": {}}));
+            let posted_id = posted.event_id.clone();
+            posted_id_out.lock().unwrap().clone_from(&posted_id);
             first
                 .unbounded_send(Ok(SourceItem::Event(posted.clone())))
                 .unwrap();
@@ -1094,6 +1114,7 @@ async fn a_lost_source_reports_an_error_and_resumes_after_its_last_event() {
 
     let opens = fixture.source.opens.lock().unwrap();
     assert_eq!(opens.len(), 2);
+    let resumed_after = resumed_after.lock().unwrap();
     assert_eq!(opens[1].1.as_deref(), Some(resumed_after.as_str()));
 }
 
@@ -1157,6 +1178,39 @@ async fn a_resumed_source_drops_what_it_replays_from_before_the_stream_opened() 
             let (method, occurrence) = next(&mut receiver).await;
             assert_eq!(method, "notifications/events/event");
             assert_eq!(occurrence["eventId"], after_id);
+            cancel.cancel();
+        },
+    )
+    .await
+    .unwrap();
+}
+
+#[tokio::test(start_paused = true)]
+async fn after_its_replay_a_resumed_source_delivers_a_live_event_minted_before_the_stream() {
+    let fixture = fixture();
+    let first = fixture.source.queue(None);
+    let second = fixture.source.queue(None);
+    // A producer whose clock is behind ours: its live event's id sorts
+    // before the stream opened.
+    let skewed = event("message.posted", json!({"metadata": {}}));
+    let skewed_id = skewed.event_id.clone();
+    stream_with(
+        &fixture.events,
+        json!({"name": "message.posted"}),
+        |mut receiver, cancel| async move {
+            next(&mut receiver).await;
+            first
+                .unbounded_send(Err(SourceError(rootcause::report!("reset"))))
+                .unwrap();
+            assert_eq!(next(&mut receiver).await.0, "notifications/events/error");
+            // The heartbeat ends the replay.
+            second.unbounded_send(Ok(SourceItem::Heartbeat)).unwrap();
+            second
+                .unbounded_send(Ok(SourceItem::Event(skewed)))
+                .unwrap();
+            let (method, occurrence) = next(&mut receiver).await;
+            assert_eq!(method, "notifications/events/event");
+            assert_eq!(occurrence["eventId"], skewed_id);
             cancel.cancel();
         },
     )

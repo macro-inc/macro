@@ -108,7 +108,15 @@ struct SubscribeParams {
 struct WebhookDelivery {
     mode: String,
     url: String,
-    secret: String,
+    #[serde(deserialize_with = "zeroizing_string")]
+    secret: zeroize::Zeroizing<String>,
+}
+
+/// A plaintext secret that is wiped when dropped.
+fn zeroizing_string<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<zeroize::Zeroizing<String>, D::Error> {
+    String::deserialize(deserializer).map(zeroize::Zeroizing::new)
 }
 
 #[derive(Deserialize)]
@@ -252,6 +260,7 @@ async fn subscribe<Sink>(
             None,
         )
     })?;
+    drop(delivery.secret);
     let subscribed = events
         .subscribe(
             &scope.user,

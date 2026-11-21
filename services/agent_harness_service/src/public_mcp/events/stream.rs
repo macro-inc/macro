@@ -238,14 +238,16 @@ struct GroupState {
     current: Option<SourceStream>,
     last_event_id: Option<String>,
     opened_at: uuid::Uuid,
-    /// Whether `current` was opened with a resume cursor, so it may replay
-    /// events from before the stream opened.
+    /// Whether `current` was opened with a resume cursor and may still be
+    /// replaying events from before the stream opened: until its first
+    /// heartbeat.
     resumed: bool,
     failures: u32,
 }
 
 impl GroupState {
     /// An event a resumed source replayed from before the stream opened.
+    /// Ids are UUIDv7, so they compare by when they were minted.
     fn predates_stream(&self, event_id: &str) -> bool {
         self.resumed && uuid::Uuid::parse_str(event_id).is_ok_and(|id| id < self.opened_at)
     }
@@ -322,7 +324,13 @@ fn group_stream(
                         return Some((GroupItem::Event(event), state));
                     }
                 }
-                Some(Ok(SourceItem::Heartbeat)) => state.failures = 0,
+                Some(Ok(SourceItem::Heartbeat)) => {
+                    state.failures = 0;
+                    // The source sends its replay before any heartbeat, so
+                    // what follows is live; a live event minted on a clock
+                    // behind ours may predate the stream and is still wanted.
+                    state.resumed = false;
+                }
                 Some(Err(error)) => {
                     tracing::warn!(error = ?error.0, "MCP events source failed");
                     state.current = None;
