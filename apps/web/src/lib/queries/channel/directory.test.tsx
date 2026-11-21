@@ -1279,10 +1279,12 @@ describe('cached channel directory', () => {
     await vi.waitFor(() => expect(directory.complete()).toBe(true));
     expect(pageAll).toHaveBeenCalledOnce();
     // Unchanged since the network read them, the cached rows are older.
-    expect(directory.channels().map(({ name }) => name).sort()).toEqual([
-      'channel a',
-      'channel b',
-    ]);
+    expect(
+      directory
+        .channels()
+        .map(({ name }) => name)
+        .sort()
+    ).toEqual(['channel a', 'channel b']);
     expect(directory.lookup(channelUuid('stale')).status).toBe('missing');
     expect(ids(await directory.readComplete())).toEqual(['a', 'b']);
     expect(directory.lookup(channelUuid('zzz')).status).toBe('missing');
@@ -1335,7 +1337,12 @@ describe('cached channel directory', () => {
     cache.records.delete(`GraphqlSoupChannel:${channelUuid('joined')}`);
     reopen();
     await vi.waitFor(() =>
-      expect(directory.channels().map(({ name }) => name).sort()).toEqual(['renamed'])
+      expect(
+        directory
+          .channels()
+          .map(({ name }) => name)
+          .sort()
+      ).toEqual(['renamed'])
     );
     expect(ids(await directory.readComplete())).toEqual(['kept']);
   });
@@ -1458,10 +1465,12 @@ describe('cached channel directory', () => {
     expect(directory.complete()).toBe(false);
     release();
     await vi.waitFor(() => expect(directory.complete()).toBe(true));
-    expect(directory.channels().map(({ name }) => name).sort()).toEqual([
-      'channel kept',
-      'rejoined',
-    ]);
+    expect(
+      directory
+        .channels()
+        .map(({ name }) => name)
+        .sort()
+    ).toEqual(['channel kept', 'rejoined']);
   });
 
   it('reads a channel again when the cache shows the viewer rejoined it before a read that found it gone settles', async () => {
@@ -1506,16 +1515,23 @@ describe('cached channel directory', () => {
     });
     reopen();
     await vi.waitFor(() =>
-      expect(directory.channels().map(({ name }) => name).sort()).toEqual(['renamed'])
+      expect(
+        directory
+          .channels()
+          .map(({ name }) => name)
+          .sort()
+      ).toEqual(['renamed'])
     );
     release();
 
     await vi.waitFor(() => expect(hydrate).toHaveBeenCalledTimes(2));
     await vi.waitFor(() => expect(directory.complete()).toBe(true));
-    expect(directory.channels().map(({ name }) => name).sort()).toEqual([
-      'rejoined',
-      'renamed',
-    ]);
+    expect(
+      directory
+        .channels()
+        .map(({ name }) => name)
+        .sort()
+    ).toEqual(['rejoined', 'renamed']);
   });
 
   it('leaves out a listed channel deleted after another write left its record without a field', async () => {

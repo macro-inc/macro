@@ -1727,9 +1727,7 @@ export function createMemoryChannelDirectory(
         options()
       );
       return inDirectoryOrder(
-        views.applyList(
-          channels.filter(({ isParticipant }) => isParticipant)
-        )
+        views.applyList(channels.filter(({ isParticipant }) => isParticipant))
       );
     },
     failed: () => pages.isError && !pages.isFetching,
