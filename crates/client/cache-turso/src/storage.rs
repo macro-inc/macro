@@ -1,4 +1,4 @@
-use crate::driver::{self, Db};
+use crate::driver::{self, Db, WalCheckpoint};
 use crate::key::RecordKey;
 use crate::{PhysicalResetReason, TursoStorageError};
 use cache_core::codec::{
@@ -906,6 +906,20 @@ impl TursoStorage {
 }
 
 impl TursoStorage {
+    /// Copies the WAL into the database file once it holds 500 frames or more,
+    /// the checkpoint Turso otherwise runs inside the COMMIT that takes it past
+    /// 1,000. Run it between requests, never inside one; it reports whether it
+    /// ran and how many frames it copied. A host that never calls it keeps
+    /// Turso's own checkpoint.
+    ///
+    /// A failure is never a reset: like Turso's own checkpoint, it leaves the
+    /// WAL whole, and the next call tries again.
+    pub fn checkpoint_if_due(&self) -> Result<WalCheckpoint, TursoStorageError> {
+        self.require_healthy()?;
+        self.connection
+            .checkpoint_over(driver::CHECKPOINT_DUE_FRAMES)
+    }
+
     fn latched_reason(&self) -> Option<PhysicalResetReason> {
         let code = self.health.load(Ordering::Acquire);
         PhysicalResetReason::from_latch_code(code)

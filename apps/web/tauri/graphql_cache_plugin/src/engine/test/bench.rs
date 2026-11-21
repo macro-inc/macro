@@ -191,6 +191,12 @@ impl Samples {
     }
 }
 
+/// `CACHE_BENCH_IDLE_CHECKPOINT` runs the host the way an engine with an idle
+/// point does: [`idle`] checkpoints between steps once the WAL is due.
+fn idle_checkpoints() -> bool {
+    std::env::var_os("CACHE_BENCH_IDLE_CHECKPOINT").is_some()
+}
+
 /// Opens without resetting: a database a reused run cannot open (another
 /// build's format) fails the run instead of measuring an empty cache.
 fn open(path: &Path) -> EngineHandle {
@@ -199,6 +205,26 @@ fn open(path: &Path) -> EngineHandle {
         .open(SCOPE)
         .unwrap();
     EngineHandle::with_schema(storage, None, cache_core::meta::bundled_schema())
+}
+
+/// The engine's idle point, outside every timed step: checkpoint when due,
+/// recording how long it took and how many frames it copied.
+async fn idle(handle: &EngineHandle, samples: &mut Samples) {
+    if !idle_checkpoints() {
+        return;
+    }
+    let started = Mark::now();
+    let state = handle.inner.lock().await;
+    let checkpoint = state.engine.storage().checkpoint_if_due().unwrap();
+    drop(state);
+    if checkpoint.ran {
+        samples.record("idle.checkpoint", started);
+        samples
+            .ms
+            .entry("idle.checkpoint.frames".to_owned())
+            .or_default()
+            .push(checkpoint.backfilled_frames as f64);
+    }
 }
 
 /// A handle stamped with the owner's current generation, as the app's
@@ -548,6 +574,7 @@ fn native_cache_bench() {
             lane.0 += 1;
             lane.1 += op.bytes;
             lane.2 += ms;
+            idle(&handle, &mut samples).await;
         }
         if !reuse {
             samples.record("seed.total", seeding);
@@ -582,12 +609,14 @@ fn native_cache_bench() {
                 let started = Mark::now();
                 apply(&handle, &docs, op, &identity).await;
                 samples.record(&format!("write.{}", op.lane), started);
+                idle(&handle, &mut samples).await;
             }
             // The same responses again: what a refetch that changed nothing costs.
             for op in writes {
                 let started = Mark::now();
                 apply(&handle, &docs, op, &identity).await;
                 samples.record(&format!("write.{}.same", op.lane), started);
+                idle(&handle, &mut samples).await;
             }
             rss_kb.push(memory_kb("VmRSS"));
             handle.shutdown().unwrap();
