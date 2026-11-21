@@ -18,8 +18,9 @@ pub fn tables(path: &Path) -> Result<BTreeMap<String, Vec<String>>, String> {
         .prepare("SELECT name FROM sqlite_schema WHERE type = 'table' ORDER BY name")
         .map_err(|error| error.to_string())?;
     rows(&mut statement, |values| {
-        if let Some(name) = values.first() {
-            names.push(name.clone());
+        // Names are text, which rows() tags `t:`.
+        if let Some(name) = values.first().and_then(|name| name.strip_prefix("t:")) {
+            names.push(name.to_owned());
         }
     })?;
     let mut out = BTreeMap::new();
@@ -29,7 +30,10 @@ pub fn tables(path: &Path) -> Result<BTreeMap<String, Vec<String>>, String> {
             .prepare(format!("SELECT * FROM \"{}\"", name.replace('"', "\"\"")))
             .map_err(|error| format!("{name}: {error}"))?;
         let mut table = Vec::new();
-        rows(&mut statement, |values| table.push(values.join("\u{1f}")))?;
+        // A JSON array, so no value can run into the next one.
+        rows(&mut statement, |values| {
+            table.push(serde_json::to_string(&values).unwrap_or_default());
+        })?;
         table.sort();
         out.insert(name, table);
     }
@@ -46,15 +50,15 @@ fn rows(statement: &mut Statement, mut visit: impl FnMut(Vec<String>)) -> Result
                 let values = row
                     .get_values()
                     .map(|value| match value {
-                        turso_core::Value::Text(text) => text.as_str().to_owned(),
+                        // Tagged with the storage class: text and a printable blob differ.
+                        turso_core::Value::Text(text) => format!("t:{}", text.as_str()),
                         // Printable bytes as they are, so ids inside encoded records stay
                         // visible to normalization.
-                        turso_core::Value::Blob(blob) => blob
-                            .iter()
-                            .map(|byte| match byte {
+                        turso_core::Value::Blob(blob) => std::iter::once("b:".to_owned())
+                            .chain(blob.iter().map(|byte| match byte {
                                 0x20..=0x7e if *byte != b'\\' => char::from(*byte).to_string(),
                                 _ => format!("\\x{byte:02x}"),
-                            })
+                            }))
                             .collect(),
                         other => format!("{other:?}"),
                     })

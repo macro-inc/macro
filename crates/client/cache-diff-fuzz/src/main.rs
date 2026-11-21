@@ -72,7 +72,11 @@ fn main() -> Result<(), rootcause::Report> {
     let tabs: Vec<(String, Value)> = tabs.into_iter().collect();
     let docs = sequence::load_docs(&faker, &sources)?;
     std::fs::create_dir_all(&args.out)?;
-    for seed in args.seed..args.seed + args.count {
+    let end = args
+        .seed
+        .checked_add(args.count)
+        .ok_or_else(|| rootcause::report!("--seed plus --count overflows u64"))?;
+    for seed in args.seed..end {
         let generated = match &args.case {
             Some(path) => serde_json::from_str(&std::fs::read_to_string(path)?)?,
             None => {

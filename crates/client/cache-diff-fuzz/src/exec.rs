@@ -56,7 +56,8 @@ impl<'a> Exec<'a> {
     ) -> Result<Self, String> {
         std::fs::create_dir_all(root.join("db-0")).map_err(|error| error.to_string())?;
         let path = root.join("db-0").join("cache.turso");
-        let normalizer = Normalizer::new(generated.ids.clone(), root);
+        let inputs = serde_json::to_string(generated).map_err(|error| error.to_string())?;
+        let normalizer = Normalizer::new(&inputs, root);
         let mut exec = Self {
             docs,
             generated,
@@ -72,20 +73,33 @@ impl<'a> Exec<'a> {
             lines: Vec::new(),
             counters: BTreeMap::new(),
         };
-        exec.handle = Some(exec.open()?);
+        exec.open(0)?;
         Ok(exec)
     }
 
-    fn open(&self) -> Result<EngineHandle, String> {
-        let storage = cache_turso::TursoFileDatabase::new(&self.path)
-            .map_err(|error| error.to_string())?
-            .open_or_reset(SCOPE)
-            .map_err(|error| error.to_string())?;
-        Ok(EngineHandle::with_schema(
+    /// Opens the engine on the current file as the host does (`open_or_reset`),
+    /// but records a reset in the trace: every case starts from an empty file,
+    /// so a reset means a build could not read what it wrote.
+    fn open(&mut self, index: usize) -> Result<(), String> {
+        let database =
+            cache_turso::TursoFileDatabase::new(&self.path).map_err(|error| error.to_string())?;
+        let storage = match database.open(SCOPE) {
+            Ok(storage) => storage,
+            Err(error) if error.requires_physical_reset() => {
+                self.record(index, "open.reset", Err(error.to_string()));
+                database
+                    .physical_reset()
+                    .map_err(|error| error.to_string())?;
+                database.open(SCOPE).map_err(|error| error.to_string())?
+            }
+            Err(error) => return Err(error.to_string()),
+        };
+        self.handle = Some(EngineHandle::with_schema(
             storage,
             None,
             cache_core::meta::bundled_schema(),
-        ))
+        ));
+        Ok(())
     }
 
     fn handle(&self) -> &EngineHandle {
@@ -439,8 +453,10 @@ impl<'a> Exec<'a> {
             }
             Op::Idle => {
                 // Builds differ here by design: only the idle checkpoint build
-                // checkpoints. What it did is counted, not compared.
-                if let Some((ran, _, backfilled)) = self.handle().fuzz_idle().await {
+                // checkpoints. What it did is counted, not compared; a failed
+                // checkpoint fails the seed.
+                if let Some(checkpoint) = self.handle().fuzz_idle().await {
+                    let (ran, backfilled) = checkpoint?;
                     if ran {
                         self.count("idle.checkpoint");
                         self.add("idle.checkpoint.frames", backfilled);
@@ -451,9 +467,9 @@ impl<'a> Exec<'a> {
             }
             Op::Reopen => {
                 self.count("reopen");
-                let handle = self.handle.take().expect("engine is open");
+                let handle = self.handle.take().ok_or("engine is closed")?;
                 handle.shutdown()?;
-                self.handle = Some(self.open()?);
+                self.open(index)?;
             }
             Op::Crash => {
                 self.count("crash");
@@ -465,7 +481,7 @@ impl<'a> Exec<'a> {
                 // the copy reaches the files the next engine opens.
                 drop(self.handle.take());
                 self.path = to.join("cache.turso");
-                self.handle = Some(self.open()?);
+                self.open(index)?;
             }
             Op::Probe => self.probe(index).await,
         }
@@ -810,7 +826,7 @@ impl<'a> Exec<'a> {
 
     /// Closes the engine and dumps every table of the file it leaves behind.
     pub fn finish(mut self) -> Result<Finished, String> {
-        let handle = self.handle.take().expect("engine is open");
+        let handle = self.handle.take().ok_or("engine is closed")?;
         handle.shutdown()?;
         Ok((self.lines, self.counters, self.path, self.normalizer))
     }

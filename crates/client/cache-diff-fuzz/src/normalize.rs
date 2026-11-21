@@ -1,7 +1,7 @@
 //! Makes a response comparable across runs: ids the engine mints (storage and
 //! Mail generations, observation instances, and SHA-256 digests of them) become
-//! `#1`, `#2`, … in order of first appearance, ids the generator made stay as
-//! they are, and the run's directory becomes `<dir>`.
+//! `#1`, `#2`, … in order of first appearance, ids that appear in the case's
+//! inputs stay as they are, and the run's directory becomes `<dir>`.
 
 use serde_json::Value;
 use std::collections::{BTreeSet, HashMap};
@@ -20,7 +20,13 @@ pub struct Normalizer {
 const UNORDERED: &[&str] = &["affectedOps", "changed", "searchChangedBuckets"];
 
 impl Normalizer {
-    pub fn new(keep: BTreeSet<String>, root: &Path) -> Self {
+    /// `inputs` is everything the case feeds the engine. Any id in it was made
+    /// by the generator or the faker, not minted by the engine, so it is kept:
+    /// a build that answers with the wrong one of those ids shows up.
+    pub fn new(inputs: &str, root: &Path) -> Self {
+        let keep = id_spans(inputs)
+            .map(|(start, width)| inputs[start..start + width].to_owned())
+            .collect();
         Self {
             keep,
             minted: HashMap::new(),
@@ -58,10 +64,37 @@ impl Normalizer {
 
     pub fn text(&mut self, text: &str) -> String {
         let text = text.replace(&self.root, "<dir>");
-        let bytes = text.as_bytes();
         let mut out = String::with_capacity(text.len());
-        let mut index = 0;
         let mut copied = 0;
+        for (start, width) in id_spans(&text) {
+            let id = &text[start..start + width];
+            if self.keep.contains(id) {
+                continue;
+            }
+            out.push_str(&text[copied..start]);
+            copied = start + width;
+            let next = self.minted.len() + 1;
+            match self.minted.get(id) {
+                Some(name) => out.push_str(name),
+                None if self.frozen => out.push_str("#?"),
+                None => {
+                    let name = format!("#{next}");
+                    out.push_str(&name);
+                    self.minted.insert(id.to_owned(), name);
+                }
+            }
+        }
+        out.push_str(&text[copied..]);
+        out
+    }
+}
+
+/// The UUIDs and 64-digit hex runs (SHA-256 digests, such as people cursors) in
+/// `text`, as `(start, width)`, each bounded by non-hex characters.
+fn id_spans(text: &str) -> impl Iterator<Item = (usize, usize)> + '_ {
+    let bytes = text.as_bytes();
+    let mut index = 0;
+    std::iter::from_fn(move || {
         while index + 36 <= bytes.len() {
             let width = if is_uuid(&bytes[index..index + 36]) {
                 36
@@ -69,7 +102,6 @@ impl Normalizer {
                 .get(index..index + 64)
                 .is_some_and(|run| run.iter().all(u8::is_ascii_hexdigit))
             {
-                // A SHA-256 the engine derives from ids it minted (people cursors).
                 64
             } else {
                 0
@@ -80,31 +112,14 @@ impl Normalizer {
                     .get(index + width)
                     .is_none_or(|next| !next.is_ascii_hexdigit())
             {
-                let uuid = &text[index..index + width];
-                if !self.keep.contains(uuid) {
-                    out.push_str(&text[copied..index]);
-                    let next = self.minted.len() + 1;
-                    match self.minted.get(uuid) {
-                        Some(name) => out.push_str(name),
-                        None if self.frozen => out.push_str("#?"),
-                        None => {
-                            let name = format!("#{next}");
-                            out.push_str(&name);
-                            self.minted.insert(uuid.to_owned(), name);
-                        }
-                    }
-                    index += width;
-                    copied = index;
-                    continue;
-                }
+                let start = index;
                 index += width;
-                continue;
+                return Some((start, width));
             }
             index += 1;
         }
-        out.push_str(&text[copied..]);
-        out
-    }
+        None
+    })
 }
 
 fn is_uuid(bytes: &[u8]) -> bool {
