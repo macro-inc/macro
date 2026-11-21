@@ -230,8 +230,10 @@ export function describeRoutine(row: RoutineRow): string {
  * text `renamesExactly`, and its mail renamed is the first seat's mail
  * exactly, though a snippet cut at 500 characters may cut a longer domain's
  * copy elsewhere), the judge reads the first seat's mail and the suggestions
- * renamed: the seats of one round then share that text word for word
- * (`shared`). Otherwise it reads the seat's own.
+ * renamed, so every seat that read the mail at one `now` (in a routines run,
+ * every seat of every rep) and renames this way gives the judge the same mail
+ * word for word (`shared`); the suggestions stay each attempt's own.
+ * Otherwise it reads the seat's own mail.
  */
 export function routinesEvidence(persona: Persona, generation: Generation): { mail: string; suggestions: string[]; shared: boolean } {
   const { variant, now } = generation;
@@ -251,7 +253,7 @@ export async function judgeRoutines(at: Stack, grader: string, persona: Persona,
   const catalog = Object.entries(CATALOG)
     .map(([key, entry]) => `- ${key}: ${entry.title}. ${entry.does} (sidebars: ${entry.surfaces.join(', ')})`)
     .join('\n');
-  // What the seats of one round share (the person, their mail, the catalog
+  // What the seats of one `now` share (the person, their mail, the catalog
   // and the key) goes as instructions after the rubric, which the route caches.
   const evidence = routinesEvidence(persona, generation);
   const person = `Now is ${iso(generation.now)}; the person's time zone is ${generation.timezone}.
@@ -284,17 +286,17 @@ Mark every suggestion, S1 to S${generation.routines.length}, in order.`;
     }
   };
   if (!evidence.shared) return judge();
-  // The round's first seat judged writes the shared instructions to the
-  // cache; the others wait for it, then read them from there.
-  const round = `${scenarioName(seatOf(persona, 1), generation.variant)} ${generation.now}`;
-  const ahead = warming.get(round);
+  // The first seat judged at this `now` writes the shared instructions to
+  // the cache; the others wait for it, then read them from there.
+  const prefix = `${scenarioName(seatOf(persona, 1), generation.variant)} ${generation.now}`;
+  const ahead = warming.get(prefix);
   if (ahead) return ahead.then(judge, judge);
   const judged = judge();
-  warming.set(round, judged);
+  warming.set(prefix, judged);
   return judged;
 }
 
-/** Each round's first routines judgement, by persona and `now`. */
+/** The first routines judgement of each persona at each `now`. */
 const warming = new Map<string, Promise<unknown>>();
 
 // ---------- feed ----------

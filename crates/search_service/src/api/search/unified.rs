@@ -37,7 +37,7 @@ use std::cmp::Ordering;
             (status = 200, body=UnifiedSearchResponse),
             (status = 400, body=ErrorResponse),
             (status = 401, body=ErrorResponse),
-            (status = 429, body=ErrorResponse, description = "The caller's other searches kept every slot of its lane busy for 20 seconds; retry after `Retry-After` seconds."),
+            (status = 429, body=ErrorResponse, description = "The caller's other searches kept every slot of its lane busy for 20 seconds, or the account's user API keys used their shared search allowance (200 at once, then one a second); retry after `Retry-After` seconds."),
             (status = 500, body=ErrorResponse),
     )
 )]

@@ -14,7 +14,7 @@ export function MobileProjectDetailHeader(props: ProjectDetailHeaderProps) {
           <>
             <Show when={isMobile() && props.source.project()}>
               {(project) => (
-                <MobileHeader.Island class="size-10 justify-center !px-0">
+                <MobileHeader.Island class="min-w-10 justify-center !px-0">
                   <ShareTrigger
                     onClick={props.onShare}
                     id={project().id}

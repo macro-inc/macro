@@ -488,7 +488,11 @@ tools — hexagonal, heavily feature-gated.
   The mailbox loops log their own deferrals with `link_id` (gate refusals at
   DEBUG), so the worker must not log them again. Add a new defer reason in `defer_reason`.
   Notification lag rides the same rows: a Graph change notification stamps
-  the folder streams' `notified_at` and `notified_traceparent`. Every claim
+  the folder streams' `notified_at` and `notified_traceparent` and makes them
+  due without moving one already due (`LEAST(next_run_at, now())`): stream
+  claims take the longest-due first across mailboxes, so a reset to now put a
+  due stream behind every stream that came due since, and a mailbox notified
+  more often than that line moved was never read. Every claim
   of the stream carries `notified_at` onto the reconciliation rows its pages
   queue (newest notification wins) until a checkpoint that started reading
   after the notification clears it; enumerate and reconcile spans record
@@ -499,6 +503,30 @@ tools — hexagonal, heavily feature-gated.
   it. Subscription upkeep and webhook deliveries open
   `outlook.subscription.maintain` and `outlook.subscription.notify`; each
   lifecycle event logs "outlook subscription lifecycle event".
+- A change notification names its message (`resourceData.id`, an immutable
+  id: every Graph request asks for them). With `NotifiedMessageReads` on (the
+  email-service API sets it from `enable-outlook-notified-message-reads`),
+  `accept_notification` also queues that message as live work in the same
+  transaction (`queue_notified_message`, `from_notification = true`), so the
+  next message turn reads it instead of waiting for its folder's claim. A row
+  already queued for the message takes the newer revision: one row per
+  message. Nothing is queued while a folder of the mailbox is in its import
+  round (its pages queue import work, and a live read of an unstored old
+  message would notify as new mail), or while the mailbox has
+  `NOTIFIED_READS_AHEAD` live rows due. The checks read
+  `email_sync_streams_link_import_rounds` and
+  `email_message_reconciliation_live_queued`; keep their predicates and the
+  query's identical. Message claims take live rows first in arrival order,
+  so that is how far one mailbox's notifications can put others' new mail
+  and every import behind its own. A notified read of a message in a folder
+  the catalog does not list (hidden, or made since the last discovery) that
+  is not stored settles as `unsynced` without storing it, since no folder
+  page would list it; a stored one is read as its folder's page would, and a
+  folder page that lists the message clears `from_notification`. The
+  reconcile span records `outlook.from_notification`, and with
+  `outlook.notification_lag_ms` it times notification to stored; the notify
+  span counts `outlook.messages_queued`. Off, a notification only wakes the
+  folders.
 - Subscription upkeep (`domain/mailbox/watches.rs`) counts failed runs in a
   row in `email_mailbox_watch_work.failures` and backs off by it
   (`upkeep_retry`): a refusal up to the 12 h renewal cadence, a transient
@@ -531,6 +559,20 @@ tools — hexagonal, heavily feature-gated.
   (link deletion) retries in the same delivery, each a bounded number of times
   inside its lease or visibility timeout. The purge's batches run in
   `email_db_client` without the timeout.
+- The user writes in `email_pg_repo` that lock an inbox's link row (draft
+  save and send admission, attachments, discard, resolution, transfer,
+  scheduling, Undo send, mailbox actions, sender policy) open with
+  `email_pg_repo::begin`, the same 5 s `lock_timeout`
+  (`email-link-lock-transactions-time-out`). Most take `FOR SHARE` on the
+  link: it fences the mailbox workers and a disconnect, which lock it
+  exclusively, while a CRM population, which share-locks it, runs alongside;
+  user writes on one draft serialize on its message row and advisory locks,
+  as Gmail's, which take no link lock, always have. Mailbox actions keep
+  `FOR UPDATE`, because a command's `accepted_order` is allocated under it,
+  and so does sender policy, like the settings worker. A timeout is
+  `EmailErr::Contended` (`AttachmentError::Contended`): 409 on REST, 503 with
+  `Retry-After` on attachment routes (whose 409 means the draft changed),
+  and GraphQL `INBOX_BUSY` with `retryable`.
 - Map database errors in `mailbox_pg` with `db_error` (or `wrapped_db_error`
   for `email_db_client` calls) so the SQLSTATE reaches the log; keep
   `MailboxError::Persistence` for stored data that cannot be decoded. Both,
@@ -564,6 +606,19 @@ tools — hexagonal, heavily feature-gated.
   import, and any message that waited for room, behind its whole backlog.
   Gmail's backfill lists its next page behind the threads it queued for the
   same reason. Live folder streams are never paced.
+  A mail folder claim takes an import round ahead of finished folders that
+  came due less than five minutes before it (`IMPORT_ROUND_HEAD_START_SECONDS`
+  in `claim_stream`, which picks the earlier of two one-row candidates). The
+  import round comes off the partial index
+  `email_sync_streams_import_round_claim`; keep its predicate and the query's
+  identical, or each claim reads every due finished folder. Polls of every
+  finished folder share the sync loops and run minutes late, and a round that
+  waited behind them read a page only every few minutes while its import sat
+  empty. A round waiting for room reads nothing: paced, or its page refused
+  by the request gate while its mailbox's message reads hold the import
+  slots, which waits the 10 s pace too. `enumerate_once` then goes on to the
+  next due stream (up to `PACED_CLAIMS_PER_TURN`); otherwise a large import's
+  waiting rounds, due again within seconds, would take the polls' turns.
   A message released after a failed read is due at once when a newer
   revision arrived during the lease.
 - A folder's import round is a delta snapshot, so mail that arrives during it
@@ -615,6 +670,17 @@ tools — hexagonal, heavily feature-gated.
   does a transient provider failure (Graph 5xx or 408, a request Graph never
   answered) or a lock timeout once its backoff is at 30 minutes, so a provider
   outage or a busy mailbox never abandons a message.
+- A projection event that keeps failing is given up as a message read is:
+  `MailboxProjectionService::project_leased` decides with `message_retry`
+  (backoff included), and `finish_projection` gives an uncounted claim back to
+  `attempts`. One whose claims keep ending without an outcome is given up
+  unprojected after `UNFINISHED_CLAIM_LIMIT`: `claim_projection` counts
+  `email_projection_outbox.unfinished_claims` from a lease still set when it
+  claims, since every recorded outcome deletes the entry or clears its lease.
+  A given-up entry is deleted, not parked: an event is projected once, a later
+  event for the link carries newer state, and a parked entry's `dedupe_key`
+  would swallow a re-enqueue of the same message version. It logs one
+  `mailbox projection abandoned` WARN holding only ids and kinds.
 - A projection's attachment download or upload that keeps failing is counted
   on the attachment (`email_attachments.upload_failures`), not the event, and
   abandoned at the limit `attachment_failure_limit` in
@@ -637,6 +703,22 @@ tools — hexagonal, heavily feature-gated.
   `AND EXCLUDED.is_import` for folder pages); keep that in a new one.
 - Outlook sync claims (catalog, folder streams, messages, contacts) skip a
   link with `needs_reauth`; clearing the flag resumes them.
+- A folder discovery that Graph answers 404 at the Inbox
+  (`MailFolderCatalog::NoMailbox`: the account has no mailbox Graph serves)
+  marks the link `mailbox_unavailable_at` (`defer_reason=no_mailbox`, the
+  span's `graph.error_code`), fenced to its catalog lease like the commit,
+  so a discovery that lost its lease can't mark a link a newer one cleared.
+  Every Outlook claim but the catalog's skips a
+  marked link (`l.mailbox_unavailable_at IS NULL`); give a new claim of work
+  that calls Graph the same filter. Discovery stays claimed as the probe and
+  waits as long as the link has been marked (30 s to 12 h). The catalog
+  commit that finds the mailbox clears the mark and makes the link's
+  streams, subscription upkeep (a new revision, failures reset) and settings
+  work due at once. A reconnect (`email_service` `mailbox_init.rs`) clears
+  it too, and with the same grant, which starts no new generation, makes
+  the same work and discovery due itself; keep the two wakes alike. Any
+  other discovery failure, a 5xx included, stays a provider error. The
+  inbox's sync status reads `MailboxUnavailable`.
 - Process deleted-user bindings in the domain by link id, custodian before
   owner, then actor id, retaining one binding per link and actor; the repository
   returns each binding's kind so custody cleanup runs before an owner disconnect

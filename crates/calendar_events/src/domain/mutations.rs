@@ -869,7 +869,11 @@ fn provider_error(error: CalendarProviderError) -> CalendarMutationError {
             CalendarMutationError::Retryable(error.to_string())
         }
         CalendarProviderErrorKind::Permanent | CalendarProviderErrorKind::PushUnsupported => {
-            CalendarMutationError::ProviderRejected(error.to_string())
+            CalendarMutationError::ProviderRejected(if error.is_refused() {
+                error.message().to_owned()
+            } else {
+                error.to_string()
+            })
         }
     }
 }

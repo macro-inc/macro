@@ -58,6 +58,7 @@ const soupPropertyToPropertyMock = vi.hoisted(() => vi.fn());
 const rollbackMock = vi.hoisted(() => vi.fn());
 const optimisticUpdateSoupEntityMock = vi.hoisted(() => vi.fn());
 const invalidateSoupEntityMock = vi.hoisted(() => vi.fn());
+const bumpSoupEntityTouchedAtMock = vi.hoisted(() => vi.fn());
 const refreshPropertyQueriesMock = vi.hoisted(() => vi.fn(async () => {}));
 vi.mock('../soup/property-queries', () => ({
   refreshPropertyQueries: refreshPropertyQueriesMock,
@@ -137,6 +138,7 @@ vi.mock('../soup/cache', () => ({
     frecency_score: 0,
   })),
   invalidateSoupEntity: invalidateSoupEntityMock,
+  bumpSoupEntityTouchedAt: bumpSoupEntityTouchedAtMock,
   optimisticUpdateSoupEntity: optimisticUpdateSoupEntityMock.mockImplementation(
     () => ({ rollback: rollbackMock })
   ),
@@ -681,6 +683,24 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
     expect(invalidateSoupEntityMock).toHaveBeenCalledWith('task-1');
     expect(testQueryClient.invalidateQueries).toHaveBeenCalled();
     expect(toastFailureMock).toHaveBeenCalledOnce();
+  });
+
+  // A saved property is the viewer's own touch: Recent moves the item now.
+  it('stamps the viewer’s touch on a saved property, and not on a failed one', async () => {
+    await mutation.mutateAsync(variables);
+    expect(bumpSoupEntityTouchedAtMock).toHaveBeenCalledExactlyOnceWith(
+      'task-1'
+    );
+
+    bumpSoupEntityTouchedAtMock.mockClear();
+    graphqlEntityPropertyMutationMock.mockResolvedValue({
+      kind: 'permanently-failed',
+      error: new Error('invalid property'),
+    });
+    await expect(mutation.mutateAsync(variables)).rejects.toThrow(
+      'invalid property'
+    );
+    expect(bumpSoupEntityTouchedAtMock).not.toHaveBeenCalled();
   });
 
   it('exposes transport-neutral pending state', async () => {

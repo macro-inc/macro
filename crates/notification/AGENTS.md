@@ -173,6 +173,10 @@ through the same service.
   `fix(notification): stop recording notification payloads` history).
 - Android call pushes carry W3C trace context inside their existing JSON offer;
   keep propagation in the outbound SNS adapter, with no baggage or payload logging.
+- Ingress queue messages carry the sender's `traceparent`/`tracestate`
+  (`IngressQueueMessage.trace_context`, `src/trace_context.rs`); the worker's
+  `notification.ingress.process` span links to it, keeping its own parent.
+  Never forward baggage or put payloads on that span.
 - iOS egress binds `recipientId` to each receiving account; channel pushes carry
   an optional typed `navigation` destination, with `threadId: null` for a root
   message. Preserve older payloads that omit these fields.

@@ -502,7 +502,7 @@ function NoTeamState() {
 }
 
 function CrmContent(props: { onOpenThread?: () => void }) {
-  const { accessState, retryAccess } = useCrmContext();
+  const { accessState, retryAccess, MemberAccess } = useCrmContext();
   const teamQuery = useCurrentTeamQuery();
 
   return (
@@ -514,6 +514,9 @@ function CrmContent(props: { onOpenThread?: () => void }) {
             title="CRM"
             description={t('crm.policySettingsDescription')}
           >
+            <Suspense>
+              <MemberAccess />
+            </Suspense>
             {content}
             <Show when={accessState() === 'error'}>
               <SettingsSection>

@@ -1,6 +1,7 @@
 //! Files manual contacts that have no company under the company for their
 //! email domain, the way creation files a new one. A contact email sync left
-//! without a company is never filed: that was sync's decision. An operator runs it for
+//! without a company is never filed: that was sync's decision. Neither is an
+//! archived one: sync never creates a company for an archived contact. An operator runs it for
 //! one team, a batch at a time; nothing runs it automatically.
 
 use super::{
@@ -23,6 +24,8 @@ pub struct UnfiledContact {
     pub email: String,
     /// Whether a person created or edited it, as opposed to email sync.
     pub manually_created: bool,
+    /// Whether it is archived.
+    pub hidden: bool,
 }
 
 /// What filing one contact did, or would do in a dry run.
@@ -37,6 +40,8 @@ pub enum ContactFiling {
     BlockedDomain,
     /// The domain's company is hidden.
     HiddenCompany,
+    /// The contact is archived.
+    Archived,
     /// Another contact of the team holds one of the contact's addresses.
     DuplicateAddress,
     /// The contact is gone, has a company, has no primary address, or is
@@ -55,6 +60,8 @@ pub struct ContactFilingBatch {
     pub companies_created: u32,
     /// Left alone: email sync filed it without a company.
     pub skipped_not_manual: u32,
+    /// Left alone: the contact is archived.
+    pub skipped_archived: u32,
     /// Left alone: the address is at a personal or generic provider.
     pub skipped_provider_domain: u32,
     /// Left alone: the team blocks the domain.
@@ -91,7 +98,8 @@ pub trait ContactFilingRepository: Send + Sync + 'static {
     /// [`CompaniesRepository::create_contact_for_email_domain`]. Takes the
     /// locks of a contact edit in the same order and re-reads the contact
     /// under them, so a contact that gained a company meanwhile is left
-    /// alone, and so is one that is not `manually_created`. Keeps the
+    /// alone, and so is one that is not `manually_created` or is archived.
+    /// Keeps the
     /// contact's id, addresses, archive state and sources.
     /// With `dry_run` nothing is written. A lock that is not free within
     /// five seconds returns [`CrmError::Contended`]. The caller rules out
@@ -171,6 +179,7 @@ where
                 });
             match filing {
                 Ok(Examined::NotManual) => batch.skipped_not_manual += 1,
+                Ok(Examined::Decided(ContactFiling::Archived)) => batch.skipped_archived += 1,
                 Ok(Examined::ProviderDomain) => batch.skipped_provider_domain += 1,
                 Ok(Examined::Decided(ContactFiling::Filed { company_created })) => {
                     batch.filed += 1;
@@ -215,6 +224,9 @@ where
     ) -> Result<Examined, CrmError> {
         if !contact.manually_created {
             return Ok(Examined::NotManual);
+        }
+        if contact.hidden {
+            return Ok(Examined::Decided(ContactFiling::Archived));
         }
         let Some((_, domain)) = contact.email.split_once('@') else {
             return Ok(Examined::ProviderDomain);

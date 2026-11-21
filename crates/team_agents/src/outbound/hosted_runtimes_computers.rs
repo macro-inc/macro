@@ -94,6 +94,7 @@ fn computer_state(
         Kind::SettingUp => ComputerState::SettingUp,
         Kind::Ready if awaiting_agent => ComputerState::AwaitingAgent,
         Kind::Ready => ComputerState::Ready,
+        Kind::Unhealthy => ComputerState::Unhealthy,
         Kind::WaitingForCapacity | Kind::Starting | Kind::Stopping | Kind::Stopped => {
             ComputerState::Paused
         }

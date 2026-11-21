@@ -274,7 +274,11 @@ function InputGroupAddon(props: InputGroupAddonProps) {
         local.class
       )}
       on:click={(event) => {
-        if ((event.target as HTMLElement).closest('button')) return;
+        if (
+          (event.target as HTMLElement).closest('button, input, label') ||
+          event.currentTarget.querySelector('input')
+        )
+          return;
         group.focus();
       }}
       {...rest}

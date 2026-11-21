@@ -1,5 +1,52 @@
 use super::*;
 
+/// What html2text made of the body itself, as the conversion did before it
+/// read the bounded parse's serialization.
+fn html2text_of_the_body(html: &str) -> Option<String> {
+    let config = html2text::config::plain()
+        .no_table_borders()
+        .link_footnotes(false)
+        .no_link_wrapping()
+        .raw_mode(true)
+        .allow_width_overflow();
+    let dom = config.parse_html(html.as_bytes()).ok()?;
+    let tree = config.dom_to_render_tree(&dom).ok()?;
+    let text = config.render_to_string(tree, TEXT_WIDTH).ok()?;
+    let lines: Vec<&str> = text
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect();
+    Some(lines.join("\n"))
+}
+
+#[test]
+fn text_matches_html2text_reading_the_body_itself() {
+    let legacy = r#"<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">"#;
+    let limited = r#"<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">"#;
+    let quirky_table = "<p><b>z<table><tr><td>cell</td></tr></table>y</b>";
+    for html in [
+        format!("{legacy}{quirky_table}"),
+        format!("{limited}{quirky_table}"),
+        format!("<!DOCTYPE html>{quirky_table}"),
+        "<b><p>one</b>two".to_string(),
+        "<font face=Arial><div>a</font>b</div>".to_string(),
+        "<a href=x><div>link</a>text</div>".to_string(),
+        "<i><ul><li>a</i>b".to_string(),
+        "<p><b>bold<p>next</b>".to_string(),
+        // Scraper's own tree dropped `lost`; html2text's kept it.
+        "<b><div>a<p><div>lost</b>".to_string(),
+        "<pre>\nkept</pre><p>x &amp; y &lt; z&nbsp;w</p>".to_string(),
+        "<noscript><p>shown</p></noscript>".to_string(),
+    ] {
+        assert_eq!(
+            html_to_plaintext(&html),
+            html2text_of_the_body(&html),
+            "{html}"
+        );
+    }
+}
+
 #[test]
 fn test_plaintext_passthrough() {
     let body = Some("Hello, world!".to_string());

@@ -1,9 +1,11 @@
 use super::*;
 use crate::domain::mailbox::{
-    AFTER_PROVIDER_ATTEMPTS, AFTER_PROVIDER_RETRY_DELAY, DatabaseFailure, LOCK_NOT_AVAILABLE,
+    AFTER_PROVIDER_ATTEMPTS, AFTER_PROVIDER_RETRY_DELAY, DatabaseFailure,
 };
+use crate::domain::models::error::LOCK_NOT_AVAILABLE;
 use email_api_client::domain::models::{
-    MailboxChangePage, MailboxMessage, MailboxState, MessageWriteReceipt, RoundStart, StreamToken,
+    MailFolderCatalog, MailboxChangePage, MailboxMessage, MailboxState, MessageWriteReceipt,
+    RoundStart, StreamToken,
 };
 use std::sync::{Arc, Mutex};
 
@@ -183,8 +185,8 @@ impl MailboxCommandRepository for Harness {
 }
 
 impl MailboxGateway for Harness {
-    async fn folders(&self, _: MailboxKey) -> Result<Vec<MailFolder>, EmailApiError> {
-        Ok(vec![])
+    async fn folders(&self, _: MailboxKey) -> Result<MailFolderCatalog, EmailApiError> {
+        Ok(MailFolderCatalog::Folders(vec![]))
     }
     async fn changes(
         &self,

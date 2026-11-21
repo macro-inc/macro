@@ -5,7 +5,6 @@ import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
 import { getDisplayNameParts, tryMacroId } from '@core/user';
 import { openExternalUrl } from '@core/util/url';
-import { createUserScopedStorage } from '@core/util/userScopedStorage';
 import {
   getGithubSenderLogin,
   isGithubNotificationType,
@@ -26,6 +25,7 @@ import {
   type NotificationsInboxContext,
   NotificationsInboxProvider,
 } from './context/notifications-inbox-context';
+import { inboxFilterStorage } from './inbox-filter-storage';
 import { inboxSearchFor, useInboxShownRowLocation } from './inbox-location';
 import { useNotificationsCalendarPreview } from './notifications-calendar-preview';
 import {
@@ -38,9 +38,8 @@ import {
 } from './queries/inbox-clear-update';
 import { createNotificationInboxSource } from './queries/notification-inbox-source';
 import { resolveAccessRequest } from './queries/row-actions';
+import type { NotificationsFrame } from './views/notifications-frame';
 import { NotificationsView } from './views/notifications-view';
-
-const filterStorage = createUserScopedStorage('macro:notifications:filters:v1');
 
 function userName(userId: string): string | undefined {
   const parts = getDisplayNameParts(tryMacroId(userId), {
@@ -93,14 +92,14 @@ function createAppNotificationsInboxContext(
     senderName,
     openUrl: openExternalUrl,
     filterStorage: {
-      read: () => filterStorage.read(userId),
-      write: (value) => filterStorage.write(userId, value),
+      read: () => inboxFilterStorage.read(userId),
+      write: (value) => inboxFilterStorage.write(userId, value),
     },
   };
 }
 
 /** The Notifications view with the app's feed, notification state and navigation. */
-export function NotificationsInbox() {
+export function NotificationsInbox(props: { frame?: NotificationsFrame }) {
   const panel = useSplitPanelOrThrow();
   const flag = useFeatureFlag(enablePasswords);
   const enabled = () => !flag().loading && flag().enabled;
@@ -132,6 +131,7 @@ export function NotificationsInbox() {
           )}
         >
           <NotificationsView
+            frame={props.frame}
             onOpenSettings={() => openSettings('Notifications')}
             shownRow={shownRow}
             calendarPreview={{

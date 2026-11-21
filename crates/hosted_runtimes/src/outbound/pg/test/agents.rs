@@ -128,3 +128,52 @@ async fn an_agent_gets_only_one_computer(pool: PgPool) {
         Err(ReserveError::Storage(_))
     ));
 }
+
+/// The agent's hand-off and start are timed in Postgres too: a finished
+/// hand-off changes nothing but the setup timeline, and still counts.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_agent_hand_off_and_start_are_timed_in_postgres(pool: PgPool) {
+    insert_team(&pool).await;
+    let repo = PgComputerRepo::new(pool.clone(), policy());
+    host(&repo, "agent-timing-host", 31, 7, 3).await;
+    let id = bought(&repo, 1).await.id;
+    changed(&repo, id, Event::InstanceStarted, now()).await;
+    let connected = changed(
+        &repo,
+        id,
+        Event::MacrodConnected,
+        now() + Duration::seconds(10),
+    )
+    .await;
+    assert!(
+        connected
+            .state
+            .setup
+            .as_ref()
+            .is_some_and(|setup| setup.connected_at.is_some())
+    );
+
+    let delivered = changed(
+        &repo,
+        id,
+        Event::AgentDelivered,
+        now() + Duration::seconds(12),
+    )
+    .await;
+    let online = changed(&repo, id, Event::AgentOnline, now() + Duration::seconds(20)).await;
+
+    let setup = |computer: &Computer| computer.state.setup.clone().unwrap();
+    assert_eq!(
+        setup(&delivered).agent_delivered_at,
+        Some(now() + Duration::seconds(12))
+    );
+    assert_eq!(
+        setup(&online).agent_online_at,
+        Some(now() + Duration::seconds(20))
+    );
+    let stored = repo.get(id).await.unwrap().unwrap().into_healthy().unwrap();
+    assert_eq!(
+        setup(&stored).agent_delivered_at,
+        Some(now() + Duration::seconds(12))
+    );
+}

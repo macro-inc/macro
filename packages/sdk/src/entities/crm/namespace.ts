@@ -29,6 +29,8 @@ import { PipelineNamespace } from './pipelines';
  *
  * Create a pipeline with its stages and fields in one `crm.pipelines.create` call. Work with entries by name through the pipeline's own methods: `find` (filters by field name and stage label, with per-stage counts and number totals such as Revenue), `addRecords`, `updateEntries` (a stage by its label, a person as `'me'`), `removeRecords`, and `edit` for fields and stage options. `importCsv` / `exportCsv` move entries through CSV, and `crm.importCompaniesCsv` loads a companies list. `crm.pipelines.entriesFor` and `searchEntries` find a company's deals across pipelines. Reach for `applyOps` and column ids only for what these cannot express.
  *
+ * Find a company before creating one: `crm.companyByDomain` by its domain, `crm.searchCompanies` by its name. Create it only when neither finds it; `createCompany` refuses a domain the team already tracks.
+ *
  * A company also has its own Stage, Owner and Revenue properties on its CRM page. They are separate from every pipeline and not kept in sync with it. When the user has pipelines, deal and stage requests mean pipeline entries; change the company's own properties only when the user asks for those properties specifically.
  */
 export class CrmNamespace {
@@ -90,6 +92,20 @@ export class CrmNamespace {
   }
 
   /**
+   * The team's company for a domain. Exact and current, unlike
+   * {@link searchCompanies}, so use it after `createCompany` reports the domain
+   * is already tracked. An archived company is returned to team admins only.
+   *
+   * @readonly
+   */
+  async companyByDomain(domain: string): Promise<Company | undefined> {
+    const { company } = unwrap(
+      await this.client.storage.getCompanyByDomain({ query: { domain } }),
+    );
+    return company ? Company.from(this.client, company) : undefined;
+  }
+
+  /**
    * Search the caller's current team's CRM contacts whose email or name
    * contains `query` (case-insensitive), most recently interacted first.
    * An empty query lists the most recent contacts.
@@ -111,7 +127,9 @@ export class CrmNamespace {
   }
 
   /**
-   * Create a CRM company for the caller's current team.
+   * Create a CRM company for the caller's current team. Look it up first with
+   * {@link companyByDomain} or {@link searchCompanies}: a domain the team
+   * already tracks is refused.
    *
    * @write
    */
@@ -125,7 +143,8 @@ export class CrmNamespace {
   /**
    * Create a contact for the caller's current team. The email is optional; a
    * work address links the contact to its domain's company, created if
-   * missing. To choose the company, use {@link Company.createContact}.
+   * missing. To choose the company, find it with {@link companyByDomain} or
+   * {@link searchCompanies} and use {@link Company.createContact}.
    *
    * @write
    */

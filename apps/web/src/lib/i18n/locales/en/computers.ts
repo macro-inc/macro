@@ -45,8 +45,7 @@ export default {
   claudeUnreachable:
     "Can't reach the computer right now. Try again in a moment.",
   claudeBusy: 'The computer is busy. Try again in a moment.',
-  claudeTimedOut:
-    "The computer didn't answer in time. Get a new link to try again.",
+  claudeTimedOut: "The computer didn't answer in time. Send the code again.",
   claudeFailed: 'Something went wrong signing in.',
   claudeStepDone: 'done',
   claudeFailedAfterClose:
@@ -80,6 +79,9 @@ export default {
   waitingForCapacityHint:
     'Turn off or release another computer on this host to make room',
   starting: 'Starting…',
+  unhealthy: 'Not responding',
+  unhealthyHint:
+    "It's back once it reconnects; Macro restarts it if it doesn't",
   stopping: 'Turning off',
   stopped: 'Powered off',
   failed: 'Failed',

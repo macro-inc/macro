@@ -28,6 +28,9 @@ pub struct PgMessageLabels<M>(pub sqlx::PgPool, pub M);
 pub enum MessageLabelPersistenceError {
     #[error(transparent)]
     Database(#[from] anyhow::Error),
+    /// The inbox stayed locked past the lock timeout; the change can be retried.
+    #[error(transparent)]
+    Contended(email::domain::models::EmailErr),
 }
 
 impl<M> MessageLabelRepository for PgMessageLabels<M>
@@ -35,6 +38,10 @@ where
     M: EmailRepo<Err = sqlx::Error>,
 {
     type Err = MessageLabelPersistenceError;
+
+    fn is_contended(&self, error: &Self::Err) -> bool {
+        matches!(error, MessageLabelPersistenceError::Contended(_))
+    }
 
     async fn inbox_for_message(
         &self,
@@ -263,7 +270,12 @@ where
         self.1
             .enqueue_mailbox_action(link_id, actor, action, targets)
             .await
-            .map_err(|e| anyhow::Error::from(e).into())
+            .map_err(|error| match error {
+                email::domain::models::EmailErr::Contended => {
+                    MessageLabelPersistenceError::Contended(error)
+                }
+                error => anyhow::Error::from(error).into(),
+            })
     }
 }
 

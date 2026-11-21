@@ -19,7 +19,7 @@ spec:
     metadata:
       annotations:
         checksum/config: 6cdd48af38ad0b7143136f3cc45865f4e301be2699c9ef8fb5f420e3769e7b3c
-        observability.macro.com/alb-readiness-gate: "false"
+        observability.macro.com/alb-readiness-gate: "true"
       labels:
         app.kubernetes.io/name: edge
         observability.macro.com/telemetry-write: "true"
