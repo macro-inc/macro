@@ -59,8 +59,11 @@ function invalidateDeletedDssItems(entities: EntityData[]): void {
   if (channelIds.length > 0) {
     queryClient.invalidateQueries({ queryKey: channelKeys._def });
     // The channel directory reads a replica, or waits for the soup update:
-    // the primary's answer takes the deleted channels out at once.
-    fireAndForget(refreshChannelDirectory(channelIds), 'channel-delete');
+    // the deleted channels come out at once, with no read of each.
+    fireAndForget(
+      refreshChannelDirectory([], { removed: channelIds }),
+      'channel-delete'
+    );
   }
   if (entities.some((e) => e.type === 'call')) {
     queryClient.invalidateQueries({ queryKey: callKeys._def });
