@@ -40,6 +40,15 @@ const EXECUTION: &str = r#"
   }
 "#;
 
+/// Programs often import `CodeContext` from the SDK as they would any other
+/// type; it is ambient, so let that import name the same type.
+const IMPORTABLE: &str = r#"
+declare module '@macro-inc/sdk' {
+  /** The ambient `CodeContext`; importing it is optional. */
+  export type CodeContext = globalThis.CodeContext;
+}
+"#;
+
 /// The declarations for a run of `shape`: `session` and `execution` are
 /// declared exactly when the bootstrap passes them to `main`.
 pub(crate) fn program_context(shape: ContextShape) -> String {
@@ -51,5 +60,6 @@ pub(crate) fn program_context(shape: ContextShape) -> String {
         declarations.push_str(EXECUTION);
     }
     declarations.push_str("}\n");
+    declarations.push_str(IMPORTABLE);
     declarations
 }
