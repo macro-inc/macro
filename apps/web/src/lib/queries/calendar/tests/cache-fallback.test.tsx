@@ -6,6 +6,7 @@ import type {
 import { OWNER_HANDOFF_BLOCKED_ERROR_CODE } from '@graphql-cache/protocol';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
+import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mapCalendarOccurrence } from '../graphql/map';
@@ -17,10 +18,14 @@ import {
   type CalendarChangesPage,
   CalendarSyncController,
   DELTA_RETRY_BASE_MS,
+  MAX_DELTA_RETRIES,
   setActiveCalendarSyncController,
 } from '../graphql/sync-controller';
 import { graphqlEvent, graphqlOccurrence } from '../graphql/tests/fixtures';
-import { useCalendarOccurrencesQuery } from '../occurrences';
+import {
+  invalidateCalendarOccurrences,
+  useCalendarOccurrencesQuery,
+} from '../occurrences';
 
 const mocks = vi.hoisted(() => ({
   listOccurrences: vi.fn(),
@@ -52,6 +57,12 @@ const week = {
   end: '2026-10-12T00:00:00.000Z',
   startDate: '2026-10-05',
   endDate: '2026-10-12',
+};
+const nextWeek = {
+  start: '2026-10-12T00:00:00.000Z',
+  end: '2026-10-19T00:00:00.000Z',
+  startDate: '2026-10-12',
+  endDate: '2026-10-19',
 };
 const restData = {
   items: [mapCalendarOccurrence(graphqlOccurrence({ overrideTitle: 'REST' }))],
@@ -338,6 +349,90 @@ describe('calendar week after REST showed what the cache missed', () => {
     );
     expect(eventIds(query.data)).toEqual(['event-1', 'event-2']);
     expect(mocks.listOccurrences).toHaveBeenCalledOnce();
+    cache.controller.dispose();
+    warn.mockRestore();
+  });
+
+  it('shows a change made elsewhere on the next poke and pages through REST once retries stop', async () => {
+    vi.useFakeTimers();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const cache = staleCoveredCache();
+    cacheHost = cache.host;
+    const elsewhere = graphqlOccurrence({
+      id: 'event-3:2026-10-08T09:00:00+00:00',
+      eventId: 'event-3',
+      occurrenceKey: '2026-10-08T09:00:00+00:00',
+      event: graphqlEvent({ id: 'event-3', title: 'Made in another tab' }),
+    });
+    let onServer = [existing, created];
+    mocks.listOccurrences.mockImplementation(async () =>
+      ok({
+        items: onServer.map(mapCalendarOccurrence),
+        syncStatus: 'ready' as const,
+        hasMore: false,
+        nextCursor: null,
+      })
+    );
+    const [range, setRange] = createSignal(week);
+    let query!: ReturnType<typeof useCalendarOccurrencesQuery>;
+    const Harness = () => {
+      query = useCalendarOccurrencesQuery(() => ({
+        userId: 'user-1',
+        range: range(),
+      }));
+      return null;
+    };
+    dispose = render(
+      () => (
+        <QueryClientProvider client={client}>
+          <Harness />
+        </QueryClientProvider>
+      ),
+      document.body
+    );
+    await vi.waitFor(() =>
+      expect(eventIds(query.data)).toEqual(['event-1', 'event-2'])
+    );
+    await expect(cache.controller.runDelta()).rejects.toThrow();
+    cache.state.handoff = false;
+
+    // The delta keeps failing through every retry, and then stops. The
+    // first attempt failed at the refused cache read, before any fetch.
+    await vi.advanceTimersByTimeAsync(
+      DELTA_RETRY_BASE_MS * (2 ** MAX_DELTA_RETRIES - 1) + 1_000
+    );
+    expect(cache.fetchChanges).toHaveBeenCalledTimes(MAX_DELTA_RETRIES);
+    for (let change = 0; change < 3; change += 1) {
+      cache.cacheChanged();
+      await vi.advanceTimersByTimeAsync(300);
+    }
+    expect(mocks.listOccurrences).toHaveBeenCalledOnce();
+
+    // An event created elsewhere reaches this tab as the server's poke.
+    onServer = [existing, created, elsewhere];
+    await invalidateCalendarOccurrences();
+    await vi.waitFor(() =>
+      expect(eventIds(query.data)).toEqual(['event-1', 'event-2', 'event-3'])
+    );
+    expect(mocks.listOccurrences).toHaveBeenCalledTimes(2);
+    // The poke tried the delta once more and scheduled no retry.
+    expect(cache.fetchChanges).toHaveBeenCalledTimes(MAX_DELTA_RETRIES + 1);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(cache.fetchChanges).toHaveBeenCalledTimes(MAX_DELTA_RETRIES + 1);
+
+    // Paging reads the new week from REST once; cache changes add nothing.
+    setRange(nextWeek);
+    await vi.waitFor(() =>
+      expect(mocks.listOccurrences).toHaveBeenCalledTimes(3)
+    );
+    expect(mocks.listOccurrences).toHaveBeenLastCalledWith(
+      expect.objectContaining({ start: nextWeek.start, end: nextWeek.end })
+    );
+    for (let change = 0; change < 3; change += 1) {
+      cache.cacheChanged();
+      await vi.advanceTimersByTimeAsync(300);
+    }
+    expect(mocks.listOccurrences).toHaveBeenCalledTimes(3);
     cache.controller.dispose();
     warn.mockRestore();
   });

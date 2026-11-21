@@ -536,6 +536,27 @@ describe('readCalendarViewport after REST showed newer data', () => {
     });
   });
 
+  it('rereads a range when a delta finished during a read that began behind', async () => {
+    const host = answeredHost();
+    let caughtUp = false;
+    host.calendarRange.mockImplementationOnce(async () => {
+      caughtUp = true;
+      return covered({ occurrenceKeys: [] });
+    });
+    const { result, fetchRest } = read(host, {
+      sync: {
+        caughtUp: () => caughtUp,
+        catchUp: vi.fn(async (): Promise<CalendarCatchUp> => 'current'),
+      },
+    });
+
+    const answer = await result;
+    expect(answer.source).toBe('cache');
+    expect(answer.data.items).toHaveLength(1);
+    expect(host.calendarRange).toHaveBeenCalledTimes(2);
+    expect(fetchRest).not.toHaveBeenCalled();
+  });
+
   it('asks nothing of a cache that is current', async () => {
     const host = answeredHost();
     const current = sync('current');

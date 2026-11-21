@@ -451,6 +451,9 @@ export async function readCalendarRange(
   } = {}
 ): Promise<CalendarRangeRead> {
   const args = toCalendarRangeArgs(range);
+  // Asked before the first read: a delta finishing during that read leaves
+  // the read older than the cache it reports as caught up.
+  const behind = options.sync ? !options.sync.caughtUp() : false;
   const first = await askCalendarRange(
     host,
     args,
@@ -460,7 +463,7 @@ export async function readCalendarRange(
   let result = first;
   if (result.kind === 'unsupported') return { kind: 'unsupported' };
   let catchUp: CalendarCatchUp = 'current';
-  if (options.sync && !options.sync.caughtUp()) {
+  if (behind && options.sync) {
     // Stays on a read whose deadline passes while the delta runs.
     options.span?.setAttr('calendar.read.catch_up', 'waiting');
     catchUp = await options.sync.catchUp();
@@ -468,8 +471,8 @@ export async function readCalendarRange(
   }
   if (options.signal?.aborted) throw options.signal.reason;
   const current = await match(catchUp)
-    .with('current', () => result)
-    // The delta changed what the range holds since the first read.
+    // The cache moved on since the first read whenever it was behind then.
+    .with('current', () => (behind ? host.calendarRange(args) : result))
     .with('held', 'retried', () => host.calendarRange(args))
     .with('behind', () => undefined)
     .exhaustive(() => undefined);
