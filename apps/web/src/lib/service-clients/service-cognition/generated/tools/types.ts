@@ -16726,7 +16726,7 @@ export interface ExecuteCode {
    */
   timeout_ms?: number;
   /**
-   * Optional. {title, sends?} runs this program as a background job, so the person can keep talking to you while it runs. Use it when the program is expected to take more than about 10 seconds or the person need not wait for its result, such as checking a routine you drafted, scanning a whole inbox, or writing many items. The call returns at once with status running and a job; then tell the person in one sentence what you started and that you will report back, and end your turn. The job runs for up to 10 minutes with this turn's account, never asks for approval, and cannot open UI; without sends: true it can't do anything that reaches other people or the outside: send email or messages, save or change routines, call connected apps, fetch or search the web, share, or invite (reading, writing your own items and drafting reviews are fine). Set sends: true when the program does any of those. When it ends, a job.settled event brings you its status and result, and you report it then. Its writes are not retried for you: after a failure, cancellation or interruption, check current state before writing again. Running jobs and recent ones are listed in each prompt's background_jobs. At most 3 jobs run per session. Where background jobs are not allowed (a turn someone other than the session owner prompted, or a system turn), the program runs in the foreground and the receipt says why in ranInForeground.
+   * Optional. {title} runs this program as a background job, so the person can keep talking to you while it runs. Use it when the program is expected to take more than about 10 seconds or the person need not wait for its result, such as scanning a whole inbox, reading many documents, or writing many of your own items. The call returns at once with status running and a job; then tell the person in one sentence what you started and that you will report back, and end your turn. The job runs for up to 10 minutes with this turn's account, never asks for approval, and cannot open UI; it can't do anything that reaches other people or the outside: send email or messages, save or change routines, call connected apps, fetch or search the web, share, or invite (reading, writing your own items and drafting reviews are fine). Run a program that does any of those in the foreground, without background; sends: true runs it in the foreground too. When it ends, a job.settled event brings you its status and result, and you report it then. Its writes are not retried for you: after a failure, cancellation or interruption, check current state before writing again. Running jobs and recent ones are listed in each prompt's background_jobs. At most 3 jobs run per session. Where background jobs are not allowed (a turn someone other than the session owner prompted, or a system turn), the program runs in the foreground and the receipt says why in ranInForeground.
    *
    */
   background?: BackgroundRequest | null;
@@ -16740,7 +16740,7 @@ export interface BackgroundRequest {
    */
   title: string;
   /**
-   * Set true only when the program itself sends email or messages; otherwise the job can read, write and draft reviews but not send.
+   * Leave unset. A background job can't send, save routines, call connected apps or reach the web yet; true runs the program in the foreground instead.
    */
   sends?: boolean;
 }
