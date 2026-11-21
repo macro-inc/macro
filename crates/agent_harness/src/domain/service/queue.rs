@@ -1624,6 +1624,7 @@ where
                     return Err(error);
                 }
             }
+            self.attach_background_jobs(session_id, &mut composed).await;
 
             // A reply shown in segments posts nothing until the agent has
             // something to say or do: the bot types meanwhile.

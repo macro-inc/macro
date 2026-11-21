@@ -86,7 +86,23 @@ impl ExecutionCredentials for Credentials {
                 ..Default::default()
             },
             acting_user: identity.owner.clone(),
+            correlation: None,
         })
+    }
+    async fn approve_job(
+        &self,
+        _: &ExecutionIdentity,
+        _: &str,
+        _: CancellationToken,
+    ) -> Result<macro_user_id::user_id::MacroUserIdStr<'static>, CodeModeError> {
+        Err(CodeModeError::Forbidden)
+    }
+    async fn mint_job(
+        &self,
+        _: &ExecutionIdentity,
+        _: &macro_user_id::user_id::MacroUserIdStr<'static>,
+    ) -> Result<IssuedRun, CodeModeError> {
+        Err(CodeModeError::Unavailable)
     }
 }
 /// PNG pixels named after their file, owned by the session owner; the file
@@ -191,6 +207,7 @@ async fn a_program_with_type_errors_stops_before_credentials() {
                 source: "export async function main() { return TYPE_ERROR; }".into(),
                 timeout_ms: 1000,
             },
+            None,
             CancellationToken::new(),
         )
         .await
@@ -221,6 +238,7 @@ async fn run_uses_session_owner_and_records_source_and_result_without_credential
             ai_toolset::actor::ToolActor::Owner,
             macro_uuid::Uuid::from_u128(1),
             request(),
+            None,
             CancellationToken::new(),
         )
         .await
@@ -245,6 +263,7 @@ async fn run_uses_session_owner_and_records_source_and_result_without_credential
             ai_toolset::actor::ToolActor::Owner,
             macro_uuid::Uuid::from_u128(1),
             request(),
+            None,
             CancellationToken::new(),
         )
         .await
@@ -259,6 +278,7 @@ async fn run_uses_session_owner_and_records_source_and_result_without_credential
             ai_toolset::actor::ToolActor::Owner,
             macro_uuid::Uuid::from_u128(1),
             changed.clone(),
+            None,
             CancellationToken::new(),
         )
         .await
@@ -296,6 +316,7 @@ async fn archived_or_inactive_sessions_never_receive_credentials() {
                 ai_toolset::actor::ToolActor::Owner,
                 macro_uuid::Uuid::from_u128(1),
                 request(),
+                None,
                 CancellationToken::new()
             )
             .await
@@ -311,6 +332,7 @@ async fn archived_or_inactive_sessions_never_receive_credentials() {
                 ai_toolset::actor::ToolActor::Owner,
                 macro_uuid::Uuid::from_u128(1),
                 request(),
+                None,
                 CancellationToken::new()
             )
             .await
@@ -330,6 +352,7 @@ async fn collision_runs_under_a_fresh_id_without_reading_another_session() {
             ai_toolset::actor::ToolActor::Owner,
             macro_uuid::Uuid::from_u128(1),
             request(),
+            None,
             CancellationToken::new(),
         )
         .await
@@ -343,6 +366,7 @@ async fn collision_runs_under_a_fresh_id_without_reading_another_session() {
             ai_toolset::actor::ToolActor::Owner,
             macro_uuid::Uuid::from_u128(1),
             request(),
+            None,
             CancellationToken::new(),
         )
         .await
@@ -371,6 +395,7 @@ async fn unfinished_journal_reads_and_retries_report_uncertainty_without_replayi
         calls: Vec::new(),
         activity: Vec::new(),
         activity_truncated: false,
+        job: None,
     };
     store.create(session.id, &record).await.unwrap();
     let access = EntityAccessReceipt::dangerously_assert_authenticated_user(
@@ -386,6 +411,7 @@ async fn unfinished_journal_reads_and_retries_report_uncertainty_without_replayi
             ai_toolset::actor::ToolActor::Owner,
             macro_uuid::Uuid::from_u128(1),
             request(),
+            None,
             CancellationToken::new(),
         )
         .await
@@ -473,6 +499,7 @@ async fn optional_reviews_default_to_empty_without_accepting_malformed_results()
                 ai_toolset::actor::ToolActor::Owner,
                 macro_uuid::Uuid::from_u128(1),
                 request(),
+                None,
                 CancellationToken::new(),
             )
             .await
@@ -559,6 +586,7 @@ async fn persists_live_activity_and_marks_unfinished_requests_unknown() {
                 ai_toolset::actor::ToolActor::Owner,
                 macro_uuid::Uuid::from_u128(1),
                 request(),
+                None,
                 CancellationToken::new(),
             )
             .await
@@ -603,6 +631,7 @@ fn activity_rejects_unknown_operations_and_is_bounded() {
         calls: vec![],
         activity: vec![],
         activity_truncated: false,
+        job: None,
     };
     super::super::activity::observe(
         &mut record.activity,
@@ -711,6 +740,7 @@ async fn cancellation_is_not_blocked_by_a_stalled_activity_save() {
                 ai_toolset::actor::ToolActor::Owner,
                 macro_uuid::Uuid::from_u128(1),
                 request(),
+                None,
                 token,
             )
             .await
@@ -739,6 +769,7 @@ async fn execution_retries_cannot_change_accounts_or_move_between_turns() {
             ai_toolset::actor::ToolActor::Owner,
             macro_uuid::Uuid::from_u128(1),
             request(),
+            None,
             CancellationToken::new(),
         )
         .await
@@ -752,6 +783,7 @@ async fn execution_retries_cannot_change_accounts_or_move_between_turns() {
             ai_toolset::actor::ToolActor::Requester,
             macro_uuid::Uuid::from_u128(1),
             request(),
+            None,
             CancellationToken::new(),
         )
         .await
@@ -765,6 +797,7 @@ async fn execution_retries_cannot_change_accounts_or_move_between_turns() {
             ai_toolset::actor::ToolActor::Owner,
             macro_uuid::Uuid::from_u128(2),
             request(),
+            None,
             CancellationToken::new(),
         )
         .await
@@ -792,6 +825,7 @@ async fn a_delayed_call_cannot_adopt_a_new_turn_or_receive_credentials() {
             ai_toolset::actor::ToolActor::Requester,
             macro_uuid::Uuid::from_u128(1),
             request(),
+            None,
             CancellationToken::new(),
         )
         .await;
@@ -820,6 +854,7 @@ async fn returned_images_reach_the_model_as_pixels() {
             ai_toolset::actor::ToolActor::Owner,
             macro_uuid::Uuid::from_u128(1),
             request(),
+            None,
             CancellationToken::new(),
         )
         .await
@@ -854,6 +889,7 @@ async fn an_unreadable_returned_image_is_reported_without_pixels() {
             ai_toolset::actor::ToolActor::Owner,
             macro_uuid::Uuid::from_u128(1),
             request(),
+            None,
             CancellationToken::new(),
         )
         .await

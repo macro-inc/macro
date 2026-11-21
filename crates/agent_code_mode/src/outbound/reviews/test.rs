@@ -28,6 +28,7 @@ async fn review_revision_claim_is_atomic_and_session_deletion_removes_reviews(po
                 calls: vec![],
                 activity: Vec::new(),
                 activity_truncated: false,
+                job: None,
             },
         )
         .await

@@ -16,6 +16,7 @@ mod subagent;
 mod tool_name;
 mod util;
 
+mod job_updates;
 mod replay;
 mod review_updates;
 

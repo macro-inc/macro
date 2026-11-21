@@ -24,6 +24,7 @@ impl SessionCodeMode for SpanRecordingCodeMode {
         _: ai_toolset::actor::ToolActor,
         _: macro_uuid::Uuid,
         _: ExecuteRequest,
+        _: Option<agent_code_mode::domain::BackgroundRequest>,
         _: tokio_util::sync::CancellationToken,
     ) -> Result<ExecutionReceipt, CodeModeError> {
         let context = tracing::Span::current().context();
@@ -40,6 +41,21 @@ impl SessionCodeMode for SpanRecordingCodeMode {
         _: ExecutionId,
     ) -> Result<ExecutionRecord, CodeModeError> {
         Err(CodeModeError::NotFound)
+    }
+
+    async fn cancel_job(
+        &self,
+        _: agent_session::domain::model::AgentSessionId,
+        _: ExecutionId,
+    ) -> Result<agent_code_mode::domain::JobCancel, CodeModeError> {
+        Err(CodeModeError::NotFound)
+    }
+
+    async fn jobs(
+        &self,
+        _: agent_session::domain::model::AgentSessionId,
+    ) -> Result<Vec<agent_runtime_protocol::domain::job::BackgroundJobSummary>, CodeModeError> {
+        Ok(Vec::new())
     }
 }
 

@@ -39,6 +39,9 @@ pub enum NotificationEvent {
         /// Connected application's display name.
         app: String,
     },
+    /// A background job the agent started ended.
+    #[serde(rename = "job.settled")]
+    JobSettled(crate::domain::job::JobSettlement),
 }
 
 impl NotificationEvent {
@@ -49,6 +52,7 @@ impl NotificationEvent {
             Self::ReviewSettled(_) => "review.settled",
             Self::ImportPlanned(_) => "import.planned",
             Self::AppConnected { .. } => "app.connected",
+            Self::JobSettled(_) => "job.settled",
         }
     }
 }

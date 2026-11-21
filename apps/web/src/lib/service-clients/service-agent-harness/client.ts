@@ -26,6 +26,7 @@ import type {
   DiscoverAgentCapabilitiesRequest,
   DiscoverAgentCapabilitiesResponse,
   ExecutionRecord,
+  JobCancel,
   LoadAgentModelsRequest,
   LoadAgentModelsResponse,
   PreviewAgentSessionsResponse,
@@ -436,6 +437,14 @@ export const agentHarnessServiceClient = {
     return fetchWithToken<ExecutionRecord>(
       `${agentHarnessHost}/agent-sessions/${sessionId}/code-executions/${executionId}`,
       { method: 'GET', errorResponseHandler: sessionError }
+    );
+  },
+
+  /** Stop a background job; it settles as cancelled within about a second. */
+  cancelCodeExecutionJob(sessionId: string, executionId: string) {
+    return fetchWithToken<JobCancel>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/code-executions/${executionId}/cancel`,
+      { method: 'POST', errorResponseHandler: sessionError }
     );
   },
 

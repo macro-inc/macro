@@ -20,7 +20,9 @@ import { match } from 'ts-pattern';
 import { RuntimeRefusalRow } from '../components/runtime-refusal-row';
 import { SessionEventRow } from '../components/session-event-row';
 import { useAgentSession } from '../context/AgentSessionContext';
+import { useJobReveal } from '../context/job-reveal';
 import type { AgentMessageTarget } from '../core/search-location';
+import { codeExecutionReceipt } from '../state/code-execution';
 import { isLiveTurn, liveTurnMessage } from '../state/live-turn';
 import { timelineNotifications } from '../state/session-notifications';
 import { WorkingLine } from '../ui/WorkingLine';
@@ -141,6 +143,28 @@ export function Transcript(props: { searchTarget?: AgentMessageTarget }) {
       }
     )
   );
+  // The running chip above the composer asks for a job's card: scroll its
+  // message into the virtual list, then the card itself into view.
+  const jobReveal = useJobReveal();
+  if (jobReveal) {
+    const unregister = jobReveal.register((jobId) => {
+      const handle = navigation();
+      const entry = [...messageById()].find(([, message]) =>
+        message.parts.some(
+          (part) =>
+            part.kind === 'tool_use' &&
+            codeExecutionReceipt(part)?.executionId === jobId
+        )
+      );
+      if (!handle || !entry || !handle.scrollToMessage(entry[0])) return;
+      requestAnimationFrame(() =>
+        transcriptEl()
+          ?.querySelector(`[data-background-job="${CSS.escape(jobId)}"]`)
+          ?.scrollIntoView({ block: 'center' })
+      );
+    });
+    onCleanup(unregister);
+  }
   // Insets belong in virtual measurements, not CSS padding outside the sizer.
   // ThreadList preserves the end pin across keyboard/viewport and inset resizes.
   const insets = () =>

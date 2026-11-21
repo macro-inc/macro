@@ -160,7 +160,10 @@ worker drains waking batches after a turn; quiet batches join a real prompt.
 Recovery reconciles the original action before rebinding/retrying, preserves
 prompter authority, and waits for a running invocation instead of re-prompting.
 Attach notifications before claiming the conversation journal, so a recovered
-running batch leaves the next real message queued. Recovery retains one drain
+running batch leaves the next real message queued. After notifications, a
+prompt's action gets the session's recent background jobs
+(`service/jobs.rs`, the `BackgroundJobs` port; the harness service's
+`SessionJobList`), listed in its invocation context. Recovery retains one drain
 future per session and waits at most two seconds per sweep; lease renewals and
 other sessions continue after a slow drain or an individual renewal error.
 Keep duplicate-completion suppression bounded to recent actions.

@@ -362,6 +362,20 @@ unfinished external chat replies alongside conversation recovery every ten secon
 Both the backend and macrod's source-message action IDs are required for replies
 from newly triggered external chat turns to finish in their channel threads.
 
+Background code jobs (`agent_code_mode`'s `JobRuntime`) run on their own
+4-slot executor (`BACKGROUND_JOB_SLOTS`, the job limit, low priority,
+`long_running`: the only executor allowed past five minutes).
+`RunCredentials` approves a job at launch (`approve_job`) and mints its
+no-send credential when it gets a slot (`mint_job`), returning the
+correlation the job is bound to.
+`code_mode/jobs.rs` holds the detach rule (`DetachPolicy`: the owner prompted
+the launching turn, the session is not hidden background work, and the owner
+has `enable-background-code-jobs`), the session facts a job watches, and the
+log its `_macro/job_updated` frames go to (filled once the session service
+exists). A sweep runs every minute; shutdown settles running jobs as
+interrupted before the executors stop. The harness lists each session's jobs
+in every prompt it dispatches (`with_background_jobs`).
+
 The cancellable, tracked notification worker calls `recover_notifications`
 every two seconds. It routes delivery and acknowledgments through each
 session's serialized worker. Internal producers use

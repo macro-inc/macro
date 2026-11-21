@@ -21,6 +21,12 @@ export const readCodeDocsHandler = createToolRenderer({
   render: () => null,
 });
 
+// Background jobs exist only in agent sessions, whose job card shows the end.
+export const cancelJobHandler = createToolRenderer({
+  name: 'CancelJob',
+  render: () => null,
+});
+
 /**
  * Nothing names what a code run does, so it says only how far it got. A
  * failed or stopped call has no receipt but has still ended; a program that

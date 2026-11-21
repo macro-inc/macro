@@ -36,6 +36,7 @@ vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => mocks.source,
 }));
 vi.mock('../context/AgentSessionContext', () => ({
+  useOptionalAgentSession: () => undefined,
   useAgentSession: () => ({
     sessionId: () => 'resolved-session',
     session: () =>

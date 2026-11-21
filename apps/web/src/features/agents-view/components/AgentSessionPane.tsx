@@ -14,9 +14,11 @@ import {
   useAgentSessionHeader,
 } from '@app/features/block-agent/component/agent-session-header';
 import { useAutoArchiveFileOperations } from '@app/features/block-agent/component/auto-archive-file-operations';
+import { BackgroundJobsChip } from '@app/features/block-agent/component/BackgroundJobsChip';
 import { AgentSidePanelSections } from '@app/features/block-agent/component/sidepanel/AgentSidePanelSections';
 import { Transcript } from '@app/features/block-agent/component/Transcript';
 import { useAgentSession } from '@app/features/block-agent/context/AgentSessionContext';
+import { JobRevealProvider } from '@app/features/block-agent/context/job-reveal';
 import { createAgentRouteTarget } from '@app/features/block-agent/primitives/create-agent-route-target';
 import { MobileAgentSessionHeader } from '@app/features/block-agent/views/mobile/redesigned-session-header/redesigned-session-header';
 import { AgentChangesProvider } from '@app/features/changes/agent-session-changes';
@@ -399,6 +401,7 @@ function SessionContent(props: {
                             </Show>
                           }
                         >
+                          <BackgroundJobsChip />
                           <ChangesHandoff />
                           <ReviewNotesDock />
                           <LocalRuntimePrompt />
@@ -440,12 +443,14 @@ export function AgentSessionPane(props: {
       <FloatRegion region="dock" priority={10} />
       <AgentSessionProvider blockId={props.id} onSessionId={props.onSessionId}>
         <AgentChangesProvider>
-          <ChangesSplit>
-            <SessionContent
-              onDeleted={props.onDeleted}
-              notificationSource={props.notificationSource}
-            />
-          </ChangesSplit>
+          <JobRevealProvider cancelInMenu={isTouchDevice()}>
+            <ChangesSplit>
+              <SessionContent
+                onDeleted={props.onDeleted}
+                notificationSource={props.notificationSource}
+              />
+            </ChangesSplit>
+          </JobRevealProvider>
         </AgentChangesProvider>
       </AgentSessionProvider>
     </>

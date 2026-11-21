@@ -50,7 +50,26 @@ impl agent_code_mode::domain::ExecutionCredentials for Credentials {
         Ok(agent_code_mode::domain::IssuedRun {
             environment: code_execution::domain::RunEnvironment::default(),
             acting_user: identity.owner.clone(),
+            correlation: None,
         })
+    }
+    async fn approve_job(
+        &self,
+        _: &agent_code_mode::domain::ExecutionIdentity,
+        _: &str,
+        _: tokio_util::sync::CancellationToken,
+    ) -> Result<
+        macro_user_id::user_id::MacroUserIdStr<'static>,
+        agent_code_mode::domain::CodeModeError,
+    > {
+        Err(agent_code_mode::domain::CodeModeError::Forbidden)
+    }
+    async fn mint_job(
+        &self,
+        _: &agent_code_mode::domain::ExecutionIdentity,
+        _: &macro_user_id::user_id::MacroUserIdStr<'static>,
+    ) -> Result<agent_code_mode::domain::IssuedRun, agent_code_mode::domain::CodeModeError> {
+        Err(agent_code_mode::domain::CodeModeError::Unavailable)
     }
 }
 

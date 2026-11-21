@@ -17,6 +17,7 @@ use agent_client_protocol::schema::v1::{
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage, RawJsonRpcParams};
 use agent_runtime_protocol::domain::action::AgentAction;
 use agent_runtime_protocol::domain::context::ContextSummaryNotification;
+use agent_runtime_protocol::domain::job::JobUpdatedNotification;
 use agent_runtime_protocol::domain::review::ReviewUpdatedNotification;
 use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToRuntimeMessage, ToServerMessage};
 use agent_runtime_protocol::domain::tool_approval::TOOL_APPROVAL_METHOD;
@@ -382,6 +383,12 @@ impl FoldState {
                     if ReviewUpdatedNotification::matches_method(&notification.method) =>
                 {
                     StepChange::metadata(self.record_review_update(notification.params.as_ref()))
+                }
+                // A background job started or settled.
+                RawJsonRpcMessage::Notification(notification)
+                    if JobUpdatedNotification::matches_method(&notification.method) =>
+                {
+                    StepChange::metadata(self.record_job_update(notification.params.as_ref()))
                 }
                 // The agent reporting that a URL interaction finished.
                 RawJsonRpcMessage::Notification(notification)

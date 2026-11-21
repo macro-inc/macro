@@ -38,7 +38,16 @@ pub fn toolset() -> AsyncToolCollection<CodeModeToolContext> {
         .add_tool::<ExecuteCode, CodeModeToolContext>()
         .add_tool::<DescribeCodeTools, CodeModeToolContext>()
         .add_tool::<ReadCodeDocs, CodeModeToolContext>()
+        .add_tool::<CancelJob, CodeModeToolContext>()
 }
+
+/// Names of the session code-mode tools, in [`toolset`]'s order.
+pub const SESSION_CODE_TOOLS: [&str; 4] = [
+    "ExecuteCode",
+    "DescribeCodeTools",
+    "ReadCodeDocs",
+    "CancelJob",
+];
 
 /// Facts supplied by an adapter that authenticated a user, not a session.
 #[derive(Clone)]
@@ -128,9 +137,13 @@ pub struct ExecuteCode {
     /// Deadline including queueing and API calls.
     #[serde(default = "default_timeout")]
     #[schemars(
-        description = "Total deadline in milliseconds, from 1 to 30000; defaults to 30000."
+        description = "Total deadline in milliseconds, from 1 to 30000; defaults to 30000. Ignored for a background job, which has 10 minutes."
     )]
     pub timeout_ms: u64,
+    /// Run as a background job that outlives this turn.
+    #[serde(default)]
+    #[schemars(description = include_str!("toolset/session/background.md"))]
+    pub background: Option<crate::domain::BackgroundRequest>,
 }
 
 fn default_timeout() -> u64 {
@@ -162,8 +175,42 @@ impl AsyncTool<CodeModeToolContext> for ExecuteCode {
                     source: self.source.clone(),
                     timeout_ms: self.timeout_ms,
                 },
+                self.background.clone(),
                 request.cancel,
             )
+            .await
+            .map_err(tool_error)
+    }
+}
+
+/// Stop a background job this session started.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(
+    title = "CancelJob",
+    description = "Stop a background job this session started with ExecuteCode's background option, by its jobId (the executionId of its receipt). The job settles as cancelled and you get its job.settled event. Writes it already made stay made. Cancel a job when the person asks, or before starting a replacement with different code; a running job's program cannot be changed."
+)]
+pub struct CancelJob {
+    /// The job to stop.
+    pub job_id: ExecutionId,
+}
+
+impl ToolAnnotated for CancelJob {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::destructive("Cancel job");
+}
+
+#[async_trait]
+impl AsyncTool<CodeModeToolContext> for CancelJob {
+    type Output = crate::domain::JobCancel;
+
+    async fn call(
+        &self,
+        context: ServiceContext<CodeModeToolContext>,
+        _: RequestContext,
+    ) -> ToolResult<Self::Output> {
+        context
+            .service
+            .cancel_job(context.session.id, self.job_id)
             .await
             .map_err(tool_error)
     }

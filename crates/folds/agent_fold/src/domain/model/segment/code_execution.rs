@@ -17,6 +17,9 @@ const FAILED: &str = "A step failed";
 /// The same row once the execution was cancelled, or its turn ended first.
 const INTERRUPTED: &str = "Step interrupted";
 
+/// The detail of a background job's row.
+const IN_THE_BACKGROUND: &str = "Running in the background";
+
 /// Labels of a code-execution row that names no workspace step. They say
 /// nothing about the work, and the live status line is told so.
 pub const UNNAMED_STEP_LABELS: [&str; 4] = [WORKING, FINISHED, FAILED, INTERRUPTED];
@@ -78,6 +81,21 @@ pub(super) fn rows(
         return None;
     }
     let receipt = receipt(detail);
+    // A background job's launch: its card shows its progress; the
+    // conversation reads it as the work it started. A launch that failed its
+    // check or was stopped never ran, and reads like any other program.
+    if let Some(title) = receipt
+        .filter(|receipt| program_status(Some(receipt)) == Some("running"))
+        .and_then(job_title)
+    {
+        return Some(vec![ActivityRow {
+            id: id.to_owned(),
+            label: title.to_owned(),
+            detail: Some(IN_THE_BACKGROUND.to_owned()),
+            status: ActivityStatus::Completed,
+            card: None,
+        }]);
+    }
     let activity = receipt
         .and_then(operations)
         .filter(|activity| !activity.is_empty());
@@ -111,6 +129,11 @@ fn receipt(detail: &ToolDetail) -> Option<&serde_json::Value> {
         ToolDetail::Other { result, .. } => result.as_ref(),
         _ => None,
     }
+}
+
+/// The title of the background job a receipt started, if it started one.
+fn job_title(receipt: &serde_json::Value) -> Option<&str> {
+    receipt.get("job")?.get("title")?.as_str()
 }
 
 fn operations(receipt: &serde_json::Value) -> Option<Vec<Operation>> {

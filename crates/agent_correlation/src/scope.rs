@@ -31,7 +31,8 @@ pub enum SessionScope {
 /// (which resume it), its tool approvals and review decisions, running or
 /// rewriting a chat's tool call (a chat message's tools are refused by its
 /// route), agents, bots and the computers they run on, which act later, and
-/// their credentials. A run that sends nothing makes none of them.
+/// their credentials, sync permission tokens included. A run that
+/// sends nothing makes none of them.
 const SENDS: &[(&str, &str)] = &[
     ("POST", "/email/messages"),
     ("POST", "/email/send-confirmed"),
@@ -139,6 +140,13 @@ const SENDS: &[(&str, &str)] = &[
     ("POST", "/call/guest-chat/{id}/messages"),
     ("PATCH", "/call/guest-chat/{id}/messages/{id}"),
     ("POST", "/call/guest-chat/{id}/messages/{id}/reactions"),
+    // Document and collab surface permission tokens are bearer credentials
+    // that outlive the run (an hour), and the sync service honours them
+    // without a database check: handing one out reaches past the run's own
+    // scope. The template also covers `permissions_token/validate`, which a
+    // run with no token of its own has no use for.
+    ("POST", "/documents/permissions_token/{id}"),
+    ("POST", "/collab_surfaces/{id}/token"),
     ("POST", "/documents/{id}/comments/text"),
     ("PUT", "/documents/{id}/team_share"),
     ("PUT", "/crm/pipelines/{id}/sharing"),

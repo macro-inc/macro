@@ -34,6 +34,45 @@ stacks. Process isolation belongs to
   into a top-level `modelMedia`, which `agent::tool_media` turns into image
   blocks as it does for `RenderCanvas`. The harness adapter is
   `agent_harness_service/src/code_mode/images.rs`.
+- `src/domain/service/jobs.rs`: background jobs. `ExecuteCode`'s
+  `background: {title}` launches the execution as a job that outlives its
+  turn, where `ExecutionCredentials::may_detach` allows it (harness rule:
+  the session owner prompted the launching turn, the session is not a
+  hidden background one, and the owner has PostHog
+  `enable-background-code-jobs`); elsewhere it runs in the foreground and
+  the receipt's `ranInForeground` says why. `background.sends: true` also
+  runs in the foreground, until a job's credential can be revoked when it
+  settles (mac-kcz), and so does a launch when this replica already holds
+  `JOBS_ON_REPLICA` (8) jobs, running or queued. The launch type-checks and
+  approves the run (`ExecutionCredentials::approve_job`), returns a running
+  receipt with `job`, and runs on the `JobRuntime`'s own executor (4 slots
+  a replica) on a `TaskTracker`. Only once it holds a slot is its credential minted (`mint_job`: the
+  no-send scope, which also refuses routine saves, connected apps, the web
+  and document permission tokens, lasting what is left of its 10 minutes
+  plus margin, traced under `agent.job.execute`); its correlation is saved
+  on the record (`JobInfo.correlation`, never shown to readers). A job that
+  never started settles saying nothing ran. It runs without `watch_turn`:
+  its row (`JobStore::control`, every second), its
+  session being archived or gone, a local cancel or shutdown stop it.
+  `JobStore::settle` writes the final record and its waking `job.settled`
+  notification in one transaction, at most once (`job_settled_at`).
+  Shutdown (`shutdown_jobs`, before the executors) settles running jobs as
+  `Interrupted`; `sweep_jobs` settles ones a dead replica left past deadline
+  plus `SWEEP_GRACE`. Caps (`JOB_CAPS`: 3 a session, 10 an account) are
+  checked in the launch transaction under an advisory lock per account.
+  Each state change logs `_macro/job_updated` (best effort). `CancelJob`
+  and `POST /agent-sessions/{id}/code-executions/{execution}/cancel` (a
+  person with edit access, never a program) set `job_cancel_requested_at`.
+  Any turn may cancel a job, deliberately: cancelling spends no one's
+  access. A settle write is retried twice before the sweep is left to it.
+  A job's connected-app use keeps its launching turn's authority and never
+  waits for approval, and only the job's own credential spends it: admission
+  requires the caller's verified correlation to be the job's. While jobs are
+  no-send, their scope refuses connected-app calls, so this guards listing,
+  tools and search. Discovery,
+  adding servers and `macro.ui.open` are refused in a job. Spans: `agent.job.start`, `agent.job.run` (root, linked;
+  `agent.job.queue`, `agent.job.execute`), `agent.job.settle`,
+  `agent.job.sweep`, `agent.job.cancel`.
 - `src/domain/user.rs`: `UserCodeMode`, runs as an authenticated user with no
   session, journal or reviews; shares outcome validation with the session path.
 - `src/domain/reviews.rs`: review revisions, claims and outcomes.
