@@ -506,6 +506,53 @@ mod tests {
         .unwrap();
     }
 
+    #[test]
+    fn records_written_now_decode_in_builds_before_zlib_rs() {
+        let mut bodies = vec![
+            "x".repeat(300),
+            "review comment line\n".repeat(2_000),
+            (0..40_000).map(|line| format!("{line}\n")).collect(),
+        ];
+        let mut state = 7_u64;
+        for length in (300..4_000).step_by(37) {
+            let body = (0..length)
+                .map(|_| {
+                    state ^= state << 13;
+                    state ^= state >> 7;
+                    state ^= state << 17;
+                    char::from_u32(32 + (state % 2_000) as u32).unwrap_or('?')
+                })
+                .collect();
+            bodies.push(body);
+        }
+        let (mut raw, mut deflated) = (0, 0);
+        for body in bodies {
+            let record = record_with_body(&body);
+            let bytes = encode_record(&record);
+            // The decoder of builds before zlib-rs: raw at any length, or a raw
+            // DEFLATE stream inflated by miniz_oxide under the same bound.
+            let (encoding, payload) = bytes.split_first().unwrap();
+            let decoded: Record = match *encoding {
+                RECORD_ENCODING_RAW => {
+                    raw += 1;
+                    decode(payload).unwrap()
+                }
+                RECORD_ENCODING_DEFLATE => {
+                    deflated += 1;
+                    let inflated = miniz_oxide::inflate::decompress_to_vec_with_limit(
+                        payload,
+                        RECORD_MAX_INFLATED_BYTES,
+                    )
+                    .unwrap();
+                    decode(&inflated).unwrap()
+                }
+                other => panic!("unknown encoding {other}"),
+            };
+            assert_eq!(decoded, record);
+        }
+        assert!(raw > 0 && deflated > 0, "raw {raw}, deflated {deflated}");
+    }
+
     /// A record as builds before zlib-rs stored it: miniz_oxide at level 3.
     fn miniz_deflated(record: &Record) -> Vec<u8> {
         let compressed = miniz_oxide::deflate::compress_to_vec(&encode(record), 3);
