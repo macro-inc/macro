@@ -71,6 +71,7 @@ fn token(
         agent_correlation_id: correlation.map(Uuid::from_u128),
         agent_session_id: correlation.map(|id| Uuid::from_u128(if id == 301 { 201 } else { 202 })),
         routine_id: routine,
+        channel_mention_id: None,
         agent_scope: scope.map(str::to_owned),
     })
     .unwrap()
