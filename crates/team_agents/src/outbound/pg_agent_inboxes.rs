@@ -199,7 +199,7 @@ impl AgentInboxRepository for PgAgentInboxes {
                 fake_provider = $6,
                 updated_at = now()
             WHERE agent_user_id = $1
-              AND state NOT IN ('paused', 'releasing', 'released')
+              AND state NOT IN ('pausing', 'paused', 'releasing', 'released')
             RETURNING agent_user_id, team_id, request_id, mailbox_id, address, state,
                       last_error, fake_provider, updated_at
             "#,
@@ -214,5 +214,30 @@ impl AgentInboxRepository for PgAgentInboxes {
         .await?;
 
         row.map(InboxRecord::try_from).transpose()
+    }
+
+    #[tracing::instrument(skip_all, err)]
+    async fn unsettled(
+        &self,
+        changed_before: DateTime<Utc>,
+        limit: u32,
+    ) -> Result<Vec<InboxRecord>, Self::Err> {
+        let rows = sqlx::query_as!(
+            InboxRow,
+            r#"
+            SELECT agent_user_id, team_id, request_id, mailbox_id, address, state,
+                   last_error, fake_provider, updated_at
+            FROM team_agent_inboxes
+            WHERE state IN ('pausing', 'releasing') AND updated_at < $1
+            ORDER BY updated_at
+            LIMIT $2
+            "#,
+            changed_before,
+            i64::from(limit),
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(InboxRecord::try_from).collect()
     }
 }

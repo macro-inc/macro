@@ -690,6 +690,22 @@ async fn run_server() -> anyhow::Result<()> {
     let internal_key = config.service_internal_auth_key.to_string();
     let harness_url = macro_service_urls::AgentHarnessServiceUrl::new()?.to_string();
     let scheduled_action_url = macro_service_urls::ScheduledActionServiceUrl::new()?.to_string();
+    // Agent teammates' inboxes: email_service makes and serves the mailbox.
+    // Team deletion releases them, and the inbox sweep finishes wind-downs
+    // email_service hasn't confirmed.
+    let agent_inboxes_service = || -> anyhow::Result<_> {
+        Ok(team_agents::domain::inbox::InboxService::new(
+            team_agents::outbound::pg_agent_inboxes::PgAgentInboxes::new(db.clone()),
+            team_agents::outbound::email_service_mailboxes::EmailServiceMailboxes::new(
+                email_service_client::EmailServiceClient::new(
+                    internal_key.clone(),
+                    EmailServiceUrl::new()?.to_string(),
+                )
+                .agent_mailboxes(),
+            ),
+        ))
+    };
+    let agent_inboxes = Arc::new(agent_inboxes_service()?);
     let team_owned_entity_cleanup = TeamOwnedEntityCleanupAdapter::new(
         Arc::new(
             passwords::outbound::postgres::PgRepository::new(db.clone())
@@ -709,6 +725,7 @@ async fn run_server() -> anyhow::Result<()> {
             hosted_runtimes::outbound::pg::PgComputerRepo::new(db.clone(), computer_policy),
             hosted_runtimes::domain::service::SystemClock,
         )),
+        agent_inboxes.clone(),
     )
     .map_err(|error| anyhow::anyhow!("{error:?}"))?;
     let crm_access_rollout: Arc<dyn teams::domain::crm_member_access::CrmAccessRollout> =
@@ -787,18 +804,8 @@ async fn run_server() -> anyhow::Result<()> {
             ),
             crate::outbound::agent_addresses::AgentAddresses,
         )
-        // Agent inboxes: email_service makes and serves the mailbox; off for
-        // every admin unless `enable-agent-inboxes` is on for them.
-        .with_inboxes(team_agents::domain::inbox::InboxService::new(
-            team_agents::outbound::pg_agent_inboxes::PgAgentInboxes::new(db.clone()),
-            team_agents::outbound::email_service_mailboxes::EmailServiceMailboxes::new(
-                email_service_client::EmailServiceClient::new(
-                    internal_key.clone(),
-                    EmailServiceUrl::new()?.to_string(),
-                )
-                .agent_mailboxes(),
-            ),
-        )),
+        // Off for every admin unless `enable-agent-inboxes` is on for them.
+        .with_inboxes(agent_inboxes_service()?),
     );
     let domain_notice_service =
         Arc::new(teams::domain::domain_notice::DomainNoticeServiceImpl::new(
@@ -845,6 +852,17 @@ async fn run_server() -> anyhow::Result<()> {
         ),
     );
     invite_reminders.close();
+    // Finishes agent inbox wind-downs email_service hasn't confirmed. Every
+    // call is idempotent, so every replica sweeps.
+    let inbox_sweep_stop = CancellationToken::new();
+    let inbox_sweep = TaskTracker::new();
+    inbox_sweep.spawn(team_agents::inbound::inbox_sweep::run_inbox_sweep(
+        agent_inboxes.clone(),
+        team_agents::inbound::inbox_sweep::INBOX_SWEEP_INITIAL_DELAY,
+        team_agents::inbound::inbox_sweep::INBOX_SWEEP_INTERVAL,
+        inbox_sweep_stop.clone().cancelled_owned(),
+    ));
+    inbox_sweep.close();
     // Carries out computers' billing effects (removing subscription items)
     // and settles purchases whose charge is being confirmed. Rows are leased,
     // so every replica runs it.
@@ -1120,6 +1138,16 @@ async fn run_server() -> anyhow::Result<()> {
         );
     }
 
+    // A round in flight is safe to drop: every call it makes is idempotent
+    // and the marks it works from stay for the next start.
+    inbox_sweep_stop.cancel();
+    if tokio::time::timeout(INBOX_SWEEP_DRAIN_TIMEOUT, inbox_sweep.wait())
+        .await
+        .is_err()
+    {
+        tracing::warn!("stopped waiting for the agent inbox sweep round to finish");
+    }
+
     // Lets a sweep in progress finish: its reminders are already counted as
     // sent, so abandoning the batch would drop them.
     invite_reminders_stop.cancel();
@@ -1151,6 +1179,9 @@ async fn run_server() -> anyhow::Result<()> {
 
 const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
 const INVITE_REMINDER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// How long shutdown waits for an agent inbox sweep round in flight.
+const INBOX_SWEEP_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
 const COMPUTER_BILLING_DRAIN_TIMEOUT: Duration = Duration::from_secs(30);
 const STRIPE_INBOX_DRAIN_TIMEOUT: Duration = Duration::from_secs(30);
 /// Stripe reads per replica for the inbox: its 20 req/s share of the live

@@ -5,6 +5,15 @@ use reqwest::StatusCode;
 use super::*;
 
 /// A team with no computers to release.
+struct NoAgentInboxes;
+
+#[async_trait::async_trait]
+impl crate::domain::computer_billing::TeamAgentInboxes for NoAgentInboxes {
+    async fn release_team(&self, _team_id: Uuid) -> Result<(), rootcause::Report> {
+        Ok(())
+    }
+}
+
 struct NoComputers;
 
 #[async_trait::async_trait]
@@ -106,6 +115,7 @@ async fn empty_team_skips_disabled_vault_rpc_but_existing_state_requires_acknowl
             scheduled_action_url: server.uri(),
         },
         Arc::new(NoComputers),
+        Arc::new(NoAgentInboxes),
     )
     .unwrap();
     adapter.prepare_team_deletion(team).await.unwrap();
@@ -162,6 +172,7 @@ async fn empty_deletion_proof_keeps_first_create_lease_admission_closed_until_de
             scheduled_action_url: server.uri(),
         },
         Arc::new(NoComputers),
+        Arc::new(NoAgentInboxes),
     )
     .unwrap();
     let team = TeamId(Uuid::now_v7());

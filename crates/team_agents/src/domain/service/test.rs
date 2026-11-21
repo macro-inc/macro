@@ -5,7 +5,9 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
-use entity_access::domain::models::EntityType;
+use entity_access::domain::models::{
+    Entity, EntityAccessAuth, EntityPermission, EntityType, TeamRole,
+};
 use feature_flags::{FlagSnapshot, FlagValue};
 use rootcause::Report;
 
@@ -24,7 +26,20 @@ fn user(id: &str) -> MacroUserIdStr<'static> {
 }
 
 fn receipt<Permission: RequiredPermission>() -> EntityAccessReceipt<Permission> {
-    EntityAccessReceipt::dangerously_assert_authenticated_user(user(ADMIN), TEAM, EntityType::Team)
+    team_receipt(TeamRole::Owner)
+}
+
+/// A receipt for the team's admin holding `role`.
+fn team_receipt<Permission: RequiredPermission>(role: TeamRole) -> EntityAccessReceipt<Permission> {
+    EntityAccessReceipt::try_new(
+        EntityAccessAuth::Authenticated(user(ADMIN)),
+        Entity {
+            entity_id: TEAM.to_owned(),
+            entity_type: EntityType::Team,
+        },
+        EntityPermission::TeamRole { role },
+    )
+    .unwrap()
 }
 
 fn request() -> CreateTeamAgent {

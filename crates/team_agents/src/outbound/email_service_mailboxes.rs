@@ -10,7 +10,8 @@ use std::time::Duration;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::domain::inbox::{
-    AgentInboxFailure, AgentInboxState, AgentMailboxes, MailboxError, MailboxView, ProvisionMailbox,
+    AgentInboxFailure, AgentInboxState, AgentMailboxes, MailboxError, MailboxView,
+    ProvisionMailbox, ReleaseOutcome,
 };
 
 #[cfg(test)]
@@ -191,10 +192,10 @@ impl AgentMailboxes for EmailServiceMailboxes {
         }
     }
 
-    async fn release(&self, agent: &MacroUserIdStr<'_>) -> Result<(), MailboxError> {
+    async fn release(&self, agent: &MacroUserIdStr<'_>) -> Result<ReleaseOutcome, MailboxError> {
         match bounded(self.client.release(agent.as_ref())).await? {
-            Ok(()) => Ok(()),
-            Err(refused) if is_missing(&refused) => Ok(()),
+            Ok(()) => Ok(ReleaseOutcome::Released),
+            Err(refused) if is_missing(&refused) => Ok(ReleaseOutcome::Released),
             // Left releasing: email_service's sweep finishes it.
             Err(refused)
                 if matches!(
@@ -202,7 +203,7 @@ impl AgentMailboxes for EmailServiceMailboxes {
                     Some(AgentMailboxErrorCode::ProviderUnavailable | AgentMailboxErrorCode::Busy)
                 ) =>
             {
-                Ok(())
+                Ok(ReleaseOutcome::Releasing)
             }
             Err(refused) => Err(error(refused)),
         }

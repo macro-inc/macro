@@ -165,7 +165,10 @@ async fn an_agent_without_a_mailbox_has_no_status_and_nothing_to_pause_or_releas
 
     assert_eq!(mailboxes.status(&agent()).await.unwrap(), None);
     mailboxes.pause(&agent()).await.unwrap();
-    mailboxes.release(&agent()).await.unwrap();
+    assert_eq!(
+        mailboxes.release(&agent()).await.unwrap(),
+        ReleaseOutcome::Released
+    );
 }
 
 #[tokio::test]
@@ -183,7 +186,10 @@ async fn a_release_left_for_the_sweep_counts_as_done_and_a_failed_pause_does_not
         .await;
     let mailboxes = mailboxes(&server);
 
-    mailboxes.release(&agent()).await.unwrap();
+    assert_eq!(
+        mailboxes.release(&agent()).await.unwrap(),
+        ReleaseOutcome::Releasing
+    );
 
     // Another operation holds the mailbox: it is releasing too.
     server.reset().await;
@@ -197,7 +203,10 @@ async fn a_release_left_for_the_sweep_counts_as_done_and_a_failed_pause_does_not
         .respond_with(ResponseTemplate::new(500))
         .mount(&server)
         .await;
-    mailboxes.release(&agent()).await.unwrap();
+    assert_eq!(
+        mailboxes.release(&agent()).await.unwrap(),
+        ReleaseOutcome::Releasing
+    );
     assert!(matches!(
         mailboxes.pause(&agent()).await,
         Err(MailboxError::Unavailable(_))

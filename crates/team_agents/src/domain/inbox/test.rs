@@ -50,7 +50,7 @@ impl AgentInboxRepository for FakeRecords {
             state,
             last_error: None,
             fake_provider: false,
-            updated_at: DateTime::UNIX_EPOCH,
+            updated_at: Utc::now(),
         };
         records.push(record.clone());
         Ok(record)
@@ -92,7 +92,29 @@ impl AgentInboxRepository for FakeRecords {
         record.state = update.state;
         record.last_error = update.last_error;
         record.fake_provider = update.fake_provider;
+        record.updated_at = Utc::now();
         Ok(record.clone())
+    }
+
+    async fn unsettled(
+        &self,
+        changed_before: DateTime<Utc>,
+        limit: u32,
+    ) -> Result<Vec<InboxRecord>, FakeError> {
+        Ok(self
+            .0
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|r| {
+                matches!(
+                    r.state,
+                    AgentInboxState::Pausing | AgentInboxState::Releasing
+                ) && r.updated_at < changed_before
+            })
+            .take(limit as usize)
+            .cloned()
+            .collect())
     }
 
     async fn update_live(
@@ -109,7 +131,8 @@ impl AgentInboxRepository for FakeRecords {
             .is_none_or(|r| {
                 matches!(
                     r.state,
-                    AgentInboxState::Paused
+                    AgentInboxState::Pausing
+                        | AgentInboxState::Paused
                         | AgentInboxState::Releasing
                         | AgentInboxState::Released
                 )
@@ -141,6 +164,10 @@ struct FakeMailboxes {
     calls: Arc<Mutex<Vec<String>>>,
     /// The mailbox email_service holds, once made.
     made: Arc<Mutex<Option<MailboxView>>>,
+    /// Pauses fail while set, whatever the answer.
+    fail_pause: Arc<Mutex<bool>>,
+    /// What a release answers.
+    release_outcome: Arc<Mutex<ReleaseOutcome>>,
     /// Runs while a provision is in flight, as a concurrent request would.
     during_provision: Arc<Mutex<Option<DuringProvision>>>,
 }
@@ -151,6 +178,8 @@ impl FakeMailboxes {
             answer: Arc::new(Mutex::new(answer)),
             calls: Arc::default(),
             made: Arc::default(),
+            fail_pause: Arc::default(),
+            release_outcome: Arc::new(Mutex::new(ReleaseOutcome::Released)),
             during_provision: Arc::default(),
         }
     }
@@ -219,17 +248,20 @@ impl AgentMailboxes for FakeMailboxes {
 
     async fn pause(&self, _agent: &MacroUserIdStr<'_>) -> Result<(), MailboxError> {
         self.calls.lock().unwrap().push("pause".to_owned());
+        if *self.fail_pause.lock().unwrap() {
+            return Err(down());
+        }
         match *self.answer.lock().unwrap() {
             Answer::Down => Err(down()),
             _ => Ok(()),
         }
     }
 
-    async fn release(&self, _agent: &MacroUserIdStr<'_>) -> Result<(), MailboxError> {
+    async fn release(&self, _agent: &MacroUserIdStr<'_>) -> Result<ReleaseOutcome, MailboxError> {
         self.calls.lock().unwrap().push("release".to_owned());
         match *self.answer.lock().unwrap() {
             Answer::Down => Err(down()),
-            _ => Ok(()),
+            _ => Ok(*self.release_outcome.lock().unwrap()),
         }
     }
 }
@@ -387,7 +419,7 @@ async fn an_agent_without_an_inbox_has_none_to_refresh() {
 }
 
 #[tokio::test]
-async fn pausing_stops_the_mailbox_and_keeps_it_and_again_is_harmless() {
+async fn pausing_stops_the_mailbox_once_and_keeps_it() {
     let (service, records, mailboxes) = service(Answer::Active);
     service
         .provision(TEAM, &agent(), "Sam Rivera", "sam-rivera")
@@ -403,8 +435,8 @@ async fn pausing_stops_the_mailbox_and_keeps_it_and_again_is_harmless() {
         .into_iter()
         .filter(|call| call.starts_with("pause"))
         .collect::<Vec<_>>();
-    // email_service's pause is idempotent; a repeat just tells it again.
-    assert_eq!(pauses, vec!["pause".to_owned(), "pause".to_owned()]);
+    // Confirmed paused: a repeat has nothing left to do.
+    assert_eq!(pauses, vec!["pause".to_owned()]);
 }
 
 #[tokio::test]
@@ -417,10 +449,10 @@ async fn a_pause_email_service_misses_fails_so_the_removal_is_retried() {
     mailboxes.answer(Answer::Down);
 
     let missed = service.pause(TEAM, &agent()).await;
-    // Marked paused already, so no provision revives it; the retry tells
+    // Marked pausing, so no provision revives it; the retry tells
     // email_service again.
     assert!(matches!(missed, Err(InboxError::Unavailable(_))));
-    assert_eq!(records.only().state, AgentInboxState::Paused);
+    assert_eq!(records.only().state, AgentInboxState::Pausing);
     mailboxes.answer(Answer::Active);
     service.pause(TEAM, &agent()).await.unwrap();
 
@@ -458,6 +490,12 @@ async fn releasing_an_inbox_email_service_never_made_releases_nothing() {
     mailboxes.answer(Answer::Active);
 
     service.release(TEAM, &agent()).await.unwrap();
+    // A provision could still make one: the mark waits, then settles.
+    assert_eq!(records.only().state, AgentInboxState::Releasing);
+    service
+        .sweep_once(Utc::now() + SETTLE_WITHOUT_MAILBOX + chrono::Duration::minutes(1))
+        .await
+        .unwrap();
 
     assert_eq!(records.only().state, AgentInboxState::Released);
     assert!(
@@ -487,7 +525,7 @@ async fn a_lost_answer_heals_once_email_service_has_made_the_mailbox() {
 }
 
 #[tokio::test]
-async fn pausing_an_inbox_email_service_never_made_only_marks_it() {
+async fn pausing_an_inbox_email_service_never_made_only_marks_it_until_it_settles() {
     let (service, records, mailboxes) = service(Answer::Down);
     service
         .provision(TEAM, &agent(), "Sam Rivera", "sam-rivera")
@@ -496,6 +534,13 @@ async fn pausing_an_inbox_email_service_never_made_only_marks_it() {
     mailboxes.answer(Answer::Active);
 
     service.pause(TEAM, &agent()).await.unwrap();
+    assert_eq!(records.only().state, AgentInboxState::Pausing);
+
+    // Long after the mark, still nothing at email_service: it settles.
+    service
+        .sweep_once(Utc::now() + SETTLE_WITHOUT_MAILBOX + chrono::Duration::minutes(1))
+        .await
+        .unwrap();
 
     assert_eq!(records.only().state, AgentInboxState::Paused);
     assert!(!mailboxes.calls().iter().any(|call| call == "pause"));
@@ -528,7 +573,7 @@ async fn an_agent_removed_while_its_inbox_is_being_made_ends_up_paused() {
     // mailbox, so its own pause finds nothing to pause yet.
     let marked = records.clone();
     *mailboxes.during_provision.lock().unwrap() = Some(Box::new(move || {
-        marked.0.lock().unwrap()[0].state = AgentInboxState::Paused;
+        marked.0.lock().unwrap()[0].state = AgentInboxState::Pausing;
     }));
 
     let inbox = service
@@ -575,4 +620,86 @@ async fn a_pause_never_undoes_a_release() {
 
     assert_eq!(records.only().state, AgentInboxState::Releasing);
     assert!(!mailboxes.calls().iter().any(|call| call == "pause"));
+}
+
+#[tokio::test]
+async fn a_removal_racing_a_provision_whose_pause_fails_is_finished_by_the_sweep() {
+    let (service, records, mailboxes) = service(Answer::Active);
+    // The removal marks the record while email_service is making the
+    // mailbox, and email_service then fails the pause.
+    let marked = records.clone();
+    let fail_pause = mailboxes.fail_pause.clone();
+    *mailboxes.during_provision.lock().unwrap() = Some(Box::new(move || {
+        marked.0.lock().unwrap()[0].state = AgentInboxState::Pausing;
+        *fail_pause.lock().unwrap() = true;
+    }));
+
+    let inbox = service
+        .provision(TEAM, &agent(), "Sam Rivera", "sam-rivera")
+        .await
+        .unwrap();
+    assert_eq!(inbox.state, AgentInboxState::Pausing);
+    assert_eq!(records.only().state, AgentInboxState::Pausing);
+
+    *mailboxes.fail_pause.lock().unwrap() = false;
+    let found = service
+        .sweep_once(Utc::now() + SWEEP_AFTER + chrono::Duration::seconds(1))
+        .await
+        .unwrap();
+
+    assert_eq!(found, 1);
+    assert_eq!(records.only().state, AgentInboxState::Paused);
+}
+
+#[tokio::test]
+async fn a_taken_back_invite_racing_a_provision_releases_what_it_made() {
+    let (service, records, mailboxes) = service(Answer::Active);
+    let marked = records.clone();
+    *mailboxes.during_provision.lock().unwrap() = Some(Box::new(move || {
+        marked.0.lock().unwrap()[0].state = AgentInboxState::Releasing;
+    }));
+
+    service
+        .provision(TEAM, &agent(), "Sam Rivera", "sam-rivera")
+        .await
+        .unwrap();
+
+    assert_eq!(records.only().state, AgentInboxState::Released);
+    assert!(mailboxes.calls().contains(&"release".to_owned()));
+    assert!(!mailboxes.calls().contains(&"pause".to_owned()));
+}
+
+#[tokio::test]
+async fn a_release_email_service_is_still_finishing_stays_releasing_until_it_confirms() {
+    let (service, records, mailboxes) = service(Answer::Active);
+    service
+        .provision(TEAM, &agent(), "Sam Rivera", "sam-rivera")
+        .await
+        .unwrap();
+    *mailboxes.release_outcome.lock().unwrap() = ReleaseOutcome::Releasing;
+
+    service.release(TEAM, &agent()).await.unwrap();
+    assert_eq!(records.only().state, AgentInboxState::Releasing);
+
+    *mailboxes.release_outcome.lock().unwrap() = ReleaseOutcome::Released;
+    service
+        .sweep_once(Utc::now() + SWEEP_AFTER + chrono::Duration::seconds(1))
+        .await
+        .unwrap();
+
+    assert_eq!(records.only().state, AgentInboxState::Released);
+}
+
+#[tokio::test]
+async fn deleting_a_team_releases_every_agents_inbox() {
+    let (service, records, mailboxes) = service(Answer::Active);
+    service
+        .provision(TEAM, &agent(), "Sam Rivera", "sam-rivera")
+        .await
+        .unwrap();
+
+    service.release_team(TEAM).await.unwrap();
+
+    assert_eq!(records.only().state, AgentInboxState::Released);
+    assert!(mailboxes.calls().contains(&"release".to_owned()));
 }

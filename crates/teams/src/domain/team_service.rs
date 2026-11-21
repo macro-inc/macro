@@ -918,6 +918,17 @@ where
                     source: Box::new(source),
                 })
             })?;
+        // Agent teammates' mailboxes live in email_service, keyed by nothing
+        // the team row cascades to: release them, or they keep receiving
+        // mail for a deleted team.
+        self.owned_entity_cleanup
+            .release_agent_inboxes(team_id)
+            .await
+            .map_err(|source| {
+                DeleteTeamError::OwnedEntityCleanup(OwnedEntityCleanupError::ReleaseAgentInboxes {
+                    source: Box::new(source),
+                })
+            })?;
 
         let subscription_id = self
             .team_repository
