@@ -1,5 +1,5 @@
 import type { Api, SentMessage } from './harness/api';
-import { expectShown, loseKeptData, type Named } from './harness/device';
+import { expectShown, loseKeptData, type Named, shown } from './harness/device';
 import {
   expect,
   failsSometimes,
@@ -482,7 +482,10 @@ test('WRT-16 a waiting reply to a message with no replies shows in the other win
   await expectShown(two, ['one', 'two', 'three']);
 
   const unblock = await blockWrites(first.context());
+  // Both windows have read the channel again before the reply is written,
+  // so that only the reply itself can bring it to the other window.
   await ada.post(channel.id, 'four');
+  await expectShown(one, ['one', 'two', 'three', 'four']);
   await expectShown(two, ['one', 'two', 'three', 'four']);
   await two.page.bringToFront();
   await two.reply(messages[1].id, 'still waiting');
@@ -496,6 +499,34 @@ test('WRT-16 a waiting reply to a message with no replies shows in the other win
   await expectServer(channel, [...after, 'five']);
   await expectShown(one, [...after, 'five']);
 });
+
+const WAITING = '  > still waiting';
+
+/**
+ * Asserts that the window shows these lines, whether or not it also shows
+ * the waiting reply: what WRT-17's known defect cannot excuse.
+ */
+async function expectShownApartFromReply(
+  view: Conversation,
+  lines: string[]
+): Promise<void> {
+  await expect
+    .poll(async () => (await shown(view)).filter((line) => line !== WAITING), {
+      message: 'the channel on the screen, apart from the waiting reply',
+      timeout: 30_000,
+    })
+    .toEqual(lines);
+}
+
+/** Asserts that the waiting reply is under its message, within ten seconds. */
+async function expectReplyKept(view: Conversation): Promise<void> {
+  await expect
+    .poll(async () => (await shown(view)).slice(1, 3), {
+      message: 'the waiting reply under the message it answers',
+      timeout: 10_000,
+    })
+    .toEqual(['two', WAITING]);
+}
 
 // If this fails, a reply that is still waiting to be sent goes from the
 // window it was written in when something else arrives in the channel, and
@@ -515,18 +546,27 @@ test('WRT-17 with the channel open in two windows, a waiting reply to a message 
   const unblock = await blockWrites(first.context());
   await ada.post(channel.id, 'earlier');
   await expectShown(bens, ['one', 'two', 'three', 'earlier']);
+  await bens.page.bringToFront();
   await bens.reply(messages[1].id, 'still waiting');
-  const after = ['one', 'two', '  > still waiting', 'three', 'earlier'];
-  await expectShown(bens, after);
+  await expectShown(bens, ['one', 'two', WAITING, 'three', 'earlier']);
   await ada.post(channel.id, 'four');
-  await expect(bens.message('four')).toBeVisible();
+  const rest = ['one', 'two', 'three', 'earlier', 'four'];
+  await expectShownApartFromReply(bens, rest);
   // Known defect, in about 1 run in 10: the window draws the message without
   // its waiting reply once it has read the channel again.
-  await failsSometimes(() => expectShown(bens, [...after, 'four']));
+  await failsSometimes(() => expectReplyKept(bens));
 
   await unblock();
-  await expectServer(channel, [...after, 'four']);
-  await failsSometimes(() => expectShown(bens, [...after, 'four']));
+  await expectServer(channel, [
+    'one',
+    'two',
+    WAITING,
+    'three',
+    'earlier',
+    'four',
+  ]);
+  await expectShownApartFromReply(bens, rest);
+  await failsSometimes(() => expectReplyKept(bens));
   await bens.reload();
-  await expectShown(bens, [...after, 'four']);
+  await expectShown(bens, ['one', 'two', WAITING, 'three', 'earlier', 'four']);
 });
