@@ -98,7 +98,8 @@ it('stores the contacts an invalidation names, under the contact write scope', a
 
   expect(fetchContactDirectoryByIds).toHaveBeenCalledExactlyOnceWith(
     [PERSON],
-    expect.any(AbortSignal)
+    expect.any(AbortSignal),
+    { lists: false }
   );
   expect(cache.hydrateQuery).toHaveBeenCalledExactlyOnceWith(
     expect.objectContaining({
