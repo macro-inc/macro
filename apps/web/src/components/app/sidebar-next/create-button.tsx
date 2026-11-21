@@ -9,6 +9,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { Button } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
+import { dockPopoverPlacement } from '../dock-prefs';
 
 /** The rail and keyboard shortcut open the same desktop launcher. */
 export const SidebarRailCreateButton = () => {
@@ -19,12 +20,12 @@ export const SidebarRailCreateButton = () => {
       aria-label={t('nav.create')}
       tooltip={{
         content: t('nav.create'),
-        placement: 'right',
+        placement: dockPopoverPlacement(),
         hotkey: TOKENS.global.createCommand,
       }}
       ref={createMenuTarget}
       variant="ghost"
-      class="size-10 shrink-0"
+      class="size-(--rail-button-size) shrink-0"
       size="icon-md"
       aria-haspopup="dialog"
       aria-expanded={createMenuOpen()}
@@ -34,7 +35,7 @@ export const SidebarRailCreateButton = () => {
         setCreateMenuOpen((open) => !open);
       }}
     >
-      <PlusIcon class="size-5" />
+      <PlusIcon class="size-(--rail-icon-size)" />
     </Button>
   );
 };

@@ -181,14 +181,11 @@ function CustomizeNavRow(props: {
 }
 
 /**
- * Center modal for showing/hiding and reordering outer sidebar items.
- * Opened from the More menu's "Customize sidebar" action.
+ * The rail's apps, each with a checkbox to show it on the rail (unchecked
+ * apps live in the More menu) and a handle to reorder it. Shared by the More
+ * menu's Customize sidebar dialog and Settings → Dock.
  */
-export function CustomizeSidebarModal(props: {
-  gates: NavItemGates;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
+export function CustomizeNavItems(props: { gates: NavItemGates }) {
   const { reorderSidebarItems } = useSidebarPrefs();
   const items = () => customizableNavItems(props.gates);
   const orderIds = () => items().map((item) => item.id);
@@ -209,6 +206,34 @@ export function CustomizeSidebarModal(props: {
     reorderSidebarItems(from, from + direction, ids);
   };
 
+  return (
+    <CustomizeNavList items={items()} onDragEnd={onDragEnd}>
+      <For each={items()}>
+        {(item, index) => (
+          <CustomizeNavRow
+            item={item}
+            checked={
+              item.id === 'home' || !props.gates.prefs.hidden.has(item.id)
+            }
+            index={index()}
+            count={items().length}
+            onMove={(direction) => moveByDirection(item.id, direction)}
+          />
+        )}
+      </For>
+    </CustomizeNavList>
+  );
+}
+
+/**
+ * Center modal for showing/hiding and reordering outer sidebar items.
+ * Opened from the More menu's "Customize sidebar" action.
+ */
+export function CustomizeSidebarModal(props: {
+  gates: NavItemGates;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   return (
     <Dialog
       open={props.open}
@@ -232,21 +257,7 @@ export function CustomizeSidebarModal(props: {
             {t('nav.customizeSidebarDescription')}
           </Dialog.Description>
 
-          <CustomizeNavList items={items()} onDragEnd={onDragEnd}>
-            <For each={items()}>
-              {(item, index) => (
-                <CustomizeNavRow
-                  item={item}
-                  checked={
-                    item.id === 'home' || !props.gates.prefs.hidden.has(item.id)
-                  }
-                  index={index()}
-                  count={items().length}
-                  onMove={(direction) => moveByDirection(item.id, direction)}
-                />
-              )}
-            </For>
-          </CustomizeNavList>
+          <CustomizeNavItems gates={props.gates} />
         </Panel.Body>
       </Panel>
     </Dialog>

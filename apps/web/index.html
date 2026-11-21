@@ -65,10 +65,31 @@
       #boot-shell[data-leaving] {
         opacity: 0;
       }
-      /* SidebarRail's 56px column. */
+      /* SidebarRail's 56px column (44px small), on the saved dock edge. */
       .bs-rail {
         width: 56px;
         flex: none;
+      }
+      #boot-shell[data-dock-size="small"] .bs-rail {
+        width: 44px;
+      }
+      #boot-shell[data-dock-position="right"] {
+        flex-direction: row-reverse;
+      }
+      #boot-shell[data-dock-position="top"] {
+        flex-direction: column;
+      }
+      #boot-shell[data-dock-position="bottom"] {
+        flex-direction: column-reverse;
+      }
+      #boot-shell[data-dock-position="top"] .bs-rail,
+      #boot-shell[data-dock-position="bottom"] .bs-rail {
+        width: auto;
+        height: 56px;
+      }
+      #boot-shell[data-dock-position="top"][data-dock-size="small"] .bs-rail,
+      #boot-shell[data-dock-position="bottom"][data-dock-size="small"] .bs-rail {
+        height: 44px;
       }
       .bs-content {
         flex: 1;
@@ -81,6 +102,17 @@
           border: 1px solid var(--bs-edge);
           border-radius: 8px;
           background: var(--bs-panel);
+        }
+      }
+      @media (pointer: fine) {
+        #boot-shell[data-dock-position="right"] .bs-content {
+          margin: 6px 0 6px 6px;
+        }
+        #boot-shell[data-dock-position="top"] .bs-content {
+          margin: 0 6px 6px 6px;
+        }
+        #boot-shell[data-dock-position="bottom"] .bs-content {
+          margin: 6px 6px 0 6px;
         }
       }
       .bs-mark {
@@ -129,6 +161,13 @@
           shell.style.background = "var(--bs-page)";
           shell.innerHTML = `<svg class="bs-mark" viewBox="0 0 24 24"><path d="m6.25 4.038-2.242.879v5.818l-1.756-1.658-2.242.879v6.677c0 .257.106.502.292.678l2.794 2.642 2.244-.879v-5.818l7.084 6.697 2.244-.879v-5.818l7.086 6.698 2.24-.879v-6.677c0-.257-.104-.502-.292-.678l-8.124-7.682-2.244.879v5.818z"/></svg>`;
         } else {
+          // Settings → Dock (`dock-prefs.ts`): the rail's edge and size.
+          let dock = null;
+          try {
+            dock = JSON.parse(localStorage.getItem("macro:dock") || "null");
+          } catch {}
+          if (dock && typeof dock.position === "string") shell.dataset.dockPosition = dock.position;
+          if (dock && typeof dock.size === "string") shell.dataset.dockSize = dock.size;
           shell.innerHTML = `<div class="bs-rail"></div><div class="bs-content"></div>`;
         }
       } catch (err) {

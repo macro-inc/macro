@@ -10,6 +10,7 @@ import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
 import { Dropdown } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { dockPopoverPlacement } from '../dock-prefs';
 import { CustomizeSidebarModal } from './customize-sidebar-modal';
 import {
   moreMenuItems,
@@ -19,7 +20,7 @@ import {
 
 export type MoreMenuProps = {
   gates: NavItemGates;
-  /** Rail items that don't fit the window's height, listed before hidden ones. */
+  /** Rail items that don't fit along the rail, listed before hidden ones. */
   overflowItems: SidebarNextMenuItem[];
 };
 
@@ -65,17 +66,20 @@ export function MoreMenu(props: MoreMenuProps) {
 
   return (
     <>
-      <Dropdown placement="right-start" gutter={6}>
+      <Dropdown placement={dockPopoverPlacement('start')} gutter={6}>
         <Dropdown.Trigger
           aria-label={t('nav.more')}
           variant="ghost"
           size="icon-md"
-          class="size-10 shrink-0 cursor-default rounded-xl"
-          tooltip={{ content: t('nav.moreOptions'), placement: 'right' }}
+          class="size-(--rail-button-size) shrink-0 cursor-default rounded-xl"
+          tooltip={{
+            content: t('nav.moreOptions'),
+            placement: dockPopoverPlacement(),
+          }}
           draggable={false}
           data-sidebar-next-item="more"
         >
-          <DotsThreeIcon class="size-5" />
+          <DotsThreeIcon class="size-(--rail-icon-size)" />
         </Dropdown.Trigger>
         <Dropdown.Content class="min-w-[14rem]">
           <Show when={menuItems().length > 0}>

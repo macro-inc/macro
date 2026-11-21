@@ -27,6 +27,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import PhoneCallIcon from '@icon/system/fill/phone-call-fill.svg';
 import { Button, cn, Hotkey } from '@ui';
 import { Show } from 'solid-js';
+import { dockPopoverPlacement } from '../dock-prefs';
 import { unreadDescription } from '../unread-description';
 import { NavGlyph } from './nav-glyph';
 import type { SidebarNextNavItem } from './nav-items';
@@ -151,7 +152,7 @@ export const ListNav = (props: ListNavProps) => {
       content={content}
       onOpenChange={props.onContextMenuOpenChange}
       // The trigger defaults to `w-full h-7`, which clips the round button.
-      triggerClass="size-10"
+      triggerClass="size-(--rail-button-size)"
       additionalActions={
         <Show when={props.item.id !== 'home'}>
           <MenuSeparator />
@@ -167,7 +168,7 @@ export const ListNav = (props: ListNavProps) => {
         variant="ghost"
         size="icon-md"
         class={cn(
-          'size-10 cursor-default rounded-xl',
+          'size-(--rail-button-size) cursor-default rounded-xl',
           isActive() && 'bg-hover text-ink'
         )}
         aria-description={
@@ -182,7 +183,7 @@ export const ListNav = (props: ListNavProps) => {
         }
         tooltip={{
           content: t('nav.goTo', { label: props.item.label }),
-          placement: 'right',
+          placement: dockPopoverPlacement(),
           hotkey: props.item.hotkeyToken
             ? [TOKENS.sidebar.goToLeader, props.item.hotkeyToken]
             : undefined,
@@ -206,7 +207,7 @@ export const ListNav = (props: ListNavProps) => {
           icon={props.item.icon}
           iconActive={props.item.iconActive}
           filled={isActive()}
-          class="size-5"
+          class="size-(--rail-icon-size)"
         />
         <Show
           when={props.activeCall}

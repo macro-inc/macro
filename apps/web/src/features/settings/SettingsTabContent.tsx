@@ -15,6 +15,7 @@ import { Appearance } from './Appearance';
 import { Billing } from './Billing';
 import { Bots } from './Bots';
 import { DesktopApp } from './DesktopApp';
+import { Dock } from './Dock';
 import { EmailSettings } from './email-settings';
 import { IntegrationsPage } from './IntegrationsPage';
 import { MobileApp } from './MobileApp';
@@ -75,6 +76,9 @@ export function SettingsTabContent(props: {
       </Show>
       <Show when={isCurrentTab('Appearance')}>
         <Appearance />
+      </Show>
+      <Show when={isCurrentTab('Dock')}>
+        <Dock />
       </Show>
       <Show when={isCurrentTab('Shortcuts')}>
         <Shortcuts />

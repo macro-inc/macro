@@ -72,8 +72,10 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
+import { match } from 'ts-pattern';
 import { BundleUpdateProgressBar } from './BundleUpdateProgressBar';
 import { DesktopTitleBar } from './DesktopTitleBar';
+import { dockPosition } from './dock-prefs';
 import GlobalShortcuts from './GlobalHotkeys';
 import { InitialInteractiveOnboardingModal } from './InitialInteractiveOnboardingModal';
 import { ItemDndProvider } from './ItemDragAndDrop';
@@ -260,6 +262,19 @@ const MobileCallIsland = lazyNamed(
   'MobileCallIsland'
 );
 
+/**
+ * Lays the rail out against the edge chosen in Settings → Dock. Reversing the
+ * direction keeps the rail first in the DOM, and so first in tab order, on
+ * every edge.
+ */
+const dockFlexDirection = () =>
+  match(dockPosition())
+    .with('left', () => 'flex-row')
+    .with('right', () => 'flex-row-reverse')
+    .with('top', () => 'flex-col')
+    .with('bottom', () => 'flex-col-reverse')
+    .exhaustive();
+
 export function AppChrome(props: ParentProps) {
   const isAuthenticated = useIsAuthenticated();
   const navigationEdge = useNativeNavigationEdge();
@@ -349,7 +364,10 @@ export function AppChrome(props: ParentProps) {
       </Show>
       {/* The banner already sits below the status bar on touch devices. */}
       <div
-        class="min-h-0 flex-1 flex"
+        class={cn(
+          'min-h-0 flex-1 flex',
+          sidebarVisible() && dockFlexDirection()
+        )}
         style={{
           'padding-left': navigationInset('left'),
           'padding-right': navigationInset('right'),
