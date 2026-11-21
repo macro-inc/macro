@@ -376,18 +376,14 @@ async fn a_refresh_while_email_service_is_down_keeps_what_was_known() {
 }
 
 #[tokio::test]
-async fn an_agent_without_an_inbox_has_none_to_refresh_pause_or_release() {
+async fn an_agent_without_an_inbox_has_none_to_refresh() {
     let (service, _, mailboxes) = service(Answer::Active);
 
     assert!(matches!(
         service.refresh(&agent()).await,
         Err(InboxError::NoInbox)
     ));
-    service.pause(TEAM, &agent()).await.unwrap();
-    service.release(TEAM, &agent()).await.unwrap();
-
-    // Only asked whether email_service has one.
-    assert!(mailboxes.calls().iter().all(|call| call == "status"));
+    assert!(mailboxes.calls().is_empty());
 }
 
 #[tokio::test]
@@ -543,4 +539,40 @@ async fn an_agent_removed_while_its_inbox_is_being_made_ends_up_paused() {
     assert_eq!(inbox.state, AgentInboxState::Paused);
     assert_eq!(records.only().state, AgentInboxState::Paused);
     assert!(mailboxes.calls().contains(&"pause".to_owned()));
+}
+
+#[tokio::test]
+async fn removing_an_agent_that_never_had_an_inbox_asks_email_service_nothing() {
+    // email_service is down: a removal must not depend on it here.
+    let (service, records, mailboxes) = service(Answer::Down);
+
+    service.pause(TEAM, &agent()).await.unwrap();
+
+    assert!(mailboxes.calls().is_empty());
+    assert_eq!(records.only().state, AgentInboxState::Paused);
+}
+
+#[tokio::test]
+async fn taking_back_an_agent_that_never_had_an_inbox_asks_email_service_nothing() {
+    let (service, records, mailboxes) = service(Answer::Down);
+
+    service.release(TEAM, &agent()).await.unwrap();
+
+    assert!(mailboxes.calls().is_empty());
+    assert_eq!(records.only().state, AgentInboxState::Released);
+}
+
+#[tokio::test]
+async fn a_pause_never_undoes_a_release() {
+    let (service, records, mailboxes) = service(Answer::Active);
+    service
+        .provision(TEAM, &agent(), "Sam Rivera", "sam-rivera")
+        .await
+        .unwrap();
+    records.0.lock().unwrap()[0].state = AgentInboxState::Releasing;
+
+    service.pause(TEAM, &agent()).await.unwrap();
+
+    assert_eq!(records.only().state, AgentInboxState::Releasing);
+    assert!(!mailboxes.calls().iter().any(|call| call == "pause"));
 }

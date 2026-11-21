@@ -490,12 +490,41 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes>
             WindDown::Pause => (AgentInboxState::Paused, AgentInboxState::Paused),
             WindDown::Release => (AgentInboxState::Releasing, AgentInboxState::Released),
         };
+        let mark = Uuid::now_v7();
         let record = self
             .repository
-            .reserve(agent, team_id, Uuid::now_v7(), marked)
+            .reserve(agent, team_id, mark, marked)
             .await
             .map_err(InboxError::internal)?;
-        if record.state == AgentInboxState::Released {
+        // This call made the record: no provision ever reserved one, so
+        // nothing exists at the provider and email_service isn't asked. A
+        // removal never depends on email_service for an agent without an
+        // inbox.
+        if record.request_id == mark {
+            if matches!(step, WindDown::Release) {
+                self.store(
+                    agent,
+                    InboxUpdate {
+                        mailbox_id: None,
+                        address: None,
+                        state: AgentInboxState::Released,
+                        last_error: None,
+                        fake_provider: false,
+                    },
+                )
+                .await?;
+            }
+            return Ok(());
+        }
+        let done_already = match step {
+            // Already further down: a pause never undoes a release.
+            WindDown::Pause => matches!(
+                record.state,
+                AgentInboxState::Releasing | AgentInboxState::Released
+            ),
+            WindDown::Release => record.state == AgentInboxState::Released,
+        };
+        if done_already {
             return Ok(());
         }
         let keep = |state| InboxUpdate {

@@ -325,11 +325,8 @@ where
         &self,
         receipt: &EntityAccessReceipt<MemberTeamRole>,
     ) -> Result<HashMap<String, AgentInbox>, TeamAgentError> {
-        if self
-            .ensure_inboxes_enabled(&acting_user(receipt)?)
-            .await
-            .is_err()
-        {
+        if let Err(error) = self.ensure_inboxes_enabled(&acting_user(receipt)?).await {
+            tracing::debug!(error = ?error, "agent inboxes are off for this admin; listing without them");
             return Ok(HashMap::new());
         }
         let inboxes = self
