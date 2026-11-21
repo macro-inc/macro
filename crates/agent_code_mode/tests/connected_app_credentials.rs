@@ -382,7 +382,12 @@ async fn the_api_omits_the_binding_while_the_journal_retains_it() {
     assert!(public.get("credentialCorrelationId").is_none());
     assert!(public.get("executionId").is_some());
     let schema =
-        serde_json::to_value(<ExecutionRecord as utoipa::PartialSchema>::schema()).unwrap();
+        serde_json::to_value(<agent_code_mode::inbound::axum_router::ExecutionRecordResponse as utoipa::PartialSchema>::schema()).unwrap();
+    assert_eq!(
+        <agent_code_mode::inbound::axum_router::ExecutionRecordResponse as utoipa::ToSchema>::name(
+        ),
+        "ExecutionRecord"
+    );
     let properties = schema["properties"].as_object().unwrap();
     assert!(properties.contains_key("executionId"));
     assert!(!properties.contains_key("credentialCorrelationId"));
