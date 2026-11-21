@@ -203,20 +203,168 @@ fn pointers_clamp_to_the_screen_and_clipboards_are_latin1() {
 }
 
 #[test]
-fn the_extended_clipboard_is_never_offered_to_the_server() {
+fn a_viewer_may_only_ask_for_encodings_the_server_side_can_frame() {
     let mut gate = RfbGate::new();
     gate.filter(HANDSHAKE, false).unwrap();
-    // noVNC's SetEncodings: Tight (7), ExtendedClipboard, DesktopSize (-223).
-    let mut set_encodings = vec![2u8, 0, 0, 3];
-    set_encodings.extend_from_slice(&7i32.to_be_bytes());
-    set_encodings.extend_from_slice(&0xC0A1_E5CEu32.to_be_bytes());
-    set_encodings.extend_from_slice(&(-223i32).to_be_bytes());
+    // noVNC's SetEncodings: Tight (7), ZRLE (16), ExtendedClipboard, Raw,
+    // DesktopSize (-223), fences (-312).
+    let mut set_encodings = vec![2u8, 0, 0, 6];
+    for encoding in [7i32, 16, 0xC0A1_E5CEu32 as i32, 0, -223, -312] {
+        set_encodings.extend_from_slice(&encoding.to_be_bytes());
+    }
 
     let filtered = gate.filter(&set_encodings, false).unwrap();
 
-    let mut expected = vec![2u8, 0, 0, 2];
-    expected.extend_from_slice(&7i32.to_be_bytes());
-    expected.extend_from_slice(&(-223i32).to_be_bytes());
+    let mut expected = vec![2u8, 0, 0, 3];
+    for encoding in [16i32, 0, -223] {
+        expected.extend_from_slice(&encoding.to_be_bytes());
+    }
     assert_eq!(filtered.forward, expected);
     assert!(!filtered.input);
+}
+
+#[test]
+fn only_version_3_8_is_spoken() {
+    assert_eq!(
+        RfbGate::new().filter(b"RFB 003.003\n", false),
+        Err(GateError::Version)
+    );
+}
+
+/// Xvnc's side of a handshake: version, security None, its result, and a
+/// 1920x1080 ServerInit at 32 bits per pixel named "a".
+fn server_greeting() -> Vec<u8> {
+    let mut bytes = b"RFB 003.008\n".to_vec();
+    bytes.extend_from_slice(&[1, 1]);
+    bytes.extend_from_slice(&[0, 0, 0, 0]);
+    bytes.extend_from_slice(&[7, 128, 4, 56]);
+    bytes.extend_from_slice(&[32, 24, 0, 1, 0, 255, 0, 255, 0, 255, 16, 8, 0, 0, 0, 0]);
+    bytes.extend_from_slice(&1u32.to_be_bytes());
+    bytes.push(b'a');
+    bytes
+}
+
+fn rectangle(width: u16, height: u16, encoding: i32) -> Vec<u8> {
+    let mut bytes = vec![0, 0, 0, 0];
+    bytes.extend_from_slice(&width.to_be_bytes());
+    bytes.extend_from_slice(&height.to_be_bytes());
+    bytes.extend_from_slice(&encoding.to_be_bytes());
+    bytes
+}
+
+fn cut_text(text: &[u8]) -> Vec<u8> {
+    let mut bytes = vec![3, 0, 0, 0];
+    bytes.extend_from_slice(&(text.len() as u32).to_be_bytes());
+    bytes.extend_from_slice(text);
+    bytes
+}
+
+/// A FramebufferUpdate with a 2x2 Raw rectangle, a ZRLE one, a cursor and
+/// a CopyRect, then a bell, a clipboard, and a colour map entry.
+fn screen_traffic() -> (Vec<u8>, Vec<u8>) {
+    let mut frames = vec![0u8, 0, 0, 4];
+    frames.extend(rectangle(2, 2, 0));
+    frames.extend([9u8; 16]);
+    frames.extend(rectangle(64, 64, 16));
+    frames.extend(5u32.to_be_bytes());
+    frames.extend([1u8, 2, 3, 4, 5]);
+    frames.extend(rectangle(9, 1, -239));
+    frames.extend([7u8; 9 * 4 + 2]);
+    frames.extend(rectangle(10, 10, 1));
+    frames.extend([0u8, 1, 0, 2]);
+    frames.push(2);
+    let clipboard = cut_text(b"secret");
+    let mut colour_map = vec![1u8, 0, 0, 0, 0, 1];
+    colour_map.extend([0u8; 6]);
+    let mut after = frames.clone();
+    after.extend(colour_map.clone());
+    let mut all = frames;
+    all.extend(&clipboard);
+    all.extend(colour_map);
+    (all, after)
+}
+
+#[test]
+fn a_viewer_who_does_not_drive_never_gets_the_clipboard() {
+    let mut server = RfbGate::new().server_filter();
+    let (traffic, without_clipboard) = screen_traffic();
+    let mut stream = server_greeting();
+    stream.extend(&traffic);
+
+    let passed = server.filter(&stream, false).unwrap();
+
+    let mut expected = server_greeting();
+    expected.extend(without_clipboard);
+    assert_eq!(passed, expected);
+}
+
+#[test]
+fn the_driver_gets_the_clipboard_and_everything_else_byte_for_byte() {
+    let mut server = RfbGate::new().server_filter();
+    let (traffic, _) = screen_traffic();
+    let mut stream = server_greeting();
+    stream.extend(&traffic);
+
+    assert_eq!(server.filter(&stream, true).unwrap(), stream);
+}
+
+#[test]
+fn the_server_side_frames_bytes_however_they_are_split() {
+    let mut server = RfbGate::new().server_filter();
+    let (traffic, without_clipboard) = screen_traffic();
+    let mut stream = server_greeting();
+    stream.extend(&traffic);
+
+    let mut passed = Vec::new();
+    for byte in &stream {
+        passed.extend(server.filter(std::slice::from_ref(byte), false).unwrap());
+    }
+
+    let mut expected = server_greeting();
+    expected.extend(without_clipboard);
+    assert_eq!(passed, expected);
+}
+
+#[test]
+fn pixels_follow_the_format_the_viewer_sets() {
+    let mut gate = RfbGate::new();
+    let mut server = gate.server_filter();
+    gate.filter(HANDSHAKE, false).unwrap();
+    // The ServerInit says 32 bits per pixel; the viewer then asks for 8.
+    assert_eq!(
+        server.filter(&server_greeting(), false).unwrap(),
+        server_greeting()
+    );
+    let set_pixel_format = [0u8, 0, 0, 0, 8, 8, 0, 1, 0, 7, 0, 7, 0, 3, 0, 3, 6, 0, 0, 0];
+    gate.filter(&set_pixel_format, false).unwrap();
+
+    // A 2x2 Raw rectangle is now 4 bytes, so the clipboard after it is
+    // still found and dropped.
+    let mut update = vec![0u8, 0, 0, 1];
+    update.extend(rectangle(2, 2, 0));
+    update.extend([9u8; 4]);
+    let mut stream = update.clone();
+    stream.extend(cut_text(b"x"));
+    assert_eq!(server.filter(&stream, false).unwrap(), update);
+}
+
+#[test]
+fn the_server_side_closes_on_what_it_cannot_frame() {
+    let mut server = RfbGate::new().server_filter();
+    let mut stream = server_greeting();
+    stream.extend([0u8, 0, 0, 1]);
+    // Tight, which the gate never offers.
+    stream.extend(rectangle(2, 2, 7));
+    assert_eq!(
+        server.filter(&stream, false),
+        Err(GateError::UnknownEncoding(7))
+    );
+
+    let mut server = RfbGate::new().server_filter();
+    let mut stream = server_greeting();
+    stream.push(77);
+    assert_eq!(
+        server.filter(&stream, false),
+        Err(GateError::UnknownServerMessage(77))
+    );
 }

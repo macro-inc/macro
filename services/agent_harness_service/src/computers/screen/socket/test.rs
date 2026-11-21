@@ -1,5 +1,7 @@
 use std::convert::Infallible;
 
+use computer_screen::domain::models::Driver;
+
 use super::*;
 
 #[tokio::test(start_paused = true)]
@@ -42,6 +44,7 @@ async fn a_hibernated_computer_is_announced_once_and_then_awaited() {
 fn the_state_says_whether_the_computer_is_waking() {
     let state = ServerMessage::State {
         driver: None,
+        lease_id: None,
         driving_here: false,
         agent_held: false,
         surface: Surface::Desktop,
@@ -55,6 +58,7 @@ fn the_state_says_whether_the_computer_is_waking() {
         serde_json::json!({
             "type": "state",
             "driver": null,
+            "leaseId": null,
             "drivingHere": false,
             "agentHeld": false,
             "surface": "desktop",
@@ -236,6 +240,16 @@ mod over_the_wire {
 
     const COMPUTER: ComputerId = ComputerId::new_from_uuid(uuid::Uuid::from_u128(0xC0));
 
+    /// Xvnc's side of a handshake: version, security None, its result, and
+    /// a 1920x1080 ServerInit at 32 bits per pixel with no name.
+    fn greeting() -> Vec<u8> {
+        let mut bytes = b"RFB 003.008\n".to_vec();
+        bytes.extend_from_slice(&[1, 1, 0, 0, 0, 0, 7, 128, 4, 56]);
+        bytes.extend_from_slice(&[32, 24, 0, 1, 0, 255, 0, 255, 0, 255, 16, 8, 0, 0, 0, 0]);
+        bytes.extend_from_slice(&0u32.to_be_bytes());
+        bytes
+    }
+
     /// An Xvnc that greets each connection and records what reaches it.
     #[derive(Default)]
     struct FakeXvnc {
@@ -280,7 +294,7 @@ mod over_the_wire {
             Box::pin(async move {
                 let (harness_end, mut guest_end) = tokio::io::duplex(1 << 20);
                 tokio::spawn(async move {
-                    guest_end.write_all(b"RFB 003.008\n").await.unwrap();
+                    guest_end.write_all(&greeting()).await.unwrap();
                     let script = std::mem::take(&mut *xvnc.script.lock().unwrap());
                     let (guest_reader, mut guest_writer) = tokio::io::split(guest_end);
                     tokio::spawn(async move {
@@ -354,10 +368,45 @@ mod over_the_wire {
 
     /// A socket route serving `grant`, as a redeemed ticket would.
     async fn rig(pool: PgPool, grant: ScreenGrant) -> Rig {
-        rig_with_script(pool, grant, Vec::new()).await
+        rig_with(pool, grant, Options::default()).await
     }
 
     async fn rig_with_script(pool: PgPool, grant: ScreenGrant, script: Vec<u8>) -> Rig {
+        rig_with(
+            pool,
+            grant,
+            Options {
+                script,
+                ..Options::default()
+            },
+        )
+        .await
+    }
+
+    /// How a rig's socket runs.
+    struct Options {
+        /// What the fake Xvnc sends after its greeting.
+        script: Vec<u8>,
+        reauthorize_every: Duration,
+        idle: Idle,
+    }
+
+    impl Default for Options {
+        fn default() -> Self {
+            Self {
+                script: Vec::new(),
+                reauthorize_every: Duration::from_millis(100),
+                idle: IDLE,
+            }
+        }
+    }
+
+    async fn rig_with(pool: PgPool, grant: ScreenGrant, options: Options) -> Rig {
+        let Options {
+            script,
+            reauthorize_every,
+            idle,
+        } = options;
         let tasks = TaskTracker::new();
         let shutdown = CancellationToken::new();
         let screens = Arc::new(computer_screen::domain::service::ScreenService::new(
@@ -400,7 +449,8 @@ mod over_the_wire {
                         let failing = lookups_fail.load(Ordering::SeqCst);
                         Box::pin(async move { (!failing).then_some(allowed) })
                     }),
-                    reauthorize_every: Duration::from_millis(100),
+                    reauthorize_every,
+                    idle,
                     shutdown: CancellationToken::new(),
                 };
                 let grant = grant.clone();
@@ -490,9 +540,7 @@ mod over_the_wire {
         assert_eq!(drive.end_reason.as_deref(), Some("handBack"));
         let notices = rig
             .screens
-            .pending_notices(
-                &MacroUserIdStr::try_from("macro|scout@example.com".to_owned()).unwrap(),
-            )
+            .claim_notices(&MacroUserIdStr::try_from("macro|scout@example.com".to_owned()).unwrap())
             .await
             .unwrap();
         assert_eq!(notices.len(), 2);
@@ -581,10 +629,11 @@ mod over_the_wire {
         message
     }
 
+    /// A viewer who only watches never gets the guest's clipboard: neither
+    /// what the agent copies nor what the driver pastes. Large and extended
+    /// cut texts are skipped whole, so what follows still arrives.
     #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-    async fn large_clipboards_from_the_guest_reach_the_viewer_byte_for_byte(pool: PgPool) {
-        // What Xvnc sends when a page's text is selected: a plain cut text
-        // of 100 KB and of 2 MB, an extended one, then a bell.
+    async fn a_viewer_who_only_watches_never_gets_the_guests_clipboard(pool: PgPool) {
         let plain_small: Vec<u8> = (0..100_000u32)
             .map(|index| b'a' + (index % 26) as u8)
             .collect();
@@ -596,11 +645,11 @@ mod over_the_wire {
         script.extend(server_cut_text(&plain_large));
         script.extend(extended_cut_text(&extended));
         script.push(2); // Bell
-        let rig = rig_with_script(pool, grant("alice", Mode::View), script.clone()).await;
+        let rig = rig_with_script(pool, grant("alice", Mode::View), script).await;
         let mut client = connect(&rig).await;
 
-        let mut expected = b"RFB 003.008\n".to_vec();
-        expected.extend_from_slice(&script);
+        let mut expected = greeting();
+        expected.push(2);
         let mut received = Vec::new();
         while received.len() < expected.len() {
             match client.next().await.unwrap().unwrap() {
@@ -610,8 +659,7 @@ mod over_the_wire {
             }
         }
 
-        assert_eq!(received.len(), expected.len());
-        assert!(received == expected, "the relay changed the guest's bytes");
+        assert_eq!(received, expected, "the viewer got more than the screen");
     }
 
     /// A guest that greets, then sends screen data as fast as it can be read.
@@ -635,9 +683,11 @@ mod over_the_wire {
                     }
                 });
                 tokio::spawn(async move {
-                    guest_writer.write_all(b"RFB 003.008\n").await.unwrap();
-                    let chunk = vec![0u8; 64 * 1024];
-                    while guest_writer.write_all(&chunk).await.is_ok() {}
+                    guest_writer.write_all(&greeting()).await.unwrap();
+                    // One 128x128 Raw rectangle per update, without end.
+                    let mut update = vec![0u8, 0, 0, 1, 0, 0, 0, 0, 0, 128, 0, 128, 0, 0, 0, 0];
+                    update.resize(update.len() + 128 * 128 * 4, 0);
+                    while guest_writer.write_all(&update).await.is_ok() {}
                 });
                 let (reader, writer) = tokio::io::split(harness_end);
                 let reader: Pin<Box<dyn tokio::io::AsyncRead + Send>> = Box::pin(reader);
@@ -670,6 +720,7 @@ mod over_the_wire {
                         Box::pin(async move { Some(allowed) })
                     }),
                     reauthorize_every: Duration::from_millis(100),
+                    idle: IDLE,
                     shutdown: CancellationToken::new(),
                 };
                 let grant = grant("alice", Mode::View);
@@ -732,6 +783,130 @@ mod over_the_wire {
             control_of(&mut client, "ended").await["reason"],
             "accessRevoked"
         );
+    }
+
+    /// Idle limits short enough for a test.
+    const QUICK_IDLE: Idle = Idle {
+        after: Duration::from_millis(600),
+        hidden_for: Duration::from_millis(200),
+    };
+
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+    async fn a_tab_that_never_says_it_is_visible_is_closed_as_idle(pool: PgPool) {
+        let rig = rig_with(
+            pool,
+            grant("alice", Mode::View),
+            Options {
+                idle: QUICK_IDLE,
+                ..Options::default()
+            },
+        )
+        .await;
+        let mut client = connect(&rig).await;
+
+        assert_eq!(control_of(&mut client, "ended").await["reason"], "idle");
+    }
+
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+    async fn a_visible_tab_stays_and_a_hidden_one_closes_soon_after(pool: PgPool) {
+        let rig = rig_with(
+            pool,
+            grant("alice", Mode::View),
+            Options {
+                idle: QUICK_IDLE,
+                ..Options::default()
+            },
+        )
+        .await;
+        let mut client = connect(&rig).await;
+        control_of(&mut client, "state").await;
+
+        // Past the idle limit while the viewer keeps saying it is visible.
+        let started = tokio::time::Instant::now();
+        while started.elapsed() < QUICK_IDLE.after * 2 {
+            send(
+                &mut client,
+                serde_json::json!({ "type": "visibility", "visible": true }),
+            )
+            .await;
+            tokio::time::sleep(QUICK_IDLE.after / 6).await;
+        }
+        send(
+            &mut client,
+            serde_json::json!({ "type": "visibility", "visible": false }),
+        )
+        .await;
+        let hidden = tokio::time::Instant::now();
+
+        assert_eq!(control_of(&mut client, "ended").await["reason"], "idle");
+        assert!(
+            hidden.elapsed() < QUICK_IDLE.after,
+            "a hidden tab waited for the full idle limit"
+        );
+    }
+
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+    async fn a_forgotten_take_over_hands_the_agent_back(pool: PgPool) {
+        let rig = rig_with(
+            pool,
+            grant("alice", Mode::Drive),
+            Options {
+                idle: QUICK_IDLE,
+                ..Options::default()
+            },
+        )
+        .await;
+        let mut client = connect(&rig).await;
+        control_of(&mut client, "state").await;
+        send(&mut client, serde_json::json!({ "type": "takeOver" })).await;
+        assert_eq!(control_of(&mut client, "state").await["drivingHere"], true);
+        send(
+            &mut client,
+            serde_json::json!({ "type": "visibility", "visible": false }),
+        )
+        .await;
+
+        assert_eq!(control_of(&mut client, "ended").await["reason"], "idle");
+        assert_eq!(rig.screens.lease(COMPUTER).await.unwrap(), None);
+    }
+
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+    async fn a_take_over_after_losing_access_ends_the_socket_at_once(pool: PgPool) {
+        let rig = rig_with(
+            pool,
+            grant("alice", Mode::Drive),
+            Options {
+                // No periodic recheck within the test.
+                reauthorize_every: Duration::from_secs(3600),
+                ..Options::default()
+            },
+        )
+        .await;
+        let mut client = connect(&rig).await;
+        control_of(&mut client, "state").await;
+        rig.allowed.store(false, Ordering::SeqCst);
+
+        send(&mut client, serde_json::json!({ "type": "takeOver" })).await;
+
+        assert_eq!(
+            control_of(&mut client, "ended").await["reason"],
+            "accessRevoked"
+        );
+        assert_eq!(rig.screens.lease(COMPUTER).await.unwrap(), None);
+    }
+
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+    async fn viewers_see_who_drives_by_name_never_by_user_id(pool: PgPool) {
+        let rig = rig(pool, grant("alice", Mode::Drive)).await;
+        let mut client = connect(&rig).await;
+        control_of(&mut client, "state").await;
+
+        send(&mut client, serde_json::json!({ "type": "takeOver" })).await;
+        let state = control_of(&mut client, "state").await;
+
+        assert_eq!(state["driver"]["isYou"], true);
+        assert!(state["driver"].get("userId").is_none(), "{state}");
+        assert!(!state.to_string().contains("alice@example.com"), "{state}");
     }
 }
 

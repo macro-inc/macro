@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use axum::extract::ws::{Message, Utf8Bytes, WebSocket};
 use computer_screen::domain::models::{
-    Driver, EndReason, Lease, Mode, ScreenGrant, SessionId, Surface, TakeOver, Transport,
+    EndReason, Lease, Mode, ScreenGrant, SessionId, Surface, TakeOver, Transport,
 };
 use computer_screen::domain::service::ScreenError;
 use futures::{SinkExt as _, StreamExt as _};
@@ -23,7 +23,7 @@ use tracing::field::Empty;
 
 use super::Screens;
 use super::media::{
-    FromViewer, MediaContext, MediaEnd, MediaError, MediaRun, ScreenMedia, ToViewer,
+    DrivingUntil, FromViewer, MediaContext, MediaEnd, MediaError, MediaRun, ScreenMedia, ToViewer,
 };
 use super::rfb::{InputEvent, RfbInjector};
 use super::tunnel::{
@@ -64,6 +64,11 @@ enum ClientMessage {
     Input {
         event: InputEvent,
     },
+    /// Whether the viewer's tab is visible: sent on open, on every change,
+    /// and repeated while visible.
+    Visibility {
+        visible: bool,
+    },
     Stop,
 }
 
@@ -87,6 +92,18 @@ pub enum ErrorCode {
     TunnelFailed,
     /// Too many screens are open on the computer, or by this person on it.
     TooManySockets,
+    /// The agent couldn't be paused on this computer, so this take-over
+    /// was refused; a later one may work.
+    AgentNotPausable,
+}
+
+/// Who drives, as viewers see it: a name, never their user id (an email).
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ShownDriver<'a> {
+    name: Option<&'a str>,
+    /// Whether it is this viewer, from this tab or another.
+    is_you: bool,
 }
 
 /// A control message to the viewer.
@@ -98,7 +115,10 @@ pub enum ErrorCode {
 )]
 enum ServerMessage<'a> {
     State {
-        driver: Option<&'a Driver>,
+        driver: Option<ShownDriver<'a>>,
+        /// The drive this lease belongs to: new at each take-over, the same
+        /// across renewals and across the driver's tabs. Opaque.
+        lease_id: Option<String>,
         /// Whether this socket holds the lease: false while the same user
         /// drives from another tab.
         driving_here: bool,
@@ -194,8 +214,26 @@ pub struct SocketDeps {
     /// How often access is checked again and the socket marked seen:
     /// [`REAUTHORIZE_EVERY`] outside tests.
     pub reauthorize_every: Duration,
+    /// When a quiet or hidden viewer's socket ends: [`IDLE`] outside tests.
+    pub idle: Idle,
     pub shutdown: CancellationToken,
 }
+
+/// How long a socket lives without its viewer saying its tab is visible
+/// (`visibility`, repeated by the viewer) or driving, and after the viewer
+/// says it was hidden: a forgotten tab stops keeping the computer awake,
+/// and a forgotten take-over hands back.
+#[derive(Debug, Clone, Copy)]
+pub struct Idle {
+    pub after: Duration,
+    pub hidden_for: Duration,
+}
+
+/// [`Idle`] outside tests.
+pub const IDLE: Idle = Idle {
+    after: Duration::from_secs(10 * 60),
+    hidden_for: Duration::from_secs(2 * 60),
+};
 
 /// The running media path and its channels.
 struct MediaSlot {
@@ -470,7 +508,11 @@ struct Connection {
 }
 
 impl Connection {
-    fn start_media(&self, driving: &watch::Receiver<bool>, activity: &Arc<Notify>) -> MediaSlot {
+    fn start_media(
+        &self,
+        driving: &watch::Receiver<DrivingUntil>,
+        activity: &Arc<Notify>,
+    ) -> MediaSlot {
         let (to_viewer_sender, to_viewer) = mpsc::channel(MEDIA_BUFFER);
         let (from_viewer, from_viewer_receiver) = mpsc::channel(MEDIA_BUFFER);
         let run = self.deps.media.run(MediaContext {
@@ -497,7 +539,11 @@ impl Connection {
         send(
             sender,
             &ServerMessage::State {
-                driver: lease.map(|lease| &lease.driver),
+                lease_id: lease.map(Lease::drive_id),
+                driver: lease.map(|lease| ShownDriver {
+                    name: lease.driver.name.as_deref(),
+                    is_you: lease.driver.user_id.as_ref() == self.grant.user_id.as_ref(),
+                }),
                 driving_here: drives_here(lease, self.session),
                 agent_held: lease.is_some_and(|lease| lease.agent_user_id.is_some()),
                 surface,
@@ -562,7 +608,10 @@ impl Connection {
             Ok(lease) => lease,
             Err(error) => return internal(&error),
         };
-        let (driving_sender, driving) = watch::channel(false);
+        let (driving_sender, driving) = watch::channel(DrivingUntil::default());
+        // The viewer's tab counts as visible on open.
+        let mut visible_at = tokio::time::Instant::now();
+        let mut hidden_at: Option<tokio::time::Instant> = None;
         let activity = Arc::new(Notify::new());
         let surface = self.grant.surface;
         let mut injector: Option<RfbInjector> = None;
@@ -588,16 +637,13 @@ impl Connection {
         let mut media = self.start_media(&driving, &activity);
 
         loop {
-            let _ = driving_sender.send(
-                lease
-                    .as_ref()
-                    .is_some_and(|lease| lease.session_id == self.session),
-            );
-            let lapse = lease.as_ref().map(|lease| {
-                let left = (lease.expires_at - chrono::Utc::now())
-                    .to_std()
-                    .unwrap_or(Duration::ZERO);
-                tokio::time::Instant::now() + left
+            let lapse = lease.as_ref().map(lapses_at);
+            let _ = driving_sender.send(DrivingUntil(
+                lapse.filter(|_| drives_here(lease.as_ref(), self.session)),
+            ));
+            let idle = self.deps.idle;
+            let idle_at = hidden_at.map_or(visible_at + idle.after, |hidden| {
+                (hidden + idle.hidden_for).min(visible_at + idle.after)
             });
             let MediaSlot {
                 run,
@@ -607,6 +653,17 @@ impl Connection {
 
             tokio::select! {
                 () = self.deps.shutdown.cancelled() => return Ending::plain(EndReason::Shutdown),
+
+                () = tokio::time::sleep_until(idle_at) => {
+                    // A forgotten take-over gives the agent back.
+                    if may_hand_back(lease.as_ref(), &self.grant.user_id)
+                        && drives_here(lease.as_ref(), self.session)
+                        && let Err(error) = self.deps.screens.hand_back(computer, self.grant.user_id.clone(), None).await
+                    {
+                        tracing::warn!(error = ?error, "could not release an idle driver's lease");
+                    }
+                    return Ending::plain(EndReason::Idle);
+                }
 
                 // The viewer stopped reading, or its connection broke.
                 () = sender.stalled.cancelled() => return Ending::plain(EndReason::Stopped),
@@ -662,18 +719,40 @@ impl Connection {
                         }
                         continue;
                     };
-                    let driving_now = *driving.borrow();
+                    // Taking over is when a demoted admin must not slip
+                    // through before the next periodic recheck.
+                    if matches!(message, ClientMessage::TakeOver)
+                        && (self.deps.reauthorize)().await == Some(false)
+                    {
+                        return Ending::plain(EndReason::AccessRevoked);
+                    }
+                    let driving_now = driving.borrow().now();
                     let sent = match message {
                         ClientMessage::Stop => return Ending::plain(EndReason::Stopped),
+                        ClientMessage::Visibility { visible } => {
+                            if visible {
+                                visible_at = tokio::time::Instant::now();
+                                hidden_at = None;
+                            } else {
+                                hidden_at.get_or_insert_with(tokio::time::Instant::now);
+                            }
+                            Ok(())
+                        }
                         ClientMessage::TakeOver => match self.deps.screens.take_over(&self.grant, self.session).await {
                             Ok(TakeOver::Taken(taken)) => {
                                 last_renew = tokio::time::Instant::now();
+                                visible_at = last_renew;
+                                let _ = driving_sender.send(DrivingUntil(Some(lapses_at(&taken))));
                                 lease = Some(taken);
-                                let _ = driving_sender.send(true);
                                 self.state(sender, lease.as_ref(), surface).await
                             }
                             Ok(TakeOver::Busy(_)) => Self::error(sender, ErrorCode::DriverBusy, "someone else is driving").await,
                             Err(ScreenError::DriveNotAllowed) => Self::error(sender, ErrorCode::DriveNotAllowed, "you may only watch this computer").await,
+                            Err(ScreenError::AgentNotPausable) => Self::error(
+                                sender,
+                                ErrorCode::AgentNotPausable,
+                                "Couldn't pause the agent on this computer, so it can't be taken over right now.",
+                            ).await,
                             Err(error) => return internal(&error),
                         },
                         ClientMessage::HandBack { note } => {
@@ -687,7 +766,7 @@ impl Connection {
                                     Ok(_) => {
                                         lease = None;
                                         injector = None;
-                                        let _ = driving_sender.send(false);
+                                        let _ = driving_sender.send(DrivingUntil::default());
                                         self.state(sender, None, surface).await
                                     }
                                     Err(error) => return internal(&error),
@@ -699,6 +778,7 @@ impl Connection {
                                 // Dropped; said once per message so the viewer can show why.
                                 Self::error(sender, ErrorCode::NotDriver, "input is dropped while you are not driving").await
                             } else {
+                                visible_at = tokio::time::Instant::now();
                                 match self.inject(&mut injector, &event).await {
                                     Ok(()) => {
                                         activity.notify_one();
@@ -720,7 +800,9 @@ impl Connection {
                 }
 
                 () = activity.notified() => {
-                    if *driving.borrow() && last_renew.elapsed() >= RENEW_EVERY {
+                    // Raw input reached the guest: its tab is in use.
+                    visible_at = tokio::time::Instant::now();
+                    if driving.borrow().now() && last_renew.elapsed() >= RENEW_EVERY {
                         last_renew = tokio::time::Instant::now();
                         match self.deps.screens.renew(computer, self.session).await {
                             Ok(renewed) => {
@@ -838,6 +920,14 @@ async fn connect_injector(
         .await
         .map_err(|_| "the computer's display did not answer".to_owned())?
         .map_err(|error| error.to_string())
+}
+
+/// When `lease` lapses, on this process's clock.
+fn lapses_at(lease: &Lease) -> tokio::time::Instant {
+    let left = (lease.expires_at - chrono::Utc::now())
+        .to_std()
+        .unwrap_or(Duration::ZERO);
+    tokio::time::Instant::now() + left
 }
 
 async fn sleep_until_some(at: Option<tokio::time::Instant>) {

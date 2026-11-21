@@ -15,7 +15,7 @@ use tokio::sync::broadcast;
 use uuid::Uuid;
 
 use super::models::{
-    Access, EndReason, IssuedTicket, Lease, Mode, PendingNotice, RedeemedTicket, Release,
+    Access, Caller, EndReason, IssuedTicket, Lease, Mode, PendingNotice, RedeemedTicket, Release,
     ScreenGrant, SessionId, TakeOver, TicketRequest, TicketSecret,
 };
 use super::ports::{DriverSignal, LeaseChanges, People, ScreenAccess, ScreenRepo, TicketHash};
@@ -40,6 +40,14 @@ pub const SESSION_FRESH_FOR: Duration = Duration::from_secs(120);
 /// makes no brain request for a day (its computer released, say) never
 /// hears it.
 pub const NOTICE_KEPT_FOR: Duration = Duration::from_secs(24 * 60 * 60);
+/// How often each replica runs [`ScreenService::reap`].
+pub const REAP_EVERY: Duration = Duration::from_secs(60);
+/// How long after a drive ended its agent is thawed again by
+/// [`ScreenService::reap`].
+pub const THAW_CHECKED_FOR: Duration = Duration::from_secs(10 * 60);
+/// How long a brain request holds the notices it carries: past a long
+/// streamed turn, so only a crash leaves them for the next one.
+pub const NOTICE_CLAIMED_FOR: Duration = Duration::from_secs(15 * 60);
 /// Sockets one person may hold open on one computer (a few tabs).
 pub const MAX_SOCKETS_PER_VIEWER: u32 = 4;
 /// Sockets open on one computer: each costs the guest an RFB client.
@@ -79,6 +87,10 @@ pub enum ScreenError {
     /// Too many sockets open on the computer, or by this person on it.
     #[error("too many screens are open on this computer")]
     TooManySockets,
+    /// The agent on the computer couldn't be paused, so nobody may take it
+    /// over now: it would fight the person for the pointer.
+    #[error("the agent on this computer couldn't be paused, so it can't be taken over right now")]
+    AgentNotPausable,
     /// Storage or a lookup failed.
     #[error("screen storage failed")]
     Internal(rootcause::Report),
@@ -150,7 +162,7 @@ where
         request: TicketRequest,
         traceparent: Option<&str>,
     ) -> Result<IssuedTicket, ScreenError> {
-        if request.program {
+        if request.caller == Caller::Program {
             return Err(ScreenError::ProgramRefused);
         }
         if !self.gate.rollout(&request.user_id).await {
@@ -323,8 +335,22 @@ where
         let span = tracing::Span::current();
         match &outcome {
             TakeOver::Taken(lease) => {
+                if self.signal.driving(lease).await.is_err() {
+                    span.record("screen.take_over", "refused");
+                    self.repo
+                        .release(
+                            grant.computer_id,
+                            Release::Refused {
+                                session_id: session,
+                            },
+                        )
+                        .await
+                        .map_err(ScreenError::internal)?;
+                    // Thaw whatever part of the freeze took.
+                    self.signal.released(grant.computer_id).await;
+                    return Err(ScreenError::AgentNotPausable);
+                }
                 span.record("screen.take_over", "taken");
-                self.signal.driving(lease).await;
             }
             TakeOver::Busy(_) => {
                 span.record("screen.take_over", "busy");
@@ -442,6 +468,34 @@ where
         }
     }
 
+    /// One round of keeping agents right after a crash or a lost
+    /// notification: lapsed leases are released (which thaws their agents),
+    /// and agents on computers a drive ended on within [`THAW_CHECKED_FOR`]
+    /// are thawed again, in case the process that released them died first.
+    /// Due every [`REAP_EVERY`] on each replica.
+    #[tracing::instrument(skip_all, fields(screen.lapsed = tracing::field::Empty, screen.thawed = tracing::field::Empty), err)]
+    pub async fn reap(&self) -> Result<(), ScreenError> {
+        let lapsed = self
+            .repo
+            .lapsed_leases()
+            .await
+            .map_err(ScreenError::internal)?;
+        tracing::Span::current().record("screen.lapsed", lapsed.len());
+        for computer in lapsed {
+            self.lease(computer).await?;
+        }
+        let released = self
+            .repo
+            .released_within(THAW_CHECKED_FOR)
+            .await
+            .map_err(ScreenError::internal)?;
+        tracing::Span::current().record("screen.thawed", released.len());
+        for computer in released {
+            self.signal.released(computer).await;
+        }
+        Ok(())
+    }
+
     /// Mark an open socket as still there; due every [`SESSION_TOUCH_EVERY`].
     pub async fn touch_session(&self, id: SessionId) -> Result<(), ScreenError> {
         self.repo
@@ -450,14 +504,27 @@ where
             .map_err(ScreenError::internal)
     }
 
-    /// The agent's notices not yet delivered. They stay pending until
-    /// [`Self::notices_delivered`] says the request carrying them succeeded.
-    pub async fn pending_notices(
+    /// The agent's notices not yet delivered, claimed for one request: no
+    /// other request gets them until [`Self::notices_returned`] gives them
+    /// back, or the claim runs out. [`Self::notices_delivered`] says the
+    /// request carrying them succeeded.
+    pub async fn claim_notices(
         &self,
         agent: &MacroUserIdStr<'_>,
     ) -> Result<Vec<PendingNotice>, ScreenError> {
         self.repo
-            .pending_notices(agent, NOTICE_KEPT_FOR)
+            .claim_notices(agent, NOTICE_KEPT_FOR, NOTICE_CLAIMED_FOR)
+            .await
+            .map_err(ScreenError::internal)
+    }
+
+    /// The request carrying these notices failed: the next one carries them.
+    pub async fn notices_returned(&self, ids: &[Uuid]) -> Result<(), ScreenError> {
+        if ids.is_empty() {
+            return Ok(());
+        }
+        self.repo
+            .unclaim_notices(ids)
             .await
             .map_err(ScreenError::internal)
     }

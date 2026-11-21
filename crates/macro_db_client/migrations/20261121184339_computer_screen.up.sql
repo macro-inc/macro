@@ -34,7 +34,7 @@ CREATE TABLE computer_screen_sessions (
     mode              TEXT        NOT NULL CHECK (mode IN ('view', 'drive')),
     started_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
     ended_at          TIMESTAMPTZ,
-    end_reason        TEXT,
+    end_reason        TEXT CHECK (end_reason IN ('stopped', 'computerOff', 'accessRevoked', 'shutdown', 'error', 'lost', 'idle')),
     bytes_to_viewer   BIGINT      NOT NULL DEFAULT 0,
     bytes_from_viewer BIGINT      NOT NULL DEFAULT 0,
     -- Bumped while the socket is open, so a row a crashed process left open
@@ -57,8 +57,12 @@ CREATE TABLE computer_screen_drives (
     user_id     TEXT        NOT NULL,
     started_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     ended_at    TIMESTAMPTZ,
-    end_reason  TEXT CHECK (end_reason IN ('handBack', 'lapsed'))
+    end_reason  TEXT CHECK (end_reason IN ('handBack', 'lapsed', 'refused'))
 );
+
+-- Recently ended drives, whose agents the harness makes sure are thawed.
+CREATE INDEX computer_screen_drives_ended ON computer_screen_drives (ended_at)
+    WHERE ended_at IS NOT NULL;
 
 -- At most one open drive per computer, the one its lease belongs to.
 CREATE UNIQUE INDEX computer_screen_drives_open ON computer_screen_drives (computer_id)
@@ -89,7 +93,10 @@ CREATE TABLE computer_screen_agent_notices (
     computer_id   UUID        NOT NULL,
     agent_user_id TEXT        NOT NULL,
     payload       JSONB       NOT NULL,
-    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    -- Set while one brain request carries it; past it, the notice is free
+    -- for the next (that request failed without saying so).
+    claimed_until TIMESTAMPTZ
 );
 
 CREATE INDEX computer_screen_agent_notices_pending ON computer_screen_agent_notices (agent_user_id, created_at);

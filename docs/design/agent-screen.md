@@ -48,26 +48,41 @@ guest: Xvnc on 127.0.0.1:5901 (the agent's display :1)
   harness `View` permission (every member of the computer's team); driving needs
   `Manage` (team owners and admins). Programs (agent and routine runs) and agent
   accounts are refused: a screen is a person's view.
-- **Input gate:** the harness parses the client-to-server half of RFB. Unless
-  the socket holds the driver lease, it drops key, pointer and clipboard
-  messages, so a viewer can't send input even with a modified client. It also
-  removes the extended-clipboard pseudo-encoding, so large guest selections
-  arrive as plain clipboard text.
+- **Input gate:** the harness parses both halves of RFB. Unless the socket
+  holds an unexpired driver lease, it drops key, pointer and clipboard messages
+  from the viewer, so a viewer can't send input even with a modified client,
+  and the guest's clipboard (what the agent copies or the driver pastes) never
+  reaches it. To follow Xvnc's stream without decoding pixels, a viewer may
+  only ask for Raw, CopyRect and ZRLE (plus pseudo-encodings that carry no
+  pixel data); Xvnc doesn't send the primary selection at all.
 - **One driver:** a lease row per computer, taken by a guarded upsert, so two
   people taking over at once never both drive. Each socket learns whether it is
   the one driving. The lease lapses two minutes after the driver's last input or
   when their access is revoked. Every take-over is an audit row, ended by hand
   back or lapse.
-- **Pausing the agent:** while a person drives, every `/brain/*` request from
-  that agent waits (woken by a Postgres notification when the lease ends,
-  bounded, then 503 with Retry-After). A step the agent already started
-  finishes. The guest gets an advisory file (`~/agent/state/screen-driver`), and
-  the agent gets a notice on take-over and on hand-back, with the note, on its
-  next brain request.
+- **Pausing the agent:** a take-over first freezes the agent's unit
+  (`systemctl freeze`, through a root-owned helper on a socket only the
+  harness's exec user may open and the agent's sandbox hides), so a step
+  already under way stops too, whichever account its Claude uses. When it
+  can't be frozen, Take over is refused with `agentNotPausable` and nothing
+  claims the agent is paused. A hand-back or lapse thaws it; each replica also
+  re-thaws recently released agents every minute, in case the process that
+  released one died. While a person drives, every `/brain/*` request from that
+  agent also waits (woken by a Postgres notification when the lease ends,
+  bounded, then 503 with Retry-After; at once on a harness shutdown). The guest
+  gets an advisory file (`~/agent/state/screen-driver`), and the agent's main
+  loop (requests its runtime marks `x-macro-agent-loop: main` that offer tools)
+  gets a notice on take-over and on hand-back, with the note, each claimed by
+  one request at a time. An agent on its owner's own Claude plan calls
+  Anthropic directly, so it never gets the notices; it is still frozen.
 - **Robustness:** sockets are capped per person and per computer, tickets are
   rate limited, a slow viewer can't stall the socket, a sleeping computer is
   woken first, an open screen keeps the computer from hibernating, and the
-  guest's `socat` is ended when its session ends.
+  guest's `socat` is ended when its session ends. A socket whose viewer hasn't
+  said its tab is visible (a `visibility` message the viewer repeats) or
+  driven for 10 minutes, or 2 minutes after its tab was hidden, ends as
+  `idle`, so a forgotten tab stops keeping the computer awake and a forgotten
+  take-over hands back. Viewers see who drives by name, never by user id.
 - **Isolation in the browser:** noVNC runs in a sandboxed `srcdoc` frame without
   same-origin access, with a strict content security policy, so a bug in the
   decoder can't reach the Macro origin. Bytes cross on a message port, and the

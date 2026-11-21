@@ -11,8 +11,8 @@ agent's brain waiting while a person drives.
 
 - `src/domain/service.rs`: tickets (with who may get one), socket caps,
   take-over/hand-back, lapse, `hold_agent`, notices.
-- `src/domain/ports.rs`: storage (`ScreenRepo`), the guest's driver file
-  (`DriverSignal`), lease changes, who may use a harness's screen
+- `src/domain/ports.rs`: storage (`ScreenRepo`), the guest (`DriverSignal`:
+  freeze the agent and write its driver file, thaw it after), lease changes, who may use a harness's screen
   (`ScreenAccess`: rollout, harness permission, the computer's agent) and who
   people are (`People`).
 - `src/outbound/pg.rs`: the `computer_screen_*` tables; every lease change
@@ -22,7 +22,7 @@ agent's brain waiting while a person drives.
 ## Scope
 
 - Owns: `computer_screen_tickets`, `_sessions` (one per socket), `_drives` (one per
-  take-over, ended `handBack` or `lapsed`), `_driver_leases`, `_agent_notices`.
+  take-over, ended `handBack`, `lapsed` or `refused`), `_driver_leases`, `_agent_notices`.
 - Not here: the WebSocket, guest tunnel, RFB gate and media relays, and the
   adapters of `ScreenAccess`/`People` →
   `services/agent_harness_service/src/computers/screen/`; the harness
@@ -31,7 +31,7 @@ agent's brain waiting while a person drives.
 ## Gotchas
 
 - Only a person gets a ticket: `issue_ticket` refuses a program's request
-  (an agent's or a routine's run, `TicketRequest::program`) and agent
+  (an agent's or a routine's run, `Caller::Program`) and agent
   accounts, then checks the rollout and the harness permission, and limits a
   person to `MAX_TICKETS_PER_WINDOW` a minute on each replica.
 - At most `MAX_SOCKETS_PER_VIEWER` sockets per person and
@@ -43,16 +43,25 @@ agent's brain waiting while a person drives.
   user's: the upsert is guarded, so two people taking over at once never both
   drive.
 - A lease lapses `LEASE_TTL` after its last renewal (driver input renews it
-  at most every 15 s) or take-over; nothing sweeps it. Whoever next reads it
+  at most every 15 s) or take-over. Whoever next reads it
   (`ScreenService::lease`, `hold_agent`, `take_over`) releases it, which
-  records the hand-back notice and tells the guest.
-- The hold gates the agent's next brain request; a step already under way
-  (tool calls of a model answer it has, its own scripts) finishes.
+  records the hand-back notice and tells the guest; `ScreenService::reap`,
+  every `REAP_EVERY` on each replica, releases lapsed leases nobody read and
+  thaws again the agents of computers a drive ended on within
+  `THAW_CHECKED_FOR`, in case the process that released them died first.
+- A take-over freezes the agent (`DriverSignal::driving`) before it counts:
+  when that fails, the lease is released as `Release::Refused` (no hand-back
+  notice, and the take-over notice goes) and the caller gets
+  `ScreenError::AgentNotPausable`. A frozen agent takes no step at all; the
+  hold on its brain requests stays, for a computer whose agent restarted
+  mid-drive. A release thaws it, off the caller's path; a thaw never undoes
+  a newer freeze.
 - Notices (`computer.screen.takeOver`/`handBack`) name the driver by name
-  only and ride the agent's next brain request; they are deleted once that
-  request succeeded (`notices_delivered`), so a refused request carries them
-  again.
-- `DriverSignal` must not wait on the guest: the harness queues the write.
+  only and go to the agent's main loop alone (the gateway decides which
+  requests those are). `claim_notices` claims them for one request for
+  `NOTICE_CLAIMED_FOR` (`FOR UPDATE SKIP LOCKED`), so two concurrent
+  requests never carry the same one; the request's success deletes them
+  (`notices_delivered`) and its failure gives them back (`notices_returned`).
 - Tickets are stored as SHA-256 only; the secret exists in one HTTP response.
   Each carries the issuing request's `traceparent`, so the socket's span joins
   that trace.

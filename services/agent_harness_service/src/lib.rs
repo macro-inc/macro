@@ -1498,6 +1498,24 @@ pub async fn run() -> anyhow::Result<()> {
             ),
             computers::screen::access::MacroPeople::new(pool.clone()),
         ));
+    // Releases lapsed leases and re-thaws recently released agents, in case
+    // the process that should have died first. One span per round.
+    {
+        let screens = Arc::clone(&screens);
+        let shutdown = service_shutdown.clone();
+        computer_tasks.spawn(async move {
+            let mut every = tokio::time::interval(computer_screen::domain::service::REAP_EVERY);
+            loop {
+                tokio::select! {
+                    () = shutdown.cancelled() => return,
+                    _ = every.tick() => {}
+                }
+                if let Err(error) = screens.reap().await {
+                    tracing::warn!(error = ?error, "could not reap computer screen leases");
+                }
+            }
+        });
+    }
     // Every /brain/* route authenticates through this one, held while a
     // person drives the agent's computer.
     let brains: Arc<dyn anthropic_gateway::brain::BrainAuthenticator> =
@@ -1506,6 +1524,7 @@ pub async fn run() -> anyhow::Result<()> {
                 pool.clone(),
             )),
             Arc::clone(&screens),
+            service_shutdown.clone(),
         ));
     // Both brain routes serve only agents with agent teammates on for their
     // creator.

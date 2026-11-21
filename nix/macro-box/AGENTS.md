@@ -142,6 +142,14 @@ image with systemd as PID 1 (for the dev-only DockerFleet).
   They keep user namespaces (Chromium's sandbox) and W+X memory (JITs). The
   firewall rejects group `macro-agent` on 127.0.0.1:5900 and :9222 (macro's
   own VNC and DevTools), and neither Xvnc listens on an abstract socket.
+- A person's take-over of the agent's screen freezes `macro-agent.service`:
+  `macro-agent-pause.socket` (`/run/macro-agent-pause.sock`, root, group
+  `macro`, 0660, hidden from the sandbox by `InaccessiblePaths`, since the
+  agent is in group `macro` too) runs a root helper per connection that
+  reads one verb, `freeze` or `thaw`, and answers `frozen`, `running`, `idle`
+  (the agent isn't running) or `failed`. The harness asks over the fleet's
+  exec. A restart asked for while frozen (`macro-agent-restart`) waits for
+  the thaw. The agent's Xvnc runs with `-SendPrimary=0`.
 - agent.env is a systemd credential (`LoadCredential`), never process
   environment: the runtime reads `MUPPET_CREDENTIALS_FILE`
   (`/run/credentials/macro-agent.service/agent.env`). The runtime contract

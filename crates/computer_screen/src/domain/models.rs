@@ -196,6 +196,21 @@ pub struct Lease {
 }
 
 impl Lease {
+    /// An opaque id for the drive this lease belongs to: a take-over starts
+    /// the lease anew, a renewal or a move to another tab of the driver
+    /// keeps its start.
+    pub fn drive_id(&self) -> String {
+        use sha2::Digest as _;
+        let mut hash = sha2::Sha256::new();
+        hash.update(self.computer_id.as_uuid().as_bytes());
+        hash.update(self.started_at.timestamp_micros().to_be_bytes());
+        hash.finalize()
+            .iter()
+            .take(12)
+            .map(|byte| format!("{byte:02x}"))
+            .collect()
+    }
+
     /// Whether it still holds at `now`.
     pub fn is_live(&self, now: DateTime<Utc>) -> bool {
         self.expires_at > now
@@ -241,9 +256,9 @@ pub struct TicketRequest {
     pub harness_id: HarnessId,
     /// Who asks.
     pub user_id: MacroUserIdStr<'static>,
-    /// Whether a program asks for them (an agent's or a routine's run),
-    /// rather than the person.
-    pub program: bool,
+    /// A person, or a program run with their credentials (an agent's or a
+    /// routine's run).
+    pub caller: Caller,
     /// How the screen reaches the browser.
     pub transport: Transport,
     /// What to show.
@@ -287,6 +302,9 @@ pub enum EndReason {
     Shutdown,
     /// Anything else.
     Error,
+    /// The viewer's tab was hidden, or said nothing, for too long; shown
+    /// again, it reconnects.
+    Idle,
     /// Only in the audit: the process serving the socket went away without
     /// closing its row (a crash or a redeploy). Never sent to a viewer.
     Lost,
@@ -321,6 +339,15 @@ pub struct AgentNotice {
     pub note: Option<String>,
 }
 
+/// Who asks for a screen ticket.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Caller {
+    /// A person, in their browser.
+    Person,
+    /// A program run with the person's credentials (a script, code mode).
+    Program,
+}
+
 /// How a lease was let go.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Release {
@@ -335,4 +362,37 @@ pub enum Release {
     /// Nobody touched it for the idle limit, or its socket closed and the
     /// grace ran out.
     Lapsed,
+    /// The take-over by `session` couldn't pause the agent, so it never
+    /// started: no hand-back is recorded and its take-over notice goes.
+    Refused {
+        /// The socket that took over.
+        session_id: SessionId,
+    },
 }
+
+/// How a drive ended, as its audit row says.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr)]
+#[strum(serialize_all = "camelCase")]
+pub enum DriveEnd {
+    /// The driver handed back.
+    HandBack,
+    /// The lease lapsed.
+    Lapsed,
+    /// The agent couldn't be paused, so the take-over was refused.
+    Refused,
+}
+
+impl From<&Release> for DriveEnd {
+    fn from(release: &Release) -> Self {
+        match release {
+            Release::HandBack { .. } => Self::HandBack,
+            Release::Lapsed => Self::Lapsed,
+            Release::Refused { .. } => Self::Refused,
+        }
+    }
+}
+
+/// The agent on a computer couldn't be frozen for a take-over.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("the agent on this computer couldn't be paused")]
+pub struct AgentNotPaused;

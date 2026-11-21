@@ -757,14 +757,46 @@ mod brain_route {
             .unwrap();
     }
 
+    /// A request of the agent's main loop: marked, and offering a tool.
     fn brain_message(key: &str) -> HttpRequest<Body> {
         HttpRequest::post("/brain/anthropic/v1/messages")
             .header("authorization", format!("Bearer {key}"))
             .header("anthropic-version", "2023-06-01")
+            .header("x-macro-agent-loop", "main")
             .body(Body::from(
-                r#"{"model":"claude-haiku-4-5-20251001","max_tokens":16,"messages":[{"role":"user","content":"go on"}]}"#,
+                r#"{"model":"claude-haiku-4-5-20251001","max_tokens":16,"tools":[{"name":"Bash","input_schema":{"type":"object"}}],"messages":[{"role":"user","content":"go on"}]}"#,
             ))
             .unwrap()
+    }
+
+    /// A side query: the runtime asking a person, or Claude Code's own
+    /// tool-less side call in the main loop's process.
+    fn side_message(key: &str, marked: bool) -> HttpRequest<Body> {
+        let request = HttpRequest::post("/brain/anthropic/v1/messages")
+            .header("authorization", format!("Bearer {key}"))
+            .header("anthropic-version", "2023-06-01");
+        let request = if marked {
+            request.header("x-macro-agent-loop", "main")
+        } else {
+            request
+        };
+        let body = if marked {
+            r#"{"model":"claude-haiku-4-5-20251001","max_tokens":16,"messages":[{"role":"user","content":"title this"}]}"#
+        } else {
+            r#"{"model":"claude-haiku-4-5-20251001","max_tokens":16,"tools":[{"name":"Ask","input_schema":{"type":"object"}}],"messages":[{"role":"user","content":"ask"}]}"#
+        };
+        request.body(Body::from(body)).unwrap()
+    }
+
+    /// How many notices wait for the agent, without keeping them claimed.
+    async fn waiting(
+        screens: &crate::computers::screen::Screens,
+        agent: &MacroUserIdStr<'_>,
+    ) -> usize {
+        let claimed = screens.claim_notices(agent).await.unwrap();
+        let ids: Vec<_> = claimed.iter().map(|pending| pending.id).collect();
+        screens.notices_returned(&ids).await.unwrap();
+        claimed.len()
     }
 
     async fn gateway_with_screens(
@@ -792,7 +824,7 @@ mod brain_route {
         let screens = crate::computers::screen::test_screens(pool).await;
         handed_back(&screens).await;
         let agent = MacroUserIdStr::parse_from_str(AGENT).unwrap().into_owned();
-        let pending = screens.pending_notices(&agent).await.unwrap().len();
+        let pending = waiting(&screens, &agent).await;
         assert_eq!(pending, 2);
 
         // Upstream refuses the request that carried them: they wait.
@@ -804,10 +836,7 @@ mod brain_route {
             .unwrap();
         assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
         assert!(refused_bodies.lock().unwrap()[0].contains("macro-runtime-notice"));
-        assert_eq!(
-            screens.pending_notices(&agent).await.unwrap().len(),
-            pending
-        );
+        assert_eq!(waiting(&screens, &agent).await, pending);
 
         // The next request is accepted: they are delivered.
         let (accepting, accepted_bodies) = upstream_answering(StatusCode::OK).await;
@@ -818,6 +847,32 @@ mod brain_route {
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         assert!(accepted_bodies.lock().unwrap()[0].contains("signed you in"));
-        assert!(screens.pending_notices(&agent).await.unwrap().is_empty());
+        assert_eq!(waiting(&screens, &agent).await, 0);
+    }
+
+    #[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
+    async fn side_queries_never_take_the_main_loops_notices(pool: sqlx::PgPool) {
+        let screens = crate::computers::screen::test_screens(pool).await;
+        handed_back(&screens).await;
+        let agent = MacroUserIdStr::parse_from_str(AGENT).unwrap().into_owned();
+        let (accepting, bodies) = upstream_answering(StatusCode::OK).await;
+
+        for marked in [false, true] {
+            let response = gateway_with_screens(&accepting, Arc::clone(&screens))
+                .await
+                .oneshot(side_message("mak_agent", marked))
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+        }
+
+        assert!(
+            bodies
+                .lock()
+                .unwrap()
+                .iter()
+                .all(|body| !body.contains("macro-runtime-notice"))
+        );
+        assert_eq!(waiting(&screens, &agent).await, 2);
     }
 }

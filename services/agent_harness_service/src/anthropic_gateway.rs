@@ -397,12 +397,6 @@ async fn forward<Sessions: AgentSessionRepo, Computers: BotComputers>(
     })?;
     let model = GatewayModel::parse(&shape.model)?;
     span.record("gen_ai.request.model", model.request_id());
-    let (body, carried_notices) = match (&brain_agent, &state.screens) {
-        (Some(agent), Some(screens)) if endpoint == Endpoint::Messages => {
-            screen_notices::deliver(body, screens, agent).await
-        }
-        _ => (body, Vec::new()),
-    };
 
     let api_key = state.api_key.as_ref().ok_or(Rejection::NOT_CONFIGURED)?;
     if endpoint == Endpoint::Messages {
@@ -417,6 +411,14 @@ async fn forward<Sessions: AgentSessionRepo, Computers: BotComputers>(
         span.record("anthropic_gateway.admission", "accepted");
     }
 
+    // Claimed last, so nothing between here and the answer returns early
+    // with them.
+    let (body, carried_notices) = match (&brain_agent, &state.screens) {
+        (Some(agent), Some(screens)) if endpoint == Endpoint::Messages => {
+            screen_notices::deliver(body, &parts.headers, screens, agent).await
+        }
+        _ => (body, Vec::new()),
+    };
     let upstream = state
         .client
         .post(format!("{}{}", state.upstream_url, endpoint.path()))
@@ -424,19 +426,29 @@ async fn forward<Sessions: AgentSessionRepo, Computers: BotComputers>(
         .body(body)
         .send()
         .await
-        .inspect_err(|error| tracing::warn!(error = ?error, "anthropic request failed"))
-        .map_err(|_| Rejection::UPSTREAM_UNREACHABLE)?;
+        .inspect_err(|error| tracing::warn!(error = ?error, "anthropic request failed"));
+
+    // The model has the notices only once it accepted the request; a
+    // refused or failed one gives them to the next.
+    let accepted = upstream
+        .as_ref()
+        .is_ok_and(|upstream| upstream.status().is_success());
+    if let Some(screens) = &state.screens
+        && !carried_notices.is_empty()
+    {
+        let settled = if accepted {
+            screens.notices_delivered(&carried_notices).await
+        } else {
+            screens.notices_returned(&carried_notices).await
+        };
+        if let Err(error) = settled {
+            tracing::warn!(error = ?error, accepted, "could not settle screen notices");
+        }
+    }
+    let upstream = upstream.map_err(|_| Rejection::UPSTREAM_UNREACHABLE)?;
 
     let status = upstream.status();
     span.record("http.response.status_code", i64::from(status.as_u16()));
-    // The model has the notices only once it accepted the request; a
-    // refused one leaves them for the next.
-    if status.is_success()
-        && let Some(screens) = &state.screens
-        && let Err(error) = screens.notices_delivered(&carried_notices).await
-    {
-        tracing::warn!(error = ?error, "could not mark screen notices delivered");
-    }
     if status.is_success() {
         span.record("anthropic_gateway.outcome", "forwarded");
     } else {
