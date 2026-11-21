@@ -21,9 +21,14 @@ use thiserror::Error;
 /// (or anything else persisted) changes incompatibly.
 pub const CACHE_FORMAT_VERSION: u32 = 4;
 
-/// Records at or above this size may be stored deflated. Smaller payloads stay
-/// raw so deflate framing never makes them larger.
-const RECORD_COMPRESSION_MIN_BYTES: usize = 256;
+/// Records at or above this size may be stored deflated; smaller ones stay raw.
+///
+/// Below 512 bytes deflate saves 19-30% of a few hundred bytes, under 150 bytes
+/// a record, for about 10 times the CPU of storing it raw: on real records,
+/// 11-14 us to encode instead of about 1, and 3.5-4.5 us to decode instead of
+/// about 1. Past 512 bytes the savings grow with the record (74% above 4 KiB).
+/// Records already stored deflated stay readable.
+const RECORD_COMPRESSION_MIN_BYTES: usize = 512;
 
 /// Deflate level for record payloads.
 ///
@@ -294,10 +299,19 @@ mod tests {
 
     #[test]
     fn small_records_stay_raw() {
-        let record = record_with_body("short body");
-        let bytes = encode_record(&record);
-        assert_eq!(bytes.first(), Some(&RECORD_ENCODING_RAW));
-        assert_eq!(decode_record(&bytes).unwrap(), record);
+        for body in ["short body".to_owned(), "review comment line\n".repeat(20)] {
+            let record = record_with_body(&body);
+            let bytes = encode_record(&record);
+            assert!(bytes.len() < RECORD_COMPRESSION_MIN_BYTES);
+            assert_eq!(bytes.first(), Some(&RECORD_ENCODING_RAW));
+            assert_eq!(decode_record(&bytes).unwrap(), record);
+            // Written deflated by builds with a lower threshold.
+            let stored = tagged(
+                RECORD_ENCODING_DEFLATE,
+                deflate::compress_to_vec(&encode(&record), RECORD_DEFLATE_LEVEL),
+            );
+            assert_eq!(decode_record(&stored).unwrap(), record);
+        }
     }
 
     #[test]
