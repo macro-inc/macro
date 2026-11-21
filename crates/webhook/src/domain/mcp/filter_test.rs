@@ -221,8 +221,10 @@ fn validation_refuses_what_delivery_cannot_evaluate() {
     );
     assert_eq!(long.validate(), Err(McpFilterError::ValueLength));
 
-    let blank =
-        McpEventFilter::for_events(vec!["document.created".to_owned()], Some(vec![" ".to_owned()]));
+    let blank = McpEventFilter::for_events(
+        vec!["document.created".to_owned()],
+        Some(vec![" ".to_owned()]),
+    );
     assert_eq!(blank.validate(), Err(McpFilterError::ValueLength));
 
     // Sixteen ids of the longest length fit each clause's limits but not the

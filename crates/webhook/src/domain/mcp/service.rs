@@ -7,9 +7,8 @@ mod test;
 
 use super::filter::McpEventFilter;
 use super::models::{
-    MAX_ARGUMENTS_BYTES, MAX_SUBSCRIPTIONS_PER_USER, McpDeliveryOutcome,
-    McpEventOccurrence, McpEventQueueMessage, McpSubscribeRequest, McpSubscribeResult,
-    McpSubscriptionKey,
+    MAX_ARGUMENTS_BYTES, MAX_SUBSCRIPTIONS_PER_USER, McpDeliveryOutcome, McpEventOccurrence,
+    McpEventQueueMessage, McpSubscribeRequest, McpSubscribeResult, McpSubscriptionKey,
 };
 use super::ports::{
     McpEndpointClient, McpEndpointVerifyError, McpEventDeliveryService, McpEventEnqueuer,
