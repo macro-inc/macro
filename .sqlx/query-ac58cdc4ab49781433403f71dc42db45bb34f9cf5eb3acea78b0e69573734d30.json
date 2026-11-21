@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, request_id, user_id, provider, requested_local_part, display_name,\n                   provider_mailbox_id, address, grant_id, grant_key_ciphertext,\n                   grant_kms_key_id, grant_encryption_version, state, last_error, paused_at\n            FROM agent_mailboxes\n            WHERE request_id = $1\n            ",
+  "query": "\n            UPDATE agent_mailboxes\n            SET lease_token = $2, lease_expires_at = $4\n            WHERE id = $1\n              AND state <> 'released'\n              AND (lease_token IS NULL OR lease_expires_at < $3)\n            RETURNING id, request_id, user_id, team_id, provider, requested_local_part, display_name,\n                      provider_mailbox_id, address, grant_id, grant_key_ciphertext,\n                      grant_kms_key_id, grant_encryption_version, state, last_error, paused_at\n            ",
   "describe": {
     "columns": [
       {
@@ -20,71 +20,80 @@
       },
       {
         "ordinal": 3,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
         "name": "provider",
         "type_info": "Text"
       },
       {
-        "ordinal": 4,
+        "ordinal": 5,
         "name": "requested_local_part",
         "type_info": "Text"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "display_name",
         "type_info": "Text"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "provider_mailbox_id",
         "type_info": "Text"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "address",
         "type_info": "Text"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "grant_id",
         "type_info": "Text"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "grant_key_ciphertext",
         "type_info": "Bytea"
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "grant_kms_key_id",
         "type_info": "Text"
       },
       {
-        "ordinal": 11,
+        "ordinal": 12,
         "name": "grant_encryption_version",
         "type_info": "Int2"
       },
       {
-        "ordinal": 12,
+        "ordinal": 13,
         "name": "state",
         "type_info": "Text"
       },
       {
-        "ordinal": 13,
+        "ordinal": 14,
         "name": "last_error",
         "type_info": "Text"
       },
       {
-        "ordinal": 14,
+        "ordinal": 15,
         "name": "paused_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz"
       ]
     },
     "nullable": [
+      false,
       false,
       false,
       false,
@@ -102,5 +111,5 @@
       true
     ]
   },
-  "hash": "0f3e9146c7f3947dad74dff36de0d27b592db0c4e5c55a12f6f35f8af374892a"
+  "hash": "ac58cdc4ab49781433403f71dc42db45bb34f9cf5eb3acea78b0e69573734d30"
 }

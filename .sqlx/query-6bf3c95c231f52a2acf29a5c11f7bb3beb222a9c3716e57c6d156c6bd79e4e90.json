@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT team_user.team_id\n            FROM \"User\" AS account\n            JOIN team_user ON team_user.user_id = account.id\n            WHERE account.id = $1 AND account.\"isAgent\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "team_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6bf3c95c231f52a2acf29a5c11f7bb3beb222a9c3716e57c6d156c6bd79e4e90"
+}

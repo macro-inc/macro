@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT coalesce(sum(recipient_count), 0) AS \"recipients!\",\n                   min(created_at) AS oldest\n            FROM agent_mailbox_sends\n            WHERE team_id = $1 AND created_at > $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "recipients!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "oldest",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "2afec98a9a1ea4f69d9861589a7ca75a0ce95d0dc360105a251b2b83ee6619f2"
+}
