@@ -61,9 +61,11 @@ export type ContactPeoplePolicy = Pick<
   PeopleSearch,
   'mode' | 'excluded' | 'senderDomain' | 'onlyListed'
 > & {
-  /** Orders people by contact list within each name stage; see
-   * `PeopleSearch.listPriority`. Only a host on policy 7 or later reads it:
-   * older hosts keep their order, and `onlyListed` drops nobody there. */
+  /** Orders people by contact list; see `PeopleSearch.listPriority`. On
+   * policy 8 the group decides before exact over word-start among the people
+   * the text names; policy 7 hosts rank within each name stage. Only a host on
+   * policy 7 or later reads it: older hosts keep their order, and `onlyListed`
+   * drops nobody there. */
   listPriority?: ContactListPriority;
 };
 export type RankedPerson = Extract<
@@ -313,63 +315,122 @@ async function readLocalWithinBudget(
   return 'failed';
 }
 
-/** The list fields of a people search, present only when a policy sets them. */
-type ListOrder = Pick<PeopleSearch, 'listPriority' | 'onlyListed'>;
+/** The fields of a people search that only newer policies read, present only
+ * when the caller sets them. */
+type PolicyFields = Pick<
+  PeopleSearch,
+  'listPriority' | 'onlyListed' | 'teammates'
+>;
 
 /** The first people policy that reads a list order. */
 const LIST_ORDER_POLICY_VERSION = 7;
+/** The first people policy that ranks teammates above other people. */
+const TEAMMATES_POLICY_VERSION = 8;
 
 /** The people policy each cache host last answered a search with. A host
- * tells its policy only in its answers, and hosts on policy 5 and 6 (native
- * builds before the release that brings 7) refuse any search carrying list
- * fields, so a list order is sent only to a host that has answered with 7 or
- * later. A page's host keeps its policy for the life of the page. */
+ * tells its policy only in its answers, and hosts refuse any search carrying a
+ * field their policy does not read (native builds keep an older policy until
+ * their next app release), so a field is sent only to a host that has
+ * answered with the policy that reads it. A page's host keeps its policy for
+ * the life of the page. */
 const answeredPolicies = new WeakMap<PeopleCache, number>();
 
-function listOrder(policy: ContactPeoplePolicy): ListOrder | undefined {
+/** The fields a host answering with `version` reads, from what the caller set. */
+function policyFields(
+  policy: ContactPeoplePolicy,
+  teammates: readonly string[],
+  version: number
+): PolicyFields {
   const groups = policy.listPriority ?? [];
-  if (!groups.length && !policy.onlyListed) return undefined;
+  const lists = version >= LIST_ORDER_POLICY_VERSION;
   return {
-    ...(groups.length
+    ...(lists && groups.length
       ? { listPriority: groups.map((group) => [...group]) }
       : {}),
-    ...(policy.onlyListed ? { onlyListed: true } : {}),
+    ...(lists && policy.onlyListed ? { onlyListed: true } : {}),
+    ...(version >= TEAMMATES_POLICY_VERSION && teammates.length
+      ? { teammates: [...teammates] }
+      : {}),
   };
 }
 
-/** Searches with the policy's list order when the host reads one. The first
- * search on a host whose policy is not yet known goes without it; if the host
- * answers with policy 7 or later, the search is sent again with the order, so
- * the first window a picker shows is already ordered by list. */
-async function searchWithListOrder(
+/** Records whether each field the caller set reached the host: `sent`,
+ * `unsupported` by the policy it answered with, or `unknown` when it has not
+ * answered with a page and so told no policy. */
+function tracePolicyField(
+  span: Span,
+  name: string,
+  requested: boolean,
+  first: boolean,
+  final: boolean,
+  answered: boolean
+) {
+  if (!requested) return;
+  let outcome = 'unknown';
+  if (final) outcome = 'sent';
+  else if (answered) outcome = 'unsupported';
+  span.setAttr(`contacts.${name}`, outcome);
+  span.setAttr(`contacts.${name}_resent`, final && !first);
+}
+
+/** Searches with every field the host reads. The first search on a host whose
+ * policy is not yet known goes without the newer fields; if the host answers
+ * with a policy that reads more of them, the search is sent again with those,
+ * so the first window a picker shows is already ordered by them. */
+async function searchWithPolicyFields(
   people: PeopleCache,
   policy: ContactPeoplePolicy,
-  search: (lists: ListOrder | undefined) => ReturnType<PeopleCache['search']>,
+  teammates: readonly string[],
+  search: (fields: PolicyFields) => ReturnType<PeopleCache['search']>,
   span: Span
 ): ReturnType<PeopleCache['search']> {
-  const lists = listOrder(policy);
-  const known = answeredPolicies.get(people) ?? 0;
-  const sendsLists = !!lists && known >= LIST_ORDER_POLICY_VERSION;
-  const first = await search(sendsLists ? lists : undefined);
-  const resend =
-    !!lists &&
-    !sendsLists &&
-    first.kind === 'page' &&
-    first.policyVersion >= LIST_ORDER_POLICY_VERSION;
-  const result = resend ? await search(lists) : first;
+  const sent = policyFields(
+    policy,
+    teammates,
+    answeredPolicies.get(people) ?? 0
+  );
+  const first = await search(sent);
+  const supported =
+    first.kind === 'page'
+      ? policyFields(policy, teammates, first.policyVersion)
+      : sent;
+  const resend = Object.keys(supported).length > Object.keys(sent).length;
+  const result = resend ? await search(supported) : first;
+  const final = resend ? supported : sent;
   if (result.kind === 'page') {
     answeredPolicies.set(people, result.policyVersion);
     span.setAttr('contacts.policy_version', result.policyVersion);
   }
-  if (lists) {
-    // A host that has not answered with a page has told no policy yet.
-    let outcome = 'unknown';
-    if (sendsLists || resend) outcome = 'sent';
-    else if (result.kind === 'page') outcome = 'unsupported';
-    span.setAttr('contacts.list_order', outcome);
-    span.setAttr('contacts.list_order_resent', resend);
-  }
+  const answered = result.kind === 'page';
+  tracePolicyField(
+    span,
+    'list_order',
+    !!policy.listPriority?.length || !!policy.onlyListed,
+    'listPriority' in sent || 'onlyListed' in sent,
+    'listPriority' in final || 'onlyListed' in final,
+    answered
+  );
+  tracePolicyField(
+    span,
+    'teammates',
+    teammates.length > 0,
+    'teammates' in sent,
+    'teammates' in final,
+    answered
+  );
   return result;
+}
+
+/** The viewer's teammates a cache host can read: Macro identities only, and
+ * at most as many as the server path looks up by ID, the same ones. */
+function supportedTeammates(teammates: readonly string[]): string[] {
+  const supported = new Set<string>();
+  for (const id of teammates) {
+    const canonical = canonicalContactUserId(id);
+    if (canonical && supported.size < MAX_NAMED_LOOKUP)
+      supported.add(canonical);
+  }
+  return [...supported];
 }
 
 /** Reads the local ranked projection. Returns undefined when this tab has no
@@ -401,12 +462,12 @@ async function readLocalWindow(
   )
     throw new ContactDirectoryScopeError();
 
-  const search = (lists: ListOrder | undefined) =>
+  const search = (fields: PolicyFields) =>
     people.search({
       mode: policy.mode,
       excluded: policy.excluded,
       senderDomain: policy.senderDomain,
-      ...lists,
+      ...fields,
       scope: { identity: viewer, storageGeneration: generation },
       query: request.query,
       limit,
@@ -416,7 +477,13 @@ async function readLocalWindow(
   let result: Awaited<ReturnType<typeof people.search>>;
   try {
     result = await span.span('contacts.read_cached_window', () =>
-      searchWithListOrder(people, policy, search, span)
+      searchWithPolicyFields(
+        people,
+        policy,
+        supportedTeammates(request.teammates ?? []),
+        search,
+        span
+      )
     );
   } catch (error) {
     if (

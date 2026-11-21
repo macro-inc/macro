@@ -21,6 +21,7 @@ fn request(query: &str, mode: PeopleMode, limit: usize) -> PeopleSearch {
         cursor: None,
         list_priority: vec![],
         only_listed: false,
+        teammates: vec![],
     }
 }
 fn person(
@@ -229,20 +230,20 @@ fn messaged_word_start_matches_lead_strangers_with_exact_names_in_every_mode() {
             (
                 &strangers[..],
                 &[
-                    ("macro|rhea.okafor@example.com", 5, 500),
-                    ("macro|rhea+1@example.com", 3, 0),
-                    ("macro|rhea@example.org", 3, 0),
+                    ("macro|rhea.okafor@example.com", 9, 500),
+                    ("macro|rhea+1@example.com", 5, 0),
+                    ("macro|rhea@example.org", 5, 0),
                 ][..],
             ),
             (
                 &groups[..],
                 &[
-                    ("macro|rhea.okafor@example.com", 5, 100),
-                    ("macro|rhea.lee@example.com", 5, 50),
-                    ("macro|rhea+agent@example.com", 4, 300),
-                    ("macro|rhea@example.com", 3, 0),
-                    ("macro|rhea+old@example.com", 2, 0),
-                    ("macro|andrhea@example.com", 1, 900),
+                    ("macro|rhea.okafor@example.com", 9, 100),
+                    ("macro|rhea.lee@example.com", 9, 50),
+                    ("macro|rhea+agent@example.com", 8, 300),
+                    ("macro|rhea@example.com", 5, 0),
+                    ("macro|rhea+old@example.com", 4, 0),
+                    ("macro|andrhea@example.com", 3, 900),
                 ][..],
             ),
         ] {
@@ -300,8 +301,8 @@ fn listed(
 }
 fn mention_priority() -> Vec<Vec<String>> {
     vec![
-        vec!["teammates".into()],
         vec!["interacted".into(), "invited".into()],
+        vec!["teammates".into()],
         vec!["gmail".into(), "outlook".into()],
     ]
 }
@@ -393,10 +394,10 @@ fn list_groups_order_people_within_each_tier_before_recency() {
     assert_eq!(
         listed_ids(&request, &rows),
         [
-            ("macro|both@example.com".to_owned(), 0),
-            ("macro|teammate@example.com".to_owned(), 0),
             ("macro|chat@example.com".to_owned(), 0),
             ("macro|invited@example.com".to_owned(), 0),
+            ("macro|both@example.com".to_owned(), 0),
+            ("macro|teammate@example.com".to_owned(), 0),
             ("macro|recent.gmail@example.com".to_owned(), 0),
             ("macro|gmail@example.com".to_owned(), 0),
             ("macro|stranger@example.com".to_owned(), 0),
@@ -410,32 +411,33 @@ fn list_groups_order_people_within_each_tier_before_recency() {
             .map(|(id, _)| id)
             .collect::<Vec<_>>(),
         [
-            "macro|both@example.com",
-            "macro|teammate@example.com",
             "macro|chat@example.com",
             "macro|invited@example.com",
+            "macro|both@example.com",
+            "macro|teammate@example.com",
             "macro|recent.gmail@example.com",
             "macro|gmail@example.com",
         ]
     );
 
-    // A group never lifts anyone past a better name stage: the exact name in
-    // the email group precedes teammates whose name only starts with the
-    // query. A list order supersedes the messaged split, so within a stage
-    // the group decides before recency.
+    // Among the people the text names, the group decides before the name
+    // tier: someone the viewer interacted with leads a teammate, and a
+    // teammate whose name only starts with the query leads an exact name from
+    // a connected inbox. Exact still precedes word-start within a group. A
+    // list order supersedes the messaged split, so recency comes after both.
     request.only_listed = false;
     request.query = "rhea".into();
     assert_eq!(
         listed_ids(&request, &rows),
         [
-            ("macro|gmail@example.com".to_owned(), 3),
-            ("macro|both@example.com".to_owned(), 2),
-            ("macro|teammate@example.com".to_owned(), 2),
-            ("macro|chat@example.com".to_owned(), 2),
-            ("macro|invited@example.com".to_owned(), 2),
-            ("macro|recent.gmail@example.com".to_owned(), 2),
-            ("macro|stranger@example.com".to_owned(), 2),
-            ("macro|custom@example.com".to_owned(), 2),
+            ("macro|chat@example.com".to_owned(), 4),
+            ("macro|invited@example.com".to_owned(), 4),
+            ("macro|both@example.com".to_owned(), 4),
+            ("macro|teammate@example.com".to_owned(), 4),
+            ("macro|gmail@example.com".to_owned(), 5),
+            ("macro|recent.gmail@example.com".to_owned(), 4),
+            ("macro|stranger@example.com".to_owned(), 4),
+            ("macro|custom@example.com".to_owned(), 4),
         ]
     );
 
@@ -444,8 +446,8 @@ fn list_groups_order_people_within_each_tier_before_recency() {
     assert_eq!(
         listed_ids(&request, &rows)[..2],
         [
-            ("macro|stranger@example.com".to_owned(), 4),
-            ("macro|custom@example.com".to_owned(), 4),
+            ("macro|stranger@example.com".to_owned(), 8),
+            ("macro|custom@example.com".to_owned(), 8),
         ]
     );
     request.query = String::new();
@@ -511,5 +513,138 @@ fn list_priority_is_bounded_and_part_of_the_cursor() {
     assert!(NameSearchRead::new(&request, Uuid::from_u128(2), VERSION).is_err());
     request.only_listed = false;
     request.list_priority.reverse();
+    assert!(NameSearchRead::new(&request, Uuid::from_u128(2), VERSION).is_err());
+}
+fn teammate_rows(request: &PeopleSearch) -> Vec<(EntityKey<'static>, Record)> {
+    [
+        ("macro|bjacob@example.com", "Bjacob Stranger", 0),
+        ("macro|majacob@example.com", "Majacob Mate", 0),
+        ("macro|jacobi@example.com", "Jacobi Stranger", 0),
+        ("macro|jacob@example.org", "Jacob", 0),
+        ("macro|jacob@example.com", "Jacob", 0),
+        ("macro|jacobson@example.com", "Jacobson Mate", 0),
+        ("macro|rivers@example.com", "Jacob Rivers", 0),
+        ("macro|park@example.com", "Jacoby Park", 200),
+        ("macro|chat@example.com", "Jacob Chat", 50),
+    ]
+    .into_iter()
+    .map(|(id, name, time)| person(request, id, name, time, None))
+    .collect()
+}
+fn teammates() -> Vec<MacroUserIdStr<'static>> {
+    // A roster id in another case parses to the form the contact is keyed by.
+    [
+        "macro|Rivers@Example.com",
+        "macro|jacobson@example.com",
+        "macro|majacob@example.com",
+        "macro|chat@example.com",
+        "macro|absent@example.com",
+    ]
+    .into_iter()
+    .map(|id| MacroUserIdStr::try_from(id).unwrap().into_owned())
+    .collect()
+}
+#[test]
+fn teammates_rank_between_messaged_people_and_strangers_in_each_name_tier() {
+    for mode in [
+        PeopleMode::Mention,
+        PeopleMode::Command,
+        PeopleMode::Property,
+        PeopleMode::Recipient,
+    ] {
+        let mut request = request("jacob", mode, 2);
+        request.teammates = teammates();
+        let rows = teammate_rows(&request);
+        // People the viewer messages lead, teammates included; then teammates
+        // never messaged, exact before word-start; then strangers, however
+        // exactly their names match. Contains-only matches follow in the same
+        // groups. Pages of two cross every boundary.
+        assert_eq!(
+            listed_ids(&request, &rows),
+            [
+                ("macro|chat@example.com".to_owned(), 9),
+                ("macro|park@example.com".to_owned(), 8),
+                ("macro|rivers@example.com".to_owned(), 7),
+                ("macro|jacobson@example.com".to_owned(), 6),
+                ("macro|jacob@example.com".to_owned(), 5),
+                ("macro|jacob@example.org".to_owned(), 5),
+                ("macro|jacobi@example.com".to_owned(), 4),
+                ("macro|majacob@example.com".to_owned(), 2),
+                ("macro|bjacob@example.com".to_owned(), 1),
+            ],
+            "{mode:?}"
+        );
+
+        // Without a roster, teammates rank as the strangers they share a tier with.
+        request.teammates = vec![];
+        assert_eq!(
+            listed_ids(&request, &rows)
+                .into_iter()
+                .map(|(id, _)| id)
+                .collect::<Vec<_>>(),
+            [
+                "macro|chat@example.com",
+                "macro|park@example.com",
+                "macro|jacob@example.com",
+                "macro|jacob@example.org",
+                "macro|rivers@example.com",
+                "macro|jacobi@example.com",
+                "macro|jacobson@example.com",
+                "macro|bjacob@example.com",
+                "macro|majacob@example.com",
+            ],
+            "{mode:?}"
+        );
+    }
+}
+#[test]
+fn a_list_order_supersedes_the_teammate_split() {
+    let mut request = request("jacob", PeopleMode::Mention, 2);
+    request.list_priority = mention_priority();
+    let rows = teammate_rows(&request);
+    let unchanged = listed_ids(&request, &rows);
+    // Nobody is listed, so everyone is in the last group: exact before
+    // word-start, then recency, then identity. A roster changes none of it.
+    assert_eq!(
+        unchanged,
+        [
+            ("macro|chat@example.com".to_owned(), 5),
+            ("macro|jacob@example.com".to_owned(), 5),
+            ("macro|jacob@example.org".to_owned(), 5),
+            ("macro|rivers@example.com".to_owned(), 5),
+            ("macro|park@example.com".to_owned(), 4),
+            ("macro|jacobi@example.com".to_owned(), 4),
+            ("macro|jacobson@example.com".to_owned(), 4),
+            ("macro|bjacob@example.com".to_owned(), 1),
+            ("macro|majacob@example.com".to_owned(), 1),
+        ]
+    );
+    request.teammates = teammates();
+    assert_eq!(listed_ids(&request, &rows), unchanged);
+}
+#[test]
+fn teammates_are_bounded_and_part_of_the_cursor() {
+    let mut request = request("jacob", PeopleMode::Mention, 1);
+    request.teammates = (0..=MAX_PEOPLE_BATCH)
+        .map(|i| {
+            MacroUserIdStr::try_from(format!("macro|mate{i}@example.com"))
+                .unwrap()
+                .into_owned()
+        })
+        .collect();
+    assert!(NameSearchRead::new(&request, Uuid::from_u128(2), VERSION).is_err());
+
+    request.teammates = teammates();
+    let rows = teammate_rows(&request);
+    let mut read = NameSearchRead::new(&request, Uuid::from_u128(2), VERSION).unwrap();
+    for (key, record) in &rows {
+        read.push(key, record, None);
+    }
+    let PeopleSearchResult::Page { next_cursor, .. } = read.finish().unwrap() else {
+        panic!("page");
+    };
+    request.cursor = next_cursor;
+    assert!(NameSearchRead::new(&request, Uuid::from_u128(2), VERSION).is_ok());
+    request.teammates.pop();
     assert!(NameSearchRead::new(&request, Uuid::from_u128(2), VERSION).is_err());
 }

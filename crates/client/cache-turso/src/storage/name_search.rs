@@ -45,6 +45,7 @@ pub(super) fn read(
             };
             candidates(connection, read, None, &seed, false)?;
         }
+        teammates(connection, read)?;
         for stage in read.stages() {
             if read.skip_stage(stage) {
                 break;
@@ -87,6 +88,31 @@ fn incomplete(
         } else {
             read.push(key, record, None)
         }
+    })
+}
+/// Every teammate's record before the ordered scans, which then stop as if
+/// nobody left to read is a teammate. One indexed lookup per requested key.
+fn teammates(
+    connection: &Arc<Connection>,
+    read: &mut NameSearchRead<'_>,
+) -> Result<(), TursoStorageError> {
+    let keys = read.teammate_keys();
+    if keys.is_empty() {
+        return Ok(());
+    }
+    let mut p = Params::default();
+    let keys = keys
+        .iter()
+        .map(|key| p.bind(text(key.as_ref())))
+        .collect::<Vec<_>>()
+        .join(",");
+    let scope = sql::scope(&mut p, read, true);
+    let query = format!(
+        "SELECT r.__typename,r.id,r.value FROM index_documents d INDEXED BY index_documents_record_key_idx {} WHERE d.record_key IN ({keys}) AND {scope}",
+        sql::RECORD_JOIN
+    );
+    visit(connection, &query, p.values, |key, record| {
+        read.push(key, record, None)
     })
 }
 fn stage_read(

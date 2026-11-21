@@ -273,6 +273,92 @@ it('sends no list fields without a list order', async () => {
     expect(request).not.toHaveProperty('onlyListed');
   }
 });
+function sentTeammates(cache: ReturnType<typeof host>) {
+  return cache.people.search.mock.calls.map(([request]) => request.teammates);
+}
+const ROSTER = [
+  'macro|Mate@Example.com',
+  'not an identity',
+  'macro|other.mate@example.com',
+];
+it('sends teammates once the host answers with policy 8, from its first window on', async () => {
+  const cache = host();
+  cache.people.search.mockResolvedValue(pageAt(8));
+  await readContactDirectory(
+    VIEWER,
+    cache,
+    { query: 'jo', policy: listedPolicy, teammates: ROSTER },
+    signal()
+  );
+  await readContactDirectory(
+    VIEWER,
+    cache,
+    { query: 'jor', policy: listedPolicy, teammates: ROSTER },
+    signal()
+  );
+  // Only Macro identities, in the form the host compares.
+  const supported = ['macro|mate@example.com', 'macro|other.mate@example.com'];
+  expect(sentTeammates(cache)).toEqual([undefined, supported, supported]);
+  expect(sentLists(cache)).toEqual([
+    { listPriority: undefined, onlyListed: undefined },
+    { listPriority: MENTION_ORDER, onlyListed: undefined },
+    { listPriority: MENTION_ORDER, onlyListed: undefined },
+  ]);
+});
+it('sends a policy 7 host its list order without teammates', async () => {
+  const cache = host();
+  cache.people.search.mockResolvedValue(pageAt(7));
+  for (const query of ['jo', 'jor'])
+    await readContactDirectory(
+      VIEWER,
+      cache,
+      { query, policy: listedPolicy, teammates: ROSTER },
+      signal()
+    );
+  expect(sentTeammates(cache)).toEqual([undefined, undefined, undefined]);
+  expect(sentLists(cache).map((sent) => sent.listPriority)).toEqual([
+    undefined,
+    MENTION_ORDER,
+    MENTION_ORDER,
+  ]);
+});
+it.each([5, 6])(
+  'never sends teammates to a policy %i host, which keeps its window',
+  async (policyVersion) => {
+    const cache = host();
+    cache.people.search.mockResolvedValue(pageAt(policyVersion));
+    for (const query of ['jo', 'jor']) {
+      const page = await readContactDirectory(
+        VIEWER,
+        cache,
+        { query, policy: { mode: 'mention', excluded: [] }, teammates: ROSTER },
+        signal()
+      );
+      expect(page.source).toBe('cache');
+    }
+    expect(sentTeammates(cache)).toEqual([undefined, undefined]);
+    expect(remote).not.toHaveBeenCalled();
+  }
+);
+it('sends at most 500 teammates, the ones the server path looks up', async () => {
+  const cache = host();
+  cache.people.search.mockResolvedValue(pageAt(8));
+  const roster = Array.from(
+    { length: 501 },
+    (_, index) => `macro|mate${index}@example.com`
+  );
+  await readContactDirectory(
+    VIEWER,
+    cache,
+    {
+      query: 'jo',
+      policy: { mode: 'mention', excluded: [] },
+      teammates: roster,
+    },
+    signal()
+  );
+  expect(sentTeammates(cache)[1]).toEqual(roster.slice(0, 500));
+});
 it.each([
   ['an empty key', [['']]],
   ['a key over 128 bytes', [['x'.repeat(129)]]],
