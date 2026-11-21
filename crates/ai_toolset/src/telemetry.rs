@@ -156,7 +156,10 @@ impl ToolCallSpan {
 /// The result with each `modelMedia` image's base64 `data` replaced by its
 /// length in `dataBytes`: pixels are not content a trace can use.
 fn without_image_pixels(value: &serde_json::Value) -> std::borrow::Cow<'_, serde_json::Value> {
-    let Some(media) = value.get("modelMedia").and_then(serde_json::Value::as_array) else {
+    let Some(media) = value
+        .get("modelMedia")
+        .and_then(serde_json::Value::as_array)
+    else {
         return std::borrow::Cow::Borrowed(value);
     };
     let media = media
