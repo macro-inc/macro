@@ -136,7 +136,10 @@ fn suite(label: &str, local_sync: &str, suffix: &str) -> Job {
         .add_step(steps::code_mode_assets())
         .add_step(run_suite())
         .add_step(stack_logs())
-        .add_step(upload(&format!("channels-e2e-stack-logs{suffix}"), STACK_LOGS))
+        .add_step(upload(
+            &format!("channels-e2e-stack-logs{suffix}"),
+            STACK_LOGS,
+        ))
         .add_step(upload(&format!("channels-e2e-results{suffix}"), RESULTS))
         .add_step(
             steps::upload_artifact(&format!("{REPORT_ARTIFACT}{suffix}"), REPORT)
