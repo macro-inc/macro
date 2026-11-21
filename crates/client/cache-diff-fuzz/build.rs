@@ -18,7 +18,11 @@ fn main() {
     std::fs::write(out.join("engine/mod.rs"), engine).unwrap();
     for module in MODULES {
         let source = host.join("engine").join(format!("{module}.rs"));
-        std::fs::write(out.join("engine").join(format!("{module}.rs")), read(&source)).unwrap();
+        std::fs::write(
+            out.join("engine").join(format!("{module}.rs")),
+            read(&source),
+        )
+        .unwrap();
     }
     let hooks = manifest.join("src/fuzz_hooks.rs");
     std::fs::write(out.join("engine/fuzz_hooks.rs"), read(&hooks)).unwrap();

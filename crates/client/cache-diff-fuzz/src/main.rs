@@ -7,10 +7,10 @@
 mod dump;
 mod exec;
 mod faker;
-mod sequence;
 mod normalize;
 mod probe;
 mod rng;
+mod sequence;
 
 mod host {
     include!(concat!(env!("OUT_DIR"), "/host/mod.rs"));
@@ -66,8 +66,9 @@ fn main() -> Result<(), rootcause::Report> {
     let faker = faker::Faker::new(&sdl)?;
     let sources: BTreeMap<String, String> =
         serde_json::from_str(&std::fs::read_to_string(args.assets.join("docs.json"))?)?;
-    let tabs: serde_json::Map<String, Value> =
-        serde_json::from_str(&std::fs::read_to_string(args.assets.join("mail-tabs.json"))?)?;
+    let tabs: serde_json::Map<String, Value> = serde_json::from_str(&std::fs::read_to_string(
+        args.assets.join("mail-tabs.json"),
+    )?)?;
     let tabs: Vec<(String, Value)> = tabs.into_iter().collect();
     let docs = sequence::load_docs(&faker, &sources)?;
     std::fs::create_dir_all(&args.out)?;
@@ -116,12 +117,21 @@ fn run(
         false => None,
     };
     let started = std::time::Instant::now();
-    let mut exec = exec::Exec::new(sources, generated, work).map_err(|error| rootcause::report!("{error}"))?;
+    let mut exec =
+        exec::Exec::new(sources, generated, work).map_err(|error| rootcause::report!("{error}"))?;
     let outcome = pollster::block_on(exec.run());
-    let (lines, mut counters, path, mut normalizer) = exec.finish().map_err(|error| rootcause::report!("{error}"))?;
+    let (lines, mut counters, path, mut normalizer) = exec
+        .finish()
+        .map_err(|error| rootcause::report!("{error}"))?;
     for line in &lines {
         let text = serde_json::to_string(&line.value)?;
-        writeln!(trace, "{} {} {:016x}", line.index, line.kind, fnv(text.as_bytes()))?;
+        writeln!(
+            trace,
+            "{} {} {:016x}",
+            line.index,
+            line.kind,
+            fnv(text.as_bytes())
+        )?;
         if let Some(full) = &mut full {
             writeln!(full, "{} {} {text}", line.index, line.kind)?;
         }
@@ -158,7 +168,10 @@ fn run(
         "counters": counters,
         "ms": started.elapsed().as_millis() as u64,
     });
-    std::fs::write(args.out.join(format!("{seed}.stats.json")), serde_json::to_vec(&stats)?)?;
+    std::fs::write(
+        args.out.join(format!("{seed}.stats.json")),
+        serde_json::to_vec(&stats)?,
+    )?;
     Ok(())
 }
 

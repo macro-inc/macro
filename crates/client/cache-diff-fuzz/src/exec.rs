@@ -1,9 +1,9 @@
 //! Runs a generated sequence against the host engine and records every
 //! response, normalized so two builds that behave alike write the same trace.
 
-use crate::sequence::{Generated, Op};
 use crate::host::engine::{EngineHandle, EntityFilterRequest, WriteRegistration, WriteRequest};
 use crate::normalize::Normalizer;
+use crate::sequence::{Generated, Op};
 use cache_core::engine::HydrationScope;
 use cache_core::people::{ContextAction, ContextUpdate};
 use serde_json::{Value, json};
@@ -120,7 +120,9 @@ impl<'a> Exec<'a> {
         let generation = handle.current_storage_generation().await?;
         let mut scope = HydrationScope {
             contact_fence: None,
-            storage_generation: generation.parse().map_err(|error: uuid::Error| error.to_string())?,
+            storage_generation: generation
+                .parse()
+                .map_err(|error: uuid::Error| error.to_string())?,
             identity: self.identity.clone(),
         };
         if fenced {
@@ -167,7 +169,10 @@ impl<'a> Exec<'a> {
                     if value["writeResult"]["revisionAdvanced"] == json!(false) {
                         self.count("hydrate.revision-unchanged");
                     }
-                    if value["unchangedViews"].as_array().is_some_and(|views| !views.is_empty()) {
+                    if value["unchangedViews"]
+                        .as_array()
+                        .is_some_and(|views| !views.is_empty())
+                    {
                         self.count("hydrate.unchanged-views");
                     }
                 }
@@ -212,7 +217,11 @@ impl<'a> Exec<'a> {
                 self.record(index, "read", outcome);
             }
             Op::Teardown { op_id } => {
-                let outcome = self.handle().teardown(op_id.clone()).await.map(|()| Value::Null);
+                let outcome = self
+                    .handle()
+                    .teardown(op_id.clone())
+                    .await
+                    .map(|()| Value::Null);
                 self.record(index, "teardown", outcome);
             }
             Op::ReadKeys { fragment, keys } => {
@@ -295,7 +304,11 @@ impl<'a> Exec<'a> {
                 }
                 .await;
                 if let Ok(value) = &outcome {
-                    self.count(if value.is_null() { "claim.none" } else { "claim.some" });
+                    self.count(if value.is_null() {
+                        "claim.none"
+                    } else {
+                        "claim.some"
+                    });
                     self.learn_leases(value, owner);
                 }
                 self.record(index, "claim", outcome);
@@ -331,7 +344,11 @@ impl<'a> Exec<'a> {
                 let outcome = async {
                     let result = self
                         .handle()
-                        .rollback_optimistic_write(lease.transaction_id, lease.owner, lease.generation)
+                        .rollback_optimistic_write(
+                            lease.transaction_id,
+                            lease.owner,
+                            lease.generation,
+                        )
                         .await?;
                     serde_json::to_value(result).map_err(|error| error.to_string())
                 }
@@ -587,13 +604,21 @@ impl<'a> Exec<'a> {
                 }
             };
             let kind = value["kind"].as_str().unwrap_or("?").to_owned();
-            self.count(format!("filter.{}.{kind}", if mail { "mail" } else { "soup" }));
+            self.count(format!(
+                "filter.{}.{kind}",
+                if mail { "mail" } else { "soup" }
+            ));
             if value["optimistic"] == json!(true) {
                 self.count("filter.optimistic");
             }
             if let Some(page_keys) = value["keys"].as_array() {
                 self.add("filter.keys", page_keys.len() as u64);
-                keys.extend(page_keys.iter().filter_map(Value::as_str).map(str::to_owned));
+                keys.extend(
+                    page_keys
+                        .iter()
+                        .filter_map(Value::as_str)
+                        .map(str::to_owned),
+                );
             }
             if page > 0 {
                 self.count("filter.mail.next-page");
@@ -643,10 +668,13 @@ impl<'a> Exec<'a> {
         let scope = self.scope(false).await?;
         let handle = self.handle();
         let snapshot = handle
-            .contact_snapshot(serde_json::from_value(json!({
-                "scope": scope,
-                "scan": { "after": null, "limit": 200 },
-            })).map_err(|error| error.to_string())?)
+            .contact_snapshot(
+                serde_json::from_value(json!({
+                    "scope": scope,
+                    "scan": { "after": null, "limit": 200 },
+                }))
+                .map_err(|error| error.to_string())?,
+            )
             .await?;
         let snapshot = serde_json::to_value(snapshot).map_err(|error| error.to_string())?;
         let ids: Vec<Value> = snapshot["ids"].as_array().cloned().unwrap_or_default();
@@ -657,13 +685,16 @@ impl<'a> Exec<'a> {
             .map(|(_, id)| id.clone())
             .collect();
         let reconcile = handle
-            .contact_reconcile(serde_json::from_value(json!({
-                "scope": scope,
-                "fence": snapshot["fence"],
-                "viewer": self.identity,
-                "requested": ids,
-                "present": present,
-            })).map_err(|error| error.to_string())?)
+            .contact_reconcile(
+                serde_json::from_value(json!({
+                    "scope": scope,
+                    "fence": snapshot["fence"],
+                    "viewer": self.identity,
+                    "requested": ids,
+                    "present": present,
+                }))
+                .map_err(|error| error.to_string())?,
+            )
             .await;
         let reconcile = match reconcile {
             Ok(result) => serde_json::to_value(result).map_err(|error| error.to_string())?,
@@ -676,7 +707,9 @@ impl<'a> Exec<'a> {
         let scope = self.scope(false).await?;
         let handle = self.handle();
         let state = handle.people_context(scope.clone()).await?;
-        let epoch = epoch.parse().map_err(|error: uuid::Error| error.to_string())?;
+        let epoch = epoch
+            .parse()
+            .map_err(|error: uuid::Error| error.to_string())?;
         let begin = handle
             .people_update(ContextUpdate {
                 scope: scope.clone(),
@@ -695,7 +728,9 @@ impl<'a> Exec<'a> {
             })
             .await
             .and_then(|result| serde_json::to_value(result).map_err(|error| error.to_string()));
-        let wrap = |result: Result<Value, String>| result.unwrap_or_else(|error| json!({ "error": error }));
+        let wrap = |result: Result<Value, String>| {
+            result.unwrap_or_else(|error| json!({ "error": error }))
+        };
         Ok(json!({
             "before": serde_json::to_value(&state).map_err(|error| error.to_string())?,
             "begin": wrap(begin),
@@ -746,7 +781,11 @@ impl<'a> Exec<'a> {
             }
         }
         for request in crate::probe::filters() {
-            let pages = if request.get("mail").is_some() { 200 } else { 1 };
+            let pages = if request.get("mail").is_some() {
+                200
+            } else {
+                1
+            };
             let outcome = self.filter(&request, pages).await;
             self.record(index, "probe.filter", outcome);
         }
@@ -767,7 +806,9 @@ impl<'a> Exec<'a> {
     }
 
     /// Closes the engine and dumps every table of the file it leaves behind.
-    pub fn finish(mut self) -> Result<(Vec<Line>, BTreeMap<String, u64>, PathBuf, Normalizer), String> {
+    pub fn finish(
+        mut self,
+    ) -> Result<(Vec<Line>, BTreeMap<String, u64>, PathBuf, Normalizer), String> {
         let handle = self.handle.take().expect("engine is open");
         handle.shutdown()?;
         Ok((self.lines, self.counters, self.path, self.normalizer))
@@ -796,7 +837,11 @@ fn copy_dir(from: &Path, to: &Path) -> Result<(), String> {
     let entries = std::fs::read_dir(from).map_err(|error| error.to_string())?;
     for entry in entries {
         let entry = entry.map_err(|error| error.to_string())?;
-        if entry.file_type().map_err(|error| error.to_string())?.is_file() {
+        if entry
+            .file_type()
+            .map_err(|error| error.to_string())?
+            .is_file()
+        {
             std::fs::copy(entry.path(), to.join(entry.file_name()))
                 .map_err(|error| error.to_string())?;
         }

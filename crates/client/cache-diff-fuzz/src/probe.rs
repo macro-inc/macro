@@ -6,12 +6,25 @@ use serde_json::{Value, json};
 
 /// The sorts the local index answers, and one it leaves to the server.
 const SORTS: &[&str] = &["UPDATED_AT", "CREATED_AT", "VIEWED_UPDATED"];
-const VIEWS: &[&str] = &["INBOX", "ALL", "DRAFTS", "SENT", "STARRED", "IMPORTANT", "OTHER"];
+const VIEWS: &[&str] = &[
+    "INBOX",
+    "ALL",
+    "DRAFTS",
+    "SENT",
+    "STARRED",
+    "IMPORTANT",
+    "OTHER",
+];
 
 pub fn filters() -> Vec<Value> {
     let mut out = Vec::new();
     let partitions = [
-        excluded(&["documentFilter", "projectFilter", "chatFilter", "channelFilter"]),
+        excluded(&[
+            "documentFilter",
+            "projectFilter",
+            "chatFilter",
+            "channelFilter",
+        ]),
         excluded(&["documentFilter", "projectFilter", "chatFilter"]),
         excluded(&["documentFilter"]),
         excluded(&["channelFilter"]),
@@ -45,17 +58,19 @@ pub fn filters() -> Vec<Value> {
 }
 
 pub fn searches() -> Vec<Value> {
-    ["", "pro", "PROJECT", "café", "cafe", "日本", "a-b", "ﬁ", "straße", "o'neil"]
-        .iter()
-        .map(|query| {
-            json!({
-                "profile": "quick-access-v1",
-                "query": query,
-                "limit": 50,
-                "nowMs": crate::sequence::NOW_MS,
-            })
+    [
+        "", "pro", "PROJECT", "café", "cafe", "日本", "a-b", "ﬁ", "straße", "o'neil",
+    ]
+    .iter()
+    .map(|query| {
+        json!({
+            "profile": "quick-access-v1",
+            "query": query,
+            "limit": 50,
+            "nowMs": crate::sequence::NOW_MS,
         })
-        .collect()
+    })
+    .collect()
 }
 
 pub fn people() -> Vec<Value> {

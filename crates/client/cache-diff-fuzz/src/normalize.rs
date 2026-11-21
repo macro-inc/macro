@@ -36,7 +36,9 @@ impl Normalizer {
     pub fn value(&mut self, value: Value) -> Value {
         match value {
             Value::String(text) => Value::String(self.text(&text)),
-            Value::Array(items) => Value::Array(items.into_iter().map(|item| self.value(item)).collect()),
+            Value::Array(items) => {
+                Value::Array(items.into_iter().map(|item| self.value(item)).collect())
+            }
             Value::Object(map) => Value::Object(
                 map.into_iter()
                     .map(|(key, value)| {
@@ -74,7 +76,9 @@ impl Normalizer {
             };
             if width > 0
                 && (index == 0 || !bytes[index - 1].is_ascii_hexdigit())
-                && bytes.get(index + width).is_none_or(|next| !next.is_ascii_hexdigit())
+                && bytes
+                    .get(index + width)
+                    .is_none_or(|next| !next.is_ascii_hexdigit())
             {
                 let uuid = &text[index..index + width];
                 if !self.keep.contains(uuid) {

@@ -191,6 +191,9 @@ pub struct Gen<'a> {
     next_register: usize,
     /// Input nodes one filter may still grow, so a deep, wide filter stays bounded.
     filter_budget: u32,
+    /// Connectives a filter still nests before its first literal: a chain this
+    /// long reaches the depth limits of the predicate index and of Turso's parser.
+    filter_chain: u8,
     ops: Vec<Op>,
 }
 
@@ -216,7 +219,15 @@ const PARTITIONS: &[(&str, &str)] = &[
     ("crmCompanyFilter", "GraphqlCrmCompanyExpr"),
     ("foreignEntityFilter", "GraphqlForeignEntityExpr"),
 ];
-const MAIL_VIEWS: &[&str] = &["INBOX", "ALL", "DRAFTS", "SENT", "STARRED", "IMPORTANT", "OTHER"];
+const MAIL_VIEWS: &[&str] = &[
+    "INBOX",
+    "ALL",
+    "DRAFTS",
+    "SENT",
+    "STARRED",
+    "IMPORTANT",
+    "OTHER",
+];
 
 fn exclusion(partition: &str) -> Value {
     match partition {
@@ -271,10 +282,12 @@ impl<'a> Gen<'a> {
         let viewer = format!("macro|{viewer_uuid}@example.com");
         let links = vec![rng.uuid(), rng.uuid()];
         let tie = rng.chance(0.45);
-        let distinct = if tie { *pick(&mut rng, &[1, 2, 3, 8]) } else { 0 };
-        let times = (0..distinct)
-            .map(|index| NOW_MS - index * DAY_MS)
-            .collect();
+        let distinct = if tie {
+            *pick(&mut rng, &[1, 2, 3, 8])
+        } else {
+            0
+        };
+        let times = (0..distinct).map(|index| NOW_MS - index * DAY_MS).collect();
         let body = if rng.chance(0.2) {
             BodyProfile {
                 html_median: 18_000.0,
@@ -309,6 +322,7 @@ impl<'a> Gen<'a> {
             registered: Vec::new(),
             next_register: 0,
             filter_budget: 0,
+            filter_chain: 0,
             ops: Vec::new(),
         };
         let scale = *pick(&mut generator.rng, &[0usize, 1, 1, 2, 2, 3]);
@@ -377,11 +391,18 @@ impl<'a> Gen<'a> {
         } else {
             format!("u{}", self.rng.below(100_000))
         };
-        let domain = *pick(&mut self.rng, &["example.com", "acme.io", "mail.example.org"]);
+        let domain = *pick(
+            &mut self.rng,
+            &["example.com", "acme.io", "mail.example.org"],
+        );
         let email = format!("{local}@{domain}");
         let user = format!("macro|{email}");
         // The record's email may differ from the user id's in case only.
-        let email = if self.rng.chance(0.05) { email.to_uppercase() } else { email };
+        let email = if self.rng.chance(0.05) {
+            email.to_uppercase()
+        } else {
+            email
+        };
         Contact {
             foreign,
             user,
@@ -421,7 +442,12 @@ impl<'a> Gen<'a> {
     pub fn generate(mut self, length: usize) -> Generated {
         // Backfill first, as the app does on a fresh cache.
         // Most caches finish the metadata lanes; some stop partway.
-        for lane in ["channels", "core-entities", "email-filter-metadata", "email-thread-pages"] {
+        for lane in [
+            "channels",
+            "core-entities",
+            "email-filter-metadata",
+            "email-thread-pages",
+        ] {
             let per_page = if lane == "email-thread-pages" { 5 } else { 100 };
             let all = self.lane_pool(lane).len().div_ceil(per_page).max(1) as u64;
             let pages = if lane != "email-thread-pages" && self.rng.chance(0.8) {
@@ -512,7 +538,12 @@ impl<'a> Gen<'a> {
             "hydrate" => {
                 let lane = *pick(
                     &mut self.rng,
-                    &["channels", "core-entities", "email-filter-metadata", "email-thread-pages"],
+                    &[
+                        "channels",
+                        "core-entities",
+                        "email-filter-metadata",
+                        "email-thread-pages",
+                    ],
                 );
                 let page = self.rng.below(4) as usize;
                 self.hydrate_lane(lane, page);
@@ -598,7 +629,8 @@ impl<'a> Gen<'a> {
                 }
             }
             "read-keys" => {
-                let fragment = pick(&mut self.rng, &["SoupItemFields", "MailItemFields"]).to_string();
+                let fragment =
+                    pick(&mut self.rng, &["SoupItemFields", "MailItemFields"]).to_string();
                 let keys = self.some_keys(60);
                 self.push(Op::ReadKeys {
                     fragment,
@@ -770,7 +802,11 @@ impl<'a> Gen<'a> {
         let ids: BTreeSet<String> = written.keys.iter().map(|(_, id)| id.clone()).collect();
         let mut times = Vec::new();
         for _ in 0..written.keys.len() {
-            times.push((self.rng.chance(changed_share), self.rng.chance(move_share), self.time()));
+            times.push((
+                self.rng.chance(changed_share),
+                self.rng.chance(move_share),
+                self.time(),
+            ));
         }
         let pool = self.lane_pool(&lane);
         let mut index = 0;
@@ -869,7 +905,8 @@ impl<'a> Gen<'a> {
         let id = match &contact.foreign {
             Some(id) => id.clone(),
             None => {
-                let namespace = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, self.viewer.as_bytes());
+                let namespace =
+                    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, self.viewer.as_bytes());
                 uuid::Uuid::new_v5(&namespace, contact.user.as_bytes()).to_string()
             }
         };
@@ -977,10 +1014,12 @@ impl<'a> Gen<'a> {
 
     fn search(&mut self) -> Value {
         let query = self.query_text();
-        let buckets: Vec<&str> = ["channel", "dm", "person", "document", "chat", "project", "email"]
-            .into_iter()
-            .filter(|_| self.rng.chance(0.25))
-            .collect();
+        let buckets: Vec<&str> = [
+            "channel", "dm", "person", "document", "chat", "project", "email",
+        ]
+        .into_iter()
+        .filter(|_| self.rng.chance(0.25))
+        .collect();
         let limit = *pick(&mut self.rng, &[1u16, 5, 20, 20, 100, 500]);
         let mut request = json!({
             "profile": "quick-access-v1",
@@ -995,7 +1034,11 @@ impl<'a> Gen<'a> {
     }
 
     fn people_search(&mut self) {
-        let mode = pick(&mut self.rng, &["command", "recipient", "mention", "property"]).to_string();
+        let mode = pick(
+            &mut self.rng,
+            &["command", "recipient", "mention", "property"],
+        )
+        .to_string();
         let query = if self.rng.chance(0.2) && !self.pools.contacts.is_empty() {
             let contact = pick(&mut self.rng, &self.pools.contacts).clone();
             // A prefix of the email or of the name, cut on a character boundary.
@@ -1040,13 +1083,19 @@ impl<'a> Gen<'a> {
         if all.is_empty() {
             return vec![];
         }
-        (0..count).map(|_| pick(&mut self.rng, &all).clone()).collect()
+        (0..count)
+            .map(|_| pick(&mut self.rng, &all).clone())
+            .collect()
     }
 
     /// Deleted keys leave the server too, so later pages stop carrying them.
     fn forget(&mut self, keys: &[String]) {
         let keys: BTreeSet<&String> = keys.iter().collect();
-        for pool in [&mut self.pools.core, &mut self.pools.channels, &mut self.pools.threads] {
+        for pool in [
+            &mut self.pools.core,
+            &mut self.pools.channels,
+            &mut self.pools.threads,
+        ] {
             pool.retain(|spec| !keys.contains(&format!("{}:{}", spec.typename, spec.id)));
         }
         let contacts = std::mem::take(&mut self.pools.contacts);
@@ -1073,7 +1122,12 @@ impl<'a> Gen<'a> {
             } else {
                 let typename = *pick(
                     &mut self.rng,
-                    &["GraphqlSoupDocument", "GraphqlSoupChat", "GraphqlSoupProject", "GraphqlSoupEmailThread"],
+                    &[
+                        "GraphqlSoupDocument",
+                        "GraphqlSoupChat",
+                        "GraphqlSoupProject",
+                        "GraphqlSoupEmailThread",
+                    ],
                 );
                 let mut spec = self.spec(typename);
                 spec.time_ms = self.clock;
@@ -1145,7 +1199,8 @@ impl<'a> Gen<'a> {
         let register = self.rng.chance(0.4).then(|| self.register());
         if self.rng.chance(0.5)
             && let Some(written) = self.pick_written()
-            && let Op::Hydrate { doc, variables, .. } | Op::Write { doc, variables, .. } = written.op
+            && let Op::Hydrate { doc, variables, .. } | Op::Write { doc, variables, .. } =
+                written.op
         {
             self.push(Op::Read {
                 doc,
@@ -1168,7 +1223,10 @@ impl<'a> Gen<'a> {
 
     fn sort(&mut self) -> (&'static str, &'static str) {
         let sort = weighted(&mut self.rng, SORTS);
-        let sort = SORTS.iter().find(|(name, _)| *name == sort).map_or("UPDATED_AT", |(name, _)| name);
+        let sort = SORTS
+            .iter()
+            .find(|(name, _)| *name == sort)
+            .map_or("UPDATED_AT", |(name, _)| name);
         let direction = if self.rng.chance(0.65) { "DESC" } else { "ASC" };
         (sort, direction)
     }
@@ -1190,6 +1248,11 @@ impl<'a> Gen<'a> {
             included.push(*name);
             if self.rng.chance(0.45) {
                 self.filter_budget = 600;
+                self.filter_chain = if self.rng.chance(0.04) {
+                    self.rng.range(30, 70) as u8
+                } else {
+                    0
+                };
                 let value = self.input_named(ty, name, 0);
                 filters.insert((*name).to_owned(), value);
             }
@@ -1224,7 +1287,11 @@ impl<'a> Gen<'a> {
 
     fn mail_filter(&mut self) -> Value {
         let (sort, direction) = self.sort();
-        let sort = if self.rng.chance(0.7) { "UPDATED_AT" } else { sort };
+        let sort = if self.rng.chance(0.7) {
+            "UPDATED_AT"
+        } else {
+            sort
+        };
         let limit = *pick(&mut self.rng, LIMITS);
         if !self.mail_tabs.is_empty() && self.rng.chance(0.4) {
             let (_, tab) = pick(&mut self.rng, self.mail_tabs).clone();
@@ -1264,8 +1331,11 @@ impl<'a> Gen<'a> {
         };
         match definition {
             ExtendedType::Enum(enumeration) => {
-                let values: Vec<String> =
-                    enumeration.values.keys().map(|name| name.to_string()).collect();
+                let values: Vec<String> = enumeration
+                    .values
+                    .keys()
+                    .map(|name| name.to_string())
+                    .collect();
                 Value::String(pick(&mut self.rng, &values).clone())
             }
             ExtendedType::InputObject(object) => {
@@ -1282,7 +1352,21 @@ impl<'a> Gen<'a> {
                         .iter()
                         .filter(|(name, _)| !deep || !matches!(name.as_str(), "and" | "or" | "not"))
                         .collect();
-                    let choices = if choices.is_empty() { fields.iter().collect() } else { choices };
+                    let choices = if choices.is_empty() {
+                        fields.iter().collect()
+                    } else {
+                        choices
+                    };
+                    let connectives: Vec<&(Name, Type)> = fields
+                        .iter()
+                        .filter(|(name, _)| matches!(name.as_str(), "and" | "or" | "not"))
+                        .collect();
+                    let choices = if self.filter_chain > 0 && !connectives.is_empty() {
+                        self.filter_chain -= 1;
+                        connectives
+                    } else {
+                        choices
+                    };
                     let (name, ty) = (*pick(&mut self.rng, &choices)).clone();
                     let value = self.input_type(&ty, name.as_str(), depth + 1);
                     json!({ name.as_str(): value })
@@ -1313,7 +1397,11 @@ impl<'a> Gen<'a> {
                 } else {
                     self.rng.range(1, 2)
                 };
-                Value::Array((0..count).map(|_| self.input_type(item, field, depth)).collect())
+                Value::Array(
+                    (0..count)
+                        .map(|_| self.input_type(item, field, depth))
+                        .collect(),
+                )
             }
         }
     }
@@ -1343,7 +1431,9 @@ impl<'a> Gen<'a> {
             pick(&mut self.rng, &self.pools.contacts).email.clone()
         };
         match field {
-            "domain" => email.split_once('@').map_or(email.clone(), |(_, domain)| domain.to_owned()),
+            "domain" => email
+                .split_once('@')
+                .map_or(email.clone(), |(_, domain)| domain.to_owned()),
             "partial" => {
                 let cut = 1 + self.rng.below(email.len() as u64) as usize;
                 email[..cut.min(email.len())].to_owned()
@@ -1361,7 +1451,11 @@ impl<'a> Gen<'a> {
                 "id" | "projectIdSelf" | "projectId" => {
                     let typename = *pick(
                         &mut self.rng,
-                        &["GraphqlSoupDocument", "GraphqlSoupProject", "GraphqlSoupChat"],
+                        &[
+                            "GraphqlSoupDocument",
+                            "GraphqlSoupProject",
+                            "GraphqlSoupChat",
+                        ],
                     );
                     self.entity_id(typename)
                 }
@@ -1387,7 +1481,11 @@ impl<'a> Gen<'a> {
                 }
                 _ => {
                     let text = self.query_text();
-                    if text.trim().is_empty() { words(&mut self.rng, 1) } else { text }
+                    if text.trim().is_empty() {
+                        words(&mut self.rng, 1)
+                    } else {
+                        text
+                    }
                 }
             }),
         }

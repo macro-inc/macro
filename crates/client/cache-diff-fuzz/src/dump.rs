@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
-use turso_core::{Database, IO, OpenOptions, PlatformIO, SqliteDialect, StepResult, Statement};
+use turso_core::{Database, IO, OpenOptions, PlatformIO, SqliteDialect, Statement, StepResult};
 
 /// Table name to its rows, each row as text, sorted.
 pub fn tables(path: &Path) -> Result<BTreeMap<String, Vec<String>>, String> {
