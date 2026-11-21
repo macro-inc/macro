@@ -5,7 +5,6 @@
 #[path = "service_test.rs"]
 mod test;
 
-use super::filter::McpEventFilter;
 use super::models::{
     MAX_ARGUMENTS_BYTES, MAX_SUBSCRIPTIONS_PER_USER, McpDeliveryOutcome, McpEventOccurrence,
     McpEventQueueMessage, McpSubscribeRequest, McpSubscribeResult, McpSubscriptionKey,
@@ -37,7 +36,7 @@ pub const SWEEP_BATCH: u32 = 500;
 pub const SWEEP_MAX_BATCHES: u32 = 20;
 
 /// Refuse arguments too large to store; the filter's own size is part of
-/// [`McpEventFilter::validate`].
+/// [`super::filter::McpEventFilter::validate`].
 fn check_arguments_size(arguments: &serde_json::Value) -> Result<(), McpSubscriptionError> {
     if serde_json::to_vec(arguments).map_or(true, |bytes| bytes.len() > MAX_ARGUMENTS_BYTES) {
         return Err(McpSubscriptionError::InvalidParams(format!(
