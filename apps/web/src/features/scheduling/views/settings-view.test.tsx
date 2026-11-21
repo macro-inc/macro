@@ -811,3 +811,31 @@ it('keeps availability hours on a 12-hour calendar’s clock', async () => {
     (await screen.findAllByText(/9:00 AM–5:00 PM/)).length
   ).toBeGreaterThan(0);
 });
+
+it('shows the owner’s bookings on the calendar’s 24-hour clock', async () => {
+  const [, setPreferences] = useCalendarPreferences();
+  setPreferences('timeFormat', '24-hour');
+  onTestFinished(() => setPreferences('timeFormat', '12-hour'));
+  fixture();
+  fireEvent.click(
+    within(
+      screen.getByRole('navigation', { name: 'Booking calendar owner' })
+    ).getByRole('button', { name: 'Design' })
+  );
+  fireEvent.click(
+    within(screen.getByRole('navigation', { name: 'Booking tabs' })).getByRole(
+      'button',
+      { name: 'Bookings' }
+    )
+  );
+  const card = await screen.findByRole('button', {
+    name: /^Team planning with Guest,/,
+  });
+  expect(screen.getAllByText(/^\d{2}:\d{2}$/).length).toBeGreaterThan(0);
+  expect(screen.queryAllByText(/\d:\d{2}\s?[AP]M/)).toHaveLength(0);
+
+  fireEvent.click(card);
+  const dialog = await screen.findByRole('dialog', { name: 'Booking details' });
+  expect(dialog.textContent).toMatch(/\d{2}:\d{2}/);
+  expect(dialog.textContent).not.toMatch(/\d:\d{2}\s?[AP]M/);
+});

@@ -105,6 +105,31 @@ describe('booking management', () => {
     expect(display.endDate).toBeUndefined();
   });
 
+  it('labels times on the clock it is given, else the locale’s', () => {
+    const source = booking({
+      startsAt: '2026-09-18T17:00:00Z',
+      endsAt: '2026-09-18T18:00:00Z',
+    });
+    expect(bookingTimeRangeDisplay(source, 'UTC', false).start.time).toBe(
+      '17:00'
+    );
+    expect(bookingTimeRange(source, 'UTC', false)).not.toMatch(/[AP]M/);
+    expect(bookingTimeRange(source, 'UTC', false)).toMatch(/17:00/);
+    expect(bookingTimeRangeDisplay(source, 'UTC', true).start.time).toBe(
+      '5:00 PM'
+    );
+    expect(bookingTimeRange(source, 'UTC')).toBe(
+      bookingTimeRange(source, 'UTC', undefined)
+    );
+    expect(bookingTimeRangeDisplay(source, 'UTC').start.time).toBe(
+      new Intl.DateTimeFormat(undefined, {
+        timeZone: 'UTC',
+        hour: 'numeric',
+        minute: '2-digit',
+      }).format(new Date(source.startsAt))
+    );
+  });
+
   it('keeps the end date visible for overnight bookings', () => {
     const source = booking({
       startsAt: '2026-09-18T23:30:00Z',

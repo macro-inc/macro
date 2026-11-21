@@ -1,7 +1,8 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { createSignal } from 'solid-js';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, expect, it, onTestFinished, vi } from 'vitest';
+import { useCalendarPreferences } from '../../calendar/utils/preferences';
 import type { Booking, BookingReceipt } from '../core/types';
 import { BookingReceiptView } from './booking-receipt-view';
 
@@ -92,4 +93,12 @@ it('drops the refusal once the receipt shows the booking cancelled', async () =>
     screen.getByRole('heading', { name: 'Booking cancelled' })
   ).toBeTruthy();
   expect(screen.queryByRole('alert')).toBeNull();
+});
+
+it('keeps the visitor’s own clock whatever the calendar is set to', () => {
+  const [, setPreferences] = useCalendarPreferences();
+  setPreferences('timeFormat', '24-hour');
+  onTestFinished(() => setPreferences('timeFormat', '12-hour'));
+  renderReceipt(receipt());
+  expect(screen.getByText(/5:00\s?PM/)).toBeTruthy();
 });
