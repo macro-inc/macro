@@ -3,9 +3,9 @@
 // transcripts (they are deleted with the sessions), and read back what it
 // wrote, how long it took and what it cost.
 
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 
 import { SQL } from 'bun';
 
@@ -212,10 +212,16 @@ function isWorkList(value: unknown): value is WorkList {
       (['name', 'cadence', 'what', 'action', 'handled_by', 'keeps'] as const).every((field) => typeof stream[field] === 'string') &&
       Number.isInteger(stream.count) &&
       Array.isArray(stream.senders) &&
-      Array.isArray(stream.labels) &&
-      Array.isArray(stream.examples),
+      stream.senders.every((sender) => sender && typeof sender === 'object' && typeof sender.name === 'string' && typeof sender.email === 'string') &&
+      isTexts(stream.labels) &&
+      isTexts(stream.examples),
   );
 }
+
+const isTexts = (value: unknown): value is string[] => Array.isArray(value) && value.every((item) => typeof item === 'string');
+
+/** Where `text`'s `<untrusted>` blocks start and end. */
+const untrustedSpans = (text: string) => [...text.matchAll(/<untrusted>\n[\s\S]*?\n<\/untrusted>/g)].map((m) => [m.index, m.index + m[0].length] as const);
 
 /**
  * `text` with markdown's backslash escapes undone. The prompt the harness
@@ -237,10 +243,16 @@ export function unescapeMarkdown(text: string): string {
   return out;
 }
 
-/** The work list one brief carried, if it carried one. */
+/**
+ * The work list one brief carried, if it carried one. The brief says
+ * `WORK_LIST_MARK` outside any `<untrusted>` block; the mark inside one is
+ * mail (a subject, say), never the list.
+ */
 function listIn(row: TranscriptRow): WorkList | undefined {
   for (const text of strings(row.content?.params)) {
-    const at = text.indexOf(WORK_LIST_MARK);
+    const spans = untrustedSpans(text);
+    let at = text.indexOf(WORK_LIST_MARK);
+    while (at >= 0 && spans.some(([start, end]) => at > start && at < end)) at = text.indexOf(WORK_LIST_MARK, at + 1);
     if (at < 0) continue;
     const block = /<untrusted>\n([\s\S]*?)\n<\/untrusted>/.exec(text.slice(at));
     if (!block) throw new Error(`a brief says it carries a work list but has no <untrusted> block after it`);
@@ -263,6 +275,32 @@ export function readWorkList(rows: Iterable<unknown>): { list?: WorkList; error?
   } catch (error) {
     return { error: String(error instanceof Error ? error.message : error).slice(0, 300) };
   }
+}
+
+/**
+ * Read `generation`'s work list again from its sessions' transcript, where
+ * it was saved or beside the run file at `runPath` (a run directory moved
+ * with its transcripts). A transcript that can't be read is the list's
+ * error. One that is gone keeps the list the run read; with no list read,
+ * whether its sessions read one is unknown, which is an error too, never an
+ * empty list. Says so when the transcript is gone.
+ */
+export function rereadList(generation: Generation, runPath: string): string | undefined {
+  const saved = generation.transcript;
+  if (!saved) return undefined;
+  const transcript = [saved, join(dirname(runPath), basename(saved))].find((file) => existsSync(file));
+  if (!transcript) {
+    if (!generation.workList && !generation.listError) generation.listError = `${saved} is gone and the run saved no list, so whether its sessions read one is unknown`;
+    return `${saved} is gone, so its work list is judged as the run first read it`;
+  }
+  try {
+    const rows = readFileSync(transcript, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line) as unknown);
+    ({ list: generation.workList, error: generation.listError } = readWorkList(rows));
+  } catch (error) {
+    generation.workList = undefined;
+    generation.listError = `reading ${transcript}: ${String(error).slice(0, 200)}`;
+  }
+  return undefined;
 }
 
 /**

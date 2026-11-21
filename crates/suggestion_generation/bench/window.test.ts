@@ -1,11 +1,15 @@
 import { describe, expect, test } from 'bun:test';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { RoutineMark } from './judge';
 import { asWritten, type Inbox, type Persona, recentMessages, type RoutinesTruth, type StreamsTruth, variantOf, windowMessages } from './personas';
-import { type Generation, readWorkList, type RoutineRow, workListOf } from './run';
+import { type Generation, readWorkList, rereadList, type RoutineRow, workListOf } from './run';
 import { boundedList, type EntryMark, type FoundStream, mailText, marksProblem, scoreList, scoreWorkList, trimAsRust, type WorkList } from './finding';
-import { draftableNeeds, inInbox, pooled, sharedFirstName } from './month';
+import { draftableNeeds, inInbox, pooled } from './month';
+import { rosterProblem } from './heldout';
 import { lines, withheldAcross } from './report';
-import { type Attempt, failedScore, marginsOf, type RunFile, scoreRoutines, summary, verdict } from './score';
+import { type Attempt, failedScore, marginsOf, type RunFile, scoreRoutines, summary, unreadList, verdict, wholeCount } from './score';
 import { ANCHOR } from './clock';
 
 const HOUR = 60 * 60_000;
@@ -245,6 +249,10 @@ describe('workListOf', () => {
     // An empty list would score as a step that found nothing; the brief and the bench have drifted apart instead.
     expect(() => workListOf([prompt({})])).toThrow("hasn't the list's shape");
     expect(() => workListOf([prompt({ person: 'x', streams: [{ name: 'y' }] })])).toThrow("hasn't the list's shape");
+    // Fields of the right kind, down to their items.
+    expect(() => workListOf([prompt({ ...list, streams: [{ ...list.streams[0], senders: [{}] }] })])).toThrow("hasn't the list's shape");
+    expect(() => workListOf([prompt({ ...list, streams: [{ ...list.streams[0], examples: [{}] }] })])).toThrow("hasn't the list's shape");
+    expect(() => workListOf([prompt({ ...list, streams: [{ ...list.streams[0], labels: [3] }] })])).toThrow("hasn't the list's shape");
     const unparsed = { ...prompt(list), content: { ...prompt(list).content, params: { prompt: [{ type: 'text', text: briefOf(list).replace('{"person"', '{person') }] } } };
     expect(() => workListOf([unparsed])).toThrow("isn't JSON");
     const bare = { ...prompt(list), content: { ...prompt(list).content, params: { prompt: [{ type: 'text', text: briefOf(list).replace(/<untrusted>\n\{[\s\S]*$/, '') }] } } };
@@ -263,6 +271,15 @@ describe('workListOf', () => {
     expect(workListOf([escaped(quoted)])).toEqual(quoted);
   });
 
+  test('takes the mark inside mail for mail, not for a list', () => {
+    const mailed = (text: string) => ({ direction: 'to_runtime', created_at: '2026-11-20 10:00:00+00', content: { type: 'acp', method: 'session/prompt', params: { prompt: [{ type: 'text', text }] } } });
+    const subject = '2026-11-19 Bo: Fwd: The streams of work a step found are in the deck';
+    // A picking brief: the mail mentions the mark, and no list follows it.
+    expect(workListOf([mailed(`Pick routines.\n<untrusted>\n${subject}\n</untrusted>`)])).toBeUndefined();
+    // A drafting brief whose mail mentions it too still reads its list.
+    expect(workListOf([mailed(briefOf(list).replace('\nmail\n', `\n${subject}\n`))])).toEqual(list);
+  });
+
   test('finds none where no session read a list', () => {
     expect(workListOf([{ direction: 'to_runtime', content: { type: 'acp', method: 'session/prompt', params: { prompt: [{ type: 'text', text: 'Draft routines.\n<untrusted>\nmail\n</untrusted>' }] } } }])).toBeUndefined();
   });
@@ -272,6 +289,61 @@ const found = (name: string, count = 4): FoundStream => ({ name, senders: [{ nam
 const listOf = (...names: string[]): WorkList => ({ person: 'Ana', streams: names.map((name) => found(name)) });
 const entry = (n: number, stream: string, also: string[] = []): EntryMark => ({ n, stream, also, why: '' });
 const keyed = (): Persona => ({ ...persona(1, 1), streamsTruth: streams });
+
+describe('rereadList', () => {
+  const list = { person: 'Runs a bakery', streams: [{ name: 'Supplier orders', senders: [], count: 9, cadence: '', what: '', action: '', handled_by: '', labels: [], keeps: '', examples: [] }] };
+  const row = { direction: 'to_runtime', created_at: '2026-11-20 10:00:00+00', content: { type: 'acp', method: 'session/prompt', params: { prompt: [{ type: 'text', text: `The streams of work a step found in the user's last 30 days of mail, those they would most regret missing first:\n<untrusted>\n${JSON.stringify(list)}\n</untrusted>` }] } } };
+  // rereadList reads and writes only these of a generation.
+  const generation = (fields: Pick<Generation, 'transcript' | 'workList'>) => fields as Generation;
+
+  test('reads a moved run\'s transcript beside its run file', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'reread-'));
+    try {
+      writeFileSync(join(dir, 'gen-1.jsonl'), `${JSON.stringify(row)}\n`);
+      const g = generation({ transcript: '/gone/before/gen-1.jsonl' });
+      expect(rereadList(g, join(dir, 'run.json'))).toBeUndefined();
+      expect(g.workList).toEqual(list);
+      expect(g.listError).toBeUndefined();
+      writeFileSync(join(dir, 'gen-1.jsonl'), 'not json\n');
+      expect(rereadList(g, join(dir, 'run.json'))).toBeUndefined();
+      expect(g.workList).toBeUndefined();
+      expect(g.listError).toContain('reading');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('keeps the list a run read when its transcript is gone, and calls none read unknown', () => {
+    const kept = generation({ transcript: '/gone/gen-1.jsonl', workList: list });
+    expect(rereadList(kept, '/gone/run.json')).toContain('is gone');
+    expect(kept.workList).toEqual(list);
+    expect(kept.listError).toBeUndefined();
+    const none = generation({ transcript: '/gone/gen-1.jsonl' });
+    expect(rereadList(none, '/gone/run.json')).toContain('is gone');
+    expect(none.listError).toContain('unknown');
+  });
+});
+
+describe('unreadList', () => {
+  test('marks a list that could not be read as not judged, never as an empty list', () => {
+    const attempt = { generation: { listError: 'no block' }, finding: { found: 0 }, findingMarks: [] } as unknown as Attempt;
+    expect(unreadList(attempt)).toBe(true);
+    expect(attempt.finding).toBeUndefined();
+    expect(attempt.findingMarks).toBeUndefined();
+    expect(attempt.findingError).toBe('reading the list: no block');
+    const read = { generation: {} } as unknown as Attempt;
+    expect(unreadList(read)).toBe(false);
+    expect(read.findingError).toBeUndefined();
+  });
+});
+
+describe('wholeCount', () => {
+  test('takes whole numbers of 1 or more', () => {
+    expect(wholeCount('--reps', '3')).toBe(3);
+    expect(wholeCount('--reps', 2)).toBe(2);
+    for (const bad of ['0', '-1', '1.5', 'x', '']) expect(() => wholeCount('--reps', bad)).toThrow('--reps takes a whole number of 1 or more');
+  });
+});
 
 describe('scoreList', () => {
   test('counts what an entry covers in full, even when it mostly covers noise', () => {
@@ -473,30 +545,40 @@ describe('writing a month', () => {
 
   test('starts no job after one fails, and throws once the running ones end', async () => {
     const started: number[] = [];
-    let running = 0;
-    let endedAfterFailure = false;
-    let failedAt = 0;
+    const finished: number[] = [];
+    // Jobs 0 and 2 hold until released; job 1 fails while they run.
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    let failed!: () => void;
+    const failure = new Promise<void>((resolve) => (failed = resolve));
     const jobs = Array.from({ length: 8 }, (_, i) => async () => {
       started.push(i);
-      running++;
-      await Bun.sleep(i === 1 ? 5 : 20);
-      running--;
       if (i === 1) {
-        failedAt = Date.now();
+        failed();
         throw new Error('job 1 failed');
       }
-      if (failedAt) endedAfterFailure = true;
+      await held;
+      finished.push(i);
       return i;
     });
-    await expect(pooled(jobs, 3)).rejects.toThrow('job 1 failed');
+    let settled = false;
+    const pool = pooled(jobs, 3).finally(() => (settled = true));
+    await failure;
+    // Every turn of the event loop that could settle it without the held jobs has run.
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(settled).toBe(false);
+    release();
+    await expect(pool).rejects.toThrow('job 1 failed');
     expect(started).toEqual([0, 1, 2]);
-    expect(running).toBe(0);
-    expect(endedAfterFailure).toBe(true);
+    expect(finished).toEqual([0, 2]);
     expect(await pooled([async () => 1, async () => 2], 3)).toEqual([1, 2]);
   });
 
-  test('tells when two people of a workspace share a first name, whatever its case', () => {
-    expect(sharedFirstName({ owner_first: 'Ana', colleagues: [{ first: 'Bo', last: 'A', role: '' }, { first: 'ana', last: 'B', role: '' }] })).toBe(true);
-    expect(sharedFirstName({ owner_first: 'Ana', colleagues: [{ first: 'Bo', last: 'A', role: '' }, { first: 'Cy', last: 'B', role: '' }] })).toBe(false);
+  test('refuses a roster where two people share a first name, whatever its case, or a colleague is named Owner', () => {
+    const roster = (owner: string, ...firsts: string[]) => ({ owner_first: owner, colleagues: firsts.map((first) => ({ first, last: 'A', role: '' })) });
+    expect(rosterProblem(roster('Ana', 'Bo', 'ana'))).toContain('share a first name');
+    expect(rosterProblem(roster('Ana', 'Bo', 'BO'))).toContain('share a first name');
+    expect(rosterProblem(roster('Ana', 'Bo', 'owner'))).toContain('named Owner');
+    expect(rosterProblem(roster('Owen', 'Bo', 'Cy'))).toBeUndefined();
   });
 });

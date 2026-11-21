@@ -134,12 +134,6 @@ export async function pooled<T>(jobs: (() => Promise<T>)[], calls = CALLS): Prom
   return results;
 }
 
-/** Whether two people of `sketch`'s workspace share a first name: each is written to as first name at the domain. */
-export function sharedFirstName(sketch: Pick<MonthSketch, 'owner_first' | 'colleagues'>): boolean {
-  const firsts = [sketch.owner_first, ...sketch.colleagues.map((colleague) => colleague.first)].map((first) => first.toLowerCase());
-  return new Set(firsts).size !== firsts.length;
-}
-
 export async function sketchMonth(at: Stack, count: number): Promise<MonthSketch[]> {
   const tune = takenPeople();
   const { people } = await write<{ people: Omit<MonthSketch, 'mail'>[] }>(

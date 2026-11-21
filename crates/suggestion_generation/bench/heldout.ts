@@ -226,7 +226,7 @@ const anchor = new Date(ANCHOR).toISOString();
 export async function makeHeldout(at: Stack, name: string, count: number, month = false) {
   if (!name) throw new Error('heldout make <name> [count] [month]');
   // Loaded here: month.ts builds on this module.
-  const { sketchMonth, writeMonthPersona, sharedFirstName } = await import('./month');
+  const { sketchMonth, writeMonthPersona } = await import('./month');
   const root = join(HELDOUT_DIR, name);
   const sketches = join(root, 'people.json');
   const written = (slug: string) => existsSync(join(root, slug));
@@ -235,14 +235,16 @@ export async function makeHeldout(at: Stack, name: string, count: number, month 
   if (existsSync(sketches)) {
     people = JSON.parse(readFileSync(sketches, 'utf8'));
     if (people.every((sketch) => written(sketch.slug))) throw new Error(`held-out set ${name} exists; pick a new name`);
+    const unusable = rosterProblems(people.filter((sketch) => !written(sketch.slug)));
+    if (unusable) throw new Error(`${unusable}: held-out set ${name} can't be finished as first planned; make a new one under a new name`);
     console.log(`finishing held-out set ${name}: ${people.length} people, as first written`);
   } else {
     // A folder left before its people were saved has nothing else in it: reuse it.
     if (existsSync(root) && readdirSync(root).some((entry) => entry !== 'people.json.partial')) throw new Error(`held-out set ${name} exists; pick a new name`);
     people = (await (month ? sketchMonth(at, count) : sketch(at, count))).slice(0, count);
     if (people.length < count) throw new Error(`the author sketched ${people.length} of ${count} people; run heldout make again`);
-    const shared = people.filter((person) => 'mail' in person && person.mail === 'month' && sharedFirstName(person as MonthSketch));
-    if (shared.length) throw new Error(`${shared.map((person) => person.slug).join(', ')}: two people of one workspace share a first name, and so an address; run heldout make again`);
+    const unusable = rosterProblems(people);
+    if (unusable) throw new Error(`${unusable}; run heldout make again`);
     const slugs = people.map((person) => person.slug);
     if (slugs.some((slug) => !/^[a-z]+$/.test(slug)) || new Set(slugs).size !== slugs.length) {
       throw new Error(`the people came back with unusable slugs (${slugs.join(', ')}); run heldout make again`);
@@ -274,6 +276,27 @@ export async function makeHeldout(at: Stack, name: string, count: number, month 
   if (failed.length) throw new Error(`held-out set ${name}: ${failed.join(', ')} not written; run heldout make ${name} again to finish it`);
   console.log(`held-out set ${name} is ready; run it with --set ${name}. Don't open its files while tuning.`);
 }
+
+/**
+ * Why a person's workspace can't be written as sketched, or undefined. Each
+ * person is mailed as their first name at the domain and seeded under it,
+ * and `owner` is the person themself.
+ */
+export function rosterProblem(sketch: Pick<Sketch, 'owner_first' | 'colleagues'>): string | undefined {
+  const firsts = [sketch.owner_first, ...sketch.colleagues.map((colleague) => colleague.first)].map((first) => first.toLowerCase());
+  if (new Set(firsts).size !== firsts.length) return 'two people of one workspace share a first name, and so an address';
+  if (sketch.colleagues.some((colleague) => colleague.first.toLowerCase() === 'owner')) return "a colleague named Owner would take the person's own place";
+  return undefined;
+}
+
+/** Every sketched person whose workspace can't be written, with why, in one line; undefined when all can. */
+const rosterProblems = (people: (Sketch | MonthSketch)[]) =>
+  people
+    .flatMap((person) => {
+      const problem = rosterProblem(person);
+      return problem ? [`${person.slug}: ${problem}`] : [];
+    })
+    .join('; ') || undefined;
 
 /** What the author spent since `started`, in all and per person written. */
 async function reportCost(at: Stack, started: Date, people: number) {

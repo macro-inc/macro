@@ -3,7 +3,7 @@
 // scores each section with one number you can hill climb. See README.md.
 
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { basename, dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 
 import { type Stack, call, exclusive, login, sdk, searchIndexer, stack } from '../../scheduled_action/bench/stack';
@@ -16,8 +16,8 @@ import { type Persona, type Variant, contentKey, ownerEmail, personaDigest, pers
 import { shiftDays } from './clock';
 import { UNJUDGED, type Waiting, judgeWaiting } from './judging';
 import { lines as reportLines, withheld, withheldAcross } from './report';
-import { CACHE, type Trigger, generate, prepare, readWorkList } from './run';
-import { type Attempt, type RunFile, type Section, MIN_HELDOUT_PEOPLE, PARTS, contrast, failedScore, marginsOf, noiseMargins, scoreFeed, scoreRoutines, summary, verdict } from './score';
+import { CACHE, type Trigger, generate, prepare, rereadList } from './run';
+import { type Attempt, type RunFile, type Section, MIN_HELDOUT_PEOPLE, PARTS, contrast, failedScore, marginsOf, noiseMargins, scoreFeed, scoreRoutines, summary, unreadList, verdict, wholeCount } from './score';
 import { startStub, stopStub, stubDir, writeFlags } from './stub';
 
 type SectionSpec = {
@@ -171,11 +171,7 @@ async function judgeWorkList(at: Stack, persona: Persona, attempt: Attempt) {
   attempt.findingMarks = undefined;
   attempt.finding = undefined;
   attempt.findingError = undefined;
-  // A list the bench couldn't read is its own failure, never an empty list.
-  if (attempt.generation.listError) {
-    attempt.findingError = `reading the list: ${attempt.generation.listError}`;
-    return;
-  }
+  if (unreadList(attempt)) return;
   try {
     attempt.findingMarks = await judgeList(at, persona, attempt.generation.workList ?? NO_LIST, attempt.generation.now);
     attempt.finding = scoreWorkList(persona, attempt.generation.workList, attempt.findingMarks);
@@ -237,11 +233,11 @@ async function runSection(section: Section, values: Record<string, string | unde
     if (gaps.length) throw new Error(gaps.join('\n'));
   }
   const flags = { ...spec.flags, ...Object.fromEntries((values.flags ?? '').split(',').filter(Boolean).map((flag) => [flag.trim(), true])) };
-  const reps = Number(values.reps ?? spec.reps);
-  const seats = Number(values.seats ?? spec.seats);
+  const reps = wholeCount('--reps', values.reps ?? spec.reps);
+  const seats = wholeCount('--seats', values.seats ?? spec.seats);
   // Every copy of every persona is a person of its own: they run side by side.
   const slots = people.flatMap((persona) => Array.from({ length: seats }, (_, i) => seatOf(persona, i + 1)));
-  const concurrency = Math.max(1, Number(values.concurrency ?? spec.concurrency));
+  const concurrency = wholeCount('--concurrency', values.concurrency ?? spec.concurrency);
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const dir = join(RUNS, `${values.label}-${section}-${set}-${stamp}`);
   mkdirSync(dir, { recursive: true });
@@ -391,21 +387,9 @@ async function rejudge(path: string, values: Record<string, string | undefined>)
   // runs already made. All are read before judging starts: a transcript that can't be read is
   // that attempt's list error, never a failure partway through the judging.
   for (const attempt of run.attempts) {
-    const saved = attempt.generation.transcript;
-    if (!saved || !listsScored(run.section, seatOf(people.get(attempt.persona)!, attempt.seat ?? 1), findsWork)) continue;
-    // Beside the run file too, for a run directory moved with its transcripts.
-    const transcript = [saved, join(dirname(path), basename(saved))].find((file) => existsSync(file));
-    if (!transcript) {
-      console.warn(`${attempt.persona} rep ${attempt.rep}: ${saved} is gone, so its work list is judged as the run first read it`);
-      continue;
-    }
-    try {
-      const rows = readFileSync(transcript, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line) as unknown);
-      ({ list: attempt.generation.workList, error: attempt.generation.listError } = readWorkList(rows));
-    } catch (error) {
-      attempt.generation.workList = undefined;
-      attempt.generation.listError = `reading ${transcript}: ${String(error).slice(0, 200)}`;
-    }
+    if (!attempt.generation.transcript || !listsScored(run.section, seatOf(people.get(attempt.persona)!, attempt.seat ?? 1), findsWork)) continue;
+    const gone = rereadList(attempt.generation, path);
+    if (gone) console.warn(`${attempt.persona} rep ${attempt.rep}: ${gone}`);
   }
   // The judge's cost is read from the grader's usage, so nothing else may judge meanwhile.
   await exclusive(at.instance, 'suggestions bench rejudge', async () => {
@@ -468,7 +452,7 @@ function rescore(path: string) {
       dropList(attempt);
       continue;
     }
-    if (attempt.benchError) continue;
+    if (attempt.benchError || unreadList(attempt)) continue;
     // An empty list needs no judge; any other is scored from the marks it was judged with, which must fit it and the key as they are now.
     const list = attempt.generation.workList ?? NO_LIST;
     const marks = attempt.findingMarks ?? (list.streams.length ? undefined : []);
@@ -562,13 +546,13 @@ async function main() {
       if (keyless) throw new Error(`${keyless} of ${people.length} people in set ${values.set} have no streams key: find runs on a month set`);
       if (values.personas) people = people.filter((persona) => values.personas!.split(',').includes(persona.name));
       if (!people.length) throw new Error(`no persona in set ${values.set} is named ${values.personas}`);
-      const reps = Number(values.reps ?? 2);
-      const concurrency = Number(values.concurrency ?? 6);
-      if (![reps, concurrency].every((n) => Number.isInteger(n) && n > 0)) throw new Error('--reps and --concurrency take whole numbers of 1 or more');
-      if (people.some((persona) => persona.heldout)) spend(values.set!, 'find', values.label!);
+      const reps = wholeCount('--reps', values.reps ?? 2);
+      const concurrency = wholeCount('--concurrency', values.concurrency ?? 6);
       // The step's cost is the author's usage while it runs: nothing else on the instance may write meanwhile.
-      await exclusive(values.instance!, 'suggestions bench find', () =>
-        runFinding(stack(values.instance!, values.tempo!), people, {
+      // A held-out use is recorded once the instance is held, so a find stopped while it waits spends none.
+      await exclusive(values.instance!, 'suggestions bench find', () => {
+        if (people.some((persona) => persona.heldout)) spend(values.set!, 'find', values.label!);
+        return runFinding(stack(values.instance!, values.tempo!), people, {
           model: values.model!,
           thinking: values.thinking === 'low' ? 'low' : undefined,
           reps,
@@ -576,15 +560,16 @@ async function main() {
           set: values.set!,
           prompt: values.prompt,
           concurrency,
-        }),
-      );
+        });
+      });
       break;
     }
     case 'heldout':
       if (rest[0] === 'make') {
         if (rest[3] && rest[3] !== 'month') throw new Error('heldout make <name> [count] [month]');
+        const count = wholeCount("heldout make's count", rest[2] ?? 3);
         // Its cost is the author's usage while it writes: nothing else on the instance may write meanwhile.
-        await exclusive(values.instance!, 'suggestions bench heldout make', () => makeHeldout(stack(values.instance!, values.tempo!), rest[1], Number(rest[2] ?? 3), rest[3] === 'month'));
+        await exclusive(values.instance!, 'suggestions bench heldout make', () => makeHeldout(stack(values.instance!, values.tempo!), rest[1], count, rest[3] === 'month'));
       }
       else console.log(spent().join('\n') || 'no held-out sets');
       break;

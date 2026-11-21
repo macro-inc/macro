@@ -449,6 +449,22 @@ export function marginsOf(text: string): Margins {
   return { score: margins[0], found: margins[1], bad: margins[2] };
 }
 
+/** `value` as a whole number of 1 or more; `what` names it in the refusal. */
+export function wholeCount(what: string, value: string | number): number {
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 1) throw new Error(`${what} takes a whole number of 1 or more, not ${value}`);
+  return n;
+}
+
+/** Whether `attempt`'s list couldn't be read, marking it so: its own failure, never an empty list. */
+export function unreadList(attempt: Attempt): boolean {
+  if (!attempt.generation.listError) return false;
+  attempt.findingMarks = undefined;
+  attempt.finding = undefined;
+  attempt.findingError = `reading the list: ${attempt.generation.listError}`;
+  return true;
+}
+
 /**
  * The noise margins from two runs of the same build: for each part, the
  * larger end of the 95% interval of their difference, i.e. how far apart
