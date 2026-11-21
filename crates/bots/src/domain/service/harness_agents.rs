@@ -17,14 +17,16 @@ impl<R: BotRepo, B: MacroEventBroker, T: HarnessTeamAgents, C: McpAppCatalog> Ha
             .await
             .map_err(|err| BotError::Repo(err.into()))?;
 
-        for (bot_id, owner) in &deleted {
+        for (bot_id, owner) in &deleted.bots {
             self.publish_bot_event(&BotMacroEvent::deleted(BotDeletedMetadata {
                 bot_id: *bot_id,
                 owner: owner.clone(),
                 actor_user_id: actor.clone(),
             }));
         }
+        self.announce_bot_membership(&actor, deleted.left_channel_ids)
+            .await;
 
-        Ok(deleted.len())
+        Ok(deleted.bots.len())
     }
 }
