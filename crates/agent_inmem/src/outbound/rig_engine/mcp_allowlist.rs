@@ -10,8 +10,8 @@ use mcp_toolset::RemoteMcpToolSet;
 /// `SearchTools` here, connected apps are reached from code.
 pub(super) const CONNECTED_APPS_FROM_CODE_HINT: &str = "A connected app's tools are not called \
      directly here: find them from ExecuteCode with \
-     macro.connectedApps.searchTools(execution, keywords) or macro.connectedApps.list(execution), \
-     then tool.call(args). Otherwise continue without it.";
+     macro.connectedApps.searchTools(execution, keywords), or list apps with \
+     macro.connectedApps.list(execution) and read app.tools(), then tool.call(args). Otherwise continue without it.";
 
 const EXECUTE_CODE: &str = "mcp__macro_internal__ExecuteCode";
 

@@ -1401,7 +1401,7 @@ Connector discovery is `macro.connectedApps.discover`; a
 `about_macro` topic replaces `SelfKnowledge`.
 Connected third-party MCP tools are not advertised to the model: a program finds
 and calls them with `macro.connectedApps.searchTools(execution, keywords)` or
-`macro.connectedApps.list(execution)` and `tool.call(args)`, through the
+`macro.connectedApps.list(execution)`, `app.tools()` and `tool.call(args)`, through the
 egress proxy. Of the session's MCP tools the model sees only `macro_internal`'s
 code and review tools.
 

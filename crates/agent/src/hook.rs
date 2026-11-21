@@ -378,8 +378,7 @@ impl StreamBridge {
                     return Some(InvalidToolCallAction::fail());
                 }
                 Some(InvalidToolCallAction::retry(format!(
-                    "Unknown tool `{tool_name}`: no tool with that name exists in this session \
-                     or its connected integrations. {}",
+                    "Unknown tool `{tool_name}`: that name is not available as a native tool here. {}",
                     self.unknown_tool_hint
                 )))
             }
