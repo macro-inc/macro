@@ -24,8 +24,12 @@ export type ScreenInputEvent =
   | { kind: 'scroll'; x: number; y: number; dx: number; dy: number }
   | { kind: 'clipboard'; text: string };
 
-/** `name` is null for a user without a profile name; resolve one from `userId`. */
-export type ScreenDriver = { userId: string; name: string | null };
+/**
+ * Who drives, as the server tells this viewer: a name (null for a user
+ * without a profile name) and whether it's this viewer's own user. No user
+ * id: viewers don't learn each other's.
+ */
+export type ScreenDriver = { name: string | null; isYou: boolean };
 
 /** The `state` message: who drives, whether the agent is held, what is shown. */
 export type ScreenState = {
@@ -42,6 +46,12 @@ export type ScreenState = {
    * that predate it (then `driver` alone says who drives).
    */
   drivingHere?: boolean;
+  /**
+   * The drive, opaque: new with each take-over, the same across its renewals
+   * and its driver's tabs, null when nobody drives. Absent from older
+   * harnesses.
+   */
+  leaseId?: string | null;
   transport: ScreenTransportKind;
   viewers: number;
 };

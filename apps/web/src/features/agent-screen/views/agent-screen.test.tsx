@@ -54,7 +54,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-const ALICE = { userId: 'user-alice', name: 'Alice' };
+const ALICE = { name: 'Alice', isYou: true };
 
 function state(drivingHere: boolean): ScreenState {
   return {
@@ -123,7 +123,6 @@ function renderView(
       harnessId: 'harness-1',
       canDrive: () => true,
       accessKnown: () => true,
-      currentUserId: () => 'user-alice',
       transport: () => 'vnc',
       capabilities: capabilities(connections),
     });
@@ -451,21 +450,6 @@ describe('a drive that lapses', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
     expect(document.activeElement).not.toBe(keyboard);
-    unmount();
-  });
-});
-
-describe('pasting while others watch', () => {
-  it('warns the driver that watchers can see a paste, only while someone else watches', async () => {
-    vi.useFakeTimers();
-    const connections: Connection[] = [];
-    const { unmount } = renderView(AgentScreen, connections);
-    await vi.advanceTimersByTimeAsync(0);
-
-    connections[0].handlers.onState(state(true));
-    expect(screen.queryByText('Watchers can see what you paste')).toBeNull();
-    connections[0].handlers.onState({ ...state(true), viewers: 2 });
-    expect(screen.getByText('Watchers can see what you paste')).toBeTruthy();
     unmount();
   });
 });

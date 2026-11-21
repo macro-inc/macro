@@ -46,7 +46,6 @@ export type ScreenSessionOptions = {
   continueDriving?: boolean;
   /** The view's load flow (`useFlow().span`): the first connection is its phase. */
   parentSpan?: () => Span;
-  currentUserId: Accessor<string | undefined>;
   transport: Accessor<ScreenTransportKind>;
   capabilities: ScreenCapabilities;
 };
@@ -112,6 +111,12 @@ export function createScreenSession(options: ScreenSessionOptions) {
   let handedBackOnLeaving = false;
   /** This tab let go of its drive itself: the lease leaving isn't a loss. */
   let handedBackHere = false;
+  /**
+   * The lease this tab drove when its connection dropped: only that one is
+   * won back, never one the same person took over in another tab meanwhile.
+   * Undefined when unknown (a pop-out, an older harness).
+   */
+  let droppedLease: string | null | undefined;
   /** Releases keys and buttons held in the guest (the input controller's). */
   let releaseInput: () => void = () => {};
   const [attached, setAttached] = createSignal(false);
@@ -246,7 +251,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
         {
           onState: (state) => {
             if (current !== generation) return;
-            const ours = state.driver?.userId === options.currentUserId();
+            const ours = state.driver?.isYou === true;
             const driving = ours && state.drivingHere !== false;
             // This tab drove and the lease went elsewhere without a hand-back
             // from here: it lapsed, or someone took it. Not when the same
@@ -398,8 +403,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
   );
 
   const ownLease = () => {
-    const driver = store.server?.driver;
-    return !!driver && driver.userId === options.currentUserId();
+    return store.server?.driver?.isYou === true;
   };
 
   /** This tab drives: the lease is ours and accepts this socket's input. */
@@ -433,6 +437,13 @@ export function createScreenSession(options: ScreenSessionOptions) {
     // Only a lease that is still ours: when it is free, someone (perhaps us,
     // from another tab) handed back on purpose, and the banner offers it.
     if (!leaseOnOtherSocket()) return;
+    // And still the same drive: a new one is the person's other tab, where
+    // they took over meanwhile; taking it from there would steal it.
+    // The view then says "You're driving in another tab", with Take over here.
+    if (!sameLeaseAsDropped()) {
+      setStore('controlLost', undefined);
+      return;
+    }
     record('computer.screen.resume_driving');
     // `controlLost` stays until the server answers: the drive is still
     // being won back (`resumingDrive`).
@@ -448,7 +459,10 @@ export function createScreenSession(options: ScreenSessionOptions) {
   function forgetServer() {
     if (!store.server) return;
     const wasDriving = drivingMe();
-    if (wasDriving) record('computer.screen.control_lost');
+    if (wasDriving) {
+      record('computer.screen.control_lost');
+      droppedLease = store.server.leaseId;
+    }
     setStore({
       server: undefined,
       takingOver: false,
@@ -474,6 +488,14 @@ export function createScreenSession(options: ScreenSessionOptions) {
     store.controlLost === 'drop' &&
     options.canDrive() &&
     (!store.server || store.takingOver || leaseOnOtherSocket());
+
+  /** The lease on the other socket is the drive this tab dropped. */
+  function sameLeaseAsDropped() {
+    const lease = store.server?.leaseId;
+    // Unknown on either side (older harness, pop-out): as before, ours.
+    if (droppedLease == null || lease == null) return true;
+    return lease === droppedLease;
+  }
 
   const controlLost = (): ControlLost | undefined => {
     if (!store.controlLost) return undefined;

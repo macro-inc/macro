@@ -31,9 +31,9 @@ const serverMessageSchema = z.discriminatedUnion('type', [
     type: z.literal('state'),
     driver: z
       .object({
-        userId: z.string(),
-        // A user without a profile name; the viewer resolves one from the id.
+        // A user without a profile name.
         name: lenient('driver.name', z.string().nullable(), null),
+        isYou: z.boolean(),
       })
       .nullable(),
     agentHeld: lenient('agentHeld', z.boolean(), false),
@@ -42,6 +42,7 @@ const serverMessageSchema = z.discriminatedUnion('type', [
     transport: z.enum(['vnc']),
     viewers: lenient('viewers', z.number(), 0),
     drivingHere: lenient('drivingHere', z.boolean().optional(), undefined),
+    leaseId: lenient('leaseId', z.string().nullable().optional(), undefined),
   }),
   z.object({
     type: z.literal('error'),
@@ -59,6 +60,8 @@ const serverMessageSchema = z.discriminatedUnion('type', [
         'badMessage',
         'inputFailed',
         'agentNotPausable',
+        // What any other code becomes.
+        'unknown',
       ]),
       'unknown'
     ),

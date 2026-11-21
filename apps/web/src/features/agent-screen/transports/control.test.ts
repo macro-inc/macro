@@ -11,7 +11,7 @@ describe('parseServerMessage', () => {
       parseServerMessage(
         JSON.stringify({
           type: 'state',
-          driver: { userId: 'macro|alice@example.test', name: null },
+          driver: { name: null, isYou: true },
           agentHeld: true,
           waking: false,
           transport: 'vnc',
@@ -20,7 +20,7 @@ describe('parseServerMessage', () => {
       )
     ).toEqual({
       type: 'state',
-      driver: { userId: 'macro|alice@example.test', name: null },
+      driver: { name: null, isYou: true },
       agentHeld: true,
       waking: false,
       transport: 'vnc',
@@ -33,7 +33,7 @@ describe('parseServerMessage', () => {
       parseServerMessage(
         JSON.stringify({
           type: 'state',
-          driver: { userId: 'macro|alice@example.test', name: 42 },
+          driver: { name: 42, isYou: true },
           agentHeld: 'yes',
           transport: 'vnc',
           viewers: null,
@@ -41,7 +41,7 @@ describe('parseServerMessage', () => {
       )
     ).toEqual({
       type: 'state',
-      driver: { userId: 'macro|alice@example.test', name: null },
+      driver: { name: null, isYou: true },
       agentHeld: false,
       waking: false,
       transport: 'vnc',

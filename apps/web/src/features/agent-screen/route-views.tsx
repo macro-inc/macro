@@ -84,7 +84,6 @@ function AgentScreenModelProvider(props: {
     accessKnown,
     continueDriving: props.continueDriving,
     parentSpan: () => flow.span,
-    currentUserId,
     transport: () => 'vnc',
     capabilities,
   });
@@ -143,8 +142,11 @@ function AgentScreenModelProvider(props: {
     driverName: () => {
       const driver = session.store.server?.driver;
       if (!driver) return undefined;
+      // The server names the driver but never says who they are, except to
+      // themselves.
+      const own = driver.isYou ? currentUserId() : undefined;
       return (
-        getDisplayName(tryMacroId(driver.userId)) ||
+        (own ? getDisplayName(tryMacroId(own)) : '') ||
         driver.name ||
         t('agentScreen.someoneElse')
       );

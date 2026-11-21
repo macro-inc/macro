@@ -63,7 +63,6 @@ describe('createScreenSession', () => {
         harnessId: 'harness-1',
         canDrive: () => true,
         accessKnown: () => true,
-        currentUserId: () => 'user-alice',
         transport: () => 'vnc',
         capabilities,
       });
@@ -87,7 +86,7 @@ describe('createScreenSession', () => {
       session.takeOver();
       expect(session.store.takingOver).toBe(true);
       connections[0].handlers.onState({
-        driver: { userId: 'user-alice', name: 'Alice' },
+        driver: { name: 'Alice', isYou: true },
         agentHeld: true,
         waking: false,
         transport: 'vnc',
@@ -124,7 +123,6 @@ describe('createScreenSession', () => {
         harnessId: 'harness-1',
         canDrive: () => false,
         accessKnown: () => true,
-        currentUserId: () => 'user-bob',
         transport: () => 'vnc',
         capabilities,
       });
@@ -159,7 +157,6 @@ describe('createScreenSession', () => {
         harnessId: 'harness-1',
         canDrive: () => false,
         accessKnown: () => true,
-        currentUserId: () => 'user-carol',
         transport: () => 'vnc',
         capabilities,
       });
@@ -188,14 +185,13 @@ describe('createScreenSession', () => {
         harnessId: 'harness-1',
         canDrive: () => true,
         accessKnown: () => true,
-        currentUserId: () => 'user-alice',
         transport: () => 'vnc',
         capabilities,
       });
       session.attach(document.createElement('div'));
       await settle();
       connections[0].handlers.onState({
-        driver: { userId: 'user-alice', name: 'Alice' },
+        driver: { name: 'Alice', isYou: true },
         agentHeld: true,
         waking: false,
         transport: 'vnc',
@@ -211,7 +207,7 @@ describe('createScreenSession', () => {
       await vi.advanceTimersByTimeAsync(500);
       expect(session.store.status).toEqual({ kind: 'live' });
       connections[1].handlers.onState({
-        driver: { userId: 'user-bob', name: 'Bob' },
+        driver: { name: 'Bob', isYou: false },
         agentHeld: true,
         waking: false,
         transport: 'vnc',
@@ -219,7 +215,7 @@ describe('createScreenSession', () => {
       });
       expect(session.controlLost()).toEqual({
         kind: 'released',
-        driver: { userId: 'user-bob', name: 'Bob' },
+        driver: { name: 'Bob', isYou: false },
         reconnected: true,
       });
 
@@ -243,14 +239,13 @@ describe('createScreenSession', () => {
         harnessId: 'harness-1',
         canDrive: () => true,
         accessKnown: () => true,
-        currentUserId: () => 'user-alice',
         transport: () => 'vnc',
         capabilities,
       });
       session.attach(document.createElement('div'));
       await settle();
       const drivenByAlice = {
-        driver: { userId: 'user-alice', name: 'Alice' },
+        driver: { name: 'Alice', isYou: true },
         agentHeld: true,
         waking: false,
         transport: 'vnc' as const,
@@ -295,7 +290,6 @@ describe('createScreenSession', () => {
         harnessId: 'harness-1',
         canDrive: () => true,
         accessKnown: () => true,
-        currentUserId: () => 'user-alice',
         transport: () => 'vnc',
         capabilities,
       });
@@ -342,7 +336,6 @@ describe('createScreenSession', () => {
         harnessId: 'harness-1',
         canDrive,
         accessKnown,
-        currentUserId: () => 'user-alice',
         transport: () => 'vnc',
         capabilities,
       });
@@ -368,7 +361,6 @@ describe('createScreenSession', () => {
         harnessId: 'harness-1',
         canDrive: manages,
         accessKnown: () => true,
-        currentUserId: () => 'user-alice',
         transport: () => 'vnc',
         capabilities,
       }).attach(document.createElement('div'));
@@ -392,14 +384,13 @@ describe('createScreenSession', () => {
         harnessId: 'harness-1',
         canDrive: () => true,
         accessKnown: () => true,
-        currentUserId: () => 'user-alice',
         transport: () => 'vnc',
         capabilities,
       });
       session.attach(document.createElement('div'));
       await settle();
       connections[0].handlers.onState({
-        driver: { userId: 'user-alice', name: 'Alice' },
+        driver: { name: 'Alice', isYou: true },
         agentHeld: true,
         waking: false,
         transport: 'vnc',
@@ -412,7 +403,7 @@ describe('createScreenSession', () => {
       await vi.advanceTimersByTimeAsync(500);
       // The new socket sees the old socket's lease: ours, but not here.
       connections[1].handlers.onState({
-        driver: { userId: 'user-alice', name: 'Alice' },
+        driver: { name: 'Alice', isYou: true },
         agentHeld: true,
         waking: false,
         transport: 'vnc',
@@ -423,7 +414,7 @@ describe('createScreenSession', () => {
       expect(connections[1].controls).toEqual(['takeOver']);
 
       connections[1].handlers.onState({
-        driver: { userId: 'user-alice', name: 'Alice' },
+        driver: { name: 'Alice', isYou: true },
         agentHeld: true,
         waking: false,
         transport: 'vnc',
@@ -449,14 +440,13 @@ describe('createScreenSession', () => {
         harnessId: 'harness-1',
         canDrive: () => true,
         accessKnown: () => true,
-        currentUserId: () => 'user-alice',
         transport: () => 'vnc',
         capabilities,
       });
       session.attach(document.createElement('div'));
       await settle();
       connections[0].handlers.onState({
-        driver: { userId: 'user-alice', name: 'Alice' },
+        driver: { name: 'Alice', isYou: true },
         agentHeld: true,
         waking: false,
         transport: 'vnc',
@@ -510,7 +500,6 @@ describe('createScreenSession', () => {
         harnessId: 'harness-1',
         canDrive: () => true,
         accessKnown: () => true,
-        currentUserId: () => 'user-alice',
         transport: () => 'vnc',
         capabilities,
       });
@@ -532,7 +521,7 @@ describe('createScreenSession', () => {
       transport: () => fakeTransport(connections),
     };
     const drivenByAlice = {
-      driver: { userId: 'user-alice', name: 'Alice' },
+      driver: { name: 'Alice', isYou: true },
       agentHeld: true,
       waking: false,
       transport: 'vnc' as const,
@@ -546,7 +535,6 @@ describe('createScreenSession', () => {
           harnessId: 'harness-1',
           canDrive: () => true,
           accessKnown: () => true,
-          currentUserId: () => 'user-alice',
           transport: () => 'vnc',
           capabilities,
         });
@@ -587,14 +575,13 @@ describe('createScreenSession', () => {
         canDrive: () => true,
         accessKnown: () => true,
         continueDriving: true,
-        currentUserId: () => 'user-alice',
         transport: () => 'vnc',
         capabilities,
       });
       session.attach(document.createElement('div'));
       await settle();
       connections[0].handlers.onState({
-        driver: { userId: 'user-alice', name: 'Alice' },
+        driver: { name: 'Alice', isYou: true },
         agentHeld: true,
         waking: false,
         transport: 'vnc',
@@ -619,14 +606,13 @@ describe('createScreenSession', () => {
         harnessId: 'harness-1',
         canDrive: () => true,
         accessKnown: () => true,
-        currentUserId: () => 'user-alice',
         transport: () => 'vnc',
         capabilities,
       });
       session.attach(document.createElement('div'));
       await settle();
       connections[0].handlers.onState({
-        driver: { userId: 'user-alice', name: 'Alice' },
+        driver: { name: 'Alice', isYou: true },
         agentHeld: true,
         waking: false,
         transport: 'vnc',
@@ -674,7 +660,6 @@ describe('createScreenSession', () => {
         harnessId: 'harness-1',
         canDrive: () => false,
         accessKnown: () => true,
-        currentUserId: () => 'user-bob',
         transport: () => 'vnc',
         capabilities,
       });
@@ -721,7 +706,6 @@ describe('createScreenSession', () => {
         harnessId: 'harness-1',
         canDrive: () => true,
         accessKnown: () => true,
-        currentUserId: () => 'user-alice',
         transport: () => 'vnc',
         capabilities,
       });
@@ -743,7 +727,7 @@ describe('createScreenSession', () => {
       transport: () => fakeTransport(connections),
     };
     const drivenByAlice = {
-      driver: { userId: 'user-alice', name: 'Alice' },
+      driver: { name: 'Alice', isYou: true },
       agentHeld: true,
       waking: false,
       transport: 'vnc' as const,
@@ -757,7 +741,6 @@ describe('createScreenSession', () => {
         harnessId: 'harness-1',
         canDrive: () => true,
         accessKnown: () => true,
-        currentUserId: () => 'user-alice',
         transport: () => 'vnc',
         capabilities,
       });
@@ -818,7 +801,6 @@ describe('createScreenSession', () => {
         harnessId: 'harness-1',
         canDrive: () => true,
         accessKnown: () => true,
-        currentUserId: () => 'user-alice',
         transport: () => 'vnc',
         capabilities,
       });
@@ -851,7 +833,7 @@ describe('createScreenSession', () => {
       transport: () => fakeTransport(connections),
     };
     const state = (
-      driver: { userId: string; name: string } | null,
+      driver: { name: string; isYou: boolean } | null,
       drivingHere: boolean
     ) => ({
       driver,
@@ -861,14 +843,13 @@ describe('createScreenSession', () => {
       viewers: 1,
       drivingHere,
     });
-    const alice = { userId: 'user-alice', name: 'Alice' };
+    const alice = { name: 'Alice', isYou: true };
 
     await createRoot(async (dispose) => {
       const session = createScreenSession({
         harnessId: 'harness-1',
         canDrive: () => true,
         accessKnown: () => true,
-        currentUserId: () => 'user-alice',
         transport: () => 'vnc',
         capabilities,
       });
@@ -898,7 +879,7 @@ describe('createScreenSession', () => {
       expect(session.holdsKeyboard()).toBe(true);
       await vi.advanceTimersByTimeAsync(5_000);
       connections[2].handlers.onState(
-        state({ userId: 'user-bob', name: 'Bob' }, false)
+        state({ name: 'Bob', isYou: false }, false)
       );
       expect(session.resumingDrive()).toBe(false);
       expect(session.holdsKeyboard()).toBe(true);
@@ -915,7 +896,7 @@ describe('createScreenSession', () => {
         ok({ socketUrl: 'wss://screen.test/ws?ticket=t1', expiresAt: '' }),
       transport: () => fakeTransport(connections),
     };
-    const alice = { userId: 'user-alice', name: 'Alice' };
+    const alice = { name: 'Alice', isYou: true };
     const state = (drivingHere: boolean) => ({
       driver: alice,
       agentHeld: true,
@@ -930,7 +911,6 @@ describe('createScreenSession', () => {
         harnessId: 'harness-1',
         canDrive: () => true,
         accessKnown: () => true,
-        currentUserId: () => 'user-alice',
         transport: () => 'vnc',
         capabilities,
       });
@@ -974,14 +954,13 @@ describe('createScreenSession', () => {
         harnessId: 'harness-1',
         canDrive: () => true,
         accessKnown: () => true,
-        currentUserId: () => 'user-alice',
         transport: () => 'vnc',
         capabilities,
       });
       session.attach(document.createElement('div'));
       await settle();
       connections[0].handlers.onState({
-        driver: { userId: 'user-alice', name: 'Alice' },
+        driver: { name: 'Alice', isYou: true },
         agentHeld: true,
         waking: false,
         transport: 'vnc',
@@ -1031,7 +1010,6 @@ describe('createScreenSession', () => {
         harnessId: 'harness-1',
         canDrive: () => false,
         accessKnown: () => true,
-        currentUserId: () => 'user-bob',
         transport: () => 'vnc',
         capabilities,
       });
@@ -1054,7 +1032,7 @@ describe('createScreenSession', () => {
       transport: () => fakeTransport(connections),
     };
     const state = (
-      driver: { userId: string; name: string } | null,
+      driver: { name: string; isYou: boolean } | null,
       drivingHere: boolean
     ) => ({
       driver,
@@ -1064,14 +1042,13 @@ describe('createScreenSession', () => {
       viewers: 1,
       drivingHere,
     });
-    const alice = { userId: 'user-alice', name: 'Alice' };
+    const alice = { name: 'Alice', isYou: true };
 
     await createRoot(async (dispose) => {
       const session = createScreenSession({
         harnessId: 'harness-1',
         canDrive: () => true,
         accessKnown: () => true,
-        currentUserId: () => 'user-alice',
         transport: () => 'vnc',
         capabilities,
       });
@@ -1097,7 +1074,7 @@ describe('createScreenSession', () => {
 
       // Someone else takes it.
       live.onState(state(alice, true));
-      live.onState(state({ userId: 'user-bob', name: 'Bob' }, false));
+      live.onState(state({ name: 'Bob', isYou: false }, false));
       expect(session.controlLost()).toMatchObject({
         kind: 'released',
         reconnected: false,
@@ -1133,14 +1110,13 @@ describe('createScreenSession', () => {
         harnessId: 'harness-1',
         canDrive: () => true,
         accessKnown: () => true,
-        currentUserId: () => 'user-alice',
         transport: () => 'vnc',
         capabilities,
       });
       session.attach(document.createElement('div'));
       await settle();
       connections[0].handlers.onState({
-        driver: { userId: 'user-alice', name: 'Alice' },
+        driver: { name: 'Alice', isYou: true },
         agentHeld: true,
         waking: false,
         transport: 'vnc',
@@ -1151,6 +1127,56 @@ describe('createScreenSession', () => {
       expect(connections[0].controls).toEqual(['handBack:null']);
       dispose();
       expect(connections[0].controls).toEqual(['handBack:null', 'close']);
+    });
+  });
+
+  it('wins back only the drive it dropped, not one the same person took over in another tab meanwhile', async () => {
+    const connections: FakeConnection[] = [];
+    const capabilities: ScreenCapabilities = {
+      requestTicket: async () =>
+        ok({ socketUrl: 'wss://screen.test/ws?ticket=t1', expiresAt: '' }),
+      transport: () => fakeTransport(connections),
+    };
+    const state = (leaseId: string, drivingHere: boolean) => ({
+      driver: { name: 'Alice', isYou: true },
+      agentHeld: true,
+      waking: false,
+      transport: 'vnc' as const,
+      viewers: 1,
+      drivingHere,
+      leaseId,
+    });
+
+    await createRoot(async (dispose) => {
+      const session = createScreenSession({
+        harnessId: 'harness-1',
+        canDrive: () => true,
+        accessKnown: () => true,
+        transport: () => 'vnc',
+        capabilities,
+      });
+      session.attach(document.createElement('div'));
+      await settle();
+
+      // The same drive, still on the dropped socket: won back.
+      connections[0].handlers.onState(state('lease-1', true));
+      connections[0].handlers.onEnded('connectionLost');
+      await vi.advanceTimersByTimeAsync(500);
+      connections[1].handlers.onState(state('lease-1', false));
+      expect(connections[1].controls).toEqual(['takeOver']);
+      connections[1].handlers.onState(state('lease-1', true));
+      expect(session.drivingMe()).toBe(true);
+
+      // Dropped again; meanwhile the person took over in another tab.
+      connections[1].handlers.onEnded('connectionLost');
+      await vi.advanceTimersByTimeAsync(5_000);
+      connections[2].handlers.onState(state('lease-2', false));
+      expect(connections[2].controls).toEqual([]);
+      expect(session.resumingDrive()).toBe(false);
+      expect(session.drivingElsewhere()).toBe(true);
+      expect(session.controlLost()).toBeUndefined();
+      expect(session.holdsKeyboard()).toBe(false);
+      dispose();
     });
   });
 });
