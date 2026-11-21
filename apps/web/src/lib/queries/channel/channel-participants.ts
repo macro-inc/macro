@@ -86,8 +86,7 @@ type ServerQuestion = {
   at: number;
   /** Which check it rode on, counted across every reader. */
   sent: number;
-  /** What it answered, and how many checks had been sent when it did. */
-  answer?: { members: readonly string[] | undefined; arrived: number };
+  answer?: { members: readonly string[] | undefined };
 };
 
 /** How many questions a reader keeps per channel. */
@@ -286,9 +285,7 @@ function withAnswer(
   members: readonly string[] | undefined
 ): readonly ServerQuestion[] {
   return questions.map((q) =>
-    q.seq === seq
-      ? { ...q, answer: { members, arrived: SERVER_CHECKS_SENT.count } }
-      : q
+    q.seq === seq ? { ...q, answer: { members } } : q
   );
 }
 
@@ -324,34 +321,23 @@ function serverSays(
 }
 
 /**
- * Who the server says is in the channel, from checks sent after `after`. An
- * answer naming members decides once every check already sent when it arrived
- * has answered too, and then the newest of them that named members decides:
- * one of those can say otherwise (the record moved again before it arrived),
- * while checks sent since cannot hold it off, however often the record moves.
- * Of the answers that can decide, the newest does; failed ones give way.
+ * Who the answer naming members from the newest check sent after `after` says
+ * is in the channel, whatever newer checks are still waiting or failed. Checks
+ * are ordered by when they were sent, so an older check that answers late
+ * cannot undo a newer one.
  */
 function latestMembers(
   questions: readonly ServerQuestion[],
   channelId: string,
   after: number
 ): ReadonlySet<string> | undefined {
-  const asked = questions.filter(
-    (q) => q.channelId === channelId && q.sent > after
-  );
-  const newestFirst = (a: ServerQuestion, b: ServerQuestion) => b.seq - a.seq;
-  const named = asked.filter((q) => q.answer?.members).sort(newestFirst);
-  for (const question of named) {
-    const arrived = question.answer?.arrived ?? 0;
-    const since = asked.filter(
-      (q) => q.sent >= question.sent && q.sent <= arrived
-    );
-    if (since.some((q) => !q.answer)) continue;
-    const [decides] = since.filter((q) => q.answer?.members).sort(newestFirst);
-    const members = (decides ?? question).answer?.members;
-    if (members) return new Set(members);
-  }
-  return undefined;
+  const [newest] = questions
+    .filter(
+      (q) => q.channelId === channelId && q.sent > after && q.answer?.members
+    )
+    .sort((a, b) => b.sent - a.sent || b.seq - a.seq);
+  const members = newest?.answer?.members;
+  return members ? new Set(members) : undefined;
 }
 
 /** How long a channel's first by-id read may go unanswered before its reader asks REST too. */
@@ -484,8 +470,11 @@ function firstSeen(
  * change keeps showing unless a later answer says otherwise. A change asked
  * about early (started over) keeps its time to show when the server does not
  * answer, and asks again once it runs out. While the reader rechecks a
- * confirmed change, any answer since the one that confirmed it can say it no
- * longer holds: record changes that keep coming must not hold that off.
+ * confirmed change, the newest check answered since the one that confirmed it
+ * decides who shows until the recheck answers, so record changes that keep
+ * coming cannot hold a refutation off, and a newer check can still bring
+ * someone back; the recheck's own answer then decides for good. If it fails,
+ * the newest answer decides for good.
  */
 function afterExpiry(
   judgedShown: ParticipantChange,
@@ -494,26 +483,15 @@ function afterExpiry(
   context: SettledContext
 ): Judged | undefined {
   if (!judgedSeen.watched) return undefined;
-  let [shown, seen] = [judgedShown, judgedSeen];
-  if (seen.rechecking) {
-    const members = latestMembers(
-      context.questions,
-      shown.channelId,
-      seen.confirmedBy
-    );
-    const refuted = members
-      ? shown.userIds.filter((userId) => !holdsFor(shown.kind, userId, members))
-      : [];
-    if (refuted.length === shown.userIds.length) return undefined;
-    seen = { ...seen, released: [...seen.released, ...refuted] };
-    shown = stillShown(shown, refuted);
-  }
+  const [shown, seen] = [judgedShown, judgedSeen];
   const says = serverSays(
     context.questions,
     shown.channelId,
     expires,
     seen.checkAfter
   );
+  if (seen.rechecking && says.kind !== 'members')
+    return whileRechecking(shown, seen, expires, says, context);
   const asking = !seen.confirmed || seen.rechecking;
   const unanswered = (): Judged | undefined => {
     if (seen.confirmed) return { seen, shown, askAt: undefined };
@@ -553,6 +531,36 @@ function afterExpiry(
       // A judgment this build does not know stops showing the change.
       .exhaustive(() => undefined)
   );
+}
+
+/** A confirmed change whose recheck has not answered: the newest answer decides who shows. */
+function whileRechecking(
+  shown: ParticipantChange,
+  seen: SettledChange,
+  expires: number,
+  says: ServerSays,
+  context: SettledContext
+): Judged | undefined {
+  const members = latestMembers(
+    context.questions,
+    shown.channelId,
+    seen.confirmedBy
+  );
+  const refuted = members
+    ? shown.userIds.filter((userId) => !holdsFor(shown.kind, userId, members))
+    : [];
+  if (says.kind !== 'failed')
+    return {
+      seen,
+      shown: stillShown(shown, refuted),
+      askAt: says.kind === 'unasked' ? expires : undefined,
+    };
+  if (refuted.length === shown.userIds.length) return undefined;
+  return {
+    seen: { ...seen, released: [...seen.released, ...refuted] },
+    shown: stillShown(shown, refuted),
+    askAt: undefined,
+  };
 }
 
 /**
