@@ -19,6 +19,7 @@ const SUBSCRIPTION: &str = "sub_team";
 pub(super) enum Step {
     Purge(Uuid),
     ReleaseComputers(Uuid),
+    ReleaseTeammateInstalls(Uuid),
     CancelSubscription(String),
     DeleteTeam { team_id: Uuid, bot_ids: Vec<BotId> },
     Published(String),
@@ -49,6 +50,7 @@ struct FakeWorld {
     /// Entities a listing returns for an owner that does not own them.
     misfiled: Vec<(TeamDeletionOwner, OwnedEntityRef)>,
     fail_prepare: bool,
+    fail_release_teammate_installs: bool,
     fail_purge_of: Option<Uuid>,
     /// How many more purges register a fresh entity for the purged one's owner.
     respawns_left: usize,
@@ -202,6 +204,14 @@ impl OwnedEntityCleanup for RecordingOwnedEntityCleanup {
         self.journal.record(Step::ReleaseComputers(team_id));
         Ok(())
     }
+
+    async fn release_teammate_installs(&self, team_id: Uuid) -> Result<(), Self::Err> {
+        if self.world.lock().unwrap().fail_release_teammate_installs {
+            return Err(std::io::Error::other("injected install release failure"));
+        }
+        self.journal.record(Step::ReleaseTeammateInstalls(team_id));
+        Ok(())
+    }
 }
 
 fn scheduled_action(id: u128) -> (RegisteredEntityType, Uuid) {
@@ -234,6 +244,10 @@ fn purge(id: u128) -> Step {
 
 fn release_computers() -> Step {
     Step::ReleaseComputers(TEAM_ID)
+}
+
+fn release_teammate_installs() -> Step {
+    Step::ReleaseTeammateInstalls(TEAM_ID)
 }
 
 fn cancel_subscription() -> Step {
@@ -331,6 +345,7 @@ async fn delete_team_purges_what_the_team_owns_directly() {
             purge(2),
             purge(3),
             release_computers(),
+            release_teammate_installs(),
             cancel_subscription(),
             delete_team(Vec::new()),
             published_team_deleted(),
@@ -357,6 +372,7 @@ async fn delete_team_purges_what_the_teams_bots_own() {
             purge(1),
             purge(2),
             release_computers(),
+            release_teammate_installs(),
             cancel_subscription(),
             delete_team(vec![bot(0xb01)]),
             published_team_deleted(),
@@ -384,6 +400,7 @@ async fn delete_team_purges_what_soft_deleted_team_bots_own() {
             purge(1),
             purge(2),
             release_computers(),
+            release_teammate_installs(),
             cancel_subscription(),
             delete_team(vec![bot(0xb01), bot(0xb02)]),
             published_team_deleted(),
@@ -415,6 +432,7 @@ async fn delete_team_purges_in_rank_order_before_billing_the_row_and_the_event()
             purge(6),
             purge(1),
             release_computers(),
+            release_teammate_installs(),
             cancel_subscription(),
             delete_team(vec![bot(0xb01)]),
             published_team_deleted(),
@@ -438,6 +456,7 @@ async fn delete_team_purges_content_created_while_it_purges() {
             purge(1),
             purge(0x1000),
             release_computers(),
+            release_teammate_installs(),
             cancel_subscription(),
             delete_team(Vec::new()),
             published_team_deleted(),
@@ -494,6 +513,7 @@ async fn delete_team_keeps_the_team_when_a_purge_fails_and_a_retry_resumes() {
             purge(4),
             purge(5),
             release_computers(),
+            release_teammate_installs(),
             cancel_subscription(),
             delete_team(Vec::new()),
             published_team_deleted(),
@@ -665,4 +685,23 @@ async fn namespace_preflight_failure_stops_before_any_team_side_effect_and_retry
             .iter()
             .any(|step| matches!(step, Step::DeleteTeam { .. }))
     );
+}
+
+#[tokio::test]
+async fn a_failed_teammate_install_release_stops_before_billing_and_the_team_row() {
+    let journal = Journal::default();
+    let cleanup = RecordingOwnedEntityCleanup::new(&journal);
+    cleanup.world.lock().unwrap().fail_release_teammate_installs = true;
+    let (service, broker) = deleting_service(&journal, &cleanup);
+
+    assert!(matches!(
+        cleanup_failure(service.delete_team(owner_receipt()).await),
+        OwnedEntityCleanupError::ReleaseTeammateInstalls { .. }
+    ));
+    assert_eq!(journal.steps(), vec![release_computers()]);
+    assert!(broker.events().is_empty());
+
+    cleanup.world.lock().unwrap().fail_release_teammate_installs = false;
+    service.delete_team(owner_receipt()).await.unwrap();
+    assert!(journal.steps().contains(&release_teammate_installs()));
 }

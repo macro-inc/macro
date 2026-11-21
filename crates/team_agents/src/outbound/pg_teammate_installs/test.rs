@@ -946,3 +946,31 @@ async fn every_way_a_host_loses_its_right_lists_its_agent_until_it_is_parked(poo
     assert_eq!(unentitled().await, 0);
     assert!(installs.by_id(INSTALL).await.unwrap().is_some());
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_team_with_installs_cant_be_deleted_until_they_are(pool: PgPool) {
+    fixture(&pool).await;
+    let installs = PgTeammateInstalls::new(pool.clone());
+    installs
+        .create(&new_install(INSTALL, LAPTOP))
+        .await
+        .unwrap();
+    assert_eq!(installs.of_team(TEAM).await.unwrap().len(), 1);
+    assert!(installs.of_team(Uuid::nil()).await.unwrap().is_empty());
+
+    let refused = sqlx::query!("DELETE FROM team WHERE id = $1", TEAM)
+        .execute(&pool)
+        .await;
+    assert!(refused.is_err(), "{refused:?}");
+    let machine = sqlx::query!("DELETE FROM harnesses WHERE id = $1", LAPTOP)
+        .execute(&pool)
+        .await;
+    assert!(machine.is_err(), "{machine:?}");
+
+    installs.delete(&user(AGENT)).await.unwrap();
+    installs.delete(&user(AGENT)).await.unwrap();
+    sqlx::query!("DELETE FROM team WHERE id = $1", TEAM)
+        .execute(&pool)
+        .await
+        .unwrap();
+}

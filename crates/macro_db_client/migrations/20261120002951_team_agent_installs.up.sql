@@ -6,12 +6,13 @@ SET LOCAL lock_timeout = '5s';
 -- One install per agent: the primary key is the agent, so a second install
 -- for the same agent loses. A move makes a new install id; a new image or a
 -- credential rotation a new generation. Removing the agent's seat removes
--- its install.
+-- its install. The team and the machine RESTRICT: deleting either must take
+-- the agent off first (revoking its key), never drop the install silently.
 CREATE TABLE team_agent_installs (
     agent_user_id TEXT PRIMARY KEY REFERENCES team_agents (user_id) ON DELETE CASCADE,
     install_id UUID NOT NULL UNIQUE,
-    team_id UUID NOT NULL REFERENCES team (id) ON DELETE CASCADE,
-    harness_id UUID NOT NULL REFERENCES harnesses (id) ON DELETE CASCADE,
+    team_id UUID NOT NULL REFERENCES team (id) ON DELETE RESTRICT,
+    harness_id UUID NOT NULL REFERENCES harnesses (id) ON DELETE RESTRICT,
     generation BIGINT NOT NULL CHECK (generation > 0),
     -- Where the machine last said the install's container is, for the
     -- current generation; `pending` until it says anything. `rolled_back`:
@@ -75,6 +76,8 @@ CREATE TABLE team_agent_installs (
 
 -- Delivery reads a machine's installs when it connects.
 CREATE INDEX team_agent_installs_harness_id_idx ON team_agent_installs (harness_id);
+-- Team deletion takes a team's agents off their machines first.
+CREATE INDEX team_agent_installs_team_id_idx ON team_agent_installs (team_id);
 CREATE INDEX team_agent_installs_move_to_harness_id_idx
     ON team_agent_installs (move_to_harness_id)
     WHERE move_to_harness_id IS NOT NULL;

@@ -698,6 +698,17 @@ async fn run_server() -> anyhow::Result<()> {
             hosted_runtimes::outbound::pg::PgComputerRepo::new(db.clone(), computer_policy),
             hosted_runtimes::domain::service::SystemClock,
         )),
+        // Likewise: the agent service is built on the team service.
+        Arc::new(team_agents::domain::service::TeamInstallRelease::new(
+            team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo::new(db.clone()),
+            agent_api_keys(&db),
+            agent_git_repos(&internal_key)?,
+            team_agents::outbound::pg_teammate_installs::PgTeammateInstalls::new(db.clone()),
+            crate::outbound::teammate_runtimes::HarnessTeammateRuntimes::new(
+                harness_url.clone(),
+                &internal_key,
+            )?,
+        )),
     )
     .map_err(|error| anyhow::anyhow!("{error:?}"))?;
     let crm_access_rollout: Arc<dyn teams::domain::crm_member_access::CrmAccessRollout> =
@@ -750,18 +761,8 @@ async fn run_server() -> anyhow::Result<()> {
     let team_agents_service = Arc::new(team_agents::domain::service::TeamAgentServiceImpl::new(
         team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo::new(db.clone()),
         team_agents::outbound::team_membership::TeamsMembership::new(teams_service.clone()),
-        team_agents::outbound::agent_api_keys::UserApiKeys::new(Arc::new(
-            user_api_key::domain::service::UserApiKeyServiceImpl::new(
-                user_api_key::outbound::pg_user_api_keys_repo::PgUserApiKeysRepo::new(db.clone()),
-            ),
-        )),
-        team_agents::outbound::agent_git_repos::AgentGitRepos::new(
-            agent_git::client::AgentGitClient::new(
-                macro_service_urls::AgentGitServiceUrl::new()?.to_string(),
-                internal_key.clone(),
-            )
-            .map_err(|error| anyhow::anyhow!("{error:?}"))?,
-        ),
+        agent_api_keys(&db),
+        agent_git_repos(&internal_key)?,
         team_agents::outbound::hosted_runtimes_computers::HostedRuntimesComputers::new(
             computer_service.clone(),
             hosted_runtimes::outbound::pg::PgComputerRepo::new(db.clone(), computer_policy),
@@ -1178,6 +1179,34 @@ async fn run_computer_agent_effects(
             }
         }
     }
+}
+
+/// Agents' API keys, for the agent service and team deletion.
+fn agent_api_keys(
+    db: &sqlx::PgPool,
+) -> team_agents::outbound::agent_api_keys::UserApiKeys<
+    user_api_key::domain::service::UserApiKeyServiceImpl<
+        user_api_key::outbound::pg_user_api_keys_repo::PgUserApiKeysRepo,
+    >,
+> {
+    team_agents::outbound::agent_api_keys::UserApiKeys::new(Arc::new(
+        user_api_key::domain::service::UserApiKeyServiceImpl::new(
+            user_api_key::outbound::pg_user_api_keys_repo::PgUserApiKeysRepo::new(db.clone()),
+        ),
+    ))
+}
+
+/// Agents' workspace repositories, for the agent service and team deletion.
+fn agent_git_repos(
+    internal_key: &str,
+) -> anyhow::Result<team_agents::outbound::agent_git_repos::AgentGitRepos> {
+    Ok(team_agents::outbound::agent_git_repos::AgentGitRepos::new(
+        agent_git::client::AgentGitClient::new(
+            macro_service_urls::AgentGitServiceUrl::new()?.to_string(),
+            internal_key.to_owned(),
+        )
+        .map_err(|error| anyhow::anyhow!("{error:?}"))?,
+    ))
 }
 
 /// How often agents on machines that may no longer host them are taken off.

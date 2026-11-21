@@ -916,6 +916,18 @@ where
                     source: Box::new(source),
                 })
             })?;
+        // Agent teammates on members' own machines: revoked and stopped, and
+        // their installs gone, which the team row's deletion otherwise refuses.
+        self.owned_entity_cleanup
+            .release_teammate_installs(team_id)
+            .await
+            .map_err(|source| {
+                DeleteTeamError::OwnedEntityCleanup(
+                    OwnedEntityCleanupError::ReleaseTeammateInstalls {
+                        source: Box::new(source),
+                    },
+                )
+            })?;
 
         let subscription_id = self
             .team_repository

@@ -24,6 +24,30 @@ pub struct TeamOwnedEntityCleanupConfig {
     pub scheduled_action_url: String,
 }
 
+/// Takes a team's agent teammates off their owners' own machines ahead of
+/// the team's deletion.
+#[async_trait::async_trait]
+pub trait TeamTeammateInstalls: Send + Sync {
+    async fn release_team(&self, team_id: Uuid) -> Result<(), Report>;
+}
+
+#[async_trait::async_trait]
+impl<Repository, ApiKeys, Repos, Installs, Runtimes> TeamTeammateInstalls
+    for team_agents::domain::service::TeamInstallRelease<Repository, ApiKeys, Repos, Installs, Runtimes>
+where
+    Repository: team_agents::domain::ports::TeamAgentRepository,
+    ApiKeys: team_agents::domain::ports::AgentApiKeys,
+    Repos: team_agents::domain::ports::AgentRepos,
+    Installs: team_agents::domain::ports::TeammateInstalls,
+    Runtimes: team_agents::domain::ports::TeammateRuntimes,
+{
+    async fn release_team(&self, team_id: Uuid) -> Result<(), Report> {
+        team_agents::domain::service::TeamInstallRelease::release_team(self, team_id)
+            .await
+            .map_err(|error| Report::new(error).into_dynamic())
+    }
+}
+
 /// [`OwnedEntityCleanup`] over the bot roster and the entity registry.
 #[derive(Clone)]
 pub struct TeamOwnedEntityCleanupAdapter<B, R> {
@@ -36,6 +60,7 @@ pub struct TeamOwnedEntityCleanupAdapter<B, R> {
     harness_url: String,
     scheduled_action_url: String,
     computers: Arc<dyn crate::domain::computer_billing::TeamComputers>,
+    teammate_installs: Arc<dyn TeamTeammateInstalls>,
 }
 
 impl<B, R> TeamOwnedEntityCleanupAdapter<B, R> {
@@ -51,6 +76,7 @@ impl<B, R> TeamOwnedEntityCleanupAdapter<B, R> {
         documents: Arc<DocumentStorageServiceClient>,
         config: TeamOwnedEntityCleanupConfig,
         computers: Arc<dyn crate::domain::computer_billing::TeamComputers>,
+        teammate_installs: Arc<dyn TeamTeammateInstalls>,
     ) -> Result<Self, Report> {
         Ok(Self {
             vault_metadata,
@@ -65,6 +91,7 @@ impl<B, R> TeamOwnedEntityCleanupAdapter<B, R> {
             harness_url: config.harness_url,
             scheduled_action_url: config.scheduled_action_url,
             computers,
+            teammate_installs,
         })
     }
 
@@ -206,6 +233,14 @@ where
     #[tracing::instrument(skip(self), err)]
     async fn release_computers(&self, team_id: Uuid) -> Result<(), Self::Err> {
         self.computers
+            .release_team(team_id)
+            .await
+            .map_err(ReportAsError::from)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn release_teammate_installs(&self, team_id: Uuid) -> Result<(), Self::Err> {
+        self.teammate_installs
             .release_team(team_id)
             .await
             .map_err(ReportAsError::from)

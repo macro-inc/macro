@@ -889,3 +889,54 @@ async fn a_failed_revoke_at_a_finished_move_holds_deliveries_until_the_sweep_ret
             .is_some()
     );
 }
+
+#[tokio::test]
+async fn deleting_a_team_takes_its_agents_off_their_machines_and_revokes_their_keys() {
+    let (service, journal, _) = self_hosted_service();
+    service.create(receipt(), own(LAPTOP)).await.unwrap();
+    let release = crate::domain::service::TeamInstallRelease::new(
+        service.repository.clone(),
+        FakeApiKeys(journal.clone(), Arc::default()),
+        FakeRepos(journal.clone()),
+        service.installs.clone(),
+        FakeRuntimes(journal.clone()),
+    );
+    let before = journal.entries().len();
+
+    release.release_team(Uuid::parse_str(TEAM).unwrap()).await.unwrap();
+
+    assert_eq!(
+        journal.entries()[before..],
+        [
+            "install.park".to_owned(),
+            "api_key.revoke_all".to_owned(),
+            "repo.create Sam Rivera".to_owned(),
+            "install.delete".to_owned(),
+            format!("runtimes.changed {LAPTOP}"),
+        ]
+    );
+    assert!(service.installs.rows.lock().unwrap().is_empty());
+    // Again: nothing left to do.
+    release.release_team(Uuid::parse_str(TEAM).unwrap()).await.unwrap();
+    assert_eq!(journal.entries().len(), before + 5);
+}
+
+#[tokio::test]
+async fn a_team_release_whose_revoke_fails_keeps_the_install_for_the_retry() {
+    let (service, journal, _) = self_hosted_service();
+    service.create(receipt(), own(LAPTOP)).await.unwrap();
+    let keys = FakeApiKeys(journal.clone(), Arc::new(AtomicBool::new(true)));
+    let release = crate::domain::service::TeamInstallRelease::new(
+        service.repository.clone(),
+        keys,
+        FakeRepos(journal.clone()),
+        service.installs.clone(),
+        FakeRuntimes(journal.clone()),
+    );
+
+    assert!(release.release_team(Uuid::parse_str(TEAM).unwrap()).await.is_err());
+
+    let rows = service.installs.rows.lock().unwrap().clone();
+    assert_eq!(rows.len(), 1);
+    assert!(rows[0].parked() && rows[0].revoke_pending, "{rows:?}");
+}

@@ -34,6 +34,9 @@ use super::self_hosting::{
 use super::voice::AgentVoice;
 
 mod self_hosted;
+mod team_release;
+
+pub use team_release::TeamInstallRelease;
 #[cfg(test)]
 mod test;
 
