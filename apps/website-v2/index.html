@@ -1,0 +1,1297 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Macro · The linked workspace for your team</title>
+    <meta
+      name="description"
+      content="Macro is one workspace for your team's email, messages, docs, tasks, calls, CRM and agents. Everything links to everything else, so people and agents share the same context."
+    />
+    <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Funnel+Display:wght@500;600;700&family=Funnel+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <script>
+      document.documentElement.classList.add('js');
+    </script>
+  </head>
+  <body>
+    <svg width="0" height="0" class="visually-hidden" aria-hidden="true">
+      <symbol id="i-mail" viewBox="0 0 16 16">
+        <rect x="2" y="3.5" width="12" height="9" rx="1.5" />
+        <path d="m2.5 5 5.5 4 5.5-4" />
+      </symbol>
+      <symbol id="i-chat" viewBox="0 0 16 16">
+        <path
+          d="M3 3h10a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H8l-3 2.5V11H3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"
+        />
+      </symbol>
+      <symbol id="i-task" viewBox="0 0 16 16">
+        <rect x="2.5" y="2.5" width="11" height="11" rx="2" />
+        <path d="m5.5 8.2 1.8 1.8 3.4-3.8" />
+      </symbol>
+      <symbol id="i-doc" viewBox="0 0 16 16">
+        <path d="M4 2.5h5l3 3v8H4z" />
+        <path d="M9 2.5v3h3M6 9h4M6 11h3" />
+      </symbol>
+      <symbol id="i-agent" viewBox="0 0 16 16">
+        <path
+          d="M8 2v3M8 11v3M2 8h3M11 8h3M4 4l1.8 1.8M10.2 10.2 12 12M12 4l-1.8 1.8M5.8 10.2 4 12"
+        />
+      </symbol>
+      <symbol id="i-crm" viewBox="0 0 16 16">
+        <path d="M3 13.5v-10h6v10M9 6.5h4v7M2 13.5h12M5 6h2M5 8.5h2M5 11h2" />
+      </symbol>
+      <symbol id="i-db" viewBox="0 0 16 16">
+        <rect x="2.5" y="3" width="11" height="10" rx="1.5" />
+        <path d="M2.5 6.5h11M2.5 9.75h11M6.5 6.5V13" />
+      </symbol>
+      <symbol id="i-call" viewBox="0 0 16 16">
+        <path
+          d="M4.2 2.5h2l1 2.6-1.3 1a6.5 6.5 0 0 0 4 4l1-1.3 2.6 1v2a1.2 1.2 0 0 1-1.3 1.2A10.3 10.3 0 0 1 3 3.8a1.2 1.2 0 0 1 1.2-1.3Z"
+        />
+      </symbol>
+      <symbol id="i-cal" viewBox="0 0 16 16">
+        <rect x="2.5" y="3.5" width="11" height="10" rx="1.5" />
+        <path d="M2.5 6.5h11M5.5 2v3M10.5 2v3" />
+      </symbol>
+      <symbol id="i-pr" viewBox="0 0 16 16">
+        <circle cx="4.5" cy="4" r="1.5" />
+        <circle cx="4.5" cy="12" r="1.5" />
+        <circle cx="11.5" cy="12" r="1.5" />
+        <path d="M4.5 5.5v5M11.5 10.5V7a2 2 0 0 0-2-2H8m1.5-1.5L8 5l1.5 1.5" />
+      </symbol>
+      <symbol id="i-out" viewBox="0 0 16 16">
+        <path d="M5 11 11 5M6 5h5v5" />
+      </symbol>
+      <symbol id="i-next" viewBox="0 0 16 16">
+        <path d="M3 8h10M9 4l4 4-4 4" />
+      </symbol>
+      <symbol id="i-copy" viewBox="0 0 16 16">
+        <rect x="5.5" y="5.5" width="8" height="8" rx="1.5" />
+        <path d="M10.5 5.5v-2a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2" />
+      </symbol>
+      <symbol id="i-play" viewBox="0 0 16 16">
+        <path d="M5 3.5v9l7.5-4.5z" />
+      </symbol>
+      <symbol id="i-logo" viewBox="0 0 24 24">
+        <path
+          d="M0 10.014v6.801a.75.75 0 0 0 .225.513l2.742 2.644 2.002-.8v-7.099l-2.97-2.859z"
+        />
+        <path
+          d="M4.078 4.8v5.786l1.36 1.309v1.313L12.481 20l2.002-.8-.001-7.1L6.078 4z"
+        />
+        <path
+          d="M13.594 4.8v5.786l1.36 1.311-.013 1.3L22 20 24 19.2V12.42a.75.75 0 0 0-.225-.533L15.595 4z"
+        />
+      </symbol>
+    </svg>
+
+    <header class="site-header">
+      <div class="wrap">
+        <a class="brand" href="#top" aria-label="Macro home">
+          <svg aria-hidden="true"><use href="#i-logo" /></svg>
+          Macro
+        </a>
+        <nav class="site-nav" aria-label="Sections">
+          <a href="#blocks">Product</a>
+          <a href="#agents">Agents</a>
+          <a href="#switch">Switch</a>
+          <a href="#pricing">Pricing</a>
+          <a href="https://docs.macro.com">Docs</a>
+        </nav>
+        <div class="header-actions">
+          <a class="header-login" href="https://macro.com/app">Log in</a>
+          <a class="btn btn-small btn-on-field" href="https://macro.com/app"
+            >Sign up</a
+          >
+        </div>
+      </div>
+    </header>
+
+    <main id="top">
+      <section class="hero">
+        <div class="wrap">
+          <h1>
+            <a href="#email">Email</a>, <a href="#messages">chat</a>,
+            <a href="#docs">docs</a> and <a href="#tasks">tasks</a> that link to
+            each other.
+          </h1>
+          <div class="hero-row">
+            <p class="hero-lead">
+              Macro is one workspace for your team's email, messages, docs,
+              tasks, calls, CRM and agents.
+              <strong
+                >Mention anything from anywhere and both sides keep the
+                link.</strong
+              >
+              Your agents work from the same context you do.
+            </p>
+            <div class="hero-actions">
+              <a class="btn btn-on-field" href="https://macro.com/app"
+                >Sign up free</a
+              >
+              <a
+                class="btn btn-outline-field"
+                href="https://macro.com/app/book/6de4003c-15e4-549f-b5a9-0e930bbf56e4/macro-demo"
+                >Book a demo</a
+              >
+            </div>
+          </div>
+          <ul class="hero-facts">
+            <li>Open source</li>
+            <li>SOC 2 Type II</li>
+            <li>ISO 27001</li>
+            <li>Web, iOS and Android</li>
+          </ul>
+        </div>
+      </section>
+
+      <div class="stage-band">
+        <div class="wrap">
+          <div
+            class="stage"
+            data-stage
+            data-step="4"
+            role="group"
+            aria-label="An example in Macro: a customer email becomes a task, an agent picks it up, and the pull request links back."
+          >
+            <div class="stage-panes">
+              <div class="slot" data-slot="email">
+                <article class="pane" data-pane="email">
+                  <header class="pane-head">
+                    <svg class="icon" aria-hidden="true">
+                      <use href="#i-mail" />
+                    </svg>
+                    <span>Signal</span>
+                    <span>9:12 AM</span>
+                  </header>
+                  <h3>CSV export drops the timezone column</h3>
+                  <p class="soft">Tim Reyes · Acme</p>
+                  <p>
+                    Hi team, since Tuesday our exported CSVs are missing the
+                    timezone column. Our finance import depends on it. Can you
+                    take a look?
+                  </p>
+                  <div class="mock-actions" aria-hidden="true">
+                    <span class="mock-button">Reply</span>
+                    <span class="mock-button"
+                      >Task <kbd>c</kbd><kbd>t</kbd></span
+                    >
+                    <span class="mock-button">Share</span>
+                  </div>
+                  <footer class="pane-foot" data-at="2">
+                    <span class="pane-label">Linked</span>
+                    <span class="chip" data-ref="task">
+                      <svg class="icon" aria-hidden="true">
+                        <use href="#i-task" />
+                      </svg>
+                      <span>Keep timezone column in CSV export</span>
+                    </span>
+                    <span class="chip" data-ref="draft" data-at="4">
+                      <svg class="icon" aria-hidden="true">
+                        <use href="#i-mail" />
+                      </svg>
+                      <span>Draft reply, ready for review</span>
+                    </span>
+                  </footer>
+                </article>
+              </div>
+
+              <div class="slot" data-slot="task">
+                <article class="pane" data-pane="task" data-at="2">
+                  <header class="pane-head">
+                    <svg class="icon" aria-hidden="true">
+                      <use href="#i-task" />
+                    </svg>
+                    <span>Task</span>
+                    <span>Support</span>
+                  </header>
+                  <h3>Keep timezone column in CSV export</h3>
+                  <dl class="props">
+                    <dt>Status</dt>
+                    <dd>
+                      <span class="status" data-only="2">Todo</span>
+                      <span class="status doing" data-only="3"
+                        >In progress</span
+                      >
+                      <span class="status review" data-only="4">In review</span>
+                    </dd>
+                    <dt>Assignee</dt>
+                    <dd>
+                      <span data-only="2" class="soft">Unassigned</span>
+                      <span data-only="3">Macro agent</span>
+                      <span data-only="4">Macro agent</span>
+                    </dd>
+                    <dt>From</dt>
+                    <dd>
+                      <span class="chip back" data-ref="email">
+                        <svg class="icon" aria-hidden="true">
+                          <use href="#i-mail" />
+                        </svg>
+                        <span>CSV export drops the timezone column</span>
+                      </span>
+                    </dd>
+                  </dl>
+                  <ul class="activity">
+                    <li>Dana created this from an email <time>9:14</time></li>
+                    <li data-at="3">
+                      Dana assigned it to Macro <time>9:15</time>
+                    </li>
+                    <li data-at="4">
+                      Macro opened a pull request <time>9:21</time>
+                    </li>
+                  </ul>
+                  <footer class="pane-foot" data-at="4">
+                    <span class="pane-label">Linked</span>
+                    <span class="chip" data-ref="pr">
+                      <svg class="icon" aria-hidden="true">
+                        <use href="#i-pr" />
+                      </svg>
+                      <span>#482 fix(export): keep timezone column</span>
+                    </span>
+                  </footer>
+                </article>
+              </div>
+
+              <div class="slot" data-slot="agent">
+                <article class="pane" data-pane="agent" data-at="3">
+                  <header class="pane-head">
+                    <svg class="icon" aria-hidden="true">
+                      <use href="#i-agent" />
+                    </svg>
+                    <span>Agent session</span>
+                    <span>Code</span>
+                  </header>
+                  <p>
+                    Reading
+                    <span class="chip back" data-ref="task">
+                      <svg class="icon" aria-hidden="true">
+                        <use href="#i-task" />
+                      </svg>
+                      <span>Keep timezone column…</span>
+                    </span>
+                    and the email it came from.
+                  </p>
+                  <p class="soft">Called 6 tools</p>
+                  <p data-at="4">
+                    The column was dropped when the export moved to streaming.
+                    I restored it and added a test.
+                  </p>
+                  <div class="pr-card" data-ref="pr" data-at="4">
+                    <span class="pr-title">
+                      <svg class="icon" aria-hidden="true">
+                        <use href="#i-pr" />
+                      </svg>
+                      #482 fix(export): keep timezone column
+                    </span>
+                    <span class="pr-meta">
+                      <span class="plus">+14</span>
+                      <span class="minus">−3</span>
+                      <span class="passed">Checks pass</span>
+                    </span>
+                  </div>
+                  <p class="soft" data-at="4">
+                    I also drafted a reply to Tim for you to review.
+                  </p>
+                </article>
+              </div>
+            </div>
+          </div>
+
+          <ol class="steps" data-steps>
+            <li>
+              <button class="step" type="button" data-step-button="1">
+                <span class="step-title"><b>1</b>An email comes in</span>
+                <span class="step-text"
+                  >A customer reports a bug. It lands in your Signal
+                  inbox.</span
+                >
+              </button>
+            </li>
+            <li>
+              <button class="step" type="button" data-step-button="2">
+                <span class="step-title"><b>2</b>It becomes a task</span>
+                <span class="step-text"
+                  >Press c then t. The task keeps a link to the thread.</span
+                >
+              </button>
+            </li>
+            <li>
+              <button class="step" type="button" data-step-button="3">
+                <span class="step-title"><b>3</b>An agent takes it</span>
+                <span class="step-text"
+                  >Assign it. The agent reads the task and everything linked to
+                  it.</span
+                >
+              </button>
+            </li>
+            <li>
+              <button
+                class="step"
+                type="button"
+                data-step-button="4"
+                aria-current="step"
+              >
+                <span class="step-title"><b>4</b>The work links back</span>
+                <span class="step-text"
+                  >The pull request and a draft reply attach to the task and
+                  the email.</span
+                >
+              </button>
+            </li>
+            <li class="steps-play">
+              <button class="btn btn-small btn-quiet" type="button" data-play>
+                <svg class="icon" aria-hidden="true"><use href="#i-play" /></svg>
+                Play
+              </button>
+            </li>
+          </ol>
+        </div>
+      </div>
+
+      <section class="section" id="blocks">
+        <div class="wrap">
+          <div class="section-head">
+            <div>
+              <span class="eyebrow">Blocks</span>
+              <h2>Every tool your team opens, built as one system.</h2>
+            </div>
+            <p>
+              Each Block is purpose-built for its job. They all share one
+              backend, one search, one permission model and one graph of links.
+            </p>
+          </div>
+
+          <div class="blocks" data-blocks>
+            <div
+              class="blocks-nav"
+              role="tablist"
+              aria-label="Blocks"
+              data-blocks-nav
+            ></div>
+
+            <div class="blocks-list">
+              <article
+                class="block"
+                id="email"
+                data-block="Email"
+                data-icon="i-mail"
+              >
+                <figure class="shot">
+                  <img
+                    src="assets/blocks/email.webp"
+                    width="1800"
+                    height="1012"
+                    alt="The Macro inbox on the Signal tab, with connected accounts and tags in the sidebar."
+                  />
+                </figure>
+                <div class="block-copy">
+                  <div>
+                    <p class="block-name">
+                      <svg class="icon" aria-hidden="true">
+                        <use href="#i-mail" />
+                      </svg>
+                      Email
+                    </p>
+                    <h3>Every inbox you own, triaged from the keyboard.</h3>
+                    <p class="block-keys">
+                      <span><kbd>j</kbd><kbd>k</kbd> move</span>
+                      <span><kbd>e</kbd> archive</span>
+                      <a href="https://docs.macro.com/product/email"
+                        >Email docs</a
+                      >
+                    </p>
+                  </div>
+                  <ul class="ticks">
+                    <li>
+                      Connect several Gmail and Outlook accounts. Triage them
+                      in one list or one at a time.
+                    </li>
+                    <li>
+                      Share a thread to any channel or DM. No screenshots.
+                    </li>
+                    <li>
+                      Open a contact or a company to see every email and file
+                      your team has exchanged with them.
+                    </li>
+                  </ul>
+                </div>
+              </article>
+
+              <article
+                class="block"
+                id="messages"
+                data-block="Messages"
+                data-icon="i-chat"
+              >
+                <figure class="shot">
+                  <img
+                    src="assets/blocks/chat.webp"
+                    width="1800"
+                    height="1012"
+                    loading="lazy"
+                    alt="A channel in Macro where a feature request mentions an agent and the agent replies with a finished coding session."
+                  />
+                </figure>
+                <div class="block-copy">
+                  <div>
+                    <p class="block-name">
+                      <svg class="icon" aria-hidden="true">
+                        <use href="#i-chat" />
+                      </svg>
+                      Messages
+                    </p>
+                    <h3>Team chat that stays readable.</h3>
+                    <p class="block-keys">
+                      <span><kbd>g</kbd><kbd>c</kbd> open chat</span>
+                      <a href="https://docs.macro.com/product/channels"
+                        >Messages docs</a
+                      >
+                    </p>
+                  </div>
+                  <ul class="ticks">
+                    <li>
+                      The first replies show inline and the rest collapse into
+                      a thread, so a busy channel stays easy to follow.
+                    </li>
+                    <li>
+                      Copy a link to any message or thread and reference it
+                      anywhere in Macro.
+                    </li>
+                    <li>
+                      Add people outside your team to a chat, or connect
+                      WhatsApp and reply from Macro.
+                    </li>
+                  </ul>
+                </div>
+              </article>
+
+              <article
+                class="block"
+                id="tasks"
+                data-block="Tasks"
+                data-icon="i-task"
+              >
+                <figure class="shot">
+                  <img
+                    src="assets/blocks/tasks.webp"
+                    width="1800"
+                    height="1012"
+                    loading="lazy"
+                    alt="A task list in Macro beside an open task with its linked discussion and code change."
+                  />
+                </figure>
+                <div class="block-copy">
+                  <div>
+                    <p class="block-name">
+                      <svg class="icon" aria-hidden="true">
+                        <use href="#i-task" />
+                      </svg>
+                      Tasks
+                    </p>
+                    <h3>Tasks that start where the conversation happens.</h3>
+                    <p class="block-keys">
+                      <span><kbd>c</kbd><kbd>t</kbd> new task</span>
+                      <a href="https://docs.macro.com/product/tasks"
+                        >Tasks docs</a
+                      >
+                    </p>
+                  </div>
+                  <ul class="ticks">
+                    <li>
+                      Create a task from an email, a message, a doc or a
+                      checklist bullet. It links back to where it came from.
+                    </li>
+                    <li>
+                      Group tasks into projects and track them in lists, boards
+                      and saved views.
+                    </li>
+                    <li>
+                      Assign a task to a teammate or an agent. Agents update
+                      the status as they work.
+                    </li>
+                  </ul>
+                </div>
+              </article>
+
+              <article
+                class="block"
+                id="docs"
+                data-block="Docs"
+                data-icon="i-doc"
+              >
+                <figure class="shot">
+                  <img
+                    src="assets/blocks/docs.webp"
+                    width="1800"
+                    height="1012"
+                    loading="lazy"
+                    alt="A product requirements doc in Macro with tags, assignees and collaborative content."
+                  />
+                </figure>
+                <div class="block-copy">
+                  <div>
+                    <p class="block-name">
+                      <svg class="icon" aria-hidden="true">
+                        <use href="#i-doc" />
+                      </svg>
+                      Docs
+                    </p>
+                    <h3>Markdown docs that feel like one shared computer.</h3>
+                    <p class="block-keys">
+                      <a href="https://docs.macro.com/product/docs">Read more</a>
+                    </p>
+                  </div>
+                  <ul class="ticks">
+                    <li>
+                      Real-time collaboration on CRDTs, with offline editing,
+                      history and forking.
+                    </li>
+                    <li>
+                      Mention emails, tasks, messages, companies and contacts
+                      inside any doc.
+                    </li>
+                    <li>
+                      Embed a database view or a live query result. Agents edit
+                      as peers, whether the doc is open or closed.
+                    </li>
+                  </ul>
+                </div>
+              </article>
+
+              <article
+                class="block"
+                id="agent-block"
+                data-block="Agents"
+                data-icon="i-agent"
+              >
+                <figure class="shot">
+                  <img
+                    src="assets/blocks/agents.webp"
+                    width="1800"
+                    height="1012"
+                    loading="lazy"
+                    alt="A coding agent session in Macro with tool calls, a passing audit and a linked pull request."
+                  />
+                </figure>
+                <div class="block-copy">
+                  <div>
+                    <p class="block-name">
+                      <svg class="icon" aria-hidden="true">
+                        <use href="#i-agent" />
+                      </svg>
+                      Agents
+                    </p>
+                    <h3>Agents that start with your team's context.</h3>
+                    <p class="block-keys">
+                      <span><kbd>g</kbd><kbd>a</kbd> open agents</span>
+                      <a href="https://docs.macro.com/product/agents"
+                        >Agents docs</a
+                      >
+                    </p>
+                  </div>
+                  <ul class="ticks">
+                    <li>
+                      DM an agent, mention one in a channel, or assign it a
+                      task.
+                    </li>
+                    <li>
+                      Agents see what you can see and act with your
+                      permissions. Their work is attributed to you.
+                    </li>
+                    <li>
+                      Hand over an engineering task and get a pull request back,
+                      with the session linked to the task.
+                    </li>
+                  </ul>
+                </div>
+              </article>
+
+              <article
+                class="block"
+                id="crm"
+                data-block="CRM"
+                data-icon="i-crm"
+              >
+                <figure class="shot">
+                  <img
+                    src="assets/blocks/crm.webp"
+                    width="1800"
+                    height="1012"
+                    loading="lazy"
+                    alt="A CRM board in Macro with demo companies grouped by pipeline stage, each with an owner and revenue."
+                  />
+                </figure>
+                <div class="block-copy">
+                  <div>
+                    <p class="block-name">
+                      <svg class="icon" aria-hidden="true">
+                        <use href="#i-crm" />
+                      </svg>
+                      CRM
+                    </p>
+                    <h3>A CRM that lives inside your email and chat.</h3>
+                    <p class="block-keys">
+                      <a href="https://docs.macro.com/product/crm">CRM docs</a>
+                    </p>
+                  </div>
+                  <ul class="ticks">
+                    <li>
+                      Company and contact records collect their emails, files,
+                      tasks, calls and discussions.
+                    </li>
+                    <li>
+                      Mention a company in any message or task and the record
+                      links back to it.
+                    </li>
+                    <li>
+                      Custom pipelines and deal stages, in board and list
+                      views.
+                    </li>
+                  </ul>
+                </div>
+              </article>
+
+              <article
+                class="block"
+                id="databases"
+                data-block="Databases"
+                data-icon="i-db"
+              >
+                <figure class="shot">
+                  <img
+                    src="assets/blocks/databases.webp"
+                    width="1800"
+                    height="1012"
+                    loading="lazy"
+                    alt="An example database in Macro with dates, amounts, categories and related records."
+                  />
+                </figure>
+                <div class="block-copy">
+                  <div>
+                    <p class="block-name">
+                      <svg class="icon" aria-hidden="true">
+                        <use href="#i-db" />
+                      </svg>
+                      Databases
+                    </p>
+                    <h3>Tables for the work that is not a task or a deal.</h3>
+                    <p class="block-keys">
+                      <a href="https://docs.macro.com/product/databases"
+                        >Databases docs</a
+                      >
+                    </p>
+                  </div>
+                  <ul class="ticks">
+                    <li>
+                      Typed columns, relations, and saved table or board views.
+                    </li>
+                    <li>Rows link to people, tasks and files.</li>
+                    <li>
+                      Ask an agent to create tables, update records or answer
+                      questions about your data.
+                    </li>
+                  </ul>
+                </div>
+              </article>
+
+              <article
+                class="block"
+                id="calls"
+                data-block="Calls"
+                data-icon="i-call"
+              >
+                <figure class="shot">
+                  <img
+                    src="assets/blocks/calls.webp"
+                    width="1800"
+                    height="1012"
+                    loading="lazy"
+                    alt="A recorded group call in Macro with playback controls and a transcript labelled by speaker."
+                  />
+                </figure>
+                <div class="block-copy">
+                  <div>
+                    <p class="block-name">
+                      <svg class="icon" aria-hidden="true">
+                        <use href="#i-call" />
+                      </svg>
+                      Calls
+                    </p>
+                    <h3>Calls that leave a record.</h3>
+                    <p class="block-keys">
+                      <a href="https://docs.macro.com/product/calls"
+                        >Calls docs</a
+                      >
+                    </p>
+                  </div>
+                  <ul class="ticks">
+                    <li>
+                      Call a teammate or start a call in a channel, with video
+                      and screen sharing.
+                    </li>
+                    <li>
+                      Send a meeting link to anyone. Guests do not need a Macro
+                      account.
+                    </li>
+                    <li>
+                      Every call is recorded and transcribed, with speaker
+                      labels and a summary your agents can use.
+                    </li>
+                  </ul>
+                </div>
+              </article>
+
+              <article
+                class="block"
+                id="calendar"
+                data-block="Calendar"
+                data-icon="i-cal"
+              >
+                <figure class="shot">
+                  <img
+                    src="assets/blocks/calendar.webp"
+                    width="1800"
+                    height="1012"
+                    loading="lazy"
+                    alt="The Macro calendar showing a full week, connected calendars and booking links."
+                  />
+                </figure>
+                <div class="block-copy">
+                  <div>
+                    <p class="block-name">
+                      <svg class="icon" aria-hidden="true">
+                        <use href="#i-cal" />
+                      </svg>
+                      Calendar
+                    </p>
+                    <h3>Your week, next to your work.</h3>
+                    <p class="block-keys">
+                      <span><kbd>g</kbd><kbd>r</kbd> open calendar</span>
+                      <a href="https://docs.macro.com/product/calendar"
+                        >Calendar docs</a
+                      >
+                    </p>
+                  </div>
+                  <ul class="ticks">
+                    <li>Connect multiple Google and Outlook calendars.</li>
+                    <li>
+                      Share personal or team booking links. Guests do not need
+                      an account.
+                    </li>
+                    <li>
+                      Ask an agent to find time, schedule meetings and update
+                      events.
+                    </li>
+                  </ul>
+                </div>
+              </article>
+            </div>
+          </div>
+
+          <p class="more-blocks">
+            <strong>Also built in:</strong> Canvas, Drive, pull requests,
+            spreadsheets, forms, snippets, routines and skills.
+            <a href="https://docs.macro.com">Read the docs</a>
+          </p>
+        </div>
+      </section>
+
+      <section class="section" id="linked">
+        <div class="wrap">
+          <div class="section-head">
+            <div>
+              <span class="eyebrow">How it holds together</span>
+              <h2>Every link works in both directions.</h2>
+            </div>
+            <p>
+              Macro stores references as a graph. Open any record and you can
+              see every conversation, task and file that points at it.
+            </p>
+          </div>
+
+          <div class="linked">
+            <div class="app-panel" aria-label="Example: a company record in Macro and everything that mentions it">
+              <div class="app-panel-inner">
+                <h3 class="record-title">
+                  <svg class="icon" aria-hidden="true">
+                    <use href="#i-crm" />
+                  </svg>
+                  Acme
+                </h3>
+                <p class="record-props">
+                  <span>Stage <b>Trialing</b></span>
+                  <span>Owner <b>Dana</b></span>
+                  <span>Domain <b>acme.com</b></span>
+                </p>
+                <span class="pane-label">Mentioned in · 5</span>
+                <ul class="backlinks">
+                  <li>
+                    <svg class="icon" aria-hidden="true">
+                      <use href="#i-chat" />
+                    </svg>
+                    <span>#support · Acme says exports lose the timezone</span>
+                    <em>Message</em>
+                  </li>
+                  <li>
+                    <svg class="icon" aria-hidden="true">
+                      <use href="#i-task" />
+                    </svg>
+                    <span>Keep timezone column in CSV export</span>
+                    <em>Task</em>
+                  </li>
+                  <li>
+                    <svg class="icon" aria-hidden="true">
+                      <use href="#i-mail" />
+                    </svg>
+                    <span>CSV export drops the timezone column</span>
+                    <em>Email</em>
+                  </li>
+                  <li>
+                    <svg class="icon" aria-hidden="true">
+                      <use href="#i-call" />
+                    </svg>
+                    <span>Acme onboarding call</span>
+                    <em>Call</em>
+                  </li>
+                  <li>
+                    <svg class="icon" aria-hidden="true">
+                      <use href="#i-doc" />
+                    </svg>
+                    <span>Renewal notes</span>
+                    <em>Doc</em>
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="principles">
+              <div>
+                <h3>Bidirectional links</h3>
+                <p>
+                  Mention a doc in a message and both know about each other.
+                  You can follow the chain from the customer email to the task
+                  to the pull request.
+                </p>
+              </div>
+              <div>
+                <h3>Permissions follow channels</h3>
+                <p>
+                  Anything you mention in a channel is shared with its members.
+                  Join a channel and you gain access. Leave and you lose it.
+                </p>
+              </div>
+              <div>
+                <h3>Team memory</h3>
+                <p>
+                  Macro builds memory from email, messages, tasks, docs and
+                  calls across your team. It refreshes every night.
+                </p>
+              </div>
+              <div>
+                <h3>One inbox</h3>
+                <p>
+                  Emails, channel messages, task assignments, mentions and
+                  agent replies arrive in one list.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section band" id="agents">
+        <div class="wrap">
+          <div class="section-head">
+            <div>
+              <span class="eyebrow">Agents</span>
+              <h2>Use our agents, or bring the ones you already run.</h2>
+            </div>
+            <p>
+              Agents in Macro can search your workspace, write docs, draft
+              email, update tasks and open pull requests. They can only see
+              what you can see.
+            </p>
+          </div>
+
+          <div class="agent-grid">
+            <ul class="agent-ways">
+              <li>
+                <h3>Macro's models</h3>
+                <p>
+                  Start a chat, mention <code>@Macro</code> in a channel, or
+                  assign a task.
+                </p>
+              </li>
+              <li>
+                <h3>Your coding agents</h3>
+                <p>
+                  Connect Cursor with your own API key, or bring agents running
+                  on your own machine into Macro through macrod.
+                </p>
+              </li>
+              <li>
+                <h3>Routines</h3>
+                <p>
+                  Run work on a schedule or when something happens in your
+                  workspace.
+                </p>
+              </li>
+              <li>
+                <h3>Skills</h3>
+                <p>
+                  Save reusable instructions so you explain a process once.
+                </p>
+              </li>
+            </ul>
+
+            <div class="terminal">
+              <div class="terminal-head">
+                <span>Connect Claude Code</span>
+                <button class="copy-button" type="button" data-copy="mcp-command">
+                  <svg class="icon" aria-hidden="true">
+                    <use href="#i-copy" />
+                  </svg>
+                  <span data-copy-label>Copy</span>
+                </button>
+              </div>
+              <pre><code><span class="prompt">$ </span><span id="mcp-command">claude mcp add --transport http macro https://mcp-server.macro.com/mcp</span></code></pre>
+              <p class="terminal-note">
+                Works with Claude Code, Codex and any MCP client.
+                <a href="https://docs.macro.com/AI/mcp/overview">MCP setup</a>
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="keyboard">
+        <div class="wrap">
+          <div class="section-head">
+            <div>
+              <span class="eyebrow">Keyboard first</span>
+              <h2>Fast enough that you stop reaching for the mouse.</h2>
+            </div>
+            <p>
+              Macro is built in SolidJS and Rust. The same keys move you
+              through email, messages and tasks, and a built-in window manager
+              gives you three or more splits on a large monitor.
+            </p>
+          </div>
+
+          <ul class="keys" data-keys>
+            <li class="key" data-key="j k">
+              <span class="key-caps"><kbd>j</kbd><kbd>k</kbd></span>
+              <p>Move down and up any list</p>
+            </li>
+            <li class="key" data-key="e">
+              <span class="key-caps"><kbd>e</kbd></span>
+              <p>Archive and move on</p>
+            </li>
+            <li class="key" data-key="c t">
+              <span class="key-caps"><kbd>c</kbd><kbd>t</kbd></span>
+              <p>Create a task from anywhere</p>
+            </li>
+            <li class="key" data-key="c a">
+              <span class="key-caps"><kbd>c</kbd><kbd>a</kbd></span>
+              <p>Start an agent chat</p>
+            </li>
+            <li class="key" data-key="g h">
+              <span class="key-caps"><kbd>g</kbd><kbd>h</kbd></span>
+              <p>Go to Home</p>
+            </li>
+            <li class="key" data-key="/">
+              <span class="key-caps"><kbd>/</kbd></span>
+              <p>Search the whole workspace</p>
+            </li>
+            <li class="key" data-key=";">
+              <span class="key-caps"><kbd>;</kbd></span>
+              <p>Insert a saved snippet</p>
+            </li>
+            <li class="key" data-key="shift enter">
+              <span class="key-caps"><kbd>shift</kbd><kbd>enter</kbd></span>
+              <p>Open the item in a new split</p>
+            </li>
+          </ul>
+          <p class="keys-note">Try them. The keys on this page light up.</p>
+        </div>
+      </section>
+
+      <section class="section" id="switch">
+        <div class="wrap">
+          <div class="section-head">
+            <div>
+              <span class="eyebrow">Switching</span>
+              <h2>Bring your work with you.</h2>
+            </div>
+            <p>
+              Connect the tool, tell the Macro agent what to import, and review
+              its plan before it creates anything. You can move one project
+              first.
+            </p>
+          </div>
+
+          <table class="switch-table">
+            <tbody>
+              <tr>
+                <th scope="row">Notion</th>
+                <td>
+                  <b>Pages become docs</b>, in folders that keep the page
+                  hierarchy. Databases keep their rows and relations. Task
+                  trackers become tasks.
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">Linear</th>
+                <td>
+                  <b>Issues become tasks.</b> Teams, projects and initiatives
+                  become projects. Your Linear workspace stays unchanged.
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">Slack</th>
+                <td>
+                  <b>Channels are recreated</b> with the members already on
+                  your Macro team. This brings names and membership, not
+                  messages.
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">Gmail and Outlook</th>
+                <td>
+                  <b>Connect the account.</b> Macro syncs with it directly, so
+                  your mail and history are already there.
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">Everything else</th>
+                <td>
+                  <b>Use MCP.</b> Connect the tool's MCP server and ask an
+                  agent to bring over the work you need.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="switch-note">
+            <a href="https://docs.macro.com/switch-to-macro"
+              >Read the switching guide</a
+            >
+          </p>
+        </div>
+      </section>
+
+      <section class="section" id="pricing">
+        <div class="wrap">
+          <div class="section-head">
+            <div>
+              <span class="eyebrow">Pricing</span>
+              <h2>One price for the whole workspace.</h2>
+            </div>
+            <p>
+              Pro is a flat price per seat with every Block included. Plans
+              differ in models, AI usage, connected email accounts and storage.
+            </p>
+          </div>
+
+          <div class="plans">
+            <div class="plan">
+              <h3>Free</h3>
+              <p class="plan-price">$0</p>
+              <ul class="ticks">
+                <li>Access to Haiku</li>
+                <li>MCP access</li>
+                <li>2 connected email accounts</li>
+                <li>5 GB storage</li>
+              </ul>
+              <a class="btn btn-quiet" href="https://macro.com/app"
+                >Start free</a
+              >
+            </div>
+            <div class="plan featured">
+              <h3>Pro</h3>
+              <p class="plan-price">$40 <small>per seat / month</small></p>
+              <ul class="ticks">
+                <li>All agents and all models</li>
+                <li>Unlimited connected email accounts</li>
+                <li>No email watermark</li>
+                <li>100 GB storage</li>
+              </ul>
+              <a class="btn btn-on-field" href="https://macro.com/app"
+                >Get Pro</a
+              >
+            </div>
+            <div class="plan">
+              <h3>Max</h3>
+              <p class="plan-price">$200 <small>per seat / month</small></p>
+              <ul class="ticks">
+                <li>Everything in Pro</li>
+                <li>10x more AI usage than Pro</li>
+                <li>1 TB storage</li>
+                <li>Priority support</li>
+              </ul>
+              <a class="btn btn-quiet" href="https://macro.com/app">Get Max</a>
+            </div>
+          </div>
+          <p class="plans-note">
+            Prices in US dollars.
+          </p>
+        </div>
+      </section>
+
+      <section class="section" id="security">
+        <div class="wrap">
+          <div class="section-head">
+            <div>
+              <span class="eyebrow">Open and audited</span>
+              <h2>Read the code. Read the reports.</h2>
+            </div>
+            <p>
+              Your company runs on this, so you should be able to inspect it.
+            </p>
+          </div>
+
+          <div class="trust">
+            <div>
+              <h3>Open source</h3>
+              <p>
+                Macro is open source under the AGPLv3. Read the code, run it
+                locally, or contribute.
+              </p>
+              <p>
+                <a href="https://github.com/macro-inc/macro">View on GitHub</a>
+              </p>
+            </div>
+            <div>
+              <h3>SOC 2 Type II and ISO 27001</h3>
+              <p>
+                Review our controls, policies and subprocessors, and request
+                the documents you need for a security review.
+              </p>
+              <p>
+                <a href="https://security.macro.com">Visit the Trust Center</a>
+              </p>
+            </div>
+            <div>
+              <h3>Self-hosting</h3>
+              <p>
+                You can run Macro on your own infrastructure. Certifications
+                for the hosted product do not cover your own deployment.
+              </p>
+              <p>
+                <a href="https://docs.macro.com/security">Security docs</a>
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="why">
+        <div class="wrap why">
+          <div>
+            <span class="eyebrow">Why we built it</span>
+            <h2>We wanted one operating system for our company.</h2>
+          </div>
+          <div class="why-body">
+            <p>
+              We used Slack, Linear, Notion, HubSpot and Superhuman. They are
+              good products, but they do not work together as one system.
+            </p>
+            <p>
+              As our last company grew to about 20 people, every team got its
+              own tools, and the company was held together by MCP and Zapier.
+            </p>
+            <p class="pull">The company was not computable.</p>
+            <p>
+              Macro is a redesign of work software from the ground up as a
+              single system. Our team of about 15 has run on it for two years.
+            </p>
+            <p class="why-sign">
+              The Macro team, New York and Toronto
+            </p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <section class="closing">
+      <div class="wrap">
+        <h2>Put your team on one page.</h2>
+        <div class="closing-row">
+          <a class="btn btn-on-field" href="https://macro.com/app"
+            >Sign up free</a
+          >
+          <a
+            class="btn btn-outline-field"
+            href="https://macro.com/app/book/6de4003c-15e4-549f-b5a9-0e930bbf56e4/macro-demo"
+            >Book a demo</a
+          >
+          <p>
+            Connect Gmail or Outlook to start.
+            <a href="https://docs.macro.com/getting-started"
+              >Setup takes about 15 minutes</a
+            >
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        <div class="footer-brand">
+          <a class="brand" href="#top">
+            <svg aria-hidden="true"><use href="#i-logo" /></svg>
+            Macro
+          </a>
+          <p>The linked workspace for your team. Designed in New York and Toronto.</p>
+        </div>
+        <div>
+          <h2>Product</h2>
+          <ul>
+            <li><a href="#blocks">Blocks</a></li>
+            <li><a href="#agents">Agents</a></li>
+            <li><a href="#switch">Switching</a></li>
+            <li><a href="#pricing">Pricing</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Get Macro</h2>
+          <ul>
+            <li><a href="https://macro.com/app">Web app</a></li>
+            <li>
+              <a href="https://apps.apple.com/us/app/macro-app/id6743133649"
+                >iOS app</a
+              >
+            </li>
+            <li>
+              <a
+                href="https://play.google.com/store/apps/details?id=com.macro.workspace.mobile"
+                >Android app</a
+              >
+            </li>
+            <li><a href="https://docs.macro.com">Docs</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Company</h2>
+          <ul>
+            <li><a href="https://github.com/macro-inc/macro">GitHub</a></li>
+            <li><a href="https://security.macro.com">Trust Center</a></li>
+            <li><a href="https://macro.com/privacy">Privacy</a></li>
+            <li><a href="https://macro.com/terms">Terms</a></li>
+          </ul>
+        </div>
+      </div>
+    </footer>
+
+    <script src="site.js"></script>
+  </body>
+</html>
