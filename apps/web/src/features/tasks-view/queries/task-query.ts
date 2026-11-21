@@ -40,19 +40,32 @@ const entityPropertyLiteral = (
 
 const documentScope = (tab: TaskTab, userId: string | undefined): TaskAst => {
   const task = literal('dst', 'task');
-  if ((tab === 'my-tasks' || tab === 'created-by-me') && !userId) {
-    return literal('id', NIL_UUID);
-  }
-  if (tab === 'created-by-me') {
-    return { '&': [task, literal('o', userId)] };
+  if (tab === 'my-tasks') {
+    if (!userId) return literal('id', NIL_UUID);
+    return {
+      '&': [
+        task,
+        {
+          '|': [
+            literal('o', userId),
+            {
+              l: {
+                prop: {
+                  pd: SYSTEM_PROPERTY_IDS.ASSIGNEES,
+                  v: { er: userId },
+                },
+              },
+            },
+          ],
+        },
+      ],
+    };
   }
 
   return task;
 };
 
 const propertyScope = (
-  tab: TaskTab,
-  userId: string | undefined,
   compiledFacets: TaskAst | undefined,
   reference: TaskReferenceScope | undefined,
   dueDate?: TaskDatePredicate
@@ -72,9 +85,6 @@ const propertyScope = (
     );
   }
 
-  if (tab === 'my-tasks' && userId) {
-    groups.push(entityPropertyLiteral(SYSTEM_PROPERTY_IDS.ASSIGNEES, userId));
-  }
   if (reference) {
     groups.push(
       entityPropertyLiteral(reference.propertyDefinitionId, reference.entityId)
@@ -211,8 +221,6 @@ export function buildTaskQuery(
   });
 
   const properties = propertyScope(
-    options.tab,
-    options.userId,
     compiledFacets.propf,
     options.reference,
     options.dueDate

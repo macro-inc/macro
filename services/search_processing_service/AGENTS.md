@@ -127,6 +127,7 @@ OpenSearch, and exposes backfill HTTP routes for each.
   (one bulk update for the batch's trashed and kept documents). A full index
   that read the link just before the release and lands after it leaves the
   parent true until its next full index.
+- Preserve DOCUMENT and TASK property namespaces on full and incremental document indexing; apply the additive `properties.entity_type` keyword mapping before indexer rollout and backfill existing document properties before enabling namespace-aware search.
 
 ## Related
 

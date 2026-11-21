@@ -532,6 +532,7 @@ const DOCUMENT_BODY = {
         type: 'nested',
         properties: {
           definition_id: { type: 'keyword' },
+          entity_type: { type: 'keyword' },
           values: { type: 'keyword' },
           number_value: { type: 'double' },
           date_value: { type: 'date' },

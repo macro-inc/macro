@@ -18,6 +18,11 @@ events shared with a channel the caller belongs to that are on none of
 their calendars. */
   calendar_event_scope?: CalendarEventSearchScope;
   collapse?: UnifiedSearchRequestCollapse;
+  /** Additional document/property expression in the GraphQL Soup filter shape.
+Restricts results to documents; supports Boolean composition and is ANDed
+with flat filters and access checks.
+Unsupported scopes and predicates are rejected rather than ignored. */
+  filter_expression?: unknown;
   /** Entity filters in the same shape as soup. Entity types with a NIL UUID in their primary ID field are excluded from search. */
   filters?: EntityFilters;
   /** Opt in to searching the caller's team CRM companies (name/domain).

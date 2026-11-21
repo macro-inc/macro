@@ -228,7 +228,7 @@ async fn page(
     limit: i64,
 ) -> anyhow::Result<Vec<(String, String, After)>> {
     let grouped = matches!(shape, Shape::Grouped(_));
-    let mut transaction = begin_dynamic_query(pool).await?;
+    let mut transaction = begin_dynamic_query(pool, filter).await?;
     let source_ids = fetch_user_source_ids(&mut transaction, viewer).await?;
     let counted = DocumentGrants::count(&mut transaction, filter, &source_ids).await?;
     let mut document_ids = DocumentIdArrays::starting_at(first_document_id_slot(sort, grouped));
@@ -413,12 +413,12 @@ async fn counted_grants_list_the_same_pages_as_estimated_ones(pool: PgPool) -> a
 /// at production's `random_page_cost`.
 async fn plan(pool: &PgPool, viewer: &str, grants: Gate) -> anyhow::Result<String> {
     let sort = DynamicSort::from(SimpleSortMethod::ViewedUpdated);
-    let mut transaction = begin_dynamic_query(pool).await?;
+    let filter = everything();
+    let mut transaction = begin_dynamic_query(pool, &filter).await?;
     sqlx::query!("SET LOCAL random_page_cost = 1.1")
         .execute(&mut *transaction)
         .await?;
     let source_ids = fetch_user_source_ids(&mut transaction, viewer).await?;
-    let filter = everything();
     let counted = DocumentGrants::count(&mut transaction, &filter, &source_ids).await?;
     let mut document_ids = DocumentIdArrays::starting_at(first_document_id_slot(sort, false));
     let builder = build_query(&filter, false, sort, grants(counted), &mut document_ids);
@@ -518,7 +518,7 @@ async fn a_caller_over_the_counted_limit_keeps_the_estimated_gate(
     .execute(&pool)
     .await?;
 
-    let mut transaction = begin_dynamic_query(&pool).await?;
+    let mut transaction = begin_dynamic_query(&pool, &everything()).await?;
     let source_ids = fetch_user_source_ids(&mut transaction, TEAM_ONLY).await?;
     assert_eq!(
         DocumentGrants::count(&mut transaction, &everything(), &source_ids).await?,

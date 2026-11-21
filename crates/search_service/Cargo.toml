@@ -31,6 +31,7 @@ entity_access = { path = "../entity_access", default-features = false, features 
 ] }
 indexmap = { workspace = true }
 item_filters = { path = "../item_filters" }
+graphql_soup_filter_input = { path = "../graphql_soup_filter_input" }
 macro_authorization = { path = "../macro_authorization" }
 macro_db_client = { path = "../macro_db_client" }
 models_properties = { path = "../models_properties" }

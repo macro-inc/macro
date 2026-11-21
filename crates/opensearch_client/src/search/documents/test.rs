@@ -132,6 +132,40 @@ fn test_build_bool_query_join_shape_sub_type_filter() -> anyhow::Result<()> {
 }
 
 #[test]
+fn personal_tasks_union_owner_and_assignee_without_replacing_access() -> anyhow::Result<()> {
+    let expression: filter_ast::Expr<item_filters::ast::document::DocumentLiteral> =
+        serde_json::from_value(serde_json::json!({"&": [
+            {"l": {"dst": "task"}},
+            {"|": [
+                {"l": {"o": "macro|creator@example.com"}},
+                {"l": {"prop": {
+                    "pd": "00000001-0000-0000-0000-000000000001",
+                    "v": {"er": "macro|viewer@example.com"}
+                }}}
+            ]}
+        ]}))?;
+    let expression = filter_expression::compile_filter_expression(Some(&expression), None)?;
+    let expected = expression.to_query()?.to_json();
+    let builder = DocumentQueryBuilder::new(vec!["launch".into()])
+        .user_id("macro|viewer@example.com")
+        .ids(vec!["shared-task".into()])
+        .filter_expression(Some(expression));
+    let json = builder.build_bool_query()?.build().to_json();
+    let filters = json["bool"]["filter"].as_array().unwrap();
+    assert!(filters.contains(&expected));
+    assert!(
+        filters.iter().any(
+            |filter| filter["bool"]["should"].as_array().is_some_and(|branches| {
+                branches.iter().any(|branch| {
+                    branch["terms"]["entity_id"] == serde_json::json!(["shared-task"])
+                })
+            })
+        )
+    );
+    Ok(())
+}
+
+#[test]
 fn test_build_bool_query_join_shape_has_inner_hits() -> anyhow::Result<()> {
     let builder = DocumentQueryBuilder::new(vec!["foo".to_string(), "bar".to_string()])
         .match_type("partial")

@@ -85,6 +85,7 @@ pub fn to_indexed_properties(properties: Vec<IndexedEntityProperty>) -> Vec<Inde
         .into_iter()
         .map(|p| IndexedProperty {
             definition_id: p.definition_id,
+            entity_type: p.entity_type,
             values: p.values,
             number_value: p.number_value,
             date_value: p.date_value,

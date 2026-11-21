@@ -6575,6 +6575,10 @@ input GraphqlInitiativeLiteral @oneOf {
 	Exact notification state for the requester; also opts in.
 	"""
 	notificationState: NotificationState
+	"""
+	A property condition that composes with initiative ownership.
+	"""
+	property: GraphqlFilterPropertiesLiteral
 }
 
 """

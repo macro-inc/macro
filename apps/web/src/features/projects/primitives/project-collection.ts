@@ -130,11 +130,9 @@ export function createProjectCollection(capabilities: {
       dueAfter: dueAfter()
         ? new Date(`${dueAfter()}T00:00:00`).toISOString()
         : undefined,
-      assignee:
-        scope() === 'assigned-to-me' || mine()
-          ? capabilities.userId()
-          : undefined,
-      owner: scope() === 'created-by-me' ? capabilities.userId() : undefined,
+      assignee: mine() ? capabilities.userId() : undefined,
+      ownerOrAssignee:
+        scope() === 'assigned-to-me' ? capabilities.userId() : undefined,
       sort: sort(),
       descending: true,
     }),

@@ -156,7 +156,7 @@ it('leaves Tab to focus order while a project or task is open, mounted after its
 });
 
 it('clears a saved project view when a hotkey selects a built-in project tab', () => {
-  fixtures.tab = 'created-by-me';
+  fixtures.tab = 'team-tasks';
   render(() => {
     useHotKeyRoot();
     return <TasksSidebar />;

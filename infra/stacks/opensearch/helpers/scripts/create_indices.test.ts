@@ -41,6 +41,31 @@ test('the documents index gains the email attachment flag in place', () => {
   });
 });
 
+test('documents add a keyword namespace to existing nested properties', () => {
+  const spec = INDEX_SPECS.find((spec) => spec.aliasName === 'documents');
+  if (!spec) throw new Error('no documents index spec');
+  const { properties } = (
+    spec.body as {
+      mappings: { properties: Record<string, unknown> };
+    }
+  ).mappings;
+  const desired = properties.properties as {
+    properties: Record<string, unknown>;
+  };
+  const { entity_type: _, ...oldNested } = desired.properties;
+  const plan = planMappingConvergence({
+    desired: properties,
+    live: {
+      ...properties,
+      properties: { type: 'nested', properties: oldNested },
+    },
+  });
+
+  expect(plan.missingPaths).toEqual(['properties.entity_type']);
+  expect(plan.conflictPaths).toEqual([]);
+  expect(plan.updates).toEqual({ properties: properties.properties });
+});
+
 describe('planCreateIndex', () => {
   test('fresh env — index missing, alias free → create with alias', () => {
     const plan = planCreateIndex({

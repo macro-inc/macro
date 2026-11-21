@@ -54,6 +54,7 @@ per-entity-type search plus a unified search across them — mounted into
 
 ## Gotchas
 
+- Accept the document/property subset of GraphQL Soup expressions through `filter_expression`; validate bounds and reject unsupported scopes before lookups, then AND the expression with existing flat filters and authorization.
 - Search spans and logs never carry what the user typed: not the query, its
   terms, or the name term. Skip those arguments and record sizes and enums
   (`term_len`, `search.terms`, `search.search_on`). The unified

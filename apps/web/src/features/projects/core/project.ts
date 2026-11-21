@@ -11,7 +11,7 @@ export type Project = {
   completedTaskCount?: number;
 };
 
-export type ProjectScope = 'all' | 'assigned-to-me' | 'created-by-me';
+export type ProjectScope = 'all' | 'assigned-to-me';
 
 export type ProjectAccess = 'view' | 'comment' | 'edit' | 'owner';
 
@@ -35,6 +35,8 @@ export type ProjectFilters = {
   priority?: string;
   assignee?: string;
   owner?: string;
+  /** Match ownership or the Assignees property before pagination. */
+  ownerOrAssignee?: string;
   dueBefore?: string;
   dueAfter?: string;
   sort?: 'updated' | 'created';

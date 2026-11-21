@@ -56,6 +56,7 @@ events to the `macro.properties` Kafka topic.
   check the outbound-only build other services depend on.
 
 - `ExternalChat` currently has no property-storage mapping.
+- Read both DOCUMENT and TASK assignments for document search indexing, preserving each row's namespace; other entity index reads remain single-namespace.
 
 ## Gotchas
 

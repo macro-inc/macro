@@ -55,6 +55,7 @@ impl SkillSearcher for SearchServiceSkillSearcher {
                 SkillMatchType::Exact => models_search::MatchType::Exact,
             },
             filters: entity_filters_from_include(vec![UnifiedSearchIndex::Documents], base_filters),
+            filter_expression: None,
             search_on: models_search::SearchOn::Name,
             include_crm: false,
             calendar_event_scope: Default::default(),

@@ -67,6 +67,8 @@ projects.
   known bug is `#[ignore = "known bug: ..."]`; the fix removes the ignore.
 
 ## Gotchas
+- Compile document/property Soup expressions as required Boolean filters; OR requires `minimum_should_match: 1`, and neither an expression owner nor ID replaces authenticated access constraints. Reject unsupported predicates and property namespaces.
+- Keep property definition, namespace, and value predicates inside the same nested object; legacy entries without namespaces match only their canonical document subtype.
 
 - Map a failed `.send()` with `OpensearchClientError::request_failed` and a
   failed body read with `deserialization_failed`. Both take an

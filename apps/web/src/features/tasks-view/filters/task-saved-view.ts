@@ -35,7 +35,7 @@ const filtersSchema = z
     statusOptionIds: idsSchema,
     priorityOptionIds: idsSchema,
     projectIds: idsSchema.optional(),
-    // Built-in tabs can add the viewer to 100 explicitly selected people.
+    // Older saved views added the viewer to 100 explicitly selected people.
     assignees: z.array(personSchema).max(101),
     creators: z.array(personSchema).max(101),
     tags: z
@@ -97,10 +97,14 @@ const sortItemSchema = z
   })
   .strict();
 const sortSchema = z.array(sortItemSchema).max(3);
+const scopeSchema = z
+  .enum(['my-tasks', 'created-by-me'])
+  .transform(() => 'my-tasks' as const);
 const taskSavedViewSchema = z
   .object({
     kind: z.literal('tasks'),
     version: z.literal(1),
+    scope: scopeSchema.optional(),
     filters: filtersSchema,
     dueDate: dueDateSchema.optional(),
     layout: layoutSchema.default('list'),
@@ -137,6 +141,7 @@ function canonical(config: TaskSavedViewConfig): TaskSavedViewConfig {
   return {
     kind: 'tasks',
     version: 1,
+    ...(config.scope && { scope: config.scope }),
     ...(config.dueDate && { dueDate: { ...config.dueDate } }),
     layout: config.layout,
     groupBy: config.groupBy,
@@ -213,6 +218,7 @@ export function readTaskSavedView(value: unknown): TaskSavedViewRead {
         },
       },
     };
+  const scope = scopeSchema.safeParse(readable.data.scope);
   const layout = layoutSchema.safeParse(readable.data.layout ?? 'list');
   const groupBy = groupBySchema.safeParse(
     readable.data.groupBy ?? TASK_DEFAULT_GROUP_BY['team-tasks']
@@ -280,6 +286,7 @@ export function readTaskSavedView(value: unknown): TaskSavedViewRead {
     config: canonical({
       kind: 'tasks',
       version: 1,
+      ...(scope.success && { scope: scope.data }),
       layout: layout.success ? layout.data : 'list',
       groupBy: groupBy.success
         ? groupBy.data
@@ -311,26 +318,6 @@ export function readTaskSavedView(value: unknown): TaskSavedViewRead {
 const optionId = (id: string, options: typeof TASK_STATUS_OPTIONS): string =>
   options.find((option) => option.id === id)?.propertyOptionId ?? id;
 
-/** Folds a built-in tab into ordinary person alternatives without losing other filters. */
-export function withTaskTabFilters(
-  tab: TaskTab,
-  facets: FacetSelection
-): FacetSelection {
-  if (tab === 'my-tasks')
-    return {
-      ...facets,
-      assignees: [...new Set([...(facets.assignees ?? []), TASK_VIEWER])],
-    };
-  if (tab === 'created-by-me')
-    return {
-      ...facets,
-      'created-by': [
-        ...new Set([...(facets['created-by'] ?? []), TASK_VIEWER]),
-      ],
-    };
-  return facets;
-}
-
 /** Captures filters, layout, grouping, and sort; text search stays local. */
 export function captureTaskSavedView(input: {
   tab: TaskTab;
@@ -354,7 +341,7 @@ export function captureTaskSavedView(input: {
       return err('A selected tag is unavailable. Remove it before saving.');
     tags.push({ optionId: id, propertyDefinitionId: definition });
   }
-  const facets = withTaskTabFilters(input.tab, input.facets);
+  const facets = input.facets;
   const people = (values: string[]) =>
     values.map((id) =>
       id === TASK_VIEWER
@@ -364,6 +351,7 @@ export function captureTaskSavedView(input: {
   return decodeTaskSavedView({
     kind: 'tasks',
     version: 1,
+    ...(input.tab === 'my-tasks' && { scope: 'my-tasks' }),
     layout: input.layout,
     groupBy: input.groupBy,
     sort: input.sort,
@@ -398,7 +386,7 @@ export function materializeTaskSavedView(config: TaskSavedViewConfig): {
   const people = (values: TaskSavedViewConfig['filters']['assignees']) =>
     values.map((value) => (value.type === 'viewer' ? TASK_VIEWER : value.id));
   return {
-    tab: 'team-tasks',
+    tab: config.scope ?? 'team-tasks',
     layout: config.layout,
     groupBy: config.groupBy,
     sort: config.sort.map((item) => ({ ...item })),

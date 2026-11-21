@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SET LOCAL enable_seqscan = off",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "640b36169b7701f2fc4499ac7495a8a31a5fd5f9e9c2d15eb9cf22b7aa2c53cc"
+}

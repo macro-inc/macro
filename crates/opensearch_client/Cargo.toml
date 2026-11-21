@@ -28,6 +28,8 @@ anyhow = { workspace = true }
 chrono = { workspace = true }
 h2 = { workspace = true }
 hyper = { workspace = true }
+filter_ast = { path = "../filter_ast" }
+item_filters = { path = "../item_filters" }
 models_opensearch = { path = "../models_opensearch" }
 models_search_cursor = { path = "../models_search_cursor" }
 opensearch = { version = "2.3.0", default-features = false, features = ["rustls-tls"] }

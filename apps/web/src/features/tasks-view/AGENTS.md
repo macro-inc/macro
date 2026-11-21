@@ -18,6 +18,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 
 ## Gotchas
 
+- Keep My tasks membership as creator OR assignee in the query and optimistic predicate, independently of completion and editable facets; send the list's document/property expressions unchanged to search through the shared GraphQL converter, and never merge client pages. Normalize retired creator tabs at URL and persistence boundaries.
 - Group task lists by the Project property, matching the Project column and Board. The server labels project groups with the initiative name the viewer can read, and the cache's local grouping projection carries that label; a header resolves the name through the authorized project identity query only while its group is still labeled by its key. Projects sort by name with No Project last in every layout.
 - Keep Priority groups in Urgent, High, Medium, Low order with unset priority last through the shared Soup group comparator; group presentation does not follow item sort direction or stored option display order.
 - Filter tasks by Project through the existing Project entity-reference property, with OR within projects and AND across facets; keep IDs in saved views and entry state, use the authorized paged project picker source (including read-only projects), and omit the facet in a single-project host. No project and AI project resolution remain unsupported.
@@ -53,11 +54,11 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Keep the touch sidebar button on the left and Search/Filters on the right; task views, projects, and saved views live in the sidebar sheet. `CollectionPanes` retains the list beside task/project details on wide touch.
 - Tab and Shift+Tab cycle sidebar tabs only over a list. Keep `TasksSidebar`'s key-time check for an open project or task: the sidebar remounts whenever the view crosses its layout breakpoint, so it registers after an open pane and eclipses any override the pane holds.
 
-- Save filters, relative due dates or valid calendar bounds, selected layout, grouping, and ordered sort directions; keep text search and scroll state local, and capture implicit person conditions as normal OR-valued facets.
+- Save filters, relative due dates or valid calendar bounds, selected layout, grouping, and ordered sort directions; keep text search and scroll state local, and preserve personal membership separately from explicit OR-valued person facets.
 - Preserve stable tag/property bindings when labels disappear; skip unsupported or malformed conditions without discarding supported filters.
 - Label the semantic viewer token Me, explain it with “Matches whoever opens this saved view,” and resolve it only when executing a filter; a selected fixed user stays fixed.
 - Limit new Assignee choices to team members and available agents without contact discovery; reuse existing selected-first ordering at opening and keep rows stable while selecting; preserve selected outsiders, the semantic Me token, Unassigned, and broad Created by options.
-- Keep saved views on All Tasks with every restriction in editable facets; accept only the final v1 person-filter format, without a separate Scope control.
+- Preserve My tasks creator-or-assignee membership in the optional saved scope and apply its restored tab when loading or duplicating a view; keep explicit person facets independent, leave filter-only v1 definitions unchanged, and accept retired creator scope values on read without rewriting records.
 - Do not persist temporary saved-view filters, including due-date predicates, in entry snapshots; detail navigation discards those edits but retains the saved-view ID.
 - Pass saved-view state through the existing Tasks search codec; split URLs namespace it as `s0.tasks.savedView`.
 - Keep embedded Project/CRM task consumers free of saved-view management.

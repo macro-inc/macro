@@ -159,6 +159,7 @@ impl AsyncTool<SearchToolContext> for ContentSearch {
             query: self.query.to_owned(),
             match_type: self.match_type.into(),
             filters: content_filters(&self.entity_types, &self.agent_session_ids, base_filters),
+            filter_expression: None,
             search_on: models_search::SearchOn::Content,
             include_crm: false,
             calendar_event_scope: Default::default(),

@@ -1,4 +1,5 @@
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
+import { makeGraphqlFilters } from '@queries/soup/graphql/ast';
 import { describe, expect, it, vi } from 'vitest';
 import {
   createDateBucketBoundaries,
@@ -56,13 +57,14 @@ describe('task reference scope', () => {
       facets: {},
       reference,
     });
-    expect(request.body.filters?.property_filters).toEqual([
-      {
-        property_definition_id: reference.propertyDefinitionId,
-        entity_type: 'TASK',
-        entity_ids: ['company-1'],
+    expect(request.body.filter_expression).toMatchObject({
+      propertiesFilter: {
+        literal: {
+          propertyDefinitionId: reference.propertyDefinitionId,
+          value: { entityRef: 'company-1' },
+        },
       },
-    ]);
+    });
   });
 });
 
@@ -520,79 +522,80 @@ describe('saved task presentation', () => {
 });
 
 describe('saved task filter execution', () => {
-  it('captures built-in person restrictions as OR filters for each viewer', () => {
-    for (const { tab, facets } of [
-      {
-        tab: 'my-tasks' as const,
-        facets: { assignees: ['macro|fixed@example.com'] },
-      },
-      {
-        tab: 'created-by-me' as const,
-        facets: { 'created-by': ['macro|fixed@example.com'] },
-      },
-    ]) {
-      const captured = captureTaskSavedView({
-        tab,
-        facets,
-        context: { tagPropertyDefinitionByOptionId: new Map() },
+  it('preserves merged membership independently of selected people for each viewer', () => {
+    const captured = captureTaskSavedView({
+      tab: 'my-tasks',
+      facets: { assignees: ['macro|fixed@example.com'] },
+      context: { tagPropertyDefinitionByOptionId: new Map() },
+    });
+    expect(captured.isOk()).toBe(true);
+    if (captured.isErr()) return;
+    const restored = materializeTaskSavedView(captured.value);
+    expect(restored.tab).toBe('my-tasks');
+    expect(restored.facets.assignees).toEqual(['macro|fixed@example.com']);
+    for (const viewer of ['macro|a@example.com', 'macro|b@example.com']) {
+      const query = buildTaskQuery({
+        ...options,
+        ...restored,
+        dueDate: taskDueDatePredicate(restored.dueDate, calendar),
+        userId: viewer,
       });
-      expect(captured.isOk()).toBe(true);
-      if (captured.isErr()) continue;
-      const restored = materializeTaskSavedView(captured.value);
-      for (const viewer of ['macro|a@example.com', 'macro|b@example.com']) {
-        const query = buildTaskQuery({
-          ...options,
-          ...restored,
-          dueDate: taskDueDatePredicate(restored.dueDate, calendar),
-          userId: viewer,
-        });
-        const search = buildTaskSearchRequest({
-          ...restored,
-          dueDate: taskDueDatePredicate(restored.dueDate, calendar),
-          query: 'review',
-          matchType: 'partial',
-          userId: viewer,
-        });
-        if (tab === 'my-tasks') {
-          expect(query.body.df).toEqual({ l: { dst: 'task' } });
-          expect(query.body.propf).toEqual({
+      expect(query.body.df).toEqual({
+        '&': [
+          { l: { dst: 'task' } },
+          {
             '|': [
+              { l: { o: viewer } },
               {
                 l: {
-                  pd: '00000001-0000-0000-0000-000000000001',
-                  v: { er: viewer },
-                },
-              },
-              {
-                l: {
-                  pd: '00000001-0000-0000-0000-000000000001',
-                  v: { er: 'macro|fixed@example.com' },
+                  prop: {
+                    pd: SYSTEM_PROPERTY_IDS.ASSIGNEES,
+                    v: { er: viewer },
+                  },
                 },
               },
             ],
-          });
-          expect(
-            search.body.filters?.property_filters?.[0]?.entity_ids
-          ).toEqual(['macro|fixed@example.com', viewer]);
-        } else {
-          expect(query.body.df).toEqual({
-            '&': [
-              { l: { dst: 'task' } },
-              {
-                '|': [
-                  { l: { o: viewer } },
-                  { l: { o: 'macro|fixed@example.com' } },
-                ],
-              },
-            ],
-          });
-          expect(search.body.filters?.document_filters?.owners).toEqual([
-            'macro|fixed@example.com',
-            viewer,
-          ]);
-        }
-      }
+          },
+        ],
+      });
+      expect(query.body.propf).toEqual({
+        l: {
+          pd: SYSTEM_PROPERTY_IDS.ASSIGNEES,
+          v: { er: 'macro|fixed@example.com' },
+        },
+      });
+      const search = buildTaskSearchRequest({
+        ...restored,
+        dueDate: taskDueDatePredicate(restored.dueDate, calendar),
+        query: 'review',
+        matchType: 'partial',
+        userId: viewer,
+      });
+      const expected = makeGraphqlFilters(query.body);
+      expect(search.body.filter_expression).toEqual({
+        documentFilter: expected.documentFilter,
+        propertiesFilter: expected.propertiesFilter,
+      });
     }
+  });
+
+  it('maps a legacy saved creator scope without losing explicit filters', () => {
+    const saved = captureTaskSavedView({
+      tab: 'team-tasks',
+      facets: { 'created-by': ['macro|fixed@example.com'] },
+      context: { tagPropertyDefinitionByOptionId: new Map() },
+    });
+    if (saved.isErr()) throw new Error(saved.error);
+    const old = { ...saved.value, scope: 'created-by-me' };
+    const decoded = decodeTaskSavedView(old);
+    expect(decoded.isOk()).toBe(true);
+    if (decoded.isErr()) throw new Error(decoded.error);
+    expect(materializeTaskSavedView(decoded.value)).toMatchObject({
+      tab: 'my-tasks',
+      facets: { 'created-by': ['macro|fixed@example.com'] },
+    });
+    expect(readTaskSavedView(old).issues).toEqual([]);
+    expect(old.scope).toBe('created-by-me');
   });
   it('applies supported saved filters while omitting malformed entries and conflicting bindings', () => {
     const { config, issues } = readTaskSavedView({
@@ -633,9 +636,9 @@ describe('saved task filter execution', () => {
     expect(query.body.propf).toEqual({
       l: { pd: '00000001-0000-0000-0000-000000000001', v: { er: 'user' } },
     });
-    expect(search.body.filters?.property_filters?.[0]?.entity_ids).toEqual([
-      'user',
-    ]);
+    expect(search.body.filter_expression).toMatchObject({
+      propertiesFilter: makeGraphqlFilters(query.body).propertiesFilter,
+    });
     expect(config.filters.tags).toEqual([]);
     expect(issues.map(({ path }) => path.join('.'))).toEqual(
       expect.arrayContaining([
@@ -697,10 +700,11 @@ describe('saved task filter execution', () => {
       expect(query.body.propf).toEqual({
         l: { pd: '00000001-0000-0000-0000-000000000001', v: { er: viewer } },
       });
-      expect(search.body.filters?.document_filters?.owners).toEqual([viewer]);
-      expect(search.body.filters?.property_filters?.[0]?.entity_ids).toEqual([
-        viewer,
-      ]);
+      const expected = makeGraphqlFilters(query.body);
+      expect(search.body.filter_expression).toEqual({
+        documentFilter: expected.documentFilter,
+        propertiesFilter: expected.propertiesFilter,
+      });
     }
   });
 
@@ -724,10 +728,9 @@ describe('saved task filter execution', () => {
     expect(JSON.stringify(query.body.propf)).toContain(tag);
     expect(JSON.stringify(query.body.propf)).toContain(property);
     expect(JSON.stringify(query.body.propf)).toContain(status);
-    expect(search.body.filters?.tag_option_ids).toEqual([tag]);
-    expect(search.body.filters?.property_filters?.[0]?.option_ids).toEqual([
-      status,
-    ]);
+    expect(search.body.filter_expression).toMatchObject({
+      propertiesFilter: makeGraphqlFilters(query.body).propertiesFilter,
+    });
   });
 });
 
@@ -763,11 +766,11 @@ describe('Project task filters', () => {
         userId: 'viewer',
         query: 'launch',
         matchType: 'partial',
-      }).body.filters?.property_filters
-    ).toContainEqual({
-      property_definition_id: SYSTEM_PROPERTY_IDS.PROJECT,
-      entity_type: 'TASK',
-      entity_ids: projectIds,
+      }).body.filter_expression
+    ).toMatchObject({
+      propertiesFilter: makeGraphqlFilters(
+        buildTaskQuery({ ...options, ...restored, dueDate: undefined }).body
+      ).propertiesFilter,
     });
   });
 
