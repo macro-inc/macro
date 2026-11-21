@@ -5,7 +5,11 @@
 -- keyed on one end's canonical id. A row spelling both ends in another case
 -- is not found; legacy writers stored the joining ids as given.
 WITH removed AS (
-    SELECT DISTINCT lower(first COLLATE "C") AS first, lower(second COLLATE "C") AS second
+    -- Back to the default collation, the key columns' own, or no index on
+    -- user1 or user2 can serve the equality probes below.
+    SELECT DISTINCT
+        lower(first COLLATE "C") COLLATE "default" AS first,
+        lower(second COLLATE "C") COLLATE "default" AS second
     FROM unnest($1::text[], $2::text[]) AS pair (first, second)
     WHERE lower(first COLLATE "C") <> lower(second COLLATE "C")
 )

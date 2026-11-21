@@ -41,6 +41,27 @@ candidates AS MATERIALIZED (
     ) AS directory
     GROUP BY directory.id
 ),
+-- Peers only the peer has: their inbox or invite names the viewer, and no list
+-- or inbox row of the viewer's names them. Read once from the viewer's own
+-- list rows and the rows naming the viewer (contact_idx, primary keys), so its
+-- cost follows those lists, not the directory's size.
+hidden AS MATERIALIZED (
+    (
+        SELECT user_id AS id FROM contact_inbox_members
+        WHERE contact_user_id = lower($1 COLLATE "C")
+        UNION
+        SELECT user_id FROM contact_list_members
+        WHERE contact_user_id = lower($1 COLLATE "C") AND list_key = 'invited'
+    )
+    EXCEPT
+    (
+        SELECT contact_user_id FROM contact_list_members
+        WHERE user_id = lower($1 COLLATE "C")
+        UNION
+        SELECT contact_user_id FROM contact_inbox_members
+        WHERE user_id = lower($1 COLLATE "C")
+    )
+),
 profiles AS (
     SELECT
         c.id,
@@ -71,35 +92,8 @@ ranked AS (
         strpos(p.email, (SELECT needle FROM viewer)) > 0
         OR strpos(p.full_name, (SELECT needle FROM viewer)) > 0
     )
-      -- Hide a peer only the peer has, as page.sql does: the peer's inbox or
-      -- invite names the viewer, and no list or inbox row of the viewer's
-      -- names the peer. Teammates always stay. Probed for matches only.
-      AND NOT (
-          NOT p.is_teammate
-          AND (
-              EXISTS (
-                  SELECT 1 FROM contact_inbox_members AS theirs
-                  WHERE theirs.user_id = p.id COLLATE "C"
-                    AND theirs.contact_user_id = lower($1 COLLATE "C")
-              )
-              OR EXISTS (
-                  SELECT 1 FROM contact_list_members AS theirs
-                  WHERE theirs.user_id = p.id COLLATE "C"
-                    AND theirs.contact_user_id = lower($1 COLLATE "C")
-                    AND theirs.list_key = 'invited'
-              )
-          )
-          AND NOT EXISTS (
-              SELECT 1 FROM contact_list_members AS mine
-              WHERE mine.user_id = lower($1 COLLATE "C")
-                AND mine.contact_user_id = p.id COLLATE "C"
-          )
-          AND NOT EXISTS (
-              SELECT 1 FROM contact_inbox_members AS mine
-              WHERE mine.user_id = lower($1 COLLATE "C")
-                AND mine.contact_user_id = p.id COLLATE "C"
-          )
-      )
+      -- Hide a peer only the peer has (see hidden); teammates always stay.
+      AND (p.is_teammate OR p.id COLLATE "C" NOT IN (SELECT id FROM hidden))
     -- Byte order keeps ties stable whatever the database's locale.
     ORDER BY p.is_teammate DESC, is_prefix DESC, sort_key, p.id COLLATE "C"
     LIMIT $3

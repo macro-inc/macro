@@ -3,42 +3,38 @@
 -- come from team_user, folded like the list-aware directory.
 --
 -- A legacy edge says nothing about direction, so the directed lists decide,
--- as in page.sql: a peer is left out when only the peer has the viewer (the
--- peer's inbox or invite) and nothing says the viewer has the peer (no list
--- or inbox row of the viewer's). Edges no list explains stay. A teammate
+-- as in page.sql. Edges no list explains stay. A teammate
 -- with an edge comes back twice; the caller drops repeats, which is cheaper
 -- than a UNION's locale sort of the whole directory.
+WITH
+-- Peers only the peer has: their inbox or invite names the viewer, and no list
+-- or inbox row of the viewer's names them. Read once from the viewer's own
+-- list rows and the rows naming the viewer (contact_idx, primary keys), so its
+-- cost follows those lists, not the directory's size.
+hidden AS MATERIALIZED (
+    (
+        SELECT user_id AS id FROM contact_inbox_members
+        WHERE contact_user_id = lower($1 COLLATE "C")
+        UNION
+        SELECT user_id FROM contact_list_members
+        WHERE contact_user_id = lower($1 COLLATE "C") AND list_key = 'invited'
+    )
+    EXCEPT
+    (
+        SELECT contact_user_id FROM contact_list_members
+        WHERE user_id = lower($1 COLLATE "C")
+        UNION
+        SELECT contact_user_id FROM contact_inbox_members
+        WHERE user_id = lower($1 COLLATE "C")
+    )
+)
 SELECT neighbors.contact
 FROM (
     SELECT user1 AS contact FROM contacts_connections WHERE user2 = $1
     UNION ALL
     SELECT user2 AS contact FROM contacts_connections WHERE user1 = $1
 ) AS neighbors
-WHERE NOT (
-    (
-        EXISTS (
-            SELECT 1 FROM contact_inbox_members AS theirs
-            WHERE theirs.user_id = lower(neighbors.contact COLLATE "C")
-              AND theirs.contact_user_id = lower($1 COLLATE "C")
-        )
-        OR EXISTS (
-            SELECT 1 FROM contact_list_members AS theirs
-            WHERE theirs.user_id = lower(neighbors.contact COLLATE "C")
-              AND theirs.contact_user_id = lower($1 COLLATE "C")
-              AND theirs.list_key = 'invited'
-        )
-    )
-    AND NOT EXISTS (
-        SELECT 1 FROM contact_list_members AS mine
-        WHERE mine.user_id = lower($1 COLLATE "C")
-          AND mine.contact_user_id = lower(neighbors.contact COLLATE "C")
-    )
-    AND NOT EXISTS (
-        SELECT 1 FROM contact_inbox_members AS mine
-        WHERE mine.user_id = lower($1 COLLATE "C")
-          AND mine.contact_user_id = lower(neighbors.contact COLLATE "C")
-    )
-)
+WHERE lower(neighbors.contact COLLATE "C") NOT IN (SELECT id FROM hidden)
 UNION ALL
 -- A user has at most one team, and its roster includes the viewer.
 SELECT lower(teammate.user_id COLLATE "C") COLLATE "default"

@@ -271,6 +271,29 @@ async fn members_leaving_together_still_disconnect_from_each_other() {
 }
 
 #[tokio::test]
+async fn a_failed_roster_read_stops_the_removal_before_it_starts() {
+    // Once the membership is gone nothing names the pairs to delete, so the
+    // removal must not go ahead without them.
+    let team_id = uuid::Uuid::from_u128(0x6330_000c);
+    let owner = MacroUserIdStr::parse_from_str(OWNER).unwrap();
+    let member = MacroUserIdStr::parse_from_str(MEMBER).unwrap();
+    let mut team_repository =
+        make_enterprise_remove_user_repository(team_id, &member, TeamRole::Member)
+            .with_team(team(team_id));
+    team_repository.fail_get_team_by_id = true;
+    let remove_user_calls = team_repository.remove_user_calls.clone();
+    let contacts_enqueuer = RecordingContactsEnqueuer::default();
+
+    service(team_repository, &contacts_enqueuer)
+        .remove_user_from_team(test_team_receipt::<AdminTeamRole>(team_id, &owner), &member)
+        .await
+        .unwrap_err();
+
+    assert_eq!(*remove_user_calls.lock().unwrap(), 0);
+    assert!(contacts_enqueuer.disconnections.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn deleting_a_team_disconnects_every_pair_of_members() {
     let team_id = uuid::Uuid::from_u128(0x6330_000a);
     let owner = MacroUserIdStr::parse_from_str(OWNER).unwrap();

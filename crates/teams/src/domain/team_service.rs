@@ -1048,8 +1048,9 @@ where
         };
         // Read before the removal: another member leaving at the same time
         // is still on this roster, so the pair between the two leavers is
-        // not missed by both removals.
-        let roster_before_removal = self.teammate_ids_except(&team_id, user_id).await;
+        // not missed by both removals. Nothing else names those pairs once
+        // the membership is gone, so a failed read stops the removal.
+        let roster_before_removal = self.read_teammate_ids_except(&team_id, user_id).await?;
         let removed_member = match self
             .team_repository
             .remove_user_from_team(&team_id, user_id)
@@ -1246,27 +1247,32 @@ where
             .ok();
     }
 
+    /// The roster without `user_id`, or none when it cannot be read: for the
+    /// best-effort side effects after a membership change.
     async fn teammate_ids_except(
         &self,
         team_id: &uuid::Uuid,
         user_id: &MacroUserIdStr<'_>,
     ) -> Vec<MacroUserIdStr<'static>> {
-        let Some(team_with_members) = self
-            .team_repository
-            .get_team_by_id(team_id)
+        self.read_teammate_ids_except(team_id, user_id)
             .await
             .inspect_err(|error| {
                 tracing::error!(
                     error = ?error,
                     team_id = %team_id,
-                    user_id = %user_id,
                     "failed to load team roster for membership side effects"
                 );
             })
-            .ok()
-        else {
-            return Vec::new();
-        };
+            .unwrap_or_default()
+    }
+
+    /// The roster without `user_id`, sorted by id.
+    async fn read_teammate_ids_except(
+        &self,
+        team_id: &uuid::Uuid,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, TeamError> {
+        let team_with_members = self.team_repository.get_team_by_id(team_id).await?;
 
         let joining_user = user_id.clone().into_owned();
         let mut teammate_ids = std::iter::once(team_with_members.team.owner_id)
@@ -1281,7 +1287,7 @@ where
             .into_iter()
             .collect::<Vec<_>>();
         teammate_ids.sort_by(|a, b| a.as_ref().cmp(b.as_ref()));
-        teammate_ids
+        Ok(teammate_ids)
     }
 
     /// Deletes the legacy contact edges team joins used to write for pairs
