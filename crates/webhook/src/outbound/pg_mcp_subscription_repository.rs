@@ -307,8 +307,14 @@ impl McpSubscriptionRepo for PgMcpSubscriptionRepository {
         // carries the user: expired rows waiting for the sweep are never read.
         // The order keeps the planner on that range. The limit is
         // `LIVE_SUBSCRIBERS_MAX_ROWS` plus one, written as a literal so a
-        // generic plan knows it.
-        sqlx::query_scalar!(
+        // generic plan knows it. The timeout ends a stuck read well within a
+        // refresh interval, so the caller forgets the set and the next round
+        // starts on time.
+        let mut transaction = self.pool.begin().await?;
+        sqlx::query!("SET LOCAL statement_timeout = '1s'")
+            .execute(&mut *transaction)
+            .await?;
+        let user_ids = sqlx::query_scalar!(
             r#"
             SELECT user_id
             FROM mcp_event_subscription
@@ -317,8 +323,10 @@ impl McpSubscriptionRepo for PgMcpSubscriptionRepository {
             LIMIT 10001
             "#,
         )
-        .fetch_all(&self.pool)
-        .await
+        .fetch_all(&mut *transaction)
+        .await?;
+        transaction.commit().await?;
+        Ok(user_ids)
     }
 
     #[tracing::instrument(skip_all, fields(audience_count = user_ids.len()), err)]

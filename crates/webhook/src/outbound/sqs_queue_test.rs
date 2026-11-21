@@ -53,8 +53,17 @@ fn raw_webhook_message_retains_transport_fields() {
         body: Some("message-body".to_string()),
         receipt_handle: Some("receipt-handle".to_string()),
         receive_count: Some(3),
+        string_attributes: HashMap::from([
+            ("traceparent".to_owned(), "00-trace".to_owned()),
+            ("tracestate".to_owned(), "vendor=1".to_owned()),
+            ("unrelated".to_owned(), "kept out".to_owned()),
+        ]),
     });
 
+    assert_eq!(
+        serde_json::Value::Object(raw.trace_context.clone()),
+        json!({"traceparent": "00-trace", "tracestate": "vendor=1"})
+    );
     assert_eq!(raw.message_id.as_deref(), Some("message-id"));
     assert_eq!(raw.body.as_deref(), Some("message-body"));
     assert_eq!(raw.receipt_handle.as_deref(), Some("receipt-handle"));

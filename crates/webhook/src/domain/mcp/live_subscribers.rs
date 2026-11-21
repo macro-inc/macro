@@ -15,16 +15,17 @@ use std::time::{Duration, Instant};
 /// repository's SQL writes this limit plus one as a literal.
 pub const LIVE_SUBSCRIBERS_MAX_ROWS: usize = 10_000;
 
-/// How long a loaded set is trusted. Refreshes come every few seconds, so a
-/// set this old means they are failing; fan-out then queries for every
-/// audience rather than miss subscriptions made since.
-pub const LIVE_SUBSCRIBERS_MAX_AGE: Duration = Duration::from_secs(10);
+/// How long a loaded set is trusted. Refreshes come every 2 s and a failed one
+/// forgets the set, so a set this old means a refresh is hanging; fan-out
+/// then queries for every audience rather than miss subscriptions made since.
+pub const LIVE_SUBSCRIBERS_MAX_AGE: Duration = Duration::from_secs(5);
 
 /// The users with a live subscription, as of the last refresh. Cheap to
 /// clone; clones share the set.
 ///
-/// A subscription made in any process reaches the set on the next refresh,
-/// so its first events can pass unmatched until then. A deleted or expired
+/// A subscription made in any process reaches the set on the next refresh
+/// that starts after it commits, so its events until then pass unmatched:
+/// up to one refresh interval plus that refresh's own time. A deleted or expired
 /// one may linger until then; matching rereads every row it uses, so that
 /// costs a query, never a delivery.
 #[derive(Clone, Default)]
@@ -72,8 +73,8 @@ impl McpLiveSubscribers {
         )
     }
 
-    /// Reload the set with one query. On failure the previous set stays until
-    /// it is [`LIVE_SUBSCRIBERS_MAX_AGE`] old.
+    /// Reload the set with one query. On failure the set is forgotten, so
+    /// fan-out matches every audience member until a refresh succeeds.
     ///
     /// Not spanned: it runs every few seconds in every replica, and a trace per
     /// round would be noise. A failure is the caller's to log.
@@ -83,10 +84,13 @@ impl McpLiveSubscribers {
     ) -> Result<(), McpSubscriptionError> {
         // Taken before the read, so the set's age covers the query's time.
         let started = Instant::now();
-        let user_ids = repo
-            .list_live_subscriber_ids()
-            .await
-            .map_err(McpSubscriptionError::internal)?;
+        let user_ids = match repo.list_live_subscriber_ids().await {
+            Ok(user_ids) => user_ids,
+            Err(error) => {
+                *self.state.write().unwrap_or_else(PoisonError::into_inner) = State::NotLoaded;
+                return Err(McpSubscriptionError::internal(error));
+            }
+        };
         let state = if user_ids.len() > LIVE_SUBSCRIBERS_MAX_ROWS {
             State::TooMany
         } else {

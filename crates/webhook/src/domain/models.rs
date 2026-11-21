@@ -102,6 +102,9 @@ pub struct RawWebhookEventQueueMessage {
     /// How many times the queue has handed this message out, this receipt
     /// included, when it reported it.
     pub receive_count: Option<u32>,
+    /// W3C trace context (`traceparent`, `tracestate`) the sender attached
+    /// beside the body; empty when it attached none.
+    pub trace_context: serde_json::Map<String, serde_json::Value>,
 }
 
 /// Identifier of a persisted webhook delivery.

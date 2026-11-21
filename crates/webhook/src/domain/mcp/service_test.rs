@@ -25,6 +25,8 @@ struct FakeRepo {
     rows: Arc<Mutex<Vec<McpEventSubscription>>>,
     /// The audience size of each match query.
     match_calls: Arc<Mutex<Vec<usize>>>,
+    /// Whether reading the live subscribers fails.
+    live_ids_fail: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl FakeRepo {
@@ -140,6 +142,9 @@ impl McpSubscriptionRepo for FakeRepo {
     }
 
     async fn list_live_subscriber_ids(&self) -> Result<Vec<String>, FakeError> {
+        if self.live_ids_fail.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err(FakeError);
+        }
         let now = Utc::now();
         Ok(self
             .rows()
@@ -947,6 +952,30 @@ async fn a_new_subscription_is_matched_from_the_next_refresh() {
         .await
         .expect("fanned out");
     assert_eq!(queued, 1);
+}
+
+#[tokio::test]
+async fn a_failed_refresh_falls_back_to_matching_every_member() {
+    let repo = FakeRepo::default();
+    let endpoint = FakeEndpoint::accepting();
+    let queue = FakeQueue::default();
+    let (fanout, subscribers) = fanout_with_known_subscribers(&repo, &queue).await;
+    service(&repo, &endpoint)
+        .subscribe(user(ME), request("mentions", mentions_of_me_in_channels()))
+        .await
+        .expect("subscribed");
+
+    repo.live_ids_fail
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    subscribers.refresh(&repo).await.expect_err("refresh fails");
+    let queued = fanout
+        .fan_out(&mentioned_event("channel", ME), &[ME.to_owned()])
+        .await
+        .expect("fanned out");
+    assert_eq!(
+        queued, 1,
+        "the stale set no longer hides the new subscription"
+    );
 }
 
 #[tokio::test]

@@ -212,6 +212,7 @@ fn raw_message(
         body,
         receipt_handle: receipt_handle.map(str::to_string),
         receive_count: Some(1),
+        trace_context: serde_json::Map::new(),
     }
 }
 

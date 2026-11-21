@@ -4,7 +4,7 @@
 #[path = "sqs_queue_test.rs"]
 mod sqs_queue_test;
 
-use std::{sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use anyhow::{Context, ensure};
 use sqs_client::{ReceivedMessage, SQS};
@@ -16,6 +16,11 @@ use crate::domain::{
 };
 
 const MAX_VISIBILITY_TIMEOUT_SECONDS: u64 = 12 * 60 * 60;
+
+/// The W3C trace context keys carried as SQS message attributes beside an MCP
+/// delivery's body. The body's contract refuses unknown fields, so the context
+/// travels outside it, where a worker that does not read it ignores it.
+const TRACE_CONTEXT_ATTRIBUTES: [&str; 2] = ["traceparent", "tracestate"];
 
 /// SQS-backed implementation of webhook enqueueing and worker queue operations.
 #[derive(Clone)]
@@ -136,7 +141,32 @@ fn raw_webhook_message(message: ReceivedMessage) -> RawWebhookEventQueueMessage 
         body: message.body,
         receipt_handle: message.receipt_handle,
         receive_count: message.receive_count,
+        trace_context: trace_context_from_attributes(message.string_attributes),
     }
+}
+
+fn trace_context_from_attributes(
+    mut attributes: HashMap<String, String>,
+) -> serde_json::Map<String, serde_json::Value> {
+    TRACE_CONTEXT_ATTRIBUTES
+        .into_iter()
+        .filter_map(|name| {
+            let value = attributes.remove(name)?;
+            Some((name.to_owned(), serde_json::Value::String(value)))
+        })
+        .collect()
+}
+
+fn trace_context_attributes(span: &tracing::Span) -> HashMap<String, String> {
+    let mut context = serde_json::Map::new();
+    genai_telemetry::propagation::inject_mcp(span, &mut context);
+    TRACE_CONTEXT_ATTRIBUTES
+        .into_iter()
+        .filter_map(|name| match context.remove(name)? {
+            serde_json::Value::String(value) => Some((name.to_owned(), value)),
+            _ => None,
+        })
+        .collect()
 }
 
 fn visibility_timeout_seconds(delay: Duration) -> anyhow::Result<i32> {
@@ -171,19 +201,16 @@ impl McpEventEnqueuer for SqsWebhookQueue {
             event_id = %message.event.event_id,
         )
     )]
-    async fn enqueue_mcp(&self, mut message: McpEventQueueMessage) -> Result<(), Self::Err> {
-        // The delivery worker parents its attempts on this send.
-        genai_telemetry::propagation::inject_mcp(
-            &tracing::Span::current(),
-            &mut message.trace_context,
-        );
+    async fn enqueue_mcp(&self, message: McpEventQueueMessage) -> Result<(), Self::Err> {
         let prepared = prepare_mcp_message(&message)?;
+        // The delivery worker parents its attempts on this send.
         self.sqs
-            .send_fifo_message(
+            .send_fifo_message_with_string_attributes(
                 &self.queue_url,
                 prepared.body,
                 prepared.group_id,
                 prepared.deduplication_id,
+                trace_context_attributes(&tracing::Span::current()),
             )
             .await?;
         Ok(())
