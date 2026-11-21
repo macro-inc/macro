@@ -241,6 +241,15 @@ function ChangesBodyContent(props: {
       />
     ),
   });
+  // One range is lit. A note's range wins in its own file; a code link that
+  // points into another file lights there, and the note's range lights again
+  // once its file is activated.
+  const litRange = () => {
+    const note = notes.selection();
+    const pointed = review.pointed();
+    if (!note) return pointed;
+    return pointed && pointed.path !== note.path ? pointed : note;
+  };
   const treeVisible = () => !props.narrow() && layout.treeOpen();
   const [wideDock, setWideDock] = createSignal<HTMLDivElement>();
   const [drawerDock, setDrawerDock] = createSignal<HTMLDivElement>();
@@ -407,7 +416,7 @@ function ChangesBodyContent(props: {
                       )}
                       annotations={notes.annotations}
                       renderAnnotation={notes.renderAnnotation}
-                      selection={() => notes.selection() ?? review.pointed()}
+                      selection={litRange}
                       reveal={review.pointed}
                       onSelectLines={notes.onSelectLines}
                     />

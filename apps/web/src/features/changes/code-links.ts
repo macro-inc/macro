@@ -83,12 +83,13 @@ export function createCodeLinkDescriber(
   changes: ChangesController
 ): AppLinkDescriber {
   return (url) => {
-    if (!changes.available()) return undefined;
+    // Described exactly when the opener answers: not before the changes load.
+    const changeset = changes.model.changeset();
+    if (!changes.available() || !changeset) return undefined;
     const reference = parseCodeReference(url);
     if (!reference) return undefined;
-    const files = changes.model.changeset()?.files ?? [];
     if (
-      !findChangedFile(reference.path, files) &&
+      !findChangedFile(reference.path, changeset.files) &&
       !readsAsRepositoryPath(reference)
     )
       return undefined;
