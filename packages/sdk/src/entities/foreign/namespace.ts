@@ -44,7 +44,7 @@ function withoutNullLogin({
 }
 
 /**
- * @routing Use when resolving a linked external entity, such as an imported item; not Macro's own items.
+ * @routing Use when looking up, favoriting or muting an item linked into Macro from another system, such as a GitHub pull request, by its id in that system; not items created in Macro.
  */
 export class ForeignEntityNamespace {
   constructor(private readonly client: MacroClient) {}

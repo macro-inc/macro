@@ -1,0 +1,13 @@
+config:
+  gcp:project: macro-435922
+  gcp:zone: us-east4-c
+  firecracker-host:hostName: firecracker-prod-1
+  firecracker-host:hostKind: metal
+  # Fallbacks, in order: c3-standard-192-metal, c4-standard-288-metal.
+  firecracker-host:machineType: c3-highcpu-192-metal
+  firecracker-host:durableDisk:
+    type: hyperdisk-balanced
+    sizeGb: 4000
+    provisionedIops: 40000
+    provisionedThroughput: 1200
+  firecracker-host:subnetCidr: 10.203.0.0/24

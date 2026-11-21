@@ -134,11 +134,7 @@ describe('thread-header unarchive eligibility', () => {
     const adapter = setup(thread());
     expect(adapter.markThreadNotDone()).toBe(true);
     expect(mocks.executeNotDone).toHaveBeenCalledWith([entity]);
-    expect(mocks.trackArchive).toHaveBeenCalledWith(
-      'thread',
-      expect.any(Promise),
-      false
-    );
+    expect(mocks.trackArchive).toHaveBeenCalledWith(expect.any(Promise));
     expect(mocks.mutate).not.toHaveBeenCalled();
   });
 });

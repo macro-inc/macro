@@ -1,11 +1,21 @@
-use super::{EventSink, ExecuteRequest, Limits, Outcome, RunEnvironment};
+use super::{ContextShape, EventSink, ExecuteRequest, Limits, Outcome, RunEnvironment};
 use async_trait::async_trait;
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 
-/// Executes a JavaScript module with run-scoped credentials and cancellation.
+/// Executes a TypeScript module with run-scoped credentials and cancellation.
 #[async_trait]
 pub trait ProgramExecutor: Send + Sync + 'static {
+    /// Type-check an attended program for a run of `shape` before its host
+    /// does anything for it (approval, credentials). `Err` is the outcome to
+    /// report instead of running it. A pass is good for the next run of the
+    /// same source and shape, which isn't checked again.
+    async fn check_program(
+        &self,
+        request: &ExecuteRequest,
+        shape: ContextShape,
+        cancellation: CancellationToken,
+    ) -> Result<(), Outcome>;
     /// Observe advisory progress separately from the final model result.
     async fn execute_program_with_progress(
         &self,
@@ -64,6 +74,7 @@ pub trait ProgramChecker: Send + Sync + 'static {
         &self,
         source: &str,
         declarations: &str,
+        imports: super::ProgramImports,
     ) -> Result<Vec<super::Diagnostic>, super::CheckError> {
         self.check_files(
             &[super::SourceFile {
@@ -71,6 +82,7 @@ pub trait ProgramChecker: Send + Sync + 'static {
                 source: source.to_owned(),
             }],
             declarations,
+            imports,
         )
         .await
     }
@@ -81,5 +93,6 @@ pub trait ProgramChecker: Send + Sync + 'static {
         &self,
         files: &[super::SourceFile],
         declarations: &str,
+        imports: super::ProgramImports,
     ) -> Result<Vec<super::Diagnostic>, super::CheckError>;
 }

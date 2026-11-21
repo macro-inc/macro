@@ -72,7 +72,9 @@ export function createDriveDataSource(options: {
 }): DriveListSource {
   const { selection, userId, notificationSource } = options;
 
-  const searchContext = useOptionalSearchContext();
+  const entityPool = useOptionalSearchContext()?.entityPool(() =>
+    Boolean(selection().search.trim())
+  );
   const databasesQuery = useDatabasesQuery();
   // Databases and forms come from their own lists, in file tabs and in the
   // folder they are filed in.
@@ -160,7 +162,7 @@ export function createDriveDataSource(options: {
       }
     }
 
-    return (searchContext?.entityPool() ?? []).filter(({ data: entity }) => {
+    return (entityPool?.() ?? []).filter(({ data: entity }) => {
       if (!driveEntityMatchesLocation(entity, selection(), userId()))
         return false;
       if (!matchesFacets(entity)) return false;

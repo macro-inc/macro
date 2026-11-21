@@ -108,7 +108,7 @@ export class BookingNamespace {
    * real hosts: a personal link names {@link BookingLinkListing.host} with
    * mode `individual`; a team link uses `collective` or `roundRobin`.
    * `requiresConfirmation` must be false. For video set `macroCall`
-   * (preferred) or `googleMeet`, never both. Creating sends no invitations.
+   * or `googleMeet`, as the user asks, never both. Creating sends no invitations.
    * Replaying an identical draft at the same slug returns the saved link; a
    * different draft at that slug conflicts (409). Share the link's
    * {@link BookingLink.webUrl} as an `<m-booking-link-mention>` chip.

@@ -85,6 +85,7 @@ const EMAIL_TOKENS_ELSEWHERE = [
   'create.emailNewSplit',
   'split.go.email',
   'sidebar.goTo.mail',
+  'sidebar.goTo.sent',
 ];
 
 function isTest(path: string): boolean {

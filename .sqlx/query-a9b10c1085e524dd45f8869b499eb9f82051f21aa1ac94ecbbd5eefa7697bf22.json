@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE hosted_runtime\n            SET hibernated_at = CASE WHEN id = ANY($2) THEN COALESCE(hibernated_at, $3) END,\n                wake_requested_at = CASE WHEN id = ANY($2) THEN wake_requested_at END\n            WHERE host_id = $1\n              AND (hibernated_at IS NOT NULL OR id = ANY($2))\n              AND (hibernated_at IS NULL) = (id = ANY($2))\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a9b10c1085e524dd45f8869b499eb9f82051f21aa1ac94ecbbd5eefa7697bf22"
+}

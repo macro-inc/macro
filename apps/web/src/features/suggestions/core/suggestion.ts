@@ -99,23 +99,49 @@ export type SuggestionFeed = {
   counts: FeedCounts;
 };
 
-export type FeedFilter = 'all' | 'running' | 'open' | 'done';
+/**
+ * Whether taking a suggestion up is what finishes it. Not a background
+ * prompt, which starts its run, a routine, which is saved, or a reply, which
+ * the server keeps open until the person replies on its item.
+ */
+export function doneWhenTakenUp(suggestion: Suggestion): boolean {
+  if (suggestion.kind === 'entity') return suggestion.action !== 'reply';
 
-export function matchesFilter(status: SuggestionStatus, filter: FeedFilter) {
-  if (filter === 'all') return true;
-  if (filter === 'running') return status === 'running' || status === 'failed';
-
-  return status === filter;
+  return suggestion.kind === 'prompt' && suggestion.runMode === 'composer';
 }
 
-/** The tabs' counts: a failed run sits with the running ones. */
-export function tabCounts(counts: FeedCounts): Record<FeedFilter, number> {
-  return {
-    all: counts.open + counts.running + counts.failed + counts.done,
-    running: counts.running + counts.failed,
-    open: counts.open,
-    done: counts.done,
-  };
+/** Where a saved reply draft came from: its thread, and what else its suggestion cites. */
+export type DraftOrigin = {
+  thread: SuggestionTarget;
+  /** The suggestion's other items, without the draft's own thread. */
+  sources: SuggestionTarget[];
+};
+
+/**
+ * The origin of the draft `draftId` when a session wrote it for one of the
+ * feed's suggestions, open or done; undefined for any other draft.
+ */
+export function draftOrigin(
+  feed: SuggestionFeed,
+  draftId: string
+): DraftOrigin | undefined {
+  for (const suggestion of feed.suggestions) {
+    if (suggestion.kind !== 'entity') continue;
+
+    const draft = suggestion.draft;
+    if (draft?.partId !== draftId) continue;
+
+    return {
+      thread: { entityType: draft.entityType, entityId: draft.entityId },
+      sources: suggestion.about.filter(
+        (target) =>
+          target.entityType !== draft.entityType ||
+          target.entityId !== draft.entityId
+      ),
+    };
+  }
+
+  return undefined;
 }
 
 /** How long someone has waited, in whole hours or days; nothing under an hour. */

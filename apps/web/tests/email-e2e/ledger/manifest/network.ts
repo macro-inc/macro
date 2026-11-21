@@ -92,11 +92,6 @@ export const REST: readonly Operation[] = [
   { id: 'POST /email/email/sync', kind: 'rest', scope: 'email' },
   { id: 'GET /email/email/threads/{}', kind: 'rest', scope: 'email' },
   {
-    id: 'PATCH /email/email/threads/{}/archived',
-    kind: 'rest',
-    scope: 'email',
-  },
-  {
     id: 'GET /email/email/threads/{}/calendar-invitations',
     kind: 'rest',
     scope: 'email',
@@ -112,15 +107,12 @@ export const REST: readonly Operation[] = [
     kind: 'rest',
     scope: 'email',
   },
-  { id: 'PATCH /email/email/threads/{}/project', kind: 'rest', scope: 'email' },
   {
     id: 'GET /email/email/threads/{}/read-receipts',
     kind: 'rest',
     scope: 'email',
   },
-  { id: 'POST /email/email/threads/{}/seen', kind: 'rest', scope: 'email' },
   { id: 'PATCH /email/email/threads/{}/state', kind: 'rest', scope: 'email' },
-  { id: 'PATCH /email/email/threads/archived', kind: 'rest', scope: 'email' },
   {
     id: 'GET /email/email/threads/previews/cursor/{}',
     kind: 'rest',

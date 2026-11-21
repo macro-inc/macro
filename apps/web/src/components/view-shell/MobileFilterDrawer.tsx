@@ -14,7 +14,7 @@ import SlidersHorizontalIcon from '@icon/system/regular/sliders-horizontal.svg?c
 import XIcon from '@icon/system/regular/x.svg';
 import { Accordion, useAccordionContext } from '@kobalte/core/accordion';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import { Button, cn, inputClasses } from '@ui';
+import { Button, CountBadge, cn, inputClasses } from '@ui';
 import {
   type Accessor,
   children,
@@ -37,6 +37,11 @@ type MobileFilterDrawerProps = {
   triggerLabel?: string;
   label?: string;
   class?: string;
+  /**
+   * The trigger sits in an in-flow header row, sized and framed like the
+   * row's other icon buttons, rather than floating as an island.
+   */
+  inline?: boolean;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   onContentPresentChange?: (present: boolean) => void;
@@ -71,19 +76,17 @@ function Root(props: MobileFilterDrawerProps) {
         ref={setTrigger}
         as={Button}
         aria-label={props.triggerLabel ?? 'Open filters'}
-        variant="ghost"
-        size="icon-md"
+        variant={props.inline ? 'secondary' : 'ghost'}
+        size={props.activeCount > 0 ? 'md' : 'icon-md'}
         class={cn(
-          'island bg-chrome pointer-events-auto relative z-10 size-10 shrink-0 rounded-full',
+          'pointer-events-auto relative z-10 shrink-0',
+          !props.inline && 'island bg-chrome h-10 rounded-full',
+          !props.inline && (props.activeCount > 0 ? 'px-3' : 'w-10'),
           props.class
         )}
       >
         <SlidersHorizontalIcon class="size-6 shrink-0" />
-        <Show when={props.activeCount > 0}>
-          <span class="pointer-events-none absolute -top-0.5 right-0 z-10 flex size-4 translate-x-1/2 items-center justify-center rounded-full bg-accent text-xxs font-medium leading-none text-surface">
-            {props.activeCount}
-          </span>
-        </Show>
+        <CountBadge count={props.activeCount} />
       </MobileDrawer.Trigger>
       <MobileDrawer.Portal>
         <MobileDrawer.Overlay />
@@ -217,11 +220,10 @@ function Section(props: {
         >
           <span class="font-medium">{props.label}</span>
           <div class="flex items-center gap-2">
-            <Show when={props.activeCount > 0}>
-              <span class="group-data-expanded:hidden flex size-4 items-center justify-center rounded-full bg-accent text-xxs font-medium leading-none text-surface">
-                {props.activeCount}
-              </span>
-            </Show>
+            <CountBadge
+              count={props.activeCount}
+              class="group-data-expanded:hidden"
+            />
             <CaretDownIcon class="size-4 text-ink-muted transition-transform duration-200 group-data-expanded:rotate-180" />
           </div>
         </Accordion.Trigger>

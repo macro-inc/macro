@@ -1,18 +1,53 @@
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import { type EntityItem, useQuickAccess } from '@core/context/quickAccess';
 import { createFreshSearch } from '@core/util/freshSort';
+import type { EmailEntity, WithSearch } from '@entity';
+import {
+  type SoupItemsQueryArgs,
+  useSoupItemsQuery,
+} from '@queries/soup/items';
 import {
   type SearchSoupQueryArgs,
   useSearchSoupQuery,
+  validateSearchServiceText,
 } from '@queries/soup/search';
 import { createLazyMemo } from '@solid-primitives/memo';
-import type { Accessor } from 'solid-js';
+import { type Accessor, createMemo } from 'solid-js';
+import { match } from 'ts-pattern';
 
 const USE_QUICK_ACCESS_FOR_EMAIL_MENTIONS: boolean = false;
+
+/** The viewer's newest threads, for when the GraphQL cache is off. */
+function recentEmailThreadsArgs(): SoupItemsQueryArgs {
+  return {
+    params: { limit: 20, sort_method: 'updated_at' },
+    body: { ...QUERY_FILTERS_BASE, email_filters: {} },
+  };
+}
+
+function emailEntityItem(email: EmailEntity): EntityItem {
+  return {
+    kind: 'entity',
+    id: email.id,
+    bucket: 'email',
+    searchText: email.name ?? 'No Subject',
+    sortTimestamp: email.updatedAt ? new Date(email.updatedAt).getTime() : 0,
+    timestamps: {
+      updatedAt: email.updatedAt ?? null,
+      createdAt: email.createdAt ?? null,
+    },
+    data: email,
+  };
+}
 
 type UseEmailSearchMentionOptions = {
   searchTerm: Accessor<string>;
   enabled?: Accessor<boolean | undefined>;
+  /**
+   * List recent threads while the term is too short for the search service.
+   * Set for menus that offer only emails, which would otherwise be empty.
+   */
+  recentWhenShort?: Accessor<boolean>;
 };
 
 type UseEmailSearchMentionResult = {
@@ -23,9 +58,15 @@ type UseEmailSearchMentionResult = {
   loadMore: () => Promise<void>;
 };
 
+/** Where the listed emails come from. */
+type EmailMentionSource = 'search' | 'quickAccess' | 'recentThreads';
+
 /**
- * Provides email mentions through unified search by default. The Quick Access
- * path remains available behind USE_QUICK_ACCESS_FOR_EMAIL_MENTIONS.
+ * Provides email mentions through unified search by default. Quick Access
+ * supplies them behind USE_QUICK_ACCESS_FOR_EMAIL_MENTIONS, and for
+ * `recentWhenShort` menus while the term is too short to search. Its email
+ * bucket needs the GraphQL cache, so without the cache those menus list the
+ * newest threads from the REST Soup list instead.
  */
 export function useEmailSearchMention(
   options: UseEmailSearchMentionOptions
@@ -33,12 +74,40 @@ export function useEmailSearchMention(
   const { searchTerm, enabled } = options;
   const listEnabled = () => enabled?.() !== false;
   const quickAccess = useQuickAccess();
-  const usesQuickAccess = () =>
-    USE_QUICK_ACCESS_FOR_EMAIL_MENTIONS && quickAccess.usesRecordSelection();
+  const source = createMemo((): EmailMentionSource => {
+    const cacheServesEmails = quickAccess.usesRecordSelection();
+    if (USE_QUICK_ACCESS_FOR_EMAIL_MENTIONS && cacheServesEmails)
+      return 'quickAccess';
+    const listsRecent =
+      options.recentWhenShort?.() === true &&
+      !validateSearchServiceText(searchTerm().trim());
+    if (!listsRecent) return 'search';
+    return cacheServesEmails ? 'quickAccess' : 'recentThreads';
+  });
+
   const cachedEmails = quickAccess.useList({
     buckets: ['email'],
     searchTerm,
-    enabled: () => usesQuickAccess() && listEnabled(),
+    enabled: () => source() === 'quickAccess' && listEnabled(),
+  });
+  // Drafts, local ones included, are not threads a mention can point to.
+  const cachedThreads = createLazyMemo(() =>
+    cachedEmails.items().filter((item) => !item.data.isDraft)
+  );
+
+  // Like the search below, asks again whenever it is shown.
+  const recentThreadsQuery = useSoupItemsQuery(recentEmailThreadsArgs, () => ({
+    enabled: source() === 'recentThreads' && listEnabled(),
+    staleTime: 0,
+  }));
+  const recentThreads = createLazyMemo((): EntityItem[] => {
+    if (recentThreadsQuery.isPending) return [];
+    return (recentThreadsQuery.data ?? [])
+      .filter(
+        (entity): entity is EmailEntity =>
+          entity.type === 'email' && !entity.isDraft
+      )
+      .map(emailEntityItem);
   });
 
   const args = createLazyMemo((): SearchSoupQueryArgs => {
@@ -61,28 +130,15 @@ export function useEmailSearchMention(
 
   // Nothing tells a viewer they lost access, so each search asks again when shown.
   const emailSearchQuery = useSearchSoupQuery(args, () => ({
-    enabled: !usesQuickAccess() && listEnabled(),
+    enabled: source() === 'search' && listEnabled(),
     staleTime: 0,
   }));
 
   const remoteEmailList = createLazyMemo((): EntityItem[] => {
     if (emailSearchQuery.status !== 'success') return [];
     return emailSearchQuery.data
-      .filter((e) => e.type === 'email')
-      .map(
-        (e): EntityItem => ({
-          kind: 'entity',
-          id: e.id,
-          bucket: 'email',
-          searchText: e.name ?? 'No Subject',
-          sortTimestamp: e.updatedAt ? new Date(e.updatedAt).getTime() : 0,
-          timestamps: {
-            updatedAt: e.updatedAt ?? null,
-            createdAt: e.createdAt ?? null,
-          },
-          data: e as unknown as EntityItem['data'],
-        })
-      );
+      .filter((e): e is WithSearch<EmailEntity> => e.type === 'email')
+      .map(emailEntityItem);
   });
 
   const emailSearch = createFreshSearch<EntityItem>({
@@ -90,34 +146,56 @@ export function useEmailSearchMention(
     getName: (item) => item.searchText,
     getTimestamp: (item) => item.timestamps,
   });
-
-  const emails = createLazyMemo((): EntityItem[] => {
-    if (usesQuickAccess()) return cachedEmails.items();
-
+  const matchingTerm = (items: EntityItem[]): EntityItem[] => {
     const term = searchTerm();
-    const remoteEmails = remoteEmailList();
-    if (!term) return remoteEmails;
-    return emailSearch(remoteEmails, term).map(({ item }) => item);
-  });
+    if (!term) return items;
+    return emailSearch(items, term).map(({ item }) => item);
+  };
+
+  const emails = createLazyMemo((): EntityItem[] =>
+    match(source())
+      .with('quickAccess', () => cachedThreads())
+      .with('recentThreads', () => matchingTerm(recentThreads()))
+      .with('search', () => matchingTerm(remoteEmailList()))
+      .exhaustive()
+  );
 
   return {
     emails,
     totalCount: () =>
-      usesQuickAccess() ? cachedEmails.totalCount() : emails().length,
+      match(source())
+        // Drafts on pages not loaded yet are still counted; the bucket lists
+        // local drafts first, so that is rare.
+        .with(
+          'quickAccess',
+          () =>
+            cachedEmails.totalCount() -
+            (cachedEmails.items().length - cachedThreads().length)
+        )
+        .with('recentThreads', 'search', () => emails().length)
+        .exhaustive(),
     hasMore: () =>
-      usesQuickAccess()
-        ? cachedEmails.hasMore()
-        : Boolean(emailSearchQuery.hasNextPage),
+      match(source())
+        .with('quickAccess', () => cachedEmails.hasMore())
+        // The REST list is one page of the newest threads.
+        .with('recentThreads', () => false)
+        .with('search', () => Boolean(emailSearchQuery.hasNextPage))
+        .exhaustive(),
     isLoadingMore: () =>
-      usesQuickAccess()
-        ? cachedEmails.isLoadingMore()
-        : emailSearchQuery.isFetching,
+      match(source())
+        .with('quickAccess', () => cachedEmails.isLoadingMore())
+        .with('recentThreads', () => recentThreadsQuery.isPending)
+        .with('search', () => emailSearchQuery.isFetching)
+        .exhaustive(),
     loadMore: async () => {
-      if (usesQuickAccess()) {
-        await cachedEmails.loadMore();
-      } else if (emailSearchQuery.hasNextPage) {
-        await emailSearchQuery.fetchNextPage();
-      }
+      await match(source())
+        .with('quickAccess', () => cachedEmails.loadMore())
+        .with('recentThreads', async () => {})
+        .with('search', async () => {
+          if (emailSearchQuery.hasNextPage)
+            await emailSearchQuery.fetchNextPage();
+        })
+        .exhaustive();
     },
   };
 }

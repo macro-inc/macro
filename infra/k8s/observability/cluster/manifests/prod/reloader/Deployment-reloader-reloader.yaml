@@ -1,0 +1,119 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    meta.helm.sh/release-name: reloader
+    meta.helm.sh/release-namespace: observability
+  labels:
+    app: reloader-reloader
+    app.kubernetes.io/instance: reloader
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: reloader
+    app.kubernetes.io/version: v1.4.24
+    chart: reloader-2.2.20
+    group: com.stakater.platform
+    helm.sh/chart: reloader-2.2.20
+    heritage: Helm
+    provider: stakater
+    release: reloader
+    version: v1.4.24
+  name: reloader-reloader
+  namespace: observability
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app: reloader-reloader
+      release: reloader
+  template:
+    metadata:
+      labels:
+        app: reloader-reloader
+        app.kubernetes.io/instance: reloader
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: reloader
+        app.kubernetes.io/version: v1.4.24
+        chart: reloader-2.2.20
+        group: com.stakater.platform
+        helm.sh/chart: reloader-2.2.20
+        heritage: Helm
+        provider: stakater
+        release: reloader
+        version: v1.4.24
+    spec:
+      containers:
+        - args:
+            - --log-level=info
+            - --resources-to-ignore=configmaps
+            - --reload-on-create=true
+            - --reload-strategy=annotations
+          env:
+            - name: GOMAXPROCS
+              valueFrom:
+                resourceFieldRef:
+                  divisor: "1"
+                  resource: limits.cpu
+            - name: GOMEMLIMIT
+              valueFrom:
+                resourceFieldRef:
+                  divisor: "1"
+                  resource: limits.memory
+            - name: KUBERNETES_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: RELOADER_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: RELOADER_DEPLOYMENT_NAME
+              value: reloader-reloader
+          image: ghcr.io/stakater/reloader:v1.4.24
+          imagePullPolicy: IfNotPresent
+          livenessProbe:
+            failureThreshold: 5
+            httpGet:
+              path: /live
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 5
+          name: reloader-reloader
+          ports:
+            - containerPort: 9090
+              name: http
+          readinessProbe:
+            failureThreshold: 5
+            httpGet:
+              path: /metrics
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 5
+          resources:
+            limits:
+              memory: 256Mi
+            requests:
+              cpu: 10m
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - mountPath: /tmp/
+              name: tmp-volume
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: reloader-reloader
+      volumes:
+        - emptyDir: {}
+          name: tmp-volume

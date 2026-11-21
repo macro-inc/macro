@@ -16,7 +16,7 @@ where
     N: ConnectionIdentity,
 {
     let link_id = request.attempt;
-    tracing::info!(user_id = %request.actor_id, ?link_id, "Init called");
+    tracing::info!(fusionauth_user_id = %request.actor_fusion_id, ?link_id, "Init called");
     let mut completed_google_grant = None;
     let link = if let Some(link_id) = link_id {
         let attempt = service
@@ -56,6 +56,7 @@ where
                     database(error, "Failed to look up child link before delegation")
                 })?;
             if let Some(child_link) = child {
+                refuse_departing(&service.links, child_link.id).await?;
                 service
                     .transactions
                     .delegate(
@@ -114,6 +115,7 @@ where
                 .await
                 .map_err(|error| database(error, "Failed to check existing link by email"))?
             {
+                refuse_departing(&service.links, existing_link_id).await?;
                 let applied = grants::apply_and_consume(
                     &service.grants,
                     existing_link_id,
@@ -146,6 +148,7 @@ where
                     })?
                 && existing_link.macro_id.as_ref() != request.actor_id.as_str()
             {
+                refuse_departing(&service.links, existing_link.id).await?;
                 if !request.force_share {
                     return Err(ConnectionError::SharedInboxConflict {
                         email_address: linked_email.clone(),
@@ -153,21 +156,9 @@ where
                         existing_link_id: existing_link.id,
                     });
                 }
-                let organization = service
-                    .links
-                    .organization(existing_link.macro_id.as_ref())
-                    .await
-                    .map_err(|error| {
-                        database(error, "Failed to fetch organization for shared-inbox owner")
-                    })?;
                 let promoted = service
                     .transactions
-                    .promote(
-                        &request.actor_id,
-                        &linked_email,
-                        &existing_link,
-                        organization,
-                    )
+                    .promote(&request.actor_id, &linked_email, &existing_link)
                     .await?;
                 shared::relocate(
                     &service.links,
@@ -239,6 +230,28 @@ where
         link_id: link.id,
         backfill_job_id: Some(job),
     })
+}
+
+/// A departing link is purged with everything attached to it, so nothing
+/// shares, delegates or reconnects it until it is gone. A second link of the
+/// same mailbox can't stand in meanwhile: Gmail keeps one watch per mailbox,
+/// which the old link's teardown stops, and pushes reach one link per address.
+async fn refuse_departing(
+    links: &impl ConnectionLinks,
+    link: uuid::Uuid,
+) -> Result<(), ConnectionError> {
+    let departing = links.link_departing(link).await.map_err(|error| {
+        database(
+            error,
+            "Failed to check whether the existing link is departing",
+        )
+    })?;
+    if departing {
+        return Err(ConnectionError::MailboxInitialization(
+            InitializationError::InboxBeingRemoved,
+        ));
+    }
+    Ok(())
 }
 
 fn new_gmail_link(

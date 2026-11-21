@@ -12,7 +12,8 @@
             "kind": {
               "Enum": [
                 "fleet",
-                "billing"
+                "billing",
+                "agents"
               ]
             }
           }

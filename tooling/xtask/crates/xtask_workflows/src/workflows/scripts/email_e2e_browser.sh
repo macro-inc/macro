@@ -50,7 +50,12 @@ echo "Email browser suite, shard $EMAIL_E2E_SHARD: $(( $(date +%s) - started )) 
 
 echo "::group::fixture suites"
 if wait "$web"; then
-  grep -E '^ +[0-9]+ (passed|flaky|skipped)|^Running' "$fixtures_log" || true
+  # Each suite's counts, and the tests listed under its flaky count: those
+  # that passed only on a retry. A failed suite prints its whole log below.
+  awk '/^Running|^ +[0-9]+ (passed|skipped|did not run)/ { names = 0; print; next }
+    /^ +[0-9]+ flaky$/ { names = 1; print; next }
+    names && /^    / { print; next }
+    { names = 0 }' "$fixtures_log"
 else
   cat "$fixtures_log"
   echo "a fixture suite failed" >&2

@@ -9,6 +9,7 @@ fn search_has_cache_matching_semantics_and_a_byte_bound() {
         id: ContactId::for_viewer(&viewer, &user_id),
         user_id,
         name: Some("CAFÉ Plan 100%_".into()),
+        lists: Vec::new(),
     };
     for query in [" café PLN ", "person EXAMPLE", "%_", ""] {
         assert!(
@@ -30,6 +31,7 @@ fn reference_predicates_match_before_limiting_without_inventing_local_part_names
         id: ContactId::for_viewer(&viewer, &user_id),
         user_id,
         name: Some("Sam Example".into()),
+        lists: Vec::new(),
     };
     assert!(!ContactSearch::exact("Sam").unwrap().matches(&contact));
     assert!(

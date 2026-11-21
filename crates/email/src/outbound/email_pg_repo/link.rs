@@ -185,6 +185,8 @@ struct DbInboxDetailsRow {
     is_sync_active: bool,
     /// Whether the provider grant needs reauthorization.
     needs_reauth: bool,
+    /// Whether the provider serves no mailbox for the account.
+    mailbox_unavailable: bool,
     /// Whether this is the owner's primary inbox.
     is_primary: bool,
     /// Link creation timestamp.
@@ -221,6 +223,7 @@ impl DbInboxDetailsRow {
             },
             is_sync_active: self.is_sync_active,
             needs_reauth: self.needs_reauth,
+            mailbox_unavailable: self.mailbox_unavailable,
             settings: UserEmailLinkSettings {
                 signature_on_replies_forwards: self.signature_on_replies_forwards.unwrap_or(false),
                 signature: self.signature,
@@ -258,6 +261,7 @@ pub(super) async fn inbox_details_for_macro_id(
                l.provider as "provider!: _",
                l.is_sync_active as "is_sync_active!",
                l.needs_reauth as "needs_reauth!",
+               l.mailbox_unavailable_at IS NOT NULL as "mailbox_unavailable!",
                l.is_primary as "is_primary!",
                l.created_at as "created_at!",
                l.updated_at as "updated_at!",
@@ -280,13 +284,13 @@ pub(super) async fn inbox_details_for_macro_id(
         FROM (
             SELECT el.id, el.macro_id, el.email_address, el.provider,
                    el.is_sync_active, el.needs_reauth, el.is_primary,
-                   el.created_at, el.updated_at, el.sync_generation
+                   el.created_at, el.updated_at, el.sync_generation, el.mailbox_unavailable_at
             FROM email_links el
             WHERE el.macro_id = $1
             UNION
             SELECT el.id, el.macro_id, el.email_address, el.provider,
                    el.is_sync_active, el.needs_reauth, el.is_primary,
-                   el.created_at, el.updated_at, el.sync_generation
+                   el.created_at, el.updated_at, el.sync_generation, el.mailbox_unavailable_at
             FROM email_links el
             JOIN macro_user_links mul ON el.id = mul.link_id
             WHERE mul.primary_macro_id = $1

@@ -49,6 +49,7 @@ export const projectDetailData = (project: InitiativeDetail) => ({
 export async function seedProjectDetail(
   userId: string | undefined,
   project: InitiativeDetail,
+  generation: string,
   host?: Pick<CacheHost, 'writeQuery' | 'disabled'>
 ) {
   if (!host || host.disabled || !userId) return;
@@ -74,6 +75,7 @@ export async function seedProjectDetail(
         },
       ].map(({ document, operationName }) =>
         host.writeQuery({
+          generation,
           query: stringifyDocument(document),
           operationName,
           variables: { initiativeId: project.id },

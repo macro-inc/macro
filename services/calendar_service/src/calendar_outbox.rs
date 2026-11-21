@@ -25,7 +25,8 @@ struct OutboxRow {
 
 /// Continuously schedule due syncs, reap wedged jobs, publish calendar outbox
 /// rows to calendar's own backfill queue, and hourly prune the calendar
-/// change log.
+/// change log and turn off Google calendars whose grant lacks the calendar
+/// capability.
 ///
 /// A row lock is held through each SQS publish. A crash after publish but
 /// before commit can duplicate a message, so every consumer remains
@@ -71,6 +72,7 @@ pub async fn run<R, P>(
     fields(
         scheduled = tracing::field::Empty,
         reaped = tracing::field::Empty,
+        disabled = tracing::field::Empty,
         published = tracing::field::Empty,
         pruned = tracing::field::Empty,
     )
@@ -95,6 +97,13 @@ async fn run_round<R, P>(
         tracing::error!(error=?error, "failed to reap wedged Google Calendar syncs");
     }) {
         span.record("reaped", reaped);
+    }
+    if prune
+        && let Ok(disabled) = scheduler.disable_without_capability_once().await.inspect_err(|error| {
+            tracing::error!(error = ?error, "failed to turn off Google calendars without the calendar capability");
+        })
+    {
+        span.record("disabled", disabled);
     }
     if let Ok(published) = drain_calendar(db, queue).await.inspect_err(|error| {
         tracing::error!(error = ?error, "failed to publish calendar backfill outbox");

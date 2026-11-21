@@ -1,5 +1,9 @@
 use super::*;
-use crate::domain::{mailbox::MailboxKey, models::ResolvedDraftInput};
+use crate::domain::models::error::LOCK_NOT_AVAILABLE;
+use crate::domain::{
+    mailbox::{AFTER_PROVIDER_ATTEMPTS, AFTER_PROVIDER_RETRY_DELAY, DatabaseFailure, MailboxKey},
+    models::ResolvedDraftInput,
+};
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
@@ -19,6 +23,8 @@ struct State {
     updates: usize,
     submissions: usize,
     additions: usize,
+    /// Checkpoints after a provider update that time out on a busy mailbox.
+    locked_checkpoints: u32,
 }
 
 fn harness(stage: Option<DraftStage>) -> Harness {
@@ -94,6 +100,7 @@ fn harness(stage: Option<DraftStage>) -> Harness {
         updates: 0,
         submissions: 0,
         additions: 0,
+        locked_checkpoints: 0,
     })))
 }
 
@@ -121,7 +128,14 @@ impl DraftRepository for Harness {
         _: &DraftLease,
         c: &DraftCheckpoint,
     ) -> Result<(), MailboxError> {
-        self.0.lock().unwrap().lease.checkpoint = Some(c.clone());
+        let mut s = self.0.lock().unwrap();
+        if s.updates > 0 && s.locked_checkpoints > 0 {
+            s.locked_checkpoints -= 1;
+            return Err(MailboxError::database(DatabaseFailure::Sqlstate(
+                LOCK_NOT_AVAILABLE.into(),
+            )));
+        }
+        s.lease.checkpoint = Some(c.clone());
         Ok(())
     }
     async fn release_draft(&self, _: &DraftLease, _: u32) -> Result<(), MailboxError> {
@@ -561,4 +575,36 @@ async fn discard_during_uncertain_creation_deletes_the_recovered_draft() {
     assert!(state.failure.is_none());
     assert_eq!(state.creates, 1);
     assert_eq!(state.submissions, 0);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_checkpoint_after_a_provider_write_waits_out_a_busy_mailbox() {
+    let h = harness(Some(DraftStage::Inspect));
+    h.0.lock().unwrap().locked_checkpoints = 2;
+    let started = tokio::time::Instant::now();
+    assert!(service(&h).execute_once().await.unwrap());
+    assert_eq!(started.elapsed(), 2 * AFTER_PROVIDER_RETRY_DELAY);
+    let s = h.0.lock().unwrap();
+    assert_eq!(s.updates, 1);
+    assert_eq!(
+        s.lease.checkpoint.as_ref().unwrap().stage,
+        DraftStage::Attachments
+    );
+    assert!(s.failure.is_none());
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_checkpoint_that_stays_locked_gives_up_inside_the_lease() {
+    let h = harness(Some(DraftStage::Inspect));
+    h.0.lock().unwrap().locked_checkpoints = u32::MAX;
+    let started = tokio::time::Instant::now();
+    let error = service(&h).execute_once().await.unwrap_err();
+    assert!(error.is_lock_timeout(), "{error:?}");
+    assert!(started.elapsed() < std::time::Duration::from_secs(180));
+    let s = h.0.lock().unwrap();
+    assert_eq!(s.locked_checkpoints, u32::MAX - AFTER_PROVIDER_ATTEMPTS);
+    assert_eq!(
+        s.lease.checkpoint.as_ref().unwrap().stage,
+        DraftStage::Updating
+    );
 }
