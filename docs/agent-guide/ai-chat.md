@@ -2037,18 +2037,24 @@ or an initiative) loads its item with the viewer's own access and opens it; a
 routine's card can pause it or run it now. An agenda loads its events live
 from the viewer's calendars and groups them by day. A tags widget nests tags
 to any depth as coloured pills. A connect card names an app (by Pipedream app
-slug) or an MCP server (by URL) the agent needs, fills the transcript column,
-and has one **Connect** button that starts its sign-in directly; once
-connected it reads **Connected**. The agent ends its turn after presenting
-it, with no text asking again to connect. In
-the session that presented it, connecting an app continues the session through
-`app.connected`, as the `Connect <app>` chip does. Elsewhere (a DM reply, a
-custom MCP server) a toast asks the reader to reply when ready. A server whose
-sign-in cannot start opens the Add MCP Server dialog filled in with its name
-and URL, unless the user already added it; then a toast says a sign-in
-could not start and, if the server needs none (no OAuth), to reply to
-continue: such a server works without one and never reads **Connected**. While the session cannot connect (a viewer, an archived session, a
-running turn) the button is disabled. A code-mode agent is told to present
+slug) or an MCP server (by URL; the card shows **MCP server · host**) the agent
+needs, fills the transcript column, and has one **Connect** button. The agent
+ends its turn after presenting it, with no text asking again to connect; once
+connected the card reads **Connected**. For an app, Connect starts its sign-in
+directly; in the session that presented it, connecting continues the session
+through `app.connected`, as the `Connect <app>` chip does, and elsewhere a
+toast asks the reader to reply when ready. For a server the user has not
+added, Connect first opens the Add MCP Server dialog, titled **Add host?** and
+filled in with its name and URL; nothing signs in until they add it and press
+Connect again. For a server they have, Connect starts its sign-in, and a toast
+asks them to reply once connected. If that sign-in cannot start, a toast says
+so and, if the server needs none (no OAuth), to reply to continue: such a
+server works without one and never reads **Connected**. Before the user's
+server list has loaded, Connect only asks them to try again. Connect is
+disabled while the session cannot connect (a viewer, an archived session, a
+running turn), and outside the session (a channel reply) for anyone but the
+session's owner. Any sign-in page that is not https (or http on loopback) is
+refused, in Settings → Connections too. A code-mode agent is told to present
 connect cards by its session prompt and the `macro.connectedApps` docs, and
 by the not-connected answers of connected-app tool calls; the `m-connect-app`
 chip stays for AI chat, external agents and older replies. In the resumed

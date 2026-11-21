@@ -1,7 +1,10 @@
 import { AddCustomMcpDialog } from '@app/features/settings/connections/add-custom-mcp-dialog';
 import { toast } from '@core/component/Toast/Toast';
 import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
-import { AppConnectionContext } from '@core/pipedream/connection-context';
+import {
+  AppConnectionContext,
+  ConnectCardAccessContext,
+} from '@core/pipedream/connection-context';
 import { fireAndForget } from '@core/util/fireAndForget';
 import Plug from '@icon/system/regular/plug.svg';
 import {
@@ -38,6 +41,8 @@ export function ConnectCardView(props: {
   busy?: boolean;
   /** Connecting is not available here, e.g. to a viewer of the session. */
   disabled?: boolean;
+  /** Why Connect is disabled, read on hover and by assistive tech. */
+  disabledReason?: string;
 }) {
   return (
     <Card width="column" data-agent-card="connect">
@@ -60,6 +65,7 @@ export function ConnectCardView(props: {
               aria-label={`Connect ${props.name}`}
               loading={props.busy ?? false}
               disabled={props.disabled}
+              title={props.disabled ? props.disabledReason : undefined}
               onClick={props.onConnect}
             >
               Connect
@@ -91,8 +97,27 @@ export function ConnectCard(props: { name: string; target: ConnectTarget }) {
   );
 }
 
-function ConnectAppCard(props: { name: string; appSlug: string }) {
+/**
+ * Who may press Connect. In the session that presented the card, the session
+ * decides (only its owner, while it can continue). Elsewhere, e.g. in a
+ * channel, only the session's owner; where no one says, no one.
+ */
+function useConnectAccess() {
   const session = useContext(AppConnectionContext);
+  const access = useContext(ConnectCardAccessContext);
+  const outsideAndBlocked = () => !session && !(access?.allowed() ?? false);
+  return {
+    session,
+    disabled: () => session?.disabled() ?? outsideAndBlocked(),
+    reason: () =>
+      outsideAndBlocked()
+        ? "Only the session's owner can connect this"
+        : undefined,
+  };
+}
+
+function ConnectAppCard(props: { name: string; appSlug: string }) {
+  const { session, disabled, reason } = useConnectAccess();
   const connections = usePipedreamConnectedSlugs();
   const [busy, setBusy] = createSignal(false);
 
@@ -122,14 +147,20 @@ function ConnectAppCard(props: { name: string; appSlug: string }) {
       icon={<PipedreamConnectorIcon appSlug={props.appSlug} class="size-5" />}
       connected={connections.ready() && connections.slugs().has(props.appSlug)}
       busy={busy()}
-      disabled={session?.disabled() ?? false}
+      disabled={disabled()}
+      disabledReason={reason()}
       onConnect={() => fireAndForget(connect(), 'connect-card')}
     />
   );
 }
 
+/** A server URL's host, as the card names it; the URL itself if it has none. */
+function serverHost(url: string): string {
+  return URL.canParse(url) ? new URL(url).host : url;
+}
+
 function ConnectServerCard(props: { name: string; url: string }) {
-  const session = useContext(AppConnectionContext);
+  const { disabled, reason } = useConnectAccess();
   const server = useMcpServerConnected(() => props.url);
   const [busy, setBusy] = createSignal(false);
   const [adding, setAdding] = createSignal(false);
@@ -142,39 +173,47 @@ function ConnectServerCard(props: { name: string; url: string }) {
     );
     setBusy(false);
     if (outcome.isErr()) {
-      // The sign-in could not start. Before the server list loads, retry; a
-      // server the list confirms the user has not added yet is added by hand,
-      // filled in; one they already have may need no sign-in at all.
-      if (!server.ready()) {
-        toast.alert(
-          `Could not start a sign-in for ${props.name}. Please try again.`
-        );
-      } else if (!server.listed()) {
-        setAdding(true);
-      } else {
-        toast.alert(
-          `Could not start a sign-in for ${props.name}. If it needs none, reply to continue.`
-        );
-      }
+      // The server is in the user's list, so its sign-in could not start; a
+      // server that needs none works without one.
+      toast.alert(
+        `Could not start a sign-in for ${props.name}. If it needs none, reply to continue.`
+      );
       return;
     }
     announce(props.name, outcome.value);
+  }
+
+  // A server the user has not added is added by hand first, from a dialog
+  // that names its host and URL: the agent chose this URL, so nothing signs
+  // in to it until the user has seen where it points.
+  function onConnect() {
+    if (!server.ready()) {
+      toast.alert(
+        `Could not start a sign-in for ${props.name}. Please try again.`
+      );
+    } else if (!server.listed()) {
+      setAdding(true);
+    } else {
+      fireAndForget(connect(), 'connect-card');
+    }
   }
 
   return (
     <>
       <ConnectCardView
         name={props.name}
-        kind="MCP server"
+        kind={`MCP server · ${serverHost(props.url)}`}
         icon={<Plug class="size-[18px]" />}
         connected={server.ready() && server.connected()}
         busy={busy()}
-        disabled={session?.disabled() ?? false}
-        onConnect={() => fireAndForget(connect(), 'connect-card')}
+        disabled={disabled()}
+        disabledReason={reason()}
+        onConnect={onConnect}
       />
       <AddCustomMcpDialog
         open={adding()}
         onOpenChange={setAdding}
+        title={`Add ${serverHost(props.url)}?`}
         initialName={props.name}
         initialUrl={props.url}
       />

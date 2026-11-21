@@ -8,6 +8,7 @@ import { Key } from '@solid-primitives/keyed';
 import { Show } from 'solid-js';
 import type { ActivityRowView } from './components/activity-rows';
 import { ActivitySummary } from './components/activity-summary';
+import { OwnerConnectAccess } from './components/owner-connect-access';
 import { PresentedView } from './components/presented-view';
 import { replyToTurn, segmentRows } from './core/live-reply';
 import { createCodeActivityRows } from './queries/code-activity';
@@ -26,7 +27,12 @@ import { createLiveSession } from './queries/live-session';
 export function AgentActivity(props: AgentActivityData) {
   return (
     <div class="min-w-0 max-w-full" data-agent-activity={props.agentSessionId}>
-      <Show when={!props.sealed} fallback={<Run rows={props.rows} sealed />}>
+      <Show
+        when={!props.sealed}
+        fallback={
+          <Run rows={props.rows} sealed sessionId={props.agentSessionId} />
+        }
+      >
         <LiveActivity {...props} />
       </Show>
     </div>
@@ -47,7 +53,14 @@ function LiveActivity(props: AgentActivityData) {
     rows
   );
   const summary = useSessionActivity(() => props.agentSessionId);
-  return <Run rows={activity()} sealed={false} summary={summary()} />;
+  return (
+    <Run
+      rows={activity()}
+      sealed={false}
+      summary={summary()}
+      sessionId={props.agentSessionId}
+    />
+  );
 }
 
 /**
@@ -60,6 +73,8 @@ function Run(props: {
   sealed: boolean;
   /** The session's live status line over an open run's steps. */
   summary?: string;
+  /** The session that presented the views, whose owner alone may connect. */
+  sessionId: string;
 }) {
   const steps = () =>
     props.rows.filter((row) => !isAgentActivityCard(row.card));
@@ -77,9 +92,13 @@ function Run(props: {
           <ActivitySummary rows={steps()} />
         </Show>
       </Show>
-      <Key each={views()} by="id">
-        {(presented) => <PresentedView view={presented().view} />}
-      </Key>
+      <Show when={views().length > 0}>
+        <OwnerConnectAccess sessionId={props.sessionId}>
+          <Key each={views()} by="id">
+            {(presented) => <PresentedView view={presented().view} />}
+          </Key>
+        </OwnerConnectAccess>
+      </Show>
     </>
   );
 }

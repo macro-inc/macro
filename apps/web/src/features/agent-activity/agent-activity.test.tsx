@@ -16,6 +16,10 @@ vi.mock('@service-agent-harness/client', () => ({
   agentHarnessServiceClient: { getCodeExecution: code.read },
 }));
 const [messages, setMessages] = createSignal<FoldedMessage[]>([]);
+// Who may press a presented connect card is its own test's concern.
+vi.mock('./components/owner-connect-access', () => ({
+  OwnerConnectAccess: (props: { children: unknown }) => props.children,
+}));
 vi.mock('./queries/live-session', () => ({
   createLiveSession: (id: () => string | undefined) => {
     live.acquired.push(id());

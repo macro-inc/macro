@@ -460,6 +460,8 @@ async function connectGithubLink(span: Span): Promise<PipedreamConnectOutcome> {
 }
 
 const MCP_AUTH_POLL_MS = 2000;
+/** Failed reads of the server list in a row that end the wait. */
+const MCP_AUTH_MAX_FAILED_READS = 3;
 // Matches the backend's pending-authorization lifetime.
 const MCP_AUTH_TIMEOUT_MS = 10 * 60 * 1000;
 
@@ -498,8 +500,10 @@ export async function connectMcpServer(server: {
  * browser), then wait for the server list to show it authorized. The
  * callback page cannot message this tab, so the list is re-read until the
  * grant lands, the tab is closed, or the pending authorization expires. A
- * read that fails is retried at the next poll: the sign-in has started by
- * then, so only a failure to start it rejects.
+ * read that fails is retried at the next poll, but
+ * `MCP_AUTH_MAX_FAILED_READS` failures in a row reject: the list is not
+ * coming back, and without a tab to watch (the desktop app) nothing else
+ * would end the wait.
  */
 async function authorizeMcpServer(
   server: { url: string; name: string },
@@ -520,12 +524,15 @@ async function authorizeMcpServer(
     popup?.close();
     return 'closed';
   }
-  assignOauthUrl(popup, started.authorization_url);
+  if (!assignOauthUrl(popup, started.authorization_url)) {
+    throw new Error('The server offered a sign-in page that is not https');
+  }
 
   const consent = span.span('mcp.consent');
   try {
     const deadline = Date.now() + MCP_AUTH_TIMEOUT_MS;
     let failedReads = 0;
+    let failedInARow = 0;
     while (Date.now() < deadline && currentUserId() === userId) {
       const closed = popup?.closed ?? false;
       const servers = await ResultAsync.fromPromise(
@@ -539,9 +546,15 @@ async function authorizeMcpServer(
       );
       if (servers.isErr()) {
         failedReads += 1;
+        failedInARow += 1;
         consent.setAttr('mcp.failed_reads', failedReads);
+        if (failedInARow >= MCP_AUTH_MAX_FAILED_READS) {
+          throw new Error('Could not read the server list');
+        }
       } else if (mcpServerConnected(servers.value, server.url)) {
         return 'connected';
+      } else {
+        failedInARow = 0;
       }
       if (closed) return 'closed';
       await new Promise((resolve) => setTimeout(resolve, MCP_AUTH_POLL_MS));

@@ -35,17 +35,22 @@ vi.mock('@app/features/settings/connections/add-custom-mcp-dialog', () => ({
     open: boolean;
     initialName?: string;
     initialUrl?: string;
+    title?: string;
   }) => (
     <div
       data-testid="add-mcp-dialog"
       data-open={String(props.open)}
+      data-title={props.title}
       data-name={props.initialName}
       data-url={props.initialUrl}
     />
   ),
 }));
 
-import { AppConnectionContext } from '@core/pipedream/connection-context';
+import {
+  AppConnectionContext,
+  ConnectCardAccessContext,
+} from '@core/pipedream/connection-context';
 import { ConnectCard } from './connect-card';
 
 beforeEach(() => {
@@ -84,10 +89,15 @@ describe('connect card', () => {
     expect(screen.queryByRole('button', { name: 'Connect Linear' })).toBeNull();
   });
 
-  it('connects an app outside a session and asks for a reply to continue', async () => {
+  it("connects an app outside the session for the session's owner and asks for a reply", async () => {
     mocks.connectPipedreamApp.mockResolvedValue('connected');
     render(() => (
-      <ConnectCard name="Linear" target={{ kind: 'app', appSlug: 'linear' }} />
+      <ConnectCardAccessContext.Provider value={{ allowed: () => true }}>
+        <ConnectCard
+          name="Linear"
+          target={{ kind: 'app', appSlug: 'linear' }}
+        />
+      </ConnectCardAccessContext.Provider>
     ));
 
     fireEvent.click(screen.getByRole('button', { name: 'Connect Linear' }));
@@ -103,13 +113,85 @@ describe('connect card', () => {
     );
   });
 
-  it('authorizes an MCP server by its URL in one click', async () => {
-    mocks.connectMcpServer.mockResolvedValue('connected');
+  it("disables Connect outside the session for anyone but the session's owner", () => {
+    render(() => (
+      <ConnectCardAccessContext.Provider value={{ allowed: () => false }}>
+        <ConnectCard
+          name="Linear"
+          target={{ kind: 'app', appSlug: 'linear' }}
+        />
+        <ConnectCard
+          name="Acme"
+          target={{ kind: 'server', url: 'https://mcp.acme.example/mcp' }}
+        />
+      </ConnectCardAccessContext.Provider>
+    ));
+
+    for (const name of ['Connect Linear', 'Connect Acme']) {
+      const button = screen.getByRole('button', { name });
+      expect(button.hasAttribute('disabled')).toBe(true);
+      expect(button.getAttribute('title')).toBe(
+        "Only the session's owner can connect this"
+      );
+      fireEvent.click(button);
+    }
+    expect(mocks.connectPipedreamApp).not.toHaveBeenCalled();
+    expect(mocks.connectMcpServer).not.toHaveBeenCalled();
+  });
+
+  it('disables Connect where no one says who may connect', () => {
+    render(() => (
+      <ConnectCard name="Linear" target={{ kind: 'app', appSlug: 'linear' }} />
+    ));
+
+    expect(
+      screen
+        .getByRole('button', { name: 'Connect Linear' })
+        .hasAttribute('disabled')
+    ).toBe(true);
+  });
+
+  it("names a server card's host", () => {
     render(() => (
       <ConnectCard
-        name="Acme"
-        target={{ kind: 'server', url: 'https://mcp.acme.example/mcp' }}
+        name="Linear"
+        target={{ kind: 'server', url: 'https://linear-mcp.evil.example/mcp' }}
       />
+    ));
+
+    expect(screen.getByText('MCP server · linear-mcp.evil.example')).toBeTruthy();
+  });
+
+  it('asks to add an unlisted server, naming its host, before any sign-in', () => {
+    render(() => (
+      <ConnectCardAccessContext.Provider value={{ allowed: () => true }}>
+        <ConnectCard
+          name="Acme"
+          target={{ kind: 'server', url: 'https://mcp.acme.example/mcp' }}
+        />
+      </ConnectCardAccessContext.Provider>
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Connect Acme' }));
+
+    const dialog = screen.getByTestId('add-mcp-dialog');
+    expect(dialog.dataset.open).toBe('true');
+    expect(dialog.dataset.title).toBe('Add mcp.acme.example?');
+    expect(dialog.dataset.name).toBe('Acme');
+    expect(dialog.dataset.url).toBe('https://mcp.acme.example/mcp');
+    expect(mocks.connectMcpServer).not.toHaveBeenCalled();
+  });
+
+  it('authorizes a server the user has added by its URL in one click', async () => {
+    mocks.listedServers.add('https://mcp.acme.example/mcp');
+    mocks.connectMcpServer.mockResolvedValue('connected');
+    render(() => (
+      <ConnectCardAccessContext.Provider value={{ allowed: () => true }}>
+        <ConnectCard
+          name="Acme"
+          target={{ kind: 'server', url: 'https://mcp.acme.example/mcp' }}
+        />
+      </ConnectCardAccessContext.Provider>
     ));
 
     fireEvent.click(screen.getByRole('button', { name: 'Connect Acme' }));
@@ -122,23 +204,46 @@ describe('connect card', () => {
     expect(screen.getByTestId('add-mcp-dialog').dataset.open).toBe('false');
   });
 
-  it('opens the add-server dialog, filled in, when the server offers no sign-in', async () => {
+  it('says a server already added may need no sign-in when its sign-in cannot start', async () => {
+    mocks.listedServers.add('https://mcp.acme.example/mcp');
     mocks.connectMcpServer.mockRejectedValue(new Error('no oauth'));
     render(() => (
-      <ConnectCard
-        name="Acme"
-        target={{ kind: 'server', url: 'https://mcp.acme.example/mcp' }}
-      />
+      <ConnectCardAccessContext.Provider value={{ allowed: () => true }}>
+        <ConnectCard
+          name="Acme"
+          target={{ kind: 'server', url: 'https://mcp.acme.example/mcp' }}
+        />
+      </ConnectCardAccessContext.Provider>
     ));
 
     fireEvent.click(screen.getByRole('button', { name: 'Connect Acme' }));
 
     await waitFor(() =>
-      expect(screen.getByTestId('add-mcp-dialog').dataset.open).toBe('true')
+      expect(mocks.toastAlert).toHaveBeenCalledWith(
+        'Could not start a sign-in for Acme. If it needs none, reply to continue.'
+      )
     );
-    const dialog = screen.getByTestId('add-mcp-dialog');
-    expect(dialog.dataset.name).toBe('Acme');
-    expect(dialog.dataset.url).toBe('https://mcp.acme.example/mcp');
+    expect(screen.getByTestId('add-mcp-dialog').dataset.open).toBe('false');
+  });
+
+  it('asks to try again, starting nothing, before the server list has loaded', () => {
+    mocks.serversReady = false;
+    render(() => (
+      <ConnectCardAccessContext.Provider value={{ allowed: () => true }}>
+        <ConnectCard
+          name="Acme"
+          target={{ kind: 'server', url: 'https://mcp.acme.example/mcp' }}
+        />
+      </ConnectCardAccessContext.Provider>
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Connect Acme' }));
+
+    expect(mocks.toastAlert).toHaveBeenCalledWith(
+      'Could not start a sign-in for Acme. Please try again.'
+    );
+    expect(mocks.connectMcpServer).not.toHaveBeenCalled();
+    expect(screen.getByTestId('add-mcp-dialog').dataset.open).toBe('false');
   });
 
   it('disables Connect without showing a sign-in when the session cannot connect', () => {
@@ -157,46 +262,6 @@ describe('connect card', () => {
     expect(button.hasAttribute('disabled')).toBe(true);
     expect(button.getAttribute('aria-busy')).toBeNull();
     expect(button.textContent).toBe('Connect');
-  });
-
-  it('says a server already added may need no sign-in, without the add-server dialog', async () => {
-    mocks.listedServers.add('https://mcp.acme.example/mcp');
-    mocks.connectMcpServer.mockRejectedValue(new Error('network'));
-    render(() => (
-      <ConnectCard
-        name="Acme"
-        target={{ kind: 'server', url: 'https://mcp.acme.example/mcp' }}
-      />
-    ));
-
-    fireEvent.click(screen.getByRole('button', { name: 'Connect Acme' }));
-
-    await waitFor(() =>
-      expect(mocks.toastAlert).toHaveBeenCalledWith(
-        'Could not start a sign-in for Acme. If it needs none, reply to continue.'
-      )
-    );
-    expect(screen.getByTestId('add-mcp-dialog').dataset.open).toBe('false');
-  });
-
-  it('asks to try again, without the add-server dialog, before the server list has loaded', async () => {
-    mocks.serversReady = false;
-    mocks.connectMcpServer.mockRejectedValue(new Error('network'));
-    render(() => (
-      <ConnectCard
-        name="Acme"
-        target={{ kind: 'server', url: 'https://mcp.acme.example/mcp' }}
-      />
-    ));
-
-    fireEvent.click(screen.getByRole('button', { name: 'Connect Acme' }));
-
-    await waitFor(() =>
-      expect(mocks.toastAlert).toHaveBeenCalledWith(
-        'Could not start a sign-in for Acme. Please try again.'
-      )
-    );
-    expect(screen.getByTestId('add-mcp-dialog').dataset.open).toBe('false');
   });
 
   it('disables a server card while the session cannot connect', () => {
@@ -220,6 +285,7 @@ describe('connect card', () => {
     ).toBe(true);
     expect(mocks.connectMcpServer).not.toHaveBeenCalled();
   });
+
   it('fills the transcript column, as the other cards the user acts on do', () => {
     const { container } = render(() => (
       <ConnectCard name="Acme" target={{ kind: 'app', appSlug: 'acme' }} />
