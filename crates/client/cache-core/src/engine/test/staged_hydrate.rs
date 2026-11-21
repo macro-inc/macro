@@ -292,3 +292,35 @@ fn a_hydrate_that_binds_the_account_is_not_staged() {
         );
     });
 }
+
+/// A request the whole hydrate rejects before reading storage is not staged
+/// and reads no storage either: a failed read there would mark storage for
+/// reset where the whole hydrate reports the request.
+#[test]
+fn a_mutation_is_not_staged_and_reads_no_storage() {
+    pollster::block_on(async {
+        let variables = serde_json::Map::new();
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let data = json!({"setEntityProperty": {"id": "property"}});
+        let write = NetworkWrite {
+            query: "mutation { setEntityProperty { id } }",
+            operation_name: None,
+            variables: &variables,
+            data: &data,
+            identity: None,
+        };
+        assert!(
+            engine
+                .stage_hydrate(write, None, &[])
+                .await
+                .unwrap()
+                .is_none()
+        );
+        assert!(!engine.optimistic_hydrated, "the queue was not read");
+        let whole = engine
+            .hydrate_query(write.query, None, &variables, &data, None)
+            .await
+            .expect_err("query-only");
+        assert!(whole.to_string().contains("query-only"), "{whole}");
+    });
+}

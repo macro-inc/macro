@@ -3075,12 +3075,16 @@ async fn a_staged_hydrate_lets_reads_run_then_commits_as_hydrate_query_does() {
                 JsValue::UNDEFINED,
             )
         };
+        let before = hydrated_state(&engine).await;
+        assert_ne!(before, whole_state, "bound {bound}");
         resolved(prepare_backfill(&engine)).await;
         resolved(read()).await;
         resolved(engine.stage_hydrate()).await;
-        // A read after the staging still sees the cache as it was before.
+        // Reads after the staging still see the cache as it was before:
+        // records, projections and revision.
         let between: serde_json::Value = from_js(resolved(read()).await);
         assert_eq!(between["kind"], "miss");
+        assert_eq!(hydrated_state(&engine).await, before, "bound {bound}");
         let split: serde_json::Value = from_js(resolved(engine.commit_hydrate()).await);
         assert_eq!(split, whole, "bound {bound}");
         let state = engine.state.lock().await;
@@ -3110,22 +3114,21 @@ async fn a_staged_hydrate_lets_reads_run_then_commits_as_hydrate_query_does() {
     }
 }
 
-/// A stage whose read fails tells the host to run nothing before the commit:
-/// the failed read latched storage for reset, which a read scheduled before
-/// the hydrate must not see. The commit then reports the failure.
+/// A stage whose read fails rejects with the error the whole hydrate meets,
+/// reset marker included, and keeps nothing to commit.
 #[wasm_bindgen_test(async)]
-async fn a_failed_stage_runs_nothing_before_the_commit_reports_it() {
+async fn a_failed_stage_fails_the_hydrate_with_its_error() {
     const SCOPE: &str = "cache-wasm-staged-hydrate-fails";
     let engine = fresh_engine(SCOPE).await;
     resolved(write_soup(&engine, "doc-bound")).await;
     resolved(prepare_backfill(&engine)).await;
     engine.arm_storage_fault(TestStorageFault::GetBatch).await;
-    let reads_may_run = resolved(engine.stage_hydrate()).await;
-    assert_eq!(reads_may_run.as_bool(), Some(false));
-    assert_eq!(engine.state.lock().await.stages_kept, 0);
-    // The fault is one-shot; a lasting one meets the whole hydrate too.
-    engine.arm_storage_fault(TestStorageFault::GetBatch).await;
-    assert_reset_required(engine.commit_hydrate()).await;
+    assert_reset_required(engine.stage_hydrate()).await;
+    let state = engine.state.lock().await;
+    assert!(state.reset_required);
+    assert!(state.prepared_hydrate.is_none());
+    assert_eq!(state.stages_kept, 0);
+    drop(state);
     close_and_destroy(&engine, SCOPE).await;
 }
 
