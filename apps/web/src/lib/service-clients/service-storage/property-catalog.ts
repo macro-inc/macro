@@ -11,7 +11,13 @@ import type { PropertyOwner } from '@service-properties/generated/schemas/proper
 import type { PropertyScope } from '@service-properties/generated/schemas/propertyScope';
 import type { TagScope } from '@service-properties/generated/schemas/tagScope';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
-import type { AnyVariables, CombinedError } from '@urql/core';
+import {
+  type AnyVariables,
+  type CombinedError,
+  createRequest,
+  type GraphQLRequest,
+} from '@urql/core';
+import type { DocumentNode } from 'graphql';
 import { match } from 'ts-pattern';
 import {
   type GraphqlPropertyDefinitionScope,
@@ -212,12 +218,35 @@ function toQueryError(error: CombinedError): Error {
   return error;
 }
 
+/**
+ * urql's client answers a query whose key (document and variables) is already
+ * in flight with that earlier request's result, `network-only` included. A
+ * read sent after a write would then answer from before it: the refetch a
+ * write's invalidation starts while an earlier fetch of the same list is
+ * pending. Every REST read was a request of its own, so every catalog read
+ * gets a key of its own; the document and variables sent are unchanged.
+ */
+function catalogRequest<Data, Variables extends AnyVariables>(
+  document: TypedDocumentNode<Data, Variables>,
+  variables: Variables
+): GraphQLRequest<Data, Variables> {
+  const request = createRequest(document, variables);
+  const query: DocumentNode = request.query;
+  const { key } = createRequest(query, {
+    catalogRead: crypto.randomUUID(),
+    key: request.key,
+  });
+  return { ...request, key };
+}
+
 async function readCatalog<Data, Variables extends AnyVariables>(
   document: TypedDocumentNode<Data, Variables>,
   variables: Variables
 ): Promise<Data> {
   const result = await getGraphqlSoupNetworkClient()
-    .query(document, variables, { requestPolicy: 'network-only' })
+    .executeQuery(catalogRequest(document, variables), {
+      requestPolicy: 'network-only',
+    })
     .toPromise();
   if (result.error) throw toQueryError(result.error);
   if (!result.data) throw new Error('Property catalog read returned no data');
