@@ -1,4 +1,3 @@
-import type { FeatureDemoComposition } from '../components/FeatureDemoArt';
 import type { TutorialVideoId } from './tutorial-videos';
 
 export type WorkspaceFeature = {
@@ -15,7 +14,6 @@ export type WorkspaceFeature = {
     | 'Skills';
   title: string;
   description: string;
-  tone: FeatureDemoComposition['tone'];
   heading: string;
   detail: string;
   sceneTitle: string;
@@ -31,7 +29,6 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     tutorial: 'spreadsheets',
     product: 'Spreadsheets',
     title: 'Sheets @linked to your work.',
-    tone: 'tasks',
     description:
       'A high performance, agent-native spreadsheet that works with Excel, Google Sheets and CSV.',
     heading: '@mention anything in a cell.',
@@ -45,11 +42,6 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
         title: 'Macro Agents edit the sheet, like teammates.',
         description:
           'Agents can edit the sheet too, including external agents like ChatGPT or Claude. Ask one to add up the spend by team, or build a forecast for next quarter, and watch its cursor move through the cells as it works. You can all collaborate in the same sheet.',
-      },
-      {
-        title: 'Tightly integrated with Macro CRM.',
-        description:
-          'Mention a company or a contact in a cell, and it’s the same record you work from in your CRM. See the stage, the owner, the last email, and the next call right from the sheet, or open the record. Your customer list and your CRM stop being two things to keep in sync.',
       },
       {
         title: 'Add formulas, charts, and comments.',
@@ -81,7 +73,6 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     tutorial: 'databases',
     product: 'Databases',
     title: 'Dear Notion, meet big data.',
-    tone: 'documents',
     description:
       'Edit records together with your team and agents. Switch between tables, boards, and timelines.',
     heading: '@mention anything in a column.',
@@ -126,7 +117,6 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     tutorial: 'canvas',
     product: 'Canvas',
     title: 'An infinite connected canvas.',
-    tone: 'chat',
     description:
       'Draw diagrams and plan with your team. Add shapes, notes, and images alongside live mentions of docs and tasks.',
     heading: '@mention Macro Tasks, Macro Docs, and Macro Mail.',
@@ -165,7 +155,6 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
   snippets: {
     product: 'Snippets',
     title: 'Reusable snippets.',
-    tone: 'documents',
     description:
       'Save replies and templates for reuse. Type a semicolon to insert them.',
     heading: 'Save replies as reusable snippets.',
@@ -205,7 +194,6 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     tutorial: 'calendar',
     product: 'Calendar',
     title: 'A really fast calendar, with agents that do the scheduling.',
-    tone: 'calls',
     description:
       'All your Google and Microsoft calendars in one view. Find time with your team and ask agents to handle the invites.',
     heading: 'All your accounts in one view.',
@@ -258,7 +246,6 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     tutorial: 'scheduling',
     product: 'Booking links',
     title: 'Team booking links.',
-    tone: 'calls',
     description: 'Let guests book an open time. No Macro account needed.',
     heading: 'Book one teammate or the whole team.',
     detail:
@@ -302,7 +289,6 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     tutorial: 'drive',
     product: 'Drive',
     title: 'Auto-organized file storage.',
-    tone: 'email',
     description:
       'Files from email, chat, and uploads, automatically tagged and searchable for your team and agents.',
     heading: 'Files from Macro Chat and Macro Mail land here.',
@@ -368,7 +354,6 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     tutorial: 'routines',
     product: 'Routines',
     title: 'Agents on a schedule.',
-    tone: 'agents',
     description:
       'Schedule agent prompts to run, or trigger them when your workspace changes.',
     heading: 'A saved prompt, run on a schedule.',
@@ -418,7 +403,6 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     tutorial: 'skills',
     product: 'Skills',
     title: 'Skills for your agents.',
-    tone: 'agents',
     description:
       'Save instructions your agents can reuse, from code reviews to release notes.',
     heading: 'Write the instructions once.',

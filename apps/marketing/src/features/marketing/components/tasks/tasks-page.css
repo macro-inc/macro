@@ -1,25 +1,4 @@
-/* Tasks owns the story and geometry; shared feature pages keep their styling. */
-.tasks-page .email-desktop-demo {
-	--desktop-stage-width: min(1120px, 92vw);
-}
-.tasks-page .email-desktop-wallpaper {
-	padding: 32px;
-}
-.tasks-page .email-desktop-content {
-	height: 540px;
-}
-.tasks-page .email-desktop-content .product-demo {
-	height: 100%;
-	border-radius: 0;
-	mask-image: none;
-	-webkit-mask-image: none;
-}
-.tasks-page .email-desktop-content .product-demo-stage {
-	height: 100%;
-}
-.tasks-page .email-desktop-content .product-demo-stage::before {
-	display: none;
-}
+/* Tasks page prose and the task components blog posts reuse. */
 .tasks-page .product-prose a {
 	color: #ddd;
 	text-decoration: underline;
@@ -70,52 +49,10 @@
 .tasks-page .task-checklist-toolbar > button:disabled {
 	opacity: 0.5;
 }
-@media (max-width: 699px) {
-	.tasks-page .email-desktop-demo {
-		--desktop-stage-width: calc(100vw - 24px);
-	}
-	.tasks-page .email-desktop-wallpaper {
-		padding: 16px 10px;
-	}
-	.tasks-page .email-desktop-content {
-		height: 600px;
-	}
-}
 .task-checklist-select { display: block; width: 100%; text-align: left; }
 .task-checklist-select-row { display: flex; align-items: center; gap: 10px; min-height: 38px; font-size: 15px; }
 .task-checklist-select:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 4px; border-radius: 4px; }
 .task-checklist-owner { color: var(--color-accent); white-space: nowrap; }
-
-/* Show the whole Tasks workspace, including its navigation and editable list. */
-.tasks-page .email-desktop-demo[data-desktop-canvas=true] {
-  --desktop-stage-width: min(1280px, 94vw);
-}
-.tasks-page .email-desktop-demo[data-desktop-canvas=true] .email-desktop-wallpaper {
-  padding: 32px;
-}
-@media (max-width: 699px) {
-  .tasks-page .email-desktop-demo[data-desktop-canvas=true] { --desktop-stage-width: calc(100vw - 24px); }
-  .tasks-page .email-desktop-demo[data-desktop-canvas=true] .email-desktop-wallpaper { padding: 16px 10px; }
-}
-
-/* Task details grow to fit their discussion. The fade is outside the content,
-   not extra space the visitor has to scroll through to reach the composer. */
-.tasks-page .feature-page-visual .product-demo:has(.sample-detail-layout) {
-  height: auto;
-  min-height: calc(var(--product-demo-height) + var(--product-demo-fade-tail));
-}
-.tasks-page .feature-page-visual .product-demo:has(.sample-detail-layout) > .dummy-main,
-.tasks-page .feature-page-visual .product-demo:has(.sample-detail-layout) .task-project-view {
-  height: auto;
-  flex: 1 0 auto;
-}
-.tasks-page .feature-page-visual .sample-detail-layout {
-  flex: 1 0 auto;
-}
-.tasks-page .feature-page-visual .sample-detail-content > .dummy-scroll {
-  flex: 1 0 auto;
-  overflow: visible;
-}
 
 /* Give the Tasks summary room for two lines without changing its type size. */
 @media (min-width: 700px) {

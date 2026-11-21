@@ -1,0 +1,78 @@
+/* Real app screens sit on a flat stage, darker than the page's raised cards and without an edge. */
+.feature-screenshot {
+  margin: 0;
+  padding: 16px;
+  border-radius: 14px;
+  background: #101010;
+}
+
+.feature-screenshot-frame {
+  overflow: hidden;
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px #ffffff1a;
+}
+
+.feature-screenshot-viewport {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.feature-screenshot-viewport::-webkit-scrollbar { display: none; }
+.feature-screenshot-viewport:focus-visible { outline: 2px solid #61a3e6; outline-offset: -2px; }
+
+.feature-screenshot-canvas { position: relative; }
+.feature-screenshot-canvas img { display: block; width: 100%; height: auto; }
+
+/* The part of the screen the section is about, in the app's accent. */
+.feature-screenshot-focus {
+  position: absolute;
+  border-radius: 8px;
+  outline: 2px solid #61a3e6;
+  outline-offset: 2px;
+  pointer-events: none;
+}
+
+.feature-phone-screens {
+  display: flex;
+  justify-content: center;
+  gap: 28px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.feature-phone-screens li { width: 220px; flex: none; }
+.feature-phone-screens img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 30px;
+  box-shadow: 0 0 0 1px #3a3a3a, 0 0 0 7px #161616, 0 0 0 8px #2e2e2e, 0 26px 40px -26px #000;
+}
+.feature-phone-screens h3 {
+  margin: 26px 0 6px;
+  font: calc(320 + var(--cream-slab-weight-increase, 0)) 19px/1.25 'Roboto Slab Variable', display, serif;
+  letter-spacing: -.01em;
+}
+.feature-phone-screens p {
+  margin: 0;
+  color: var(--feature-copy-color, var(--color-ink-muted));
+  font: 370 14px/1.55 'Inter Variable', Inter, sans-serif;
+}
+
+/* Phones: keep app text readable and scroll the screen sideways instead. */
+@media (max-width: 699px) {
+  .feature-screenshot { padding: 10px; }
+  .feature-screenshot-canvas { width: 640px; }
+  .feature-phone-screens {
+    justify-content: flex-start;
+    gap: 16px;
+    margin-inline: -16px;
+    padding-inline: 16px;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: 16px;
+    scrollbar-width: none;
+  }
+  .feature-phone-screens::-webkit-scrollbar { display: none; }
+  .feature-phone-screens li { width: 230px; scroll-snap-align: start; }
+}
