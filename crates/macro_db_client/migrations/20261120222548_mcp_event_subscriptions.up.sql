@@ -40,9 +40,10 @@ CREATE UNIQUE INDEX mcp_event_subscription_user_subscription_uq
 CREATE INDEX mcp_event_subscription_user_expires_at_idx
     ON mcp_event_subscription (user_id, expires_at);
 
--- The expiry sweep reads the oldest expired rows first.
+-- The expiry sweep reads the oldest expired rows first. Each replica's
+-- refresh of who holds a live subscription reads the live end, index only.
 CREATE INDEX mcp_event_subscription_expires_at_idx
-    ON mcp_event_subscription (expires_at);
+    ON mcp_event_subscription (expires_at) INCLUDE (user_id);
 
 -- One row per Macro event name a subscription's filter can match, so matching
 -- an event reads only its audience's live subscriptions to that event. The

@@ -5,6 +5,7 @@
 #[path = "service_test.rs"]
 mod test;
 
+use super::live_subscribers::McpLiveSubscribers;
 use super::models::{
     MAX_ARGUMENTS_BYTES, MAX_SUBSCRIPTIONS_PER_USER, McpDeliveryOutcome, McpEventOccurrence,
     McpEventQueueMessage, McpSubscribeRequest, McpSubscribeResult, McpSubscriptionKey,
@@ -216,12 +217,19 @@ where
 pub struct McpEventFanoutImpl<R, Q> {
     repo: R,
     queue: Q,
+    subscribers: McpLiveSubscribers,
 }
 
 impl<R, Q> McpEventFanoutImpl<R, Q> {
-    /// Create the fan-out.
-    pub fn new(repo: R, queue: Q) -> Self {
-        Self { repo, queue }
+    /// Create the fan-out. `subscribers` narrows each audience to the users
+    /// with a live subscription before any query; whoever owns it keeps it
+    /// refreshed.
+    pub fn new(repo: R, queue: Q, subscribers: McpLiveSubscribers) -> Self {
+        Self {
+            repo,
+            queue,
+            subscribers,
+        }
     }
 }
 
@@ -237,6 +245,8 @@ where
             event_id = %event.event_id,
             event_name = %event.event_name,
             audience_count = audience.len(),
+            subscribers_known = tracing::field::Empty,
+            queried_audience_count = tracing::field::Empty,
             candidate_count = tracing::field::Empty,
             match_count = tracing::field::Empty,
         ),
@@ -250,6 +260,13 @@ where
         if audience.is_empty() {
             return Ok(0);
         }
+        let span = tracing::Span::current();
+        // Most events reach no subscriber, and then cost no query. Without a
+        // known set, every audience member is matched.
+        let narrowed = self.subscribers.narrow(audience);
+        span.record("subscribers_known", narrowed.is_some());
+        let audience = narrowed.as_deref().unwrap_or(audience);
+        span.record("queried_audience_count", audience.len());
         let mut candidate_count = 0;
         // Only the matching row ids are kept; each chunk's filters are dropped
         // with it.
@@ -277,7 +294,6 @@ where
                     .map(|candidate| candidate.id),
             );
         }
-        let span = tracing::Span::current();
         span.record("candidate_count", candidate_count);
         span.record("match_count", matched.len());
         // A few sends at a time; each message's copy of the event is made

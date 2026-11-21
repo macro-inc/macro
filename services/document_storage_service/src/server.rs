@@ -1166,6 +1166,13 @@ async fn run_server() -> anyhow::Result<()> {
             ),
             webhook_http_client.clone(),
         );
+    let mcp_live_subscribers =
+        webhook::domain::mcp::live_subscribers::McpLiveSubscribers::default();
+    consumer_tracker.spawn(crate::mcp_live_subscribers::run(
+        mcp_live_subscribers.clone(),
+        mcp_subscription_repository.clone(),
+        consumer_cancellation_token.clone(),
+    ));
     consumer_tracker.spawn(crate::mcp_subscription_sweep::run(
         webhook::domain::mcp::service::McpSubscriptionSweeper::new(
             mcp_subscription_repository.clone(),
@@ -1182,6 +1189,7 @@ async fn run_server() -> anyhow::Result<()> {
         .with_mcp_fanout(webhook::domain::mcp::service::McpEventFanoutImpl::new(
             mcp_subscription_repository,
             webhook_event_queue.clone(),
+            mcp_live_subscribers,
         ));
     let webhook_delivery_repository =
         webhook::outbound::PgWebhookDeliveryRepository::new(db.clone());

@@ -139,6 +139,16 @@ impl McpSubscriptionRepo for FakeRepo {
         }))
     }
 
+    async fn list_live_subscriber_ids(&self) -> Result<Vec<String>, FakeError> {
+        let now = Utc::now();
+        Ok(self
+            .rows()
+            .into_iter()
+            .filter(|row| row.is_live(now))
+            .map(|row| row.user_id.as_ref().to_owned())
+            .collect())
+    }
+
     async fn list_match_candidates(
         &self,
         user_ids: &[String],
@@ -503,7 +513,8 @@ async fn fan_out_reaches_matching_subscribers_in_the_audience_only() {
         .await
         .expect("subscribed");
     let queue = FakeQueue::default();
-    let fanout = McpEventFanoutImpl::new(repo.clone(), queue.clone());
+    let fanout =
+        McpEventFanoutImpl::new(repo.clone(), queue.clone(), McpLiveSubscribers::default());
 
     let audience = vec![ME.to_owned(), OTHER.to_owned(), "team-1".to_owned()];
     let queued = fanout
@@ -623,7 +634,8 @@ async fn a_large_audience_is_matched_in_bounded_chunks() {
         .await
         .expect("subscribed");
     let queue = FakeQueue::default();
-    let fanout = McpEventFanoutImpl::new(repo.clone(), queue.clone());
+    let fanout =
+        McpEventFanoutImpl::new(repo.clone(), queue.clone(), McpLiveSubscribers::default());
 
     let mut audience: Vec<String> = (0..AUDIENCE_CHUNK * 2)
         .map(|index| format!("user-{index}"))
@@ -842,7 +854,8 @@ async fn a_failed_send_does_not_cancel_the_other_sends() {
             .expect("subscribed");
     }
     let queue = FirstSendFails::default();
-    let fanout = McpEventFanoutImpl::new(repo.clone(), queue.clone());
+    let fanout =
+        McpEventFanoutImpl::new(repo.clone(), queue.clone(), McpLiveSubscribers::default());
 
     let result = fanout
         .fan_out(&mentioned_event("channel", ME), &[ME.to_owned()])
@@ -850,4 +863,122 @@ async fn a_failed_send_does_not_cancel_the_other_sends() {
 
     assert!(result.is_err(), "the failure is reported");
     assert_eq!(*queue.attempted.lock().expect("lock"), 2, "both were sent");
+}
+
+/// A fan-out over a set of live subscribers refreshed from `repo`.
+async fn fanout_with_known_subscribers(
+    repo: &FakeRepo,
+    queue: &FakeQueue,
+) -> (McpEventFanoutImpl<FakeRepo, FakeQueue>, McpLiveSubscribers) {
+    let subscribers = McpLiveSubscribers::default();
+    subscribers.refresh(repo).await.expect("refreshed");
+    (
+        McpEventFanoutImpl::new(repo.clone(), queue.clone(), subscribers.clone()),
+        subscribers,
+    )
+}
+
+#[tokio::test]
+async fn an_audience_without_subscribers_costs_no_query() {
+    let repo = FakeRepo::default();
+    let endpoint = FakeEndpoint::accepting();
+    service(&repo, &endpoint)
+        .subscribe(user(ME), request("mentions", mentions_of_me_in_channels()))
+        .await
+        .expect("subscribed");
+    let queue = FakeQueue::default();
+    let (fanout, _) = fanout_with_known_subscribers(&repo, &queue).await;
+
+    let audience = vec![OTHER.to_owned(), "team-1".to_owned()];
+    let queued = fanout
+        .fan_out(&mentioned_event("channel", ME), &audience)
+        .await
+        .expect("fanned out");
+
+    assert_eq!(queued, 0);
+    assert!(repo.match_calls.lock().expect("lock").is_empty());
+}
+
+#[tokio::test]
+async fn only_subscribers_in_the_audience_are_queried() {
+    let repo = FakeRepo::default();
+    let endpoint = FakeEndpoint::accepting();
+    service(&repo, &endpoint)
+        .subscribe(user(ME), request("mentions", mentions_of_me_in_channels()))
+        .await
+        .expect("subscribed");
+    let queue = FakeQueue::default();
+    let (fanout, _) = fanout_with_known_subscribers(&repo, &queue).await;
+
+    let mut audience: Vec<String> = (0..AUDIENCE_CHUNK * 2)
+        .map(|index| format!("user-{index}"))
+        .collect();
+    audience.push(ME.to_owned());
+    let queued = fanout
+        .fan_out(&mentioned_event("channel", ME), &audience)
+        .await
+        .expect("fanned out");
+
+    assert_eq!(queued, 1);
+    assert_eq!(*repo.match_calls.lock().expect("lock"), vec![1]);
+}
+
+#[tokio::test]
+async fn a_new_subscription_is_matched_from_the_next_refresh() {
+    let repo = FakeRepo::default();
+    let endpoint = FakeEndpoint::accepting();
+    let queue = FakeQueue::default();
+    let (fanout, subscribers) = fanout_with_known_subscribers(&repo, &queue).await;
+    service(&repo, &endpoint)
+        .subscribe(user(ME), request("mentions", mentions_of_me_in_channels()))
+        .await
+        .expect("subscribed");
+    let event = mentioned_event("channel", ME);
+
+    let queued = fanout
+        .fan_out(&event, &[ME.to_owned()])
+        .await
+        .expect("fanned out");
+    assert_eq!(queued, 0, "not in the set loaded before it");
+
+    subscribers.refresh(&repo).await.expect("refreshed");
+    let queued = fanout
+        .fan_out(&event, &[ME.to_owned()])
+        .await
+        .expect("fanned out");
+    assert_eq!(queued, 1);
+}
+
+#[tokio::test]
+async fn too_many_subscriptions_fall_back_to_matching_every_member() {
+    let repo = FakeRepo::default();
+    {
+        let mut rows = repo.rows.lock().expect("lock");
+        for index in 0..=crate::domain::mcp::live_subscribers::LIVE_SUBSCRIBERS_MAX_ROWS {
+            rows.push(McpEventSubscription {
+                id: Uuid::now_v7(),
+                user_id: user(OTHER),
+                subscription_id: McpSubscriptionId::from_stored(format!("sub_{index}")),
+                event_type: "macro.events".to_owned(),
+                arguments: serde_json::json!({}),
+                filter: mentions_of_me_in_channels(),
+                endpoint_url: URL.to_owned(),
+                secret: ciphertext(),
+                expires_at: Utc::now() + chrono::Duration::minutes(5),
+            });
+        }
+    }
+    let queue = FakeQueue::default();
+    let (fanout, _) = fanout_with_known_subscribers(&repo, &queue).await;
+
+    fanout
+        .fan_out(&mentioned_event("channel", ME), &[ME.to_owned()])
+        .await
+        .expect("fanned out");
+
+    assert_eq!(
+        *repo.match_calls.lock().expect("lock"),
+        vec![1],
+        "the set is unknown, so the member is queried"
+    );
 }

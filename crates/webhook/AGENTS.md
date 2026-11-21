@@ -28,7 +28,9 @@ before changing ingestion or delivery behavior.
 - `src/domain/mcp/`: MCP Events subscriptions (README's "MCP Events
   subscriptions"): `filter.rs` the compiled filter language, `service.rs`
   subscribe, fan-out, delivery and the expiry sweep (run by
-  `document_storage_service`'s `src/mcp_subscription_sweep.rs`). Matching reads
+  `document_storage_service`'s `src/mcp_subscription_sweep.rs`),
+  `live_subscribers.rs` the in-memory set fan-out narrows each audience to
+  (reloaded by `src/mcp_live_subscribers.rs`). Matching reads
   the `mcp_event_subscription_event` index table, which the repository rewrites
   with each stored filter; never match by scanning subscription rows.
   `src/inbound/mcp_router.rs` is the internal

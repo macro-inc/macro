@@ -473,3 +473,31 @@ async fn matching_reads_only_the_audience(pool: PgPool) -> anyhow::Result<()> {
     );
     Ok(())
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn live_subscribers_are_the_owners_of_live_rows(pool: PgPool) -> anyhow::Result<()> {
+    let repo = setup(&pool).await?;
+    for query in ["one", "two"] {
+        store(
+            &repo,
+            upsert(ME, URL, query, &["message.posted"], Duration::hours(1)),
+        )
+        .await?;
+    }
+    store(
+        &repo,
+        upsert(
+            OTHER,
+            URL,
+            "old",
+            &["message.posted"],
+            -Duration::minutes(1),
+        ),
+    )
+    .await?;
+
+    let mut owners = repo.list_live_subscriber_ids().await?;
+    owners.sort();
+    assert_eq!(owners, vec![ME.to_owned(), ME.to_owned()]);
+    Ok(())
+}

@@ -87,6 +87,14 @@ pub trait McpSubscriptionRepo: Clone + Send + Sync + 'static {
         endpoint_url: &str,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
+    /// The owner of each live subscription, at most
+    /// [`LIVE_SUBSCRIBERS_MAX_ROWS`](super::live_subscribers::LIVE_SUBSCRIBERS_MAX_ROWS)
+    /// plus one, so the caller can tell a full read from a cut one. A user
+    /// appears once per subscription.
+    fn list_live_subscriber_ids(
+        &self,
+    ) -> impl Future<Output = Result<Vec<String>, Self::Err>> + Send;
+
     /// Live subscriptions of any of `user_ids` whose filter names
     /// `event_name`, with only what matching reads.
     fn list_match_candidates(
