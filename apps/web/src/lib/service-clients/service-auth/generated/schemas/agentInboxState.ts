@@ -16,6 +16,7 @@ export const AgentInboxState = {
   provisioning: 'provisioning',
   active: 'active',
   failed: 'failed',
+  pausing: 'pausing',
   paused: 'paused',
   releasing: 'releasing',
   released: 'released',

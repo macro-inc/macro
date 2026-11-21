@@ -7831,6 +7831,7 @@
           "provisioning",
           "active",
           "failed",
+          "pausing",
           "paused",
           "releasing",
           "released"
