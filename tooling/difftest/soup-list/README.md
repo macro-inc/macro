@@ -11,9 +11,14 @@ tooling/difftest/soup-list/run.sh        # everything; results/ and results/summ
 
 `run.sh` checks that the two checkouts' `apps/` and `packages/` are exactly the
 commits it names (`NEW_REF`, and its second parent as `OLD_REF`), serves each
-from its own Vite with `probe/` copied in, and runs three passes: quiet (seed
-`A1`, with mutants), under concurrent load (`B1`), and with the browser cache off
-(`C1`). Environment variables override the defaults at the top of the script.
+from its own Vite with `probe/` copied in, and runs the passes in `PASSES`: quiet
+(seed `A1`), under concurrent load (`B1`), with the browser cache off (`C1`),
+mutants (`M1`: each planted mutant in its own lane, plus a control) and an A/A
+control (`D1`: main against itself, the base rate of each difference kind).
+Environment variables override the defaults at the top of the script.
+
+`repro/` holds the minimal repros of the differences the runs found; each says
+what it shows at the top.
 
 ## Pieces
 
