@@ -7,14 +7,15 @@ A service for adding and querying contacts
 `crates/contacts/src/domain/backfill.rs`) fills `contact_list_members`
 (`interacted`) and `contact_inbox_members` (`gmail`, `outlook`) from what the
 database already records, and audits the legacy `contacts_connections` graph.
-It reads `DATABASE_URL`, prints a JSON report on stdout, and logs progress.
+It reads `DATABASE_URL`, writes a JSON report to `--report`, and logs
+progress to stdout.
 Running it against a hosted database is a separate, approved operation.
 
 ```bash
-cargo run -p contacts_service --bin contacts_backfill -- audit
-cargo run -p contacts_service --bin contacts_backfill -- backfill --dry-run
-cargo run -p contacts_service --bin contacts_backfill -- backfill
-cargo run -p contacts_service --bin contacts_backfill -- backfill --after 2026-11-20T00:00:00Z --only channels,direct-messages
+cargo run -p contacts_service --bin contacts_backfill -- --report audit.json audit
+cargo run -p contacts_service --bin contacts_backfill -- --report dry-run.json backfill --dry-run
+cargo run -p contacts_service --bin contacts_backfill -- --report backfill.json backfill
+cargo run -p contacts_service --bin contacts_backfill -- --report repair.json backfill --after 2026-11-20T00:00:00Z --only channels,direct-messages
 ```
 
 - `audit` writes nothing. It classifies each direction of every legacy edge

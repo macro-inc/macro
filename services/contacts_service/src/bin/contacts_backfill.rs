@@ -1,9 +1,10 @@
 //! Backfills the list-aware directory (`contact_list_members`,
 //! `contact_inbox_members`) and audits the legacy `contacts_connections`
 //! graph it replaces. See `services/contacts_service/README.md` for the run
-//! order. Prints its report as JSON on stdout; progress goes to the logs.
+//! order. Writes its report as JSON to `--report`; logs go to stdout.
 
 use std::collections::{BTreeSet, HashSet};
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -52,6 +53,10 @@ const CONNECTIONS: u32 = 2;
 struct Cli {
     #[command(subcommand)]
     command: Command,
+
+    /// Where to write the JSON report.
+    #[arg(long)]
+    report: PathBuf,
 
     /// Channels, snapshot rows, DMs and inbox owners per read.
     #[arg(long, default_value_t = 500, value_parser = clap::value_parser!(i64).range(1..=1000))]
@@ -177,6 +182,7 @@ async fn main() -> Result<(), Report> {
             serde_json::to_string_pretty(&backfill.backfill(&request).await?)?
         }
     };
-    println!("{report}");
+    std::fs::write(&cli.report, report)?;
+    tracing::info!(report = %cli.report.display(), "contacts backfill report written");
     Ok(())
 }
