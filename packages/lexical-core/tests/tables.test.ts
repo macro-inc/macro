@@ -40,7 +40,7 @@ import {
   EXTERNAL_TRANSFORMERS,
   INTERNAL_TRANSFORMERS,
 } from '../transformers';
-import { E_TABLE_NODE } from '../transformers/tables';
+import { E_TABLE_NODE, isolatePipeTables } from '../transformers/tables';
 
 function createTestEditor() {
   return createEditor({
@@ -1427,5 +1427,44 @@ describe('video link transformer', () => {
       expect($getRoot().getTextContent()).toContain('Document');
     });
     expect(exportMarkdown(editor)).toContain('document.pdf?next=clip.mp4');
+  });
+});
+
+describe('isolatePipeTables', () => {
+  it('keeps a header-and-delimiter table and gives it a blank line above', () => {
+    expect(
+      isolatePipeTables(
+        '<m-table><m-table-row><m-table-cell>Old</m-table-cell></m-table-row></m-table>\n| Step | Done |\n| --- | :---: |\n| Ship | yes |\nAfter'
+      )
+    ).toBe(
+      '<m-table><m-table-row><m-table-cell>Old</m-table-cell></m-table-row></m-table>\n\n| Step | Done |\n| --- | :---: |\n| Ship | yes |\nAfter'
+    );
+  });
+
+  it('escapes pipe lines that are not a table so they stay text', () => {
+    expect(
+      isolatePipeTables(
+        '| plain text |\n\n| a | b |\n| --- |\n\n| --- |\n| x |'
+      )
+    ).toBe('\\| plain text |\n\n\\| a | b |\n\\| --- |\n\n\\| --- |\n\\| x |');
+  });
+
+  it('keeps a table run that is already text in an existing paragraph', () => {
+    expect(
+      isolatePipeTables('| H |\n| --- |\n| B |\n\n| N |\n| --- |', [
+        'Intro\n| H |\n| --- |\n| B |',
+      ])
+    ).toBe('\\| H |\n\\| --- |\n\\| B |\n\n| N |\n| --- |');
+  });
+
+  it('pads a short body row with empty cells to the header width', () => {
+    expect(isolatePipeTables('| A | B | C |\n| --- | --- | --- |\n| x |')).toBe(
+      '| A | B | C |\n| --- | --- | --- |\n| x | | |'
+    );
+  });
+
+  it('leaves pipe lines in fenced code alone', () => {
+    const markdown = '```\n| a |\n| --- |\n| plain |\n```';
+    expect(isolatePipeTables(markdown)).toBe(markdown);
   });
 });

@@ -31,6 +31,7 @@ pub mod live_query;
 pub mod mail;
 mod notifications;
 mod parsed_document;
+pub mod permissions;
 pub mod properties;
 pub use notifications::{
     notification_deletion_updates, notification_projection_updates, optimistic_notification_updates,

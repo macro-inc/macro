@@ -1,0 +1,51 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT ep.entity_type AS \"entity_type!: EntityType\", ep.entity_id AS \"entity_id!\"\n        FROM UNNEST($1::text[]) AS company(id)\n        JOIN entity_properties ep\n            ON ep.property_definition_id = '00000001-0000-0000-0000-00000000000c'\n           AND ep.values->'value' @> jsonb_build_array(jsonb_build_object('entity_id', company.id))\n        UNION\n        SELECT ep.entity_type, ep.entity_id\n        FROM UNNEST($2::text[]) AS contact(id)\n        JOIN entity_properties ep\n            ON ep.property_definition_id = '00000001-0000-0000-0000-000000000013'\n           AND ep.values->'value' @> jsonb_build_array(jsonb_build_object('entity_id', contact.id))\n        UNION\n        SELECT cell.entity_type, cell.entity_id\n        FROM (\n            SELECT jsonb_build_array(jsonb_build_object('entity_type', 'COMPANY', 'entity_id', id))\n            FROM UNNEST($1::text[]) AS company(id)\n            UNION ALL\n            SELECT jsonb_build_array(jsonb_build_object('entity_type', 'CONTACT', 'entity_id', id))\n            FROM UNNEST($2::text[]) AS contact(id)\n        ) AS record(reference)\n        -- Fenced so each record probes the index. Joined plainly, the planner\n        -- can start from every entity definition and compare all of their\n        -- cells with every record. It did so from about 500 records with\n        -- fresh statistics, and for a single record once they were stale.\n        CROSS JOIN LATERAL (\n            SELECT ep.entity_type, ep.entity_id, ep.property_definition_id\n            FROM entity_properties ep\n            WHERE ep.entity_type = 'DATABASE_ROW'\n              AND ep.values->>'type' = 'EntityReference'\n              AND ep.values->'value' @> record.reference\n            OFFSET 0\n        ) AS cell\n        -- Fenced too: three lookups by key per matched cell, never a join\n        -- over every definition, row, or column.\n        WHERE EXISTS (\n            SELECT 1\n            FROM property_definitions pd\n            -- A row cell's entity id is its row id's canonical text; anything else\n            -- names no row, and must not abort the statement with a cast error.\n            JOIN database_rows r\n                ON r.id = (CASE\n                    WHEN cell.entity_id ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'\n                    THEN cell.entity_id\n                END)::uuid\n            JOIN database_columns dc\n                ON dc.table_id = r.table_id AND dc.property_definition_id = pd.id\n            WHERE pd.id = cell.property_definition_id AND pd.data_type = 'ENTITY'\n            OFFSET 0\n        )\n        UNION\n        SELECT task.entity_type, task.entity_id\n        FROM (\n            SELECT jsonb_build_array(jsonb_build_object('entity_type', 'COMPANY', 'entity_id', id))\n            FROM UNNEST($1::text[]) AS company(id)\n            UNION ALL\n            SELECT jsonb_build_array(jsonb_build_object('entity_type', 'CONTACT', 'entity_id', id))\n            FROM UNNEST($2::text[]) AS contact(id)\n        ) AS record(reference)\n        -- Fenced so each record probes the index. Joined plainly, the planner\n        -- can start from every custom entity definition and read all of their\n        -- values, which it prefers once statistics are stale or the records\n        -- are many.\n        CROSS JOIN LATERAL (\n            SELECT ep.entity_type, ep.entity_id, ep.property_definition_id\n            FROM entity_properties ep\n            WHERE ep.entity_type = 'TASK'\n              AND ep.property_definition_id <> '00000001-0000-0000-0000-00000000000c'\n              AND ep.property_definition_id <> '00000001-0000-0000-0000-000000000013'\n              AND (ep.values->'value' @> '[{\"entity_type\": \"COMPANY\"}]'\n                   OR ep.values->'value' @> '[{\"entity_type\": \"CONTACT\"}]')\n              AND ep.values->'value' @> record.reference\n            OFFSET 0\n        ) AS task\n        WHERE $3\n          -- Fenced too: one lookup by key per matched value, never a read of\n          -- every custom definition.\n          AND EXISTS (\n              SELECT 1\n              FROM property_definitions pd\n              WHERE pd.id = task.property_definition_id\n                AND pd.data_type = 'ENTITY'\n                AND NOT pd.is_system\n                AND pd.database_id IS NULL\n              OFFSET 0\n          )\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_type!: EntityType",
+        "type_info": {
+          "Custom": {
+            "name": "property_entity_type",
+            "kind": {
+              "Enum": [
+                "CHANNEL",
+                "CHAT",
+                "DOCUMENT",
+                "PROJECT",
+                "THREAD",
+                "USER",
+                "COMPANY",
+                "TASK",
+                "CALL_RECORD",
+                "CALENDAR_EVENT",
+                "INITIATIVE",
+                "CONTACT",
+                "DATABASE_ROW"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "entity_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "TextArray",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "142b60cd73eeaf15d6283f24e8bd949299c94afa99d84dc155b5fab6246a93ff"
+}

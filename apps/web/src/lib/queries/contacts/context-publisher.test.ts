@@ -3,6 +3,7 @@ import type {
   PeopleContextUpdate,
 } from '@graphql-cache/people/generated';
 import { parseCacheRevision } from '@graphql-cache/protocol';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { expect, it, vi } from 'vitest';
 import { EMPTY_PERSON_FACTS, type PersonFacts } from './context-facts';
 import {
@@ -83,6 +84,25 @@ it('publishes a large snapshot in bounded writes, then only changed and removed 
   publisher.replace(new Map(changed));
   await publisher.flush();
   expect(cache.writes).toHaveLength(1);
+});
+
+it('discards a context snapshot captured before a session transition', async () => {
+  const cache = cachePort();
+  const entered = Promise.withResolvers<void>();
+  const state = Promise.withResolvers<PeopleContextState>();
+  cache.context.mockImplementationOnce(() => {
+    entered.resolve();
+    return state.promise;
+  });
+  const publisher = new ContactContextPublisher(cache, SCOPE, () => true);
+  publisher.replace(new Map([['macro|peer@example.com', FIRST]]));
+  const publishing = publisher.flush();
+  await entered.promise;
+  await cacheSessionGeneration.transition(async () => {});
+  state.resolve({ kind: 'missing' });
+  await expect(publishing).rejects.toBeInstanceOf(ContactContextCanceled);
+  expect(cache.update).not.toHaveBeenCalled();
+  publisher.dispose();
 });
 
 it('keeps a newer update to an in-flight dirty ID until its own ack', async () => {

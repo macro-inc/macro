@@ -171,6 +171,7 @@ function Fixture() {
                             });
                           }}
                           onSendError={() => {}}
+                          collapsible={search.has('collapsible')}
                           participants={() => []}
                           bots={() => []}
                           persistenceKey={makeInputValuePersistenceKey({

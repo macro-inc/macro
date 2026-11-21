@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/component: distributor
+    app.kubernetes.io/instance: tempo
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: tempo
+    app.kubernetes.io/version: 2.10.7
+    helm.sh/chart: tempo-distributed-2.26.2
+  name: tempo-distributor
+  namespace: observability
+spec:
+  internalTrafficPolicy: Cluster
+  ipFamilies:
+    - IPv4
+  ipFamilyPolicy: SingleStack
+  ports:
+    - name: http-metrics
+      port: 3200
+      targetPort: http-metrics
+    - name: grpc
+      port: 9095
+      protocol: TCP
+      targetPort: 9095
+    - name: distributor-otlp-http
+      port: 4318
+      protocol: TCP
+      targetPort: otlp-http
+    - name: grpc-distributor-otlp
+      port: 4317
+      protocol: TCP
+      targetPort: grpc-otlp
+    - name: distributor-otlp-legacy
+      port: 55680
+      protocol: TCP
+      targetPort: grpc-otlp
+  selector:
+    app.kubernetes.io/component: distributor
+    app.kubernetes.io/instance: tempo
+    app.kubernetes.io/name: tempo
+  type: ClusterIP

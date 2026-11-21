@@ -261,6 +261,7 @@ impl OutlookApiClientRepository {
             reauthorized,
             http.response.status_code = tracing::field::Empty,
             graph.request_id = tracing::field::Empty,
+            graph.error_code = tracing::field::Empty,
             outlook.gate_wait_ms = tracing::field::Empty,
             outlook.throttle_origin = tracing::field::Empty,
             outlook.retry_after_seconds = tracing::field::Empty,
@@ -358,6 +359,7 @@ impl OutlookApiClientRepository {
         let body = response.text().await.unwrap_or_default();
         let error: Value = serde_json::from_str(&body).unwrap_or(Value::Null);
         let code = error.pointer("/error/code").and_then(Value::as_str);
+        span.record("graph.error_code", code);
         if method != Method::GET {
             // Graph error messages can quote recipient addresses. The code and
             // request-id identify the failure; only bodies without a Graph error

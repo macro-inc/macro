@@ -1,4 +1,11 @@
 //! Process-level Kafka consumer feeding the local webhook stream channel.
+//!
+//! Alongside the events it sends the feed a heartbeat every
+//! [`STREAM_HEARTBEAT_INTERVAL`], but only while the consumer is making
+//! progress by its librdkafka statistics ([`kafka_util::progress`]): polled
+//! within the last 30 s, every partition's broker connected, and each
+//! partition caught up or advancing. A consumer that hangs, loses its
+//! brokers, or stops advancing stops the heartbeats, and clients reconnect.
 
 use crate::domain::ingestion::{
     WebhookEventIngestionError,
@@ -10,12 +17,21 @@ use crate::domain::ingestion::{
     },
     user_event_subject,
 };
+use crate::domain::models::STREAM_HEARTBEAT_INTERVAL;
 use crate::domain::ports::WebhookWorkspaceResolver;
 use crate::domain::stream::{StreamCandidateEvent, StreamFeed};
 use crate::topics::DeclaredMacroEvent;
-use kafka_util::{InitialOffset, KafkaEventConsumer, Ungrouped};
+use kafka_util::progress::{Progress, ProgressSample, assess};
+use kafka_util::{ConsumerStatistics, InitialOffset, KafkaEventConsumer, Ungrouped};
 use macro_event_broker::{KafkaConsumerAdapter, MacroEvent as _, MacroEventConsumerService};
-use std::time::Duration;
+use std::convert::Infallible;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+use tokio::sync::watch;
+use tokio::time::MissedTickBehavior;
+
+#[cfg(test)]
+mod test;
 
 /// Time allowed for topic metadata lookup.
 const METADATA_TIMEOUT: Duration = Duration::from_secs(10);
@@ -33,12 +49,26 @@ pub async fn run_webhook_stream_consumer<R: WebhookWorkspaceResolver>(
     feed: &StreamFeed,
     workspace_resolver: &R,
 ) -> Result<(), rootcause::Report> {
-    let consumer = KafkaEventConsumer::<Ungrouped>::from_env(brokers)
+    let (observer, progress) = ProgressCheck::start();
+    let consumer = KafkaEventConsumer::<Ungrouped>::from_env_with_statistics(brokers, observer)
         .map_err(|error| rootcause::report!(error))?;
     let consumer =
         WebhookStreamKafkaAdapter::new(consumer, InitialOffset::Latest, METADATA_TIMEOUT)?;
     let consumer = WebhookStreamKafkaConsumer::new(consumer);
 
+    // One task, so heartbeats stop with the consumer; the check, not the
+    // shared task, decides whether it is progressing.
+    tokio::select! {
+        result = consume(&consumer, feed, workspace_resolver) => result,
+        never = send_heartbeats(progress, feed) => match never {},
+    }
+}
+
+async fn consume<R: WebhookWorkspaceResolver>(
+    consumer: &WebhookStreamKafkaConsumer,
+    feed: &StreamFeed,
+    workspace_resolver: &R,
+) -> Result<(), rootcause::Report> {
     loop {
         let message = consumer.recv().await?;
         let decoded = match message.decode_payload() {
@@ -56,6 +86,95 @@ pub async fn run_webhook_stream_consumer<R: WebhookWorkspaceResolver>(
                 tracing::warn!(error = ?error, "skipping non-streamable broker event");
             }
         }
+    }
+}
+
+/// Judges the consumer's progress from the statistics samples it delivers.
+struct ProgressCheck {
+    samples: watch::Receiver<Option<Arc<ProgressSample>>>,
+    /// The sample the previous check judged, to see partitions advance.
+    previous: Option<Arc<ProgressSample>>,
+    latest: Option<Arc<ProgressSample>>,
+}
+
+impl ProgressCheck {
+    /// A check, and the statistics observer that feeds it.
+    fn start() -> (ConsumerStatistics, Self) {
+        let (sender, samples) = watch::channel(None);
+        let observer: ConsumerStatistics = Arc::new(move |stats| {
+            sender.send_replace(Some(Arc::new(ProgressSample::new(stats, Instant::now()))));
+        });
+        (observer, Self::new(samples))
+    }
+
+    fn new(samples: watch::Receiver<Option<Arc<ProgressSample>>>) -> Self {
+        Self {
+            samples,
+            previous: None,
+            latest: None,
+        }
+    }
+
+    fn check(&mut self) -> Progress {
+        if self.samples.has_changed().unwrap_or(false) {
+            self.previous = self.latest.take();
+            self.latest = self.samples.borrow_and_update().clone();
+        }
+        assess(
+            self.previous.as_deref(),
+            self.latest.as_deref(),
+            Instant::now(),
+            chrono::Utc::now().timestamp(),
+        )
+    }
+}
+
+/// Heartbeat the feed every interval in which the consumer is progressing.
+async fn send_heartbeats(progress: ProgressCheck, feed: &StreamFeed) -> Infallible {
+    let mut heartbeat = Heartbeat::new(progress);
+    let mut ticks = tokio::time::interval(STREAM_HEARTBEAT_INTERVAL);
+    ticks.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    loop {
+        ticks.tick().await;
+        heartbeat.beat(feed);
+    }
+}
+
+/// One heartbeat decision per interval, logging each change in progress.
+struct Heartbeat {
+    progress: ProgressCheck,
+    last: Option<Progress>,
+}
+
+impl Heartbeat {
+    fn new(progress: ProgressCheck) -> Self {
+        Self {
+            progress,
+            last: None,
+        }
+    }
+
+    /// Heartbeat `feed` if the consumer is progressing.
+    fn beat(&mut self, feed: &StreamFeed) -> Progress {
+        let current = self.progress.check();
+        if current == Progress::Progressing {
+            feed.heartbeat();
+        }
+        if self.last != Some(current) {
+            if self.last == Some(Progress::Progressing) {
+                tracing::warn!(
+                    progress = current.as_ref(),
+                    "webhook stream consumer stopped progressing; heartbeats paused"
+                );
+            } else {
+                tracing::info!(
+                    progress = current.as_ref(),
+                    "webhook stream consumer progress changed"
+                );
+            }
+            self.last = Some(current);
+        }
+        current
     }
 }
 

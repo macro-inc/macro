@@ -3,6 +3,7 @@ import {
   DateTimeRangeFields,
 } from '@app/components/date-time-range/date-time-range-fields';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
+import InfoIcon from '@icon/system/regular/info.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import type { CalendarUpdateScope } from '@service-email/client';
 import { Button, cn, Input, Layer, RadioGroup, Tooltip } from '@ui';
@@ -18,6 +19,7 @@ import {
   calendarDescriptionToEditorHtml,
   exportCalendarDescription,
 } from '../../utils/calendar-description';
+import { CalendarFirstSyncNotice } from '../CalendarFirstSyncNotice';
 import {
   EventGuestPolicyRow,
   EventGuestPolicyRows,
@@ -194,6 +196,7 @@ function Description() {
       }}
       placeholder="Add description..."
       portalScope="local"
+      releaseEscape
       domRef={(element) => element.setAttribute('aria-label', 'Description')}
       class="h-full w-full bg-transparent px-2 text-sm text-ink outline-none"
     />
@@ -256,17 +259,19 @@ function KindTabs() {
 function CalendarPill() {
   const form = useEventForm();
   return (
-    <LockedField reason={form.props.detailsReadOnlyReason}>
-      <EventComposerCalendarPill
-        options={form.controller.calendarOptions()}
-        value={form.controller.selectedCalendarOption()}
-        onChange={(calendarId) =>
-          form.controller.setField('calendarId', calendarId)
-        }
-        disabled={form.formIsDisabled() || form.detailsLocked()}
-        readOnly={form.fieldIsReadOnly('calendar')}
-      />
-    </LockedField>
+    <Show when={!form.calendarFirstSync()}>
+      <LockedField reason={form.props.detailsReadOnlyReason}>
+        <EventComposerCalendarPill
+          options={form.controller.calendarOptions()}
+          value={form.controller.selectedCalendarOption()}
+          onChange={(calendarId) =>
+            form.controller.setField('calendarId', calendarId)
+          }
+          disabled={form.formIsDisabled() || form.detailsLocked()}
+          readOnly={form.fieldIsReadOnly('calendar')}
+        />
+      </LockedField>
+    </Show>
   );
 }
 
@@ -322,10 +327,14 @@ function ConferencePill() {
         canKeepExisting={
           form.controller.initialConferenceChoice() === 'existing'
         }
+        keepOrRemoveOnly={form.conferenceLocked()}
         onChange={(conference) =>
           form.controller.setField('conference', conference)
         }
-        disabled={form.fieldIsDisabled('conference') || form.conferenceLocked()}
+        disabled={
+          form.fieldIsDisabled('conference') ||
+          (form.conferenceLocked() && !form.props.onReplace)
+        }
       />
     </LockedField>
   );
@@ -479,7 +488,10 @@ function GuestPolicyRows() {
   );
 }
 
-/** Why details are locked, conferencing limits, and the out-of-office disclosure. */
+/**
+ * Why details are locked, the replacement a removed Teams meeting needs, and
+ * the out-of-office disclosure.
+ */
 function Notices() {
   const form = useEventForm();
   const state = form.state;
@@ -488,12 +500,40 @@ function Notices() {
       <Show when={form.props.detailsReadOnlyReason}>
         {(reason) => <p class="text-xs text-ink-muted">{reason()}</p>}
       </Show>
-      <Show when={form.conferenceLocked()}>
-        <p class="text-xs text-ink-muted">
-          Microsoft keeps the online meeting link on an existing event. To
-          remove it, use “Replace event” after saving or discarding your edits
-          without a meeting link.
-        </p>
+      <Show when={form.conferenceRemovalPending()}>
+        <div
+          role="status"
+          class="flex min-w-0 gap-3 rounded-lg border border-accent/30 bg-accent-bg p-3 text-xs text-ink"
+        >
+          <InfoIcon class="mt-px size-4 shrink-0 text-accent" />
+          <div class="flex min-w-0 flex-col gap-2.5">
+            <p>
+              Outlook can’t remove Teams from an existing event. To drop it,
+              replace the event: guests get a new invitation with your changes
+              and respond again.
+            </p>
+            <div class="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                disabled={!form.controller.canSave() || form.formIsDisabled()}
+                onClick={form.replace}
+              >
+                Replace event…
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={form.formIsDisabled()}
+                onClick={form.undoConferenceRemoval}
+              >
+                Undo
+              </Button>
+            </div>
+          </div>
+        </div>
       </Show>
       <Show when={form.controller.conferenceError()}>
         {(error) => (
@@ -623,18 +663,27 @@ function Submit() {
   const form = useEventForm();
   const label = () => (form.isEdit() ? 'Save' : 'Create event');
   return (
-    <Button
-      type="submit"
-      // Names the form so the action submits it from pinned sheet chrome too.
-      form={form.ids.form}
-      variant="primary"
-      disabled={!form.controller.canSave() || form.formIsDisabled()}
-      aria-label={label()}
+    <Show
+      when={!form.calendarFirstSync()}
+      fallback={<CalendarFirstSyncNotice />}
     >
-      <Show when={form.props.pending} fallback={label()}>
-        <SpinnerIcon class="size-4 animate-spin" />
-      </Show>
-    </Button>
+      <Button
+        type="submit"
+        // Names the form so the action submits it from pinned sheet chrome too.
+        form={form.ids.form}
+        variant="primary"
+        disabled={
+          !form.controller.canSave() ||
+          form.formIsDisabled() ||
+          form.conferenceRemovalPending()
+        }
+        aria-label={label()}
+      >
+        <Show when={form.props.pending} fallback={label()}>
+          <SpinnerIcon class="size-4 animate-spin" />
+        </Show>
+      </Button>
+    </Show>
   );
 }
 

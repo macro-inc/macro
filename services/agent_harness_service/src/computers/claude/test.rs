@@ -421,9 +421,35 @@ async fn sign_in_failures_carry_the_code_that_says_how_to_recover() {
         .await,
         (StatusCode::CONFLICT, Some("computer_busy".to_owned()))
     );
+    // harnessd's own timeout waiting on the CLI has already ended the
+    // sign-in: a new one is needed, so it reads as expired.
+    assert_eq!(status_and_code(harnessd_error("timeout")).await, expired);
+    // This service giving up on harnessd may leave the computer still
+    // signing in: the code can be sent again.
     assert_eq!(
-        status_and_code(harnessd_error("timeout")).await,
+        status_and_code(super::ComputerRouteError::from(
+            super::super::harnessd::HarnessdError::Timeout
+        ))
+        .await,
         (StatusCode::GATEWAY_TIMEOUT, None)
+    );
+}
+
+/// Both refusals are 403s, but only the rollout one clears without the
+/// caller's rights changing, so the web client must tell them apart.
+#[tokio::test]
+async fn a_refusal_says_whether_the_rollout_or_the_callers_rights_stopped_it() {
+    use axum::http::StatusCode;
+    assert_eq!(
+        status_and_code(super::ComputerRouteError::RolloutDisabled).await,
+        (StatusCode::FORBIDDEN, Some("rollout_disabled".to_owned()))
+    );
+    assert_eq!(
+        status_and_code(super::ComputerRouteError::from(
+            harnesses::domain::ports::HarnessError::Unauthorized
+        ))
+        .await,
+        (StatusCode::FORBIDDEN, None)
     );
 }
 

@@ -3,14 +3,15 @@
 ## What it is
 
 Shared icon and tag-palette color editing for routines, ordinary Markdown,
-snippets, task projects (initiatives), forms, and databases.
+snippets, task projects (initiatives), forms, databases, and saved views.
 
 ## Start here
 
-- `entity-appearance.tsx`: lazy editor launcher and header-only trigger.
+- `entity-appearance.tsx`: lazy editor launcher and header-only trigger, which draws the entity's type icon or the icon its host passes (a routine passes the icon its page shows).
 - `appearance-menu.tsx`: device entry for desktop `views/appearance-menu.tsx` and touch `views/mobile/appearance-menu.tsx`.
 - `core/appearance.ts`: eligibility and appearance comparisons.
 - `components/appearance-glyph.tsx`: presentation without data fetching.
+- `types.ts`: appearance targets, including saved definitions without adding them to the Soup entity union.
 - `primitives/create-appearance-editor.ts`: immediate picks with guarded async settlement.
 - `primitives/create-recent-icons.ts`: account-scoped recent picks through `makePersistedState` and schema-validated storage.
 - `core/catalog.ts`: picker projections of `@macro-inc/entity-icons`; curate names and nouns in `packages/entity-icons/sections.json`.
@@ -52,7 +53,7 @@ snippets, task projects (initiatives), forms, and databases.
 - Match lazy-loaded submenu content with a picker-shaped skeleton, not the branded logo loader.
 - Reuse the shared 12-color tag palette in `@core/constant/color-palette`; preserve named wire keys and let swatches wrap.
 - Use `virtua` for both catalogs and search results; pin and restore focused choices across scrolling and Recent reordering.
-- Read only the normalized appearance fields before optimistic writes; unrelated preview fields can be absent on a loaded entity.
+- Capture the cache generation before reading normalized appearance fields and retain it for optimistic, server, and rollback writes; unrelated preview fields can be absent on a loaded entity.
 - Type cache-write payloads with the generated subscription result; `soupUpdates` is a list.
 - Keep pending appearance visible through uncached GraphQL revalidation; retain confirmed intent only for failed readers until fresh data or mutation garbage collection.
 - Serialize server writes per entity, fence confirmed REST writes against older GraphQL responses, and republish confirmed appearance before releasing pending intent.
@@ -62,3 +63,4 @@ snippets, task projects (initiatives), forms, and databases.
 - Keep header icon buttons at 24px with 16px glyphs; retain the shared larger touch targets.
 - Pass document identity through the `MarkdownDocument` context's `entity` accessor from each host; do not read legacy block metadata inside `Notebook`.
 - Keep initiative list queries limited to server-backed initiative fields; unrelated cache-only Mail fields prevent cache hits and optimistic icon updates.
+- Preserve saved-view bookmark defaults and use the owner-only saved-view API; keep filter revisions/timestamps unchanged and patch the normalized definition, not Soup or previews.

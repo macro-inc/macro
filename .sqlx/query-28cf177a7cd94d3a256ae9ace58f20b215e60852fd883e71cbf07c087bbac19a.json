@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE hosted_runtime SET hibernated_at = $2 WHERE id = $1 AND hibernated_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "28cf177a7cd94d3a256ae9ace58f20b215e60852fd883e71cbf07c087bbac19a"
+}

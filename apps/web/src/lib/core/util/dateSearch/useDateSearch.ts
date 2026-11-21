@@ -1,6 +1,7 @@
 import {
   addDays,
   addYears,
+  differenceInCalendarDays,
   format,
   getYear,
   isValid,
@@ -218,16 +219,7 @@ function formatDateWithContext(
   showTime = true
 ): string {
   const now = new Date(baseDate);
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const dateOnly = new Date(
-    date.getFullYear(),
-    date.getMonth(),
-    date.getDate()
-  );
-
-  const diffDays = Math.floor(
-    (dateOnly.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
-  );
+  const diffDays = differenceInCalendarDays(date, now);
 
   if (diffDays === 0) {
     return showTime ? `Today, ${format(date, 'h:mm a')}` : 'Today';

@@ -2,6 +2,7 @@
 // inbox linked together with its calendar, the calendar service syncing that
 // calendar from the provider emulator, and the invitation card in a thread
 // answering, joining, opening and saving events for real.
+import { readFile } from 'node:fs/promises';
 import type { Locator, Page } from '@playwright/test';
 import { body, composeNew } from './harness/drafts';
 import { expect, type Mailbox, test } from './harness/fixtures';
@@ -292,6 +293,24 @@ function invitationCard(page: Page): Locator {
   return page.getByRole('region', { name: `Calendar invitation: ${TITLE}` });
 }
 
+/** Delays only the test's new account's first Calendar API discovery. */
+async function delayCalendarDiscovery(mailbox: Mailbox, address: string) {
+  const faults = `${mailbox.stack.info.gmailUrl}/_emulator/faults`;
+  const response = await fetch(faults, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      mailbox: address,
+      route: 'calendarList.list',
+      delay_ms: 25_000,
+    }),
+  });
+  if (!response.ok)
+    throw new Error(`discovery delay refused: ${response.status}`);
+  const { id } = (await response.json()) as { id: number };
+  return () => fetch(`${faults}/${id}`, { method: 'DELETE' });
+}
+
 /** Grace's invitation to her meeting, synced and open in the thread. */
 async function openInvitation(page: Page, mailbox: Mailbox): Promise<Meeting> {
   await calendarReady(mailbox);
@@ -556,6 +575,110 @@ test.describe('shared events in email on GMAIL', { tag: '@full-stack' }, () => {
   });
 });
 
+test.describe('first calendar sync from email', { tag: '@full-stack' }, () => {
+  test.use({ provider: 'GMAIL', access: 'mail', seedGoogleGrant: false });
+
+  test('shared-event actions recover when the first writable calendar arrives', async ({
+    page,
+    mailbox,
+  }) => {
+    const grace = mailbox.stack.address('grace@example.com');
+    const address = 'calendar@example.com';
+    const calendarAddress = mailbox.stack.address(address);
+    const revisedTitle = `${TITLE} with notes`;
+    const links = await mailbox.api('/email/email/links');
+    expect(links.ok).toBe(true);
+    expect((await links.json()).links).toContainEqual(
+      expect.objectContaining({
+        id: mailbox.inbox.linkId,
+        needs_calendar_permission: true,
+      })
+    );
+    await withoutExtraction(page);
+    await deliverCalendarMail(
+      mailbox,
+      { from: grace, subject: TITLE, method: 'PUBLISH' },
+      calendarFile({
+        method: 'PUBLISH',
+        uid: `first-calendar-${mailbox.inbox.linkId}@example.com`,
+        organizer: grace,
+      })
+    );
+    const thread = await mailbox.synced(TITLE);
+    await invitationReady(mailbox, thread.id, false);
+
+    const recording = test.info().outputPath('first-calendar-sync.webm');
+    const release = await delayCalendarDiscovery(mailbox, calendarAddress);
+    try {
+      await page.screencast.start({
+        path: recording,
+        size: { width: 1280, height: 720 },
+      });
+      await mailbox.stack.link(
+        mailbox.user,
+        'GMAIL',
+        address,
+        'mail-and-calendar'
+      );
+      await mailbox.open(`/app/mail/${thread.id}`);
+      const origin = await page.evaluate(() => performance.timeOrigin);
+      const syncing = 'Syncing your calendar…';
+      const card = page.getByRole('region', { name: `Shared event: ${TITLE}` });
+      const cardSync = card.getByRole('status').filter({ hasText: syncing });
+      await expect(cardSync).toBeVisible({ timeout: 15_000 });
+      await expect(
+        card.getByRole('button', { name: 'Add to calendar' })
+      ).toHaveCount(0);
+      saw('STL-523');
+
+      await page.keyboard.press('b');
+      did('AL-136');
+      const composer = await composerFor(page, grace);
+      const title = composer.getByRole('textbox', { name: 'Title' });
+      await expect(
+        composer.getByRole('status').filter({ hasText: syncing })
+      ).toBeVisible();
+      await expect(
+        composer.getByRole('button', { name: 'Calendar', exact: true })
+      ).toHaveCount(0);
+      await expect(
+        composer.getByRole('button', { name: 'Create event' })
+      ).toHaveCount(0);
+      await title.fill(revisedTitle);
+      saw('STL-524');
+
+      // An in-flight discovery returns after its delay. Later requests proceed normally.
+      expect((await release()).ok).toBe(true);
+      await expect(
+        composer.getByRole('button', { name: 'Create event' })
+      ).toBeEnabled({ timeout: 60_000 });
+      await expect(title).toHaveValue(revisedTitle);
+      await composer.getByRole('button', { name: 'Create event' }).click();
+      await expect(composer).toHaveCount(0);
+      const titles = async () =>
+        (await providerEvents(mailbox, calendarAddress)).map(titleOf);
+      await expect.poll(titles).toContain(revisedTitle);
+      confirmed('F-114');
+
+      await card.getByRole('button', { name: 'Add to calendar' }).click();
+      did('AL-183');
+      await expect
+        .poll(titles)
+        .toEqual(expect.arrayContaining([TITLE, revisedTitle]));
+      confirmed('F-156');
+      expect(await page.evaluate(() => performance.timeOrigin)).toBe(origin);
+    } finally {
+      await release();
+      await page.screencast.stop();
+    }
+    // The full-stack workflow only uploads loose recordings on failure.
+    await test.info().attach('first-calendar-sync', {
+      body: await readFile(recording),
+      contentType: 'video/webm',
+    });
+  });
+});
+
 test.describe('shared events in email on OUTLOOK', {
   tag: '@full-stack',
 }, () => {
@@ -620,16 +743,15 @@ test.describe('shared events in email on OUTLOOK', {
     confirmed('F-156');
   });
 
-  // When this fails, someone whose only calendar is Outlook's is offered an
-  // Add to calendar that the calendar service refuses: shared events can be
-  // added to Google calendars only.
-  test('Add to calendar cannot be pressed with only an Outlook calendar', async ({
+  // When this fails, a reader whose only calendar is Outlook's has no way to
+  // tell why the shared event cannot be saved directly from the card.
+  test('a shared event explains the calendar requirement to an Outlook-only reader', async ({
     page,
     mailbox,
   }) => {
     await calendarReady(mailbox);
-    // The button is also disabled while the page has no answer about the
-    // user's calendars: the test looks at it after that answer is drawn.
+    // Check the response as well as the card so a disconnected reader cannot
+    // satisfy the test.
     const calendars = page.waitForResponse(
       (response) =>
         (response.request().postData() ?? '').includes(
@@ -638,14 +760,116 @@ test.describe('shared events in email on OUTLOOK', {
     );
     const card = await sharedEvent(page, mailbox);
     expect(await (await calendars).text()).toMatch(/"provider":"outlook"/i);
-    await page.evaluate(
-      () =>
-        new Promise<void>((drawn) =>
-          requestAnimationFrame(() => requestAnimationFrame(() => drawn()))
-        )
+    await expect(card.getByRole('status')).toHaveText(
+      'Adding shared events requires a writable Google calendar.'
     );
     await expect(
       card.getByRole('button', { name: 'Add to calendar' })
-    ).toBeDisabled();
+    ).toHaveCount(0);
+    saw('STL-522');
+  });
+});
+
+test.describe('a calendar connected after the calendar was opened', {
+  tag: '@full-stack',
+}, () => {
+  test.use({ provider: 'GMAIL' });
+
+  /** Puts an event at local noon today on a Google mailbox's calendar. */
+  async function eventToday(
+    page: Page,
+    mailbox: Mailbox,
+    address: string,
+    title: string
+  ): Promise<void> {
+    const start = await page.evaluate(() => {
+      const noon = new Date();
+      noon.setHours(12, 0, 0, 0);
+      return noon.toISOString();
+    });
+    const end = new Date(Date.parse(start) + 30 * 60_000).toISOString();
+    const url = `${mailbox.stack.info.gmailUrl}/_emulator/mailboxes/${encodeURIComponent(address)}/calendars/primary/events`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        summary: title,
+        start: { dateTime: start, timeZone: 'UTC' },
+        end: { dateTime: end, timeZone: 'UTC' },
+      }),
+    });
+    if (!response.ok) {
+      throw new Error(`${response.status} ${await response.text()}`);
+    }
+  }
+
+  /** Whether Macro holds an event with this title for the test's user. */
+  async function stored(mailbox: Mailbox, title: string): Promise<number> {
+    const [row] = await mailbox.stack.sql<{ count: number }>(
+      `SELECT count(*)::int AS count FROM calendar_events
+       WHERE owner_id = '${mailbox.user.macroUserId}' AND title = '${title}'`
+    );
+    return row?.count ?? 0;
+  }
+
+  // When this fails, the days the calendar showed while no inbox was
+  // connected stay empty once one is: the local cache keeps them as fetched,
+  // and with no inbox tracked it never asks the server what changed.
+  test('shows the new calendar on a day it showed before', async ({
+    page,
+    mailbox,
+  }) => {
+    const removed = await mailbox.api(
+      `/email/email/links/${mailbox.inbox.linkId}`,
+      { method: 'DELETE' }
+    );
+    expect(removed.status).toBe(204);
+    // The watermark of each page of occurrences the cache fetched.
+    const pages: string[] = [];
+    let lastPageAt = 0;
+    page.on('response', async (response) => {
+      const request = response.request().postData() ?? '';
+      if (!request.includes('"operationName":"CalendarOccurrences"')) return;
+      lastPageAt = Date.now();
+      const text = await response.text().catch(() => '');
+      pages.push(/"watermark":(\[[^\]]*\])/.exec(text)?.[1] ?? 'none');
+    });
+    const days = page.getByRole('region', { name: 'Calendar periods' });
+    await mailbox.open('/app/calendar/day');
+    await expect(days).toBeVisible();
+    // The cache fills a year around today in the background, a month every
+    // two seconds; a user connects later than that.
+    await expect
+      .poll(() => pages.length > 0 && Date.now() - lastPageAt > 6_000, {
+        timeout: 120_000,
+      })
+      .toBe(true);
+    expect(new Set(pages)).toEqual(new Set(['[]']));
+
+    const address = mailbox.stack.address('calendar@example.com');
+    const run = Date.now().toString(36);
+    const before = `Standup ${run}`;
+    await mailbox.stack.seed('GMAIL', 'calendar@example.com', []);
+    await eventToday(page, mailbox, address, before);
+    const inbox = await mailbox.stack.link(
+      mailbox.user,
+      'GMAIL',
+      'calendar@example.com',
+      'mail-and-calendar'
+    );
+    await calendarReady(mailbox, inbox);
+    await expect.poll(() => stored(mailbox, before)).toBe(1);
+
+    // The open day shows it once the server says the calendar changed.
+    await expect(days.getByText(before)).toBeVisible({ timeout: 60_000 });
+
+    // A change after connecting reaches the same day too.
+    const after = `Retro ${run}`;
+    await eventToday(page, mailbox, address, after);
+    await expect
+      .poll(() => stored(mailbox, after), { timeout: 60_000 })
+      .toBe(1);
+    await expect(days.getByText(after)).toBeVisible({ timeout: 60_000 });
+    await expect(days.getByText(before)).toBeVisible();
   });
 });

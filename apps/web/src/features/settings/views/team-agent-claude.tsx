@@ -1,18 +1,18 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
-import { enableMacroComputers } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { ClaudeSignInEntry } from '@queries/computers/claude';
 import {
   useClaudeModeQuery,
   useClaudeSignOutMutation,
 } from '@queries/computers/claude';
+import { useMacroComputersRollout } from '@queries/computers/computers';
 import { useHarnessesQuery } from '@queries/harnesses/harnesses';
 import type { TeamAgent } from '@service-auth/team-agents';
 import { confirmDialog } from '@ui';
 import { createEffect, createSignal, Show } from 'solid-js';
 import { TeamAgentClaudeStatus } from '../components/team-agent-claude-status';
+import { computerFailureMessage } from '../computers/core/computer-display';
 import {
   agentClaudeMode,
   agentClaudeState,
@@ -32,7 +32,7 @@ import { AgentClaudeDialog } from './agent-claude-step';
  * everyone else.
  */
 export function TeamAgentClaude(props: { agent: TeamAgent }) {
-  const computers = useFeatureFlag(enableMacroComputers);
+  const computers = useMacroComputersRollout();
   const harnesses = useHarnessesQuery();
   const harness = () => {
     if (!computers().enabled) return undefined;
@@ -71,8 +71,13 @@ export function TeamAgentClaude(props: { agent: TeamAgent }) {
     if (!confirmed) return;
     try {
       await signOut.mutateAsync(id);
-    } catch {
-      toast.failure(t('teamAgents.useCreditsFailed', { name }));
+    } catch (error) {
+      toast.failure(
+        computerFailureMessage(
+          error,
+          t('teamAgents.useCreditsFailed', { name })
+        )
+      );
     }
   };
 

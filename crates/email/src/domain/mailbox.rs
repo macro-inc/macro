@@ -1,15 +1,18 @@
 //! Durable mailbox enumeration independent from provider-specific notifications.
 
+use crate::domain::backfill_jobs::worker::is_unstorable_sqlstate;
 use email_api_client::domain::models::{
-    EmailApiError, MailFolder, MailboxChangePage, MailboxMessage, ProviderId, StreamPosition,
-    StreamToken,
+    EmailApiError, MailFolder, MailFolderCatalog, MailboxChangePage, MailboxMessage, ProviderId,
+    RoundStart, StreamPosition, StreamToken,
 };
+use live_pass::{FolderPass, LiveImportPass, StreamKind};
 use progress::{ImportCompleted, ImportTally};
+use retry::{message_retry, retry_seconds};
 use std::future::Future;
 use std::time::Instant;
 use telemetry::{
-    claim_failed, elapsed_ms, record_abandoned, record_deferred, record_done, record_failed,
-    span_int,
+    claim_failed, elapsed_ms, enumerate_span, is_gate_refusal, record_abandoned, record_deferred,
+    record_done, record_failed, span_int,
 };
 use tracing::{Instrument, Span};
 use uuid::Uuid;
@@ -30,13 +33,13 @@ pub mod initialization;
 pub mod lifecycle;
 /// Link-maintenance queue decisions and reconnect notification selection.
 pub mod link_manager;
+pub mod live_pass;
 pub mod progress;
 pub mod projection;
 pub mod reimport;
+mod retry;
 pub mod settings;
 pub mod telemetry;
-#[cfg(test)]
-mod test;
 pub mod watches;
 
 #[derive(Debug, thiserror::Error)]
@@ -50,13 +53,17 @@ pub enum MailboxError {
     /// A database call failed; the cause carries no row data.
     #[error("mailbox persistence is unavailable: {0}")]
     Database(DatabaseFailure),
+    /// The database refused a value the work carries with this SQLSTATE
+    /// ([`is_unstorable_sqlstate`]), so it fails the same way every time.
+    #[error("mailbox data cannot be stored: sqlstate {0}")]
+    Unstorable(String),
     /// A projection's downstream effect (event publishing, a queue, another
     /// service) failed or is not ready.
     #[error("a mailbox projection effect is unavailable: {0}")]
     Effect(EffectFailure),
     #[error("mailbox generation or worker lease changed")]
     Stale,
-    /// The provider no longer reports the message where it was; a later
+    /// The provider does not return the message a live change named; a later
     /// attempt either finds it or settles that it is gone.
     #[error("mailbox message location has not settled")]
     LocationUnsettled,
@@ -64,6 +71,15 @@ pub enum MailboxError {
     /// its MIME source; a later attempt imports it without calendar parts.
     #[error("the invitation's calendar parts are unavailable")]
     CalendarPartsUnavailable,
+    /// The account has no mailbox the provider will serve: discovery found no
+    /// Inbox. The link is marked until a later discovery finds one.
+    #[error("the account has no mailbox the provider will serve")]
+    NoMailbox,
+    /// The message's last claims all ended without an outcome: each worker
+    /// reading it stopped (a read that runs the worker out of memory kills
+    /// every worker that claims it) and its lease expired.
+    #[error("the message's last {0} claims ended without an outcome")]
+    ClaimsUnfinished(i32),
 }
 
 /// Which projection effect deferred the work (`outlook.effect`).
@@ -112,6 +128,25 @@ impl std::fmt::Display for EffectFailure {
     }
 }
 
+impl MailboxError {
+    /// A failed database call. A value the database will never accept is the
+    /// data's fault, not an outage, so it is `Unstorable` rather than `Database`.
+    pub fn database(failure: DatabaseFailure) -> Self {
+        match failure {
+            DatabaseFailure::Sqlstate(code) if is_unstorable_sqlstate(&code) => {
+                Self::Unstorable(code)
+            }
+            failure => Self::Database(failure),
+        }
+    }
+
+    /// Whether a database call gave up waiting for a lock (see
+    /// [`DatabaseFailure::is_lock_timeout`]).
+    pub fn is_lock_timeout(&self) -> bool {
+        matches!(self, Self::Database(failure) if failure.is_lock_timeout())
+    }
+}
+
 /// What failed underneath a database call. The database's own message is
 /// left out because it can quote row data.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -140,6 +175,14 @@ impl std::fmt::Display for DatabaseFailure {
     }
 }
 
+impl DatabaseFailure {
+    /// Whether the statement gave up waiting for a lock. The rows were busy,
+    /// not wrong, so the same work succeeds once their holder finishes.
+    pub fn is_lock_timeout(&self) -> bool {
+        matches!(self, Self::Sqlstate(code) if code == super::models::error::LOCK_NOT_AVAILABLE)
+    }
+}
+
 /// Both generations are resolved from storage, never selected by the client.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct MailboxKey {
@@ -153,6 +196,8 @@ pub struct StreamLease {
     pub id: Uuid,
     pub mailbox: MailboxKey,
     pub folder: ProviderId,
+    /// Which of the folder's streams this is.
+    pub pass: FolderPass,
     pub position: Option<StreamToken>,
     pub initial_complete: bool,
     pub lease_id: Uuid,
@@ -181,8 +226,14 @@ pub struct MessageLease {
     pub lease_id: Uuid,
     pub is_import: bool,
     pub attempts: i32,
+    /// Claims of this revision in a row before this one that ended without
+    /// recording an outcome: their worker stopped while it held the lease.
+    pub unfinished_claims: i32,
     /// The newest change notification that queued this message.
     pub notification: Option<Notification>,
+    /// A change notification queued this message by the id it names, not a
+    /// folder page.
+    pub from_notification: bool,
 }
 
 #[derive(Debug)]
@@ -227,9 +278,22 @@ pub trait MailboxSyncRepository: Send + Sync + 'static {
         lease: &CatalogLease,
         retry_after_seconds: u32,
     ) -> impl Future<Output = Result<(), MailboxError>> + Send;
+    /// Marks the lease's link as having no mailbox the provider will serve,
+    /// unless it already is, and answers how many seconds it has been
+    /// marked. Every claim but the catalog's skips a marked link; a committed
+    /// catalog or a reconnect clears the mark.
+    fn mark_no_mailbox(
+        &self,
+        lease: &CatalogLease,
+    ) -> impl Future<Output = Result<u32, MailboxError>> + Send;
+    /// Claims the longest-due stream of `kind`, except that a mail folder's
+    /// import round goes ahead of finished folders that came due less than
+    /// five minutes before it, so its next page is read once its mailbox has
+    /// room instead of behind every poll.
     fn claim_stream(
         &self,
         lease_id: Uuid,
+        kind: StreamKind,
     ) -> impl Future<Output = Result<Option<StreamLease>, MailboxError>> + Send;
     /// Atomically records every changed/removed ID and advances the opaque
     /// cursor only while this generation and lease fence are still current.
@@ -239,7 +303,21 @@ pub trait MailboxSyncRepository: Send + Sync + 'static {
         page: &MailboxChangePage,
     ) -> impl Future<Output = Result<CommittedPage, MailboxError>> + Send;
     /// Reset only this expired stream; this operation never removes messages.
+    /// Its folder's live pass goes with the round it ran beside.
     fn reset_stream(
+        &self,
+        lease: &StreamLease,
+    ) -> impl Future<Output = Result<(), MailboxError>> + Send;
+    /// Opens the folder's live pass while the import round `lease` read a
+    /// page of still runs. An open pass is left as it is.
+    fn open_live_pass(
+        &self,
+        lease: &StreamLease,
+    ) -> impl Future<Output = Result<(), MailboxError>> + Send;
+    /// Starts an expired live pass over from now. Unlike `reset_stream`, it
+    /// requeues nothing: mail it missed is in the folder's import round, or
+    /// in the folder's next round once that one ends.
+    fn restart_live_pass(
         &self,
         lease: &StreamLease,
     ) -> impl Future<Output = Result<(), MailboxError>> + Send;
@@ -295,12 +373,15 @@ pub trait MailboxGateway: Send + Sync + 'static {
     fn folders(
         &self,
         mailbox: MailboxKey,
-    ) -> impl Future<Output = Result<Vec<MailFolder>, EmailApiError>> + Send;
+    ) -> impl Future<Output = Result<MailFolderCatalog, EmailApiError>> + Send;
+    /// One page of a folder's delta round. `start` says what a new round
+    /// (no `position`) lists; a position carries it.
     fn changes(
         &self,
         mailbox: MailboxKey,
         folder: &ProviderId,
         position: Option<&StreamToken>,
+        start: RoundStart,
     ) -> impl Future<Output = Result<MailboxChangePage, EmailApiError>> + Send;
     fn message(
         &self,
@@ -324,6 +405,11 @@ pub trait MailboxIngest: Send + Sync + 'static {
     /// membership, and recheck before any destructive retention decision.
     fn absent(&self, lease: &MessageLease)
     -> impl Future<Output = Result<(), MailboxError>> + Send;
+    /// Whether the mailbox already stores the leased message.
+    fn stored(
+        &self,
+        lease: &MessageLease,
+    ) -> impl Future<Output = Result<bool, MailboxError>> + Send;
 }
 
 pub struct MailboxSyncService<R, P, I> {
@@ -336,6 +422,7 @@ pub struct MailboxSyncService<R, P, I> {
     import_provider: P,
     ingest: I,
     imports: ImportTally,
+    live_pass: LiveImportPass,
 }
 
 impl<R, P, I> MailboxSyncService<R, P, I> {
@@ -346,7 +433,15 @@ impl<R, P, I> MailboxSyncService<R, P, I> {
             import_provider,
             ingest,
             imports: ImportTally::default(),
+            live_pass: LiveImportPass::default(),
         }
+    }
+
+    /// Reads new mail beside import rounds, and imports newest first, while
+    /// `switch` is on.
+    pub fn with_live_import_pass(mut self, switch: LiveImportPass) -> Self {
+        self.live_pass = switch;
+        self
     }
 
     fn provider_for(&self, is_import: bool) -> &P {
@@ -380,6 +475,7 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
             outlook.stream_kind = "folder_catalog",
             outlook.folders = tracing::field::Empty,
             outlook.provider_item_count = tracing::field::Empty,
+            graph.error_code = tracing::field::Empty,
             outlook.outcome = tracing::field::Empty,
             outlook.defer_reason = tracing::field::Empty,
             outlook.defer_seconds = tracing::field::Empty,
@@ -396,7 +492,11 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
         )
         .await;
         let result = match outcome {
-            Ok(folders) => {
+            Ok(MailFolderCatalog::NoMailbox { error_code }) => {
+                span.record("graph.error_code", error_code.as_deref());
+                return self.park_without_mailbox(lease).await;
+            }
+            Ok(MailFolderCatalog::Folders(folders)) => {
                 span.record("outlook.folders", span_int(folders.len()));
                 span.record(
                     "outlook.provider_item_count",
@@ -439,39 +539,85 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
         }
     }
 
+    /// The provider serves no mailbox for the account. Every claim but this
+    /// catalog's skips the marked link, and discovery alone looks again,
+    /// waiting as long as the link has been marked (30 s at first, at most
+    /// the 12 h a working subscription waits), so its probes double apart.
+    /// The first discovery that finds the mailbox clears the mark.
+    async fn park_without_mailbox(&self, lease: &CatalogLease) -> Result<bool, MailboxError> {
+        let span = Span::current();
+        let link_id = lease.mailbox.link_id;
+        let marked_seconds = self
+            .repo
+            .mark_no_mailbox(lease)
+            .await
+            .inspect_err(|error| record_failed(&span, link_id, error))?;
+        let delay =
+            marked_seconds.clamp(NO_MAILBOX_FIRST_PROBE_SECONDS, NO_MAILBOX_PROBE_MAX_SECONDS);
+        self.repo
+            .release_catalog(lease, delay)
+            .await
+            .inspect_err(|error| record_failed(&span, link_id, error))?;
+        let error = MailboxError::NoMailbox;
+        record_deferred(&span, link_id, &error, delay);
+        Err(error)
+    }
+
     /// Process one bounded provider page. Notifications only make streams due;
     /// periodic polling recovers missed, duplicate and out-of-order notifications.
+    ///
+    /// An import round that waits for room in its mailbox's import (paced, or
+    /// refused by the request gate) reads nothing, so the claim moves on to
+    /// the next due stream. Import rounds are claimed ahead of finished
+    /// folders, and a waiting round is due again seconds later: without
+    /// moving on, a large mailbox's waiting rounds would take the turns every
+    /// other mailbox's new mail needs.
     pub async fn enumerate_once(&self) -> Result<bool, MailboxError> {
-        let Some(lease) = self
-            .repo
-            .claim_stream(macro_uuid::generate_uuid_v7())
+        for _ in 0..PACED_CLAIMS_PER_TURN {
+            let Some(lease) = self
+                .claim_folder_stream()
+                .await
+                .map_err(|error| claim_failed("enumerate", error))?
+            else {
+                return Ok(false);
+            };
+            let span = enumerate_span(&lease);
+            adopt_notification_trace(&span, lease.notification.as_ref());
+            // Only an import round waiting for room comes back without reading.
+            if self.enumerate(&lease).instrument(span).await? {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    /// New mail goes first: a due live pass is claimed before any folder.
+    async fn claim_folder_stream(&self) -> Result<Option<StreamLease>, MailboxError> {
+        if self.live_pass.enabled()
+            && let Some(lease) = self
+                .repo
+                .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::LivePass)
+                .await?
+        {
+            return Ok(Some(lease));
+        }
+        self.repo
+            .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
             .await
-            .map_err(|error| claim_failed("enumerate", error))?
-        else {
-            return Ok(false);
-        };
-        let span = tracing::info_span!(
-            "outlook.sync.enumerate",
-            mailbox.link_id = %lease.mailbox.link_id,
-            mailbox.sync_generation = lease.mailbox.sync_generation,
-            outlook.stream_kind = "mail_folder",
-            outlook.stream_id = %lease.id,
-            outlook.page_items = tracing::field::Empty,
-            outlook.rows_queued = tracing::field::Empty,
-            outlook.delta_advanced = tracing::field::Empty,
-            outlook.folder_initial_complete = tracing::field::Empty,
-            outlook.cursor_reset = tracing::field::Empty,
-            outlook.notification_wait_ms = lease
-                .notification
-                .as_ref()
-                .map(|notification| telemetry::since_ms(notification.received_at)),
-            outlook.outcome = tracing::field::Empty,
-            outlook.defer_reason = tracing::field::Empty,
-            outlook.defer_seconds = tracing::field::Empty,
-            otel.status_description = tracing::field::Empty,
-        );
-        adopt_notification_trace(&span, lease.notification.as_ref());
-        self.enumerate(&lease).instrument(span).await
+    }
+
+    /// A failure leaves the folder as it was before the switch: its new mail
+    /// waits for the round. The next page tries again.
+    async fn open_live_pass(&self, lease: &StreamLease) {
+        let opened = self.repo.open_live_pass(lease).await;
+        Span::current().record("outlook.live_pass_opened", opened.is_ok());
+        if let Err(error) = opened {
+            tracing::warn!(
+                link_id = %lease.mailbox.link_id,
+                error = %error,
+                "outlook live pass not opened"
+            );
+        }
     }
 
     async fn enumerate(&self, lease: &StreamLease) -> Result<bool, MailboxError> {
@@ -498,7 +644,12 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
             async {
                 Ok(self
                     .provider_for(!lease.initial_complete)
-                    .changes(lease.mailbox, &lease.folder, lease.position.as_ref())
+                    .changes(
+                        lease.mailbox,
+                        &lease.folder,
+                        lease.position.as_ref(),
+                        live_pass::round_start(lease, &self.live_pass),
+                    )
                     .await?)
             },
             || self.repo.renew(SyncLease::Stream(lease)),
@@ -514,20 +665,41 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
                     span_int(page.changed.len() + page.removed.len()),
                 );
                 let checkpoint = matches!(page.position, StreamPosition::Checkpoint(_));
-                self.repo.commit_page(lease, &page).await.map(|committed| {
+                let committed = self.repo.commit_page(lease, &page).await;
+                if committed.is_ok() && live_pass::opens(lease, checkpoint, &self.live_pass) {
+                    self.open_live_pass(lease).await;
+                }
+                committed.map(|committed| {
                     span.record("outlook.rows_queued", span_int(committed.queued));
                     delta_advanced = true;
                     folder_initial_complete |= checkpoint;
                     committed.import_completed
                 })
             }
+            // A live pass only starts over: its folder's rounds list what it
+            // missed, so requeueing the folder would only repeat the import.
             Err(MailboxError::Provider(EmailApiError::OutdatedCursor)) => {
                 cursor_reset = true;
-                self.repo.reset_stream(lease).await.map(|()| None)
+                match lease.pass {
+                    FolderPass::Live { .. } => {
+                        self.repo.restart_live_pass(lease).await.map(|()| None)
+                    }
+                    FolderPass::Folder => self.repo.reset_stream(lease).await.map(|()| None),
+                }
             }
             Err(MailboxError::Provider(error)) => {
+                // The request gate refuses an import round's page while its
+                // mailbox's own message reads hold the import slots, which
+                // is a wait for room like pacing: the round waits as long,
+                // and the claim moves on to the next stream.
                 let delay = retry_seconds(&error);
                 let error = MailboxError::from(error);
+                let import_busy = !lease.initial_complete && is_gate_refusal(&error);
+                let delay = if import_busy {
+                    delay.max(IMPORT_PACE_SECONDS)
+                } else {
+                    delay
+                };
                 record_stream(&span, delta_advanced, folder_initial_complete, cursor_reset);
                 self.repo
                     .release_stream(lease, delay)
@@ -536,6 +708,9 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
                         record_failed(&span, lease.mailbox.link_id, release);
                     })?;
                 record_deferred(&span, lease.mailbox.link_id, &error, delay);
+                if import_busy {
+                    return Ok(false);
+                }
                 return Err(error);
             }
             Err(error) => Err(error),
@@ -570,6 +745,7 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
             mailbox.link_id = %lease.mailbox.link_id,
             mailbox.sync_generation = lease.mailbox.sync_generation,
             outlook.is_import = lease.is_import,
+            outlook.from_notification = lease.from_notification,
             outlook.attempts = lease.attempts,
             outlook.graph_calls = tracing::field::Empty,
             outlook.attachments = tracing::field::Empty,
@@ -582,7 +758,24 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
             otel.status_description = tracing::field::Empty,
         );
         adopt_notification_trace(&span, lease.notification.as_ref());
+        if lease.unfinished_claims >= UNFINISHED_CLAIM_LIMIT {
+            return self.abandon_unfinished(&lease).instrument(span).await;
+        }
         self.reconcile(&lease).instrument(span).await
+    }
+
+    /// Gives up on a message without reading it, since the read is the likely
+    /// cause of the workers that stopped. A new change revives it as it does
+    /// any abandoned message.
+    async fn abandon_unfinished(&self, lease: &MessageLease) -> Result<bool, MailboxError> {
+        let span = Span::current();
+        let error = MailboxError::ClaimsUnfinished(lease.unfinished_claims);
+        self.repo
+            .release_message(lease, MessageRetry::Abandon)
+            .await
+            .inspect_err(|release| record_failed(&span, lease.mailbox.link_id, release))?;
+        record_abandoned(&span, lease.mailbox.link_id, &error, lease.attempts);
+        Err(error)
     }
 
     async fn reconcile(&self, lease: &MessageLease) -> Result<bool, MailboxError> {
@@ -599,7 +792,25 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
             .await;
             span.record("outlook.graph_calls", i64::from(graph_calls));
             let started = Instant::now();
-            let outcome = match snapshot? {
+            let snapshot = snapshot?;
+            // A notification names messages in every folder, the hidden ones
+            // and those created since the last discovery included, while
+            // folder pages list only the catalog's folders. A message no
+            // folder page would list is not stored; one already stored is
+            // read as its folder's page would.
+            let unsynced = match &snapshot {
+                Some(snapshot)
+                    if lease.from_notification
+                        && !folders
+                            .iter()
+                            .any(|folder| Some(&folder.id) == snapshot.folder_id.as_ref()) =>
+                {
+                    !self.ingest.stored(lease).await?
+                }
+                _ => false,
+            };
+            let outcome = match snapshot {
+                Some(_) if unsynced => "unsynced",
                 Some(snapshot) => {
                     span.record(
                         "outlook.attachments",
@@ -619,7 +830,17 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
                     self.ingest.ingest(lease, snapshot).await?;
                     "imported"
                 }
-                None if lease.attempts < 3 => return Err(MailboxError::LocationUnsettled),
+                // Live work follows a change Graph or Macro just made, which
+                // Graph's message read can briefly miss, so its 404 is read
+                // again. Import work lists what a folder already held, or
+                // rechecks mail Macro stored before: its 404 means the message
+                // has left the mailbox, or the entry is one Graph lists but
+                // never serves as a message (Deleted Items holds them). Ids
+                // are immutable, so a message moved meanwhile still reads,
+                // and a retry would only repeat the answer later.
+                None if !lease.is_import && lease.attempts < 3 => {
+                    return Err(MailboxError::LocationUnsettled);
+                }
                 None => {
                     self.ingest.absent(lease).await?;
                     "absent"
@@ -703,6 +924,43 @@ where
     }
 }
 
+/// Attempts a write that records a provider call's result gets while its
+/// mailbox stays locked, and the wait between them. With each attempt's 5 s
+/// lock timeout they take about 80 s, inside one 3 minute lease even before it
+/// is renewed.
+pub(crate) const AFTER_PROVIDER_ATTEMPTS: u32 = 6;
+pub(crate) const AFTER_PROVIDER_RETRY_DELAY: std::time::Duration =
+    std::time::Duration::from_secs(10);
+
+/// Retries `write` while it times out on a lock. A later attempt reads the
+/// provider's new state as already applied, or as another client's change,
+/// so what the call changed has to be recorded now. Each attempt opens its
+/// own transaction, so no connection is held between attempts.
+pub(crate) async fn record_after_provider<F, W>(
+    unit: &'static str,
+    mut write: F,
+) -> Result<(), MailboxError>
+where
+    F: FnMut() -> W,
+    W: Future<Output = Result<(), MailboxError>>,
+{
+    let mut attempt = 1;
+    loop {
+        match write().await {
+            Err(error) if attempt < AFTER_PROVIDER_ATTEMPTS && error.is_lock_timeout() => {
+                tracing::debug!(
+                    unit,
+                    attempt,
+                    "write after a provider call waits for its mailbox to be free"
+                );
+                tokio::time::sleep(AFTER_PROVIDER_RETRY_DELAY).await;
+                attempt += 1;
+            }
+            result => return result,
+        }
+    }
+}
+
 /// Due import messages a mailbox may have before its folders' import rounds
 /// stop reading pages: two pages. Gmail's backfill lists its next page
 /// behind the threads it queued; this keeps an Outlook walk about as far
@@ -714,84 +972,27 @@ const IMPORT_QUEUED_AHEAD: u32 = 200;
 /// most about 12 messages a second, so its two pages outlast the wait.
 const IMPORT_PACE_SECONDS: u32 = 10;
 
-/// Claims after which a message the provider keeps refusing outright
-/// (malformed, forbidden) is abandoned: 3 tries, 10 minutes apart.
-const PERMANENT_FAILURE_ATTEMPTS: i32 = 3;
+/// How soon discovery looks again for a mailbox it found missing, and the
+/// longest it waits: the 12 h a working subscription waits for renewal.
+const NO_MAILBOX_FIRST_PROBE_SECONDS: u32 = 30;
+const NO_MAILBOX_PROBE_MAX_SECONDS: u32 = 12 * 60 * 60;
 
-/// Claims after which a message that keeps failing for any other reason of
-/// its own is abandoned. With the backoff below that is about a day.
-const MESSAGE_FAILURE_ATTEMPTS: i32 = 50;
+/// Waiting import rounds one `enumerate_once` passes over before it gives up
+/// its turn. Each costs a claim, a count or a gate check, and a release, and
+/// no Graph request.
+const PACED_CLAIMS_PER_TURN: u32 = 8;
 
-/// The longest backoff. The `outlook-message-parked-too-long` monitor alerts
-/// above 30 minutes, which only a Graph `Retry-After` should reach.
-const MAX_BACKOFF_SECONDS: u32 = 1800;
+/// Claims in a row that may end without an outcome before a message, or a
+/// projection event, is abandoned unread. Its next claim comes when the
+/// 3-minute lease expires, so a read that kills its worker kills five, over
+/// about 15 minutes, instead of one every few minutes forever. A deploy, or a
+/// worker stopped for another reason, leaves one such claim on whatever it
+/// was reading.
+const UNFINISHED_CLAIM_LIMIT: i32 = 5;
 
 /// Claims an invitation waits for its MIME source before it is imported
 /// without calendar parts.
 const CALENDAR_PARTS_ATTEMPTS: i32 = 3;
-
-/// How a failed reconciliation is retried. `attempts` counts this claim.
-/// Throttling and credential failures belong to the mailbox, not the message,
-/// so they keep their own delays and never move it closer to abandonment.
-/// A transient provider failure (Graph 5xx or 408, a request Graph never
-/// answered) says nothing about the message either: during an outage every
-/// message gets one. It backs off like any failure but is never abandoned, and
-/// stops counting once the backoff is at its longest.
-fn message_retry(error: &MailboxError, attempts: i32) -> MessageRetry {
-    match error {
-        MailboxError::Provider(
-            error @ (EmailApiError::RateLimited { .. }
-            | EmailApiError::CredentialsUnavailable { .. }
-            | EmailApiError::AuthRequired),
-        ) => MessageRetry::After {
-            seconds: retry_seconds(error),
-            counted: false,
-        },
-        MailboxError::Provider(EmailApiError::Permanent { .. } | EmailApiError::Forbidden) => {
-            if attempts >= PERMANENT_FAILURE_ATTEMPTS {
-                MessageRetry::Abandon
-            } else {
-                MessageRetry::After {
-                    seconds: 600,
-                    counted: true,
-                }
-            }
-        }
-        MailboxError::Provider(EmailApiError::Transient { .. }) => {
-            let seconds = backoff_seconds(attempts);
-            MessageRetry::After {
-                seconds,
-                counted: seconds < MAX_BACKOFF_SECONDS,
-            }
-        }
-        MailboxError::Stale => MessageRetry::After {
-            seconds: 30,
-            counted: true,
-        },
-        _ if attempts >= MESSAGE_FAILURE_ATTEMPTS => MessageRetry::Abandon,
-        _ => MessageRetry::After {
-            seconds: backoff_seconds(attempts),
-            counted: true,
-        },
-    }
-}
-
-/// 30 s doubling to 30 minutes: 30, 60, 120, ... 960, then 1800.
-fn backoff_seconds(attempts: i32) -> u32 {
-    (30_u32 << attempts.clamp(1, 7).saturating_sub(1)).min(MAX_BACKOFF_SECONDS)
-}
-
-fn retry_seconds(error: &EmailApiError) -> u32 {
-    match error {
-        EmailApiError::RateLimited {
-            retry_after: Some(delay),
-            ..
-        } => delay.as_secs().clamp(1, 86_400) as u32,
-        EmailApiError::AuthRequired | EmailApiError::Forbidden => 300,
-        EmailApiError::Permanent { .. } => 600,
-        _ => 30,
-    }
-}
 
 /// What one enumerated page did to its folder's stream, recorded once.
 fn record_stream(

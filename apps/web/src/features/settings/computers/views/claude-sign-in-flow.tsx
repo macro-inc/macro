@@ -1,7 +1,7 @@
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { assignOauthUrl, reserveOauthPopup } from '@core/pipedream/oauth-popup';
+import { reserveOauthPopup } from '@core/pipedream/oauth-popup';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isTauri } from '@core/util/platform';
 import { openExternalUrl } from '@core/util/url';
@@ -54,8 +54,15 @@ function failureMessage(
   phase: Problem['phase'],
   failure: ClaudeSignInFailure
 ): string {
-  // No link existed yet: only a reason the computer can't answer says more.
-  if (phase === 'start' && failure !== 'unreachable' && failure !== 'busy')
+  // No link existed yet: only a reason the computer can't answer, or won't
+  // for this account or caller, says more.
+  if (
+    phase === 'start' &&
+    failure !== 'unreachable' &&
+    failure !== 'busy' &&
+    failure !== 'rollout_disabled' &&
+    failure !== 'forbidden'
+  )
     return t('computers.claudeLinkFailed');
   return match(failure)
     .with('expired', () => t('computers.claudeSignInExpired'))
@@ -64,6 +71,8 @@ function failureMessage(
     .with('unreachable', () => t('computers.claudeUnreachable'))
     .with('busy', () => t('computers.claudeBusy'))
     .with('timeout', () => t('computers.claudeTimedOut'))
+    .with('rollout_disabled', () => t('computers.rolloutDisabled'))
+    .with('forbidden', () => t('computers.errorForbidden'))
     .with('failed', () => t('computers.claudeFailed'))
     .exhaustive();
 }
@@ -168,7 +177,9 @@ export function ClaudeSignInFlow(props: {
       if (current !== linkGeneration) return;
       if (!isHttpsUrl(result.url)) throw new Error('untrusted sign-in link');
       setUrl(result.url);
-      if (waitingTab) assignOauthUrl(waitingTab, result.url);
+      // A tab the user closed meanwhile stays closed.
+      if (waitingTab && !waitingTab.closed)
+        waitingTab.location.href = result.url;
       else if (openWhenReady) openExternalUrl(result.url);
       waitingTab = undefined;
       openWhenReady = false;
@@ -190,14 +201,15 @@ export function ClaudeSignInFlow(props: {
   // for the code.
   const pageTitle = document.title;
   const markTab = (waiting: boolean) => {
-    document.title = waiting ? t('computers.signInTabTitle') : pageTitle;
+    if (waiting) document.title = t('computers.signInTabTitle');
+    // Only undo our own title; the page may have set a newer one.
+    else if (document.title === t('computers.signInTabTitle'))
+      document.title = pageTitle;
   };
 
   onCleanup(() => {
     disposed = true;
-    // Only undo our own title; the page may have set a newer one.
-    if (document.title === t('computers.signInTabTitle'))
-      document.title = pageTitle;
+    markTab(false);
     linkGeneration++;
     linkRequest?.abort();
     forgetWaitingTab();
@@ -209,8 +221,12 @@ export function ClaudeSignInFlow(props: {
   const showProblem = (next: Problem) => {
     setProblem(next);
     queueMicrotask(() => {
-      if (next.recovery === 'repaste') codeInput?.focus();
-      else recoveryButton?.focus();
+      match(next.recovery)
+        .with('repaste', () => codeInput?.focus())
+        .with('retry', 'new_link', () => recoveryButton?.focus())
+        // No action to move to: the alert is announced where it is.
+        .with('none', () => undefined)
+        .exhaustive();
     });
   };
 
@@ -228,7 +244,8 @@ export function ClaudeSignInFlow(props: {
     fireAndForget(begin(), 'computer-claude');
   };
 
-  /** A failure that needs a new link has nothing left to paste into. */
+  /** A failure that needs a new link, or has no way out, has nothing left
+   * to paste into. */
   const needsNewLink = () => {
     const current = problem();
     return !!current && current.recovery !== 'repaste';
@@ -273,8 +290,6 @@ export function ClaudeSignInFlow(props: {
         harnessId: props.harnessId,
         entry: props.entry,
         code: code().trim(),
-        // Never aborted: closing mid-check lets the computer finish.
-        signal: new AbortController().signal,
       });
       if (current !== codeGeneration) return;
       if (!disposed) markTab(false);
@@ -417,7 +432,12 @@ export function ClaudeSignInFlow(props: {
               <span id={alertId} class="min-w-0 flex-1">
                 {failureMessage(current().phase, current().failure)}
               </span>
-              <Show when={current().recovery !== 'repaste'}>
+              <Show
+                when={
+                  current().recovery === 'retry' ||
+                  current().recovery === 'new_link'
+                }
+              >
                 <Button
                   ref={(button: HTMLButtonElement) => {
                     recoveryButton = button;

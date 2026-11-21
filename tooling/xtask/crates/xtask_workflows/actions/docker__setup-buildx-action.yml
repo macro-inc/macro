@@ -1,0 +1,78 @@
+name: Docker Setup Buildx
+description: Set up Docker Buildx
+inputs:
+  version:
+    description: Buildx version. (eg. v0.3.0)
+    required: false
+  driver:
+    description: Sets the builder driver to be used
+    default: docker-container
+    required: false
+  driver-opts:
+    description: List of additional driver-specific options. (eg. image=moby/buildkit:master)
+    required: false
+  buildkitd-flags:
+    description: BuildKit daemon flags
+    required: false
+  buildkitd-config:
+    description: BuildKit daemon config file
+    required: false
+  buildkitd-config-inline:
+    description: Inline BuildKit daemon config
+    required: false
+  use:
+    description: Switch to this builder instance
+    default: 'true'
+    required: false
+  name:
+    description: Name of the builder. If not specified, one will be generated or if it already exists, it will be used instead of creating a new one.
+    required: false
+  endpoint:
+    description: Optional address for docker socket or context from `docker context ls`
+    required: false
+  platforms:
+    description: Fixed platforms for current node. If not empty, values take priority over the detected ones
+    required: false
+  append:
+    description: Append additional nodes to the builder
+    required: false
+  keep-state:
+    description: Keep BuildKit state on cleanup. This is only useful on persistent self-hosted runners.
+    default: 'false'
+    required: false
+  cache-binary:
+    description: Cache buildx binary to GitHub Actions cache backend
+    default: 'true'
+    required: false
+  cleanup:
+    description: Cleanup temp files and remove builder at the end of a job
+    default: 'true'
+    required: false
+  config:
+    description: BuildKit daemon config file
+    deprecationMessage: Use buildkitd-config instead
+    required: false
+  config-inline:
+    description: Inline BuildKit daemon config
+    deprecationMessage: Use buildkitd-config-inline instead
+    required: false
+  install:
+    description: Sets up docker build command as an alias to docker buildx build
+    deprecationMessage: '"docker buildx install" command is deprecated and will be removed in a future release, use BUILDX_BUILDER environment variable instead'
+    default: 'false'
+    required: false
+outputs:
+  name:
+    description: Builder name
+  driver:
+    description: Builder driver
+  platforms:
+    description: Builder node platforms (preferred or available)
+  nodes:
+    description: Builder nodes metadata
+  endpoint:
+    description: Builder node endpoint (deprecated, use nodes output instead)
+  status:
+    description: Builder node status (deprecated, use nodes output instead)
+  flags:
+    description: Builder node flags (deprecated, use nodes output instead)

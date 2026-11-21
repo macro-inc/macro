@@ -83,7 +83,7 @@ function setup(options: GraphicsInputOptions) {
     | 'pointerup'
     | 'pointercancel';
   const pointer = (
-    pointerType: 'touch' | 'pen',
+    pointerType: 'touch' | 'pen' | 'mouse',
     id: number,
     type: PointerEventType,
     x: number,
@@ -120,7 +120,23 @@ function setup(options: GraphicsInputOptions) {
   ) => pointer('touch', id, type, x, y, elapsed);
   const pen = (type: PointerEventType, x: number, y: number) =>
     pointer('pen', 9, type, x, y, 10);
-  return { editor, viewport, finger, pen, detach, sameFrame };
+  const mouse = (type: PointerEventType, x: number, y: number) =>
+    pointer('mouse', 8, type, x, y, 10);
+  // What a host's tool listening on the surface hears, as the connector and
+  // eraser do: each event's type and pointer type.
+  const heard: string[] = [];
+  for (const type of [
+    'pointerdown',
+    'pointermove',
+    'pointerup',
+    'pointercancel',
+  ])
+    viewport.addEventListener(type, (event) =>
+      heard.push(
+        `${type} ${event instanceof PointerEvent ? event.pointerType : ''}`
+      )
+    );
+  return { editor, viewport, finger, pen, mouse, heard, detach, sameFrame };
 }
 
 it('zooms around the midpoint of two fingers and leaves the selection alone', () => {
@@ -382,6 +398,246 @@ it('navigates again after a pen whose release was lost to another window', () =>
   finger(1, 'pointermove', 150, 200);
   finger(2, 'pointermove', 350, 200);
   expect(editor.getCamera().scale).toBe(2);
+});
+
+it('pans with one finger where the host says fingers do not draw', () => {
+  const { editor, finger, heard } = setup({
+    tool: () => 'rectangle',
+    fingerPans: () => true,
+  });
+  const before = editor.document;
+
+  // The pan starts where the finger has shown it is moving, not where it
+  // landed, so the canvas does not jump by that first stretch.
+  finger(1, 'pointerdown', 150, 150);
+  finger(1, 'pointermove', 170, 150);
+  expect(editor.getCamera()).toEqual({ x: 0, y: 0, scale: 1 });
+  finger(1, 'pointermove', 210, 180);
+  expect(editor.getPreview()).toBeUndefined();
+  expect(editor.getCamera()).toEqual({ x: 40, y: 30, scale: 1 });
+
+  // A second finger makes it a pinch, from where both now are: spread from
+  // 100 to 200px around (260, 180), which keeps the point under it there.
+  // The first finger no longer pans on its own.
+  finger(2, 'pointerdown', 310, 180);
+  finger(1, 'pointermove', 160, 180);
+  finger(2, 'pointermove', 360, 180);
+  const pinched = editor.getCamera();
+  expect(pinched.scale).toBe(2);
+  expect(pinched.x).toBeCloseTo(260 - (260 - 40) * 2);
+  expect(pinched.y).toBeCloseTo(180 - (180 - 30) * 2);
+
+  finger(2, 'pointerup', 360, 180);
+  finger(1, 'pointerup', 160, 180, 400);
+  expect(editor.document).toBe(before);
+  expect(editor.getSession().canUndo).toBe(false);
+  // No tool heard of any of it.
+  expect(heard).toEqual([]);
+});
+
+it('glides when the one panning finger flicks, and not when it rests first', () => {
+  vi.useFakeTimers({
+    toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'],
+  });
+  const { editor, finger } = setup({
+    tool: () => 'pencil',
+    fingerPans: () => true,
+  });
+  const flick = () => {
+    finger(1, 'pointerdown', 200, 200);
+    for (let step = 1; step <= 5; step++)
+      finger(1, 'pointermove', 200 + step * 20, 200, 8);
+  };
+
+  flick();
+  finger(1, 'pointerup', 300, 200);
+  const released = editor.getCamera();
+  expect(released.x).toBe(80);
+  vi.advanceTimersByTime(500);
+  const glided = editor.getCamera();
+  expect(glided.x).toBeGreaterThan(released.x);
+
+  // The same moves, then two seconds without one before the lift.
+  flick();
+  finger(1, 'pointerup', 300, 200, 2000);
+  const rested = editor.getCamera();
+  vi.advanceTimersByTime(500);
+  expect(editor.getCamera()).toEqual(rested);
+
+  // The same moves, then the system takes the finger away.
+  flick();
+  finger(1, 'pointercancel', 300, 200);
+  const cancelled = editor.getCamera();
+  vi.advanceTimersByTime(500);
+  expect(editor.getCamera()).toEqual(cancelled);
+});
+
+it('glides nothing after a tap, even one straight after a two-finger flick', () => {
+  vi.useFakeTimers({
+    toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'],
+  });
+  const { editor, finger } = setup({
+    tool: () => 'pencil',
+    fingerPans: () => true,
+  });
+  finger(1, 'pointerdown', 200, 200);
+  finger(2, 'pointerdown', 300, 200);
+  for (let step = 1; step <= 5; step++) {
+    finger(1, 'pointermove', 200 + step * 20, 200, 8);
+    finger(2, 'pointermove', 300 + step * 20, 200, 8);
+  }
+  finger(1, 'pointerup', 300, 200);
+  finger(2, 'pointerup', 400, 200);
+
+  // A finger lands at once, which stops the glide, and wobbles before it
+  // lifts. It never moved far enough to pan, so it has nothing to fling.
+  finger(1, 'pointerdown', 250, 300, 20);
+  const tapped = editor.getCamera();
+  finger(1, 'pointermove', 253, 302, 16);
+  finger(1, 'pointermove', 256, 304, 16);
+  finger(1, 'pointerup', 256, 304, 16);
+  vi.advanceTimersByTime(500);
+  expect(editor.getCamera()).toEqual(tapped);
+});
+
+it('gives the surface to a pen that lands while a finger is drawing', () => {
+  const { editor, finger, pen } = setup({ tool: () => 'rectangle' });
+
+  // The hand holding the pen touches down first and starts a shape.
+  finger(1, 'pointerdown', 150, 150);
+  finger(1, 'pointermove', 180, 190);
+  expect(editor.getPreview()).toBeDefined();
+
+  // The pen takes over: the hand's shape is void and the pen draws its own.
+  pen('pointerdown', 300, 300);
+  pen('pointermove', 360, 350);
+  finger(1, 'pointermove', 200, 220);
+  pen('pointerup', 360, 350);
+  finger(1, 'pointerup', 200, 220);
+
+  const drawn = Object.values(editor.document.items).flatMap((item) =>
+    item.type === 'rectangle' && item.id !== 'shape' ? [item.geometry] : []
+  );
+  expect(drawn).toEqual([expect.objectContaining({ width: 60, height: 50 })]);
+});
+
+it('leaves the canvas still under a hand that only settles, and stops a pan when the pen lands', () => {
+  const { editor, finger, pen } = setup({
+    tool: () => 'pencil',
+    fingerPans: () => true,
+  });
+  const camera = editor.getCamera();
+
+  // The hand shifts a little as it comes to rest, never 10px from where it
+  // landed: not a pan.
+  finger(1, 'pointerdown', 300, 400);
+  finger(1, 'pointermove', 306, 405);
+  finger(1, 'pointermove', 303, 409);
+  expect(editor.getCamera()).toEqual(camera);
+
+  // The pen draws, and the hand does nothing while it rests or after.
+  pen('pointerdown', 150, 150);
+  pen('pointermove', 200, 180);
+  finger(1, 'pointermove', 340, 440);
+  pen('pointerup', 200, 180);
+  finger(1, 'pointermove', 360, 460);
+  finger(1, 'pointerup', 360, 460);
+  expect(editor.getCamera()).toEqual(camera);
+  expect(Object.keys(editor.document.items)).toHaveLength(3);
+
+  // A finger that was really panning is stopped where it is, not put back.
+  finger(1, 'pointerdown', 300, 400);
+  finger(1, 'pointermove', 320, 400);
+  finger(1, 'pointermove', 380, 400);
+  const panned = editor.getCamera();
+  expect(panned.x).toBe(camera.x + 60);
+  pen('pointerdown', 150, 150);
+  finger(1, 'pointermove', 480, 400);
+  expect(editor.getCamera()).toEqual(panned);
+  pen('pointerup', 150, 150);
+  finger(1, 'pointerup', 480, 400);
+});
+
+it('keeps the hand holding the pen from every tool until it lifts', () => {
+  const { finger, pen, mouse, heard } = setup({ tool: () => 'select' });
+
+  // The palm lands beside the pen, shifts and lifts.
+  pen('pointerdown', 150, 150);
+  finger(1, 'pointerdown', 300, 400);
+  finger(1, 'pointermove', 320, 410);
+  finger(1, 'pointerup', 320, 410);
+  pen('pointerup', 150, 150);
+  expect(heard).toEqual(['pointerdown pen', 'pointerup pen']);
+
+  // The palm got there first. The tools hear it land and hear that it was
+  // void; what it does after that, here being taken away by the system (which
+  // would drop the pen's connector), reaches none of them.
+  heard.length = 0;
+  finger(1, 'pointerdown', 300, 400);
+  pen('pointerdown', 150, 150);
+  finger(1, 'pointermove', 320, 410);
+  finger(1, 'pointercancel', 320, 410);
+  pen('pointerup', 150, 150);
+  expect(heard).toEqual([
+    'pointerdown touch',
+    'pointercancel touch',
+    'pointerdown pen',
+    'pointerup pen',
+  ]);
+
+  // A finger beside a pressed mouse is not a resting hand: tools hear of it
+  // as they always did.
+  heard.length = 0;
+  mouse('pointerdown', 150, 150);
+  finger(1, 'pointerdown', 300, 400);
+  finger(1, 'pointerup', 300, 400);
+  mouse('pointerup', 150, 150);
+  expect(heard).toEqual([
+    'pointerdown mouse',
+    'pointerdown touch',
+    'pointerup touch',
+    'pointerup mouse',
+  ]);
+});
+
+it('lets the hand beside a pen pan nothing where fingers pan', () => {
+  const { editor, finger, pen, heard } = setup({
+    tool: () => 'pencil',
+    fingerPans: () => true,
+  });
+  const camera = editor.getCamera();
+
+  pen('pointerdown', 150, 150);
+  finger(1, 'pointerdown', 300, 400);
+  finger(1, 'pointermove', 340, 440);
+  pen('pointermove', 200, 180);
+  finger(1, 'pointermove', 400, 480);
+  pen('pointerup', 200, 180);
+  // The pen has lifted, and the hand still has not.
+  finger(1, 'pointermove', 420, 500);
+  finger(1, 'pointerup', 420, 500);
+
+  expect(editor.getCamera()).toEqual(camera);
+  expect(Object.keys(editor.document.items)).toHaveLength(3);
+  expect(heard.filter((event) => event.endsWith('touch'))).toEqual([]);
+});
+
+it('takes the surface from fingers for a pen and not a mouse', () => {
+  const { editor, finger, mouse } = setup({
+    tool: () => 'pencil',
+    fingerPans: () => true,
+  });
+
+  finger(1, 'pointerdown', 300, 400);
+  finger(1, 'pointermove', 320, 400);
+  finger(1, 'pointermove', 380, 400);
+  expect(editor.getCamera().x).toBe(60);
+
+  mouse('pointerdown', 150, 150);
+  finger(1, 'pointermove', 420, 400);
+  expect(editor.getCamera().x).toBe(100);
+  mouse('pointerup', 150, 150);
+  finger(1, 'pointerup', 420, 400);
 });
 
 it('turns a finger held still into a long press and spends the finger', () => {

@@ -19,18 +19,23 @@
 //! must never check out or execute PR head code — there is deliberately no
 //! checkout step; it only reads event metadata and calls two APIs.
 
+use gh_workflow::expr::typed::{Bool, Str, github};
 use gh_workflow::{
-    Concurrency, Event, Expression, IssueComment, IssueCommentType, Job, Level, Permissions,
-    PullRequestTarget, PullRequestType, Step, Use, Workflow,
+    Concurrency, Event, IssueComment, IssueCommentType, Job, Level, Permissions, PullRequestTarget,
+    PullRequestType, Step, Use, Workflow,
 };
 
-use crate::workflows::runners;
+use crate::workflows::actions::ActionsGithubScript;
+use crate::workflows::{runners, vars};
 
 /// Base URL of the signing worker (`services/cla-worker`). On workers.dev
 /// like the account's other workers; if it ever moves to a vanity host,
 /// update this constant, the OAuth app callback URL, CONTRIBUTING.md, and
 /// the worker README together.
 const WORKER_ORIGIN: &str = "https://macro-cla.macroverse.workers.dev";
+
+/// The commit status this workflow posts, which `main`'s ruleset requires.
+pub const STATUS_CONTEXT: &str = "cla";
 
 /// Build the workflow.
 pub fn cla() -> Workflow {
@@ -46,8 +51,11 @@ pub fn cla() -> Workflow {
         // Serialize runs per PR so a burst of events can't interleave status
         // writes; never cancel — a dropped run could leave a stale status.
         .concurrency(
-            Concurrency::new(Expression::new(
-                "cla-${{ github.event.pull_request.number || github.event.issue.number }}",
+            Concurrency::new(format!(
+                "cla-{}",
+                github()
+                    .event::<Str>("pull_request.number")
+                    .or_else(github().event::<Str>("issue.number"))
             ))
             .cancel_in_progress(false),
         )
@@ -60,10 +68,15 @@ fn cla_job() -> Job {
         .runs_on(runners::Runner::TinyNoCache.to_string())
         // Skip non-PR comments and comments that can't be a command; the
         // command itself is exact-matched in the script.
-        .cond(Expression::new(
-            "github.event_name == 'pull_request_target' || \
-             (github.event.issue.pull_request && startsWith(github.event.comment.body, '/macro-cla'))",
-        ))
+        .cond(
+            github().event_name().eq("pull_request_target").or(github()
+                .event::<Bool>("issue.pull_request")
+                .and(
+                    github()
+                        .event::<Str>("comment.body")
+                        .starts_with("/macro-cla"),
+                )),
+        )
         // `pull_requests` must be WRITE, not read. Posting the invitation goes
         // through the issues API (`POST /issues/{n}/comments`), but GitHub
         // scopes that call by the *target resource*: when the target is a PR
@@ -80,23 +93,18 @@ fn cla_job() -> Job {
 }
 
 fn cla_script() -> Step<Use> {
-    Step::new("Run CLA check")
-        .uses(
-            "actions",
-            "github-script",
-            "f28e40c7f34bde8b3046d885e986cb6290c5673b",
-        )
+    ActionsGithubScript::new("Run CLA check", script())
+        .github_token(vars::GITHUB_TOKEN)
+        .step()
         // Org-membership probe. The default GITHUB_TOKEN only sees public org
         // members; set the CLA_ORG_READ_TOKEN secret (read:org PAT or app
         // token) so private members pass without signing.
         .add_env((
             "ORG_READ_TOKEN",
-            "${{ secrets.CLA_ORG_READ_TOKEN || github.token }}",
+            vars::CLA_ORG_READ_TOKEN.expr().or_else(github().token()),
         ))
         // Shared secret for the signing worker's /cla/check endpoint.
-        .add_env(("CLA_CHECK_API_KEY", "${{ secrets.CLA_CHECK_API_KEY }}"))
-        .add_with(("github-token", "${{ secrets.GITHUB_TOKEN }}"))
-        .add_with(("script", script()))
+        .add_env(("CLA_CHECK_API_KEY", vars::CLA_CHECK_API_KEY))
 }
 
 /// The whole enforcement logic. Comment bodies are only ever read from the
@@ -106,7 +114,7 @@ fn script() -> String {
     indoc::formatdoc! {r#"
         const WORKER_ORIGIN = '{WORKER_ORIGIN}';
         const SIGN_URL = `${{WORKER_ORIGIN}}/cla`;
-        const STATUS_CONTEXT = 'cla';
+        const STATUS_CONTEXT = '{STATUS_CONTEXT}';
         const {{ owner, repo }} = context.repo;
 
         // GET /orgs/{{org}}/members/{{username}}: 204 → member, 404 → not a

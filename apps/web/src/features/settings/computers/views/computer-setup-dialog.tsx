@@ -1,14 +1,16 @@
-import { openAgentsPage } from '@app/features/agents-view/primitives/open-page';
+import { useOpenAgentDm } from '@app/features/agent-dms/open-agent-dm';
 import { requestCreateAgent } from '@app/features/settings/agentSettingsState';
 import { t } from '@app/lib/i18n';
-import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
+import { ENABLE_AGENT_DMS } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { thrownResultErrorHasCode } from '@core/util/result';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import MinusIcon from '@icon/system/regular/minus.svg';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import {
   type AgentWithHarnessId,
   invalidateAgents,
@@ -35,7 +37,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { match } from 'ts-pattern';
+import { match, P } from 'ts-pattern';
 import { SetupProgressHeader } from '../components/setup-progress-header';
 import {
   computerFailureMessage,
@@ -196,6 +198,21 @@ export function DisabledReason(props: { children: JSX.Element }) {
   );
 }
 
+/** How long one finishing step may take before setup says it stopped. */
+const FINISH_STEP_TIMEOUT_MS = 20_000;
+
+/** The steps that finish setup once the computer is up, in order. */
+type FinishStep = 'rename' | 'claude_sign_out' | 'complete_setup' | 'refresh';
+
+/** `work`, or a rejection once `ms` pass without an answer. */
+function withinDeadline<Value>(work: Promise<Value>, ms: number) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`timed out after ${ms} ms`)), ms);
+  });
+  return Promise.race([work, deadline]).finally(() => clearTimeout(timer));
+}
+
 /**
  * Guided setup's Agent, Claude and Ready steps for a bought computer, inside
  * the one setup modal the buy step opened. The host owns the step, the agent
@@ -225,6 +242,8 @@ export function ComputerSetupSteps(props: {
   teamAgentComputer?: boolean;
   /** Bring your AI was opened, so choosing credits there completes it. */
   signInVisited?: boolean;
+  /** Show the step bar; `false` in the stepless buy, which goes to Ready. */
+  steps?: boolean;
 }) {
   const nameId = createUniqueId();
   const agents = useAgentsQuery();
@@ -232,7 +251,6 @@ export function ComputerSetupSteps(props: {
   const signOut = useClaudeSignOutMutation();
   const completeSetup = useCompleteComputerSetupMutation();
   const retry = useRetryComputerMutation();
-  const layout = useSplitLayout();
   const settings = useSettingsState();
 
   const up = () => computerConnected(props.computer, props.connected);
@@ -273,17 +291,65 @@ export function ComputerSetupSteps(props: {
   };
 
   // Finish once the computer is up: rename, then Claude, then setup-complete.
-  // With the user's own account, the sign-in step completes it instead.
+  // With the user's own account, the sign-in step completes it instead. Each
+  // step has a deadline; one that fails or runs out stops here with Try
+  // again, instead of leaving the dialog waiting.
+  // Why the last attempt stopped, while it is the latest (boxed, so even a
+  // falsy thrown value counts as a failure); and whether one is running, so
+  // Retry shows it tried.
+  const [finishError, setFinishError] = createSignal<{ error: unknown }>();
+  const finishFailed = () => !!finishError();
+  // A caller without manage rights stays without them: Retry can't help.
+  const finishRetryable = () =>
+    !thrownResultErrorHasCode(finishError()?.error, 'FORBIDDEN');
+  const [finishing, setFinishing] = createSignal(false);
+  // A deadline stops the wait, not the request: Retry can send a step again
+  // while the first is still in flight. Each step is idempotent (the same
+  // name, an already signed-out Claude, setup already complete), so a repeat
+  // changes nothing.
+  const finishStep = (
+    span: Span,
+    step: FinishStep,
+    run: () => Promise<unknown>
+  ) => {
+    span.setAttr('setup.finish.step', step);
+    return span.span(`computers.setup.finish.${step}`, () =>
+      withinDeadline(run(), FINISH_STEP_TIMEOUT_MS)
+    );
+  };
   const finish = async () => {
     const current = agent();
     const id = harnessId();
-    if (!current || !id || done()) return;
-    await rename(current);
-    if (props.choice === 'macro_credits') await signOut.mutateAsync(id);
-    await completeSetup.mutateAsync(props.computer.id);
-    await invalidateHarnesses();
+    if (finishing() || !current || !id || done()) return;
+    setFinishing(true);
+    await Telemetry.span('computers.setup.finish', async (span) => {
+      span.setAttr('computer.id', props.computer.id);
+      span.setAttr('setup.claude_mode', props.choice ?? 'undecided');
+      try {
+        await finishStep(span, 'rename', () => rename(current));
+        if (props.choice === 'macro_credits')
+          await finishStep(span, 'claude_sign_out', () =>
+            signOut.mutateAsync(id)
+          );
+        await finishStep(span, 'complete_setup', () =>
+          completeSetup.mutateAsync(props.computer.id)
+        );
+        // Refresh first, so the row behind no longer offers Sign in with
+        // Claude.
+        await finishStep(span, 'refresh', () => invalidateHarnesses());
+        span.setAttr('setup.finish.outcome', 'done');
+        setFinishError(undefined);
+        setFinishing(false);
+      } catch (error) {
+        span.setAttr('setup.finish.outcome', 'failed');
+        span.error(error);
+        // Free before Retry shows, so it can start the next attempt.
+        setFinishError({ error });
+        setFinishing(false);
+      }
+    });
   };
-  let finishing = false;
+  const runFinish = () => fireAndForget(finish(), 'computer-setup');
   createEffect(() => {
     if (
       props.step !== 'ready' ||
@@ -291,29 +357,15 @@ export function ComputerSetupSteps(props: {
       !up() ||
       !agent() ||
       done() ||
-      finishing
+      finishFailed()
     )
       return;
-    finishing = true;
-    fireAndForget(
-      (async () => {
-        try {
-          await finish();
-        } finally {
-          finishing = false;
-        }
-      })(),
-      'computer-setup'
-    );
+    runFinish();
   });
 
-  const signedIn = async () => {
-    const current = agent();
-    if (current) await rename(current);
-    await completeSetup.mutateAsync(props.computer.id);
-    // Refresh first, so the row behind no longer offers Sign in with Claude.
-    await invalidateHarnesses();
+  const signedIn = () => {
     props.onStep('ready');
+    runFinish();
   };
 
   const useCreditsInstead = () => {
@@ -328,13 +380,18 @@ export function ComputerSetupSteps(props: {
     props.onStep(props.choice === 'own_account' ? 'claude' : 'ready');
   };
 
-  // Try it: a new conversation in Code with this computer's agent selected.
-  const tryIt = () => {
-    const botId = props.computer.defaultAgentId;
+  // The conversation with the agent just set up, in its DM. Without agent
+  // DMs, Ready ends on Done.
+  const agentDm = ENABLE_AGENT_DMS ? useOpenAgentDm() : undefined;
+  const chat = (open: NonNullable<typeof agentDm>) => {
+    const botId = agent()?.bot.id;
+    if (!botId) return;
     props.onClose();
-    if (isMobile()) settings.closeSettings();
-    openAgentsPage(layout, 'new', botId ? { composerAgentId: botId } : {});
+    fireAndForget(open.open(botId), 'computer-setup');
   };
+  // Ready with nothing to open: Done is the one action.
+  const endsOnDone = () =>
+    done() && !agentDm && !props.selectsForAgent && !props.teamAgentComputer;
 
   // The create form, with this computer chosen under Where it runs. The tab
   // switches first, so the Agents page there takes the request.
@@ -370,10 +427,12 @@ export function ComputerSetupSteps(props: {
   const header = (): JSX.Element => (
     <SetupProgressHeader
       steps={
-        <StepHeader
-          step={props.step}
-          claude={claudeStepMark(props.choice, props.signInVisited ?? false)}
-        />
+        props.steps === false ? undefined : (
+          <StepHeader
+            step={props.step}
+            claude={claudeStepMark(props.choice, props.signInVisited ?? false)}
+          />
+        )
       }
       computer={props.computer}
       signIn={signInPlan()}
@@ -471,7 +530,11 @@ export function ComputerSetupSteps(props: {
             entry="computer_setup"
             header={header()}
             title={t('computers.signInToClaude')}
-            onSignedIn={() => fireAndForget(signedIn(), 'computer-setup')}
+            onSignedIn={(closed) => {
+              // Closed meanwhile: nothing on screen says it worked.
+              if (closed) toast.success(t('computers.claudeSignedIn'));
+              signedIn();
+            }}
             footnote={t('computers.claudeSharedAccount')}
             secondary={{
               label: t('computers.claudeUseCreditsInstead'),
@@ -536,60 +599,112 @@ export function ComputerSetupSteps(props: {
           {header()}
           <ActionDialogShell.Header>
             <ActionDialogShell.Title>
-              {done()
-                ? t('computers.setupDoneTitle', { agent: agentName() })
-                : t('computers.almostReady')}
+              {match([done(), finishFailed()] as const)
+                .with([true, P.boolean], () =>
+                  t('computers.setupDoneTitle', { agent: agentName() })
+                )
+                .with([false, true], () =>
+                  t('computers.finishFailedTitle', { agent: agentName() })
+                )
+                .with([false, false], () =>
+                  t('computers.settingUpAgentTitle', { agent: agentName() })
+                )
+                .exhaustive()}
             </ActionDialogShell.Title>
             <ActionDialogShell.Description>
-              {done()
-                ? t(
+              {match([done(), finishFailed()] as const)
+                .with([true, P.boolean], () =>
+                  t(
                     props.selectsForAgent
-                      ? 'computers.setupDoneBodyForAgent'
-                      : 'computers.setupDoneBody',
-                    {
-                      agent: agentName(),
-                      computer: props.computer.name,
-                    }
+                      ? 'computers.setupReadyBodyForAgent'
+                      : 'computers.setupReadyBody',
+                    { agent: agentName(), computer: props.computer.name }
                   )
-                : t('computers.almostReadyBody', {
-                    computer: props.computer.name,
-                  })}
+                )
+                .with([false, true], () =>
+                  computerFailureMessage(
+                    finishError()?.error,
+                    t('computers.finishFailedBody', {
+                      computer: props.computer.name,
+                    })
+                  )
+                )
+                .with([false, false], () => t('computers.settingUpAgentBody'))
+                .exhaustive()}
             </ActionDialogShell.Description>
           </ActionDialogShell.Header>
-          <Show when={!done()}>
-            <p class="text-sm text-ink-muted">
-              {t('computers.setupContinuesInBackground')}
-            </p>
+          <Show
+            when={done() && !props.teamAgentComputer && !props.selectsForAgent}
+          >
+            <div>
+              <Button
+                type="button"
+                variant="link"
+                size="sm"
+                class="px-0"
+                onClick={createAgentHere}
+              >
+                {t('computers.addAnotherAgent')}
+              </Button>
+            </div>
           </Show>
         </ActionDialogShell.Body>
-        {/* Three actions do not fit one phone row: stack them, Try it on top. */}
+        {/* One action: the agent's chat once it is ready, Try again when a
+            finishing step failed, and the wait on the button until then. */}
         <ActionDialogShell.Footer class="touch:flex-col-reverse touch:items-stretch">
-          <Button type="button" variant="ghost" onClick={props.onClose}>
-            {t('computers.done')}
-          </Button>
-          <Show when={!props.teamAgentComputer}>
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={!done()}
-              onClick={createAgentHere}
-            >
-              {props.selectsForAgent
-                ? t('computers.useForThisAgent')
-                : t('computers.createAgentHere')}
+          <Show when={!endsOnDone()}>
+            <Button type="button" variant="ghost" onClick={props.onClose}>
+              {done() ? t('computers.done') : t('common.close')}
             </Button>
-            <Button
-              type="button"
-              variant="primary"
-              disabled={!done()}
-              onClick={tryIt}
-            >
-              {t('computers.tryIt')}
-            </Button>
-            <Show when={!done()}>
-              <DisabledReason>{t('computers.tryItAfterSetup')}</DisabledReason>
-            </Show>
           </Show>
+          <Switch>
+            <Match when={props.teamAgentComputer || setupStopped()}>
+              {null}
+            </Match>
+            <Match when={finishFailed() && !done() && finishRetryable()}>
+              <Button
+                type="button"
+                variant="primary"
+                disabled={finishing()}
+                aria-busy={finishing() || undefined}
+                onClick={runFinish}
+              >
+                <Show when={finishing()} fallback={t('computers.retry')}>
+                  <Spinner size="sm" decorative />
+                  {t('computers.retrying')}
+                </Show>
+              </Button>
+            </Match>
+            <Match when={finishFailed() && !done()}>{null}</Match>
+            <Match when={!done()}>
+              <Button type="button" variant="primary" disabled aria-busy>
+                <Spinner size="sm" decorative />
+                <span role="status">{t('computers.settingUpAgent')}</span>
+              </Button>
+            </Match>
+            <Match when={props.selectsForAgent}>
+              <Button type="button" variant="primary" onClick={createAgentHere}>
+                {t('computers.useForThisAgent')}
+              </Button>
+            </Match>
+            <Match when={done() && agentDm}>
+              {(open) => (
+                <Button
+                  type="button"
+                  variant="primary"
+                  disabled={open().pending()}
+                  onClick={() => chat(open())}
+                >
+                  {t('computers.chatWithAgent', { agent: agentName() })}
+                </Button>
+              )}
+            </Match>
+            <Match when={endsOnDone()}>
+              <Button type="button" variant="primary" onClick={props.onClose}>
+                {t('computers.done')}
+              </Button>
+            </Match>
+          </Switch>
         </ActionDialogShell.Footer>
       </Match>
     </Switch>

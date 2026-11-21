@@ -61,11 +61,16 @@ export function attachConnectorControls(
     tapping = undefined;
     window.removeEventListener('pointermove', move, true);
     window.removeEventListener('pointerup', up, true);
-    window.removeEventListener('pointercancel', cancel, true);
+    window.removeEventListener('pointercancel', pointerCancel, true);
   };
   const cancel = () => {
     cleanupPointer();
     op.cancel();
+  };
+  // Only the gesture's own pointer ends it: a palm the system takes away must
+  // not drop the pen's connector.
+  const pointerCancel = (event: PointerEvent) => {
+    if (event.pointerId === pointer) cancel();
   };
   const move = (event: PointerEvent) => {
     if (event.pointerId !== pointer) return;
@@ -165,7 +170,7 @@ export function attachConnectorControls(
     element.setPointerCapture(pointer);
     window.addEventListener('pointermove', move, true);
     window.addEventListener('pointerup', up, true);
-    window.addEventListener('pointercancel', cancel, true);
+    window.addEventListener('pointercancel', pointerCancel, true);
     event.preventDefault();
     event.stopPropagation();
   };

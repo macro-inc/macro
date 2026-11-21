@@ -52,7 +52,10 @@ vi.mock('@ui', async () => ({
 }));
 const [unreadIds, setUnreadIds] = createSignal<string[]>([]);
 vi.mock('../use-navigation-unread', () => ({
-  useNavigationUnread: () => (id: string) => unreadIds().includes(id),
+  useNavigationUnread: () => ({
+    has: (id: string) => unreadIds().includes(id),
+    count: () => undefined,
+  }),
 }));
 const [islandWidth, setIslandWidth] = createSignal(80);
 const [islandHeight, setIslandHeight] = createSignal(40);
@@ -301,6 +304,17 @@ it('returns from customization to More without navigating', async () => {
   expect(document.activeElement).toBe(
     screen.getByRole('button', { name: 'Customize dock' })
   );
+});
+
+it('keeps Tasks active while a project view is open', () => {
+  foreground.id = 'projects';
+  setIslandWidth(400);
+  render(() => <MobileDockRow />);
+  expect(
+    screen
+      .getByRole('button', { name: 'Tasks' })
+      .classList.contains('text-ink-extra-muted')
+  ).toBe(false);
 });
 
 describe('dock unread indicators', () => {

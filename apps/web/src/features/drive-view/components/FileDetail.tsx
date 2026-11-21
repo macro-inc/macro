@@ -20,8 +20,10 @@ import {
 import { useIsAuthenticated } from '@core/context/user';
 import { trackOpen } from '@core/internal/track-open';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { StaleCacheAuthorityError } from '@graphql-cache/authority';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
-import type { Span } from '@macro-inc/observability';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
 import { Button } from '@ui';
@@ -33,9 +35,18 @@ import {
   Match,
   onCleanup,
   type ParentProps,
+  type ResourceFetcherInfo,
   Suspense,
   Switch,
+  untrack,
 } from 'solid-js';
+
+type FileDetailPublication<T> = {
+  data: T;
+  generation: string;
+  attempt: number;
+  request: number;
+};
 
 export type FileDetailLayoutProps = ParentProps<{
   documentId: string;
@@ -92,9 +103,6 @@ function FileDetailBodyState(props: {
             role="alert"
           >
             <span>This {props.label} couldn’t be displayed.</span>
-            <pre class="max-h-48 max-w-full overflow-auto whitespace-pre-wrap text-left text-failure text-xs">
-              {String(props.error)}
-            </pre>
             <Button variant="secondary" size="sm" onClick={props.onAction}>
               {props.actionLabel ?? 'Reset'}
             </Button>
@@ -113,6 +121,8 @@ export function FileDetailLoadGate<
   entityType: BlockName;
   label: string;
   load: (documentId: string, parentSpan?: Span) => Promise<T>;
+  /** Retires query-adapter credentials before the one identity retry. */
+  recover: (documentId: string) => Promise<void>;
   /**
    * Releases what a load opened, such as a markdown document's sync source,
    * once its result can no longer be shown: its content replaced or removed,
@@ -120,6 +130,8 @@ export function FileDetailLoadGate<
    * unmount.
    */
   dispose?: (data: T) => void;
+  /** Releases a result that never reached its viewer; shown viewers own it. */
+  discard?: (data: T) => void;
   children: (data: T) => JSX.Element;
 }) {
   const analytics = useAnalytics();
@@ -128,30 +140,65 @@ export function FileDetailLoadGate<
   // Shown results are released when their content is disposed (after the
   // editor it rendered); the rest here. Each result is released once.
   const released = new WeakSet<T>();
+  const handedToViewer = new WeakSet<T>();
   const release = (data: T | undefined) => {
     if (data === undefined || released.has(data)) return;
     released.add(data);
     props.dispose?.(data);
+    if (!handedToViewer.has(data)) props.discard?.(data);
   };
   let unmounted = false;
   let latestLoad = 0;
   let current: T | undefined;
-  const load = async (documentId: string): Promise<T | undefined> => {
+  const load = async (
+    documentId: string,
+    info: ResourceFetcherInfo<FileDetailPublication<T> | undefined, number>
+  ): Promise<FileDetailPublication<T> | undefined> => {
     const request = ++latestLoad;
-    const data = await flow.task('document.load', (span) => {
-      span.setAttr('doc.type', props.entityType);
-      span.setAttr('document.id', documentId);
-      return props.load(documentId, span);
-    });
-    // The resource ignores a superseded result; one unloaded while pending
-    // (access revoked) must not become current either, so a later grant finds
-    // nothing loaded and reloads. Nothing will show it, so release it now.
-    if (unmounted || request !== latestLoad) {
-      release(data);
-      return undefined;
+    const superseded = () => unmounted || request !== latestLoad;
+    const firstAttempt =
+      typeof info.refetching === 'number' ? info.refetching : 0;
+    const recover = async () => {
+      await cacheSessionGeneration.settled();
+      if (superseded()) return false;
+      if (cacheSessionGeneration.state().paused)
+        throw new StaleCacheAuthorityError();
+      await props.recover(documentId);
+      return !superseded();
+    };
+    if (firstAttempt === 1 && !(await recover())) return undefined;
+    for (let attempt = firstAttempt; attempt < 2; attempt++) {
+      const generation = cacheSessionGeneration.capture();
+      let data: T | undefined;
+      try {
+        data = await untrack(() =>
+          flow.task('document.load', (span) => {
+            span.setAttr('doc.type', props.entityType);
+            span.setAttr('document.id', documentId);
+            span.setAttr('doc.session_retry', attempt);
+            return props.load(documentId, span);
+          })
+        );
+      } catch (error) {
+        if (cacheSessionGeneration.isCurrent(generation)) throw error;
+      }
+      // A disposed or revoked view must not publish its late result or recover.
+      if (superseded()) {
+        release(data);
+        return undefined;
+      }
+      if (!cacheSessionGeneration.isCurrent(generation)) {
+        release(data);
+        if (attempt > 0) throw new StaleCacheAuthorityError();
+        // A cold load can overlap local retirement. Retry once from identity,
+        // after local cleanup, with fresh metadata and authorization credentials.
+        if (!(await recover())) return undefined;
+        continue;
+      }
+      current = data;
+      return data ? { data, generation, attempt, request } : undefined;
     }
-    current = data;
-    return data;
+    throw new StaleCacheAuthorityError();
   };
   const unload = () => {
     latestLoad++;
@@ -174,7 +221,13 @@ export function FileDetailLoadGate<
   // revoked access is ready without a document and is not an open.
   let trackedDocumentId: string | undefined;
   createEffect(() => {
-    if (document.state !== 'ready' || document.latest === undefined) return;
+    if (document.state !== 'ready') return;
+    const publication = document.latest;
+    if (publication === undefined) return;
+    if (
+      !untrack(() => cacheSessionGeneration.isCurrent(publication.generation))
+    )
+      return;
     const documentId = props.documentId;
     if (trackedDocumentId === documentId) return;
     trackedDocumentId = documentId;
@@ -197,7 +250,8 @@ export function FileDetailLoadGate<
         unload();
         return;
       }
-      const loaded = document.state === 'ready' ? document.latest : undefined;
+      const loaded =
+        document.state === 'ready' ? document.latest?.data : undefined;
       if (loaded?.userAccessLevel !== level) reload();
     }
   );
@@ -229,19 +283,40 @@ export function FileDetailLoadGate<
           )}
         </Match>
         <Match when={document()} keyed>
-          {(data) => {
+          {(publication) => {
+            const data = publication.data;
+            if (
+              !untrack(() =>
+                cacheSessionGeneration.isCurrent(publication.generation)
+              )
+            ) {
+              release(data);
+              if (current === data) current = undefined;
+              if (!unmounted && publication.request === latestLoad)
+                fireAndForget(refetch(publication.attempt + 1), 'drive-view');
+              return null;
+            }
+            handedToViewer.add(data);
             // Runs after this content, and the editor it renders, is disposed.
             onCleanup(() => release(data));
             return (
               <ErrorBoundary
-                fallback={(error, reset) => (
-                  <FileDetailBodyState
-                    label={props.label}
-                    error={error}
-                    actionLabel="Reset"
-                    onAction={reset}
-                  />
-                )}
+                fallback={(error, reset) => {
+                  // A failed load is already on its `document.load` span.
+                  Telemetry.error(error, {
+                    surface: 'file-detail',
+                    'doc.type': props.entityType,
+                    'document.id': props.documentId,
+                  });
+                  return (
+                    <FileDetailBodyState
+                      label={props.label}
+                      error={error}
+                      actionLabel="Try again"
+                      onAction={reset}
+                    />
+                  );
+                }}
               >
                 {props.children(data)}
               </ErrorBoundary>

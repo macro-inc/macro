@@ -3613,6 +3613,12 @@ export type ChannelDeletedMetadata = {
      * The id of the deleted channel.
      */
     channel_id: string;
+    /**
+     * Active participants just before the delete. The channel and its
+     * memberships are gone by the time this is consumed, so consumers that
+     * tell members about the delete cannot look them up.
+     */
+    participant_user_ids?: Array<MacroUserIdStr>;
 };
 
 /**
@@ -5351,8 +5357,10 @@ export type CreateCrmContactRequest = {
  */
 export type CreateCrmTeamContactRequest = {
     /**
-     * The contact's email address, of any domain. Optional: omit it to
-     * add the contact by name only.
+     * The contact's email address, of any domain. A company-domain address
+     * also links the contact to that domain's company, unless the team
+     * blocks the domain or the company is hidden. Optional: omit it to add
+     * the contact by name only.
      */
     email?: string | null;
     /**
@@ -5730,6 +5738,7 @@ export type CreateProjectResponse = {
 };
 
 export type CreateSavedViewDefinitionRequest = {
+    appearance?: null | EntityAppearance;
     /**
      * Consumer configuration with its `kind` and `version`, at most 32 KiB.
      */
@@ -5848,6 +5857,10 @@ export type CreateTaskRequest = {
      */
     markdown?: string | null;
     /**
+     * Property definition IDs to pin in the first task snapshot. Omission keeps implicit defaults.
+     */
+    pinnedPropertyDefinitionIds?: Array<string> | null;
+    /**
      * Optional project ID to associate the task with.
      */
     projectId?: string | null;
@@ -5899,6 +5912,28 @@ export type CreateTaskResponse = {
      * A pre-generated permission token that you can use for SS
      */
     token: string;
+};
+
+/**
+ * Create a personal template or one owned by a current team.
+ */
+export type CreateTaskTemplateRequest = {
+    /**
+     * Reusable task fields and description.
+     */
+    configuration: TaskTemplateConfiguration;
+    /**
+     * Client-generated creation identity; reuse the same ID and input when retrying.
+     */
+    id?: string | null;
+    /**
+     * Template name.
+     */
+    name: string;
+    /**
+     * Owning team; omission creates a personal template.
+     */
+    teamId?: string | null;
 };
 
 /**
@@ -12426,6 +12461,13 @@ export type GetBatchProjectPreviewResponse = {
 };
 
 /**
+ * Response from looking up a CRM company by domain.
+ */
+export type GetCompanyByDomainResponse = {
+    company?: null | CrmCompanyResponse;
+};
+
+/**
  * Response from looking up a CRM contact by email.
  */
 export type GetContactByEmailResponse = {
@@ -16285,7 +16327,7 @@ export type PasswordAgentEditableMetadata = {
 /**
  * Closed, payload-free failure codes of the agent vault API.
  */
-export type PasswordAgentErrorCode = 'unauthorized' | 'invalid_agent' | 'invalid_session_attribution' | 'not_found' | 'not_granted' | 'pending' | 'forbidden' | 'invalid_request' | 'unsupported_kind' | 'field_not_set' | 'version_conflict' | 'vault_busy' | 'rate_limited' | 'vault_unavailable';
+export type PasswordAgentErrorCode = 'unauthorized' | 'invalid_agent' | 'invalid_session_attribution' | 'not_found' | 'not_granted' | 'pending' | 'forbidden' | 'invalid_request' | 'unsupported_kind' | 'field_not_set' | 'version_conflict' | 'vault_busy' | 'rate_limited' | 'vault_unavailable' | 'vault_not_provisioned';
 
 /**
  * Sanitized agent vault failure.
@@ -16562,7 +16604,7 @@ export type PasswordCreateFolderBody = {
 /**
  * Closed, payload-free failure codes exposed by the human vault API.
  */
-export type PasswordErrorCode = 'not_found' | 'forbidden' | 'invalid_request' | 'version_conflict' | 'vault_busy' | 'folder_missing' | 'vault_unavailable';
+export type PasswordErrorCode = 'not_found' | 'forbidden' | 'invalid_request' | 'version_conflict' | 'vault_busy' | 'folder_missing' | 'vault_unavailable' | 'vault_not_provisioned';
 
 /**
  * Sanitized vault failure shared with generated HTTP clients.
@@ -16677,7 +16719,7 @@ export type PasswordImportBatchResult = {
 /**
  * Closed, sanitized per-item failure categories.
  */
-export type PasswordImportErrorCode = 'not_found' | 'forbidden' | 'invalid_request' | 'version_conflict' | 'folder_missing' | 'busy' | 'vault_unavailable';
+export type PasswordImportErrorCode = 'not_found' | 'forbidden' | 'invalid_request' | 'version_conflict' | 'folder_missing' | 'busy' | 'vault_unavailable' | 'vault_not_provisioned';
 
 /**
  * Source folder; parents must precede children in every batch.
@@ -16796,7 +16838,7 @@ export type PasswordItemFields = {
      */
     createdAt: string;
     /**
-     * Whether the item is marked as a favorite.
+     * The current viewer's private favorite in responses; legacy initial flag in storage.
      */
     favorite: boolean;
     /**
@@ -16910,7 +16952,7 @@ export type PasswordPatchItem = {
      */
     expectedVersion: number;
     /**
-     * Whether the item is marked as a favorite.
+     * Legacy accepted field, ignored; change private preferences through the favorite endpoint.
      */
     favorite: boolean;
     /**
@@ -17085,7 +17127,7 @@ export type PasswordWriteItem = {
      */
     expectedVersion?: number | null;
     /**
-     * Whether the item is marked as a favorite.
+     * Initial creator preference on create; ignored on update. Use the favorite endpoint afterward.
      */
     favorite: boolean;
     /**
@@ -18063,6 +18105,20 @@ export type PropertyDateRanges = {
      * Ordered, contiguous ranges covering every present date.
      */
     ranges: Array<PropertyDateRange>;
+};
+
+/**
+ * A reusable default using the task creation property's existing value contract.
+ */
+export type PropertyDefault = {
+    /**
+     * Definition that receives the default.
+     */
+    propertyId: string;
+    /**
+     * Default value; absence from the configuration leaves the field blank.
+     */
+    value: SetPropertyValue;
 };
 
 /**
@@ -19063,6 +19119,7 @@ export type SavedQuery = {
  * A saved filter definition, not a snapshot of matching entities.
  */
 export type SavedViewDefinition = {
+    appearance?: null | EntityAppearance;
     /**
      * Versioned configuration interpreted by the consuming feature, with its
      * `kind` (such as `email` or `task`) and `version`.
@@ -19347,7 +19404,9 @@ export type SetCompanyNameRequest = {
 };
 
 /**
- * Link or switch a contact with a known personal-provider email.
+ * Link a contact without a company, or switch the company of a contact
+ * whose primary email is at a known personal provider. A contact with an
+ * address on its current company's domain cannot switch.
  */
 export type SetContactCompanyRequest = {
     /**
@@ -22822,6 +22881,78 @@ export type TaskSimilaritySearchResponse = {
 };
 
 /**
+ * A personal or team-owned template with viewer-specific management capability.
+ */
+export type TaskTemplate = {
+    /**
+     * Whether the current viewer can update or delete the template.
+     */
+    canManage: boolean;
+    /**
+     * Reusable task fields and description.
+     */
+    configuration: TaskTemplateConfiguration;
+    /**
+     * Creation time.
+     */
+    createdAt: string;
+    /**
+     * Original creator; cleared when that account is deleted.
+     */
+    creatorId?: string | null;
+    /**
+     * Stable template ID.
+     */
+    id: string;
+    /**
+     * User-supplied template name.
+     */
+    name: string;
+    /**
+     * Positive revision used for conditional updates and deletes.
+     */
+    revision: number;
+    /**
+     * Owning team; absent for personal templates.
+     */
+    teamId?: string | null;
+    /**
+     * Last content update time.
+     */
+    updatedAt: string;
+    /**
+     * Personal owner; absent for team-owned templates.
+     */
+    userId?: string | null;
+};
+
+/**
+ * Selected fields, optional task title and sharing defaults, and description Markdown.
+ */
+export type TaskTemplateConfiguration = {
+    /**
+     * Defaults for selected fields only.
+     */
+    defaults?: Array<PropertyDefault>;
+    /**
+     * Markdown inserted only when the current description is blank.
+     */
+    descriptionMarkdown: string;
+    /**
+     * Visible definition IDs, including fields without a default value.
+     */
+    propertyIds: Array<string>;
+    /**
+     * Default task sharing, independent of template ownership; absence preserves the current choice.
+     */
+    shareWithTeam?: boolean | null;
+    /**
+     * Default task title, separate from the template name; absence leaves the task untitled.
+     */
+    title?: string | null;
+};
+
+/**
  * Availability for exactly the members selected by the domain service.
  */
 export type TeamAvailability = {
@@ -23165,6 +23296,28 @@ export type ThreadAnchor = {
      * Vertical offset, measured like `x`.
      */
     y: number;
+};
+
+/**
+ * A channel grant the thread owner can see in the sharing roster.
+ */
+export type ThreadChannelShare = {
+    /**
+     * The access level granted to the channel.
+     */
+    access_level: AccessLevel;
+    /**
+     * The channel with access to the thread.
+     */
+    channel_id: string;
+    /**
+     * The channel's configured name, if it has one.
+     */
+    channel_name?: string | null;
+    /**
+     * Whether the share is with a conversation or a group.
+     */
+    channel_type: ChannelType;
 };
 
 /**
@@ -23848,6 +24001,24 @@ export type UpdateSharePermissionRequestV2 = {
 };
 
 /**
+ * Replace content without changing ownership.
+ */
+export type UpdateTaskTemplateRequest = {
+    /**
+     * Replacement task fields and description.
+     */
+    configuration: TaskTemplateConfiguration;
+    /**
+     * Replacement name.
+     */
+    name: string;
+    /**
+     * Revision observed when editing began.
+     */
+    revision: number;
+};
+
+/**
  * An updated entry.
  */
 export type UpdatedPipelineEntry = {
@@ -24159,6 +24330,7 @@ export type VersionedTable = {
 };
 
 export type View = {
+    appearance?: null | EntityAppearance;
     /**
      * It is an explicit choice that the structure of the view configuration
      * is up to the frontend. The structure and composition of view configuration
@@ -28562,6 +28734,40 @@ export type CreateCrmCompanyResponses = {
 };
 
 export type CreateCrmCompanyResponse = CreateCrmCompanyResponses[keyof CreateCrmCompanyResponses];
+
+export type GetCompanyByDomainData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * The company domain to resolve within the caller's team, such as
+         * `acme.com`.
+         */
+        domain: string;
+    };
+    url: '/crm/companies/by-domain';
+};
+
+export type GetCompanyByDomainErrors = {
+    /**
+     * The domain is not a bare domain like acme.com.
+     */
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetCompanyByDomainError = GetCompanyByDomainErrors[keyof GetCompanyByDomainErrors];
+
+export type GetCompanyByDomainResponses = {
+    /**
+     * The company for the domain, or a null company when none is visible.
+     */
+    200: GetCompanyByDomainResponse;
+};
+
+export type GetCompanyByDomainResponse2 = GetCompanyByDomainResponses[keyof GetCompanyByDomainResponses];
 
 export type ImportCrmCompaniesCsvData = {
     body: ImportCompaniesCsvRequest;
@@ -34949,6 +35155,10 @@ export type GetItemsSoupErrors = {
      */
     403: ErrorResponse;
     500: ErrorResponse;
+    /**
+     * Selected email rules exceeded a resource limit
+     */
+    503: ErrorResponse;
 };
 
 export type GetItemsSoupError = GetItemsSoupErrors[keyof GetItemsSoupErrors];
@@ -34977,6 +35187,10 @@ export type PostItemsSoupErrors = {
      */
     403: ErrorResponse;
     500: ErrorResponse;
+    /**
+     * Selected email rules exceeded a resource limit
+     */
+    503: ErrorResponse;
 };
 
 export type PostItemsSoupError = PostItemsSoupErrors[keyof PostItemsSoupErrors];
@@ -35009,6 +35223,10 @@ export type PostItemsSoupAstErrors = {
      */
     404: ErrorResponse;
     500: ErrorResponse;
+    /**
+     * Selected email rules exceeded a resource limit
+     */
+    503: ErrorResponse;
 };
 
 export type PostItemsSoupAstError = PostItemsSoupAstErrors[keyof PostItemsSoupAstErrors];
@@ -35344,6 +35562,9 @@ export type PasswordsAgentCreateErrors = {
     401: PasswordAgentFailure;
     403: PasswordAgentFailure;
     404: PasswordAgentFailure;
+    /**
+     * A conflict code, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordAgentFailure;
     503: PasswordAgentFailure;
 };
@@ -35385,6 +35606,9 @@ export type PasswordsAgentUpdateErrors = {
     401: PasswordAgentFailure;
     403: PasswordAgentFailure;
     404: PasswordAgentFailure;
+    /**
+     * A conflict code, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordAgentFailure;
     503: PasswordAgentFailure;
 };
@@ -35495,6 +35719,9 @@ export type PasswordsAgentDiscloseErrors = {
     401: PasswordAgentFailure;
     403: PasswordAgentFailure;
     404: PasswordAgentFailure;
+    /**
+     * A conflict code, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordAgentFailure;
     503: PasswordAgentFailure;
 };
@@ -35532,6 +35759,9 @@ export type PasswordsAgentSetTotpErrors = {
     401: PasswordAgentFailure;
     403: PasswordAgentFailure;
     404: PasswordAgentFailure;
+    /**
+     * A conflict code, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordAgentFailure;
     503: PasswordAgentFailure;
 };
@@ -35569,6 +35799,9 @@ export type PasswordsAgentTotpCodeErrors = {
     401: PasswordAgentFailure;
     403: PasswordAgentFailure;
     404: PasswordAgentFailure;
+    /**
+     * A conflict code, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordAgentFailure;
     503: PasswordAgentFailure;
 };
@@ -35649,6 +35882,9 @@ export type PasswordsFoldersData = {
 
 export type PasswordsFoldersErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -35677,6 +35913,9 @@ export type PasswordsCreateFolderData = {
 
 export type PasswordsCreateFolderErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -35706,6 +35945,9 @@ export type PasswordsRemoveFolderData = {
 
 export type PasswordsRemoveFolderErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -35735,6 +35977,9 @@ export type PasswordsRenameFolderData = {
 
 export type PasswordsRenameFolderErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -35766,6 +36011,9 @@ export type PasswordsMoveFolderErrors = {
     400: PasswordFailure;
     403: PasswordFailure;
     404: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -35826,6 +36074,9 @@ export type PasswordsListData = {
 
 export type PasswordsListErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -35854,6 +36105,9 @@ export type PasswordsCreateData = {
 
 export type PasswordsCreateErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -35913,6 +36167,9 @@ export type PasswordsRemoveData = {
 
 export type PasswordsRemoveErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -35936,6 +36193,9 @@ export type PasswordsDetailData = {
 
 export type PasswordsDetailErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -35965,6 +36225,9 @@ export type PasswordsPatchData = {
 
 export type PasswordsPatchErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -35994,6 +36257,9 @@ export type PasswordsUpdateData = {
 
 export type PasswordsUpdateErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -36017,6 +36283,9 @@ export type PasswordsActivityData = {
 
 export type PasswordsActivityErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -36112,6 +36381,9 @@ export type PasswordsCopyData = {
 
 export type PasswordsCopyErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -36122,6 +36394,64 @@ export type PasswordsCopyResponses = {
 };
 
 export type PasswordsCopyResponse = PasswordsCopyResponses[keyof PasswordsCopyResponses];
+
+export type PasswordsRemoveFavoriteData = {
+    body?: never;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}/favorite';
+};
+
+export type PasswordsRemoveFavoriteErrors = {
+    404: PasswordFailure;
+    503: PasswordFailure;
+};
+
+export type PasswordsRemoveFavoriteError = PasswordsRemoveFavoriteErrors[keyof PasswordsRemoveFavoriteErrors];
+
+export type PasswordsRemoveFavoriteResponses = {
+    204: void;
+};
+
+export type PasswordsRemoveFavoriteResponse = PasswordsRemoveFavoriteResponses[keyof PasswordsRemoveFavoriteResponses];
+
+export type PasswordsSetFavoriteData = {
+    body?: never;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}/favorite';
+};
+
+export type PasswordsSetFavoriteErrors = {
+    404: PasswordFailure;
+    503: PasswordFailure;
+};
+
+export type PasswordsSetFavoriteError = PasswordsSetFavoriteErrors[keyof PasswordsSetFavoriteErrors];
+
+export type PasswordsSetFavoriteResponses = {
+    204: void;
+};
+
+export type PasswordsSetFavoriteResponse = PasswordsSetFavoriteResponses[keyof PasswordsSetFavoriteResponses];
 
 export type PasswordsHistoryData = {
     body?: never;
@@ -36135,6 +36465,9 @@ export type PasswordsHistoryData = {
 
 export type PasswordsHistoryErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -36164,6 +36497,9 @@ export type PasswordsRevealData = {
 
 export type PasswordsRevealErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -36187,6 +36523,9 @@ export type PasswordsGrantsData = {
 
 export type PasswordsGrantsErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -36216,6 +36555,9 @@ export type PasswordsShareData = {
 
 export type PasswordsShareErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -36245,6 +36587,9 @@ export type PasswordsRemoveTotpData = {
 
 export type PasswordsRemoveTotpErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -36274,6 +36619,9 @@ export type PasswordsSetTotpData = {
 
 export type PasswordsSetTotpErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -36303,6 +36651,9 @@ export type PasswordsTotpData = {
 
 export type PasswordsTotpErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -36326,6 +36677,9 @@ export type PasswordsUsernameData = {
 
 export type PasswordsUsernameErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -36355,6 +36709,9 @@ export type PasswordsCopyUsernameData = {
 
 export type PasswordsCopyUsernameErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -37204,6 +37561,33 @@ export type UpdateSavedViewDefinitionResponses = {
 
 export type UpdateSavedViewDefinitionResponse = UpdateSavedViewDefinitionResponses[keyof UpdateSavedViewDefinitionResponses];
 
+export type SetSavedViewAppearanceData = {
+    body: EntityAppearance;
+    path: {
+        /**
+         * The saved view to edit
+         */
+        saved_view_id: string;
+    };
+    query?: never;
+    url: '/saved_views/definitions/{saved_view_id}/appearance';
+};
+
+export type SetSavedViewAppearanceErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetSavedViewAppearanceError = SetSavedViewAppearanceErrors[keyof SetSavedViewAppearanceErrors];
+
+export type SetSavedViewAppearanceResponses = {
+    200: SavedViewDefinition;
+};
+
+export type SetSavedViewAppearanceResponse = SetSavedViewAppearanceResponses[keyof SetSavedViewAppearanceResponses];
+
 export type ExcludeDefaultViewHandlerData = {
     body: ExcludeDefaultViewRequest;
     path?: never;
@@ -37472,6 +37856,115 @@ export type BulkWakeupSyncServiceDocumentsResponses = {
 
 export type BulkWakeupSyncServiceDocumentsResponse = BulkWakeupSyncServiceDocumentsResponses[keyof BulkWakeupSyncServiceDocumentsResponses];
 
+export type ListTaskTemplatesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        teamId?: string;
+    };
+    url: '/task_templates';
+};
+
+export type ListTaskTemplatesErrors = {
+    403: ErrorResponse;
+};
+
+export type ListTaskTemplatesError = ListTaskTemplatesErrors[keyof ListTaskTemplatesErrors];
+
+export type ListTaskTemplatesResponses = {
+    200: Array<TaskTemplate>;
+};
+
+export type ListTaskTemplatesResponse = ListTaskTemplatesResponses[keyof ListTaskTemplatesResponses];
+
+export type CreateTaskTemplateData = {
+    body: CreateTaskTemplateRequest;
+    path?: never;
+    query?: never;
+    url: '/task_templates';
+};
+
+export type CreateTaskTemplateErrors = {
+    400: ErrorResponse;
+    403: ErrorResponse;
+    409: ErrorResponse;
+};
+
+export type CreateTaskTemplateError = CreateTaskTemplateErrors[keyof CreateTaskTemplateErrors];
+
+export type CreateTaskTemplateResponses = {
+    201: TaskTemplate;
+};
+
+export type CreateTaskTemplateResponse = CreateTaskTemplateResponses[keyof CreateTaskTemplateResponses];
+
+export type DeleteTaskTemplateData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query: {
+        revision: number;
+    };
+    url: '/task_templates/{id}';
+};
+
+export type DeleteTaskTemplateErrors = {
+    404: ErrorResponse;
+    409: ErrorResponse;
+};
+
+export type DeleteTaskTemplateError = DeleteTaskTemplateErrors[keyof DeleteTaskTemplateErrors];
+
+export type DeleteTaskTemplateResponses = {
+    204: void;
+};
+
+export type DeleteTaskTemplateResponse = DeleteTaskTemplateResponses[keyof DeleteTaskTemplateResponses];
+
+export type GetTaskTemplateData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/task_templates/{id}';
+};
+
+export type GetTaskTemplateErrors = {
+    404: ErrorResponse;
+};
+
+export type GetTaskTemplateError = GetTaskTemplateErrors[keyof GetTaskTemplateErrors];
+
+export type GetTaskTemplateResponses = {
+    200: TaskTemplate;
+};
+
+export type GetTaskTemplateResponse = GetTaskTemplateResponses[keyof GetTaskTemplateResponses];
+
+export type UpdateTaskTemplateData = {
+    body: UpdateTaskTemplateRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/task_templates/{id}';
+};
+
+export type UpdateTaskTemplateErrors = {
+    404: ErrorResponse;
+    409: ErrorResponse;
+};
+
+export type UpdateTaskTemplateError = UpdateTaskTemplateErrors[keyof UpdateTaskTemplateErrors];
+
+export type UpdateTaskTemplateResponses = {
+    200: TaskTemplate;
+};
+
+export type UpdateTaskTemplateResponse = UpdateTaskTemplateResponses[keyof UpdateTaskTemplateResponses];
+
 export type EditThreadV2Data = {
     body: PatchThreadRequestV2;
     path: {
@@ -37496,6 +37989,43 @@ export type EditThreadV2Responses = {
 };
 
 export type EditThreadV2Response = EditThreadV2Responses[keyof EditThreadV2Responses];
+
+export type GetThreadChannelSharesData = {
+    body?: never;
+    path: {
+        /**
+         * Thread ID
+         */
+        thread_id: string;
+    };
+    query?: never;
+    url: '/threads/{thread_id}/channel-shares';
+};
+
+export type GetThreadChannelSharesErrors = {
+    /**
+     * Invalid thread ID
+     */
+    400: unknown;
+    /**
+     * Owner access required
+     */
+    401: unknown;
+    /**
+     * User session required
+     */
+    403: unknown;
+    /**
+     * Unable to read thread shares
+     */
+    500: unknown;
+};
+
+export type GetThreadChannelSharesResponses = {
+    200: Array<ThreadChannelShare>;
+};
+
+export type GetThreadChannelSharesResponse = GetThreadChannelSharesResponses[keyof GetThreadChannelSharesResponses];
 
 export type ListUserApiKeysData = {
     body?: never;

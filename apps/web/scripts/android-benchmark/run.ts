@@ -14,10 +14,22 @@ import { homedir, loadavg } from 'node:os';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { Device } from './device';
-import { launchFresh, measureStep, prepare, sleep } from './harness';
+import {
+  launchFresh,
+  measureStep,
+  prepare,
+  sleep,
+  waitForBootFlow,
+} from './harness';
 import { type Sample, sampleFrom } from './measure';
-import { SCENARIOS, type Targets } from './scenarios';
+import { SCENARIOS } from './scenarios';
 import { summarize } from './stats';
+import {
+  candidates,
+  fingerprint,
+  NoCandidateError,
+  parseTargets,
+} from './targets';
 import { parseCpuThrottle } from './throttle';
 
 const { values: options } = parseArgs({
@@ -68,9 +80,15 @@ try {
 const selected = options.scenarios.split(',').filter(Boolean);
 for (const id of selected)
   if (!SCENARIOS[id]) throw new Error(`Unknown scenario ${id}`);
-const targets = JSON.parse(
-  await readFile(options.targets, 'utf8').catch(() => '{}')
-) as Targets;
+// Without a file, scenarios that open items stop the run when they prepare.
+const targetsText = await readFile(options.targets, 'utf8').catch(() => '{}');
+let targetsFile: ReturnType<typeof parseTargets>;
+try {
+  targetsFile = parseTargets(targetsText, options.targets);
+} catch (error) {
+  console.error((error as Error).message);
+  process.exit(2);
+}
 
 const samples: Sample[] = [];
 const failures: {
@@ -79,6 +97,11 @@ const failures: {
   cpuThrottle: number;
   error: string;
 }[] = [];
+/** How long each launch's boot `view.app` flow ran, from the launch. */
+const boots: { iteration: number; cpuThrottle: number; viewAppMs: number }[] = [];
+
+/** A scenario that could not prepare before it ever ran: the setup is wrong. */
+class StopRun extends Error {}
 
 /**
  * One fresh process: cold start, then each selected scenario with the WebView
@@ -99,16 +122,34 @@ async function iteration(index: number, cpuThrottle: number) {
       });
     }
     await session.throttleCpu(cpuThrottle);
+    const bootFlow = await waitForBootFlow(session, launched);
+    boots.push({ iteration: index, cpuThrottle, viewAppMs: bootFlow.end - launched });
     await sleep(bootSettleMs);
     for (const id of selected) {
       const scenario = SCENARIOS[id];
       if (!scenario.steps) continue;
-      await prepare(session, scenario, targets, settleMs * 2);
+      let prepared: Awaited<ReturnType<typeof prepare>>;
+      try {
+        prepared = await prepare(session, scenario, targetsFile, settleMs * 2);
+      } catch (error) {
+        const message = (error as Error).message;
+        failures.push({ scenario: `${id}.prepare`, iteration: index, cpuThrottle, error: message });
+        const ids = new Set(scenario.steps.map((step) => step.id));
+        // Not once measured: every iteration would fail the same way. Every
+        // candidate showing unread is a moment, not a setup error: skip it.
+        const transient = error instanceof NoCandidateError && error.onlyUnread;
+        if (!transient && !samples.some((sample) => ids.has(sample.scenario)))
+          throw new StopRun(`${id} could not prepare: ${message}`);
+        console.warn(`  ${index} ${cpuThrottle}× ${id} could not prepare, skipped: ${message}`);
+        continue;
+      }
+      const { targets, choices } = prepared;
       for (const variant of ['cold', 'warm'] as const) {
         for (const step of scenario.steps) {
           try {
             const sample = await measureStep(session, step, targets, variant, index);
-            samples.push({ ...sample, hostLoad: loadavg()[0] });
+            const target = choices.find((choice) => choice.key === (step.opens ?? step.leaves));
+            samples.push({ ...sample, target, hostLoad: loadavg()[0] });
             console.log(
               `  ${index} ${cpuThrottle}× ${variant.padEnd(4)} ${step.id.padEnd(22)} ${Math.round(sample.readyMs)} ms`
             );
@@ -162,12 +203,14 @@ async function environment() {
 
 function table(results: Sample[]) {
   const groups = new Map<string, Sample[]>();
+  // Samples of different targets are different measurements: separate rows.
   for (const sample of results) {
-    const key = `${sample.cpuThrottle}\u0000${sample.scenario}\u0000${sample.variant}`;
+    const key = `${sample.cpuThrottle}\u0000${sample.scenario}\u0000${sample.variant}\u0000${sample.target?.index ?? ''}`;
     groups.set(key, [...(groups.get(key) ?? []), sample]);
   }
   return [...groups.entries()].map(([key, group]) => {
     const [cpuThrottle, scenario, variant] = key.split('\u0000');
+    const target = group[0].target;
     const ready = summarize(group.map((sample) => sample.readyMs));
     const spans = group
       .map((sample) => sample.spanMs)
@@ -177,6 +220,7 @@ function table(results: Sample[]) {
       cpuThrottle: Number(cpuThrottle),
       scenario,
       variant,
+      target: target && { index: target.index, fingerprint: target.fingerprint },
       ...ready,
       spanMedian: spans.length ? summarize(spans).median : undefined,
       httpMedian: median(group.map((sample) => sample.requests.http)),
@@ -198,10 +242,11 @@ function table(results: Sample[]) {
 function print(rows: ReturnType<typeof table>) {
   const fmt = (value: number | undefined) =>
     value === undefined || Number.isNaN(value) ? '-' : String(Math.round(value));
-  const header = ['scenario', 'variant', 'n', 'median', 'p90', 'min', 'max', 'sd~', 'detect', 'span p50', 'http', 'gql', 'cpu'];
+  const header = ['scenario', 'variant', 'target', 'n', 'median', 'p90', 'min', 'max', 'sd~', 'detect', 'span p50', 'http', 'gql', 'cpu'];
   const lines = rows.map((row) => [
     row.scenario,
     row.variant,
+    row.target ? String(row.target.index) : '-',
     String(row.n),
     fmt(row.median),
     fmt(row.p90),
@@ -228,25 +273,49 @@ function print(rows: ReturnType<typeof table>) {
   }
   if (selected.includes('cold-start'))
     console.log('Cold start is never throttled, so its rows are under 1×.');
+  console.log('target is the candidate a step opened, by its position in the targets file.');
   console.log('cpu is the WebView slowdown measured around each step.');
+  const targetRows = new Map<string, number>();
+  for (const row of rows.filter((entry) => entry.target)) {
+    const step = `${row.scenario} ${row.variant} at ${row.cpuThrottle}×`;
+    targetRows.set(step, (targetRows.get(step) ?? 0) + 1);
+  }
+  for (const [step, count] of targetRows)
+    if (count > 1)
+      console.warn(`Warning: ${step} opened ${count} different targets in this run; compare its rows only with rows of the same target.`);
   console.log('Times in ms. sd~ is the MAD-based spread; detect is the smallest change between two runs this spread lets the harness detect.');
 }
 
 const started = new Date();
-const meta = { started: started.toISOString(), label: options.label, iterations, cpuThrottle: cpuThrottles, settleMs, bootSettleMs, scenarios: selected, environment: await environment() };
+// Targets by position and id hash only: results never name account content.
+const targetSummary = Object.fromEntries(
+  (['channel', 'smallDocument', 'largeDocument'] as const).map((key) => [
+    key,
+    candidates(targetsFile, key).map((item) => fingerprint(item.id)),
+  ])
+);
+const meta = { started: started.toISOString(), label: options.label, iterations, cpuThrottle: cpuThrottles, settleMs, bootSettleMs, scenarios: selected, targets: targetSummary, environment: await environment() };
 const profiles = cpuThrottles.map((rate) => `${rate}×`).join(', ');
 console.log(
   `Benchmarking ${meta.environment.app} on ${options.serial}, ${iterations} iterations at CPU throttle ${profiles}` +
     (cpuThrottles.length > 1 ? `: ${iterations * cpuThrottles.length} launches, alternating` : '')
 );
-for (let index = 0; index < iterations; index++) {
+let stopped: string | undefined;
+for (let index = 0; index < iterations && !stopped; index++) {
   // Alternating profiles within each iteration exposes them to the same host load.
   for (const cpuThrottle of cpuThrottles) {
     console.log(`iteration ${index + 1}/${iterations}, CPU throttle ${cpuThrottle}×`);
-    await iteration(index, cpuThrottle).catch((error: Error) => {
-      failures.push({ scenario: 'iteration', iteration: index, cpuThrottle, error: error.message });
-      console.warn(`  iteration ${index} at ${cpuThrottle}× failed: ${error.message}`);
-    });
+    try {
+      await iteration(index, cpuThrottle);
+    } catch (error) {
+      if (error instanceof StopRun) {
+        stopped = error.message;
+        console.error(`Stopping the run: ${stopped}`);
+        break;
+      }
+      failures.push({ scenario: 'iteration', iteration: index, cpuThrottle, error: (error as Error).message });
+      console.warn(`  iteration ${index} at ${cpuThrottle}× failed: ${(error as Error).message}`);
+    }
   }
 }
 
@@ -255,8 +324,11 @@ const outDir = resolve(options.out);
 await mkdir(outDir, { recursive: true });
 const profileName = [...cpuThrottles].sort((a, b) => a - b).map((rate) => `${rate}x`).join('-');
 const file = join(outDir, `android-benchmark-${started.toISOString().replace(/[:.]/g, '-')}-cpu${profileName}.json`);
-await writeFile(file, `${JSON.stringify({ meta, summary, failures, samples }, null, 2)}\n`);
+await writeFile(file, `${JSON.stringify({ meta: { ...meta, stopped }, summary, failures, boots, samples }, null, 2)}\n`);
 print(summary);
+const bootFlows = summarize(boots.map((boot) => boot.viewAppMs));
+if (boots.length)
+  console.log(`Boot view.app flow ended ${Math.round(bootFlows.median)} ms after launch (median; max ${Math.round(bootFlows.max)}); the first tap waits for it.`);
 if (failures.length) console.warn(`${failures.length} failed steps; see ${file}`);
 console.log(`Results: ${file}`);
 // A run that measured nothing (signed out, wrong build), or nothing at one of
@@ -271,4 +343,5 @@ const unmeasured = cpuThrottles.filter(
 );
 if (timedSteps && unmeasured.length)
   console.warn(`No steps measured at CPU throttle ${unmeasured.map((rate) => `${rate}×`).join(', ')}`);
-process.exit(samples.length > 0 && !(timedSteps && unmeasured.length) ? 0 : 1);
+if (stopped) console.error(`The run stopped early: ${stopped}`);
+process.exit(samples.length > 0 && !stopped && !(timedSteps && unmeasured.length) ? 0 : 1);

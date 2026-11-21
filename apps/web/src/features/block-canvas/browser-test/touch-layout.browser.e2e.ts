@@ -575,10 +575,13 @@ test('a fill is picked from swatches in the sheet, with the shape still in view'
   await expect(customPicker).toBeVisible();
 });
 
-/** A pen going down or lifting: CDP sends a pen as a mouse of pointer type pen. */
+/**
+ * A pen going down, moving while down, or lifting: CDP sends a pen as a mouse
+ * of pointer type pen.
+ */
 async function pen(
   cdp: CDPSession,
-  type: 'mousePressed' | 'mouseReleased',
+  type: 'mousePressed' | 'mouseMoved' | 'mouseReleased',
   point: Point
 ) {
   await cdp.send('Input.dispatchMouseEvent', {
@@ -586,7 +589,7 @@ async function pen(
     x: point.x,
     y: point.y,
     button: 'left',
-    buttons: type === 'mousePressed' ? 1 : 0,
+    buttons: type === 'mouseReleased' ? 0 : 1,
     clickCount: 1,
     pointerType: 'pen',
   });
@@ -625,6 +628,11 @@ test('with the Text tool a pen keeps its press whichever of pen and palm lands f
   const afterPenFirst = await textBeingEdited(page);
   expect(Math.abs((afterPenFirst?.x ?? 0) - first.x)).toBeLessThan(12);
   await page.evaluate(() => window.canvasTouchFixture.state.text.finish());
+  // The Text tool keeps its press from the scene, and the pen still counts as
+  // used: drawing is now the pen's.
+  expect(
+    await page.evaluate(() => window.canvasTouchFixture.state.penOnly())
+  ).toBe(true);
 
   // The palm rests first; the pen then taps while it is still down.
   const second = { x: 260, y: 240 };
@@ -723,5 +731,70 @@ test('with the tool kept, one choice of Rectangle draws several', async ({
   await draw(240);
   await draw(360);
   await expect(rectangle).toHaveAttribute('aria-pressed', 'true');
+  expect((await canvas(page)).items).toBe(before + 3);
+});
+
+test('once a pen has drawn, a finger under a drawing tool pans until fingers are given it back', async ({
+  page,
+}) => {
+  const cdp = await page.context().newCDPSession(page);
+  const rectangle = page.getByRole('button', { name: 'Rectangle tool' });
+  const view = page.getByRole('dialog', { name: 'View' });
+  const camera = () =>
+    page.evaluate(() => window.canvasTouchFixture.editor.getCamera());
+  /** One finger dragged 100 right and 60 down across empty canvas. */
+  const drag = async (from: Point) => {
+    await touch(cdp, 'touchStart', [from]);
+    await touch(cdp, 'touchMove', [{ x: from.x + 50, y: from.y + 30 }]);
+    await touch(cdp, 'touchMove', [{ x: from.x + 100, y: from.y + 60 }]);
+    await touch(cdp, 'touchEnd', []);
+  };
+  const before = (await canvas(page)).items;
+  const rest = await camera();
+
+  const zoomOptions = page.getByRole('button', { name: 'Zoom options' });
+  const penOnly = view.getByRole('menuitemcheckbox', {
+    name: 'Draw with pen only',
+  });
+  const closeView = async () => {
+    await page.touchscreen.tap(380, 40);
+    await expect(view).toBeHidden();
+  };
+
+  // With no pen about, a finger draws, and the sheet has nothing to offer.
+  await rectangle.tap();
+  await drag({ x: 250, y: 120 });
+  expect((await canvas(page)).items).toBe(before + 1);
+  expect(await camera()).toEqual(rest);
+  await zoomOptions.tap();
+  await settle(view);
+  await expect(penOnly).toHaveCount(0);
+  await closeView();
+
+  // The pen draws a shape.
+  await rectangle.tap();
+  await pen(cdp, 'mousePressed', { x: 250, y: 260 });
+  await pen(cdp, 'mouseMoved', { x: 320, y: 310 });
+  await pen(cdp, 'mouseReleased', { x: 320, y: 310 });
+  expect((await canvas(page)).items).toBe(before + 2);
+
+  // From then on a finger under the same tool moves the canvas instead. The
+  // pan starts at the drag's first move, once the finger has shown it is
+  // moving, and may glide on a little after the lift.
+  await rectangle.tap();
+  await drag({ x: 250, y: 400 });
+  expect((await canvas(page)).items).toBe(before + 2);
+  const panned = await camera();
+  expect(panned.x - rest.x).toBeGreaterThanOrEqual(49);
+  expect(panned.y - rest.y).toBeGreaterThanOrEqual(29);
+
+  // The view sheet now offers the choice. Switched off, the finger draws again.
+  await zoomOptions.tap();
+  await expect(penOnly).toHaveAttribute('aria-checked', 'true');
+  await penOnly.tap();
+  await expect(penOnly).toHaveAttribute('aria-checked', 'false');
+  await closeView();
+
+  await drag({ x: 250, y: 400 });
   expect((await canvas(page)).items).toBe(before + 3);
 });

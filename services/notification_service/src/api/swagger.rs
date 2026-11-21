@@ -19,7 +19,7 @@ use utoipa::OpenApi;
 
 use crate::{
     api::{
-        health,
+        health, notification_settings, ping,
         unsubscribe::{self, unsubscribe_item::UnsubscribeItemPathParams},
         user_notification,
     },
@@ -41,6 +41,7 @@ use crate::{
                 user_notification::bulk_get_typed_notifications_by_event_item_ids,
                 user_notification::get_typed_by_event_item_id,
                 user_notification::get_typed_notification_by_id,
+                ping::send_ping,
                 notification_crate::inbound::http::delete_notification,
                 notification_crate::inbound::http::bulk_delete_notifications,
                 notification_crate::inbound::http::bulk_mark_seen,
@@ -61,6 +62,13 @@ use crate::{
                 unsubscribe::unsubscribe_email::handler,
                 unsubscribe::remove_unsubscribe_all::handler,
                 unsubscribe::unsubscribe_all::handler,
+
+                /// /notification_settings
+                notification_settings::list_channel_settings,
+                notification_settings::update_channel_settings,
+                notification_settings::reset_channel_settings,
+                notification_settings::sections::list_section_settings,
+                notification_settings::sections::update_section_settings,
         ),
         components(
             schemas(
@@ -74,6 +82,15 @@ use crate::{
                         unsubscribe::items::BulkSetItemsRequest,
                         unsubscribe::items::BulkRemoveItemsRequest,
                         UserUnsubscribe,
+                        notification_settings::ChannelNotificationSettingsResponse,
+                        notification_settings::ListChannelNotificationSettingsResponse,
+                        notification_settings::UpdateChannelNotificationSettingsRequest,
+                        notification_crate::domain::channel_settings::ChannelNotificationKind,
+                        notification_settings::sections::SectionNotificationSettingsResponse,
+                        notification_settings::sections::ListSectionNotificationSettingsResponse,
+                        notification_settings::sections::UpdateSectionNotificationSettingsRequest,
+                        notification_crate::domain::section_settings::ChannelSection,
+                        notification_crate::domain::section_settings::SectionMute,
                         DeviceType,
                         PushNotificationData,
                         NewEmailMetadata,
