@@ -54,17 +54,23 @@ pub enum WritePassStep {
     Done(Vec<ProjectionMutation>),
 }
 
+/// After this many restarts the passes run as they did before reading once:
+/// each pass reads storage for itself, all in one step, and nothing is kept,
+/// so another connection that keeps committing cannot keep a write waiting.
+const MAX_RESTARTS: u32 = 2;
+
 /// [`write_passes`] one pass at a time, so a host can run reads between
-/// passes. What the earlier passes read and computed holds only while storage
-/// commits nothing, so a step that finds [`cache_core::store::Storage::write_position`] moved
-/// since the previous step starts the passes over.
+/// passes. A key is read from storage once for all the passes, which equals
+/// reading it again in each pass only while storage commits nothing. So the
+/// passes take [`cache_core::store::Storage::write_position`] before their
+/// first read and again after each step, and start over when it moved.
 pub struct WritePasses {
     reuse_stored_identity: bool,
     given: Vec<ProjectionMutation>,
     projections: Vec<ProjectionMutation>,
     next: Option<Pass>,
     reads: PassReadSet,
-    /// Where storage stood after the previous step, once a pass has run.
+    /// Where storage stood before the first read, once a pass has started.
     position: Option<WritePosition>,
     restarts: u32,
 }
@@ -98,7 +104,7 @@ impl WritePasses {
 
     /// Runs the next pass over `response`, the same response every step.
     /// Storage without a position runs every pass in this one step, since no
-    /// later step could tell whether what the earlier ones read still holds.
+    /// step could tell whether what earlier passes read still holds.
     pub async fn step<S>(
         &mut self,
         engine: &mut Engine<S>,
@@ -108,21 +114,32 @@ impl WritePasses {
         S: PredicateIndexStorage,
         for<'a> PassReads<'a, S>: DurableRead<Error = S::Error>,
     {
-        let position = engine.storage().write_position();
-        if self.position.is_some() && self.position != position {
-            self.restart();
+        if self.restarts >= MAX_RESTARTS {
+            while self.next.is_some() {
+                let reads = engine.pass_reads();
+                self.run(&reads, response, true).await?;
+            }
+            engine.keep_pass_reads(PassReadSet::default(), None);
+            return Ok(WritePassStep::Done(std::mem::take(&mut self.projections)));
         }
+        if self.position.is_none() {
+            self.position = engine.storage().write_position();
+        }
+        let stepping = self.position.is_some();
         let reads = engine.resume_pass_reads(std::mem::take(&mut self.reads));
-        let result = self.run(&reads, response, position.is_some()).await;
+        let result = self.run(&reads, response, stepping).await;
         self.reads = reads.finish();
         result?;
-        if self.next.is_some() {
-            self.position = position;
+        // What the passes computed so far holds only if every key they read
+        // still reads the same, i.e. storage committed nothing since.
+        if stepping && engine.storage().write_position() != self.position {
+            self.restart();
             return Ok(WritePassStep::Pending);
         }
-        // The position from before this step read anything: a commit since
-        // then leaves the kept reads unused.
-        engine.keep_pass_reads(std::mem::take(&mut self.reads), position);
+        if self.next.is_some() {
+            return Ok(WritePassStep::Pending);
+        }
+        engine.keep_pass_reads(std::mem::take(&mut self.reads), self.position);
         Ok(WritePassStep::Done(std::mem::take(&mut self.projections)))
     }
 
