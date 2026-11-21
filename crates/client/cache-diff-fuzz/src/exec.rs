@@ -43,6 +43,9 @@ pub struct Exec<'a> {
     leases: HashMap<usize, Lease>,
     tx_of: HashMap<String, usize>,
     last_keys: BTreeMap<&'static str, Vec<String>>,
+    /// Each live view slot's last revision and registration, as its subscriber
+    /// keeps them; they outlive reopens, as a subscriber outlives the engine.
+    live: BTreeMap<u8, (String, Value)>,
     pub lines: Vec<Line>,
     pub counters: BTreeMap<String, u64>,
     /// Real time to wait at `idle`, `reopen` and `crash` ops, in milliseconds (see `pause`).
@@ -108,6 +111,7 @@ impl<'a> Exec<'a> {
             leases: HashMap::new(),
             tx_of: HashMap::new(),
             last_keys: BTreeMap::new(),
+            live: BTreeMap::new(),
             lines: Vec::new(),
             counters: BTreeMap::new(),
             pause_ms: None,
@@ -491,6 +495,14 @@ impl<'a> Exec<'a> {
             Op::Filter { request, pages } => {
                 let outcome = self.filter(request, *pages).await;
                 self.record(index, "filter", outcome);
+            }
+            Op::Live {
+                slot,
+                action,
+                request,
+            } => {
+                let outcome = self.live(*slot, action, request).await;
+                self.record(index, "live", outcome);
             }
             Op::Search { request, pages } => {
                 let outcome = self.search(request, *pages).await;
@@ -920,6 +932,67 @@ impl<'a> Exec<'a> {
         }
         self.last_keys.insert("filter", keys);
         Ok(json!({ "request": request, "pages": out }))
+    }
+
+    /// One live view op (see `Op::Live`). The slot's revision and registration
+    /// are this run's own, so they are sent as they are, never normalized.
+    async fn live(&mut self, slot: u8, action: &str, request: &Value) -> Outcome {
+        const FRAGMENT: &str = "SoupItemFields";
+        let id = format!("live-{slot}");
+        self.count(format!("live.{action}"));
+        let value = if action == "resume" {
+            let Some((since, registration)) = self.live.get(&slot).cloned() else {
+                self.count("live.resume-unregistered");
+                return Ok(json!("unregistered"));
+            };
+            let registration =
+                serde_json::from_value(registration).map_err(|error| error.to_string())?;
+            let result = self
+                .handle()
+                .resume_entity_filter(id, registration, Some(since))
+                .await?;
+            serde_json::to_value(result).map_err(|error| error.to_string())?
+        } else {
+            let since = match action {
+                "read-since" => self.live.get(&slot).map(|(since, _)| since.clone()),
+                _ => None,
+            };
+            let mut request = request.clone();
+            request["liveQuery"] = json!({
+                "id": id,
+                "document": self.doc(&format!("fragment:{FRAGMENT}"))?,
+                "fragmentName": FRAGMENT,
+                "since": since,
+                "release": action == "release",
+            });
+            let parsed: EntityFilterRequest =
+                serde_json::from_value(request).map_err(|error| format!("request: {error}"))?;
+            let result = self.handle().entity_filter(parsed).await?;
+            serde_json::to_value(result).map_err(|error| error.to_string())?
+        };
+        if action == "release" {
+            self.live.remove(&slot);
+        }
+        if value["kind"] == json!("live-query") {
+            for (field, counter) in [("reset", "live.reset"), ("optimistic", "live.optimistic")] {
+                if value[field] == json!(true) {
+                    self.count(counter);
+                }
+            }
+            for field in ["upserts", "patches", "removed"] {
+                let len = value[field].as_array().map_or(0, Vec::len);
+                self.add(format!("live.{field}"), len as u64);
+            }
+            if let (Some(revision), registration) =
+                (value["revision"].as_str(), &value["registrationId"])
+            {
+                self.live
+                    .insert(slot, (revision.to_owned(), registration.clone()));
+            }
+        } else if action == "resume" {
+            self.count("live.resume-gone");
+        }
+        Ok(value)
     }
 
     async fn search(&mut self, request: &Value, pages: u8) -> Outcome {

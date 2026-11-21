@@ -14,7 +14,7 @@ disk after a reopen must come out the same.
   fuzzer drives the same `EngineHandle` the desktop app does. `src/fuzz_hooks.rs`
   is compiled inside that module.
 - `src/sequence.rs` generates a case from a seed: hydrates, writes, reads, Soup
-  filters and search, the optimistic mutation queue (enqueue, claim, commit,
+  filters and live views of them (read, read since, resume, release), search, the optimistic mutation queue (enqueue, claim, commit,
   rollback, defer), deletes, invalidation, people search, idle, reopen, crash,
   probes, and written pages again with one value broken (`src/malformed.rs`). Responses come from `src/faker.rs` over the app schema.
 - `src/exec.rs` runs a case. `src/normalize.rs` replaces the ids the engine mints

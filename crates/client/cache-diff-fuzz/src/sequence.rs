@@ -64,6 +64,15 @@ pub enum Op {
         request: Value,
         pages: u8,
     },
+    /// A maintained view of a reconciled Soup filter (`entityFilter` with
+    /// `liveQuery`), one of a few subscriber slots: `read` from scratch,
+    /// `read-since` the slot's last revision, `resume` its registration
+    /// (`resumeEntityFilter`), or `release` it.
+    Live {
+        slot: u8,
+        action: String,
+        request: Value,
+    },
     /// Quick Access search, following its cursor for up to `pages` pages.
     Search {
         request: Value,
@@ -197,8 +206,13 @@ pub struct Gen<'a> {
     /// Connectives a filter still nests before its first literal: a chain this
     /// long reaches the depth limits of the predicate index and of Turso's parser.
     filter_chain: u8,
+    /// The filter each live view slot last read, so later reads of a slot
+    /// mostly ask for the same view and get deltas.
+    live: [Option<Value>; LIVE_SLOTS],
     ops: Vec<Op>,
 }
+
+const LIVE_SLOTS: usize = 3;
 
 const LIMITS: &[u16] = &[1, 2, 3, 7, 20, 50, 63, 64, 65, 100, 128, 500];
 const SORTS: &[(&str, u32)] = &[
@@ -327,6 +341,7 @@ impl<'a> Gen<'a> {
             departed: Vec::new(),
             filter_budget: 0,
             filter_chain: 0,
+            live: Default::default(),
             ops: Vec::new(),
         };
         let scale = *pick(&mut generator.rng, &[0usize, 1, 1, 2, 2, 3]);
@@ -538,6 +553,7 @@ impl<'a> Gen<'a> {
             ("delete", 2),
             ("invalidate", 1),
             ("soup-filter", 14),
+            ("live", 6),
             ("mail-filter", 10),
             ("read-keys", 4),
             ("read", 3),
@@ -633,6 +649,7 @@ impl<'a> Gen<'a> {
                     });
                 }
             }
+            "live" => self.live(),
             "mail-filter" => {
                 let request = self.mail_filter();
                 let pages = *pick(&mut self.rng, &[1u8, 2, 3, 8, 40]);
@@ -1317,6 +1334,38 @@ impl<'a> Gen<'a> {
             request.insert("baseline".into(), self.baseline());
         }
         Value::Object(request)
+    }
+
+    /// A live view op on one slot; reads mostly keep the slot's filter, so
+    /// they test deltas, and sometimes replace it.
+    fn live(&mut self) {
+        let slot = self.rng.below(LIVE_SLOTS as u64) as usize;
+        let action = weighted(
+            &mut self.rng,
+            &[
+                ("read", 30),
+                ("read-since", 40),
+                ("resume", 20),
+                ("release", 10),
+            ],
+        )
+        .to_owned();
+        let request = match self.live[slot].clone() {
+            Some(request) if action != "read" || self.rng.chance(0.6) => request,
+            _ => {
+                let mut request = self.soup_filter();
+                if request.get("baseline").is_none() {
+                    request["baseline"] = self.baseline();
+                }
+                request
+            }
+        };
+        self.live[slot] = Some(request.clone());
+        self.push(Op::Live {
+            slot: slot as u8,
+            action,
+            request,
+        });
     }
 
     fn baseline(&mut self) -> Value {
