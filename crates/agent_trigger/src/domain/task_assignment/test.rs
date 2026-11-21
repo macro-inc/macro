@@ -12,6 +12,7 @@ fn brief() -> TaskBrief {
         markdown: "Include archived rows in CSV exports.".to_owned(),
         status: None,
         priority: None,
+        start: None,
         due: None,
         assignee_ids: Vec::new(),
         project: None,

@@ -1308,6 +1308,7 @@ describe('repeated task sharing', () => {
       const host: TaskComposerHost = {
         userId: () => 'viewer',
         templatesEnabled: () => true,
+        startDatesEnabled: () => false,
         resolveAppLink: undefined,
         createTemplate: vi.fn(),
         updateTemplate: vi.fn(),

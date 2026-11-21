@@ -7,9 +7,12 @@
 import type { SetPropertyValueOneOfThreeType } from './setPropertyValueOneOfThreeType';
 
 /**
- * Date and time value
+ * Date value. `has_time: true` makes it an exact instant; `false` or no
+flag makes it a whole day, shown as the day its instant falls on in the
+viewer's time zone.
  */
 export type SetPropertyValueOneOfThree = {
+  has_time?: boolean;
   type: SetPropertyValueOneOfThreeType;
   value: string;
 };

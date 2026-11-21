@@ -170,11 +170,15 @@ pub struct GraphqlStringPropertyValue {
     value: String,
 }
 
-/// A date-time property value.
+/// A date property value.
 #[derive(SimpleObject)]
 pub struct GraphqlDatePropertyValue {
-    /// The stored date-time formatted as RFC 3339.
+    /// The stored instant formatted as RFC 3339.
     value: String,
+    /// Whether its time of day was set. Without one the value stands for a
+    /// whole day, shown as the day its instant falls on in the viewer's time
+    /// zone.
+    has_time: bool,
 }
 
 /// A date-range property value.
@@ -219,7 +223,8 @@ impl GraphqlPropertyValue {
                 value: value.clone(),
             }),
             PropertyValue::Date(value) => Self::Date(GraphqlDatePropertyValue {
-                value: value.to_rfc3339(),
+                value: value.at().to_rfc3339(),
+                has_time: value.has_time(),
             }),
             PropertyValue::DateRange(range) => Self::DateRange(GraphqlDateRangePropertyValue {
                 start: range.start().to_rfc3339(),

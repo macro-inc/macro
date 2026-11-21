@@ -80,7 +80,11 @@ async fn get_entity_properties_values_value_kinds(pool: Pool<Postgres>) -> anyho
     let Some(PropertyValue::Date(date)) = &date_prop.value else {
         panic!("Expected Date value");
     };
-    assert_eq!((date.year(), date.month(), date.day()), (2025, 12, 31));
+    assert_eq!(
+        (date.at().year(), date.at().month(), date.at().day()),
+        (2025, 12, 31)
+    );
+    assert!(!date.has_time());
 
     Ok(())
 }

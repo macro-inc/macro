@@ -171,12 +171,14 @@ impl<'a> Converter<'a> {
             },
             DataType::Date => match single(values)? {
                 PropertyValue::Date(value) => PropertyValue::Date(value),
-                PropertyValue::Str(value) => date(&value).map(PropertyValue::Date)?,
+                PropertyValue::Str(value) => date(&value).map(|date| {
+                    PropertyValue::Date(models_properties::shared::DateValue::new(date))
+                })?,
                 _ => return Err(Misfit::NotDate),
             },
             DataType::DateRange => match single(values)? {
                 PropertyValue::DateRange(range) => PropertyValue::DateRange(range),
-                PropertyValue::Date(date) => PropertyValue::DateRange(DateRange::at(date)),
+                PropertyValue::Date(date) => PropertyValue::DateRange(DateRange::at(date.at())),
                 PropertyValue::Str(value) => date_range(&value).map(PropertyValue::DateRange)?,
                 _ => return Err(Misfit::NotDateRange),
             },
@@ -317,14 +319,18 @@ fn text(value: PropertyValue) -> Option<String> {
         PropertyValue::Str(value) => Some(value),
         PropertyValue::Num(value) if value.is_finite() => Some(value.to_string()),
         PropertyValue::Bool(value) => Some(value.to_string()),
-        PropertyValue::Date(value) if value.time() == chrono::NaiveTime::MIN => {
-            Some(value.date_naive().to_string())
+        PropertyValue::Date(value) if value.at().time() == chrono::NaiveTime::MIN => {
+            Some(value.at().date_naive().to_string())
         }
-        PropertyValue::Date(value) => Some(value.to_rfc3339()),
+        PropertyValue::Date(value) => Some(value.at().to_rfc3339()),
         PropertyValue::DateRange(range) => Some(format!(
             "{}/{}",
-            text(PropertyValue::Date(range.start()))?,
-            text(PropertyValue::Date(range.end()))?
+            text(PropertyValue::Date(
+                models_properties::shared::DateValue::new(range.start())
+            ))?,
+            text(PropertyValue::Date(
+                models_properties::shared::DateValue::new(range.end())
+            ))?
         )),
         _ => None,
     }

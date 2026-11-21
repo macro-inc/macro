@@ -94,7 +94,9 @@ fn orders(price_kind: ColumnKind) -> Table {
 }
 
 fn date(text: &str) -> PropertyValue {
-    PropertyValue::Date(text.parse().unwrap())
+    PropertyValue::Date(models_properties::shared::DateValue::new(
+        text.parse().unwrap(),
+    ))
 }
 
 #[test]

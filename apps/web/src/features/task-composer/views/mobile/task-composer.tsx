@@ -1,6 +1,7 @@
 import { TaskTemplateNameStrip } from '@app/features/task-templates/views/shared/task-template-name-strip';
 import { onElementConnect } from '@core/util/onElementConnect';
 import { Property } from '@property';
+import { StartDueSheetEditor } from '@property/editors/popover/StartDueEditor';
 import { InlineTagsSheetPill } from '@property/tags';
 import { cn, EntityComposer } from '@ui';
 import { type Component, createSignal, onCleanup, Show } from 'solid-js';
@@ -48,6 +49,7 @@ export function MobileTaskComposer(props: {
       composer={props.composer}
       tagsPill={InlineTagsSheetPill}
       propertyEditor={Property.SheetEditor}
+      datesEditor={StartDueSheetEditor}
     >
       <EntityComposer.Header
         ref={observeHeader}

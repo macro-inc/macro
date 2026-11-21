@@ -47,6 +47,7 @@ fn initial_values_convert_to_the_domain_request() {
                 property_definition_id: due,
                 value: SetPropertyValue::Date {
                     value: "2026-10-01T00:00:00Z".parse().unwrap(),
+                    has_time: false,
                 },
             },
         ]

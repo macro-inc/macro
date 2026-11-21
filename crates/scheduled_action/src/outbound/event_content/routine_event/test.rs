@@ -284,7 +284,9 @@ fn a_task_status_change_carries_the_task_as_it_reads_now() {
                 is_multi_select: false,
                 is_system: true,
                 value: Some(PropertyValue::Date(
-                    Utc.with_ymd_and_hms(2026, 10, 9, 0, 0, 0).unwrap(),
+                    models_properties::shared::DateValue::new(
+                        Utc.with_ymd_and_hms(2026, 10, 9, 0, 0, 0).unwrap(),
+                    ),
                 )),
                 options: Vec::new(),
             },
@@ -326,6 +328,7 @@ fn a_task_status_change_carries_the_task_as_it_reads_now() {
                 markdown: "Steps: open login on Safari 17.".into(),
                 status: Some("In review".into()),
                 priority: Some("High".into()),
+                start: None,
                 due: Some(Utc.with_ymd_and_hms(2026, 10, 9, 0, 0, 0).unwrap()),
                 assignees: vec![ContextPerson {
                     id: "macro|sam@example.com".into(),

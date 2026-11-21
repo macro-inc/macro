@@ -1,7 +1,13 @@
 import type { EditorControls } from '@core/component/LexicalMarkdown/builder/types';
+import { buildStartDateDefaultProperty } from '@entity/extractors-property';
 import ArrowsOutIcon from '@icon/system/regular/arrows-out.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { PropertyValuePill } from '@property/component/PropertyValuePill';
+import { startDueEditorFor } from '@property/editors/popover/start-due-editor-for';
+import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
+import type { Property } from '@property/types';
+import { isDateProperty } from '@property/utils';
+import { formatStartDue, startDueOf } from '@property/utils/start-due';
 import { Button, EntityComposer, ToggleSwitch } from '@ui';
 import { $getRoot } from 'lexical';
 import { For, onMount, Show } from 'solid-js';
@@ -27,6 +33,33 @@ export function CreateProject(props: {
     context.createCommands(),
     props.initialDraft
   );
+  // The due date pill reads as the range and drafts the start too.
+  const startDateEnabled = () => context.startDatesEnabled?.() ?? false;
+  const drafted = (property: Property) =>
+    withProjectPropertyValue(
+      property,
+      composer.drafts().get(property.propertyDefinitionId)?.value
+    );
+  const draftedStart = () => {
+    const property = drafted(buildStartDateDefaultProperty());
+    return isDateProperty(property) ? property : undefined;
+  };
+  const dueDatesText = (property: Property) => {
+    if (
+      !startDateEnabled() ||
+      property.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.DUE_DATE
+    ) {
+      return undefined;
+    }
+    return formatStartDue(startDueOf(draftedStart(), property));
+  };
+  const dueDatesEditor = startDueEditorFor({
+    field: 'due',
+    enabled: startDateEnabled,
+    other: draftedStart,
+    saveOther: async (property, value) =>
+      composer.saveDraft(property, { valueType: 'DATE', value }),
+  });
   let titleInput: HTMLInputElement | undefined;
   let description: EditorControls | undefined;
   onMount(() => titleInput?.focus());
@@ -159,11 +192,14 @@ export function CreateProject(props: {
                   <PropertyValuePill
                     variant="secondary"
                     size="xs"
-                    property={withProjectPropertyValue(
-                      property,
-                      composer.drafts().get(property.propertyDefinitionId)
-                        ?.value
-                    )}
+                    property={drafted(property)}
+                    valueText={dueDatesText(drafted(property))}
+                    editor={
+                      property.propertyDefinitionId ===
+                      SYSTEM_PROPERTY_IDS.DUE_DATE
+                        ? dueDatesEditor
+                        : undefined
+                    }
                     canEdit={!composer.pending()}
                     entitySelfFilter={{ entityType: 'INITIATIVE' }}
                     onSave={async (_, value) => {

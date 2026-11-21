@@ -46,6 +46,7 @@ const mocks = vi.hoisted(() => ({
   kind: 'document' as MarkdownDocumentKind,
   setProperties: undefined as Setter<Property[]> | undefined,
   fetchDefinition: vi.fn(async (_id: string): Promise<unknown> => null),
+  startDates: false,
 }));
 const entityWrite = vi.fn();
 
@@ -64,6 +65,9 @@ vi.mock('@service-connection/websocket', () => ({
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: false }),
 }));
+vi.mock('@property/hooks/useStartDateEnabled', () => ({
+  useStartDateEnabled: () => () => mocks.startDates,
+}));
 vi.mock('@entity', () => ({
   InlineEntity: () => null,
   isTaskEntity: () => false,
@@ -74,6 +78,17 @@ vi.mock('@entity/extractors-property', () => ({
     propertyDefinitionId: '00000001-0000-0000-0000-000000000014',
     displayName: 'Project',
     valueType: 'ENTITY',
+    value: null,
+    isMultiSelect: false,
+    owner: { scope: 'system' },
+    createdAt: '1970-01-01',
+    updatedAt: '1970-01-01',
+  }),
+  buildStartDateDefaultProperty: () => ({
+    propertyId: 'pending:start',
+    propertyDefinitionId: '00000001-0000-0000-0000-000000000015',
+    displayName: 'Start Date',
+    valueType: 'DATE',
     value: null,
     isMultiSelect: false,
     owner: { scope: 'system' },
@@ -154,13 +169,14 @@ vi.mock('../context/markdown-document-context', () => ({
   }),
 }));
 vi.mock('./InlinePropertyValue', () => ({
-  InlinePropertyValue: (props: { property: Property }) => {
+  InlinePropertyValue: (props: { property: Property; valueText?: string }) => {
     const context = usePropertiesContext();
     return (
       <button
         onClick={() => context.onPropertyUnpinned?.(props.property.propertyId)}
       >
         Unpin {props.property.displayName}
+        {props.valueText ? ` (${props.valueText})` : ''}
       </button>
     );
   },
@@ -171,6 +187,7 @@ afterEach(() => {
   vi.clearAllMocks();
   vi.restoreAllMocks();
   mocks.kind = 'document';
+  mocks.startDates = false;
 });
 
 const disposers: (() => void)[] = [];
@@ -264,6 +281,45 @@ it("shows a task's Project with the other task properties, through the same pill
   // A task without a project still gets the standard pill, from a placeholder.
   await waitFor(() =>
     expect(screen.getByRole('button', { name: 'Unpin Project' })).toBeTruthy()
+  );
+});
+
+const dueDate: Property = {
+  ...property,
+  propertyId: 'due',
+  propertyDefinitionId: SYSTEM_PROPERTY_IDS.DUE_DATE,
+  displayName: 'Due Date',
+  valueType: 'DATE',
+  value: new Date(2026, 10, 27),
+};
+const startDate: Property = {
+  ...dueDate,
+  propertyId: 'start',
+  propertyDefinitionId: SYSTEM_PROPERTY_IDS.START_DATE,
+  displayName: 'Start Date',
+  value: new Date(2026, 10, 23),
+};
+
+it("reads a task's due date pill as the range once a start is set", async () => {
+  mocks.kind = 'task';
+  mocks.startDates = true;
+  setup([dueDate, startDate]);
+  await waitFor(() =>
+    expect(
+      screen.getByRole('button', {
+        name: `Unpin Due Date (Nov 23 → Nov 27${new Date().getFullYear() === 2026 ? '' : ', 2026'})`,
+      })
+    ).toBeTruthy()
+  );
+  // Start Date is not a default pin, so it has no pill of its own.
+  expect(screen.queryByRole('button', { name: /Unpin Start Date/ })).toBeNull();
+});
+
+it("keeps a task's due date pill as it was without start dates", async () => {
+  mocks.kind = 'task';
+  setup([dueDate, startDate]);
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Unpin Due Date' })).toBeTruthy()
   );
 });
 

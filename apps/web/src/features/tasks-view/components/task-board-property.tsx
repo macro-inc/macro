@@ -14,6 +14,7 @@ import {
   hasValue,
 } from '@property/utils/typeGuards';
 import { Match, Show, Switch } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 
 export function TaskBoardColumnIcon(props: {
   propertyDefinitionId: string;
@@ -85,6 +86,10 @@ export function TaskBoardProperty(props: {
   onSave: PropertySaveFn;
   dueDateUrgency?: 'danger' | 'warning';
   onFilterByUser?: (userId: string) => void;
+  /** Text shown with the date icon in place of the value, such as a range. */
+  valueText?: string;
+  /** The editor the card field opens instead of the property's own. */
+  editor?: typeof Property.PopoverEditor;
 }) {
   return (
     <Property.Root
@@ -146,7 +151,9 @@ export function TaskBoardProperty(props: {
                       <ProjectIcon class="size-3.5 shrink-0" />
                     </Show>
                   </Match>
-                  <Match when={isDate() && hasValue(shown())}>
+                  <Match
+                    when={isDate() && (hasValue(shown()) || props.valueText)}
+                  >
                     <CalendarIcon
                       class="size-3.5 shrink-0"
                       classList={{
@@ -164,16 +171,30 @@ export function TaskBoardProperty(props: {
                   </Match>
                 </Switch>
                 <Show when={!props.iconOnly}>
-                  <Property.Text
-                    property={shown()}
-                    resolveSingleEntity={isProject()}
-                    class={`min-w-0 truncate ${isDate() && props.dueDateUrgency === 'danger' ? 'text-failure' : ''} ${isDate() && props.dueDateUrgency === 'warning' ? 'text-warning light-mode:text-[color-mix(in_srgb,var(--color-warning)_60%,var(--color-ink))]' : ''}`}
-                    fallback={<span>{shown().displayName}</span>}
-                  />
+                  <Show
+                    when={props.valueText}
+                    fallback={
+                      <Property.Text
+                        property={shown()}
+                        resolveSingleEntity={isProject()}
+                        class={`min-w-0 truncate ${isDate() && props.dueDateUrgency === 'danger' ? 'text-failure' : ''} ${isDate() && props.dueDateUrgency === 'warning' ? 'text-warning light-mode:text-[color-mix(in_srgb,var(--color-warning)_60%,var(--color-ink))]' : ''}`}
+                        fallback={<span>{shown().displayName}</span>}
+                      />
+                    }
+                  >
+                    {(text) => (
+                      <span
+                        class={`min-w-0 truncate ${props.dueDateUrgency === 'danger' ? 'text-failure' : ''} ${props.dueDateUrgency === 'warning' ? 'text-warning light-mode:text-[color-mix(in_srgb,var(--color-warning)_60%,var(--color-ink))]' : ''}`}
+                      >
+                        {text()}
+                      </span>
+                    )}
+                  </Show>
                 </Show>
               </Property.Pill>
             </Property.Tooltip>
-            <Property.PopoverEditor
+            <Dynamic
+              component={props.editor ?? Property.PopoverEditor}
               entitySelfFilter={{ entityType: 'TASK', blockId: props.taskId }}
             />
           </>
