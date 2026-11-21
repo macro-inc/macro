@@ -62,6 +62,10 @@ struct Args {
     /// Compare stored records by what they decode to, not by their bytes (see `dump::tables`).
     #[arg(long)]
     decoded_records: bool,
+    /// Compare index document facts by what they hold, not by the table that holds them,
+    /// and the storage schema version masked (see `dump::tables`).
+    #[arg(long)]
+    decoded_facts: bool,
     /// Compare responses without their `sourceHash` (an upgrade to a build that
     /// hashes records differently rehashes unchanged ones).
     #[arg(long)]
@@ -181,8 +185,8 @@ fn run(
         writeln!(trace, "abort {}", normalizer.text(error))?;
     }
     normalizer.freeze();
-    let tables =
-        dump::tables(&path, args.decoded_records).map_err(|error| rootcause::report!("{error}"))?;
+    let tables = dump::tables(&path, args.decoded_records, args.decoded_facts)
+        .map_err(|error| rootcause::report!("{error}"))?;
     for (table, rows) in tables {
         let rows: Vec<String> = rows.iter().map(|row| normalizer.text(row)).collect();
         let mut sorted = rows.clone();

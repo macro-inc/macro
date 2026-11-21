@@ -41,6 +41,10 @@ disk after a reopen must come out the same.
   side's own codec decodes, and a `search_documents.source_hash` equal to the hash
   of its record's stored bytes as `h:record`. Response `sourceHash` values become
   `h1`, `h2`, … by first appearance. Every other byte is still compared.
+- When a change moves index document facts into another table (storage schema 13 keeps
+  them as one blob per document), add `--decoded-facts`: `index_document_facts` is
+  compared as each complete document's facts, decoded from the blob or gathered from
+  the fact tables, and `meta`'s storage schema version is masked.
 - `FUZZ_ARGS` goes to both sides; `FUZZ_ARGS_A` and `FUZZ_ARGS_B` to one each, for
   one build under two settings (e.g. `FUZZ_ARGS_B="--hot-capacity 16"` against
   itself: the hot tier is a cache, so its size must change nothing).

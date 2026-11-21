@@ -15,7 +15,16 @@ use turso_core::{
 /// this build's own codec) instead of its bytes, and a `search_documents.source_hash`
 /// that is the hash of its record's stored bytes is written as `h:record`. For
 /// builds whose record encoding differs on purpose.
-pub fn tables(path: &Path, decoded: bool) -> Result<BTreeMap<String, Vec<String>>, String> {
+///
+/// With `facts`, `meta`'s `storage_schema_version` is masked and
+/// `index_document_facts` holds each complete document's facts, decoded from its
+/// blob (storage schema 13 and later) or gathered from the fact tables (before),
+/// so builds on both sides of that schema change compare.
+pub fn tables(
+    path: &Path,
+    decoded: bool,
+    facts: bool,
+) -> Result<BTreeMap<String, Vec<String>>, String> {
     let io: Arc<dyn IO> = Arc::new(PlatformIO::new().map_err(|error| error.to_string())?);
     let path = path.to_str().ok_or("path is not UTF-8")?;
     let database = Database::open(io, path, OpenOptions::new(Arc::new(SqliteDialect)))
@@ -42,6 +51,9 @@ pub fn tables(path: &Path, decoded: bool) -> Result<BTreeMap<String, Vec<String>
     }
     if decoded {
         decode_records(&connection, &mut out)?;
+    }
+    if facts {
+        decode_facts(&connection, &mut out)?;
     }
     for table in out.values_mut() {
         table.sort();
@@ -110,6 +122,164 @@ fn decode_records(
     Ok(())
 }
 
+/// Rewrites `meta` and `index_document_facts` as [`tables`] describes for `facts`.
+fn decode_facts(
+    connection: &Arc<Connection>,
+    out: &mut BTreeMap<String, Vec<String>>,
+) -> Result<(), String> {
+    if out.contains_key("meta") {
+        let mut meta = Vec::new();
+        rows(&mut select(connection, "meta", "key, value")?, |values| {
+            let schema =
+                matches!(&values[0], Value::Text(key) if key.as_str() == "storage_schema_version");
+            meta.push(row_text(values.iter().enumerate().map(
+                |(index, value)| match index == 1 && schema {
+                    true => "schema".to_owned(),
+                    false => render(value),
+                },
+            )));
+        })?;
+        out.insert("meta".into(), meta);
+    }
+    let mut documents = BTreeMap::new();
+    if out.contains_key("index_document_facts") {
+        rows(
+            &mut select(connection, "index_document_facts", "document_id, facts")?,
+            |values| {
+                let facts = match &values[1] {
+                    Value::Blob(blob) => facts_blob::decode(blob),
+                    _ => None,
+                };
+                documents.insert(render(&values[0]), facts);
+            },
+        )?;
+    } else if out.contains_key("index_documents") {
+        // The facts of each complete document, from the fact tables.
+        rows(
+            &mut select(connection, "index_documents", "id, state")?,
+            |values| {
+                if render(&values[1]) == render(&Value::from_i64(0)) {
+                    documents.insert(render(&values[0]), Some(Vec::new()));
+                }
+            },
+        )?;
+        for (table, tag) in [
+            ("exact_facts", "e"),
+            ("integer_facts", "i"),
+            ("sort_facts", "s"),
+        ] {
+            rows(
+                &mut select(connection, table, "document_id, attribute, value")?,
+                |values| {
+                    if let Some(Some(facts)) = documents.get_mut(&render(&values[0])) {
+                        let attribute = match &values[1] {
+                            Value::Text(text) => text.as_str().to_owned(),
+                            other => render(other),
+                        };
+                        facts.push(format!("{tag} {attribute} {}", render(&values[2])));
+                    }
+                },
+            )?;
+        }
+    } else {
+        return Ok(());
+    }
+    let table = documents
+        .into_iter()
+        .map(|(id, facts)| {
+            let facts = match facts {
+                Some(mut facts) => {
+                    facts.sort();
+                    serde_json::to_string(&facts).unwrap_or_default()
+                }
+                None => "invalid blob".to_owned(),
+            };
+            row_text([id, facts].into_iter())
+        })
+        .collect();
+    out.insert("index_document_facts".into(), table);
+    Ok(())
+}
+
+/// The facts blob of storage schema 13 (`cache-turso`'s `storage/facts_blob.rs`),
+/// read back as one `tag attribute value` line per fact, rendered as the fact
+/// tables' rows are.
+mod facts_blob {
+    use super::{render, render_bytes};
+    use turso_core::Value;
+
+    pub fn decode(blob: &[u8]) -> Option<Vec<String>> {
+        let mut reader = Reader { blob, at: 0 };
+        if reader.byte()? != 1 {
+            return None;
+        }
+        let mut facts = Vec::new();
+        let count = reader.varint()?;
+        let mut previous = None;
+        for _ in 0..count {
+            let attribute = reader.attribute(&mut previous)?;
+            let length = usize::try_from(reader.varint()?).ok()?;
+            let value = render_bytes(reader.bytes(length)?);
+            facts.push(format!("e {attribute} {value}"));
+        }
+        for tag in ["i", "s"] {
+            let count = reader.varint()?;
+            let mut previous = None;
+            for _ in 0..count {
+                let attribute = reader.attribute(&mut previous)?;
+                let raw = reader.varint()?;
+                let value = ((raw >> 1) as i64) ^ -((raw & 1) as i64);
+                facts.push(format!(
+                    "{tag} {attribute} {}",
+                    render(&Value::from_i64(value))
+                ));
+            }
+        }
+        (reader.at == blob.len()).then_some(facts)
+    }
+
+    struct Reader<'a> {
+        blob: &'a [u8],
+        at: usize,
+    }
+
+    impl<'a> Reader<'a> {
+        fn byte(&mut self) -> Option<u8> {
+            let byte = *self.blob.get(self.at)?;
+            self.at += 1;
+            Some(byte)
+        }
+
+        fn varint(&mut self) -> Option<u64> {
+            let mut value = 0u64;
+            for shift in (0..64).step_by(7) {
+                let byte = self.byte()?;
+                value |= u64::from(byte & 0x7f).checked_shl(shift)?;
+                if byte & 0x80 == 0 {
+                    return Some(value);
+                }
+            }
+            None
+        }
+
+        fn bytes(&mut self, length: usize) -> Option<&'a [u8]> {
+            let bytes = self.blob.get(self.at..self.at.checked_add(length)?)?;
+            self.at += length;
+            Some(bytes)
+        }
+
+        fn attribute(&mut self, previous: &mut Option<&'a str>) -> Option<&'a str> {
+            let length = usize::try_from(self.varint()?).ok()?;
+            if length == 0 {
+                return *previous;
+            }
+            let attribute = std::str::from_utf8(self.bytes(length)?).ok()?;
+            *previous = Some(attribute);
+            Some(attribute)
+        }
+    }
+}
+
 fn select(connection: &Arc<Connection>, table: &str, columns: &str) -> Result<Statement, String> {
     connection
         .prepare(format!(
@@ -129,14 +299,18 @@ fn render(value: &Value) -> String {
         Value::Text(text) => format!("t:{}", text.as_str()),
         // Printable bytes as they are, so ids inside encoded records stay
         // visible to normalization.
-        Value::Blob(blob) => std::iter::once("b:".to_owned())
-            .chain(blob.iter().map(|byte| match byte {
-                0x20..=0x7e if *byte != b'\\' => char::from(*byte).to_string(),
-                _ => format!("\\x{byte:02x}"),
-            }))
-            .collect(),
+        Value::Blob(blob) => render_bytes(blob),
         other => format!("{other:?}"),
     }
+}
+
+fn render_bytes(blob: &[u8]) -> String {
+    std::iter::once("b:".to_owned())
+        .chain(blob.iter().map(|byte| match byte {
+            0x20..=0x7e if *byte != b'\\' => char::from(*byte).to_string(),
+            _ => format!("\\x{byte:02x}"),
+        }))
+        .collect()
 }
 
 fn rows(statement: &mut Statement, mut visit: impl FnMut(Vec<Value>)) -> Result<(), String> {
