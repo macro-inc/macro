@@ -21,6 +21,28 @@ export OLD_COMMIT="${OLD_COMMIT:-a03c481f726}"
 PROPS="$ROOT/apps/web/src/lib/queries/properties"
 MODES=("${@:-all}")
 
+# Every run this invocation will make, cleared before anything else can fail:
+# a mode that never starts reads INCOMPLETE, never as an earlier pass.
+MUTANTS=(drop-row swap-order alter-field stale-cache skip-live-update)
+outs_for() {
+  case "$1" in
+    smoke) echo smoke ;;
+    quiet) echo seed-1 ;;
+    load) echo seed-2-load ;;
+    seed4) echo seed-4 ;;
+    control) echo control ;;
+    mutants) echo mutant-baseline; for m in "${MUTANTS[@]}"; do echo "mutant-$m"; done ;;
+    all) for m in mutants quiet load seed4 control; do outs_for "$m"; done ;;
+    *) echo "usage: $0 [all | smoke | quiet | load | seed4 | control | mutants ...]" >&2; return 2 ;;
+  esac
+}
+for m in "${MODES[@]}"; do
+  dirs=$(outs_for "$m") || exit 2
+  for d in $dirs; do
+    mkdir -p "$HERE/out/$d" && rm -f "$HERE/out/$d/results.json" && date -Is > "$HERE/out/$d/started"
+  done
+done
+
 # The base commit's query modules, served beside the head's; the OLD side of
 # the harness swaps them in by URL. Each carries a marker the runner reads
 # back from the page, so a swap that did not happen fails the run. Removed
@@ -64,7 +86,7 @@ run_mode() {
       SEED=1 SEQS=2 LANES=1 SWEEP=0 VOLUME=0 OUT="$HERE/out/mutant-baseline" node_run mutant-baseline
       # run.mjs also refuses a baseline without a passing verdict
       if [[ " ${FAILED[*]} " == *" mutant-baseline "* ]]; then echo "baseline failed; mutants not run" >&2; return; fi
-      for m in drop-row swap-order alter-field stale-cache skip-live-update; do
+      for m in "${MUTANTS[@]}"; do
         SEED=1 SEQS=2 LANES=1 SWEEP=0 VOLUME=0 MUTANT=$m BASELINE="$HERE/out/mutant-baseline/results.json" \
           OUT="$HERE/out/mutant-$m" node_run "mutant-$m"
       done ;;

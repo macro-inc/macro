@@ -1256,6 +1256,8 @@ async function takeSkipped(...pages) {
 
 // One write, through the real mutation hooks: NEW performs it against the
 // server, OLD replays NEW's recorded requests and responses.
+// An option's value as written: the API returns `{ type, value }`.
+const optValue = (v) => (v && typeof v === 'object' ? v.value : v);
 async function write(pair, actor, name, vars) {
   const acct = pair[actor];
   if (CONFIG.mutant === 'stale-cache') await ev(acct.neu, 'mutant.takeCache');
@@ -1296,7 +1298,10 @@ async function write(pair, actor, name, vars) {
   // created or changed (fetchPropertyDefinitionWithOptions), OLD vs NEW.
   const defId = name === 'createDef' ? (n.ok ? (n.value?.id ?? n.value?.definition?.id) : null) : (vars?.propertyDefinitionId ?? null);
   if (defId) (pair.imperative ??= []).push({ actor, id: defId });
-  return { n };
+  // Both sides refused it on a server answer (every request answered with a
+  // status, replayed one for one): a refusal, not a transport failure.
+  const refused = !n.ok && !o.ok && replay.requests > 0 && !replay.unused.length && !replay.mismatches.length && acct.neu.tap.rec.every((x) => !x.failed && x.status >= 400);
+  return { n, refused };
 }
 const canonDefWithOptions = (x) => (x && Array.isArray(x.property_options) ? { ...x, property_options: canonOptions(x.property_options) } : x);
 async function compareImperative(acct, id) {
@@ -1391,7 +1396,9 @@ const res = await write(pair, actor, 'createDef', { body });
         : { type: 'select_string', option: { value: gen.optString(), display_order: gen.displayOrder(), ...(g.chance(0.05) ? { color: g.pick(TAG_COLORS) } : {}) } };
 const res = await write(pair, actor, 'addOption', { propertyDefinitionId: d.definition.id, body });
       // a refused write to a system definition is coverage too: both sides must refuse it alike
-      cover('option write target', `${d.definition.is_system ? 'system definition' : 'own definition'}${res?.n?.ok ? '' : ' (refused)'}`);
+      const target = d.definition.is_system ? 'system definition' : 'own definition';
+      if (res?.n?.ok) cover('option write target', target);
+      else if (res?.refused) cover('option write target', `${target} (refused)`);
       return res;
     }
     case 'updateOption':
@@ -1405,7 +1412,7 @@ const res = await write(pair, actor, 'addOption', { propertyDefinitionId: d.defi
       if (g.chance(0.5)) body.display_order = gen.displayOrder();
       if (defType(d) !== 'SELECT_NUMBER' && g.chance(0.6)) body.value = gen.optString();
 const res = await write(pair, actor, 'updateOption', { propertyDefinitionId: d.definition.id, optionId: o.id, body });
-      if (res?.n?.ok && body.value !== undefined && body.value !== o.value) cover('odd value', 'rename option');
+      if (res?.n?.ok && body.value !== undefined && body.value !== optValue(o.value)) cover('odd value', 'rename option');
       return res;
     }
     case 'ensureTagSet':
@@ -1426,7 +1433,7 @@ const res = await write(pair, actor, 'createTag', { scope, value: gen.optString(
       if (g.chance(0.5)) body.color = g.chance(0.95) ? g.pick(TAG_COLORS) : null;
       if (g.chance(0.3)) body.display_order = gen.displayOrder();
 const res = await write(pair, actor, 'updateTag', { propertyDefinitionId: t.propertyDefinitionId, optionId: t.id, body });
-      if (res?.n?.ok && body.value !== undefined && body.value !== t.value) cover('odd value', 'rename tag');
+      if (res?.n?.ok && body.value !== undefined && body.value !== optValue(t.value)) cover('odd value', 'rename tag');
       return res;
     }
     case 'promoteTag': {

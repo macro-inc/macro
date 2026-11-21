@@ -63,8 +63,9 @@ not run the base commit's modules, or a mutant was not applied or not caught.
   like Rust's `to_lowercase` (JavaScript's `toLowerCase`), plain definitions,
   options and tag options like PostgreSQL's `LOWER` under its libc collation
   (one code point at a time, so `İ` lowers to `i`). At the end the run asks
-  PostgreSQL to lower every string a SQL-sorted key was built from and fails if
-  any differs from the harness's mapping. Timestamps normalize to a NUL-prefixed instant, so no literal can
+  PostgreSQL to lower the strings SQL-sorted keys were built from (up to
+  200,000 distinct ones, NUL-free) and fails if any differs from the harness's
+  mapping. Timestamps normalize to a NUL-prefixed instant, so no literal can
   pass for one. `error-shape` (the same retry decision, a different error
   object; the retry decision is the app's own, computed in the page with
   `thrownResultErrorHasCode`; equality compares the whole message, and each
@@ -102,8 +103,8 @@ not run the base commit's modules, or a mutant was not applied or not caught.
   against OLD.
 - `LOAD=n` adds `n` other accounts writing and reading on the server, and has
   each fuzzed account's NEW page read both catalogs in the background.
-- An uncaught page error seen on one side only is a `diff` at level
-  `page-errors`.
+- An uncaught page error seen on one fuzzed side only is a `diff` at level
+  `page-errors` (a load page's errors count in `harnessErrors`).
 - `node summarize.mjs` rolls every `out/*/results.json` into `out/summary.json`
   and prints each run's commit and verdict. A run deletes its old
   `results.json` when it starts and writes `verdict` only after its final
@@ -132,7 +133,8 @@ The counts measure work attempted, not successes, and are not interchangeable:
   (created type and scope, unicode and long names, tag scope, renames, team
   events, SQL renames and null colors) are credited only when the write
   succeeded and changed that value; an option write to a system definition is
-  credited as `(refused)` when refused, as both sides must refuse it alike.
+  credited as `(refused)` when both sides refused it on a server answer
+  replayed one for one.
   Read dimensions count reads made, not reads that succeeded.
 - `ops`: for a hook write, NEW's outcome per operation and actor (OLD's replay
   is checked at `write-replay`); for an out-of-band SQL write, the statement's

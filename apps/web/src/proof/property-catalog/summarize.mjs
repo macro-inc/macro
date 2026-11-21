@@ -15,7 +15,14 @@ for (const dir of fs.readdirSync(OUT).sort()) {
     if (fs.existsSync(path.join(OUT, dir, 'started'))) console.log(`${dir} [INCOMPLETE]: no results written`);
     continue;
   }
-  const r = JSON.parse(fs.readFileSync(file, 'utf8'));
+  let r;
+  try {
+    r = JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch {
+    // removed by a run starting in this directory, between the check and the read
+    console.log(`${dir} [INCOMPLETE]: results unreadable`);
+    continue;
+  }
   // level families: raw (by phase), write replay, imperative, mutation results, readers, callers, staleness
   const family = (level) => {
     if (level.startsWith('raw:')) return `raw read cases (${level.slice(4)})`;
