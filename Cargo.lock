@@ -21254,6 +21254,7 @@ dependencies = [
  "email_service_client",
  "entity_access",
  "feature_flags",
+ "futures",
  "harness_id",
  "hosted_runtimes",
  "macro_authorization",
