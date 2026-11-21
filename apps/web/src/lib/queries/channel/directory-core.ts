@@ -172,6 +172,36 @@ export type DirectoryDifference = {
 // REST lists a bot among the participants under this prefix.
 export const BOT_PRINCIPAL_PREFIX = 'bot|';
 
+const RFC3339_INSTANT = /^(.+T\d{2}:\d{2}:\d{2})(?:\.(\d+))?(Z|[+-]\d{2}:\d{2})$/i;
+
+/** Microseconds since the epoch, keeping the microseconds the server sends
+ * and `Date.parse` drops: two updates in one millisecond still order. */
+export function instantMicros(value: string): number {
+  const parts = RFC3339_INSTANT.exec(value);
+  if (!parts) return Date.parse(value) * 1000;
+  const [, seconds, fraction = '', zone] = parts;
+  return (
+    Date.parse(`${seconds}${zone}`) * 1000 +
+    Number(fraction.slice(0, 6).padEnd(6, '0'))
+  );
+}
+
+/** Channels in the REST channel list's order, newest update first and then
+ * by id, descending (`updated_at DESC, id DESC`), so a reader that keeps
+ * the order of ties (a sort by name, the first match) picks as it did. */
+export function inDirectoryOrder(
+  channels: readonly DirectoryChannel[]
+): DirectoryChannel[] {
+  return channels
+    .map((channel) => ({ channel, at: instantMicros(channel.updatedAt) }))
+    .sort((a, b) => {
+      if (a.at !== b.at) return b.at - a.at;
+      if (a.channel.id === b.channel.id) return 0;
+      return a.channel.id < b.channel.id ? 1 : -1;
+    })
+    .map(({ channel }) => channel);
+}
+
 function sameInstant(
   left: string | null | undefined,
   right: string | null | undefined

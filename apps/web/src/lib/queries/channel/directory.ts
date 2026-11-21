@@ -87,7 +87,11 @@ import {
   type RecordVersion,
   sameRecordVersion,
 } from './directory-cache';
-import { type DirectoryChannel, toDirectoryChannel } from './directory-core';
+import {
+  type DirectoryChannel,
+  inDirectoryOrder,
+  toDirectoryChannel,
+} from './directory-core';
 import {
   CHANNEL_DIRECTORY_CHECKPOINT_ID,
   CHANNEL_DIRECTORY_INPUT,
@@ -135,7 +139,7 @@ export type ChannelLookup =
 export type ChannelDirectoryState = {
   /** Records with every directory field, joined or not, by id. */
   records: Readonly<Record<string, DirectoryChannel>>;
-  /** The channels the viewer joined. */
+  /** The channels the viewer joined, in the REST list's order. */
   joined: readonly DirectoryChannel[];
   /** Cached channel records that lack a directory field, by id. */
   incomplete: Readonly<Record<string, true>>;
@@ -149,7 +153,8 @@ export type ByIdOutcome = 'returned' | 'absent' | 'failed';
 
 /** What the app reads: the joined channels and lookups of one channel. */
 export type ChannelDirectory = {
-  /** The channels the viewer joined; partial until `complete`. */
+  /** The channels the viewer joined, newest update first as the REST list
+   * ordered them; partial until `complete`. */
   channels: Accessor<readonly DirectoryChannel[]>;
   /** Whether `channels` lists every joined channel and no other. After its
    * lane's pass the cached directory waits for the by-id read of each cached
@@ -259,7 +264,7 @@ export function channelDirectoryState(
   }
   const incomplete: Record<string, true> = {};
   for (const id of incompleteIds) incomplete[id] = true;
-  return { records, joined, incomplete, complete };
+  return { records, joined: inDirectoryOrder(joined), incomplete, complete };
 }
 
 /**
@@ -1642,7 +1647,7 @@ export function createCachedChannelDirectory(
     },
     async readComplete() {
       if (untrack(proven)) return untrack(view).joined;
-      return views.applyList(await deps.fetchAll());
+      return inDirectoryOrder(views.applyList(await deps.fetchAll()));
     },
     failed: () => {
       const { state: current, fallback: status } = shown();
@@ -1721,8 +1726,10 @@ export function createMemoryChannelDirectory(
         deps.queryClient,
         options()
       );
-      return views.applyList(
-        channels.filter(({ isParticipant }) => isParticipant)
+      return inDirectoryOrder(
+        views.applyList(
+          channels.filter(({ isParticipant }) => isParticipant)
+        )
       );
     },
     failed: () => pages.isError && !pages.isFetching,

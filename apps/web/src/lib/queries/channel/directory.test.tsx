@@ -187,8 +187,19 @@ const byName = (outcomes: Record<string, ByIdOutcome>) =>
     ])
   );
 
+/** The channels' fixture names, sorted: these tests check which channels a
+ * directory lists; `inDirectoryOrder`'s own tests check their order. */
 const ids = (channels: readonly DirectoryChannel[]) =>
+  channels.map(({ id }) => channelName(id)).sort();
+
+/** The channels' fixture names in the order the directory lists them. */
+const inOrder = (channels: readonly DirectoryChannel[]) =>
   channels.map(({ id }) => channelName(id));
+
+// Three updates, oldest first, for the order tests.
+const UPDATED_OLD = '2026-11-01T00:00:00+00:00';
+const UPDATED_MID = '2026-11-02T00:00:00+00:00';
+const UPDATED_NEW = '2026-11-03T00:00:00+00:00';
 
 /** The view a lookup shows, or its status when it found nothing. */
 function viewedAt(directory: ChannelDirectory, name: string) {
@@ -494,6 +505,19 @@ describe('staticChannelDirectory', () => {
     expect(directory.lookup(channelUuid('b')).status).toBe('loaded');
     expect(ids(await directory.readComplete())).toEqual(['a', 'b']);
   });
+
+  it('lists its channels newest update first', () => {
+    const directory = createRoot((dispose) => {
+      disposers.push(dispose);
+      return staticChannelDirectory(() => [
+        directoryChannel('old', { updatedAt: UPDATED_OLD }),
+        directoryChannel('new', { updatedAt: UPDATED_NEW }),
+        directoryChannel('mid', { updatedAt: UPDATED_MID }),
+      ]);
+    });
+
+    expect(inOrder(directory.channels())).toEqual(['new', 'mid', 'old']);
+  });
 });
 
 /** Mounts the in-memory directory under a query client that never retries. */
@@ -575,6 +599,23 @@ describe('in-memory channel directory', () => {
     const directory = mountMemoryDirectory(network);
 
     expect(ids(await directory.readComplete())).toEqual(['a', 'b', 'c']);
+  });
+
+  it('lists and reads every channel newest update first, across pages', async () => {
+    const network = fakeNetwork([
+      channelRecord('old', { updatedAt: UPDATED_OLD }),
+      channelRecord('new', { updatedAt: UPDATED_NEW }),
+      channelRecord('mid', { updatedAt: UPDATED_MID }),
+    ]);
+    const directory = mountMemoryDirectory(network);
+
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    expect(inOrder(directory.channels())).toEqual(['new', 'mid', 'old']);
+    expect(inOrder(await directory.readComplete())).toEqual([
+      'new',
+      'mid',
+      'old',
+    ]);
   });
 
   it('shows a recorded view over the by-id read and the pages read before it', async () => {
@@ -792,6 +833,22 @@ describe('cached channel directory', () => {
     completeLane('g1');
     await vi.waitFor(() => expect(directory.complete()).toBe(true));
     expect(directory.failed()).toBe(false);
+  });
+
+  it('lists the cached channels newest update first', async () => {
+    const { cache, directory } = mountCachedDirectory([]);
+    cache.put(channelRecord('old', { updatedAt: UPDATED_OLD }));
+    cache.put(channelRecord('new', { updatedAt: UPDATED_NEW }));
+    cache.put(channelRecord('mid', { updatedAt: UPDATED_MID }));
+    completeLane('g1');
+
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    expect(inOrder(directory.channels())).toEqual(['new', 'mid', 'old']);
+    expect(inOrder(await directory.readComplete())).toEqual([
+      'new',
+      'mid',
+      'old',
+    ]);
   });
 
   it('never calls a scan complete that started before the lane finished', async () => {
@@ -1222,7 +1279,7 @@ describe('cached channel directory', () => {
     await vi.waitFor(() => expect(directory.complete()).toBe(true));
     expect(pageAll).toHaveBeenCalledOnce();
     // Unchanged since the network read them, the cached rows are older.
-    expect(directory.channels().map(({ name }) => name)).toEqual([
+    expect(directory.channels().map(({ name }) => name).sort()).toEqual([
       'channel a',
       'channel b',
     ]);
@@ -1278,7 +1335,7 @@ describe('cached channel directory', () => {
     cache.records.delete(`GraphqlSoupChannel:${channelUuid('joined')}`);
     reopen();
     await vi.waitFor(() =>
-      expect(directory.channels().map(({ name }) => name)).toEqual(['renamed'])
+      expect(directory.channels().map(({ name }) => name).sort()).toEqual(['renamed'])
     );
     expect(ids(await directory.readComplete())).toEqual(['kept']);
   });
@@ -1401,7 +1458,7 @@ describe('cached channel directory', () => {
     expect(directory.complete()).toBe(false);
     release();
     await vi.waitFor(() => expect(directory.complete()).toBe(true));
-    expect(directory.channels().map(({ name }) => name)).toEqual([
+    expect(directory.channels().map(({ name }) => name).sort()).toEqual([
       'channel kept',
       'rejoined',
     ]);
@@ -1449,15 +1506,15 @@ describe('cached channel directory', () => {
     });
     reopen();
     await vi.waitFor(() =>
-      expect(directory.channels().map(({ name }) => name)).toEqual(['renamed'])
+      expect(directory.channels().map(({ name }) => name).sort()).toEqual(['renamed'])
     );
     release();
 
     await vi.waitFor(() => expect(hydrate).toHaveBeenCalledTimes(2));
     await vi.waitFor(() => expect(directory.complete()).toBe(true));
-    expect(directory.channels().map(({ name }) => name)).toEqual([
-      'renamed',
+    expect(directory.channels().map(({ name }) => name).sort()).toEqual([
       'rejoined',
+      'renamed',
     ]);
   });
 

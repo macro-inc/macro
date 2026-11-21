@@ -3,8 +3,11 @@ import { describe, expect, it } from 'vitest';
 import {
   compareChannelDirectory,
   countDirectoryDifferences,
+  inDirectoryOrder,
+  instantMicros,
   toDirectoryChannel,
 } from './directory-core';
+import { directoryChannel } from './tests/directory-channel';
 import { channelRecord, restChannel } from './tests/directory-fixtures';
 
 const message = {
@@ -198,5 +201,55 @@ describe('channel directory comparison', () => {
         ({ kind }) => kind
       )
     ).toEqual(['participants']);
+  });
+});
+
+describe('inDirectoryOrder', () => {
+  const at = (id: string, updatedAt: string) =>
+    directoryChannel(id, { updatedAt });
+  const order = (channels: Parameters<typeof inDirectoryOrder>[0]) =>
+    inDirectoryOrder(channels).map(({ id }) => id);
+
+  it('lists the newest update first, as the REST channel list does', () => {
+    expect(
+      order([
+        at('a', '2026-11-01T00:00:00+00:00'),
+        at('b', '2026-11-03T00:00:00+00:00'),
+        at('c', '2026-11-02T00:00:00+00:00'),
+      ])
+    ).toEqual(['b', 'c', 'a']);
+  });
+
+  it('breaks a tie by id, descending', () => {
+    const tie = '2026-11-01T00:00:00+00:00';
+    expect(
+      order([
+        at('01a1f7a8-0000-7000-8000-000000000001', tie),
+        at('01a1f7a8-0000-7000-8000-000000000003', tie),
+        at('01a1f7a8-0000-7000-8000-000000000002', tie),
+      ])
+    ).toEqual([
+      '01a1f7a8-0000-7000-8000-000000000003',
+      '01a1f7a8-0000-7000-8000-000000000002',
+      '01a1f7a8-0000-7000-8000-000000000001',
+    ]);
+  });
+
+  it('orders updates within one millisecond by their microseconds', () => {
+    expect(
+      order([
+        at('a', '2026-11-20T06:33:17.159544+00:00'),
+        at('b', '2026-11-20T06:33:17.159911+00:00'),
+      ])
+    ).toEqual(['b', 'a']);
+  });
+
+  it('compares instants, whatever offset they are written in', () => {
+    expect(instantMicros('2026-11-20T06:33:17.159544Z')).toBe(
+      instantMicros('2026-11-20T08:33:17.159544+02:00')
+    );
+    expect(instantMicros('2026-11-20T06:33:17Z')).toBe(
+      Date.parse('2026-11-20T06:33:17Z') * 1000
+    );
   });
 });
