@@ -197,10 +197,12 @@ fn idle_checkpoints() -> bool {
     std::env::var_os("CACHE_BENCH_IDLE_CHECKPOINT").is_some()
 }
 
+/// Opens without resetting: a database a reused run cannot open (another
+/// build's format) fails the run instead of measuring an empty cache.
 fn open(path: &Path) -> EngineHandle {
     let storage = cache_turso::TursoFileDatabase::new(path)
         .unwrap()
-        .open_or_reset(SCOPE)
+        .open(SCOPE)
         .unwrap();
     EngineHandle::with_schema(storage, None, cache_core::meta::bundled_schema())
 }
