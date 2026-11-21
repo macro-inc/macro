@@ -452,6 +452,31 @@ fn keys(result: &serde_json::Value) -> Vec<String> {
         .unwrap_or_default()
 }
 
+/// `CACHE_BENCH_READ_GAP_MS` waits a random time before each read
+/// (exponential, with that mean), so reads arrive at moments independent of
+/// the engine's work, as a person's do, instead of each right after the
+/// last. Reads run on the bench's own thread, so the wait never holds up
+/// the background hydrates on the async runtime.
+fn read_gap() {
+    static STATE: std::sync::atomic::AtomicU64 =
+        std::sync::atomic::AtomicU64::new(0x9E37_79B9_7F4A_7C15);
+    let Some(mean) = std::env::var("CACHE_BENCH_READ_GAP_MS")
+        .ok()
+        .and_then(|value| value.parse::<f64>().ok())
+    else {
+        return;
+    };
+    let mut x = STATE.load(Ordering::Relaxed);
+    x ^= x << 13;
+    x ^= x >> 7;
+    x ^= x << 17;
+    STATE.store(x, Ordering::Relaxed);
+    let uniform = ((x >> 11) as f64 + 0.5) / (1u64 << 53) as f64;
+    std::thread::sleep(std::time::Duration::from_secs_f64(
+        -uniform.ln() * mean / 1000.0,
+    ));
+}
+
 async fn read_pass(
     handle: &EngineHandle,
     docs: &BTreeMap<String, String>,
@@ -460,6 +485,7 @@ async fn read_pass(
     samples: &mut Samples,
 ) -> serde_json::Value {
     for (tab, request) in mail_tabs() {
+        read_gap();
         let started = Mark::now();
         let result = handle
             .entity_filter(serde_json::from_value(request).unwrap())
@@ -471,6 +497,7 @@ async fn read_pass(
     }
     let mail_rows = &docs["fragment:MailItemFields"];
     let soup_rows = &docs["fragment:SoupItemFields"];
+    read_gap();
     let started = Mark::now();
     let inbox = serde_json::to_value(
         handle
@@ -480,6 +507,7 @@ async fn read_pass(
     )
     .unwrap();
     samples.record("mail.inbox.filter", started);
+    read_gap();
     let started = Mark::now();
     handle
         .read_records_by_keys(mail_rows.clone(), "MailItemFields".into(), keys(&inbox))
@@ -487,6 +515,7 @@ async fn read_pass(
         .unwrap();
     samples.record("mail.inbox.rows", started);
     if let Some(cursor) = inbox.get("nextCursor").filter(|cursor| !cursor.is_null()) {
+        read_gap();
         let started = Mark::now();
         let next = serde_json::to_value(
             handle
@@ -496,6 +525,7 @@ async fn read_pass(
         )
         .unwrap();
         samples.record("mail.inbox.page2.filter", started);
+        read_gap();
         let started = Mark::now();
         handle
             .read_records_by_keys(mail_rows.clone(), "MailItemFields".into(), keys(&next))
@@ -503,6 +533,7 @@ async fn read_pass(
             .unwrap();
         samples.record("mail.inbox.page2.rows", started);
     }
+    read_gap();
     let started = Mark::now();
     let all = serde_json::to_value(
         handle
@@ -512,16 +543,19 @@ async fn read_pass(
     )
     .unwrap();
     samples.record("mail.all.filter", started);
+    read_gap();
     let started = Mark::now();
     handle
         .read_records_by_keys(mail_rows.clone(), "MailItemFields".into(), keys(&all))
         .await
         .unwrap();
     samples.record("mail.all.rows", started);
+    read_gap();
     let started = Mark::now();
     let core = serde_json::to_value(handle.entity_filter(core_args(50)).await.unwrap()).unwrap();
     samples.record("soup.core.filter", started);
     if matches!(core["kind"].as_str(), Some("complete" | "reconciled")) {
+        read_gap();
         let started = Mark::now();
         handle
             .read_records_by_keys(soup_rows.clone(), "SoupItemFields".into(), keys(&core))
@@ -529,6 +563,7 @@ async fn read_pass(
             .unwrap();
         samples.record("soup.core.rows", started);
     }
+    read_gap();
     let started = Mark::now();
     handle
         .read(
@@ -542,6 +577,7 @@ async fn read_pass(
         .unwrap();
     samples.record("soup.home.readQuery", started);
     for thread in threads {
+        read_gap();
         let started = Mark::now();
         let variables = serde_json::from_value(
             serde_json::json!({ "threadId": thread, "offset": 0, "limit": 20 }),
@@ -559,10 +595,12 @@ async fn read_pass(
             .unwrap();
         samples.record("thread.readQuery", started);
     }
+    read_gap();
     let started = Mark::now();
     handle.search(search("")).await.unwrap();
     samples.record("search.empty", started);
     for query in ["pro", "project update", "zzqx"] {
+        read_gap();
         let started = Mark::now();
         handle.search(search(query)).await.unwrap();
         samples.record("search.typed", started);
