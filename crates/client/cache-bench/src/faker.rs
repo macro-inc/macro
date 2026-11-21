@@ -252,7 +252,10 @@ impl Faker {
             Type::Named(inner) => {
                 // The planned focus is always generated. The roll still happens so the
                 // rest of the response keeps the same bytes.
-                if !in_list && self.null_chance(inner, name, rng) && !self.may_hold_focus(inner, plan) {
+                if !in_list
+                    && self.null_chance(inner, name, rng)
+                    && !self.may_hold_focus(inner, plan)
+                {
                     return Value::Null;
                 }
                 self.named(document, parent, inner, name, sets, ctx, rng, plan)
