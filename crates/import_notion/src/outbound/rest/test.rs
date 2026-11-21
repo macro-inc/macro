@@ -855,13 +855,13 @@ async fn incomplete_view_lists_are_errors_and_view_reads_retry_and_preserve_acce
         client
             .list_views(&ViewScope::Database(id.clone()), None)
             .await,
-        Err(NotionError::Decode(_))
+        Err(NotionError::Upstream { status: 503, .. })
     ));
     assert!(matches!(
         client
             .list_views(&ViewScope::DataSource(id.clone()), None)
             .await,
-        Err(NotionError::Decode(_))
+        Err(NotionError::Upstream { status: 503, .. })
     ));
     assert!(matches!(
         client.retrieve_view(&id).await,

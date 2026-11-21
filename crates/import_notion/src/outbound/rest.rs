@@ -434,9 +434,11 @@ impl<Transport: NotionTransport> NotionApi for NotionRestClient<Transport> {
             status.get("type").and_then(serde_json::Value::as_str) != Some("complete")
         });
         if incomplete || (list.has_more && list.next_cursor.is_none()) {
-            return Err(NotionError::Decode(
-                "view list is incomplete or missing its next cursor".to_owned(),
-            ));
+            return Err(NotionError::Upstream {
+                status: 503,
+                body: "view list is incomplete or missing its next cursor; retry the read"
+                    .to_owned(),
+            });
         }
         Ok(Paged {
             results: list.results.into_iter().map(|view| view.id).collect(),
