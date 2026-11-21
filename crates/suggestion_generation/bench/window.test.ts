@@ -221,6 +221,13 @@ describe('workListOf', () => {
     expect(workListOf([{ direction: 'to_server', content: { type: 'event', event: 'acp_ready' } }, prompt(list)])).toEqual(list);
   });
 
+  test('reads a list in a fenced block as written, escapes and all', () => {
+    const odd = { ...list, streams: [{ ...list.streams[0], name: 'Orders & returns', what: 'Pay INV\\_7 by "Friday"' }] };
+    const fenced = `Draft routines.\n\nThe streams of work a step found in the user's last 30 days of mail, those they would most regret missing first:\n<untrusted>\n\n\`\`\`json\n${JSON.stringify(odd).replace(/&/g, '\\u0026')}\n\`\`\`\n\n</untrusted>`;
+    const row = { direction: 'to_runtime', created_at: '2026-11-20 10:00:00+00', content: { type: 'acp', method: 'session/prompt', params: { prompt: [{ type: 'text', text: fenced }] } } };
+    expect(workListOf([row])).toEqual(odd);
+  });
+
   test('reads the earliest brief, whatever order the rows came in', () => {
     const retried = { ...list, person: 'Retried' };
     expect(workListOf([prompt(retried, '2026-11-20 10:05:00+00'), prompt(list, '2026-11-20 10:00:00+00')])).toEqual(list);

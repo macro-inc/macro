@@ -254,18 +254,20 @@ export function unescapeMarkdown(text: string): string {
  * line with `WORK_LIST_MARK`, outside any `<untrusted>` block, and the list's
  * block follows that line. The mark inside a block is mail (a subject, say),
  * and inside a line it is quoted (a dismissed routine's name): neither is the
- * list.
+ * list. The block holds the list in a fenced `json` block, which the
+ * harness's Markdown round trip leaves as written, or (in briefs before the
+ * fence) bare, with the round trip's escapes to undo.
  */
 function listIn(row: TranscriptRow): WorkList | undefined {
   for (const text of strings(row.content?.params)) {
     const spans = untrustedSpans(text);
     const at = [...text.matchAll(LINE_MARK)].map((m) => m.index + m[1].length).find((start) => !spans.some(([from, to]) => start > from && start < to));
     if (at === undefined) continue;
-    const block = /^[^\n]*\n<untrusted>\n([\s\S]*?)\n<\/untrusted>/.exec(text.slice(at));
+    const block = /^[^\n]*\n<untrusted>\n(?:\n```json\n([\s\S]*?)\n```\n\n|([\s\S]*?)\n)<\/untrusted>/.exec(text.slice(at));
     if (!block) throw new Error(`a brief says it carries a work list but has no <untrusted> block after it`);
     let list: unknown;
     try {
-      list = JSON.parse(unescapeMarkdown(block[1]));
+      list = JSON.parse(block[1] ?? unescapeMarkdown(block[2]));
     } catch (error) {
       throw new Error(`a brief's work list isn't JSON: ${String(error).slice(0, 200)}`);
     }

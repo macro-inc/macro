@@ -156,8 +156,9 @@ finding no list, the run's reading stands (its list, its error, or none
 read). Where both transcripts are gone, or the one found holds no prompt,
 the run's reading stands too, and a run with neither a list nor an error
 has an unknown list. The harness sends a brief to its
-runtime as Markdown, which backslash-escapes characters such as `_`; the
-bench undoes those escapes. A brief that says it carries a list (the
+runtime as Markdown, which backslash-escapes characters such as `_` outside
+code; the bench reads a list in a fenced `json` block as written and undoes
+those escapes in a bare one (briefs before the fence). A brief that says it carries a list (the
 drafting brief's words at the start of a line, outside the mail's
 `<untrusted>` block) the bench still can't parse is that attempt's list
 error, as is an unknown list: counted as not judged, by `rescore` too, never
