@@ -625,7 +625,8 @@ On desktop, drag an app by its **Reorder <name>** handle; Up/Down on the focused
 handle also moves it. Touch devices offer move buttons. Home stays first and
 cannot be hidden. Verify that hovering within a destination row keeps the drag
 preview stable, dropping saves the order, and reopening retains it. In short
-desktop windows, the app list scrolls while More and the footer remain reachable.
+desktop windows, the rail shows only whole app buttons: apps that don't fit move
+to the top of More in rail order, and More and the footer remain reachable.
 Touch devices retain the flag-gated Reviews tab in Tasks.
 Scheduling appears in Customize sidebar only when the calendar-scheduling flag is
 on. It starts hidden in More, including for existing sidebar preferences. Enable
