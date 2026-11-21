@@ -1574,8 +1574,9 @@ async fn live_recomputes_and_write_replies_read_committed_state() {
         .unwrap();
     assert_eq!(take_reads(&harness.source), vec![CandidateRead::Committed]);
 
-    // Finding the rows to mark reads the replica, as before; the reply,
-    // sent after the write, reads what the write committed.
+    // Finding the rows to mark reads the primary too, since a live recompute
+    // may have shown them before the replica had them; the reply, sent after
+    // the write, reads what the write committed.
     harness
         .service
         .mark_seen(viewer(), unread(), vec![row(&channel(), &thread_slot())])
@@ -1583,6 +1584,101 @@ async fn live_recomputes_and_write_replies_read_committed_state() {
         .unwrap();
     assert_eq!(
         take_reads(&harness.source),
-        vec![CandidateRead::Replica, CandidateRead::Committed]
+        vec![CandidateRead::Committed, CandidateRead::Committed]
     );
+
+    let thread = row(&channel(), &thread_slot());
+    harness
+        .service
+        .mark_done(
+            viewer(),
+            vec![InboxRowTarget {
+                id: thread.clone(),
+                revision: None,
+            }],
+        )
+        .await
+        .unwrap();
+    assert_eq!(take_reads(&harness.source), vec![CandidateRead::Committed]);
+    harness
+        .service
+        .mark_notification_done(viewer(), InboxScope::default(), thread, uuid(4))
+        .await
+        .unwrap();
+    assert_eq!(
+        take_reads(&harness.source),
+        vec![CandidateRead::Committed, CandidateRead::Committed]
+    );
+}
+
+/// The inbox with the channel's group shown to the viewer by a live
+/// recompute, which reads the primary, before the replica had it.
+fn inbox_ahead_of_the_replica() -> Harness {
+    let harness = inbox();
+    harness
+        .source
+        .unreplicated
+        .lock()
+        .unwrap()
+        .push(channel().into_entity());
+    harness
+}
+
+#[tokio::test]
+async fn done_acknowledges_a_row_the_replica_has_not_caught_up_with() {
+    let harness = inbox_ahead_of_the_replica();
+    let thread = row(&channel(), &thread_slot());
+
+    let outcome = harness
+        .service
+        .mark_done(
+            viewer(),
+            vec![InboxRowTarget {
+                id: thread,
+                revision: None,
+            }],
+        )
+        .await
+        .unwrap();
+
+    let mut acknowledged = outcome.receipt.notification_ids;
+    acknowledged.sort();
+    assert_eq!(acknowledged, vec![uuid(2), uuid(3), uuid(4)]);
+}
+
+#[tokio::test]
+async fn done_on_one_notification_the_replica_has_not_caught_up_with_acknowledges_it() {
+    let harness = inbox_ahead_of_the_replica();
+    let thread = row(&channel(), &thread_slot());
+
+    let outcome = harness
+        .service
+        .mark_notification_done(viewer(), InboxScope::default(), thread, uuid(4))
+        .await
+        .unwrap();
+
+    assert_eq!(outcome.receipt.notification_ids, vec![uuid(4)]);
+}
+
+#[tokio::test]
+async fn seen_marks_a_row_the_replica_has_not_caught_up_with() {
+    let harness = inbox_ahead_of_the_replica();
+
+    harness
+        .service
+        .mark_seen(
+            viewer(),
+            InboxScope::default(),
+            vec![row(&channel(), &thread_slot())],
+        )
+        .await
+        .unwrap();
+
+    let transitions = harness.notifications.transitions.lock().unwrap().clone();
+    let [(seen, NotificationTransition::Seen)] = transitions.as_slice() else {
+        panic!("expected one seen transition, got {transitions:?}");
+    };
+    let mut seen = seen.clone();
+    seen.sort();
+    assert_eq!(seen, vec![uuid(2), uuid(3), uuid(4)]);
 }

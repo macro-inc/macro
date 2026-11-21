@@ -751,9 +751,11 @@ where
         }
         // Rows are found among every row of their group, whatever inbox the
         // caller was looking at, so done acknowledges what they observed.
+        // Read from the primary: what they observed may have come from a live
+        // recompute the replica has not caught up with.
         let groups = unique(targets.iter().map(|target| target.id.group.clone()));
         let current = self
-            .current(&viewer, &groups, CandidateRead::Replica)
+            .current(&viewer, &groups, CandidateRead::Committed)
             .await?;
 
         let rows: Vec<InboxRowId> = targets.iter().map(|target| target.id.clone()).collect();
@@ -809,8 +811,9 @@ where
         notification: Uuid,
     ) -> Result<InboxNotificationDoneOutcome<Self::Entity>, FeedError> {
         let groups = vec![row.group.clone()];
+        // From the primary, as for `mark_done`.
         let current = self
-            .current(&viewer, &groups, CandidateRead::Replica)
+            .current(&viewer, &groups, CandidateRead::Committed)
             .await?;
         let acknowledgment = match current.get(&row.group).and_then(|group| {
             let found = group.row(&row)?;
@@ -1092,8 +1095,10 @@ where
         if groups.is_empty() {
             return Ok(Vec::new());
         }
+        // From the primary, as for `mark_done`: a row opened from a live
+        // recompute can hold notifications the replica does not have yet.
         let current = self
-            .current(&viewer, &groups, CandidateRead::Replica)
+            .current(&viewer, &groups, CandidateRead::Committed)
             .await?;
         let notification_ids: Vec<Uuid> = rows
             .iter()

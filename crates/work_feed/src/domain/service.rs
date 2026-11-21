@@ -327,13 +327,15 @@ where
             });
         }
         // Evaluate each item in every feed's scope, whatever feed the caller
-        // was looking at, so done acknowledges what they observed.
+        // was looking at, so done acknowledges what they observed. Read from
+        // the primary: what they observed may have come from a live recompute
+        // the replica has not caught up with.
         let mut current = self
             .current(
                 &viewer,
                 &WorkFeedScope::everything(),
                 &keys,
-                CandidateRead::Replica,
+                CandidateRead::Committed,
             )
             .await?;
 

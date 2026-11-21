@@ -61,14 +61,17 @@ whose `DoneReceipt` is the undo token. Subscriptions run `FeedTriggers` through
   `new_notification_listing` and the work feed as `admits_new_notification`,
   each with its own candidate request.
 
-- `CandidateRequest::read` picks the store. Pages and pre-write checks read
-  the replica (`CandidateRead::Replica`); the feeds' recomputes (live updates,
-  and the entries undo, seen and the inbox's single-notification done return)
-  read the primary (`Committed`, through
+- `CandidateRequest::read` picks the store. Pages, unread counts and bulk
+  clears read the replica (`CandidateRead::Replica`); the feeds' recomputes
+  (live updates, and the entries undo, seen and the inbox's
+  single-notification done return) and the rows done and seen act on read
+  the primary (`Committed`, through
   `SoupCandidateSource::with_committed_reads`). Clients apply recomputed
   entries over the Soup patch that announced the change, which was hydrated
   from the primary, so entries read from a lagging replica would write the
-  state before the change back into their caches. `outbound/soup/test.rs`
+  state before the change back into their caches; and done or seen on a row
+  a recompute showed would find nothing to mark on a replica that does not
+  have it yet. `outbound/soup/test.rs`
   pins the routing with a store per read (`AttentionPages`, `ViewerInboxes`).
 - Revision, cursor and undo token JSON is a wire format clients hold across
   deploys; `models/test.rs` pins it.

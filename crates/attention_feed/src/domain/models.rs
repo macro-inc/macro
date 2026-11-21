@@ -212,13 +212,16 @@ pub struct CandidateRequest {
 /// Which store may answer a candidate read.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CandidateRead {
-    /// A replica, which can lag the primary: feed pages.
+    /// A replica, which can lag the primary: pages, unread counts and bulk
+    /// clears.
     Replica,
     /// The primary: a recompute answering a change the viewer has just been
-    /// told about, or a write the viewer just made. Its entries reach clients
-    /// that already hold the change (Soup patches are hydrated from the
-    /// primary), so entries read from a lagging replica would write the
-    /// state before the change back into their caches.
+    /// told about or a write the viewer just made, and the rows done and seen
+    /// act on. Recomputed entries reach clients that already hold the change
+    /// (Soup patches are hydrated from the primary), so entries read from a
+    /// lagging replica would write the state before the change back into
+    /// their caches; and a row a recompute showed may not be on the replica
+    /// yet, so done or seen read there would find nothing of it to mark.
     Committed,
 }
 

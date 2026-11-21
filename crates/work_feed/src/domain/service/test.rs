@@ -605,7 +605,7 @@ fn take_reads(source: &FakeSource<&'static str>) -> Vec<CandidateRead> {
 }
 
 #[tokio::test]
-async fn live_recomputes_read_committed_state_and_pages_read_the_replica() {
+async fn recomputes_and_writes_read_committed_state_and_pages_read_the_replica() {
     let harness = harness(
         vec![candidate(
             "doc",
@@ -642,7 +642,9 @@ async fn live_recomputes_read_committed_state_and_pages_read_the_replica() {
         )
         .await
         .unwrap();
-    assert_eq!(take_reads(&harness.source), vec![CandidateRead::Replica]);
+    // Done acknowledges what the viewer observed, which a live recompute may
+    // have shown them before the replica had it.
+    assert_eq!(take_reads(&harness.source), vec![CandidateRead::Committed]);
 
     // Undo's reply is a recompute of what the viewer just wrote.
     let receipt = DoneReceipt::decode(&outcome.receipt.encode()).unwrap();
@@ -652,4 +654,46 @@ async fn live_recomputes_read_committed_state_and_pages_read_the_replica() {
         .await
         .unwrap();
     assert_eq!(take_reads(&harness.source), vec![CandidateRead::Committed]);
+}
+
+#[tokio::test]
+async fn done_acknowledges_an_item_the_replica_has_not_caught_up_with() {
+    let harness = harness(
+        vec![candidate(
+            "doc",
+            entity(EntityType::Document, DOC),
+            Some(5),
+            None,
+        )],
+        vec![doc_comment(1, DOC, 0xA0, 0xA0, 5)],
+    );
+    // A live recompute, which reads the primary, showed the viewer this item
+    // before the replica had it.
+    harness
+        .source
+        .unreplicated
+        .lock()
+        .unwrap()
+        .push(entity(EntityType::Document, DOC));
+    let doc = key(entity(EntityType::Document, DOC));
+
+    let outcome = harness
+        .service
+        .mark_done(
+            viewer(),
+            vec![WorkFeedDoneTarget {
+                key: doc,
+                revision: Some(FeedRevision {
+                    attention_through: Some(at(5)),
+                }),
+            }],
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(outcome.receipt.notification_ids, vec![uuid(1)]);
+    assert_eq!(
+        harness.notifications.state_of(uuid(1)),
+        NotificationState::Done
+    );
 }
