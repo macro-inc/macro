@@ -1,4 +1,4 @@
-//! A proxied run's only way out (`Egress::Proxied`): a loopback listener,
+//! A proxied or enforced run's only way out (`Egress::Proxied`, `Egress::Enforced`): a loopback listener,
 //! one per run, that forwards each request to the SDK host it names. The
 //! child's `--allow-net` names only this listener, so the code-execution
 //! mark and trace context are set here, outside the program's realm, where

@@ -1,7 +1,8 @@
-//! What the forwarder will refuse once it enforces. For now each decision is
-//! only recorded on the request's span (`would_refuse`): the request is
-//! forwarded either way, so the rollout can show which programs a refusal
-//! would break before any does.
+//! What the forwarder refuses when it enforces, and what it only records
+//! when it doesn't. Each decision is recorded on the request's span
+//! (`would_refuse`); under `Egress::Proxied` the request is forwarded either
+//! way, so the rollout can show which programs a refusal would break before
+//! any does.
 
 use std::collections::HashMap;
 
@@ -57,7 +58,8 @@ impl Refusal {
 }
 
 /// Routes anyone may call that reach someone else (public booking) or fetch
-/// an outside URL (unfurl's proxy and bulk unfurl, the read-receipt pixel),
+/// an outside URL (unfurl, its proxy and bulk unfurl, the read-receipt pixel),
+/// or write into someone's database (its webhook),
 /// as `(service, method, path)` under the service's base. A scoped or dry
 /// run is refused them: they take no credential, so no signed scope holds
 /// them.
@@ -77,10 +79,13 @@ const ANONYMOUS_OUTWARD: &[(&str, &str, &str)] = &[
         "POST",
         "/scheduling/public/bookings/{id}/reschedule",
     ),
+    ("unfurl", "GET", "/unfurl"),
     ("unfurl", "GET", "/proxy"),
     ("unfurl", "POST", "/bulk"),
     ("unfurl", "POST", "/unfurl/bulk"),
     ("email", "GET", "/opens/{token}"),
+    // A database's webhook: a secret URL anyone holding it may post rows to.
+    ("storage", "POST", "/databases/webhooks/{token}"),
 ];
 
 /// What a run's forwarder holds its requests to.

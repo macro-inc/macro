@@ -199,7 +199,9 @@ fn scoped_and_dry_runs_are_refused_anonymous_outward_routes() {
             "POST",
             "/calendar/scheduling/public/bookings/b1/reschedule",
         ),
+        ("unfurl", "/unfurl", "GET", "/unfurl/unfurl"),
         ("unfurl", "/unfurl", "GET", "/unfurl/proxy"),
+        ("storage", "/dss", "POST", "/dss/databases/webhooks/secret"),
         ("unfurl", "/unfurl", "POST", "/unfurl/unfurl/bulk"),
         ("email", "/email", "GET", "/email/opens/token"),
     ] {
@@ -216,6 +218,43 @@ fn scoped_and_dry_runs_are_refused_anonymous_outward_routes() {
             "{method} {path}"
         );
     }
+}
+
+/// Every unfurl operation of the SDK fetches a URL it is given and takes no
+/// credential, so a scoped or dry run is refused each of them: a new one
+/// can't slip through unlisted.
+#[test]
+fn scoped_and_dry_runs_are_refused_every_unfurl_operation() {
+    let catalog = Catalog::of_the_sdk();
+    let mut seen = 0;
+    for (key, operation) in crate::domain::operations() {
+        if !key.starts_with("unfurl.") {
+            continue;
+        }
+        seen += 1;
+        let concrete = operation
+            .path
+            .split('/')
+            .map(|segment| {
+                if segment.starts_with('{') {
+                    "x"
+                } else {
+                    segment
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("/");
+        let path = format!("/unfurl{concrete}");
+        for policy in [SCOPED, DRY_RUN] {
+            assert_eq!(
+                decide(&catalog, "unfurl", "/unfurl", &operation.method, &path, policy, true)
+                    .refusal,
+                Some(Refusal::AnonymousOutward),
+                "{key} {policy:?}"
+            );
+        }
+    }
+    assert!(seen >= 3, "the SDK's unfurl operations: {seen}");
 }
 
 /// Every refusal tells the program what to do instead.
