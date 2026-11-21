@@ -4,7 +4,7 @@ Proof harness for moving the property catalog reads (definitions, options, tag
 sets) from REST to GraphQL. It is not product code and is not on `main`.
 
 ```sh
-apps/web/src/proof/property-catalog/run.sh all     # seed 1 quiet, seed 2 under load, seed 4 quiet, control, mutants
+apps/web/src/proof/property-catalog/run.sh all     # mutants, seed 1 quiet, seed 2 under load, seed 4 quiet, control
 apps/web/src/proof/property-catalog/run.sh control mutants   # any modes, in order
 apps/web/src/proof/property-catalog/run.sh smoke   # 1 sequence of 3 steps
 ```

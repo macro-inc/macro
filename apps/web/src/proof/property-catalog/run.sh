@@ -3,9 +3,9 @@
 #
 #   apps/web/src/proof/property-catalog/run.sh [all | smoke | quiet | load | seed4 | control | mutants ...]
 #
-# `all` runs, in order: seed 1 quiet, seed 2 under load, seed 4 quiet, the
-# old-vs-old control, and the mutants (a clean baseline, then five planted
-# faults). Several modes may be given. Exits non-zero if a run crashed, a lane
+# `all` runs, in order: the mutants (a clean baseline, then five planted
+# faults), seed 1 quiet, seed 2 under load, seed 4 quiet, and the old-vs-old
+# control. Several modes may be given. Exits non-zero if a run crashed, a lane
 # died, the OLD page did not run the base commit's modules, or a mutant was
 # not caught.
 #
@@ -64,7 +64,7 @@ run_mode() {
           OUT="$HERE/out/mutant-$m" node_run "mutant-$m"
       done ;;
     all)
-      for m in quiet load seed4 control mutants; do run_mode $m; done ;;
+      for m in mutants quiet load seed4 control; do run_mode $m; done ;;
     *) echo "usage: $0 [all | smoke | quiet | load | seed4 | control | mutants ...]" >&2; exit 2 ;;
   esac
 }
