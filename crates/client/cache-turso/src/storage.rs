@@ -770,6 +770,17 @@ fn remove_native_file(path: &Path) -> Result<(), TursoStorageError> {
     }
 }
 
+/// Pages the native connection keeps in Turso's page cache, about 31 MiB at the
+/// default 4 KiB page size.
+///
+/// Turso's native default is 2,000 pages. On a large database a typed search
+/// reads a browse index of nearly that many pages, and a Home refresh touches more, so
+/// each evicted the other's pages and read them back from the file on the next
+/// call. Clean pages past the cap are read again; dirty ones spill to the WAL,
+/// which native Turso does by default.
+#[cfg(not(target_arch = "wasm32"))]
+const NATIVE_PAGE_CACHE_PAGES: i64 = 8_000;
+
 #[cfg(not(target_arch = "wasm32"))]
 fn open_native_database(
     io: Arc<dyn IO>,
@@ -789,6 +800,16 @@ fn open_native_database(
     // each, and one filtered read can open several. The browser build always
     // keeps them in memory; the native build now does the same.
     connection.set_temp_store(TempStore::Memory);
+    if let Err(error) = connection.execute(format!("PRAGMA cache_size = {NATIVE_PAGE_CACHE_PAGES}"))
+    {
+        if connection.close().is_err() {
+            return Err(TursoStorageError::reset(
+                PhysicalResetReason::TransactionOutcomeUncertain,
+            ));
+        }
+        let error = TursoStorageError::turso(error);
+        return Err(if fresh { error } else { error.initialization() });
+    }
     let migrated = match initialize(&Db::uncached(connection.clone()), scope, fresh) {
         Ok(migrated) => migrated,
         Err(error) => {
