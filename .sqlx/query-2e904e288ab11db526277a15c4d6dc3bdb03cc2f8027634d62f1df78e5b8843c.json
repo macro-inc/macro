@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT i.install_id, i.agent_user_id, i.team_id, i.harness_id, i.generation,\n                   i.run_state, i.failure, i.delivery, i.applied_generation, i.applied_delivery,\n                   i.checkpoint, i.move_to_harness_id, i.checkpoint_started_at,\n                   i.delivered_image_id\n            FROM team_agent_installs i\n            JOIN team t ON t.id = i.team_id\n            WHERE i.checkpoint IS DISTINCT FROM 'removing'\n              AND EXISTS (\n                  SELECT 1\n                  FROM harnesses h\n                  WHERE h.id IN (i.harness_id, i.move_to_harness_id)\n                    AND (\n                        h.deleted_at IS NOT NULL\n                        OR h.owner_user_id IS NULL\n                        OR (\n                            h.owner_user_id IS DISTINCT FROM t.owner_id\n                            AND NOT EXISTS (\n                                SELECT 1 FROM team_user tu\n                                WHERE tu.user_id = h.owner_user_id\n                                  AND tu.team_id = i.team_id\n                                  AND tu.team_role IN ('owner', 'admin')\n                            )\n                        )\n                    )\n              )\n            ORDER BY i.install_id\n            LIMIT $1\n            ",
+  "query": "\n            UPDATE team_agent_installs\n            SET parked_at = COALESCE(parked_at, now()),\n                revoke_pending = TRUE,\n                checkpoint = NULL,\n                move_to_harness_id = NULL,\n                checkpoint_started_at = NULL,\n                updated_at = now()\n            WHERE agent_user_id = $1 AND checkpoint IS DISTINCT FROM 'removing'\n            RETURNING install_id, agent_user_id, team_id, harness_id, generation, run_state,\n                      failure, delivery, applied_generation, applied_delivery, checkpoint,\n                      move_to_harness_id, checkpoint_started_at, delivered_image_id, parked_at,\n                      revoke_pending\n            ",
   "describe": {
     "columns": [
       {
@@ -72,11 +72,21 @@
         "ordinal": 13,
         "name": "delivered_image_id",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "parked_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 15,
+        "name": "revoke_pending",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
       "Left": [
-        "Int8"
+        "Text"
       ]
     },
     "nullable": [
@@ -93,8 +103,10 @@
       true,
       true,
       true,
-      true
+      true,
+      true,
+      false
     ]
   },
-  "hash": "39e65c66ff304710645ae6fee9cfedd31f9f219fc39dcb1bb04bdca7b0d09fbb"
+  "hash": "2e904e288ab11db526277a15c4d6dc3bdb03cc2f8027634d62f1df78e5b8843c"
 }

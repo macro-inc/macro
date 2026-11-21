@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT install_id, agent_user_id, team_id, harness_id, generation, run_state,\n                   failure, delivery, applied_generation, applied_delivery, checkpoint,\n                      move_to_harness_id,\n                   checkpoint_started_at, delivered_image_id\n            FROM team_agent_installs\n            WHERE harness_id = $1\n            ORDER BY install_id\n            ",
+  "query": "\n            UPDATE team_agent_installs\n            SET install_id = $2,\n                harness_id = move_to_harness_id,\n                generation = generation + 1,\n                delivery = 0,\n                reported_delivery = NULL,\n                applied_generation = NULL,\n                applied_delivery = NULL,\n                run_state = 'pending',\n                failure = NULL,\n                checkpoint = NULL,\n                move_to_harness_id = NULL,\n                checkpoint_started_at = NULL,\n                parked_at = NULL,\n                revoke_pending = TRUE,\n                updated_at = now()\n            WHERE install_id = $1 AND checkpoint = 'moving'\n            RETURNING install_id, agent_user_id, team_id, harness_id, generation, run_state,\n                      failure, delivery, applied_generation, applied_delivery, checkpoint,\n                      move_to_harness_id,\n                      checkpoint_started_at, delivered_image_id, parked_at, revoke_pending\n            ",
   "describe": {
     "columns": [
       {
@@ -72,10 +72,21 @@
         "ordinal": 13,
         "name": "delivered_image_id",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "parked_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 15,
+        "name": "revoke_pending",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
       "Left": [
+        "Uuid",
         "Uuid"
       ]
     },
@@ -93,8 +104,10 @@
       true,
       true,
       true,
-      true
+      true,
+      true,
+      false
     ]
   },
-  "hash": "5bfb2965fe4993628d441b8818e61313e6a01bbb1e9a23dceb3f7fe000a6d026"
+  "hash": "ce190fc70ca14ff9fd81001c4bed24d9d99d5f44b088db627632d507789eebad"
 }

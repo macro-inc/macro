@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT install_id, agent_user_id, team_id, harness_id, generation, run_state,\n                   failure, delivery, applied_generation, applied_delivery, checkpoint,\n                   move_to_harness_id,\n                   checkpoint_started_at, delivered_image_id\n            FROM team_agent_installs\n            WHERE agent_user_id = ANY($1::TEXT[])\n            ",
+  "query": "\n            UPDATE team_agent_installs\n            SET checkpoint = $2,\n                move_to_harness_id = $3,\n                checkpoint_started_at = COALESCE(checkpoint_started_at, now()),\n                updated_at = now()\n            WHERE agent_user_id = $1\n              AND (checkpoint IS DISTINCT FROM 'removing' OR $2 = 'removing')\n            RETURNING install_id, agent_user_id, team_id, harness_id, generation, run_state,\n                      failure, delivery, applied_generation, applied_delivery, checkpoint,\n                      move_to_harness_id,\n                      checkpoint_started_at, delivered_image_id, parked_at, revoke_pending\n            ",
   "describe": {
     "columns": [
       {
@@ -72,11 +72,23 @@
         "ordinal": 13,
         "name": "delivered_image_id",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "parked_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 15,
+        "name": "revoke_pending",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
       "Left": [
-        "TextArray"
+        "Text",
+        "Text",
+        "Uuid"
       ]
     },
     "nullable": [
@@ -93,8 +105,10 @@
       true,
       true,
       true,
-      true
+      true,
+      true,
+      false
     ]
   },
-  "hash": "066e5ee3f924f2e2fc32dfe1d2dc3f22fac5d7ba27a487a1a05c613c5534c5f1"
+  "hash": "b146f6950f26b160c26171c33255f2207e3b54cea2a52f10458f887187fa6a72"
 }

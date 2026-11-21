@@ -1,0 +1,112 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT i.install_id, i.agent_user_id, i.team_id, i.harness_id, i.generation,\n                   i.run_state, i.failure, i.delivery, i.applied_generation, i.applied_delivery,\n                   i.checkpoint, i.move_to_harness_id, i.checkpoint_started_at,\n                   i.delivered_image_id, i.parked_at, i.revoke_pending\n            FROM team_agent_installs i\n            JOIN team t ON t.id = i.team_id\n            WHERE i.checkpoint IS DISTINCT FROM 'removing'\n              AND i.parked_at IS NULL\n              AND EXISTS (\n                  SELECT 1\n                  FROM harnesses h\n                  WHERE h.id IN (i.harness_id, i.move_to_harness_id)\n                    AND (\n                        h.deleted_at IS NOT NULL\n                        OR h.owner_user_id IS NULL\n                        OR (\n                            h.owner_user_id IS DISTINCT FROM t.owner_id\n                            AND NOT EXISTS (\n                                SELECT 1 FROM team_user tu\n                                WHERE tu.user_id = h.owner_user_id\n                                  AND tu.team_id = i.team_id\n                                  AND tu.team_role IN ('owner', 'admin')\n                            )\n                        )\n                    )\n              )\n            ORDER BY i.install_id\n            LIMIT $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "install_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "agent_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "harness_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "run_state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "failure",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "delivery",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 8,
+        "name": "applied_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 9,
+        "name": "applied_delivery",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 10,
+        "name": "checkpoint",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "move_to_harness_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 12,
+        "name": "checkpoint_started_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "delivered_image_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "parked_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 15,
+        "name": "revoke_pending",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "a121b4f3dbb0aec0470534acb99907151f2854919babae3c087a8372a8653df4"
+}

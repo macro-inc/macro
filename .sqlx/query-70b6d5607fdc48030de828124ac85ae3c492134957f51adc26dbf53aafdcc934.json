@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM team_agent_installs WHERE agent_user_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "70b6d5607fdc48030de828124ac85ae3c492134957f51adc26dbf53aafdcc934"
+}

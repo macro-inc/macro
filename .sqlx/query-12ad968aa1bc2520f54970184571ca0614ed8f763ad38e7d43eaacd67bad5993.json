@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT install_id, agent_user_id, team_id, harness_id, generation, run_state,\n                   failure, delivery, applied_generation, applied_delivery, checkpoint,\n                      move_to_harness_id,\n                   checkpoint_started_at, delivered_image_id\n            FROM team_agent_installs\n            WHERE install_id = $1\n            ",
+  "query": "\n            UPDATE team_agent_installs\n            SET generation = generation + 1,\n                delivery = 0,\n                reported_delivery = NULL,\n                run_state = 'pending',\n                failure = NULL,\n                updated_at = now()\n            WHERE install_id = $1\n              AND generation = $2\n              AND checkpoint IS NULL\n              AND delivered_image_id IS NOT NULL\n              AND delivered_image_id <> $3\n            RETURNING install_id, agent_user_id, team_id, harness_id, generation, run_state,\n                      failure, delivery, applied_generation, applied_delivery, checkpoint,\n                      move_to_harness_id,\n                      checkpoint_started_at, delivered_image_id, parked_at, revoke_pending\n            ",
   "describe": {
     "columns": [
       {
@@ -72,11 +72,23 @@
         "ordinal": 13,
         "name": "delivered_image_id",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "parked_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 15,
+        "name": "revoke_pending",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "Int8",
+        "Text"
       ]
     },
     "nullable": [
@@ -93,8 +105,10 @@
       true,
       true,
       true,
-      true
+      true,
+      true,
+      false
     ]
   },
-  "hash": "f77b6b7699cd2ddc521497caa2245146d152428c9d295a19d74d3879e47d9991"
+  "hash": "12ad968aa1bc2520f54970184571ca0614ed8f763ad38e7d43eaacd67bad5993"
 }
