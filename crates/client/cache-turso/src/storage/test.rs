@@ -2208,6 +2208,25 @@ fn fault_storage(io: Arc<FaultIo>) -> TursoStorage {
 }
 
 #[test]
+fn incomplete_scope_check_seeks_to_incomplete_states() {
+    let storage = TursoStorage::open_in_memory("incomplete-scope-plan").unwrap();
+    let details = driver::query(
+        &storage.connection(),
+        &format!("EXPLAIN QUERY PLAN {INCOMPLETE_SCOPE_DOCUMENT}"),
+        vec![text("soup-flat-v1"), text("document")],
+    )
+    .unwrap()
+    .into_iter()
+    .map(|row| required_text(&row, 3).unwrap())
+    .collect::<Vec<_>>();
+    assert!(
+        details.iter().any(|detail| detail
+            .contains("index_documents_scope_idx (profile=? AND partition=? AND state>?)")),
+        "{details:#?}"
+    );
+}
+
+#[test]
 fn predicate_query_plan_uses_fact_indexes_and_never_scans_record_blobs() {
     let storage = TursoStorage::open_in_memory("predicate-query-plan").unwrap();
     let token = |value| Token::new(value).unwrap();
