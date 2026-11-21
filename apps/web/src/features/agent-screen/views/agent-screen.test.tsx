@@ -345,6 +345,23 @@ describe('the screen viewer while a drive drops', () => {
 });
 
 describe('a refused Take over', () => {
+  it('stops taking over and says it did not work when the answer is a code this client does not know', async () => {
+    vi.useFakeTimers();
+    const connections: Connection[] = [];
+    const { unmount } = renderView(AgentScreen, connections);
+    await vi.advanceTimersByTimeAsync(0);
+    connections[0].handlers.onState({ ...state(true), driver: null });
+
+    fireEvent.click(screen.getByRole('button', { name: /^Take over/ }));
+    expect(screen.getByRole('button', { name: /Taking over/ })).toBeTruthy();
+    connections[0].handlers.onError({ code: 'unknown', message: 'new' });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(screen.queryByRole('button', { name: /Taking over/ })).toBeNull();
+    expect(screen.getByText('That didn’t work. Try again.')).toBeTruthy();
+    unmount();
+  });
+
   it('says the agent could not be paused, and leaves Take over to try again', async () => {
     vi.useFakeTimers();
     const connections: Connection[] = [];

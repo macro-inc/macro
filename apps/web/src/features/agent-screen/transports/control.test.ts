@@ -91,6 +91,17 @@ describe('parseServerMessage', () => {
     });
   });
 
+  it('keeps an error or an end whose code this client does not know', () => {
+    expect(
+      parseServerMessage(
+        JSON.stringify({ type: 'error', code: 'brandNew', message: 'new' })
+      )
+    ).toEqual({ type: 'error', code: 'unknown', message: 'new' });
+    expect(
+      parseServerMessage(JSON.stringify({ type: 'ended', reason: 'brandNew' }))
+    ).toEqual({ type: 'ended', reason: 'error' });
+  });
+
   it('parses the idle end and the refused take-over the server sends', () => {
     expect(
       parseServerMessage(JSON.stringify({ type: 'ended', reason: 'idle' }))

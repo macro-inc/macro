@@ -45,29 +45,40 @@ const serverMessageSchema = z.discriminatedUnion('type', [
   }),
   z.object({
     type: z.literal('error'),
-    code: z.enum([
-      'driveNotAllowed',
-      'driverBusy',
-      'notDriver',
-      'sourceUnavailable',
-      'tunnelFailed',
-      'tooManySockets',
-      'badMessage',
-      'inputFailed',
-      'agentNotPausable',
-    ]),
-    message: z.string(),
+    // A newer harness may send codes this client doesn't know: still an
+    // error, so whatever waited on the answer (Take over) stops waiting.
+    code: lenient(
+      'error.code',
+      z.enum([
+        'driveNotAllowed',
+        'driverBusy',
+        'notDriver',
+        'sourceUnavailable',
+        'tunnelFailed',
+        'tooManySockets',
+        'badMessage',
+        'inputFailed',
+        'agentNotPausable',
+      ]),
+      'unknown'
+    ),
+    message: lenient('error.message', z.string(), ''),
   }),
   z.object({
     type: z.literal('ended'),
-    reason: z.enum([
-      'stopped',
-      'computerOff',
-      'accessRevoked',
-      'shutdown',
-      'idle',
-      'error',
-    ]),
+    // An end this client doesn't know is still an end: retried like `error`.
+    reason: lenient(
+      'ended.reason',
+      z.enum([
+        'stopped',
+        'computerOff',
+        'accessRevoked',
+        'shutdown',
+        'idle',
+        'error',
+      ]),
+      'error'
+    ),
   }),
 ]);
 

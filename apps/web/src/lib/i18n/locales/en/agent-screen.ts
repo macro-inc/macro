@@ -73,6 +73,7 @@ export default {
   noticeTunnelFailed: 'Couldn’t reach the computer’s screen. Reconnecting…',
   noticeTooManySockets:
     'Too many screens are open for this computer. Close one; this view keeps trying.',
+  noticeUnknown: 'That didn’t work. Try again.',
   noticeAgentNotPausable:
     'Couldn’t pause the agent on this computer, so it can’t be taken over right now.',
 

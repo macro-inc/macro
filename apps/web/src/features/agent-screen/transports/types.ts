@@ -87,7 +87,9 @@ export type ScreenErrorCode =
    * Take over refused: the agent couldn't be paused on that computer. This
    * viewer still watches; another attempt may work.
    */
-  | 'agentNotPausable';
+  | 'agentNotPausable'
+  /** A code this client doesn't know (a newer harness). */
+  | 'unknown';
 
 export type ScreenError = { code: ScreenErrorCode; message: string };
 
