@@ -1,4 +1,4 @@
-import { Macro, gateRequests, observeRequests, sendVerbHeaders } from "@macro-inc/sdk";
+import { Macro, gateRequests, limitSearches, observeRequests, sendVerbHeaders } from "@macro-inc/sdk";
 
 // Trusted bootstrap: credentials arrive once on stdin, then user code is imported
 // dynamically so module reads are checked against the scratch-only read grant.
@@ -25,6 +25,12 @@ const NativeError = Error;
 const requestUrl = getter(Request.prototype, "url");
 const requestMethod = getter(Request.prototype, "method");
 const requestHeaders = getter(Request.prototype, "headers");
+// Forwarding changes the URL, so copy RequestInit through captured getters.
+// Passing the Request itself as options would read program-modified getters.
+const requestInitGetters = [
+  "method", "headers", "body", "redirect", "signal", "cache", "credentials",
+  "integrity", "keepalive", "mode", "referrer", "referrerPolicy",
+].map(name => [name, getter(Request.prototype, name)]);
 const setHeader = uncurry(Headers.prototype.set);
 const urlProtocol = getter(URL.prototype, "protocol");
 const urlPathname = getter(URL.prototype, "pathname");
@@ -36,7 +42,12 @@ const mapSet = uncurry(Map.prototype.set);
 const regExpExec = uncurry(RegExp.prototype.exec);
 const endsWith = uncurry(String.prototype.endsWith);
 const sliceString = uncurry(String.prototype.slice);
+const startsWith = uncurry(String.prototype.startsWith);
 const nativeFetch = globalThis.fetch.bind(globalThis);
+// Each search is heavy for the search cluster's few threads, so a program that
+// fans searches out makes every other user's search wait behind it. Four at once
+// still lets a program with dozens of searches finish inside its deadline.
+const SEARCHES_IN_FLIGHT = 4;
 // Calls of one operation that, unfinished at the deadline, read as a loop.
 const LOOP_HINT_CALLS = 50;
 function emit(frame) {
@@ -96,7 +107,7 @@ globalThis.console = {
 // The bootstrap keeps one timer for itself: the loop report before the deadline.
 const bootstrapTimeout = globalThis.setTimeout.bind(globalThis);
 const sleepBanned = (name) => function () {
-  throw new Error(`${name} is unavailable in ExecuteCode: do not sleep or poll in a program. Finish this execution, and to check back later create a routine with macro.routines.create.`);
+  throw new Error(`${name} is unavailable in ExecuteCode: Custom timers are unsupported, including Promise.race deadline guards. The host already enforces the execution deadline (30 s by default in ExecuteCode). Use bounded batches with Promise.allSettled and return successful results with any failures before the deadline. Promise.allSettled does not add a timeout. To check back later, create a routine with macro.routines.create.`);
 };
 for (const name of ["setTimeout", "setInterval", "setImmediate", "Worker"]) globalThis[name] = sleepBanned(name);
 AbortSignal.timeout = sleepBanned("AbortSignal.timeout");
@@ -175,9 +186,13 @@ try {
   });
   const traceHeaders = entries(context.traceHeaders ?? {})
     .filter(([name]) => name === "traceparent" || name === "tracestate");
+  // A proxied run reaches only its forwarder, longest service base first.
+  const forwarded = entries(context.forwarder ?? {})
+    .map(([service, local]) => [context.hosts[service].replace(/\/$/, ""), local])
+    .sort(([left], [right]) => right.length - left.length);
   // Async, so a refusal or a throw in here rejects like a failed fetch.
   globalThis.fetch = async (input, init) => {
-    const request = new NativeRequest(input, init);
+    let request = new NativeRequest(input, init);
     // Every request to an SDK origin, whatever credential it carries.
     if (setHas(destinations, destinationOf(requestUrl(request)))) {
       const headers = requestHeaders(request);
@@ -206,7 +221,21 @@ try {
         // A redirect would resend the read's method and body somewhere else.
         // No prototype, so the program can't add options through
         // `Object.prototype` (a method, or headers without the mark).
-        return nativeFetch(new NativeRequest(request, {__proto__: null, redirect: "error"}));
+        request = new NativeRequest(request, {__proto__: null, redirect: "error"});
+      }
+    }
+    for (let index = 0; index < forwarded.length; index++) {
+      const base = forwarded[index][0];
+      const local = forwarded[index][1];
+      const url = requestUrl(request);
+      if (url === base || startsWith(url, `${base}/`) || startsWith(url, `${base}?`)) {
+        const options = {__proto__: null};
+        for (let field = 0; field < requestInitGetters.length; field++) {
+          const name = requestInitGetters[field][0];
+          const read = requestInitGetters[field][1];
+          options[name] = read(request);
+        }
+        return nativeFetch(new NativeRequest(`${local}${sliceString(url, base.length)}`, options));
       }
     }
     return nativeFetch(request);
@@ -224,11 +253,12 @@ try {
     } else if (!activeRequests.delete(value.id)) return;
     emit({type: "progress", value});
   });
+  limitSearches(SEARCHES_IN_FLIGHT);
   const macro = new Macro({token: context.token, hosts: context.hosts, webAppUrl: context.webAppUrl});
   // A literal dynamic import joins Deno's initial static graph, bypassing read
   // permissions. Compute this specifier so the entire generated graph is loaded
   // at runtime and every local module read requires the scratch permission.
-  const program = new URL(unattended ? "./main.ts" : "./main.mjs", import.meta.url).href;
+  const program = new URL("./main.ts", import.meta.url).href;
   // Every request must go through the fetch above, which marks it as the
   // program's and holds back a dry run's writes. Nothing else may reach the
   // network (raw sockets, listeners, websockets), start a realm with its own
@@ -253,11 +283,37 @@ try {
   if (unattended) {
     if (typeof main !== "function") throw new Error("Export an async main(context: StepContext) function.");
     // Never the credential, hosts or trace context: only the SDK and the step's inputs.
-    value = await main({...unattended.arguments, macro});
+    const args = {...unattended.arguments, macro};
+    // A routine's entity knob arrives as its item marked `$entity`; code gets
+    // the SDK's handle for it, never the id. One call per kind, as
+    // routine_program's `EntityKind::factory` names it.
+    if (args.knobs) {
+      const handles = {
+        channel: (id) => macro.channels.byId(id),
+        document: (id) => macro.documents.byId(id),
+        project: (id) => macro.projects.byId(id),
+        database: (id) => macro.databases.byId(id),
+        user: (id) => macro.users.byId(id),
+        task: (id) => macro.tasks.byId(id),
+        email_thread: (id) => macro.email.byId(id),
+        chat: (id) => macro.chats.byId(id),
+        crm_company: (id) => macro.crm.companyById(id),
+        crm_contact: (id) => macro.crm.contactById(id),
+        initiative: (id) => macro.initiatives.byId(id),
+      };
+      args.knobs = Object.fromEntries(Object.entries(args.knobs).map(([name, knob]) => {
+        const item = knob?.$entity;
+        if (!item) return [name, knob];
+        const handle = Object.hasOwn(handles, item.type) ? handles[item.type] : undefined;
+        if (!handle) throw new Error(`Knob ${name} names a ${item.type}, which code can't use.`);
+        return [name, handle(item.id)];
+      }));
+    }
+    value = await main(args);
   } else {
     const session = context.sessionId ? macro.agentSessions.byId(context.sessionId) : undefined;
     const execution = session && context.executionId ? session.codeExecutions.byId(context.executionId) : undefined;
-    if (typeof main !== "function") throw new Error("Export an async main({macro, session, execution}) function.");
+    if (typeof main !== "function") throw new Error("Export an async main(context: CodeContext) function.");
     value = await main({...context, macro, session, execution});
   }
   if (unattended) {

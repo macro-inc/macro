@@ -89,7 +89,7 @@ function StepOutput(props: { output: unknown }) {
         {open() ? 'Hide output' : 'Show output'}
       </button>
       <Show when={open()}>
-        <pre class="max-h-64 min-w-0 overflow-auto rounded-lg border border-edge-frame bg-control px-3 py-2 font-mono text-xs leading-relaxed text-ink">
+        <pre class="max-h-64 min-w-0 select-text select-children overflow-auto rounded-lg border border-edge-frame bg-control px-3 py-2 font-mono text-xs leading-relaxed text-ink">
           <code>{outputText(props.output)}</code>
         </pre>
       </Show>
@@ -139,7 +139,9 @@ function RunStep(props: {
       </span>
       <Show when={error()}>
         {(message) => (
-          <span class="col-start-2 text-xs text-failure">{message()}</span>
+          <span class="col-start-2 select-text text-xs text-failure">
+            {message()}
+          </span>
         )}
       </Show>
       <Show
@@ -296,7 +298,7 @@ export function RunDetail(props: {
         {(message) => (
           <p
             role="alert"
-            class="flex gap-2.5 rounded-[10px] border border-failure/30 bg-failure-bg px-3 py-2.5 text-sm text-failure"
+            class="flex select-text gap-2.5 rounded-[10px] border border-failure/30 bg-failure-bg px-3 py-2.5 text-sm text-failure"
           >
             <XIcon class="mt-0.5 size-3.5 shrink-0" />
             {message()}

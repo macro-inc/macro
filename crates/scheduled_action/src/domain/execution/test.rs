@@ -233,7 +233,7 @@ impl ScheduledActionRepo for Repo {
     async fn set_appearance(
         &self,
         _change: crate::domain::appearance::ChangeAppearance,
-    ) -> Result<Option<model_entity::EntityAppearance>> {
+    ) -> Result<crate::domain::appearance::AppearanceSet> {
         anyhow::bail!("appearance writes are not supported by this execution-only adapter")
     }
 

@@ -104,7 +104,6 @@ export default {
     close: 'Cerrar',
     delete: 'Eliminar',
     rename: 'Cambiar nombre',
-    more: 'Más',
     search: 'Buscar',
     settings: 'Configuración',
   },
@@ -527,6 +526,11 @@ export default {
       other: '{{count}} elementos eliminados',
     },
     toastDeleteFailed: 'No se pudo eliminar',
+    toastPropertySet: {
+      one: '{{property}}: valor establecido',
+      many: '{{property}}: valor establecido para {{count}} de elementos',
+      other: '{{property}}: valor establecido para {{count}} elementos',
+    },
     toastAddedToFavorites: 'Añadido a favoritos',
     toastAddedCountToFavorites: {
       one: '{{count}} elemento añadido a favoritos',
@@ -717,8 +721,6 @@ export default {
     create: 'Crear',
     getMobileApp: 'Obtener la app móvil',
     signedInAs: 'Sesión iniciada como {{name}}',
-    commandMenu: 'Menú de comandos',
-    searchEverything: 'Buscar en todo',
     customizeSidebar: 'Personalizar barra lateral',
     customizeSidebarDescription:
       'Elige qué apps aparecen en la barra lateral y arrástralas para reordenarlas. Inicio siempre aparece primero.',

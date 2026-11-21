@@ -29,11 +29,13 @@ export function EmailRecentSearches(props: {
               role="option"
               aria-selected={props.suggestions.active() === index()}
               class={cn(
-                'flex h-9 min-w-0 items-center gap-2 pr-4 pl-8 text-sm text-ink not-touch:hover:bg-hover',
+                'flex h-9 min-w-0 items-center gap-2 pr-4 pl-8 text-sm text-ink not-touch:hover:bg-hover touch:h-11 touch:pl-4 touch:text-base',
                 props.suggestions.active() === index() && 'bg-hover'
               )}
               // The field keeps focus, so a press is a pick and not a blur.
+              // iOS still sends mousedown after a cancelled pointerdown.
               onPointerDown={(event) => event.preventDefault()}
+              onMouseDown={(event) => event.preventDefault()}
               onClick={() => props.onPick(index())}
             >
               <ClockIcon

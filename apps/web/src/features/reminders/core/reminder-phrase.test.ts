@@ -101,6 +101,19 @@ describe('readReminderPhrase in New York', () => {
     ]);
   });
 
+  it('reads a quantity without in, and words cut short', () => {
+    expect(offered('2 day', friday)).toEqual([
+      { label: '2 day', at: '2026-11-08T14:00:00.000Z', note: 'default time' },
+    ]);
+    expect(offered('nxt mond', friday)).toEqual([
+      {
+        label: 'nxt mond',
+        at: '2026-11-09T14:00:00.000Z',
+        note: 'default time',
+      },
+    ]);
+  });
+
   it('drops a passed guess and keeps the other half of the day', () => {
     expect(offered('today at 9', friday)).toEqual([
       {

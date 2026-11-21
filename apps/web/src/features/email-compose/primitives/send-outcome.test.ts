@@ -10,6 +10,7 @@ import type { EmailRecipient } from '../core/email-recipient';
 import type { ReplyType } from '../core/reply-type';
 import { createComposeContext } from '../tests/capabilities';
 import { mountEmailComposer } from '../tests/composer';
+import { recordNotices } from '../tests/notices';
 import { mountReplyComposer } from '../tests/reply';
 import type { ReplyComposerOptions } from './reply-composer';
 
@@ -78,33 +79,20 @@ function lastNotice(context: EmailComposeContext) {
     .at(-1)?.kind;
 }
 
-/** When the newest Undo offer ends, on this device's clock. */
-function undoOfferEnds(context: EmailComposeContext) {
-  const offer = vi
-    .mocked(context.notices.feedback.success)
-    .mock.calls.filter(([, options]) =>
+/** Whether a notice on screen offers Undo. */
+function offersUndo(notices: ReturnType<typeof recordNotices>) {
+  return notices
+    .open()
+    .some(({ options }) =>
       options?.actions?.some((action) => action.label === 'Undo')
-    )
-    .at(-1);
-  const duration = offer?.[1]?.duration;
-  return duration === undefined ? undefined : Date.now() + duration;
-}
-
-/** Undo offers still on screen, given notices that return their ids. */
-function openUndoOffers(context: EmailComposeContext) {
-  const { success, dismiss } = vi.mocked(context.notices.feedback);
-  const dismissed = new Set(dismiss.mock.calls.map(([id]) => id));
-  return success.mock.calls.filter(
-    ([, options], index) =>
-      options?.actions?.some((action) => action.label === 'Undo') &&
-      !dismissed.has(success.mock.results[index]?.value)
-  ).length;
+    );
 }
 
 it.each(providers)(
   '%s: keeps a delivered reply done and offers Undo until the server deadline',
   async (provider) => {
     const { context, report } = outbox(provider);
+    const notices = recordNotices(context);
     const thread = inboxThread();
     const reply = mountReplyComposer(
       context,
@@ -116,10 +104,15 @@ it.each(providers)(
       await reply.sendEmail();
       expect(thread.onMarkDone).toHaveBeenCalledOnce();
 
-      const undoUntil = new Date(Date.now() + 9_640).toISOString();
       report({ state: 'pending' });
-      report({ state: 'accepted', undoUntil });
-      expect(undoOfferEnds(context)).toBe(Date.parse(undoUntil));
+      report({
+        state: 'accepted',
+        undoUntil: new Date(Date.now() + 9_640).toISOString(),
+      });
+      await vi.advanceTimersByTimeAsync(9_639);
+      expect(offersUndo(notices)).toBe(true);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(offersUndo(notices)).toBe(false);
 
       report({ state: 'pending' });
       report({ state: 'sent' });
@@ -232,20 +225,17 @@ it.each(providers)(
   '%s: withdraws Undo when the server accepts the send after its deadline',
   async (provider) => {
     const { context, report } = outbox(provider);
-    let notice = 0;
-    vi.mocked(context.notices.feedback.success).mockImplementation(
-      () => ++notice
-    );
+    const notices = recordNotices(context);
     const reply = mountReplyComposer(context);
     try {
       await reply.sendEmail();
-      expect(openUndoOffers(context)).toBe(1);
+      expect(offersUndo(notices)).toBe(true);
 
       report({
         state: 'accepted',
         undoUntil: new Date(Date.now() - 1_000).toISOString(),
       });
-      expect(openUndoOffers(context)).toBe(0);
+      expect(offersUndo(notices)).toBe(false);
     } finally {
       reply.dispose();
     }
@@ -256,10 +246,7 @@ it.each(providers)(
   '%s: leaves no Undo on offer once a send accepted with time left is sent',
   async (provider) => {
     const { context, report } = outbox(provider);
-    let notice = 0;
-    vi.mocked(context.notices.feedback.success).mockImplementation(
-      () => ++notice
-    );
+    const notices = recordNotices(context);
     const reply = mountReplyComposer(context);
     try {
       await reply.sendEmail();
@@ -267,11 +254,11 @@ it.each(providers)(
         state: 'accepted',
         undoUntil: new Date(Date.now() + 10_000).toISOString(),
       });
-      expect(openUndoOffers(context)).toBe(1);
+      expect(offersUndo(notices)).toBe(true);
 
       report({ state: 'pending' });
       report({ state: 'sent' });
-      expect(openUndoOffers(context)).toBe(0);
+      expect(offersUndo(notices)).toBe(false);
     } finally {
       reply.dispose();
     }
@@ -312,6 +299,7 @@ it.each(providers)(
   '%s: offers Undo until the server deadline and reports a new message that fails',
   async (provider) => {
     const { context, report } = outbox(provider);
+    const notices = recordNotices(context);
     const root = mountEmailComposer(context);
     try {
       root.edit('Quarterly numbers attached');
@@ -320,14 +308,284 @@ it.each(providers)(
       await vi.advanceTimersByTimeAsync(0);
       expect(context.delivery.sendMessage).toHaveBeenCalledOnce();
 
-      const undoUntil = new Date(Date.now() + 9_910).toISOString();
-      report({ state: 'accepted', undoUntil });
-      expect(undoOfferEnds(context)).toBe(Date.parse(undoUntil));
+      report({
+        state: 'accepted',
+        undoUntil: new Date(Date.now() + 9_910).toISOString(),
+      });
+      await vi.advanceTimersByTimeAsync(9_909);
+      expect(offersUndo(notices)).toBe(true);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(offersUndo(notices)).toBe(false);
 
       report({ state: 'failed' });
       expect(lastNotice(context)).toBe('failure');
     } finally {
       root.dispose();
+    }
+  }
+);
+
+it.each(providers)(
+  '%s: keeps one reply notice through sending, the undo deadline and delivery',
+  async (provider) => {
+    const { context, report } = outbox(provider);
+    const notices = recordNotices(context);
+    const reply = mountReplyComposer(context);
+    try {
+      await reply.sendEmail();
+      report({ state: 'pending' });
+      report({
+        state: 'accepted',
+        undoUntil: new Date(Date.now() + 5_000).toISOString(),
+      });
+      report({ state: 'pending' });
+      await vi.advanceTimersByTimeAsync(5_000);
+      report({ state: 'sent' });
+
+      expect(notices.log).toEqual([
+        'open 1 success: Sending… [Undo]',
+        'update 1 success: Sending…',
+        'update 1 success: Email sent',
+      ]);
+      expect(notices.open()[0]?.options?.persistent).toBeFalsy();
+    } finally {
+      reply.dispose();
+    }
+  }
+);
+
+it.each(providers)(
+  '%s: keeps one new-message notice from sending until it fails',
+  async (provider) => {
+    const { context, report } = outbox(provider);
+    const notices = recordNotices(context);
+    const root = mountEmailComposer(context);
+    try {
+      root.edit('Quarterly numbers attached');
+      await vi.advanceTimersByTimeAsync(600);
+      root.state.context.onSend();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(notices.open()[0]?.options?.persistent).toBe(true);
+
+      report({
+        state: 'accepted',
+        undoUntil: new Date(Date.now() + 5_000).toISOString(),
+      });
+      await vi.advanceTimersByTimeAsync(5_000);
+      report({ state: 'pending' });
+      report({ state: 'failed' });
+
+      expect(notices.log).toEqual([
+        'open 1 success: Sending… [Undo]',
+        'update 1 success: Sending…',
+        'update 1 failure: Email failed to send',
+      ]);
+      expect(notices.open()[0]?.options?.persistent).toBe(true);
+    } finally {
+      root.dispose();
+    }
+  }
+);
+
+it.each(providers)(
+  '%s: follows a send queued offline with one notice once it goes out',
+  async (provider) => {
+    const { context, report } = outbox(provider);
+    vi.mocked(context.connectivity.looksOffline).mockReturnValue(true);
+    context.delivery.queueActive = () => true;
+    const notices = recordNotices(context);
+    const reply = mountReplyComposer(context);
+    try {
+      await reply.sendEmail();
+      expect(notices.open()[0]?.options?.persistent).toBe(false);
+      // The queued notice expires while the device is offline.
+      notices.expireAll();
+
+      report({
+        state: 'accepted',
+        undoUntil: new Date(Date.now() + 5_000).toISOString(),
+      });
+      await vi.advanceTimersByTimeAsync(5_000);
+      report({ state: 'sent' });
+
+      expect(notices.log).toEqual([
+        'open 1 success: Email queued to send [Undo]',
+        'expire 1',
+        'open 2 success: Sending… [Undo]',
+        'update 2 success: Sending…',
+        'update 2 success: Email sent',
+      ]);
+    } finally {
+      reply.dispose();
+    }
+  }
+);
+
+it.each(providers)(
+  '%s: does not bring back a sending notice the user dismissed',
+  async (provider) => {
+    const { context, report } = outbox(provider);
+    const notices = recordNotices(context);
+    const reply = mountReplyComposer(context);
+    try {
+      await reply.sendEmail();
+      notices.expireAll();
+      report({
+        state: 'accepted',
+        undoUntil: new Date(Date.now() + 5_000).toISOString(),
+      });
+      await vi.advanceTimersByTimeAsync(5_000);
+      report({ state: 'pending' });
+      report({ state: 'sent' });
+
+      expect(notices.log).toEqual([
+        'open 1 success: Sending… [Undo]',
+        'expire 1',
+        'open 2 success: Email sent',
+      ]);
+    } finally {
+      reply.dispose();
+    }
+  }
+);
+
+it.each(providers)(
+  '%s: withdraws the sending notice when Undo is pressed',
+  async (provider) => {
+    const { context, report } = outbox(provider);
+    const notices = recordNotices(context);
+    const reply = mountReplyComposer(context);
+    try {
+      await reply.sendEmail();
+      report({
+        state: 'accepted',
+        undoUntil: new Date(Date.now() + 5_000).toISOString(),
+      });
+      notices.pressUndo();
+      await vi.advanceTimersByTimeAsync(5_000);
+      report({ state: 'pending' });
+      report({ state: 'cancelled' });
+
+      expect(notices.log).toEqual([
+        'open 1 success: Sending… [Undo]',
+        'dismiss 1',
+      ]);
+      expect(context.delivery.undoSend).toHaveBeenCalledOnce();
+    } finally {
+      reply.dispose();
+    }
+  }
+);
+
+it.each(providers)(
+  '%s: keeps a failed send on screen when its draft is restored',
+  async (provider) => {
+    const { context, report } = outbox(provider);
+    const notices = recordNotices(context);
+    const reply = mountReplyComposer(context);
+    try {
+      await reply.sendEmail();
+      report({ state: 'failed' });
+      report({ state: 'cancelled' });
+
+      expect(notices.log).toEqual([
+        'open 1 success: Sending… [Undo]',
+        'update 1 failure: Email failed to send',
+      ]);
+    } finally {
+      reply.dispose();
+    }
+  }
+);
+
+it.each(providers)(
+  '%s: stops holding the notice for a send that stalls, and follows it again once accepted',
+  async (provider) => {
+    const { context, report } = outbox(provider);
+    const notices = recordNotices(context);
+    const reply = mountReplyComposer(context);
+    try {
+      await reply.sendEmail();
+      report({ state: 'pending' });
+      await vi.advanceTimersByTimeAsync(29_999);
+      expect(notices.open()[0]?.options?.persistent).toBe(true);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(notices.open()[0]?.options?.persistent).toBe(false);
+      // The timed notice expires while the send keeps retrying.
+      notices.expireAll();
+
+      report({
+        state: 'accepted',
+        undoUntil: new Date(Date.now() + 5_000).toISOString(),
+      });
+      expect(notices.open()[0]?.options?.persistent).toBe(true);
+      report({ state: 'sent' });
+
+      expect(notices.log).toEqual([
+        'open 1 success: Sending… [Undo]',
+        'update 1 success: Sending… [Undo]',
+        'expire 1',
+        'open 2 success: Sending… [Undo]',
+        'update 2 success: Email sent',
+      ]);
+    } finally {
+      reply.dispose();
+    }
+  }
+);
+
+it.each(providers)(
+  '%s: keeps a dismissed notice closed when its stalled send is accepted',
+  async (provider) => {
+    const { context, report } = outbox(provider);
+    const notices = recordNotices(context);
+    const reply = mountReplyComposer(context);
+    try {
+      await reply.sendEmail();
+      notices.expireAll();
+      await vi.advanceTimersByTimeAsync(30_000);
+      report({
+        state: 'accepted',
+        undoUntil: new Date(Date.now() + 5_000).toISOString(),
+      });
+      report({ state: 'sent' });
+
+      expect(notices.log).toEqual([
+        'open 1 success: Sending… [Undo]',
+        'expire 1',
+        'open 2 success: Email sent',
+      ]);
+    } finally {
+      reply.dispose();
+    }
+  }
+);
+
+it.each(providers)(
+  '%s: shows delivery of an offline send accepted after its undo deadline',
+  async (provider) => {
+    const { context, report } = outbox(provider);
+    vi.mocked(context.connectivity.looksOffline).mockReturnValue(true);
+    context.delivery.queueActive = () => true;
+    const notices = recordNotices(context);
+    const reply = mountReplyComposer(context);
+    try {
+      await reply.sendEmail();
+      notices.expireAll();
+      report({
+        state: 'accepted',
+        undoUntil: new Date(Date.now() - 1_000).toISOString(),
+      });
+      report({ state: 'sent' });
+
+      expect(notices.log).toEqual([
+        'open 1 success: Email queued to send [Undo]',
+        'expire 1',
+        'open 2 success: Sending…',
+        'update 2 success: Email sent',
+      ]);
+    } finally {
+      reply.dispose();
     }
   }
 );

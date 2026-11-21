@@ -71,7 +71,7 @@ let
     # One object per weekday keeps a rolling week without a lifecycle rule on
     # a bucket whose retention Loki owns.
     ${lib.getExe pkgs.awscli2} s3 cp --only-show-errors "$dump" \
-      "s3://$LOGS_BUCKET/goalert/goalert-$(date +%a).dump"
+      "s3://$BACKUP_BUCKET/goalert/goalert-$(date +%a).dump"
   '';
 in
 {

@@ -31,7 +31,7 @@ export class ChatNamespace {
   }
 
   /**
-   * Search AI chats by name and content, most relevant first, auto-paginated.
+   * Search AI chats by name and content, most relevant first, auto-paginated; `maxItems` caps the total.
    *
    * @readonly
    */

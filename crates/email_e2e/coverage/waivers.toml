@@ -1,0 +1,343 @@
+# What the email end-to-end suite leaves uncovered, and why. Four kinds:
+# waived for good, deferred to the full-stack tier, thought dead, and (in
+# functions.toml, `bug`) held open by a known product bug. Anything waived,
+# deferred or thought dead here that a scenario does cover or reach is
+# reported as stale. A fifth kind is not left uncovered: entry points owned
+# by the functions of another product, counted there.
+#
+# A function no scenario is asked to cover:
+#
+# [[function]]
+# id = "F-000"            # from apps/web/tests/email-e2e/ledger/functions.tsv
+# provider = "outlook"    # optional: gmail or outlook; both when absent
+# reason = "..."
+#
+# An entry point no scenario is asked to reach:
+#
+# [[entry_point]]
+# entry = "http GET /health"   # `kind key`, as in entrypoints.tsv
+# provider = "gmail"           # optional
+# reason = "..."
+#
+# An entry point left to the full-stack tier (a provider's sign-in route,
+# say): not waived and not open, counted in its own column. An entry point
+# is waived or deferred on a provider, never both.
+#
+# [[deferred]]
+# entry = "http GET /email/oauth/callback"
+# provider = "gmail"           # optional
+# reason = "..."
+#
+# An entry point nothing in the repository calls: waived on both providers
+# and listed under "Dead code candidates" with its source. The reason says
+# how it was found to have no caller.
+#
+# [[dead_code]]
+# entry = "http GET /email/unused"
+# reason = "..."
+#
+# An entry point the functions of another product call, not email's: not
+# waived, deferred or open, and in none of email's totals. It is counted
+# with its owner's functions; the report lists it under "Counted with the
+# <owner> functions" and says whether a scenario reached it. It cannot also
+# be waived, deferred, dead code or named in functions.toml.
+#
+# [[owned]]
+# entry = "provider gmail:events.list"
+# provider = "gmail"           # optional
+# owner = "calendar"
+#
+# Functions another service carries out are deferred to the full-stack tier
+# by `outside` in functions.toml, not here.
+#
+# A scenario kept for a known bug (`#[ignore = "known bug: <id>"]`) that
+# passes fails the coverage job: the bug is gone, so the scenario should
+# gate. One whose bug shows only now and then is named here, and may pass:
+#
+# [[intermittent_bug]]
+# scenario = "state_writes outlook_..."   # `binary test`
+# reason = "..."                          # how often it shows, and why
+#
+# CI runs the report with `--enforce`: everything not proved, reached or
+# named in this file fails the job, and so does everything named here that
+# the records contradict. This file is the one place to say why something
+# is left; each entry needs its own reason.
+
+# ------------------------------------------------- provider methods unused
+
+[[entry_point]]
+entry = "provider gmail:messages.batchDelete"
+reason = "served by the emulator, never called by the product: every Gmail request goes through gmail_client, which has no batch delete"
+
+[[entry_point]]
+entry = "provider gmail:messages.delete"
+reason = "served by the emulator, never called by the product: gmail_client only reads messages by id; the product trashes, it never deletes"
+
+[[entry_point]]
+entry = "provider gmail:messages.import"
+reason = "served by the emulator, never called by the product: sending is messages.send; nothing posts to messages/import"
+
+[[entry_point]]
+entry = "provider gmail:labels.update"
+reason = "served by the emulator, never called by the product: the Gmail label adapter lists, creates and deletes; nothing sends a PUT or PATCH"
+
+[[entry_point]]
+entry = "provider outlook:messages.copy"
+reason = "served by the emulator, never called by the product: archive and move use /move; no Graph request ends in /copy"
+
+[[entry_point]]
+entry = "provider outlook:messages.sendMail"
+reason = "served by the emulator, never called by the product: Outlook sends by creating a draft and posting /send on it"
+
+[[entry_point]]
+entry = "provider outlook:messages.reply"
+reason = "served by the emulator, never called by the product: the product calls createReply, a separate row"
+
+[[entry_point]]
+entry = "provider outlook:messages.forward"
+reason = "served by the emulator, never called by the product: no Graph request ends in /forward"
+
+[[entry_point]]
+entry = "provider outlook:batch"
+reason = "served by the emulator, never called by the product: every Graph call is a single request; nothing posts to $batch"
+
+[[entry_point]]
+entry = "provider gmail:drafts.get"
+reason = "served by the emulator, never called by the product: gmail_client has no drafts call; a Gmail draft lives in Macro until it is sent"
+
+[[entry_point]]
+entry = "provider gmail:drafts.list"
+reason = "served by the emulator, never called by the product: gmail_client has no drafts call; a Gmail draft lives in Macro until it is sent"
+
+[[entry_point]]
+entry = "provider gmail:drafts.send"
+reason = "served by the emulator, never called by the product: Gmail mail is sent through messages.send only"
+
+[[entry_point]]
+entry = "provider gmail:labels.get"
+reason = "served by the emulator, never called by the product: labels are listed, created and deleted, never read one by one"
+
+[[entry_point]]
+entry = "provider gmail:messages.trash"
+reason = "served by the emulator, never called by the product: trashing is a label write through messages.modify or batchModify"
+
+[[entry_point]]
+entry = "provider gmail:messages.untrash"
+reason = "served by the emulator, never called by the product: restoring is a label write through messages.modify or batchModify"
+
+[[entry_point]]
+entry = "provider gmail:settings.filters.get"
+reason = "served by the emulator, never called by the product: filters are created, listed and deleted by id, never read one by one"
+
+[[entry_point]]
+entry = "provider outlook:attachments.get"
+reason = "served by the emulator, never called by the product: attachments are listed, or read as bytes through a separate row; nothing reads one attachment's metadata"
+
+[[entry_point]]
+entry = "provider outlook:messages.createForward"
+reason = "served by the emulator, never called by the product: a forward is a new draft posted to /me/messages; nothing posts to /createForward"
+
+[[entry_point]]
+entry = "provider outlook:uploads.delete"
+reason = "served by the emulator, never called by the product: an upload session is only read and written; nothing cancels one"
+
+# ------------------------------------------------- outside every scenario
+
+[[entry_point]]
+entry = "http GET /health"
+reason = "the load balancer's health check, not a function of email; the harness polls it on the service's own port to wait for the start, past the proxy that records"
+
+# ------------------------------------------------------- not reached yet
+#
+# The product does call these; the harness or an emulator cannot yet make
+# the call succeed. Each goes when what its reason names is built.
+
+[[entry_point]]
+entry = "queue sfs-uploader:SFSUploaderMessage"
+provider = "gmail"
+reason = "not reached yet: the worker fetches a contact's photo only from a host that resolves to a public address, and has no setting that lets a stack's local host through, so the message can be sent but never handled; reaching it needs a change to that guard in the product"
+
+[[entry_point]]
+entry = "gateway refresh_email:PhotoSynced"
+provider = "gmail"
+reason = "not reached yet: on Gmail it follows the photo upload of sfs-uploader:SFSUploaderMessage, which a stack cannot complete"
+
+# ---------------------------------------------------- sign-in, full stack
+
+[[deferred]]
+entry = "provider gmail:oauth.userinfo"
+reason = "a sign-in route the authentication service or a browser calls; the stack replaces that service with a stand-in"
+
+[[deferred]]
+entry = "provider outlook:oauth.adminconsent"
+reason = "a sign-in route the authentication service or a browser calls; the stack replaces that service with a stand-in"
+
+[[deferred]]
+entry = "provider outlook:oauth.discovery"
+reason = "a sign-in route the authentication service or a browser calls; the stack replaces that service with a stand-in"
+
+[[deferred]]
+entry = "provider outlook:oauth.keys"
+reason = "a sign-in route the authentication service or a browser calls; the stack replaces that service with a stand-in"
+
+[[deferred]]
+entry = "provider outlook:oauth.userinfo"
+reason = "a sign-in route the authentication service or a browser calls; the stack replaces that service with a stand-in"
+
+# ------------------------------------------------------------- no caller
+
+[[dead_code]]
+entry = "queue gmail-ops:DeleteLabel"
+reason = "unreachable: candidate for removal (the handler has no sender: nothing in the repository builds this message)"
+
+[[dead_code]]
+entry = "http GET /internal/messages/{id}"
+reason = "unreachable: candidate for removal (no client in the repository requests this internal route)"
+
+[[dead_code]]
+entry = "http POST /internal/messages/batch"
+reason = "unreachable: candidate for removal (no client in the repository requests this internal route)"
+
+[[dead_code]]
+entry = "http GET /internal/threads/{id}/messages"
+reason = "unreachable: candidate for removal (no client in the repository requests this internal route)"
+
+[[dead_code]]
+entry = "http GET /internal/threads/{id}/owner"
+reason = "unreachable: candidate for removal (no client in the repository requests this internal route)"
+
+[[dead_code]]
+entry = "graphql GraphqlSoupEmailThread.latestContentMessage"
+reason = "unreachable: candidate for removal (no client document selects the field; only the crates' own tests do)"
+
+[[dead_code]]
+entry = "graphql GraphqlUser.emailLabels"
+reason = "unreachable: candidate for removal (no client document selects the field; the app lists labels through GET /email/labels)"
+
+[[dead_code]]
+entry = "graphql CompleteMutationRoot.sendEmailMessage"
+reason = "unreachable: candidate for removal (clients send through sendEmailAttempt, which the app only aliases to this name)"
+
+[[dead_code]]
+entry = "graphql CompleteMutationRoot.resolveEmailMessageOperation"
+reason = "unreachable: candidate for removal (the app and the SDK resolve an operation through POST /email/drafts/{id}/resolve)"
+
+[[dead_code]]
+entry = "http POST /internal/backfill/provider/gmail"
+reason = "unreachable: candidate for removal (no client in the repository requests this internal route; a backfill starts from POST /email/init)"
+
+[[dead_code]]
+entry = "http GET /internal/backfill/provider/gmail/{id}"
+reason = "unreachable: candidate for removal (no client in the repository requests this internal route; the app reads GET /email/backfill/gmail/{id})"
+
+[[dead_code]]
+entry = "http DELETE /internal/backfill/provider/gmail"
+reason = "unreachable: candidate for removal (no client in the repository requests this internal route; the app cancels through DELETE /email/backfill/gmail)"
+
+[[dead_code]]
+entry = "http DELETE /internal/delete_user/{id}"
+reason = "unreachable: candidate for removal (no client in the repository requests this internal route; account deletion puts DeleteUser on the queue itself)"
+
+[[dead_code]]
+entry = "queue backfill:BackfillMessage"
+reason = "unreachable: candidate for removal (the handler has no sender: a backfill writes whole threads, and nothing builds this message any more)"
+
+[[dead_code]]
+entry = "queue backfill:DepopulateCrmContact"
+reason = "unreachable: candidate for removal (the handler has no sender: the nightly CRM cleanup replaced the fan-out that built this message)"
+
+[[dead_code]]
+entry = "queue gmail-ops:BlockSender"
+reason = "unreachable: candidate for removal (the port method that queues it has no caller: blocking writes the Gmail filter directly)"
+
+[[dead_code]]
+entry = "queue gmail-ops:UnblockSender"
+reason = "unreachable: candidate for removal (the port method that queues it has no caller: unblocking deletes the Gmail filter directly)"
+
+# ------------------------------------------- calendar provider methods
+#
+# The calendar product calls these, not email. `provider gmail:events.import`
+# is not here: adding a forwarded invitation to the calendar (F-156) is a
+# function of email and calls it.
+
+[[owned]]
+entry = "provider gmail:calendarList.list"
+owner = "calendar"
+
+[[owned]]
+entry = "provider gmail:events.delete"
+owner = "calendar"
+
+[[owned]]
+entry = "provider gmail:events.get"
+owner = "calendar"
+
+[[owned]]
+entry = "provider gmail:events.insert"
+owner = "calendar"
+
+[[owned]]
+entry = "provider gmail:events.instances"
+owner = "calendar"
+
+[[owned]]
+entry = "provider gmail:events.list"
+owner = "calendar"
+
+[[owned]]
+entry = "provider gmail:events.patch"
+owner = "calendar"
+
+[[owned]]
+entry = "provider gmail:events.watch"
+owner = "calendar"
+
+[[owned]]
+entry = "provider outlook:calendarView.delta"
+owner = "calendar"
+
+[[owned]]
+entry = "provider outlook:calendarView.list"
+owner = "calendar"
+
+[[owned]]
+entry = "provider outlook:calendars.get"
+owner = "calendar"
+
+[[owned]]
+entry = "provider outlook:calendars.list"
+owner = "calendar"
+
+[[owned]]
+entry = "provider outlook:events.create"
+owner = "calendar"
+
+[[owned]]
+entry = "provider outlook:events.delete"
+owner = "calendar"
+
+[[owned]]
+entry = "provider outlook:events.get"
+owner = "calendar"
+
+[[owned]]
+entry = "provider outlook:events.instances"
+owner = "calendar"
+
+[[owned]]
+entry = "provider outlook:events.list"
+owner = "calendar"
+
+[[owned]]
+entry = "provider outlook:events.respond"
+owner = "calendar"
+
+[[owned]]
+entry = "provider outlook:events.update"
+owner = "calendar"
+
+# ------------------------------------------------ bugs that show sometimes
+
+[[intermittent_bug]]
+scenario = "state_writes outlook_a_thread_can_be_archived_while_a_reply_is_sending"
+reason = "state-update-races-send: the change answers 500 about one run in twenty, when the reply's row changes between reading the messages to move and queueing the move"

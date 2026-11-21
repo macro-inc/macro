@@ -17,7 +17,7 @@ import type { PasswordTeamId } from './passwordTeamId';
 export interface PasswordItemFields {
   /** Resource creation timestamp. */
   createdAt: string;
-  /** Whether the item is marked as a favorite. */
+  /** The current viewer's private favorite in responses; legacy initial flag in storage. */
   favorite: boolean;
   /** Optional folder belonging to this same team. */
   folderId?: PasswordItemFieldsFolderId;

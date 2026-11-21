@@ -18,6 +18,9 @@ function parseBuildNumber(name, fallback) {
 }
 
 function gitSha() {
+  // Nix builds the desktop app without a .git directory and passes the commit.
+  const fromEnv = process.env.GIT_SHA?.trim();
+  if (fromEnv) return fromEnv;
   try {
     return execSync('git rev-parse --short HEAD', {
       cwd: packageDir,

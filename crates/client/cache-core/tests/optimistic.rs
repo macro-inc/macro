@@ -7,8 +7,8 @@ use cache_core::engine::{
 };
 use cache_core::predicate::{OptimisticUpsertReconciliation, ProjectionMutation};
 use cache_core::queue::{
-    ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, MutationUpsertResult,
-    NewQueuedMutation, QueuedMutation,
+    ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, MutationLeaseInspection,
+    MutationUpsertResult, NewQueuedMutation, QueuedMutation,
 };
 use cache_core::store::{InMemoryStorage, Storage};
 use cache_core::value::{CacheValue, EntityKey, Record};
@@ -87,6 +87,31 @@ impl ClaimFailingStorage {
 
 impl Storage for ClaimFailingStorage {
     type Error = std::io::Error;
+    async fn record_keys(
+        &self,
+        typename: &str,
+        after_id: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<EntityKey<'static>>, Self::Error> {
+        Ok(self
+            .inner
+            .record_keys(typename, after_id, limit)
+            .await
+            .unwrap())
+    }
+
+    async fn projection_keys(
+        &self,
+        typename: &str,
+        after_id: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<EntityKey<'static>>, Self::Error> {
+        Ok(self
+            .inner
+            .projection_keys(typename, after_id, limit)
+            .await
+            .unwrap())
+    }
 
     async fn read_people_sql(
         &self,
@@ -183,6 +208,22 @@ impl Storage for ClaimFailingStorage {
             .upsert_mutation_with_shadow(entry, now_ms, reconciliation)
             .await
             .unwrap())
+    }
+
+    async fn replace_optimistic_layers(
+        &mut self,
+        layers: &[(
+            cache_core::queue::MutationId,
+            cache_core::queue::PersistedOptimisticLayer,
+        )],
+        affected_projection_keys: &[predicate_index::RecordKey],
+        projections: &[predicate_index::EffectiveOptimisticProjection],
+    ) -> Result<(), Self::Error> {
+        self.inner
+            .replace_optimistic_layers(layers, affected_projection_keys, projections)
+            .await
+            .unwrap();
+        Ok(())
     }
 
     async fn load_mutation_queue(&self) -> Result<Vec<QueuedMutation>, Self::Error> {
@@ -553,9 +594,40 @@ fn mutation_inspection_preserves_metadata_without_claiming_or_changing_leases() 
                 .unwrap()
                 .is_none()
         );
+        // The lease names its claim, so a runner can release one whose owner
+        // has gone; settling still needs the owner and generation.
+        assert_eq!(
+            inspected[0].lease,
+            Some(MutationLeaseInspection {
+                owner: "runner".into(),
+                generation: claimed.lease_generation.to_string(),
+                expires_at_ms: 100,
+            })
+        );
         let wire = serde_json::to_value(&inspected[0]).unwrap();
+        assert_eq!(
+            wire["lease"],
+            json!({"owner": "runner", "generation": "1", "expiresAtMs": 100})
+        );
         assert!(wire.get("leaseGeneration").is_none());
-        assert!(wire.get("leaseOwner").is_none());
+
+        engine
+            .defer_optimistic_write(
+                id,
+                MutationClaimToken {
+                    owner: "runner".into(),
+                    generation: claimed.lease_generation,
+                },
+                10,
+                "lease owner left".into(),
+                false,
+            )
+            .await
+            .unwrap();
+        let inspected = engine.inspect_mutations().await.unwrap();
+        assert_eq!(inspected[0].lease, None);
+        let wire = serde_json::to_value(&inspected[0]).unwrap();
+        assert!(wire.get("lease").is_none());
     });
 }
 

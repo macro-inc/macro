@@ -43,7 +43,10 @@ export function DocumentPreviewSheet(
                 previewInfo={props.previewInfo}
                 snapshotInfo={props.snapshotInfo}
                 useFallbackData={props.useFallbackData}
-                onOpened={() => props.onOpenChange(false)}
+                onOpened={() => {
+                  props.onOpenChange(false);
+                  props.onOpened?.();
+                }}
               />
             </Suspense>
           </MobileDrawer.ScrollBody>

@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT kind.entity_type AS \"entity_type!\", found.entity_id AS \"entity_id!\"\n        FROM unnest($2::text[]) AS kind(entity_type)\n        CROSS JOIN LATERAL (\n            WITH RECURSIVE walk AS (\n                (\n                    SELECT un.event_item_id AS entity_id, 1 AS position\n                    FROM user_notification un\n                    WHERE un.user_id = $1\n                    AND un.deleted_at IS NULL\n                    AND un.state = 'unseen'\n                    AND un.event_item_type = kind.entity_type\n                    ORDER BY un.event_item_id\n                    LIMIT 1\n                )\n                UNION ALL\n                SELECT next.entity_id, walk.position + 1\n                FROM walk\n                CROSS JOIN LATERAL (\n                    SELECT un.event_item_id AS entity_id\n                    FROM user_notification un\n                    WHERE un.user_id = $1\n                    AND un.deleted_at IS NULL\n                    AND un.state = 'unseen'\n                    AND un.event_item_type = kind.entity_type\n                    AND un.event_item_id > walk.entity_id\n                    ORDER BY un.event_item_id\n                    LIMIT 1\n                ) next\n                WHERE walk.position < $3\n            )\n            SELECT entity_id FROM walk\n        ) found\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_type!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "entity_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "b7ec3d87688525e822a72080bce1d257bc41cea9af0d5768de9bb7ded6875e33"
+}

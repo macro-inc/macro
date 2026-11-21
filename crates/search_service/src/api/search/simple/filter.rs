@@ -9,6 +9,10 @@ use opensearch_client::search::unified::{
     UnifiedProjectSearchArgs,
 };
 
+use crate::domain::email_search::{EmailScope, MAX_EMAIL_PROJECTS, ThreadStates, ViewerInboxes};
+use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
+use uuid::Uuid;
+
 use crate::api::{
     context::SearchHandlerState,
     search::simple::{
@@ -18,6 +22,9 @@ use crate::api::{
         simple_project::filter_projects,
     },
 };
+
+#[cfg(test)]
+mod test;
 
 /// Trait to convert item_filters into search args
 pub(super) trait FilterVariantToSearchArgs {
@@ -147,32 +154,101 @@ impl FilterVariantToSearchArgs for item_filters::ProjectFilters {
     }
 }
 
-impl FilterVariantToSearchArgs for item_filters::EmailFilters {
-    type Output = UnifiedEmailSearchArgs;
+/// What an email search sends to OpenSearch, and the thread states each
+/// page's email hits are then checked against in Postgres.
+pub(super) struct EmailSearch {
+    pub args: UnifiedEmailSearchArgs,
+    pub hit_states: ThreadStates,
+    pub shared_capped: bool,
+    pub project_capped: bool,
+}
 
-    async fn filter_to_search_args(
-        &self,
-        _ctx: &SearchHandlerState,
-        _user_id: &str,
-        _user_organization_id: Option<i32>,
-        should_include: bool,
-    ) -> Result<Self::Output, SearchError> {
-        if !should_include {
-            Ok(UnifiedEmailSearchArgs::default())
-        } else {
-            Ok(UnifiedEmailSearchArgs {
-                sender: self.senders.clone(),
-                cc: self.cc.clone(),
-                bcc: self.bcc.clone(),
-                recipients: self.recipients.clone(),
-                link_ids: self.link_ids.clone(),
-                include_labels: self.include_labels.clone(),
-                exclude_labels: self.exclude_labels.clone(),
-                importance: self.importance,
-                ..Default::default()
-            })
-        }
+/// Email filters search cannot apply, rejected instead of ignored: the CRM
+/// filters widen a list to the team's mailboxes under per-mailbox consent,
+/// which only listing email implements.
+pub(super) fn reject_unsupported_email_filters(
+    filters: &item_filters::EmailFilters,
+) -> Result<(), SearchError> {
+    if !filters.crm_domains.is_empty() {
+        return Err(SearchError::UnsupportedEmailFilter("crm_domains"));
     }
+    if !filters.crm_addresses.is_empty() {
+        return Err(SearchError::UnsupportedEmailFilter("crm_addresses"));
+    }
+    if filters.project_ids.len() > MAX_EMAIL_PROJECTS {
+        return Err(SearchError::TooManyEmailProjects(MAX_EMAIL_PROJECTS));
+    }
+    Ok(())
+}
+
+/// Resolves the email threads `filters` reach for the caller, or `None` when
+/// emails are left out or no thread can match.
+pub(super) async fn email_search(
+    ctx: &SearchHandlerState,
+    user_id: &MacroUserId<Lowercase<'_>>,
+    filters: &item_filters::EmailFilters,
+    should_include: bool,
+) -> Result<Option<EmailSearch>, SearchError> {
+    reject_unsupported_email_filters(filters)?;
+    if !should_include {
+        return Ok(None);
+    }
+    // Every inbox the caller can reach (their own plus delegated). Connected
+    // secondary inboxes share the owner's user_id; delegated inboxes index
+    // under their own, so collect the distinct macro_ids the caller can search.
+    let links =
+        email_db_client::links::get::fetch_search_inboxes_for_macro_id(&ctx.db, user_id.as_ref())
+            .await
+            .map_err(SearchError::InternalError)?;
+    let mut user_ids: Vec<String> = links.iter().map(|l| l.macro_id.clone()).collect();
+    user_ids.sort();
+    user_ids.dedup();
+    // A mailbox being disconnected keeps its documents until its rows are
+    // purged, which can take hours; its mail stops matching from the start.
+    let disconnecting: Vec<String> = links
+        .iter()
+        .filter(|l| l.deleting)
+        .map(|l| l.id.to_string())
+        .collect();
+    let inboxes = ViewerInboxes {
+        link_ids: links.iter().map(|l| l.id).collect(),
+        user_ids,
+    };
+
+    let scope = ctx
+        .email_search()
+        .scope(user_id, filters, &inboxes)
+        .await
+        .map_err(|error| SearchError::InternalError(anyhow::anyhow!("{error}")))?;
+    let EmailScope::Threads(threads) = scope else {
+        return Ok(None);
+    };
+
+    Ok(Some(EmailSearch {
+        args: UnifiedEmailSearchArgs {
+            user_ids: threads.user_ids,
+            thread_ids: threads.thread_ids.iter().map(Uuid::to_string).collect(),
+            ids_only: threads.ids_only,
+            required_thread_ids: threads
+                .required_thread_ids
+                .iter()
+                .map(Uuid::to_string)
+                .collect(),
+            sender: filters.senders.clone(),
+            cc: filters.cc.clone(),
+            bcc: filters.bcc.clone(),
+            recipients: filters.recipients.clone(),
+            link_ids: filters.link_ids.clone(),
+            exclude_link_ids: disconnecting,
+            include_labels: filters.include_labels.clone(),
+            exclude_labels: filters.exclude_labels.clone(),
+            importance: filters.importance,
+            ..Default::default()
+        },
+        hit_states: threads.hit_states,
+        shared_capped: threads.shared_capped,
+        project_capped: threads.project_capped,
+    }))
 }
 
 impl FilterVariantToSearchArgs for item_filters::CallFilters {

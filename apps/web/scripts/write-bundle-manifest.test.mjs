@@ -29,6 +29,9 @@ await test('incomplete or unsafe minima fail the build', () => {
   assert.throws(() => build({ MIN_NATIVE_BUILD_ANDROID: '2' }));
   assert.throws(() => build({ MIN_NATIVE_BUILD_ANDROID: '9007199254740992', MIN_NATIVE_BUILD_IOS: '1' }));
 });
+await test('GIT_SHA names the commit when the build has no repository', () => {
+  assert.equal(build({ GIT_SHA: 'cd95980' }).gitSha, 'cd95980');
+});
 await test('legacy manifests retain schema 2', () => {
   assert.equal(build({ MIN_NATIVE_BUILD: '5' }).schemaVersion, 2);
 });

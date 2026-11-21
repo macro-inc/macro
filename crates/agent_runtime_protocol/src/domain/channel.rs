@@ -53,7 +53,8 @@ impl<Tx, Rx> Channel<Tx, Rx> {
 /// carrier apart is for. They run as separate tasks rather than arms of one
 /// `select!` specifically so that a `recv` already mid-flight is always polled
 /// to completion instead of being raced against, and possibly cancelled by, an
-/// outgoing send becoming ready.
+/// outgoing send becoming ready. The inbound task races its `recv` only
+/// against its caller going away, when nothing would read the message.
 ///
 /// Not exposed outside this crate: outbound adapters adapt to [`Channel`],
 /// they don't hand pumps to callers.
@@ -78,8 +79,15 @@ where
         }
     });
 
+    // Exits as soon as the caller stops reading, not on the next message:
+    // dropping `receiver` is what tells the transport nothing serves it.
     tokio::spawn(async move {
-        while let Ok(Some(incoming)) = receiver.recv().await {
+        loop {
+            let incoming = tokio::select! {
+                () = worker_tx.closed() => break,
+                incoming = receiver.recv() => incoming,
+            };
+            let Ok(Some(incoming)) = incoming else { break };
             if worker_tx.send(incoming).is_err() {
                 break;
             }

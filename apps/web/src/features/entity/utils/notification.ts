@@ -165,17 +165,35 @@ export function muteItemFallbackIconType(
     .otherwise(() => 'default' as const);
 }
 
-export function isMutedItem(
-  muted: readonly UserUnsubscribe[],
+/** The live preference stored for this item, if any. */
+function activePreference(
+  preferences: readonly UserUnsubscribe[],
   item: UserUnsubscribe
-): boolean {
+): UserUnsubscribe | undefined {
   const type = normalizeMuteItemType(item.item_type);
-  return muted.some(
+  return preferences.find(
     (entry) =>
       entry.item_id === item.item_id &&
       normalizeMuteItemType(entry.item_type) === type &&
       (!entry.snoozed_until || Date.parse(entry.snoozed_until) > Date.now())
   );
+}
+
+/** Fully silenced. A mentions-only item still notifies, so it is not muted. */
+export function isMutedItem(
+  muted: readonly UserUnsubscribe[],
+  item: UserUnsubscribe
+): boolean {
+  const preference = activePreference(muted, item);
+  return preference !== undefined && !preference.mentions_only;
+}
+
+/** Silenced except for messages that @mention the viewer directly. */
+export function isMentionsOnlyItem(
+  preferences: readonly UserUnsubscribe[],
+  item: UserUnsubscribe
+): boolean {
+  return activePreference(preferences, item)?.mentions_only === true;
 }
 
 export function entityIsMuted(
@@ -184,6 +202,14 @@ export function entityIsMuted(
 ): boolean {
   const item = muteItemForEntity(entity);
   return item !== undefined && isMutedItem(muted, item);
+}
+
+export function entityIsMentionsOnly(
+  preferences: readonly UserUnsubscribe[],
+  entity: EntityData
+): boolean {
+  const item = muteItemForEntity(entity);
+  return item !== undefined && isMentionsOnlyItem(preferences, item);
 }
 
 /**
@@ -302,6 +328,7 @@ export function getNotificationActionText(n: Notification): string {
         ? 'failed'
         : 'ready';
     })
+    .with('ping', () => 'pinged')
     .exhaustive(() => 'notified');
 }
 
@@ -397,6 +424,7 @@ export function extractMessageContent(notification: Notification): string {
       { tag: 'computer_setup' },
       (m) => m.content.agent?.name ?? m.content.computerName
     )
+    .with({ tag: 'ping' }, (m) => m.content.body)
     .exhaustive(() => '');
 }
 

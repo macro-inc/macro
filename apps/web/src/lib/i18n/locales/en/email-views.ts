@@ -73,5 +73,7 @@ export default {
   attachments: 'Attachments',
   tags: 'Tags',
   // Search
+  searchEmail: 'Search email',
+  clearSearch: 'Clear search',
   recentSearches: 'Recent searches',
 };

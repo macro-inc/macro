@@ -45,7 +45,7 @@ import {
 import { RoutineWideContent } from './routine';
 import { RowEnd } from './row-end';
 import { SOUP_ROW_CLASS } from './row-geometry';
-import type { LayoutProps } from './shared';
+import { classicWeight, type LayoutProps } from './shared';
 
 function RowTags(props: {
   entityId: string;
@@ -101,7 +101,16 @@ export function WideLayout(props: LayoutProps) {
           : '"indicator content meta timestamp"',
       }}
     >
-      <Show when={!props.hideCheckbox}>
+      <Show when={!props.hideCheckbox && props.classic}>
+        <Entity.Slot placement="indicator" class="size-full">
+          <MultiSelectCheckbox
+            checked={props.checked}
+            onChecked={props.onChecked}
+            showBorder
+          />
+        </Entity.Slot>
+      </Show>
+      <Show when={!props.hideCheckbox && !props.classic}>
         <Entity.Slot placement="indicator" class="relative size-full group">
           <div class="absolute inset-0 grid place-items-center group-hover:opacity-0">
             <UnreadIndicator active={props.unread} />
@@ -147,6 +156,9 @@ export function WideLayout(props: LayoutProps) {
             {(entity) => (
               <EmailWideContent
                 entity={entity()}
+                textClass={
+                  props.classic ? classicWeight(props.unread) : undefined
+                }
                 chars={props.chars}
                 showHitSnippet={props.showHitSnippet}
                 setContainerRef={props.setSnippetContainerRef}
@@ -345,7 +357,12 @@ export function WideLayout(props: LayoutProps) {
       </Entity.Slot>
       <Entity.Slot
         placement="timestamp"
-        class="flex items-center justify-end gap-1 text-xs text-right text-ink-extra-muted font-medium"
+        class={cn(
+          'flex items-center justify-end gap-1 text-xs text-right',
+          props.classic ? classicWeight(props.unread) : 'font-medium',
+          // A Classic unread date reads like its sender and subject.
+          props.classic && props.unread ? 'text-ink' : 'text-ink-extra-muted'
+        )}
       >
         {props.scheduleStatus}
         <RowEnd actions={props.actions} leadingAction={props.leadingAction}>

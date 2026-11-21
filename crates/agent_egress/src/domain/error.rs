@@ -84,6 +84,15 @@ pub enum EgressError {
     #[error("upstream request failed: {0}")]
     Upstream(rootcause::Report),
 
+    /// The upstream refused the request with HTTP 429 before running it, so
+    /// the same request may be sent again once `retry_after` (its
+    /// `Retry-After` in seconds, when it sent one) has passed.
+    #[error("upstream rate limited the request")]
+    RateLimited {
+        /// How long the upstream asked callers to wait.
+        retry_after: Option<std::time::Duration>,
+    },
+
     /// Our side broke: storage, decryption, configuration.
     #[error("egress failed: {0}")]
     Internal(rootcause::Report),

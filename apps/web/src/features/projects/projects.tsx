@@ -4,8 +4,9 @@ import {
   makeCopyLinkAction,
 } from '@app/features/next-soup/actions';
 import { TasksCreateAction } from '@app/features/tasks-view/tasks-create-action';
-import { ShowFeatureFlag, useFeatureFlag } from '@app/lib/analytics/posthog';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { createSearchParams } from '@app/lib/split-router';
+import { usePending } from '@app/observability/flow';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
@@ -15,7 +16,6 @@ import {
 import {
   enableEntityAppearance,
   enableGantt,
-  enableProjects,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -39,6 +39,7 @@ import {
   Suspense,
 } from 'solid-js';
 import { useChangeEntityIcon } from '../entity-appearance/entity-appearance';
+import { useProjectSavedViews } from './context/project-saved-views-context';
 import {
   ProjectsProvider,
   useProjectsContext,
@@ -55,12 +56,6 @@ import { createProjectSources } from './queries/project-sources';
 import { ProjectAssignment } from './views/project-assignment';
 import { ProjectsCollection } from './views/projects-collection';
 
-function createProjectReadGate() {
-  // Each source invokes this under its own owner, which can outlive this view.
-  const flag = useFeatureFlag(enableProjects);
-  return () => flag().enabled;
-}
-
 /** The production capabilities, for hosts outside the Projects view. */
 export function createProjectsContext() {
   const userId = useUserId();
@@ -68,17 +63,12 @@ export function createProjectsContext() {
     initiativeClient,
     { client: getGraphqlSoupClient, cacheHost: getGraphqlSoupCacheHost },
     queryClient,
-    userId,
-    createProjectReadGate
+    userId
   );
 }
 
 export function Projects(props: ParentProps) {
-  return (
-    <ShowFeatureFlag flag={enableProjects}>
-      <ProjectsContent>{props.children}</ProjectsContent>
-    </ShowFeatureFlag>
-  );
+  return <ProjectsContent>{props.children}</ProjectsContent>;
 }
 
 function ProjectsContent(props: ParentProps) {
@@ -127,6 +117,7 @@ function ProjectsCollectionHost(props: ProjectsTabProps) {
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
   const context = useProjectsContext();
+  const savedViews = useProjectSavedViews();
   const ganttFlag = useFeatureFlag(enableGantt);
   const [search, setSearch] = createSearchParams(projectCollectionSearch);
   const activation = withSplitPanelOwner(
@@ -143,24 +134,49 @@ function ProjectsCollectionHost(props: ProjectsTabProps) {
   onCleanup(() => {
     if (activation.current === open) activation.current = undefined;
   });
+  const persistence = createProjectCollectionPersistence(panel.handle);
   const collection = withSplitPanelOwner(
     listOwnedSlotName('initiatives:collection'),
     () =>
       createProjectCollection({
-        ...createProjectCollectionPersistence(panel.handle),
+        ...persistence,
+        captureState: (read) =>
+          persistence.captureState(() => {
+            const snapshot = read();
+            if (!savedViews) return snapshot;
+            return {
+              ...snapshot,
+              ...savedViews.persistentSettings(),
+              search: savedViews.selectedId() ? '' : snapshot.search,
+            };
+          }),
         createSource: context.createCollectionSource,
         search: props.search,
-        scope: () => props.scope?.() ?? 'all',
+        settings: savedViews
+          ? { value: savedViews.settings, update: savedViews.updateSettings }
+          : undefined,
+        scope: () => savedViews?.scope() ?? props.scope?.() ?? 'all',
+        enabled: savedViews?.ready,
         userId: context.userId,
         onOpen: (id, metadata) => activation.current?.(id, metadata),
       })
   );
+  usePending('projects.collection', () => {
+    if (savedViews && !savedViews.ready()) return false;
+    return collection.state().kind === 'loading';
+  });
   // URL history restores the entry snapshot, not the latest layout selection.
   const entryLayout = collection.layout();
   createEffect(
     on(
-      () => search.layout,
-      (layout) => collection.setLayout(layout ?? entryLayout)
+      () => [search.layout, savedViews?.selectedId()] as const,
+      ([layout, savedViewId], previous) => {
+        // A saved definition owns its raw layout, including the phone List fallback.
+        if (savedViewId) return;
+        const leavingSavedView = previous?.[1] !== undefined;
+        const fallback = leavingSavedView ? 'list' : entryLayout;
+        collection.setLayout(layout ?? fallback);
+      }
     )
   );
   const displayCollection = {
@@ -181,7 +197,7 @@ function ProjectsCollectionHost(props: ProjectsTabProps) {
       <ProjectsCollection
         createAction={
           <Show when={!isTouchDevice()}>
-            <TasksCreateAction presentation="toolbar" projectsEnabled />
+            <TasksCreateAction presentation="toolbar" />
           </Show>
         }
         onOpen={open}

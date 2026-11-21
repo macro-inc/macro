@@ -16,6 +16,7 @@ where
     Targets: TaskTargetValidator,
     Github: GithubInstallationClaims,
     Code: RoutineCode,
+    Upgrades: CodeUpgrades,
     Rollout: EventRoutineRollout,
 {
     /// The routine run in progress that a create comes from, when its
@@ -48,6 +49,7 @@ where
         mut input: ActionConfiguration,
         run: RunningRun,
         key: Option<SubRoutineKey>,
+        requester: Requester,
     ) -> Result<SavedAction> {
         // One level: a sub-routine's creations follow its own parent.
         let parent_id = run.parent_id.unwrap_or(run.routine_id);
@@ -73,6 +75,11 @@ where
         if paused_by_parent {
             input.enabled = false;
         }
+        // A repeated key keeps the look its sub-routine was created with, but
+        // refuses a pick it couldn't save, as the first create does.
+        if let Some(pick) = &input.appearance {
+            check_pick(pick)?;
+        }
 
         if let Some(key) = &key
             && let Some(existing) = self.repo.child_by_key(&parent_id, key).await?
@@ -93,6 +100,7 @@ where
                 EntityAppearance::default(),
                 None,
                 Some(link),
+                requester,
             )
             .await;
 
@@ -125,7 +133,9 @@ where
     /// Make `parent`'s sub-routines follow it off or back on. Switching it
     /// off pauses the ones that are on; switching it on resumes only those.
     /// One sub-routine that can't follow doesn't stop the rest.
-    pub(super) async fn follow_parent(&self, parent: &ScheduledAction) {
+    /// A program switching the parent on leaves the sub-routines that write as
+    /// their owner off: only a person switches those on.
+    pub(super) async fn follow_parent(&self, parent: &ScheduledAction, requester: Requester) {
         let Some(parent_id) = parent.id else {
             return;
         };
@@ -150,7 +160,10 @@ where
 
             for child in children {
                 let follows = match (&child.sub_routine, parent.enabled) {
-                    (Some(link), true) => link.paused_by_parent,
+                    (Some(link), true) => {
+                        link.paused_by_parent
+                            && (requester == Requester::Person || !writes_as_owner(&child.task))
+                    }
                     (Some(_), false) => child.enabled,
                     (None, _) => false,
                 };
@@ -165,6 +178,7 @@ where
                     enabled: parent.enabled,
                     run_visibility: child.run_visibility,
                     description: child.description.clone(),
+                    appearance: None,
                 };
                 let child_id = child.id;
                 match self.replace_one(child, input, true).await {

@@ -138,6 +138,10 @@ pub trait SuggestionSources: Send + Sync + 'static {
         &self,
         user: &MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<Vec<String>>> + Send;
+
+    /// Whether the person may add companies to a team's CRM: they are in a
+    /// team, and its CRM is open to them.
+    fn crm(&self, user: &MacroUserIdStr<'static>) -> impl Future<Output = Result<bool>> + Send;
 }
 
 /// Routine suggestions as the API serves them.

@@ -1,0 +1,53 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT work_id, link_id, consent_incarnation, policy_version, after_contact_address, received_pass\n               FROM crm_email_policy_work WHERE team_id = $1 AND user_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "work_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "consent_incarnation",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "policy_version",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "after_contact_address",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "received_pass",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "cf6ee393058e8cef197f5f4bcd289fe030f7547e8b26d539e6ad65e3f661a113"
+}

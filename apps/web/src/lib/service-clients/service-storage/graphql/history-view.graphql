@@ -1,0 +1,31 @@
+# Loads one viewed item the cache does not hold, with the fields history reads.
+query HistoryViewItem($input: SoupInput!) {
+	user {
+		id
+		soup(input: $input) {
+			items {
+				__typename
+				id
+				...GraphqlDocumentHistoryFields
+				...GraphqlChatHistoryFields
+				...GraphqlProjectHistoryFields
+			}
+		}
+	}
+}
+
+# A viewedAt patch updates history order without replacing query membership.
+subscription HistoryViewedAtCacheWrite {
+	soupUpdates {
+		__typename
+		... on SoupUpdated {
+			item {
+				__typename
+				id
+				... on GraphqlSoupDocument { viewedAt }
+				... on GraphqlSoupChat { viewedAt }
+				... on GraphqlSoupProject { viewedAt }
+			}
+		}
+	}
+}

@@ -940,6 +940,9 @@ impl From<SoupErr> for SoupHandlerErr {
             SoupErr::CrmTeamRequired => SoupHandlerErr::CrmScopeForbidden,
             SoupErr::CrmAdminRequired => SoupHandlerErr::CrmAdminRequired,
             SoupErr::CrmRecordNotFound => SoupHandlerErr::CrmRecordNotFound,
+            SoupErr::EmailErr(error @ EmailErr::EmailRuleLimitExceeded(_)) => {
+                SoupHandlerErr::EmailErr(error)
+            }
             SoupErr::TouchedUnsupportedFilter(kind) => {
                 SoupHandlerErr::TouchedUnsupportedFilter(kind)
             }
@@ -965,12 +968,19 @@ impl IntoResponse for SoupHandlerErr {
                 StatusCode::FORBIDDEN
             }
             SoupHandlerErr::CrmRecordNotFound => StatusCode::NOT_FOUND,
+            SoupHandlerErr::EmailErr(EmailErr::EmailRuleLimitExceeded(_)) => {
+                StatusCode::SERVICE_UNAVAILABLE
+            }
             _ => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+        let message = match &self {
+            SoupHandlerErr::EmailErr(EmailErr::EmailRuleLimitExceeded(limit)) => limit.to_string(),
+            _ => self.to_string(),
         };
         (
             status_code,
             Json(ErrorResponse {
-                message: self.to_string().into(),
+                message: message.into(),
             }),
         )
             .into_response()
@@ -1013,6 +1023,7 @@ where
             (status = 200, body=SoupPage),
             (status = 403, description = "CRM-scoped queries require team membership, or requesting hidden CRM companies requires admin/owner team role", body=ErrorResponse),
             (status = 500, body=ErrorResponse),
+            (status = 503, description = "Selected email rules exceeded a resource limit", body=ErrorResponse),
     )
 )]
 pub async fn get_soup_handler<T, U, EAS, Auth>(
@@ -1092,6 +1103,7 @@ type SoupCursor<R> = Either5<
             (status = 200, body=SoupPage),
             (status = 403, description = "CRM-scoped queries require team membership, or requesting hidden CRM companies requires admin/owner team role", body=ErrorResponse),
             (status = 500, body=ErrorResponse),
+            (status = 503, description = "Selected email rules exceeded a resource limit", body=ErrorResponse),
     )
 )]
 #[tracing::instrument(err, skip_all)]
@@ -1160,6 +1172,7 @@ pub struct PostSoupAstRequest {
         (status = 403, description = "CRM-scoped queries require team membership, or requesting hidden CRM companies requires admin/owner team role", body=ErrorResponse),
         (status = 404, description = "The CRM record named by `crma` or a document `crm` literal is not visible to the caller", body=ErrorResponse),
         (status = 500, body=ErrorResponse),
+        (status = 503, description = "Selected email rules exceeded a resource limit", body=ErrorResponse),
     )
 )]
 #[tracing::instrument(err, skip_all)]
@@ -1322,8 +1335,9 @@ pub struct ApiEntityFilterAst {
     pub favorites_only: Option<bool>,
     /// Restrict every entity type to items associated with this CRM record
     /// (wire key `crma`): its Companies or Contacts property names the
-    /// record, or it references the record. A company also matches through
-    /// its contacts. Unknown or inaccessible records answer 404; requests
+    /// record, or it references the record. A task also matches when one of
+    /// its custom entity properties names the record. A company also matches
+    /// through its contacts. Unknown or inaccessible records answer 404; requests
     /// require expanded queries sorted by a timestamp or selected numeric property.
     #[serde(default, rename = "crma", skip_serializing_if = "Option::is_none")]
     pub crm_association: Option<item_filters::ast::crm_association::CrmAssociation>,

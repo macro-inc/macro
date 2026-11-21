@@ -81,6 +81,11 @@ export type AgentSessionSearchResult = {
 };
 
 /**
+ * A kind of attachment a thread's messages carry, by MIME type.
+ */
+export type AttachmentKind = 'pdf' | 'image' | 'document';
+
+/**
  * Filters for canonical calendar-event entities.
  */
 export type CalendarEventFilters = {
@@ -1080,6 +1085,11 @@ export type DocumentSubType = 'task' | 'snippet' | 'skill' | 'initiative_descrip
  */
 export type EmailFilters = {
     /**
+     * Only threads with at least one attachment of one of these kinds, by
+     * MIME type, on any of their messages. Empty applies no constraint.
+     */
+    attachments?: Array<AttachmentKind>;
+    /**
      * Email BCC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by BCC.
      */
     bcc?: Array<string>;
@@ -1099,7 +1109,8 @@ export type EmailFilters = {
      * fully-qualified addresses. Each address is authorized against
      * `crm_contacts` + `crm_companies` (contact must not be hidden, company
      * must not be hidden, `email_sync` must be true).
-     * Mutually exclusive with `crm_domains`.
+     * Mutually exclusive with `crm_domains`. Listing email only: search
+     * rejects a request that sets it with a 400.
      */
     crm_addresses?: Array<string>;
     /**
@@ -1108,9 +1119,16 @@ export type EmailFilters = {
      * domains (in any of sender/cc/bcc/recipient). Each domain is authorized
      * against `crm_domains` + `crm_companies` (must exist for the caller's
      * team, company must not be hidden, `email_sync` must be true).
-     * Mutually exclusive with `crm_addresses`.
+     * Mutually exclusive with `crm_addresses`. Listing email only: search
+     * rejects a request that sets it with a 400.
      */
     crm_domains?: Array<string>;
+    /**
+     * Filter by whether the thread is done: true for threads out of the
+     * inbox (archived), false for threads still in it. This is the mailbox
+     * state the Email view's Done filter uses, independent of notifications.
+     */
+    done?: boolean | null;
     /**
      * Email thread IDs to filter by. Examples: ['thread-uuid-1']. Empty to search all threads.
      */
@@ -1145,7 +1163,14 @@ export type EmailFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * A list of project ids to search within. Empty to ignore project filtering.
+     * Drive folder (project) ids to search within: threads filed in any of
+     * these folders. Besides the caller's own threads, it reaches every
+     * thread in a folder shared with the caller, whoever's inbox holds it,
+     * as the folder's list does. Search takes at most 50 folders and
+     * rejects more with a 400, and matches the query against at most 10,000
+     * of their threads in all; threads past that are not searched, unless
+     * `email_thread_ids` names them, and at most 10,000 named threads are
+     * searched in all. Empty to ignore project filtering.
      */
     project_ids?: Array<string>;
     /**
@@ -1161,6 +1186,7 @@ export type EmailFilters = {
      * Defaults to "exclude" (only the user's own threads).
      */
     shared?: SharedEmailFilter;
+    view?: null | EmailSearchView;
 };
 
 /**
@@ -1318,6 +1344,11 @@ export type EmailSearchResult = {
      */
     sent_at?: string | null;
 };
+
+/**
+ * A mailbox view the Email list scopes a search to, as its tabs do.
+ */
+export type EmailSearchView = 'sent' | 'drafts';
 
 /**
  * Empty response is required due to custom fetch forcing `response.json()`
@@ -2595,6 +2626,10 @@ export type UnifiedSearchData = {
 export type UnifiedSearchErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
+    /**
+     * The caller's other searches kept every slot of its lane busy for 20 seconds, or the account's user API keys used their shared search allowance (200 at once, then one a second); retry after `Retry-After` seconds.
+     */
+    429: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -2625,6 +2660,10 @@ export type SimpleUnifiedSearchData = {
 export type SimpleUnifiedSearchErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
+    /**
+     * The caller's other searches kept every slot of its lane busy for 20 seconds, or the account's user API keys used their shared search allowance (200 at once, then one a second); retry after `Retry-After` seconds.
+     */
+    429: ErrorResponse;
     500: ErrorResponse;
 };
 

@@ -12,7 +12,8 @@ service with Axum, agent-tool and Postgres adapters.
   `databases`/`database_entities` storage-vs-app-entity split, and a review map
   of every module.
 - `src/domain/service.rs` + `src/domain/ports.rs`: orchestration and the ports
-  adapters implement.
+  adapters implement. `DatabaseLifecycleReads` exposes only existence/trash
+  facts to trusted backend hosts, independently of viewer permissions.
 - `src/domain/models.rs`: `Database`, `DatabaseStorage`, typed ops/results.
 - `set_appearance` updates `database_entities` presentation under Edit access, preserving content dates and committing history-only activity in the same transaction.
 
@@ -91,3 +92,5 @@ service with Axum, agent-tool and Postgres adapters.
 
 - Skill: `database-core` · Rules: `.agents/rules/rust/db.md`,
   `.agents/rules/rust/architecture.md`
+
+- Creating a database webhook (`POST /databases/{id}/webhooks`, `crates/database_webhooks`) refuses an agent's program or a bot (403): its URL is a lasting secret that writes rows as its creator.

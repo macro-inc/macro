@@ -6,6 +6,10 @@ use crate::domain::shared_thread_replies::{
     NoSharedThreadReplies, ReplyTargetInboxFuture, SharedThreadReplyAccess,
 };
 use crm::domain::service::NoOpCrmService;
+use entity_access::domain::models::{
+    AccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
+    ViewAccessLevel,
+};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_event_broker::NoopMacroEventBroker;
 
@@ -132,6 +136,85 @@ async fn shared_thread_reply_starts_a_thread_in_the_recipients_inbox(
     .fetch_one(&pool)
     .await?;
     assert_eq!(owner_messages, 2);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn shared_thread_reads_only_the_viewers_reply_drafts(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let owner_inbox = uuid::uuid!("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+    let thread_id = uuid::uuid!("11111111-1111-1111-1111-111111111111");
+    let parent = uuid::uuid!("ee000001-0000-0000-0000-000000000001");
+    let owner_draft = uuid::uuid!("ee000002-0000-0000-0000-000000000002");
+    let owner_moved_draft = uuid::uuid!("ee000005-0000-0000-0000-000000000005");
+    let reader_inbox = insert_recipient_inbox(&pool).await?;
+    let owner = sqlx::query_scalar!(
+        "SELECT macro_id FROM email_links WHERE id = $1",
+        owner_inbox
+    )
+    .fetch_one(&pool)
+    .await?;
+    let service = service(pool, GrantsInbox(owner_inbox));
+    let reader_reply = service
+        .save_draft_for_user_impl(recipient(), Some(reader_inbox), reply_to(parent))
+        .await?
+        .draft
+        .db_id;
+
+    for (viewer, access, mut expected) in [
+        // A thread editor sees their saved reply. Both of the owner's drafts
+        // are outside the editor's inbox scope, including the moved reply.
+        (recipient(), AccessLevel::Edit, vec![parent, reader_reply]),
+        (recipient(), AccessLevel::View, vec![parent]),
+        (
+            MacroUserIdStr::try_from_email("other@example.com")?,
+            AccessLevel::Edit,
+            vec![parent],
+        ),
+        (
+            MacroUserIdStr::try_from(owner)?,
+            AccessLevel::Owner,
+            vec![parent, owner_draft, owner_moved_draft],
+        ),
+    ] {
+        expected.sort_unstable();
+        let receipt = EntityAccessReceipt::<ViewAccessLevel>::try_new(
+            EntityAccessAuth::Authenticated(viewer),
+            Entity {
+                entity_type: EntityType::EmailThread,
+                entity_id: thread_id.to_string(),
+            },
+            EntityPermission::AccessLevel {
+                access_level: access,
+            },
+        )?;
+
+        let mut full: Vec<_> = service
+            .get_thread_with_messages_impl(receipt.clone(), 0, 20)
+            .await?
+            .expect("thread exists")
+            .messages
+            .into_iter()
+            .map(|message| message.db_id)
+            .collect();
+        full.sort_unstable();
+        assert_eq!(full, expected, "full page for {access:?}");
+
+        let mut parsed: Vec<_> = service
+            .get_thread_parsed_impl(receipt, 0, 20)
+            .await?
+            .expect("thread exists")
+            .messages
+            .into_iter()
+            .map(|message| message.db_id)
+            .collect();
+        parsed.sort_unstable();
+        assert_eq!(parsed, expected, "parsed page for {access:?}");
+    }
     Ok(())
 }
 

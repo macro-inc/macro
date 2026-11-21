@@ -1,5 +1,6 @@
 import { gql, type OperationResult } from '@urql/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { TEST_AUTHORITY_GENERATION, testAuthority } from '../authority-fixture';
 import type { CacheRequest, CacheResponse } from '../protocol';
 import { installCacheCoordinatorWorker } from '../worker/cache-coordinator-runtime';
 import { installCacheEngineWorker } from '../worker/cache-engine-runtime';
@@ -77,7 +78,11 @@ class IntegrationCore {
       id: request.id,
       query: 'query' in request ? request.query : undefined,
     };
-    this.logs.push(entry);
+    if (
+      request.kind !== 'current-authority' &&
+      request.kind !== 'transition-authority'
+    )
+      this.logs.push(entry);
     for (const observer of requestObservers) observer(entry);
     if (request.kind === 'init') {
       // Like WASM: hold the owner lock and get the storage grant, then open.
@@ -98,6 +103,15 @@ class IntegrationCore {
       if (gate) await gate;
     }
     let result: unknown = null;
+    if (request.kind === 'current-authority')
+      result = testAuthority(request.identity);
+    if (request.kind === 'transition-authority')
+      result = {
+        authority: testAuthority(request.identity),
+        revision: '0',
+        changed: false,
+        affectedOps: [],
+      };
     if (request.kind === 'read') result = { kind: 'miss' };
     if (request.kind === 'enqueue-optimistic-mutation') {
       result = {
@@ -109,7 +123,12 @@ class IntegrationCore {
         initialClaim: { kind: 'not-runnable' },
       };
     }
-    const response: CacheResponse = { id: request.id, ok: true, result };
+    const response: CacheResponse = {
+      id: request.id,
+      ok: true,
+      result,
+      authorityGeneration: TEST_AUTHORITY_GENERATION,
+    };
     port.postMessage(response);
   }
 
@@ -840,6 +859,7 @@ describe('worker CacheHost coordinator integration', () => {
       standby.readQuery({ opKey: 9, query: 'query Blocked { blocked }' })
     ).rejects.toThrow('owner handoff timeout');
     const write = standby.writeQuery({
+      generation: TEST_AUTHORITY_GENERATION,
       query: 'query Write { write }',
       data: { write: true },
     });
@@ -973,4 +993,15 @@ describe('worker CacheHost coordinator integration', () => {
     owner.dispose();
     await vi.waitFor(() => expect(dedicatedWorkers[0]?.terminated).toBe(true));
   });
+});
+
+vi.mock('../authority', async (original) => {
+  const actual = await original<typeof import('../authority')>();
+  return {
+    ...actual,
+    createAuthorityObserver: (identity: string) => ({
+      ...actual.createAuthorityObserver(identity),
+      verified: () => true,
+    }),
+  };
 });

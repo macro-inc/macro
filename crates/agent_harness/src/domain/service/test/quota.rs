@@ -85,6 +85,7 @@ fn action(action: AgentAction) -> DeliverAction {
         announce: None,
         context: None,
         client: None,
+        prompter: agent_session::domain::model::PrompterKind::User,
     }
 }
 
@@ -733,6 +734,7 @@ async fn rejection_persistence_failure_keeps_work_and_defers_reply_resolution() 
             created_at: chrono::Utc::now(),
             context: None,
             client: None,
+            prompter: agent_session::domain::model::PrompterKind::User,
         };
         let stored = entry.to_stored().unwrap();
         let mut sessions = MockAgentSessionService::new();

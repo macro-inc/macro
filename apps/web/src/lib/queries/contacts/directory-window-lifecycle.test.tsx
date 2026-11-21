@@ -14,6 +14,7 @@ import { createEffect, createSignal } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { ContactDirectoryPage, readContactDirectory } from './directory';
 import { createContactDirectoryWindow } from './directory-query';
+import { watchContactReaders } from './readers';
 
 vi.mock('./backfill', () => ({
   loadContactCheckpoint: () => ({ pages: 200, completedAt: 1 }),
@@ -295,5 +296,180 @@ it('keeps its window key through a refresh of the same page and changes it for t
   await vi.advanceTimersByTimeAsync(300);
   expect(window!.windowKey()).toBeDefined();
   expect(window!.windowKey()).not.toBe(firstPage);
+  client.clear();
+});
+
+it('counts as an open contact reader once its first page settles, while enabled and mounted', async () => {
+  vi.useFakeTimers();
+  const readersOpen = watchContactReaders();
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const [enabled, setEnabled] = createSignal(false);
+  let answer = Promise.withResolvers<ContactDirectoryPage>();
+  const reader = vi.fn<typeof readContactDirectory>(() => answer.promise);
+  const page: ContactDirectoryPage = {
+    source: 'cache',
+    sync: 'snapshot',
+    offline: false,
+    query: '',
+    users: [],
+    nextCursor: null,
+  };
+  function Harness() {
+    createContactDirectoryWindow(
+      () => ({ userId: 'macro|viewer@example.com' }),
+      reader,
+      enabled,
+      { debounceMs: 0 }
+    );
+    return null;
+  }
+  const view = render(() => (
+    <QueryClientProvider client={client}>
+      <Harness />
+    </QueryClientProvider>
+  ));
+  setEnabled(true);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(reader).toHaveBeenCalledOnce();
+  expect(readersOpen()).toBe(false);
+
+  answer.resolve(page);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(readersOpen()).toBe(true);
+  setEnabled(false);
+  expect(readersOpen()).toBe(false);
+  await vi.advanceTimersByTimeAsync(0);
+
+  answer = Promise.withResolvers<ContactDirectoryPage>();
+  setEnabled(true);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(readersOpen()).toBe(false);
+  answer.reject(new Error('read failed'));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(readersOpen()).toBe(true);
+  view.unmount();
+  expect(readersOpen()).toBe(false);
+  client.clear();
+});
+
+it('keeps rows the server listed for a late cache until the input changes', async () => {
+  vi.useFakeTimers();
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+  const client = new QueryClient();
+  let changed: CacheChangeListener | undefined;
+  const host: CacheHost = {
+    ...createNoopCacheHost(),
+    disabled: false,
+    onCacheChanged: (callback) => {
+      changed = callback;
+      return () => {};
+    },
+  };
+  const reader = vi.fn<typeof readContactDirectory>(
+    async (_viewer, _host, request): Promise<ContactDirectoryPage> => ({
+      source: 'server',
+      sync: 'unavailable',
+      offline: false,
+      localLate: true,
+      query: request.query,
+      nextCursor: null,
+      users: [{ id: 'macro|a@example.com', email: 'a@example.com', name: 'A' }],
+    })
+  );
+  const [search, setSearch] = createSignal('');
+  let window: ReturnType<typeof createContactDirectoryWindow> | undefined;
+  function Harness() {
+    window = createContactDirectoryWindow(
+      () => ({ userId: 'macro|viewer@example.com', host }),
+      reader,
+      () => true,
+      { search, debounceMs: 0, localBudgetMs: 2_000 }
+    );
+    return null;
+  }
+  render(() => (
+    <QueryClientProvider client={client}>
+      <Harness />
+    </QueryClientProvider>
+  ));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(window!.data()?.localLate).toBe(true);
+  expect(reader).toHaveBeenCalledOnce();
+  expect(reader.mock.calls[0][2].localBudgetMs).toBe(2_000);
+
+  // The cache answering afterwards would rank the rows on screen again.
+  changed!(parseCacheRevision('2'), { searchChangedBuckets: ['person'] });
+  await vi.advanceTimersByTimeAsync(300);
+  expect(reader).toHaveBeenCalledOnce();
+
+  setSearch('a');
+  await vi.advanceTimersByTimeAsync(0);
+  expect(reader).toHaveBeenCalledTimes(2);
+  client.clear();
+});
+
+it('does not restart a budgeted read for cache changes while it runs', async () => {
+  vi.useFakeTimers();
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+  const client = new QueryClient();
+  let changed: CacheChangeListener | undefined;
+  const host: CacheHost = {
+    ...createNoopCacheHost(),
+    disabled: false,
+    onCacheChanged: (callback) => {
+      changed = callback;
+      return () => {};
+    },
+  };
+  const page: ContactDirectoryPage = {
+    source: 'cache',
+    sync: 'snapshot',
+    offline: false,
+    query: '',
+    nextCursor: null,
+    users: [{ id: 'macro|a@example.com', email: 'a@example.com', name: 'A' }],
+  };
+  const first = Promise.withResolvers<ContactDirectoryPage>();
+  const reader = vi
+    .fn<typeof readContactDirectory>()
+    .mockReturnValueOnce(first.promise)
+    .mockResolvedValue(page);
+  let window: ReturnType<typeof createContactDirectoryWindow> | undefined;
+  function Harness() {
+    window = createContactDirectoryWindow(
+      () => ({ userId: 'macro|viewer@example.com', host }),
+      reader,
+      () => true,
+      { debounceMs: 0, localBudgetMs: 2_000 }
+    );
+    return null;
+  }
+  render(() => (
+    <QueryClientProvider client={client}>
+      <Harness />
+    </QueryClientProvider>
+  ));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(reader).toHaveBeenCalledOnce();
+
+  // A busy cache reports changes while the read waits on it. Restarting the
+  // read each time would restart its budget and never reach the server.
+  changed!(parseCacheRevision('2'), { searchChangedBuckets: ['person'] });
+  await vi.advanceTimersByTimeAsync(300);
+  changed!(parseCacheRevision('3'), { searchChangedBuckets: ['person'] });
+  await vi.advanceTimersByTimeAsync(300);
+  expect(reader).toHaveBeenCalledOnce();
+  expect(reader.mock.calls[0][3].aborted).toBe(false);
+
+  // Its page lists as it lands, and the next change refreshes it.
+  first.resolve(page);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(reader).toHaveBeenCalledOnce();
+  expect(window!.data()?.users).toHaveLength(1);
+  changed!(parseCacheRevision('4'), { searchChangedBuckets: ['person'] });
+  await vi.advanceTimersByTimeAsync(300);
+  expect(reader).toHaveBeenCalledTimes(2);
   client.clear();
 });

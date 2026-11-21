@@ -58,8 +58,9 @@ impl From<SubjectQuery> for String {
 }
 
 /// A kind of attachment a thread's messages carry, by MIME type.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
 pub enum AttachmentKind {
     /// `application/pdf`.
     Pdf,
@@ -155,13 +156,20 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             importance,
             is_read,
             notification_filters,
+            done,
             include_labels: _,
             exclude_labels: _,
             shared,
             crm_domains,
             crm_addresses,
             calendar_only,
+            attachments,
+            view,
         } = input;
+
+        if view.is_some() {
+            return Err(ExpandErr::SearchOnlyEmailView);
+        }
 
         // Expand crm_domains / crm_addresses via the shared helper so the
         // raw AST endpoint and the typed POST stay byte-identical. We
@@ -222,6 +230,15 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
         let calendar_only_node = calendar_only
             .filter(|v| *v)
             .map(|v| Expr::Literal(EmailLiteral::CalendarOnly(v)));
+        let mut attachment_kinds: Vec<AttachmentKind> = Vec::new();
+        for kind in attachments {
+            if !attachment_kinds.contains(&kind) {
+                attachment_kinds.push(kind);
+            }
+        }
+        let attachment_node = attachment_kinds
+            .into_iter()
+            .expand(EmailLiteral::Attachment, Expr::or);
 
         Ok([
             sender_nodes,
@@ -234,9 +251,11 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             importance_node,
             is_read.map(|read| Expr::val(EmailLiteral::Read(read))),
             notification_state_node,
+            done.map(|done| Expr::val(EmailLiteral::InboxVisible(!done))),
             shared_node,
             crm_node,
             calendar_only_node,
+            attachment_node,
         ]
         .into_iter()
         .fold_with(Expr::and))

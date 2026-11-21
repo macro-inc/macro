@@ -1,6 +1,7 @@
 import type { FacetSelection } from '@app/features/soup/filters/facets/types';
 
-export type HomeTab = 'signal' | 'noise';
+/** Signal and Noise are old Home's; Recent is New Home's list. */
+export type HomeTab = 'signal' | 'noise' | 'recent';
 
 export type HomeGroupBy = 'date' | 'type' | 'none';
 

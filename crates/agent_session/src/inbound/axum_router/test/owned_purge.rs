@@ -60,6 +60,7 @@ impl AgentSessionNotificationRecipient for OwnedSessions {
         _: AgentActionId,
         _: String,
         _: Option<MacroUserIdStr<'static>>,
+        _: crate::domain::model::PrompterKind,
     ) -> SessionResult<()> {
         unreachable!()
     }

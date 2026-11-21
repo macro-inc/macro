@@ -964,10 +964,7 @@ impl<
 
                 // Decided before the row exists, so nobody can read this call
                 // and see a discussion it will not keep.
-                let channel_thread = match &self.channel_threads {
-                    Some(channel_threads) => channel_threads.enabled_for(user_id.copied()).await,
-                    None => false,
-                };
+                let channel_thread = self.channel_threads.is_some();
 
                 // Try to create call record; if another request won the race
                 // the ON CONFLICT returns None — re-read the existing call.

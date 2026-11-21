@@ -1,7 +1,6 @@
 import { createQueryKeys } from '@lukemorales/query-key-factory';
 
 export const projectsKeys = createQueryKeys('projects', {
-  list: null,
   preview: (projectId: string) => ({
     queryKey: [projectId],
   }),

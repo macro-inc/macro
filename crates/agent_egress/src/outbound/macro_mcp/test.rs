@@ -261,3 +261,24 @@ async fn sessions_of_the_same_agent_never_share_mcp_credentials() {
     }
     assert_eq!(tokens.minted.load(Ordering::SeqCst), 2);
 }
+
+/// A routine run's token signs its routine and, for a dry run, its scope.
+#[test]
+fn a_routine_token_signs_its_routine_and_scope() {
+    let routine = macro_uuid::Uuid::from_u128(7);
+    assert_eq!(
+        SignedClaims::routine(
+            None,
+            routine,
+            Some(agent_correlation::scope::SessionScope::DryRun)
+        ),
+        SignedClaims {
+            agent_id: None,
+            agent_via: None,
+            agent_session_id: None,
+            agent_correlation_id: None,
+            agent_scope: Some(agent_correlation::scope::SessionScope::DryRun),
+            routine_id: Some(routine),
+        }
+    );
+}

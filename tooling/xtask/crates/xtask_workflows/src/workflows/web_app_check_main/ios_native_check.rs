@@ -1,6 +1,6 @@
 //! `iOS Native Check` — merge gate for PRs that change native iOS (Tauri)
-//! code, as a job of the web app PR checks so that `Web App Status Check`
-//! (the required status check) covers it without a ruleset change. Web
+//! code, as a job of the web app PR checks so that `CI gate` (the required
+//! status) covers it without a ruleset change. Web
 //! bundles ship over the air, but native changes only reach users through
 //! the App Store, so a PR whose bundle depends on new native code must not
 //! merge before Apple has approved that native build; the prod deploy that
@@ -39,24 +39,69 @@
 //! stale by then. The job name must stay stable: the release workflow, the
 //! watcher and that label workflow find the job by it.
 
-use gh_workflow::{Expression, Job, Level, Permissions, Run, Step, Use};
+use gh_workflow::expr::typed::{
+    Bool, Expr, Flag, JobHandle, StepHandle, StepOutput, Str, cancelled, github, to_json,
+    whole_steps,
+};
+use gh_workflow::{Job, Level, Permissions, Run, Step, Use};
 
+use crate::workflows::actions::{ActionsGithubScript, DornyPathsFilter, OvenShSetupBun};
 use crate::workflows::{runners, vars};
 
-/// The job's id in the web app check workflow.
-pub(super) const JOB_ID: &str = "ios-native-check";
+/// The job in the web app check workflow.
+pub(super) const JOB: JobHandle<()> = JobHandle::new("ios-native-check", ());
 /// The job's display name (a check run name).
 pub(super) const JOB_NAME: &str = "iOS Native Check";
 
+struct NativeFilterOutputs {
+    /// Whether the path filter matched native iOS code.
+    ios_native: StepOutput<Flag>,
+}
+
+const NATIVE_FILTER: StepHandle<NativeFilterOutputs> = StepHandle::new(
+    "native-filter",
+    NativeFilterOutputs {
+        ios_native: StepOutput::new("native-filter", "ios_native"),
+    },
+);
+
+struct CacheWasmOutputs {
+    /// Whether the client cache wasm version moved against the base.
+    bumped: StepOutput<Flag>,
+    /// The base commit the merge result was built on.
+    base_sha: StepOutput<Str>,
+}
+
+const CACHE_WASM: StepHandle<CacheWasmOutputs> = StepHandle::new(
+    "cache-wasm",
+    CacheWasmOutputs {
+        bumped: StepOutput::new("cache-wasm", "bumped"),
+        base_sha: StepOutput::new("cache-wasm", "base_sha"),
+    },
+);
+
+struct LabelsOutputs {
+    /// Whether the PR carries the `skip-ios-update` label.
+    skip: StepOutput<Flag>,
+}
+
+const LABELS: StepHandle<LabelsOutputs> = StepHandle::new(
+    "labels",
+    LabelsOutputs {
+        skip: StepOutput::new("labels", "skip"),
+    },
+);
+
 /// Native iOS code changed: the path filter matched, or the cache wasm
 /// version moved against the base branch.
-const NATIVE_CHANGED: &str = "(steps.native-filter.outputs.ios_native == 'true' || steps.cache-wasm.outputs.bumped == 'true')";
-/// The PR opted out of the gate via the `skip-ios-update` label (as read at
-/// run time, see [`read_labels`]), and its negation. Spelled out rather than
-/// `!SKIP_LABEL`: in GitHub expressions `!` binds tighter than `==`, so
-/// `!a == 'true'` is `(!a) == 'true'`, false whatever `a` is.
-const SKIP_LABEL: &str = "steps.labels.outputs.skip == 'true'";
-const NOT_SKIPPED: &str = "steps.labels.outputs.skip != 'true'";
+fn native_changed() -> Expr<Bool> {
+    NATIVE_FILTER
+        .outputs
+        .ios_native
+        .read()
+        .is_set()
+        .or(CACHE_WASM.outputs.bumped.read().is_set())
+}
 
 pub(super) fn job() -> Job {
     Job::default()
@@ -83,30 +128,22 @@ pub(super) fn job() -> Job {
         .add_step(pr_comment())
 }
 
-fn gated() -> Expression {
-    Expression::new(format!("{NATIVE_CHANGED} && {NOT_SKIPPED}"))
+fn gated() -> Expr<Bool> {
+    native_changed().and(LABELS.outputs.skip.read().is_unset())
 }
 
 fn paths_filter() -> Step<Use> {
-    Step::new("Detect native iOS changes")
-        .uses(
-            "dorny",
-            "paths-filter",
-            "d1c1ffe0248fe513906c8e24db8ea791d46f8590",
-        ) // v3.0.3
-        .id("native-filter")
-        .add_with(("predicate-quantifier", "every"))
-        .add_with((
-            "filters",
-            // Mirror NATIVE_TREE_EXCLUDE in scripts/ios_native_tree.sh: paths
-            // named for another platform (android, macos, linux, windows,
-            // desktop) never reach the iOS binary; `desktop_*` stays counted
-            // because desktop_update compiles into mobile. The generator rejects
-            // globs that match nothing, so only the shapes present in the
-            // tree today are listed; when a file in a new shape appears
-            // (e.g. the first windows_* module), extend this list to keep it
-            // in step with the regex.
-            indoc::indoc! {"
+    DornyPathsFilter::new(
+        "Detect native iOS changes",
+        // Mirror NATIVE_TREE_EXCLUDE in scripts/ios_native_tree.sh: paths
+        // named for another platform (android, macos, linux, windows,
+        // desktop) never reach the iOS binary; `desktop_*` stays counted
+        // because desktop_update compiles into mobile. The generator rejects
+        // globs that match nothing, so only the shapes present in the
+        // tree today are listed; when a file in a new shape appears
+        // (e.g. the first windows_* module), extend this list to keep it
+        // in step with the regex.
+        indoc::indoc! {"
                 ios_native:
                   - 'apps/web/tauri/**'
                   - '!apps/web/tauri/**/android/**'
@@ -129,7 +166,10 @@ fn paths_filter() -> Step<Use> {
                   - '!apps/web/tauri/.helix/**'
                   - '!apps/web/tauri/**/*.md'
             "},
-        ))
+    )
+    .predicate_quantifier("every")
+    .step()
+    .id(NATIVE_FILTER.id())
 }
 
 /// Did this PR move the client cache wasm package version against its base?
@@ -157,7 +197,7 @@ fn cache_wasm_version_bump() -> Step<Run> {
               echo "bumped=false" >> "$GITHUB_OUTPUT"
             fi
         "#})
-        .id("cache-wasm")
+        .id(CACHE_WASM.id())
         .shell("bash")
 }
 
@@ -176,24 +216,23 @@ fn read_labels() -> Step<Run> {
               echo "skip=false" >> "$GITHUB_OUTPUT"
             fi
         "#})
-        .id("labels")
-        .if_condition(Expression::new(NATIVE_CHANGED))
+        .id(LABELS.id())
+        .if_condition(native_changed())
         .shell("bash")
-        .add_env(("GH_TOKEN", "${{ github.token }}"))
-        .add_env(("GH_REPO", "${{ github.repository }}"))
-        .add_env(("PR_NUMBER", "${{ github.event.pull_request.number }}"))
+        .add_env(("GH_TOKEN", github().token()))
+        .add_env(("GH_REPO", github().repository()))
+        .add_env((
+            "PR_NUMBER",
+            github().event::<Str>("pull_request.number"),
+        ))
 }
 
 fn setup_bun() -> Step<Use> {
-    Step::new("Setup Bun")
-        .uses(
-            "oven-sh",
-            "setup-bun",
-            "0c5077e51419868618aeaa5fe8019c62421857d6",
-        ) // v2.2.0
+    OvenShSetupBun::new("Setup Bun")
+        .bun_version("1.3.13")
+        .step()
         .id("bun")
         .if_condition(gated())
-        .add_with(("bun-version", "1.3.13"))
 }
 
 fn verify_bump() -> Step<Run> {
@@ -203,7 +242,7 @@ fn verify_bump() -> Step<Run> {
         .id("bump")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
         // The base the merge result was built on (fetched by the cache-wasm step).
-        .add_env(("BASE_REF", "${{ steps.cache-wasm.outputs.base_sha }}"))
+        .add_env(("BASE_REF", CACHE_WASM.outputs.base_sha.read()))
 }
 
 /// Exports `APPLE_API_KEY` / `APPLE_API_ISSUER` via `GITHUB_ENV` and writes
@@ -236,9 +275,9 @@ fn require_approved_version() -> Step<Run> {
         .shell("bash")
         .id("live")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
-        .add_env(("GH_TOKEN", "${{ github.token }}"))
-        .add_env(("GH_REPO", "${{ github.repository }}"))
-        .add_env(("PR_NUMBER", "${{ github.event.pull_request.number }}"))
+        .add_env(("GH_TOKEN", github().token()))
+        .add_env(("GH_REPO", github().repository()))
+        .add_env(("PR_NUMBER", github().event::<Str>("pull_request.number")))
 }
 
 fn skip_notice() -> Step<Run> {
@@ -247,23 +286,22 @@ fn skip_notice() -> Step<Run> {
             "echo \"Native iOS changes detected, but the skip-ios-update label says they \
              don't break the native/web contract — skipping the App Store release gate.\"",
         )
-        .if_condition(Expression::new(format!("{NATIVE_CHANGED} && {SKIP_LABEL}")))
+        .if_condition(native_changed().and(LABELS.outputs.skip.read().is_set()))
 }
 
 /// Keep release instructions visible on the PR even when an earlier step fails.
 fn pr_comment() -> Step<Use> {
-    Step::new("Update iOS gate status on the PR")
-        .uses(
-            "actions",
-            "github-script",
-            "f28e40c7f34bde8b3046d885e986cb6290c5673b",
-        )
-        .if_condition(Expression::new(
-            "!cancelled() && github.event.pull_request.head.repo.full_name == github.repository",
-        ))
-        .add_env(("IOS_GATE_STEPS", "${{ toJSON(steps) }}"))
-        .add_with((
-            "script",
-            include_str!("../scripts/ios_native_check_comment.js"),
-        ))
+    ActionsGithubScript::new(
+        "Update iOS gate status on the PR",
+        include_str!("../scripts/ios_native_check_comment.js"),
+    )
+    .step()
+    .if_condition(
+        (!cancelled()).and(
+            github()
+                .event::<Str>("pull_request.head.repo.full_name")
+                .eq(github().repository()),
+        ),
+    )
+    .add_env(("IOS_GATE_STEPS", to_json(whole_steps())))
 }

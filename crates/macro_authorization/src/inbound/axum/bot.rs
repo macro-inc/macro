@@ -15,7 +15,7 @@ use super::{
 };
 
 /// Header carrying a bot authentication token.
-pub const BOT_TOKEN_HEADER: &str = "x-macro-bot-token";
+pub use macro_auth::credential::BOT_TOKEN_HEADER;
 /// Header carrying the access scope for a bot-authorized request.
 pub const BOT_SCOPE_HEADER: &str = "x-macro-bot-scope";
 /// Header carrying the Macro user ID a bot claims to act for.

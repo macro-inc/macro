@@ -1,0 +1,71 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT m.id,m.provider_id,\n            (m.is_draft OR NOT m.is_sent AND (\n                EXISTS(SELECT 1 FROM email_scheduled_messages s WHERE s.message_id = m.id AND s.link_id = m.link_id)\n                OR EXISTS(SELECT 1 FROM email_send_attempts a WHERE a.message_id = m.id AND a.link_id = m.link_id AND NOT a.cancelled AND NOT a.sent)\n            )) AS \"is_draft!\",\n            m.is_sent,m.is_read,\n            f.in_inbox AS \"in_inbox!\", f.in_trash AS \"in_trash!\", f.in_junk AS \"in_junk!\", f.is_present AS \"is_present!\"\n        FROM email_messages m JOIN email_message_mailbox_facts f ON f.id = m.id\n        WHERE m.link_id = $1 AND m.thread_id = $2 ORDER BY m.id\n    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "provider_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "is_draft!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "is_sent",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "is_read",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "in_inbox!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "in_trash!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "in_junk!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "is_present!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      null,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "2e15f4ac9f0400e221e6a705a53a82c78d26d1a393edb7385ef424bd198b46cc"
+}

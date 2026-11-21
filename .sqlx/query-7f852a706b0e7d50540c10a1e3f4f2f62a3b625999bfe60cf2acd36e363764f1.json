@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH items AS (\n    SELECT d.id AS entity_id, 'document' AS entity_type,\n           CASE WHEN st.sub_type = 'task' THEN 'task' ELSE 'document' END AS kind,\n           CASE WHEN d.\"deletedAt\" IS NULL THEN d.\"updatedAt\" END AS sort_ts\n    FROM \"Document\" d\n    LEFT JOIN document_sub_type st ON st.document_id = d.id\n    UNION ALL\n    SELECT c.id, 'chat', 'chat', CASE WHEN c.\"deletedAt\" IS NULL THEN c.\"updatedAt\" END\n    FROM \"Chat\" c\n    UNION ALL\n    SELECT p.id, 'project', 'project', CASE WHEN p.\"deletedAt\" IS NULL THEN p.\"updatedAt\" END\n    FROM \"Project\" p\n), expected AS (\n    SELECT ea.source_id, i.entity_type, i.kind, i.entity_id, i.sort_ts, count(*)::int AS grants\n    FROM items i\n    JOIN entity_access ea ON ea.entity_id::text = i.entity_id AND ea.entity_type = i.entity_type\n    GROUP BY ea.source_id, i.entity_type, i.kind, i.entity_id, i.sort_ts\n), actual AS (\n    SELECT source_id, entity_type, kind, entity_id, sort_ts, grants FROM source_items\n)\nSELECT\n    (SELECT count(*) FROM (SELECT * FROM expected EXCEPT ALL SELECT * FROM actual) m)\n        AS \"missing_or_wrong!\",\n    (SELECT count(*) FROM (SELECT * FROM actual EXCEPT ALL SELECT * FROM expected) e)\n        AS \"extra_or_wrong!\"\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "missing_or_wrong!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "extra_or_wrong!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "7f852a706b0e7d50540c10a1e3f4f2f62a3b625999bfe60cf2acd36e363764f1"
+}

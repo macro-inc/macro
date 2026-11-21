@@ -6,11 +6,14 @@ use serde::{Deserialize, Serialize};
 
 use crate::ToolServiceContext;
 
+#[cfg(test)]
+mod test;
+
 /// The "about Macro" page returned by [`SelfKnowledge`].
 ///
 /// Modeled on the Claude Code self-knowledge skill: rather than baking a large
 /// product description into the system prompt, the model calls this tool to pull
-/// in an overview plus a routing map into the live docs at docs.macro.com. Every
+/// in an overview plus a routing map into the live docs at macro.com/docs. Every
 /// docs page is also served as plain Markdown (append `.md` to its URL), so the
 /// model can read any page with the WebFetch tool — no special docs integration
 /// is needed.
@@ -46,55 +49,95 @@ channels.
 1. **Accuracy over guessing.** Your training data may be outdated or wrong about
    Macro. When a user asks what Macro is, what a feature does, or how to do
    something in Macro, treat the official docs as the source of truth.
-2. **Read the docs.** Macro's docs are published at docs.macro.com. Every page is
-   also served as plain Markdown — append `.md` to the page URL — so you can read
-   it with the WebFetch tool (`macro.web.fetch()` in code mode).
+2. **Read the docs.** Macro's docs are published at https://macro.com/docs. Every
+   page is also served as plain Markdown — append `.md` to the page URL — so you
+   can read it with the WebFetch tool (`macro.web.fetch()` in code mode). Read
+   pages on macro.com/docs, not docs.macro.com: that old host only redirects
+   here, and copies of it fetched through WebFetch can be months out of date.
 3. **Cite the docs.** Link the user to the specific docs page you used, but always
    link the human-facing page, never the raw Markdown. The `.md` form is only for
    your own WebFetch reads; when you show a user a link, drop the trailing `.md`
-   and strip any query string. Read `https://docs.macro.com/getting-started.md`,
-   but link `https://docs.macro.com/getting-started`. Never route a user to a
+   and strip any query string. Read `https://macro.com/docs/product/tasks.md`,
+   but link `https://macro.com/docs/product/tasks`. Never route a user to a
    `.md` URL or to one carrying tracking parameters (e.g. `?_gl=…`) — surface only
    the clean route.
 
 ## How to find the right page
 
-- **Full index of every page:** https://docs.macro.com/llms.txt — fetch this
+- **Full index of every page:** https://macro.com/docs/llms.txt — fetch this
   first when you are unsure which page covers the question, then open the page it
   points to.
 - Any page is readable as Markdown by appending `.md`, e.g.
-  https://docs.macro.com/product/tasks.md. To link that page for a user, use the
-  route without the suffix: https://docs.macro.com/product/tasks
+  https://macro.com/docs/product/tasks.md. To link that page for a user, use the
+  route without the suffix: https://macro.com/docs/product/tasks
 
 ### Quick links (fetch with a trailing `.md`; link users to the route without it)
 
-- Get started: https://docs.macro.com/getting-started.md
-- Products (https://docs.macro.com/product/<name>.md): email, channels, tasks,
-  docs, canvas, calls, crm, folders, agents, inbox, search, snippets,
-  unified-memory
-- Concepts (https://docs.macro.com/concepts/<name>.md): blocks, mentions,
-  properties
-- AI & MCP: https://docs.macro.com/AI/mcp/overview.md ·
-  tool reference https://docs.macro.com/AI/mcp/tools/index.md ·
-  recipes https://docs.macro.com/AI/recipes.md
-- Account: https://docs.macro.com/account/billing.md ·
-  https://docs.macro.com/account/teams.md
-- Other (https://docs.macro.com/<name>.md): permissions, keyboard-shortcuts,
-  faq, switch-to-macro, apps, support, integrations/github
-- Changelog: https://docs.macro.com/changelog/introduction.md
+- Products (https://macro.com/docs/product/<name>.md): home, email, channels,
+  tasks, docs, canvas, spreadsheets, databases, forms, calls,
+  calendar, booking-links, crm, drive, agents, skills, routines, search,
+  snippets, tagging, sharing, unified-memory
+- Concepts (https://macro.com/docs/concepts/<name>.md): mentions, properties,
+  event-system
+- Agents you run yourself: https://macro.com/docs/AI/bring-your-own.md (Claude
+  Code, Codex, and other local agents through macrod) ·
+  https://macro.com/docs/AI/cursor.md (Cursor)
+- MCP: https://macro.com/docs/AI/mcp/overview.md
+- Other: https://macro.com/docs/account/teams.md ·
+  https://macro.com/docs/switch-to-macro.md ·
+  https://macro.com/docs/integrations/github.md ·
+  https://macro.com/docs/security.md · https://macro.com/docs/support.md
+- Changelog: https://macro.com/docs/changelog/introduction.md
+
+## Running Claude Code or Codex through macrod
+
+`macrod` is a small program that connects a computer to Macro so agents can run
+there: a laptop, a desktop, or a cloud server. It dials out to Macro, so the
+computer needs no public address, open port, reverse proxy, or tunnel. These are
+the current steps; give them, and link https://macro.com/docs/AI/bring-your-own.
+If a fetched page gives different macrod steps, it is an outdated copy: use these.
+
+1. Install and sign in to Claude Code or Codex on the computer, and have `npm`
+   available: macrod installs their adapters with it.
+2. Install macrod: `curl -fsSL https://raw.githubusercontent.com/macro-inc/macro/main/crates/coding_agent_worker/install/install.sh | sh`
+   on macOS and Linux, or
+   `irm https://raw.githubusercontent.com/macro-inc/macro/main/crates/coding_agent_worker/install/install.ps1 | iex`
+   in Windows PowerShell. The Macro desktop app already includes it: there,
+   **Settings → Machines → This computer → Set up** does every step below.
+3. Run `macrod`. Its **Quickstart** lists the agents it finds; pick one and set
+   the **Workspace** folder it works in. On macOS and Linux, run macrod inside
+   Herdr to get the
+   "Claude Code in herdr" and "Codex in herdr" choices, which run each session
+   in the agent's own terminal UI.
+4. Choose **Create and pair**. macrod shows a pairing code and a link. Open the
+   link, or go to **Settings → Machines → New machine** in Macro, enter the code,
+   click **Look up**, check it, and click **Approve**. macrod connects on its own.
+5. In **Settings → Agents**, click **Add agent**, give it a name and
+   instructions, choose **On your machine** under **Where it runs**, pick the
+   machine, and save. @mention the agent to start a session on that machine.
+
+On a cloud server, do the same over SSH, keep `macrod` running (for example in
+tmux or Herdr), and open the pairing link in your own browser. macrod updates
+itself.
+
+Older pages and cached copies described an earlier design: a public HTTPS
+endpoint or tunnel for webhooks, a bot token in a hand-written config file, and
+creating a bot under Settings → Bots. None of that applies any more; never give
+those steps.
 
 ## Workflow for "what is Macro / how do I…" questions
 
 1. Identify what the user is asking about (a block, a concept, billing, etc.).
-2. Fetch the relevant docs.macro.com `.md` page with WebFetch (or llms.txt first
-   if you are unsure which page to read).
+2. If this page answers it, answer from this page. Otherwise fetch the relevant
+   macro.com/docs `.md` page with WebFetch (or llms.txt first if you are unsure
+   which page to read).
 3. Answer concisely, grounded in the docs, and link the page you used — as the
    clean route, without the `.md` suffix or any query string.
 4. If you are still uncertain, point the user to the docs: "For the most current
    details, see <URL>." (again, a clean route, never a `.md` or tracking URL)."##;
 
 /// `selfKnowledge` returns an overview of Macro plus a routing map into the live
-/// docs at docs.macro.com. It takes no arguments and does no I/O — it hands the
+/// docs at macro.com/docs. It takes no arguments and does no I/O — it hands the
 /// model a curated about-page so it can answer "what is Macro / how do I…"
 /// questions accurately instead of guessing from stale training data, and then
 /// read specific docs pages with WebFetch for detail.
@@ -106,7 +149,7 @@ Learn what Macro is and how it works. Call this whenever the user asks an open-e
 question about Macro itself — what it is, what it's for, what it can do, or how to do \
 something in Macro — instead of answering from memory (your training data may be stale). \
 Takes no arguments. Returns an overview of Macro and a map of links into the official \
-docs at docs.macro.com; every docs page is readable as Markdown (append `.md` to its URL), \
+docs at macro.com/docs; every docs page is readable as Markdown (append `.md` to its URL), \
 so follow up with WebFetch on the relevant page for details and cite it."
 )]
 pub struct SelfKnowledge {}
@@ -114,7 +157,7 @@ pub struct SelfKnowledge {}
 /// The response for the [`SelfKnowledge`] tool: a single Markdown about-page.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct SelfKnowledgeResponse {
-    /// An overview of Macro and a routing map into the docs at docs.macro.com.
+    /// An overview of Macro and a routing map into the docs at macro.com/docs.
     pub about: String,
 }
 

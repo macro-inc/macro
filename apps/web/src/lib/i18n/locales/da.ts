@@ -104,7 +104,6 @@ export default {
     close: 'Luk',
     delete: 'Slet',
     rename: 'Omdøb',
-    more: 'Mere',
     search: 'Søg',
     settings: 'Indstillinger',
   },
@@ -519,6 +518,10 @@ export default {
       other: '{{count}} elementer slettet',
     },
     toastDeleteFailed: 'Kunne ikke slette',
+    toastPropertySet: {
+      one: '{{property}} angivet',
+      other: '{{property}} angivet for {{count}} elementer',
+    },
     toastAddedToFavorites: 'Føjet til favoritter',
     toastAddedCountToFavorites: {
       one: '{{count}} element føjet til favoritter',
@@ -689,8 +692,6 @@ export default {
     create: 'Opret',
     getMobileApp: 'Hent mobilappen',
     signedInAs: 'Logget ind som {{name}}',
-    commandMenu: 'Kommandomenu',
-    searchEverything: 'Søg i alt',
     customizeSidebar: 'Tilpas sidepanelet',
     customizeSidebarDescription:
       'Vælg, hvilke apps der vises i sidepanelet, og træk for at ændre rækkefølgen. Hjem er altid først.',

@@ -105,7 +105,6 @@ export default {
     close: 'Schließen',
     delete: 'Löschen',
     rename: 'Umbenennen',
-    more: 'Mehr',
     search: 'Suchen',
     settings: 'Einstellungen',
   },
@@ -528,6 +527,10 @@ export default {
       other: '{{count}} Elemente gelöscht',
     },
     toastDeleteFailed: 'Löschen fehlgeschlagen',
+    toastPropertySet: {
+      one: '{{property}} festgelegt',
+      other: '{{property}} für {{count}} Elemente festgelegt',
+    },
     toastAddedToFavorites: 'Zu Favoriten hinzugefügt',
     toastAddedCountToFavorites: {
       one: '{{count}} Element zu Favoriten hinzugefügt',
@@ -699,8 +702,6 @@ export default {
     create: 'Erstellen',
     getMobileApp: 'Mobile App herunterladen',
     signedInAs: 'Angemeldet als {{name}}',
-    commandMenu: 'Befehlsmenü',
-    searchEverything: 'Alles durchsuchen',
     customizeSidebar: 'Seitenleiste anpassen',
     customizeSidebarDescription:
       'Auswählen, welche Apps in der Seitenleiste erscheinen, und per Drag & Drop neu anordnen. Start bleibt immer an erster Stelle.',

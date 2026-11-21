@@ -3,13 +3,13 @@ export {
   CollapsibleSection,
   type CollapsibleSectionRootProps,
 } from './CollapsibleSection';
+export { CollectionEmpty, CollectionPanes } from './CollectionPanes';
 export {
   createCollapsedSidebarSectionsStorage,
   setSidebarSectionCollapsed,
 } from './collapsed-sections';
 export {
   type ListControlOption,
-  ListFilterCountBadge,
   ListFilterDropdown,
   type ListFilterDropdownProps,
   type ListFilterGroup,
@@ -23,6 +23,7 @@ export {
 } from './ListDropdowns';
 export { MobileFilterDrawer } from './MobileFilterDrawer';
 export { SearchBar, type SearchBarProps } from './SearchBar';
+export { useTouchTopBarsFloat } from './touch-top-bar';
 export { VIEW_SHELL_TOUR } from './tour';
 export {
   type UseViewControlHotkeysOptions,
@@ -46,6 +47,7 @@ export {
 } from './ViewBreadcrumbs';
 export {
   asideCollapsedPreferenceKey,
+  asideWidthPreferenceKey,
   useViewShell,
   ViewNavigationControls,
   ViewShell,

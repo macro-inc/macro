@@ -6,8 +6,6 @@ import { useHasPaidAccess } from '@core/auth/license';
 import { defaultModelForPlan } from '@core/component/AI/constant';
 import {
   enableRoutineBackgroundDrafts,
-  enableRoutineCodeSteps,
-  enableRoutineConditions,
   enableRoutineStarterTemplates,
 } from '@core/constant/featureFlags';
 import { type ComponentProps, Show } from 'solid-js';
@@ -30,10 +28,8 @@ export function RoutineCreator(
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
   const hasPaidAccess = useHasPaidAccess();
-  const decisions = useFeatureFlag(enableRoutineConditions);
   const templates = useFeatureFlag(enableRoutineStarterTemplates);
   const defaultModel = () => defaultModelForPlan(hasPaidAccess());
-  const codeSteps = useFeatureFlag(enableRoutineCodeSteps);
   const catalog = useRoutineCatalog();
   const background = useFeatureFlag(enableRoutineBackgroundDrafts);
   // The page reads its first draft from the unsent-draft store.
@@ -50,10 +46,10 @@ export function RoutineCreator(
   ) => (
     <RoutineCreatorView
       defaultModel={defaultModel()}
-      decisionsEnabled={decisions().enabled}
+      decisionsEnabled
       templatesEnabled={templates().enabled}
       catalog={catalog()}
-      codeSteps={codeSteps().enabled}
+      codeSteps
       renderComposer={slots.renderComposer}
       drafting={slots.drafting}
       onClose={() => panel.handle.close()}
@@ -73,14 +69,14 @@ export function RoutineCreator(
             current={current}
             initialDescription={initialDescription}
             defaultModel={defaultModel()}
-            decisionsEnabled={decisions().enabled}
+            decisionsEnabled
           />
         ),
       })}
     >
       <RoutineBackgroundDrafts
         defaultModel={defaultModel()}
-        decisionsEnabled={decisions().enabled}
+        decisionsEnabled
         open={open}
       >
         {(slots) =>

@@ -45,6 +45,35 @@ fn a_generation_session_reads_and_writes_only_its_own_tools() {
     }
 }
 
+/// Count previews and validation reveal no new content or sharing; policy
+/// writes can contribute mail and remain outside every scoped credential.
+#[test]
+fn scoped_sessions_inspect_email_rules_without_changing_contribution() {
+    for scope in [
+        SessionScope::Generation,
+        SessionScope::NoSend,
+        SessionScope::DryRun,
+    ] {
+        for prefix in ["", "/dss/v1"] {
+            for (method, path) in [
+                ("GET", "/crm/email-privacy/policy"),
+                ("POST", "/crm/email-privacy/policy/validate"),
+                ("POST", "/crm/email-privacy/policy/preview"),
+            ] {
+                assert!(scope.allows(method, &format!("{prefix}{path}")));
+            }
+            assert!(!scope.allows("PUT", &format!("{prefix}/crm/email-privacy/policy")));
+            assert_eq!(
+                scope.allows(
+                    "DELETE",
+                    &format!("{prefix}/crm/email-privacy/policy/preview/01a1"),
+                ),
+                scope == SessionScope::NoSend,
+            );
+        }
+    }
+}
+
 #[test]
 fn a_template_matches_the_whole_path_under_at_most_one_service_prefix() {
     assert!(matches(
@@ -61,6 +90,72 @@ fn a_template_matches_the_whole_path_under_at_most_one_service_prefix() {
     assert!(!matches("/scheduled-actionx/suggestions", "/suggestions"));
 }
 
+/// Document storage, cognition and notification serve every route under an
+/// API version too, so a template matches its versioned path, under a
+/// service prefix or alone.
+#[test]
+fn a_template_matches_its_path_under_an_api_version() {
+    assert!(matches(
+        "/cognition/v1/email/send-confirmed",
+        "/email/send-confirmed"
+    ));
+    assert!(matches(
+        "/dss/v1/documents/1/comments/text",
+        "/documents/{id}/comments/text"
+    ));
+    assert!(matches("/v2/web/fetch", "/web/fetch"));
+    assert!(!matches("/cognition/v1/v1/web/fetch", "/web/fetch"));
+    assert!(!matches("/cognition/vx/web/fetch", "/web/fetch"));
+    assert!(!matches("/v1/cognition/web/fetch", "/web/fetch"));
+}
+
+/// Routers percent-decode the parameters they match (`/{version}`), so a
+/// path is compared decoded: an encoded version, prefix or literal still
+/// matches.
+#[test]
+fn a_template_matches_its_percent_encoded_path() {
+    assert!(matches(
+        "/dss/%76%31/items/soup/graphql",
+        "/items/soup/graphql"
+    ));
+    assert!(matches(
+        "/%64ss/v1/items/soup/graphql",
+        "/items/soup/graphql"
+    ));
+    assert!(matches("/cognition/web/%66etch", "/web/fetch"));
+    assert!(!SessionScope::NoSend.allows("POST", "/dss/%76%31/items/soup/graphql"));
+    assert!(!SessionScope::NoSend.allows("POST", "/cognition/%76%31/email/send-confirmed"));
+    assert!(!matches("/cognition/web%2Ffetch", "/web/fetch"));
+}
+
+/// A run that sends nothing is refused each of its sends under every service
+/// prefix and API version.
+#[test]
+fn a_run_that_sends_nothing_is_refused_every_send_under_any_version() {
+    for (method, template) in SessionScope::sends() {
+        let path: String = template
+            .split('/')
+            .map(|segment| {
+                if segment.starts_with('{') {
+                    "x"
+                } else {
+                    segment
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("/");
+        for prefix in std::iter::once("").chain(SERVICE_PREFIXES.iter().copied()) {
+            for version in ["", "/v1", "/v2"] {
+                let sent = format!("{prefix}{version}{path}");
+                assert!(
+                    !SessionScope::NoSend.allows(method, &sent),
+                    "{method} {sent}"
+                );
+            }
+        }
+    }
+}
+
 #[test]
 fn a_scope_is_stored_by_name() {
     assert_eq!(
@@ -71,7 +166,7 @@ fn a_scope_is_stored_by_name() {
 }
 
 /// A run that sends nothing changes the person's own items but never sends,
-/// posts, shares, invites, sets up a routine, or starts work with the
+/// posts, shares, invites, pings, sets up a routine, or starts work with the
 /// person's full access.
 #[test]
 fn a_run_that_sends_nothing_reaches_nobody() {
@@ -93,6 +188,16 @@ fn a_run_that_sends_nothing_reaches_nobody() {
     for (method, path) in [
         ("POST", "/email/messages"),
         ("POST", "/cognition/email/send-confirmed"),
+        // Booking changes the guest or host hears of.
+        ("POST", "/calendar/scheduling/bookings/01a1/approve"),
+        ("POST", "/calendar/scheduling/bookings/01a1/attendance"),
+        ("POST", "/calendar/scheduling/bookings/01a1/cancel"),
+        ("POST", "/calendar/scheduling/public/someone/intro/book"),
+        ("POST", "/calendar/scheduling/public/bookings/01a1/cancel"),
+        (
+            "POST",
+            "/calendar/scheduling/public/bookings/01a1/reschedule",
+        ),
         // Work that runs with the person's full access.
         ("POST", "/agent-harness/agent-sessions"),
         ("POST", "/agent-sessions/01a1/control"),
@@ -145,6 +250,9 @@ fn a_run_that_sends_nothing_reaches_nobody() {
             "/agent-sessions/a/code-executions/b/connected-apps/slack/send/calls",
         ),
         ("POST", "/team/invite"),
+        ("POST", "/notification/v1/user_notifications/send"),
+        ("POST", "/notification/user_notifications/send"),
+        ("POST", "/user_notifications/send"),
     ] {
         assert!(!scope.allows(method, path), "{method} {path}");
     }
@@ -156,7 +264,11 @@ fn a_run_that_sends_nothing_reaches_nobody() {
 #[test]
 fn a_signed_scope_is_read_from_its_claim() {
     assert_eq!(SignedScope::from_claim(None), SignedScope::Unscoped);
-    for scope in [SessionScope::Generation, SessionScope::NoSend] {
+    for scope in [
+        SessionScope::Generation,
+        SessionScope::NoSend,
+        SessionScope::DryRun,
+    ] {
         assert_eq!(
             SignedScope::from_claim(Some(scope.as_str())),
             SignedScope::Known(scope)
@@ -187,17 +299,51 @@ fn no_scope_reaches_graphql() {
     for scope in [
         SignedScope::Known(SessionScope::Generation),
         SignedScope::Known(SessionScope::NoSend),
+        SignedScope::Known(SessionScope::DryRun),
         SignedScope::Unknown,
     ] {
         for (method, path) in [
-            ("POST", "/soup/graphql"),
-            ("POST", "/dss/soup/graphql"),
-            ("GET", "/soup/graphql/ws"),
-            ("GET", "/dss/soup/graphql/ws"),
+            ("POST", "/items/soup/graphql"),
+            ("POST", "/dss/items/soup/graphql"),
+            ("POST", "/dss/v1/items/soup/graphql"),
+            ("GET", "/items/soup/graphql/ws"),
+            ("GET", "/dss/items/soup/graphql/ws"),
+            ("GET", "/dss/v1/items/soup/graphql/ws"),
         ] {
             assert!(!scope.allows(method, path), "{scope:?} {method} {path}");
         }
         assert!(scope.allows("GET", "/dss/documents/01a1"), "{scope:?}");
     }
-    assert!(SignedScope::Unscoped.allows("POST", "/dss/soup/graphql"));
+    assert!(SignedScope::Unscoped.allows("POST", "/dss/items/soup/graphql"));
+}
+
+/// A dry run reads, including the reads the SDK sends as POST, and writes
+/// nothing, under any service prefix.
+#[test]
+fn a_dry_run_reads_and_writes_nothing() {
+    let scope = SessionScope::DryRun;
+    for (method, path) in [
+        ("GET", "/email/threads/abc"),
+        ("HEAD", "/documents/abc"),
+        ("POST", "/dss/search"),
+        ("POST", "/search"),
+        ("POST", "/cognition/decisions"),
+    ] {
+        assert!(scope.allows(method, path), "{method} {path}");
+    }
+    for (method, path) in [
+        ("POST", "/email/messages"),
+        ("POST", "/email/drafts"),
+        ("DELETE", "/email/drafts/01a1"),
+        ("PUT", "/email/drafts/scheduled/01a1"),
+        ("PATCH", "/documents/01a1"),
+        ("POST", "/scheduled-action/suggestions"),
+        ("POST", "/scheduled-actions"),
+        ("POST", "/channels/01a1/messages"),
+        ("POST", "/web/search"),
+        ("POST", "/cognition/structured-completion"),
+    ] {
+        assert!(!scope.allows(method, path), "{method} {path}");
+    }
+    assert!(!scope.allows_sharing());
 }

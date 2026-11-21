@@ -135,8 +135,13 @@ fn build_text_query_string(terms: &[String], match_type: &str) -> String {
 
 pub(crate) struct EmailQueryBuilder {
     inner: SearchQueryBuilder<EmailSearchConfig>,
+    /// Threads every hit must belong to, on top of the access filter
+    required_thread_ids: Vec<String>,
     /// link ids to query over
     link_ids: Vec<String>,
+    /// Links whose mail never matches, such as a mailbox being disconnected
+    /// whose documents are not deleted yet
+    exclude_link_ids: Vec<String>,
     /// The sender of the email message
     sender: Vec<String>,
     /// The cc of the email message
@@ -165,7 +170,9 @@ impl EmailQueryBuilder {
     pub fn new(terms: Vec<String>) -> Self {
         Self {
             inner: SearchQueryBuilder::new(terms),
+            required_thread_ids: Vec::new(),
             link_ids: Vec::new(),
+            exclude_link_ids: Vec::new(),
             sender: Vec::new(),
             cc: Vec::new(),
             bcc: Vec::new(),
@@ -191,8 +198,18 @@ impl EmailQueryBuilder {
         fn ids_only(ids_only: bool) -> Self;
     }
 
+    pub fn required_thread_ids(mut self, required_thread_ids: Vec<String>) -> Self {
+        self.required_thread_ids = required_thread_ids;
+        self
+    }
+
     pub fn link_ids(mut self, link_ids: Vec<String>) -> Self {
         self.link_ids = link_ids;
+        self
+    }
+
+    pub fn exclude_link_ids(mut self, exclude_link_ids: Vec<String>) -> Self {
+        self.exclude_link_ids = exclude_link_ids;
         self
     }
 
@@ -278,9 +295,20 @@ impl EmailQueryBuilder {
         }
 
         // CUSTOM ATTRIBUTES SECTION
+        if !self.required_thread_ids.is_empty() {
+            content_bool_query.filter(QueryType::terms(
+                "entity_id",
+                self.required_thread_ids.clone(),
+            ));
+        }
+
         // If link_ids are provided, add them to the query
         if !self.link_ids.is_empty() {
             content_bool_query.filter(QueryType::terms("link_id", self.link_ids.clone()));
+        }
+
+        if !self.exclude_link_ids.is_empty() {
+            content_bool_query.must_not(QueryType::terms("link_id", self.exclude_link_ids.clone()));
         }
 
         if !self.sender.is_empty() {
@@ -423,7 +451,9 @@ pub struct EmailSearchArgs {
     pub user_id: String,
     pub user_ids: Vec<String>,
     pub thread_ids: Vec<String>,
+    pub required_thread_ids: Vec<String>,
     pub link_ids: Vec<String>,
+    pub exclude_link_ids: Vec<String>,
     pub sender: Vec<String>,
     pub cc: Vec<String>,
     pub bcc: Vec<String>,
@@ -450,7 +480,9 @@ impl From<EmailSearchArgs> for EmailQueryBuilder {
             .user_id(&args.user_id)
             .user_ids(args.user_ids)
             .ids(args.thread_ids)
+            .required_thread_ids(args.required_thread_ids)
             .link_ids(args.link_ids)
+            .exclude_link_ids(args.exclude_link_ids)
             .sender(args.sender)
             .cc(args.cc)
             .bcc(args.bcc)

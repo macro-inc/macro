@@ -53,7 +53,7 @@ export default defineConfig({
     },
     {
       name: 'tablet',
-      testMatch: 'mobile-input.browser.e2e.ts',
+      testMatch: ['mobile-input.browser.e2e.ts', 'caret.browser.e2e.ts'],
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 1024, height: 768 },

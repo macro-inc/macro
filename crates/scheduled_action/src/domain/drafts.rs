@@ -32,6 +32,7 @@ use agent_session::domain::routines::{
 };
 use anyhow::Result;
 use bot_id::BotId;
+use bots::domain::models::AgentMcpServer;
 use chrono::{SecondsFormat, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use routine_program::{CATALOG, CODE_STEPS, RoutineProgram, STEP_CONTEXT, Step};
@@ -39,12 +40,15 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use utoipa::ToSchema;
 
+use super::appearance::check_pick;
 use super::code_check::MAX_TASK_CHARS;
 use super::event_trigger::ActionTrigger;
 use super::models::{CreatedItem, RoutineCheck};
 use super::ports::{
-    DraftHandBacks, NoSessionCreations, RoutineCode, RoutineDraftService, SessionCreations,
+    DraftApps, DraftHandBacks, NoSessionCreations, RoutineCode, RoutineDraftService,
+    SessionCreations,
 };
+use super::service::missing_apps;
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument as _;
 
@@ -84,6 +88,9 @@ const TIMED_OUT: &str = "Drafting took too long. Try again, or describe the rout
 const INTERRUPTED: &str = "Drafting stopped before it finished. Please try again.";
 const HAS_AGENT: &str = "This routine already has its Ask AI step. Change that one instead.";
 const NO_CODE: &str = "Code steps can’t be written here right now.";
+/// How a routine's draft may use apps outside Macro, with `{apps}`, the ones
+/// its owner connected.
+const APPS: &str = include_str!("drafts/apps.md");
 
 /// What to draft.
 #[derive(Debug, Clone, Deserialize, ToSchema)]
@@ -185,6 +192,19 @@ pub struct DraftedRoutine {
     /// What AI created while drafting, such as the database the routine
     /// writes to. These exist whether or not the routine is saved.
     pub created: Vec<DraftCreated>,
+    /// The icon and colour AI picked for it from Macro's icons; absent when
+    /// it picked none, or one Macro doesn't have.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(nullable = false)]
+    pub appearance: Option<model_entity::EntityAppearance>,
+    /// Apps outside Macro its Ask AI step uses that its owner connected,
+    /// which the routine requires (its task's `mcp_servers`).
+    #[serde(default)]
+    pub apps: Vec<AgentMcpServer>,
+    /// Apps its Ask AI step needs that its owner hasn't connected: the owner
+    /// connects each one, or removes it, before saving.
+    #[serde(default)]
+    pub missing_apps: Vec<AgentMcpServer>,
 }
 
 /// Something a draft's session created. It exists whether or not the draft
@@ -255,6 +275,8 @@ pub struct RoutineDrafts<Code, Sessions> {
     conditions_enabled: bool,
     /// What drafts find before their session starts.
     finding: Option<Arc<Finding>>,
+    /// The apps a routine's draft may require, listed in its prompt.
+    apps: Option<Arc<dyn DraftApps>>,
 }
 
 /// What finding a draft's items uses, and the prompts it builds once.
@@ -290,6 +312,7 @@ impl<Code, Sessions> RoutineDrafts<Code, Sessions> {
             agent,
             conditions_enabled: false,
             finding: None,
+            apps: None,
         }
     }
 
@@ -303,6 +326,14 @@ impl<Code, Sessions> RoutineDrafts<Code, Sessions> {
     /// Let drafts ask AI before a run, when this host can answer.
     pub fn with_conditions_enabled(mut self, enabled: bool) -> Self {
         self.conditions_enabled = enabled;
+        self
+    }
+
+    /// List the apps its owner connected in a routine's draft, so its Ask
+    /// AI step may require the ones it uses, and say which it needs that
+    /// they haven't.
+    pub fn with_apps(mut self, apps: Arc<dyn DraftApps>) -> Self {
+        self.apps = Some(apps);
         self
     }
 }
@@ -373,6 +404,9 @@ fn draft_span(request: &DraftRequest) -> tracing::Span {
         routine.draft.ended = tracing::field::Empty,
         routine.draft.code_failing = tracing::field::Empty,
         routine.draft.agent_task = tracing::field::Empty,
+        routine.draft.connected_apps = tracing::field::Empty,
+        routine.draft.apps = tracing::field::Empty,
+        routine.draft.missing_apps = tracing::field::Empty,
         routine.draft.steps = tracing::field::Empty,
         routine.draft.step = tracing::field::Empty,
         routine.draft.outcome = tracing::field::Empty,
@@ -476,14 +510,41 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
         context: &DraftContext,
         progress: &dyn DraftProgress,
     ) -> Result<Result<Brief, &'static str>> {
-        if let Some(finding) = &self.finding {
-            return self
-                .found_brief(finding, owner, request, program, context, progress)
-                .await;
+        let briefed = match &self.finding {
+            Some(finding) => {
+                self.found_brief(finding, owner, request, program, context, progress)
+                    .await?
+            }
+            None => {
+                tracing::Span::current().record("routine.draft.drafter", "session");
+                let code = self.code_available(request, context);
+                brief(request, program, context, code, owner, self.agent.guide).map(Brief::from)
+            }
+        };
+        let Ok(mut brief) = briefed else {
+            return Ok(briefed);
+        };
+        if matches!(request, DraftRequest::Routine { .. })
+            && let Some(apps) = self.connected_apps(owner).await
+        {
+            brief.prompt.push_str(&apps_section(&apps));
+            brief.apps = Some(apps);
         }
-        tracing::Span::current().record("routine.draft.drafter", "session");
-        let code = self.code_available(request, context);
-        Ok(brief(request, program, context, code, owner, self.agent.guide).map(Brief::from))
+        Ok(Ok(brief))
+    }
+
+    /// The apps `owner` connected, or `None` when this host lists none or
+    /// they can't be read: the draft then requires no app.
+    async fn connected_apps(&self, owner: &MacroUserIdStr<'static>) -> Option<Vec<AgentMcpServer>> {
+        let apps = self
+            .apps
+            .as_ref()?
+            .connected(owner)
+            .await
+            .inspect_err(|error| tracing::warn!(error = ?error, "could not read a draft's apps"))
+            .ok()?;
+        tracing::Span::current().record("routine.draft.connected_apps", apps.len());
+        Some(apps)
     }
 
     /// Whether `request` may be written with code steps here.
@@ -557,6 +618,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
         let session = drafting.session;
         span.record("agent.session.id", session.to_string());
         let action = self.action(owner, session);
+        let connected = brief.apps.clone();
         // A request dropped mid-draft (the person left, or the connection
         // went) still stops and deletes its session.
         let mut cleanup = Cleanup {
@@ -622,14 +684,40 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
             "routine.draft.created_unused",
             created.iter().filter(|item| !item.used).count(),
         );
-        Ok(Some(match (check, ending) {
-            (Some(check), _) => drafted(request, program, check, created),
+        let draft = match (check, ending) {
+            (Some(check), _) => drafted(request, program, check, created, connected.as_deref()),
             (None, Ending::TimedOut) => failed_with(TIMED_OUT, created),
             (None, Ending::Interrupted) => failed_with(INTERRUPTED, created),
             (None, Ending::Finished | Ending::Checked | Ending::Failed | Ending::Cancelled) => {
                 failed_with(request.failed(), created)
             }
-        }))
+        };
+        Ok(Some(self.requirable_apps(owner, draft).await))
+    }
+
+    /// `draft` naming only the missing apps a routine of `owner`'s can
+    /// require once connected: a Connect for any other would leave it
+    /// unsaveable. The required apps that aren't connected joined the named
+    /// ones unbounded, so the list is bounded again (app-shaped, each once,
+    /// at most ten) before any is looked up. When that can't be read, the
+    /// draft names none rather than one it can't vouch for.
+    async fn requirable_apps(&self, owner: &MacroUserIdStr<'static>, mut draft: Draft) -> Draft {
+        let Draft::Routine(routine) = &mut draft else {
+            return draft;
+        };
+        let missing = missing_apps(std::mem::take(&mut routine.missing_apps), &routine.apps);
+        routine.missing_apps = match &self.apps {
+            Some(apps) if !missing.is_empty() => match apps.requirable(owner, missing).await {
+                Ok(requirable) => requirable,
+                Err(error) => {
+                    tracing::warn!(error = ?error, "could not tell which apps a routine can require");
+                    Vec::new()
+                }
+            },
+            _ => missing,
+        };
+        tracing::Span::current().record("routine.draft.missing_apps", routine.missing_apps.len());
+        draft
     }
 
     /// Open the hidden session, prompt it once and wait for a check that
@@ -1015,6 +1103,9 @@ fn created_items(
 struct Brief {
     instructions: Option<String>,
     prompt: String,
+    /// The apps its owner connected, as the prompt lists them; `None` when it
+    /// lists none, and the draft then requires no app.
+    apps: Option<Vec<AgentMcpServer>>,
 }
 
 impl From<String> for Brief {
@@ -1022,8 +1113,31 @@ impl From<String> for Brief {
         Self {
             instructions: None,
             prompt,
+            apps: None,
         }
     }
+}
+
+/// How a routine's draft may use apps outside Macro, after the `connected`
+/// ones, for the end of its prompt. Each is listed as the routine requires
+/// it, its slug and name quoted as data.
+fn apps_section(connected: &[AgentMcpServer]) -> String {
+    let listed = if connected.is_empty() {
+        "None.".to_owned()
+    } else {
+        connected
+            .iter()
+            .map(|app| {
+                format!(
+                    "{{ slug: {}, name: {} }}",
+                    Value::from(app.app_slug.as_str()),
+                    Value::from(app.server_name.as_str())
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    format!("\n\n{}", APPS.trim().replace("{apps}", &listed))
 }
 
 /// The draft's first prompt: what to draft, from what words, and how to hand
@@ -1068,15 +1182,15 @@ Follow the routines guide, which every session follows when it sets up a routine
 
 For this draft:
 
-1. You can't ask them anything. When no item has the name the words use, or several do, leave it out (no `entities`, or an empty knob) and they will pick it before saving.
+1. You can't ask them anything. When no item has the name the words use, or several do, leave it out (no `entities`, or an entity knob with `value: null`) and they will pick it before saving.
 
 2. Don't create the routine itself, run it or test it: you hand it back for them to review.
 
-3. Write the routine as `macro.routines.check` takes it: read `RoutineNamespace.check` and the types it names first, and follow them exactly, since the check type-checks code steps but not your options. Triggers: `{{type: 'events', filters: [{{events, entities?}}]}}`, `{{type: 'cron', schedule, timezone: '{timezone}'}}` or `{{type: 'once', at}}`. {conditions}
+3. Write the routine as `macro.routines.check` takes it: read `RoutineNamespace.check` and the types it names first, and follow them exactly: the program is type-checked against them before it runs. Build it as `const routine: RoutineOptions = {{...}}`, with `import type {{ RoutineOptions }} from '@macro-inc/sdk'`, so its literal values keep their types. Triggers: `{{type: 'events', filters: [{{events, entities?}}]}}`, `{{type: 'cron', schedule, timezone: '{timezone}'}}` or `{{type: 'once', at}}`. {conditions}
 
 {steps}
 
-4. Hand it back by checking it: `await macro.routines.check(routine, {{ created }})`, where `created` lists the handles of everything you created for it (empty when you created nothing). The check saves nothing and returns `ok`, `problems` and the code `steps` that don't type-check. Every check is taken as your answer, the last one winning: only ever check the whole routine you mean to hand back, never a test, a part of it or a variant without the items you found. Fix what it reports and check the whole routine again until `ok` is true. A code step's `main` takes `StepContext`: `export async function main({{ macro, trigger }}: StepContext)`. As soon as a check passes, stop with one short line."
+4. Hand it back by checking it: `await macro.routines.check(routine, {{ created }})`, where `created` lists the handles of everything you created for it (empty when you created nothing). The check saves nothing and returns `ok`, `problems` and the code `steps` that don't type-check. Every check is taken as your answer, the last one winning: only ever check the whole routine you mean to hand back, never a test, a part of it or a variant without the items you found. Fix what it reports and check the whole routine again until `ok` is true, or all it reports is an item for them to pick. The program's own `main` takes `CodeContext` (`export async function main({{ macro }}: CodeContext)`); a code step's `main` takes `StepContext`: `export async function main({{ macro, trigger }}: StepContext)`. As soon as a check passes, stop with one short line."
     ))
 }
 
@@ -1128,7 +1242,7 @@ fn task(request: &DraftRequest, program: &[Step], code: bool) -> Result<String, 
     })
 }
 
-/// Macro's catalog routines that are code, as worked examples of whole
+/// Macro's catalog routines marked `example`, as worked examples of whole
 /// routines: what someone asked for, and the trigger and step that do it.
 /// Their code type-checks against the SDK (the harness's real-Deno tests).
 fn catalog_examples(conditions: bool) -> String {
@@ -1136,6 +1250,7 @@ fn catalog_examples(conditions: bool) -> String {
         .iter()
         // A routine whose trigger asks a condition is no example where
         // triggers can't.
+        .filter(|routine| routine.example)
         .filter(|routine| conditions || !asks_condition(&routine.trigger))
         .filter_map(|routine| {
             let step = serde_json::to_value(Step::Code(routine.code.clone()?)).ok()?;
@@ -1179,9 +1294,9 @@ fn routine_data(routine: &RoutineSoFar) -> String {
 
 /// The steps of a checked routine's task. A single agent task, which the
 /// SDK still accepts and a draft's session sometimes checks, becomes one
-/// agent step holding its prompt and user prompt, if it declares no apps and
-/// that step passes a program's rules: the editor saves the draft as steps.
-/// `None` for anything else.
+/// agent step holding its prompt and user prompt, if that step passes a
+/// program's rules: the editor saves the draft as steps. Its apps are the
+/// draft's ([`draft_apps`]). `None` for anything else.
 fn task_steps(task: &Value) -> Option<Vec<Value>> {
     if let Some(steps) = task.get("steps").and_then(Value::as_array) {
         return Some(steps.clone());
@@ -1191,14 +1306,10 @@ fn task_steps(task: &Value) -> Option<Vec<Value>> {
     steps
 }
 
-/// A single agent task as a program's one agent step, if it is one, declares
-/// no apps (a draft holds only steps, so they would be lost) and the step
-/// passes a program's rules.
+/// A single agent task as a program's one agent step, if it is one and the
+/// step passes a program's rules.
 fn agent_task_steps(task: &Value) -> Option<Vec<Value>> {
     let task = RoutineProgram::from_task(task).ok()?;
-    if !task.mcp_servers.is_empty() {
-        return None;
-    }
     let program = RoutineProgram::new(task.steps);
     program.validate().ok()?;
     program
@@ -1209,12 +1320,62 @@ fn agent_task_steps(task: &Value) -> Option<Vec<Value>> {
         .ok()
 }
 
-/// The draft `request` asks for, from the session's last check.
+/// The apps a drafted routine of `steps` requires, and the ones it needs
+/// that its owner hasn't connected: the apps its `check` requires or names
+/// as missing, each slug once, sorted by whether its owner `connected` them
+/// (as connected, by the name listed). Without that list, the ones it
+/// requires stay required. None without an Ask AI step, the only step apps
+/// reach.
+fn draft_apps(
+    steps: &[Value],
+    check: &RoutineCheck,
+    connected: Option<&[AgentMcpServer]>,
+) -> (Vec<AgentMcpServer>, Vec<AgentMcpServer>) {
+    let mut apps: Vec<AgentMcpServer> = Vec::new();
+    let mut missing: Vec<AgentMcpServer> = Vec::new();
+    if !steps
+        .iter()
+        .any(|step| step.get("type").and_then(Value::as_str) == Some("agent"))
+    {
+        return (apps, missing);
+    }
+    let required = RoutineProgram::from_task(&check.routine.task)
+        .map(|program| program.mcp_servers)
+        .unwrap_or_default();
+    let named = required
+        .into_iter()
+        .map(|app| (app, true))
+        .chain(check.missing_apps.iter().cloned().map(|app| (app, false)));
+    for (app, is_required) in named {
+        if apps
+            .iter()
+            .chain(&missing)
+            .any(|seen| seen.app_slug == app.app_slug)
+        {
+            continue;
+        }
+        match connected.map(|connected| {
+            connected
+                .iter()
+                .find(|listed| listed.app_slug == app.app_slug)
+        }) {
+            Some(Some(listed)) => apps.push(listed.clone()),
+            Some(None) => missing.push(app),
+            None if is_required => apps.push(app),
+            None => missing.push(app),
+        }
+    }
+    (apps, missing)
+}
+
+/// The draft `request` asks for, from the session's last check, given the
+/// apps its owner `connected` when its prompt listed them.
 fn drafted(
     request: &DraftRequest,
     program: &[Step],
     check: RoutineCheck,
     created: Vec<DraftCreated>,
+    connected: Option<&[AgentMcpServer]>,
 ) -> Draft {
     let span = tracing::Span::current();
     span.record("routine.draft.code_failing", check.steps.len());
@@ -1232,8 +1393,15 @@ fn drafted(
     match request {
         DraftRequest::Routine { .. } => {
             span.record("routine.draft.steps", steps.len());
+            let (apps, missing_apps) = draft_apps(&steps, &check, connected);
+            span.record("routine.draft.apps", apps.len());
             Draft::Routine(DraftedRoutine {
                 name: check.routine.name.trim().to_owned(),
+                appearance: check
+                    .routine
+                    .appearance
+                    .clone()
+                    .filter(|pick| check_pick(pick).is_ok()),
                 trigger: Some(check.routine.trigger.clone()),
                 problems: check
                     .steps
@@ -1245,6 +1413,8 @@ fn drafted(
                     .collect(),
                 steps,
                 created,
+                apps,
+                missing_apps,
             })
         }
         DraftRequest::AddStep { kind, .. } => {

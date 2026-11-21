@@ -14,7 +14,8 @@ import type { User } from '../users/user';
 /** A meeting's schedule and invitation link. */
 export class Meeting extends MacroEntity<MeetingRecord> {
   /**
-   * Join this meeting as the current account; always send a program join body.
+   * Join this meeting as the current account, always sending a program join
+   * body; refused to an agent's program (ExecuteCode, a routine).
    *
    * @write
    * @mcp-exclude Returns a live call connection; MCP calls carry JSON only.

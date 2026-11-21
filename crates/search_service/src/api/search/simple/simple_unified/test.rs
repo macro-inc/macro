@@ -713,3 +713,814 @@ fn the_unified_search_span_defaults_the_page_size() {
     assert_eq!(span["search.caller"], "session");
     assert_eq!(span["search.page_size"], "10");
 }
+
+// ============ Tests for read_until_page_kept (email thread states) ============
+
+/// A mailbox of `total` email threads, newest first, one hit each.
+fn mailbox(total: u128) -> Vec<SearchHit> {
+    (0..total)
+        .map(|n| SearchHit {
+            entity_id: Uuid::from_u128(n + 1),
+            entity_type: SearchEntityType::Emails,
+            updated_at: Some(ts(1_000_000 - n as i64)),
+            score: None,
+            highlight: Highlight::default(),
+            goto: None,
+        })
+        .collect()
+}
+
+/// Pages through `hits` the way OpenSearch does: `page_size` hits after the
+/// cursor's anchor, and a cursor on the last one while more remain.
+fn page_after(
+    hits: &[SearchHit],
+    cursor: &SearchCursorOption,
+    page_size: usize,
+) -> (Vec<SearchHit>, SearchCursorOption) {
+    let start = match cursor {
+        SearchCursorOption::NotDone(Some(cursor)) => {
+            let (anchor, _) = cursor.as_updated_at().unwrap();
+            hits.iter().position(|hit| hit.entity_id == anchor).unwrap() + 1
+        }
+        _ => 0,
+    };
+    let page: Vec<SearchHit> = hits.iter().skip(start).take(page_size).cloned().collect();
+    let more = start + page.len() < hits.len();
+    let cursor = match page.last() {
+        Some(last) if more => SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
+            entity_id: last.entity_id,
+            updated_at: last.updated_at.unwrap(),
+        })),
+        _ => SearchCursorOption::Done,
+    };
+    (page, cursor)
+}
+
+fn anchor(cursor: &SearchCursorOption) -> Uuid {
+    match cursor {
+        SearchCursorOption::NotDone(Some(cursor)) => cursor.as_updated_at().unwrap().0,
+        other => panic!("expected a cursor, got {other:?}"),
+    }
+}
+
+fn page_args(page_size: u32) -> UnifiedSearchArgs {
+    UnifiedSearchArgs {
+        page_size,
+        ..Default::default()
+    }
+}
+
+async fn read_with_matching(
+    hits: &[SearchHit],
+    page_size: u32,
+    matches: impl Fn(Uuid) -> bool,
+    cursor: SearchCursorOption,
+) -> (ContentHits, StateCheckRounds) {
+    let mut args = page_args(page_size);
+    args.cursor = cursor;
+    read_until_page_kept(
+        args,
+        |args| std::future::ready(Ok(page_after(hits, &args.cursor, args.page_size as usize))),
+        |ids: Vec<Uuid>| {
+            std::future::ready(Ok(ids.into_iter().filter(|id| matches(*id)).collect()))
+        },
+    )
+    .await
+    .unwrap()
+}
+
+fn ids(content: &ContentHits) -> Vec<u128> {
+    content
+        .hits
+        .iter()
+        .map(|hit| hit.entity_id.as_u128())
+        .collect()
+}
+
+#[tokio::test]
+async fn matching_threads_behind_a_first_page_that_all_fails_are_returned() {
+    // The first 100 hits fail the filter; the matching threads come after.
+    let hits = mailbox(400);
+    let matches = |id: Uuid| id.as_u128() > 100 && id.as_u128().is_multiple_of(2);
+
+    let (content, rounds) =
+        read_with_matching(&hits, 100, matches, SearchCursorOption::NotDone(None)).await;
+
+    assert_eq!(content.hits.len(), 100);
+    assert_eq!(ids(&content)[0], 102);
+    assert_eq!(*ids(&content).last().unwrap(), 300);
+    assert!(content.hits.iter().all(|hit| matches(hit.entity_id)));
+    assert_eq!(rounds.rounds, 3);
+    assert!(!rounds.bound_reached);
+    // The next page starts after the last hit read, past the ones dropped.
+    assert_eq!(anchor(&content.cursor).as_u128(), 300);
+}
+
+#[tokio::test]
+async fn a_short_mailbox_ends_with_what_matched() {
+    let hits = mailbox(150);
+    let matches = |id: Uuid| id.as_u128() > 140;
+
+    let (content, rounds) =
+        read_with_matching(&hits, 100, matches, SearchCursorOption::NotDone(None)).await;
+
+    assert_eq!(ids(&content), (141..=150).collect::<Vec<_>>());
+    assert!(content.cursor.is_done());
+    assert_eq!(rounds.rounds, 2);
+    assert!(!rounds.bound_reached);
+}
+
+#[tokio::test]
+async fn reading_stops_at_the_bound_and_resumes_past_every_hit_read() {
+    // One match, far beyond what one request reads.
+    let page_size = 100u128;
+    let read_per_request = page_size * u128::from(MAX_EMAIL_STATE_ROUNDS);
+    let hits = mailbox(read_per_request * 3);
+    let target = read_per_request * 2 + 7;
+    let matches = |id: Uuid| id.as_u128() == target;
+
+    let (first, rounds) =
+        read_with_matching(&hits, 100, matches, SearchCursorOption::NotDone(None)).await;
+
+    assert!(first.hits.is_empty());
+    assert_eq!(rounds.rounds, MAX_EMAIL_STATE_ROUNDS);
+    assert!(rounds.bound_reached);
+    assert_eq!(rounds.threads_checked, read_per_request as usize);
+
+    // Each request moves the cursor a full bound on, so the match is reached.
+    let (second, _) = read_with_matching(&hits, 100, matches, first.cursor).await;
+    assert!(second.hits.is_empty());
+    let (third, rounds) = read_with_matching(&hits, 100, matches, second.cursor).await;
+    assert_eq!(ids(&third), vec![target]);
+    assert!(third.cursor.is_done());
+    assert!(!rounds.bound_reached);
+}
+
+#[tokio::test]
+async fn other_entity_types_are_kept_without_a_check() {
+    let mut hits = mailbox(10);
+    hits[3].entity_type = SearchEntityType::Documents;
+    let checked = std::sync::Mutex::new(Vec::new());
+
+    let (content, _) = read_until_page_kept(
+        page_args(100),
+        |args| std::future::ready(Ok(page_after(&hits, &args.cursor, args.page_size as usize))),
+        |ids: Vec<Uuid>| {
+            checked.lock().unwrap().extend(ids);
+            std::future::ready(Ok(HashSet::new()))
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(ids(&content), vec![4]);
+    assert!(!checked.lock().unwrap().contains(&Uuid::from_u128(4)));
+}
+
+#[test]
+fn a_checked_page_that_kept_nothing_still_moves_on() {
+    let read_past = SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
+        entity_id: Uuid::from_u128(500),
+        updated_at: ts(500),
+    }));
+    let original = SearchCursorOption::NotDone(None);
+
+    let next = next_content_cursor(true, &read_past, 0, 0, None, &original);
+
+    assert_eq!(anchor(&next), Uuid::from_u128(500));
+}
+
+#[test]
+fn a_checked_page_resumes_after_the_last_hit_read_not_the_last_kept() {
+    let read_past = SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
+        entity_id: Uuid::from_u128(500),
+        updated_at: ts(500),
+    }));
+    let last_kept = make_tagged_hit(Uuid::from_u128(20), Some(ts(980)), SearchSource::Content);
+
+    let next = next_content_cursor(
+        true,
+        &read_past,
+        3,
+        3,
+        Some(&last_kept),
+        &SearchCursorOption::NotDone(None),
+    );
+
+    assert_eq!(anchor(&next), Uuid::from_u128(500));
+}
+
+#[test]
+fn a_checked_page_truncated_by_the_merge_resumes_after_the_last_hit_shown() {
+    let read_past = SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
+        entity_id: Uuid::from_u128(500),
+        updated_at: ts(500),
+    }));
+    let last_kept = make_tagged_hit(Uuid::from_u128(20), Some(ts(980)), SearchSource::Content);
+
+    let next = next_content_cursor(
+        true,
+        &read_past,
+        2,
+        3,
+        Some(&last_kept),
+        &SearchCursorOption::NotDone(None),
+    );
+
+    assert_eq!(anchor(&next), Uuid::from_u128(20));
+}
+
+#[tokio::test]
+async fn a_checked_page_counts_hits_as_an_unfiltered_page_does() {
+    // Two messages per thread: a page of 100 hits holds 50 threads.
+    let hits: Vec<SearchHit> = mailbox(400)
+        .into_iter()
+        .map(|mut hit| {
+            hit.entity_id = Uuid::from_u128(hit.entity_id.as_u128().div_ceil(2));
+            hit
+        })
+        .collect();
+
+    let (content, rounds) =
+        read_with_matching(&hits, 100, |_| true, SearchCursorOption::NotDone(None)).await;
+
+    assert_eq!(content.hits.len(), 100);
+    assert_eq!(rounds.rounds, 1);
+}
+
+// ============ Tests for the caller's turn (search lanes) ============
+
+fn agent_of_caller() -> MacroUserAuthentication {
+    MacroUserAuthentication {
+        agent_id: Some(bot_id::BotId::new_from_uuid(Uuid::from_u128(0xA9E7))),
+        ..caller(macro_authorization::CredentialOrigin::MacroApiJwt)
+    }
+}
+
+fn one_at_a_time() -> SearchLanes {
+    SearchLanes::new(crate::domain::search_lanes::LanePolicy {
+        app_concurrency: 1,
+        concurrency: 1,
+        max_wait: std::time::Duration::from_secs(20),
+    })
+}
+
+fn search_request(query: &str) -> UnifiedSearchRequest {
+    UnifiedSearchRequest {
+        query: query.to_string(),
+        match_type: MatchType::Partial,
+        filters: Default::default(),
+        search_on: SearchOn::NameContent,
+        include_crm: false,
+        calendar_event_scope: Default::default(),
+        term_matching: Default::default(),
+        collapse: None,
+    }
+}
+
+fn no_paging() -> SearchPaginationParams {
+    SearchPaginationParams {
+        page: None,
+        page_size: None,
+        cursor: None,
+    }
+}
+
+fn search_span() -> tracing::Span {
+    unified_search_span(
+        &agent_of_caller(),
+        &no_paging(),
+        &search_request("quarterly plan"),
+    )
+}
+
+struct NoSessions;
+
+impl agent_session::domain::search::AgentSessionSearchMetadataService for NoSessions {
+    fn search_metadata(
+        &self,
+        _ids: Vec<Uuid>,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<
+                    Output = agent_session::domain::error::Result<
+                        Vec<agent_session::domain::search::AgentSessionSearchMetadata>,
+                    >,
+                > + Send
+                + '_,
+        >,
+    > {
+        Box::pin(async { Ok(Vec::new()) })
+    }
+}
+
+struct NoLabels;
+
+impl calendar_events::domain::ports::CalendarEventLabelReader for NoLabels {
+    fn event_labels<'a>(
+        &'a self,
+        _requester_id: &'a str,
+        _event_ids: &'a [Uuid],
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<
+                    Output = Result<
+                        std::collections::HashMap<
+                            Uuid,
+                            calendar_events::domain::labels::EventLabels,
+                        >,
+                        rootcause::Report,
+                    >,
+                > + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(async { Ok(std::collections::HashMap::new()) })
+    }
+}
+
+/// Handler state whose database and OpenSearch cannot be reached, so a
+/// search that gets past its turn waits 25 s for a connection, longer than a
+/// turn's longest wait, and then fails.
+fn unreachable_state(lanes: SearchLanes) -> SearchHandlerState {
+    let pool = sqlx::postgres::PgPoolOptions::new()
+        .acquire_timeout(std::time::Duration::from_secs(25))
+        .connect_lazy("postgres://user:password@127.0.0.1:1/unreachable")
+        .unwrap();
+    SearchHandlerState {
+        db: readonly_pool::ReadOnlyPool(pool.clone()),
+        crm_db: pool.clone(),
+        opensearch_client: std::sync::Arc::new(
+            opensearch_client::OpensearchClient::new(
+                "http://127.0.0.1:1".to_string(),
+                String::new(),
+                String::new(),
+            )
+            .unwrap(),
+        ),
+        entity_access_service: std::sync::Arc::new(
+            entity_access::domain::service::EntityAccessServiceImpl::new(
+                entity_access::outbound::PgAccessRepository::new(pool),
+            ),
+        ),
+        authorization_state: macro_authorization::MacroAuthorizationState::new(
+            std::sync::Arc::new(macro_authorization::MacroAuthorizationServiceImpl::new(
+                macro_authorization::MacroAuthJwtValidator::new(
+                    macro_auth::middleware::decode_jwt::JwtValidationArgs::new_testing(),
+                ),
+                macro_authorization::InternalAuthConfig {
+                    api_key: "test-internal-key".to_string(),
+                    default_user_id: None,
+                },
+                macro_authorization::NoBotAuthorizer,
+                macro_authorization::NoUserApiKeyAuthorizer,
+            )),
+        ),
+        agent_session_search_metadata: std::sync::Arc::new(NoSessions),
+        calendar_search_enabled: false,
+        calendar_event_labels: std::sync::Arc::new(NoLabels),
+        term_matching_rollout: std::sync::Arc::new(crate::LocalTermMatching),
+        search_lanes: std::sync::Arc::new(lanes),
+        api_key_search_buckets: std::sync::Arc::new(FixedBucket::answering(Some(
+            rate_limit::TokenBucketResult::Taken { remaining: 200 },
+        ))),
+    }
+}
+
+/// A unified search waits for its caller's turn before it reads anything,
+/// and one still waiting at the deadline is refused as busy.
+#[tokio::test(start_paused = true)]
+async fn a_unified_search_waits_for_its_callers_turn_before_reading_anything() {
+    let ctx = unreachable_state(one_at_a_time());
+    let _running = ctx
+        .search_lanes
+        .take_turn(search_caller(&agent_of_caller()))
+        .await
+        .unwrap();
+
+    let started = tokio::time::Instant::now();
+    let refused = perform_unified_search(
+        &ctx,
+        &agent_of_caller(),
+        true,
+        no_paging(),
+        search_request("quarterly plan"),
+    )
+    .await
+    .map(|_| ());
+
+    assert!(matches!(refused, Err(SearchError::Busy)), "{refused:?}");
+    assert_eq!(started.elapsed(), std::time::Duration::from_secs(20));
+}
+
+/// A search holds its caller's turn while it reads, so the caller's next
+/// search waits for it, here until the deadline.
+#[tokio::test(start_paused = true)]
+async fn a_search_holds_its_callers_turn_while_it_reads() {
+    let ctx = std::sync::Arc::new(unreachable_state(one_at_a_time()));
+    let mut reading = tokio::spawn({
+        let ctx = std::sync::Arc::clone(&ctx);
+        async move {
+            perform_unified_search(
+                &ctx,
+                &agent_of_caller(),
+                false,
+                no_paging(),
+                search_request("quarterly plan"),
+            )
+            .await
+            .map(|_| ())
+        }
+    });
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_secs(1), &mut reading)
+            .await
+            .is_err()
+    );
+
+    let next = perform_unified_search(
+        &ctx,
+        &agent_of_caller(),
+        false,
+        no_paging(),
+        search_request("quarterly plan"),
+    )
+    .await
+    .map(|_| ());
+
+    assert!(matches!(next, Err(SearchError::Busy)), "{next:?}");
+    assert!(!matches!(reading.await.unwrap(), Err(SearchError::Busy)));
+}
+
+/// A request that cannot be searched fails at once, even while its caller's
+/// lane is full, rather than waiting its turn to be told so.
+#[tokio::test(start_paused = true)]
+async fn a_malformed_search_fails_at_once_while_its_callers_lane_is_full() {
+    let ctx = unreachable_state(one_at_a_time());
+    let _running = ctx
+        .search_lanes
+        .take_turn(search_caller(&agent_of_caller()))
+        .await
+        .unwrap();
+
+    let started = tokio::time::Instant::now();
+    let refused = perform_unified_search(
+        &ctx,
+        &agent_of_caller(),
+        false,
+        no_paging(),
+        search_request("  "),
+    )
+    .await
+    .map(|_| ());
+
+    assert!(
+        matches!(refused, Err(SearchError::EmptyQuery)),
+        "{refused:?}"
+    );
+    assert_eq!(started.elapsed(), std::time::Duration::ZERO);
+
+    let mut crm_filtered = search_request("quarterly plan");
+    crm_filtered.filters.email_filters.crm_domains = vec!["example.com".to_string()];
+    let refused =
+        perform_unified_search(&ctx, &agent_of_caller(), false, no_paging(), crm_filtered)
+            .await
+            .map(|_| ());
+    assert!(
+        matches!(
+            refused,
+            Err(SearchError::UnsupportedEmailFilter("crm_domains"))
+        ),
+        "{refused:?}"
+    );
+    assert_eq!(started.elapsed(), std::time::Duration::ZERO);
+}
+
+/// A search records on its span which lane it waited in, how long, and how
+/// the wait ended, so a queued search can be told apart from a slow one.
+#[tokio::test(start_paused = true)]
+async fn a_search_records_its_wait_for_the_callers_turn_on_its_span() {
+    use crate::api::search::span_capture::SpanFields;
+
+    let (fields, _guard) = SpanFields::install();
+    let lanes = one_at_a_time();
+
+    let running = take_search_turn(&lanes, search_caller(&agent_of_caller()))
+        .instrument(search_span())
+        .await
+        .unwrap();
+    let span = fields.of("perform_unified_search");
+    assert_eq!(span["search.lane"], "agent");
+    assert_eq!(span["search.lane_outcome"], "immediate");
+    assert_eq!(span["search.lane_wait_ms"], "0");
+
+    let refused = take_search_turn(&lanes, search_caller(&agent_of_caller()))
+        .instrument(search_span())
+        .await;
+    assert!(matches!(refused, Err(SearchError::Busy)));
+    let span = fields.of("perform_unified_search");
+    assert_eq!(span["search.lane_outcome"], "refused");
+    assert_eq!(span["search.lane_wait_ms"], "20000");
+
+    let mut waiting = tokio::spawn({
+        let lanes = std::sync::Arc::new(lanes);
+        async move {
+            take_search_turn(&lanes, search_caller(&agent_of_caller()))
+                .instrument(search_span())
+                .await
+                .map(|turn| turn.waited)
+        }
+    });
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_secs(3), &mut waiting)
+            .await
+            .is_err()
+    );
+    drop(running);
+    assert_eq!(
+        waiting.await.unwrap().unwrap(),
+        std::time::Duration::from_secs(3)
+    );
+    let span = fields.of("perform_unified_search");
+    assert_eq!(span["search.lane_outcome"], "queued");
+    assert_eq!(span["search.lane_wait_ms"], "3000");
+}
+
+/// The person's own app search never waits behind anything searching for
+/// them: their agent, their routine, a service such as an agent's native
+/// search tools, or their API key, each of which has a lane of its own.
+#[tokio::test(start_paused = true)]
+async fn a_persons_app_search_never_waits_behind_what_searches_for_them() {
+    use macro_authorization::CredentialOrigin;
+
+    let lanes = one_at_a_time();
+    let routine = MacroUserAuthentication {
+        routine_id: Some(Uuid::from_u128(0x2007)),
+        ..caller(CredentialOrigin::MacroApiJwt)
+    };
+    let mut held = Vec::new();
+    for program in [
+        agent_of_caller(),
+        routine,
+        caller(CredentialOrigin::Internal),
+        caller(CredentialOrigin::UserApiKey),
+    ] {
+        let turn = take_search_turn(&lanes, search_caller(&program))
+            .await
+            .unwrap();
+        assert!(!turn.queued, "{:?} shares a lane", program.origin);
+        held.push(turn);
+    }
+
+    let own = take_search_turn(&lanes, search_caller(&caller(CredentialOrigin::Session)))
+        .await
+        .unwrap();
+    assert!(!own.queued);
+}
+
+/// A refused search is a 429 the caller can pace on, not a failure.
+#[test]
+fn a_refused_search_is_answered_too_many_requests_with_retry_after() {
+    let response = axum::response::IntoResponse::into_response(SearchError::Busy);
+    assert_eq!(response.status(), axum::http::StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(response.headers()[axum::http::header::RETRY_AFTER], "1");
+}
+
+// ============ Tests for the API-key search allowance ============
+
+/// A bucket that always answers the same, or fails as Redis down would, and
+/// counts how often it was asked.
+struct FixedBucket {
+    answer: Option<rate_limit::TokenBucketResult>,
+    takes: std::sync::atomic::AtomicUsize,
+}
+
+impl FixedBucket {
+    fn answering(answer: Option<rate_limit::TokenBucketResult>) -> Self {
+        FixedBucket {
+            answer,
+            takes: std::sync::atomic::AtomicUsize::new(0),
+        }
+    }
+}
+
+impl rate_limit::TokenBucketPort for FixedBucket {
+    async fn take(
+        &self,
+        _key: rate_limit::RateLimitKey,
+        _config: rate_limit::TokenBucketConfig,
+    ) -> Result<rate_limit::TokenBucketResult, rootcause::Report> {
+        self.takes.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        self.answer.ok_or_else(|| {
+            rootcause::Report::new(std::io::Error::other("connection refused")).into_dynamic()
+        })
+    }
+}
+
+/// An API key whose account used its allowance is refused at once, not after
+/// waiting for its turn, and told when to retry.
+#[tokio::test(start_paused = true)]
+async fn an_api_key_search_past_its_accounts_allowance_is_refused_before_it_waits() {
+    use macro_authorization::CredentialOrigin;
+
+    let ctx = SearchHandlerState {
+        api_key_search_buckets: std::sync::Arc::new(FixedBucket::answering(Some(
+            rate_limit::TokenBucketResult::Empty {
+                retry_after: std::time::Duration::from_millis(300),
+            },
+        ))),
+        ..unreachable_state(one_at_a_time())
+    };
+    let api_key = caller(CredentialOrigin::UserApiKey);
+    let _running = ctx
+        .search_lanes
+        .take_turn(search_caller(&api_key))
+        .await
+        .unwrap();
+
+    let started = tokio::time::Instant::now();
+    let refused = perform_unified_search(
+        &ctx,
+        &api_key,
+        false,
+        no_paging(),
+        search_request("quarterly plan"),
+    )
+    .await
+    .map(|_| ());
+
+    assert!(
+        matches!(
+            refused,
+            Err(SearchError::RateLimited {
+                retry_after_seconds: 1
+            })
+        ),
+        "{refused:?}"
+    );
+    assert_eq!(started.elapsed(), std::time::Duration::ZERO);
+}
+
+/// When the allowance cannot be read the API key searches anyway: here it
+/// gets as far as waiting for its turn.
+#[tokio::test(start_paused = true)]
+async fn an_api_key_search_runs_when_its_allowance_cannot_be_read() {
+    use macro_authorization::CredentialOrigin;
+
+    let ctx = SearchHandlerState {
+        api_key_search_buckets: std::sync::Arc::new(FixedBucket::answering(None)),
+        ..unreachable_state(one_at_a_time())
+    };
+    let api_key = caller(CredentialOrigin::UserApiKey);
+    let _running = ctx
+        .search_lanes
+        .take_turn(search_caller(&api_key))
+        .await
+        .unwrap();
+
+    let refused = perform_unified_search(
+        &ctx,
+        &api_key,
+        false,
+        no_paging(),
+        search_request("quarterly plan"),
+    )
+    .await
+    .map(|_| ());
+
+    assert!(matches!(refused, Err(SearchError::Busy)), "{refused:?}");
+}
+
+/// Only a user API key draws on the allowance: the app, agents, routines,
+/// services, Macro API tokens and account managers never ask the bucket.
+#[tokio::test(start_paused = true)]
+async fn only_user_api_key_searches_draw_on_the_allowance() {
+    use macro_authorization::{AccountManagerCredential, CredentialOrigin};
+
+    let bucket = std::sync::Arc::new(FixedBucket::answering(Some(
+        rate_limit::TokenBucketResult::Empty {
+            retry_after: std::time::Duration::from_secs(1),
+        },
+    )));
+    let ctx = SearchHandlerState {
+        api_key_search_buckets: bucket.clone(),
+        ..unreachable_state(one_at_a_time())
+    };
+    let routine = MacroUserAuthentication {
+        routine_id: Some(Uuid::from_u128(0x2007)),
+        ..caller(CredentialOrigin::MacroApiJwt)
+    };
+    let account_manager = caller(CredentialOrigin::AccountManager(AccountManagerCredential {
+        grant_id: Uuid::from_u128(0x6A47),
+        manager_user_id: macro_user_id::user_id::MacroUserIdStr::try_from(
+            "macro|manager@example.com".to_string(),
+        )
+        .unwrap(),
+    }));
+
+    for searcher in [
+        caller(CredentialOrigin::Session),
+        agent_of_caller(),
+        routine,
+        caller(CredentialOrigin::Internal),
+        caller(CredentialOrigin::MacroApiJwt),
+        account_manager,
+    ] {
+        let _running = ctx
+            .search_lanes
+            .take_turn(search_caller(&searcher))
+            .await
+            .unwrap();
+        let result = perform_unified_search(
+            &ctx,
+            &searcher,
+            false,
+            no_paging(),
+            search_request("quarterly plan"),
+        )
+        .await
+        .map(|_| ());
+        assert!(
+            matches!(result, Err(SearchError::Busy)),
+            "{:?}: {result:?}",
+            searcher.origin
+        );
+    }
+
+    assert_eq!(bucket.takes.load(std::sync::atomic::Ordering::SeqCst), 0);
+}
+
+/// An API-key search records on its span whether it was limited, how many
+/// searches its account had left and how long the bucket took, so limited
+/// callers and a slow bucket can be found.
+#[tokio::test(start_paused = true)]
+async fn an_api_key_search_records_its_allowance_on_its_span() {
+    use crate::api::search::span_capture::SpanFields;
+
+    let (fields, _guard) = SpanFields::install();
+
+    let unreadable = SearchHandlerState {
+        api_key_search_buckets: std::sync::Arc::new(FixedBucket::answering(None)),
+        ..unreachable_state(one_at_a_time())
+    };
+    let account = MacroUserId::parse_from_str("macro|user@example.com")
+        .unwrap()
+        .lowercase();
+    draw_search_allowance(&unreadable, &account)
+        .instrument(search_span())
+        .await
+        .unwrap();
+    let span = fields.of("perform_unified_search");
+    assert_eq!(span["search.rate_limit"], "unavailable");
+    assert!(!span.contains_key("search.rate_limit_remaining"));
+    assert_eq!(span["search.rate_limit_wait_ms"], "0");
+
+    let allowed = SearchHandlerState {
+        api_key_search_buckets: std::sync::Arc::new(FixedBucket::answering(Some(
+            rate_limit::TokenBucketResult::Taken { remaining: 199 },
+        ))),
+        ..unreachable_state(one_at_a_time())
+    };
+    draw_search_allowance(&allowed, &account)
+        .instrument(search_span())
+        .await
+        .unwrap();
+    let span = fields.of("perform_unified_search");
+    assert_eq!(span["search.rate_limit"], "allowed");
+    assert_eq!(span["search.rate_limit_remaining"], "199");
+    assert_eq!(span["search.rate_limit_wait_ms"], "0");
+
+    let limited = SearchHandlerState {
+        api_key_search_buckets: std::sync::Arc::new(FixedBucket::answering(Some(
+            rate_limit::TokenBucketResult::Empty {
+                retry_after: std::time::Duration::from_millis(1500),
+            },
+        ))),
+        ..unreachable_state(one_at_a_time())
+    };
+    let refused = draw_search_allowance(&limited, &account)
+        .instrument(search_span())
+        .await;
+    assert!(
+        matches!(
+            refused,
+            Err(SearchError::RateLimited {
+                retry_after_seconds: 2
+            })
+        ),
+        "{refused:?}"
+    );
+    let span = fields.of("perform_unified_search");
+    assert_eq!(span["search.rate_limit"], "limited");
+    assert_eq!(span["search.rate_limit_remaining"], "0");
+}
+
+/// A limited search is a 429 that says when the account may search again.
+#[test]
+fn a_limited_search_is_answered_too_many_requests_with_its_retry_after() {
+    let response = axum::response::IntoResponse::into_response(SearchError::RateLimited {
+        retry_after_seconds: 3,
+    });
+    assert_eq!(response.status(), axum::http::StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(response.headers()[axum::http::header::RETRY_AFTER], "3");
+}

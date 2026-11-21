@@ -371,6 +371,8 @@ pub struct FirstPrompt {
     /// first turn like a control prompt's, so the turn can show them things
     /// in that tab.
     pub client: Option<super::model::UiClientId>,
+    /// Whether a person or a program for them sent it.
+    pub prompter: super::model::PrompterKind,
 }
 
 impl FirstPrompt {
@@ -381,6 +383,7 @@ impl FirstPrompt {
             prompt: prompt.into(),
             attachments: Vec::new(),
             client: None,
+            prompter: super::model::PrompterKind::User,
         }
     }
 
@@ -1325,6 +1328,8 @@ pub struct ControlEvent {
     /// The app tab a person typed the prompt in; see
     /// [`UiClientId`](super::model::UiClientId).
     pub client: Option<super::model::UiClientId>,
+    /// Whether a person or a program for them sent it.
+    pub prompter: super::model::PrompterKind,
 }
 
 /// What accepting a control operation did with it.
@@ -1430,13 +1435,15 @@ pub trait AgentSessionNotificationRecipient: Send + Sync + 'static {
     ///
     /// `actor` is the user responsible, judged by the same gates as sending:
     /// whoever may not prompt a session may not rewrite what it is about to
-    /// be prompted with.
+    /// be prompted with. `prompter` says whether a program rewrote it, which
+    /// makes the entry a program's for good.
     fn edit_queued_control(
         &self,
         id: AgentSessionId,
         action_id: AgentActionId,
         prompt: String,
         actor: Option<MacroUserIdStr<'static>>,
+        prompter: super::model::PrompterKind,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Remove a queued action before it dispatches.
@@ -1523,6 +1530,12 @@ pub trait RuntimeSessionLookup: Send + Sync {
         sessions: &[SessionId],
         dormant_before: chrono::DateTime<chrono::Utc>,
     ) -> impl Future<Output = std::result::Result<Vec<RuntimeSession>, Self::Err>> + Send;
+    /// Which of `bots` have a session with work under way: a turn not yet
+    /// ended or prompts queued. A Macro computer running one is in use.
+    fn bots_with_live_work(
+        &self,
+        bots: &[BotId],
+    ) -> impl Future<Output = std::result::Result<std::collections::HashSet<BotId>, Self::Err>> + Send;
     /// Persistence failure.
     type Err: std::error::Error + Send + Sync + 'static;
 }

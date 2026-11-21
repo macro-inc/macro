@@ -1,16 +1,18 @@
 import {
   useViewControlHotkeys,
   ViewBreadcrumbs,
-  ViewShell,
   ViewSwitchTrigger,
 } from '@app/components/view-shell';
 import {
   ListHeader,
   ListHeaderSearch,
 } from '@app/components/view-shell/ListHeader';
+import { useProjectSavedViews } from '@app/features/projects/context/project-saved-views-context';
+import { t } from '@app/lib/i18n';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { EntityIcon } from '@core/component/EntityIcon';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import BookmarkIcon from '@phosphor/bookmark-simple.svg';
+import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import { Show } from 'solid-js';
 import { TASK_TABS } from '../constants';
 import { taskSavedViewTitle } from '../primitives/create-task-saved-view-draft';
@@ -22,7 +24,6 @@ import {
   TaskSaveViewButton,
 } from '../views/task-saved-views';
 import { TasksControls } from './TasksControls';
-import { TasksMobileTabs } from './TasksMobileTabs';
 
 export type TasksHeaderProps = {
   /** Moves the keyboard from the search field into the list. */
@@ -31,10 +32,25 @@ export type TasksHeaderProps = {
 
 export function TaskViewBreadcrumbItem() {
   const { state, savedViews } = useTasksView();
-  const tabTitle = () =>
-    state.savedViewActive && savedViews
-      ? taskSavedViewTitle(savedViews.view())
-      : (TASK_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Tasks');
+  const projectViews = useProjectSavedViews();
+  const projectSavedView = () =>
+    projectViews?.active() ? projectViews.draft.view() : undefined;
+  const savedViewActive = () =>
+    state.savedViewActive || projectSavedView()?.kind === 'saved';
+  const tabTitle = () => {
+    const projectView = projectSavedView();
+    if (projectView?.kind === 'saved') return projectView.record.name;
+    if (projectView?.kind === 'new') return t('viewMenus.newView');
+    if (state.savedViewActive && savedViews)
+      return taskSavedViewTitle(savedViews.view());
+    return (
+      TASK_TABS.find((tab) => tab.id === state.tab)?.label ?? t('nav.tasks')
+    );
+  };
+  const appearance = () => {
+    const view = projectSavedView() ?? savedViews?.view();
+    return view?.kind === 'saved' ? view.record.appearance : undefined;
+  };
 
   return (
     <ViewBreadcrumbs.Item
@@ -45,12 +61,18 @@ export function TaskViewBreadcrumbItem() {
       {(item) => {
         const label = () => (
           <>
-            <Show when={state.savedViewActive}>
-              <BookmarkIcon class="size-4 shrink-0" aria-hidden="true" />
+            <Show when={savedViewActive()}>
+              <EntityIcon
+                targetType="saved_view"
+                appearance={appearance()}
+                size="xs"
+              />
             </Show>
             <span class="truncate">{tabTitle()}</span>
           </>
         );
+        // A compact (phone) bar keeps its room for the open entity's name, so
+        // the way back is an arrow; the view's name stays its accessible name.
         const button = () => (
           <ViewBreadcrumbs.ReturnButton
             isActive={item.isActive()}
@@ -58,7 +80,16 @@ export function TaskViewBreadcrumbItem() {
             tooltip={tabTitle()}
             class="gap-2"
           >
-            {label()}
+            <span
+              data-compact-back
+              aria-hidden="true"
+              class="hidden group-data-[compact]/location:flex"
+            >
+              <ArrowLeftIcon class="size-4 shrink-0" />
+            </span>
+            <span class="flex min-w-0 items-center gap-2 group-data-[compact]/location:sr-only">
+              {label()}
+            </span>
           </ViewBreadcrumbs.ReturnButton>
         );
         // At the list itself the name switches views; deeper, it returns here.
@@ -74,7 +105,7 @@ export function TaskViewBreadcrumbItem() {
 
 export function TasksHeader(props: TasksHeaderProps) {
   const panel = useSplitPanelOrThrow();
-  const { state, setState, projectsEnabled } = useTasksView();
+  const { state, setState } = useTasksView();
   let focusSearch: (() => void) | undefined;
   useViewControlHotkeys({
     scopeId: panel.splitHotkeyScope,
@@ -89,41 +120,29 @@ export function TasksHeader(props: TasksHeaderProps) {
   });
 
   return (
-    <Show
-      when={isTouchDevice()}
-      fallback={
-        <ListHeader
-          title={
-            <div class="flex min-w-0 items-center gap-1">
-              <ViewBreadcrumbs.Outlet aria-label="Task location" />
-              <TaskSavedViewMenu />
-            </div>
-          }
-        >
-          <TaskSaveViewButton />
-          <TaskSavedViewActions />
-          <TasksControls />
-          <TasksCreateAction
-            presentation="toolbar"
-            projectsEnabled={projectsEnabled()}
-          />
-          <ListHeaderSearch
-            label="Search tasks"
-            value={state.search}
-            onValueChange={(search) => setState('search', search)}
-            focusResults={props.focusSearchResults}
-            registerFocus={(focus) => {
-              focusSearch = focus;
-            }}
-          />
-        </ListHeader>
-      }
-    >
-      <ViewShell.Header>
-        <div class="flex min-w-0 flex-col">
-          <TasksMobileTabs />
-        </div>
-      </ViewShell.Header>
+    <Show when={!isTouchDevice()}>
+      <ListHeader
+        title={
+          <div class="flex min-w-0 items-center gap-1">
+            <ViewBreadcrumbs.Outlet aria-label="Task location" />
+            <TaskSavedViewMenu />
+          </div>
+        }
+      >
+        <TaskSaveViewButton />
+        <TaskSavedViewActions />
+        <TasksControls />
+        <TasksCreateAction presentation="toolbar" />
+        <ListHeaderSearch
+          label="Search tasks"
+          value={state.search}
+          onValueChange={(search) => setState('search', search)}
+          focusResults={props.focusSearchResults}
+          registerFocus={(focus) => {
+            focusSearch = focus;
+          }}
+        />
+      </ListHeader>
     </Show>
   );
 }

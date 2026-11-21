@@ -22,9 +22,10 @@ import { crmTaskComposerContext } from './task-composer';
 
 /**
  * The record's Tasks tab: the production Tasks list, scoped to tasks
- * associated with the record through its Companies or Contacts property or a
- * reference (for a company, also through any of its contacts). It owns its
- * tag sets because a standalone record has no list provider above it.
+ * associated with the record through its Companies or Contacts property, a
+ * custom entity property that names the record, or a reference (for a
+ * company, also through any of its contacts). It owns its tag sets because a
+ * standalone record has no list provider above it.
  */
 export function CrmRecordTasks(props: { scope: CrmRecordScope }) {
   const layout = useSplitLayout();

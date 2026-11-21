@@ -8,12 +8,15 @@ use rootcause::Report;
 use serde_json::Value;
 use uuid::Uuid;
 
-use super::models::{DueDateInput, FocusInbox, FocusMail, FocusRecord, StaleThread, ThreadFocus};
+use super::models::{
+    DueDateInput, FocusInbox, FocusInboxOwner, FocusMail, FocusRecord, StaleThread, ThreadFocus,
+};
 
 /// Focus storage and the thread reads classification needs.
 pub trait FocusStore: Send + Sync + 'static {
-    /// Where a thread lives and how it stands, or `None` when it no longer
-    /// exists. A single-row read: every email event starts here.
+    /// Where a thread lives, who its inbox is linked to and how it stands, or
+    /// `None` when it no longer exists. A single-row read: every email event
+    /// starts here.
     fn thread_inbox(
         &self,
         thread_id: Uuid,
@@ -29,17 +32,27 @@ pub trait FocusStore: Send + Sync + 'static {
     /// already stored. Returns whether it was stored.
     fn save(&self, record: &FocusRecord) -> impl Future<Output = Result<bool, Report>> + Send;
 
-    /// Inbox threads that may belong in Focus with mail since `since` and no
-    /// classification of their latest message under the current rule, newest
-    /// first, from inboxes whose address is at one of `domains`. `after` is the
-    /// last thread of the previous page.
+    /// Threads of inbox `link_id` that may belong in Focus with mail since
+    /// `since` and no classification of their latest message under the current
+    /// rule, newest first. `after` is the last thread of the previous page.
     fn stale_threads(
         &self,
+        link_id: Uuid,
         since: DateTime<Utc>,
-        domains: &[String],
         after: Option<StaleThread>,
         limit: i64,
     ) -> impl Future<Output = Result<Vec<StaleThread>, Report>> + Send;
+
+    /// Inboxes holding a Focus thread, with their owners and the users they are
+    /// linked to: inboxes classified before, which may still be in the rollout.
+    fn inboxes_with_focus(
+        &self,
+    ) -> impl Future<Output = Result<Vec<FocusInboxOwner>, Report>> + Send;
+
+    /// Every inbox whose mail is syncing, with its owner and the users it is
+    /// linked to: where a person who joins the rollout is found before any mail
+    /// of theirs arrives.
+    fn syncing_inboxes(&self) -> impl Future<Output = Result<Vec<FocusInboxOwner>, Report>> + Send;
 
     /// The owner's Focus threads still in the inbox with mail since `since`,
     /// newest first by latest message time, in either direction. Threads whose
@@ -83,6 +96,17 @@ pub trait ProfileSource: Send + Sync + 'static {
         &self,
         owner: &MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<Option<String>, Report>> + Send;
+}
+
+/// Who is in the Focus rollout.
+pub trait FocusEnrollment: Send + Sync + 'static {
+    /// Whether `user` is in the rollout, which classifies every inbox whose
+    /// Focus tab they see: their own and those linked to them. An error leaves
+    /// the answer unknown, and nothing is classified on it until it is known.
+    fn is_enrolled(
+        &self,
+        user: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<bool, Report>> + Send;
 }
 
 /// Tells the people reading an inbox that its Focus changed.

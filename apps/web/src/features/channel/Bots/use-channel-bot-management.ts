@@ -1,11 +1,9 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   requestBotCreation,
   requestBotDetail,
 } from '@channel/Bots/botSettingsState';
 import { channelWebhookUrl } from '@channel/Bots/webhook';
 import { toast } from '@core/component/Toast/Toast';
-import { botManagement } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useChannelType } from '@core/context/channels';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
@@ -27,12 +25,9 @@ export function useChannelBotManagement(
 ) {
   const { openSettings } = useSettingsState();
   const channelType = useChannelType(options.channelId);
-  const featureFlag = useFeatureFlag(botManagement);
   const [inviteFocusRequest, setInviteFocusRequest] = createSignal(0);
 
-  const enabled = () => featureFlag().enabled;
-  const canManageBots = () =>
-    enabled() && channelType() === ChannelTypeEnum.Private;
+  const canManageBots = () => channelType() === ChannelTypeEnum.Private;
 
   const openCreateBot = () => {
     requestBotCreation(options.channelId);
@@ -94,7 +89,6 @@ export function useChannelBotManagement(
     icon: CopyIcon,
     keywords: ['bot', 'webhook', 'endpoint'],
     displayPriority: 8,
-    condition: enabled,
     keyDownHandler: () => {
       fireAndForget(copyWebhookUrl(), 'channel-bots');
       return true;
@@ -104,7 +98,6 @@ export function useChannelBotManagement(
   onCleanup(() => commandGroup.dispose());
 
   return {
-    enabled,
     inviteFocusRequest,
     openBot,
     openCreateBot,

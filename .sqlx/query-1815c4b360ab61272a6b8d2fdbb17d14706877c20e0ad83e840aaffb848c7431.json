@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT t.id FROM unnest($2::uuid[]) ids(id) CROSS JOIN LATERAL (\n               SELECT id,link_id FROM email_threads WHERE id=ids.id OFFSET 0\n           ) t WHERE t.link_id=$1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "1815c4b360ab61272a6b8d2fdbb17d14706877c20e0ad83e840aaffb848c7431"
+}

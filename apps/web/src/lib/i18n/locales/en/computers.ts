@@ -25,29 +25,46 @@ export default {
   cancels: 'Cancels {{date}}',
   keptUntil: 'Kept until {{date}}',
   pastDue: 'Payment past due',
-  claudeSignInConflict:
-    'Another sign-in is in progress on this computer — try again shortly',
-  claudeStartFailed: 'Could not start Claude sign-in. Please try again.',
-  claudeCompleteFailed:
-    'Could not complete Claude sign-in. Check the code and try again.',
   claudeCreditsFailed: 'Could not switch to Macro credits. Please try again.',
   claudeSignIn: 'Sign in with Claude',
-  claudeInvalidCode: "That code didn't work. Try again to get a new one.",
-  claudeSignInExpired:
-    'This sign-in link expired. Start over to get a new one.',
-  claudeStartOver: 'Start over',
+  claudeInvalidCode:
+    "Claude didn't accept that code. Get a new link and sign in again.",
+  claudeSignInExpired: 'This link expired. Get a new link to sign in again.',
   claudeTryAgain: 'Try again',
   openClaudeSignIn: 'Open claude.ai',
   claudeSignInTitle: 'Sign in with Claude',
-  claudeSignInSteps:
-    "We'll open claude.ai in a new tab. Sign in, copy the code it shows, then come back here and paste it.",
+  claudeSignInDescription:
+    'Use your Claude Pro or Max plan on this computer instead of Macro credits.',
+  claudeStepOpen: 'Sign in on claude.ai',
+  claudeStepPaste: 'Paste the code Claude shows you',
+  claudeCodePlaceholder: 'Paste code',
+  openClaudeAgain: 'Open again',
+  claudeNewLink: 'Get a new link',
+  claudeMalformedCode:
+    "That doesn't look like the whole code. Copy it again from claude.ai.",
+  claudeUnreachable:
+    "Can't reach the computer right now. Try again in a moment.",
+  claudeBusy: 'The computer is busy. Try again in a moment.',
+  claudeTimedOut: "The computer didn't answer in time. Send the code again.",
+  claudeFailed: 'Something went wrong signing in.',
+  claudeStepDone: 'done',
+  claudeFailedAfterClose:
+    "The Claude sign-in didn't finish. Open it again to try once more.",
+  claudeLinkFailed: "Couldn't get a sign-in link from the computer.",
+  claudeChecking: 'Checking with Claude. This can take a minute.',
+  claudePreparingLink: 'Preparing the sign-in link…',
+  claudeSwitchTitle: 'Switch to Macro credits?',
+  claudeSwitchBody:
+    "This computer signs out of Claude and runs on your team's Macro credits.",
+  claudeKeepCredits: 'Keep using Macro credits',
+  claudeSwitchToCredits: 'Switch to Macro credits',
   claudeUseCreditsInstead: 'Use Macro credits instead',
   claudeCodeLabel: 'Paste the code Claude showed you',
   completeSignIn: 'Complete sign-in',
   claudeSignedIn: 'Signed in with Claude',
   claudeNotSignedIn: 'Claude: not signed in',
   claudeSharedAccount:
-    'Everyone using this computer can use this Claude sign-in. Signing out removes it from the computer; to revoke it, go to claude.ai settings.',
+    'Everyone using this computer can use this sign-in. Revoke it any time in claude.ai settings.',
   claudeCredits: 'Claude: Macro credits',
   buying: 'Buying',
   standard: 'Standard',
@@ -62,15 +79,30 @@ export default {
   waitingForCapacityHint:
     'Turn off or release another computer on this host to make room',
   starting: 'Starting…',
+  unhealthy: 'Not responding',
+  unhealthyHint:
+    "It's back once it reconnects; Macro restarts it if it doesn't",
   stopping: 'Turning off',
   stopped: 'Powered off',
   failed: 'Failed',
   failedBecause: 'Setup failed: {{reason}}',
   failedHint: 'Macro is looking into it. Contact support if it stays failed.',
   retry: 'Retry',
+  retrying: 'Retrying…',
   retryFailed: "Couldn't retry. Try again.",
   releasedStatus: 'Released',
   offerSpecs: '{{cpus}} vCPU · {{memory}} GB · {{disk}} GB',
+  usageCpu: 'CPU',
+  usageMemoryName: 'Memory',
+  usagePercent: '{{percent}}%',
+  usageMemory: '{{used}} of {{total}} GB',
+  usageIdle: 'idle',
+  usageMeasuring: '–',
+  usageCpuChart: 'CPU use over the last day',
+  usageMemoryChart:
+    'Memory this computer uses on its own over the last day, not counting memory shared with its system image',
+  usageMemoryHint:
+    "Memory this computer uses on its own. Memory it shares with its system image isn't counted.",
   computerSpecs: '{{size}} · {{cpus}} vCPU · {{memory}} GB · {{disk}} GB',
   priceMonthly: '{{amount}}/month',
   priceYearly: '{{amount}}/year',
@@ -112,6 +144,17 @@ export default {
   name: 'Name',
   sizeTitle: 'Get a Macro computer',
   buy: 'Buy',
+  buyReadyHeadsUp:
+    "It's ready in a couple of seconds, on the list with the team's other computers.",
+  gettingIt: 'Getting your computer…',
+  tryAgainPriced: 'Try again · {{price}}',
+  updateCard: 'Update card',
+  declined:
+    'Your card was declined. Nothing was charged and nothing was set up. Update the card, or try again if your bank has cleared it.',
+  declinedCaption:
+    'Try again charges the card on file once more. The size and name are kept.',
+  noRoom:
+    'No room for a {{size}} computer right now. Nothing was charged. Pick another size.',
   buyHeadsUp:
     "Next you'll name your agent and sign in to Claude (Pro or Max) — have claude.ai handy.",
   stepBuy: 'Buy computer',
@@ -160,8 +203,6 @@ export default {
   retrySetup: 'Retry setup',
   setupFailedTitle: 'Setup failed',
   signInSkipped: 'Not needed: the agent runs on Macro credits.',
-  tryItAfterSetup: 'Try it and creating agents unlock once setup finishes.',
-  pasteCodeToContinue: 'Paste the code from claude.ai to complete sign-in.',
   buyAfterSizesLoad: 'Buy unlocks once the sizes have loaded.',
   setupContinuesInBackground:
     'You can close this; setup carries on and the computer’s row shows its progress.',
@@ -169,11 +210,7 @@ export default {
     "Your computer is still starting. The sign-in link comes from the computer, so this step unlocks by itself once it connects; you'll open claude.ai, sign in, and paste a code back here.",
   setupSteps: 'Setup steps',
   signInToClaude: 'Sign in to Claude',
-  signInTabTitle: '● Sign in to Claude — Macro',
-  claudeHarnessNote:
-    'We run the real Claude Code on your computer. The code you paste here goes right into the harness on your computer.',
-  almostReady: 'Almost ready',
-  almostReadyBody: 'Finishing setup on {{computer}}.',
+  signInTabTitle: '● Paste your Claude code — Macro',
   setupAgentTitle: "Let's set up an agent on it",
   agentName: 'Agent name',
   claudeChoice: 'Which Claude should it use?',
@@ -183,17 +220,22 @@ export default {
   claudeCreditsChoice: 'Macro credits',
   claudeCreditsChoiceHint: "Runs on Macro's API key and your team's credits.",
   setupDoneTitle: '{{agent}} is ready',
-  setupDoneBody:
-    'It runs on {{computer}}. Try {{agent}} now, or create another agent that runs there.',
-  setupDoneBodyForAgent:
-    'It runs on {{computer}}. Try {{agent}} now, or use this computer for the agent you are editing.',
-  createAgentHere: 'Create an agent on this computer',
+  setupReadyBody: 'It runs on {{computer}}. Say hi to get started.',
+  setupReadyBodyForAgent:
+    "It runs on {{computer}}. Use it for the agent you're editing.",
+  settingUpAgentTitle: 'Setting up {{agent}}',
+  settingUpAgentBody: 'This takes a few seconds.',
+  settingUpAgent: 'Setting up…',
+  finishFailedTitle: "Couldn't finish setting up {{agent}}",
+  finishFailedBody:
+    "{{computer}} is up, but its setup didn't finish. Retry to finish it.",
+  chatWithAgent: 'Chat with {{agent}}',
+  addAnotherAgent: 'Add another agent',
   setupReadyNotice: 'Your computer is ready: connect your AI and finish setup',
   setupReadyNoticeBody:
     '{{computer}} is up. Bring your AI, then create an agent on it.',
   setupFailedNotice: '{{computer}} could not be set up',
   useForThisAgent: 'Use for this agent',
-  tryIt: 'Try it',
   done: 'Done',
   fromPrice: 'From {{price}}',
   fromPriceLower: 'from {{price}}',
@@ -208,6 +250,7 @@ export default {
   noPaidPlan:
     'Computers need a paid Macro plan. Your team does not have one yet.',
   rolloutDisabled: "Computers aren't available for this account yet.",
+  errorForbidden: "You can't change this computer. Ask a team owner or admin.",
   trialBillingAction: 'Go to Billing',
   errorPurchaseConflict:
     'That size just sold out, or an earlier attempt is still being confirmed.',

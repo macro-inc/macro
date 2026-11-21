@@ -1,5 +1,7 @@
 import type { AiUsageSnapshot } from '../../../src/lib/service-clients/service-auth/ai-billing-types';
 import type { Link } from '../../../src/lib/service-clients/service-email/generated/schemas/link';
+import type { ListChannelNotificationSettingsResponse } from '../../../src/lib/service-clients/service-notification/generated/schemas/listChannelNotificationSettingsResponse';
+import type { ListSectionNotificationSettingsResponse } from '../../../src/lib/service-clients/service-notification/generated/schemas/listSectionNotificationSettingsResponse';
 import { accounts, EMAIL, identity, USER_ID } from './mail';
 
 const link: Link = {
@@ -39,6 +41,13 @@ const aiBilling: AiUsageSnapshot = {
   overage_suspended: false,
   uncovered_cents: 0,
   remaining_cents: 0,
+};
+// No channel or section has notification settings, so every channel uses the defaults.
+const CHANNEL_NOTIFICATION_SETTINGS: ListChannelNotificationSettingsResponse = {
+  channels: [],
+};
+const SECTION_NOTIFICATION_SETTINGS: ListSectionNotificationSettingsResponse = {
+  sections: [],
 };
 const name = { id: USER_ID, first_name: 'Offline', last_name: 'Fixture' };
 
@@ -82,6 +91,8 @@ export const bootstrapResponses = new Map<
   ['GET /dss/call/meetings/active', { body: { meetings: [] } }],
   ['GET /dss/instructions', { body: {}, status: 404 }],
   ['GET /dss/crm/settings', { body: {}, status: 403 }],
+  // The fixture user has no team, so the CRM access proof names none.
+  ['GET /dss/crm/member-access', { body: { allowed: false, team_id: null } }],
   ['GET /dss/crm/contacts', { body: { contacts: [] } }],
   [
     'POST /agent-harness/agent-models/load',
@@ -95,8 +106,11 @@ export const bootstrapResponses = new Map<
   ['GET /cognition/mcp/servers', { body: [] }],
   ['GET /cognition/pipedream/mcp/connections', { body: [] }],
   ['GET /cognition/onboarding/prompts', { body: { dismissed: [] } }],
+  ['GET /cognition/import/state', { body: { runs: [], entities: [] } }],
+  ['POST /scheduled-action/suggestions/seen', { body: {} }],
   ['GET /scheduled-action/scheduled-actions', { body: [] }],
   ['GET /scheduled-action/scheduled-actions/catalog', { body: [] }],
+  ['GET /scheduled-action/scheduled-actions/draft-jobs', { body: [] }],
   [
     'GET /scheduled-action/scheduled-actions/suggestions',
     { body: { status: 'none', suggestions: [] } },
@@ -106,6 +120,14 @@ export const bootstrapResponses = new Map<
     { body: { disabled_types: [] } },
   ],
   ['GET /notification/unsubscribe', { body: [] }],
+  [
+    'GET /notification/notification_settings/channels',
+    { body: CHANNEL_NOTIFICATION_SETTINGS },
+  ],
+  [
+    'GET /notification/notification_settings/sections',
+    { body: SECTION_NOTIFICATION_SETTINGS },
+  ],
   ['POST /dss/items/soup', { body: { items: [], next_cursor: null } }],
   ['POST /dss/items/soup/ast', { body: { items: [], next_cursor: null } }],
 ]);

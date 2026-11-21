@@ -80,8 +80,9 @@ async function expectCount(label: string, state: string, expected: number) {
 const variables = (id: string, operation: string) => ({
   input: { notificationIds: [id], operation },
 });
-const authority = (id: string, state: string) =>
+const authority = async (id: string, state: string) =>
   host.writeQuery({
+    generation: (await host.authority!.current()).generation,
     query: updateQuery,
     variables: variables(id, 'MARK_DONE'),
     data: { updateNotifications: [notification(id, state)] },
@@ -121,10 +122,15 @@ const snapshot = (
     },
   },
 });
-const seed = () => host.writeQuery(snapshot());
-const markDone = (id: string) =>
+const seed = async () =>
+  host.writeQuery({
+    generation: (await host.authority!.current()).generation,
+    ...snapshot(),
+  });
+const markDone = async (id: string) =>
   host.enqueueOptimisticMutation(
     {
+      generation: (await host.authority!.current()).generation,
       query: updateQuery,
       variables: variables(id, 'MARK_DONE'),
       uuid: crypto.randomUUID(),
@@ -153,6 +159,7 @@ try {
       unreadNotifications: [{ id: ids[index], state: 'UNSEEN' }],
     }));
     await host.writeQuery({
+      generation: (await host.authority!.current()).generation,
       ...sidebar,
       data: { user: { id: 'viewer', soup: { items: staleChannels } } },
     });
@@ -163,6 +170,7 @@ try {
     // Another device read the first conversation, but this client missed its
     // realtime patch. Opening must repair the sidebar with this response alone.
     await host.writeQuery({
+      generation: (await host.authority!.current()).generation,
       query: print(ChannelDetailSoupDocument),
       variables: {
         input: {
@@ -246,6 +254,7 @@ try {
   }
   for (const row of unhydratedNotifications) {
     await host.writeQuery({
+      generation: (await host.authority!.current()).generation,
       query: updateQuery,
       variables: variables(row.id, 'MARK_SEEN'),
       data: { updateNotifications: [{ ...row, state: 'SEEN' }] },
@@ -296,6 +305,7 @@ try {
       generation: claim.leaseGeneration,
     },
     {
+      generation: (await host.authority!.current()).generation,
       query: updateQuery,
       variables: variables(ids[1], 'MARK_DONE'),
       data: { updateNotifications: [notification(ids[1], 'DONE')] },
@@ -324,23 +334,26 @@ try {
   report.push('DONE: network-only');
   // Reused notification IDs must not carry old-parent removals across viewers.
   // A complete snapshot establishes only the new viewer's parent projection.
-  await host.writeQuery(
-    snapshot('write-viewer', '00000000-0000-0000-0000-000000000002')
-  );
+  await host.writeQuery({
+    generation: (await host.authority!.current()).generation,
+    ...snapshot('write-viewer', '00000000-0000-0000-0000-000000000002'),
+  });
   await expectCount(
     'Write identity switch discards old associations',
     'UNSEEN',
     1
   );
-  await host.hydrateQuery(
-    snapshot('hydrate-viewer', '00000000-0000-0000-0000-000000000003')
-  );
+  await host.hydrateQuery({
+    generation: (await host.authority!.current()).generation,
+    ...snapshot('hydrate-viewer', '00000000-0000-0000-0000-000000000003'),
+  });
   await expectCount(
     'Hydration identity switch discards old associations',
     'UNSEEN',
     1
   );
   await host.writeQuery({
+    generation: (await host.authority!.current()).generation,
     query: updateQuery,
     identity: 'id-only-viewer',
     variables: variables(ids[0], 'MARK_DONE'),

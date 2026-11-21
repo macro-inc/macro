@@ -579,6 +579,9 @@ fn saved_draft_message(saved: SavedUserDraft) -> Message {
 /// REST `CreateDraftError` mapping with machine-readable `extensions.code`
 /// values the client can use to offer recovery without blocking its mutation queue.
 pub fn draft_mutation_error(error: &EmailErr) -> async_graphql::Error {
+    if matches!(error, EmailErr::Contended) {
+        return busy_error(error);
+    }
     let (message, code) = match error {
         EmailErr::SendAttemptConflict => (
             "send attempt was reused with different content",
@@ -632,7 +635,19 @@ fn internal_email_error(error: async_graphql::Error) -> async_graphql::Error {
     })
 }
 
+/// The inbox stayed locked past the lock timeout. The write rolled back, so
+/// the client can repeat it once the inbox settles.
+fn busy_error(error: &EmailErr) -> async_graphql::Error {
+    async_graphql::Error::new(error.to_string()).extend_with(|_, extensions| {
+        extensions.set("code", "INBOX_BUSY");
+        extensions.set("retryable", true);
+    })
+}
+
 fn mutation_error(error: &EmailErr) -> async_graphql::Error {
+    if matches!(error, EmailErr::Contended) {
+        return busy_error(error);
+    }
     let message = match error {
         EmailErr::ThreadNotFound | EmailErr::ThreadEmpty => "email thread not found",
         EmailErr::LabelNotFound => "email label not found",

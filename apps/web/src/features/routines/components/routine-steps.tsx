@@ -24,6 +24,7 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
 import type { StepAuthor } from '../context/routine-slots';
+import type { UnusableItem } from '../core/knobs';
 import type {
   AgentStepDraft,
   RoutineSoFar,
@@ -60,6 +61,8 @@ type StepsContextValue = {
   fresh: Set<string>;
   /** AI that adds and changes steps, when the host provides it. */
   author?: StepAuthor;
+  /** Picked items its owner can't use now; their knobs need a new pick. */
+  unusableItems: Accessor<readonly UnusableItem[]>;
 };
 
 const StepsContext = createContext<StepsContextValue>();
@@ -76,6 +79,8 @@ export type RoutineStepsProps = {
   triggers: RoutineTriggerDraft[];
   defaultTarget: RoutineTarget;
   slots: RoutineStepSlots;
+  /** Picked items its owner can't use now, on a saved routine's page. */
+  unusableItems?: readonly UnusableItem[];
 };
 
 /** What every step editor reads: slots and the AI that writes steps. */
@@ -94,6 +99,7 @@ export function StepsProvider(
         slots: props.slots,
         fresh: new Set(),
         author,
+        unusableItems: () => props.unusableItems ?? [],
       }}
     >
       {props.children}

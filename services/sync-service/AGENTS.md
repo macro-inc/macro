@@ -88,6 +88,10 @@ to the requested surface. These are scoped sync JWTs, not app-session tokens.
   source's mappings first. A peer's first owner keeps it; registration only
   claims peers the system author holds.
   A new write path does the same (`tests/peer_authors.test.ts`).
+- `docker/sync-service.Dockerfile` fetches the tools `worker-build` would
+  download (wasm-opt, esbuild, wasm-bindgen) into its cache first, with
+  retries: wasm-opt and esbuild at the versions `worker-build` 0.8.1 pins.
+  Bumping `worker-build` there means bumping those two with it.
 - `migration-test-hooks` is test-only fault injection — never enable it in a
   deployed worker (see the feature's doc comment in `Cargo.toml`).
 - Provision `LEXICAL_SERVICE_AUTH_KEY` to match lexical-service before deploying; `just check-secrets <environment>` checks binding presence without reading values.

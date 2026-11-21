@@ -107,11 +107,16 @@ pub fn construct_search_result(
             map
         });
 
-    // now construct the search results in the original search result order
+    // now construct the search results in the original search result order.
+    // The index keeps a trashed chat's messages until it is purged, so a hit
+    // on a trashed chat is dropped here, like a hit on one that is gone.
     let result: Vec<ChatSearchResponseItemWithMetadata> = entity_id_hit_map
         .into_iter()
         .filter_map(|(entity_id, hits)| {
-            if let Some(info) = chat_histories.get(&entity_id.to_string()) {
+            if let Some(info) = chat_histories
+                .get(&entity_id.to_string())
+                .filter(|info| info.deleted_at.is_none())
+            {
                 let info = info.clone();
                 let metadata = models_search::chat::ChatMetadata {
                     created_at: info.created_at,

@@ -39,8 +39,22 @@ Install widened checks as `NOT VALID` and validate in a separate migration so
 the scan does not retain the replacement migration's exclusive table lock.
 
 Entity appearance is nullable JSON on each owning entity table (including routine
-template snapshots); appearance-only writes preserve content timestamps. Document
+template snapshots and saved-view definitions); appearance-only writes preserve content timestamps. Document
 lists and content save responses retain the stored appearance alongside ordinary metadata.
+
+`password_item_favorites` stores private human preferences. Its composite item
+and membership foreign keys cascade on deletion. Item triggers seed the creator's
+initial flag and clear soft-deleted items; never reseed on metadata updates.
+The legacy JSON favorite bit stays for rollback but is no longer a read source;
+remove it in a later migration after rollback compatibility is retired.
+
+`contact_list_members` and `contact_inbox_members` (migration `20261120222032`)
+are the directed, list-aware contact directory owned by `crates/contacts`; they
+replace `contacts_connections`, which stays until its readers are gone. Both store
+only canonical lowercase `macro|` ids in `COLLATE "C"` keys. Inbox rows cascade
+with their `email_links` row; `user_id` and `list_key` on them repeat the link's
+owner and provider on purpose, so reads never join `email_links`. List rows have no
+foreign key: the contacts worker removes them on account deletion.
 
 ## Boundaries
 
@@ -81,9 +95,16 @@ watchers; its queries and policy belong to `agent_preview`. Leases have a bounde
 TTL, deletion cascades credentials, and sweepers reclaim expired watchers and
 unreferenced replicas. These additive tables do not change agent-session claims.
 
+Task-template rows cascade with personal users or teams; nullable creator attribution clears on account deletion while team-owned content remains.
+
 `password_import_activity` stores only per-batch source format and counts; its
 team foreign key cascades, and the passwords repository includes it in retained
 data checks and explicit vault purge. It does not depend on a successful item.
+
+`import_run.personal_root_folder_id` and `personal_folder_ids` are nullable,
+additive state owned by the import repository. Preserve both when a later run
+restarts, just like `root_folder_id`; they identify the user's persistent
+owner-only Notion mirror. No existing folders or import rows are backfilled.
 
 ## Gotchas
 
@@ -99,27 +120,66 @@ data checks and explicit vault purge. It does not depend on a successful item.
 - `crm_email_rule_*` and `crm_email_policy_audit` hold private member/mailbox
   policy history. Selected consent uses its own grant bit and exact revision FK;
   legacy-write/version triggers and mailbox revocation must survive rollbacks.
+  The eligibility function migration rejects preexisting selected rows because
+  old inline readers remain during deployment. Keep selected activation absent
+  until the scalar function, ingestion and Team reader are compatible.
   Keep applied migration files immutable and add forward corrections instead.
 
-- `user::get_user_name::get_user_names_with_email` is shared by authentication and bounded contact-directory enrichment; preserve viewer-only address-book fallback and keep its IDs/names off tracing spans.
+- `crm_email_consent.consent_incarnation` is nullable for legacy writers;
+  server UUIDv7 initialization preserves existing consent, and an initialized
+  identity cannot be cleared or changed. New policy envelopes carry both that
+  identity and `policy_version`; null outbox generation fields mean legacy work.
+  Keep mailbox/membership cascades and the bounded source-event reverse indexes
+  on rule tables. Interrupted concurrent builds of `crm_email_rule_contacts_source`
+  or `crm_email_rule_companies_source` require inspecting and dropping only the
+  invalid index before retrying the unapplied migration. Modern work also keeps
+  an address cursor and sent/received pass; old thread-cursor columns remain for
+  rolling compatibility. `crm_email_backfill_outbox_due` orders durable recovery
+  signals by `(requested_at, team_id, user_id)`; it adds no email-table index.
+
+- `user::get_user_name::get_user_names_with_email` is shared by authentication and bounded contact-directory enrichment; preserve viewer-only address-book fallback and keep its IDs/names off tracing spans. Its SQL (`user/get_user_name/names_with_email.sql`) reads the viewer's mailboxes once, into an array, and probes `email_contacts` by `(link_id, email_address)`. Don't join `email_links` per requested id again: with statistics that say most mailboxes are the viewer's, that plan searches every mailbox's contacts through the trigram index, seconds for one page of ids. `address_book_names_are_read_through_the_viewers_mailboxes` covers it.
 - `contacts_connections` keeps its raw forward/reverse paging indexes; upstream migration `20261101055556` owns `idx_contacts_connections_user2_user1`, so do not add a duplicate branch migration. Migrations `20261105044718` and `20261105044750` add `(raw viewer, lower(peer COLLATE "C"))` point-lookup indexes with a strict peer `macro|` prefix predicate. They preserve stored rows, edge constraints and cursor order; bounded directory reads belong to `crates/contacts`. Apply both before new readers, with a short session `lock_timeout` (for SQLx CLI, e.g. `PGOPTIONS='-c lock_timeout=5s'`). An interrupted concurrent build must be inspected/repaired before retrying; these migrations do not hide an existing invalid index with `IF NOT EXISTS`.
 
 - `item_access::get_accessible_items::get_user_accessible_items` (cached 10 s)
   and `call_record::get::get_accessible_call_ids` (uncached) share one run of
   their queries between concurrent identical callers through `single_flight`.
+  The accessible-items run uses `run_to_completion`: it finishes when every
+  caller has gone away (a cancelled search), so its document checks are kept
+  for the next search, and a caller arriving meanwhile joins it.
   The unit tests compile with the cache off; `tests/coalesced_access_lookups.rs`
   covers the cached path and needs its own user ids per test.
-- `get_user_accessible_items` counts the caller's document grants first, up to
-  `DOCUMENT_GRANTS_LOOKED_UP_BY_ID`. At or under it, `documents_by_grant.sql`
-  looks each granted document up by id behind `OFFSET 0` fences; above it the
+- `get_user_accessible_items` reads the caller's document grants first, up to
+  `DOCUMENT_GRANTS_LOOKED_UP_BY_ID`. At or under it, `documents_by_id.sql`
+  looks each granted document up by id behind an `OFFSET 0` fence; above it the
   planner chooses. Left alone, the planner scans every live document for a
   caller with many small sources, because it estimates each at the table's
-  average grant count. Keep the fences, and re-measure both paths on a
+  average grant count. Keep the fence, and re-measure both paths on a
   production-size seed before changing the limit.
+- Each of those lookups costs a random read per granted document whose pages
+  are not cached, and for callers holding thousands of grants they are cold
+  again minutes after their last search. So `checked_documents` keeps, per
+  process and caller, what the lookups found about each granted document (it
+  exists, and whether the caller owns it) for `CHECKS_KEPT_FOR`, and reads
+  `Document` only for granted ids not checked within it. Grants are read on
+  every lookup, and Trash state too (`trashed_by_id.sql`, through
+  `idx_document_trashed_id_owner`, which holds only trashed rows and stays
+  cached): a revoked or new share, a move to or from the Trash, and a purge
+  (which removes the grants) count at once; only a document given to another
+  owner counts once its check expires. The checks are on in unit tests too,
+  keyed by database and caller.
+- `idx_document_trashed_id_owner` (migration `20261120081501`) is built
+  concurrently. If the build is interrupted, inspect `pg_index.indisvalid` and
+  drop only the invalid index before retrying.
 - `recents::deleted` (the Trash list) pages by `("deletedAt", id)` through the
   partial trash indexes on `Document`, `Chat` and `Project`. A folder trash or
   batch move gives thousands of items one `"deletedAt"`, so the id tiebreak must
   stay in those indexes, and the list must not read without a page limit.
+- `get_accessible_call_ids` (`call_record/get/accessible_call_ids.sql`) reads
+  the caller's call grants by source and looks each granted call up by id;
+  link shares cost one `SharePermission` probe per channel call, since a public
+  call has no grant to start from. Never check a call's grants against the
+  caller's sources row by row: that compares every grant with every source
+  and took seconds for callers in thousands of channels.
 - Migrations deploy before service code: never drop a column/table in the
   same PR that removes its last usage (see `docs/development/database.md`).
 - `call_participants.client` defaults to `person` for older call writers;
@@ -169,6 +229,7 @@ foreign keys; the broker deletes expired rows.
 
 - Spam/Trash candidate indexes cover `email_messages(link_id, id)` only for the corresponding positive `mailbox_state` JSON containment predicate; keep query literals aligned with the partial-index predicates.
 - If either concurrent folder-index migration is interrupted, inspect `pg_index.indisvalid` and drop only its invalid index before retrying; `CREATE INDEX IF NOT EXISTS` would silently preserve an unusable index.
+- `idx_ep_crm_record_references_gin` (migration `20261119222316`) holds only the `entity_properties` values that reference a company or contact outside the Companies and Contacts properties and database rows. Soup's CRM property edges use it by repeating its predicate; keep the two in step. If its concurrent build is interrupted, inspect `pg_index.indisvalid` and drop only the invalid index before retrying.
 - `document::get_all_documents::get_documents_to_delete` pages expired trash in `("deletedAt", id)` order through the partial `idx_document_deleted_at_id`, under a 10 s statement timeout; keep its `ORDER BY` and keyset comparison matching that index, or each page reads the whole Document table.
 
 - `agent_correlation` owns invocation mappings; activity and scheduled-email correlation columns remain nullable for older writers. Build the activity correlation index concurrently, outside a transaction.
@@ -194,4 +255,5 @@ invalid index before retrying.
 `crm_email_thread_exclusions` stores one contributor's private thread exceptions;
 its membership, mailbox and thread foreign keys cascade deletion. The CRM domain
 owns writes and owner-only listing; `crm_email_thread_excluded` is the independent
-veto used by the shared eligibility function and mirrored in set-based ingestion.
+veto used by the shared eligibility function and mirrored in set-based ingestion
+and the inline Team reader, including selected contribution.

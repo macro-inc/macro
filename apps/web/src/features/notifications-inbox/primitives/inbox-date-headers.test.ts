@@ -14,6 +14,7 @@ const NOW = new Date(2026, 8, 14, 20, 0);
 const row = (id: string, latestAt: Date): NotificationInboxRow => ({
   id,
   type: 'task',
+  alsoListedAs: [],
   revision: `rev-${id}`,
   latestAt: latestAt.getTime(),
   actions: [],

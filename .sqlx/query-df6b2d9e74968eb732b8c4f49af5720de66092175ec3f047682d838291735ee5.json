@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT current_setting('TimeZone') IN ('UTC', 'Etc/UTC') AS \"utc!\",\n            source_items_exact() AS \"exact!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "utc!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "exact!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "df6b2d9e74968eb732b8c4f49af5720de66092175ec3f047682d838291735ee5"
+}

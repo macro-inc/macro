@@ -75,12 +75,22 @@ interface ToastOptions {
    * control, Escape, a swipe, or `toast.dismiss`.
    */
   onDismiss?: () => void;
+  /**
+   * A toast this one takes the place of: while that toast is still open it
+   * changes in place and keeps its id, so one process (a send, say) shows one
+   * toast through each of its states. Its options, `onDismiss` included,
+   * replace the earlier ones, and a timed toast starts its timer again. A
+   * closed toast leaves this one to open as usual.
+   */
+  replace?: number;
 }
 
 interface ToastActionOptions extends ToastOptions {
   actions?: ToastAction[];
   /** When true, bypasses the 3s duplicate-message throttle. */
   stack?: boolean;
+  /** Stays until dismissed or, on mobile, until the next notice replaces it. */
+  persistent?: boolean;
 }
 
 /**
@@ -146,7 +156,7 @@ function dismissActiveToast(region: string): boolean {
   if (activeId === undefined) return false;
 
   setActiveToastId(region, undefined);
-  toaster.dismiss(activeId);
+  dismiss(activeId);
   return true;
 }
 
@@ -192,7 +202,7 @@ function dismissIfRecent(message: string, type: ToastType): void {
     now - existingToast.timestamp < THROTTLE_DURATION &&
     existingToast.toastId != null
   ) {
-    toaster.dismiss(existingToast.toastId);
+    dismiss(existingToast.toastId);
   }
 }
 
@@ -201,11 +211,15 @@ function success(
   message: string,
   options?: ToastActionOptions
 ): number | undefined {
-  if (!options?.stack) dismissIfRecent(message, ToastType.SUCCESS);
   return createToast(message, ToastType.SUCCESS, options);
 }
 
 function dismiss(toastId: number) {
+  // A toast queued past its region's limit never mounts, so its cleanup
+  // can't be what closes it.
+  const open = openToasts.get(toastId);
+  openToasts.delete(toastId);
+  if (open && !open.mounted()) open.close();
   toaster.dismiss(toastId);
 }
 
@@ -214,7 +228,6 @@ function failure(
   message: string,
   options?: ToastActionOptions
 ): number | undefined {
-  if (!options?.stack) dismissIfRecent(message, ToastType.FAILURE);
   return createToast(message, ToastType.FAILURE, options);
 }
 
@@ -223,7 +236,6 @@ function alert(
   message: string,
   options?: ToastActionOptions
 ): number | undefined {
-  if (!options?.stack) dismissIfRecent(message, ToastType.ALERT);
   return createToast(message, ToastType.ALERT, options);
 }
 
@@ -275,8 +287,7 @@ function ActionButtons(props: {
   );
 }
 
-/** Shared presentation for the app service and isolated gallery regions. */
-export function ToastContent(props: {
+type ToastContentProps = {
   toastId: number;
   toastType?: ToastType;
   message?: string;
@@ -292,7 +303,36 @@ export function ToastContent(props: {
   dismissStyle?: ToastDismissStyle;
   onDismiss?: () => void;
   onUserDismiss?: () => void;
-}) {
+  /** Counts in-place replacements; each one restarts a timed toast's timer. */
+  revision?: number;
+};
+
+/** Shared presentation for the app service and isolated gallery regions. */
+export function ToastContent(props: ToastContentProps) {
+  onCleanup(() => props.onDismiss?.());
+
+  // Kobalte's close timer doesn't follow a change to `persistent`, nor start
+  // again for new content, so a toast updated in place to new timing (a
+  // persistent "Sending…" becoming a timed "Sent"), or a timed toast given
+  // new content, mounts a fresh frame, without the entrance animation.
+  let mounted = false;
+  const timing = () =>
+    props.persistent
+      ? 'persistent'
+      : `${props.duration}:${props.revision ?? 0}`;
+  return (
+    <Show when={timing()} keyed>
+      {/* Show re-renders only a child that takes the value. */}
+      {(_timing) => {
+        const replaced = mounted;
+        mounted = true;
+        return <ToastFrame {...props} replaced={replaced} />;
+      }}
+    </Show>
+  );
+}
+
+function ToastFrame(props: ToastContentProps & { replaced: boolean }) {
   const styles = () =>
     props.toastType ? TOAST_STYLES[props.toastType] : undefined;
   const icon = () => props.custom?.icon ?? styles()?.icon;
@@ -319,20 +359,27 @@ export function ToastContent(props: {
   let surface!: HTMLDivElement;
 
   // Keep the natural height while older cards are tucked into the stack.
+  // Read it once at mount, so the entrance keyframes start from the real
+  // height rather than their fallback, then from the observer's entries:
+  // reading layout in the callback would force a style and layout pass of
+  // whatever an earlier callback in that frame dirtied, in every frame the
+  // card resizes.
   onMount(() => {
-    const measure = () => setHeight(surface.offsetHeight);
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(surface);
+    setHeight(surface.offsetHeight);
+    const observer = new ResizeObserver(([entry]) => {
+      const size = entry?.borderBoxSize[0];
+      if (size) setHeight(size.blockSize);
+    });
+    observer.observe(surface, { box: 'border-box' });
     onCleanup(() => observer.disconnect());
   });
-  onCleanup(() => props.onDismiss?.());
 
   return (
     <Toast
       toastId={props.toastId}
       data-macro-toast
       data-toast-id={props.toastId}
+      data-replaced={props.replaced ? '' : undefined}
       data-mobile={isMobile() ? '' : undefined}
       data-single-row={singleRow() ? '' : undefined}
       class="macro-toast"
@@ -536,6 +583,85 @@ async function promise<T>(
     });
 }
 
+// ─── showToast (internal) ────────────────────────────────────────────────────
+
+type ShownToast = Omit<ToastContentProps, 'toastId' | 'revision'>;
+
+/** Open toasts by id, with their region and the setter `replace` changes them through. */
+const openToasts = new Map<
+  number,
+  {
+    region: string;
+    update: (content: ShownToast) => void;
+    mounted: () => boolean;
+    close: () => void;
+  }
+>();
+
+/**
+ * Show a toast in `region`, or change the open toast `replace` names in place.
+ * A toast that `holdsSlot` is the one the next mobile notice replaces.
+ */
+function showToast(
+  region: string,
+  content: ShownToast,
+  replace: number | undefined,
+  holdsSlot: boolean
+): number {
+  const open = replace === undefined ? undefined : openToasts.get(replace);
+  if (replace !== undefined && open) {
+    open.update(content);
+    // The throttle must not dismiss this toast for a message it no longer shows.
+    for (const [key, recent] of recentToasts) {
+      if (recent.toastId !== replace) continue;
+      clearTimeout(recent.timeoutId);
+      recentToasts.delete(key);
+    }
+    if (!holdsSlot) {
+      clearTrackedToast(open.region, replace);
+    } else {
+      if (getActiveToastId(open.region) !== replace)
+        dismissActiveToast(open.region);
+      setActiveToastId(open.region, replace);
+    }
+    return replace;
+  }
+
+  replaceActiveToast(region, !holdsSlot);
+  const [current, setCurrent] = createSignal({ ...content, revision: 0 });
+  let mounted = false;
+  let closed = false;
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    openToasts.delete(toastId);
+    clearTrackedToast(region, toastId);
+    current().onDismiss?.();
+  };
+  const toastId = toaster.show(
+    (props) => {
+      mounted = true;
+      return (
+        <ToastContent
+          {...current()}
+          toastId={props.toastId}
+          onDismiss={close}
+        />
+      );
+    },
+    { region }
+  );
+  openToasts.set(toastId, {
+    region,
+    update: (next) =>
+      setCurrent((previous) => ({ ...next, revision: previous.revision + 1 })),
+    mounted: () => mounted,
+    close,
+  });
+  trackActiveToast(region, toastId, !holdsSlot);
+  return toastId;
+}
+
 // ─── createToast (internal) ──────────────────────────────────────────────────
 
 function createToast(
@@ -554,11 +680,17 @@ function createToast(
     showCloseButton,
     dismissStyle,
     onDismiss,
+    persistent,
+    replace,
   } = options ?? {};
 
   if (isMobile() && hideOnMobile) return undefined;
 
-  if (!stack) {
+  // A toast changing in place may already show this message, and its later
+  // states are not new messages to throttle.
+  const replacing = replace !== undefined && openToasts.has(replace);
+  if (!stack && !replacing) {
+    dismissIfRecent(message, toastType);
     const key = createToastKey(message, toastType);
     const existingToast = recentToasts.get(key);
     if (existingToast?.timeoutId) {
@@ -568,33 +700,26 @@ function createToast(
 
   const useMobile = isMobile();
   const region = useMobile ? 'mobile-toast-region' : 'toast-region';
-  dismissActiveToast(region);
-
-  const toastId = toaster.show(
-    (props) => (
-      <ToastContent
-        toastId={props.toastId}
-        toastType={toastType}
-        message={message}
-        subtext={subtext}
-        titleIcon={titleIcon}
-        actions={actions}
-        actionLayout={actionLayout}
-        duration={duration}
-        showCloseButton={showCloseButton}
-        dismissStyle={dismissStyle}
-        onDismiss={() => {
-          clearTrackedToast(region, props.toastId);
-          onDismiss?.();
-        }}
-      />
-    ),
-    { region }
+  const toastId = showToast(
+    region,
+    {
+      toastType,
+      message,
+      subtext,
+      titleIcon,
+      actions,
+      actionLayout,
+      duration,
+      persistent,
+      showCloseButton,
+      dismissStyle,
+      onDismiss,
+    },
+    replace,
+    true
   );
 
-  setActiveToastId(region, toastId);
-
-  if (!stack) {
+  if (!stack && !replacing) {
     const key = createToastKey(message, toastType);
     const timeoutId = setTimeout(() => {
       recentToasts.delete(key);
@@ -662,32 +787,27 @@ function custom(
     onUserDismiss?: () => void;
     showCloseButton?: boolean;
     dismissStyle?: ToastDismissStyle;
+    /** See `ToastOptions.replace`. */
+    replace?: number;
   }
 ): number {
   const useMobile = isMobile();
   const region =
     options?.region ?? (useMobile ? 'mobile-toast-region' : 'toast-region');
-  replaceActiveToast(region, options?.persistent);
-  const toastId = toaster.show(
-    (props) => (
-      <ToastContent
-        toastId={props.toastId}
-        custom={config}
-        persistent={options?.persistent}
-        duration={options?.duration}
-        onUserDismiss={options?.onUserDismiss}
-        showCloseButton={options?.showCloseButton}
-        dismissStyle={options?.dismissStyle}
-        onDismiss={() => {
-          clearTrackedToast(region, props.toastId);
-          options?.onDismiss?.();
-        }}
-      />
-    ),
-    { region }
+  return showToast(
+    region,
+    {
+      custom: config,
+      persistent: options?.persistent,
+      duration: options?.duration,
+      onUserDismiss: options?.onUserDismiss,
+      showCloseButton: options?.showCloseButton,
+      dismissStyle: options?.dismissStyle,
+      onDismiss: options?.onDismiss,
+    },
+    options?.replace,
+    !options?.persistent
   );
-  trackActiveToast(region, toastId, options?.persistent);
-  return toastId;
 }
 
 // ─── public API ──────────────────────────────────────────────────────────────

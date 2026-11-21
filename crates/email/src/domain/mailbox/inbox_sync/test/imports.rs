@@ -38,7 +38,7 @@ async fn existing_message_read_failure_is_terminal_and_provider_absence_has_no_e
     fake.0.lock().unwrap().failures.push(("message", 1));
     let (delete, error) = failure(svc.process(Ok(input(operation()))).await);
     assert!(delete);
-    assert!(error.source.to_string().contains("before provider upsert"));
+    assert!(format!("{:#}", error.source).contains("before provider upsert"));
     let (svc, fake) = make_service(false);
     assert!(matches!(
         svc.process(Ok(input(operation()))).await,
@@ -541,6 +541,7 @@ async fn crm_fanout_rejects_each_malformed_shape_and_preserves_valid_neighbours(
             BackfillOperation::PopulateCrmContact(LinkScopedPayload {
                 link_id: LINK,
                 payload: PopulateCrmContactPayload {
+                    live_mail: true,
                     contact_email: email.into(),
                     contact_name: Some(name.into()),
                     first_at: at,
@@ -602,12 +603,7 @@ async fn contact_connections_follow_direction_and_enqueue_failure_is_terminal() 
     let (delete, error) = failure(svc.process(Ok(input(operation()))).await);
     assert!(delete);
     assert_eq!(error.reason, FailureReason::SqsEnqueueFailed);
-    assert!(
-        error
-            .source
-            .to_string()
-            .contains("Failed to enqueue contacts message")
-    );
+    assert!(format!("{:#}", error.source).contains("Failed to enqueue contacts message"));
 }
 #[tokio::test]
 async fn notification_query_failures_retry_after_the_insert_and_publication_failure_is_best_effort()

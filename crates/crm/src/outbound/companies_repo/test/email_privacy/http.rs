@@ -1,4 +1,5 @@
 //! Real HTTP extraction, domain policy and migrated persistence in an owned fixture.
+mod mailbox_domains;
 use super::*;
 use crate::{
     domain::service::CrmServiceImpl,
@@ -178,6 +179,33 @@ async fn privacy_http_preserves_records_and_enforces_mailbox_and_role_boundaries
     assert_eq!(initial["mailbox_link_id"], link.to_string());
     assert_eq!(initial["enabled"], false);
     assert_eq!(initial["can_remove_team_domains"], true);
+    let consent_path = "/crm/email-privacy?consent_only=true";
+    assert_eq!(
+        request_path(&app, "invalid", consent_path, None).await.0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        request_path(&app, "owner", consent_path, None).await,
+        (
+            StatusCode::OK,
+            json!({
+                "enabled": false,
+                "mailbox_email": initial["mailbox_email"],
+                "mailbox_link_id": link,
+            })
+        )
+    );
+    assert_eq!(
+        request_path(&app, "member", consent_path, None).await,
+        (
+            StatusCode::OK,
+            json!({
+                "enabled": false,
+                "mailbox_email": null,
+                "mailbox_link_id": null,
+            })
+        )
+    );
     assert_eq!(
         request(&app, "member", None).await.1["can_remove_team_domains"],
         false
@@ -205,6 +233,30 @@ async fn privacy_http_preserves_records_and_enforces_mailbox_and_role_boundaries
     );
     assert!(allowed(&pool, team, thread).await?);
 
+    // Header consent must remain available without reading domain settings.
+    let mut domain_lock = pool.begin().await?;
+    sqlx::raw_sql(
+        "LOCK TABLE crm_companies, crm_domains, crm_blocked_domains, crm_personal_email_blocklist IN ACCESS EXCLUSIVE MODE",
+    )
+    .execute(&mut *domain_lock)
+    .await?;
+    let (status, consent) = tokio::time::timeout(
+        std::time::Duration::from_secs(3),
+        request_path(&app, "owner", consent_path, None),
+    )
+    .await
+    .expect("consent projection must not wait for domain-list locks");
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        consent,
+        json!({
+            "enabled": true,
+            "mailbox_email": initial["mailbox_email"],
+            "mailbox_link_id": link,
+        })
+    );
+    domain_lock.rollback().await?;
+
     for excluded in [true, false] {
         assert_eq!(
             request(
@@ -220,7 +272,7 @@ async fn privacy_http_preserves_records_and_enforces_mailbox_and_role_boundaries
         );
     }
     assert!(
-        repo.excluded_email_threads(team, OWNER, None)
+        repo.excluded_email_threads(team, OWNER, None, None)
             .await?
             .threads
             .is_empty()
@@ -272,6 +324,27 @@ async fn privacy_http_preserves_records_and_enforces_mailbox_and_role_boundaries
             assert_eq!(body["threads"][0]["thread_id"], thread.to_string());
         }
     }
+
+    // The header lookup remains owner-only and has no continuation page.
+    let lookup = format!("/crm/email-privacy/threads?thread_id={thread}");
+    for (actor, expected_count) in [("owner", 1), ("member", 0)] {
+        let (status, body) = request_path(&app, actor, &lookup, None).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["threads"].as_array().unwrap().len(), expected_count);
+        assert!(body["next_cursor"].is_null());
+        if actor == "owner" {
+            assert_eq!(body["threads"][0]["thread_id"], thread.to_string());
+        }
+    }
+    let absent = format!("/crm/email-privacy/threads?thread_id={}", Uuid::now_v7());
+    let (status, body) = request_path(&app, "owner", &absent, None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["threads"], json!([]));
+    let mixed = format!("{lookup}&after={thread}");
+    assert_eq!(
+        request_path(&app, "owner", &mixed, None).await.0,
+        StatusCode::BAD_REQUEST
+    );
 
     assert_eq!(
         request(

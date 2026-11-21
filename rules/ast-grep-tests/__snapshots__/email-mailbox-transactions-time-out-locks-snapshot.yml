@@ -1,0 +1,16 @@
+id: email-mailbox-transactions-time-out-locks
+snapshots:
+  ? |
+    async fn accessible(&self) { authorized(&mut *self.db.acquire().await?, actor, link).await }
+  : labels:
+    - source: self.db.acquire()
+      style: primary
+      start: 46
+      end: 63
+  ? |
+    async fn commit(&self) { let mut tx = self.db.begin().await.map_err(db_error)?; }
+  : labels:
+    - source: self.db.begin()
+      style: primary
+      start: 38
+      end: 53

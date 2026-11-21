@@ -96,26 +96,7 @@ verified removals disappear from local SQL, while delayed older hydration cannot
 restore them. A later successful positive lookup/backfill can add them again.
 ## Feature flag
 
-Databases is behind the `enable-databases` PostHog flag. A deployed app reads it
-at runtime, and a fresh `/app/database/<uuid>` link waits up to three seconds for
-PostHog before deciding. `VITE_ENABLE_DATABASES=true|false` overrides it at build
-time; `bun run dev` defaults it on, and a local stack's static build defers to
-PostHog unless the variable was set when it was built. With the flag off:
-
-- `/app/database/<uuid>` and a `~/database/<uuid>` split show the 404 view. The
-  database block's code is never fetched and no database request is made.
-- **Create → Database**, its **C → L** shortcut, the command palette entry and
-  the slash menu's **Database** and **Query** actions are absent, and no starter database is
-  created.
-- The sidebar, mentions, search and Quick Access list no databases; Activity
-  and `macro.activity.mine()` leave out database rows.
-- A document's database answer shows its title (or "Database answer") as a
-  plain label, keeps the node unchanged, and never loads the SQL engine.
-- Database tool calls in a chat render as a muted "Database tool" line.
-- The SQL engine's wasm and the database bundles are only fetched once a
-  database surface mounts with the flag on.
-
-`showDatabaseSql` (`VITE_SHOW_DATABASE_SQL`) is separate and only hides SQL.
+`showDatabaseSql` (`VITE_SHOW_DATABASE_SQL`) shows the SQL behind database answers.
 
 The table selector matches the inset project/channel navigation. In narrow panes,
 scroll its tabs horizontally with a trackpad, mouse wheel, or the arrow buttons.

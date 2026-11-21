@@ -14,26 +14,30 @@ export function Topbar(props: {
   return (
     <ViewShell.TopBar class="touch:flex">
       <Show when={props.onBack}>
-        <Button
-          aria-label="Back to conversations"
-          tooltip="Back to conversations"
-          variant="ghost"
-          size="icon-md"
-          onClick={props.onBack}
-        >
-          <ArrowLeft class="size-4 touch:size-6 shrink-0 pointer-events-none" />
-        </Button>
+        <ViewShell.TopBarIsland>
+          <Button
+            aria-label="Back to conversations"
+            tooltip="Back to conversations"
+            variant="ghost"
+            size="icon-md"
+            onClick={props.onBack}
+          >
+            <ArrowLeft class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+          </Button>
+        </ViewShell.TopBarIsland>
       </Show>
-      <div class="flex min-w-0 items-center gap-1">
-        {props.titleContent ?? (
-          <Show when={props.title}>
-            <ViewSidebar.Title caret={false}>{props.title}</ViewSidebar.Title>
-          </Show>
-        )}
-      </div>
-      <div class="header-actions ml-auto flex shrink-0 items-center gap-2 touch:gap-1">
+      <ViewShell.TopBarTitle>
+        <div class="flex min-w-0 items-center gap-1">
+          {props.titleContent ?? (
+            <Show when={props.title}>
+              <ViewSidebar.Title caret={false}>{props.title}</ViewSidebar.Title>
+            </Show>
+          )}
+        </div>
+      </ViewShell.TopBarTitle>
+      <ViewShell.TopBarActions class="header-actions not-touch:gap-2">
         {props.children}
-      </div>
+      </ViewShell.TopBarActions>
     </ViewShell.TopBar>
   );
 }

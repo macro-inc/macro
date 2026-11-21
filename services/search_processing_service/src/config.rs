@@ -131,6 +131,12 @@ pub struct Config {
     #[macro_config_default(10)]
     pub worker_count: u8,
 
+    /// The most backfill work in flight in one task, across the SQS workers
+    /// and the direct backfills; an SQS worker takes `queue_max_messages`
+    /// of it for each batch it receives.
+    #[macro_config_default(20)]
+    pub backfill_max_in_flight: u32,
+
     /// The URL for the Lexical service
     #[macro_config_default(LexicalServiceUrl::unwrap_new().to_string())]
     pub lexical_service_url: String,

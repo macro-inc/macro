@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT user_id, revision FROM crm_email_rule_contacts\n                   WHERE team_id = $1 AND contact_id = $2 AND (user_id, revision) > ($3, $4)\n                   ORDER BY user_id, revision LIMIT 100",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "revision",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "37518c8a4e8bfb45c07b3c1e35deff78ce6cb2c26cc7b910e49e516acced6594"
+}

@@ -29,16 +29,12 @@ import { useHasPermission } from '../context/user';
 import { isMobile } from '../mobile/isMobile';
 import { isNativeMobilePlatform } from '../mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '../mobile/isTouchDevice';
-import { isDesktopPlatform, isPlatform } from '../util/platform';
+import { isPlatform } from '../util/platform';
 import {
-  botManagement,
   DEV_MODE_ENV,
   desktopApp,
   ENABLE_APP_STORE_QR_CODE,
   ENABLE_EMAIL,
-  enableCalendarScheduling,
-  enableChatV3Agents,
-  enableCrm,
 } from './featureFlags';
 import { PERMISSION_IDS } from './permissions';
 import type { SettingsTab } from './SettingsState';
@@ -71,6 +67,7 @@ export function isTeamSettingsGroup(group: SettingsTabGroup): boolean {
 }
 
 export type SettingsTabGroup = {
+  id: string;
   /** Shown in the interface language. */
   label: string;
   items: SettingsTabItem[];
@@ -103,8 +100,8 @@ function tabItem(
 /**
  * Single source of truth for the settings categories: ordering, labels, icons
  * and grouping. Consumed by the settings panel's side nav (and bottom tabs) and
- * the app sidebar's settings dropdown. Group order also defines keyboard nav
- * order (see `flatTabs` in {@link useSettingsTabs}).
+ * the app sidebar's settings dropdown. Group ids retain desktop sidebar ordering
+ * across translations and availability changes; `flatTabs` keeps the default order.
  *
  * Presentation-free and hook-free: gating lives in {@link useSettingsTabAvailable}.
  * Search keywords live on each item so the nav and the settings search share
@@ -112,6 +109,7 @@ function tabItem(
  */
 export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
   {
+    id: 'team',
     get label() {
       return t('settingsNav.groupTeam');
     },
@@ -137,6 +135,7 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
     ],
   },
   {
+    id: 'blocks',
     get label() {
       return t('settingsNav.groupBlocks');
     },
@@ -169,6 +168,7 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
     ],
   },
   {
+    id: 'personal',
     get label() {
       return t('settingsNav.groupPersonal');
     },
@@ -216,6 +216,7 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
     ],
   },
   {
+    id: 'workspace',
     get label() {
       return t('settingsNav.groupWorkspace');
     },
@@ -243,6 +244,7 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
     ],
   },
   {
+    id: 'developer',
     get label() {
       return t('settingsNav.groupDeveloper');
     },
@@ -283,6 +285,7 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
     ],
   },
   {
+    id: 'admin',
     get label() {
       return t('settingsNav.groupAdmin');
     },
@@ -358,10 +361,6 @@ export const settingsSlugToTab = (
  * surface a tab the panel won't render.
  */
 export const useSettingsTabAvailable = () => {
-  const calendarSchedulingFlag = useFeatureFlag(enableCalendarScheduling);
-  const botManagementFlag = useFeatureFlag(botManagement);
-  const chatV3AgentsFlag = useFeatureFlag(enableChatV3Agents);
-  const crmFlag = useFeatureFlag(enableCrm);
   const desktopAppFlag = useFeatureFlag(desktopApp);
   const hasAdminPanel = useHasPermission(PERMISSION_IDS.WRITE_ADMIN_PANEL);
 
@@ -376,7 +375,7 @@ export const useSettingsTabAvailable = () => {
       case 'Email':
         return ENABLE_EMAIL;
       case 'Calendar':
-        return calendarSchedulingFlag().enabled;
+        return true;
       // Issuing and copying a key is desk work, and the mobile sheet has no
       // good place for a one-time secret.
       case 'API Keys':
@@ -387,12 +386,8 @@ export const useSettingsTabAvailable = () => {
       case 'Team':
       case 'Team Members':
       case 'Tags':
-        return true;
-      // CRM is still rolling out (Macro-internal only); keep the settings tab
-      // behind the same enable-crm gate as every other CRM surface so it never
-      // leaks into teams that can't actually use the CRM.
       case 'CRM':
-        return crmFlag().enabled;
+        return true;
       case 'Connected':
         return true;
       case 'Shortcuts':
@@ -406,18 +401,15 @@ export const useSettingsTabAvailable = () => {
         );
       case 'Agent':
         return !isNativeMobilePlatform();
-      // The bundled desktop runtime can be set up from Home even while the
-      // configurable Agents view is still rolling out.
       case 'Harness':
-        return isDesktopPlatform() || chatV3AgentsFlag().enabled;
       case 'Agents':
-        return chatV3AgentsFlag().enabled;
+        return true;
       // Touch hides the Agents sidebar that lists Routines on desktop, so
       // phones and tablets reach the list here, beside Agents.
       case 'Routines':
-        return chatV3AgentsFlag().enabled && isTouchDevice();
+        return isTouchDevice();
       case 'Bots':
-        return botManagementFlag().enabled;
+        return true;
       case 'Mobile':
         return isNativeMobilePlatform() && DEV_MODE_ENV;
       case 'Admin':
@@ -440,6 +432,7 @@ export const useSettingsTabs = () => {
   // rather than copying the current text into the filtered groups.
   const searchGroups = createMemo<SettingsTabGroup[]>(() =>
     SETTINGS_TAB_GROUPS.map((group) => ({
+      id: group.id,
       get label() {
         return group.label;
       },
@@ -450,6 +443,7 @@ export const useSettingsTabs = () => {
   const groups = createMemo<SettingsTabGroup[]>(() =>
     searchGroups()
       .map((group) => ({
+        id: group.id,
         get label() {
           return group.label;
         },

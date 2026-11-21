@@ -6,6 +6,7 @@ import WarningCircleIcon from '@icon/system/regular/warning-circle.svg';
 import type { ComputerStatus } from '@service-auth/computers';
 import { Button, cn, Spinner } from '@ui';
 import {
+  children,
   createSignal,
   createUniqueId,
   For,
@@ -121,8 +122,8 @@ function SetupProgressList(props: {
  * why, Retry setup, and what a retry costs behind Details.
  */
 export function SetupProgressHeader(props: {
-  /** The step bar, which leads the header's first line. */
-  steps: JSX.Element;
+  /** The step bar, which leads the header's first line; none when stepless. */
+  steps?: JSX.Element;
   computer: ComputerStatus;
   signIn: SignInPlan;
   connected: boolean;
@@ -136,6 +137,8 @@ export function SetupProgressHeader(props: {
   onRetry: () => void;
   retrying: boolean;
 }) {
+  // Resolved once, so checking for a step bar doesn't render a second one.
+  const steps = children(() => props.steps);
   const listId = createUniqueId();
   const detailsId = createUniqueId();
   const [detailsOpen, setDetailsOpen] = createSignal(false);
@@ -152,90 +155,100 @@ export function SetupProgressHeader(props: {
       ? setupProgressLine(props.computer, stages(), elapsed())
       : undefined;
 
+  // Stepless with nothing to report: no header, and no gap above the title.
   return (
-    <div class="flex flex-col gap-3">
-      <div class="flex flex-col items-start gap-1">
-        {props.steps}
-        <Show when={line()}>
-          {(text) => (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              class="-ml-2"
-              aria-expanded={props.expanded}
-              aria-controls={listId}
-              tooltip={t('computers.showSetupProgress')}
-              onClick={() => props.onExpandedChange(!props.expanded)}
+    <Show when={steps() || line() || failure()}>
+      <div class="flex flex-col gap-3">
+        <div class="flex flex-col items-start gap-1">
+          {steps()}
+          <Show when={line()}>
+            {(text) => (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                class="-ml-2"
+                aria-expanded={props.expanded}
+                aria-controls={listId}
+                tooltip={t('computers.showSetupProgress')}
+                onClick={() => props.onExpandedChange(!props.expanded)}
+              >
+                <Spinner size="sm" decorative class="size-3.5" />
+                <span class="tabular-nums">{text()}</span>
+                <CaretDownIcon
+                  aria-hidden="true"
+                  class={cn(
+                    'size-3.5 shrink-0 text-ink-muted transition-transform',
+                    props.expanded && 'rotate-180'
+                  )}
+                />
+              </Button>
+            )}
+          </Show>
+        </div>
+        <Show when={line() && props.expanded}>
+          <SetupProgressList
+            id={listId}
+            stages={stages()}
+            elapsed={elapsed()}
+          />
+        </Show>
+        <Show when={failure()}>
+          {(stopped) => (
+            <FailureNotice
+              class="py-3"
+              actions={
+                <>
+                  <Show when={stopped().details}>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      aria-expanded={detailsOpen()}
+                      aria-controls={detailsId}
+                      onClick={() => setDetailsOpen(!detailsOpen())}
+                    >
+                      {t('computers.setupFailureDetails')}
+                      <CaretDownIcon
+                        aria-hidden="true"
+                        class={cn(
+                          'size-3.5 shrink-0 text-ink-muted transition-transform',
+                          detailsOpen() && 'rotate-180'
+                        )}
+                      />
+                    </Button>
+                  </Show>
+                  <Show when={stopped().retryable}>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      disabled={props.retrying}
+                      onClick={() => props.onRetry()}
+                    >
+                      {t('computers.retrySetup')}
+                    </Button>
+                  </Show>
+                </>
+              }
+              below={
+                <Show when={detailsOpen() && stopped().details}>
+                  {(details) => (
+                    <p
+                      id={detailsId}
+                      class="text-xs text-ink-muted text-pretty"
+                    >
+                      {details()}
+                    </p>
+                  )}
+                </Show>
+              }
             >
-              <Spinner size="sm" decorative class="size-3.5" />
-              <span class="tabular-nums">{text()}</span>
-              <CaretDownIcon
-                aria-hidden="true"
-                class={cn(
-                  'size-3.5 shrink-0 text-ink-muted transition-transform',
-                  props.expanded && 'rotate-180'
-                )}
-              />
-            </Button>
+              {stopped().message}
+            </FailureNotice>
           )}
         </Show>
       </div>
-      <Show when={line() && props.expanded}>
-        <SetupProgressList id={listId} stages={stages()} elapsed={elapsed()} />
-      </Show>
-      <Show when={failure()}>
-        {(stopped) => (
-          <FailureNotice
-            class="py-3"
-            actions={
-              <>
-                <Show when={stopped().details}>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    aria-expanded={detailsOpen()}
-                    aria-controls={detailsId}
-                    onClick={() => setDetailsOpen(!detailsOpen())}
-                  >
-                    {t('computers.setupFailureDetails')}
-                    <CaretDownIcon
-                      aria-hidden="true"
-                      class={cn(
-                        'size-3.5 shrink-0 text-ink-muted transition-transform',
-                        detailsOpen() && 'rotate-180'
-                      )}
-                    />
-                  </Button>
-                </Show>
-                <Show when={stopped().retryable}>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    disabled={props.retrying}
-                    onClick={() => props.onRetry()}
-                  >
-                    {t('computers.retrySetup')}
-                  </Button>
-                </Show>
-              </>
-            }
-            below={
-              <Show when={detailsOpen() && stopped().details}>
-                {(details) => (
-                  <p id={detailsId} class="text-xs text-ink-muted text-pretty">
-                    {details()}
-                  </p>
-                )}
-              </Show>
-            }
-          >
-            {stopped().message}
-          </FailureNotice>
-        )}
-      </Show>
-    </div>
+    </Show>
   );
 }

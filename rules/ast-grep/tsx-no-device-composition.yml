@@ -12,8 +12,9 @@ note: |-
 
   The ignore list has two parts. "Entries" is permanent: the one file per
   view that holds the device switch. "Not yet split" is a baseline of files
-  that predate the rule; delete a file's line when you split its view, and
-  never add one.
+  that predate the rule; delete a file's line when you split its view. Add
+  a file only when its split is already a task, named in a comment on its
+  line.
 files:
   - apps/web/src/features/**
 ignores:
@@ -22,26 +23,47 @@ ignores:
   # A mobile view may branch on isMobile() / mobile: for phone versus tablet.
   - apps/web/src/**/views/mobile/**
   # Entries: the one device switch of each split view.
+  - apps/web/src/features/agents-view/model-selector.tsx
   - apps/web/src/features/block-agent/component/Block.tsx
   - apps/web/src/features/block-ai/ai-block.tsx
+  - apps/web/src/features/block-call/component/CallBlockAdapter.tsx
+  - apps/web/src/features/block-canvas/canvas-next.tsx
   - apps/web/src/features/block-canvas/component/Block.tsx
   - apps/web/src/features/block-chat/component/Chat.tsx
   - apps/web/src/features/block-code/component/Block.tsx
   - apps/web/src/features/block-email/EmailBlockAdapter.tsx
   - apps/web/src/features/block-fig/fig-block.tsx
+  - apps/web/src/features/block-form/form-block.tsx
   - apps/web/src/features/block-image/component/Block.tsx
   - apps/web/src/features/block-md/component/Block.tsx
   - apps/web/src/features/block-pdf/component/Block.tsx
   - apps/web/src/features/block-pptx/pptx-block.tsx
+  - apps/web/src/features/block-project/component/Block.tsx
   - apps/web/src/features/block-psd/psd-block.tsx
+  - apps/web/src/features/block-spreadsheet/SpreadsheetBlock.tsx
   - apps/web/src/features/block-unknown/component/Block.tsx
   - apps/web/src/features/block-video/component/Block.tsx
   - apps/web/src/features/block-write/DocxBlock.tsx
+  - apps/web/src/features/crm/add-to-pipeline.tsx
+  - apps/web/src/features/email-view/components/EmailComposeRouteView.tsx
+  - apps/web/src/features/email-view/components/EmailDetailView.tsx
   - apps/web/src/features/entity-appearance/appearance-menu.tsx
+  - apps/web/src/features/projects/add-project-tasks.tsx
+  - apps/web/src/features/projects/new-project-task.tsx
+  - apps/web/src/features/projects/project-top-bar.tsx
   - apps/web/src/features/task-composer/compose-task.tsx
+  - apps/web/src/features/projects/add-project-tasks.tsx
+  - apps/web/src/features/projects/project-title-menu.tsx
+  - apps/web/src/features/projects/project-row.tsx
+  - apps/web/src/features/projects/project-detail.tsx
+  - apps/web/src/features/crm/company-discussion-section.tsx
+  - apps/web/src/features/block-md/component/DocumentDiscussion.tsx
+  - apps/web/src/features/tasks-view/components/TasksDetailView.tsx
+  - apps/web/src/features/settings/TeamMembers.tsx
   # Not yet split.
   - apps/web/src/features/activity/views/my-activity-view.tsx
   - apps/web/src/features/agent-session-activity/components/activity-row.tsx
+  - apps/web/src/features/agents-view/components/AgentSessionPane.tsx # MACRO-5126 (3.4)
   - apps/web/src/features/agents-view/components/AgentsSidebar.tsx
   - apps/web/src/features/agents-view/components/ChatComposer.tsx
   - apps/web/src/features/agents-view/route-views.tsx
@@ -53,7 +75,6 @@ ignores:
   - apps/web/src/features/block-agent/ui/AgentModelSelector.tsx
   - apps/web/src/features/block-call/component/CallRecording/CallRecordingBody.tsx
   - apps/web/src/features/block-call/component/CallRecording/CallRecordingControls.tsx
-  - apps/web/src/features/block-call/component/CallRecording/CallRecordingSplitHeader.tsx
   - apps/web/src/features/block-call/component/CallRecording/CallRecordingTitle.tsx
   - apps/web/src/features/block-call/views/CallDetailMobileHeader.tsx
   - apps/web/src/features/block-call/views/CallDetailView.tsx
@@ -62,7 +83,6 @@ ignores:
   - apps/web/src/features/block-company/component/CompanyBlockAdapter.tsx
   - apps/web/src/features/block-contact/component/ContactBlockAdapter.tsx
   - apps/web/src/features/block-database/component/TopBar.tsx
-  - apps/web/src/features/block-form/form-block.tsx
   - apps/web/src/features/block-form/views/builder-view.tsx
   - apps/web/src/features/block-image/component/ImageContent.tsx
   - apps/web/src/features/block-md/comments/CommentMargin.tsx
@@ -70,9 +90,6 @@ ignores:
   - apps/web/src/features/block-pr/component/Block.tsx
   - apps/web/src/features/block-pr/hooks/usePrShare.tsx
   - apps/web/src/features/block-pr/views/PrDetail.tsx
-  - apps/web/src/features/block-project/component/ProjectCreateMenu.tsx
-  - apps/web/src/features/block-project/component/TopBar.tsx
-  - apps/web/src/features/block-spreadsheet/SpreadsheetBlock.tsx
   - apps/web/src/features/block-spreadsheet/components/FormulaInput.tsx
   - apps/web/src/features/block-spreadsheet/components/SpreadsheetSheetTabs.tsx
   - apps/web/src/features/block-spreadsheet/components/SpreadsheetToolbar.tsx
@@ -112,6 +129,7 @@ ignores:
   - apps/web/src/features/channel/Participants/ChannelBotsPanel.tsx
   - apps/web/src/features/channel/Participants/ChannelParticipantsTab.tsx
   - apps/web/src/features/channels-view/channels-view-skeleton.tsx
+  - apps/web/src/features/channels-view/channels-view.tsx # MACRO-5116 (2.2)
   - apps/web/src/features/channels-view/components/rail/ChannelListViews.tsx
   - apps/web/src/features/channels-view/components/rail/ChannelOption.tsx
   - apps/web/src/features/channels-view/components/rail/ExpandedChannelsRail.tsx

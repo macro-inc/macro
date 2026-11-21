@@ -23,7 +23,7 @@
 .product-demo .dummy-task-row { grid-template-columns: 8px minmax(0, 1fr) 116px 105px 100px; }
 .product-demo .dummy-created, .product-demo .dummy-updated { display: none; }
 @media (max-width: 699px) {
- .product-page { padding-inline: 18px; }
+ .product-page { padding-inline: 8px; }
  .product-page .homepage-feature-heading, .product-prose { padding-inline: 0; }
  .product-page .homepage-section-break p { white-space: normal; text-wrap: pretty; }
  .product-page .feature-page-visual, .product-page .feature-page-comparison, .product-page > .homepage-feature-end { width: 100%; }

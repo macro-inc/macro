@@ -9,6 +9,7 @@ optional collaboration layers used by Canvas Next.
 | --- | --- |
 | `@macro-inc/graphics` | Document model, editor, commands, geometry, queries, and shape definitions |
 | `@macro-inc/graphics/browser` | Browser input, clipboard, and gesture adapters |
+| `@macro-inc/graphics/pan-zoom` | Transform-agnostic inertial glide and two-finger pinch step, shared with the image viewers |
 | `@macro-inc/graphics/solid` | Solid renderers and scene projections |
 | `@macro-inc/graphics/loro` | Optional collaborative document and presence backend |
 

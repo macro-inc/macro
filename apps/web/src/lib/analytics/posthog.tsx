@@ -27,14 +27,22 @@ export const [PosthogProvider, usePosthog] = createAssertedContextProvider(
       cachedFlags,
       { equals: false }
     );
+    // A build that never starts PostHog (no API key, or the Vite dev server)
+    // never fetches flags, so no answer will come: it starts where an
+    // unreachable PostHog ends up, every flag without an override off.
+    const posthogStarted = analytics.posthog.__loaded;
     // Distinguishes "flags not fetched yet" from "no flags enabled": both
     // leave featureFlags empty, but destructive flag-off fallbacks (e.g.
     // RedirectSplit) must not fire before the answer arrives. Set even on
     // errorsLoading so a PostHog outage degrades to flags-off, not a hang.
-    const [flagsLoaded, setFlagsLoaded] = createSignal(cachedFlags.length > 0);
+    const [flagsLoaded, setFlagsLoaded] = createSignal(
+      !posthogStarted || cachedFlags.length > 0
+    );
     // Whether the last fetch got no answer at all (blocked, offline, PostHog
     // down), as opposed to an answer that says a flag is off.
-    const [flagsUnreachable, setFlagsUnreachable] = createSignal(false);
+    const [flagsUnreachable, setFlagsUnreachable] = createSignal(
+      !posthogStarted
+    );
 
     const unsub = analytics.posthog.onFeatureFlags((flags, _, ctx) => {
       // Flags usually arrive after first paint and swap flagged subtrees,

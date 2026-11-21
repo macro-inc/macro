@@ -1,0 +1,29 @@
+[package]
+description = "xtask email-coverage: list the backend email entry points and report which the end-to-end scenarios cover"
+edition = "2024"
+name = "xtask_email_coverage"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "xtask_email_coverage"
+path = "src/main.rs"
+
+[dependencies]
+async-graphql-parser = { workspace = true }
+clap = { workspace = true }
+glob = { workspace = true }
+heck = { workspace = true }
+lazy-regex = { workspace = true }
+# span-locations: source lines of parsed items, for the `source` column.
+proc-macro2 = { workspace = true, features = ["span-locations"] }
+rootcause = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+strum = { workspace = true }
+syn = { workspace = true, features = ["visit"] }
+toml = { workspace = true }
+xtask_paths = { path = "../xtask_paths" }
+
+[dev-dependencies]
+tempfile = { workspace = true }
