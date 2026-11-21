@@ -13,6 +13,9 @@ use super::engine::{
     ContainerState, Engine, PROVIDER_TARGET, container_name, network_name, provider_volume_name,
 };
 use super::store::{Store, StoredInstall, teammates_directory};
+use agent_runtime_protocol::domain::schema::v0::{
+    ContainerEngineKind, EngineIsolation, TeammateHostReport,
+};
 
 /// What `macrod teammate` does.
 #[derive(Debug, clap::Subcommand)]
@@ -102,7 +105,61 @@ fn kept_installs() -> rootcause::Result<Vec<StoredInstall>> {
         .collect())
 }
 
+/// The last host report any harness's store kept.
+fn kept_host_report() -> Option<TeammateHostReport> {
+    let root = teammates_directory().ok()?;
+    std::fs::read_dir(&root)
+        .ok()?
+        .flatten()
+        .filter(|entry| entry.path().is_dir())
+        .find_map(|entry| Store::new(entry.path()).host_report())
+}
+
+/// The `macrod teammate list` header: every installed engine, whether it
+/// enforces isolation, and which one runs teammates.
+pub fn engines_line(report: &TeammateHostReport) -> String {
+    if report.engines.is_empty() {
+        return "engines: none installed".to_owned();
+    }
+    let chosen = report.engine.as_ref().map(|engine| engine.kind);
+    let engines: Vec<String> = report
+        .engines
+        .iter()
+        .map(|engine| {
+            let kind = match engine.kind {
+                ContainerEngineKind::Docker => "docker",
+                ContainerEngineKind::Podman => "podman",
+            };
+            let version = engine.version.as_deref().unwrap_or("(no answer)");
+            let rootless = if engine.rootless { " rootless" } else { "" };
+            let isolation = match engine.isolation {
+                EngineIsolation::Enforced => "isolation ok".to_owned(),
+                EngineIsolation::NotProbed => "isolation not probed yet".to_owned(),
+                EngineIsolation::Unavailable { reason } => {
+                    format!(
+                        "isolation unavailable ({})",
+                        serde_json::to_value(reason)
+                            .ok()
+                            .and_then(|value| value.as_str().map(str::to_owned))
+                            .unwrap_or_default()
+                    )
+                }
+            };
+            let marker = if chosen == Some(engine.kind) {
+                " (runs teammates)"
+            } else {
+                ""
+            };
+            format!("{kind} {version}{rootless}: {isolation}{marker}")
+        })
+        .collect();
+    format!("engines: {}", engines.join(" · "))
+}
+
 async fn list() -> rootcause::Result<()> {
+    if let Some(report) = kept_host_report() {
+        println!("{}", engines_line(&report));
+    }
     let installs = kept_installs()?;
     if installs.is_empty() {
         println!("No teammates on this machine.");

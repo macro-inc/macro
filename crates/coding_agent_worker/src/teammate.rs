@@ -30,8 +30,9 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use agent_runtime_protocol::domain::schema::v0::{
-    AgentEnvironment, TeammateHostReport, TeammateImage, TeammateInstall, TeammateInstallId,
-    TeammateRunFailure, TeammateRunState, ToRuntimeMessage, ToServerMessage,
+    AgentEnvironment, EngineIsolation, InstalledEngine, IsolationProblem, TeammateHostReport,
+    TeammateImage, TeammateInstall, TeammateInstallId, TeammateRunFailure, TeammateRunState,
+    ToRuntimeMessage, ToServerMessage,
 };
 use tokio::sync::{broadcast, mpsc};
 use tokio_util::task::AbortOnDropHandle;
@@ -278,20 +279,8 @@ impl<EngineImpl: Engine> Teammates<EngineImpl> {
             problem = tracing::field::Empty
         );
         let report = async {
-            let engine = tokio::time::timeout(ENGINE_CHECK_TIMEOUT, shared.engine.info())
-                .await
-                .unwrap_or(Err(EngineUnavailable::Unreachable));
             let installs = shared.store.installs();
-            let mut engine = engine;
-            let mut isolation = self.probe_isolation(&engine, &installs).await;
-            // `auto`: an engine that can't enforce the policy gives way to
-            // the next installed one, if that one can.
-            while isolation == Some(false) && shared.engine.next_engine() {
-                engine = tokio::time::timeout(ENGINE_CHECK_TIMEOUT, shared.engine.info())
-                    .await
-                    .unwrap_or(Err(EngineUnavailable::Unreachable));
-                isolation = self.probe_isolation(&engine, &installs).await;
-            }
+            let (engine, engines) = self.choose_engine(&installs).await;
             let user_namespaces = match &engine {
                 Ok(info) if info.supported_version => self.probe_user_namespaces(&installs).await,
                 _ => None,
@@ -300,7 +289,7 @@ impl<EngineImpl: Engine> Teammates<EngineImpl> {
                 shared.platform,
                 engine,
                 user_namespaces,
-                isolation,
+                engines,
                 installs.into_iter().map(|stored| stored.install).collect(),
             )
         }
@@ -313,6 +302,9 @@ impl<EngineImpl: Engine> Teammates<EngineImpl> {
             span.record("problem", tracing::field::debug(problem));
         }
         *lock(&shared.host) = Some(report.clone());
+        if let Err(error) = shared.store.save_host_report(&report) {
+            tracing::warn!(error = ?error, "could not keep the host report");
+        }
 
         if can_host(&report) && !shared.resumed.swap(true, Ordering::SeqCst) {
             let _ = self.requests.send(Work::Resume);
@@ -322,16 +314,63 @@ impl<EngineImpl: Engine> Teammates<EngineImpl> {
 
     /// Probe user namespaces with a kept install's image, when one is here:
     /// the probe needs an image, and macrod fetches none just to probe.
-    /// Whether the engine can put an egress policy in place: a probe
-    /// install's holder, guard and readback, with a kept install's image
-    /// (`None` when there is none here yet, or no usable engine).
+    /// Check every installed engine the choice allows, and pick one: the
+    /// first (Docker, then Podman) whose isolation probe passes, else the
+    /// first not yet probed (no image here), else the first that answers.
+    /// Deterministic, and the list says why.
+    async fn choose_engine(
+        &self,
+        installs: &[StoredInstall],
+    ) -> (
+        Result<engine::EngineInfo, EngineUnavailable>,
+        Vec<InstalledEngine>,
+    ) {
+        let engine = &self.shared.engine;
+        let kinds = engine.installed();
+        if kinds.is_empty() {
+            return (Err(EngineUnavailable::NotInstalled), Vec::new());
+        }
+        let mut listed = Vec::new();
+        for kind in &kinds {
+            let info = tokio::time::timeout(ENGINE_CHECK_TIMEOUT, engine.select(*kind))
+                .await
+                .unwrap_or(Err(EngineUnavailable::Unreachable));
+            let isolation = self.probe_isolation(&info, installs).await;
+            listed.push(InstalledEngine {
+                kind: *kind,
+                version: info.as_ref().ok().map(|info| info.version.clone()),
+                rootless: info.as_ref().is_ok_and(|info| info.rootless),
+                isolation,
+            });
+        }
+        let answered = |engine: &&InstalledEngine| engine.version.is_some();
+        let chosen = listed
+            .iter()
+            .find(|engine| engine.isolation == EngineIsolation::Enforced)
+            .or_else(|| {
+                listed
+                    .iter()
+                    .filter(answered)
+                    .find(|engine| engine.isolation == EngineIsolation::NotProbed)
+            })
+            .or_else(|| listed.iter().find(answered))
+            .map_or(kinds[0], |engine| engine.kind);
+        let info = tokio::time::timeout(ENGINE_CHECK_TIMEOUT, engine.select(chosen))
+            .await
+            .unwrap_or(Err(EngineUnavailable::Unreachable));
+        (info, listed)
+    }
+
+    /// Whether the selected engine can put an egress policy in place: a
+    /// probe install's holder, guard and readback, with a kept install's
+    /// image (not probed when there is none here yet).
     async fn probe_isolation(
         &self,
         engine: &Result<engine::EngineInfo, EngineUnavailable>,
         installs: &[StoredInstall],
-    ) -> Option<bool> {
+    ) -> EngineIsolation {
         if !matches!(engine, Ok(info) if info.supported_version) {
-            return None;
+            return EngineIsolation::NotProbed;
         }
         let engine = &self.shared.engine;
         for stored in installs {
@@ -339,7 +378,9 @@ impl<EngineImpl: Engine> Teammates<EngineImpl> {
             if !matches!(engine.image_id(image_id).await, Ok(Some(local)) if &local == image_id) {
                 continue;
             }
-            let probe = TeammateInstallId::new(PROBE_INSTALL).ok()?;
+            let Ok(probe) = TeammateInstallId::new(PROBE_INSTALL) else {
+                return EngineIsolation::NotProbed;
+            };
             let network = network_name(&probe);
             let probed = async {
                 engine
@@ -362,18 +403,22 @@ impl<EngineImpl: Engine> Teammates<EngineImpl> {
             let _ = engine.remove_container(&engine::holder_name(&probe)).await;
             let _ = engine.remove_network(&network).await;
             return match outcome {
-                Ok(Ok(_)) => Some(true),
+                Ok(Ok(_)) => EngineIsolation::Enforced,
                 Ok(Err(error)) => {
                     tracing::warn!(error = %error, "this engine can't enforce a teammate's egress policy");
-                    Some(false)
+                    EngineIsolation::Unavailable {
+                        reason: error.problem(),
+                    }
                 }
                 Err(_) => {
                     tracing::warn!("the network isolation probe took too long");
-                    Some(false)
+                    EngineIsolation::Unavailable {
+                        reason: IsolationProblem::EngineFailed,
+                    }
                 }
             };
         }
-        None
+        EngineIsolation::NotProbed
     }
 
     async fn probe_user_namespaces(&self, installs: &[StoredInstall]) -> Option<bool> {

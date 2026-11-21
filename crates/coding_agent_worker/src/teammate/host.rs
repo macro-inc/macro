@@ -2,8 +2,8 @@
 //! hardware floor, as the [`TeammateHostReport`] the service reads.
 
 use agent_runtime_protocol::domain::schema::v0::{
-    ContainerEngine, HostArch, HostOs, HostResource, TeammateHostProblem, TeammateHostReport,
-    TeammateInstall,
+    ContainerEngine, EngineIsolation, HostArch, HostOs, HostResource, InstalledEngine,
+    TeammateHostProblem, TeammateHostReport, TeammateInstall,
 };
 
 use super::engine::{EngineInfo, EngineUnavailable};
@@ -53,7 +53,7 @@ pub fn host_report(
     platform: Platform,
     engine: Result<EngineInfo, EngineUnavailable>,
     user_namespaces: Option<bool>,
-    isolation: Option<bool>,
+    engines: Vec<InstalledEngine>,
     installs: Vec<TeammateInstall>,
 ) -> TeammateHostReport {
     let unsupported_platform =
@@ -72,6 +72,7 @@ pub fn host_report(
             };
             return TeammateHostReport {
                 engine: None,
+                engines,
                 os: platform.os,
                 arch: platform.arch,
                 cpus: 0,
@@ -97,7 +98,9 @@ pub fn host_report(
         .is_some_and(|free| free < MINIMUM_DISK_FREE_MIB)
     {
         below(HostResource::Disk)
-    } else if isolation == Some(false) {
+    } else if engines.iter().any(|engine| {
+        engine.kind == info.kind && matches!(engine.isolation, EngineIsolation::Unavailable { .. })
+    }) {
         Some(TeammateHostProblem::NetworkIsolationUnavailable)
     } else if user_namespaces == Some(false) {
         Some(TeammateHostProblem::InnerSandboxUnavailable)
@@ -111,6 +114,7 @@ pub fn host_report(
             version: info.version,
             rootless: info.rootless,
         }),
+        engines,
         os: platform.os,
         arch: platform.arch,
         cpus: info.cpus,

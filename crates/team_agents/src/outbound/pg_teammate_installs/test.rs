@@ -488,6 +488,7 @@ async fn an_inviters_hosts_are_their_own_paired_machines_with_their_reports(pool
             version: "5.2.0".to_owned(),
             rootless: true,
         }),
+        engines: Vec::new(),
         os: HostOs::Linux,
         arch: HostArch::Amd64,
         cpus: 8,

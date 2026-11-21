@@ -641,7 +641,9 @@ async fn start<EngineImpl: Engine>(
     let holder_id = match isolated {
         Ok(holder_id) => holder_id,
         Err(IsolationError::Engine(error)) => return Err(StartError::Engine(error)),
-        Err(IsolationError::Unavailable(reason)) => return Err(StartError::Isolation(reason)),
+        Err(error @ IsolationError::Unavailable { .. }) => {
+            return Err(StartError::Isolation(error.to_string()));
+        }
     };
 
     let previous_exit = lifecycle.policy.started(clock.now());

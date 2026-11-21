@@ -251,6 +251,7 @@ fn a_host_report_says_which_engine_or_why_not() {
                 version: "5.2.0".to_owned(),
                 rootless: true,
             }),
+            engines: Vec::new(),
             os: HostOs::Linux,
             arch: HostArch::Amd64,
             cpus: 8,
@@ -270,6 +271,7 @@ fn a_host_report_says_which_engine_or_why_not() {
             "type": "teammateHost",
             "report": {
                 "engine": { "kind": "podman", "version": "5.2.0", "rootless": true },
+                "engines": [],
                 "os": "linux",
                 "arch": "amd64",
                 "cpus": 8,
@@ -381,4 +383,61 @@ fn network_isolation_that_cant_be_enforced_is_a_host_problem_and_a_failure() {
         serde_json::to_value(&status).unwrap()["state"],
         json!({ "state": "failed", "reason": "networkIsolationUnavailable" })
     );
+}
+
+#[test]
+fn a_host_report_lists_each_installed_engine_and_whether_it_enforces_isolation() {
+    let report = TeammateHostReport {
+        engine: Some(ContainerEngine {
+            kind: ContainerEngineKind::Podman,
+            version: "5.2.0".to_owned(),
+            rootless: true,
+        }),
+        engines: vec![
+            InstalledEngine {
+                kind: ContainerEngineKind::Docker,
+                version: Some("29.5.1".to_owned()),
+                rootless: false,
+                isolation: EngineIsolation::Unavailable {
+                    reason: IsolationProblem::GuardRefused,
+                },
+            },
+            InstalledEngine {
+                kind: ContainerEngineKind::Podman,
+                version: Some("5.2.0".to_owned()),
+                rootless: true,
+                isolation: EngineIsolation::Enforced,
+            },
+        ],
+        os: HostOs::Linux,
+        arch: HostArch::Amd64,
+        cpus: 8,
+        memory_mib: 16_384,
+        disk_free_mib: Some(100_000),
+        problem: None,
+        installs: Vec::new(),
+    };
+    let json = serde_json::to_value(&report).unwrap();
+    assert_eq!(
+        json["engines"],
+        json!([
+            {
+                "kind": "docker",
+                "version": "29.5.1",
+                "rootless": false,
+                "isolation": { "state": "unavailable", "reason": "guardRefused" },
+            },
+            {
+                "kind": "podman",
+                "version": "5.2.0",
+                "rootless": true,
+                "isolation": { "state": "enforced" },
+            },
+        ])
+    );
+    // A report from a runtime that lists no engines reads as an empty list.
+    let mut older = json;
+    older.as_object_mut().unwrap().remove("engines");
+    let read: TeammateHostReport = serde_json::from_value(older).unwrap();
+    assert!(read.engines.is_empty());
 }

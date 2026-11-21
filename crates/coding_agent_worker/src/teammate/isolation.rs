@@ -6,7 +6,7 @@
 
 use super::egress::{self, Allow, NetworkFacts};
 use super::engine::{Engine, EngineError, GuardError, HolderSpec, holder_name};
-use agent_runtime_protocol::domain::schema::v0::TeammateInstallId;
+use agent_runtime_protocol::domain::schema::v0::{IsolationProblem, TeammateInstallId};
 
 /// Why an install's policy isn't in place.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -16,15 +16,33 @@ pub enum IsolationError {
     Engine(EngineError),
     /// The policy can't be put in place, or didn't read back as rendered:
     /// the agent must not start.
-    #[error("the egress policy is not in place: {0}")]
-    Unavailable(String),
+    #[error("the egress policy is not in place ({problem:?}): {detail}")]
+    Unavailable {
+        /// Which step.
+        problem: IsolationProblem,
+        /// What it said.
+        detail: String,
+    },
+}
+
+impl IsolationError {
+    /// The problem a host report names.
+    pub fn problem(&self) -> IsolationProblem {
+        match self {
+            Self::Engine(_) => IsolationProblem::EngineFailed,
+            Self::Unavailable { problem, .. } => *problem,
+        }
+    }
 }
 
 impl From<GuardError> for IsolationError {
     fn from(error: GuardError) -> Self {
         match error {
             GuardError::Engine(error) => Self::Engine(error),
-            GuardError::Refused(reason) => Self::Unavailable(reason),
+            GuardError::Refused(detail) => Self::Unavailable {
+                problem: IsolationProblem::GuardRefused,
+                detail,
+            },
         }
     }
 }
@@ -70,8 +88,10 @@ pub async fn isolate<EngineImpl: Engine>(
     let readback = engine
         .guard(&holder_id, &isolation.image_id, Some(&ruleset))
         .await?;
-    egress::verify(&readback, &allow, &facts)
-        .map_err(|mismatch| IsolationError::Unavailable(mismatch.to_string()))?;
+    egress::verify(&readback, &allow, &facts).map_err(|mismatch| IsolationError::Unavailable {
+        problem: IsolationProblem::ReadbackMismatch,
+        detail: mismatch.to_string(),
+    })?;
     Ok(holder_id)
 }
 
@@ -85,8 +105,10 @@ pub async fn check<EngineImpl: Engine>(
     let facts = facts(engine, holder_id, isolation).await?;
     let allow = allowed(engine, holder_id, isolation).await;
     let readback = engine.guard(holder_id, &isolation.image_id, None).await?;
-    egress::verify(&readback, &allow, &facts)
-        .map_err(|mismatch| IsolationError::Unavailable(mismatch.to_string()))
+    egress::verify(&readback, &allow, &facts).map_err(|mismatch| IsolationError::Unavailable {
+        problem: IsolationProblem::ReadbackMismatch,
+        detail: mismatch.to_string(),
+    })
 }
 
 /// The explicit exceptions, then each local-stack service resolved in the
@@ -133,9 +155,13 @@ async fn facts<EngineImpl: Engine>(
         .await
         .map_err(IsolationError::Engine)?;
     // A host whose addresses can't be read can't be protected: refused.
-    facts.host_prefixes = engine
-        .host_prefixes()
-        .await
-        .map_err(|error| IsolationError::Unavailable(error.to_string()))?;
+    facts.host_prefixes =
+        engine
+            .host_prefixes()
+            .await
+            .map_err(|error| IsolationError::Unavailable {
+                problem: IsolationProblem::HostUnreadable,
+                detail: error.to_string(),
+            })?;
     Ok(facts)
 }

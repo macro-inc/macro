@@ -9,8 +9,11 @@ use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 use agent_runtime_protocol::domain::schema::v0::{
-    TeammateImage, TeammateInstall, TeammateInstallId,
+    TeammateHostReport, TeammateImage, TeammateInstall, TeammateInstallId,
 };
+
+/// The last host report's file in a harness's store.
+const HOST_REPORT: &str = "host.json";
 use rootcause::prelude::ResultExt as _;
 use serde::{Deserialize, Serialize};
 use teammate_lifecycle::replacement::ImageUpdate;
@@ -166,6 +169,21 @@ impl Store {
             &record,
             0o600,
         )
+    }
+
+    /// Keep the last host report (engines, choice, problem) for
+    /// `macrod teammate list`.
+    pub fn save_host_report(&self, report: &TeammateHostReport) -> rootcause::Result<()> {
+        create_private_directory(&self.root)?;
+        let record =
+            serde_json::to_vec_pretty(report).context("could not encode the host report")?;
+        write_whole(&self.root.join(HOST_REPORT), &record, 0o600)
+    }
+
+    /// The last host report kept, if any.
+    pub fn host_report(&self) -> Option<TeammateHostReport> {
+        let contents = std::fs::read(self.root.join(HOST_REPORT)).ok()?;
+        serde_json::from_slice(&contents).ok()
     }
 
     /// Forget the install: its credentials file and record.

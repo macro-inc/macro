@@ -283,8 +283,12 @@ pub struct TeammateImage {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct TeammateHostReport {
-    /// The container engine found, if any.
+    /// The container engine chosen to run teammates, if any.
     pub engine: Option<ContainerEngine>,
+    /// Every engine installed here, and whether each can enforce a
+    /// teammate's egress policy, so the choice is visible.
+    #[serde(default)]
+    pub engines: Vec<InstalledEngine>,
     /// The machine's operating system.
     pub os: HostOs,
     /// The machine's CPU architecture.
@@ -313,6 +317,50 @@ pub struct ContainerEngine {
     pub version: String,
     /// Whether it runs without root on the host.
     pub rootless: bool,
+}
+
+/// An engine installed on the machine.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct InstalledEngine {
+    /// Which engine.
+    pub kind: ContainerEngineKind,
+    /// Its server version, when it answered.
+    pub version: Option<String>,
+    /// Whether it runs without root on the host.
+    pub rootless: bool,
+    /// Whether it can put a teammate's egress policy in place.
+    pub isolation: EngineIsolation,
+}
+
+/// Whether an engine can enforce a teammate's egress policy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(tag = "state", rename_all = "camelCase")]
+pub enum EngineIsolation {
+    /// Its probe put the policy in place and read it back.
+    Enforced,
+    /// Its probe failed.
+    Unavailable {
+        /// Why.
+        reason: IsolationProblem,
+    },
+    /// Not probed: no teammate image is here yet, or the engine didn't
+    /// answer.
+    NotProbed,
+}
+
+/// Why an engine can't enforce the egress policy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub enum IsolationProblem {
+    /// The guard couldn't load the ruleset (no nftables, no `NET_ADMIN`).
+    GuardRefused,
+    /// The loaded ruleset didn't read back as rendered.
+    ReadbackMismatch,
+    /// The host's addresses couldn't be read.
+    HostUnreadable,
+    /// The engine failed a step (the holder, the network) or took too long.
+    EngineFailed,
 }
 
 /// The engines a runtime may drive.

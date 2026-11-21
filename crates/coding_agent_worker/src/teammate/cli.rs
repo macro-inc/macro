@@ -41,8 +41,6 @@ struct Found {
 pub struct CliEngine {
     found: Mutex<Option<Found>>,
     choice: EngineChoice,
-    /// Engines `auto` set aside because they couldn't enforce isolation.
-    set_aside: Mutex<Vec<ContainerEngineKind>>,
 }
 
 impl CliEngine {
@@ -61,19 +59,13 @@ impl CliEngine {
 
     /// Whether `kind` may run teammates now.
     pub(crate) fn wanted(&self, kind: ContainerEngineKind) -> bool {
-        let set_aside = self
-            .set_aside
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .contains(&kind);
-        let chosen = match (self.choice, kind) {
+        match (self.choice, kind) {
             (EngineChoice::Auto, _)
             | (EngineChoice::Docker, ContainerEngineKind::Docker)
             | (EngineChoice::Podman, ContainerEngineKind::Podman) => true,
             (EngineChoice::Docker, ContainerEngineKind::Podman)
             | (EngineChoice::Podman, ContainerEngineKind::Docker) => false,
-        };
-        chosen && !set_aside
+        }
     }
 
     /// The engine command, for `macrod teammate` to run interactively.
@@ -396,30 +388,34 @@ impl Engine for CliEngine {
             .map_err(|_| EngineError("the engine's exit code is not a number".to_owned()))
     }
 
-    fn next_engine(&self) -> bool {
-        if self.choice != EngineChoice::Auto {
-            return false;
-        }
-        let Ok(found) = self.found() else {
-            return false;
-        };
-        let mut set_aside = self
-            .set_aside
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if set_aside.contains(&found.kind) {
-            return false;
-        }
-        set_aside.push(found.kind);
+    fn installed(&self) -> Vec<ContainerEngineKind> {
         let paths = crate::executable::search_paths();
         [
             ("docker", ContainerEngineKind::Docker),
             ("podman", ContainerEngineKind::Podman),
         ]
         .into_iter()
-        .any(|(program, kind)| {
-            !set_aside.contains(&kind) && crate::executable::find(&paths, program).is_some()
+        .filter(|(program, kind)| {
+            self.wanted(*kind) && crate::executable::find(&paths, program).is_some()
         })
+        .map(|(_, kind)| kind)
+        .collect()
+    }
+
+    async fn select(&self, kind: ContainerEngineKind) -> Result<EngineInfo, EngineUnavailable> {
+        let paths = crate::executable::search_paths();
+        match kind {
+            ContainerEngineKind::Docker => {
+                let program = crate::executable::find(&paths, "docker")
+                    .ok_or(EngineUnavailable::NotInstalled)?;
+                self.detect_docker(program).await
+            }
+            ContainerEngineKind::Podman => {
+                let program = crate::executable::find(&paths, "podman")
+                    .ok_or(EngineUnavailable::NotInstalled)?;
+                self.detect_podman(program).await
+            }
+        }
     }
 
     async fn run_holder(&self, spec: &HolderSpec) -> Result<String, EngineError> {

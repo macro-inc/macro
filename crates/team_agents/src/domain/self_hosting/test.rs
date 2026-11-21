@@ -18,6 +18,7 @@ fn docker_linux() -> TeammateHostReport {
             version: "29.0.1".to_owned(),
             rootless: false,
         }),
+        engines: Vec::new(),
         os: HostOs::Linux,
         arch: HostArch::Amd64,
         cpus: 8,
@@ -101,6 +102,7 @@ fn macos_machines_are_listed_as_experimental() {
             name: "Laptop".to_owned(),
             connected: true,
             report: Some(TeammateHostReport {
+                engines: Vec::new(),
                 os: HostOs::Macos,
                 arch: HostArch::Arm64,
                 ..docker_linux()

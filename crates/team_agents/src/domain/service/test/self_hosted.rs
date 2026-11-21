@@ -18,6 +18,7 @@ fn docker_linux() -> TeammateHostReport {
             version: "29.0.1".to_owned(),
             rootless: false,
         }),
+        engines: Vec::new(),
         os: HostOs::Linux,
         arch: HostArch::Amd64,
         cpus: 8,

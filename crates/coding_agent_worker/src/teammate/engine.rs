@@ -240,9 +240,15 @@ pub trait Engine: Send + Sync + 'static {
     /// Wait for the container to exit and return its exit code.
     fn wait(&self, name: &str) -> impl Future<Output = Result<i64, EngineError>> + Send;
 
-    /// With `engine = "auto"`, set the engine [`Engine::info`] just found
-    /// aside for the next installed one; whether there is one.
-    fn next_engine(&self) -> bool;
+    /// The engines installed here that the configured choice allows, in
+    /// the order `auto` prefers them (Docker, then Podman).
+    fn installed(&self) -> Vec<ContainerEngineKind>;
+
+    /// Make `kind` the engine every other call uses, and say what it is.
+    fn select(
+        &self,
+        kind: ContainerEngineKind,
+    ) -> impl Future<Output = Result<EngineInfo, EngineUnavailable>> + Send;
 
     /// Create and start an install's holder (it only owns the network
     /// namespace) and return its container id.

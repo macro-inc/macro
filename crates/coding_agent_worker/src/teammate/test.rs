@@ -82,8 +82,10 @@ struct FakeState {
     /// What the guard does: load and read back as rendered, refuse, or
     /// print this table.
     guard: FakeGuard,
-    /// Another installed engine `auto` may turn to, and its guard.
-    next_engine: Option<FakeGuard>,
+    /// A Podman installed beside Docker, and its guard.
+    podman_guard: Option<FakeGuard>,
+    /// The engine `select` made current.
+    selected: ContainerEngineKind,
     /// The ruleset the guard last loaded.
     last_ruleset: Option<String>,
 }
@@ -130,7 +132,8 @@ impl FakeEngine {
                 volume_removal_fails: false,
                 holders: 0,
                 guard: FakeGuard::Loads,
-                next_engine: None,
+                podman_guard: None,
+                selected: ContainerEngineKind::Docker,
                 last_ruleset: None,
             })),
             holder_exits: Arc::new(tokio::sync::Notify::new()),
@@ -285,15 +288,22 @@ impl Engine for FakeEngine {
         Ok(code)
     }
 
-    fn next_engine(&self) -> bool {
-        let mut state = self.state();
-        match state.next_engine.take() {
-            Some(guard) => {
-                state.guard = guard;
-                true
-            }
-            None => false,
+    fn installed(&self) -> Vec<ContainerEngineKind> {
+        let state = self.state();
+        if state.info == Err(EngineUnavailable::NotInstalled) {
+            return Vec::new();
         }
+        match state.podman_guard {
+            Some(_) => vec![ContainerEngineKind::Docker, ContainerEngineKind::Podman],
+            None => vec![ContainerEngineKind::Docker],
+        }
+    }
+
+    async fn select(&self, kind: ContainerEngineKind) -> Result<EngineInfo, EngineUnavailable> {
+        let mut state = self.state();
+        state.selected = kind;
+        let info = state.info.clone()?;
+        Ok(EngineInfo { kind, ..info })
     }
 
     async fn run_holder(&self, spec: &super::engine::HolderSpec) -> Result<String, EngineError> {
@@ -353,7 +363,11 @@ impl Engine for FakeEngine {
         if let Some(ruleset) = ruleset {
             state.last_ruleset = Some(ruleset.to_owned());
         }
-        match &state.guard {
+        let guard = match (state.selected, &state.podman_guard) {
+            (ContainerEngineKind::Podman, Some(podman)) => podman.clone(),
+            _ => state.guard.clone(),
+        };
+        match &guard {
             FakeGuard::Loads => Ok(super::egress::simulated_readback(&[], &fake_facts())),
             FakeGuard::Refuses => Err(super::engine::GuardError::Refused(
                 "nft: Operation not permitted".to_owned(),
@@ -509,7 +523,7 @@ async fn next_states(
 #[test]
 fn the_host_report_names_each_problem_in_the_order_to_fix_it() {
     let problem = |platform, engine, user_namespaces| {
-        host_report(platform, engine, user_namespaces, None, Vec::new()).problem
+        host_report(platform, engine, user_namespaces, Vec::new(), Vec::new()).problem
     };
     let with = |change: fn(&mut EngineInfo)| {
         let mut info = docker_info();
@@ -2441,19 +2455,38 @@ async fn an_adopted_teammate_without_a_holder_is_restarted_with_one() {
 
 #[test]
 fn an_engine_that_cant_enforce_isolation_is_a_host_problem_before_the_sandbox() {
+    use agent_runtime_protocol::domain::schema::v0::{
+        EngineIsolation, InstalledEngine, IsolationProblem,
+    };
+    let docker = |isolation| InstalledEngine {
+        kind: ContainerEngineKind::Docker,
+        version: Some("29.5.1".to_owned()),
+        rootless: false,
+        isolation,
+    };
+    let refused = EngineIsolation::Unavailable {
+        reason: IsolationProblem::GuardRefused,
+    };
     assert_eq!(
         host_report(
             LINUX,
             Ok(docker_info()),
             Some(false),
-            Some(false),
+            vec![docker(refused)],
             Vec::new()
         )
         .problem,
         Some(TeammateHostProblem::NetworkIsolationUnavailable)
     );
     assert_eq!(
-        host_report(LINUX, Ok(docker_info()), Some(true), Some(true), Vec::new()).problem,
+        host_report(
+            LINUX,
+            Ok(docker_info()),
+            Some(true),
+            vec![docker(EngineIsolation::Enforced)],
+            Vec::new()
+        )
+        .problem,
         None
     );
 }
@@ -2502,15 +2535,40 @@ async fn an_engine_whose_isolation_probe_fails_is_reported_and_hosts_nothing() {
 }
 
 #[tokio::test]
-async fn auto_turns_to_the_next_engine_whose_probe_passes() {
+async fn auto_chooses_the_first_engine_whose_probe_passes_and_lists_both() {
+    use agent_runtime_protocol::domain::schema::v0::{
+        EngineIsolation, InstalledEngine, IsolationProblem,
+    };
     let (engine, _exit) = FakeEngine::new(Ok(docker_info()));
     engine.state().guard = FakeGuard::Refuses;
-    engine.state().next_engine = Some(FakeGuard::Loads);
+    engine.state().podman_guard = Some(FakeGuard::Loads);
     let (teammates, _directory) = restarted_on(&engine).await;
 
     let report = teammates.detect().await;
 
     assert_eq!(report.problem, None);
+    assert_eq!(report.engine.unwrap().kind, ContainerEngineKind::Podman);
+    assert_eq!(
+        report.engines,
+        [
+            InstalledEngine {
+                kind: ContainerEngineKind::Docker,
+                version: Some("29.5.1".to_owned()),
+                rootless: false,
+                isolation: EngineIsolation::Unavailable {
+                    reason: IsolationProblem::GuardRefused
+                },
+            },
+            InstalledEngine {
+                kind: ContainerEngineKind::Podman,
+                version: Some("29.5.1".to_owned()),
+                rootless: false,
+                isolation: EngineIsolation::Enforced,
+            },
+        ]
+    );
+    // The chosen engine is the current one afterwards.
+    assert_eq!(engine.state().selected, ContainerEngineKind::Podman);
 }
 
 #[test]
@@ -2524,8 +2582,6 @@ fn the_engine_choice_names_which_engines_may_run_teammates() {
     assert!(!podman_only.wanted(Docker) && podman_only.wanted(Podman));
     let auto = super::cli::CliEngine::with_choice(EngineChoice::Auto);
     assert!(auto.wanted(Docker) && auto.wanted(Podman));
-    // Choosing one engine never falls through to the other.
-    assert!(!docker_only.next_engine());
 }
 
 #[tokio::test]
@@ -2593,5 +2649,38 @@ async fn a_local_stack_allows_only_the_services_the_agent_was_given() {
     assert_eq!(
         accepts,
         ["ip daddr 172.30.0.8/32 tcp dport { 8080 } accept"]
+    );
+}
+
+#[test]
+fn the_list_header_names_every_engine_and_the_one_that_runs_teammates() {
+    use agent_runtime_protocol::domain::schema::v0::{
+        ContainerEngine, EngineIsolation, InstalledEngine, IsolationProblem,
+    };
+    let mut report = host_report(LINUX, Ok(docker_info()), Some(true), Vec::new(), Vec::new());
+    report.engine = Some(ContainerEngine {
+        kind: ContainerEngineKind::Podman,
+        version: "5.2.0".to_owned(),
+        rootless: true,
+    });
+    report.engines = vec![
+        InstalledEngine {
+            kind: ContainerEngineKind::Docker,
+            version: Some("29.5.1".to_owned()),
+            rootless: false,
+            isolation: EngineIsolation::Unavailable {
+                reason: IsolationProblem::GuardRefused,
+            },
+        },
+        InstalledEngine {
+            kind: ContainerEngineKind::Podman,
+            version: Some("5.2.0".to_owned()),
+            rootless: true,
+            isolation: EngineIsolation::Enforced,
+        },
+    ];
+    assert_eq!(
+        super::command::engines_line(&report),
+        "engines: docker 29.5.1: isolation unavailable (guardRefused) · podman 5.2.0 rootless: isolation ok (runs teammates)"
     );
 }
