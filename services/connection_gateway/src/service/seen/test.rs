@@ -121,8 +121,7 @@ async fn a_failed_write_is_tried_again_next_round() {
 #[tokio::test(start_paused = true)]
 async fn an_open_connection_marks_its_person_on_open_and_every_hour() {
     let mut started = start(0);
-    let recorder = started.recorder.clone();
-    let open = tokio::spawn(async move { recorder.mark_while_open(user(ADA)).await });
+    let open = tokio::spawn(started.recorder.mark_while_open(user(ADA)));
 
     let (first, after) = next_write(&mut started.writes).await;
     assert_eq!(first, [ADA]);
@@ -139,6 +138,20 @@ async fn an_open_connection_marks_its_person_on_open_and_every_hour() {
     tokio::time::advance(MARK_EVERY).await;
     started.recorder.mark(&user(BEA));
     assert_eq!(next_write(&mut started.writes).await.0, [BEA]);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_connection_that_closes_at_once_is_still_seen() {
+    let mut started = start(0);
+    // The connection closes before anything polls its marking.
+    let marking = started.recorder.mark_while_open(user(ADA));
+    drop(marking);
+
+    let write = tokio::time::timeout(FLUSH_EVERY * 2, next_write(&mut started.writes)).await;
+    assert_eq!(
+        write.ok().map(|(write, _)| write),
+        Some(vec![ADA.to_owned()])
+    );
 }
 
 #[tokio::test(start_paused = true)]
