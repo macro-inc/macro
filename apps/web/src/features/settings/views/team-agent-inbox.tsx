@@ -16,6 +16,7 @@ function failureText(failure: AgentInboxFailure | null | undefined): string {
     .with('not_configured', () => t('teamAgents.inboxNotConfigured'))
     .with('address_taken', () => t('teamAgents.inboxAddressTaken'))
     .with('quota_exceeded', () => t('teamAgents.inboxQuotaExceeded'))
+    .with('team_limit', () => t('teamAgents.inboxTeamLimit'))
     .with('unavailable', 'rejected', () => t('teamAgents.inboxFailed'))
     .exhaustive();
 }

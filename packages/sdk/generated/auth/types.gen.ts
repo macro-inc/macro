@@ -45,7 +45,7 @@ export type AgentInbox = {
 /**
  * Why an inbox couldn't be created.
  */
-export type AgentInboxFailure = 'not_configured' | 'address_taken' | 'quota_exceeded' | 'unavailable' | 'rejected';
+export type AgentInboxFailure = 'not_configured' | 'address_taken' | 'quota_exceeded' | 'team_limit' | 'unavailable' | 'rejected';
 
 /**
  * Where an agent's inbox is.

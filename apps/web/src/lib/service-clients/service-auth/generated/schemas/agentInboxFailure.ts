@@ -16,6 +16,7 @@ export const AgentInboxFailure = {
   not_configured: 'not_configured',
   address_taken: 'address_taken',
   quota_exceeded: 'quota_exceeded',
+  team_limit: 'team_limit',
   unavailable: 'unavailable',
   rejected: 'rejected',
 } as const;

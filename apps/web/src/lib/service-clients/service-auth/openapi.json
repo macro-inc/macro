@@ -7820,6 +7820,7 @@
           "not_configured",
           "address_taken",
           "quota_exceeded",
+          "team_limit",
           "unavailable",
           "rejected"
         ]

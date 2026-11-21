@@ -256,3 +256,18 @@ async fn a_failed_request_never_names_the_agent() {
     assert!(!logged.contains("agents.macro.invalid"), "{logged}");
     assert!(!logged.contains("sam-rivera"), "{logged}");
 }
+
+#[tokio::test]
+async fn a_team_at_its_mailbox_cap_is_told_so() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/internal/agent-mailboxes"))
+        .respond_with(refused(409, "team_limit"))
+        .mount(&server)
+        .await;
+
+    assert!(matches!(
+        mailboxes(&server).provision(&request()).await,
+        Err(MailboxError::TeamLimit)
+    ));
+}

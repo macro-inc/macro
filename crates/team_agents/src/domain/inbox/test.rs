@@ -248,6 +248,7 @@ enum Answer {
     Active,
     Slow,
     Taken,
+    TeamLimit,
     NotConfigured,
     Down,
 }
@@ -326,6 +327,7 @@ impl AgentMailboxes for FakeMailboxes {
                 ..Self::view(AgentInboxState::Failed)
             },
             Answer::NotConfigured => return Err(MailboxError::NotConfigured),
+            Answer::TeamLimit => return Err(MailboxError::TeamLimit),
             Answer::Down => return Err(down()),
         };
         *self.made.lock().unwrap() = Some(view.clone());
@@ -895,6 +897,22 @@ async fn a_release_email_service_is_already_doing_is_not_asked_again() {
 }
 
 #[tokio::test]
+async fn a_pause_that_finds_the_mailbox_already_releasing_is_done() {
+    let (service, records, mailboxes) = service(Answer::Active);
+    service
+        .provision(TEAM, &agent(), "Sam Rivera", "sam-rivera")
+        .await
+        .unwrap();
+    // email_service is deleting it on its own: it can't receive mail either way.
+    mailboxes.made.lock().unwrap().as_mut().unwrap().state = AgentInboxState::Releasing;
+
+    service.pause(TEAM, &agent()).await.unwrap();
+
+    assert_eq!(records.only().state, AgentInboxState::Paused);
+    assert!(!mailboxes.calls().contains(&"pause".to_owned()));
+}
+
+#[tokio::test]
 async fn an_inbox_made_while_its_team_was_deleted_is_paused_by_the_sweep() {
     let (service, records, mailboxes) = service(Answer::Active);
     // The team's deletion listed its inboxes before this provision reserved
@@ -930,4 +948,21 @@ async fn deleting_a_team_while_email_service_is_down_marks_its_inboxes_and_succe
 
     // Marked: the sweep finishes it once email_service is back.
     assert_eq!(records.only().state, AgentInboxState::Pausing);
+}
+
+#[tokio::test]
+async fn a_team_at_its_mailbox_cap_gets_a_failed_inbox_saying_so() {
+    let (service, records, _) = service(Answer::TeamLimit);
+
+    let inbox = service
+        .provision(TEAM, &agent(), "Sam Rivera", "sam-rivera")
+        .await
+        .unwrap();
+
+    assert_eq!(inbox.state, AgentInboxState::Failed);
+    assert_eq!(inbox.failure, Some(AgentInboxFailure::TeamLimit));
+    assert_eq!(
+        records.only().last_error,
+        Some(AgentInboxFailure::TeamLimit)
+    );
 }

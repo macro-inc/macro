@@ -9,7 +9,7 @@
 use std::collections::HashMap;
 use std::future::Future;
 
-use futures::future::join_all;
+use futures::stream::{self, StreamExt};
 
 use chrono::{DateTime, Utc};
 use macro_user_id::cowlike::CowLike;
@@ -82,6 +82,8 @@ pub enum AgentInboxFailure {
     AddressTaken,
     /// The provider account is out of inboxes.
     QuotaExceeded,
+    /// The team has as many live inboxes as it may have.
+    TeamLimit,
     /// The provider or email_service didn't answer.
     Unavailable,
     /// The provider refused the request.
@@ -140,6 +142,9 @@ pub enum MailboxError {
     /// The provider refused the request.
     #[error("the email provider refused the request")]
     Rejected,
+    /// The team has as many live inboxes as it may have.
+    #[error("the team has reached its inbox limit")]
+    TeamLimit,
     /// email_service didn't answer.
     #[error("email service unavailable")]
     Unavailable(rootcause::Report),
@@ -374,8 +379,8 @@ impl From<MailboxError> for InboxError {
         match error {
             MailboxError::NotConfigured => Self::NotConfigured,
             MailboxError::Unavailable(report) => Self::Unavailable(report),
-            rejected @ MailboxError::Rejected => {
-                Self::Unavailable(rootcause::Report::new(rejected).into_dynamic())
+            refused @ (MailboxError::Rejected | MailboxError::TeamLimit) => {
+                Self::Unavailable(rootcause::Report::new(refused).into_dynamic())
             }
         }
     }
@@ -641,8 +646,10 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes>
         let after = match (step, view.state) {
             (WindDown::Pause, AgentInboxState::Paused)
             | (WindDown::Release, AgentInboxState::Released) => settled,
-            // email_service is deleting it on its own retries.
-            (_, AgentInboxState::Releasing) => return Ok(()),
+            // email_service is deleting it: it receives nothing, so a pause is
+            // done; a release waits for email_service to confirm.
+            (WindDown::Pause, AgentInboxState::Releasing) => settled,
+            (WindDown::Release, AgentInboxState::Releasing) => return Ok(()),
             (WindDown::Pause, _) => match self.mailboxes.pause(agent).await {
                 Ok(()) | Err(MailboxError::NotConfigured) => AgentInboxState::Paused,
                 Err(error) => return Err(InboxError::from(error)),
@@ -810,21 +817,25 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes>
                 pending.push((record, marked_at));
             }
         }
-        // All at once: each call is bounded by the email_service adapter, so
-        // the deletion waits for one call, not one per agent.
+        // A few at once: each call is bounded by the email_service adapter,
+        // so the deletion waits for a handful of calls, not one per agent.
         let now = Utc::now();
-        join_all(pending.iter().map(|(record, marked_at)| async move {
-            let _ = self
-                .finish(&record.agent, WindDown::Pause, record, *marked_at, now)
-                .await
-                .inspect_err(|error| {
-                    tracing::warn!(error = ?error, "could not pause an agent's inbox now; the sweep retries");
-                });
-        }))
-        .await;
+        stream::iter(&pending)
+            .for_each_concurrent(TEAM_PAUSE_CONCURRENCY, |(record, marked_at)| async move {
+                let _ = self
+                    .finish(&record.agent, WindDown::Pause, record, *marked_at, now)
+                    .await
+                    .inspect_err(|error| {
+                        tracing::warn!(error = ?error, "could not pause an agent's inbox now; the sweep retries");
+                    });
+            })
+            .await;
         Ok(())
     }
 }
+
+/// How many of a deleted team's inboxes are paused at once.
+const TEAM_PAUSE_CONCURRENCY: usize = 8;
 
 /// How long a wind-down that found no mailbox waits before it settles: a
 /// provision in flight (one bounded attempt) may still make one until then.
@@ -961,6 +972,7 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes> AgentInboxes
                 return Err(InboxError::NotConfigured);
             }
             Err(MailboxError::Rejected) => failed(AgentInboxFailure::Rejected, &record),
+            Err(MailboxError::TeamLimit) => failed(AgentInboxFailure::TeamLimit, &record),
             Err(MailboxError::Unavailable(error)) => {
                 tracing::warn!(error = ?error, "email service didn't answer an inbox request");
                 failed(AgentInboxFailure::Unavailable, &record)
@@ -1003,7 +1015,7 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes> AgentInboxes
                 tracing::warn!(error = ?error, "email service didn't answer an inbox status");
                 Ok(record.view())
             }
-            Err(MailboxError::Rejected) => {
+            Err(MailboxError::Rejected | MailboxError::TeamLimit) => {
                 tracing::warn!("email service refused an inbox status");
                 Ok(record.view())
             }

@@ -26,7 +26,8 @@ CREATE TABLE team_agent_inboxes (
     ),
     last_error TEXT CHECK (
         last_error IN (
-            'not_configured', 'address_taken', 'quota_exceeded', 'unavailable', 'rejected'
+            'not_configured', 'address_taken', 'quota_exceeded', 'team_limit', 'unavailable',
+            'rejected'
         )
     ),
     -- A stand-in provider serves the mailbox (local stacks, previews): no

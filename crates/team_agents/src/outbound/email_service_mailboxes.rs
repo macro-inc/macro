@@ -97,6 +97,7 @@ fn error(error: AgentMailboxesError) -> MailboxError {
     let code = error.code();
     match code {
         Some(AgentMailboxErrorCode::NotConfigured) => return MailboxError::NotConfigured,
+        Some(AgentMailboxErrorCode::TeamLimit) => return MailboxError::TeamLimit,
         // Refusals a retry won't change.
         Some(
             AgentMailboxErrorCode::ProviderRejected
