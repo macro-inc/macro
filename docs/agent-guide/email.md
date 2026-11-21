@@ -285,9 +285,20 @@ time) stays in until its event is over, or for 7 days after the notice when it i
 recurring event or no time can be read, and is the only mail with the Calendar
 category in Focus. New invites and RSVP notices stay out. A calendar notice counts
 only as the thread's latest message: once anyone writes after it, the thread takes
-the same rules as any other. A thread the owner answered last joins 3 days after
-their message, unless that message only closes the exchange ("Thanks!"). `Follow up`
-marks only threads whose
+the same rules as any other. Plain mail the due-date read finds is about a meeting
+leaves once the meeting's day is over for the owner, unless it names a deadline
+after that day. Mail written after the meeting, such as its notes or thanks, keeps
+it out, unless that mail asks the owner something or for a decision only they
+can make, or the owner's own question is still waiting: then the thread is judged
+on its own. Mail more than two weeks after the meeting, by the day its writer
+wrote it on, is no longer about it. Once the owner has written last, the thread
+leaves Focus. It comes back 3 days after their message with no answer, or on its
+due day if that comes first, unless the
+closing-reply check reads that message as only ending the exchange (a short
+"Thanks!" or a brush-off, nothing else); a closing it misses, such as "Done, sent
+it over", comes back after the wait. An answer from the other side has the thread
+judged again. `Follow up`
+marks only threads that came back after that wait or on their due day, whose
 latest message is the owner's, and `Reply needed` only threads whose latest message
 is someone else's. A thread holding only the owner's sent mail is not listed: it
 has no inbox state, so Mark Done could not remove it. Each row says why it is
@@ -326,8 +337,11 @@ calendar change whose event ends or importance moving shows at the tab's next
 read. Mark
 Done hides the row at once and archives the thread; Undo brings it back. The
 worker classifies an inbox only while someone whose tab shows it has
-`enable-email-focus` on: its owner, or a user it is linked to, so a mailbox you
-link is classified while you have the flag even when its own account does not.
+`enable-email-focus` on and has used Macro in the last 7 days: its owner, or a
+user it is linked to, so a mailbox you link is classified while you have the
+flag even when its own account does not. Someone away for a week gets nothing
+classified until they open Macro again; within about 6 minutes of that their
+inboxes are backfilled as if they had just joined.
 A user who joins the rollout gets a filled tab without new mail: within about
 6 minutes the worker finds them (it looks at every connected inbox each minute,
 evaluating the flag from definitions it polls from PostHog every 5 minutes) and
