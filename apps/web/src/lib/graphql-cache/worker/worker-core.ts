@@ -33,6 +33,7 @@ import {
   parseStorageGeneration,
 } from '../protocol';
 import {
+  type CacheTelemetryObservation,
   type CacheTelemetryRecorderLike,
   classifyCacheError,
   describeCacheError,
@@ -47,6 +48,23 @@ import {
   type CacheOpenResult,
   loadCacheWasm,
 } from './wasm-module';
+
+type StorageHistory = Pick<
+  CacheTelemetryObservation,
+  'fromStorageVersion' | 'carryForward'
+>;
+
+/** Payload-free storage history of an open, for its `schema_init` event. */
+const storageHistory = (opened: CacheOpenResult): StorageHistory => {
+  const fromStorageVersion =
+    opened.fromStorageVersion ?? opened.carryForwardStorageVersion;
+  return {
+    ...(fromStorageVersion === undefined ? {} : { fromStorageVersion }),
+    ...(opened.carryForward === undefined
+      ? {}
+      : { carryForward: opened.carryForward }),
+  };
+};
 
 const isOwnerLockUnavailable = (error: unknown): boolean =>
   typeof error === 'object' &&
@@ -1268,6 +1286,7 @@ export class CacheWorkerCore {
         : undefined;
       try {
         let openOutcome: CacheOpenOutcome;
+        let openHistory: StorageHistory = {};
         if (awaitStorageGrant && onOwnerLockBusy) {
           const open = this.options.recoveryOpen
             ? wasm.openCacheForRecoveryWithOutcome
@@ -1292,6 +1311,7 @@ export class CacheWorkerCore {
           );
           this.engine = opened.engine;
           openOutcome = opened.outcome;
+          openHistory = storageHistory(opened);
         } else if (this.options.recoveryOpen) {
           if (wasm.openCacheForRecoveryWithOutcome) {
             const opened = await wasm.openCacheForRecoveryWithOutcome(
@@ -1301,6 +1321,7 @@ export class CacheWorkerCore {
             );
             this.engine = opened.engine;
             openOutcome = opened.outcome;
+            openHistory = storageHistory(opened);
           } else {
             this.engine = await wasm.openCacheForRecovery(scope, hotCapacity);
             openOutcome = 'reset-storage-uncertain';
@@ -1313,6 +1334,7 @@ export class CacheWorkerCore {
           );
           this.engine = opened.engine;
           openOutcome = opened.outcome;
+          openHistory = storageHistory(opened);
         } else {
           this.engine = await wasm.openCache(scope, hotCapacity);
           openOutcome = 'opened-existing';
@@ -1328,6 +1350,7 @@ export class CacheWorkerCore {
           outcome: 'success',
           errorCode: 'none',
           openOutcome,
+          ...openHistory,
           durationMs: this.now() - schemaStartedAt,
         });
         await this.refreshQueueDiagnostics(true);

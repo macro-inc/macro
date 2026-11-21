@@ -3085,6 +3085,70 @@ describe('CacheWorkerCore', () => {
     );
   });
 
+  it('records where an upgraded or left-behind older database came from', async () => {
+    const engine = {
+      queueDiagnostics: vi.fn().mockResolvedValue({
+        availability: 'available',
+        depth: '1',
+        oldestCreatedAtMs: '1',
+      }),
+    };
+    for (const [opened, expected] of [
+      [
+        {
+          outcome: 'upgraded-existing',
+          fromStorageVersion: 11,
+          carryForward: 'moved',
+          carryForwardStorageVersion: 11,
+        },
+        {
+          openOutcome: 'upgraded-existing',
+          fromStorageVersion: 11,
+          carryForward: 'moved',
+        },
+      ],
+      [
+        {
+          outcome: 'opened-new',
+          carryForward: 'older-in-use',
+          carryForwardStorageVersion: 11,
+        },
+        {
+          openOutcome: 'opened-new',
+          fromStorageVersion: 11,
+          carryForward: 'older-in-use',
+        },
+      ],
+      [{ outcome: 'opened-existing' }, { openOutcome: 'opened-existing' }],
+    ] as const) {
+      const observations: Array<Record<string, unknown>> = [];
+      loadCacheWasmMock.mockResolvedValue({
+        openCacheWithOutcome: vi.fn().mockResolvedValue({ engine, ...opened }),
+      });
+      const onInitializationOutcome = vi.fn();
+      const core = new CacheWorkerCore({
+        onInitializationOutcome,
+        telemetry: {
+          record: (observation) => observations.push(observation),
+          flush: vi.fn(),
+        },
+      });
+      await core.handleRequest(
+        { postMessage: vi.fn() },
+        { id: 1, kind: 'init', scope: 'scope-1' }
+      );
+      expect(onInitializationOutcome).toHaveBeenCalledWith(opened.outcome);
+      const schemaInit = observations.find(
+        (observation) => observation.name === 'graphql_cache.schema_init'
+      );
+      expect(schemaInit).toMatchObject(expected);
+      if (!('carryForward' in expected)) {
+        expect(schemaInit).not.toHaveProperty('carryForward');
+        expect(schemaInit).not.toHaveProperty('fromStorageVersion');
+      }
+    }
+  });
+
   it('leaves recovery-open wipe authority with the coordinator', async () => {
     const observations: Array<Record<string, unknown>> = [];
     loadCacheWasmMock.mockResolvedValue({

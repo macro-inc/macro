@@ -41,6 +41,7 @@ import {
 } from './stale-databases';
 import { OWNER_LOCK_RETRY_DELAYS_MS } from './startup';
 import {
+  type CacheOpenOutcome,
   type CacheWasmModule,
   cacheWasmLinearMemoryBytes,
   loadCacheWasm,
@@ -117,6 +118,24 @@ const withVersion = <
     coordinatorVersion: CACHE_COORDINATOR_PROTOCOL_VERSION,
     ...value,
   }) as unknown as T;
+
+/**
+ * The coordinator protocol says only whether storage survived the open. An
+ * in-place upgrade keeps every record, queued write and generation, so it
+ * travels as an ordinary existing open and the protocol stays as it is.
+ */
+const engineOpenOutcome = (outcome: CacheOpenOutcome): EngineOpenOutcome =>
+  match(outcome)
+    .with('upgraded-existing', (): EngineOpenOutcome => 'opened-existing')
+    .with(
+      'opened-existing',
+      'opened-new',
+      'reset-incompatible',
+      'reset-corrupt',
+      'reset-storage-uncertain',
+      (same) => same
+    )
+    .exhaustive();
 
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
@@ -326,7 +345,7 @@ async function activate(
       storageBusy = true;
     },
     onInitializationOutcome: (outcome) => {
-      initializationOpenOutcome = outcome;
+      initializationOpenOutcome = engineOpenOutcome(outcome);
     },
     telemetry,
   });

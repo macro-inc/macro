@@ -514,6 +514,33 @@ describe('cache engine worker runtime', () => {
     });
   });
 
+  it('tells the coordinator an in-place upgrade kept storage, as an existing open', async () => {
+    const scope = new FakeWorkerScope();
+    const direct = new FakePort();
+    installCacheEngineWorker({
+      scope,
+      ownerLockIsHeld: async () => true,
+      createCore: (options) => ({
+        addPort: vi.fn(),
+        handleRequest: async (port, request) => {
+          options.onInitializationOutcome?.('upgraded-existing');
+          port.postMessage({ id: request.id, ok: true, result: null });
+        },
+        drain: vi.fn(),
+      }),
+    });
+
+    scope.activate(activation('open-existing'), direct);
+    await vi.waitFor(() =>
+      expect(messagesOfKind(direct, 'engine-ready')).toHaveLength(1)
+    );
+
+    expect(messagesOfKind(direct, 'engine-ready')[0]).toMatchObject({
+      databaseActionProof: 'opened-existing',
+      openOutcome: 'opened-existing',
+    });
+  });
+
   it('throttles runtime linear memory, emits cached queue state, and drains high-water values', async () => {
     const scope = new FakeWorkerScope();
     const direct = new FakePort();

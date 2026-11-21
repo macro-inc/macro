@@ -46,6 +46,12 @@ export function createOtelCacheTelemetrySink(): CacheTelemetrySink {
         if (event.openOutcome !== undefined) {
           span.setAttr('cache.open_outcome', event.openOutcome);
         }
+        if (event.fromStorageVersion !== undefined) {
+          span.setAttr('cache.from_storage_version', event.fromStorageVersion);
+        }
+        if (event.carryForward !== undefined) {
+          span.setAttr('cache.carry_forward', event.carryForward);
+        }
         if (event.queueDiagnosticsAvailability !== undefined) {
           span.setAttr(
             'cache.queue_diagnostics_availability',
