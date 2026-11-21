@@ -7,10 +7,42 @@ set -euo pipefail
 # the suite makes.
 stack_env=$(mktemp)
 echo 'RUST_MIN_STACK=16777216' > "$stack_env"
+# No test starts an agent sandbox, and building the sandbox image is the one
+# stage of the bring-up nothing here caches: it clones the repository and
+# realizes its dev shell over the network, which has taken from one minute to
+# longer than the whole job. With local sandboxes off the stack skips it, and
+# the harness service starts with no credential for a hosted one, which it
+# allows.
+echo 'DEV_DANGEROUS_LOCAL_CONTAINERS=false' >> "$stack_env"
 
 started=$(date +%s)
+# The bring-up prints a stage's output only once the stage ends, so a stage
+# that never ends leaves nothing in the log. Once a minute, name the build and
+# compose commands that are running. Read from /proc: the runner's `ps` does
+# not load inside the Nix shell.
+running() {
+  for cmdline in /proc/[0-9]*/cmdline; do
+    # A process may have ended since the list was made.
+    { tr '\0' ' ' < "$cmdline"; } 2>/dev/null || true
+    echo
+  done | grep -E '^([^ ]*/)?(docker|cargo|rustc|bun|node) ' | cut -c1-120 | sort -u | head -n 3 | tr '\n' ';'
+}
+(
+  while sleep 60; do
+    echo "starting the stack, $(( $(date +%s) - started )) s: $(running || true)"
+  done
+) &
+watch=$!
+trap 'kill "$watch" 2>/dev/null || true' EXIT
+# The wasm packages the web app imports are built first, without the job's
+# RUSTFLAGS: those link the services with mold, and a package the wasm cache
+# misses links with rust-lld, which refuses that flag. The bring-up then finds
+# every package in the cache. Without this, the first run on main after a
+# change to a wasm package failed before any test ran.
+(cd apps/web && unset RUSTFLAGS && bun run dev:prepare)
 just stack up --no-doppler --instance "$CHANNELS_E2E_INSTANCE" --traces off --no-computers \
   --env-file "$stack_env"
+kill "$watch" 2>/dev/null || true
 echo "Local stack up: $(( $(date +%s) - started )) s" | tee -a "$GITHUB_STEP_SUMMARY"
 
 just seed-scenario --instance "$CHANNELS_E2E_INSTANCE" apply --file seed/scenarios/channels-e2e.json

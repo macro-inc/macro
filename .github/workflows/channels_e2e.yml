@@ -67,7 +67,8 @@ jobs:
             /home/runner/.cargo/git
             /home/runner/.cargo/.global-cache
         continue-on-error: true
-      - name: Reuse the kept cargo target
+      - id: reuse
+        name: Reuse the kept cargo target
         run: |
           node --disable-warning=ExperimentalWarning --input-type=module-typescript <<'NODE_SCRIPT'
           // Lets cargo reuse the `target` directory a CI job keeps on its cache
@@ -481,10 +482,42 @@ jobs:
           # the suite makes.
           stack_env=$(mktemp)
           echo 'RUST_MIN_STACK=16777216' > "$stack_env"
+          # No test starts an agent sandbox, and building the sandbox image is the one
+          # stage of the bring-up nothing here caches: it clones the repository and
+          # realizes its dev shell over the network, which has taken from one minute to
+          # longer than the whole job. With local sandboxes off the stack skips it, and
+          # the harness service starts with no credential for a hosted one, which it
+          # allows.
+          echo 'DEV_DANGEROUS_LOCAL_CONTAINERS=false' >> "$stack_env"
 
           started=$(date +%s)
+          # The bring-up prints a stage's output only once the stage ends, so a stage
+          # that never ends leaves nothing in the log. Once a minute, name the build and
+          # compose commands that are running. Read from /proc: the runner's `ps` does
+          # not load inside the Nix shell.
+          running() {
+            for cmdline in /proc/[0-9]*/cmdline; do
+              # A process may have ended since the list was made.
+              { tr '\0' ' ' < "$cmdline"; } 2>/dev/null || true
+              echo
+            done | grep -E '^([^ ]*/)?(docker|cargo|rustc|bun|node) ' | cut -c1-120 | sort -u | head -n 3 | tr '\n' ';'
+          }
+          (
+            while sleep 60; do
+              echo "starting the stack, $(( $(date +%s) - started )) s: $(running || true)"
+            done
+          ) &
+          watch=$!
+          trap 'kill "$watch" 2>/dev/null || true' EXIT
+          # The wasm packages the web app imports are built first, without the job's
+          # RUSTFLAGS: those link the services with mold, and a package the wasm cache
+          # misses links with rust-lld, which refuses that flag. The bring-up then finds
+          # every package in the cache. Without this, the first run on main after a
+          # change to a wasm package failed before any test ran.
+          (cd apps/web && unset RUSTFLAGS && bun run dev:prepare)
           just stack up --no-doppler --instance "$CHANNELS_E2E_INSTANCE" --traces off --no-computers \
             --env-file "$stack_env"
+          kill "$watch" 2>/dev/null || true
           echo "Local stack up: $(( $(date +%s) - started )) s" | tee -a "$GITHUB_STEP_SUMMARY"
 
           just seed-scenario --instance "$CHANNELS_E2E_INSTANCE" apply --file seed/scenarios/channels-e2e.json
@@ -509,14 +542,15 @@ jobs:
           CARGO_PROFILE_AI_ENGINE_WASM_CODEGEN_UNITS: '16'
           WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
           WASM_PKG_HTTP_CACHE: '1'
+        timeout-minutes: 30
       - name: collect the stack's logs
-        if: failure()
+        if: failure() || cancelled()
         run: |-
           mkdir -p target/channels-e2e
           docker compose -p macro-channels-e2e logs --no-color > target/channels-e2e/containers.log 2>&1 || true
           cp infra/local/generated/channels-e2e/run/*.log target/channels-e2e/ 2>/dev/null || true
       - name: Upload channels-e2e-stack-logs artifact
-        if: failure()
+        if: failure() || cancelled()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           path: target/channels-e2e
@@ -525,7 +559,7 @@ jobs:
           retention-days: '7'
           include-hidden-files: 'true'
       - name: Upload channels-e2e-results artifact
-        if: failure()
+        if: failure() || cancelled()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           path: apps/web/tests/channels-e2e/.run
@@ -534,7 +568,7 @@ jobs:
           retention-days: '7'
           include-hidden-files: 'true'
       - name: Upload channels-e2e-report artifact
-        if: '!cancelled()'
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           path: apps/web/tests/channels-e2e/.run/playwright-report.json
@@ -550,6 +584,7 @@ jobs:
         if: always()
         uses: ./.github/actions/teardown-nix
       - name: Seal the kept cargo target
+        if: always() && steps.reuse.outcome == 'success'
         run: |
           node --disable-warning=ExperimentalWarning --input-type=module-typescript <<'NODE_SCRIPT'
           // Lets cargo reuse the `target` directory a CI job keeps on its cache
