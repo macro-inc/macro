@@ -47,7 +47,7 @@ export const CLOSURES: Closure[] = [
     id: 'T1',
     match: field('[a-z_]+\\.notifications'),
     title: 'Items carry their own notifications on GraphQL',
-    cause: `${MAPPER}:2031-2034 maps each item's notification edges (e.g. :2116, :2141); REST Soup items have none.`,
+    cause: `${MAPPER}:2102-2105 maps each item's notification edges (e.g. :2192, :2217); REST Soup items have none.`,
     outcome: `Callers read an item's own notifications first and fall back to the global source (features/soup/entity-notifications.ts:117-128), so the open/done state they decide on is the same. ${DOM_EVIDENCE}`,
     needsRefAgreement: true,
   },
@@ -55,7 +55,7 @@ export const CLOSURES: Closure[] = [
     id: 'T2',
     match: field('[a-z_]+\\.(deletedAt|editedAt|viewedAt|interactedAt|senderPhotoUrl|thread\\.editedAt|thread\\.deletedAt)'),
     title: 'Missing optional timestamps: null on REST, undefined on GraphQL',
-    cause: `${MAPPER} maps absent values with \`?? undefined\` (:2136-2137 documents, :2174-2175 chats, :2195-2196 projects, :2219 and :2228 email, :2288-2289 channels); REST sends null.`,
+    cause: `${MAPPER} maps absent values with \`?? undefined\` (:2212-2213 documents, :2250-2251 chats, :2271-2272 projects, :2302 and :2311 email, :2371-2372 channels); REST sends null.`,
     outcome: `Callers test these with \`!= null\` or truthiness, so both read as "not set". ${DOM_EVIDENCE}`,
     needsRefAgreement: true,
   },
@@ -63,7 +63,7 @@ export const CLOSURES: Closure[] = [
     id: 'T3',
     match: field('(document|initiative)\\.appearance'),
     title: 'appearance absent on REST, null on GraphQL',
-    cause: `${MAPPER}:2109 and :2129 set appearance from readEntityAppearance, which returns null when the entity has none; REST omits the key.`,
+    cause: `${MAPPER}:2185 and :2205 set appearance from readEntityAppearance, which returns null when the entity has none; REST omits the key.`,
     outcome: `Both mean "default appearance" (the icon falls back on a missing value). ${DOM_EVIDENCE}`,
     needsRefAgreement: true,
   },
@@ -71,7 +71,7 @@ export const CLOSURES: Closure[] = [
     id: 'T4',
     match: field('document\\.(documentVersionId|sha)'),
     title: 'Document version id and sha are not on the GraphQL list item',
-    cause: `${MAPPER}:2138 sets documentVersionId to 0 and the GraphQL document fragment has no sha; REST sends both.`,
+    cause: `${MAPPER}:2214 sets documentVersionId to 0 and the GraphQL document fragment has no sha; REST sends both.`,
     outcome: `List rows do not use either; opening a document loads its version from the document service. ${DOM_EVIDENCE}`,
     needsRefAgreement: true,
   },
@@ -79,7 +79,7 @@ export const CLOSURES: Closure[] = [
     id: 'T5',
     match: field('document\\.properties\\[\\]\\.(definition\\.(created_at|updated_at|owner\\.scope|owner\\.user_id)|value|value\\.value\\[\\]\\.specific_message_id)'),
     title: 'Property definitions and empty values are shaped differently',
-    cause: `${MAPPER}:1171-1173 fills a GraphQL property definition with owner {scope: 'system'} and empty created_at/updated_at; :1175 and :1154 give an empty value as null (REST omits it); :1146 maps a missing specificMessageId to undefined.`,
+    cause: `${MAPPER}:1218-1220 fills a GraphQL property definition with owner {scope: 'system'} and empty created_at/updated_at; :1222 and :1201 give an empty value as null (REST omits it); :1193 maps a missing specificMessageId to undefined.`,
     outcome: `Rows show a property's display name and value, not its definition's owner or dates. ${DOM_EVIDENCE}`,
     needsRefAgreement: true,
   },
@@ -87,7 +87,7 @@ export const CLOSURES: Closure[] = [
     id: 'T6',
     match: field('email\\.(hasReceivedMail|labels\\[\\]\\.labelListVisibility)'),
     title: 'Email thread fields: hasReceivedMail, label visibility spelling',
-    cause: `${MAPPER}:2214 adds hasReceivedMail (REST omits it), :2254 passes the GraphQL label visibility enum ('label_show') where REST sends Gmail's 'labelShow'.`,
+    cause: `${MAPPER}:2297 adds hasReceivedMail (REST omits it), :2337 passes the GraphQL label visibility enum ('label_show') where REST sends Gmail's 'labelShow'.`,
     outcome: `Rows do not show label visibility, and hasReceivedMail only gates mail actions on the thread view. ${DOM_EVIDENCE}`,
     needsRefAgreement: true,
   },
@@ -95,7 +95,7 @@ export const CLOSURES: Closure[] = [
     id: 'T7',
     match: field('channel_thread\\.(latestReplyAt|thread\\.latestReplyAt)'),
     title: 'Thread latestReplyAt: null on REST, the thread time on GraphQL',
-    cause: `${MAPPER}:2333 fills latest_reply_at from effectiveUpdatedAt; REST leaves it null for a thread whose replies it does not count.`,
+    cause: `${MAPPER}:2416 fills latest_reply_at from effectiveUpdatedAt; REST leaves it null for a thread whose replies it does not count.`,
     outcome: `Home orders and buckets threads by sortTs and notifiedAt, which match. ${DOM_EVIDENCE}`,
     needsRefAgreement: true,
   },
@@ -103,14 +103,14 @@ export const CLOSURES: Closure[] = [
     id: 'T8',
     match: field('email\\.updatedAt'),
     title: "Email updatedAt is whichever read last wrote the thread into GraphQL's cache",
-    cause: "Soup gives an email thread's updatedAt per read: the row's updated_at on notified reads, the latest eligible message time on All Mail-style reads (crates/email/src/outbound/email_pg_repo/dynamic/query.rs:487-494). GraphQL's normalized cache keeps one updatedAt per GraphqlSoupEmailThread id, so a GraphQL list shows the value of whichever query (Home's update-time witness, a mail list) wrote the thread last. REST lists keep their own copy. Repro: dbg-email.ts and dbg-case.ts (seed 1310 case 7): the same thread reads 2026-11-20 on REST and 2026-11-19 on GraphQL in one page, and main's GraphQL reader shows the same mix.",
+    cause: "Soup gives an email thread's updatedAt per read: the row's updated_at on notified reads, the latest eligible message time on All Mail-style reads (crates/email/src/outbound/email_pg_repo/dynamic/query.rs:488-495). GraphQL's normalized cache keeps one updatedAt per GraphqlSoupEmailThread id, so a GraphQL list shows the value of whichever query (Home's update-time witness, a mail list) wrote the thread last. REST lists keep their own copy. Repro: dbg-email.ts and dbg-case.ts (seed 1310 case 7): the same thread reads 2026-11-20 on REST and 2026-11-19 on GraphQL in one page, and main's GraphQL reader shows the same mix.",
     outcome: 'Home sorts and buckets email by sortTs and notifiedAt (features/home/queries/home-results.ts:19-36), and the inbox row shows notifiedAt or sortTs (features/next-soup/soup-view/soup-view.tsx:1283-1296), all of which match. ' + DOM_EVIDENCE,
   },
   {
     id: 'D2',
     match: field('calendar_event\\.notifiedAt'),
     title: 'Calendar events in grouped notified lists carry their reminder time on GraphQL',
-    cause: "Grouped Soup pages carry no notified_at on either transport. For calendar events the client falls back to the attached reminder's delivery time (lib/queries/soup/transform-utils.ts:1080-1089), which needs the item's own notifications: GraphQL items have them, REST items do not, so main's REST grouped list leaves notifiedAt unset. Repro: dbg-case.ts seed 1300 case 21 (grouped by date) and seed 1310 case 35 (grouped by type).",
+    cause: "Grouped Soup pages carry no notified_at on either transport. For calendar events the client falls back to the attached reminder's delivery time (lib/queries/soup/transform-utils.ts:1042-1051), which needs the item's own notifications: GraphQL items have them, REST items do not, so main's REST grouped list leaves notifiedAt unset. Repro: dbg-case.ts seed 1300 case 21 (grouped by date) and seed 1310 case 35 (grouped by type).",
     outcome: "Visible, intended: in a grouped notified view the inbox shows and buckets these rows by their reminder time instead of their update time (features/next-soup/soup-view/soup-view.tsx:1286-1293, soup-view-context.tsx:1354-1361), which is what the fallback's comment asks for and what main with the flag off (GraphQL) already does (the reference read agrees on every one). Flat notified lists are unchanged: the server stamps them on both sides.",
     needsRefAgreement: true,
   },
@@ -119,7 +119,7 @@ export const CLOSURES: Closure[] = [
     match: /(^|\s)paging:retained-pages$/,
     title: "A second read of the same list starts with the pages main's REST reader kept",
     cause:
-      "Main's REST reader is a TanStack infinite query with no page limit (lib/queries/soup/items.ts:242-336, mounted at :344) and the client keeps inactive queries for ten minutes (lib/queries/client.ts:19). A reader that mounts a key another reader already paged gets every cached page back, refetched, and its first fetchNextPage asks for the page after them. The GraphQL reader owns its pages per mount (lib/queries/soup/graphql/create-soup-live-query.ts:122, :215) and starts at the first page. Repro: dbg-retained.ts on seed 2601's world (DBG_SIZE=101 DBG_LIMIT=1 DBG_MAX_PAGES=60: the 101-entity viewer's Signal preset, one row a page, sixty pages) reads the same list twice in one tab: main's REST reader returns 60 rows in 60 pages, then 102 rows in 44 pages, to the end of the list (hasNextPage false); the branch and main's GraphQL reader (update-time sort) return 60 rows in 60 pages both times, with a next page. Every second read starts with the first read's rows. The run's case is a read of a list an earlier case read in the same tab; when main's kept pages reach the end of the list, the comparison checks the branch's rows as main's prefix (compare.ts, harness test 'compares only the shared prefix').",
+      "Main's REST reader is a TanStack infinite query with no page limit (lib/queries/soup/items.ts:242-336, mounted at :344) and the client keeps inactive queries for ten minutes (lib/queries/client.ts:27). A reader that mounts a key another reader already paged gets every cached page back, refetched, and its first fetchNextPage asks for the page after them. The GraphQL reader owns its pages per mount (lib/queries/soup/graphql/create-soup-live-query.ts:122, :215) and starts at the first page. Repro: dbg-retained.ts on seed 2601's world (DBG_SIZE=101 DBG_LIMIT=1 DBG_MAX_PAGES=60: the 101-entity viewer's Signal preset, one row a page, sixty pages) reads the same list twice in one tab: main's REST reader returns 60 rows in 60 pages, then 102 rows in 44 pages, to the end of the list (hasNextPage false); the branch and main's GraphQL reader (update-time sort) return 60 rows in 60 pages both times, with a next page. Every second read starts with the first read's rows. The run's case is a read of a list an earlier case read in the same tab; when main's kept pages reach the end of the list, the comparison checks the branch's rows as main's prefix (compare.ts, harness test 'compares only the shared prefix').",
     outcome:
       "Every row the branch reads is the row main shows at that position (the comparison checks the prefix row by row, and every field of it); main only shows rows further down sooner on a revisit, which the branch loads as the list scrolls. That is how every GraphQL Soup list main serves already behaves, and what users without the flag get.",
   },
@@ -137,8 +137,8 @@ export const CLOSURES: Closure[] = [
     match: /^live:[a-z]+:old-behind:[a-z-]+\/[a-z_-]+$|(^|\s)dom:old-behind-reload$/,
     title: "Main's mounted list stays behind its own reload where the branch's has caught up",
     cause:
-      "The class holds only when the branch's mounted list shows, row for row, the fresh read of both sides (run.ts live check; for Home on screen, the branch's mounted rows equal its reload and the two reloads agree), so only main is behind. Main's REST notified lists change on a notification only through updateSoupForNotification (main's lib/queries/notification/notification-soup.ts:52-94: stamp notifiedAt, prepend to lists missing the row) and the per-tag invalidations of features/notifications/use-notification-updates.ts:78-250; they never re-read the server. The class is named for the write that first put the list behind (kind/entity kind), and each is traced:\n" +
-      "notify/calendar: calendar_event_reminder has no case in use-notification-updates.ts, so it falls to .otherwise (main's :248) and nothing invalidates the list; notifiedAt is stamped (operations.ts:217-249) but a REST page keeps its server order (lib/queries/soup/items.ts:286-293, no client sort), so the event stays under rows notified before it. Repro: dbg-dom-step.ts, seed 2690, lane v3, DBG_KIND=notify DBG_ENTITY=v3-cal1: main's mounted Home keeps the event at row 2 under an event notified 2 min earlier, while both reloads and the branch's mounted Home put it at row 1; dbg-live.ts shows main's live row carrying the new stamp at index 1.\n" +
+      "The class holds only when the branch's mounted list shows, row for row, the fresh read of both sides (run.ts live check; for Home on screen, the branch's mounted rows equal its reload and the two reloads agree), so only main is behind. Main's REST notified lists change on a notification only through updateSoupForNotification (main's lib/queries/notification/notification-soup.ts:52-94: stamp notifiedAt, prepend to lists missing the row) and the per-tag invalidations of features/notifications/use-notification-updates.ts:74-246; they never re-read the server. The class is named for the write that first put the list behind (kind/entity kind), and each is traced:\n" +
+      "notify/calendar: calendar_event_reminder has no case in use-notification-updates.ts, so it falls to .otherwise (main's :244) and nothing invalidates the list; notifiedAt is stamped (operations.ts:217-249) but a REST page keeps its server order (lib/queries/soup/items.ts:286-293, no client sort), so the event stays under rows notified before it. Repro: dbg-dom-step.ts, seed 2690, lane v3, DBG_KIND=notify DBG_ENTITY=v3-cal1: main's mounted Home keeps the event at row 2 under an event notified 2 min earlier, while both reloads and the branch's mounted Home put it at row 1; dbg-live.ts shows main's live row carrying the new stamp at index 1.\n" +
       "rename/*: another user's rename reaches the GraphQL cache through the SoupUpdates subscription (lib/service-clients/service-storage/graphql-soup-websocket.ts:280-283) and no REST list. Repro: dbg-dom-step.ts, seed 2690, lane v2, DBG_ENTITY=v2-task1: main's mounted Home keeps the old name for 15 s and shows the new one after a reload; the branch's mounted Home shows it within the step.\n" +
       "notify/* with rows main's read lacks: restoreSoupEntityToDoneFilteredQueries prepends the entity to every cached REST list that excludes done items, checked only against the caller's itemFilter and insertFilter (operations.ts:489-564), never the server; the probe's generated-filter reads pass neither, so an email lands in a list confined to another thread. Seen in seed 2100 lane v0 step 1 and seed 2690 lane v0 step 1.\n" +
       "done, seen, delete-notification and other writes that remove a row: a GraphqlUpdatedNotification only refetches the notification feed (features/notifications/notification-source.ts:441-446, the same on both sides), so main's REST list keeps the row until a reload; the branch's GraphQL list re-evaluates on writes to the shared GraphQL cache (lib/queries/soup/graphql/create-soup-live-query.ts:356-371) and re-reads on its next notification (notification-soup.ts revalidateNotifiedGraphqlSoupLists).",
@@ -159,7 +159,7 @@ export const CLOSURES: Closure[] = [
     match: /^live:grouped:new-held-notified-stamp$/,
     title: "A grouped list on the branch keeps a row's notification time after the websocket floor expires",
     cause:
-      "Rows take notified_at through the websocket floor when they are mapped (transform-utils.ts:1084 resolveNotifiedAt; the floor is kept 5 min, normalized-cache/notified-floor.ts:15), and grouped pages carry no notification times, so a fresh read shows none. The branch's GraphQL list reuses a mapped row while its record, baseline and page stamp are unchanged (graphql/items.ts:110-121); a re-read after a notification (notification-soup.ts isNotifiedList, grouped lists included since 9d846c3c812) brings the same record back, so a row mapped inside the window keeps the stamp. Main serves the same grouped list by REST (graphql/ast.ts mapSortMethod rejects notified_at), and a notification refetches the REST lists holding its entity (normalized-cache/operations.ts:256 invalidateSoupEntity), which maps every row again. The harness closes only a stamp equal to one of the viewer's user_notification.created_at times for that entity, where the fresh read has none (run.ts heldNotifiedStamps). Repro: dbg-seq seed 2691, lane v3, spec2 (a filter list grouped by entity type): the project notified at step 0 (06:24:23.330671) shows that stamp in both mounted lists from step 8; main drops it at step 11, when a notification for an email in the list refetches it; the branch keeps it to step 19.",
+      "Rows take notified_at through the websocket floor when they are mapped (transform-utils.ts:1046 resolveNotifiedAt; the floor is kept 5 min, normalized-cache/notified-floor.ts:15), and grouped pages carry no notification times, so a fresh read shows none. The branch's GraphQL list reuses a mapped row while its record, baseline and page stamp are unchanged (graphql/items.ts:112-123); a re-read after a notification (notification-soup.ts isNotifiedList, grouped lists included since 9d846c3c812) brings the same record back, so a row mapped inside the window keeps the stamp. Main serves the same grouped list by REST (graphql/ast.ts mapSortMethod rejects notified_at), and a notification refetches the REST lists holding its entity (normalized-cache/operations.ts:256 invalidateSoupEntity), which maps every row again. The harness closes only a stamp equal to one of the viewer's user_notification.created_at times for that entity, where the fresh read has none (run.ts heldNotifiedStamps). Repro: dbg-seq seed 2691, lane v3, spec2 (a filter list grouped by entity type): the project notified at step 0 (06:24:23.330671) shows that stamp in both mounted lists from step 8; main drops it at step 11, when a notification for an email in the list refetches it; the branch keeps it to step 19.",
     outcome:
       "Visible, not fixed: in a grouped view sorted by notification, that row shows its real notification time and sorts first in its group (soup-view.tsx:1289-1294, sort-options.tsx:38, soup-view-context.tsx:1141-1149) until the row changes or the page reloads. Main shows the same stamp and order from the same floor until a refetch of the list happens to run. The value is the entity's real latest notification time.",
   },

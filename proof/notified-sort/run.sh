@@ -28,6 +28,12 @@ if ! command -v just >/dev/null || ! command -v psql >/dev/null; then
   exec nix develop "$PROOF_REPO" --command bash "${BASH_SOURCE[0]}" "$@"
 fi
 source "$here/env.sh"
+# Both apps load the browser WebAssembly packages their sources generate; a
+# worktree that moved since its last build loads stale ones and the app (and
+# the probe) fails to import. This is a no-op when they are current.
+for tree in "$PROOF_OLD_WORKTREE" "$PROOF_NEW_WORKTREE"; do
+  (cd "$tree/apps/web" && bun run dev:prepare >/dev/null)
+done
 # The browser runs in its own network namespace (lib/chromium-netns.sh) and
 # reaches the dev servers through socat.
 : "${PROOF_SOCAT:=$(nix build --no-link --print-out-paths nixpkgs#socat)/bin/socat}"
