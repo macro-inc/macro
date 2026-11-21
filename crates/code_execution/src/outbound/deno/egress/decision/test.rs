@@ -247,8 +247,16 @@ fn scoped_and_dry_runs_are_refused_every_unfurl_operation() {
         let path = format!("/unfurl{concrete}");
         for policy in [SCOPED, DRY_RUN] {
             assert_eq!(
-                decide(&catalog, "unfurl", "/unfurl", &operation.method, &path, policy, true)
-                    .refusal,
+                decide(
+                    &catalog,
+                    "unfurl",
+                    "/unfurl",
+                    &operation.method,
+                    &path,
+                    policy,
+                    true
+                )
+                .refusal,
                 Some(Refusal::AnonymousOutward),
                 "{key} {policy:?}"
             );
