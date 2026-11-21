@@ -1,7 +1,7 @@
 import { useFlowTrace } from '@app/observability/flow';
 import type { DateValue } from '@core/util/date';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { Telemetry } from '@macro-inc/observability';
+import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import {
   type ChannelDirectory,
   type ChannelLookup,
@@ -16,8 +16,10 @@ import {
 import { isLaterView, readChannelViewedAt } from '@queries/channel/viewed-at';
 import {
   type Accessor,
+  createEffect,
   createMemo,
   createSignal,
+  on,
   onCleanup,
   onMount,
   untrack,
@@ -39,34 +41,101 @@ const LAST_VIEW_PENDING: ChannelLastViewed = { status: 'pending' };
 const LAST_VIEW_UNKNOWN: ChannelLastViewed = { status: 'unknown' };
 
 /** How long an open waits for the server's answer before it records its own
- * view without one. An answer after that could already be that view. */
+ * view without one, ending the request. An answer after that could already
+ * be that view. */
 export const LAST_VIEW_WAIT_MS = 5_000;
 
 function sameLastViewed(a: ChannelLastViewed, b: ChannelLastViewed) {
   return a.status === b.status && knownLastView(a) === knownLastView(b);
 }
 
-/** What became of the server's answer: the open used it, had already
- * stopped waiting (after `LAST_VIEW_WAIT_MS`), or had closed. */
-type LastViewOutcome = 'used' | 'late' | 'closed';
+/** Why an open stopped waiting for the server's answer: `LAST_VIEW_WAIT_MS`
+ * passed, the directory's record settled the open first, or the open
+ * closed. Each one ends the request. */
+type LastViewStop = 'timed_out' | 'superseded' | 'closed';
 
-async function askLastView(
-  channelId: string,
-  settle: (state: ChannelLastViewed) => LastViewOutcome
-) {
+/** One open's ask of the server. */
+type LastViewAsk = {
+  /** Aborts once the open stops waiting. */
+  signal: AbortSignal;
+  /** Why the open stopped waiting, once it has. */
+  stopped: () => LastViewStop | undefined;
+  /** Gives the open the server's answer, which it still waits for. */
+  take: (state: ChannelLastViewed) => void;
+};
+
+/** Asks the server in a span that records what became of the answer: `used`,
+ * or why the open stopped waiting. Stopping aborts the read, which ends the
+ * request and the span with it. */
+async function askLastView(channelId: string, ask: LastViewAsk) {
   await Telemetry.span('channel.last_view', async (span) => {
     span.setAttr('channel.id', channelId);
-    const viewedAt = await readChannelViewedAt(channelId);
+    const viewedAt = await readChannelViewedAt(channelId, ask.signal);
+    const stopped = ask.stopped();
+    if (stopped) {
+      span.setAttr('channel.last_view.outcome', stopped);
+      return;
+    }
     if (viewedAt.isErr()) span.error(viewedAt.error);
-    span.setAttr(
-      'channel.last_view.outcome',
-      settle(
-        viewedAt.isOk()
-          ? { status: 'known', viewedAt: viewedAt.value }
-          : LAST_VIEW_UNKNOWN
-      )
+    ask.take(
+      viewedAt.isOk()
+        ? { status: 'known', viewedAt: viewedAt.value }
+        : LAST_VIEW_UNKNOWN
     );
+    span.setAttr('channel.last_view.outcome', 'used');
   });
+}
+
+/**
+ * Asks the server for an open's last view until the open stops waiting: the
+ * answer arrives, `LAST_VIEW_WAIT_MS` pass, the directory's record settles
+ * the open first, or the open closes. Stopping ends the request. Runs under
+ * the open's owner.
+ */
+function askWhileOpen(
+  channelId: string,
+  lastViewed: Accessor<ChannelLastViewed>,
+  setAnswer: (state: ChannelLastViewed) => void,
+  flow: TraceContext | undefined
+) {
+  const controller = new AbortController();
+  let stoppedBy: LastViewStop | undefined;
+  let answered = false;
+  // Each way out marks itself before it writes the answer: a write that
+  // settles the open runs the record's stop below at once.
+  function stop(why: LastViewStop) {
+    if (answered || stoppedBy) return;
+    stoppedBy = why;
+    clearTimeout(wait);
+    controller.abort();
+  }
+  const wait = setTimeout(() => {
+    stop('timed_out');
+    setAnswer(LAST_VIEW_UNKNOWN);
+  }, LAST_VIEW_WAIT_MS);
+  onCleanup(() => stop('closed'));
+  // What's new is marked from the first view the open settles on (the
+  // activity tracker keeps it), so once the record settles it, no answer can
+  // change it.
+  createEffect(
+    on(
+      () => lastViewed().status !== 'pending',
+      (settled) => {
+        if (settled) stop('superseded');
+      }
+    )
+  );
+  const ask = () =>
+    askLastView(channelId, {
+      signal: controller.signal,
+      stopped: () => stoppedBy,
+      take(state) {
+        answered = true;
+        clearTimeout(wait);
+        setAnswer(state);
+      },
+    });
+  fireAndForget(flow ? flow.run(ask) : ask(), 'channel-viewed-at');
 }
 
 type ChannelDirectoryProviderProps = {
@@ -123,7 +192,8 @@ export function useChannel(
  * viewer's own activity row, which keeps their views after they leave; a
  * record then shows the later of its view and the answer. Record the open's
  * own view only once this is no longer `pending`, or the answer can be that
- * view.
+ * view. The ask stops, ending its request, as soon as the open no longer
+ * waits for it.
  */
 export function useChannelLastViewed(
   channelId: string
@@ -135,28 +205,7 @@ export function useChannelLastViewed(
   const asks = untrack(
     () => lookup().status !== 'loaded' || !directory.viewsCurrent()
   );
-  // The view that is opening, for the ask's span.
-  const flow = useFlowTrace();
-  onMount(() => {
-    if (!asks) return;
-    let closed = false;
-    const wait = setTimeout(() => settle(LAST_VIEW_UNKNOWN), LAST_VIEW_WAIT_MS);
-    onCleanup(() => {
-      closed = true;
-      clearTimeout(wait);
-    });
-    // The first settlement wins: an answer after the wait is ignored.
-    function settle(state: ChannelLastViewed): LastViewOutcome {
-      clearTimeout(wait);
-      if (closed) return 'closed';
-      if (answer().status !== 'pending') return 'late';
-      setAnswer(state);
-      return 'used';
-    }
-    const ask = () => askLastView(channelId, settle);
-    fireAndForget(flow ? flow.run(ask) : ask(), 'channel-viewed-at');
-  });
-  return createMemo(
+  const lastViewed = createMemo(
     (previous): ChannelLastViewed => {
       const found = lookup();
       const asked = answer();
@@ -176,6 +225,14 @@ export function useChannelLastViewed(
     LAST_VIEW_PENDING,
     { equals: sameLastViewed }
   );
+  // The view that is opening, for the ask's span.
+  const flow = useFlowTrace();
+  onMount(() => {
+    // Untracked: a record that settled the open since needs no answer.
+    if (asks && lastViewed().status === 'pending')
+      askWhileOpen(channelId, lastViewed, setAnswer, flow);
+  });
+  return lastViewed;
 }
 
 function laterView(

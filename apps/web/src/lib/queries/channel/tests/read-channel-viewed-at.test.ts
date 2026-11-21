@@ -1,5 +1,6 @@
 import { QueryClient } from '@tanstack/solid-query';
 import { beforeEach, expect, it, vi } from 'vitest';
+import { fromValue, make, onPush, pipe } from 'wonka';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
@@ -22,7 +23,7 @@ const VIEWER = 'macro|viewer@example.com';
 const CHANNEL = channelUuid('left');
 
 function answers(result: object) {
-  mocks.query.mockReturnValue({ toPromise: async () => result });
+  mocks.query.mockReturnValue(fromValue(result));
 }
 
 beforeEach(() => {
@@ -70,18 +71,47 @@ it('fails when the server fails, or answers nothing', async () => {
 });
 
 it('fails when another account signed in during the read', async () => {
-  mocks.query.mockReturnValue({
-    toPromise: async () => {
-      mocks.client?.setQueryData(authKeys.userInfo.queryKey, {
-        id: 'macro|other@example.com',
-        authenticated: true,
-      });
-      return {
+  mocks.query.mockReturnValue(
+    pipe(
+      fromValue({
         data: {
           user: { id: VIEWER, channelViewedAt: '2026-11-20T10:00:00+00:00' },
         },
-      };
-    },
-  });
+      }),
+      onPush(() => {
+        mocks.client?.setQueryData(authKeys.userInfo.queryKey, {
+          id: 'macro|other@example.com',
+          authenticated: true,
+        });
+      })
+    )
+  );
   expect((await readChannelViewedAt(CHANNEL)).isErr()).toBe(true);
+});
+
+// An open that stops waiting (its wait passed, its record answered, it
+// closed) ends the request instead of leaving it to answer nobody.
+it('ends the request when its signal aborts, failing with the reason', async () => {
+  let ended = false;
+  mocks.query.mockReturnValue(
+    make(() => () => {
+      ended = true;
+    })
+  );
+  const stop = new AbortController();
+  const read = readChannelViewedAt(CHANNEL, stop.signal);
+  await Promise.resolve();
+  expect(ended).toBe(false);
+  stop.abort('stopped');
+  expect((await read)._unsafeUnwrapErr()).toBe('stopped');
+  expect(ended).toBe(true);
+});
+
+it('asks nothing once its signal has aborted', async () => {
+  const stop = new AbortController();
+  stop.abort('stopped');
+  expect(
+    (await readChannelViewedAt(CHANNEL, stop.signal))._unsafeUnwrapErr()
+  ).toBe('stopped');
+  expect(mocks.query).not.toHaveBeenCalled();
 });

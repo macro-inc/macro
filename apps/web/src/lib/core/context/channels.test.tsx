@@ -150,18 +150,30 @@ describe('useChannelLastViewed', () => {
   const VIEWED = '2026-11-20T10:00:00+00:00';
   const SERVER_VIEWED = '2026-11-19T08:00:00+00:00';
 
-  /** The server's answer, held until the test lets it through. */
-  function heldAnswer() {
+  /** The server's answer, held until the test lets it through. Like the real
+   * read, it fails with the abort's reason once the open stops waiting,
+   * unless `ignoresAbort`. */
+  function heldAnswer({ ignoresAbort = false } = {}) {
     let release!: (viewedAt: string | null) => void;
-    serverViews.read.mockReturnValue(
-      ResultAsync.fromSafePromise(
-        new Promise<string | null>((resolve) => {
-          release = resolve;
-        })
-      )
+    serverViews.read.mockImplementation(
+      (_channelId: string, signal: AbortSignal) =>
+        ResultAsync.fromPromise(
+          new Promise<string | null>((resolve, reject) => {
+            release = resolve;
+            if (ignoresAbort) return;
+            signal.addEventListener('abort', () => reject(signal.reason), {
+              once: true,
+            });
+          }),
+          (error) => error
+        )
     );
     return (viewedAt: string | null) => release(viewedAt);
   }
+
+  /** The signal the open's last ask went with. */
+  const askSignal = (): AbortSignal | undefined =>
+    serverViews.read.mock.lastCall?.[1];
 
   function setup(channelId: string, filling = fillingDirectory()) {
     let lastViewed!: () => ChannelLastViewed;
@@ -200,7 +212,8 @@ describe('useChannelLastViewed', () => {
     await settles();
     expect(lastViewed()).toEqual({ status: 'known', viewedAt: SERVER_VIEWED });
     expect(serverViews.read).toHaveBeenCalledTimes(1);
-    expect(serverViews.read).toHaveBeenCalledWith(id);
+    expect(serverViews.read).toHaveBeenCalledWith(id, expect.any(AbortSignal));
+    expect(askSignal()?.aborted).toBe(false);
   });
 
   it('knows that the viewer never viewed a channel the server has no view of', async () => {
@@ -212,17 +225,19 @@ describe('useChannelLastViewed', () => {
     expect(lastViewed()).toEqual({ status: 'known', viewedAt: null });
   });
 
-  it('stops waiting for a server that does not answer, and ignores its late answer', async () => {
+  it('stops waiting for a server that does not answer, ending the request, and ignores its late answer', async () => {
     vi.useFakeTimers();
     try {
       const filling = fillingDirectory();
       filling.fill([]);
-      const answer = heldAnswer();
+      const answer = heldAnswer({ ignoresAbort: true });
       const { lastViewed } = setup(channelUuid('slow'), filling);
       await vi.advanceTimersByTimeAsync(LAST_VIEW_WAIT_MS - 1);
       expect(lastViewed()).toEqual({ status: 'pending' });
+      expect(askSignal()?.aborted).toBe(false);
       await vi.advanceTimersByTimeAsync(1);
       expect(lastViewed()).toEqual({ status: 'unknown' });
+      expect(askSignal()?.aborted).toBe(true);
       answer(SERVER_VIEWED);
       await vi.advanceTimersByTimeAsync(0);
       expect(lastViewed()).toEqual({ status: 'unknown' });
@@ -231,7 +246,9 @@ describe('useChannelLastViewed', () => {
     }
   });
 
-  it('records on its span whether the open used the answer, had stopped waiting, or had closed', async () => {
+  // A span that ends only when the server answers says nothing about a server
+  // that never does: each way of stopping ends the request and the span.
+  it('records on its span whether the open used the answer, or why it stopped waiting, as it stops', async () => {
     const spans: { name: string; attrs: Record<string, unknown> }[] = [];
     const span = vi.spyOn(Telemetry, 'span').mockImplementation(((
       name: string,
@@ -266,21 +283,33 @@ describe('useChannelLastViewed', () => {
       });
       cleanup();
 
-      let answer = heldAnswer();
-      setup(channelUuid('late'), filling);
+      // None of these answers: each span ends as the open stops waiting.
+      heldAnswer();
+      setup(channelUuid('timed-out'), filling);
       await vi.advanceTimersByTimeAsync(LAST_VIEW_WAIT_MS);
-      answer(SERVER_VIEWED);
-      await vi.advanceTimersByTimeAsync(0);
-      expect(outcome()).toBe('late');
+      expect(askSignal()?.aborted).toBe(true);
+      expect(outcome()).toBe('timed_out');
       cleanup();
 
-      answer = heldAnswer();
+      heldAnswer();
       setup(channelUuid('closed'), filling);
       await vi.advanceTimersByTimeAsync(0);
+      expect(outcome()).toBeUndefined();
       cleanup();
-      answer(SERVER_VIEWED);
       await vi.advanceTimersByTimeAsync(0);
+      expect(askSignal()?.aborted).toBe(true);
       expect(outcome()).toBe('closed');
+
+      const cold = fillingDirectory();
+      const id = channelUuid('superseded');
+      heldAnswer();
+      setup(id, cold);
+      await vi.advanceTimersByTimeAsync(0);
+      cold.fill([directoryChannel(id, { viewedAt: VIEWED })]);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(askSignal()?.aborted).toBe(true);
+      expect(outcome()).toBe('superseded');
+      cleanup();
 
       serverViews.read.mockReturnValue(errAsync(new Error('lookup failed')));
       setup(channelUuid('failed'), filling);
@@ -289,7 +318,8 @@ describe('useChannelLastViewed', () => {
         error: true,
         'channel.last_view.outcome': 'used',
       });
-      expect(spans).toHaveLength(4);
+      expect(spans).toHaveLength(5);
+      expect(spans.filter(({ attrs }) => attrs.error)).toHaveLength(1);
     } finally {
       vi.useRealTimers();
       span.mockRestore();
@@ -305,16 +335,21 @@ describe('useChannelLastViewed', () => {
     expect(lastViewed()).toEqual({ status: 'unknown' });
   });
 
-  it('asks the server while a cold directory cannot place the channel, and takes the record that arrives first', async () => {
+  // The activity tracker keeps the first view the open settles on, so an
+  // answer after the record's, even a later view, would change nothing on
+  // screen: the open ends the request and takes none.
+  it('asks the server while a cold directory cannot place the channel, takes the record that arrives first, and stops asking', async () => {
     const id = channelUuid('cold');
-    const answer = heldAnswer();
+    const LATER = '2026-11-21T09:00:00+00:00';
+    const answer = heldAnswer({ ignoresAbort: true });
     const { fill, lastViewed } = setup(id);
     await settles();
     expect(serverViews.read).toHaveBeenCalledTimes(1);
     expect(lastViewed()).toEqual({ status: 'pending' });
     fill([directoryChannel(id, { viewedAt: VIEWED })]);
     expect(lastViewed()).toEqual({ status: 'known', viewedAt: VIEWED });
-    answer(SERVER_VIEWED);
+    expect(askSignal()?.aborted).toBe(true);
+    answer(LATER);
     await settles();
     expect(lastViewed()).toEqual({ status: 'known', viewedAt: VIEWED });
   });
@@ -333,7 +368,10 @@ describe('useChannelLastViewed', () => {
       const answer = heldAnswer();
       const { lastViewed } = setup(id, stale(id));
       await settles();
-      expect(serverViews.read).toHaveBeenCalledWith(id);
+      expect(serverViews.read).toHaveBeenCalledWith(
+        id,
+        expect.any(AbortSignal)
+      );
       expect(lastViewed()).toEqual({ status: 'pending' });
       answer(LATER);
       await settles();
@@ -387,15 +425,19 @@ describe('useChannelLastViewed', () => {
       }
     });
 
-    it('stops waiting once a pass rereads the record', async () => {
+    it('stops waiting once a pass rereads the record, ending the request', async () => {
       const id = channelUuid('reread');
-      heldAnswer();
+      const answer = heldAnswer({ ignoresAbort: true });
       const filling = stale(id);
       const { lastViewed } = setup(id, filling);
       await settles();
       expect(lastViewed()).toEqual({ status: 'pending' });
       filling.setChannels([directoryChannel(id, { viewedAt: LATER })]);
       filling.setViewsCurrent(true);
+      expect(lastViewed()).toEqual({ status: 'known', viewedAt: LATER });
+      expect(askSignal()?.aborted).toBe(true);
+      answer('2026-11-21T09:30:00+00:00');
+      await settles();
       expect(lastViewed()).toEqual({ status: 'known', viewedAt: LATER });
     });
   });

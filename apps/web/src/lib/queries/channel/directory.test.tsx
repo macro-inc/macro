@@ -30,7 +30,15 @@ import {
   createRoot,
   createSignal,
 } from 'solid-js';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+  vi,
+} from 'vitest';
 import { fromPromise, make, pipe, type Source, toPromise } from 'wonka';
 import {
   initialSoupBackfillCheckpoint,
@@ -354,7 +362,9 @@ describe('by-id reader', () => {
     expect(read.mock.calls.map(([ids]) => ids)).toEqual([[channelUuid('a')]]);
   });
 
-  it('reads in the trace of the view that asked, and retries in a trace of their own', async () => {
+  // Observability rule: work outliving the request keeps its parent across
+  // retries, so a slow open shows its failed read and the retry together.
+  it('reads in the trace of the view that asked, its retry included', async () => {
     const active: string[] = [];
     const within = <T,>(name: string, work: () => T): T => {
       active.push(name);
@@ -382,6 +392,7 @@ describe('by-id reader', () => {
         })
       );
     }) as never);
+    onTestFinished(() => span.mockRestore());
     const sentIn: (string | undefined)[] = [];
     let fail = true;
     const read = vi.fn<Read>(async (ids) => {
@@ -403,16 +414,15 @@ describe('by-id reader', () => {
     reader.request(channelUuid('a'));
     reader.request(channelUuid('b'), view);
     await vi.advanceTimersByTimeAsync(100);
-    span.mockRestore();
 
-    // One batch of both, in the view's trace, then its retry outside it.
+    // One batch of both, in the view's trace, then its retry there too.
     expect(sentIn).toEqual([
       'channel_directory.by_id',
       'channel_directory.by_id',
     ]);
     expect(spans.map(({ parent }) => parent)).toEqual([
       'view.channel',
-      undefined,
+      'view.channel',
     ]);
     expect(spans.map(({ attrs }) => attrs)).toEqual([
       expect.objectContaining({
@@ -430,6 +440,13 @@ describe('by-id reader', () => {
       [channelUuid('a')]: 'returned',
       [channelUuid('b')]: 'returned',
     });
+
+    // Settled, it lets the trace go: a later read nobody traced joins none.
+    reader.renew([channelUuid('b')]);
+    reader.request(channelUuid('b'));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(spans).toHaveLength(3);
+    expect(spans.at(-1)?.parent).toBeUndefined();
   });
 
   it('forgets a failed id after the cooldown, while others keep failing, and reads it only when asked again', async () => {

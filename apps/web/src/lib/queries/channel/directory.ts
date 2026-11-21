@@ -975,7 +975,8 @@ type ByIdReaderOptions = {
  * any more costs nothing. A hidden tab keeps its failures until it is shown.
  * With `version`, an absence holds only while the channel's record stays as
  * it was when its read was sent. A batch's span joins the trace of the first
- * of its ids whose request named one, on that id's first read only.
+ * of its ids whose request named one, retries included, until that id
+ * settles.
  */
 export function createByIdReader(
   read: (ids: string[], signal: AbortSignal) => Promise<ByIdRead>,
@@ -988,8 +989,8 @@ export function createByIdReader(
   let attempts = new Map<string, number>();
   // For each absence, the record its read was sent against.
   let sentAgainst = new Map<string, RecordVersion>();
-  // The flow that asked for each id not yet read, and when each id still to
-  // read was queued.
+  // The flow that asked for each id not yet settled, which its retries
+  // join too, and when each id still to read was queued.
   let askedIn = new Map<string, TraceContext>();
   let queuedAt = new Map<string, number>();
   let controller = new AbortController();
@@ -998,6 +999,7 @@ export function createByIdReader(
   const settle = (updates: Record<string, ByIdOutcome>) => {
     const ids = Object.keys(updates);
     if (ids.length === 0) return;
+    for (const id of ids) askedIn.delete(id);
     setOutcomes((previous) => ({ ...previous, ...updates }));
     options.onSettle?.();
   };
@@ -1128,14 +1130,14 @@ export function createByIdReader(
     queuedAt.set(id, performance.now());
     batcher.addItem(id);
   }
-  /** The trace a batch's span joins and how long its oldest id waited; the
-   * ids' requests are used up, so a retry starts a trace of its own. */
+  /** The trace a batch's span joins and how long its oldest id waited. Each
+   * id keeps the trace it was asked in until it settles, so a retry is read
+   * in the trace of the view that asked for it. */
   function takeBatchTrace(ids: readonly string[]) {
     let parent: TraceContext | undefined;
     let oldest = Number.POSITIVE_INFINITY;
     for (const id of ids) {
       parent ??= askedIn.get(id);
-      askedIn.delete(id);
       oldest = Math.min(oldest, queuedAt.get(id) ?? oldest);
       queuedAt.delete(id);
     }

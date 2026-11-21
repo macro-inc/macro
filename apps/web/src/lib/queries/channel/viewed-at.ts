@@ -1,3 +1,4 @@
+import { firstOrAborted } from '@core/util/abort-signal';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { readRecordsByKeys, selectRecords } from '@graphql-cache/index';
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';
@@ -10,6 +11,7 @@ import {
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import { stringifyDocument } from '@urql/core';
 import { okAsync, ResultAsync } from 'neverthrow';
+import { filter, pipe } from 'wonka';
 import { assertQueryAccount, currentQueryAccount } from '../auth/account-scope';
 import { isChannelId } from './channel-id';
 import { CHANNEL_RECORD_PREFIX } from './directory-cache';
@@ -100,29 +102,49 @@ export async function stampCachedChannelView(
  * viewer's own activity row: null when they never viewed it. For a channel
  * the directory does not hold (one they left or never joined), whose record
  * carries no view of theirs. Asking records nothing and skips every cache, so
- * the answer is the server's as of the request.
+ * the answer is the server's as of the request. Aborting `signal` ends the
+ * request and fails the read with its reason.
  */
 export function readChannelViewedAt(
-  channelId: string
+  channelId: string,
+  signal?: AbortSignal
 ): ResultAsync<string | null, unknown> {
   // The server refuses an id it cannot parse, and no view names one.
   if (!isChannelId(channelId)) return okAsync(null);
   return ResultAsync.fromPromise(
-    askChannelViewedAt(channelId),
+    askChannelViewedAt(channelId, signal),
     (error) => error
   );
 }
 
-async function askChannelViewedAt(channelId: string): Promise<string | null> {
+/** An abort leaves the query's result source, which is what ends urql's
+ * request: urql replaces a `fetchOptions.signal` with its own. */
+async function askChannelViewedAt(
+  channelId: string,
+  signal: AbortSignal | undefined
+): Promise<string | null> {
+  signal?.throwIfAborted();
   const account = currentQueryAccount();
   assertQueryAccount(account);
-  const result = await getGraphqlSoupClient()
-    .query(
-      ViewerChannelViewedAtDocument,
-      { channelId },
-      { requestPolicy: 'network-only' }
-    )
-    .toPromise();
+  const settled = await firstOrAborted(
+    pipe(
+      getGraphqlSoupClient().query(
+        ViewerChannelViewedAtDocument,
+        { channelId },
+        { requestPolicy: 'network-only' }
+      ),
+      // The answer, as urql's own toPromise takes it.
+      filter((result) => !result.stale && !result.hasNext)
+    ),
+    signal
+  );
+  if (settled.kind === 'aborted') {
+    signal?.throwIfAborted();
+    throw new Error('channel view lookup was cancelled');
+  }
+  if (settled.kind === 'ended')
+    throw new Error('channel view lookup ended without an answer');
+  const result = settled.value;
   assertQueryAccount(account);
   if (result.error) throw result.error;
   if (!result.data) throw new Error('channel view lookup returned no data');

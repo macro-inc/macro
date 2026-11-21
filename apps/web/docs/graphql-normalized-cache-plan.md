@@ -1538,15 +1538,18 @@ whose lookup asked for its first id (`useChannelLookup` passes
 `view.*`. It records `requested`, `returned`, `unreadable`, `timed_out`,
 `retried` (ids read before) and `queued_ms`: from the oldest id's request or
 retry to the read, the batching wait plus the wait for a free read slot. A
-retry is read in a trace of its own. `channel_directory.read_keys` records
-`keys_outcome` (`read`, `unchanged`, `stale`, `scope_changed`) and
+retry is read in that view's trace too, until the id settles.
+`channel_directory.read_keys` records `keys_outcome` (`read`, `unchanged`,
+`stale`, `scope_changed`) and
 `channel_directory.fallback` its `fallback_outcome` (`loaded`, `failed`). The
 reads under these spans, under `channel_directory.reconcile` (each by-id batch
 of a pass) and under `channel_directory.own_writes`, are sent inside the span,
 including those that start after an await. `useChannelLastViewed`'s ask is a
 `channel.last_view` span in the opening view's trace, whose
-`channel.last_view.outcome` says whether the open used the answer (`used`),
-had already stopped waiting (`late`) or had closed (`closed`).
+`channel.last_view.outcome` says whether the open used the answer (`used`) or
+why it stopped waiting: five seconds passed (`timed_out`), the directory's
+record settled the open first (`superseded`), or the open closed (`closed`).
+Each stop aborts the request, so the span ends as the open stops waiting.
 
 ## Authoritative Mail membership repair
 
