@@ -27,10 +27,11 @@ crate=${FUZZER_SRC:-$repo/crates/client/cache-diff-fuzz}
 home=${CACHE_DIFF_FUZZ_HOME:-$HOME/.cache/cache-diff-fuzz}
 tree=$home/sides/$name
 target=$home/target-${TARGET:-$name}
-mkdir -p "$home/bin" "$home/sides"
+mkdir -p "$home/bin" "$home/sides" "$home/locks"
 # One build per side name at a time, and none while a run copies the side. Cargo gets the
-# descriptor closed, so no long-lived child (an sccache server) keeps the lock.
-exec 8> "$home/bin/$name.lock"
+# descriptor closed, so no long-lived child (an sccache server) keeps the lock. Locks live
+# apart from sides and targets, so no name's lock is another name's file.
+exec 8> "$home/locks/side-$name"
 flock 8
 rm -f "$home/bin/$name" "$home/bin/$name.side"
 
@@ -86,7 +87,7 @@ fi
 (
   cd "$tree"
   export CACHE_DIFF_FUZZ_IDLE_CHECKPOINT=${IDLE_CHECKPOINT:-0} CARGO_TARGET_DIR=$target out=$home/bin/$name.tmp
-  flock -o "$target.lock" bash -c 'cargo build --quiet --release -p cache-diff-fuzz && cp "$CARGO_TARGET_DIR/release/cache-diff-fuzz" "$out"' 8>&-
+  flock -o "$home/locks/target-${TARGET:-$name}" bash -c 'cargo build --quiet --release -p cache-diff-fuzz && cp "$CARGO_TARGET_DIR/release/cache-diff-fuzz" "$out"' 8>&-
 )
 {
   cat "$stamp"

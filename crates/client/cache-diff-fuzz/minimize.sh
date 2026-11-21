@@ -33,8 +33,15 @@ rm -rf "${out:?}"
 mkdir -p "$out/try" "$out/bin"
 # Copies, so a rebuild or an edit meanwhile cannot change what either side runs on. Each
 # binary is copied with its stamp under the side's lock, so the two come from one build.
-flock -s "$home/bin/$side_a.lock" sh -c 'cp "$1.side" "$2.side" && cp "$1" "$2"' _ "$home/bin/$side_a" "$out/bin/a"
-flock -s "$home/bin/$side_b.lock" sh -c 'cp "$1.side" "$2.side" && cp "$1" "$2"' _ "$home/bin/$side_b" "$out/bin/b"
+# One side against itself runs one snapshot twice.
+mkdir -p "$home/locks"
+flock -s "$home/locks/side-$side_a" sh -c 'cp "$1.side" "$2.side" && cp "$1" "$2"' _ "$home/bin/$side_a" "$out/bin/a"
+if [ "$side_b" = "$side_a" ]; then
+  cp "$out/bin/a.side" "$out/bin/b.side"
+  cp "$out/bin/a" "$out/bin/b"
+else
+  flock -s "$home/locks/side-$side_b" sh -c 'cp "$1.side" "$2.side" && cp "$1" "$2"' _ "$home/bin/$side_b" "$out/bin/b"
+fi
 hash_a=$(awk '$1 == "fuzzer" { print $3 }' "$out/bin/a.side")
 hash_b=$(awk '$1 == "fuzzer" { print $3 }' "$out/bin/b.side")
 if [ -z "$hash_a" ] || [ "$hash_a" != "$hash_b" ]; then

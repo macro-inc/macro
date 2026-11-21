@@ -48,11 +48,18 @@ mkdir -p "$out/a" "$out/b" "$out/stderr" "$work/bin"
 
 # The run uses copies of both binaries, the schema and the assets, so a rebuild or an edit
 # while it goes cannot change one side's inputs.
+mkdir -p "$home/locks"
 for side in a b; do
   name=$side_a
   [ "$side" = b ] && name=$side_b
+  if [ "$side" = b ] && [ "$side_b" = "$side_a" ]; then
+    # One side against itself runs one snapshot twice, not two builds.
+    cp "$out/a.side" "$out/b.side"
+    cp "$work/bin/a" "$work/bin/b"
+    continue
+  fi
   # Under the side's lock, so the binary and its stamp come from the same build.
-  flock -s "$home/bin/$name.lock" sh -c 'cp "$1.side" "$2" && cp "$1" "$3"' _ \
+  flock -s "$home/locks/side-$name" sh -c 'cp "$1.side" "$2" && cp "$1" "$3"' _ \
     "$home/bin/$name" "$out/$side.side" "$work/bin/$side"
 done
 hash_a=$(awk '$1 == "fuzzer" { print $3 }' "$out/a.side")
