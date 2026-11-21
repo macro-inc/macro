@@ -290,12 +290,33 @@ pub trait AgentInboxRepository: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<InboxRecord>, Self::Err>> + Send;
 
     /// Records marked `pausing` or `releasing` that last changed before
-    /// `changed_before`, oldest first, at most `limit`.
+    /// `changed_before`, in (`updated_at`, agent) order after `after`, at
+    /// most `limit`.
     fn unsettled(
         &self,
         changed_before: DateTime<Utc>,
+        after: Option<&SweepCursor>,
         limit: u32,
     ) -> impl Future<Output = Result<Vec<InboxRecord>, Self::Err>> + Send;
+}
+
+/// Where a sweep page ended: the next one starts after it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SweepCursor {
+    /// The last record's `updated_at`.
+    pub updated_at: DateTime<Utc>,
+    /// The last record's agent.
+    pub agent: String,
+}
+
+/// What one sweep round did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SweepRound {
+    /// How many unsettled marks it found.
+    pub found: usize,
+    /// Where the next page starts, when this one was full; `None` when the
+    /// sweep reached the end.
+    pub next: Option<SweepCursor>,
 }
 
 /// Why an inbox request failed.
@@ -600,19 +621,26 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes>
         Ok(())
     }
 
-    /// Finish wind-downs email_service hasn't confirmed: every record marked
-    /// `pausing` or `releasing` for longer than [`SWEEP_AFTER`], at most
-    /// [`SWEEP_BATCH`] a round. Answers how many it found.
+    /// Finish wind-downs email_service hasn't confirmed: one page of at
+    /// most `limit` records marked `pausing` or `releasing` for longer than
+    /// [`SWEEP_AFTER`], after `after`. Marks it can't finish keep their place,
+    /// so the caller pages on with [`SweepRound::next`] instead of meeting
+    /// the same page again.
     #[tracing::instrument(
         name = "team_agents.inbox.sweep",
         skip_all,
         fields(found = tracing::field::Empty, failed = tracing::field::Empty),
         err
     )]
-    pub async fn sweep_once(&self, now: DateTime<Utc>) -> Result<usize, InboxError> {
+    pub async fn sweep_once(
+        &self,
+        now: DateTime<Utc>,
+        after: Option<&SweepCursor>,
+        limit: u32,
+    ) -> Result<SweepRound, InboxError> {
         let records = self
             .repository
-            .unsettled(now - SWEEP_AFTER, SWEEP_BATCH)
+            .unsettled(now - SWEEP_AFTER, after, limit)
             .await
             .map_err(InboxError::internal)?;
         let mut failed = 0_usize;
@@ -630,14 +658,21 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes>
                 tracing::warn!(
                     error = ?error,
                     agent_user_id = %agent_credentials::telemetry_id(record.agent.as_ref()),
-                    "could not finish an inbox wind-down; next round retries"
+                    "could not finish an inbox wind-down; a later round retries"
                 );
             }
         }
         let span = tracing::Span::current();
         span.record("found", records.len());
         span.record("failed", failed);
-        Ok(records.len())
+        let full = u32::try_from(records.len()).is_ok_and(|found| found >= limit);
+        Ok(SweepRound {
+            found: records.len(),
+            next: records.last().filter(|_| full).map(|last| SweepCursor {
+                updated_at: last.updated_at,
+                agent: last.agent.as_ref().to_owned(),
+            }),
+        })
     }
 
     /// The team is being deleted: release every agent's inbox. Each one is

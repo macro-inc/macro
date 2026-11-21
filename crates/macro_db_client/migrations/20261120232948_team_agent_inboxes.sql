@@ -38,5 +38,5 @@ CREATE TABLE team_agent_inboxes (
 CREATE INDEX team_agent_inboxes_team_id_idx ON team_agent_inboxes (team_id);
 
 -- The inbox sweep's wind-downs still waiting on email_service.
-CREATE INDEX team_agent_inboxes_unsettled_idx ON team_agent_inboxes (updated_at)
+CREATE INDEX team_agent_inboxes_unsettled_idx ON team_agent_inboxes (updated_at, agent_user_id)
     WHERE state IN ('pausing', 'releasing');

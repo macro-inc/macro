@@ -99,9 +99,10 @@ impl AgentInboxRepository for FakeRecords {
     async fn unsettled(
         &self,
         changed_before: DateTime<Utc>,
+        after: Option<&SweepCursor>,
         limit: u32,
     ) -> Result<Vec<InboxRecord>, FakeError> {
-        Ok(self
+        let mut found: Vec<InboxRecord> = self
             .0
             .lock()
             .unwrap()
@@ -111,10 +112,16 @@ impl AgentInboxRepository for FakeRecords {
                     r.state,
                     AgentInboxState::Pausing | AgentInboxState::Releasing
                 ) && r.updated_at < changed_before
+                    && after.is_none_or(|after| {
+                        (r.updated_at, r.agent.as_ref().to_owned())
+                            > (after.updated_at, after.agent.clone())
+                    })
             })
-            .take(limit as usize)
             .cloned()
-            .collect())
+            .collect();
+        found.sort_by_key(|r| (r.updated_at, r.agent.as_ref().to_owned()));
+        found.truncate(limit as usize);
+        Ok(found)
     }
 
     async fn update_live(
@@ -493,7 +500,11 @@ async fn releasing_an_inbox_email_service_never_made_releases_nothing() {
     // A provision could still make one: the mark waits, then settles.
     assert_eq!(records.only().state, AgentInboxState::Releasing);
     service
-        .sweep_once(Utc::now() + SETTLE_WITHOUT_MAILBOX + chrono::Duration::minutes(1))
+        .sweep_once(
+            Utc::now() + SETTLE_WITHOUT_MAILBOX + chrono::Duration::minutes(1),
+            None,
+            SWEEP_BATCH,
+        )
         .await
         .unwrap();
 
@@ -538,7 +549,11 @@ async fn pausing_an_inbox_email_service_never_made_only_marks_it_until_it_settle
 
     // Long after the mark, still nothing at email_service: it settles.
     service
-        .sweep_once(Utc::now() + SETTLE_WITHOUT_MAILBOX + chrono::Duration::minutes(1))
+        .sweep_once(
+            Utc::now() + SETTLE_WITHOUT_MAILBOX + chrono::Duration::minutes(1),
+            None,
+            SWEEP_BATCH,
+        )
         .await
         .unwrap();
 
@@ -643,11 +658,15 @@ async fn a_removal_racing_a_provision_whose_pause_fails_is_finished_by_the_sweep
 
     *mailboxes.fail_pause.lock().unwrap() = false;
     let found = service
-        .sweep_once(Utc::now() + SWEEP_AFTER + chrono::Duration::seconds(1))
+        .sweep_once(
+            Utc::now() + SWEEP_AFTER + chrono::Duration::seconds(1),
+            None,
+            SWEEP_BATCH,
+        )
         .await
         .unwrap();
 
-    assert_eq!(found, 1);
+    assert_eq!(found.found, 1);
     assert_eq!(records.only().state, AgentInboxState::Paused);
 }
 
@@ -683,7 +702,11 @@ async fn a_release_email_service_is_still_finishing_stays_releasing_until_it_con
 
     *mailboxes.release_outcome.lock().unwrap() = ReleaseOutcome::Released;
     service
-        .sweep_once(Utc::now() + SWEEP_AFTER + chrono::Duration::seconds(1))
+        .sweep_once(
+            Utc::now() + SWEEP_AFTER + chrono::Duration::seconds(1),
+            None,
+            SWEEP_BATCH,
+        )
         .await
         .unwrap();
 
@@ -702,4 +725,41 @@ async fn deleting_a_team_releases_every_agents_inbox() {
 
     assert_eq!(records.only().state, AgentInboxState::Released);
     assert!(mailboxes.calls().contains(&"release".to_owned()));
+}
+
+#[tokio::test]
+async fn the_sweep_pages_past_marks_it_cannot_finish_instead_of_spinning_on_them() {
+    let (service, records, mailboxes) = service(Answer::Active);
+    let later = Utc::now() + SWEEP_AFTER + chrono::Duration::seconds(1);
+    for (slug, request) in [("ada", 1_u128), ("ben", 2)] {
+        records.0.lock().unwrap().push(InboxRecord {
+            agent: MacroUserIdStr::parse_from_str(&format!("macro|{slug}@agents.macro.invalid"))
+                .unwrap()
+                .into_owned(),
+            team_id: TEAM,
+            request_id: Uuid::from_u128(request),
+            mailbox_id: Some(MAILBOX),
+            address: None,
+            state: AgentInboxState::Pausing,
+            last_error: None,
+            fake_provider: false,
+            updated_at: Utc::now(),
+        });
+    }
+    // email_service is down: neither mark can be finished.
+    mailboxes.answer(Answer::Down);
+
+    let first = service.sweep_once(later, None, 1).await.unwrap();
+    let second = service
+        .sweep_once(later, first.next.as_ref(), 1)
+        .await
+        .unwrap();
+    let third = service
+        .sweep_once(later, second.next.as_ref(), 1)
+        .await
+        .unwrap();
+
+    assert_eq!((first.found, second.found, third.found), (1, 1, 0));
+    assert_ne!(first.next, second.next);
+    assert_eq!(third.next, None);
 }
