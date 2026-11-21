@@ -3,7 +3,7 @@
 // write step (DBG_KIND, default done; DBG_ENTITY limits it to one world key),
 // print where each side's live list parts from a fresh network read of the
 // same list, every two seconds.
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { runStep, type ActionContext, type StepKind } from './lib/actions.ts';
 import { launchBrowser, openLane, probeOpenLive, probeRead, probeSnapLive, startApp, stopApp, type ReadSpec } from './lib/browser.ts';
@@ -31,7 +31,11 @@ const seeded = await seedWorld(stack, {
 });
 const viewerKey = process.env.DBG_LANE ?? 'v0';
 const user = seeded.users.get(viewerKey)!;
-const spec: ReadSpec = { source: { kind: 'home', tab: (process.env.DBG_TAB as 'signal' | 'noise') ?? 'signal', facets: {}, foreignEntities: true }, maxPages: 1 };
+// DBG_SPEC (a JSON file holding one ReadSpec) replaces the Home list; DBG_GROUP
+// (entity_type, date, project) groups whichever list is watched.
+const homeSpec: ReadSpec = { source: { kind: 'home', tab: (process.env.DBG_TAB as 'signal' | 'noise') ?? 'signal', facets: {}, foreignEntities: true }, maxPages: 1 };
+const baseSpec: ReadSpec = process.env.DBG_SPEC ? JSON.parse(readFileSync(process.env.DBG_SPEC, 'utf8')) : homeSpec;
+const spec: ReadSpec = process.env.DBG_GROUP ? { ...baseSpec, groupBy: { type: process.env.DBG_GROUP } } : baseSpec;
 const apps = await Promise.all([
   startApp('old', process.env.PROOF_OLD_WORKTREE ?? '', portBase, env, join(here, 'probe.ts'), out),
   startApp('new', process.env.PROOF_NEW_WORKTREE ?? '', portBase + 1, env, join(here, 'probe.ts'), out),
@@ -61,14 +65,15 @@ try {
       await new Promise((r) => setTimeout(r, 2000));
     }
   };
+  if (process.env.DBG_ENTITY) watched = seeded.world.entities.find((e) => e.key === process.env.DBG_ENTITY)?.id;
   await watch('before', 6);
   const only = process.env.DBG_ENTITY;
   const world = only ? { ...seeded.world, entities: seeded.world.entities.filter((e) => e.key === only) } : seeded.world;
   const ctx: ActionContext = { stack, queueUrl: process.env.PROOF_QUEUE_URL ?? '', world, users: seeded.users, viewer: viewerKey, rng: new Rng(Number(process.env.DBG_RNG ?? 7)), created: [] };
   const step = await runStep(ctx, (process.env.DBG_KIND ?? 'done') as StepKind);
-  watched = seeded.world.entities.find((e) => e.key === step.entity)?.id;
+  watched = (seeded.world.entities.find((e) => e.key === step.entity) ?? ctx.created.find((e) => e.key === step.entity))?.id;
   console.log(`step ${JSON.stringify(step)}`);
-  await watch('after', 16);
+  await watch('after', Number(process.env.DBG_AFTER ?? 16));
 } finally {
   await browser.close();
   for (const app of apps) stopApp(app);

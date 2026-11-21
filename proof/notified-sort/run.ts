@@ -39,10 +39,10 @@ import { compareHomeDom } from './lib/dom.ts';
 import { generateReads, type ReadCase } from './lib/gen.ts';
 import { applyMutant, MUTANTS, revertMutant } from './lib/mutants.ts';
 import { queueNotify } from './lib/notify.ts';
-import { discrepancies, project, rowsDiff, sameRows, type Row } from './lib/project.ts';
+import { discrepancies, instant, project, rowsDiff, sameRows, type Row } from './lib/project.ts';
 import { Rng } from './lib/rng.ts';
 import { seedWorld, sender } from './lib/setup.ts';
-import { stackFromEnv, type User } from './lib/stack.ts';
+import { q, sql, stackFromEnv, type User } from './lib/stack.ts';
 import type { Entity, World } from './lib/world.ts';
 
 const env = process.env;
@@ -492,14 +492,25 @@ async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
             // (lib/project.ts discrepancies), each remembered with the step
             // that first produced it: a list left behind by one write stays
             // behind through later steps, and is attributed to that write.
-            const freshAgree = sameRows(raw[i][0], raw[i][1]);
+            // The fresh reads agree when they hold the same rows, or differ only
+            // in classes closed for the transports (calendar stamps, D2).
+            const rawClasses = (checks[`raw${i}`] as { classes?: string[] } | undefined)?.classes ?? [];
+            const freshAgree = sameRows(raw[i][0], raw[i][1]) || (rawClasses.length > 0 && rawClasses.every((c) => closureOf(c)));
             const tokens = [0, 1].map((side) => (reached[i][side] !== null ? [] : lastLive[i][side] ? discrepancies(lastLive[i][side]!, raw[i][side]) : ['unread']));
             for (const side of [0, 1]) {
               const seen = origins[i][side];
               for (const token of [...seen.keys()]) if (!tokens[side].includes(token)) seen.delete(token);
               for (const token of tokens[side]) if (!seen.has(token)) seen.set(token, `${kind}/${step.entityKind ?? '-'}`);
             }
-            const [tOld, tNew] = tokens;
+            const tOld = tokens[0];
+            // A grouped list's pages carry no notification times, yet a row
+            // mapped while the websocket floor held (5 min) keeps that stamp
+            // until it is mapped again. Main's REST grouped list maps again
+            // whenever a notification refetches it; the branch's GraphQL one
+            // does not. Only a stamp that is one of this viewer's notification
+            // times for the entity, where the fresh read has none, is this.
+            const held = specs[i].groupBy && reached[i][1] === null ? await heldNotifiedStamps(user, lastLive[i][1] ?? [], raw[i][1], tokens[1].filter((t) => !tOld.includes(t))) : [];
+            const tNew = tokens[1].filter((t) => !held.includes(t));
             const origin = (side: number, token: string) => origins[i][side].get(token) ?? `${kind}/${step.entityKind ?? '-'}`;
             const note = (side: number, list: string[]) => list.map((t) => `${t}<${origin(side, t)}`).join(' ').slice(0, 600);
             const emit = (signature: string, detail: string) => tallyInto(classes, [classify({ signature, kind: 'order', detail: `${JSON.stringify(at)} ${detail}` })], 'sequences');
@@ -507,6 +518,7 @@ async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
             const unsettled = [0, 1].filter((side) => reached[i][side] === null && tokens[side].length === 0);
             for (const side of unsettled) emit(`live:${tag}:${side ? 'new' : 'old'}-unsettled${changed[side]}`, 'the list matched its read but never settled');
             // The branch missed something main did not: never closed.
+            if (held.length) emit(`live:${tag}:new-held-notified-stamp`, note(1, held));
             const newOnly = tNew.filter((t) => !tOld.includes(t) || t === 'unread');
             if (newOnly.length) emit(`live:${tag}:new-not-within-bound${changed[1]}`, note(1, newOnly));
             else if (tOld.length || tNew.length) {
@@ -672,4 +684,25 @@ async function readUntilAnswered(where: string, lanes: Lane[], attempt: () => Pr
 /** Whether the browser failed one of the lane's requests for a network change since `since` (ms). */
 function networkChangedSince(lane: Lane, since: number) {
   return lane.failed.some((f) => f.error === 'net::ERR_NETWORK_CHANGED' && Date.parse(f.at) >= since);
+}
+
+/** The `notifiedAt:<key>` tokens of a mounted grouped list whose stamp is one
+ * of the viewer's notification times for that entity while its fresh read
+ * shows none: a stamp held from the websocket floor (see the live check). */
+async function heldNotifiedStamps(user: User, live: Row[], fresh: Row[], candidates: string[]): Promise<string[]> {
+  const held: string[] = [];
+  for (const token of candidates) {
+    if (!token.startsWith('notifiedAt:')) continue;
+    const key = token.slice('notifiedAt:'.length);
+    const mounted = live.find((r) => r.key === key);
+    const read = fresh.find((r) => r.key === key);
+    if (!mounted?.notifiedAt || !read || read.notifiedAt !== null) continue;
+    const id = key.slice(key.indexOf(':') + 1);
+    const times = await sql<{ at: string }>(
+      stack,
+      `SELECT to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS at FROM user_notification WHERE user_id = ${q(user.macroUserId)} AND event_item_id = ${q(id)}`
+    );
+    if (times.some((t) => instant(t.at) === mounted.notifiedAt)) held.push(token);
+  }
+  return held;
 }

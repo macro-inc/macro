@@ -166,8 +166,10 @@ describe('live closures', () => {
     expect(closureOf('live:home:old-behind:rename/task')?.id).toBe('B1');
     expect(closureOf('seq home touch signal dom:old-behind-reload')?.id).toBe('B1');
     expect(closureOf('live:grouped:both-stale-alike:done/document')?.id).toBe('S1');
+    expect(closureOf('live:grouped:new-held-notified-stamp')?.id).toBe('H1');
     for (const open of [
       'live:random:new-not-within-bound',
+      'live:home:new-held-notified-stamp',
       'live:home:new-not-within-bound:after-network-change',
       'live:home:old-behind:done/document:after-network-change',
       'live:random:both-not-within-bound',
