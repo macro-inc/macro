@@ -3,7 +3,7 @@
 ## What it is
 
 Agent permissions: the one checked-in registry that gives every Macro SDK
-operation (service + operationId, the key the OCaml call analyzer reports) a
+operation (service + operationId, the key the JS tools analyzer reports) a
 permission group, an action (create, read, update, destroy, send) and a label.
 Rust reads it through this crate; the web app imports the same
 `registry.json` as `@agent-permission-registry` (`apps/web/tsconfig.json`)
@@ -18,7 +18,7 @@ through `apps/web/src/features/agent-permissions/core/registry.ts`.
 
 ## Recipes
 
-- Classify a new operation (the OCaml SDK check names it): add a line under
+- Classify a new operation (generating the JS tools catalog names it): add a line under
   its service in `registry.json` with the group whose area it touches, the
   action, and a short label a person understands ("Send email"). `send` is
   anything that reaches other people (messages, email, invites, sharing,
@@ -39,9 +39,6 @@ through `apps/web/src/features/agent-permissions/core/registry.ts`.
 
 - `cargo test -p agent_permission_registry`: the file parses, groups and
   labels are consistent.
-- `nix-shell shell.nix --run "dune build && dune test"` in
-  `packages/sdk-ocaml`: `analyzer/test/test_registry.ml` fails on an
-  unclassified operation or one that no longer exists (CI: `OCaml SDK Check`).
 - `bun run test` in `packages/code-mode-sdk`: generating the JS tools catalog
   fails on an operation without a line here, and `catalog.test.ts` fails on
   a line for an operation of the TypeScript SDK's services that is neither a
@@ -50,9 +47,9 @@ through `apps/web/src/features/agent-permissions/core/registry.ts`.
 
 ## Gotchas
 
-- The key is the spec's operationId (`create_task_handler`), as the OCaml
+- The key is the spec's operationId (`create_task_handler`), as the JS tools
   analyzer reports it. Code mode's `fetch` and the TypeScript SDK name
-  operations by method (`createTaskHandler`, `Macro_sdk_fetch.sdk_method`);
+  operations by method (`createTaskHandler`);
   cognition declares `get_state_handler` twice, one entry here and
   `getStateHandler` / `getStateHandler2` there.
 - Some operations do whatever their input says: running a routine or an

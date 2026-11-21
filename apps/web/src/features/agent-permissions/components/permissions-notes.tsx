@@ -9,8 +9,8 @@ import { type Component, type ComponentProps, type JSX, Show } from 'solid-js';
 
 /**
  * Permissions only cover the programs the harness checks before they run
- * (JS tools and OCaml), not the agent's plain JavaScript ones, its other
- * tools or connected apps; the note says so plainly.
+ * (JS tools), not the agent's plain JavaScript ones, its other tools or
+ * connected apps; the note says so plainly.
  */
 export function PermissionsScopeNote(props: { agent: string }) {
   return (

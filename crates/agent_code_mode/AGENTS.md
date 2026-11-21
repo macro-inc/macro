@@ -170,9 +170,7 @@ longer delivery state.
 
 - `cargo test -p agent_code_mode --lib` from the repository root, with live local
   database configuration and `SQLX_OFFLINE` unset.
-- Keep `toolset/session/ocaml.md`'s example compiling: it is the program
-  `code_execution`'s OCaml suite runs (`ocaml_tool_example_creates_and_reads_a_task`).
-  `toolset/session/js_tools.md`'s example runs the same way
+- Keep `toolset/session/js_tools.md`'s example running: it runs end to end
   (`toolset/test/js_tools.rs`, `-- --include-ignored` with Deno 2.9.6 on
   `PATH`), and its operations must be in the JS tools catalog
   (`the_js_tools_texts_call_catalog_operations`).

@@ -3,9 +3,9 @@
 // declined program, and a hold waiting above the composer. The harness's
 // permission routes answer from memory. `?viewer=other` shows it to someone
 // who can't edit the agent and isn't the approver; `?theme=light` lights it.
-// `?language=js_tools` writes the programs in opencode's JavaScript dialect
-// and saves their records as JS tools ones; `?view=page` shows the agent's
-// permissions page instead of the session.
+// The programs are JS tools ones (opencode's JavaScript dialect), with saved
+// records; `?view=page` shows the agent's permissions page instead of the
+// session.
 
 import { AgentPermissionsPage } from '@app/features/agent-permissions';
 import { applyTheme } from '@app/features/theme/utils/themeUtils';
@@ -45,7 +45,7 @@ document.documentElement.dataset.touchDevice = String(isTouchDevice());
 applyTheme(params.get('theme') === 'light' ? 'Macro Light' : 'Macro Dark');
 
 const SESSION_ID = session.sessionId();
-const LANGUAGE = params.get('language') === 'js_tools' ? 'js_tools' : 'ocaml';
+const LANGUAGE = 'js_tools';
 const ACTIONS: PermissionAction[] = [
   'create',
   'read',
@@ -210,8 +210,7 @@ const op = (
 const executionId = (n: number) =>
   `019a0000-0000-7000-8000-${n.toString(16).padStart(12, '0')}`;
 
-// JS tools programs' saved records, by execution id. OCaml ones have none:
-// each card reads its state from the call's receipt.
+// The programs' saved records, by execution id.
 const records = new Map<string, ExecutionRecord>();
 Object.assign(agentHarnessServiceClient, {
   getCodeExecution: async (_session: string, id: string) => {
@@ -227,21 +226,18 @@ function program(
   id: string,
   n: number,
   permission: ExecutionPermission,
-  sources: { ocaml: string; js_tools: string }
+  source: string
 ): MessagePart {
-  const source = sources[LANGUAGE];
-  if (LANGUAGE === 'js_tools') {
-    records.set(executionId(n), {
-      executionId: executionId(n),
-      source,
-      language: 'js_tools',
-      sdkFingerprint: '@opencode/codemode@2.3.2+0123456789ab',
-      status: 'failed',
-      calls: [],
-      activity: [],
-      permission,
-    });
-  }
+  records.set(executionId(n), {
+    executionId: executionId(n),
+    source,
+    language: LANGUAGE,
+    sdkFingerprint: '@opencode/codemode@2.3.2+0123456789ab',
+    status: 'failed',
+    calls: [],
+    activity: [],
+    permission,
+  });
   return {
     kind: 'tool_use',
     id,
@@ -268,21 +264,13 @@ const ASKED = [
   op('documents', 'edit_document', 'ask'),
   op('documents', 'rename_document', 'ask'),
 ];
-const SOURCES = {
-  ocaml: `let () =
-  let report = Documents.get_document ~id:"weekly-report" in
-  Documents.edit_document ~id:report.id ~content:(Report.render report);
-  Documents.rename_document ~id:report.id ~name:"Weekly report";
-  Email.send_message ~to_:[ "team@example.com" ] ~subject:"Weekly report"
-    ~body:(Report.summary report)`,
-  js_tools: `const report = await tools.documents.get_document({ path: { id: "weekly-report" } })
+const SOURCE = `const report = await tools.documents.get_document({ path: { id: "weekly-report" } })
 await tools.documents.edit_document({ path: { id: report.id }, body: { content: report.markdown } })
 await tools.documents.rename_document({ path: { id: report.id }, body: { name: "Weekly report" } })
 await tools.email.send_message({
   body: { to: ["team@example.com"], subject: "Weekly report", body: report.summary },
 })
-return { documentId: report.id }`,
-};
+return { documentId: report.id }`;
 
 function hold(
   approvalId: string,
@@ -296,7 +284,7 @@ function hold(
     serverName: 'Macro',
     toolName: 'ExecuteCode',
     arguments: {
-      source: SOURCES[LANGUAGE],
+      source: SOURCE,
       permission: {
         executionId: executionId(9),
         language: LANGUAGE,
@@ -335,10 +323,7 @@ const reply: FoldedMessage = {
           op('email', 'delete_email_filter', 'never'),
         ],
       },
-      {
-        ocaml: 'let () = Email.delete_label ~id:"old"',
-        js_tools: 'await tools.email.delete_label({ path: { id: "old" } })',
-      }
+      'await tools.email.delete_label({ path: { id: "old" } })'
     ),
     text(
       'I can’t delete email labels: deleting email is set to Never for me. I’ve left them as they are. For the report, sending email needs your OK.'
@@ -352,10 +337,7 @@ const reply: FoldedMessage = {
         status: 'denied',
         operations: [op('email', 'send_message', 'ask')],
       },
-      {
-        ocaml: 'let () = Email.send_message ()',
-        js_tools: 'await tools.email.send_message({ body: {} })',
-      }
+      'await tools.email.send_message({ body: {} })'
     ),
     text(
       'Want me to stop asking before sending email? You can change it here:'

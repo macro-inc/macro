@@ -31,6 +31,6 @@ describe('useAgentPermissionsFlag', () => {
 
   it('is off without the permissions flag, whatever else is on', () => {
     expect(shown()).toBe(false);
-    expect(shown('enable-ocaml-code-mode')).toBe(false);
+    expect(shown('enable-something-else')).toBe(false);
   });
 });

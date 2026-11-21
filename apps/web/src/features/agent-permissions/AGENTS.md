@@ -45,8 +45,8 @@ shows a tool's override or its action's state.
   no link, and a pending approval stays answerable without one. Every
   surface and its flag-off test: `crates/agent_permissions/AGENTS.md`
   (Rollout: one flag).
-- Copy says plainly what the settings cover: the agent's JS tools and OCaml
-  programs, which the harness checks before they run. Its plain JavaScript
+- Copy says plainly what the settings cover: the agent's JS tools programs,
+  which the harness checks before they run. Its plain JavaScript
   programs, other tools and connected apps are not covered, even on Never;
   never word it so a person could think they are.
 - Color is on glyphs only (Ask amber hand, Never failure prohibit); text stays

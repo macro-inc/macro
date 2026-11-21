@@ -1241,7 +1241,7 @@ same page for the Macro persona (the new Macro bot id), and
 to a group, action or tool. The section and button are absent while the
 flag is off or the API answers 404, and on the create form; an open page
 closes when the flag turns off, and a link waits until it is on. The page's
-note says the settings apply to the agent's JS tools and OCaml programs only,
+note says the settings apply to the agent's JS tools programs only,
 and that its plain JavaScript programs, other tools and connected apps aren't
 covered, even where a setting says Never.
 

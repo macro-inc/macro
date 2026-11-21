@@ -39,10 +39,8 @@ async function shot(
   if (size) await page.setViewportSize(size);
 }
 
-// The same cards for programs in either checked language; a JS tools
-// program also has a saved record, which the cards load.
+// JS tools programs, whose saved records the cards load.
 const LANGUAGES = [
-  { language: 'ocaml', program: 'Email.send_message' },
   { language: 'js_tools', program: 'tools.email.send_message' },
 ] as const;
 
@@ -111,11 +109,11 @@ test('the permissions page says which programs it covers', async ({
 }) => {
   await page.goto(fixture('view=page'));
   await expect(
-    page.getByText('Applies to JS tools and OCaml programs only, for now.')
+    page.getByText('Applies to JS tools programs only, for now.')
   ).toBeVisible();
   await expect(
     page.getByText(
-      'What Scout may do in the JS tools and OCaml programs it runs for you.',
+      'What Scout may do in the JS tools programs it runs for you.',
       { exact: false }
     )
   ).toBeVisible();

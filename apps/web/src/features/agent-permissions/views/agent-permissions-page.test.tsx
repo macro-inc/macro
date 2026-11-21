@@ -85,7 +85,7 @@ describe('AgentPermissionsPage', () => {
     renderPage();
     expect(
       await screen.findByText(
-        'Applies to JS tools and OCaml programs only, for now.'
+        'Applies to JS tools programs only, for now.'
       )
     ).toBeTruthy();
     expect(

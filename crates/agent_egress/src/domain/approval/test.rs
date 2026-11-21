@@ -813,9 +813,9 @@ fn permission_hold(session: AgentSessionId, operations: &[&str]) -> PermissionHo
             .map(|&operation| operation.to_owned())
             .collect(),
         arguments: serde_json::json!({
-            "source": "let () = Code_mode.run (fun _ -> `Null)",
+            "source": "return null",
             "permission": {
-                "language": "ocaml",
+                "language": "js_tools",
                 "operations": operations.iter().map(|operation| {
                     let (service, operation) = operation.split_once('.').unwrap();
                     serde_json::json!({"service": service, "operation": operation})

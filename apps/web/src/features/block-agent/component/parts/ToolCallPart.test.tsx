@@ -1628,8 +1628,8 @@ describe('code execution results', () => {
     expect(rendered.getByTestId('macro-tool').textContent).toBe('ReadContent');
   });
 
-  // JS tools programs (opencode's JavaScript dialect) are gated like OCaml
-  // ones; their records say so with `language: "js_tools"`.
+  // JS tools programs (opencode's JavaScript dialect) are gated; their
+  // records say so with `language: "js_tools"`.
   const jsToolsSource =
     'await tools.email.delete_label({ path: { id: "old" } })\nreturn null';
   const jsToolsPart = (): ToolUsePart => {

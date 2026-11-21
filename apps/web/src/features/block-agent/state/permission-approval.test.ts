@@ -45,19 +45,6 @@ const EXECUTION_ID = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b';
 
 describe('parsePermissionHold', () => {
   it('reads the program and the operations it asks about', () => {
-    expect(
-      parsePermissionHold({
-        source: 'let () = ()',
-        permission: {
-          executionId: EXECUTION_ID,
-          language: 'ocaml',
-          operations: [SEND],
-        },
-      })
-    ).toEqual({ source: 'let () = ()', operations: [SEND] });
-  });
-
-  it('reads a JS tools program the same way', () => {
     const source = 'await tools.email.send_message({ body: {} })';
     expect(
       parsePermissionHold({

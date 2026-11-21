@@ -79,19 +79,17 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   PostHog).
   The same service gates checked `ExecuteCode` programs
   (`src/code_mode/permissions.rs`, `PermissionGate`, wired into
-  `RunCredentials` where the build can analyze some language): OCaml
-  (`OcamlAnalyzer`, with the OCaml bundle) and JavaScript tools
-  (`JsToolsAnalyzer`, on every Deno build; one that can't start is logged
-  and left out, so startup goes on without JS tools), each in `Analyzers`. For an owner
-  with `enable-agent-permissions` (and, for OCaml, `enable-ocaml-code-mode`;
-  `LanguageRollout`) it analyzes the program, refuses it on any `never`
+  `RunCredentials` where the build can analyze JavaScript tools programs:
+  `JsToolsAnalyzer`, on every Deno build; one that can't start is logged
+  and left out, so startup goes on without JS tools; `Analyzers`). For an
+  owner with `enable-agent-permissions` (`LanguageRollout`) it analyzes the program, refuses it on any `never`
   operation or when it can't be analyzed, holds it for the run's account on
   any `ask` (`macro-sdk` approval), then runs it limited to every analyzed
   call (`allowed_operations`). Flags off, a language without an analyzer, or
   plain JavaScript: nothing changes. `ShowPermissions` is offered by the
   internal MCP only then. `ExecuteCode` offers JavaScript tools programs
   (`language: "js_tools"`) to exactly the owners the gate applies to them
-  for: `main.rs` wires `CodeModeService::with_js_tools` beside the
+  for: `lib.rs` wires `CodeModeService::with_js_tools` beside the
   `JsToolsAnalyzer`, with `code_mode::JsToolsRollout`
   (`enable-agent-permissions` alone; there is no separate JS tools flag).
   `RunCredentials` fails closed: a JS tools program the gate returned

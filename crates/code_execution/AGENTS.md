@@ -29,12 +29,6 @@ composition root.
   program's burst, while one at a time pushes programs with dozens of searches
   past their deadline.
 - `src/outbound/deno/check.rs`: type-checking TypeScript against the SDK.
-- `src/outbound/ocaml.rs`: the OCaml bundle and the compile step;
-  `src/outbound/ocaml/check.rs`: type-checking OCaml;
-  `src/outbound/ocaml/analyze.rs`: `OcamlAnalyzer`, the `ProgramAnalyzer`
-  that lists the SDK calls (`SdkCall`: service, raw operationId, method,
-  route) a program may call, with the bundle's `macro_sdk_calls`, for the
-  agent permissions gate.
 - `src/domain/operations.rs`: the generated operation catalog (labels, routes,
   read or write) and the SDK fingerprint.
 - JS tools programs: `runJsTools` and `callTool` in `bootstrap.mjs`;
@@ -150,9 +144,6 @@ operations lack), so `fetch` reports and gates it as a named request.
 
 - `cargo test -p code_execution --lib -- --include-ignored` from the repository
   root with Deno available; real-process tests exercise permissions and cleanup.
-  The OCaml tests (`src/outbound/deno/test/ocaml.rs`) also need the bundle:
-  `CODE_MODE_OCAML_DIR=$(nix build --no-link --print-out-paths .#code-mode-ocaml)`
-  set for the build. Every isolation test of the JavaScript path has an OCaml
-  twin there and a JS tools twin in `src/outbound/deno/test/js_tools.rs`, or
-  is listed as not applying in that file's header; add one with each new
-  one.
+  Every isolation test of the JavaScript path has a JS tools twin in
+  `src/outbound/deno/test/js_tools.rs`, or is listed as not applying in that
+  file's header; add one with each new one.

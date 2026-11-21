@@ -35,9 +35,9 @@ const REQUEST: HeldToolApproval = {
 
 const viewer = vi.hoisted(() => ({ id: 'macro|dana@example.com' }));
 const answer = vi.hoisted(() => vi.fn(() => Promise.resolve(true)));
-const OCAML_PROGRAM = {
-  source: 'let () = Email.send_message ()',
-  language: 'ocaml',
+const JS_TOOLS_PROGRAM = {
+  source: 'await tools.email.send_message({ body: {} })',
+  language: 'js_tools',
 };
 // The held program; each test may swap in another language's.
 const held = vi.hoisted(() => ({ program: { source: '', language: '' } }));
@@ -108,7 +108,7 @@ function renderRequest() {
 beforeEach(() => {
   queryClient.clear();
   viewer.id = 'macro|dana@example.com';
-  held.program = OCAML_PROGRAM;
+  held.program = JS_TOOLS_PROGRAM;
   flags.permissions = true;
   client.session.mockResolvedValue(
     ok({ agentId: 'agent-1', canEdit: true, groups: [], rules: [] })
@@ -164,16 +164,7 @@ describe('PermissionApprovalRequest', () => {
     const toggle = screen.getByRole('button', { name: 'View program' });
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
     fireEvent.click(toggle);
-    expect(screen.getByText('let () = Email.send_message ()')).toBeTruthy();
-  });
-
-  it('shows a JS tools program the same way', () => {
-    const source = 'await tools.email.send_message({ body: {} })';
-    held.program = { source, language: 'js_tools' };
-    renderRequest();
-    expect(screen.getByText('Send message')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'View program' }));
-    expect(screen.getByText(source)).toBeTruthy();
+    expect(screen.getByText(JS_TOOLS_PROGRAM.source)).toBeTruthy();
   });
 
   it('lets anyone else only stop waiting', () => {

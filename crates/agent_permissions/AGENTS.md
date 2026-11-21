@@ -40,13 +40,13 @@ resolves them against `agent_permission_registry`, and serves the HTTP API
   for a run's gate.
 - `src/domain/resolve.rs`: resolution, the view, tighten-only.
 - `src/inbound/axum_router.rs`: routes, credential mapping, error codes.
-- `src/domain/admission.rs`: `admit`, the OCaml gate's question: every
+- `src/domain/admission.rs`: `admit`, the gate's question: every
   operation a program may call sorted into blocked / ask / allowed as
   `GatedOperation`s (an unclassified one is blocked). `ExecutionPermission`
   is what a stopped run's record carries.
 - `src/inbound/toolset.rs`: `ShowPermissions`, the direct tool the internal
-  MCP offers where permissions gate the session's programs (JS tools, or
-  OCaml); it reads `view_agent` as the agent in its session and changes
+  MCP offers where permissions gate the session's programs (JS tools); it
+  reads `view_agent` as the agent in its session and changes
   nothing.
 
 ## Rollout: one flag
@@ -55,7 +55,7 @@ Everything agent permissions and JavaScript tools (`js_tools`) programs add is
 behind `enable-agent-permissions`, backend and web. Off, or unreadable (no
 PostHog client, a failed load: `code_mode::flags_on` in the harness,
 `useFeatureFlag` on the web), behaviour is exactly what it was before them.
-OCaml programs are gated only with `enable-ocaml-code-mode` too. The backend
+The backend
 reads the session owner's flag (the caller's for the HTTP routes); the web
 reads the viewer's. A new surface goes in this table with its flag-off test.
 
@@ -63,10 +63,9 @@ reads the viewer's. A new surface goes in this table with its flag-off test.
 | --- | --- | --- | --- |
 | Routes `/agent-tool-permissions/catalog`, `/agents/{id}/tool-permissions[/tighten]`, `/agent-sessions/{id}/tool-permissions` | `AgentPermissionsService::ensure_enabled` (`PermissionsRollout`) | 404 | `every_route_is_not_found_while_the_feature_is_off`, `with_the_rollout_off_everything_is_disabled` |
 | `ExecuteCode` `language: "js_tools"` (schema, `js_tools.md` and `js_tools_permissions.md` text, the call) | `session_toolset`, `CodeModeService::execute` (`JsToolsRollout`) | today's tool, pinned by `toolset/test/without_js_tools.json`; a `js_tools` call refused before a credential | `sessions_see_and_call_js_tools_only_with_the_rollout`, `js_tools_without_the_rollout_is_refused_before_a_credential` |
-| OCaml permissions text (`ocaml_permissions.md`) | `SessionCodeMode::permissions_enabled` (both flags) | OCaml's text without it | `sessions_see_and_call_ocaml_only_with_the_rollout` |
-| The gate: analysis, never, ask holds, `allowed_operations` | `PermissionGate::check` (`LanguageRollout`) | `None`: the run is unchanged; a JS tools program it did not check is refused unrun | `javascript_and_owners_without_the_rollout_are_not_checked`, `each_language_is_checked_only_with_its_own_rollout_and_analyzer`, `the_gate_follows_the_permissions_flag_and_for_ocaml_its_flag` |
+| The gate: analysis, never, ask holds, `allowed_operations` | `PermissionGate::check` (`LanguageRollout`) | `None`: the run is unchanged; a JS tools program it did not check is refused unrun | `javascript_and_owners_without_the_rollout_are_not_checked`, `each_language_is_checked_only_with_its_own_rollout_and_analyzer`, `the_gate_follows_the_permissions_flag` |
 | `macro-sdk` holds (`PermissionApprovals`, standing approvals, `by_person`), fold `approver`, record `permission`, `refused` activity | made only by the gate | never made; absent fields serialize as before | the gate's tests above |
-| `ShowPermissions` (internal MCP list and call) | `InternalTools::permission_tools` (`permissions_enabled`) | not listed; a call is refused | `execute_code_offers_and_accepts_js_tools_only_with_permissions` |
+| `ShowPermissions` (internal MCP list and call) | `InternalTools::permission_tools` (`permissions_enabled`) | not listed; a call is refused | `execute_code_offers_and_accepts_js_tools_only_with_permissions`, `show_permissions_is_offered_only_where_permissions_gate_js_tools` |
 | Web flag | `enableAgentPermissions` (`featureFlags.ts`, `default: LOCAL_ONLY \|\| undefined`) | on only under local HMR or a `just stack` bundle; dev and prod follow PostHog alone, and unreachable PostHog is off | `use-agent-permissions-flag.test.ts` (the hook; vitest runs with `import.meta.hot`, so the default itself can't be tested there) |
 | Web: editor section, Macro's shield, permissions page, `requestAgentPermissions` links | `Agents.tsx` (`useAgentPermissionsFlag`, `useAgentPermissionsAvailable`) | hidden; an open page closes; a link waits | `Agents.test.tsx` (`permissions`) |
 | Web: ShowPermissions card | `ShowPermissionsPart` | a plain row, nothing read | `ShowPermissionsPart.test.tsx` |

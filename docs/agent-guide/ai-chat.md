@@ -1396,28 +1396,18 @@ tools, `AskUser`, connector discovery, tool loading for connected apps,
 and explicit provider code execution retain their direct lifecycle. Connected
 third-party MCP tools remain available.
 
-When the session owner has the backend flag `enable-ocaml-code-mode` and the
-harness build has the OCaml bundle, `ExecuteCode` also takes
-`language: "ocaml"` (an OCaml `main.ml` calling `Code_mode.run`); otherwise its
-schema and description are unchanged and an OCaml call is refused. An OCaml run
-renders in the session exactly like a JavaScript one (its SDK calls as rows), and
-its execution record carries `language: "ocaml"` and the bundle's
-`sdkFingerprint`. Locally, build the harness with
-`CODE_MODE_OCAML_DIR=$(nix build --no-link --print-out-paths .#code-mode-ocaml)`
-and answer the flag on from a PostHog stand-in (`POSTHOG_HOST` in `--env-file`).
-
 When the session owner has `enable-agent-permissions` (no other flag; every
 build with Deno can run them), `ExecuteCode` takes `language: "js_tools"`: a
 JavaScript tools script (opencode's dialect) that calls SDK operations as
 `await tools.<service>.<operation>({path, query, body})` and returns its data,
 which the agent's permissions check before it runs (below). Its description
 then carries the JS tools contract, an example (create a task, read its
-markdown) and the permissions paragraph instead of the OCaml section; an
-OCaml call still runs for an owner who also has `enable-ocaml-code-mode`.
-With the flag off, `ExecuteCode`'s schema and description are exactly as
+markdown) and the permissions paragraph. With the flag off, `ExecuteCode`'s schema and description are exactly as
 above and a `js_tools` call is refused unrun. A JS tools run renders like a
 JavaScript one, and its record carries `language: "js_tools"` and the
-interpreter and catalog's `sdkFingerprint`.
+interpreter and catalog's `sdkFingerprint`. Locally, the flag is on for
+the web app under HMR; for the harness, answer it on from a PostHog stand-in
+(`POSTHOG_HOST` in `--env-file`).
 
 Sessions without a user owner can't run in-process turns at all.
 Summary/compaction calls advertise no tools. The mode
@@ -1837,10 +1827,8 @@ agent is instructed not to disclose another person’s earlier private results.
 ## Agent permissions in a session
 
 Behind `enable-agent-permissions`, a JS tools (`language: "js_tools"`)
-`ExecuteCode` program, and with `enable-ocaml-code-mode` too an OCaml one, is
-checked against the agent's permissions (Settings → Agents → Permissions)
-before it runs. The cards below are the same for both languages and name
-neither:
+`ExecuteCode` program is checked against the agent's permissions (Settings →
+Agents → Permissions) before it runs. The cards name no language:
 
 - **Ask**: a permission hold (`tool_approval` with `serverSlug: "macro-sdk"`)
   appears above the composer as **Approval needed**: `<Agent> wants to run a
@@ -1881,7 +1869,7 @@ the page. People who can't edit the agent see the controls disabled and `Only
 people who can edit <Agent> can change these.`
 
 Backend-free check (desktop and phone), with the blocked and approval cards
-for OCaml and JS tools programs and the permissions page:
+for JS tools programs and the permissions page:
 `bunx playwright test --config src/features/block-agent/browser-test/permissions.playwright.config.ts`
 from `apps/web`; set `PERMISSIONS_SCREENSHOT_DIR` to keep its screenshots and
 `PERMISSIONS_THEME=light` for Macro Light.

@@ -2,7 +2,7 @@
 export default {
   title: 'Permissions',
   description:
-    'What {{agent}} may do in the JS tools and OCaml programs it runs for you. <b>Allow</b> runs without asking, <b>Ask</b> waits for your approval, <b>Never</b> refuses the program before it runs.',
+    'What {{agent}} may do in the JS tools programs it runs for you. <b>Allow</b> runs without asking, <b>Ask</b> waits for your approval, <b>Never</b> refuses the program before it runs.',
   settingsDiffer: {
     one: '{{count}} setting differs from Always allow',
     other: '{{count}} settings differ from Always allow',
@@ -10,7 +10,7 @@ export default {
   setByAgentCount: { other: '{{count}} set by {{agent}} itself' },
   reset: 'Reset permissions',
   nothingToReset: 'Everything is already Always allow',
-  scopeLead: 'Applies to JS tools and OCaml programs only, for now.',
+  scopeLead: 'Applies to JS tools programs only, for now.',
   scopeBody:
     '{{agent}}’s plain JavaScript programs, its other tools and your connected apps aren’t covered: they work as before, even where a setting says Never.',
   readOnly: 'Only people who can edit {{agent}} can change these.',
@@ -102,7 +102,7 @@ export default {
   cancel: 'Cancel',
 
   sectionDescription:
-    'What this agent may do in its JS tools and OCaml programs. Changes save right away.',
+    'What this agent may do in its JS tools programs. Changes save right away.',
   restrictionCount: {
     one: '{{count}} restriction',
     other: '{{count}} restrictions',
