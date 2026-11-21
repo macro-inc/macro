@@ -1629,30 +1629,50 @@ describe('cached channel directory', () => {
     }
   );
 
-  it('leaves out a listed channel once a by-id read finds it gone after the cache held it whole and then without a field', async () => {
-    const server = [channelRecord('a'), channelRecord('x')];
-    const { cache, directory, reopen, hydrate } = mountCachedDirectory(server, {
-      pageAll: async () => [directoryChannel('a'), directoryChannel('x')],
-    });
-    cache.put(channelRecord('a'));
-    cache.put(channelRecord('x'));
-    await vi.waitFor(() => expect(directory.channels()).toHaveLength(2));
-    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
-    await vi.waitFor(() => expect(directory.complete()).toBe(true));
-    expect(hydrate).not.toHaveBeenCalled();
+  it.each([
+    { history: 'whole', renamed: false },
+    { history: 'whole, then renamed,', renamed: true },
+  ])(
+    'leaves out a listed channel once a by-id read finds it gone after the cache held it $history and then without a field',
+    async ({ renamed }) => {
+      const server = [channelRecord('a'), channelRecord('x')];
+      const { cache, directory, reopen, hydrate } = mountCachedDirectory(
+        server,
+        {
+          pageAll: async () => [directoryChannel('a'), directoryChannel('x')],
+        }
+      );
+      cache.put(channelRecord('a'));
+      cache.put(channelRecord('x'));
+      await vi.waitFor(() => expect(directory.channels()).toHaveLength(2));
+      markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+      await vi.waitFor(() => expect(directory.complete()).toBe(true));
+      expect(hydrate).not.toHaveBeenCalled();
+      if (renamed) {
+        // A change the cache saw after the walk: its row replaces the walk's.
+        server[1] = channelRecord('x', { name: 'renamed' });
+        cache.put(server[1], { sourceHash: 'x-renamed' });
+        reopen();
+        await vi.waitFor(() =>
+          expect(directory.channels().map(({ name }) => name)).toContain(
+            'renamed'
+          )
+        );
+      }
 
-    // Rewritten without a field, then gone from the server: what the walk
-    // listed of it no longer holds.
-    server.splice(1, 1);
-    cache.put(channelRecord('x'), { incomplete: true, sourceHash: 'x-2' });
-    reopen();
-    await vi.waitFor(() => expect(hydrate).toHaveBeenCalled());
-    await vi.waitFor(() => expect(ids(directory.channels())).toEqual(['a']));
-    await vi.waitFor(() => expect(directory.complete()).toBe(true));
-    await vi.waitFor(() =>
-      expect(directory.lookup(channelUuid('x')).status).toBe('missing')
-    );
-  });
+      // Rewritten without a field, then gone from the server: what the walk
+      // or the cache last showed of it no longer holds.
+      server.splice(1, 1);
+      cache.put(channelRecord('x'), { incomplete: true, sourceHash: 'x-2' });
+      reopen();
+      await vi.waitFor(() => expect(hydrate).toHaveBeenCalled());
+      await vi.waitFor(() => expect(ids(directory.channels())).toEqual(['a']));
+      await vi.waitFor(() => expect(directory.complete()).toBe(true));
+      await vi.waitFor(() =>
+        expect(directory.lookup(channelUuid('x')).status).toBe('missing')
+      );
+    }
+  );
 
   it('leaves out a listed channel the cache never held once a by-id read finds it gone', async () => {
     let release!: () => void;

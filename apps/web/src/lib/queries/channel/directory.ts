@@ -952,10 +952,13 @@ export type FallbackEvidence = {
  * The network's joined channels, updated by what the cache saw after the
  * network's read began:
  *
- * - A change the cache saw since is at least as new as the page that listed
- *   the channel.
+ * - A listed channel a by-id read found absent is out: the read answers for
+ *   the record the cache holds now, which may be one it kept from before the
+ *   viewer lost the channel.
+ * - Otherwise a change the cache saw since is at least as new as the page
+ *   that listed the channel.
  * - A listed record the cache held unchanged is as of before that read, so
- *   the network's row wins, until a by-id read finds the channel absent.
+ *   the network's row wins.
  * - A listed channel the cache never held may have gone since with nothing
  *   left in the cache for its removal to reach: the network's row stands
  *   until a by-id read finds the channel absent.
@@ -973,12 +976,10 @@ export function fallbackChannels(
   const listed = new Set<string>();
   for (const channel of network) {
     listed.add(channel.id);
+    if (confirmed[channel.id] === 'absent') continue;
     const change = changes.get(channel.id);
-    if (change !== undefined) {
-      if (change) channels.push(change);
-    } else if (confirmed[channel.id] !== 'absent') {
-      channels.push(channel);
-    }
+    if (change === undefined) channels.push(channel);
+    else if (change) channels.push(change);
   }
   for (const [id, change] of changes)
     if (change && !listed.has(id) && confirmed[id] === 'returned')
