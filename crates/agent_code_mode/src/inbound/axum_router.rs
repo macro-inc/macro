@@ -1,6 +1,5 @@
 //! Session-authorized reads for code execution's existing tool components.
 mod execution_response;
-pub use execution_response::ExecutionRecordResponse;
 use crate::domain::{
     CodeModeError, ExecutionId, ExecutionRecord, SessionCodeMode,
     connected_apps::*,
@@ -22,6 +21,7 @@ use entity_access::{
     },
     inbound::axum_extractors::AgentSessionAccessLevelExtractor,
 };
+pub use execution_response::ExecutionRecordResponse;
 use macro_authorization::{
     ActingUser, CredentialAttribution, MacroAuthorizationExtractor, MacroAuthorizationService,
     MacroAuthorizationState, UserOnly, is_program_run,

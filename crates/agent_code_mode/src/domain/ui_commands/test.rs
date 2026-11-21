@@ -145,7 +145,7 @@ impl UiCommandDelivery for Gateway {
 
 fn record(execution: ExecutionId, turn: Uuid) -> ExecutionRecord {
     ExecutionRecord {
-        credential_correlation_id: None,
+        credential_correlation_id: Some(Uuid::from_u128(1)),
         execution_id: execution,
         // System turns' programs act as the owner, who also prompts here.
         acting_as: Some(ToolActor::Owner),
@@ -220,8 +220,13 @@ impl Harness {
             &session().to_string(),
             EntityType::AgentSession,
         );
-        self.service
-            .open(
+        agent_correlation::context::scope_attribution(
+            agent_correlation::context::Attribution {
+                correlation_id: Some(Uuid::from_u128(1)),
+                session_id: Some(session().as_uuid()),
+                ..Default::default()
+            },
+            self.service.open(
                 &access,
                 &caller,
                 OpenInApp {
@@ -229,8 +234,9 @@ impl Harness {
                     path: path.to_owned(),
                     placement: UiPlacement::BesideAgent,
                 },
-            )
-            .await
+            ),
+        )
+        .await
     }
 
     async fn open(&self, path: &str) -> UiCommandOutcome {

@@ -68,7 +68,10 @@ stacks. Process isolation belongs to
   records), uncorrelated credentials, other sessions or executions, and
   every scoped credential (including unknown signed scopes) are refused.
   Routine and public-MCP provenance alone do not refuse a matching own run;
-  the same binding and account checks apply. All six methods share `admit`;
+  the same binding and account checks apply. The binding is journal-only:
+  `GET code-executions/{id}` projects an explicit public DTO and its schema
+  excludes the internal field. Expected refusals are WARN with a closed
+  `refusal` classification. All six methods share `admit`;
   the harness adapter
   (`agent_harness_service/src/code_mode/connected_apps.rs`) lists the apps the
   session's agent was given (`EgressProvisioner::advertised_all`) and calls
@@ -82,11 +85,12 @@ stacks. Process isolation belongs to
   a call egress's budget (`agent_egress::outbound::budgeted_mcp`) could not
   get through; it did not run.
 - `src/domain/ui_commands.rs`: a running execution's `macro.ui.open`.
-  `POST /agent-sessions/{id}/ui-commands` checks the execution's approved
-  account and active turn, then sends only for a turn a person prompted from an app tab
-  (`TurnPrompter.client`); system turns, routines, triggers, channel
-  mentions and prompts typed on mobile (the web app sends no tab there)
-  answer `no_client`. The path must match `navigable_routes.json`,
+  `POST /agent-sessions/{id}/ui-commands` uses the same exact credential
+  binding, session, scope, approved-account and active-turn checks as connected
+  apps, then sends only for an admitted turn a person prompted from an app tab
+  (`TurnPrompter.client`). Admitted turns without a tab (system turns,
+  routines, triggers and mobile prompts) answer `no_client`; scoped or
+  uncorrelated callers are refused before navigation. The path must match `navigable_routes.json`,
   generated from the web route table by
   `apps/web/src/features/agent-navigation/core/navigable-routes.test.tsx`
   (`UPDATE_AGENT_ROUTE_TABLE=1` rewrites it; never edit it by hand). The
