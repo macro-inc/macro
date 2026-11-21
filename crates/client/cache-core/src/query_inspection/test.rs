@@ -17,8 +17,9 @@ fn concrete_union_member_outside_selected_fragment_is_absent() {
             name: "properties".to_string(),
             cache_only: false,
             arguments: Vec::new(),
-            selection_set: Vec::new(),
-        })],
+            selection_set: Vec::new().into(),
+        })]
+        .into(),
     }];
 
     let records = HashMap::new();

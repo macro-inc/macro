@@ -10,10 +10,15 @@ use apollo_parser::cst;
 use apollo_parser::cst::CstNode;
 use serde_json::Value as Json;
 use std::collections::HashMap;
+use std::sync::Arc;
 use thiserror::Error;
 
 mod prepare;
 pub(crate) use prepare::prepare_selections;
+
+/// Selections shared between a parsed operation and the plans prepared from it:
+/// preparing reuses every subtree that has no directives or variable arguments.
+pub type SelectionSet = Arc<[Selection]>;
 
 #[derive(Debug, Error)]
 pub enum DocumentError {
@@ -56,7 +61,7 @@ pub struct FieldNode {
     /// Conditional directives evaluated once against operation variables.
     pub conditions: Vec<(String, ArgValue)>,
     pub arguments: Vec<(String, ArgValue)>,
-    pub selection_set: Vec<Selection>,
+    pub selection_set: SelectionSet,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -67,7 +72,7 @@ pub enum Selection {
     Fragment {
         type_condition: Option<String>,
         conditions: Vec<(String, ArgValue)>,
-        selection_set: Vec<Selection>,
+        selection_set: SelectionSet,
     },
 }
 
@@ -84,7 +89,7 @@ pub struct Operation {
     pub name: Option<String>,
     pub kind: OperationKind,
     pub variable_defaults: serde_json::Map<String, Json>,
-    pub selection_set: Vec<Selection>,
+    pub selection_set: SelectionSet,
 }
 
 /// Named fragment definition retained for fragment-rooted record reads.
@@ -92,7 +97,7 @@ pub struct Operation {
 pub struct Fragment {
     pub name: String,
     pub type_condition: String,
-    pub selection_set: Vec<Selection>,
+    pub selection_set: SelectionSet,
 }
 
 #[derive(Debug, Clone)]
@@ -258,7 +263,7 @@ fn convert_selection_set(
     set: cst::SelectionSet,
     fragments: &HashMap<String, cst::FragmentDefinition>,
     depth: usize,
-) -> Result<Vec<Selection>, DocumentError> {
+) -> Result<SelectionSet, DocumentError> {
     if depth > MAX_FRAGMENT_DEPTH {
         return Err(DocumentError::Malformed(
             "fragment nesting too deep (cycle?)",
@@ -301,7 +306,7 @@ fn convert_selection_set(
                 });
                 let selection_set = match f.selection_set() {
                     Some(s) => convert_selection_set(s, fragments, depth + 1)?,
-                    None => Vec::new(),
+                    None => SelectionSet::default(),
                 };
                 out.push(Selection::Field(FieldNode {
                     response_key,
@@ -361,7 +366,7 @@ fn convert_selection_set(
             }
         }
     }
-    Ok(out)
+    Ok(out.into())
 }
 
 fn convert_value(value: cst::Value) -> Result<ArgValue, DocumentError> {

@@ -21,7 +21,7 @@ pub const MAX_RECORD_SELECTION_KEYS: usize = 500;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RecordSelection {
     type_names: Vec<String>,
-    selection_set: Vec<Selection>,
+    selection_set: crate::document::SelectionSet,
 }
 
 impl RecordSelection {

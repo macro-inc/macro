@@ -48,12 +48,35 @@ pub(super) fn conditions(
     Ok(conditions)
 }
 
+/// A selection with no directive and only constant arguments prepares to itself:
+/// there is nothing to evaluate or freeze anywhere below it.
+fn is_static(selection: &Selection) -> bool {
+    match selection {
+        Selection::Field(field) => {
+            field.conditions.is_empty()
+                && field
+                    .arguments
+                    .iter()
+                    .all(|(_, value)| matches!(value, ArgValue::Const(_)))
+                && field.selection_set.iter().all(is_static)
+        }
+        Selection::Fragment {
+            conditions,
+            selection_set,
+            ..
+        } => conditions.is_empty() && selection_set.iter().all(is_static),
+    }
+}
+
 pub(crate) fn prepare_selections(
-    selections: &[Selection],
+    selections: &SelectionSet,
     variables: &serde_json::Map<String, Json>,
-) -> Result<Vec<Selection>, DocumentError> {
-    let mut out = Vec::new();
-    for selection in selections {
+) -> Result<SelectionSet, DocumentError> {
+    if selections.iter().all(is_static) {
+        return Ok(Arc::clone(selections));
+    }
+    let mut out = Vec::with_capacity(selections.len());
+    for selection in selections.iter() {
         let conditions = match selection {
             Selection::Field(field) => &field.conditions,
             Selection::Fragment { conditions, .. } => conditions,
@@ -94,5 +117,5 @@ pub(crate) fn prepare_selections(
             },
         });
     }
-    Ok(out)
+    Ok(out.into())
 }
