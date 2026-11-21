@@ -65,6 +65,9 @@ struct Args {
     /// Records the engine keeps decoded in its hot tier (the host's default when unset).
     #[arg(long)]
     hot_capacity: Option<u32>,
+    /// Start from a copy of this cache directory (another build's, for an upgrade) instead of an empty one.
+    #[arg(long)]
+    start_from: Option<PathBuf>,
 }
 
 fn main() -> Result<(), rootcause::Report> {
@@ -130,6 +133,14 @@ fn run(
         false => None,
     };
     let started = std::time::Instant::now();
+    if let Some(from) = &args.start_from {
+        let db = work.join("db-0");
+        std::fs::create_dir_all(&db)?;
+        for entry in std::fs::read_dir(from)? {
+            let entry = entry?;
+            std::fs::copy(entry.path(), db.join(entry.file_name()))?;
+        }
+    }
     let mut exec = exec::Exec::new(
         sources,
         generated,

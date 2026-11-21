@@ -9,6 +9,8 @@
 # seed's trace and counters, diffs.txt names each seed whose traces differ and
 # the first line that does, failures.txt each seed a side could not finish.
 # Exits 0 only when every seed finished on both sides with the same trace.
+# UPGRADE=1 starts both sides from the file SIDE_A left after the seed's case, so
+# SIDE_B reads and writes on top of what the older build stored.
 set -euo pipefail
 
 if [ $# -lt 5 ]; then
@@ -78,6 +80,7 @@ cp -r "$repo/crates/client/cache-diff-fuzz/assets" "$work/assets"
   echo "fuzz-args ${FUZZ_ARGS:-}"
   echo "fuzz-args-a ${FUZZ_ARGS_A:-}"
   echo "fuzz-args-b ${FUZZ_ARGS_B:-}"
+  echo "upgrade ${UPGRADE:-}"
 } > "$out/run.txt"
 
 export out work
@@ -87,6 +90,26 @@ one() {
   seed=$1
   # shellcheck disable=SC2206
   common=(--seed "$seed" --schema "$work/schema.graphql" --assets "$work/assets" ${FUZZ_ARGS:-})
+  if [ -n "${UPGRADE:-}" ]; then
+    # Side a runs the case on an empty file and keeps what it leaves. Both sides then start
+    # from that file (an upgrade, when b is the newer build): a probe of everything, the case
+    # again, and its probes.
+    up=$work/up/$seed
+    mkdir -p "$up"
+    # shellcheck disable=SC2086
+    if ! { "$work/bin/a" "${common[@]}" ${FUZZ_ARGS_A:-} --emit-case --out "$up" --work "$up/w" \
+      && jq -c '.ops = [{"op": "probe"}] + .ops' "$up/$seed.case.json" > "$up/upgrade.json" \
+      && "$work/bin/a" "${common[@]}" ${FUZZ_ARGS_A:-} --keep --out "$up/o" --work "$up/w"; } \
+      2> "$out/stderr/$seed.write"; then
+      echo "$seed write-failed" >> "$out/failures.txt" || return 1
+      rm -rf "${up:?}"
+      return 0
+    fi
+    # A crash moves the engine to the next copy, db-1, db-2, …: the last is what it left.
+    last=0
+    while [ -d "$up/w/$seed/db-$((last + 1))" ]; do last=$((last + 1)); done
+    common+=(--case "$up/upgrade.json" --start-from "$up/w/$seed/db-$last")
+  fi
   status=ok
   # shellcheck disable=SC2086
   "$work/bin/a" "${common[@]}" ${FUZZ_ARGS_A:-} --out "$out/a" --work "$work/a" \
@@ -99,13 +122,21 @@ one() {
     [ -f "$out/$side/$seed.trace" ] && [ "$(tail -n 1 "$out/$side/$seed.trace")" = end ] \
       || status="$status $side-no-trace"
   done
+  same=0
+  [ "$status" = ok ] && { cmp -s "$out/a/$seed.trace" "$out/b/$seed.trace" || same=$?; }
+  if [ -n "${UPGRADE:-}" ]; then
+    # The starting file and the upgrade case are kept for any seed that needs a look.
+    if [ "$status" = ok ] && [ "$same" -eq 0 ]; then
+      rm -rf "${up:?}"
+    else
+      mkdir -p "$out/upgrade" && mv "$up" "$out/upgrade/$seed"
+    fi
+  fi
   if [ "$status" != ok ]; then
     echo "$seed $status" >> "$out/failures.txt" || return 1
     return 0
   fi
-  rm -f "$out/stderr/$seed.a" "$out/stderr/$seed.b"
-  same=0
-  cmp -s "$out/a/$seed.trace" "$out/b/$seed.trace" || same=$?
+  rm -f "$out/stderr/$seed.a" "$out/stderr/$seed.b" "$out/stderr/$seed.write"
   case $same in
     0) rm -f "$out/a/$seed.trace" "$out/b/$seed.trace" ;; # matching traces need no keeping
     1)
