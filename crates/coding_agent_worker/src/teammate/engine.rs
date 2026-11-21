@@ -437,10 +437,12 @@ pub fn holder_arguments(spec: &HolderSpec) -> Vec<OsString> {
         "16",
         "--memory",
         "64m",
-        // Unprivileged ping for the agent, as Docker allows by default and
-        // rootless Podman doesn't (the policy still decides where to).
+        // Unprivileged ping for the agent's group only (gid 1000), as
+        // Docker allows by default and rootless Podman doesn't; a wider
+        // range fails on rootless Podman, beyond its mapped gids. The
+        // policy still decides where to.
         "--sysctl",
-        "net.ipv4.ping_group_range=0 2147483647",
+        "net.ipv4.ping_group_range=1000 1000",
     ]
     .into_iter()
     .map(OsString::from)

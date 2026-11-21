@@ -2140,7 +2140,7 @@ fn the_holder_runs_with_exactly_the_specified_flags() {
             "--memory",
             "64m",
             "--sysctl",
-            "net.ipv4.ping_group_range=0 2147483647",
+            "net.ipv4.ping_group_range=1000 1000",
             "--network",
             "macro-teammate-install-1",
             "--network",
