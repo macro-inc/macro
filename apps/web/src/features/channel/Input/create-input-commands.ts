@@ -9,7 +9,10 @@ import type {
   InputData,
   InputSnapshot,
 } from './types';
-import { hasSendableInputContent } from './utils/sendable-content';
+import {
+  hasSendableInputContent,
+  sendableSnapshot,
+} from './utils/sendable-content';
 
 type CreateInputCommandsDeps = {
   view: Accessor<InputData>;
@@ -46,7 +49,8 @@ export function createInputCommands(
       const onSend = deps.callbacks?.onSend;
       if (!onSend) return false;
 
-      const current = deps.snapshot();
+      const original = deps.snapshot();
+      const current = sendableSnapshot(original);
       if (!hasSendableInputContent(current)) return false;
       return Telemetry.span('message.composer_send', async (span) => {
         span.setAttr('composer.mode', deps.view().mode);
@@ -70,7 +74,8 @@ export function createInputCommands(
             draft.attachments.length === 0 &&
             draft.mentions.length === 0
           ) {
-            deps.restoreSnapshot?.(current);
+            // What was typed, not what was sent: its blank lines included.
+            deps.restoreSnapshot?.(original);
             span.setAttr('composer.outcome', 'restored');
           } else {
             span.setAttr('composer.outcome', 'preserved_newer_draft');

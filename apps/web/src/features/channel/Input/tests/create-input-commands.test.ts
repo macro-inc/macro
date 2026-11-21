@@ -110,6 +110,64 @@ describe('createInputCommands', () => {
     expect(value).toBe('Hello agent');
   });
 
+  it.each([
+    ['a list left with Enter', '1. one\n2. two\n\n \n', '1. one\n2. two'],
+    ['several empty paragraphs', 'hello\n\n \n\n \n', 'hello'],
+    ['blank lines between paragraphs', 'one\n\n \n\ntwo', 'one\n\n \n\ntwo'],
+    ['spaces after its last text', 'hello  \n \n', 'hello  '],
+    // A trim that backtracks over a long run of blank lines takes seconds here.
+    [
+      'a long run of blank lines before text',
+      `one${'\n'.repeat(65_536)}two`,
+      `one${'\n'.repeat(65_536)}two`,
+    ],
+  ])('sends %s without blank lines at its end', async (_name, value, sent) => {
+    const onSend = vi.fn();
+    const commands = createInputCommands({
+      view: () => ({ mode: 'channel', hasPendingAttachments: false }),
+      snapshot: () => ({ value, mentions: [], attachments: [] }),
+      setIsSending: vi.fn(),
+      setShowFormatRibbon: vi.fn(),
+      reset: vi.fn(),
+      removeTrackedAttachment: vi.fn(),
+      callbacks: { onSend },
+    });
+
+    await expect(commands.send()).resolves.toBe(true);
+    expect(onSend).toHaveBeenCalledExactlyOnceWith({
+      value: sent,
+      mentions: [],
+      attachments: [],
+    });
+  });
+
+  it('restores the draft as typed, blank lines included, when send fails', async () => {
+    const typed = '- one\n\n \n';
+    let value = typed;
+    const commands = createInputCommands({
+      view: () => ({ mode: 'channel', hasPendingAttachments: false }),
+      snapshot: () => ({ value, mentions: [], attachments: [] }),
+      setIsSending: vi.fn(),
+      setShowFormatRibbon: vi.fn(),
+      reset: () => {
+        value = '';
+      },
+      restoreSnapshot: (next) => {
+        value = next.value;
+      },
+      removeTrackedAttachment: vi.fn(),
+      callbacks: {
+        onSend: async (snapshot) => {
+          expect(snapshot.value).toBe('- one');
+          throw new Error('offline');
+        },
+      },
+    });
+
+    await expect(commands.send()).rejects.toThrow('offline');
+    expect(value).toBe(typed);
+  });
+
   it('resets before invoking onClose', () => {
     const events: string[] = [];
     const snapshot: InputSnapshot = {
