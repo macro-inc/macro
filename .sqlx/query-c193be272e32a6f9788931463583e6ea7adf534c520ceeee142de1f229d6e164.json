@@ -1,0 +1,49 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- People in the viewer's directory (their contact graph in both directions,\n-- self, and current team) whom the typed text names, as the local people\n-- ranking's two name stages decide it: the whole name, or for one word the\n-- first name, equals the text; or every typed word starts a word of the name.\n-- The name is the one the directory shows: the Macro profile name, else the\n-- viewer's own address-book label, else the address's local part.\n-- Teammates come first; within each group exact matches, then byte-ordered\n-- ids.\n-- $1 viewer id, $2 normalized text, $3 its distinct words, $4 result limit.\n-- Peers are read through contacts_connections_user1_user2_key and\n-- idx_contacts_connections_user2_user1; each then costs the \"User\" and\n-- macro_user_info probes the ranked search pays. The viewer's address book is\n-- read once and hash-joined to the people without a profile name.\nWITH patterns AS MATERIALIZED (\n    -- Words hold only letters and digits, so they carry no LIKE wildcards.\n    SELECT\n        array_agg('%' || word || '%') AS inside,\n        array_agg('% ' || word || '%') AS word_start\n    FROM unnest($3::text[]) AS word\n),\nviewer_mailboxes AS MATERIALIZED (\n    SELECT COALESCE(array_agg(id ORDER BY id), '{}'::uuid[]) AS ids\n    FROM email_links\n    WHERE macro_id = $1\n),\ncandidates AS MATERIALIZED (\n    SELECT directory.id, bool_or(directory.is_teammate) AS is_teammate\n    FROM (\n        -- Fold case like the scoped peer indexes, then return to the default\n        -- collation so the joins below can use \"User\" and email_contacts keys.\n        SELECT lower(user2 COLLATE \"C\") COLLATE \"default\" AS id, FALSE AS is_teammate\n        FROM contacts_connections\n        WHERE user1 = $1\n          AND user2 COLLATE \"C\" LIKE 'macro|%'\n        UNION ALL\n        SELECT lower(user1 COLLATE \"C\") COLLATE \"default\", FALSE\n        FROM contacts_connections\n        WHERE user2 = $1\n          AND user1 COLLATE \"C\" LIKE 'macro|%'\n        UNION ALL\n        SELECT lower($1::text COLLATE \"C\") COLLATE \"default\", FALSE\n        UNION ALL\n        -- A user has at most one team; its members include the viewer.\n        SELECT lower(teammate.user_id COLLATE \"C\") COLLATE \"default\", TRUE\n        FROM team_user AS own\n        JOIN team_user AS teammate ON teammate.team_id = own.team_id\n        WHERE own.user_id = $1\n    ) AS directory\n    GROUP BY directory.id\n),\nprofiles AS MATERIALIZED (\n    SELECT\n        c.id,\n        substr(c.id, length('macro|') + 1) AS email,\n        c.is_teammate,\n        COALESCE(u.\"isAgent\", FALSE) AS is_agent,\n        NULLIF(mui.first_name, 'N/A') AS first_name,\n        NULLIF(mui.last_name, 'N/A') AS last_name\n    FROM candidates AS c\n    LEFT JOIN \"User\" AS u ON u.id = c.id\n    LEFT JOIN macro_user_info AS mui ON mui.macro_user_id = u.macro_user_id\n),\n-- The viewer's address book, read through its mailboxes only: joined on the\n-- address instead, Postgres probes the address trigram index per person,\n-- which searches every mailbox and takes seconds.\nbook_rows AS MATERIALIZED (\n    SELECT\n        ec.email_address AS email,\n        ec.name,\n        array_position((SELECT ids FROM viewer_mailboxes), ec.link_id) AS mailbox\n    FROM email_contacts AS ec\n    WHERE ec.link_id = ANY((SELECT ids FROM viewer_mailboxes)::uuid[])\n      AND ec.name IS NOT NULL\n),\n-- Labels of the people without a profile name. Someone in several of the\n-- viewer's mailboxes takes the label of the first that has one, as the\n-- directory's names choose it.\nbook AS MATERIALIZED (\n    SELECT DISTINCT ON (r.email COLLATE \"C\") r.email, r.name\n    FROM book_rows AS r\n    JOIN profiles AS p USING (email)\n    WHERE p.first_name IS NULL AND p.last_name IS NULL\n    -- Byte order: a locale-aware sort costs more than the rest of the query.\n    ORDER BY r.email COLLATE \"C\", r.mailbox\n),\nnames AS MATERIALIZED (\n    SELECT\n        p.*,\n        book.name AS book_name,\n        -- Lowercased, with runs of whitespace collapsed, as the local\n        -- ranking normalizes names.\n        regexp_replace(lower(trim(COALESCE(\n            NULLIF(\n                CASE\n                    WHEN p.first_name IS NOT NULL OR p.last_name IS NOT NULL\n                    THEN concat_ws(' ', NULLIF(p.first_name, ''), NULLIF(p.last_name, ''))\n                    ELSE book.name\n                END,\n                ''),\n            split_part(p.email, '@', 1)\n        ))), '\\s+', ' ', 'g') AS name\n    FROM profiles AS p\n    LEFT JOIN book USING (email)\n),\nnamed AS (\n    SELECT\n        n.*,\n        (\n            n.name = $2\n            OR (strpos($2, ' ') = 0 AND strpos(n.name, ',') = 0 AND split_part(n.name, ' ', 1) = $2)\n        ) AS is_exact\n    FROM names AS n\n    -- Every typed word occurs in the name: a cheap test before the word split.\n    WHERE n.name LIKE ALL ((SELECT inside FROM patterns)::text[])\n)\nSELECT\n    n.id AS \"user_id!\",\n    n.is_teammate AS \"is_teammate!\",\n    n.is_agent AS \"is_agent!\",\n    CASE\n        WHEN n.first_name IS NOT NULL OR n.last_name IS NOT NULL THEN n.first_name\n        ELSE split_part(n.book_name, ' ', 1)\n    END AS \"first_name?\",\n    CASE\n        WHEN n.first_name IS NOT NULL OR n.last_name IS NOT NULL THEN n.last_name\n        WHEN position(' ' IN n.book_name) > 0\n        THEN NULLIF(trim(substring(n.book_name FROM position(' ' IN n.book_name) + 1)), '')\n    END AS \"last_name?\"\nFROM named AS n\n-- Words are split on anything but letters and digits.\nWHERE n.is_exact\n   OR ' ' || regexp_replace(n.name, '[^[:alnum:]]+', ' ', 'g')\n        LIKE ALL ((SELECT word_start FROM patterns)::text[])\n-- Byte order keeps ties stable whatever the database's locale.\nORDER BY n.is_teammate DESC, n.is_exact DESC, n.id COLLATE \"C\"\nLIMIT $4\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "is_teammate!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "is_agent!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "first_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "last_name?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "TextArray",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "c193be272e32a6f9788931463583e6ea7adf534c520ceeee142de1f229d6e164"
+}

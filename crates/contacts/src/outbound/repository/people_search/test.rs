@@ -1,6 +1,8 @@
 use super::*;
 use crate::domain::{
-    models::people::PeopleSearchQuery, ports::PeopleSearchService, service::ContactsDomainService,
+    models::people::{NamedPeopleQuery, PeopleSearchQuery},
+    ports::{PeopleNamingService, PeopleSearchService},
+    service::ContactsDomainService,
 };
 use crate::outbound::gateway::ConnectionGatewayNotifier;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -182,4 +184,116 @@ async fn blank_and_one_character_queries_return_nobody(pool: PgPool) {
     for query in ["", "   ", "s", " e "] {
         assert!(search(&pool, query, 50).await.is_empty(), "{query:?}");
     }
+}
+
+async fn named(pool: &PgPool, text: &str, limit: u32) -> Vec<(String, Option<String>)> {
+    service(pool.clone())
+        .people_named(
+            MacroUserIdStr::try_from_email(VIEWER).unwrap(),
+            &NamedPeopleQuery::new(text).unwrap(),
+            PeopleSearchLimit::new(limit).unwrap(),
+        )
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|person| (person.contact.user_id.to_string(), person.contact.name))
+        .collect()
+}
+
+fn ids(people: &[(String, Option<String>)]) -> Vec<&str> {
+    people.iter().map(|(id, _)| id.as_str()).collect()
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("people_named"))
+)]
+async fn named_people_rank_teammates_then_exact_names_then_ids(pool: PgPool) {
+    assert_eq!(
+        ids(&named(&pool, "Tero", 50).await),
+        [
+            "macro|tero.t@example.com",
+            // Exact first names.
+            "macro|abbott@example.com",
+            "macro|nyland@example.com",
+            // Word starts: an address-book label, then two local parts.
+            "macro|nameless@example.com",
+            "macro|tero.case@example.org",
+            "macro|tero.nolabel@example.org",
+        ]
+    );
+    assert_eq!(
+        ids(&named(&pool, "tero n", 50).await),
+        ["macro|nyland@example.com", "macro|tero.nolabel@example.org"]
+    );
+    assert_eq!(
+        ids(&named(&pool, "nyland tero", 50).await),
+        ["macro|nyland@example.com"]
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("people_named"))
+)]
+async fn named_people_start_a_word_of_the_name_they_are_shown_with(pool: PgPool) {
+    assert_eq!(
+        named(&pool, "te", 50).await,
+        [
+            (
+                "macro|tero.t@example.com".to_string(),
+                Some("Tero Teammate".to_string())
+            ),
+            (
+                "macro|abbott@example.com".to_string(),
+                Some("Tero Abbott".to_string())
+            ),
+            (
+                "macro|nameless@example.com".to_string(),
+                Some("Terodora Label".to_string())
+            ),
+            (
+                "macro|nyland@example.com".to_string(),
+                Some("Tero Nyland".to_string())
+            ),
+            (
+                "macro|teague@example.com".to_string(),
+                Some("Quinn Teague".to_string())
+            ),
+            ("macro|tero.case@example.org".to_string(), None),
+            ("macro|tero.nolabel@example.org".to_string(), None),
+            // Named by the first of the viewer's mailboxes that labels them.
+            (
+                "macro|tessa.book@example.org".to_string(),
+                Some("Tessa Book".to_string())
+            ),
+        ],
+        "Peter Stone only contains the text"
+    );
+    assert!(named(&pool, "other label", 50).await.is_empty());
+    assert!(
+        named(&pool, "ignored", 50).await.is_empty(),
+        "a profile name wins over the viewer's label"
+    );
+    assert_eq!(ids(&named(&pool, "te", 2).await).len(), 2);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("people_named"))
+)]
+async fn named_people_are_scoped_to_the_viewers_directory(pool: PgPool) {
+    assert!(
+        named(&pool, "tero s", 50).await.is_empty(),
+        "another user's contact"
+    );
+    assert!(
+        named(&pool, "tero leak", 50).await.is_empty(),
+        "another user's label"
+    );
+    assert_eq!(
+        ids(&named(&pool, "viewer", 50).await),
+        ["macro|viewer@example.com"]
+    );
+    assert!(named(&pool, "tero@example.com", 50).await.is_empty());
 }
