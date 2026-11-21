@@ -58,7 +58,7 @@ const domPerViewer = Number(env.PROOF_DOM ?? 6);
 const load = env.PROOF_LOAD === '1';
 const phases = new Set((env.PROOF_PHASES ?? 'reads,dom,sequences').split(','));
 const LIVE_BOUND_MS = Number(env.PROOF_LIVE_BOUND_MS ?? 15_000);
-const DOM_EVERY = 5;
+const DOM_EVERY = Number(env.PROOF_DOM_EVERY ?? 5);
 // Anchors the generated date filters; with the seed it fixes every read case.
 const genNow = Number(env.PROOF_NOW ?? Date.now());
 
@@ -597,7 +597,12 @@ async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
                 const reloaded = again.map((r) => (r as PromiseFulfilledResult<DomRow[]>).value);
                 const sides = (await compareHomeDom(stack, user, reloaded[0], reloaded[1], `seq home touch ${domTab} reload`)).map(classify);
                 const newHeld = (await compareHomeDom(stack, user, reloaded[1], rows[1], 'held')).length === 0;
-                checks.domReload = { sides: sides.map((d) => d.cls), newHeld };
+                const oldHeld = (await compareHomeDom(stack, user, reloaded[0], rows[0], 'held')).length === 0;
+                checks.domReload = { sides: sides.map((d) => d.cls), newHeld, oldHeld };
+                // The evidence for an open difference: each side's mounted and
+                // reloaded rows, as bucket/type:id "text" in screen order.
+                const compactDom = (list: DomRow[]) => list.map((r) => (r.kind === 'entity' ? `${r.id.split('|').slice(2).map((p) => p.replace(/^s\d+:/, '')).join('/')}${r.unread ? '*' : ''} ${r.text}` : `# ${r.label}`));
+                checks.domRows = { oldMounted: compactDom(rows[0]), newMounted: compactDom(rows[1]), oldReload: compactDom(reloaded[0]), newReload: compactDom(reloaded[1]) };
                 if (sides.every((d) => closureOf(d.cls)) && newHeld) {
                   diffs = [...diffs.filter((d) => closureOf(d.cls)), classify({ signature: `seq home touch ${domTab} dom:old-behind-reload`, kind: 'dom', detail: open.map((d) => `${d.cls}: ${d.detail}`).join(' | ').slice(0, 600) })];
                 }

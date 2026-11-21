@@ -241,7 +241,9 @@ export async function runStep(ctx: ActionContext, kind: StepKind): Promise<StepR
       case 'participant-add': {
         entity = pick(all.filter((e) => e.kind === 'channel' && (e.channel?.type === 'public' || e.channel?.type === 'private')));
         if (!entity?.channel) return result(false, { note: 'no channel' });
-        const owner = userOf(ctx, 'b');
+        // The channel's owner changes its members: 'b' owns the seeded ones, and
+        // a created channel belongs to whoever created it.
+        const owner = userOf(ctx, entity.owner);
         await call(ctx.stack, owner, `/dss/channels/${entity.channel.id}/participants`, {
           method: kind === 'participant-add' ? 'POST' : 'DELETE',
           body: { participants: [viewer.macroUserId] },
