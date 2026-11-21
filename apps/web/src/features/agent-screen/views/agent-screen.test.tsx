@@ -468,3 +468,35 @@ describe('pasting while others watch', () => {
     unmount();
   });
 });
+
+describe('the first Take over', () => {
+  it('desktop: gives the keyboard to the drive, since the button that had focus goes away', async () => {
+    vi.useFakeTimers();
+    const openSearch = hotkeys();
+    const connections: Connection[] = [];
+    const { unmount } = renderView(AgentScreen, connections);
+    await vi.advanceTimersByTimeAsync(0);
+    connections[0].handlers.onState({ ...state(true), driver: null });
+
+    const takeOver = screen.getByRole('button', { name: /^Take over/ });
+    takeOver.focus();
+    fireEvent.click(takeOver);
+    connections[0].handlers.onState(state(true));
+    await vi.advanceTimersByTimeAsync(0);
+
+    const keyboard = screen.getByRole('textbox', {
+      name: 'Keyboard for Scout’s desktop',
+    });
+    expect(document.activeElement).toBe(keyboard);
+    keyboard.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: '/',
+        code: 'Slash',
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    expect(openSearch).not.toHaveBeenCalled();
+    unmount();
+  });
+});

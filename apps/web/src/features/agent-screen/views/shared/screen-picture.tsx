@@ -1,4 +1,5 @@
 import { t } from '@app/lib/i18n';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createEffect, type JSX, on } from 'solid-js';
 import { ScreenOverlay } from '../../components/screen-overlay';
@@ -62,6 +63,8 @@ export function ScreenPicture(props: {
       }
       drivingMe={session.drivingMe()}
       ownsKeyboard={session.holdsKeyboard()}
+      takeOvers={session.store.takeOvers}
+      focusOnTakeOver={!isTouchDevice()}
       stale={session.store.status.kind !== 'live'}
       loupe={loupe()}
       snapshot={(rect) => session.snapshot(rect)}

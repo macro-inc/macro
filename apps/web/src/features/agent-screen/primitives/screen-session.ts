@@ -57,6 +57,8 @@ type SessionStore = {
   server: ScreenState | undefined;
   /** Take over sent, waiting for the server's state to name us. */
   takingOver: boolean;
+  /** How many times the person clicked Take over here (not resumes). */
+  takeOvers: number;
   /** The last error the server reported on an open socket. */
   notice: ScreenError | undefined;
   /**
@@ -85,6 +87,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
     frame: undefined,
     server: undefined,
     takingOver: false,
+    takeOvers: 0,
     notice: undefined,
     controlLost: options.continueDriving ? 'drop' : undefined,
   });
@@ -513,7 +516,12 @@ export function createScreenSession(options: ScreenSessionOptions) {
     takeOver() {
       if (!session || !options.canDrive()) return;
       record('computer.screen.take_over');
-      setStore({ takingOver: true, notice: undefined, controlLost: undefined });
+      setStore({
+        takingOver: true,
+        takeOvers: store.takeOvers + 1,
+        notice: undefined,
+        controlLost: undefined,
+      });
       session.takeOver();
     },
     handBack(note: string | null) {

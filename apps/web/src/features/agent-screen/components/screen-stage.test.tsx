@@ -59,6 +59,8 @@ describe('ScreenStage keyboard', () => {
         driven
         drivingMe
         ownsKeyboard
+        takeOvers={0}
+        focusOnTakeOver={false}
         stale={false}
         loupe={undefined}
         snapshot={() => undefined}
@@ -116,6 +118,8 @@ describe('ScreenStage keyboard', () => {
         driven
         drivingMe
         ownsKeyboard
+        takeOvers={0}
+        focusOnTakeOver={false}
         stale={false}
         loupe={undefined}
         snapshot={() => undefined}
@@ -167,6 +171,8 @@ describe('ScreenStage keyboard', () => {
         driven
         drivingMe
         ownsKeyboard
+        takeOvers={0}
+        focusOnTakeOver={false}
         stale={false}
         loupe={undefined}
         snapshot={() => undefined}
@@ -231,6 +237,8 @@ describe('ScreenStage keyboard', () => {
         driven
         drivingMe={driving()}
         ownsKeyboard={owns()}
+        takeOvers={0}
+        focusOnTakeOver={false}
         stale={false}
         loupe={undefined}
         snapshot={() => undefined}

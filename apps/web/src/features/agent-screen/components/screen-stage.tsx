@@ -39,6 +39,14 @@ export function ScreenStage(props: {
    * drive reconnects. Keys typed while not driving are swallowed, not sent.
    */
   ownsKeyboard: boolean;
+  /**
+   * Counts the person's own Take over clicks here: the drive that follows
+   * one gets the keyboard (`focusOnTakeOver`), since the button that had
+   * focus is gone by then.
+   */
+  takeOvers: number;
+  /** Not on touch screens, where focus would raise the on-screen keyboard. */
+  focusOnTakeOver: boolean;
   /** Grey the last picture out while it isn't live. */
   stale: boolean;
   loupe:
@@ -57,6 +65,18 @@ export function ScreenStage(props: {
   // Typing when the drive paused (a dropped connection): once driving again,
   // the keys go to the guest as before, even if something took focus.
   let typingWhenPaused = false;
+  // A Take over clicked here and not yet answered with the drive.
+  let tookOverHere = false;
+
+  createEffect(
+    on(
+      () => props.takeOvers,
+      () => {
+        tookOverHere = true;
+      },
+      { defer: true }
+    )
+  );
 
   // Handed back, or the lease went to someone else: give the keyboard back to
   // the app, rather than keep typing invisibly into the hidden field.
@@ -82,15 +102,19 @@ export function ScreenStage(props: {
         if (!keyboardField || driving === wasDriving) return;
         if (!driving) {
           typingWhenPaused = document.activeElement === keyboardField;
+          tookOverHere = false;
           return;
         }
         const resumed = typingWhenPaused;
+        const tookOver = tookOverHere && props.focusOnTakeOver;
         typingWhenPaused = false;
+        tookOverHere = false;
         // Only when focus went nowhere: never take it from another control.
         const focusLost =
           document.activeElement === null ||
           document.activeElement === document.body;
-        if (resumed && focusLost) keyboardField.focus({ preventScroll: true });
+        if ((resumed || tookOver) && focusLost)
+          keyboardField.focus({ preventScroll: true });
       },
       { defer: true }
     )
