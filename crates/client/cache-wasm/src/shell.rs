@@ -618,19 +618,16 @@ pub fn configure_cache_schema(schema_sdl: &str) -> Result<(), JsValue> {
     })
 }
 
-/// The schema this worker's engines use: the one `configureCacheSchema`
-/// installed, or else the bundled one. Decoding its tables costs a fraction of
-/// parsing its SDL, which was a large part of starting an engine.
+/// The schema for the next engine: the one `configureCacheSchema` installed,
+/// or else the bundled one. Decoding its tables costs a fraction of parsing its
+/// SDL, which was a large part of starting an engine. The worker keeps the
+/// bundled schema only once an engine is built with it (`build_engine`), so a
+/// caller whose open was refused can still configure another schema.
 fn runtime_schema() -> Result<std::sync::Arc<cache_core::meta::Schema>, JsValue> {
-    RUNTIME_SCHEMA.with(|slot| {
-        let mut slot = slot.borrow_mut();
-        if let Some(schema) = slot.as_ref() {
-            return Ok(schema.clone());
-        }
-        let schema = decode_bundled_schema()?;
-        *slot = Some(schema.clone());
-        Ok(schema)
-    })
+    match RUNTIME_SCHEMA.with(|slot| slot.borrow().clone()) {
+        Some(schema) => Ok(schema),
+        None => decode_bundled_schema(),
+    }
 }
 
 fn decode_bundled_schema() -> Result<std::sync::Arc<cache_core::meta::Schema>, JsValue> {
@@ -644,6 +641,8 @@ fn build_engine(
     schema: std::sync::Arc<cache_core::meta::Schema>,
 ) -> BrowserEngine {
     let storage = wrap_storage(storage);
+    // A schema configured while storage opened wins, as it always has.
+    let schema = RUNTIME_SCHEMA.with(|slot| slot.borrow_mut().get_or_insert(schema).clone());
     Engine::with_schema(
         storage,
         hot_capacity.map_or(cache_core::engine::DEFAULT_HOT_CAPACITY, |c| c as usize),
@@ -2506,7 +2505,7 @@ impl CacheEngine {
         let state = self.state.clone();
         future_to_promise(async move {
             let mut state = state.lock().await;
-            // The engine being reset was built with it, so it is already decoded.
+            // The engine being reset was built with it, so the worker keeps it.
             let schema = runtime_schema()?;
             let engine = state.engine.take().ok_or_else(|| {
                 if state.reset_required {
