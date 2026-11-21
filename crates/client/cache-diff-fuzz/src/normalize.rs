@@ -1,7 +1,7 @@
 //! Makes a response comparable across runs: ids the engine mints (storage and
-//! Mail generations, observation instances) become `#1`, `#2`, … in order of
-//! first appearance, ids the generator made stay as they are, and the run's
-//! directory becomes `<dir>`.
+//! Mail generations, observation instances, and SHA-256 digests of them) become
+//! `#1`, `#2`, … in order of first appearance, ids the generator made stay as
+//! they are, and the run's directory becomes `<dir>`.
 
 use serde_json::Value;
 use std::collections::{BTreeSet, HashMap};
@@ -61,11 +61,22 @@ impl Normalizer {
         let mut index = 0;
         let mut copied = 0;
         while index + 36 <= bytes.len() {
-            if is_uuid(&bytes[index..index + 36])
-                && (index == 0 || !bytes[index - 1].is_ascii_hexdigit())
-                && bytes.get(index + 36).is_none_or(|next| !next.is_ascii_hexdigit())
+            let width = if is_uuid(&bytes[index..index + 36]) {
+                36
+            } else if bytes
+                .get(index..index + 64)
+                .is_some_and(|run| run.iter().all(u8::is_ascii_hexdigit))
             {
-                let uuid = &text[index..index + 36];
+                // A SHA-256 the engine derives from ids it minted (people cursors).
+                64
+            } else {
+                0
+            };
+            if width > 0
+                && (index == 0 || !bytes[index - 1].is_ascii_hexdigit())
+                && bytes.get(index + width).is_none_or(|next| !next.is_ascii_hexdigit())
+            {
+                let uuid = &text[index..index + width];
                 if !self.keep.contains(uuid) {
                     out.push_str(&text[copied..index]);
                     let next = self.minted.len() + 1;
@@ -78,11 +89,11 @@ impl Normalizer {
                             self.minted.insert(uuid.to_owned(), name);
                         }
                     }
-                    index += 36;
+                    index += width;
                     copied = index;
                     continue;
                 }
-                index += 36;
+                index += width;
                 continue;
             }
             index += 1;
