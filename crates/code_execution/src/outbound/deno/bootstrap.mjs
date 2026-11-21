@@ -193,35 +193,35 @@ try {
   const redirects = new Set([301, 302, 303, 307, 308]);
   // A scoped run follows redirects itself, so none lands on a fetcher.
   const guarded = async (first) => {
-    let request = first;
+    // Each hop is a fresh request from the program's own headers and its
+    // body read once, so the body keeps its length and no hop's marks
+    // (trace context, the program header) reach the next one.
     const signal = first.signal;
+    let url = first.url;
+    let method = first.method;
+    const headers = new Headers(first.headers);
+    let body = first.body === null ? null : await first.arrayBuffer();
     for (let hop = 0; hop <= 20; hop++) {
-      if (reachesFetcher(request.url)) throw refusal();
-      // The program's own headers and body, before this hop's marks, to
-      // replay on a redirect; a body replays with its length.
-      const headers = new Headers(request.headers);
-      const body = request.body === null ? null : await request.clone().arrayBuffer();
-      const response = await route(request);
+      if (reachesFetcher(url)) throw refusal();
+      const response = await route(new Request(url, {method, headers: new Headers(headers), body, redirect: "manual", signal}));
       const location = redirects.has(response.status) ? response.headers.get("location") : null;
       if (location === null) return response;
-      const next = new URL(location, request.url).href;
-      const asGet = response.status === 303 || ((response.status === 301 || response.status === 302) && request.method === "POST");
-      if (originOf(next) !== originOf(request.url)) {
+      const next = new URL(location, url).href;
+      if (response.status === 303 || ((response.status === 301 || response.status === 302) && method === "POST")) {
+        method = method === "HEAD" ? "HEAD" : "GET";
+        body = null;
+        for (const name of ["content-type", "content-length", "content-encoding", "content-language", "content-location"]) headers.delete(name);
+      }
+      if (originOf(next) !== originOf(url)) {
         headers.delete("authorization");
         headers.delete("cookie");
       }
-      if (asGet) {
-        for (const name of ["content-type", "content-length", "content-encoding", "content-language", "content-location"]) headers.delete(name);
-      }
-      request = asGet
-        ? new Request(next, {method: request.method === "HEAD" ? "HEAD" : "GET", headers, redirect: "manual", signal})
-        : new Request(next, {method: request.method, headers, body, redirect: "manual", signal});
+      url = next;
     }
     throw new TypeError("Too many redirects.");
   };
   globalThis.fetch = (input, init) => {
-    // Set where the request is made, so its body keeps its length.
-    const request = new Request(input, scoped ? {...init, redirect: "manual"} : init);
+    const request = new Request(input, init);
     return scoped ? guarded(request) : route(request);
   };
   const route = (request) => {
