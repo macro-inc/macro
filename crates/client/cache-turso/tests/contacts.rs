@@ -23,6 +23,7 @@ fn hydrated_contacts_search_and_materialize_after_reopen_without_viewer_pages() 
             generation
         );
         contacts::assert_contact_search(&mut engine, 1_500).await;
+        contacts::assert_contact_top_up(&mut engine).await;
         contacts::assert_account_reset(&mut engine).await;
     });
 }

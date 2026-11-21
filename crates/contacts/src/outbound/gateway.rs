@@ -41,6 +41,8 @@ impl ConnectionGatewayNotifier {
         let body = InvalidationBody {
             changed: invalidation.changed(),
         };
+        let mut headers = reqwest::header::HeaderMap::new();
+        macro_tower_layers::inject_trace_headers(&mut headers);
         let response = self
             .client
             .post(format!(
@@ -48,6 +50,7 @@ impl ConnectionGatewayNotifier {
                 self.url,
                 urlencoding::encode(invalidation.user().as_ref())
             ))
+            .headers(headers)
             .json(&serde_json::json!({"message_type": "contacts_invalidation", "message": body}))
             .send()
             .await?;
