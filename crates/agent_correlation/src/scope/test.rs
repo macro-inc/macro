@@ -363,6 +363,24 @@ fn a_dry_run_reads_and_writes_nothing() {
     assert!(!scope.allows_sharing());
 }
 
+/// Every spec name, as a service serving all of them would declare.
+const ALL_SPECS: &[&str] = &[
+    "agent-harness",
+    "auth",
+    "calendar",
+    "cognition",
+    "connection",
+    "contacts",
+    "email",
+    "notification",
+    "properties",
+    "scheduled-action",
+    "search",
+    "static-files",
+    "storage",
+    "unfurl",
+];
+
 /// The services' OpenAPI specs, by the name their lists use.
 const SPECS: &[(&str, &str)] = &[
     (
@@ -536,7 +554,7 @@ fn a_job_classifies_every_read_and_allows_only_its_lists() {
                 }
                 let key = (*name, method.as_str(), path.as_str());
                 let on_list = listed.contains(&key);
-                if scope.allows(&method, &concrete_typed(path)) != on_list {
+                if scope.allows_on(Some(&[name]), &method, &concrete_typed(path)) != on_list {
                     mismatched.push(format!("{name} {method} {path} (listed: {on_list})"));
                 }
                 if method == "GET" && on_list == refused_reads.contains(&key) {
@@ -682,7 +700,10 @@ fn a_job_is_refused_whatever_its_lists_do_not_name() {
         ),
         ("GET", "/agent-harness/agent-sessions/unlisted"),
     ] {
-        assert!(!scope.allows(method, path), "{method} {path}");
+        assert!(
+            !scope.allows_on(Some(ALL_SPECS), method, path),
+            "{method} {path}"
+        );
     }
     for (method, path) in [
         ("GET", "/dss/documents/0192f1a0-0000-7000-8000-000000000001"),
@@ -702,7 +723,10 @@ fn a_job_is_refused_whatever_its_lists_do_not_name() {
         ),
         ("PATCH", "/notification/v1/user_notifications/bulk/done"),
     ] {
-        assert!(scope.allows(method, path), "{method} {path}");
+        assert!(
+            scope.allows_on(Some(ALL_SPECS), method, path),
+            "{method} {path}"
+        );
     }
     assert!(!scope.allows_sharing());
     assert_eq!(SessionScope::parse(scope.as_str()), Some(scope));
@@ -794,4 +818,64 @@ fn a_jobs_entries_count_only_on_their_own_service() {
             "{spec} {method} {path}"
         );
     }
+}
+
+/// A job fails closed where a service declares no specs: nothing on its
+/// lists counts there, so a service that forgets to declare them refuses
+/// jobs rather than matching every service's entries.
+#[test]
+fn a_job_is_refused_on_a_service_that_declares_no_specs() {
+    let scope = SessionScope::Job;
+    let document = "/documents/0192f1a0-0000-7000-8000-000000000001";
+    assert!(!scope.allows("GET", document));
+    assert!(!scope.allows_on(None, "GET", document));
+    assert!(!SignedScope::Known(scope).allows_on(None, "GET", document));
+    assert!(scope.allows_on(Some(&["storage"]), "GET", document));
+}
+
+/// Every service that validates attribution declares the specs it serves,
+/// so a job's entries count only on their own service; a signed-scope-only
+/// service that a job reads uses the serving variant.
+#[test]
+fn every_service_declares_the_specs_it_serves() {
+    fn rust_files(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                rust_files(&path, out);
+            } else if path.extension().is_some_and(|extension| extension == "rs") {
+                out.push(path);
+            }
+        }
+    }
+    let services = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../services");
+    let mut files = Vec::new();
+    // Each service's sources only; build output and local data stay out.
+    for service in std::fs::read_dir(&services).unwrap().flatten() {
+        rust_files(&service.path().join("src"), &mut files);
+    }
+    let mut undeclared = Vec::new();
+    let mut states = 0;
+    for file in files {
+        let text = std::fs::read_to_string(&file).unwrap();
+        for (index, _) in text.match_indices("CorrelationState::new(") {
+            states += 1;
+            let rest = &text[index..text.len().min(index + 400)];
+            let statement = rest.split(';').next().unwrap_or_default();
+            if !statement.contains(".serving(") {
+                undeclared.push(format!("{}", file.display()));
+            }
+        }
+    }
+    assert!(states >= 8, "found {states} CorrelationState constructions");
+    assert!(
+        undeclared.is_empty(),
+        "declare `.serving(&[specs])`: {undeclared:#?}"
+    );
+    let static_files =
+        std::fs::read_to_string(services.join("static_file_service/src/api.rs")).unwrap();
+    assert!(static_files.contains("enforce_signed_scope_serving"));
 }

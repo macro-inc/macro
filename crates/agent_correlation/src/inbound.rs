@@ -69,7 +69,7 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let state = CorrelationState::from_ref(state);
         let tokens = verified_api_tokens(parts, &state.jwt)?;
-        other_tokens_scope(Some(&state), &tokens.others, parts).await?;
+        other_tokens_scope(Some(&state), state.specs, &tokens.others, parts).await?;
         let token = tokens.authenticating;
         checked_signed_scope(token.as_ref(), parts, state.specs)?;
         let correlation = accept_correlation(&state, token.as_ref()).await?;
@@ -167,12 +167,13 @@ fn narrowest(first: Option<SessionScope>, second: Option<SessionScope>) -> Optio
 /// correlations up in), and name the narrowest of them.
 async fn other_tokens_scope(
     state: Option<&CorrelationState>,
+    specs: Option<&[&str]>,
     others: &[MacroApiToken],
     parts: &Parts,
 ) -> Result<Option<SessionScope>, CorrelationRejection> {
     let mut scope = None;
     for token in others {
-        let signed = checked_signed_scope(Some(token), parts, state.and_then(|state| state.specs))?;
+        let signed = checked_signed_scope(Some(token), parts, specs)?;
         scope = narrowest(scope, signed.known());
         let Some(state) = state else {
             continue;
@@ -180,7 +181,7 @@ async fn other_tokens_scope(
         if let Some((_, correlation)) = accept_correlation(state, Some(token)).await?
             && let Some(stored) = correlation.scope
         {
-            if !stored.allows_on(state.specs, parts.method.as_str(), parts.uri.path()) {
+            if !stored.allows_on(specs, parts.method.as_str(), parts.uri.path()) {
                 return Err(CorrelationRejection(CorrelationError::OutOfScope));
             }
             scope = narrowest(scope, Some(stored));
@@ -318,10 +319,11 @@ async fn propagate_request(
         Ok(tokens) => tokens,
         Err(rejection) => return rejection.into_response(),
     };
-    let others_scope = match other_tokens_scope(Some(&state), &tokens.others, &parts).await {
-        Ok(scope) => scope,
-        Err(rejection) => return rejection.into_response(),
-    };
+    let others_scope =
+        match other_tokens_scope(Some(&state), state.specs, &tokens.others, &parts).await {
+            Ok(scope) => scope,
+            Err(rejection) => return rejection.into_response(),
+        };
     let token = tokens.authenticating;
     let signed = match checked_signed_scope(token.as_ref(), &parts, state.specs) {
         Ok(signed) => signed,
@@ -377,16 +379,40 @@ async fn propagate_request(
 /// in: refuse a request outside the scope its credential signs before any
 /// handler runs. Install it wherever a code-mode credential is accepted and
 /// [`propagate`] is not.
+/// It binds no service, so a background job's credential is refused
+/// everything here ([`SessionScope::allows_on`]); a service a job reads
+/// uses [`enforce_signed_scope_serving`].
 pub fn enforce_signed_scope(
-    state: State<JwtValidationArgs>,
+    State(jwt): State<JwtValidationArgs>,
     request: Request,
     next: Next,
 ) -> impl Future<Output = Response> + Send {
-    enforce_signed_scope_request(state, request, next)
+    enforce_signed_scope_request(jwt, None, request, next)
+}
+
+/// What [`enforce_signed_scope_serving`] checks with: the verifier and the
+/// OpenAPI specs the service serves.
+#[derive(Clone)]
+pub struct SignedScopeState {
+    /// Existing JWT verifier configuration.
+    pub jwt: JwtValidationArgs,
+    /// The specs this service serves (`CorrelationState::specs`).
+    pub specs: &'static [&'static str],
+}
+
+/// [`enforce_signed_scope`] for a service that serves `specs`, so a
+/// background job's list entries for it count here.
+pub fn enforce_signed_scope_serving(
+    State(state): State<SignedScopeState>,
+    request: Request,
+    next: Next,
+) -> impl Future<Output = Response> + Send {
+    enforce_signed_scope_request(state.jwt, Some(state.specs), request, next)
 }
 
 async fn enforce_signed_scope_request(
-    State(jwt): State<JwtValidationArgs>,
+    jwt: JwtValidationArgs,
+    specs: Option<&'static [&'static str]>,
     request: Request,
     next: Next,
 ) -> Response {
@@ -395,11 +421,11 @@ async fn enforce_signed_scope_request(
         Ok(tokens) => tokens,
         Err(rejection) => return rejection.into_response(),
     };
-    if let Err(rejection) = other_tokens_scope(None, &tokens.others, &parts).await {
+    if let Err(rejection) = other_tokens_scope(None, specs, &tokens.others, &parts).await {
         return rejection.into_response();
     }
     let token = tokens.authenticating;
-    if let Err(rejection) = checked_signed_scope(token.as_ref(), &parts, None) {
+    if let Err(rejection) = checked_signed_scope(token.as_ref(), &parts, specs) {
         return rejection.into_response();
     }
     next.run(Request::from_parts(parts, body)).await

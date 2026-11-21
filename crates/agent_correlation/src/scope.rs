@@ -449,7 +449,8 @@ impl SessionScope {
     /// [`Self::allows`] on a service that serves `specs` (the OpenAPI specs
     /// a job's lists name entries by): a job's entry counts only on the
     /// service its spec belongs to, so a template can't admit the same path
-    /// on another service. `None` doesn't bind entries to a service.
+    /// on another service. A job is refused everything on a service that
+    /// declares no specs (`None`): it fails closed.
     pub fn allows_on(self, specs: Option<&[&str]>, method: &str, path: &str) -> bool {
         if listed(ANY_WRITE, method, path) {
             return false;
@@ -461,7 +462,7 @@ impl SessionScope {
         if self == Self::Job {
             let method = if method == "HEAD" { "GET" } else { method };
             return JOB_REQUESTS.iter().any(|(spec, listed, template)| {
-                specs.is_none_or(|specs| specs.contains(spec))
+                specs.is_some_and(|specs| specs.contains(spec))
                     && *listed == method
                     && job_matches(path, template)
             });

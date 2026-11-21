@@ -843,3 +843,50 @@ async fn ordinary_agents_reach_policy_put_while_restricted_agents_do_not() {
         );
     }
 }
+
+/// A signed-scope-only service a job reads declares its specs: there a
+/// job's listed read counts; without them it fails closed.
+#[tokio::test]
+async fn a_signed_scope_service_holds_a_job_to_its_own_specs() {
+    use tower::ServiceExt;
+
+    let job = mint(
+        Some(Uuid::from_u128(1)),
+        Some(Uuid::from_u128(3)),
+        None,
+        Some("job"),
+    );
+    let file = || {
+        Request::builder()
+            .method("GET")
+            .uri("/file/0192f1a0-0000-7000-8000-000000000001")
+            .header("authorization", format!("Bearer {job}"))
+            .body(axum::body::Body::empty())
+            .unwrap()
+    };
+    let route = || {
+        axum::Router::new().route(
+            "/file/{id}",
+            axum::routing::get(|| async { StatusCode::OK }),
+        )
+    };
+    let serving = route().layer(axum::middleware::from_fn_with_state(
+        SignedScopeState {
+            jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+            specs: &["static-files"],
+        },
+        enforce_signed_scope_serving,
+    ));
+    assert_eq!(
+        serving.oneshot(file()).await.unwrap().status(),
+        StatusCode::OK
+    );
+    let unbound = route().layer(axum::middleware::from_fn_with_state(
+        JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+        enforce_signed_scope,
+    ));
+    assert_eq!(
+        unbound.oneshot(file()).await.unwrap().status(),
+        StatusCode::FORBIDDEN
+    );
+}

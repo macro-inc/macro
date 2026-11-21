@@ -37,7 +37,10 @@ code, not in its prompt. The harness also signs the scope into the credential
   admitted. OPTIONS is refused to a job (a preflight carries no
   credential). Each list entry is bound to its spec's service: a service
   declares the specs it serves (`CorrelationState::serving`), and an entry
-  counts only there (`allows_on`; signed-scope-only services bind none).
+  counts only there (`allows_on`). A service that declares none refuses a
+  job everything (fails closed); a signed-scope-only service a job reads
+  uses `enforce_signed_scope_serving` (static files). The test
+  `every_service_declares_the_specs_it_serves` holds every service to it.
   Under `job`,
   `entity_access`'s `EntityPermission::satisfies` makes a change need owner
   access, and no scope shares. Signed-scope services
