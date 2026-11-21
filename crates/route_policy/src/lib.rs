@@ -5,7 +5,8 @@
 //! holds every answer, so a route can't be refused on one mount and allowed on
 //! another, and nothing here matches paths.
 //!
-//! The table only refuses. Which principals a route admits and what they may
+//! This crate is data only: it decides nothing by itself. The table only
+//! refuses. Which principals a route admits and what they may
 //! do to a given item stay with `macro_authorization` and the domain's access
 //! receipts.
 

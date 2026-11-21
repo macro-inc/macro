@@ -50,3 +50,20 @@ the axum route constructors that declare each handler's category.
 - The layer can't reach the `http.request` span (other middleware opens
   spans in between), so it hands its fields to `macro_tower_layers` in the
   response's `ResponseSpanFields`.
+- **Routes the table can't express.** A cell is one category per route, so
+  two kinds of route stay outside it:
+  - body-dependent checks, such as `refuse_sharing` and `may_share` on a
+    route that only sometimes changes who an item is shared with. They keep
+    their own check; the route takes the category of what it does without the
+    field.
+  - multiplexed routes (DSS GraphQL runs any mutation over one path). They
+    take the most sensitive category any request to them can reach, and a
+    test pins it when they are categorized.
+- **Unscoped programs may use egress.** The `program` x `egress` cell is
+  observed, not allowed, by design: agents fetch and search the web today, so
+  the rollout must not enforce that cell without a replacement path. The
+  no-send, generation, dry-run, unknown and channel-mention callers are
+  refused egress.
+- Cells that must not be enforced without a replacement path: `program` x
+  `egress`, and `bot` and `harness` x `connect` and `approval_gate` (the
+  computers pair and approve through them today).
