@@ -506,23 +506,29 @@ const rowsWith = (x, id) => {
   walkRows(x, (r) => r.id === id && out.push(r));
   return out;
 };
-// Every list in x that holds both rows, by its path, with whether p comes first.
-function pairOrders(x, p, q, path = '$', out = new Map()) {
+// Every list in x that holds all these rows, by its path, with each row's position.
+function positions(x, want, path = '$', out = new Map()) {
   if (Array.isArray(x)) {
     const ids = x.map(rowId);
-    const i = ids.indexOf(p);
-    const j = ids.indexOf(q);
-    if (i >= 0 && j >= 0) out.set(path, i < j);
+    const at = want.map((id) => ids.indexOf(id));
+    if (at.every((i) => i >= 0)) out.set(path, at);
     // a row's own id names its place, so a list keeps its path when rows before it differ
-    x.forEach((v, n) => pairOrders(v, p, q, `${path}[${rowId(v) ?? n}]`, out));
-  } else if (x && typeof x === 'object') for (const [k, v] of Object.entries(x)) pairOrders(v, p, q, `${path}.${k}`, out);
+    x.forEach((v, n) => positions(v, want, `${path}[${rowId(v) ?? n}]`, out));
+  } else if (x && typeof x === 'object') for (const [k, v] of Object.entries(x)) positions(v, want, `${path}.${k}`, out);
   return out;
 }
-// The same list holding the two rows in the injected order on NEW and the
-// server's on OLD.
-function swappedAt(a, b, p, q) {
-  const oa = pairOrders(a, p, q);
-  return [...pairOrders(b, p, q)].some(([path, pFirst]) => pFirst && oa.get(path) === false);
+// The same list holding the injected transposition on NEW (ids[0], every row
+// that was between them, ids[1]) and the server's order on OLD (ids[1], the
+// same rows, ids[0]); any other permutation of them does not match.
+function swappedAt(a, b, m) {
+  const want = [...m.ids, ...(m.between ?? [])];
+  const pa = positions(a, want);
+  return [...positions(b, want)].some(([path, nb]) => {
+    const na = pa.get(path);
+    if (!na) return false;
+    const mid = (n) => n.slice(2);
+    return mid(nb).every((x) => nb[0] < x && x < nb[1]) && nb[0] < nb[1] && mid(na).every((x) => na[1] < x && x < na[0]) && na[1] < na[0];
+  });
 }
 // A GraphQL field and the reader's or caller's spelling of it (displayOrder,
 // display_order; the property panel's domain row calls data_type valueType,
@@ -537,7 +543,7 @@ const fieldOf = (row, field) => Object.entries(row).filter(([k]) => sameField(k,
 function shows(m, level, kind, a, b, norm, rawB) {
   if (m.kind === 'drop-row') return rowsWith(a, m.id).length > 0 && rowsWith(b, m.id).length === 0;
   // the two rows in the injected order on NEW and the server's on OLD
-  if (m.kind === 'swap-order') return swappedAt(a, b, m.ids[0], m.ids[1]);
+  if (m.kind === 'swap-order') return swappedAt(a, b, m);
   // the altered field holding the injected value on NEW and the server's on OLD
   if (m.kind === 'alter-field')
     return rowsWith(b, m.id).some((r) => fieldOf(r, m.field).includes(J(m.to))) && rowsWith(a, m.id).some((r) => fieldOf(r, m.field).includes(J(m.from)));
@@ -906,8 +912,9 @@ function mutateResponse(json, kind, g) {
       for (let j = list.length - 1; j > i; j--)
         if (sig(list[i]) !== sig(list[j])) {
           [list[i], list[j]] = [list[j], list[i]];
-          // NEW now lists ids[0] before ids[1]; the server listed them the other way
-          return { kind, ids: [list[i].id, list[j].id] };
+          // NEW now lists ids[0], the rows between, then ids[1]; the server
+          // listed them the other way round
+          return { kind, ids: [list[i].id, list[j].id], between: list.slice(i + 1, j).map((r) => r.id) };
         }
     return null;
   }
