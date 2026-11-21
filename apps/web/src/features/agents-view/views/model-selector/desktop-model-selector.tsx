@@ -136,7 +136,8 @@ export function DesktopModelSelector() {
                   </Dropdown.SubTrigger>
                   <Dropdown.SubContent
                     aria-label={t('agentControls.allModels')}
-                    class="w-72 max-h-[min(28rem,var(--kb-popper-content-available-height))] overflow-y-auto"
+                    // A fixed height: filtering never moves the search field.
+                    class="flex w-72 h-[min(28rem,var(--kb-popper-content-available-height))] flex-col overflow-hidden"
                     onPointerDown={(event: PointerEvent) =>
                       event.stopPropagation()
                     }
