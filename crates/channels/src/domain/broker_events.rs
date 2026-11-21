@@ -180,7 +180,8 @@ pub enum ChannelTopicEvent {
     #[serde(rename = "channel.created")]
     Created(ChannelCreatedMetadata),
     /// A channel's settings were patched (a rename, a team conversion, or an
-    /// auto-join change); the names are equal when it was not a rename.
+    /// auto-join change), or the bots in it changed; the names are equal when
+    /// it was not a rename.
     #[serde(rename = "channel.updated")]
     Updated(ChannelUpdatedMetadata),
     /// A channel was deleted.

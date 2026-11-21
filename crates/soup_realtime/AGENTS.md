@@ -83,7 +83,8 @@ tasks itself.
   side effects publish from separate tasks, so a re-add can be published
   before the removal it follows; the removal's roster read still sees the
   rejoin. Every channel settings patch raises `channel.updated`, so conversions and
-  auto-join changes reach members too.
+  auto-join changes reach members too, and so does every change of the bots in
+  a channel (`crates/bots` raises it with the name unchanged).
 - Agent sessions have no source event here: their patches come from channel
   references, linked pull requests, and the harness publishing through
   `outbound/agent_sessions.rs`' `SoupWorkRegistrationSignal` for registered work.
