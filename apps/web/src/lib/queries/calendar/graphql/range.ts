@@ -472,7 +472,7 @@ export async function readCalendarRange(
     // The delta changed what the range holds since the first read.
     .with('held', 'retried', () => host.calendarRange(args))
     .with('behind', () => undefined)
-    .exhaustive();
+    .exhaustive(() => undefined);
   if (!current) return olderRange(host, result);
   result = current;
   if (result.kind === 'unsupported') return { kind: 'unsupported' };
