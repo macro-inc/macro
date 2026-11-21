@@ -327,9 +327,10 @@ Under its header (New Chat, then the tab's tools) New Home has Recents and
 Notifications tabs, labels only, or icons only when the list is narrower
 than 280px; the Notifications tab carries the rail's unread dot. Switching
 tabs is a history entry and keeps the list's width: both tabs share one
-saved width, which starts from old Home's. `1` and `2`, Tab and Shift+Tab move
-between Recents and Notifications; All and Unread are a filter row under
-them and take no key. Both tabs show Home's chat composer
+saved width, which starts from old Home's. While the keyboard is on the list (or
+nothing has focus), `1` and `2`, Tab and Shift+Tab move between Recents and
+Notifications; in the chat composer they type and move focus as usual. All
+and Unread are a filter row under them and take no key. Both tabs show Home's chat composer
 while nothing is open; a chat started from Notifications opens on Recents.
 
 - **Recents** is Home's list, rows and tools (Filter with Type only, Search,

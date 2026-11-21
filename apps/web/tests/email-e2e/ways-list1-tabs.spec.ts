@@ -79,13 +79,13 @@ for (const provider of PROVIDERS) {
       await checked('Signal');
       await expectRows(page, [lunch]);
 
-      // The sidebar's Inbox item leads back to Signal; on that button, Tab
-      // moves focus and leaves the tab alone.
-      await inboxTabs.getByText('Noise', { exact: true }).click();
-      await expectRows(page, [sale]);
-      const inboxItem = page
-        .getByRole('navigation', { name: 'Email tabs' })
-        .getByRole('button', { name: 'Inbox' });
+      // From another mailbox, the sidebar's Inbox item reopens the Inbox
+      // tab last open, Signal; on that button, Tab moves focus and leaves
+      // the tab alone.
+      const sidebar = page.getByRole('navigation', { name: 'Email tabs' });
+      await sidebar.getByRole('button', { name: 'Sent' }).click();
+      await expect(page).toHaveURL(/mail\.tab=sent/);
+      const inboxItem = sidebar.getByRole('button', { name: 'Inbox' });
       await inboxItem.click();
       did('AL-001');
       await checked('Signal');

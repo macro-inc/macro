@@ -176,6 +176,9 @@ it('leaves the split itself to the pane the user last put the keyboard in', () =
     focus(view.split);
     expect(handler('tab')(keydown(view.split))).toBe(false);
     expect(handler('2')(keydown(document.body))).toBe(false);
+    // The detail replacing what was pressed keeps the keyboard there.
+    view.detailText.remove();
+    expect(handler('tab')(keydown(view.split))).toBe(false);
     focus(view.grid);
     expect(handler('tab')(keydown(view.split))).toBe(true);
     expect(move).toHaveBeenCalledTimes(2);

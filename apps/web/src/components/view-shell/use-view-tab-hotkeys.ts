@@ -48,8 +48,8 @@ function isOnScreen(element: Element | undefined): boolean {
  * holding the tabs (a list beside a detail is its own pane), else the whole
  * split. Nothing focused counts as the pane, as the split keeps the keyboard
  * after a load or an item opening, unless the user last put the keyboard in
- * another of the split's panes (`lastPlace`: a press on plain text in a
- * detail beside the list focuses the split itself).
+ * another of the split's panes (`lastPlace`, that pane: a press on plain text
+ * in a detail beside the list focuses the split itself).
  */
 function keyboardIsOnPane(
   target: EventTarget | null | undefined,
@@ -81,15 +81,16 @@ export function useViewTabHotkeys<TTab extends string>(
   options: UseViewTabHotkeysOptions<TTab>
 ) {
   const group = createHotkeyGroup();
-  // Where the user last put the keyboard: the last element pressed, or the
-  // last one focused other than the split itself.
+  // Where the user last put the keyboard: the pane of the last element
+  // pressed, or of the last one focused other than the split itself. The
+  // pane rather than the element, so content replaced inside it keeps it.
   let lastPlace: WeakRef<Element> | undefined;
   const remember = (event: Event) => {
     const target = event.target;
     if (!(target instanceof Element)) return;
     if (event.type === 'focusin' && target === getScopeElement(options.scopeId))
       return;
-    lastPlace = new WeakRef(target);
+    lastPlace = new WeakRef(target.closest(PANE_REGION_SELECTOR) ?? target);
   };
   document.addEventListener('pointerdown', remember, { capture: true });
   document.addEventListener('focusin', remember, { capture: true });
