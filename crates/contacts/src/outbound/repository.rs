@@ -1,3 +1,4 @@
+mod directory;
 mod lists;
 mod page;
 mod people_search;
