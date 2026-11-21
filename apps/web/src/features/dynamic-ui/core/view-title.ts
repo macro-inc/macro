@@ -7,7 +7,6 @@ const TITLED_TYPES: ReadonlySet<WidgetType> = new Set<WidgetType>([
   'cards',
   'timeline',
   'tags',
-  'channelMessage',
 ]);
 
 /**
@@ -19,8 +18,15 @@ const TITLED_TYPES: ReadonlySet<WidgetType> = new Set<WidgetType>([
 export function titledWidgets(view: View): {
   title?: string;
   widgets: Widget[];
+  /** A lone channel thread's line under its channel name: the view's title. */
+  caption?: string;
 } {
   const [first, ...rest] = view.widgets;
+  // A channel thread card is headed by its channel; the view's title takes
+  // the card's second line instead of printing above it.
+  if (view.title && first?.type === 'channelMessage' && rest.length === 0) {
+    return { widgets: view.widgets, caption: view.title };
+  }
   if (!view.title || !first || !TITLED_TYPES.has(first.type)) return view;
   const own = 'title' in first ? first.title : undefined;
   if (own === view.title) return { widgets: view.widgets };

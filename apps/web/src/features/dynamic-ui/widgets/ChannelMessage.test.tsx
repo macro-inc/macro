@@ -125,17 +125,17 @@ describe('ChannelMessage', () => {
     expect(view.getByTestId('icon').dataset.icon).toBe('private');
   });
 
-  it('shows a view title it was handed once, instead of the channel and "Thread"', () => {
+  it('names its channel, with a view title it was handed in place of "Thread"', () => {
     channelNames = { 'channel-1': 'launch-planning' };
     const view = render(() => (
       <ChannelMessage
         channelId="channel-1"
         messageId="message-1"
-        title="Thread in #launch-planning"
+        caption="Where the review date was set"
       />
     ));
-    view.getByText('Thread in #launch-planning');
-    expect(view.queryByText('launch-planning')).toBeNull();
+    view.getByText('launch-planning');
+    view.getByText('Where the review date was set');
     expect(view.queryByText('Thread')).toBeNull();
     view.getByRole('button', { name: 'Open in channel' });
   });

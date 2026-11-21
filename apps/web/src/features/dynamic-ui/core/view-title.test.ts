@@ -42,7 +42,7 @@ describe('a view title', () => {
     expect(titledWidgets(view)).toBe(view);
   });
 
-  it('names a lone channel thread card, which shows it once', () => {
+  it('moves into a lone channel thread card, under its channel name', () => {
     const thread = {
       type: 'channelMessage' as const,
       channelId: 'c',
@@ -53,7 +53,8 @@ describe('a view title', () => {
       widgets: [thread],
     };
     expect(titledWidgets(view)).toEqual({
-      widgets: [{ ...thread, title: 'Thread in #launch-planning' }],
+      widgets: [thread],
+      caption: 'Thread in #launch-planning',
     });
   });
 });

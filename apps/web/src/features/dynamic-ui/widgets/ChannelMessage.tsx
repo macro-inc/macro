@@ -6,16 +6,12 @@ import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { EntityIcon, getEntityIconType } from '@core/component/EntityIcon';
 import { useChannelName, useChannelType } from '@core/context/channels';
 import { Button, Item, Card as UiCard } from '@ui';
-import { Show } from 'solid-js';
 import { Card, CardBody } from '../../agent-cards/components/kit/card';
 import type { WidgetOf } from '../view';
 
-export type ChannelMessageProps = Omit<
-  WidgetOf<'channelMessage'>,
-  'type' | 'title'
-> & {
-  /** The view's title, handed to a lone card so it shows once. */
-  title?: string;
+export type ChannelMessageProps = Omit<WidgetOf<'channelMessage'>, 'type'> & {
+  /** The view's title, shown in place of "Thread" so it appears once. */
+  caption?: string;
 };
 
 /**
@@ -30,7 +26,6 @@ export function ChannelMessage(props: ChannelMessageProps) {
   // Named and drawn as the channel list does: a group chat's long list of
   // people is shortened, and a DM or private chat gets its own icon.
   const title = () => {
-    if (props.title) return props.title;
     const name = channelName();
     return name === undefined
       ? t('agentCards.channelFallback')
@@ -61,11 +56,9 @@ export function ChannelMessage(props: ChannelMessageProps) {
           </Item.Media>
           <Item.Content class="gap-0">
             <UiCard.Title class="truncate">{title()}</UiCard.Title>
-            <Show when={!props.title}>
-              <UiCard.Description>
-                {t('agentCards.channelThread')}
-              </UiCard.Description>
-            </Show>
+            <UiCard.Description>
+              {props.caption ?? t('agentCards.channelThread')}
+            </UiCard.Description>
           </Item.Content>
           <Item.Actions>
             <Button

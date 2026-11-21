@@ -26,11 +26,17 @@ import { Timeline } from './widgets/Timeline';
  * and no `<Dynamic>`: adding a widget means adding one arm here (and the
  * `.exhaustive()` keeps it honest).
  */
-export function Render(props: { node: Widget }): JSX.Element {
+export function Render(props: {
+  node: Widget;
+  /** A view title handed to a lone channel thread card (`titledWidgets`). */
+  caption?: string;
+}): JSX.Element {
   return match(props.node)
     .with({ type: 'md' }, (n) => <Md {...n} />)
     .with({ type: 'timeline' }, (n) => <Timeline {...n} />)
-    .with({ type: 'channelMessage' }, (n) => <ChannelMessage {...n} />)
+    .with({ type: 'channelMessage' }, (n) => (
+      <ChannelMessage {...n} caption={props.caption} />
+    ))
     .with({ type: 'list' }, (n) => <List {...n} />)
     .with({ type: 'events' }, (n) => <Events {...n} />)
     .with({ type: 'cards' }, (n) => <Cards {...n} />)
@@ -151,7 +157,7 @@ export function Compose(props: { view: ComposedView }): JSX.Element {
       >
         <View title={shown().title}>
           <For each={shown().widgets}>
-            {(widget) => <Render node={widget} />}
+            {(widget) => <Render node={widget} caption={shown().caption} />}
           </For>
         </View>
       </Suspense>
