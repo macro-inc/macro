@@ -2951,7 +2951,7 @@ impl ChannelRepo for PgChannelsRepo {
         sqlx::query!("SET LOCAL statement_timeout = '15s'")
             .execute(&mut *tx)
             .await?;
-        let channel_id = historical::find_dm(&mut tx, &pair).await?;
+        let channel_id = historical::find_dm(&mut tx, &pair, historical::DmRoster::Listed).await?;
         tx.commit().await?;
         Ok(channel_id)
     }
