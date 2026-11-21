@@ -499,6 +499,8 @@ if (stack === 'prod') {
         'MS=ms97745247',
         // Macro Connect's Google OAuth app.
         'google-site-verification=v0VjgBSJnZ-Xl6zjn4QFZibcfAsjWJejEOrmuM93a1Y',
+        // Macro Connect's HubSpot developer account: verified domain for its apps.
+        'hubspot-developer-verification=NTQwYmU1NDAtZTdmZC00OWJiLTgxNDAtMDk3OTMxNWNlOTll',
       ],
     },
     { retainOnDelete: true }
