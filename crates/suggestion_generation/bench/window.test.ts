@@ -324,30 +324,37 @@ describe('rereadList', () => {
     const file = join(dir, 'gen-1.jsonl');
     const picking = { ...row, content: { ...row.content, params: { prompt: [{ type: 'text', text: 'Pick routines.\n<untrusted>\nmail\n</untrusted>' }] } } };
     try {
-      // Empty: unknown, the run's list stands, and with none it is an error.
-      writeFileSync(file, '');
-      const kept = generation({ transcript: file, workList: list });
-      expect(rereadList(kept, join(dir, 'run.json'))).toContain('holds no brief');
-      expect(kept.workList).toEqual(list);
-      expect(kept.listError).toBeUndefined();
-      const none = generation({ transcript: file });
-      expect(rereadList(none, join(dir, 'run.json'))).toContain('holds no brief');
-      expect(none.listError).toContain('unknown');
-      // Prompts without text are no brief either.
-      const blank = (params: unknown) => JSON.stringify({ ...row, content: { method: 'session/prompt', ...(params === undefined ? {} : { params }) } });
-      writeFileSync(file, `${blank(undefined)}\n${blank({ prompt: [{ type: 'text', text: '  ' }] })}\n`);
-      const malformed = generation({ transcript: file });
-      expect(rereadList(malformed, join(dir, 'run.json'))).toContain('holds no brief');
-      expect(malformed.listError).toContain('unknown');
-      // Only the picking session's brief: the run's list stands; with none, none was read.
-      writeFileSync(file, `${JSON.stringify(picking)}\n`);
+      // Empty, or only rows that aren't prompts (null among them): unknown, the run's list stands, and with none it is an error.
+      for (const text of ['', 'null\n{"direction":"to_server"}\n']) {
+        writeFileSync(file, text);
+        const kept = generation({ transcript: file, workList: list });
+        expect(rereadList(kept, join(dir, 'run.json'))).toContain('holds no prompt');
+        expect(kept.workList).toEqual(list);
+        expect(kept.listError).toBeUndefined();
+        const none = generation({ transcript: file });
+        expect(rereadList(none, join(dir, 'run.json'))).toContain('holds no prompt');
+        expect(none.listError).toContain('unknown');
+      }
+      // Prompts with no list (the picking session's, one with no params, one of metadata
+      // alone): the run's reading stands, whether a list, an error or none read.
+      const prompt = (params: unknown) => JSON.stringify({ ...row, content: { method: 'session/prompt', ...(params === undefined ? {} : { params }) } });
+      writeFileSync(file, `${JSON.stringify(picking)}\n${prompt(undefined)}\n${prompt({ prompt: [{ type: 'text', text: 'invocation: onboarding' }] })}\n`);
       const partial = generation({ transcript: file, workList: list });
       expect(rereadList(partial, join(dir, 'run.json'))).toContain('stands');
       expect(partial.workList).toEqual(list);
-      const unread = { ...generation({ transcript: file }), listError: 'an old reader failed' };
-      expect(rereadList(unread, join(dir, 'run.json'))).toBeUndefined();
-      expect(unread.workList).toBeUndefined();
-      expect(unread.listError).toBeUndefined();
+      const failed = { ...generation({ transcript: file }), listError: 'an old reader failed' };
+      expect(rereadList(failed, join(dir, 'run.json'))).toContain('stands');
+      expect(failed.listError).toBe('an old reader failed');
+      const none = generation({ transcript: file });
+      expect(rereadList(none, join(dir, 'run.json'))).toContain('stands');
+      expect(none.workList).toBeUndefined();
+      expect(none.listError).toBeUndefined();
+      // A list found replaces an error the run had.
+      writeFileSync(file, `${JSON.stringify(row)}\n`);
+      const corrected = { ...generation({ transcript: file }), listError: 'an old reader failed' };
+      expect(rereadList(corrected, join(dir, 'run.json'))).toBeUndefined();
+      expect(corrected.workList).toEqual(list);
+      expect(corrected.listError).toBeUndefined();
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

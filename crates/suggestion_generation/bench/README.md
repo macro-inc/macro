@@ -150,11 +150,12 @@ with each attempt's suggestions, the judge's marks, the score and the
 sessions' transcripts beside it. A routines attempt is written as soon as it
 has generated, marked not judged until it is, so `rejudge` can judge a run
 that stopped first; `rejudge` reads each work list again from the
-transcripts (where they were saved, or beside `run.json`), and never
-erases a list the run read. Where both are gone, or the one found holds
-no brief with text in it, the run's list stands, and a run that read none
-has an unknown list. Briefs that carry no list leave a list the run read,
-and otherwise mean none was read. The harness sends a brief to its
+transcripts (where they were saved, or beside `run.json`). A list it
+finds replaces the run's reading, and a list it can't read is an error;
+finding no list, the run's reading stands (its list, its error, or none
+read). Where both transcripts are gone, or the one found holds no prompt,
+the run's reading stands too, and a run with neither a list nor an error
+has an unknown list. The harness sends a brief to its
 runtime as Markdown, which backslash-escapes characters such as `_`; the
 bench undoes those escapes. A brief that says it carries a list (the
 drafting brief's words at the start of a line, outside the mail's

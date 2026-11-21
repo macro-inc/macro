@@ -206,11 +206,6 @@ type TranscriptRow = { session?: string; direction?: string; created_at?: string
 /** Whether `row` is a prompt the harness sent a runtime. */
 const isPrompt = (row: TranscriptRow) => row?.direction === 'to_runtime' && row.content?.method === 'session/prompt';
 
-/** Whether `row` is a prompt with some text in it (ACP's `prompt` blocks): a brief that says what it carried. */
-const isBrief = (row: TranscriptRow) => {
-  const blocks = (row.content?.params as { prompt?: unknown } | undefined)?.prompt;
-  return isPrompt(row) && Array.isArray(blocks) && blocks.some((block) => typeof block?.text === 'string' && block.text.trim() !== '');
-};
 
 /** Whether `value` has the shape of a work list (`finding.ts` `WORK_LIST`). */
 function isWorkList(value: unknown): value is WorkList {
@@ -292,16 +287,16 @@ export function readWorkList(rows: Iterable<unknown>): { list?: WorkList; error?
 /**
  * Read `generation`'s work list again from its sessions' transcript, where
  * it was saved or beside the run file at `runPath` (a run directory moved
- * with its transcripts). A re-read can correct what the run read, never
- * erase a list it read:
- * - a list read is the list; a transcript or brief that can't be read is
+ * with its transcripts). A re-read can only correct the run's reading with
+ * what it finds, never take it away:
+ * - a list found is the list; a transcript or brief that can't be read is
  *   the list's error;
- * - a transcript that is gone, or holds no brief to a runtime (empty, say,
- *   or only prompts without text), can't say what was read: the run's list
- *   stands, and with none, whether its sessions read one is unknown, an
- *   error too;
- * - briefs that carry no list leave a list the run read (the transcript may
- *   hold only some sessions), and otherwise say none was read.
+ * - finding no list, the run's reading stands: its list, its error, or none
+ *   read (the transcript may hold only some sessions, or briefs the bench
+ *   can't tell from others);
+ * - a transcript that is gone, or holds no prompt to a runtime (empty, say),
+ *   can't say what was read: the run's reading stands, and with neither a
+ *   list nor an error, whether its sessions read one is unknown, an error.
  * Says why when the run's reading stands.
  */
 export function rereadList(generation: Generation, runPath: string): string | undefined {
@@ -309,7 +304,7 @@ export function rereadList(generation: Generation, runPath: string): string | un
   if (!saved) return undefined;
   const transcript = [saved, join(dirname(runPath), basename(saved))].find((file) => existsSync(file));
   const unknown = (why: string) => {
-    if (!generation.workList) generation.listError = `${why}, and the run read no list, so whether its sessions read one is unknown`;
+    if (!generation.workList && !generation.listError) generation.listError = `${why}, and the run read no list, so whether its sessions read one is unknown`;
     return `${why}, so its work list is judged as the run first read it`;
   };
   if (!transcript) return unknown(`${saved} is gone`);
@@ -321,9 +316,9 @@ export function rereadList(generation: Generation, runPath: string): string | un
     generation.listError = `reading ${transcript}: ${String(error).slice(0, 200)}`;
     return undefined;
   }
-  if (!rows.some((row) => isBrief(row as TranscriptRow))) return unknown(`${transcript} holds no brief to a runtime`);
+  if (!rows.some((row) => isPrompt(row as TranscriptRow))) return unknown(`${transcript} holds no prompt to a runtime`);
   const { list, error } = readWorkList(rows);
-  if (!list && !error && generation.workList) return `${transcript} holds no brief with a list, so the list the run read stands`;
+  if (!list && !error) return `${transcript} holds no brief with a list, so the run's reading of it stands`;
   generation.workList = list;
   generation.listError = error;
   return undefined;
