@@ -488,6 +488,10 @@ pub enum TeammateRunFailure {
     /// The install's egress policy couldn't be put in place (or read back
     /// as put), so the agent wasn't started.
     NetworkIsolationUnavailable,
+    /// The host has no route to the internet (no default route, v4 or v6),
+    /// so every destination the agent's policy leaves it is unreachable:
+    /// the agent wasn't started.
+    EgressBlocked,
 }
 
 /// An agent teammate's environment: credentials and addresses, one variable

@@ -386,6 +386,17 @@ fn network_isolation_that_cant_be_enforced_is_a_host_problem_and_a_failure() {
 }
 
 #[test]
+fn a_host_with_no_route_to_the_internet_is_an_egress_failure() {
+    assert_eq!(
+        serde_json::to_value(TeammateRunState::Failed {
+            reason: TeammateRunFailure::EgressBlocked,
+        })
+        .unwrap(),
+        json!({ "state": "failed", "reason": "egressBlocked" })
+    );
+}
+
+#[test]
 fn a_host_report_lists_each_installed_engine_and_whether_it_enforces_isolation() {
     let report = TeammateHostReport {
         engine: Some(ContainerEngine {
