@@ -2,7 +2,16 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { driverOf, driverPorts, refusal, staleLeaseMs } from '../driver.ts';
+import { driverOf, driverPorts, ownerDriving, refusal, staleLeaseMs } from '../driver.ts';
+
+describe('ownerDriving', () => {
+  test("the harness's take-over file says human, with or without an id", () => {
+    expect(ownerDriving('human\n')).toBe(true);
+    expect(ownerDriving('human:7d2c4f50-0000-4000-8000-000000000001\n')).toBe(true);
+    expect(ownerDriving('humane')).toBe(false);
+    expect(ownerDriving(undefined)).toBe(false);
+  });
+});
 
 describe('driverOf', () => {
   test("the owner's take-over beats a solver's lease", () => {

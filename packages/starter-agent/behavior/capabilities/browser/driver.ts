@@ -5,7 +5,8 @@
  * solver doesn't start while the owner does.
  *
  * The owner's take-over is the harness's advisory file
- * (`$HOME/state/screen-driver`, `human:<userId>`); the harness itself also
+ * (`$HOME/state/screen-driver`: `human`, or `human:<id>` from older
+ * harnesses); the harness itself also
  * holds the agent's brain calls until hand-back. The solver's lease is a
  * file of the agent's own, made exclusively, so two solves never overlap.
  */
@@ -24,7 +25,7 @@ type Lease = { readonly solveId: string; readonly since: number };
 
 /** The owner's take-over, from the advisory file's contents. */
 export const ownerDriving = (advisory: string | undefined): boolean =>
-  advisory !== undefined && advisory.trim().startsWith('human:');
+  advisory !== undefined && /^human(?::|$)/.test(advisory.trim());
 
 const parseLease = (text: string | undefined): Lease | undefined => {
   if (text === undefined) return undefined;
