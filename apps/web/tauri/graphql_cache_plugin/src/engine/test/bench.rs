@@ -316,14 +316,34 @@ fn core_request(limit: u16) -> serde_json::Value {
     })
 }
 
+const SEARCH_PARITY_QUERIES: &[&str] = &[
+    "a",
+    "e",
+    "q",
+    "pro",
+    "Pro",
+    "project update",
+    "re, fw",
+    "a b c d",
+    "inv  2024",
+    "m t",
+    "the",
+    "é",
+    "zzqx",
+    "x y z q",
+];
+
 fn search(query: &str) -> SearchRequest {
-    serde_json::from_value(serde_json::json!({
+    serde_json::from_value(search_request(query, 20)).unwrap()
+}
+
+fn search_request(query: &str, limit: u16) -> serde_json::Value {
+    serde_json::json!({
         "profile": "quick-access-v1",
         "query": query,
-        "limit": 20,
+        "limit": limit,
         "nowMs": 1_795_000_000_000_i64,
-    }))
-    .unwrap()
+    })
 }
 
 /// The Mail tabs' list requests, as the app builds them: the fixture that
@@ -695,6 +715,21 @@ fn native_cache_parity_dump() {
                         );
                     }
                 }
+            }
+        }
+        // Typed search: whole ranked pages (documents in order), over one-letter, multi-token,
+        // comma, Unicode, case and unmatched queries.
+        for query in SEARCH_PARITY_QUERIES {
+            for limit in [20u16, 500] {
+                let page = handle
+                    .search(serde_json::from_value(search_request(query, limit)).unwrap())
+                    .await
+                    .map(|page| serde_json::to_value(page).unwrap())
+                    .unwrap_or_else(|error| serde_json::json!({ "error": error }));
+                dump.insert(
+                    format!("search {query:?} limit={limit}"),
+                    serde_json::json!([page]),
+                );
             }
         }
         handle.shutdown().unwrap();

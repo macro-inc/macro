@@ -15,6 +15,7 @@ mod predicate_cost;
 mod projection_writes;
 mod search_bucket_cost;
 mod search_options;
+mod search_prefilter;
 mod search_projection;
 mod search_streaming;
 mod startup;

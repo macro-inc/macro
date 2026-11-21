@@ -1184,10 +1184,10 @@ impl Storage for TursoStorage {
         mut visit: impl FnMut(SearchDocumentRef<'_>) + maybe_send::MaybeSend,
     ) -> Result<(), Self::Error> {
         self.require_healthy()?;
-        let (sql, values) = search::statement(profile, bucket, query);
+        let (sql, values) = search::statement(profile, bucket);
         let mut key = String::new();
         let result = driver::query_each(&self.connection(), &sql, values, |row| {
-            search::visit_row(row, profile, &mut key, &mut visit)
+            search::visit_row(row, profile, query, &mut key, &mut visit)
         });
         self.latch_result(result)
     }
