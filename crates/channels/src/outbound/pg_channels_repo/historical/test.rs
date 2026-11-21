@@ -761,7 +761,15 @@ async fn the_older_of_two_dms_within_a_second_wins_by_instant(pool: PgPool) {
         pair().lo().as_ref().to_owned(),
         pair().hi().as_ref().to_owned(),
     );
-    let younger = insert_dm(&pool, 1_000, &[(&lo, false), (&hi, false)]).await;
+    let first = insert_dm(&pool, 1_000, &[(&lo, false), (&hi, false)]).await;
+    let second = insert_dm(&pool, 1_000, &[(&lo, false), (&hi, false)]).await;
+    // Ids made in the same millisecond order at random: the younger is
+    // whichever has the lower id.
+    let (younger, older) = if first < second {
+        (first, second)
+    } else {
+        (second, first)
+    };
     sqlx::query!(
         "UPDATE comms_channels SET created_at = created_at + interval '500 milliseconds' WHERE id = $1",
         younger
@@ -769,8 +777,6 @@ async fn the_older_of_two_dms_within_a_second_wins_by_instant(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
-    let older = insert_dm(&pool, 1_000, &[(&lo, false), (&hi, false)]).await;
-    assert!(younger < older, "the younger DM has the lower id");
     for (viewer, other) in [
         (pair().lo().clone(), pair().hi().clone()),
         (pair().hi().clone(), pair().lo().clone()),
