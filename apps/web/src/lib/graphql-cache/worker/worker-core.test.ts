@@ -3119,6 +3119,22 @@ describe('CacheWorkerCore', () => {
           carryForward: 'older-in-use',
         },
       ],
+      [
+        {
+          outcome: 'reset-storage-uncertain',
+          carryForward: 'returned',
+          carryForwardStorageVersion: 11,
+        },
+        {
+          openOutcome: 'reset-storage-uncertain',
+          fromStorageVersion: 11,
+          carryForward: 'returned',
+        },
+      ],
+      [
+        { outcome: 'opened-new', carryForward: 'failed' },
+        { openOutcome: 'opened-new', carryForward: 'failed' },
+      ],
       [{ outcome: 'opened-existing' }, { openOutcome: 'opened-existing' }],
     ] as const) {
       const observations: Array<Record<string, unknown>> = [];
@@ -3144,6 +3160,8 @@ describe('CacheWorkerCore', () => {
       expect(schemaInit).toMatchObject(expected);
       if (!('carryForward' in expected)) {
         expect(schemaInit).not.toHaveProperty('carryForward');
+      }
+      if (!('fromStorageVersion' in expected)) {
         expect(schemaInit).not.toHaveProperty('fromStorageVersion');
       }
     }

@@ -75,9 +75,13 @@ export type CacheOpenOutcome = (typeof CACHE_OPEN_OUTCOMES)[number];
 
 export const CACHE_CARRY_FORWARDS = [
   'moved',
+  'resumed',
   'older-in-use',
   'unsupported',
+  'unreadable',
   'failed',
+  'returned',
+  'discarded',
 ] as const;
 export type CacheCarryForward = (typeof CACHE_CARRY_FORWARDS)[number];
 

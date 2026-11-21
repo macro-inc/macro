@@ -83,12 +83,20 @@ export type CacheQueueDiagnostics =
     };
 
 /** What happened to an older storage version's database when this build had
- * none of its own: moved here and opened, or left where it was. */
+ * none of its own: moved here and opened (`moved`, or `resumed` after an
+ * earlier open stopped partway), left where it was (`older-in-use`,
+ * `unsupported`, `unreadable`, `failed`), or, when its first open here never
+ * finished, handed back to the older build (`returned`) or reset
+ * (`discarded`). */
 export type CacheCarryForward =
   | 'moved'
+  | 'resumed'
   | 'older-in-use'
   | 'unsupported'
-  | 'failed';
+  | 'unreadable'
+  | 'failed'
+  | 'returned'
+  | 'discarded';
 
 export interface CacheOpenResult {
   engine: CacheEngine;
@@ -97,6 +105,7 @@ export interface CacheOpenResult {
   fromStorageVersion?: number;
   /** Absent when this build's database existed or no older one did. */
   carryForward?: CacheCarryForward;
+  /** Absent when the older storage version is unknown. */
   carryForwardStorageVersion?: number;
 }
 
