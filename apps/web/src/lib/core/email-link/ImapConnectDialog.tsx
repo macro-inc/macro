@@ -28,6 +28,7 @@ import {
 } from '@ui';
 import {
   createEffect,
+  createMemo,
   createSignal,
   createUniqueId,
   type Owner,
@@ -45,6 +46,7 @@ function blankEndpoint(email: string, port: number): Endpoint {
 function EndpointFields(props: {
   protocol: 'IMAP' | 'SMTP';
   endpoint: Endpoint;
+  discoveredEndpoint?: Endpoint;
   disabled?: boolean;
   onChange: (endpoint: Endpoint) => void;
 }) {
@@ -53,8 +55,15 @@ function EndpointFields(props: {
   const tlsForPort = (port: number) => {
     if (port === implicit) return 'implicit';
     if (port === startTls) return 'start_tls';
-    return props.endpoint.tls;
+    return props.discoveredEndpoint?.tls ?? props.endpoint.tls;
   };
+  const ports = createMemo(() => [
+    ...new Set([
+      implicit,
+      startTls,
+      props.discoveredEndpoint?.port ?? implicit,
+    ]),
+  ]);
   const portLabel = (port: number) =>
     t(tlsForPort(port) === 'implicit' ? 'imap.tlsPort' : 'imap.startTlsPort', {
       port: String(port),
@@ -81,7 +90,7 @@ function EndpointFields(props: {
       </label>
       <Select<number>
         class="grid gap-1 text-sm"
-        options={[...new Set([implicit, startTls, props.endpoint.port])]}
+        options={ports()}
         value={props.endpoint.port}
         optionTextValue={portLabel}
         disabled={props.disabled}
@@ -89,6 +98,7 @@ function EndpointFields(props: {
         onChange={(port) => {
           if (port == null) return;
           const tls = tlsForPort(port);
+          // Kobalte can re-emit a controlled selection when options change.
           if (port === props.endpoint.port && tls === props.endpoint.tls)
             return;
           props.onChange({ ...props.endpoint, port, tls });
@@ -226,15 +236,38 @@ function ConnectForm(props: ImapConnectProps) {
     requestId = crypto.randomUUID();
   }
 
+  function startRequest(budgetMs: number, parent: Span) {
+    controller?.abort();
+    const request = new AbortController();
+    controller = request;
+    const timer = setTimeout(() => {
+      if (request.signal.aborted || !isCurrentQueryAccount(viewer)) return;
+      request.abort();
+      clearPasswords();
+      setBusy(false);
+      setError('imap.timedOut');
+      parent.error('request_timeout');
+    }, budgetMs);
+    const finish = () => clearTimeout(timer);
+    request.signal.addEventListener('abort', finish, { once: true });
+    return { request, finish };
+  }
+
+  function cancel() {
+    controller?.abort();
+    clearPasswords();
+    setBusy(false);
+    props.onOpenChange(false);
+  }
+
   async function discover(parent: Span) {
     if (busy() || !isCurrentQueryAccount(viewer)) return;
     const address = email().trim();
     setEmail(address);
     setBusy(true);
     setError(undefined);
-    controller?.abort();
-    const read = new AbortController();
-    controller = read;
+    // Discovery has a five-second provider budget; allow capability lookup too.
+    const { request: read, finish } = startRequest(20_000, parent);
     try {
       const result = await imapDiscover(address, read.signal, parent);
       if (read.signal.aborted || !isCurrentQueryAccount(viewer)) return;
@@ -272,7 +305,10 @@ function ConnectForm(props: ImapConnectProps) {
       setSmtp(found?.smtp ?? blankEndpoint(address, 465));
       setManual(!found?.imap || !found?.smtp);
       setPhase('servers');
+    } catch (cause) {
+      if (!read.signal.aborted) throw cause;
     } finally {
+      finish();
       if (!read.signal.aborted) setBusy(false);
     }
   }
@@ -296,8 +332,9 @@ function ConnectForm(props: ImapConnectProps) {
       return;
     setBusy(true);
     setError(undefined);
-    const attempt = new AbortController();
-    controller = attempt;
+    // The internal client caps verification at 90 seconds. Preserve the
+    // request id after a timeout so a retry can recover a completed connect.
+    const { request: attempt, finish } = startRequest(95_000, parent);
     try {
       const result = await imapConnect(
         {
@@ -339,9 +376,14 @@ function ConnectForm(props: ImapConnectProps) {
         ].includes(code)
       )
         requestId = crypto.randomUUID();
+    } catch (cause) {
+      if (!attempt.signal.aborted) throw cause;
     } finally {
-      clearPasswords();
-      if (!attempt.signal.aborted) setBusy(false);
+      finish();
+      if (!attempt.signal.aborted && controller === attempt) {
+        clearPasswords();
+        setBusy(false);
+      }
     }
   }
 
@@ -394,12 +436,7 @@ function ConnectForm(props: ImapConnectProps) {
 
   const actions = () => (
     <div class="flex justify-end gap-2">
-      <Button
-        type="button"
-        variant="ghost"
-        disabled={busy()}
-        onClick={() => props.onOpenChange(false)}
-      >
+      <Button type="button" variant="ghost" onClick={cancel}>
         {t('imap.cancel')}
       </Button>
       <Show when={phase() === 'address' || canUsePassword()}>
@@ -531,6 +568,7 @@ function ConnectForm(props: ImapConnectProps) {
                         <EndpointFields
                           disabled={busy()}
                           protocol="IMAP"
+                          discoveredEndpoint={discovery()?.imap ?? undefined}
                           endpoint={imap()}
                           onChange={(value) => {
                             changeSettings();
@@ -540,6 +578,7 @@ function ConnectForm(props: ImapConnectProps) {
                         <EndpointFields
                           disabled={busy()}
                           protocol="SMTP"
+                          discoveredEndpoint={discovery()?.smtp ?? undefined}
                           endpoint={smtp()}
                           onChange={(value) => {
                             changeSettings();

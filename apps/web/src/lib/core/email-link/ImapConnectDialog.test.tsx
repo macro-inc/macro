@@ -285,7 +285,7 @@ it('keeps the same connection action and label while checking, failing and retry
   expect(button.textContent).toBe('Connect inbox');
   expect(screen.getByRole('button', { name: 'Cancel' })).toHaveProperty(
     'disabled',
-    true
+    false
   );
   fireEvent.keyDown(document, { key: 'Escape' });
   expect(close).not.toHaveBeenCalled();
@@ -462,7 +462,7 @@ it.each([
   }
 );
 
-it('shows the actual discovered submission port until the user changes it', async () => {
+it('retains the discovered submission port when switching to a standard port and back', async () => {
   mail.discover.mockResolvedValue(
     ok({
       imap: {
@@ -493,5 +493,94 @@ it('shows the actual discovered submission port until the user changes it', asyn
   const smtp = screen.getByRole('group', { name: 'Outgoing mail (SMTP)' });
   const connection = within(smtp).getByRole('button', { name: /^Connection/ });
   expect(connection.textContent).toContain('2525');
+  fireEvent.keyDown(connection, { key: 'ArrowDown', code: 'ArrowDown' });
+  fireEvent.click(await screen.findByRole('option', { name: /587/ }));
+  expect(connection.textContent).toContain('587');
+  fireEvent.keyDown(connection, { key: 'ArrowDown', code: 'ArrowDown' });
+  fireEvent.click(await screen.findByRole('option', { name: /2525/ }));
+  expect(connection.textContent).toContain('2525');
+  expect(connection.textContent).toContain('TLS');
   expect(mail.connect).not.toHaveBeenCalled();
+});
+
+it.each(['discovery', 'connect'])(
+  'explicitly cancels pending %s and ignores its late result',
+  async (phase) => {
+    const pending =
+      Promise.withResolvers<
+        Result<{ linkId: string }, { code: string; message: string }[]>
+      >();
+    const close = vi.fn();
+    const result = vi.fn();
+    if (phase === 'discovery')
+      mail.discover.mockReturnValueOnce(pending.promise);
+    else mail.connect.mockReturnValueOnce(pending.promise);
+    render(() => (
+      <ImapConnectDialog
+        open
+        onOpenChange={close}
+        onResult={result}
+        emailAddress="owner@example.com"
+      />
+    ));
+    if (phase === 'connect') {
+      const password = await screen.findByLabelText('Password or app password');
+      fireEvent.click(screen.getByRole('checkbox', { name: /I trust/ }));
+      fireEvent.input(password, { target: { value: 'synthetic-password' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Connect inbox' }));
+    }
+    const request = phase === 'discovery' ? mail.discover : mail.connect;
+    await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(1));
+    const signal = request.mock.calls[0][1] as AbortSignal;
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(signal.aborted).toBe(true);
+    expect(close).toHaveBeenCalledWith(false);
+    pending.resolve(ok({ linkId: 'late-inbox' }));
+    await pending.promise;
+    expect(result).not.toHaveBeenCalled();
+  }
+);
+
+it.each([
+  ['discovery', 20_000],
+  ['connect', 95_000],
+] as const)('ends stalled %s at its deadline', async (phase, deadline) => {
+  const pending =
+    Promise.withResolvers<
+      Result<{ linkId: string }, { code: string; message: string }[]>
+    >();
+  if (phase === 'discovery') mail.discover.mockReturnValueOnce(pending.promise);
+  else mail.connect.mockReturnValueOnce(pending.promise);
+  try {
+    if (phase === 'discovery') vi.useFakeTimers();
+    render(() => (
+      <ImapConnectDialog
+        open
+        onOpenChange={() => {}}
+        onResult={() => {}}
+        emailAddress="owner@example.com"
+      />
+    ));
+    if (phase === 'connect') {
+      const password = await screen.findByLabelText('Password or app password');
+      fireEvent.click(screen.getByRole('checkbox', { name: /I trust/ }));
+      fireEvent.input(password, { target: { value: 'synthetic-password' } });
+      vi.useFakeTimers();
+      fireEvent.click(screen.getByRole('button', { name: 'Connect inbox' }));
+    }
+    await vi.advanceTimersByTimeAsync(deadline);
+    const request = phase === 'discovery' ? mail.discover : mail.connect;
+    expect((request.mock.calls[0][1] as AbortSignal).aborted).toBe(true);
+    expect(
+      screen
+        .getByRole('button', {
+          name: phase === 'connect' ? 'Connect inbox' : 'Find settings',
+        })
+        .getAttribute('aria-busy')
+    ).toBeNull();
+    expect(screen.getByRole('alert')).toBeTruthy();
+  } finally {
+    pending.resolve(ok({ linkId: 'late-inbox' }));
+    vi.useRealTimers();
+  }
 });
