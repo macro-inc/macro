@@ -804,9 +804,11 @@ export type Widget_Deserialize =
   /**
    *  A card with one Connect button, for an app or remote MCP server the
    *  user must connect before you can continue, and only one that is not
-   *  connected yet. Present it instead of telling them to open settings.
-   *  Once they connect an app, an agent session continues by itself; after
-   *  they sign in to a server, they reply to continue, so ask them to.
+   *  connected yet. Present it instead of telling them to open settings,
+   *  then end your turn without asking them in text to connect: the card
+   *  asks, and shows Connected once they have. Once they connect an app,
+   *  an agent session continues by itself; after they sign in to a server,
+   *  they reply to continue, so say only to reply once it is connected.
    */
   | ({
       type: 'connect';
@@ -1119,9 +1121,11 @@ export type Widget_Serialize =
   /**
    *  A card with one Connect button, for an app or remote MCP server the
    *  user must connect before you can continue, and only one that is not
-   *  connected yet. Present it instead of telling them to open settings.
-   *  Once they connect an app, an agent session continues by itself; after
-   *  they sign in to a server, they reply to continue, so ask them to.
+   *  connected yet. Present it instead of telling them to open settings,
+   *  then end your turn without asking them in text to connect: the card
+   *  asks, and shows Connected once they have. Once they connect an app,
+   *  an agent session continues by itself; after they sign in to a server,
+   *  they reply to continue, so say only to reply once it is connected.
    */
   | ({
       type: 'connect';

@@ -1514,7 +1514,7 @@ expression: schema
           "type": "object"
         },
         {
-          "description": "A card with one Connect button, for an app or remote MCP server the\nuser must connect before you can continue, and only one that is not\nconnected yet. Present it instead of telling them to open settings.\nOnce they connect an app, an agent session continues by itself; after\nthey sign in to a server, they reply to continue, so ask them to.",
+          "description": "A card with one Connect button, for an app or remote MCP server the\nuser must connect before you can continue, and only one that is not\nconnected yet. Present it instead of telling them to open settings,\nthen end your turn without asking them in text to connect: the card\nasks, and shows Connected once they have. Once they connect an app,\nan agent session continues by itself; after they sign in to a server,\nthey reply to continue, so say only to reply once it is connected.",
           "properties": {
             "name": {
               "description": "The app's or server's display name, e.g. \"Linear\".",
