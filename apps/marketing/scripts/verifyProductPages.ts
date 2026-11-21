@@ -11,6 +11,16 @@ export async function verifyProductPages(browser: Browser, origin: string) {
     '/crm',
     '/agents',
     '/github',
+    '/forms',
+    '/spreadsheets',
+    '/databases',
+    '/drive',
+    '/calendar',
+    '/booking-links',
+    '/canvas',
+    '/snippets',
+    '/routines',
+    '/skills',
   ]) {
     const page = await browser.newPage({
       viewport: { width: 390, height: 844 },
@@ -61,7 +71,7 @@ export async function verifyProductPages(browser: Browser, origin: string) {
       await expect(brand).toHaveAttribute('width', '20');
       await expect(brand).toHaveAttribute('height', '20');
       // Each feature section shows a real app screen, sized before it loads.
-      const screens = page.locator('.feature-screenshot img');
+      const screens = page.locator('.feature-screenshot img:visible');
       const count = await screens.count();
       expect(count, `${route}: app screens are present`).toBeGreaterThan(0);
       for (let index = 0; index < count; index++) {
@@ -71,6 +81,22 @@ export async function verifyProductPages(browser: Browser, origin: string) {
           `${route}: screen ${index} keeps its height`
         ).toBeGreaterThan(100);
       }
+      // The outlined part of each screen starts fully in view on a phone.
+      const clipped = await page.evaluate(() =>
+        [...document.querySelectorAll('.feature-screenshot-focus')]
+          .filter((focus) => focus.getClientRects().length > 0)
+          .filter((focus) => {
+            const frame = focus
+              .closest('.feature-screenshot-viewport')
+              ?.getBoundingClientRect();
+            const box = focus.getBoundingClientRect();
+            return (
+              !frame || box.left < frame.left - 1 || box.right > frame.right + 1
+            );
+          })
+          .map((focus) => focus.closest('section')?.id ?? '?')
+      );
+      expect(clipped, `${route}: outlines fit on a phone`).toEqual([]);
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth > window.innerWidth + 1
       );

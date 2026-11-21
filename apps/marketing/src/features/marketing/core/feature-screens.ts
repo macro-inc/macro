@@ -121,12 +121,17 @@ import tasksProjectTasks from '../assets/screens/tasks-project-tasks.webp';
 import tasksPrtaskPanel3 from '../assets/screens/tasks-prtask-panel3.webp';
 import tasksTaskAssignees from '../assets/screens/tasks-task-assignees.webp';
 
-export type FeatureScreen = {
+export type FeatureScreenFrame = {
   src: string;
   width: number;
   height: number;
-  alt: string;
   focus?: { x: number; y: number; width: number; height: number };
+};
+
+export type FeatureScreen = FeatureScreenFrame & {
+  alt: string;
+  /** The same scene captured narrower, for phones when `focus` is too wide to fit them. */
+  narrow?: FeatureScreenFrame;
 };
 
 export type PhoneScreen = {

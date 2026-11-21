@@ -355,8 +355,12 @@ meta-ads repository's tutorial sets, taken at about 1000×600 in dark mode at 2x
 and stored as WebP in `src/features/marketing/assets/screens/`. Register each
 capture in `core/feature-screens.ts` with its alt text and an optional `focus`
 rectangle (capture pixels) that `FeatureScreenshot` outlines in the app accent.
-The screen sits on a flat, borderless `#101010` stage. On phones the screen keeps
-a 640px canvas and scrolls sideways, starting on the focus. `FeaturePhoneScreens`
+The screen sits on a flat, borderless `#101010` stage. On phones the canvas is
+up to 640px wide, sized so the focus fits, and scrolls sideways starting on it.
+When the focus is too wide for that (about 580 capture pixels or more), add a
+`narrow` frame: the same scene captured at 400×700, where the app uses its narrow
+layout, with the focus measured on the same element; phones show it instead. The
+build fails if an outline starts clipped on a phone. `FeaturePhoneScreens`
 adds an "On your phone." row of mobile captures from `phoneScreens`. Children
 passed with a `screen` render below it, for real links, videos, and setup steps.
 Drop a section the app cannot show rather than drawing it, and keep `Macro
@@ -1266,7 +1270,7 @@ Feature, benefits, and documentation pages share `PageOutline`: the reading colu
 
 The homepage uses the same wide-screen right rail and stacked signup/demo actions as feature pages. `HomepageResources` has two matching groups: Downloads for iOS, Mac, and Android, followed by Links for GitHub, X / Twitter, LinkedIn, YouTube, and Instagram. Separate the groups by 24px. Display Links as a horizontal row of social icons with accessible names and hover titles, without a star count. Keep Blog and Documentation out of this resource rail. Keep mobile downloads aligned with the native app's store URLs; resolve the Mac installer through `desktopDownloads.ts`, retaining a verified direct fallback when GitHub is unavailable. Below 1440px the resources follow the homepage content.
 
-Use full first and last names for people in channel mockups. Rotate stories across Peter Chinman, Wolf Mermelstein, Eric Hayes, Rahul Batra, and Austin Barron as well as the existing cast. Use the shared `homepagePeople` profile photos; Rahul has an initials avatar because his Macro profile has no photo. Keep Valentina out of demo fixtures.
+Use full first and last names for people in channel mockups. Rotate stories across Peter Chinman, Wolf Mermelstein, Eric Hayes, Rahul Batra, and Austin Barron as well as the existing cast. Use the shared `homepagePeople` profile photos; Rahul has an initials avatar because his Macro profile has no photo. Keep Valentina out of demo fixtures and app captures.
 
 The Agents teamwork walkthrough uses a compact 600px frame and finishes on the completed Cursor session card. Keep that card visible at the bottom of the conversation, including with reduced motion; do not loop back to the initial design request.
 

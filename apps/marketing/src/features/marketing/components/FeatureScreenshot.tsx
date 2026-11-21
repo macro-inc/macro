@@ -1,27 +1,63 @@
 import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
-import type { FeatureScreen, PhoneScreen } from '../core/feature-screens';
+import type {
+  FeatureScreen,
+  FeatureScreenFrame,
+  PhoneScreen,
+} from '../core/feature-screens';
 import './feature-screenshot.css';
 
 /** A real Macro app screen on a dark stage, outlined where the section's point is. */
 export function FeatureScreenshot(props: { screen: FeatureScreen }) {
+  return (
+    <figure
+      class="feature-screenshot"
+      data-narrow={props.screen.narrow ? '' : undefined}
+    >
+      <div class="feature-screenshot-frame">
+        <ScreenCanvas
+          frame={props.screen}
+          alt={props.screen.alt}
+          class="feature-screenshot-wide"
+        />
+        <Show when={props.screen.narrow}>
+          {(narrow) => (
+            <ScreenCanvas
+              frame={narrow()}
+              alt={props.screen.alt}
+              class="feature-screenshot-narrow"
+            />
+          )}
+        </Show>
+      </div>
+    </figure>
+  );
+}
+
+/**
+ * One capture in a viewport that scrolls sideways on phones. The canvas is
+ * sized so the outlined part fits the phone's width, and the scroll starts on it.
+ */
+function ScreenCanvas(props: {
+  frame: FeatureScreenFrame;
+  alt: string;
+  class: string;
+}) {
   let viewport: HTMLDivElement | undefined;
   const [scrollable, setScrollable] = createSignal(false);
 
-  // Phones show the screen at a readable width and scroll it sideways. Start
-  // the scroll on the outlined part, so the point of the section is in view.
   const showFocus = () => {
     if (!viewport) return;
     const overflow = viewport.scrollWidth > viewport.clientWidth;
     setScrollable(overflow);
     if (!overflow) return;
 
-    const focus = props.screen.focus;
+    const focus = props.frame.focus;
     if (!focus) {
       viewport.scrollLeft = 0;
       return;
     }
 
-    const scale = viewport.scrollWidth / props.screen.width;
+    const scale = viewport.scrollWidth / props.frame.width;
     const left = focus.x * scale;
     const width = focus.width * scale;
     if (width > viewport.clientWidth) {
@@ -39,43 +75,51 @@ export function FeatureScreenshot(props: { screen: FeatureScreen }) {
 
   const percent = (value: number, total: number) => `${(value / total) * 100}%`;
 
+  // Phones: wide enough to read (up to 640px), narrow enough that the focus
+  // and a 12px margin each side fit the viewport.
+  const phoneWidth = () => {
+    const focus = props.frame.focus;
+    if (!focus) return undefined;
+    const fit = props.frame.width / (focus.width + 24);
+    return `clamp(100%, ${(fit * 100).toFixed(1)}%, 640px)`;
+  };
+
   return (
-    <figure class="feature-screenshot">
-      <div class="feature-screenshot-frame">
-        <div
-          ref={viewport}
-          class="feature-screenshot-viewport"
-          tabIndex={scrollable() ? 0 : undefined}
-          role={scrollable() ? 'group' : undefined}
-          aria-label={scrollable() ? 'App screen, scrolls sideways' : undefined}
-        >
-          <div class="feature-screenshot-canvas">
-            <img
-              src={props.screen.src}
-              width={props.screen.width}
-              height={props.screen.height}
-              alt={props.screen.alt}
-              loading="lazy"
-              decoding="async"
+    <div
+      ref={viewport}
+      class={`feature-screenshot-viewport ${props.class}`}
+      tabIndex={scrollable() ? 0 : undefined}
+      role={scrollable() ? 'group' : undefined}
+      aria-label={scrollable() ? 'App screen, scrolls sideways' : undefined}
+    >
+      <div
+        class="feature-screenshot-canvas"
+        style={{ '--phone-canvas-width': phoneWidth() }}
+      >
+        <img
+          src={props.frame.src}
+          width={props.frame.width}
+          height={props.frame.height}
+          alt={props.alt}
+          loading="lazy"
+          decoding="async"
+        />
+        <Show when={props.frame.focus}>
+          {(focus) => (
+            <span
+              class="feature-screenshot-focus"
+              aria-hidden="true"
+              style={{
+                left: percent(focus().x, props.frame.width),
+                top: percent(focus().y, props.frame.height),
+                width: percent(focus().width, props.frame.width),
+                height: percent(focus().height, props.frame.height),
+              }}
             />
-            <Show when={props.screen.focus}>
-              {(focus) => (
-                <span
-                  class="feature-screenshot-focus"
-                  aria-hidden="true"
-                  style={{
-                    left: percent(focus().x, props.screen.width),
-                    top: percent(focus().y, props.screen.height),
-                    width: percent(focus().width, props.screen.width),
-                    height: percent(focus().height, props.screen.height),
-                  }}
-                />
-              )}
-            </Show>
-          </div>
-        </div>
+          )}
+        </Show>
       </div>
-    </figure>
+    </div>
   );
 }
 
