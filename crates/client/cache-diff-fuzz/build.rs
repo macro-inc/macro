@@ -26,6 +26,18 @@ fn main() {
         let module = read(&source).replace("tauri::async_runtime::spawn(", "tokio::spawn(");
         std::fs::write(out.join("engine").join(name), module).unwrap();
     }
+    // Hosts whose `soup::write_projections` takes the write's normalized
+    // updates get `cfg(write_projections_normalized)`, so the hooks build
+    // against hosts from before and after that parameter.
+    println!("cargo::rustc-check-cfg=cfg(write_projections_normalized)");
+    let soup = read(&host.join("engine/soup.rs"));
+    let normalized = soup
+        .split_once("fn write_projections(")
+        .and_then(|(_, rest)| rest.split_once(") ->"))
+        .is_some_and(|(parameters, _)| parameters.contains("normalized:"));
+    if normalized {
+        println!("cargo::rustc-cfg=write_projections_normalized");
+    }
     let hooks = manifest.join("src/fuzz_hooks.rs");
     std::fs::write(out.join("engine/fuzz_hooks.rs"), read(&hooks)).unwrap();
     std::fs::write(

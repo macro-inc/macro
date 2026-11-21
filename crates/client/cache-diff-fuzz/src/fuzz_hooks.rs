@@ -66,6 +66,10 @@ impl EngineHandle {
             request.variables,
             request.data,
             request.identity,
+            // A host that shares the write's normalization with the passes
+            // takes it here; none makes the passes normalize the response.
+            #[cfg(write_projections_normalized)]
+            None,
         )
         .await
         {
