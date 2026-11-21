@@ -1,7 +1,7 @@
 import type { InputAttachmentData } from '@channel/Input';
 import { setPreferredSpeed } from '@core/component/AI/signal/speed';
 import type { TurnState } from '@service-agent-fold/generated/types';
-import { cleanup, render } from '@solidjs/testing-library';
+import { cleanup, render, screen } from '@solidjs/testing-library';
 import { err, ok } from 'neverthrow';
 import { createSignal, mergeProps } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -27,6 +27,7 @@ const speedOption = (values: string[]) => ({
 
 const mocks = vi.hoisted(() => ({
   session: (): { canEdit?: boolean; harness?: string } => ({ canEdit: false }),
+  sessionId: (): string => 'session-1',
   turn: () => 'idle' as TurnState,
   issue: vi.fn(),
   selectModel: vi.fn(),
@@ -79,7 +80,7 @@ vi.mock('../context/AgentSessionContext', () => ({
     steer: mocks.steer,
     steerFailed: () => new Set(),
     turn: () => mocks.turn(),
-    sessionId: () => 'session-1',
+    sessionId: () => mocks.sessionId(),
     registerQuoteInsert: vi.fn(),
   }),
 }));
@@ -92,7 +93,7 @@ vi.mock('../ui', () => ({
     mocks.queued = props;
     return null;
   },
-  ComposerNotice: () => null,
+  ComposerNotice: (props: { text: string }) => <p>{props.text}</p>,
 }));
 vi.mock('@app/features/agents-view/model-selector', () => ({
   UnifiedModelSelector: (props: { state: UnifiedModelSelectorState }) => {
@@ -107,6 +108,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   mocks.turn = () => 'idle';
   mocks.metadata = () => undefined;
+  mocks.sessionId = () => 'session-1';
   mocks.session = () => ({ canEdit: false });
   mocks.issue.mockResolvedValue({ isErr: () => false });
   setPreferredSpeed('priority');
@@ -385,6 +387,103 @@ describe('a message the harness does not take', () => {
     expect(mocks.toastFailure).not.toHaveBeenCalled();
   });
 
+  it('says above the input why the message came back, until the next send', async () => {
+    let answer!: (result: unknown) => void;
+    mocks.issue.mockResolvedValueOnce(
+      err([
+        {
+          code: 'NO_RUNTIME_ACCESS',
+          message: 'This agent runs on a machine that is not connected.',
+        },
+      ])
+    );
+    mocks.issue.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        })
+    );
+    render(() => <AgentComposer />);
+    sendFromInput('Run the tests');
+
+    expect(
+      await screen.findByText(
+        'Not sent: This agent runs on a machine that is not connected.'
+      )
+    ).toBeTruthy();
+    // A polite live region, so a screen reader hears why the text came back.
+    expect(screen.getByRole('status').textContent).toBe(
+      'Not sent: This agent runs on a machine that is not connected.'
+    );
+    // Editing the message keeps the reason; sending it clears it, even before
+    // the input has emptied itself.
+    mocks.input?.onDraftChange?.('Run the tests again');
+    expect(screen.queryByText(/^Not sent:/)).toBeTruthy();
+    mocks.input?.onSend('Run the tests again', []);
+    expect(screen.queryByText(/^Not sent:/)).toBeNull();
+    answer(ok({ status: 'accepted', actionId: 'a' }));
+  });
+
+  it('drops the reason when the composer moves to another session', async () => {
+    const [session, setSession] = createSignal('session-1');
+    mocks.sessionId = session;
+    mocks.issue.mockResolvedValue(
+      err([{ code: 'NO_RUNTIME_ACCESS', message: 'Not connected.' }])
+    );
+    render(() => <AgentComposer />);
+    sendFromInput('Run the tests');
+
+    expect(await screen.findByText('Not sent: Not connected.')).toBeTruthy();
+    setSession('session-2');
+    expect(screen.queryByText(/^Not sent:/)).toBeNull();
+  });
+
+  it('keeps an earlier reason when a later send fails without one', async () => {
+    let answer!: (result: unknown) => void;
+    mocks.issue.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        })
+    );
+    mocks.issue.mockResolvedValueOnce(
+      err([{ code: 'NO_RUNTIME_ACCESS', message: 'Not connected.' }])
+    );
+    render(() => <AgentComposer />);
+    sendFromInput('First message');
+    sendFromInput('Second message');
+    expect(await screen.findByText('Not sent: Not connected.')).toBeTruthy();
+
+    answer(err([{ code: 'HTTP_ERROR' }]));
+    await vi.waitFor(() => expect(mocks.toastFailure).toHaveBeenCalled());
+    expect(screen.queryByText('Not sent: Not connected.')).toBeTruthy();
+  });
+
+  it('keeps the reason while the returned files are still there', async () => {
+    mocks.issue.mockResolvedValue(
+      err([{ code: 'NO_RUNTIME_ACCESS', message: 'Not connected.' }])
+    );
+    render(() => <AgentComposer />);
+    sendFromInput('', [attachment]);
+
+    expect(await screen.findByText('Not sent: Not connected.')).toBeTruthy();
+    mocks.input?.onDraftChange?.('x');
+    mocks.input?.onDraftChange?.('');
+    expect(screen.queryByText('Not sent: Not connected.')).toBeTruthy();
+  });
+
+  it('drops the reason once the returned message is cleared away', async () => {
+    mocks.issue.mockResolvedValue(
+      err([{ code: 'NO_RUNTIME_ACCESS', message: 'Not connected.' }])
+    );
+    render(() => <AgentComposer />);
+    sendFromInput('Run the tests');
+
+    expect(await screen.findByText('Not sent: Not connected.')).toBeTruthy();
+    mocks.input?.onDraftChange?.('');
+    expect(screen.queryByText(/^Not sent:/)).toBeNull();
+  });
+
   it('keeps the draft and says so when the send fails', async () => {
     mocks.issue.mockResolvedValue(err([{ code: 'HTTP_ERROR' }]));
     render(() => <AgentComposer />);
@@ -394,6 +493,8 @@ describe('a message the harness does not take', () => {
     expect(mocks.toastFailure).toHaveBeenCalledWith(
       'The message could not be sent'
     );
+    // The toast says it; there is no reason to repeat above the input.
+    expect(screen.queryByText(/^Not sent:/)).toBeNull();
   });
 
   it('keeps the draft when the request throws', async () => {

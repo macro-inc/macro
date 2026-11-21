@@ -2401,8 +2401,14 @@ must stay hidden; subsequent live messages must still appear.
   rejected speed change, or editing access lost meanwhile) comes back the same
   way. Any pending bubble it
   showed is retracted, so a resend appears once. A no-runtime refusal is
-  explained in the transcript; any other failure shows "The message could not
-  be sent".
+  explained in the transcript, and the composer that sent it shows
+  "Not sent: <reason>" above the input (a polite live region; the line wraps
+  so the harness's "what to do" half stays readable on a phone) while the
+  message is still there:
+  editing keeps it, and its next send, emptying the box of text and files, or
+  switching session clears it. Another composer that takes a refused message
+  in shows no reason. Any other failure shows "The message could not be sent"
+  and leaves an earlier reason in place.
 - Queued prompts render as a list between the transcript and the input, newest at the
   top — the prompt about to be sent sits at the bottom, immediately above the input.
   The list is capped at the smaller of 40% of the viewport height and 24rem. Past that
