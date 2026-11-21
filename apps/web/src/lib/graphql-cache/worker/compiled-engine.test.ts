@@ -12,11 +12,11 @@ import {
 const EMPTY_WASM = new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x01, 0, 0, 0]);
 
 const channels: MessageChannel[] = [];
-function engineStart() {
+function engineStart(waitMs?: number) {
   const channel = new MessageChannel();
   channels.push(channel);
   const worker = compiledEngineFromPage(channel.port2);
-  offerCompiledEngine(channel.port1);
+  offerCompiledEngine(channel.port1, waitMs);
   return worker;
 }
 
@@ -148,4 +148,42 @@ it('compiles nothing ahead when the page holds a module or a compile', async () 
   prefetchCompiledEngine(compile);
   prefetchCompiledEngine(compile);
   expect(compile).toHaveBeenCalledTimes(1);
+});
+
+it('lets the worker compile when the compile ahead stalls, and keeps it if it finishes', async () => {
+  let finish: (engine: CompiledEngine) => void = () => undefined;
+  prefetchCompiledEngine(
+    () => new Promise<CompiledEngine>((resolve) => (finish = resolve))
+  );
+  await expect(engineStart(20).offered).resolves.toBeUndefined();
+
+  finish(await compiledAhead());
+  await vi.waitFor(async () => {
+    const next = await engineStart().offered;
+    expect(next?.assetUrl).toBe('https://app.test/engine-a.wasm');
+  });
+});
+
+it('keeps the module a later report retained over a stalled compile ahead', async () => {
+  let finish: (engine: CompiledEngine) => void = () => undefined;
+  prefetchCompiledEngine(
+    () => new Promise<CompiledEngine>((resolve) => (finish = resolve))
+  );
+  const first = engineStart(20);
+  await expect(first.offered).resolves.toBeUndefined();
+  first.report({
+    assetUrl: 'https://app.test/engine-b.wasm',
+    module: await WebAssembly.compile(EMPTY_WASM),
+  });
+  await vi.waitFor(async () => {
+    expect((await engineStart().offered)?.assetUrl).toBe(
+      'https://app.test/engine-b.wasm'
+    );
+  });
+
+  finish(await compiledAhead());
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  expect((await engineStart().offered)?.assetUrl).toBe(
+    'https://app.test/engine-b.wasm'
+  );
 });

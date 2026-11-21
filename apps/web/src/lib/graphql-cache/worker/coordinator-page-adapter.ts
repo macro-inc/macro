@@ -3,6 +3,8 @@ import * as Effect from 'effect/Effect';
 import { APP_BUILD_TIME } from '../app-build';
 import type { CacheRequest, WorkerMessage } from '../protocol';
 import {
+  type CacheTelemetryEventName,
+  type CacheTelemetryObservation,
   type CacheTelemetryRecorderLike,
   describeCacheError,
   isolateCacheTelemetry,
@@ -143,6 +145,13 @@ const defaultDedicatedWorkerFactory = (
     name: `graphql-cache-engine:${scope}:${ownerEpoch}`,
   });
 
+const PREFETCH_EVENT_NAMES: Partial<
+  Record<CacheTelemetryEventName, CacheTelemetryEventName>
+> = {
+  'graphql_cache.wasm_download': 'graphql_cache.wasm_prefetch_download',
+  'graphql_cache.wasm_compile': 'graphql_cache.wasm_prefetch_compile',
+};
+
 const compileProductionEngine =
   (telemetry: CacheTelemetryRecorderLike) =>
   async (): Promise<CompiledEngine> => {
@@ -150,9 +159,18 @@ const compileProductionEngine =
     // module compiled from it.
     const url = new URL('../wasm/cache_wasm_bg.wasm', import.meta.url);
     const now = (): number => performance.now();
+    // Recorded apart from the worker's own download and compile: a follower
+    // tab compiles ahead too, and no engine starts from it.
+    const prefetchTelemetry = {
+      record: (event: CacheTelemetryObservation) =>
+        telemetry.record({
+          ...event,
+          name: PREFETCH_EVENT_NAMES[event.name] ?? event.name,
+        }),
+    };
     return {
       assetUrl: url.href,
-      module: await compileCacheWasm(url, telemetry, now),
+      module: await compileCacheWasm(url, prefetchTelemetry, now),
     };
   };
 
@@ -322,6 +340,7 @@ export class CacheCoordinatorPageAdapter {
     this.disposePromise = new Promise<void>((resolve) => {
       this.resolveDispose = resolve;
     });
+    dropPrefetchedCompiledEngine();
     if (this.closed) {
       this.settleDispose();
       return this.disposePromise;
@@ -607,6 +626,9 @@ export class CacheCoordinatorPageAdapter {
           return;
         }
         this.registered = true;
+        // Another visible tab runs the engine: this one compiled ahead for a
+        // worker it will not start. Elected later, its worker compiles.
+        if (message.ownerElsewhere) dropPrefetchedCompiledEngine();
         this.resolveRegistration?.();
         this.resolveRegistration = undefined;
         this.rejectRegistration = undefined;
@@ -1042,6 +1064,7 @@ export class CacheCoordinatorPageAdapter {
   private failTerminal(error: Error): void {
     if (this.terminalErrorReported) return;
     this.terminalErrorReported = true;
+    dropPrefetchedCompiledEngine();
     this.closed = true;
     this.registered = false;
     this.terminateCleanupWorker();
@@ -1072,6 +1095,8 @@ export class CacheCoordinatorPageAdapter {
   }
 
   private rejectStartAndQueued(error: Error): void {
+    // A page that leaves before owning the cache keeps no compile ahead.
+    dropPrefetchedCompiledEngine();
     this.rejectRegistration?.(error);
     this.rejectRegistration = undefined;
     this.resolveRegistration = undefined;

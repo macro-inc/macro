@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { type CompiledEngine, forgetCompiledEngine } from './compiled-engine';
+import {
+  type CompiledEngine,
+  forgetCompiledEngine,
+  prefetchCompiledEngine,
+} from './compiled-engine';
 import {
   createCacheCoordinatorPageAdapter,
   type DedicatedWorkerLike,
@@ -1355,7 +1359,8 @@ describe('CacheCoordinatorPageAdapter', () => {
 
     async function registered(
       events: string[],
-      compileEngine: () => Promise<CompiledEngine>
+      compileEngine: () => Promise<CompiledEngine>,
+      acknowledgement: { ownerElsewhere?: true } = {}
     ) {
       const port = new FakeCoordinatorPort();
       const adapter = createCacheCoordinatorPageAdapter({
@@ -1368,7 +1373,12 @@ describe('CacheCoordinatorPageAdapter', () => {
       });
       const started = adapter.start();
       await vi.waitFor(() => expect(port.messages).toHaveLength(1));
-      port.receive({ ...version, kind: 'registered', tabId: 'tab-a' });
+      port.receive({
+        ...version,
+        kind: 'registered',
+        tabId: 'tab-a',
+        ...acknowledgement,
+      });
       await started;
       return { adapter, port };
     }
@@ -1408,6 +1418,28 @@ describe('CacheCoordinatorPageAdapter', () => {
       await vi.waitFor(() => expect(offered).toHaveLength(1));
       expect(offered[0]).toBeNull();
       await adapter.dispose({ graceful: false });
+    });
+
+    it('forgets the compile when it joins while another visible tab owns the cache', async () => {
+      const offered = offers();
+      const { adapter, port } = await registered([], compiled, {
+        ownerElsewhere: true,
+      });
+
+      // Elected later, this page's worker compiles for itself.
+      port.receive(election(1));
+      await vi.waitFor(() => expect(offered).toHaveLength(1));
+      expect(offered[0]).toBeNull();
+      await adapter.dispose({ graceful: false });
+    });
+
+    it('forgets the compile when the page leaves before it is elected', async () => {
+      const compile = vi.fn(compiled);
+      const { adapter } = await registered([], compile);
+      await adapter.dispose({ graceful: false });
+      // A compile ahead still held would make the next one a no-op.
+      prefetchCompiledEngine(compile);
+      expect(compile).toHaveBeenCalledTimes(2);
     });
 
     it('keeps the compile while its own engine opens', async () => {
