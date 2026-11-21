@@ -64,8 +64,10 @@ export type OwnChannelWrites = {
    * channel replaced it, all in one change: a bulk deletion lets thousands
    * go at once. */
   release: (released: readonly (readonly [string, OwnChannelWrite])[]) => void;
-  /** Lets every write go, and drops the reads still in flight: the storage
-   * the directories read was replaced. */
+  /** Lets every write go, drops the reads still in flight, and forgets the
+   * order of every read sent so far: the storage the directories read was
+   * replaced, or a new sign-in replaced the one that wrote. No read sent
+   * before it is taken after it. */
   clear: () => void;
 };
 
@@ -84,7 +86,8 @@ export function ownChannelWrites(client: QueryClient): OwnChannelWrites {
   // One hold per read that took writes, however many channels it named.
   const holds = new Set<ReturnType<typeof setTimeout>>();
   // The latest read taken for each channel, kept after its write goes, so a
-  // read sent before it can never land later.
+  // read sent before it can never land later. A clear forgets it: every
+  // read sent before the clear is dropped anyway (`clearedAt`).
   const latest = new Map<string, number>();
   const inFlight = new Map<number, OwnWriteRead>();
   let sequence = 0;
@@ -149,11 +152,19 @@ export function ownChannelWrites(client: QueryClient): OwnChannelWrites {
       inFlight.clear();
       for (const hold of holds) clearTimeout(hold);
       holds.clear();
+      latest.clear();
       if (Object.keys(untrack(writes)).length > 0) setWrites({});
     },
   };
   OWN_WRITES.set(client, created);
   return created;
+}
+
+/** Forgets `client`'s own writes, the reads in flight and their hold timers,
+ * if it has a store: a new sign-in replaced the one that made them. Creates
+ * nothing for a client no directory has read. */
+export function forgetOwnChannelWrites(client: QueryClient) {
+  OWN_WRITES.get(client)?.clear();
 }
 
 type SettledChannels = Readonly<Record<string, DirectoryChannel | null>>;

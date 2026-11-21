@@ -189,18 +189,28 @@ type RemoveParticipantsCallbacks = MutationCallbacks<
 >;
 
 /**
+ * Whether the sign-in that made a roster change is still the current one. A
+ * change that settles in another leaves its caches alone: the participants
+ * list is keyed by channel only, and the new sign-in read every query again
+ * (`invalidateAllAfterLogin`), so its copy is newer than anything the change
+ * could restore or ask for.
+ */
+function sameSignIn(context: MutationFunctionContext) {
+  return isCurrentQueryAccount(mutationQueryAccount(context));
+}
+
+/**
  * After a roster change, whatever its outcome: the participants list reads
  * again, and the channel directory reads the channel from the primary, so
  * the readers of its record (call and DM Work members, DM peers) show the
- * change before the soup update reaches the cache. A change made in another
- * sign-in leaves the directory alone.
+ * change before the soup update reaches the cache.
  */
 function afterRosterChange(
   channelId: string,
   context: MutationFunctionContext
 ) {
-  if (isCurrentQueryAccount(mutationQueryAccount(context)))
-    fireAndForget(refreshChannelDirectory([channelId]), 'channel-participants');
+  if (!sameSignIn(context)) return;
+  fireAndForget(refreshChannelDirectory([channelId]), 'channel-participants');
   return softInvalidateChannelParticipants(channelId);
 }
 
@@ -233,10 +243,10 @@ export function addParticipantsMutationOptions(
             channelId: vars.channelId,
             participants: vars.participants,
           }),
-        onError(error, vars, context) {
+        onError(error, vars, context, mutation) {
           console.error('failed to add participants', error);
           toast.failure('Failed to add participants to channel');
-          if (context) {
+          if (context && sameSignIn(mutation)) {
             rollbackAddParticipants(vars.channelId, context);
           }
         },
@@ -289,10 +299,10 @@ export function removeParticipantsMutationOptions(
             channelId: vars.channelId,
             participants: vars.participants,
           }),
-        onError(error, vars, context) {
+        onError(error, vars, context, mutation) {
           console.error('failed to remove participants', error);
           toast.failure('Failed to remove participants from channel');
-          if (context) {
+          if (context && sameSignIn(mutation)) {
             rollbackRemoveParticipants(vars.channelId, context);
           }
         },

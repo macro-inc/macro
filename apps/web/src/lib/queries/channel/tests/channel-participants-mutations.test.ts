@@ -56,6 +56,10 @@ function run<TVars>(
 
 const ROSTER = { channelId: 'channel-1', participants: ['macro|peer'] };
 
+type Answer = Awaited<
+  ReturnType<typeof storageServiceClient.addParticipantsToChannel>
+>;
+
 describe('channel roster changes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -115,7 +119,10 @@ describe('channel roster changes', () => {
     ]);
   });
 
-  it('leaves the directory alone when the change settles in another sign-in', async () => {
+  // The participants list is keyed by channel only, and a new sign-in reads
+  // every query again: a change admitted before it settles without touching
+  // what the new sign-in shows.
+  it('leaves the caches alone when the change settles in another sign-in', async () => {
     let answer!: (
       value: Awaited<
         ReturnType<typeof storageServiceClient.addParticipantsToChannel>
@@ -137,9 +144,59 @@ describe('channel roster changes', () => {
     await settled;
 
     expect(directory.refreshChannelDirectory).not.toHaveBeenCalled();
-    expect(invalidate).toHaveBeenCalledWith({
-      queryKey: channelKeys.participants('channel-1').queryKey,
-      refetchType: 'inactive',
-    });
+    expect(invalidate).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ['adding', 'add'],
+    ['removing', 'remove'],
+  ] as const)(
+    'keeps what another sign-in read after %s people fails',
+    async (_name, kind) => {
+      const participantsKey = channelKeys.participants('channel-1').queryKey;
+      const member = (userId: string) => ({
+        user_id: userId,
+        role: 'member' as const,
+        left_at: null,
+        joined_at: '2026-11-01T00:00:00.000Z',
+        channel_id: 'channel-1',
+      });
+      // Before: the peer is out to add, or in to remove.
+      testQueryClient.setQueryData(
+        participantsKey,
+        kind === 'add'
+          ? [member('viewer')]
+          : [member('viewer'), member('macro|peer')]
+      );
+      let answer!: (value: Answer) => void;
+      const pending = new Promise<Answer>((resolve) => {
+        answer = resolve;
+      });
+      const call =
+        kind === 'add'
+          ? storageServiceClient.addParticipantsToChannel
+          : storageServiceClient.removeParticipantsFromChannel;
+      vi.mocked(call).mockReturnValue(pending as never);
+
+      const settled = run(
+        kind === 'add'
+          ? addParticipantsMutationOptions()
+          : removeParticipantsMutationOptions(),
+        ROSTER
+      );
+      await vi.waitFor(() => expect(call).toHaveBeenCalled());
+      signIn('someone-else');
+      // The new sign-in's own read of the roster, after the server applied
+      // the change and before its answer failed.
+      const fresh =
+        kind === 'add'
+          ? [member('viewer'), member('macro|peer')]
+          : [member('viewer')];
+      testQueryClient.setQueryData(participantsKey, fresh);
+      answer(err([{ code: 'SERVER_ERROR', message: 'timeout' }]));
+      await settled;
+
+      expect(testQueryClient.getQueryData(participantsKey)).toEqual(fresh);
+    }
+  );
 });

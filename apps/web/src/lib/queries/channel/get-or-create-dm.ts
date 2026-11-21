@@ -9,9 +9,19 @@ import {
 } from '@service-storage/client';
 import { DirectMessageChannelIdDocument } from '@service-storage/graphql/generated/graphql';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
-import { useMutation } from '@tanstack/solid-query';
+import {
+  type MutationFunctionContext,
+  useMutation,
+} from '@tanstack/solid-query';
 import { okAsync, ResultAsync } from 'neverthrow';
-import { assertQueryAccount, currentQueryAccount } from '../auth/account-scope';
+import {
+  assertQueryAccount,
+  currentQueryAccount,
+  isCurrentQueryAccount,
+  mutationQueryAccount,
+  type QueryAccount,
+} from '../auth/account-scope';
+import { useQueryAccount } from '../auth/use-query-account';
 import { refreshChannelDirectory } from './directory';
 
 type GetOrCreateDmResponse = GetOrCreateChannelResponse;
@@ -21,20 +31,47 @@ type GetOrCreateDirectMessageParams = {
   recipient_id: string;
 };
 
+type GetOrCreatePrivateChannelParams = {
+  parentSpan?: TraceContext;
+  recipients: string[];
+};
+
 /**
- * Create or resolve a 1:1 DM channel for a recipient. Refreshes the in-memory
- * channel directory on settle.
+ * Reads the conversation found or created into the channel directory, unless
+ * the sign-in that asked was replaced since: the directory it would refresh
+ * is gone, and a read now would run as the replacement.
  */
-export function useGetOrCreateDirectMessageMutation(
+function refreshAfterConversation(
+  account: QueryAccount | undefined,
+  channelId: string | undefined
+) {
+  if (!isCurrentQueryAccount(account)) return;
+  fireAndForget(
+    refreshChannelDirectory(channelId ? [channelId] : []),
+    'channel-list'
+  );
+}
+
+function refreshAfterSettled(
+  data: GetOrCreateChannelResponse | undefined,
+  context: MutationFunctionContext
+) {
+  refreshAfterConversation(mutationQueryAccount(context), data?.channel_id);
+}
+
+/** Creates or resolves a 1:1 DM with a recipient, as `account`. */
+function getOrCreateDirectMessageMutationOptions(
   callbacks?: MutationCallbacks<
     GetOrCreateDmResponse,
     Error,
     GetOrCreateDirectMessageParams,
     undefined
-  >
+  >,
+  account = currentQueryAccount()
 ) {
-  return useMutation(() => ({
+  return {
     gcTime: 0,
+    meta: { queryAccount: account },
     mutationFn: async (vars: GetOrCreateDirectMessageParams) => {
       return await throwOnErr(async () =>
         (vars.parentSpan ?? Telemetry.captureContext()).run(() =>
@@ -54,30 +91,47 @@ export function useGetOrCreateDirectMessageMutation(
         onError(error) {
           console.error('failed to get or create direct message', error);
         },
-        onSettled: (data) =>
-          fireAndForget(
-            refreshChannelDirectory(data ? [data.channel_id] : []),
-            'channel-list'
-          ),
+        onSettled: (data, _error, _vars, _result, context) =>
+          refreshAfterSettled(data, context),
       },
       callbacks,
       (variables) => variables.parentSpan
     ),
-  }));
+  };
+}
+
+/**
+ * Create or resolve a 1:1 DM channel for a recipient. Refreshes the in-memory
+ * channel directory on settle, in the sign-in that started it.
+ */
+export function useGetOrCreateDirectMessageMutation(
+  callbacks?: MutationCallbacks<
+    GetOrCreateDmResponse,
+    Error,
+    GetOrCreateDirectMessageParams,
+    undefined
+  >
+) {
+  const account = useQueryAccount();
+  return useMutation(() =>
+    getOrCreateDirectMessageMutationOptions(callbacks, account())
+  );
 }
 
 /**
  * The DM with `recipientId`, created if there is none yet. For a recipient
  * that writes first (an agent teammate's greeting), so the conversation shown
- * is the real one its message lands in. Refreshes the channel directory after.
+ * is the real one its message lands in. Refreshes the channel directory after,
+ * in the sign-in that asked.
  */
 export function getOrCreateDirectMessageChannel(
   recipientId: string
 ): ResultAsync<string, ResultError[]> {
+  const account = currentQueryAccount();
   return new ResultAsync(
     storageServiceClient.getOrCreateDirectMessage({ recipient_id: recipientId })
   ).map(({ channel_id }) => {
-    fireAndForget(refreshChannelDirectory([channel_id]), 'channel-list');
+    refreshAfterConversation(account, channel_id);
     return channel_id;
   });
 }
@@ -118,25 +172,19 @@ async function lookupDirectMessage(
   return result.data?.user.directMessageChannelId ?? undefined;
 }
 
-type GetOrCreatePrivateChannelParams = {
-  parentSpan?: TraceContext;
-  recipients: string[];
-};
-
-/**
- * Create or resolve a private group channel for a set of recipients.
- * Refreshes the in-memory channel directory on settle.
- */
-export function useGetOrCreatePrivateChannelMutation(
+/** Creates or resolves a private group channel, as `account`. */
+function getOrCreatePrivateChannelMutationOptions(
   callbacks?: MutationCallbacks<
     GetOrCreateChannelResponse,
     Error,
     GetOrCreatePrivateChannelParams,
     undefined
-  >
+  >,
+  account = currentQueryAccount()
 ) {
-  return useMutation(() => ({
+  return {
     gcTime: 0,
+    meta: { queryAccount: account },
     mutationFn: async (vars: GetOrCreatePrivateChannelParams) => {
       return await throwOnErr(async () =>
         (vars.parentSpan ?? Telemetry.captureContext()).run(() =>
@@ -156,14 +204,30 @@ export function useGetOrCreatePrivateChannelMutation(
         onError(error) {
           console.error('failed to get or create private channel', error);
         },
-        onSettled: (data) =>
-          fireAndForget(
-            refreshChannelDirectory(data ? [data.channel_id] : []),
-            'channel-list'
-          ),
+        onSettled: (data, _error, _vars, _result, context) =>
+          refreshAfterSettled(data, context),
       },
       callbacks,
       (variables) => variables.parentSpan
     ),
-  }));
+  };
+}
+
+/**
+ * Create or resolve a private group channel for a set of recipients.
+ * Refreshes the in-memory channel directory on settle, in the sign-in that
+ * started it.
+ */
+export function useGetOrCreatePrivateChannelMutation(
+  callbacks?: MutationCallbacks<
+    GetOrCreateChannelResponse,
+    Error,
+    GetOrCreatePrivateChannelParams,
+    undefined
+  >
+) {
+  const account = useQueryAccount();
+  return useMutation(() =>
+    getOrCreatePrivateChannelMutationOptions(callbacks, account())
+  );
 }
