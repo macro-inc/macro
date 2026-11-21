@@ -1078,6 +1078,8 @@ async function catalog(s) {
   const [defs, tags] = await Promise.all([ev(s, 'raw.old.list', { scope: 'all', includeOptions: true }), ev(s, 'raw.old.tags')]);
   const list = defs.ok ? defs.value : [];
   return {
+    // a failed listing leaves the generator nothing to pick from; it is not an empty catalog
+    listed: defs.ok,
     defs: list,
     own: list.filter((d) => !d.definition.is_system),
     selects: list.filter((d) => ['SELECT_STRING', 'SELECT_NUMBER'].includes(defType(d))),
@@ -1296,6 +1298,15 @@ async function write(pair, actor, name, vars) {
   record('write-replay', empty ? `${name}: succeeded without a request` : name, replay.unused.length || replay.mismatches.length || empty ? 'diff' : 'equal', { sent: 'as recorded' }, replay);
   checkStray(pair);
   bump(R.ops, `${name}:${actor}`, n.ok ? 'ok' : 'rejected');
+  // What a create made, for every create (fallbacks included), once it succeeded.
+  if (n.ok && name === 'createDef') {
+    const body = vars.body;
+    cover('created data type', body.data_type.type);
+    cover('created scope', body.scope);
+    if (/[^\x00-\x7f]/.test(body.display_name)) cover('odd value', 'unicode name');
+    if (body.display_name.length > 60) cover('odd value', 'long name');
+  }
+  if (n.ok && name === 'createTag') cover('tag scope', vars.scope);
   if (!n.ok) {
     const why = (R.rejections[`${name}:${actor}`] ??= {});
     const msg = `${n.error?.class} ${JSON.stringify(n.error?.codes)} ${String(n.message).slice(0, 80)}`;
@@ -1328,7 +1339,8 @@ async function compareImperative(acct, id) {
 async function readAfterWrite(s, name, vars, result) {
   const keys = [{ k: 'defs', scope: 'all', includeOptions: true }, { k: 'tags' }];
   const defId = vars?.propertyDefinitionId ?? vars?.definitionId;
-  if (defId) keys.push({ k: 'opts', id: defId, why: 'just written' });
+  // result is null for an out-of-band change, which happened when it returns
+  if (defId) keys.push({ k: 'opts', id: defId, why: result && !result.ok ? 'refused write' : 'just written' });
   const c = here();
   const prev = c.phase;
   c.phase = 'read-after-write';
@@ -1359,7 +1371,7 @@ async function step(pair, g, gen) {
   const actor = g.chance(0.3) ? 'B' : 'A';
   const acct = pair[actor];
   const cat = await catalog(acct.neu);
-  cover('catalog size', sizeBucket(cat.defs.length));
+  if (cat.listed) cover('catalog size', sizeBucket(cat.defs.length));
   const teamScope = () => (pair.teamCreated && g.chance(0.5) ? 'team' : 'user');
   // Mostly the account's own selects; now and then a system one, whose writes the server refuses.
   const writable = g.chance(0.1) ? cat.selects : cat.ownSelects;
@@ -1382,14 +1394,7 @@ async function step(pair, g, gen) {
       const body = op === 'crmStage'
         ? { display_name: 'Deal Stage', data_type: { type: 'select_string', multi: false, options: [{ display_order: 0, value: 'Lead' }, { display_order: 1, value: 'Won', color: '#00AA88' }] }, scope }
         : { display_name: gen.name(), data_type: gen.dataType(), scope };
-const res = await write(pair, actor, 'createDef', { body });
-      if (res?.n?.ok) {
-        cover('created data type', body.data_type.type);
-        cover('created scope', scope);
-        if (/[^\x00-\x7f]/.test(body.display_name)) cover('odd value', 'unicode name');
-        if (body.display_name.length > 60) cover('odd value', 'long name');
-      }
-      return res;
+return write(pair, actor, 'createDef', { body });
     }
     case 'deleteDef': {
       const pool = cat.own.filter((d) => defType(d) !== 'TAG');
@@ -1431,9 +1436,7 @@ const res = await write(pair, actor, 'updateOption', { propertyDefinitionId: d.d
       return write(pair, actor, 'ensureTagSet', { scope: teamScope() });
     case 'createTag': {
       const scope = teamScope();
-const res = await write(pair, actor, 'createTag', { scope, value: gen.optString(), ...(g.chance(0.95) ? { color: g.pick(TAG_COLORS) } : {}) });
-      if (res?.n?.ok) cover('tag scope', scope);
-      return res;
+return write(pair, actor, 'createTag', { scope, value: gen.optString(), ...(g.chance(0.95) ? { color: g.pick(TAG_COLORS) } : {}) });
     }
     case 'updateTag':
     case 'deleteTag': {
@@ -1469,7 +1472,7 @@ const res = await write(pair, actor, 'updateTag', { propertyDefinitionId: t.prop
       bump(R.ops, 'sqlRename', ok ? 'ok' : 'rejected');
       // a rename to the name it already had changes nothing a reader shows
       if (ok && v !== d.definition.display_name) cover('odd value', 'renamed definition');
-      await readAfterWrite(acct.neu, op, { definitionId: d.definition.id }, null);
+      await readAfterWrite(acct.neu, op, { definitionId: d.definition.id }, ok ? null : { ok: false });
       return null;
     }
     case 'sqlNullColor': {
@@ -1479,7 +1482,7 @@ const res = await write(pair, actor, 'updateTag', { propertyDefinitionId: t.prop
       const ok = sql(`UPDATE property_options SET color = NULL, updated_at = now() WHERE id = :'id'`, { id: t.id });
       bump(R.ops, 'sqlNullColor', ok ? 'ok' : 'rejected');
       if (ok && t.color != null) cover('odd value', 'null color');
-      await readAfterWrite(acct.neu, op, { propertyDefinitionId: t.propertyDefinitionId }, null);
+      await readAfterWrite(acct.neu, op, { propertyDefinitionId: t.propertyDefinitionId }, ok ? null : { ok: false });
       return null;
     }
     case 'openEditor': {
