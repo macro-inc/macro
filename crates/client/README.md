@@ -512,6 +512,31 @@ Parameters, results, raw SQL, and user identity are not exported. Logging uses
 an anonymous span context. A throwing JS telemetry callback cannot change query
 results. Native hosts are unchanged unless they install their own telemetry sink.
 
+## Slow request telemetry
+
+The engine worker reports each request that answers **1 s or more** after it
+arrived as `graphql_cache.slow_request`, unsampled. A page gives up on a
+request after 10 s; these spans say what held the engine meanwhile. Search
+Datadog spans for `service:web-app resource_name:graphql_cache.slow_request`:
+
+- `cache.request_kind`: the protocol request kind (`read`, `hydrate`, `init`...).
+- `cache.queue_wait_ms`: time queued in the engine worker before it ran.
+- `cache.duration_ms`: time it ran, from start to its answer.
+- `cache.queue_depth`: requests still queued when it started.
+- `cache.outcome`, `cache.error_code`: `success`/`none`, or the error class.
+
+A stall shows as one request with a long `duration_ms` and the requests behind
+it with long `queue_wait_ms`.
+
+Only requests that reach the engine worker's queue are covered. Two waits are
+not in `queue_wait_ms`:
+
+- A message that arrives while the engine is inside a wasm call is stamped only
+  when that call returns; the wait shows in the running request's
+  `duration_ms`.
+- Time the coordinator holds a request before any engine has it (owner
+  handoff, a parked or draining engine) is not reported here.
+
 ## Key policy
 
 **Presence-of-id convention**: an output object type with an `id: ID!`
