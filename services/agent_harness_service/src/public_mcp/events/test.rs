@@ -1079,6 +1079,8 @@ fn a_value_reads_exactly_as_one_value() {
     // So do characters that render as nothing.
     let hidden = super::describe::describe(&in_parent(&["chan\u{200B}nel"]));
     assert!(hidden.contains(r#"a `"chan\u200bnel"`."#));
+    let shorthand = super::describe::describe(&in_parent(&["chan\u{1BCA0}nel"]));
+    assert!(shorthand.contains(r#"a `"chan\ud82f\udca0nel"`."#));
     let tagged = super::describe::describe(&in_parent(&["channel\u{E0041}"]));
     assert!(tagged.contains(r#"a `"channel\udb40\udc41"`."#));
 }
