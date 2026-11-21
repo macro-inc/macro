@@ -7,12 +7,14 @@ import {
 } from '@tanstack/solid-query';
 import {
   type Accessor,
+  batch,
   createEffect,
   createMemo,
   createSignal,
   on,
   onCleanup,
 } from 'solid-js';
+import { match } from 'ts-pattern';
 import { queryClient } from '../client';
 import { createChannelDetailQuery } from './detail';
 import {
@@ -36,9 +38,13 @@ type ParticipantChange = {
   settled: boolean;
 };
 
+/** Which read a channel's record came from. */
+type RecordSource = 'graphql' | 'rest';
+
 /** What a reader remembers about a succeeded change it shows. */
 type SettledChange = {
-  /** The roster it succeeded over. */
+  /** The record it was judged against, and that record's roster. */
+  source: RecordSource;
   roster: string;
   /** Since when it shows. */
   since: number;
@@ -46,33 +52,62 @@ type SettledChange = {
   watched: boolean;
   /** Whether the server said it holds once that time ran out. */
   confirmed: boolean;
+  /**
+   * People it no longer decides: a change here that finished later touched
+   * them, or the server said it does not hold for them.
+   */
+  released: readonly string[];
 };
 
-/** Who the server said was in a channel, asked at `at`; undefined if it did not say. */
-type ServerCheck = {
+/**
+ * A question a reader asked the server about a channel once a succeeded
+ * change's time to show ran out, at `at`, and its answer: who the server said
+ * is in the channel, or undefined members if it did not say.
+ */
+type ServerQuestion = {
   channelId: string;
+  seq: number;
   at: number;
-  members: readonly string[] | undefined;
+  answer?: { members: readonly string[] | undefined };
 };
+
+/** How many questions a reader keeps per channel. */
+const QUESTIONS_KEPT = 8;
+
+/** What the server says about a change, from the questions asked since its time to show ran out. */
+type ServerSays =
+  | { kind: 'unasked' }
+  | { kind: 'waiting' }
+  | { kind: 'failed' }
+  | { kind: 'members'; members: ReadonlySet<string> };
 
 /** What one reader remembers about the changes it showed. */
 type Overlay = {
   data: ChannelParticipant[] | undefined;
   /** Changes this reader saw in flight. */
   seenPending: ReadonlySet<number>;
+  /**
+   * When each succeeded change finished, as this reader saw it: a change that
+   * finished later decides the people it touches.
+   */
+  finished: ReadonlyMap<number, number>;
   /** Succeeded changes still shown. */
   settled: ReadonlyMap<number, SettledChange>;
-  /** Succeeded changes a newer record has superseded; never shown again. */
-  superseded: ReadonlySet<number>;
-  /** When the next succeeded change's time to show runs out. */
+  /**
+   * Succeeded changes a newer record has superseded, and which read that
+   * record came from: never shown over that read again.
+   */
+  superseded: ReadonlyMap<number, RecordSource>;
+  /** When the reader next needs to ask the server. */
   expiresAt: number | undefined;
 };
 
 const EMPTY_OVERLAY: Overlay = {
   data: undefined,
   seenPending: new Set(),
+  finished: new Map(),
   settled: new Map(),
-  superseded: new Set(),
+  superseded: new Map(),
   expiresAt: undefined,
 };
 
@@ -96,27 +131,35 @@ function selectChange(
   };
 }
 
+/** Who is in a record, with their roles and join times: a rejoin changes it. */
 function rosterOf(participants: readonly ChannelParticipant[]) {
   return participants
-    .map((participant) => participant.user_id)
+    .map(
+      (participant) =>
+        `${participant.user_id}\u0000${participant.role}\u0000${Date.parse(participant.joined_at)}`
+    )
     .sort()
     .join('\n');
+}
+
+function holdsFor(
+  kind: ParticipantChange['kind'],
+  userId: string,
+  present: ReadonlySet<string>
+) {
+  return kind === 'add' ? present.has(userId) : !present.has(userId);
 }
 
 function recordShows(
   change: ParticipantChange,
   participants: readonly ChannelParticipant[]
 ) {
-  return holdsIn(
-    change,
-    new Set(participants.map((participant) => participant.user_id))
+  const present = new Set(
+    participants.map((participant) => participant.user_id)
   );
-}
-
-function holdsIn(change: ParticipantChange, present: ReadonlySet<string>) {
-  return change.kind === 'add'
-    ? change.userIds.every((userId) => present.has(userId))
-    : change.userIds.every((userId) => !present.has(userId));
+  return change.userIds.every((userId) =>
+    holdsFor(change.kind, userId, present)
+  );
 }
 
 function applyChange(
@@ -148,20 +191,90 @@ function applyChange(
   return added.length ? [...participants, ...added] : participants;
 }
 
-// A later add or remove of the same people decides what they show as, even once
-// it settles against a record that already matched it.
-function laterChangeTouches(
+/** Orders succeeded changes by when they finished, as this reader saw them finish. */
+function byFinish(finished: ReadonlyMap<number, number>) {
+  const at = (change: ParticipantChange) =>
+    finished.get(change.id) ?? change.submittedAt;
+  return (a: ParticipantChange, b: ParticipantChange) =>
+    at(a) - at(b) || a.id - b.id;
+}
+
+// A change here that finished later decides the people it touches, even once
+// it settles against a record that already matched it, as the server applied
+// it last. One still in flight shows over this change, which comes back if it
+// fails.
+function released(
   change: ParticipantChange,
-  changes: readonly (ParticipantChange | undefined)[]
-) {
-  const userIds = new Set(change.userIds);
-  return changes.some(
-    (later) =>
-      !!later &&
-      later.id > change.id &&
-      later.channelId === change.channelId &&
-      later.userIds.some((userId) => userIds.has(userId))
+  changes: readonly (ParticipantChange | undefined)[],
+  finished: ReadonlyMap<number, number>,
+  earlier: readonly string[]
+): readonly string[] {
+  const touched = new Set(earlier);
+  const order = byFinish(finished);
+  for (const later of changes) {
+    if (!later?.settled || later.channelId !== change.channelId) continue;
+    if (order(later, change) <= 0) continue;
+    for (const userId of later.userIds)
+      if (change.userIds.includes(userId)) touched.add(userId);
+  }
+  return touched.size === earlier.length ? earlier : [...touched];
+}
+
+/** The part of a change still its own to show. */
+function stillShown(
+  change: ParticipantChange,
+  gone: readonly string[]
+): ParticipantChange {
+  if (!gone.length) return change;
+  return {
+    ...change,
+    userIds: change.userIds.filter((userId) => !gone.includes(userId)),
+  };
+}
+
+/** Adds a question, keeping the channel's latest few. */
+function withQuestion(
+  questions: readonly ServerQuestion[],
+  question: ServerQuestion
+): readonly ServerQuestion[] {
+  const same = questions.filter((q) => q.channelId === question.channelId);
+  const dropped = new Set(
+    same.slice(0, Math.max(0, same.length - (QUESTIONS_KEPT - 1)))
   );
+  return [...questions.filter((q) => !dropped.has(q)), question];
+}
+
+/** Records the answer to one question; answers to forgotten ones change nothing. */
+function withAnswer(
+  questions: readonly ServerQuestion[],
+  seq: number,
+  members: readonly string[] | undefined
+): readonly ServerQuestion[] {
+  return questions.map((q) =>
+    q.seq === seq ? { ...q, answer: { members } } : q
+  );
+}
+
+/**
+ * What the server says, from the questions asked since `expires`: the newest
+ * that answered decides, unless a newer one is still waiting; a question the
+ * server did not answer gives way to an older one.
+ */
+function serverSays(
+  questions: readonly ServerQuestion[],
+  channelId: string,
+  expires: number
+): ServerSays {
+  const asked = questions
+    .filter((q) => q.channelId === channelId && q.at >= expires)
+    .sort((a, b) => b.seq - a.seq);
+  if (!asked.length) return { kind: 'unasked' };
+  for (const question of asked) {
+    if (!question.answer) return { kind: 'waiting' };
+    const { members } = question.answer;
+    if (members) return { kind: 'members', members: new Set(members) };
+  }
+  return { kind: 'failed' };
 }
 
 /** How long a channel's first by-id read may go unanswered before its reader asks REST too. */
@@ -175,136 +288,230 @@ function fallbackReason(
   return slow ? 'channel read slow' : 'channel not in soup';
 }
 
-/** Asks the server who is in the channel, once a change's time to show ran out at `expires`. */
+/** Asks the server who is in the channel, once a change's time to show ran out. */
 async function askServer(
   channelId: string,
-  expires: number,
-  answered: (check: ServerCheck) => void
+  answered: (members: readonly string[] | undefined) => void
 ) {
-  const at = Math.max(Date.now(), expires);
   let members: readonly string[] | undefined;
   try {
     members = await readParticipantsOnServer(channelId);
   } finally {
     // Even a read that threw is an answer: the change stops waiting on it.
-    answered({ channelId, at, members });
+    answered(members);
   }
 }
 
-/**
- * Whether a succeeded change keeps showing once its time to show has run out:
- * only if this reader showed it all that time, and the server, asked since
- * then, says it still holds. Until the server answers, it waits.
- */
-function outlives(
-  change: ParticipantChange,
-  seen: SettledChange,
-  expires: number,
-  check: ServerCheck | undefined
-): 'keep' | 'wait' | 'drop' {
-  if (seen.confirmed) return 'keep';
-  if (!seen.watched) return 'drop';
-  if (!check || check.at < expires) return 'wait';
-  return check.members && holdsIn(change, new Set(check.members))
-    ? 'keep'
-    : 'drop';
-}
+/** What a reader judges a succeeded change against. */
+type SettledContext = {
+  changes: readonly (ParticipantChange | undefined)[];
+  participants: readonly ChannelParticipant[];
+  source: RecordSource;
+  roster: string;
+  previous: Overlay;
+  finished: ReadonlyMap<number, number>;
+  now: number;
+  questions: readonly ServerQuestion[];
+};
 
-/** How a reader first records a succeeded change it shows. */
+/** A succeeded change that still shows: what the reader remembers, who it shows, and when to ask next. */
+type Judged = {
+  seen: SettledChange;
+  shown: ParticipantChange;
+  askAt: number | undefined;
+};
+
+/**
+ * How a reader first records a succeeded change it shows. One it saw in
+ * flight, or showed over another read, shows from now; one that had
+ * already succeeded when the reader opened shows from its submission.
+ */
 function firstSeen(
   change: ParticipantChange,
-  previous: Overlay,
-  roster: string,
-  now: number
+  context: SettledContext,
+  restarted: boolean
 ): SettledChange {
-  // A reader opened after the change succeeded times it from its submission.
-  const since = previous.seenPending.has(change.id) ? now : change.submittedAt;
+  const fresh = restarted || context.previous.seenPending.has(change.id);
+  const since = fresh ? context.now : change.submittedAt;
   return {
-    roster,
+    source: context.source,
+    roster: context.roster,
     since,
-    watched: now < since + CHANNEL_PARTICIPANTS_MUTATION_GC_MS,
+    watched: context.now < since + CHANNEL_PARTICIPANTS_MUTATION_GC_MS,
     confirmed: false,
+    released: [],
   };
 }
 
-/** Carries what a reader remembers about one change into its next overlay. */
-function keepHistory(
-  id: number,
-  previous: Overlay,
-  next: {
-    seenPending: Set<number>;
-    settled: Map<number, SettledChange>;
-    superseded: Set<number>;
-  }
-) {
-  if (previous.seenPending.has(id)) next.seenPending.add(id);
-  if (previous.superseded.has(id)) next.superseded.add(id);
-  const earlier = previous.settled.get(id);
-  if (earlier) next.settled.set(id, earlier);
+/**
+ * Once a change's time to show runs out, it keeps showing only if this reader
+ * showed it all that time and the server, asked since then, says it holds,
+ * for the people it says so; until the server answers, it waits. A confirmed
+ * change keeps showing unless a later answer says otherwise.
+ */
+function afterExpiry(
+  shown: ParticipantChange,
+  seen: SettledChange,
+  expires: number,
+  context: SettledContext
+): Judged | undefined {
+  if (!seen.watched) return undefined;
+  const says = serverSays(context.questions, shown.channelId, expires);
+  const keep = (askAt?: number): Judged | undefined =>
+    seen.confirmed || says.kind !== 'failed'
+      ? { seen, shown, askAt: seen.confirmed ? undefined : askAt }
+      : undefined;
+  return (
+    match(says)
+      .with({ kind: 'unasked' }, () => keep(expires))
+      .with({ kind: 'waiting' }, () => keep())
+      .with({ kind: 'failed' }, () => keep())
+      .with({ kind: 'members' }, ({ members }) => {
+        const refuted = shown.userIds.filter(
+          (userId) => !holdsFor(shown.kind, userId, members)
+        );
+        if (refuted.length === shown.userIds.length) return undefined;
+        return {
+          seen: {
+            ...seen,
+            confirmed: true,
+            released: [...seen.released, ...refuted],
+          },
+          shown: stillShown(shown, refuted),
+          askAt: undefined,
+        };
+      })
+      // A judgment this build does not know stops showing the change.
+      .exhaustive(() => undefined)
+  );
 }
 
 /**
- * Shows the channel's adds and removes over its record: in flight, and once
- * they succeed until the record shows them, the record changes otherwise
- * (someone changed it since), a later change here touches the same people, or
- * the change has shown for a while without its soup update arriving and the
- * server, asked then (`check`), does not say it still holds.
+ * Whether a succeeded change still shows, and how: undefined once something
+ * has superseded it.
+ */
+function judgeSettled(
+  change: ParticipantChange,
+  context: SettledContext
+): Judged | undefined {
+  const { previous, now, source } = context;
+  const supersededOver = previous.superseded.get(change.id);
+  if (supersededOver === source) return undefined;
+  const kept = previous.settled.get(change.id);
+  const earlier = kept?.source === source ? kept : undefined;
+  // A change judged against the other read starts over against this one.
+  const restarted = !earlier && (!!kept || supersededOver !== undefined);
+  const first = earlier ?? firstSeen(change, context, restarted);
+  const seen = {
+    ...first,
+    released: released(
+      change,
+      context.changes,
+      context.finished,
+      first.released
+    ),
+  };
+  const shown = stillShown(change, seen.released);
+  if (
+    seen.roster !== context.roster ||
+    !shown.userIds.length ||
+    recordShows(shown, context.participants)
+  )
+    return undefined;
+  const expires = seen.since + CHANNEL_PARTICIPANTS_MUTATION_GC_MS;
+  if (now < expires) return { seen, shown, askAt: expires };
+  return afterExpiry(shown, seen, expires, context);
+}
+
+/** When each succeeded change of the channel finished, as this reader saw it. */
+function finishTimes(
+  channelId: string,
+  changes: readonly (ParticipantChange | undefined)[],
+  previous: Overlay,
+  now: number
+) {
+  const finished = new Map<number, number>();
+  for (const change of changes) {
+    if (!change?.settled) continue;
+    const known = previous.finished.get(change.id);
+    if (known !== undefined) finished.set(change.id, known);
+    else if (change.channelId === channelId)
+      finished.set(
+        change.id,
+        previous.seenPending.has(change.id) ? now : change.submittedAt
+      );
+  }
+  return finished;
+}
+
+/**
+ * Shows the channel's adds and removes over its record: succeeded ones in the
+ * order they finished, until the record shows them, the record changes
+ * otherwise (someone changed it since), a change here that finished later
+ * takes over the same people, or the change has shown for a while without its
+ * soup update arriving and the server, asked then, does not say it still
+ * holds; then the ones in flight.
  */
 export function overlayParticipantChanges(
   channelId: string,
-  participants: ChannelParticipant[] | undefined,
+  record:
+    | { participants: ChannelParticipant[]; source: RecordSource }
+    | undefined,
   changes: readonly (ParticipantChange | undefined)[],
   previous: Overlay,
   now: number,
-  check?: ServerCheck
+  questions: readonly ServerQuestion[] = []
 ): Overlay {
-  if (!participants)
-    return { ...previous, data: undefined, expiresAt: undefined };
-  const roster = rosterOf(participants);
+  if (!record) return { ...previous, data: undefined, expiresAt: undefined };
+  const { participants, source } = record;
   const seenPending = new Set<number>();
   const settled = new Map<number, SettledChange>();
-  const superseded = new Set<number>();
+  const superseded = new Map<number, RecordSource>();
+  const finished = finishTimes(channelId, changes, previous, now);
+  const context: SettledContext = {
+    changes,
+    participants,
+    source,
+    roster: rosterOf(participants),
+    previous,
+    finished,
+    now,
+    questions,
+  };
   let expiresAt: number | undefined;
   let data = participants;
-  const ownCheck = check?.channelId === channelId ? check : undefined;
+  const own: ParticipantChange[] = [];
   for (const change of changes) {
     if (!change) continue;
-    if (change.channelId !== channelId) {
-      // Kept for when the reader returns to that channel.
-      keepHistory(change.id, previous, { seenPending, settled, superseded });
+    if (change.channelId === channelId) {
+      own.push(change);
       continue;
     }
-    if (!change.settled) {
-      seenPending.add(change.id);
-      data = applyChange(channelId, data, change);
-      continue;
-    }
-    const seen =
-      previous.settled.get(change.id) ??
-      firstSeen(change, previous, roster, now);
-    const expires = seen.since + CHANNEL_PARTICIPANTS_MUTATION_GC_MS;
-    const fate =
-      now < expires ? 'keep' : outlives(change, seen, expires, ownCheck);
-    if (
-      previous.superseded.has(change.id) ||
-      seen.roster !== roster ||
-      recordShows(change, participants) ||
-      laterChangeTouches(change, changes) ||
-      fate === 'drop'
-    ) {
-      superseded.add(change.id);
-      continue;
-    }
-    settled.set(
-      change.id,
-      now >= expires && fate === 'keep' ? { ...seen, confirmed: true } : seen
-    );
-    // A confirmed change shows until the record catches up; nothing to time.
-    if (now < expires || fate === 'wait')
-      expiresAt = Math.min(expiresAt ?? expires, expires);
-    data = applyChange(channelId, data, change);
+    // Kept for when the reader returns to that channel.
+    if (previous.seenPending.has(change.id)) seenPending.add(change.id);
+    const over = previous.superseded.get(change.id);
+    if (over) superseded.set(change.id, over);
+    const earlier = previous.settled.get(change.id);
+    if (earlier) settled.set(change.id, earlier);
   }
-  return { data, seenPending, settled, superseded, expiresAt };
+  const inFlight = own.filter((change) => !change.settled);
+  for (const change of inFlight) seenPending.add(change.id);
+  const succeeded = own
+    .filter((change) => change.settled)
+    .sort(byFinish(finished));
+  for (const change of succeeded) {
+    const judged = judgeSettled(change, context);
+    if (!judged) {
+      superseded.set(change.id, source);
+      continue;
+    }
+    settled.set(change.id, judged.seen);
+    if (judged.askAt !== undefined)
+      expiresAt = Math.min(expiresAt ?? judged.askAt, judged.askAt);
+    data = applyChange(channelId, data, judged.shown);
+  }
+  for (const change of inFlight) data = applyChange(channelId, data, change);
+  return { data, seenPending, finished, settled, superseded, expiresAt };
 }
 
 /**
@@ -313,6 +520,8 @@ export function overlayParticipantChanges(
  * Adds and removes in flight show until the record catches up.
  */
 export function useChannelParticipantsQuery(channelId: Accessor<string>) {
+  // The id alone, so timers below restart only when it changes.
+  const openId = createMemo(() => channelId());
   const query = createChannelDetailQuery(
     channelId,
     () => !!channelId(),
@@ -347,15 +556,21 @@ export function useChannelParticipantsQuery(channelId: Accessor<string>) {
   // reader did on every open: the channel's by-id read can wait behind a busy
   // cache or connection long after REST would have answered.
   const [slowChannel, setSlowChannel] = createSignal<string>();
+  const pendingChannel = createMemo(() =>
+    query.isPending ? openId() || undefined : undefined
+  );
   createEffect(
-    on([channelId, () => query.isPending], ([id, pending]) => {
+    on(pendingChannel, (pending) => {
       setSlowChannel(undefined);
-      if (!id || !pending) return;
-      const timer = setTimeout(() => setSlowChannel(id), CHANNEL_READ_SLOW_MS);
+      if (!pending) return;
+      const timer = setTimeout(
+        () => setSlowChannel(pending),
+        CHANNEL_READ_SLOW_MS
+      );
       onCleanup(() => clearTimeout(timer));
     })
   );
-  const readSlow = () => query.isPending && slowChannel() === channelId();
+  const readSlow = () => query.isPending && slowChannel() === openId();
   const missesChannel = () => {
     if (!channelId()) return false;
     if (query.isPending) return readSlow();
@@ -369,7 +584,11 @@ export function useChannelParticipantsQuery(channelId: Accessor<string>) {
     )
   );
   const confirmed = createMemo<
-    | { channelId: string; participants: ChannelParticipant[] | undefined }
+    | {
+        channelId: string;
+        participants: ChannelParticipant[] | undefined;
+        source: RecordSource;
+      }
     | undefined
   >((previous) => {
     if (query.isPending && !readSlow()) return undefined;
@@ -382,33 +601,59 @@ export function useChannelParticipantsQuery(channelId: Accessor<string>) {
         (participant) =>
           participant.channel_id.toLowerCase() === id.toLowerCase()
       );
-      return { channelId: id, participants: own ? rows : undefined };
+      return {
+        channelId: id,
+        participants: own ? rows : undefined,
+        source: 'rest',
+      };
     }
     // A failed refresh keeps the participants on screen.
     if (query.error)
       return previous?.channelId === id
         ? previous
-        : { channelId: id, participants: undefined };
+        : { channelId: id, participants: undefined, source: 'graphql' };
     const entity = query.data?.entities.find(
       (entity): entity is ChannelEntity =>
         entity.type === 'channel' && entity.id === id
     );
-    return { channelId: id, participants: entity?.participants };
+    return {
+      channelId: id,
+      participants: entity?.participants,
+      source: 'graphql',
+    };
   });
   // Ticks when a succeeded change's time to show runs out.
   const [tick, setTick] = createSignal(0);
-  // What the server last said about this reader's channel, once a succeeded
-  // change's time to show ran out.
-  const [check, setCheck] = createSignal<ServerCheck>();
+  // What the reader asked the server about each channel, once a succeeded
+  // change's time to show ran out, and what it answered.
+  const [questions, setQuestions] = createSignal<readonly ServerQuestion[]>([]);
+  let asks = 0;
+  const ask = (channel: string, at: number) => {
+    asks += 1;
+    const seq = asks;
+    batch(() => {
+      setQuestions((all) => withQuestion(all, { channelId: channel, seq, at }));
+      setTick((value) => value + 1);
+    });
+    fireAndForget(
+      askServer(channel, (members) =>
+        setQuestions((all) => withAnswer(all, seq, members))
+      ),
+      'channel participants server check'
+    );
+  };
   const overlay = createMemo<Overlay>((previous) => {
     tick();
+    const record = confirmed();
     return overlayParticipantChanges(
       channelId(),
-      confirmed()?.participants,
+      record?.participants
+        ? { participants: record.participants, source: record.source }
+        : undefined,
       changes(),
       previous,
       Date.now(),
-      check()
+      questions()
     );
   }, EMPTY_OVERLAY);
   // When a succeeded change's time to show runs out, the reader asks the
@@ -417,16 +662,10 @@ export function useChannelParticipantsQuery(channelId: Accessor<string>) {
   // asks again.)
   const expiresAt = createMemo(() => overlay().expiresAt);
   createEffect(
-    on([channelId, expiresAt], ([id, expires]) => {
+    on([openId, expiresAt], ([current, expires]) => {
       if (expires === undefined) return;
       const timer = setTimeout(
-        () => {
-          setTick((value) => value + 1);
-          fireAndForget(
-            askServer(id, expires, setCheck),
-            'channel participants server check'
-          );
-        },
+        () => ask(current, Math.max(Date.now(), expires)),
         Math.max(0, expires - Date.now())
       );
       onCleanup(() => clearTimeout(timer));
