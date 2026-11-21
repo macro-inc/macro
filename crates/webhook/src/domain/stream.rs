@@ -538,7 +538,8 @@ where
 {
     #[tracing::instrument(
         skip(self, subscriber, filters),
-        fields(filter_count = filters.len(), replayed = tracing::field::Empty)
+        fields(filter_count = filters.len(), replayed = tracing::field::Empty),
+        err
     )]
     async fn open_stream(
         &self,
