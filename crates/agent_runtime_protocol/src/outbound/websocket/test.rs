@@ -400,3 +400,251 @@ async fn a_socket_that_stops_answering_pings_is_closed() {
         "the pump should close its inbound channel when the peer goes quiet"
     );
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_socket_nobody_reads_is_closed_even_while_its_sender_is_held() {
+    let transport: Arc<ServerTransport<ToRuntimeMessage, ToServerMessage>> =
+        Arc::new(ServerTransport::new());
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("listener should bind");
+    let address = listener.local_addr().expect("listener address");
+    let app = Arc::clone(&transport).into_router();
+    let server_handle = tokio::spawn(async move {
+        axum::serve(listener, app).await.expect("server should run");
+    });
+
+    let (mut client, _response) = tokio_tungstenite::connect_async(format!("ws://{address}"))
+        .await
+        .expect("raw client should connect");
+    let Channel {
+        tx: held_sender,
+        rx,
+    } = timeout(PROMPT, transport.accept())
+        .await
+        .expect("server accept should not hang")
+        .expect("server should accept the connection");
+    // What an evicted connection looks like: its router is gone, but a
+    // session still holds a way to send on it.
+    drop(rx);
+
+    // The pings would keep an unread socket alive forever; it has to close
+    // instead, so the peer sees the end and redials.
+    let ended = timeout(PROMPT, async {
+        loop {
+            match client.next().await {
+                Some(Ok(TungsteniteMessage::Ping(_) | TungsteniteMessage::Pong(_))) => {}
+                Some(Ok(TungsteniteMessage::Close(_)) | Err(_)) | None => break,
+                Some(Ok(other)) => panic!("expected only keepalive frames, got {other:?}"),
+            }
+        }
+    })
+    .await;
+    assert!(
+        ended.is_ok(),
+        "a socket whose reader is gone should close, not keep answering pings"
+    );
+    drop(held_sender);
+    server_handle.abort();
+}
+
+/// A socket whose writes never complete: the kernel send buffer of a
+/// half-open path, full and never drained.
+struct BlockedSocket;
+
+impl futures::Sink<TungsteniteMessage> for BlockedSocket {
+    type Error = futures::channel::mpsc::SendError;
+
+    fn poll_ready(
+        self: std::pin::Pin<&mut Self>,
+        _context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        std::task::Poll::Pending
+    }
+
+    fn start_send(
+        self: std::pin::Pin<&mut Self>,
+        _item: TungsteniteMessage,
+    ) -> Result<(), Self::Error> {
+        unreachable!("poll_ready never resolves")
+    }
+
+    fn poll_flush(
+        self: std::pin::Pin<&mut Self>,
+        _context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        std::task::Poll::Pending
+    }
+
+    fn poll_close(
+        self: std::pin::Pin<&mut Self>,
+        _context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        std::task::Poll::Pending
+    }
+}
+
+impl futures::Stream for BlockedSocket {
+    type Item = Result<TungsteniteMessage, futures::channel::mpsc::SendError>;
+
+    fn poll_next(
+        self: std::pin::Pin<&mut Self>,
+        _context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        std::task::Poll::Pending
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_write_that_never_completes_does_not_hold_off_the_silence_check() {
+    let (outgoing, outgoing_rx) = mpsc::unbounded_channel();
+    let (incoming, mut incoming_rx) = mpsc::unbounded_channel::<ToServerMessage>();
+    tokio::spawn(run_pump(BlockedSocket, outgoing_rx, incoming));
+    outgoing.send("{}".to_owned()).unwrap();
+
+    let ended = timeout(SILENCE_TIMEOUT + PING_INTERVAL, incoming_rx.recv())
+        .await
+        .expect("a write stuck on a dead path should not keep the socket open");
+    assert!(ended.is_none(), "the pump should end when a write stalls");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn frames_queued_just_before_the_channel_is_dropped_still_go_out() {
+    const LAST_WORDS: usize = 200;
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("listener should bind");
+    let address = listener.local_addr().expect("listener address");
+    let peer = tokio::spawn(async move {
+        let (socket, _) = listener.accept().await.expect("peer should accept");
+        let mut socket = tokio_tungstenite::accept_async(socket)
+            .await
+            .expect("peer should upgrade");
+        let mut texts = 0;
+        while let Some(Ok(frame)) = socket.next().await {
+            if frame.is_text() {
+                texts += 1;
+            }
+            if frame.is_close() {
+                break;
+            }
+        }
+        texts
+    });
+
+    let (stream, _response) = tokio_tungstenite::connect_async(format!("ws://{address}"))
+        .await
+        .expect("runtime should connect");
+    let channel = connect_runtime::<ToServerMessage, ToRuntimeMessage, _>(stream);
+    // What a bridge ending does: queue its last messages, then drop the
+    // whole channel at once, reader and sender together.
+    for _ in 0..LAST_WORDS {
+        channel.tx.send(event()).unwrap();
+    }
+    drop(channel);
+
+    let received = timeout(PROMPT, peer)
+        .await
+        .expect("the socket should close")
+        .expect("the peer should finish");
+    assert_eq!(
+        received, LAST_WORDS,
+        "every frame queued before the drop should reach the peer"
+    );
+}
+
+/// A socket whose every write is slow but succeeds, and which answers with a
+/// pong every second: a live peer behind backpressure.
+struct SlowSocket<Writes> {
+    writes: std::pin::Pin<Box<Writes>>,
+    pongs: tokio::time::Interval,
+}
+
+impl<Writes> futures::Sink<TungsteniteMessage> for SlowSocket<Writes>
+where
+    Writes: futures::Sink<TungsteniteMessage, Error = futures::channel::mpsc::SendError>,
+{
+    type Error = futures::channel::mpsc::SendError;
+
+    fn poll_ready(
+        self: std::pin::Pin<&mut Self>,
+        context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        self.get_mut().writes.as_mut().poll_ready(context)
+    }
+
+    fn start_send(
+        self: std::pin::Pin<&mut Self>,
+        item: TungsteniteMessage,
+    ) -> Result<(), Self::Error> {
+        self.get_mut().writes.as_mut().start_send(item)
+    }
+
+    fn poll_flush(
+        self: std::pin::Pin<&mut Self>,
+        context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        self.get_mut().writes.as_mut().poll_flush(context)
+    }
+
+    fn poll_close(
+        self: std::pin::Pin<&mut Self>,
+        context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        self.get_mut().writes.as_mut().poll_close(context)
+    }
+}
+
+impl<Writes> futures::Stream for SlowSocket<Writes> {
+    type Item = Result<TungsteniteMessage, futures::channel::mpsc::SendError>;
+
+    fn poll_next(
+        self: std::pin::Pin<&mut Self>,
+        context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        self.get_mut()
+            .pongs
+            .poll_tick(context)
+            .map(|_| Some(Ok(TungsteniteMessage::Pong(Default::default()))))
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_dropped_channel_drains_its_queue_however_long_the_writes_take() {
+    const QUEUED: usize = 5;
+    let written = Arc::new(std::sync::Mutex::new(0_usize));
+    let counter = Arc::clone(&written);
+    let writes = futures::sink::unfold(counter, |counter, frame: TungsteniteMessage| async move {
+        // Quicker than a ping interval, so the peer's pongs still get
+        // read, but the whole queue takes longer than the grace.
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        if frame.is_text() {
+            *counter.lock().unwrap() += 1;
+        }
+        Ok::<_, futures::channel::mpsc::SendError>(counter)
+    });
+    let (outgoing, outgoing_rx) = mpsc::unbounded_channel();
+    let (incoming, incoming_rx) = mpsc::unbounded_channel::<ToServerMessage>();
+    for _ in 0..QUEUED {
+        outgoing.send("{}".to_owned()).unwrap();
+    }
+    // Reader and sender go together, the way a bridge ending drops its channel.
+    drop(outgoing);
+    drop(incoming_rx);
+
+    let socket = SlowSocket {
+        writes: Box::pin(writes),
+        pongs: tokio::time::interval(Duration::from_secs(1)),
+    };
+    timeout(
+        Duration::from_secs(60),
+        run_pump(socket, outgoing_rx, incoming),
+    )
+    .await
+    .expect("the pump should finish once its queue has drained");
+    assert_eq!(
+        *written.lock().unwrap(),
+        QUEUED,
+        "every queued frame should be written before the socket closes"
+    );
+}

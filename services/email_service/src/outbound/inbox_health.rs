@@ -1,4 +1,4 @@
-use contacts::domain::ports::ContactsIngress;
+use contacts::domain::ports::{ContactListIngress, ContactsIngress};
 use email::domain::mailbox::{MailboxError, health::*};
 use email_api_client::domain::{
     models::{AccessToken, EmailApiError, MailboxAccess, TokenError, TokenFreshness},
@@ -8,7 +8,7 @@ use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_email::service::{
     link::{Link, UserProvider},
-    pubsub::LinkManagerMessage,
+    pubsub::{LinkManagerMessage, LinkManagerSender},
 };
 use uuid::Uuid;
 
@@ -60,7 +60,10 @@ impl InboxHealthRepository for PgInboxHealth {
     async fn enqueue_probe(&self, link: Uuid) -> Result<(), MailboxError> {
         let result = self
             .queue
-            .enqueue_link_manager_notification(LinkManagerMessage::HealthCheck { link_id: link })
+            .enqueue_link_manager_notification(
+                LinkManagerMessage::HealthCheck { link_id: link },
+                LinkManagerSender::Event,
+            )
             .await;
         if result.is_err() {
             self.redis.cancel_health_probe(link).await;
@@ -83,8 +86,8 @@ pub struct ProviderInboxHealth<T, B, C> {
     pub broker: B,
     pub contacts: std::sync::Arc<C>,
 }
-impl<T: MailboxTokenSource, B: MacroEventBroker, C: ContactsIngress> InboxHealthGateway
-    for ProviderInboxHealth<T, B, C>
+impl<T: MailboxTokenSource, B: MacroEventBroker, C: ContactsIngress + ContactListIngress>
+    InboxHealthGateway for ProviderInboxHealth<T, B, C>
 {
     async fn acquire(
         &self,

@@ -3,8 +3,8 @@
 use super::fixture;
 use crate::domain::mailbox::*;
 use email_api_client::domain::models::{
-    EmailApiError, MailFolder, MailboxChangePage, MailboxMessage, ProviderId, RoundStart,
-    StreamPosition, StreamToken,
+    EmailApiError, MailFolder, MailFolderCatalog, MailboxChangePage, MailboxMessage, ProviderId,
+    RoundStart, StreamPosition, StreamToken,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
@@ -23,9 +23,9 @@ impl Provider {
 }
 
 impl MailboxGateway for Provider {
-    async fn folders(&self, _: MailboxKey) -> Result<Vec<MailFolder>, EmailApiError> {
+    async fn folders(&self, _: MailboxKey) -> Result<MailFolderCatalog, EmailApiError> {
         self.served("folders");
-        Ok(Vec::new())
+        Ok(MailFolderCatalog::Folders(Vec::new()))
     }
     async fn changes(
         &self,

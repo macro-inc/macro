@@ -112,6 +112,7 @@ export async function createTaskWithProperties(
   >,
   upsertToHistory: (params: { itemId: string; itemType: 'document' }) => void,
   options?: {
+    pinnedPropertyDefinitionIds?: string[];
     revalidateSoup?: boolean;
     shareWithTeam?: boolean;
     /** Disable when the caller provides its own recovery notification. */
@@ -145,6 +146,7 @@ export async function createTaskWithProperties(
     title: taskTitle,
     content: taskContent,
     propertyValues: propertyValues.length > 0 ? propertyValues : undefined,
+    pinnedPropertyDefinitionIds: options?.pinnedPropertyDefinitionIds,
   });
 
   if (!createdTask) {
@@ -337,6 +339,16 @@ export function createTaskComposerProperties(args: {
     );
   };
 
+  // Host-controlled fields still belong to the draft even without separate pills.
+  const selectedPropertyIds = () => {
+    const values = args.values?.() ?? propertyValues;
+    return [
+      ...new Set([
+        ...visiblePropertyIds(),
+        ...(args.hiddenPropertyIds ?? []).filter((id) => id in values),
+      ]),
+    ];
+  };
   const visibleIds = () =>
     taskComposerVisiblePropertyIds(
       [
@@ -367,12 +379,14 @@ export function createTaskComposerProperties(args: {
       return;
     setVisiblePropertyIds((current) => [...current, id]);
   };
+  const writableProperties = () =>
+    availableDefinitions().map((definition) =>
+      toPropertyDefinitionDomain(definition, options().get(definition.id))
+    );
   const availableProperties = () =>
-    availableDefinitions()
-      .filter((definition) => !args.hiddenPropertyIds?.includes(definition.id))
-      .map((definition) =>
-        toPropertyDefinitionDomain(definition, options().get(definition.id))
-      );
+    writableProperties().filter(
+      (definition) => !args.hiddenPropertyIds?.includes(definition.id)
+    );
 
   const draftProperty = (id: string): Property | undefined => {
     const definition = definitions().get(id);
@@ -453,7 +467,10 @@ export function createTaskComposerProperties(args: {
     draftProperties,
     visiblePropertyIds,
     setVisiblePropertyIds,
+    selectedPropertyIds,
+    writableProperties,
     availableProperties,
+    definitionsReady: () => systemPropertiesQuery.isSuccess,
     addProperty,
     saveHandler,
     composerTags,

@@ -328,6 +328,7 @@ export function getNotificationActionText(n: Notification): string {
         ? 'failed'
         : 'ready';
     })
+    .with('ping', () => 'pinged')
     .exhaustive(() => 'notified');
 }
 
@@ -423,6 +424,7 @@ export function extractMessageContent(notification: Notification): string {
       { tag: 'computer_setup' },
       (m) => m.content.agent?.name ?? m.content.computerName
     )
+    .with({ tag: 'ping' }, (m) => m.content.body)
     .exhaustive(() => '');
 }
 

@@ -1,0 +1,119 @@
+set -euo pipefail
+
+nix_bin="/nix/var/nix/profiles/default/bin/nix"
+daemon_bin="/nix/var/nix/profiles/default/bin/nix-daemon"
+
+have_systemd=false
+if [ -d /run/systemd/system ]; then have_systemd=true; fi
+
+# The private-bucket substituter needs all four pieces: URL, a key to
+# verify signatures, and AWS credentials for the daemon to read S3.
+cache_enabled=false
+if [[ -n "$NIX_CACHE_URL" && -n "$NIX_CACHE_PUBLIC_KEY" \
+      && -n "$NIX_CACHE_AWS_ACCESS_KEY_ID" && -n "$NIX_CACHE_AWS_SECRET_ACCESS_KEY" ]]; then
+  cache_enabled=true
+fi
+
+write_conf() {
+  sudo mkdir -p /etc/nix
+  # The minimal config the Determinate installer would have written.
+  {
+    echo "experimental-features = nix-command flakes"
+    echo "trusted-users = root runner"
+    echo "build-users-group = nixbld"
+    if $cache_enabled; then
+      echo "extra-substituters = $NIX_CACHE_URL"
+      echo "extra-trusted-public-keys = $NIX_CACHE_PUBLIC_KEY"
+      # A missing narinfo is the common case for freshly built crates;
+      # don't let its negative cache linger across a push from another
+      # job in the same run.
+      echo "narinfo-cache-negative-ttl = 30"
+    fi
+  } | sudo tee /etc/nix/nix.conf >/dev/null
+}
+
+ensure_nixbld() {
+  # Build group/users do not persist outside /nix; recreate if missing.
+  if ! getent group nixbld >/dev/null; then
+    sudo groupadd -r nixbld || true
+    for i in $(seq 1 10); do
+      sudo useradd -r -g nixbld -G nixbld -d /var/empty -s "$(command -v nologin || echo /sbin/nologin)" \
+        "nixbld$i" 2>/dev/null || true
+    done
+  fi
+}
+
+start_daemon() {
+  if $have_systemd; then
+    if [[ -e /nix/var/nix/profiles/default/lib/systemd/system/nix-daemon.service ]]; then
+      sudo cp /nix/var/nix/profiles/default/lib/systemd/system/nix-daemon.* /etc/systemd/system/ || true
+      sudo systemctl daemon-reload || true
+    fi
+    sudo systemctl enable --now nix-daemon.socket nix-daemon.service 2>/dev/null || true
+  fi
+  # Without systemd (or if the unit failed to come up), run the daemon
+  # directly: it is just a process listening on the daemon socket. The
+  # daemon is what talks to substituters, so the S3 credentials must be
+  # in *its* environment, not the client's.
+  if ! sudo test -S /nix/var/nix/daemon-socket/socket || ! pgrep -x nix-daemon >/dev/null 2>&1; then
+    sudo mkdir -p /nix/var/nix/daemon-socket
+    sudo rm -f /nix/var/nix/daemon-socket/socket
+    daemon_env=()
+    if $cache_enabled; then
+      daemon_env+=("AWS_ACCESS_KEY_ID=$NIX_CACHE_AWS_ACCESS_KEY_ID")
+      daemon_env+=("AWS_SECRET_ACCESS_KEY=$NIX_CACHE_AWS_SECRET_ACCESS_KEY")
+    fi
+    sudo env "${daemon_env[@]}" sh -c "nohup '$daemon_bin' >/tmp/nix-daemon.log 2>&1 &"
+    for _ in $(seq 1 30); do
+      if sudo test -S /nix/var/nix/daemon-socket/socket; then break; fi
+      sleep 1
+    done
+    if ! sudo test -S /nix/var/nix/daemon-socket/socket; then
+      echo "nix-daemon failed to come up; log follows:" >&2
+      sudo cat /tmp/nix-daemon.log >&2 || true
+      exit 1
+    fi
+  fi
+}
+
+if [[ ! -x "$nix_bin" && -n "$NIX_SEED_CACHE" ]]; then
+  "$GITHUB_ACTION_PATH/nix_seed.sh" restore || echo "No Nix seed restored."
+fi
+
+if [[ -x "$nix_bin" ]]; then
+  # Store + profiles persist on the cache volume, but config, build
+  # users, and the daemon live outside /nix and are gone on a fresh
+  # runner. Repair only those.
+  echo "Found existing Nix store on cache volume; re-initialising daemon/config only."
+  write_conf
+  ensure_nixbld
+  start_daemon
+else
+  echo "No Nix store found on cache volume; performing a full install."
+  init_flag="none"
+  if $have_systemd; then init_flag="systemd"; fi
+  curl --http1.1 --retry 5 --retry-delay 5 --retry-all-errors \
+    --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | \
+    sh -s -- install linux --no-confirm --init "$init_flag" \
+    --extra-conf "experimental-features = nix-command flakes" \
+    --extra-conf "trusted-users = root runner"
+  # Rewrite the config so the substituter block above applies on fresh
+  # installs too, then bring the daemon up ourselves (with --init none
+  # the installer lays out the multi-user store but starts no service).
+  write_conf
+  start_daemon
+fi
+
+if $cache_enabled; then
+  echo "S3 nix cache substituter configured: $NIX_CACHE_URL"
+else
+  echo "S3 nix cache substituter not configured (inputs unset); volume-only caching."
+fi
+
+# Make nix discoverable in subsequent (non-login) steps.
+echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
+export PATH="/nix/var/nix/profiles/default/bin:$PATH"
+export NIX_REMOTE=daemon
+echo "NIX_REMOTE=daemon" >> "$GITHUB_ENV"
+
+"$nix_bin" --version || nix --version

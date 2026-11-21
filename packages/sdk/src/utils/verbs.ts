@@ -74,7 +74,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     deleted: 'deleteAgentSession',
     ran: `
       startFreshAgentConversation retryAgentConversationTurn refreshAgentSessionChanges
-      callConnectedAppTool controlAgentSession steerQueuedAction openInApp
+      callConnectedAppTool controlAgentSession steerQueuedAction
     `,
     linked: `
       linkAgentSessionPullRequest
@@ -85,6 +85,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     removed: 'removeQueuedAction unregisterAgentSessionWork',
     submitted: 'answerAgentSessionToolApproval',
     approved: 'decideSessionReview',
+    requested: 'openInApp',
     shared: 'presentSessionView',
     registered: 'registerAgentSessionWork',
   },
@@ -209,6 +210,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     `,
     enabled: 'enableNotificationType',
     edited: 'updateChannelNotificationSettings',
+    sent: 'sendPing',
   },
   properties: {
     labeled: 'ensureTagSet',
@@ -248,6 +250,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       exportDocument streamEvents
       passwordsAgentDisclose passwordsAgentMyRequest passwordsAgentTotpCode
       exportCrmPipelineCsv getBatchCallRecordPreview getCallRecording getCrmPipelineCsv getDatabaseQuery getDocumentMarkdown getInitiativeActivity getInitiativeDescription getSavedViewDefinition readCanvasScene readDesign readIllustratorDocument readPhotoshopDocument readPresentation readSpreadsheet readWordDocument
+      getTaskTemplate
     `,
     listed: `
       listAccountManagers listAgents listBots listBotChannels listBotTokens listOccurrences
@@ -262,6 +265,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       getPinsHandler getProjectContentHandler recentlyDeleted listEmailReminders listUserApiKeys
       listWebhooks whatsappChats
       getCallParticipants getLiveCalls listCrmRecordPipelineEntries listHarnessDirectory listHarnessResidents listSavedViewDefinitions pageInitiatives
+      listTaskTemplates
     `,
     searched: `
       searchContacts taskSimilaritySearchHandler passwordsAgentSearch
@@ -285,7 +289,8 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       createCanvasHandler createMarkdownHandler createSkillHandler createSnippetHandler
       createTaskHandler externalChatAdd createForm createHarnessPairing createInitiative
       entityMessageCreate createProjectHandler createUserApiKey createWebhook
-      createSavedViewDefinition createSpreadsheet saveDatabaseQuery startCall passwordsAgentCreate
+      createSavedViewDefinition createSpreadsheet saveDatabaseQuery startCall
+      createTaskTemplate passwordsAgentCreate
     `,
     edited: `
       passwordsAgentUpdate passwordsAgentSetTotp
@@ -302,6 +307,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       patchWebhook
       setDatabaseAppearance setDocumentAppearance setFormAppearance setInitiativeAppearance
       applyCanvasEdits editCanvasWithAi editCrmPipeline editPresentation editSpreadsheet editSpreadsheetWithAi editWordDocument patchAgent addCrmContactEmail removeCrmContactEmail setCrmContactEmail updateCrmPipelineEntries updateSavedViewDefinition setSavedViewAppearance writeDocumentMarkdown
+      updateTaskTemplate
     `,
     renamed: 'renameChannelLabel renameCrmPipeline',
     deleted: `
@@ -312,6 +318,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       entityMessageDeleteMessage entityMessageDeleteThread deleteProjectHandler
       permanentlyDeleteProject deleteUserApiKey deleteWebhook
       deleteSavedViewDefinition
+      deleteTaskTemplate
     `,
     removed: `
       removeBotFromChannelByBot removeParticipants removeFavoriteByEntity removePinHandler

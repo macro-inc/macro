@@ -67,6 +67,9 @@ pub async fn list_links_handler(
                 email::domain::models::EmailSyncStatus::NeedsReauth => {
                     api::link::SyncStatus::NeedsReauth
                 }
+                email::domain::models::EmailSyncStatus::MailboxUnavailable => {
+                    api::link::SyncStatus::MailboxUnavailable
+                }
                 email::domain::models::EmailSyncStatus::Inactive => api::link::SyncStatus::Inactive,
             };
             let inbox = entry.facts;

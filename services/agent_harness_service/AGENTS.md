@@ -139,7 +139,9 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   (a failed sign-in carries a `code` saying how to recover:
   `invalid_code` 422 and `sign_in_expired` 410 need a new sign-in,
   `malformed_code` 400 a fresh paste, `computer_unreachable` 503 and
-  `computer_busy` 409 a retry; a timeout is a bare 504),
+  `computer_busy` 409 a retry; harnessd's own CLI timeout ends the sign-in
+  and answers `sign_in_expired`, while this service timing out on harnessd
+  is a bare 504 that lets the code be sent again),
   `POST /harnesses/{id}/claude-sign-out` → `{mode}`, and
   `GET /harnesses/{id}/claude-mode` → `{mode, account?}` (all manage rights).
   The sign-in link must be `https://claude.com` or `claude.ai` at exactly
@@ -248,8 +250,8 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   page (newest first) without two exact matches goes to the session,
   which also looks up the other kinds. `routine_code.rs` gives the
   session each SDK area it needs
-  (`area_reference`: the area's index, guidance and declarations, then
-  the generated types they import). `scheduling.rs` composes the drafter
+  (`area_reference`: the area's index, guidance and declarations from every
+  namespace in the topic, then the generated types they import). `scheduling.rs` composes the drafter
   after the service with its
   `scheduled_action_draft` store, the session drafter's check lookup
   (`CorrelationSessions`) and activity (`ActivityCreations`), and the
@@ -450,6 +452,11 @@ replica. Serialize connect/disconnect effects by harness across replicas and che
 durable live connections before emitting a disconnect, so an old socket cannot
 mark its replacement offline. Keep this lock pool separate from repository pools
 to avoid exhausting the connections needed inside the guarded operation.
+Harness presence lease renewals use one more dedicated connection
+(`harness_bindings.rs`, each renewal bounded to 5 s), so a starved shared pool
+can't lapse the leases of live harnesses. A renewal cut off by that bound closes
+its connection instead of returning it: sqlx's unbounded return ping would let a
+silent socket hold the only slot.
 Routine dispatch waits for the shared HTTP listener and calls its loopback
 address, avoiding an ALB/self-startup race. Shutdown stops scheduling intake and
 cognition workers before draining sessions and pending publishes. Preview
@@ -485,6 +492,12 @@ listener failure shuts down the process so ECS can replace the task.
 - The public MCP server is stateless, so tool calls carry no `clientInfo`; the
   client is identified per call by its `User-Agent` / `x-anthropic-client`
   headers and per session by `$mcp_initialize`.
+- Each public tool call runs in a `public_mcp.call_tool` span (tool name, mode,
+  caller kind, outcome) carrying only opaque caller ids: `fusionauth_user_id`,
+  the OAuth `mcp.client.id` and registered `mcp.client.name`, or `agent_id`,
+  from `mcp_auth_proxy`'s `McpCallerIds`. Never put the Macro user id, an
+  email, on it. Span-reading tests share `test_spans::exported_spans()`, the
+  binary's one global subscriber.
 
 Local MCP uses both configured egress addresses in the in-process catalog;
 the public MCP transport permits its typed service hostname as well as its
