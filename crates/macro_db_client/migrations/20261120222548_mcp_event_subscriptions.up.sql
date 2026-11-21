@@ -54,7 +54,10 @@ CREATE TABLE mcp_event_subscription_event (
     event_name TEXT NOT NULL,
     user_id TEXT NOT NULL,
     expires_at TIMESTAMPTZ NOT NULL,
-    PRIMARY KEY (subscription_row_id, event_name),
+    -- The user sits between the two so the foreign key's cascade, which
+    -- deletes by (subscription_row_id, user_id), reads one subscription's rows
+    -- through this index rather than a whole user's range of the match index.
+    PRIMARY KEY (subscription_row_id, user_id, event_name),
     FOREIGN KEY (subscription_row_id, user_id)
         REFERENCES mcp_event_subscription (id, user_id)
         ON DELETE CASCADE ON UPDATE CASCADE
