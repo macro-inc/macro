@@ -70,6 +70,62 @@ async function everyEntry(
   throw new Error(`${path} has more than 50 pages`);
 }
 
+/** A message the services hold, with the replies under it. */
+export type HeldMessage = {
+  id: string;
+  /** The message as `serverChannel` writes it, without the reply mark. */
+  line: string;
+  deleted: boolean;
+  replies: HeldMessage[];
+};
+
+function held(message: StoredMessage, replies: HeldMessage[]): HeldMessage {
+  return {
+    id: message.id,
+    line: line(message),
+    deleted: message.deleted_at !== null,
+    replies,
+  };
+}
+
+/**
+ * Every message of the channel as the services hold it for the person whose
+ * session `http` carries, oldest first, each with its replies.
+ */
+export async function heldMessages(
+  http: APIRequestContext,
+  channelId: string
+): Promise<HeldMessage[]> {
+  const messages: HeldMessage[] = [];
+  const base = `/dss/messages/channel/${channelId}`;
+  for (const entry of await everyEntry(http, `${base}/timeline`)) {
+    if (entry.type !== 'message' || !entry.message) continue;
+    if ((entry.message.thread?.reply_count ?? 0) === 0) {
+      messages.push(held(entry.message, []));
+      continue;
+    }
+    const thread = await read<Thread>(
+      http,
+      `${base}/threads/${entry.message.id}`
+    );
+    messages.push(
+      held(
+        entry.message,
+        thread.replies.map((reply) => held(reply, []))
+      )
+    );
+  }
+  return messages;
+}
+
+/** Held messages as lines: `text [👍 2]`, and `  > text` for a reply. */
+export function asLines(messages: HeldMessage[]): string[] {
+  return messages.flatMap((message) => [
+    message.line,
+    ...message.replies.map((reply) => `  > ${reply.line}`),
+  ]);
+}
+
 /**
  * The channel as the services hold it for this person, one line a message,
  * oldest first: `text`, `text [👍 2]` with reactions, `  > text` for a reply
@@ -81,19 +137,7 @@ export async function serverChannel(
 ): Promise<string[]> {
   const http = await apiFor(key);
   try {
-    const lines: string[] = [];
-    const base = `/dss/messages/channel/${channelId}`;
-    for (const entry of await everyEntry(http, `${base}/timeline`)) {
-      if (entry.type !== 'message' || !entry.message) continue;
-      lines.push(line(entry.message));
-      if ((entry.message.thread?.reply_count ?? 0) === 0) continue;
-      const thread = await read<Thread>(
-        http,
-        `${base}/threads/${entry.message.id}`
-      );
-      for (const reply of thread.replies) lines.push(`  > ${line(reply)}`);
-    }
-    return lines;
+    return asLines(await heldMessages(http, channelId));
   } finally {
     await http.dispose();
   }
