@@ -152,9 +152,14 @@ impl ContactListRepository for DbContactsRepository {
         // Account deletion queues this just before it deletes the profile.
         // Until the profile is gone an interaction could still add the user
         // back, so refuse and let the queue deliver the message again; once it
-        // is gone, interactions naming the user write nothing.
+        // is gone, interactions naming the user write nothing. A legacy
+        // "User" id stored with capitals is matched by its address, as the
+        // interaction writes match it.
         let profile_exists = sqlx::query_scalar!(
-            r#"SELECT EXISTS (SELECT 1 FROM "User" WHERE id = $1) AS "exists!""#,
+            r#"SELECT (
+                EXISTS (SELECT 1 FROM "User" WHERE id = $1)
+                OR EXISTS (SELECT 1 FROM "User" WHERE lower(email) = substr($1, 7))
+            ) AS "exists!""#,
             user.as_ref(),
         )
         .fetch_one(&mut *tx)
