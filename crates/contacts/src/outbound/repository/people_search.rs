@@ -83,8 +83,7 @@ impl PeopleSearchRepository for DbContactsRepository {
         let rows = sqlx::query_file!(
             "src/outbound/repository/people_named.sql",
             viewer.as_ref(),
-            query.normalized(),
-            &query.words() as &[&str],
+            query.text(),
             i64::from(limit.get()),
         )
         .fetch_all(&mut *transaction)

@@ -281,8 +281,7 @@ impl ContactListReader for DbContactsRepository {
         let rows = sqlx::query_file!(
             "src/outbound/repository/directory/people_named.sql",
             viewer.as_ref(),
-            query.normalized(),
-            &query.words() as &[&str],
+            query.text(),
             i64::from(limit.get()),
             ContactList::Teammates.as_ref(),
             &keys(&INTERACTED_GROUP) as &[&str],

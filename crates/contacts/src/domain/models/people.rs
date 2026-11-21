@@ -89,6 +89,7 @@ pub enum NamedBy {
 /// ranking's two name stages (`subsequence_match::names`).
 #[derive(Clone, Debug)]
 pub struct NamedPeopleQuery {
+    text: String,
     query: NameQuery,
     identity: bool,
 }
@@ -108,7 +109,17 @@ impl NamedPeopleQuery {
             || trimmed
                 .get(..6)
                 .is_some_and(|prefix| prefix.eq_ignore_ascii_case("macro|"));
-        Some(Self { query, identity })
+        Some(Self {
+            text: trimmed.to_owned(),
+            query,
+            identity,
+        })
+    }
+
+    /// The text as typed, trimmed. Storage normalizes it with the names it
+    /// compares, so both sides follow one set of case rules.
+    pub fn text(&self) -> &str {
+        &self.text
     }
 
     /// Whether the text can name anyone: it holds a letter or digit and is
