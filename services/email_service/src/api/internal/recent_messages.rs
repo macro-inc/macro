@@ -90,7 +90,9 @@ fn parse_request(
             folder: query.folder.unwrap_or_default(),
             days,
             limit,
-            texts: query.texts.unwrap_or(limit),
+            // Every message the read keeps: the domain clamps `limit`
+            // (`limit=0` reads one) and caps `texts` at what it kept.
+            texts: query.texts.unwrap_or(u16::MAX),
             snippet_chars,
         }),
     };
