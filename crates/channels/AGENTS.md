@@ -83,17 +83,29 @@ DMs, and the shared message store other domains discuss things on.
   `ChannelService::find_direct_message`, the Slack importer) intersects the two
   people's participant rows behind an `OFFSET 0` fence, through the partial
   `(user_id, channel_id)` indexes on active rows and on left rows
-  (`idx_comms_cp_left_by_user_channel`), then checks the shared channels. Left
-  rows count: an imported DM both people left is still the one to reuse. A
-  bot still in it makes it a group. A bot that was removed counts only for
-  the Slack importer (`DmRoster::Stored`), which maps a conversation onto the
-  channel it reserved by that rule; live get-or-create and the lookup
-  (`DmRoster::Listed`) skip its row, so the DM is the pair's again, as
-  channel lists show it. So when a pair's only DM had a bot removed, a Slack
-  import of that pair creates a DM of its own while live messages keep
-  reusing the first, as they did when the web opener picked the DM from the
-  channel list. Keep that shape; checking every direct-message channel for
-  both people reads the whole table.
+  (`idx_comms_cp_left_by_user_channel`), then reads the rows of each shared
+  direct message once. A DM has rows of exactly the two of them, active or
+  left: an imported DM both people left is still the one to reuse. A third
+  member still in it (a bot) makes it a group. The Slack importer
+  (`DmRoster::Stored`) counts every row and takes the oldest, then the lowest
+  id, the rule it reserved its channels by. Live get-or-create
+  (`DmRoster::Listed`) and the lookup (`DmRoster::Joined`) also take a DM
+  both people are still in whose other rows are members who left (a removed
+  bot, a person who left a legacy group), as channel lists show it. Once one
+  of the two has left, every row counts again, as before: reuse rejoins
+  nobody, so such a DM would take a first message its sender cannot post or
+  the other person never sees. Of several DMs, live get-or-create takes one
+  both people are still in, then one only the other left, then one its actor
+  left, then one both left; then the oldest, then the lowest id, so a legacy
+  duplicate never takes over the DM in use. The lookup ranks the same among
+  the DMs its viewer is still in: it answers the DM their first message would
+  reuse whenever they can open it, and nothing otherwise. Unlike the web
+  opener it replaces, which read the channel list and found only a DM both
+  people were in, that includes one only the other person left, which
+  get-or-create already reused. So when a pair's only DM had a bot removed,
+  a Slack import of that pair creates a DM of its own while live messages
+  keep reusing the first. Keep that shape; checking every direct-message
+  channel for both people reads the whole table.
 
 - The channel list picks its candidates from the filter
   (`ChannelCandidates::for_filter`): joined channels by default, plus the

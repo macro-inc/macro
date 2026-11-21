@@ -208,18 +208,31 @@ async fn concurrent_live_and_import_dm_creation_share_one_channel(pool: PgPool) 
     );
 }
 
+/// An import never reuses a DM with a third member's row, even one who left;
+/// live lookups take a DM both people are in whose third member left as the
+/// pair's, as every channel list shows it. Of exact duplicates, an import takes the oldest,
+/// then the lowest id, and live lookups the one both people are still in.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn malformed_dm_is_not_reused_and_exact_duplicates_choose_oldest_then_id(pool: PgPool) {
+async fn malformed_and_duplicate_dms_are_chosen_by_their_rule(pool: PgPool) {
     let repo = PgChannelsRepo::new(pool.clone());
     let malformed = repo
         .ensure_dm(pair(), historical_dm(macro_uuid::generate_uuid_v7()))
         .await
         .unwrap();
-    // Legacy corruption includes even a departed third member.
+    // A departed third member: legacy corruption to an import, gone to live lookups.
     sqlx::query!(
         "INSERT INTO comms_channel_participants (channel_id, user_id, role, left_at) VALUES ($1, 'macro|third@example.com', 'member', NOW())",
         malformed.id,
     ).execute(&pool).await.unwrap();
+    // Newer than the exact DM, until the end.
+    sqlx::query!(
+        "UPDATE comms_channels SET created_at = $2 WHERE id = $1",
+        malformed.id,
+        timestamp(1_100)
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     let exact = repo
         .ensure_dm(pair(), historical_dm(macro_uuid::generate_uuid_v7()))
         .await
@@ -246,22 +259,38 @@ async fn malformed_dm_is_not_reused_and_exact_duplicates_choose_oldest_then_id(p
         "INSERT INTO comms_channel_participants (channel_id, user_id, role, joined_at, left_at) SELECT $1, user_id, role, joined_at, $3 FROM comms_channel_participants WHERE channel_id = $2",
         duplicate_id, exact.id, timestamp(2_000),
     ).execute(&pool).await.unwrap();
-    let expected = exact.id.min(duplicate_id);
+    // An import takes the oldest, then the lowest id. Live get-or-create and
+    // the lookup take the DM both people are still in: the duplicate they
+    // left is one neither can open.
     assert_eq!(
-        repo.ensure_dm(pair(), DmCreation::Live(pair().hi().clone()))
+        repo.ensure_dm(pair(), historical_dm(macro_uuid::generate_uuid_v7()))
             .await
-            .unwrap(),
+            .unwrap()
+            .id,
+        exact.id.min(duplicate_id)
+    );
+    let live_answers = |repo: PgChannelsRepo| async move {
+        (
+            repo.ensure_dm(pair(), DmCreation::Live(pair().hi().clone()))
+                .await
+                .unwrap(),
+            repo.maybe_get_dm(pair().hi().clone(), pair().lo().clone())
+                .await
+                .unwrap(),
+            repo.maybe_get_dm(pair().lo().clone(), pair().hi().clone())
+                .await
+                .unwrap(),
+        )
+    };
+    let in_exact = (
         EnsuredChannel {
-            id: expected,
-            created: false
-        }
+            id: exact.id,
+            created: false,
+        },
+        Some(exact.id),
+        Some(exact.id),
     );
-    assert_eq!(
-        repo.maybe_get_dm(pair().hi().clone(), pair().lo().clone())
-            .await
-            .unwrap(),
-        Some(expected)
-    );
+    assert_eq!(live_answers(repo.clone()).await, in_exact);
     sqlx::query!(
         "UPDATE comms_channels SET created_at = $2 WHERE id = $1",
         duplicate_id,
@@ -271,6 +300,11 @@ async fn malformed_dm_is_not_reused_and_exact_duplicates_choose_oldest_then_id(p
     .await
     .unwrap();
     assert_eq!(
+        live_answers(repo.clone()).await,
+        in_exact,
+        "an older DM both people left never takes over the one they are in"
+    );
+    assert_eq!(
         repo.ensure_dm(pair(), historical_dm(macro_uuid::generate_uuid_v7()))
             .await
             .unwrap()
@@ -279,6 +313,35 @@ async fn malformed_dm_is_not_reused_and_exact_duplicates_choose_oldest_then_id(p
     );
     let left_count = sqlx::query_scalar!("SELECT COUNT(*) FROM comms_channel_participants WHERE channel_id = $1 AND left_at IS NOT NULL", duplicate_id).fetch_one(&pool).await.unwrap();
     assert_eq!(left_count, Some(2));
+
+    sqlx::query!(
+        "UPDATE comms_channels SET created_at = $2 WHERE id = $1",
+        malformed.id,
+        timestamp(800)
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        live_answers(repo.clone()).await,
+        (
+            EnsuredChannel {
+                id: malformed.id,
+                created: false,
+            },
+            Some(malformed.id),
+            Some(malformed.id),
+        ),
+        "the oldest DM both are in, its third member gone"
+    );
+    assert_eq!(
+        repo.ensure_dm(pair(), historical_dm(macro_uuid::generate_uuid_v7()))
+            .await
+            .unwrap()
+            .id,
+        duplicate_id,
+        "an import still skips the DM with a third member's row"
+    );
     assert_eq!(
         sqlx::query_scalar!("SELECT COUNT(*) FROM comms_activity")
             .fetch_one(&pool)
@@ -288,9 +351,9 @@ async fn malformed_dm_is_not_reused_and_exact_duplicates_choose_oldest_then_id(p
     );
 }
 
-/// A bot added to a DM and removed again leaves the DM the pair's: every
-/// channel list shows it with the two people only, so get-or-create and the
-/// lookup keep answering it. A bot still in the DM makes it a group. An import
+/// A bot added to a DM and removed again leaves the DM the pair's while both
+/// are in it: every channel list shows it with the two people only, so
+/// get-or-create and the lookup keep answering it. A bot still in the DM makes it a group. An import
 /// keeps the stored roster, so it still maps the pair's conversation onto a
 /// channel of its own, as it did before.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -360,6 +423,478 @@ async fn a_removed_bot_leaves_the_dm_the_pairs(pool: PgPool) {
             created: true
         }
     );
+}
+
+/// The lookup answers a viewer only a DM they are still in, the only kind
+/// they can open, as the joined channel list it replaced did; the other
+/// person still finds it, and get-or-create still reuses it. Of several DMs,
+/// get-or-create and the lookup take the one both people are in.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_lookup_answers_a_dm_the_viewer_is_still_in(pool: PgPool) {
+    let repo = PgChannelsRepo::new(pool.clone());
+    let (lo, hi) = (
+        pair().lo().as_ref().to_owned(),
+        pair().hi().as_ref().to_owned(),
+    );
+    let left = repo
+        .ensure_dm(pair(), DmCreation::Live(pair().lo().clone()))
+        .await
+        .unwrap();
+    sqlx::query!(
+        "UPDATE comms_channel_participants SET left_at = NOW() WHERE channel_id = $1 AND user_id = $2",
+        left.id,
+        lo,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        repo.maybe_get_dm(pair().lo().clone(), pair().hi().clone())
+            .await
+            .unwrap(),
+        None,
+        "the viewer left it"
+    );
+    assert_eq!(
+        repo.maybe_get_dm(pair().hi().clone(), pair().lo().clone())
+            .await
+            .unwrap(),
+        Some(left.id)
+    );
+    assert_eq!(
+        repo.ensure_dm(pair(), DmCreation::Live(pair().lo().clone()))
+            .await
+            .unwrap(),
+        EnsuredChannel {
+            id: left.id,
+            created: false
+        }
+    );
+
+    // A newer DM both people are in, beside the older one.
+    let joined = macro_uuid::generate_uuid_v7();
+    sqlx::query!(
+        "INSERT INTO comms_channels (id, owner_id, channel_type, created_at) VALUES ($1, 'macro|a@example.com', 'direct_message', $2)",
+        joined,
+        chrono::Utc::now() + chrono::Duration::hours(1),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO comms_channel_participants (channel_id, user_id, role) VALUES ($1, $2, 'member'), ($1, $3, 'member')",
+        joined,
+        lo,
+        hi,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    for (viewer, other) in [
+        (pair().lo().clone(), pair().hi().clone()),
+        (pair().hi().clone(), pair().lo().clone()),
+    ] {
+        assert_eq!(
+            repo.maybe_get_dm(viewer.clone(), other).await.unwrap(),
+            Some(joined)
+        );
+        assert_eq!(
+            repo.ensure_dm(pair(), DmCreation::Live(viewer))
+                .await
+                .unwrap(),
+            EnsuredChannel {
+                id: joined,
+                created: false
+            }
+        );
+    }
+}
+
+/// When each person has left one of two DMs, each lands in the one they can
+/// still write in, by get-or-create and by the lookup alike, whichever is
+/// older.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn each_person_reuses_a_dm_they_are_still_in(pool: PgPool) {
+    let repo = PgChannelsRepo::new(pool.clone());
+    let (lo, hi) = (
+        pair().lo().as_ref().to_owned(),
+        pair().hi().as_ref().to_owned(),
+    );
+    let mut dms = Vec::new();
+    for (seconds, gone) in [(1_000, &lo), (2_000, &hi)] {
+        let id = macro_uuid::generate_uuid_v7();
+        sqlx::query!(
+            "INSERT INTO comms_channels (id, owner_id, channel_type, created_at) VALUES ($1, 'macro|a@example.com', 'direct_message', $2)",
+            id,
+            timestamp(seconds),
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query!(
+            "INSERT INTO comms_channel_participants (channel_id, user_id, role) VALUES ($1, $2, 'member'), ($1, $3, 'member')",
+            id,
+            lo,
+            hi,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query!(
+            "UPDATE comms_channel_participants SET left_at = NOW() WHERE channel_id = $1 AND user_id = $2",
+            id,
+            gone,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        dms.push(id);
+    }
+    // The older DM is the one `lo` left; the newer, the one `hi` left.
+    let (lo_left, hi_left) = (dms[0], dms[1]);
+    for (viewer, other, theirs) in [
+        (pair().lo().clone(), pair().hi().clone(), hi_left),
+        (pair().hi().clone(), pair().lo().clone(), lo_left),
+    ] {
+        assert_eq!(
+            repo.maybe_get_dm(viewer.clone(), other).await.unwrap(),
+            Some(theirs)
+        );
+        assert_eq!(
+            repo.ensure_dm(pair(), DmCreation::Live(viewer))
+                .await
+                .unwrap(),
+            EnsuredChannel {
+                id: theirs,
+                created: false
+            }
+        );
+    }
+}
+
+async fn insert_dm(pool: &PgPool, seconds: i64, rows: &[(&str, bool)]) -> Uuid {
+    let id = macro_uuid::generate_uuid_v7();
+    sqlx::query!(
+        "INSERT INTO comms_channels (id, owner_id, channel_type, created_at) VALUES ($1, 'macro|a@example.com', 'direct_message', $2)",
+        id,
+        timestamp(seconds),
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    for (user_id, left) in rows {
+        sqlx::query!(
+            "INSERT INTO comms_channel_participants (channel_id, user_id, role, left_at) VALUES ($1, $2, 'member', CASE WHEN $3 THEN NOW() END)",
+            id,
+            *user_id,
+            *left,
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+    id
+}
+
+/// A legacy group conversation is the pair's DM while both people are still
+/// in it, its departed third member gone, as channel lists show it. Once the
+/// other person has left too, it is not: no list showed it as theirs and
+/// get-or-create never reused it, so the lookup answers nothing and a first
+/// message starts a DM of their own.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_group_the_other_person_left_is_not_their_dm(pool: PgPool) {
+    let repo = PgChannelsRepo::new(pool.clone());
+    let (lo, hi) = (
+        pair().lo().as_ref().to_owned(),
+        pair().hi().as_ref().to_owned(),
+    );
+    let group = insert_dm(
+        &pool,
+        1_000,
+        &[
+            (&lo, false),
+            (&hi, false),
+            ("macro|third@example.com", true),
+        ],
+    )
+    .await;
+    for (viewer, other) in [
+        (pair().lo().clone(), pair().hi().clone()),
+        (pair().hi().clone(), pair().lo().clone()),
+    ] {
+        assert_eq!(repo.maybe_get_dm(viewer, other).await.unwrap(), Some(group));
+    }
+
+    sqlx::query!(
+        "UPDATE comms_channel_participants SET left_at = NOW() WHERE channel_id = $1 AND user_id = $2",
+        group,
+        hi,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        repo.maybe_get_dm(pair().lo().clone(), pair().hi().clone())
+            .await
+            .unwrap(),
+        None,
+        "the other person and a third left: a group, not their DM"
+    );
+    let created = repo
+        .ensure_dm(pair(), DmCreation::Live(pair().lo().clone()))
+        .await
+        .unwrap();
+    assert!(created.created);
+    assert_ne!(created.id, group);
+    for (viewer, other) in [
+        (pair().lo().clone(), pair().hi().clone()),
+        (pair().hi().clone(), pair().lo().clone()),
+    ] {
+        assert_eq!(
+            repo.maybe_get_dm(viewer, other).await.unwrap(),
+            Some(created.id)
+        );
+    }
+}
+
+/// A removed bot's row counts like a departed person's: overlooked while
+/// both people are in the DM, counted once either has left. Get-or-create
+/// rejoins nobody, so reusing that DM would put a first message where its
+/// sender cannot post, or where the other person never sees it; as before,
+/// it starts a DM they are both in.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_dm_one_person_left_counts_its_removed_bot(pool: PgPool) {
+    let repo = PgChannelsRepo::new(pool.clone());
+    let (lo, hi) = (
+        pair().lo().as_ref().to_owned(),
+        pair().hi().as_ref().to_owned(),
+    );
+    let bot = format!("bot|{}", macro_uuid::generate_uuid_v7());
+    let lo_left = insert_dm(&pool, 1_000, &[(&lo, true), (&hi, false), (&bot, true)]).await;
+    let mut connection = pool.acquire().await.unwrap();
+    for actor in [pair().lo(), pair().hi()] {
+        assert_eq!(
+            find_dm(&mut connection, &pair(), DmRoster::Listed(actor))
+                .await
+                .unwrap(),
+            None,
+            "neither the one who left nor the one still in reuses it"
+        );
+    }
+    drop(connection);
+    for (viewer, other) in [
+        (pair().lo().clone(), pair().hi().clone()),
+        (pair().hi().clone(), pair().lo().clone()),
+    ] {
+        assert_eq!(repo.maybe_get_dm(viewer, other).await.unwrap(), None);
+    }
+
+    let created = repo
+        .ensure_dm(pair(), DmCreation::Live(pair().lo().clone()))
+        .await
+        .unwrap();
+    assert!(created.created);
+    assert_ne!(created.id, lo_left);
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT COUNT(*) FROM comms_channel_participants WHERE channel_id = $1 AND left_at IS NULL",
+            created.id,
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        Some(2),
+        "both people are in the new DM"
+    );
+}
+
+/// A third member still in the channel, a person or a bot, makes it a group
+/// even once one of the pair has left: two people are still in it, but not
+/// these two, so it is nobody's DM with the one who left.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_third_member_still_in_keeps_a_group_after_one_left(pool: PgPool) {
+    let repo = PgChannelsRepo::new(pool.clone());
+    let (lo, hi) = (
+        pair().lo().as_ref().to_owned(),
+        pair().hi().as_ref().to_owned(),
+    );
+    let bot = format!("bot|{}", macro_uuid::generate_uuid_v7());
+    for third in ["macro|third@example.com", bot.as_str()] {
+        let group = insert_dm(&pool, 1_000, &[(&lo, false), (&hi, true), (third, false)]).await;
+        let mut connection = pool.acquire().await.unwrap();
+        for actor in [pair().lo(), pair().hi()] {
+            assert_eq!(
+                find_dm(&mut connection, &pair(), DmRoster::Listed(actor))
+                    .await
+                    .unwrap(),
+                None,
+                "{third} is still in it: a group"
+            );
+        }
+        drop(connection);
+        assert_eq!(
+            repo.maybe_get_dm(pair().lo().clone(), pair().hi().clone())
+                .await
+                .unwrap(),
+            None,
+            "{third} is still in it: a group"
+        );
+        sqlx::query!(
+            "DELETE FROM comms_channel_participants WHERE channel_id = $1",
+            group
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+}
+
+/// Of two DMs both people are in, created within one second, the lookup and
+/// get-or-create take the one created first, by instant: one made on the
+/// second comes before one made half a second later, though its time
+/// serialized as RFC 3339 (`…:40Z`) sorts after the other's (`…:40.500Z`)
+/// as text. The younger has the lower id, so no tie-break picks the older.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_older_of_two_dms_within_a_second_wins_by_instant(pool: PgPool) {
+    let repo = PgChannelsRepo::new(pool.clone());
+    let (lo, hi) = (
+        pair().lo().as_ref().to_owned(),
+        pair().hi().as_ref().to_owned(),
+    );
+    let first = insert_dm(&pool, 1_000, &[(&lo, false), (&hi, false)]).await;
+    let second = insert_dm(&pool, 1_000, &[(&lo, false), (&hi, false)]).await;
+    // Ids made in the same millisecond order at random: the younger is
+    // whichever has the lower id.
+    let (younger, older) = if first < second {
+        (first, second)
+    } else {
+        (second, first)
+    };
+    sqlx::query!(
+        "UPDATE comms_channels SET created_at = created_at + interval '500 milliseconds' WHERE id = $1",
+        younger
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    for (viewer, other) in [
+        (pair().lo().clone(), pair().hi().clone()),
+        (pair().hi().clone(), pair().lo().clone()),
+    ] {
+        assert_eq!(
+            repo.maybe_get_dm(viewer.clone(), other).await.unwrap(),
+            Some(older)
+        );
+        assert_eq!(
+            repo.ensure_dm(pair(), DmCreation::Live(viewer))
+                .await
+                .unwrap(),
+            EnsuredChannel {
+                id: older,
+                created: false
+            }
+        );
+    }
+}
+
+/// Live get-or-create ranks a DM its actor left before one both people left,
+/// however much older that one is, and DMs of the same rank created at the
+/// same instant by id; an import keeps taking the oldest of every row.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn live_ranks_by_who_left_then_age_then_id(pool: PgPool) {
+    let repo = PgChannelsRepo::new(pool.clone());
+    let (lo, hi) = (
+        pair().lo().as_ref().to_owned(),
+        pair().hi().as_ref().to_owned(),
+    );
+    let both_left = insert_dm(&pool, 1_000, &[(&lo, true), (&hi, true)]).await;
+    assert_eq!(
+        repo.ensure_dm(pair(), DmCreation::Live(pair().lo().clone()))
+            .await
+            .unwrap(),
+        EnsuredChannel {
+            id: both_left,
+            created: false
+        },
+        "a DM both left is still theirs when it is the only one"
+    );
+    let lo_left = insert_dm(&pool, 2_000, &[(&lo, true), (&hi, false)]).await;
+    assert_eq!(
+        repo.ensure_dm(pair(), DmCreation::Live(pair().lo().clone()))
+            .await
+            .unwrap(),
+        EnsuredChannel {
+            id: lo_left,
+            created: false
+        },
+        "the actor left it, but not both"
+    );
+    assert_eq!(
+        repo.maybe_get_dm(pair().lo().clone(), pair().hi().clone())
+            .await
+            .unwrap(),
+        None,
+        "the viewer left both"
+    );
+    assert_eq!(
+        repo.maybe_get_dm(pair().hi().clone(), pair().lo().clone())
+            .await
+            .unwrap(),
+        Some(lo_left)
+    );
+    let mut connection = pool.acquire().await.unwrap();
+    assert_eq!(
+        find_dm(&mut connection, &pair(), DmRoster::Stored)
+            .await
+            .unwrap(),
+        Some(both_left)
+    );
+    drop(connection);
+
+    // Two DMs both are in, created at the same instant, inserted highest id
+    // first so neither insertion order nor age decides.
+    let (first, second) = (
+        macro_uuid::generate_uuid_v7(),
+        macro_uuid::generate_uuid_v7(),
+    );
+    for id in [second, first] {
+        sqlx::query!(
+            "INSERT INTO comms_channels (id, owner_id, channel_type, created_at) VALUES ($1, 'macro|a@example.com', 'direct_message', $2)",
+            id,
+            timestamp(3_000),
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query!(
+            "INSERT INTO comms_channel_participants (channel_id, user_id, role) VALUES ($1, $2, 'member'), ($1, $3, 'member')",
+            id,
+            lo,
+            hi,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    let lowest = first.min(second);
+    for (viewer, other) in [
+        (pair().lo().clone(), pair().hi().clone()),
+        (pair().hi().clone(), pair().lo().clone()),
+    ] {
+        assert_eq!(
+            repo.maybe_get_dm(viewer.clone(), other).await.unwrap(),
+            Some(lowest)
+        );
+        assert_eq!(
+            repo.ensure_dm(pair(), DmCreation::Live(viewer))
+                .await
+                .unwrap(),
+            EnsuredChannel {
+                id: lowest,
+                created: false
+            }
+        );
+    }
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

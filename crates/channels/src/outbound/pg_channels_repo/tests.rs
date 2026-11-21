@@ -881,18 +881,18 @@ async fn get_viewed_at_reads_the_users_own_row_even_after_leaving(pool: Pool<Pos
     let viewed: DateTime<Utc> = "2024-01-04T12:30:00.123456Z".parse().unwrap();
     // The left user viewed the channel they later left; someone else viewed
     // another channel; nobody's row says the left user viewed TEAM_A_MANUAL.
-    sqlx::query(
+    sqlx::query!(
         "INSERT INTO comms_activity (id, user_id, channel_id, viewed_at, created_at, updated_at)
          VALUES (gen_random_uuid(), $1, $2, $3, now(), now()),
                 (gen_random_uuid(), $4, $5, now(), now(), now()),
                 (gen_random_uuid(), $1, $6, NULL, now(), now())",
+        LEFT_USER,
+        TEAM_A_AUTO_LEFT,
+        viewed.naive_utc(),
+        USER_B,
+        TEAM_A_MANUAL,
+        TEAM_A_AUTO_ACTIVE,
     )
-    .bind(LEFT_USER)
-    .bind(TEAM_A_AUTO_LEFT)
-    .bind(viewed.naive_utc())
-    .bind(USER_B)
-    .bind(TEAM_A_MANUAL)
-    .bind(TEAM_A_AUTO_ACTIVE)
     .execute(&pool)
     .await
     .unwrap();
@@ -3364,16 +3364,20 @@ async fn walk_returns_channel_moved_mid_walk(
                 !walked.contains(&moved),
                 "walk channel 1 is on a later page"
             );
-            sqlx::query("UPDATE comms_channels SET updated_at = now() WHERE id = $1")
-                .bind(moved)
-                .execute(pool)
-                .await
-                .unwrap();
-            sqlx::query("UPDATE comms_activity SET viewed_at = now() WHERE channel_id = $1")
-                .bind(moved)
-                .execute(pool)
-                .await
-                .unwrap();
+            sqlx::query!(
+                "UPDATE comms_channels SET updated_at = now() WHERE id = $1",
+                moved
+            )
+            .execute(pool)
+            .await
+            .unwrap();
+            sqlx::query!(
+                "UPDATE comms_activity SET viewed_at = now() WHERE channel_id = $1",
+                moved
+            )
+            .execute(pool)
+            .await
+            .unwrap();
         }
     }
     walked.contains(&moved)

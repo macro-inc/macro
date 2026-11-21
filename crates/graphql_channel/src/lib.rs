@@ -208,7 +208,8 @@ where
 /// Domain-facing capability behind the viewer's channel reads.
 pub trait ChannelUserReads: Send + Sync + 'static {
     /// The direct message between `user_id` and `recipient_id` that
-    /// get-or-create would reuse, without creating one.
+    /// get-or-create by `user_id` would reuse, while `user_id` is still in
+    /// it, without creating one: `None` when they have none `user_id` is in.
     fn find_direct_message(
         &self,
         user_id: MacroUserIdStr<'static>,
@@ -318,9 +319,10 @@ impl GraphqlChannelUserQuery {
 #[Object]
 impl GraphqlChannelUserQuery {
     /// The id of the authenticated user's direct message with `userId`, the
-    /// one a first message to them would reuse: the oldest channel of the two
-    /// of them alone. Null when they have none, or when `userId` is the
-    /// authenticated user. Asking never creates one.
+    /// one a first message to them would reuse, while the authenticated user
+    /// is still in it: of several, one both are in, then one only `userId`
+    /// left, then the oldest, then the lowest id. Null when they are in none,
+    /// or when `userId` is the authenticated user. Asking never creates one.
     async fn direct_message_channel_id(
         &self,
         ctx: &Context<'_>,
