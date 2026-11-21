@@ -6,7 +6,7 @@ import {
   createPriorityCollapseController,
   PriorityCollapseOverflowSensor,
 } from '@app/components/priority-collapse/PriorityCollapseOverflowSensor';
-import { ViewShell } from '@app/components/view-shell';
+import { useViewTabHotkeys, ViewShell } from '@app/components/view-shell';
 import { AccountManagerRequestButton } from '@app/features/account-manager/account-manager-request-button';
 import {
   DmWorkPanel,
@@ -36,6 +36,7 @@ import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import {
   useSplitDisplayName,
+  useSplitPanel,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
@@ -170,9 +171,23 @@ export function ChannelDetailTabs(props: {
         priority: 1,
       })
     : () => false;
+  const [tabsElement, setTabsElement] = createSignal<HTMLElement>();
+  const panel = useSplitPanel();
+  if (panel) {
+    useViewTabHotkeys<ChannelTabId>({
+      scopeId: panel.splitHotkeyScope,
+      enabled: panel.isPanelActive,
+      tabs: tabsElement,
+      ids: () => tabs().map((tab) => tab.value),
+      activeId: activeTab,
+      setActiveId: setActiveTab,
+      label: (id) => tabs().find((tab) => tab.value === id)?.label ?? id,
+    });
+  }
 
   return (
     <Tabs
+      ref={setTabsElement}
       aria-label="Channel sections"
       size="sm"
       touch="inset"
