@@ -54,6 +54,10 @@ export function ScreenStage(props: {
   let frameElement: HTMLDivElement | undefined;
   let keyboardField: HTMLTextAreaElement | undefined;
 
+  // Typing when the drive paused (a dropped connection): once driving again,
+  // the keys go to the guest as before, even if something took focus.
+  let typingWhenPaused = false;
+
   // Handed back, or the lease went to someone else: give the keyboard back to
   // the app, rather than keep typing invisibly into the hidden field.
   createEffect(
@@ -61,8 +65,32 @@ export function ScreenStage(props: {
       () => props.ownsKeyboard,
       (owns) => {
         if (owns || !keyboardField) return;
+        typingWhenPaused = false;
         keyboardField.value = '';
         if (document.activeElement === keyboardField) keyboardField.blur();
+      },
+      { defer: true }
+    )
+  );
+
+  createEffect(
+    on(
+      () => props.drivingMe,
+      (driving, wasDriving) => {
+        // `on` runs on every change of what the accessor reads, not only of
+        // its value: act on real flips only.
+        if (!keyboardField || driving === wasDriving) return;
+        if (!driving) {
+          typingWhenPaused = document.activeElement === keyboardField;
+          return;
+        }
+        const resumed = typingWhenPaused;
+        typingWhenPaused = false;
+        // Only when focus went nowhere: never take it from another control.
+        const focusLost =
+          document.activeElement === null ||
+          document.activeElement === document.body;
+        if (resumed && focusLost) keyboardField.focus({ preventScroll: true });
       },
       { defer: true }
     )

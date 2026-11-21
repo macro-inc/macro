@@ -77,7 +77,7 @@ export function MobileAgentScreen(props: { model: AgentScreenModel }) {
             <StatusPill
               status={session.store.status}
               driver={driverLabel(
-                session.drivingMe(),
+                session.drivingMe() || session.resumingDrive(),
                 session.drivingElsewhere(),
                 props.model.driverName()
               )}

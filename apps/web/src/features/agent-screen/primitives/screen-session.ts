@@ -356,9 +356,15 @@ export function createScreenSession(options: ScreenSessionOptions) {
   /** This tab drives: the lease is ours and accepts this socket's input. */
   const drivingMe = () => ownLease() && store.server?.drivingHere !== false;
 
-  /** We hold the lease, but from another tab or an older connection. */
-  const drivingElsewhere = () =>
+  /** The lease is ours, on another socket: another tab, or an older connection. */
+  const leaseOnOtherSocket = () =>
     ownLease() && store.server?.drivingHere === false;
+
+  /**
+   * We hold the lease from another tab. Not while resuming: then the other
+   * socket is this tab's own dropped one, and the lease is about to move here.
+   */
+  const drivingElsewhere = () => leaseOnOtherSocket() && !resumingDrive();
 
   /**
    * This tab was driving when its connection ended (a drop, a reload of the
@@ -376,7 +382,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
     }
     // Only a lease that is still ours: when it is free, someone (perhaps us,
     // from another tab) handed back on purpose, and the banner offers it.
-    if (!drivingElsewhere()) return;
+    if (!leaseOnOtherSocket()) return;
     record('computer.screen.resume_driving');
     // `controlLost` stays until the server answers: the drive is still
     // being won back (`resumingDrive`).
@@ -414,7 +420,9 @@ export function createScreenSession(options: ScreenSessionOptions) {
    * taking it back).
    */
   const resumingDrive = () =>
-    store.controlLost && (!store.server || store.takingOver);
+    store.controlLost &&
+    options.canDrive() &&
+    (!store.server || store.takingOver || leaseOnOtherSocket());
 
   const controlLost = (): ControlLost | undefined => {
     if (!store.controlLost) return undefined;

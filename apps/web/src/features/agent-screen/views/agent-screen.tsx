@@ -49,7 +49,7 @@ export function AgentScreen(props: { model: AgentScreenModel }) {
           <StatusPill
             status={session.store.status}
             driver={driverLabel(
-              session.drivingMe(),
+              session.drivingMe() || session.resumingDrive(),
               session.drivingElsewhere(),
               props.model.driverName()
             )}
@@ -93,7 +93,7 @@ export function AgentScreen(props: { model: AgentScreenModel }) {
                   name: props.model.driverName() ?? '',
                 })}
               >
-                <Match when={session.drivingMe()}>
+                <Match when={session.drivingMe() || session.resumingDrive()}>
                   {t('agentScreen.youAreDriving')}
                 </Match>
                 <Match when={session.drivingElsewhere()}>
