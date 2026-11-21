@@ -119,7 +119,10 @@ fn error_responses_are_logged_without_their_data_and_rmcps_own_log_is_the_droppe
     });
     let response = String::from_utf8_lossy(&response);
     // The caller still gets the data.
-    assert!(response.contains("the caller's own words"), "{response}");
+    assert!(
+        response.contains(r#""data":{"query":"the caller's own words"}"#),
+        "{response}"
+    );
 
     let ours = String::from_utf8_lossy(&ours.0.lock().unwrap_or_else(PoisonError::into_inner))
         .into_owned();
