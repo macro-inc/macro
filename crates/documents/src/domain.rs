@@ -24,6 +24,9 @@ pub mod markdown_backfill;
 /// Revision-checked reads and writes of a markdown document's body.
 #[cfg(feature = "ai_tools")]
 pub mod markdown_body;
+/// Direct edits to a markdown document's body, with no model.
+#[cfg(feature = "ai_tools")]
+pub mod markdown_edits;
 
 #[cfg(feature = "document_create")]
 pub mod create;

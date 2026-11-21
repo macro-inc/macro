@@ -160,6 +160,12 @@ enforced by the ordinary backend APIs.
   `toMarkdown()` (also `markdown` in `toJSON()`) writes the `<m-image>` tag that
   shows one inline. It must match lexical-core's `I_IMAGE_CONSTRAINED`
   (pinned in `lexical-core/tests/generated-image.test.ts`).
+- `src/entities/markdown-edits/`: `Document.markdownBlocks()` and
+  `applyMarkdownEdits()` (storage `/documents/{id}/markdown/blocks` and
+  `/markdown/edits`, the `EditDocument` tool's `edits` engine) over
+  `DocumentBlock` handles; a 422 is `MarkdownEditsRefusedError` with its code
+  and matching blocks, a 409 `DocumentChangedError` (or `DocumentBusyError`
+  when others kept editing: retry as is).
 - `src/entities/documents/text-comment.ts`: `Document.commentOnText()` anchors a
   thread to quoted text (`POST /documents/{id}/comments/text`, the
   `CommentOnText` tool's domain function); a 422 becomes

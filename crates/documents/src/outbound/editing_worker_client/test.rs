@@ -290,3 +290,130 @@ async fn spreadsheet_instructions_carry_usage_with_every_outcome() {
     assert_eq!(result.usage[0].input_tokens, 400);
     assert_eq!(result.usage[0].output_tokens, 30);
 }
+
+#[cfg(feature = "ai_tools")]
+#[tokio::test]
+async fn direct_markdown_edits_send_the_batch_and_read_each_outcome() {
+    use crate::domain::markdown_edits::{
+        BlockId, DeleteEdit, MarkdownEdit, MarkdownEditConflict, MarkdownEditConflictReason,
+        MarkdownEditMerge, MarkdownEditOutcomeKind, MarkdownEditRefusalCode, MarkdownEditRequest,
+    };
+    use axum::{Json, Router, http::StatusCode, routing::post};
+
+    let bodies = Arc::new(std::sync::Mutex::new(Vec::<serde_json::Value>::new()));
+    let seen = bodies.clone();
+    let app = Router::new().route(
+        "/markdown",
+        post(move |Json(body): Json<serde_json::Value>| {
+            let seen = seen.clone();
+            async move {
+                let call = seen.lock().unwrap().len();
+                seen.lock().unwrap().push(body);
+                match call {
+                    0 => (
+                        StatusCode::OK,
+                        Json(serde_json::json!({
+                            "action": "edit",
+                            "outcome": "committed",
+                            "revision": "AQIE",
+                            "merge": "current",
+                            "changes": [{ "kind": "deleted", "blockId": "b1", "markdown": "Old." }],
+                        })),
+                    ),
+                    1 => (
+                        StatusCode::UNPROCESSABLE_ENTITY,
+                        Json(serde_json::json!({
+                            "error": "edit 1: no block with id b1",
+                            "refusal": {
+                                "code": "unknown_block",
+                                "message": "edit 1: no block with id b1",
+                                "edit": 1,
+                                "blocks": [],
+                            },
+                        })),
+                    ),
+                    2 => (
+                        StatusCode::CONFLICT,
+                        Json(serde_json::json!({ "error": "the matched text is gone", "conflict": { "reason": "changed", "edit": 1 } })),
+                    ),
+                    3 => (
+                        StatusCode::PAYLOAD_TOO_LARGE,
+                        Json(serde_json::json!({ "error": "The document exceeds the 4 MiB snapshot limit." })),
+                    ),
+                    _ => (
+                        StatusCode::CONFLICT,
+                        Json(serde_json::json!({ "error": "The document changed since it was read." })),
+                    ),
+                }
+            }
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let client = ReqwestEditingWorkerClient::new(
+        url,
+        Arc::new(Client::builder().no_proxy().build().unwrap()),
+    );
+    let token = "test-token".to_owned().into();
+    let request = MarkdownEditRequest {
+        edits: vec![MarkdownEdit::Delete(DeleteEdit {
+            delete: BlockId::try_from("b1".to_owned()).unwrap(),
+        })],
+        base_revision: Some("AQID".into()),
+        dry_run: false,
+        allow_deleting_content: false,
+    };
+
+    let applied = client.edit_markdown("doc", &token, &request).await.unwrap();
+    let refused = client.edit_markdown("doc", &token, &request).await.unwrap();
+    let conflict = client.edit_markdown("doc", &token, &request).await.unwrap();
+    let too_large = client.edit_markdown("doc", &token, &request).await.unwrap();
+    let sync_conflict = client.edit_markdown("doc", &token, &request).await.unwrap();
+
+    match applied {
+        MarkdownEditOutcome::Applied(edited) => {
+            assert_eq!(edited.outcome, MarkdownEditOutcomeKind::Committed);
+            assert_eq!(edited.merge, Some(MarkdownEditMerge::Current));
+            assert_eq!(edited.changes.len(), 1);
+        }
+        other => panic!("expected an applied batch, got {other:?}"),
+    }
+    match refused {
+        MarkdownEditOutcome::Refused(refusal) => {
+            assert_eq!(refusal.code, MarkdownEditRefusalCode::UnknownBlock);
+            assert_eq!(refusal.edit, Some(1));
+        }
+        other => panic!("expected a refusal, got {other:?}"),
+    }
+    assert_eq!(
+        conflict,
+        MarkdownEditOutcome::Conflict(MarkdownEditConflict {
+            reason: MarkdownEditConflictReason::Changed,
+            message: "the matched text is gone".into(),
+        })
+    );
+    assert!(
+        matches!(&too_large, MarkdownEditOutcome::Invalid(message) if message.contains("4 MiB")),
+        "a 4xx is not written: {too_large:?}"
+    );
+    assert_eq!(
+        sync_conflict,
+        MarkdownEditOutcome::Conflict(MarkdownEditConflict {
+            reason: MarkdownEditConflictReason::Changed,
+            message: "The document changed since it was read.".into(),
+        })
+    );
+    assert_eq!(
+        bodies.lock().unwrap()[0],
+        serde_json::json!({
+            "documentId": "doc",
+            "documentToken": "test-token",
+            "request": {
+                "action": "edit",
+                "edits": [{ "delete": "b1" }],
+                "baseRevision": "AQID",
+            },
+        })
+    );
+}

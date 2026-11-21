@@ -573,6 +573,18 @@ export type {
   InitiativeSummary,
 } from './entities/initiatives/namespace';
 export {
+  type BlockPosition,
+  DocumentBlock,
+  type DocumentBlockChange,
+  type DocumentBlocks,
+  DocumentBusyError,
+  type MarkdownEditMatchingBlock,
+  type MarkdownEditOperation,
+  type MarkdownEditOptions,
+  type MarkdownEditResult,
+  MarkdownEditsRefusedError,
+} from './entities/markdown-edits/markdown-edits';
+export {
   MeNamespace,
   type UpdateMeOptions,
   type UploadProfilePictureOptions,
@@ -582,7 +594,11 @@ export type {
   ExplicitMemory,
   MemoryEdit,
 } from './entities/memory/namespace';
-export type { TimelineOptions } from './entities/messages/thread';
+export type {
+  TimelineEntry,
+  TimelineOptions,
+  TimelinePage,
+} from './entities/messages/thread';
 export { type MessageParent, MessageThread } from './entities/messages/thread';
 export type {
   AgentAccessRequest,

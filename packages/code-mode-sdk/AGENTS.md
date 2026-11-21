@@ -35,6 +35,7 @@ HTML worker belong to `packages/sdk-docs`.
   `typescript` and typed with `CodeContext`; `crates/agent_code_mode` checks
   each one.
 - `crmEmailPrivacy` documents `macro.crm.emailPrivacy` separately from CRM records so both entity indexes stay within the 16 KiB bound; this changes neither the public namespace nor endpoint authorization.
+- `markdownEdits` (`entities/markdown-edits/`) documents `DocumentBlock`, the edit operations and `MarkdownEditsRefusedError` apart from `documents` for the same bound; `Document.markdownBlocks` and `applyMarkdownEdits` stay on `Document`. Name a long inline return type (`TimelinePage`) rather than letting it spell out in every index line.
 - The bundled SDK adds its hand-assigned display verb to each generated call
   when code mode enables the verb header in the bootstrap.
 - Keep `generate.ts`'s `postReads` in step with
