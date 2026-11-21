@@ -72,7 +72,8 @@ impl<R: ContactsRepository + ContactListRepository, N: ContactsNotifier> Contact
         .instrument(span.clone())
         .await
         .inspect_err(|error| {
-            tracing::error!(parent: &span, error = ?error, "error processing message");
+            // Entered, not just parented, so the log carries the round's trace ids.
+            span.in_scope(|| tracing::error!(error = ?error, "error processing message"));
         })
     }
 
