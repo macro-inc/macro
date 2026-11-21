@@ -295,3 +295,48 @@ async fn encoded_global_attachment_can_use_a_seven_bit_transport() {
     assert_eq!(peer.commands[1], "MAIL FROM:<owner@example.net>\r\n");
     assert_eq!(peer.delivered, wire);
 }
+
+#[tokio::test]
+async fn recipient_refusal_returns_without_waiting_for_connection_cleanup() {
+    for code in [450, 550] {
+        let (mut client, server) = tokio::io::duplex(4096);
+        let peer = tokio::spawn(async move {
+            let mut server = BufReader::new(server);
+            let mut command = String::new();
+            server.read_line(&mut command).await.unwrap();
+            assert_eq!(command, "MAIL FROM:<owner@example.net>\r\n");
+            server
+                .get_mut()
+                .write_all(b"250 accepted\r\n")
+                .await
+                .unwrap();
+            command.clear();
+            server.read_line(&mut command).await.unwrap();
+            assert_eq!(command, "RCPT TO:<recipient@example.net>\r\n");
+            server
+                .get_mut()
+                .write_all(format!("{code} synthetic refusal\r\n").as_bytes())
+                .await
+                .unwrap();
+            // Keep the peer open after its refusal. The discarded connection
+            // must close without DATA, RSET or another round trip.
+            command.clear();
+            assert_eq!(server.read_line(&mut command).await.unwrap(), 0);
+        });
+        let result = tokio::time::timeout(
+            Duration::from_secs(5),
+            deliver(
+                &mut client,
+                &Extensions::default(),
+                "owner@example.net",
+                &["recipient@example.net".into()],
+                ASCII,
+            ),
+        )
+        .await
+        .expect("a definitive refusal must not wait for cleanup");
+        assert_eq!(result, Err(Error::SendRejected));
+        drop(client);
+        peer.await.unwrap();
+    }
+}

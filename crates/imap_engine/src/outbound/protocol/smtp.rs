@@ -266,17 +266,15 @@ async fn deliver<S: AsyncRead + AsyncWrite + Unpin>(
     mail_from.push_str("\r\n");
     submission_command(stream, mail_from.as_bytes(), 250, "mail-from").await?;
     for recipient in recipients {
-        if let Err(error) = submission_command(
+        // Refused sockets are discarded, so cleanup must not delay a known
+        // pre-DATA rejection or turn it into an uncertain RPC timeout.
+        submission_command(
             stream,
             format!("RCPT TO:<{recipient}>\r\n").as_bytes(),
             250,
             "rcpt-to",
         )
-        .await
-        {
-            let _ = command(stream, b"RSET\r\n", 250).await;
-            return Err(error);
-        }
+        .await?;
     }
     submission_command(stream, b"DATA\r\n", 354, "data-command").await?;
     // Admission was persisted before IO. Lost DATA delivery acknowledgments remain Unknown.

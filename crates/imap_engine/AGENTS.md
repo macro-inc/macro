@@ -78,6 +78,8 @@ accepts bearer access to a remote mail server.
   8BITMIME for 8-bit data before sending MAIL. Unsupported capabilities are
   definite rejections; a lost DATA acknowledgment remains Unknown.
 
+- Return a definite pre-DATA SMTP refusal immediately; discard its socket without
+  waiting for RSET, so cleanup cannot turn rejection into an uncertain timeout.
 - Classify explicit IMAP authentication response codes before diagnostic prose.
   SMTP authentication replies are separate from submission replies: 535 rejects
   credentials, temporary failures and transport closes never imply bad passwords.
