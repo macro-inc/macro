@@ -820,12 +820,29 @@ describe('channel deletion', () => {
     mocks.deleteCallGraphql.mockImplementation(async ({ id }) => {
       if (id === 'refused') throw new Error('refused');
     });
-    const open = channelKeys.withID('open').queryKey;
+    const open = channelKeys.withID('first').queryKey;
+    const attachments = channelKeys.attachments('second', 'image').queryKey;
+    const refused = channelKeys.withID('refused').queryKey;
+    const other = channelKeys.participants('other').queryKey;
+    const list = channelKeys.listChannels('macro|viewer@example.com').queryKey;
     const directory = channelKeys.directory(
       'macro|viewer@example.com'
     ).queryKey;
-    client.setQueryData(open, {});
-    client.setQueryData(directory, {});
+    const quickAccess = channelKeys.quickAccessGraphql(
+      'client',
+      'macro|viewer@example.com',
+      0
+    ).queryKey;
+    for (const key of [
+      open,
+      attachments,
+      refused,
+      other,
+      list,
+      directory,
+      quickAccess,
+    ])
+      client.setQueryData(key, {});
     const { mutation } = mount();
 
     await expect(
@@ -841,8 +858,15 @@ describe('channel deletion', () => {
       removed: ['first', 'second'],
     });
     expect(client.getQueryState(open)?.isInvalidated).toBe(true);
-    // Left to the directory's own refresh, which reads it once.
+    expect(client.getQueryState(attachments)?.isInvalidated).toBe(true);
+    expect(client.getQueryState(list)?.isInvalidated).toBe(true);
+    // A channel that was not deleted keeps its reads.
+    expect(client.getQueryState(refused)?.isInvalidated).toBe(false);
+    expect(client.getQueryState(other)?.isInvalidated).toBe(false);
+    // Left to the directory's own refresh, which reads it once, and to Quick
+    // Access, which rereads the cache when the deletion reaches it.
     expect(client.getQueryState(directory)?.isInvalidated).toBe(false);
+    expect(client.getQueryState(quickAccess)?.isInvalidated).toBe(false);
   });
 
   it('refreshes the directory as the sign-in that deleted, after another signs in', async () => {

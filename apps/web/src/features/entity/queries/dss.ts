@@ -64,11 +64,17 @@ function invalidateDeletedDssItems(
     e.type === 'channel' ? [e.id] : []
   );
   if (channelIds.length > 0) {
+    const deleted = new Set(channelIds);
     queryClient.invalidateQueries({
       queryKey: channelKeys._def,
-      // The directory refresh below reads the directory again itself.
+      // The deleted channels' own reads, and the REST lists that hold them.
+      // The directory refresh below reads the directory again itself, and
+      // Quick Access rereads its cached channels when the cache drops them:
+      // both are account-wide reads one deletion should not repeat.
       predicate: ({ queryKey }) =>
-        !partialMatchKey(queryKey, channelKeys.directory._def),
+        partialMatchKey(queryKey, channelKeys.listChannels._def) ||
+        partialMatchKey(queryKey, channelKeys.activity._def) ||
+        (typeof queryKey[2] === 'string' && deleted.has(queryKey[2])),
     });
     // The channel directory reads a replica, or waits for the soup update:
     // the deleted channels come out at once, with no read of each.

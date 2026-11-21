@@ -120,15 +120,21 @@ export function createChannelDirectoryIndex(
 ) {
   let entries = new Map<string, IndexEntry>();
   let generation: string | undefined;
+  // The lists `entries` gives, kept until an entry changes, so a refresh
+  // that finds nothing new walks no entry to answer.
+  let listed: Omit<ChannelDirectoryRead, 'reread'> | undefined;
 
   const snapshot = (reread: number): ChannelDirectoryRead => {
-    const channels: DirectoryChannel[] = [];
-    const incompleteIds: string[] = [];
-    for (const [recordKey, entry] of entries) {
-      if (entry.channel) channels.push(entry.channel);
-      else incompleteIds.push(recordKey.slice(CHANNEL_RECORD_PREFIX.length));
+    if (!listed) {
+      const channels: DirectoryChannel[] = [];
+      const incompleteIds: string[] = [];
+      for (const [recordKey, entry] of entries) {
+        if (entry.channel) channels.push(entry.channel);
+        else incompleteIds.push(recordKey.slice(CHANNEL_RECORD_PREFIX.length));
+      }
+      listed = { channels, incompleteIds };
     }
-    return { channels, incompleteIds, reread };
+    return { ...listed, reread };
   };
 
   return {
@@ -153,17 +159,20 @@ export function createChannelDirectoryIndex(
     ): Promise<ChannelDirectoryRead> {
       if (storageGeneration !== generation) {
         entries = new Map();
+        listed = undefined;
         generation = storageGeneration;
       }
       const documents = await listCachedChannelDocuments(host, signal);
-      const listed = new Set(documents.map(({ recordKey }) => recordKey));
+      const inSearch = new Set(documents.map(({ recordKey }) => recordKey));
       const changed = documents.filter(
         ({ recordKey, sourceHash }) =>
           entries.get(recordKey)?.sourceHash !== sourceHash
       );
       // A record whose sort time changed while the pages were read can be
       // missed by them; read it by key before dropping it.
-      const unlisted = [...entries.keys()].filter((key) => !listed.has(key));
+      const unlisted = [...entries.keys()].filter((key) => !inSearch.has(key));
+      // Every listed record as the index holds it: nothing to read or rebuild.
+      if (changed.length === 0 && unlisted.length === 0) return snapshot(0);
       const read = await readDirectoryChannels(
         host,
         [...changed.map(({ recordKey }) => recordKey), ...unlisted],
@@ -187,6 +196,7 @@ export function createChannelDirectoryIndex(
         if (channel) next.set(key, { sourceHash: '', channel });
       }
       entries = next;
+      listed = undefined;
       return snapshot(read.size);
     },
 
@@ -210,6 +220,7 @@ export function createChannelDirectoryIndex(
         if (deepEqual(entries.get(recordKey)?.channel, channel)) continue;
         // An empty hash makes the next refresh read it again.
         entries.set(recordKey, { sourceHash: '', channel });
+        listed = undefined;
         changed += 1;
       }
       if (changed === 0) return { kind: 'unchanged' };
