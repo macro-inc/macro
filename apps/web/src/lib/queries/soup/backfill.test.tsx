@@ -27,6 +27,7 @@ const graphqlMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../contacts/backfill', () => ({ useContactBackfill: () => {} }));
+vi.mock('../contacts/top-up', () => ({ useContactTopUp: () => {} }));
 const contextPublisher = vi.hoisted(() => vi.fn());
 vi.mock('../contacts/use-context-publisher', () => ({
   useContactContextPublisher: contextPublisher,

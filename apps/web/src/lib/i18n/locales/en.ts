@@ -9,6 +9,7 @@ import calendarPrompt from './en/calendar-prompt';
 import calls from './en/calls';
 import channelComposer from './en/channel-composer';
 import channelLabels from './en/channel-labels';
+import channelNotificationStacks from './en/channel-notification-stacks';
 import channelSections from './en/channel-sections';
 import commandMenu from './en/command-menu';
 import commands from './en/commands';
@@ -43,6 +44,7 @@ import subRoutines from './en/sub-routines';
 import suggestions from './en/suggestions';
 import tabs from './en/tabs';
 import teamAgents from './en/team-agents';
+import teamMembers from './en/team-members';
 import tutorials from './en/tutorials';
 import viewMenus from './en/view-menus';
 
@@ -62,6 +64,7 @@ export default {
   calls,
   channelComposer,
   channelLabels,
+  channelNotificationStacks,
   channelSections,
   commandMenu,
   commands,
@@ -96,6 +99,7 @@ export default {
   subRoutines,
   tabs,
   teamAgents,
+  teamMembers,
   tutorials,
   viewMenus,
 };

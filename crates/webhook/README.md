@@ -100,8 +100,9 @@ The `webhook-event-ingestion` Kafka consumer reads `macro.documents`,
 - Users: `user.picture_changed` (`entity_type = "user"`, entity and ordering key
   are the user id; `file_id` and `url` are both null when the picture was
   removed). Persisted webhooks go only to the changed user's own personal and
-  team workspaces. The live SSE stream also reaches the user's contacts (user
-  scope only) and the team-scoped streams of the user's teams.
+  team workspaces. The live SSE stream also reaches everyone who has the user in
+  their contact directory (user scope only) and the team-scoped streams of the
+  user's teams.
 - Calls: `call.started`, `call.ended`, `call.participant_joined`,
   `call.participant_left`, `call.recording_ready`, `call.summarized`,
   `call.ringing`, `call.answered`, `call.declined`, and `call.invited`.
@@ -214,6 +215,26 @@ starting and the first request. The header is the standard SSE one and is not
 listed in the OpenAPI spec, and without `resume=true` it is ignored: a browser
 `EventSource` reconnecting or an SDK listener gets exactly the live stream it
 always got.
+
+The `: keep-alive` comments every 20 s come from the HTTP layer's timer and say
+nothing about the event source. So the response also carries
+`x-macro-stream-heartbeat: 20`, and every 20 s the stream sends `event:
+heartbeat` with data `{}` and no `id`, but only while the process's Kafka
+consumer is making progress by its librdkafka statistics
+(`kafka_util::progress`): a sample from the last 30 s (samples arrive only while
+the consumer is polled), every assigned partition's broker connected, and each
+partition caught up or advancing. A heartbeat reaches every open stream
+whatever its filters, after the events already queued for it, and is never
+replayed. A client that misses three heartbeats in a row, hearing no event
+either, can reconnect and resume; macrod does after 70 s, and only when the
+header is present, so it never reconnects in a loop to an older server. SDK
+listeners skip the heartbeat, which has no `event_type`.
+
+A resuming stream (`resume=true` with a readable `Last-Event-ID`) that falls
+more than 1,024 events behind its process's feed ends rather than skipping what
+it missed, so its client reopens it and replays them from the retained events.
+Any other stream skips them and continues, as before: its client could not
+replay them, and the SDK's listener does not reopen a stream that ends.
 
 ## Queue contract, deduplication, and ordering
 

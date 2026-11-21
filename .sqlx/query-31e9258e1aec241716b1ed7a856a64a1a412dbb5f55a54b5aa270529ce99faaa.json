@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE import_entity AS entity\n            SET metadata = decided.metadata || jsonb_strip_nulls(jsonb_build_object(\n                        'personalFolderId', entity.metadata -> 'personalFolderId',\n                        'separateFolder', entity.metadata -> 'separateFolder')), updated_at = NOW()\n            FROM UNNEST($3::text[], $4::jsonb[]) AS decided(foreign_id, metadata)\n            JOIN LATERAL (\n                SELECT candidate.id FROM import_entity AS candidate\n                WHERE candidate.user_id = $1 AND candidate.source = $2\n                  AND candidate.foreign_id = decided.foreign_id\n                OFFSET 0\n            ) AS target ON true\n            WHERE entity.id = target.id AND (SELECT entity.user_id OFFSET 0) = $1\n              AND entity.source = $2\n              AND entity.status = 'staged' AND entity.metadata->'plan' IS NOT NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "TextArray",
+        "JsonbArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "31e9258e1aec241716b1ed7a856a64a1a412dbb5f55a54b5aa270529ce99faaa"
+}

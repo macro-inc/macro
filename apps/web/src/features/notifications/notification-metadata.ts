@@ -128,6 +128,7 @@ export function getNotificationAction(n: UnifiedNotification): string {
           .with('expired', () => `${agent} sign-in expired`)
           .exhaustive(() => `${agent} sign-in expires soon`);
       })
+      .with('ping', () => 'pinged you')
       .with('runtime_access_removed', () => 'removed your access to')
       // The computer, or the agent teammate it runs, is the actor:
       // "<computer> is ready", "<agent> couldn't be set up".
@@ -205,6 +206,7 @@ export function getNotificationTargetName(
       .with({ tag: 'routine_run_finished' }, () => undefined)
       .with({ tag: 'agent_sign_in_expiry' }, () => undefined)
       .with({ tag: 'computer_setup' }, () => undefined)
+      .with({ tag: 'ping' }, () => undefined)
       .with(
         {
           tag: P.union(
@@ -308,6 +310,7 @@ export function getNotificationContent(
           .exhaustive();
         return `Its ${agent} sign-in ${when}. Sign in again in Settings → Machines.`;
       })
+      .with({ tag: 'ping' }, (m) => m.content.body)
       .with({ tag: 'runtime_access_removed' }, (m) =>
         stoppedAgentsText(m.content.agents, m.content.runtimeName)
       )
@@ -408,6 +411,7 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
       .with({ tag: 'routine_run_finished' }, () => false)
       .with({ tag: 'agent_sign_in_expiry' }, () => false)
       .with({ tag: 'computer_setup' }, () => false)
+      .with({ tag: 'ping' }, () => false)
       .with({ tag: 'runtime_access_removed' }, () => true)
       .with(
         {
@@ -443,6 +447,29 @@ function agentDisplayName(agent: AgentProvider): string {
   return match(agent)
     .with('claude', () => 'Claude')
     .exhaustive();
+}
+
+/**
+ * Who pinged: "<sender> pinged you", where the sender is the agent or person
+ * who sent it. A ping people send themselves from a script has no sender.
+ */
+export function pingedBy(sender: string | undefined): string {
+  return sender ? `${sender} pinged you` : 'You pinged yourself';
+}
+
+/**
+ * What a ping is about, as its row names it: a channel as its messages do,
+ * anything else by its own name. A DM names the other person.
+ */
+export function pingPlace(entity: {
+  type: string;
+  name: string;
+  channelType?: string;
+}): string {
+  return entity.type === 'channel' &&
+    (entity.channelType === 'public' || entity.channelType === 'team')
+    ? `#${entity.name}`
+    : entity.name;
 }
 
 function routineRunFailed(n: UnifiedNotification): boolean {

@@ -49,6 +49,8 @@ mod voice_gateway;
 
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+mod test_spans;
 
 use std::{future::Future, pin::Pin, sync::Arc};
 
@@ -1338,10 +1340,16 @@ pub async fn run() -> anyhow::Result<()> {
         session_repo.clone(),
     );
 
-    let contacts_ingress = Arc::new(contacts::domain::service::SqsContactsIngress {
-        queue: contacts::outbound::ingress::SqsContactsQueue::new(
-            aws_sdk_sqs::Client::new(&aws_config),
-            macro_queues::ContactsQueue::new().to_string(),
+    let contacts_ingress = Arc::new(contacts::domain::list_writes::ListWritesGate {
+        inner: contacts::domain::service::SqsContactsIngress {
+            queue: contacts::outbound::ingress::SqsContactsQueue::new(
+                aws_sdk_sqs::Client::new(&aws_config),
+                macro_queues::ContactsQueue::new().to_string(),
+            ),
+        },
+        writes: contacts::domain::list_writes::ContactListWrites::new(
+            config.environment,
+            feature_flags.clone(),
         ),
     });
     // The same message service the storage API composes, so an announcement
@@ -1855,10 +1863,12 @@ pub async fn run() -> anyhow::Result<()> {
                             };
                             let send: runtime_commands::SendAgent = {
                                 let runtimes = Arc::clone(&runtimes);
-                                Arc::new(move |harness, environment| {
+                                Arc::new(move |harness, environment, traceparent| {
                                     let runtimes = Arc::clone(&runtimes);
                                     Box::pin(async move {
-                                        runtimes.apply_agent(harness, environment).await
+                                        runtimes
+                                            .apply_agent(harness, environment, traceparent)
+                                            .await
                                     })
                                 })
                             };
