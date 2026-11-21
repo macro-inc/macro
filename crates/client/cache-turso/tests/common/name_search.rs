@@ -32,11 +32,11 @@ pub async fn contract<S: Storage>(engine: &mut Engine<S>, scope: &HydrationScope
         .await
         .unwrap();
     // Teammates late in key order, which an ordered scan that stops early never
-    // reaches: two named Group1, one Group4, the last contact, one written in
-    // another case and one not in the directory.
+    // reaches: two named Group1, one Group4, the last contact and one not in
+    // the directory.
     let roster = [
         "macro|p000994@example.com",
-        "macro|P000987@Example.com",
+        "macro|p000987@example.com",
         "macro|p000990@example.com",
         "macro|p000999@example.com",
         "macro|absent@example.com",

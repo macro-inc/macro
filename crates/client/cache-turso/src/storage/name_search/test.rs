@@ -920,3 +920,118 @@ fn teammates_match_complete_scan_across_early_stops_and_continuations() {
         );
     });
 }
+#[test]
+fn mixed_name_tiers_list_groups_and_teammates_match_complete_scan() {
+    block_on(async {
+        let (engine, scope) = seed(0).await;
+        let mut storage = engine.into_storage();
+        // A fixed pseudo-random mix, so one query meets exact, word-start and
+        // contains-only names across list groups, recencies and a roster, with
+        // more than one probe of matches so the ordered scans stop early.
+        let mut state: u64 = 0x9e37_79b9_7f4a_7c15;
+        let mut next = move || {
+            state = state
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            usize::try_from(state >> 33).unwrap()
+        };
+        let mut rows = vec![];
+        let mut times = vec![];
+        let mut roster = vec![];
+        for i in 0..1500 {
+            let user = format!("macro|p{i:06}@example.com");
+            let name = match next() % 10 {
+                0..3 => format!("Ann q{}", i % 37),
+                3..6 => format!("Anna q{}", i % 41),
+                6 => format!("Joanne q{}", i % 13),
+                7 => "Bob Annabel".to_owned(),
+                _ => "Other person".to_owned(),
+            };
+            let lists: &[&str] = match next() % 6 {
+                0 => &["a"],
+                1 => &["b"],
+                2 => &["c"],
+                3 => &["a", "c"],
+                _ => &[],
+            };
+            if next() % 5 == 0 {
+                times.push((user.clone(), 100 * i64::try_from(next() % 4).unwrap() + 1));
+            }
+            if next() % 6 == 0 {
+                roster.push(user.clone());
+            }
+            rows.push((key(&user), listed_record(&user, &name, lists)));
+        }
+        for chunk in rows.chunks(500) {
+            storage.put_batch(chunk.to_vec()).await.unwrap();
+        }
+        let mut engine = Engine::new(storage);
+        engine
+            .update_people_context(&ContextUpdate {
+                scope: scope.clone(),
+                epoch: EPOCH,
+                action: ContextAction::Patch {
+                    updates: times
+                        .iter()
+                        .map(|(user, time)| PersonFactPatch {
+                            user_id: user.clone().try_into().unwrap(),
+                            facts: PersonFacts {
+                                last_interaction_ms: Some(*time),
+                                ..Default::default()
+                            },
+                        })
+                        .collect(),
+                },
+            })
+            .await
+            .unwrap();
+        roster.truncate(500);
+        let orders: [(Vec<Vec<String>>, bool); 6] = [
+            (vec![], false),
+            (vec![vec!["a".into()], vec!["b".into(), "c".into()]], false),
+            (vec![vec!["a".into()], vec!["b".into(), "c".into()]], true),
+            (vec![vec!["c".into()], vec!["a".into()]], false),
+            (vec![vec!["c".into()], vec!["a".into()]], true),
+            (vec![vec!["b".into()]], false),
+        ];
+        for (list_priority, only_listed) in &orders {
+            for with_roster in [false, true] {
+                for mode in [PeopleMode::Mention, PeopleMode::Command] {
+                    for limit in [3, 25] {
+                        for query in ["ann", "ann q1", "jo"] {
+                            let mut request = request(&scope, query, mode);
+                            request.limit = limit;
+                            request.list_priority = list_priority.clone();
+                            request.only_listed = *only_listed;
+                            if with_roster {
+                                request.teammates = roster
+                                    .iter()
+                                    .map(|id| id.clone().try_into().unwrap())
+                                    .collect();
+                            }
+                            let mut listed = std::collections::BTreeSet::new();
+                            for _ in 0..30 {
+                                let PeopleSearchResult::Page {
+                                    people,
+                                    next_cursor,
+                                    ..
+                                } = parity(&mut engine, &request, EPOCH).await
+                                else {
+                                    panic!("page");
+                                };
+                                for person in people {
+                                    assert!(
+                                        listed.insert(person.user_id.to_string()),
+                                        "repeat {query} {mode:?} {limit}"
+                                    );
+                                }
+                                let Some(cursor) = next_cursor else { break };
+                                request.cursor = Some(cursor);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    });
+}

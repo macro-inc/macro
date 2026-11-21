@@ -327,8 +327,15 @@ impl<'a> NameSearchRead<'a> {
     }
     /// Record keys of the requested teammates. An ordered scan stops early on
     /// the assumption that every teammate was already pushed, so a storage
-    /// that stops early pushes these records before its ordered scans.
+    /// that stops early pushes these records before its ordered scans. Empty
+    /// where teammates rank like everyone else: under a list order, while
+    /// browsing, and for an address or identity query.
     pub fn teammate_keys(&self) -> Vec<EntityKey<'static>> {
+        let ranked =
+            !self.listed() && !self.browsing() && matches!(self.query, NameSearch::Name(_));
+        if !ranked {
+            return vec![];
+        }
         self.request
             .teammates
             .iter()

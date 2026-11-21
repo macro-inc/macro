@@ -532,7 +532,7 @@ fn teammate_rows(request: &PeopleSearch) -> Vec<(EntityKey<'static>, Record)> {
     .collect()
 }
 fn teammates() -> Vec<MacroUserIdStr<'static>> {
-    // Case differs from the stored contact, as legacy-cased rosters may.
+    // A roster id in another case parses to the form the contact is keyed by.
     [
         "macro|Rivers@Example.com",
         "macro|jacobson@example.com",

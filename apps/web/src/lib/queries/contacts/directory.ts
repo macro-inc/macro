@@ -61,9 +61,11 @@ export type ContactPeoplePolicy = Pick<
   PeopleSearch,
   'mode' | 'excluded' | 'senderDomain' | 'onlyListed'
 > & {
-  /** Orders people by contact list within each name stage; see
-   * `PeopleSearch.listPriority`. Only a host on policy 7 or later reads it:
-   * older hosts keep their order, and `onlyListed` drops nobody there. */
+  /** Orders people by contact list; see `PeopleSearch.listPriority`. On
+   * policy 8 the group decides before exact over word-start among the people
+   * the text names; policy 7 hosts rank within each name stage. Only a host on
+   * policy 7 or later reads it: older hosts keep their order, and `onlyListed`
+   * drops nobody there. */
   listPriority?: ContactListPriority;
 };
 export type RankedPerson = Extract<
