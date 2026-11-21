@@ -1400,9 +1400,13 @@ or 25 ms, two batches at a time), then rereads only the records that read
 wrote; it is missing once that read returns nothing for it or the directory
 completes without it. A returned id whose record cannot be read yet is read
 again, and so is one a read without complete evidence did not return. A read
-answers only for the record cached then, so a channel whose record lost a
-field after a read returned it, or arrived after a read found it absent, is
-read again. An id that failed twice stays pending, and the failed ids are read
+answers only for the record cached when it was sent, so a channel whose
+record lost a field after a read returned it is read again, and so is one
+whose record the cache wrote or changed after a read was sent that found it
+absent (the viewer may have joined it since), whether that write lands
+before the answer or after it. A read that wrote no record leaves the
+directory as it was, and one whose records match what the directory held
+publishes nothing. An id that failed twice stays pending, and the failed ids are read
 again together at most every 30 seconds without anyone asking, once the tab
 is visible. Readers that decide from absence (section
 membership, notification bulk actions, scope checks, built-in section mute)
@@ -1422,15 +1426,20 @@ shows only once a by-id read returns it, and a listed channel the cache never
 held is dropped once a by-id read finds it absent. Those reads decide only
 with complete evidence (a cached record cannot vouch for a channel the viewer
 may have lost), and the directory is complete only once each has returned
-its channel or found it absent; until then a lookup of a channel one of them
-decides is pending. A channel such a read found absent that the cache writes
-again (the viewer may have rejoined it) is read again. The rows, the walk's
+its channel or found it absent; until then a lookup of an unlisted channel
+one of them decides is pending, and a listed one answers with the network's
+row, as `channels()` shows it. A channel such a read found absent whose
+record the cache changes after that read was sent (the viewer may have
+rejoined it) is read again. A record that loses a field keeps what the walk
+last saw of it, so its later removal still drops the row. The rows, the walk's
 status and the reads still open are published as one value, so `complete()`
 never pairs one with another's older state, and a read that settles without
 adding or removing a row (it failed, or returned a listed channel) changes
 only which reads are open. The cache writes the walk's pages after answering
-them, so the directory waits for those writes (at most 10 seconds) and then
-reads the cache again before showing them: what the walk wrote counts as
+them, so the directory waits for those writes (at most 10 seconds; the
+`channel_directory.fallback_pages_written` span attribute counts the pages
+the cache wrote, -1 when they did not settle in time) and then reads the
+cache again before showing them: what the walk wrote counts as
 held, and only the rest wait for a by-id read. A storage reset or a
 change of viewer under the walk starts it again, since what it saw went with
 the old cache. A lane pass that finishes later stops the walk and makes the

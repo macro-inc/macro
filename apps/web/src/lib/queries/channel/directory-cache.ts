@@ -1,3 +1,4 @@
+import { deepEqual } from '@core/util/compareUtils';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { readRecordsByKeys, selectRecords } from '@graphql-cache/index';
 import type { SearchCursor } from '@graphql-cache/protocol';
@@ -80,6 +81,25 @@ export async function readDirectoryChannels(
  * is null while the record lacks one of them. */
 type IndexEntry = { sourceHash: string; channel: DirectoryChannel | null };
 
+/** What the index holds of one channel's record: the record, the search
+ * hash of a record that lacks a directory field, or undefined for none. */
+export type RecordVersion = DirectoryChannel | string | undefined;
+
+/** Whether two versions are of the same record: the same fields, or the
+ * same search hash while it lacks one. */
+export function sameRecordVersion(a: RecordVersion, b: RecordVersion) {
+  if (a === b) return true;
+  return typeof a === 'object' && typeof b === 'object' && deepEqual(a, b);
+}
+
+/** What a reread of some records found: `stale` when the index holds
+ * another storage generation and needs a full refresh first, `unchanged`
+ * when every record read matched what the index held. */
+export type ChannelDirectoryKeysRead =
+  | { kind: 'stale' }
+  | { kind: 'unchanged' }
+  | { kind: 'read'; read: ChannelDirectoryRead };
+
 /** What one refresh of the cached directory found. */
 export type ChannelDirectoryRead = {
   /** Every complete channel record, the same object while it is unchanged. */
@@ -112,6 +132,21 @@ export function createChannelDirectoryIndex(
   };
 
   return {
+    /** What the index holds of the channel's record now. */
+    version(channelId: string): RecordVersion {
+      const entry = entries.get(`${CHANNEL_RECORD_PREFIX}${channelId}`);
+      if (!entry) return undefined;
+      return entry.channel ?? `incomplete:${entry.sourceHash}`;
+    },
+
+    /** The channel's record, if the index holds it with every field. */
+    record(channelId: string): DirectoryChannel | undefined {
+      return (
+        entries.get(`${CHANNEL_RECORD_PREFIX}${channelId}`)?.channel ??
+        undefined
+      );
+    },
+
     async refresh(
       storageGeneration: string,
       signal?: AbortSignal
@@ -157,23 +192,28 @@ export function createChannelDirectoryIndex(
 
     /**
      * Rereads only these records, for the channels a by-id read just wrote,
-     * without listing the rest. Undefined when the index holds another
-     * storage generation and needs a full refresh first. A record still
-     * missing a field keeps the entry it had.
+     * without listing the rest. A record still missing a field keeps the
+     * entry it had, and so does one whose fields match it, so a read that
+     * changed nothing walks no other entry.
      */
     async readKeys(
       storageGeneration: string,
       recordKeys: readonly string[],
       signal?: AbortSignal
-    ): Promise<ChannelDirectoryRead | undefined> {
-      if (storageGeneration !== generation) return undefined;
+    ): Promise<ChannelDirectoryKeysRead> {
+      if (storageGeneration !== generation) return { kind: 'stale' };
       const read = await readDirectoryChannels(host, recordKeys, signal);
       signal?.throwIfAborted();
-      if (storageGeneration !== generation) return undefined;
-      // An empty hash makes the next refresh read it again.
-      for (const [recordKey, channel] of read)
+      if (storageGeneration !== generation) return { kind: 'stale' };
+      let changed = 0;
+      for (const [recordKey, channel] of read) {
+        if (deepEqual(entries.get(recordKey)?.channel, channel)) continue;
+        // An empty hash makes the next refresh read it again.
         entries.set(recordKey, { sourceHash: '', channel });
-      return snapshot(read.size);
+        changed += 1;
+      }
+      if (changed === 0) return { kind: 'unchanged' };
+      return { kind: 'read', read: snapshot(read.size) };
     },
   };
 }

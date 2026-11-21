@@ -84,6 +84,8 @@ import {
   CHANNEL_SEARCH_BUCKETS,
   type ChannelDirectoryRead,
   createChannelDirectoryIndex,
+  type RecordVersion,
+  sameRecordVersion,
 } from './directory-cache';
 import { type DirectoryChannel, toDirectoryChannel } from './directory-core';
 import {
@@ -187,8 +189,10 @@ const NO_IDS: Readonly<Record<string, true>> = {};
 /** The answer for one channel. A complete directory holds every joined
  * channel, so a channel it lacks is not joined; a cached record that lacks
  * a field waits for its by-id read, and so does a channel the directory
- * left out until a read decides it (`unconfirmed`). An unjoined channel is
- * missing, as it was from the REST channel list. */
+ * left out until a read decides it (`unconfirmed`). A row the directory
+ * shows answers loaded even while a read decides whether it stays, as
+ * `channels` lists it. An unjoined channel is missing, as it was from the
+ * REST channel list. */
 export function lookupChannel(
   state: ChannelDirectoryState,
   outcomes: Readonly<Record<string, ByIdOutcome>>,
@@ -353,8 +357,17 @@ type DirectoryPage = {
  * those pages. */
 export type JoinedChannelsWalk = {
   channels: DirectoryChannel[];
-  /** Settles, never rejecting, once the cache wrote every page. */
-  persisted: Promise<unknown>;
+  /** How many pages the walk read. */
+  pages: number;
+  /** How many of those pages the cache wrote, once each write settled;
+   * never rejects. A page the cache did not answer, or whose write it
+   * skipped or failed, does not count. */
+  written: Promise<number>;
+};
+
+/** A walk the fallback shows: the joined channels and the cache's writes. */
+type FallbackWalk = Omit<JoinedChannelsWalk, 'channels'> & {
+  channels: readonly DirectoryChannel[];
 };
 
 type DirectoryPageSettled =
@@ -450,7 +463,15 @@ export async function pageJoinedChannels(
     }
     span.setAttr('channel_directory.pages', pages);
     span.setAttr('channel_directory.channels', channels.size);
-    return { channels: [...channels.values()], persisted: Promise.all(writes) };
+    // The exchange answers a write it skipped or failed with no revision.
+    const countWritten = async () =>
+      (await Promise.all(writes)).filter((revision) => revision !== undefined)
+        .length;
+    return {
+      channels: [...channels.values()],
+      pages,
+      written: countWritten(),
+    };
   });
 }
 
@@ -464,31 +485,28 @@ export async function fetchJoinedChannels(
   return channels;
 }
 
-/** Whether `work` settled within `timeoutMs`; false at once when
- * `signal` aborts. `work` must never reject. */
-async function settledWithin(
-  work: Promise<unknown>,
+/** What `work` resolved to, if it settled within `timeoutMs`; undefined
+ * once that passed, or at once when `signal` aborts. `work` must never
+ * reject. */
+async function settledWithin<T>(
+  work: Promise<T>,
   timeoutMs: number,
   signal: AbortSignal
-): Promise<boolean> {
+): Promise<T | undefined> {
   const listening = new AbortController();
-  const settled = async () => {
-    await work;
-    return true;
-  };
   const late = async () => {
     await promiseTimeout(timeoutMs);
-    return false;
+    return undefined;
   };
-  const aborted = new Promise<boolean>((resolve) => {
-    if (signal.aborted) resolve(false);
-    signal.addEventListener('abort', () => resolve(false), {
+  const aborted = new Promise<undefined>((resolve) => {
+    if (signal.aborted) resolve(undefined);
+    signal.addEventListener('abort', () => resolve(undefined), {
       once: true,
       signal: listening.signal,
     });
   });
   try {
-    return await Promise.race([settled(), late(), aborted]);
+    return await Promise.race([work, late(), aborted]);
   } finally {
     listening.abort();
   }
@@ -604,6 +622,12 @@ type ByIdRead = {
 type ByIdReaderOptions = {
   /** Runs after reads settle, for an owner that reads `outcomes` untracked. */
   onSettle?: () => void;
+  /** What the cache holds of the channel's record now. A read that finds a
+   * channel absent answers for its record as it was when the read was sent:
+   * one the cache changed before the answer settles is read again, as a
+   * failed read is, and `renewChanged` forgets an absence whose record
+   * changed since. */
+  version?: (id: string) => RecordVersion;
 };
 
 /**
@@ -611,7 +635,8 @@ type ByIdReaderOptions = {
  * id is read once until `reset` or `renew`, except that the ids whose reads
  * failed are read again together at most every `BY_ID_RETRY_AFTER_MS`, with
  * nobody asking: an owner waiting on them may hear of nothing else. A hidden
- * tab holds that read until it is shown.
+ * tab holds that read until it is shown. With `version`, an absence holds
+ * only while the channel's record stays as it was when its read was sent.
  */
 export function createByIdReader(
   read: (ids: string[], signal: AbortSignal) => Promise<ByIdRead>,
@@ -622,7 +647,10 @@ export function createByIdReader(
   >({});
   let requested = new Set<string>();
   let attempts = new Map<string, number>();
+  // For each absence, the record its read was sent against.
+  let sentAgainst = new Map<string, RecordVersion>();
   let controller = new AbortController();
+  const versionOf = options.version;
 
   const settle = (updates: Record<string, ByIdOutcome>) => {
     const ids = Object.keys(updates);
@@ -670,6 +698,7 @@ export function createByIdReader(
   const readBatch = async (ids: string[]) => {
     const signal = controller.signal;
     if (signal.aborted) return;
+    const before = new Map(ids.map((id) => [id, versionOf?.(id)]));
     try {
       const found = await Telemetry.span(
         'channel_directory.by_id',
@@ -690,14 +719,30 @@ export function createByIdReader(
       if (signal.aborted) return;
       const unreadable = new Set(found.unreadable);
       const updates: Record<string, ByIdOutcome> = {};
+      const rewritten: string[] = [];
       for (const id of ids) {
         if (unreadable.has(id)) continue;
         // Without evidence, the caller listed every id it lacks as unreadable.
-        updates[id] =
-          !found.returned || found.returned.has(id) ? 'returned' : 'absent';
+        if (!found.returned || found.returned.has(id)) {
+          updates[id] = 'returned';
+          sentAgainst.delete(id);
+        } else if (
+          versionOf &&
+          !sameRecordVersion(before.get(id), versionOf(id))
+        ) {
+          // The cache wrote it while the server answered: the viewer may
+          // have joined it since.
+          rewritten.push(id);
+        } else {
+          updates[id] = 'absent';
+          sentAgainst.set(id, before.get(id));
+        }
       }
       settle(updates);
-      if (unreadable.size > 0) retryOrFail([...unreadable]);
+      // Read again like a failed read, so a record the cache keeps rewriting
+      // costs at most a read every `BY_ID_RETRY_AFTER_MS`.
+      const again = [...unreadable, ...rewritten];
+      if (again.length > 0) retryOrFail(again);
     } catch (error) {
       if (signal.aborted) return;
       Telemetry.error(error, { surface: 'channel-directory-by-id' });
@@ -727,6 +772,24 @@ export function createByIdReader(
     whileShown.dispose();
   });
 
+  const renew = (ids: readonly string[]) => {
+    const current = untrack(outcomes);
+    const settled = new Set(
+      ids.filter((id) => current[id] === 'returned' || current[id] === 'absent')
+    );
+    if (settled.size === 0) return;
+    for (const id of settled) {
+      requested.delete(id);
+      attempts.delete(id);
+      sentAgainst.delete(id);
+    }
+    setOutcomes((previous) =>
+      Object.fromEntries(
+        Object.entries(previous).filter(([id]) => !settled.has(id))
+      )
+    );
+  };
+
   return {
     outcomes,
     /** Queues a by-id read; false when the id was already requested. Never
@@ -740,23 +803,15 @@ export function createByIdReader(
     /** Forgets what the reads of these ids settled, so asking reads them
      * again: each answered for a record the cache has changed since. Reads
      * that failed or are under way are left alone. */
-    renew(ids: readonly string[]) {
-      const current = untrack(outcomes);
-      const settled = new Set(
-        ids.filter(
-          (id) => current[id] === 'returned' || current[id] === 'absent'
-        )
-      );
-      if (settled.size === 0) return;
-      for (const id of settled) {
-        requested.delete(id);
-        attempts.delete(id);
-      }
-      setOutcomes((previous) =>
-        Object.fromEntries(
-          Object.entries(previous).filter(([id]) => !settled.has(id))
-        )
-      );
+    renew,
+    /** Forgets each absence whose record `version` now shows changed since
+     * its read was sent, so asking reads it again. */
+    renewChanged() {
+      if (!versionOf) return;
+      const changed: string[] = [];
+      for (const [id, sent] of sentAgainst)
+        if (!sameRecordVersion(sent, versionOf(id))) changed.push(id);
+      renew(changed);
     },
     /** Forgets every read, for a new storage generation. */
     reset() {
@@ -764,6 +819,7 @@ export function createByIdReader(
       controller = new AbortController();
       requested = new Set();
       attempts = new Map();
+      sentAgainst = new Map();
       setOutcomes({});
     },
   };
@@ -816,10 +872,7 @@ type CachedDirectoryDeps = {
   fetchAll: () => Promise<readonly DirectoryChannel[]>;
   /** Every joined channel, paged from the network now, for the fallback,
    * and the cache's writes of its pages. */
-  pageAll: (signal: AbortSignal) => Promise<{
-    channels: readonly DirectoryChannel[];
-    persisted: Promise<unknown>;
-  }>;
+  pageAll: (signal: AbortSignal) => Promise<FallbackWalk>;
   /** Writes a recorded view onto the channel's cached record. */
   stampView: (channelId: string, viewedAt: string) => Promise<boolean>;
 };
@@ -1062,10 +1115,15 @@ export function createCachedChannelDirectory(
       readableChannelsInput(CHANNEL_DIRECTORY_INPUT, ids),
       { signal }
     );
-    // A lookup answers from the directory, so let it see the records first.
-    for (const id of ids) wantKeys.add(`${CHANNEL_RECORD_PREFIX}${id}`);
-    await runner();
     const returned = returnedChannelIds(ids, page);
+    // A lookup answers from the directory, so let it see the records the read
+    // wrote first: those it returned, or without evidence any of them. One
+    // that wrote none leaves the directory as it was.
+    const written = returned ? [...returned] : ids;
+    if (written.length > 0) {
+      for (const id of written) wantKeys.add(`${CHANNEL_RECORD_PREFIX}${id}`);
+      await runner();
+    }
     // Without evidence, an id with no record may still be the viewer's.
     if (!returned)
       return {
@@ -1077,8 +1135,14 @@ export function createCachedChannelDirectory(
       unreadable: [...returned].filter((id) => !hasRecord(id)),
     };
   };
-  const reader = createByIdReader((ids, signal) =>
-    readById(ids, signal, (id) => Boolean(untrack(state).records[id]))
+  const reader = createByIdReader(
+    (ids, signal) =>
+      readById(ids, signal, (id) => Boolean(untrack(state).records[id])),
+    {
+      version: (id) => index.version(id),
+      // A read that wrote nothing published nothing that would queue more.
+      onSettle: () => queueIncomplete(),
+    }
   );
   // While the network's channels are shown: reads of those the cache cannot
   // vouch for. Their records land in the cache, so a returned channel reads
@@ -1089,10 +1153,13 @@ export function createCachedChannelDirectory(
       readById(
         ids,
         signal,
-        (id) => observed?.has(id) ?? false,
+        (id) => index.record(id) !== undefined,
         () => false
       ),
-    { onSettle: () => renderConfirmed() }
+    {
+      version: (id) => index.version(id),
+      onSettle: () => renderConfirmed(),
+    }
   );
   // The channels the network fallback decides by a by-id read, as of the
   // last read of the cache.
@@ -1164,6 +1231,8 @@ export function createCachedChannelDirectory(
       return;
     }
     builtFrom = confirmed;
+    // Built while every row is walked anyway, so a settle walks none.
+    listedIds(network.channels);
     const evidence: FallbackEvidence = {
       changes: changes ?? new Map(),
       seen: seen ?? new Set(),
@@ -1189,31 +1258,30 @@ export function createCachedChannelDirectory(
 
   /** Notes each record this read found changed or removed since the last,
    * while the fallback runs. A record that now lacks a field is not a
-   * change: it keeps what was seen of it. */
+   * change: what was seen of it stands, so its removal later still is one. */
   const observe = (
     read: ChannelDirectoryRead,
     records: () => Map<string, DirectoryChannel>
   ) => {
     if (!observed || !changes) return;
     const next = records();
-    const changed: string[] = [];
     for (const [id, channel] of next) {
       const before = observed.get(id);
-      if (before !== channel && !deepEqual(before, channel)) {
+      if (before !== channel && !deepEqual(before, channel))
         changes.set(id, channel);
-        changed.push(id);
-      }
     }
     const incomplete = new Set(read.incompleteIds);
-    for (const id of observed.keys())
-      if (!next.has(id) && !incomplete.has(id)) changes.set(id, null);
+    // Copied only when a record lost a field: `next` is shared.
+    let kept: Map<string, DirectoryChannel> | undefined;
+    for (const [id, before] of observed) {
+      if (next.has(id)) continue;
+      if (incomplete.has(id)) {
+        kept ??= new Map(next);
+        kept.set(id, before);
+      } else changes.set(id, null);
+    }
     for (const id of next.keys()) seen?.add(id);
-    observed = next;
-    // A channel a by-id read found gone that the cache wrote again since:
-    // the viewer may have rejoined it. One the read returned is shown as the
-    // cache holds it, so a later write needs no read.
-    const confirmed = untrack(confirm.outcomes);
-    confirm.renew(changed.filter((id) => confirmed[id] === 'absent'));
+    observed = kept ?? next;
   };
 
   /** Stops showing the network's channels from the caller's next render. */
@@ -1253,26 +1321,34 @@ export function createCachedChannelDirectory(
   };
 
   /** A by-id read answered for the record the cache held then. One that
-   * returned a channel whose record now lacks a field, or found gone a
-   * channel whose record arrived since without one, proves nothing of the
-   * record now cached: forget it, so the channel is read again. */
-  const renewStaleReads = (
-    before: ChannelDirectoryRead | undefined,
-    read: ChannelDirectoryRead
-  ) => {
+   * returned a channel whose record now lacks a field, or found absent a
+   * channel whose record the cache changed since that read was sent (the
+   * viewer may have joined it), proves nothing of the record now cached:
+   * forget it, so the channel is read again. A channel a confirming read
+   * returned is shown as the cache holds it, so a later write needs no read. */
+  const renewStaleReads = (read: ChannelDirectoryRead) => {
     const outcomes = untrack(reader.outcomes);
-    const wasIncomplete = new Set(before?.incompleteIds);
     reader.renew(
-      read.incompleteIds.filter(
-        (id) =>
-          outcomes[id] === 'returned' ||
-          (outcomes[id] === 'absent' && !wasIncomplete.has(id))
-      )
+      read.incompleteIds.filter((id) => outcomes[id] === 'returned')
     );
+    reader.renewChanged();
+    confirm.renewChanged();
+  };
+
+  /** Queues by-id reads of the records that lack a field once the lane
+   * finished; before that it fills them itself. At most
+   * `INCOMPLETE_READS_PER_REFRESH` new ones at a time: ids already requested
+   * do not count, so ones that keep failing cannot hold back the rest. */
+  const queueIncomplete = () => {
+    if (!lane.complete || !lastRead) return;
+    let queued = 0;
+    for (const id of lastRead.incompleteIds) {
+      if (queued >= INCOMPLETE_READS_PER_REFRESH) break;
+      if (reader.request(id)) queued += 1;
+    }
   };
 
   const publish = (read: ChannelDirectoryRead) => {
-    const before = lastRead;
     lastRead = read;
     // Built once, and only when one of them needs it.
     let byId: Map<string, DirectoryChannel> | undefined;
@@ -1286,18 +1362,10 @@ export function createCachedChannelDirectory(
     if (lane.complete) stopFallback();
     // `complete` reads both, so it never pairs one with the other's old value.
     batch(() => {
-      renewStaleReads(before, read);
+      renewStaleReads(read);
       render();
     });
-    // Before the lane finishes it fills these itself. Ids already requested
-    // do not count, so ones that keep failing cannot hold back the rest.
-    if (lane.complete) {
-      let queued = 0;
-      for (const id of read.incompleteIds) {
-        if (queued >= INCOMPLETE_READS_PER_REFRESH) break;
-        if (reader.request(id)) queued += 1;
-      }
-    }
+    queueIncomplete();
     if (lane.failed) startFallback('lane_failed');
   };
 
@@ -1318,10 +1386,14 @@ export function createCachedChannelDirectory(
         // The walk wrote its pages into the cache. Read them back first, once
         // written, so the cache holds every channel it can and a removal
         // reaches it; only the rest wait for a by-id read.
-        span.setAttr(
-          'channel_directory.fallback_persisted',
-          await settledWithin(walk.persisted, FALLBACK_PERSIST_WAIT_MS, signal)
+        const written = await settledWithin(
+          walk.written,
+          FALLBACK_PERSIST_WAIT_MS,
+          signal
         );
+        span.setAttr('channel_directory.fallback_pages', walk.pages);
+        // -1 when the writes did not all settle in time.
+        span.setAttr('channel_directory.fallback_pages_written', written ?? -1);
         if (signal.aborted || run !== fallbackRun) return;
         await refresh();
         if (signal.aborted || run !== fallbackRun) return;
@@ -1409,17 +1481,20 @@ export function createCachedChannelDirectory(
       publish(read);
     });
 
-  /** Rereads these records; false when a full read has to run instead. */
+  /** Rereads these records; false when a full read has to run instead. One
+   * that finds every record as the index held it publishes nothing. */
   const readKeys = (keys: readonly string[]) =>
     Telemetry.span('channel_directory.read_keys', async (span) => {
       span.setAttr('channel_directory.keys', keys.length);
       const signal = controller.signal;
       const scope = await readContactCacheScope(host, userId, signal);
       if (scope === undefined || scope !== generation) return false;
-      const read = await index.readKeys(scope, keys, signal);
-      if (!read) return false;
+      const found = await index.readKeys(scope, keys, signal);
+      if (found.kind === 'stale') return false;
+      span.setAttr('channel_directory.keys_changed', found.kind === 'read');
+      if (found.kind === 'unchanged') return true;
       await assertContactCacheScope(host, userId, scope, signal);
-      publish(read);
+      publish(found.read);
       return true;
     });
 
@@ -1700,8 +1775,8 @@ export function createAppChannelDirectory(): ChannelDirectory {
       pageAll: async (signal) => {
         const walk = await pageJoinedChannels(getGraphqlSoupClient(), signal);
         return {
+          ...walk,
           channels: walk.channels.filter(({ isParticipant }) => isParticipant),
-          persisted: walk.persisted,
         };
       },
       stampView: (channelId, viewedAt) =>
