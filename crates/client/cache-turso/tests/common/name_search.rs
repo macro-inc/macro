@@ -31,7 +31,21 @@ pub async fn contract<S: Storage>(engine: &mut Engine<S>, scope: &HydrationScope
         })
         .await
         .unwrap();
-    for query in ["group1", "gr", "oup", "LATE_ÉCHO%", "unknown"] {
+    // Teammates late in key order, which an ordered scan that stops early never
+    // reaches: two named Group1, one Group4, the last contact, one written in
+    // another case and one not in the directory.
+    let roster = [
+        "macro|p000994@example.com",
+        "macro|P000987@Example.com",
+        "macro|p000990@example.com",
+        "macro|p000999@example.com",
+        "macro|absent@example.com",
+    ]
+    .map(|id| id.try_into().unwrap());
+    for (query, teammates) in ["group1", "gr", "oup", "LATE_ÉCHO%", "unknown"]
+        .into_iter()
+        .flat_map(|query| [(query, vec![]), (query, roster.to_vec())])
+    {
         let mut request = PeopleSearch {
             scope: scope.clone(),
             mode: PeopleMode::Recipient,
@@ -43,6 +57,7 @@ pub async fn contract<S: Storage>(engine: &mut Engine<S>, scope: &HydrationScope
             cursor: None,
             list_priority: vec![],
             only_listed: false,
+            teammates,
         };
         for _ in 0..3 {
             let mut expected =
@@ -79,6 +94,7 @@ pub async fn contract<S: Storage>(engine: &mut Engine<S>, scope: &HydrationScope
         cursor: None,
         list_priority: vec![],
         only_listed: false,
+        teammates: vec![],
     };
     let PeopleSearchResult::Page { next_cursor, .. } =
         engine.search_people(&request).await.unwrap()
@@ -136,6 +152,7 @@ pub async fn contract<S: Storage>(engine: &mut Engine<S>, scope: &HydrationScope
                 cursor: None,
                 list_priority: vec![],
                 only_listed: false,
+                teammates: vec![],
             })
             .await
             .is_err()

@@ -124,6 +124,7 @@ pub async fn assert_policy<S: Storage>(storage: S) -> S {
         cursor: None,
         list_priority: vec![],
         only_listed: false,
+        teammates: vec![],
     };
     assert!(
         engine.search_people(&request).await.is_err(),
@@ -367,7 +368,7 @@ pub async fn assert_policy<S: Storage>(storage: S) -> S {
         panic!("ready")
     };
     assert_eq!(people[0].user_id.as_ref(), "macro|p000001@example.com");
-    assert_eq!(people[0].match_rank, 7);
+    assert_eq!(people[0].match_rank, 11);
     request.mode = PeopleMode::Mention;
     request.query = "al".into();
     request.limit = 2;

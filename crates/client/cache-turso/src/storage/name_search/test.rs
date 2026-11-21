@@ -113,6 +113,7 @@ fn request(scope: &HydrationScope, query: &str, mode: PeopleMode) -> PeopleSearc
         cursor: None,
         list_priority: vec![],
         only_listed: false,
+        teammates: vec![],
     }
 }
 async fn reference(
@@ -291,13 +292,13 @@ fn indexed_stages_match_complete_scan_across_sparse_prefixes_overflow_and_contin
                     .map(|(user, rank)| (user.as_str(), *rank))
                     .collect::<Vec<_>>(),
                 [
-                    ("macro|zed.okafor@example.com", 5),
-                    ("macro|zed.group@example.com", 4),
-                    ("macro|okafor.zed@example.com", 4),
-                    ("macro|zed@example.com", 3),
-                    ("macro|zed.ann@example.com", 2),
-                    ("macro|zed.control@example.com", 2),
-                    ("macro|ozeda@example.com", 1),
+                    ("macro|zed.okafor@example.com", 9),
+                    ("macro|zed.group@example.com", 8),
+                    ("macro|okafor.zed@example.com", 8),
+                    ("macro|zed@example.com", 5),
+                    ("macro|zed.ann@example.com", 4),
+                    ("macro|zed.control@example.com", 4),
+                    ("macro|ozeda@example.com", 3),
                 ],
                 "{mode:?}"
             );
@@ -368,9 +369,9 @@ fn messaged_word_prefixes_page_ahead_of_unmessaged_exact_names_at_scale() {
             }
             assert_eq!(listed.len(), 360, "{mode:?}");
             assert_eq!(listed[0].0.as_ref(), "macro|q000199@example.com");
-            assert!(listed[..200].iter().all(|(_, rank)| *rank == 4), "{mode:?}");
+            assert!(listed[..200].iter().all(|(_, rank)| *rank == 8), "{mode:?}");
             assert_eq!(listed[200].0.as_ref(), "macro|p000000@example.com");
-            assert!(listed[200..].iter().all(|(_, rank)| *rank == 3), "{mode:?}");
+            assert!(listed[200..].iter().all(|(_, rank)| *rank == 5), "{mode:?}");
         }
     });
 }
@@ -814,6 +815,108 @@ fn list_groups_match_complete_scan_with_small_groups_and_continuations() {
                 .collect::<std::collections::BTreeSet<_>>()
                 .len(),
             5001
+        );
+    });
+}
+#[test]
+fn teammates_match_complete_scan_across_early_stops_and_continuations() {
+    block_on(async {
+        let (mut engine, scope) = seed(5000).await;
+        // Ten teammates spread through key order, most of them late: an ordered
+        // scan that stopped early without reading them first would miss them.
+        let roster = [3, 2500, 4700, 4750, 4805, 4890, 4950, 4990, 4995, 4999]
+            .map(|i| format!("macro|p{i:06}@example.com"));
+        engine
+            .update_people_context(&ContextUpdate {
+                scope: scope.clone(),
+                epoch: EPOCH,
+                action: ContextAction::Patch {
+                    updates: [(10, 2000), (4995, 500), (4850, 300)]
+                        .into_iter()
+                        .map(|(i, time)| PersonFactPatch {
+                            user_id: format!("macro|p{i:06}@example.com").try_into().unwrap(),
+                            facts: PersonFacts {
+                                last_interaction_ms: Some(time),
+                                ..Default::default()
+                            },
+                        })
+                        .collect(),
+                },
+            })
+            .await
+            .unwrap();
+        let mention = vec![
+            vec!["teammates".to_owned()],
+            vec!["interacted".to_owned(), "invited".to_owned()],
+        ];
+        for list_priority in [vec![], mention] {
+            for query in ["", "person", "other", "late", "ers", "p004999", "missing"] {
+                for mode in [
+                    PeopleMode::Command,
+                    PeopleMode::Recipient,
+                    PeopleMode::Mention,
+                    PeopleMode::Property,
+                ] {
+                    let mut request = request(&scope, query, mode);
+                    request.limit = 4;
+                    request.list_priority = list_priority.clone();
+                    request.teammates = roster
+                        .iter()
+                        .map(|id| id.clone().try_into().unwrap())
+                        .collect();
+                    for _ in 0..5 {
+                        let PeopleSearchResult::Page { next_cursor, .. } =
+                            parity(&mut engine, &request, EPOCH).await
+                        else {
+                            panic!("page");
+                        };
+                        if next_cursor.is_none() {
+                            break;
+                        }
+                        request.cursor = next_cursor;
+                    }
+                }
+            }
+        }
+
+        // The people the viewer messages, then the teammates, then everyone else.
+        let mut request = request(&scope, "person", PeopleMode::Mention);
+        request.limit = 4;
+        request.teammates = roster
+            .iter()
+            .map(|id| id.clone().try_into().unwrap())
+            .collect();
+        let mut listed = vec![];
+        while listed.len() < 14 {
+            let PeopleSearchResult::Page {
+                people,
+                next_cursor,
+                ..
+            } = parity(&mut engine, &request, EPOCH).await
+            else {
+                panic!("page");
+            };
+            listed.extend(people.into_iter().map(|p| p.user_id.to_string()));
+            request.cursor = next_cursor;
+        }
+        assert_eq!(
+            listed[..14],
+            [
+                "macro|p000010@example.com",
+                "macro|p004995@example.com",
+                "macro|p004850@example.com",
+                "macro|p000003@example.com",
+                "macro|p002500@example.com",
+                "macro|p004700@example.com",
+                "macro|p004750@example.com",
+                "macro|p004805@example.com",
+                "macro|p004890@example.com",
+                "macro|p004950@example.com",
+                "macro|p004990@example.com",
+                "macro|p004999@example.com",
+                "macro|p000000@example.com",
+                "macro|p000001@example.com",
+            ]
         );
     });
 }

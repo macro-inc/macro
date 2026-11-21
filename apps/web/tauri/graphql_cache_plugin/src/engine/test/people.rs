@@ -93,6 +93,7 @@ fn native_person_policy_preserves_scope_and_publication() {
             cursor: None,
             list_priority: vec![],
             only_listed: false,
+            teammates: vec![],
         };
         assert!(matches!(
             handle.people_search(request.clone()).await.unwrap(),

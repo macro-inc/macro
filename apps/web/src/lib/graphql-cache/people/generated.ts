@@ -2,7 +2,7 @@
 
 import { z } from 'zod/v3';
 
-export const PEOPLE_POLICY_VERSION = 7;
+export const PEOPLE_POLICY_VERSION = 8;
 
 export const PEOPLE_MIN_POLICY_VERSION = 5;
 
@@ -224,6 +224,7 @@ export const PeopleSearchSchema = z
       })
       .strict(),
     senderDomain: z.union([z.string(), z.null()]).optional(),
+    teammates: z.array(z.string()).max(500).optional(),
   })
   .strict();
 

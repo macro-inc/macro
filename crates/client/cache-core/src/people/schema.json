@@ -7,7 +7,7 @@
   "maxSqlInputBytes": 262144,
   "maxSqlRows": 500,
   "minPolicyVersion": 5,
-  "policyVersion": 7,
+  "policyVersion": 8,
   "referencePolicyVersion": 4,
   "schemas": {
     "ContactReconcile": {
@@ -758,7 +758,7 @@
           "type": "integer"
         },
         "listPriority": {
-          "description": "Ordered groups of opaque contact list keys. Within a name stage, a\nperson ranks by the first group holding any of their lists, then by\nrecency; people in no group come last. A nonempty order supersedes the\npolicy 6 messaged split; empty keeps the policy 6 order.\nOmitted when empty, which policy 5 and 6 hosts require.",
+          "description": "Ordered groups of opaque contact list keys. A person ranks by the first\ngroup holding any of their lists; people in no group come last. Among\nexact and word-start matches the group decides before exact over\nword-start, then recency; contains-only, then address matches follow,\neach by group, then recency. A nonempty order supersedes the messaged\nand teammate splits; empty keeps them. Hosts on policy 7 rank by name\nstage before group. Omitted when empty, which policy 5 and 6 hosts\nrequire.",
           "items": {
             "items": {
               "type": "string"
@@ -795,6 +795,14 @@
             "string",
             "null"
           ]
+        },
+        "teammates": {
+          "description": "The viewer's teammates, at most 500. Among exact, word-start and\ncontains-only name matches, teammates the viewer has not messaged rank\nafter the people they message and before everyone else. A list order\nsupersedes this split as it does the messaged one. Omitted when empty,\nwhich hosts before policy 8 require.",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 500,
+          "type": "array"
         }
       },
       "required": [

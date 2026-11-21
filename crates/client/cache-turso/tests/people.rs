@@ -72,6 +72,7 @@ fn people_policy_100k() {
                     cursor: None,
                     list_priority: list_priority.clone(),
                     only_listed: false,
+                    teammates: vec![],
                 })
                 .await
                 .unwrap();

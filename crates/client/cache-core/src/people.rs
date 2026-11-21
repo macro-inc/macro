@@ -19,7 +19,12 @@ pub const MAX_PEOPLE_BATCH: usize = 500;
 /// renumbers `match_rank` (email prefix 6, identity 7, property self pin 8).
 /// Version 7 accepts `listPriority` and `onlyListed`. A list order replaces
 /// the messaged split: name stage, then list group, then recency.
-pub const PEOPLE_POLICY_VERSION: u32 = 7;
+/// Version 8 accepts `teammates`: among exact, word-start and contains-only
+/// name matches, teammates the viewer has not messaged rank between people they
+/// message and everyone else. A list order now ranks exact and word-start
+/// matches by list group before name tier. Renumbers `match_rank` (email prefix
+/// 10, identity 11, property self pin 12).
+pub const PEOPLE_POLICY_VERSION: u32 = 8;
 /// Oldest suggestion policy a frontend still accepts. Native hosts (desktop,
 /// iOS, Android) compile this crate and update only with an app release, while
 /// the frontend ships over the air; their policy-5 windows differ only in order.
@@ -151,11 +156,14 @@ pub struct PeopleSearch {
     pub now_ms: i64,
     /// Opaque continuation from this same account, generation and search policy.
     pub cursor: Option<String>,
-    /// Ordered groups of opaque contact list keys. Within a name stage, a
-    /// person ranks by the first group holding any of their lists, then by
-    /// recency; people in no group come last. A nonempty order supersedes the
-    /// policy 6 messaged split; empty keeps the policy 6 order.
-    /// Omitted when empty, which policy 5 and 6 hosts require.
+    /// Ordered groups of opaque contact list keys. A person ranks by the first
+    /// group holding any of their lists; people in no group come last. Among
+    /// exact and word-start matches the group decides before exact over
+    /// word-start, then recency; contains-only, then address matches follow,
+    /// each by group, then recency. A nonempty order supersedes the messaged
+    /// and teammate splits; empty keeps them. Hosts on policy 7 rank by name
+    /// stage before group. Omitted when empty, which policy 5 and 6 hosts
+    /// require.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[cfg_attr(any(test, feature = "schema"), schemars(length(max = MAX_LIST_GROUPS)))]
     pub list_priority: Vec<Vec<String>>,
@@ -163,6 +171,14 @@ pub struct PeopleSearch {
     /// last; with no groups, nobody is listed. The empty-browse self pin stays.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub only_listed: bool,
+    /// The viewer's teammates, at most 500. Among exact, word-start and
+    /// contains-only name matches, teammates the viewer has not messaged rank
+    /// after the people they message and before everyone else. A list order
+    /// supersedes this split as it does the messaged one. Omitted when empty,
+    /// which hosts before policy 8 require.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[cfg_attr(any(test, feature = "schema"), schemars(with = "Vec<String>", length(max = MAX_PEOPLE_BATCH)))]
+    pub teammates: Vec<MacroUserIdStr<'static>>,
 }
 
 /// Fully materialized winning person; neither the cache key nor DM id replaces user_id.
