@@ -23,9 +23,10 @@ pub struct PassReadSet {
     states: HashMap<PredicateRecordKey, Option<ProjectionState>>,
 }
 
-/// [`DurableRead`] from storage, reading each key at most once. A record the
-/// hot tier holds is read from storage like any other, but not kept: the
-/// write merges onto the hot copy, so keeping it would only copy it.
+/// [`DurableRead`] from storage, reading each key at most once, except a
+/// record the hot tier holds: that is read from storage on every call, and
+/// not kept, since the write merges onto the hot copy and keeping it would
+/// only copy it.
 pub struct PassReads<'a, S> {
     storage: &'a S,
     hot: &'a LruCache<EntityKey<'static>, Record>,

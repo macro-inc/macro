@@ -623,3 +623,105 @@ fn pass_reads_come_from_storage_not_from_a_stale_hot_tier() {
         drop(other);
     });
 }
+
+#[path = "support/committing_storage.rs"]
+mod committing_storage;
+
+#[test]
+fn a_write_that_finds_its_kept_reads_stale_rereads_every_stored_record_at_once() {
+    use cache_core::store::DurableRead;
+    use committing_storage::CommittingStorage;
+    use std::sync::{Arc, Mutex};
+    block_on(async {
+        let directory = tempfile::tempdir().unwrap();
+        let database = TursoFileDatabase::new(directory.path().join("cache.turso")).unwrap();
+        let name = "engine-kept-reads-snapshot";
+        let mut writer = Engine::new(database.open(name).unwrap());
+        writer
+            .write_query(
+                Some(1),
+                QUERY,
+                Some("Soup"),
+                &query_vars(),
+                &page("Status", "todo", "user-1"),
+                None,
+            )
+            .await
+            .unwrap();
+        drop(writer);
+
+        // A fresh engine has nothing hot. The passes read the property, and
+        // the write reads the document from storage itself.
+        let mut engine = Engine::new(CommittingStorage::new(database.open(name).unwrap()));
+        let property = EntityKey("GraphqlProperty:property-1".into());
+        let document = EntityKey("GraphqlSoupDocument:doc-1".into());
+        let position = engine.storage().write_position();
+        let reads = engine.pass_reads();
+        reads
+            .read_records(std::slice::from_ref(&property))
+            .await
+            .unwrap();
+        let reads = reads.finish();
+        engine.keep_pass_reads(reads, position);
+
+        // Right after the write reads the document, another connection adds a
+        // field to the property and the document in one commit. It stays
+        // open, so closing it cannot checkpoint the log over.
+        let held = Arc::new(Mutex::new(None));
+        let (keep, mut other) = (held.clone(), database.open(name).unwrap());
+        let keys = [property.clone(), document.clone()];
+        engine.storage().after_next_get_batch(move || {
+            block_on(async {
+                let records = other.get_batch(&keys).await.unwrap();
+                let entries = keys
+                    .iter()
+                    .cloned()
+                    .zip(records)
+                    .map(|(key, record)| {
+                        let mut record = record.unwrap();
+                        record
+                            .fields
+                            .insert("note".into(), CacheValue::String("other".into()));
+                        (key, record)
+                    })
+                    .collect();
+                other.put_batch(entries).await.unwrap();
+            });
+            *keep.lock().unwrap() = Some(other);
+        });
+
+        // A second property changes the document. Merged onto the document as
+        // read before the commit, it would drop the other connection's field.
+        let mut two = page("Status", "todo", "user-1");
+        let second = json!({
+            "id": "property-2",
+            "displayName": "Stage",
+            "value": {"__typename": "GraphqlStringPropertyValue", "stringValue": "done"}
+        });
+        two["user"]["soup"]["items"][0]["properties"]
+            .as_array_mut()
+            .unwrap()
+            .push(second);
+        let result = engine
+            .write_query(Some(1), QUERY, Some("Soup"), &query_vars(), &two, None)
+            .await
+            .unwrap();
+        assert!(held.lock().unwrap().is_some(), "the commit landed");
+        assert!(result.changed.contains(&document), "{:?}", result.changed);
+        drop(engine);
+
+        let stored = database
+            .open(name)
+            .unwrap()
+            .get_batch(&[property.clone(), document.clone()])
+            .await
+            .unwrap();
+        for (key, record) in [property, document].iter().zip(stored) {
+            assert_eq!(
+                record.unwrap().fields.get("note"),
+                Some(&CacheValue::String("other".into())),
+                "{key:?}"
+            );
+        }
+    });
+}
