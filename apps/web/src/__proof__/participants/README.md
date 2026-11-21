@@ -59,7 +59,11 @@ apps/web/src/__proof__/participants/run.sh mutants    # one part
 
 Knobs (env): `PX_SEQS`, `PX_STEPS`, `PX_BATCH`, `PX_LIVE_MS`, `PX_SEED`,
 `PX_LOAD`, `PX_MUTANT`, `PX_ORIGIN` (the stack's Vite), `PX_PG` and
-`PX_REDIS` (its containers). Results go under `PX_ROOT`; `driver/report.ts`
+`PX_REDIS` (its containers). Each driver runs in a network namespace of its own with the
+stack's ports forwarded (`apps/web/tests/view-parity/isolated-network.sh`;
+`PX_PORTS` overrides them, `PX_NETNS=0` turns it off): Chromium fails every
+request in flight with `net::ERR_NETWORK_CHANGED` when another container
+changes the host's interfaces. Results go under `PX_ROOT`; `driver/report.ts`
 summarizes them and `driver/rejudge.ts` re-reads one run's records with the
 current comparison. Don't edit files the page imports while it runs: Vite
 reloads the pages.

@@ -10,6 +10,13 @@
 # /tmp/px-<timestamp>). Every knob of driver/run.ts is an env var: PX_SEQS,
 # PX_STEPS, PX_BATCH, PX_LIVE_MS, PX_ORIGIN, PX_PG, PX_REDIS.
 #
+# Each driver runs in a network namespace of its own, with the stack's ports
+# forwarded (apps/web/tests/view-parity/isolated-network.sh): Chromium fails
+# every request in flight (net::ERR_NETWORK_CHANGED) whenever a host interface
+# changes, which other containers starting and stopping do every few seconds.
+# PX_PORTS overrides the forwarded ports (default: every port listening in the
+# origin port's block of a hundred); PX_NETNS=0 runs on the host's network.
+#
 #   ./run.sh                 # everything
 #   ./run.sh differential    # the four seed runs only
 #   ./run.sh mutants         # the five mutants only
@@ -25,7 +32,18 @@ what=${1:-all}
 mkdir -p "$root"
 cd "$repo"
 
-bun_run() { nix develop --command bun "$@"; }
+origin_port=${PX_ORIGIN:-https://localhost:20609}
+origin_port=${origin_port##*:}
+origin_port=${origin_port%%/*}
+ports=${PX_PORTS:-$(ss -ltnH | awk '{print $4}' | grep -oE ":${origin_port:0:3}[0-9][0-9]$" | tr -d : | sort -u | tr '\n' ' ')}
+bun_run() {
+  if [[ ${PX_NETNS:-1} == 0 ]]; then
+    nix develop --command bun "$@"
+  else
+    nix shell nixpkgs#socat --command nix develop --command \
+      apps/web/tests/view-parity/isolated-network.sh "$ports" bun "$@"
+  fi
+}
 
 echo "head $(git rev-parse HEAD) -> $root"
 "$here/check-copies.sh"
