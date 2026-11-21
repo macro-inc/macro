@@ -246,7 +246,8 @@ export async function makeHeldout(at: Stack, name: string, count: number, month 
     const unusable = rosterProblems(people);
     if (unusable) throw new Error(`${unusable}; run heldout make again`);
     // A held-out person is someone no earlier set has, by slug, name or mail domain.
-    if (repeatsEarlier(people, takenIdentities())) throw new Error('a sketched person repeats one from an earlier set or this one (by slug, full name or mail domain); run heldout make again');
+    const repeated = repeatsEarlier(people, takenIdentities());
+    if (repeated.length) throw new Error(`a sketched person repeats one from an earlier set or this one (by ${repeated.join(', ')}); run heldout make again`);
     const slugs = people.map((person) => person.slug);
     if (slugs.some((slug) => !/^[a-z]+$/.test(slug)) || new Set(slugs).size !== slugs.length) {
       throw new Error(`the people came back with unusable slugs (${slugs.join(', ')}); run heldout make again`);
@@ -318,15 +319,31 @@ export function takenIdentities(): Set<string> {
   return new Set([...tune, ...written].flatMap(identityKeys));
 }
 
-/** Whether a sketched person shares a slug, full name or mail domain with an earlier one, or with another of the same set; it says nothing of whom, so a held-out set stays unread. */
-export function repeatsEarlier(people: Pick<Sketch, 'slug' | 'owner_first' | 'owner_last' | 'domain'>[], taken: Set<string>): boolean {
+/**
+ * What a sketched person shares with an earlier one, or with another of the
+ * same set: `slug`, `name` or `domain`, each once; none when nobody repeats.
+ * It says which, never whom, so a held-out set stays unread.
+ */
+export function repeatsEarlier(people: Pick<Sketch, 'slug' | 'owner_first' | 'owner_last' | 'domain'>[], taken: Set<string>): string[] {
   const seen = new Set(taken);
+  const repeated = new Set<string>();
   for (const s of people) {
     const keys = identityKeys({ slug: s.slug, name: `${s.owner_first} ${s.owner_last}`, domain: s.domain });
-    if (keys.some((key) => seen.has(key))) return true;
+    for (const key of keys) if (seen.has(key)) repeated.add(key.slice(0, key.indexOf(':')));
     for (const key of keys) seen.add(key);
   }
-  return false;
+  return [...repeated].sort();
+}
+
+/** The slugs, full names and mail domains a new person must not take, for the author's prompt. */
+export function takenWords(): string {
+  const of = (kind: string) =>
+    [...takenIdentities()]
+      .filter((key) => key.startsWith(`${kind}:`))
+      .map((key) => key.slice(kind.length + 1))
+      .sort()
+      .join(', ');
+  return `Use none of these slugs: ${of('slug')}. None of these full names: ${of('name')}. None of these domains: ${of('domain')}.`;
 }
 
 /** What the author spent since `started`, in all and per person written. */
@@ -362,7 +379,7 @@ async function sketch(at: Stack, count: number): Promise<Sketch[]> {
   const { people } = await write<{ people: Sketch[] }>(
     at,
     `Invent ${count} people who would use a work app with email, tasks, documents, chat channels, calls, a CRM and calendar. Each runs or works in a small organization; make them differ from each other in industry, role, seniority and how they work, and differ from these existing ones: ${tune.join(' | ')}.
-For each: a short slug (lowercase letters), a one-sentence persona, a first and last name, an invented company domain ending in .example, an IANA time zone in the Americas or Europe, the 4 to 6 mail labels they file mail under, 4 colleagues, the recurring streams of mail they get (at least 6, such as weekly reports, invoices, customer requests, tool notifications; say how often each comes), and a situation: what is going on in their work this month.`,
+For each: a short slug (lowercase letters), a one-sentence persona, a first and last name, an invented company domain ending in .example, an IANA time zone in the Americas or Europe, the 4 to 6 mail labels they file mail under, 4 colleagues, the recurring streams of mail they get (at least 6, such as weekly reports, invoices, customer requests, tool notifications; say how often each comes), and a situation: what is going on in their work this month. ${takenWords()}`,
     SKETCH,
   );
   return people;

@@ -634,13 +634,13 @@ describe('writing a month', () => {
 describe('a held-out person is someone no earlier set has', () => {
   const taken = new Set(['slug:ana', 'name:ana lopez', 'domain:acme.example']);
   const person = { slug: 'bea', owner_first: 'Bea', owner_last: 'Stone', domain: 'stone.example' };
-  test('a new slug, name and domain pass', () => expect(repeatsEarlier([person], taken)).toBe(false));
-  test('the same slug, full name or mail domain is refused', () => {
-    expect(repeatsEarlier([person, { ...person, slug: 'ana' }], taken)).toBe(true);
-    expect(repeatsEarlier([{ ...person, owner_first: 'ANA', owner_last: 'Lopez' }], taken)).toBe(true);
-    expect(repeatsEarlier([{ ...person, domain: 'Acme.example' }], taken)).toBe(true);
+  test('a new slug, name and domain pass', () => expect(repeatsEarlier([person], taken)).toEqual([]));
+  test('the same slug, full name or mail domain is refused, saying which', () => {
+    expect(repeatsEarlier([{ ...person, slug: 'ana' }], taken)).toEqual(['slug']);
+    expect(repeatsEarlier([{ ...person, owner_first: 'ANA', owner_last: 'Lopez' }], taken)).toEqual(['name']);
+    expect(repeatsEarlier([{ ...person, domain: 'Acme.example' }], taken)).toEqual(['domain']);
     // Two people of one set are two people too.
-    expect(repeatsEarlier([person, { ...person, slug: 'cy', owner_first: 'Cy' }], taken)).toBe(true);
-    expect(repeatsEarlier([person, { slug: 'cy', owner_first: 'Cy', owner_last: 'Moss', domain: 'moss.example' }], taken)).toBe(false);
+    expect(repeatsEarlier([person, { ...person, slug: 'cy', owner_first: 'Cy' }], taken)).toEqual(['domain']);
+    expect(repeatsEarlier([person, { slug: 'cy', owner_first: 'Cy', owner_last: 'Moss', domain: 'moss.example' }], taken)).toEqual([]);
   });
 });

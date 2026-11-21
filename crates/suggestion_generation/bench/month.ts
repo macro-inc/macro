@@ -20,7 +20,7 @@ import type { Stack } from '../../scheduled_action/bench/stack';
 import { CATALOG } from './catalog';
 import { ANCHOR } from './clock';
 import { DOES, type Does, type InboxMessage, type MailStream, SENT_MESSAGES, SENT_TEXTS, type SentMessage, WINDOW_DAYS, WINDOW_MESSAGES, WINDOW_TEXTS } from './personas';
-import { type WrittenRoutinesTruth, obj, placeAll, str, strs, takenPeople, write } from './heldout';
+import { type WrittenRoutinesTruth, obj, placeAll, str, strs, takenPeople, takenWords, write } from './heldout';
 
 export type MonthSketch = {
   mail: 'month';
@@ -173,7 +173,7 @@ export async function sketchMonth(at: Stack, count: number): Promise<MonthSketch
   const { people } = await write<{ people: Omit<MonthSketch, 'mail'>[] }>(
     at,
     `Invent ${count} people whose work runs through their inbox, many kinds of it arriving every week (requests, orders, bills, bookings, applications, reports, notices from their tools that need a step), who would use a work app with email, tasks, documents, chat channels, calls, a CRM and calendar. Each runs or works in a small organization; make them differ from each other in industry, role, seniority and how they work, and differ from these existing ones: ${tune.join(' | ')}.
-For each: a short slug (lowercase letters), a one-sentence persona, a first and last name, an invented company domain ending in .example, an IANA time zone in the Americas or Europe, the 4 to 7 mail labels they file mail under, 4 colleagues, a situation (what is going on in their work this month), and volume: how many messages reach their inbox in a month, 250 to 500.`,
+For each: a short slug (lowercase letters), a one-sentence persona, a first and last name, an invented company domain ending in .example, an IANA time zone in the Americas or Europe, the 4 to 7 mail labels they file mail under, 4 colleagues, a situation (what is going on in their work this month), and volume: how many messages reach their inbox in a month, 250 to 500. ${takenWords()}`,
     MONTH_SKETCH,
   );
   return people.map((person) => ({ ...person, mail: 'month' as const }));
