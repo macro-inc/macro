@@ -1144,6 +1144,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     const personList = createPersonList({
       scope: directoryScope,
       resetKey: personExclusions.key,
+      localBudgetMs: options?.peopleLocalBudgetMs,
       search: () => options?.searchTerm?.() ?? '',
       enabled: () =>
         projectedBuckets().includes('person') && options?.enabled?.() !== false,

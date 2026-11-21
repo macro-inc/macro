@@ -10,7 +10,6 @@ export {
 } from './collapsed-sections';
 export {
   type ListControlOption,
-  ListFilterCountBadge,
   ListFilterDropdown,
   type ListFilterDropdownProps,
   type ListFilterGroup,

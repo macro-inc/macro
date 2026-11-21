@@ -195,6 +195,7 @@ async fn bounded_contact_hydration_and_search_over_opfs() {
         generation
     );
     contacts::assert_contact_search(&mut engine, 1_500).await;
+    contacts::assert_contact_top_up(&mut engine).await;
     contacts::assert_account_reset(&mut engine).await;
     healthy_close(engine.into_storage().try_close().unwrap())
         .preserve()

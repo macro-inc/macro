@@ -1,6 +1,12 @@
 import { expect, test } from 'bun:test';
 import type { Entry, Incoming } from '../entry.ts';
-import { inThread, isRelevant, judge, type Probabilities } from '../listen.ts';
+import {
+  inThread,
+  isRelevant,
+  judge,
+  type Probabilities,
+  screenAttributes,
+} from '../listen.ts';
 import { screen } from '../screen.ts';
 
 const me = 'macro|agent@example.com';
@@ -142,4 +148,39 @@ test('when the screen keeps failing, a reply in a thread the agent is in is for 
   );
   expect(outside.kind).toBe('irrelevant');
   expect(inThread(history, me, null)).toBe(false);
+});
+
+test('the screen span records the verdict and each probability by question, never the message', () => {
+  expect(
+    screenAttributes({
+      kind: 'relevant',
+      mentioned: false,
+      p: { asks_agent: 0.92, about_agent: 0.1 },
+    })
+  ).toEqual({
+    'chat.screen.verdict': 'relevant',
+    'chat.screen.mentioned': false,
+    'chat.screen.p.asks_agent': 0.92,
+    'chat.screen.p.about_agent': 0.1,
+  });
+  expect(screenAttributes({ kind: 'irrelevant', p: { fallback: 1 } })).toEqual({
+    'chat.screen.verdict': 'irrelevant',
+    'chat.screen.p.fallback': 1,
+  });
+  expect(screenAttributes({ kind: 'ignored' })).toEqual({
+    'chat.screen.verdict': 'ignored',
+  });
+});
+
+test('the screen span records at most eight well-formed question keys', () => {
+  const p = Object.fromEntries([
+    ['Bad Key', 0.5],
+    ...Array.from({ length: 12 }, (_, i) => [`q${i}`, i / 100]),
+  ]);
+  const attributes = screenAttributes({ kind: 'irrelevant', p });
+  const keys = Object.keys(attributes).filter((key) =>
+    key.startsWith('chat.screen.p.')
+  );
+  expect(keys).toHaveLength(8);
+  expect(keys).not.toContain('chat.screen.p.Bad Key');
 });

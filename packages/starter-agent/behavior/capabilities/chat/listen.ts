@@ -57,6 +57,37 @@ export type Verdict =
       readonly p: Probabilities;
     };
 
+/**
+ * The most probabilities a `chat.screen` span records, and the shape of a
+ * question key it records: the agent edits its screen, so its questions must
+ * not grow the span's attribute set without bound.
+ */
+const screenQuestions = 8;
+const screenQuestion = /^[a-z0-9_]{1,32}$/;
+
+/**
+ * What a `chat.screen` span records of a verdict: its kind, and each
+ * probability by the screen's question key (`addressed` for a DM or a
+ * mention, `fallback` when the screen failed), at most
+ * {@link screenQuestions} well-formed ones. Never the message.
+ */
+export const screenAttributes = (
+  verdict: Verdict
+): Readonly<Record<string, string | number | boolean>> => ({
+  'chat.screen.verdict': verdict.kind,
+  ...(verdict.kind === 'relevant'
+    ? { 'chat.screen.mentioned': verdict.mentioned }
+    : {}),
+  ...(verdict.kind === 'ignored'
+    ? {}
+    : Object.fromEntries(
+        Object.entries(verdict.p)
+          .filter(([question]) => screenQuestion.test(question))
+          .slice(0, screenQuestions)
+          .map(([question, p]) => [`chat.screen.p.${question}`, p])
+      )),
+});
+
 /** What a DM or a mention is logged with: nobody asked the screen. */
 const addressed: Probabilities = { addressed: 1 };
 

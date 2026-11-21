@@ -209,6 +209,30 @@ async fn malformed_codes_never_reach_the_cli() {
     assert_eq!(claude.status().await, Ok(AgentStatus::Pending));
 }
 
+/// The CLI's own "Invalid code" ends its sign-in like a rejection: asking
+/// for the same code again would only find no sign-in waiting.
+#[tokio::test]
+async fn a_code_the_cli_calls_invalid_needs_a_new_sign_in() {
+    let directory = tempfile::tempdir().expect("a directory");
+    let program = directory.path().join("claude");
+    std::fs::write(
+        &program,
+        format!(
+            "#!/usr/bin/env bash\ncat \"{FIXTURES}/setup-token-screen1.raw\"\nIFS= read -r code\nprintf '\\r\\n Invalid code\\r\\n'\nread -r never\n"
+        ),
+    )
+    .expect("the stub");
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).expect("executable");
+    let claude = ClaudeAuth::new(config(directory.path(), program));
+    claude.start().await.expect("a url");
+
+    assert_eq!(
+        claude.complete("shape#ok".to_owned()).await,
+        Err(ErrorKind::InvalidCode)
+    );
+    assert_eq!(claude.status().await, Ok(AgentStatus::SignedOut));
+}
+
 #[tokio::test]
 async fn completing_without_a_sign_in_is_refused() {
     let directory = tempfile::tempdir().expect("a directory");

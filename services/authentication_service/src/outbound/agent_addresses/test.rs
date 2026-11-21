@@ -25,3 +25,16 @@ fn loopback_credentialed_or_wrong_scheme_addresses_are_refused() {
         assert!(checked("X", raw, websocket).is_err(), "{raw}");
     }
 }
+
+#[test]
+fn the_agent_exports_to_a_reachable_intake_and_to_none_on_loopback() {
+    assert_eq!(
+        telemetry("https://macro-prox-dev.macroverse.workers.dev/i/otlp").unwrap(),
+        Some((
+            TELEMETRY_KEY,
+            "https://macro-prox-dev.macroverse.workers.dev/i/otlp".to_owned()
+        ))
+    );
+    assert_eq!(telemetry("http://localhost:4318").unwrap(), None);
+    assert!(telemetry("https://user:pass@intake.example.com").is_err());
+}
