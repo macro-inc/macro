@@ -87,7 +87,7 @@ pub(super) fn decode_into<'a>(blob: &'a [u8], facts: &mut Facts<'a>) -> Option<(
 
 impl Facts<'_> {
     /// The facts as an owned, canonical document.
-    pub(super) fn into_document(
+    pub(super) fn to_document(
         &self,
         record_key: predicate_index::RecordKey,
         profile: predicate_index::Profile,
@@ -190,7 +190,11 @@ impl<'a> Reader<'a> {
         let mut value = 0u64;
         for shift in (0..64).step_by(7) {
             let byte = self.byte()?;
-            value |= u64::from(byte & 0x7f).checked_shl(shift)?;
+            // The tenth byte holds only the 64th bit; more would overflow.
+            if shift == 63 && byte & 0x7f > 1 {
+                return None;
+            }
+            value |= u64::from(byte & 0x7f) << shift;
             if byte & 0x80 == 0 {
                 return Some(value);
             }

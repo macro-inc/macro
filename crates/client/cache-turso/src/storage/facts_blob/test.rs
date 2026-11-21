@@ -136,7 +136,7 @@ proptest! {
         let mut expected = document.clone();
         expected.canonicalize();
         let decoded = facts
-            .into_document(document.record_key.clone(), document.profile.clone(), document.partition.clone())
+            .to_document(document.record_key.clone(), document.profile.clone(), document.partition.clone())
             .unwrap();
         prop_assert_eq!(decoded, expected);
     }
@@ -190,4 +190,21 @@ fn repeated_attributes_are_written_once() {
     // version, count, "label" once (1 + 5), then 0 for each repeat, and three
     // one-byte values (2 each), then two empty sections.
     assert_eq!(encode(&document).len(), 1 + 1 + 6 + 2 + 1 + 2 + 1 + 2 + 2);
+}
+
+#[test]
+fn a_varint_past_64_bits_is_refused() {
+    let mut blob = vec![VERSION, 0, 1, 1, b'x'];
+    // Nine continuation bytes, then a tenth that would set bit 65.
+    blob.extend([0x80; 9]);
+    blob.extend([0x02, 0]);
+    assert!(decode(&blob).is_none());
+    // The largest value still decodes.
+    let mut max = vec![VERSION, 0, 1, 1, b'x'];
+    max.extend([0xff; 9]);
+    max.extend([0x01, 0]);
+    assert_eq!(
+        decode(&max).unwrap().integer,
+        vec![("x", unzigzag(u64::MAX))]
+    );
 }

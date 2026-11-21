@@ -360,6 +360,12 @@ fn schema_12_cache_is_upgraded_in_place_and_keeps_pending_writes() {
             .put_batch(vec![(key("Thing:1"), record("kept"))])
             .await
             .unwrap();
+        // The lowest row id is a valid one; the fill must not skip it.
+        raw_execute(
+            &storage,
+            "INSERT INTO index_documents (id, record_key, profile, partition, state) VALUES (?1, 'Thing:00000', 'profile-v1', 'thing', 1)",
+            vec![Value::from_i64(i64::MIN)],
+        );
         let mutations = (0..1_100)
             .map(|n| {
                 let mut document =
@@ -466,6 +472,13 @@ fn schema_12_cache_is_upgraded_in_place_and_keeps_pending_writes() {
 
         let storage = database.open("scope").unwrap();
         assert_eq!(read(&storage, &keys, &queries).await, before);
+        assert_eq!(
+            raw_scalar(
+                &storage,
+                "SELECT count(*) FROM index_document_facts WHERE document_id = -9223372036854775808"
+            ),
+            1
+        );
         assert_eq!(
             raw_scalar(
                 &storage,

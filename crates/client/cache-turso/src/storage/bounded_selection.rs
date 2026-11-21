@@ -222,8 +222,8 @@ fn candidate_sql(
     let sql = match source {
         // An authority candidate in scope brings its facts blob, and its own
         // partition's predicate is tested on it in Rust: one row read instead
-        // of a fact-table seek per fact the predicate names. A candidate out
-        // of scope never reads its blob.
+        // of a fact-table seek per fact the predicate names. The engine may
+        // still read an out-of-scope candidate's blob; CASE discards it.
         conjunction::FactSource::Authority => {
             let partitions = searched_partitions(query)
                 .map(|partition| {
@@ -332,36 +332,44 @@ impl Window {
         let Some(mut statement) = driver::prepare_unless_refused(connection, &sql)? else {
             return Ok(false);
         };
-        let rows = driver::query_prepared(&mut statement, parameters)?;
-        self.read += rows.len();
-        self.exhausted = rows.len() < count;
-        for row in rows {
-            if row.len() != 5 {
-                return Err(invariant());
-            }
-            let position = Position {
-                value: required_i64(&row, 1)?,
-                document: required_i64(&row, 2)?,
-            };
-            let later = self.last.is_none_or(|last| {
-                let order = (position.value, position.document).cmp(&(last.value, last.document));
-                match query.sort_direction {
-                    SortDirection::Asc => order.is_gt(),
-                    SortDirection::Desc => order.is_lt(),
-                }
-            });
-            if later {
-                self.last = Some(position);
-            }
-            let record_key = required_text(&row, 0)?;
-            if row_matches(query, self.source, &record_key, &row)? {
-                self.hits.push(ReferenceHit {
-                    record_key: PredicateRecordKey::new(record_key).map_err(|_| invariant())?,
-                    sort_value: position.value,
-                });
-            }
-        }
+        // Each row is tested as it is read, so at most one candidate's facts
+        // blob is held at a time however large the window.
+        let mut read = 0;
+        driver::query_each_prepared(&mut statement, parameters, |row| {
+            read += 1;
+            self.take(query, &row.get_values().cloned().collect::<Vec<_>>())
+        })?;
+        self.read += read;
+        self.exhausted = read < count;
         Ok(true)
+    }
+
+    fn take(&mut self, query: &IndexQuery, row: &[Value]) -> Result<(), TursoStorageError> {
+        if row.len() != 5 {
+            return Err(invariant());
+        }
+        let position = Position {
+            value: required_i64(row, 1)?,
+            document: required_i64(row, 2)?,
+        };
+        let later = self.last.is_none_or(|last| {
+            let order = (position.value, position.document).cmp(&(last.value, last.document));
+            match query.sort_direction {
+                SortDirection::Asc => order.is_gt(),
+                SortDirection::Desc => order.is_lt(),
+            }
+        });
+        if later {
+            self.last = Some(position);
+        }
+        let record_key = required_text(row, 0)?;
+        if row_matches(query, self.source, &record_key, row)? {
+            self.hits.push(ReferenceHit {
+                record_key: PredicateRecordKey::new(record_key).map_err(|_| invariant())?,
+                sort_value: position.value,
+            });
+        }
+        Ok(())
     }
 
     /// Every candidate up to `cutoff` is read: the window ran out, or its last

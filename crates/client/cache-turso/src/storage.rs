@@ -2671,7 +2671,7 @@ fn load_projection_states(
         }
         let blob = required_blob(&row, 4)?;
         let document = facts_blob::decode(&blob)
-            .and_then(|facts| facts.into_document(record_key.clone(), profile, partition))
+            .and_then(|facts| facts.to_document(record_key.clone(), profile, partition))
             .ok_or_else(invariant)?;
         document.validate().map_err(|_| invariant())?;
         documents.insert(record_key, document);
@@ -3484,22 +3484,23 @@ fn upgrade_schema(connection: &Db) -> Result<(), TursoStorageError> {
         driver::execute(connection, INDEX_DOCUMENT_FACTS_TABLE, Vec::new())?;
         let mut statement = driver::prepare(
             connection,
-            "SELECT id, record_key, profile, partition FROM index_documents WHERE id > ?1 AND state = 0 ORDER BY id LIMIT ?2",
+            "SELECT id, record_key, profile, partition FROM index_documents WHERE id >= ?1 AND state = 0 ORDER BY id LIMIT ?2",
         )?;
         let mut insert = driver::prepare(
             connection,
             "INSERT INTO index_document_facts (document_id, facts) VALUES (?1, ?2)",
         )?;
-        let mut after = i64::MIN;
-        loop {
+        // Every id is a valid row id, i64::MIN and i64::MAX included.
+        let mut from = Some(i64::MIN);
+        while let Some(start) = from {
             let rows = driver::query_prepared(
                 &mut statement,
-                vec![Value::from_i64(after), Value::from_i64(FACTS_UPGRADE_BATCH)],
+                vec![Value::from_i64(start), Value::from_i64(FACTS_UPGRADE_BATCH)],
             )?;
             let Some(last) = rows.last() else {
                 break;
             };
-            after = required_i64(last, 0)?;
+            from = required_i64(last, 0)?.checked_add(1);
             let mut by_id = HashMap::with_capacity(rows.len());
             let mut documents = HashMap::with_capacity(rows.len());
             for row in &rows {
