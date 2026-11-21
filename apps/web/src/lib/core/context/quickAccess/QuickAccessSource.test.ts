@@ -115,6 +115,9 @@ vi.mock('@core/context/channels', () => ({
 vi.mock('@queries/contacts/use-directory', () => ({
   useContactDirectoryScope: () => () => ({ userId: 'viewer' }),
 }));
+vi.mock('@queries/team/roster', () => ({
+  useTeammateIds: () => () => new Set<string>(),
+}));
 vi.mock('./person-list', () => ({
   createPersonList: () => ({
     items: () => [],
