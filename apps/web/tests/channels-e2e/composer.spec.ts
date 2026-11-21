@@ -108,14 +108,18 @@ test('CMP-13 a message shown as sent is still sent when the page is reloaded at 
   await view.shown();
 
   await view.expectEndsWith(['sent just before a reload']);
-  // Known defect on main, about one run in twenty-five: the message is stored but
-  // never reaches a member who has the channel open, until they reload. The
-  // reload cuts the request off after the message is stored and before it is
-  // announced.
+  // Known defect on main, about one run in sixteen: the message is stored but
+  // never reaches a member who has the channel open. The likely cause, not
+  // proven: the reload cuts the request off after the message is stored and
+  // before it is announced.
   await failsSometimes(async () => {
     await bens.expectEndsWith(['sent just before a reload']);
   });
-  // Known defect on main, about one run in sixteen: the sent message is
+  // Whatever the open page missed, a reload must show it.
+  await bens.page.reload();
+  await bens.shown();
+  await bens.expectEndsWith(['sent just before a reload']);
+  // Known defect on main, about one run in nine: the sent message is
   // also back in the composer as a draft.
   await failsSometimes(async () => {
     await expect(view.composerText).toHaveText('');
