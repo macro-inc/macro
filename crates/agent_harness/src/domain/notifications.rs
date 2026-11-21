@@ -22,7 +22,10 @@
 //! turn ends by patching its
 //! pending reply into the thread, and the message service notifies on that
 //! patch as if the answer had just been posted, so a `settled` notification
-//! on top would tell the same people the same thing twice. The same reply
+//! on top would tell the same people the same thing twice. The person who
+//! asked hears that patch as a mention (see `crates/channels`), so a
+//! mentions-only channel still tells them their answer is in; an answer
+//! posted as a new message, rather than patched, does not get this. The same reply
 //! is patched when the turn stops to ask a question, so `waiting_for_input`
 //! is suppressed for it likewise. A coding agent's chip notifies nobody,
 //! and a chat turn nobody announced - one driven from the session view -

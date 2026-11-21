@@ -151,6 +151,18 @@ pub enum ChannelNotificationEffect {
         /// Users that should receive the notification.
         recipient_ids: HashSet<MacroUserIdStr<'static>>,
     },
+    /// A bot's reply was resolved into its answer for the person who asked:
+    /// they hear about it as a mention, which a mentions-only channel or one
+    /// with replies turned off still lets through.
+    AnsweredMention {
+        /// Common mention payload.
+        mention: ChannelMentionNotification,
+        /// The person the reply answers.
+        recipient_id: MacroUserIdStr<'static>,
+        /// Derived from the message and its answer, so a redelivered
+        /// resolution notifies once.
+        notification_id: Uuid,
+    },
     /// A document was mentioned in a channel message.
     DocumentMention {
         /// Common mention payload.
@@ -397,6 +409,7 @@ where
                 mentions,
                 has_attachments,
                 notification_policy,
+                finalized_reply,
             } => {
                 // A silent post skips only notifications; its mention events
                 // below still publish.
@@ -411,6 +424,7 @@ where
                         has_attachments,
                         bot_profile,
                         notification_policy,
+                        finalized_reply,
                     })
                     .await;
                 }
@@ -596,6 +610,16 @@ where
         }
     }
 
+    #[tracing::instrument(
+        name = "channel.message_posted_notifications",
+        skip_all,
+        fields(
+            channel_id = %inputs.channel_id,
+            message_id = %inputs.message.id,
+            finalized_reply = inputs.finalized_reply,
+            answered_person = tracing::field::Empty,
+        )
+    )]
     async fn send_message_posted_notifications(&self, inputs: PostedMessageNotificationInputs) {
         let PostedMessageNotificationInputs {
             channel_id,
@@ -606,7 +630,14 @@ where
             has_attachments,
             bot_profile,
             notification_policy,
+            finalized_reply,
         } = inputs;
+        let answered = answered_person(finalized_reply, &message, &participants, &mentions);
+        tracing::Span::current().record("answered_person", <&'static str>::from(&answered));
+        let answered = match answered {
+            AnsweredPerson::Notified(person) => Some(person),
+            _ => None,
+        };
         let resolved_sender = if let Some(user_id) = message.sender_id.as_user() {
             let user_id = user_id.clone();
             ResolvedNotificationSender {
@@ -641,7 +672,7 @@ where
             )
             .await
         {
-            Ok(context) => context,
+            Ok(context) => context.answering(answered.as_ref()),
             Err(err) => {
                 tracing::error!(error=?err, "unable to build channel notification context");
                 return;
@@ -655,6 +686,10 @@ where
 
         self.send_user_mention_notifications(channel_id, &message, has_attachments, &context)
             .await;
+        if let Some(person) = answered {
+            self.send_answered_mention(channel_id, &message, has_attachments, &context, person)
+                .await;
+        }
         self.send_document_mention_notifications(channel_id, &message, has_attachments, &context)
             .await;
 
@@ -821,6 +856,31 @@ where
                 .unwrap_or_default(),
             None => ThreadNotificationContext::default(),
         }
+    }
+
+    async fn send_answered_mention(
+        &self,
+        channel_id: Uuid,
+        message: &MutatedMessage,
+        has_attachments: bool,
+        context: &PostedMessageNotificationContext,
+        person: MacroUserIdStr<'static>,
+    ) {
+        self.send_notification(ChannelNotificationEffect::AnsweredMention {
+            mention: ChannelMentionNotification {
+                channel_id,
+                message_content: message.content.clone(),
+                message_id: message.id,
+                has_attachments,
+                thread_id: message.thread_id,
+                metadata: context.metadata.clone(),
+                sender_profile_picture_url: context.sender_profile_picture_url.clone(),
+                sender: context.sender.clone(),
+            },
+            recipient_id: person,
+            notification_id: answered_notification_id(message.id, &message.content),
+        })
+        .await;
     }
 
     async fn send_user_mention_notifications(
@@ -1110,6 +1170,7 @@ struct PostedMessageNotificationInputs {
     has_attachments: bool,
     bot_profile: Option<BotSenderProfile>,
     notification_policy: PostMessageNotificationPolicy,
+    finalized_reply: bool,
 }
 
 /// Sender identity and avatar resolved for notification delivery.
@@ -1131,9 +1192,97 @@ struct PostedMessageNotificationContext {
     excluded_user_ids: Vec<String>,
     recipients_without_sender: HashSet<MacroUserIdStr<'static>>,
     recipients_without_sender_and_mentions: HashSet<MacroUserIdStr<'static>>,
-    /// Channel members the message @mentions, other than its sender.
+    /// Channel members the message @mentions, or the person a resolved
+    /// reply answers (see `answering`), other than its sender.
     mentioned_members: HashSet<MacroUserIdStr<'static>>,
     is_first_top_level_message: bool,
+}
+
+/// The namespace answered-mention notification ids are derived in. Fixed
+/// forever, so a redelivered resolution keeps its id across deploys.
+const ANSWERED_MENTION_NAMESPACE: Uuid = Uuid::from_u128(0x6368_616e_2d61_6e73_7765_7265_642d_6d65);
+
+/// The answered mention's id, derived rather than generated (`now_v7`) so it
+/// is idempotent: one per message and answer, so redelivering
+/// the same resolution is a no-op while a later, different answer (after a
+/// question was answered) is news again.
+fn answered_notification_id(message_id: Uuid, content: &str) -> Uuid {
+    Uuid::new_v5(
+        &ANSWERED_MENTION_NAMESPACE,
+        format!("{message_id}:{content}").as_bytes(),
+    )
+}
+
+/// Whether a posted message answers someone who should hear it directly,
+/// and if not, why not. Recorded on the span by name.
+#[derive(Debug, Clone, PartialEq, Eq, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
+enum AnsweredPerson {
+    /// A bot's reply was resolved into its answer for this person.
+    Notified(MacroUserIdStr<'static>),
+    /// A new post or a plain edit, not a resolved bot reply.
+    NotFinalized,
+    /// Not sent by a bot.
+    NotBotReply,
+    /// The reply names nobody it was posted for.
+    NoTrigger,
+    /// It was posted for a bot or another non-person principal.
+    NotAPerson,
+    /// The person is no longer a member of the channel.
+    NotAMember,
+    /// The reply @mentions them, which already tells them.
+    AlreadyMentioned,
+}
+
+fn answered_person(
+    finalized_reply: bool,
+    message: &MutatedMessage,
+    participants: &[ChannelParticipant],
+    mentions: &[SimpleMention],
+) -> AnsweredPerson {
+    if !finalized_reply {
+        return AnsweredPerson::NotFinalized;
+    }
+    if message.sender_id.as_bot().is_none() {
+        return AnsweredPerson::NotBotReply;
+    }
+    let Some(triggered_by) = message.triggered_by.as_deref() else {
+        return AnsweredPerson::NoTrigger;
+    };
+    if is_bot_principal(triggered_by) {
+        return AnsweredPerson::NotAPerson;
+    }
+    let Ok(person) = MacroUserIdStr::parse_from_str(triggered_by).map(CowLike::into_owned) else {
+        return AnsweredPerson::NotAPerson;
+    };
+    let is_member = participants
+        .iter()
+        .any(|participant| participant.left_at.is_none() && participant.user_id == person.as_ref());
+    if !is_member {
+        return AnsweredPerson::NotAMember;
+    }
+    if mentions
+        .iter()
+        .any(|mention| mention.entity_type == "user" && mention.entity_id == person.as_ref())
+    {
+        return AnsweredPerson::AlreadyMentioned;
+    }
+    AnsweredPerson::Notified(person)
+}
+
+impl PostedMessageNotificationContext {
+    /// Treat the person a resolved reply answers (a channel member, see
+    /// [`answered_person`]) as mentioned: they get the answered mention, are
+    /// left out of the reply or message, and stay its mention fallback, so
+    /// whoever turned mentions off for the channel hears through it instead.
+    fn answering(mut self, person: Option<&MacroUserIdStr<'static>>) -> Self {
+        if let Some(person) = person {
+            self.excluded_user_ids.push(person.as_ref().to_owned());
+            self.recipients_without_sender_and_mentions.remove(person);
+            self.mentioned_members.insert(person.clone());
+        }
+        self
+    }
 }
 
 /// Whether a participant principal id refers to a bot (e.g. `bot|<uuid>`).

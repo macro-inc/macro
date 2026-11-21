@@ -1,3 +1,4 @@
+mod answered;
 mod interactions;
 mod mention_fallback;
 
@@ -441,6 +442,7 @@ async fn message_posted_derives_notification_effects_without_legacy_realtime() {
             mentions: Vec::new(),
             has_attachments: false,
             notification_policy: PostMessageNotificationPolicy::Default,
+            finalized_reply: false,
         })
         .await;
 
@@ -508,6 +510,7 @@ fn bot_message_posted_event(
         mentions: Vec::new(),
         has_attachments: false,
         notification_policy: PostMessageNotificationPolicy::Default,
+        finalized_reply: false,
     }
 }
 
@@ -567,6 +570,7 @@ async fn silent_message_posted_skips_notifications_only() {
             mentions: Vec::new(),
             has_attachments: false,
             notification_policy: PostMessageNotificationPolicy::Silent,
+            finalized_reply: false,
         })
         .await;
 
@@ -630,6 +634,7 @@ async fn mentions_only_skips_failing_invite_lookup_and_sends_mention() {
             mentions: vec![SimpleMention::user(&mentioned)],
             has_attachments: false,
             notification_policy: PostMessageNotificationPolicy::MentionsOnly,
+            finalized_reply: false,
         })
         .await;
 
@@ -926,6 +931,7 @@ async fn a_mention_of_someone_connected_to_the_threads_call_is_delivered() {
             mentions: vec![SimpleMention::user(&connected), SimpleMention::user(&away)],
             has_attachments: false,
             notification_policy: PostMessageNotificationPolicy::MentionsOnly,
+            finalized_reply: false,
         })
         .await;
 
@@ -1051,6 +1057,7 @@ async fn document_mentions_notify_participants_except_sender() {
             ],
             has_attachments: false,
             notification_policy: PostMessageNotificationPolicy::Default,
+            finalized_reply: false,
         })
         .await;
 
@@ -1134,6 +1141,7 @@ async fn document_mentions_in_a_reply_notify_only_thread_participants() {
             }],
             has_attachments: false,
             notification_policy: PostMessageNotificationPolicy::Default,
+            finalized_reply: false,
         })
         .await;
 
@@ -1601,6 +1609,7 @@ fn mention_broker_events_map_message_posted_mentions() {
         ],
         has_attachments: false,
         notification_policy: PostMessageNotificationPolicy::Default,
+        finalized_reply: false,
     });
 
     assert_eq!(events.len(), 2);

@@ -46,6 +46,74 @@ fn channel_message(
     .into_request()
 }
 
+/// A channel mention, as the channels crate sends it, including the one a
+/// bot's answer sends the person who asked.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+struct ChannelMention {
+    message: String,
+}
+
+impl Notification for ChannelMention {
+    const TYPE_NAME: &'static str = "channel_mention";
+}
+
+/// A bot's answer reaches the person who asked as a mention: a mentions-only
+/// channel or one with thread replies off lets it through, while a muted
+/// channel, a global mute or mentions turned off still keep it quiet.
+#[tokio::test]
+async fn an_answer_reaches_mentions_only_and_replies_off_but_not_a_muted_person() {
+    let mentions_only = test_user_id("mentions-only@example.com");
+    let replies_off = test_user_id("replies-off@example.com");
+    let channel_muted = test_user_id("channel-muted@example.com");
+    let muted = test_user_id("muted@example.com");
+    let mentions_off = test_user_id("mentions-off@example.com");
+    let everything_off = test_user_id("everything-off@example.com");
+    let service = NotificationIngressService::new(
+        MockRepository::new()
+            .with_mentions_only_user(mentions_only.clone())
+            .with_channel_settings(
+                replies_off.clone(),
+                disabled(&[ChannelNotificationKind::ThreadReply]),
+            )
+            .with_unsubscribed_user(channel_muted.clone())
+            .with_muted_user(muted.clone())
+            .with_channel_settings(
+                mentions_off.clone(),
+                disabled(&[ChannelNotificationKind::Mention]),
+            )
+            .with_channel_settings(
+                everything_off.clone(),
+                disabled(&ChannelNotificationKind::iter().collect::<Vec<_>>()),
+            ),
+        MockQueue::new(),
+        MockStateMachine,
+    );
+    let request = SendNotificationRequestBuilder {
+        notification_entity: EntityType::Channel.with_entity_string(CHANNEL_ID.to_string()),
+        secondary_notification_entity: None,
+        notification: ChannelMention {
+            message: "Here is the answer".to_string(),
+        },
+        sender_id: None,
+        recipient_ids: HashSet::from([
+            mentions_only.clone(),
+            replies_off.clone(),
+            channel_muted,
+            muted,
+            mentions_off,
+            everything_off,
+        ]),
+    }
+    .into_request();
+
+    let result = service.send_notification(request).await.unwrap().unwrap();
+
+    assert_eq!(
+        result.notified_recipients,
+        HashSet::from([mentions_only, replies_off])
+    );
+}
+
 #[tokio::test]
 async fn a_kind_turned_off_for_the_channel_skips_only_that_kind() {
     let quiet = test_user_id("quiet@example.com");
