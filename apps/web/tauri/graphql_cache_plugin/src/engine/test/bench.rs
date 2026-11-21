@@ -12,11 +12,14 @@
 use super::*;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 const SCOPE: &str = "cache-bench";
 const NIL: &str = "00000000-0000-0000-0000-000000000000";
 
+#[derive(Clone)]
 struct Op {
     lane: String,
     write: bool,
@@ -195,6 +198,47 @@ impl Samples {
 /// person using the app does, so its idle task copies the WAL once it is due.
 fn idle_checkpoints() -> bool {
     std::env::var_os("CACHE_BENCH_IDLE_CHECKPOINT").is_some()
+}
+
+/// `CACHE_BENCH_SKIP_CONTENDED` leaves out the contended pass.
+fn contended_reads() -> bool {
+    std::env::var_os("CACHE_BENCH_SKIP_CONTENDED").is_none()
+}
+
+/// Reads while background hydration of seed pages keeps the engine busy, as
+/// the browser half's contended pass does. Returns each hydrate's time.
+async fn contended_pass(
+    handle: &EngineHandle,
+    docs: &Arc<BTreeMap<String, String>>,
+    background: &Arc<Vec<Op>>,
+    identity: &str,
+    threads: &[String],
+    home: &Variables,
+    samples: &mut Samples,
+) -> Vec<f64> {
+    let stop = Arc::new(AtomicBool::new(false));
+    let task = {
+        let handle = handle.clone();
+        let docs = Arc::clone(docs);
+        let ops = Arc::clone(background);
+        let identity = identity.to_owned();
+        let stop = Arc::clone(&stop);
+        tauri::async_runtime::spawn(async move {
+            let mut ms = Vec::new();
+            for op in ops.iter().cycle() {
+                if stop.load(Ordering::SeqCst) {
+                    break;
+                }
+                let started = Instant::now();
+                apply(&handle, &docs, op, &identity).await;
+                ms.push(started.elapsed().as_secs_f64() * 1000.0);
+            }
+            ms
+        })
+    };
+    read_pass(handle, docs, threads, home, samples).await;
+    stop.store(true, Ordering::SeqCst);
+    task.await.unwrap()
 }
 
 /// Opens without resetting: a database a reused run cannot open (another
@@ -536,8 +580,8 @@ fn native_cache_bench() {
     let data = PathBuf::from(std::env::var_os("CACHE_BENCH_DATA").expect("CACHE_BENCH_DATA"));
     let runs: usize = std::env::var_os("CACHE_BENCH_RUNS")
         .map_or(5, |runs| runs.to_str().unwrap().parse().unwrap());
-    let docs: BTreeMap<String, String> =
-        serde_json::from_slice(&std::fs::read(data.join("docs.json")).unwrap()).unwrap();
+    let docs: Arc<BTreeMap<String, String>> =
+        Arc::new(serde_json::from_slice(&std::fs::read(data.join("docs.json")).unwrap()).unwrap());
     let meta: serde_json::Value =
         serde_json::from_slice(&std::fs::read(data.join("meta.json")).unwrap()).unwrap();
     let threads: Vec<String> = meta["threadIds"]
@@ -596,6 +640,16 @@ fn native_cache_bench() {
             % variants;
         let mut counts = serde_json::Value::Null;
         let mut rss_kb = Vec::new();
+        let mut contended = Samples::default();
+        let mut background_ms = Vec::new();
+        // Background hydration during the contended pass replays seed pages.
+        let background: Arc<Vec<Op>> = Arc::new(
+            seed.iter()
+                .take(40)
+                .cloned()
+                .map(|op| Op { write: false, ..op })
+                .collect(),
+        );
         for _ in 0..runs {
             let started = Mark::now();
             let handle = open(&path);
@@ -619,6 +673,21 @@ fn native_cache_bench() {
                 let started = Mark::now();
                 apply(&handle, &docs, op, &identity).await;
                 samples.record(&format!("write.{}.same", op.lane), started);
+                idle(&handle, &mut samples).await;
+            }
+            if contended_reads() {
+                background_ms.extend(
+                    contended_pass(
+                        &handle,
+                        &docs,
+                        &background,
+                        &identity,
+                        &threads,
+                        &home,
+                        &mut contended,
+                    )
+                    .await,
+                );
                 idle(&handle, &mut samples).await;
             }
             rss_kb.push(memory_kb("VmRSS"));
@@ -646,6 +715,8 @@ fn native_cache_bench() {
                 "counts": counts,
                 "lanes": lanes,
                 "steps": samples.summary(),
+                "contended": contended.summary(),
+                "background": { "hydrates": background_ms.len(), "meanMs": background_ms.iter().sum::<f64>() / background_ms.len().max(1) as f64 },
                 "io": samples.io_summary(),
                 "memory": { "rssKbPerRun": rss_kb, "peakRssKb": memory_kb("VmHWM") },
                 "variants": variants,
