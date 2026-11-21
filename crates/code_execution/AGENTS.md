@@ -101,7 +101,8 @@ one over the limit fails the run with a message saying so.
 
 A promise that rejects before the program awaits or catches it would end Deno
 with no frame; the bootstrap's `unhandledrejection` listener reports its reason
-as the run's error instead, with how to avoid it.
+as the run's error instead, with how to avoid it and, as `stop()` does, a warning
+that calls already started may have taken effect.
 
 Every Deno child's `code_execution.process` span records how it ended:
 `process.exit_code` or `process.signal`, `process.wall_ms`, `process.cpu_ms`
