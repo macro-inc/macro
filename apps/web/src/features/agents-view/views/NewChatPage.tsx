@@ -152,14 +152,21 @@ export function NewChatPage(props: {
     props.roster.filter((agent) => agent.kind === kindForMode(kind));
   const options = () => optionsFor(agentsMode());
   const [agentId, setAgentId] = createSignal<string>();
+  // A mention made before the roster has loaded is applied once it has,
+  // unless something later decides first: another mention, a pick, a mode
+  // switch or a requested agent.
+  const [pendingMention, setPendingMention] = createSignal<string>();
   createEffect(
     on(
       () => props.requestedAgent,
       (requested) => {
-        if (requested) setAgentId(requested.agentId);
+        if (!requested) return;
+        setPendingMention(undefined);
+        setAgentId(requested.agentId);
       }
     )
   );
+  createEffect(on(mode, () => setPendingMention(undefined), { defer: true }));
   /** One-shot model from a coding agent's submenu; Macro uses {@link preferredInmem}. */
   const [modelOverride, setModelOverride] = createSignal<string>();
   const [effortPickerOpen, setEffortPickerOpen] = createSignal(false);
@@ -469,8 +476,6 @@ export function NewChatPage(props: {
     setModelOverride(undefined);
   };
 
-  // A mention made before the roster has loaded is applied once it has.
-  const [pendingMention, setPendingMention] = createSignal<string>();
   const selectAgent = (
     agent: RosterAgent,
     model?: string,
@@ -506,8 +511,10 @@ export function NewChatPage(props: {
     // Only agents select; a person mentioned meanwhile keeps a pending one.
     if (!mentionedId.startsWith('bot|')) return;
     const agent = rosterAgentForMention(props.roster, mentionedId);
-    if (agent) activateMentioned(agent);
-    else if (props.rosterLoading || props.availabilityLoading)
+    if (agent) {
+      setPendingMention(undefined);
+      activateMentioned(agent);
+    } else if (props.rosterLoading || props.availabilityLoading)
       setPendingMention(mentionedId);
   };
   createEffect(

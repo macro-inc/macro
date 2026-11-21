@@ -808,6 +808,89 @@ describe('agent-led new conversation', () => {
       expect.objectContaining({ botId: CURSOR_BOT_ID })
     );
   });
+  describe('a mention waiting for the roster gives way to a later decision', () => {
+    const saved = (id: string, name: string): PersistedAgentLike => ({
+      bot: { id, name, handle: id },
+      harness: 'macrod',
+      harness_id: 'computer',
+      default_model: 'default',
+    });
+    function loadingPage(request?: () => AgentRequest | undefined) {
+      const [agents, setAgents] = createSignal<PersistedAgentLike[]>([]);
+      const [loading, setLoading] = createSignal(true);
+      const send = vi.fn();
+      render(() => (
+        <NewChatPage
+          requestedAgent={request?.()}
+          roster={buildAgentRoster({
+            agents: agents(),
+            runtimes: [{ id: 'computer', name: 'Agent Box', connected: true }],
+            cursorConnected: true,
+            cursorNeedsConnection: false,
+            macroDefaultModel: 'chat-default',
+          })}
+          rosterLoading={loading()}
+          onStart={send}
+          onOpenRoster={vi.fn()}
+        />
+      ));
+      const mention = (value: string) =>
+        fireEvent.change(screen.getByRole('textbox', { name: 'Mention' }), {
+          target: { value },
+        });
+      const load = () => {
+        setAgents([
+          saved('maya-agent', "Maya's Agent"),
+          saved('ben-agent', "Ben's Agent"),
+        ]);
+        setLoading(false);
+      };
+      const sendNow = () =>
+        fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+      return { send, mention, load, sendNow };
+    }
+
+    it('a later mention of the active agent', () => {
+      const { send, mention, load, sendNow } = loadingPage();
+      fireEvent.click(screen.getByRole('radio', { name: 'Chat' }));
+      mention('bot|maya-agent');
+      mention(`bot|${MACRO_AGENT_BOT_ID}`);
+      load();
+      sendNow();
+      expect(send).toHaveBeenLastCalledWith(
+        expect.objectContaining({ botId: undefined })
+      );
+    });
+
+    it('a mode switch', () => {
+      const { send, mention, load, sendNow } = loadingPage();
+      fireEvent.click(screen.getByRole('radio', { name: 'Code' }));
+      mention('bot|maya-agent');
+      fireEvent.click(screen.getByRole('radio', { name: 'Chat' }));
+      load();
+      expect(
+        (screen.getByRole('radio', { name: 'Chat' }) as HTMLInputElement)
+          .checked
+      ).toBe(true);
+      sendNow();
+      expect(send).toHaveBeenLastCalledWith(
+        expect.objectContaining({ botId: undefined })
+      );
+    });
+
+    it('a requested agent', () => {
+      const [request, setRequest] = createSignal<AgentRequest>();
+      const { send, mention, load, sendNow } = loadingPage(request);
+      fireEvent.click(screen.getByRole('radio', { name: 'Code' }));
+      mention('bot|maya-agent');
+      setRequest({ agentId: 'ben-agent', request: 'set up' });
+      load();
+      sendNow();
+      expect(send).toHaveBeenLastCalledWith(
+        expect.objectContaining({ botId: 'ben-agent' })
+      );
+    });
+  });
   it('selects an @mentioned agent from Auto, showing its selector', () => {
     startInChat = false;
     const send = page();
