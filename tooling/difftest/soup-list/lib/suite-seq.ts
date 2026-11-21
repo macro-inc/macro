@@ -719,9 +719,12 @@ async function converge(ctx: SeqContext, readers: Reader[], truth: Snap[], prevT
   const tv = truth.map((t, i) => (t.timedOut || errorOf(t) ? undefined : JSON.stringify(view(readers[i], t))));
   const at: { old: (number | undefined)[]; new: (number | undefined)[] } = { old: readers.map(() => undefined), new: readers.map(() => undefined) };
   const affected = readers.map((_, i) => tv[i] !== undefined && prevTruth[i] !== undefined && prevTruth[i] !== tv[i]);
+  // The branch's last snapshot, for the caller diff a missed update leaves.
+  let lastNew: Snap[] = [];
   for (;;) {
     const elapsed = Date.now() - t0;
     const [o, n] = await Promise.all([snapAll(session.pages.old, readers), snapAll(session.pages.new, readers)]);
+    lastNew = n;
     readers.forEach((r, i) => {
       if (!affected[i]) return;
       if (at.old[i] === undefined && o[i].settled && JSON.stringify(view(r, o[i])) === tv[i]) at.old[i] = elapsed;
@@ -738,6 +741,7 @@ async function converge(ctx: SeqContext, readers: Reader[], truth: Snap[], prevT
   while (behind.some((b, i) => b && lateAt[i] === undefined) && Date.now() - t0 < bound + LATE_MS) {
     await Bun.sleep(POLL_MS * 2);
     const n = await snapAll(session.pages.new, readers);
+    lastNew = n;
     const elapsed = Date.now() - t0;
     readers.forEach((r, i) => {
       if (behind[i] && lateAt[i] === undefined && n[i].settled && JSON.stringify(view(r, n[i])) === tv[i]) lateAt[i] = elapsed;
@@ -768,6 +772,8 @@ async function converge(ctx: SeqContext, readers: Reader[], truth: Snap[], prevT
         detail: `${stepKind}: main showed the change after ${o} ms, the branch not within ${bound} ms; ${late === undefined ? `not within ${bound + LATE_MS} ms either` : `it did at ${late} ms`}`,
         lateMs: late ?? null,
         cache,
+        // What the branch still showed against the cold read when the watch ended.
+        ...(late === undefined && lastNew[i] && { diffs: compareCaller(JSON.parse(tv[i] as string), view(r, lastNew[i])).diffs.slice(0, 8) }),
       });
     } else {
       t.newOnly++;
