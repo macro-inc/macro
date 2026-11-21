@@ -747,10 +747,22 @@ async fn list_for_soup_viewed_updated_interleaves_views_and_interactions(
             vec![c4, c3],
         ),
     ] {
-        let page = repo
-            .list_companies_for_soup(&team, VIEWER, &subset, None, sort, cursor, limit)
-            .await?;
-        assert_eq!(ids(&page), want, "{sort:?} cursor={cursor:?} limit={limit}");
+        for request_size in [subset.len(), 500, 501] {
+            let subset = subset
+                .iter()
+                .copied()
+                .cycle()
+                .take(request_size)
+                .collect::<Vec<_>>();
+            let page = repo
+                .list_companies_for_soup(&team, VIEWER, &subset, None, sort, cursor, limit)
+                .await?;
+            assert_eq!(
+                ids(&page),
+                want,
+                "{sort:?} cursor={cursor:?} limit={limit} request_size={request_size}"
+            );
+        }
     }
     Ok(())
 }
@@ -801,6 +813,71 @@ async fn list_for_soup_hidden_filter_applies_to_every_sort(pool: PgPool) -> anyh
             let mut got = ids(&page);
             got.sort();
             assert_eq!(&got, want, "{sort:?} hidden={filter:?}");
+        }
+    }
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_for_soup_explicit_ids_preserve_set_semantics_and_visibility(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team = Uuid::now_v7();
+    seed_team(&pool, team, VIEWER).await?;
+    let foreign_team = Uuid::now_v7();
+    seed_team(&pool, foreign_team, "macro|foreign@example.com").await?;
+    let visible = insert_company_at(&pool, team, "visible.example.com", ts(1, 0), ts(2, 0)).await?;
+    let hidden = insert_company_at(&pool, team, "hidden.example.com", ts(2, 0), ts(3, 0)).await?;
+    let foreign = insert_company_at(
+        &pool,
+        foreign_team,
+        "foreign.example.com",
+        ts(3, 0),
+        ts(4, 0),
+    )
+    .await?;
+    sqlx::query!("UPDATE crm_companies SET hidden=TRUE WHERE id=$1", hidden)
+        .execute(&pool)
+        .await?;
+    record_history(&pool, VIEWER, CRM_COMPANY, visible, ts(4, 0)).await?;
+    record_history(&pool, VIEWER, CRM_COMPANY, hidden, ts(5, 0)).await?;
+    let repo = CompaniesRepositoryImpl::new(pool);
+    let requested = [visible, foreign, hidden, visible, hidden, Uuid::now_v7()];
+    for request_size in [requested.len(), 500, 501] {
+        let requested = requested
+            .iter()
+            .copied()
+            .cycle()
+            .take(request_size)
+            .collect::<Vec<_>>();
+        for sort in ALL_SORTS {
+            for (hidden_filter, expected) in [
+                (None, visible),
+                (Some(false), visible),
+                (Some(true), hidden),
+            ] {
+                let page = repo
+                    .list_companies_for_soup(
+                        &team,
+                        VIEWER,
+                        &requested,
+                        hidden_filter,
+                        sort,
+                        None,
+                        100,
+                    )
+                    .await?;
+                assert_eq!(
+                    ids(&page),
+                    [expected],
+                    "{sort:?} hidden={hidden_filter:?} request_size={request_size}"
+                );
+                assert_eq!(
+                    page[0].company.domains.len(),
+                    1,
+                    "duplicate IDs do not repeat domains"
+                );
+            }
         }
     }
     Ok(())

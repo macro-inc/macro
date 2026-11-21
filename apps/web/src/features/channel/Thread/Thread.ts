@@ -1,5 +1,6 @@
 import { ThreadActionsFooter } from './ThreadActionsFooter';
 import { ThreadCollapsedIndicator } from './ThreadCollapsedIndicator';
+import { ThreadGutterSlot } from './ThreadGutterSlot';
 import { ThreadRepliesBridgeRail } from './ThreadRepliesBridgeRail';
 import { ThreadRepliesContainer } from './ThreadRepliesContainer';
 import { ThreadReplyAuthor } from './ThreadReplyAuthor';
@@ -28,4 +29,5 @@ export const Thread = {
   ReplyAuthor: ThreadReplyAuthor,
   ReplyInput: ThreadReplyInput,
   ActionsFooter: ThreadActionsFooter,
+  GutterSlot: ThreadGutterSlot,
 };

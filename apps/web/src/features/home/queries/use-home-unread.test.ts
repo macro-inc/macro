@@ -26,7 +26,10 @@ vi.mock('@app/features/soup', async () => ({
   ...(await import('@app/features/soup/filters')),
   ...(await import('@app/features/soup/collection/rows')),
   ...(await import('@app/features/soup/collection/row-store')),
-  useSearchContext: () => ({ entityPool: () => [], routinePool: () => [] }),
+  useSearchContext: () => ({
+    entityPool: () => () => [],
+    routinePool: () => [],
+  }),
   createSearchState: vi.fn(),
 }));
 // Keep data-only query tests independent of unrelated UI barrel dependencies.

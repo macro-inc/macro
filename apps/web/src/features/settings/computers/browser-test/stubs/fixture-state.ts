@@ -19,13 +19,18 @@ export const [agents, setAgents] = createSignal<FixtureAgent[]>([]);
 
 export const [settingsOpened, setSettingsOpened] = createSignal<string>();
 
-/** The Agents page Try it opened, with the params it passed. */
-export type AgentsPageOpened = {
-  page: string;
-  params: Record<string, unknown>;
+/** The agent whose DM Chat with opened, by bot id. */
+export const [agentDmOpened, setAgentDmOpened] = createSignal<string>();
+
+/**
+ * How the computer's runtime answers Claude sign-out: `ok`, `rollout_disabled`
+ * as the harness does for an account outside the computers rollout, or
+ * `forbidden` for a caller without manage rights.
+ */
+export const claudeAnswers = {
+  signOut: 'ok' as 'ok' | 'rollout_disabled' | 'forbidden',
+  signOutCalls: 0,
 };
-export const [agentsPageOpened, setAgentsPageOpened] =
-  createSignal<AgentsPageOpened>();
 
 declare global {
   interface Window {
@@ -33,9 +38,8 @@ declare global {
       setHarnesses: typeof setHarnesses;
       setAgents: typeof setAgents;
       settingsOpened: typeof settingsOpened;
-      agentsPageOpened: typeof agentsPageOpened;
-      setAgentsPageOpened: typeof setAgentsPageOpened;
       setSettingsOpened: typeof setSettingsOpened;
+      claude: typeof claudeAnswers;
       /** Set by the fixture once its notice code loads. */
       notify: (content: ComputerSetupContent) => Promise<void>;
     };
@@ -46,8 +50,7 @@ window.computerFixture = {
   setHarnesses,
   setAgents,
   settingsOpened,
-  agentsPageOpened,
-  setAgentsPageOpened,
   setSettingsOpened,
+  claude: claudeAnswers,
   notify: async () => {},
 };

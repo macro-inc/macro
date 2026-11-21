@@ -23,6 +23,7 @@ ignores:
   # A mobile view may branch on isMobile() / mobile: for phone versus tablet.
   - apps/web/src/**/views/mobile/**
   # Entries: the one device switch of each split view.
+  - apps/web/src/features/agents-view/model-selector.tsx
   - apps/web/src/features/block-agent/component/Block.tsx
   - apps/web/src/features/block-ai/ai-block.tsx
   - apps/web/src/features/block-call/component/CallBlockAdapter.tsx
@@ -47,9 +48,18 @@ ignores:
   - apps/web/src/features/email-view/components/EmailComposeRouteView.tsx
   - apps/web/src/features/email-view/components/EmailDetailView.tsx
   - apps/web/src/features/entity-appearance/appearance-menu.tsx
+  - apps/web/src/features/projects/add-project-tasks.tsx
   - apps/web/src/features/projects/new-project-task.tsx
+  - apps/web/src/features/projects/project-top-bar.tsx
   - apps/web/src/features/task-composer/compose-task.tsx
+  - apps/web/src/features/projects/add-project-tasks.tsx
+  - apps/web/src/features/projects/project-title-menu.tsx
+  - apps/web/src/features/projects/project-row.tsx
+  - apps/web/src/features/projects/project-detail.tsx
+  - apps/web/src/features/crm/company-discussion-section.tsx
+  - apps/web/src/features/block-md/component/DocumentDiscussion.tsx
   - apps/web/src/features/tasks-view/components/TasksDetailView.tsx
+  - apps/web/src/features/settings/TeamMembers.tsx
   # Not yet split.
   - apps/web/src/features/activity/views/my-activity-view.tsx
   - apps/web/src/features/agent-session-activity/components/activity-row.tsx

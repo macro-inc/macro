@@ -109,3 +109,81 @@ fn test_generate_terms_must_query_and_combine() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+/// Only a term the analyzer reads as one token of three or more characters
+/// becomes an uncapped prefix; every other term keeps its phrase query.
+#[test]
+fn a_content_term_is_an_uncapped_prefix_only_when_it_is_one_long_enough_token() {
+    let long_word = "a".repeat(256);
+    let cases = [
+        (
+            "con.",
+            serde_json::json!({"match_bool_prefix": {"content": {"query": "con"}}}),
+        ),
+        (
+            "naïve",
+            serde_json::json!({"match_bool_prefix": {"content": {"query": "naïve"}}}),
+        ),
+        (
+            "c++",
+            serde_json::json!({"match_phrase": {"content": "c++"}}),
+        ),
+        (
+            "#go",
+            serde_json::json!({"match_phrase": {"content": "#go"}}),
+        ),
+        (
+            "e-mail",
+            serde_json::json!({"match_phrase_prefix": {"content": {"query": "e-mail", "max_expansions": 256}}}),
+        ),
+        (
+            "abc\u{200d}👍",
+            serde_json::json!({"match_phrase_prefix": {"content": {"query": "abc\u{200d}👍", "max_expansions": 256}}}),
+        ),
+        (
+            "it’s",
+            serde_json::json!({"match_bool_prefix": {"content": {"query": "it’s"}}}),
+        ),
+        (
+            "cafe\u{0301}",
+            serde_json::json!({"match_bool_prefix": {"content": {"query": "cafe\u{0301}"}}}),
+        ),
+        (
+            "👍abc",
+            serde_json::json!({"match_phrase_prefix": {"content": {"query": "👍abc", "max_expansions": 256}}}),
+        ),
+        (
+            long_word.as_str(),
+            serde_json::json!({"match_phrase_prefix": {"content": {"query": long_word, "max_expansions": 256}}}),
+        ),
+    ];
+    for (term, expected) in cases {
+        assert_eq!(
+            child_content_query(term, "partial").to_json(),
+            expected,
+            "{term}"
+        );
+    }
+}
+
+/// A name prefix of one word under three characters keeps the capped phrase
+/// prefix; a longer word expands in full.
+#[test]
+fn a_field_prefix_expands_in_full_only_for_one_word_of_three_or_more_characters() {
+    let query = |term| {
+        create_query(CreateQueryParams {
+            query_key: QueryKey::MatchPhrasePrefix,
+            field: "name",
+            term,
+        })
+        .to_json()
+    };
+    assert_eq!(
+        query("co"),
+        serde_json::json!({"match_phrase_prefix": {"name": {"query": "co", "max_expansions": 256}}})
+    );
+    assert_eq!(
+        query("conveyor."),
+        serde_json::json!({"match_bool_prefix": {"name": {"query": "conveyor"}}})
+    );
+}

@@ -95,6 +95,8 @@ let
     runtime=${cfg.runtime}
     helper=${lib.getExe credentialHelper}
     helper_credentials=/run/credentials/macro-agent.service/agent.env
+    setup_traceparent=/run/macrod/agent-traceparent
+    setup_traceparent_used=${state}/setup-traceparent
   '';
   credentialHelper = pkgs.writeShellApplication {
     name = "git-credential-agent";
@@ -393,6 +395,10 @@ in
         WorkingDirectory = home;
         ExecStart = "${lib.getExe startAgent} run";
         ExecStopPost = lib.getExe agentStopped;
+        # Code that needs a newer image (start-agent's 79) can't start on this
+        # one, and has nothing to roll back to: no retrying. It starts again
+        # when the computer boots a newer image.
+        RestartPreventExitStatus = 79;
         # A call is a child process; a restart must not hang up on anyone.
         KillMode = "process";
       };

@@ -758,6 +758,20 @@ it('says the server could not be reached when no batch got through', async () =>
   expect(screen.getByText("Couldn't reach the server (2)")).toBeTruthy();
 });
 
+it("groups the failures of a team whose vault isn't set up under that reason", async () => {
+  const source = createFakePasswordSource([], { notProvisioned: true });
+  mount(source, PARSED, createMemoryImportResume());
+  chooseFileOnClick(new File(['{}'], 'export.json'));
+  fireEvent.click(screen.getByRole('button', { name: 'Choose file' }));
+  await screen.findByText('Bitwarden JSON');
+  fireEvent.click(screen.getByRole('button', { name: 'Import 2 items' }));
+  await screen.findByText('2 failed', undefined, { timeout: 5000 });
+  expect(
+    screen.getByText("This team's vault isn't set up yet (2)")
+  ).toBeTruthy();
+  expect(screen.queryByText(/couldn't save to the vault/)).toBeNull();
+});
+
 it('puts skipped file items and dropped attachments on one Not carried over line', async () => {
   mount(createFakePasswordSource(), {
     ...PARSED,

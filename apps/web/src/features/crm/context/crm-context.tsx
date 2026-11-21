@@ -56,6 +56,7 @@ import type {
   TeamSource,
   TeamViewsSource,
 } from './crm-sources';
+import type { EmailPolicySource } from './email-policy';
 import type {
   AddToPipelineSource,
   PipelineEditor,
@@ -66,6 +67,12 @@ import type {
 } from './pipelines';
 
 export type CrmContext = {
+  /** Admitted record data; pending/error stay gated. Pipeline grants are separate. */
+  canAccess: Accessor<boolean>;
+  accessState: Accessor<'pending' | 'allowed' | 'denied' | 'error'>;
+  retryAccess(): Promise<unknown>;
+  createEmailPolicy(): EmailPolicySource;
+  /** Owner-scoped email reference, available independently of CRM viewing access. */
   EmailThreadMention: Component<{
     threadId: string;
     subject: string;
@@ -86,6 +93,8 @@ export type CrmContext = {
     record: Accessor<PipelineEntryRecord>
   ): AddToPipelineSource;
   PipelineSharing: PipelineSharing;
+  /** CRM settings' Who can use CRM; renders nothing for viewers who can't change it. */
+  MemberAccess: Component;
   createPipelineTransfer(pipeline: Pipeline): PipelineTransfer;
   downloadCsv(content: string, filename: string): Promise<{ saved: boolean }>;
   /** Profile picture lookup for a contact; presentation owns the fallback. */

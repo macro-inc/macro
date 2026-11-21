@@ -9,7 +9,8 @@ mod test;
 
 /// Live Markdown export from collaborative storage.
 pub trait LiveMarkdownReader: Send + Sync {
-    /// Export the current document as ordinary Markdown, including recent edits.
+    /// Export the current document as internal Markdown, including recent edits:
+    /// mentions and other rich nodes stay `<m-*>` tags, so writing it back keeps them.
     fn markdown(
         &self,
         document_id: &str,

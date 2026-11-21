@@ -338,7 +338,6 @@ fn add_computers(
                 .volumes
                 .push(dct::Volumes::Simple(format!("{0}:{0}", dir.display())));
         }
-        Fleet::Incus => {}
     }
     Ok(())
 }
@@ -460,12 +459,8 @@ fn add_proxy_service(
         )));
     }
     let mut ports = vec![format!("{proxy_port}:{proxy_port}")];
-    // Incus reverse tunnels dial the host loopback; Docker computers use the
-    // proxy's services-network name and need no host DNS or guest CA changes.
+    // Docker computers reach the gateway by the proxy's services-network name.
     let computer_gateway_port = instance.port(Port::ComputerGateway);
-    ports.push(format!(
-        "127.0.0.1:{computer_gateway_port}:{computer_gateway_port}"
-    ));
     if previews {
         ports.push(format!("{}:8443", instance.port(Port::PreviewHttps)));
         volumes.push(dct::Volumes::Simple(format!(

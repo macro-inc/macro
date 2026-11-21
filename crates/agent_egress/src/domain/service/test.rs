@@ -1634,3 +1634,4 @@ async fn a_public_web_search_in_a_gated_turn_goes_straight_through() {
 }
 
 mod actor;
+mod telemetry;

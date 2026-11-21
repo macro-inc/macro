@@ -6,7 +6,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{Identify, Query, SimpleSortMethod, SortOn};
 use serde_with::{DeserializeFromStr, SerializeDisplay};
 use std::str::FromStr;
-use strum::{Display, EnumString};
+use strum::{Display, EnumString, IntoStaticStr};
 use uuid::Uuid;
 
 use super::attachment::Attachment;
@@ -26,7 +26,7 @@ pub struct PreviewCursorQuery {
     pub team_id: Option<Uuid>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumString, Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumString, Display, IntoStaticStr)]
 #[strum(serialize_all = "lowercase", ascii_case_insensitive)]
 pub enum PreviewViewStandardLabel {
     Inbox,
@@ -49,6 +49,17 @@ pub enum PreviewView {
 impl Default for PreviewView {
     fn default() -> Self {
         PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox)
+    }
+}
+
+impl PreviewView {
+    /// The view as a span value: a standard label's name, or `user` for a user
+    /// label, whose name is the user's own text and can hold an address.
+    pub fn span_value(&self) -> &'static str {
+        match self {
+            PreviewView::StandardLabel(label) => label.into(),
+            PreviewView::UserLabel(_) => "user",
+        }
     }
 }
 

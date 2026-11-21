@@ -69,7 +69,8 @@ pub enum DocumentLiteral {
     #[serde(rename = "eap")]
     EmailAttachmentParticipant(Email),
     /// the document or task is associated with a CRM record through its
-    /// Companies or Contacts property or a reference to the record. Soup
+    /// Companies or Contacts property or a reference to the record; a task
+    /// also through a custom entity property that names the record. Soup
     /// resolves the record before querying; it composes with the other
     /// document literals the way [`DocumentLiteral::Property`] does. Only
     /// expanded, timestamp-sorted queries accept it.

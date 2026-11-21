@@ -1,8 +1,8 @@
 // Tells the Macro Alerts channel when an email end-to-end workflow turns red
 // on `main`, and when it turns green again. The last job of `email_e2e.yml`,
 // `email_e2e_browser.yml` and `email_e2e_full_stack.yml` runs it after every
-// other job, on a push to `main` and in the daily sweep; never on a run by
-// hand.
+// other job, as does that of `channels_e2e.yml`, on a push to `main` and in
+// the daily sweep; never on a run by hand.
 //
 // A run posts only when its result differs from what the channel was last
 // told about its stream: the workflow's runs on the same branch for the same
@@ -24,6 +24,15 @@
 // never runs, the next run does. A failed post records nothing, so the next
 // run posts again, as does a re-run of this job while no newer run has ended.
 //
+// A push that waited for the run before it and was replaced by a newer push
+// (the workflows queue as the dev deploys do) ends as a cancelled run with no
+// jobs, and a stream can hold several for each run that ended. Having no jobs,
+// it neither records nor passes, and the job reads past it without counting it
+// toward LOOK_BACK; the run after it tests the newer tree, and that run's
+// failure names the last pass before it, so the changes since span its
+// commit. A run is judged by its jobs, never by its conclusion: one whose job
+// ran out of time is cancelled too, yet ran this job.
+//
 // A failure names the commit, each failed job with the step it failed at, and
 // what the run's coverage report (downloaded to EMAIL_E2E_REPORTS) says
 // failed: gating tests, tests kept for known bugs that now pass, or the
@@ -42,8 +51,14 @@ import { appendFileSync, existsSync, readdirSync, readFileSync, writeFileSync } 
  */
 const RED = new Set(['failure', 'timed_out', 'cancelled']);
 
-/** The most runs of the stream the job reads. */
-const LOOK_BACK = 30;
+/** The most runs with jobs of the stream the job reads. */
+export const LOOK_BACK = 30;
+
+/**
+ * How many of the stream's newest runs the job lists, the most a page holds:
+ * runs replaced while they waited have no jobs, and are read past.
+ */
+const LISTED = 100;
 
 /** How many runs' jobs the job reads at once. */
 const BATCH = 5;
@@ -189,6 +204,34 @@ export function passed(entry: Entry, alertJob: string): boolean | null {
   return failedJobs(suite).length === 0;
 }
 
+/**
+ * Reads the stream's runs, newest first, a few at a time with `jobsOf`, until
+ * the decision `judge` makes of them would not change or, by the end of a
+ * batch, LOOK_BACK runs with jobs were read. A push replaced while it waited
+ * has none: it is read but not counted, so replaced pushes do not crowd out
+ * the runs that ended.
+ */
+export async function readStream(
+  stream: StreamRun[],
+  names: Names,
+  judge: (entries: Entry[]) => Decision,
+  jobsOf: (run: StreamRun) => Promise<Job[]>,
+): Promise<Decision> {
+  const entries: Entry[] = [];
+  const ran = () => entries.filter((entry) => entry.jobs.length > 0).length;
+  let decision = judge(entries);
+  for (
+    let start = 0;
+    start < stream.length && ran() < LOOK_BACK && readMore(decision, entries, names);
+    start += BATCH
+  ) {
+    const batch = stream.slice(start, start + BATCH);
+    entries.push(...(await Promise.all(batch.map(async (run) => ({ run, jobs: await jobsOf(run) })))));
+    decision = judge(entries);
+  }
+  return decision;
+}
+
 const short = (sha: string) => sha.slice(0, 7);
 
 const newestFirst = (a: { run: StreamRun }, b: { run: StreamRun }) => b.run.run_number - a.run.run_number;
@@ -259,7 +302,12 @@ export function readMore(decision: Decision, entries: Entry[], names: Names): bo
   );
 }
 
-type PlaywrightSpec = { title: string; file: string; line: number; tests: { status: string }[] };
+type PlaywrightSpec = {
+  title: string;
+  file: string;
+  line: number;
+  tests: { status: string; expectedStatus?: string }[];
+};
 type PlaywrightSuite = { specs?: PlaywrightSpec[]; suites?: PlaywrightSuite[] };
 
 /** `file:line title` of each spec that failed in a Playwright JSON report. */
@@ -310,6 +358,30 @@ export function browserFindings(
   };
 }
 
+/** What a message says of a spec marked to fail (`test.fail()`) that passed. */
+const MARKED_TO_FAIL = ' (marked as a known defect, and now passes)';
+
+/**
+ * What the one Playwright report of a suite with no coverage check says failed
+ * (the channels suite's `playwright-report.json`). Its tests for known defects
+ * run in every run, marked to fail, so one that passes fails the run: it is
+ * named with the failed tests, and said to be that.
+ */
+export function suiteFindings(report: { suites?: PlaywrightSuite[] }): Findings {
+  const unexpected = (spec: PlaywrightSpec) => spec.tests.filter((test) => test.status === 'unexpected');
+  const walk = (suites: PlaywrightSuite[] = []): string[] =>
+    suites.flatMap((suite) => [
+      ...(suite.specs ?? [])
+        .filter((spec) => unexpected(spec).length > 0)
+        .map((spec) => {
+          const marked = unexpected(spec).some((test) => test.expectedStatus === 'failed');
+          return `${spec.file}:${spec.line} ${spec.title}${marked ? MARKED_TO_FAIL : ''}`;
+        }),
+      ...walk(suite.suites),
+    ]);
+  return { failedTests: walk(report.suites), knownBugsPassing: [], otherProblems: [] };
+}
+
 /** What the coverage report in `dir` says failed, or null when there is none. */
 export function readFindings(dir: string): Findings | null {
   const read = (name: string) => JSON.parse(readFileSync(`${dir}/${name}`, 'utf8'));
@@ -321,6 +393,9 @@ export function readFindings(dir: string): Findings | null {
       .filter((name) => /^playwright-.*\.json$/.test(name))
       .map((name) => ({ name, report: read(name) }));
     return browserFindings(read('ledger.json'), reports);
+  }
+  if (existsSync(`${dir}/playwright-report.json`)) {
+    return suiteFindings(read('playwright-report.json'));
   }
   return null;
 }
@@ -471,17 +546,15 @@ export async function main() {
   const [run, jobs] = await Promise.all([github(`/repos/${repo}/actions/runs/${id}`), jobsOf(repo, id, 'latest')]);
   const failed = failedJobs(jobs.filter((job) => job.name !== names.job));
 
-  // Newest first; read a few at a time, until the decision would not change.
-  const query = new URLSearchParams({ branch: run.head_branch, event: run.event, per_page: `${LOOK_BACK}` });
+  const query = new URLSearchParams({ branch: run.head_branch, event: run.event, per_page: `${LISTED}` });
   const stream: StreamRun[] = (await github(`/repos/${repo}/actions/workflows/${run.workflow_id}/runs?${query}`))
     .workflow_runs;
-  const entries: Entry[] = [];
-  let decision = decide({ run, red: failed.length > 0, entries, names });
-  for (let start = 0; start < stream.length && readMore(decision, entries, names); start += BATCH) {
-    const batch = stream.slice(start, start + BATCH);
-    entries.push(...(await Promise.all(batch.map(async (each) => ({ run: each, jobs: await jobsOf(repo, each.id, 'all') })))));
-    decision = decide({ run, red: failed.length > 0, entries, names });
-  }
+  const decision = await readStream(
+    stream,
+    names,
+    (entries) => decide({ run, red: failed.length > 0, entries, names }),
+    (each) => jobsOf(repo, each.id, 'all'),
+  );
 
   const context: Context = {
     runId: id,

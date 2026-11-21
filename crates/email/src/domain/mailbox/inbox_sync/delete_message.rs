@@ -2,7 +2,6 @@ use super::*;
 use crate::domain::events::MessageDeletedMetadata;
 use models_email::gmail::inbox_sync::DeleteMessagePayload;
 use models_email::service::link;
-use std::collections::HashSet;
 
 // delete user's message from the db
 #[tracing::instrument(skip(ctx))]
@@ -97,8 +96,10 @@ where
         // Upsert last: the row lock lasts until commit, and every delete of mail
         // with the same contact waits on it.
         if !crm_emails.is_empty() {
-            let self_email = link.email_address.0.as_ref().to_ascii_lowercase();
-            let emails = normalized_non_self_contact_emails(&self_email, crm_emails);
+            let emails = crate::domain::crm_cleanup::candidate_emails(
+                link.email_address.0.as_ref(),
+                crm_emails,
+            );
             tx.cleanup_contacts(link.id, emails).await?;
         }
         Ok::<MessageDeletion, ProcessingError>(result)
@@ -140,25 +141,4 @@ where
         .await;
 
     Ok(())
-}
-
-fn normalized_non_self_contact_emails(
-    self_email: &str,
-    contact_emails: impl IntoIterator<Item = String>,
-) -> Vec<String> {
-    let mut seen: HashSet<String> = HashSet::new();
-    contact_emails
-        .into_iter()
-        .filter_map(|raw| {
-            let email = raw.trim().to_ascii_lowercase();
-            let (local, domain) = email.split_once('@')?;
-            if local.is_empty() || domain.is_empty() || domain.contains('@') {
-                return None;
-            }
-            if email == self_email || !seen.insert(email.clone()) {
-                return None;
-            }
-            Some(email)
-        })
-        .collect()
 }

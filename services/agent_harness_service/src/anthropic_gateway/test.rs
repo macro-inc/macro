@@ -388,6 +388,41 @@ async fn non_streaming_messages_record_usage_under_the_priced_model() {
 }
 
 #[tokio::test]
+async fn sonnet_5_5_messages_are_forwarded_and_metered_under_the_priced_model() {
+    let (upstream_url, seen) = fake_anthropic().await;
+    let (app, _session, usage) = gateway(&upstream_url).await;
+    let request = r#"{"model":"claude-sonnet-5-5","max_tokens":16,"messages":[]}"#;
+
+    let response = app
+        .oneshot(
+            HttpRequest::post("/anthropic/v1/messages")
+                .header("authorization", "Bearer session-secret")
+                .body(Body::from(request))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let requests = seen.lock().unwrap();
+    assert_eq!(requests.len(), 1);
+    assert_eq!(requests[0].path, "/v1/messages");
+    assert_eq!(requests[0].body, request);
+    let events = usage.0.lock().unwrap();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].model, "claude-sonnet-5-5");
+    assert_eq!(
+        events[0].amount,
+        UsageAmount::Tokens {
+            input: 9,
+            output: 5,
+            cache_read: 2,
+            cache_write: 0,
+        }
+    );
+}
+
+#[tokio::test]
 async fn count_tokens_is_forwarded_without_recording_usage() {
     let (upstream_url, seen) = fake_anthropic().await;
     let (app, _session, usage) = gateway(&upstream_url).await;
@@ -433,7 +468,7 @@ async fn a_model_off_the_allowlist_is_refused_before_anthropic_is_called() {
             "type": "error",
             "error": {
                 "type": "invalid_request_error",
-                "message": "model `claude-3-opus-20240229` is not available on Macro credits; use one of: claude-opus-4-8, claude-sonnet-4-6, claude-opus-5-5, claude-sonnet-5, claude-haiku-4-5-20251001, claude-fable-5-1",
+                "message": "model `claude-3-opus-20240229` is not available on Macro credits; use one of: claude-opus-4-8, claude-sonnet-4-6, claude-opus-5-5, claude-sonnet-5-5, claude-sonnet-5, claude-haiku-4-5-20251001, claude-fable-5-1",
             },
         })
     );

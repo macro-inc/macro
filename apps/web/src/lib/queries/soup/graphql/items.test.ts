@@ -212,6 +212,93 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     });
   });
 
+  it.each([true, false])(
+    'distinguishes a partial channel cache from a resolved page (online: %s)',
+    async (online) => {
+      const connection = vi
+        .spyOn(navigator, 'onLine', 'get')
+        .mockReturnValue(online);
+      const fake = makeFakeClient();
+      getGraphqlSoupClientMock.mockReturnValue(fake.client);
+      entityFilterMock.mockResolvedValue({
+        kind: 'live-query',
+        revision: parseCacheRevision(REVISION_0),
+        reset: true,
+        keys: [],
+        upserts: [],
+        patches: [],
+        removed: [],
+        retainedKeys: [],
+        optimistic: false,
+      });
+      getGraphqlSoupCacheHostMock.mockReturnValue({
+        liveQueries: true,
+        currentRevision: async () => REVISION_0,
+        entityFilter: entityFilterMock,
+        onCacheChanged: () => () => {},
+        onCacheGenerationChanged: () => () => {},
+      });
+      const ready = deferred<void>();
+      const { source, dispose } = createRoot((dispose) => {
+        const source = createSoupLiveQuery(
+          () => ({ sortMethod: 'UPDATED_AT', limit: 100 }),
+          () => ({ projection: 'channel-list' })
+        );
+        createComputed(() => {
+          if (source.cacheStatus() === 'ready') ready.resolve();
+        });
+        return { source, dispose };
+      });
+      try {
+        await ready.promise;
+        expect(source.data()).toEqual([]);
+        expect(source.hasPageData()).toBe(false);
+        expect(source.isLoading()).toBe(online);
+        fake.executions[0].next(
+          graphqlSoupPage({ items: [], next_cursor: null })
+        );
+        expect(source.isLoading()).toBe(false);
+        expect(source.hasPageData()).toBe(true);
+        expect(source.data()).toEqual([]);
+      } finally {
+        dispose();
+        connection.mockRestore();
+      }
+    }
+  );
+
+  it('does not use a previous-input placeholder as evidence of a current page', () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    const { source, dispose, setLimit } = createRoot((dispose) => {
+      const [limit, setLimit] = createSignal(1);
+      return {
+        source: createSoupLiveQuery(
+          () => ({ sortMethod: 'UPDATED_AT', limit: limit() }),
+          () => ({ keepPreviousData: true })
+        ),
+        dispose,
+        setLimit,
+      };
+    });
+    try {
+      fake.executions[0].next(
+        graphqlSoupPage({ items: [{ id: 'one' }], next_cursor: null })
+      );
+      expect(source.hasPageData()).toBe(true);
+      setLimit(2);
+      expect(source.data()?.map(({ id }) => id)).toEqual(['one']);
+      expect(source.hasPageData()).toBe(false);
+      fake.executions[1].next(
+        graphqlSoupPage({ items: [], next_cursor: null })
+      );
+      expect(source.hasPageData()).toBe(true);
+      expect(source.data()).toEqual([]);
+    } finally {
+      dispose();
+    }
+  });
+
   it('retains CRM dependency scope on opaque continuation pages', async () => {
     const fake = makeFakeClient();
     getGraphqlSoupClientMock.mockReturnValue(fake.client);

@@ -142,7 +142,9 @@ export function createSseClient<TData = unknown>({
 
         const abortHandler = () => {
           try {
-            reader.cancel();
+            // An aborted fetch has already errored the body, so cancel()
+            // rejects with the abort: expected, never an unhandled rejection.
+            reader.cancel().catch(() => {});
           } catch {
             // noop
           }
@@ -203,6 +205,11 @@ export function createSseClient<TData = unknown>({
                 }
               }
 
+              // An event arrived, so the connection works: a later failure
+              // backs off from the first delay again. Not on the response
+              // alone, or a stream that ends at once would retry every 3 s.
+              attempt = 1;
+
               onSseEvent?.({
                 data,
                 event: eventName,
@@ -220,6 +227,9 @@ export function createSseClient<TData = unknown>({
           reader.releaseLock();
         }
 
+        // The server ended the stream (a restart, a deploy). Like EventSource,
+        // reconnect unless the caller stopped it: through the retry below.
+        if (!signal.aborted) throw new Error('SSE stream ended by the server');
         break; // exit loop on normal completion
       } catch (error) {
         // connection failed or aborted; retry after delay

@@ -1,10 +1,12 @@
-//! `cargo x workflows [--check]`
+//! `cargo x workflows [--check | diff [--base <rev>] | actions fetch]`
 //!
 //! Generates the repo's GitHub Actions workflows from Rust (see the
 //! [`workflows`] module). The `--check` variant regenerates them in memory and
 //! fails if the committed YAML has drifted, so CI can guarantee the checked-in
-//! YAML always matches this source.
+//! YAML always matches this source. `diff` reports what a change to the
+//! generated YAML means to GitHub (see [`workflows::semantic_diff`]).
 
+mod actions;
 mod workflows;
 
 use anyhow::{Result, bail};
@@ -14,6 +16,9 @@ fn main() -> Result<()> {
     match args.iter().map(String::as_str).collect::<Vec<_>>()[..] {
         [] => workflows::generate(),
         ["--check"] => workflows::check(),
-        _ => bail!("usage: cargo x workflows [--check]"),
+        ["actions", "fetch"] => actions::fetch(),
+        ["diff"] => workflows::semantic_diff::run("HEAD"),
+        ["diff", "--base", base] => workflows::semantic_diff::run(base),
+        _ => bail!("usage: cargo x workflows [--check | diff [--base <rev>] | actions fetch]"),
     }
 }

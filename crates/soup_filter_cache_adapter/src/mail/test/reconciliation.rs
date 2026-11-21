@@ -268,8 +268,242 @@ fn other_mail_views_use_their_own_timestamp_and_membership() {
     });
 }
 
+async fn begin_pending<S: PredicateIndexStorage>(
+    engine: &mut Engine<S>,
+    uuid: &str,
+    data: &Value,
+) -> cache_core::engine::OptimisticTransactionId {
+    let projections = optimistic_updates(
+        projection_updates(
+            engine.schema(),
+            engine.storage(),
+            PARTIAL,
+            None,
+            &Map::new(),
+            data,
+        )
+        .await
+        .unwrap(),
+    );
+    let projections = crate::properties::augment_optimistic(
+        engine.schema(),
+        engine.storage(),
+        PARTIAL,
+        None,
+        &Map::new(),
+        data,
+        projections,
+    )
+    .await
+    .unwrap();
+    engine
+        .begin_optimistic_write_with_projections(
+            None,
+            BeginOptimisticWrite {
+                client_metadata: None,
+                uuid,
+                query: PARTIAL,
+                operation_name: None,
+                variables: &Map::new(),
+                data,
+                link_patches: &[],
+                revalidations: &[],
+                created_at_ms: 1,
+                identity_bindings: &[],
+            },
+            projections,
+        )
+        .await
+        .unwrap()
+        .0
+}
+
+async fn claim<S: PredicateIndexStorage>(engine: &mut Engine<S>) -> MutationClaimToken {
+    let claimed = engine
+        .claim_next_mutation(MutationClaimRequest {
+            owner: "test".into(),
+            now_ms: 1,
+            lease_expires_at_ms: 100,
+        })
+        .await
+        .unwrap()
+        .unwrap();
+    MutationClaimToken {
+        owner: "test".into(),
+        generation: claimed.lease_generation,
+    }
+}
+
 #[test]
-fn pending_local_edits_survive_negative_server_membership() {
+fn pending_writes_that_list_a_thread_survive_negative_server_membership() {
+    pollster::block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let vars = variables("DESC");
+        // 15 is archived: only the queued Mark Not Done lists it in the Inbox.
+        persist(
+            &mut engine,
+            "SoupMailBackfill",
+            &vars,
+            &response(&[20, 18, 16, 15, 14, 8], Value::Null),
+        )
+        .await;
+        let data = json!({"user":{"id":VIEWER,"soup":{"items":[{"__typename":TYPE,"id":id(15),"inboxVisible":true}]}}});
+        begin_pending(&mut engine, "00000000-0000-0000-0000-000000009000", &data).await;
+        assert_eq!(
+            current_keys(&mut engine, noise(), "DESC").await,
+            [20, 18, 16, 15, 14, 8].map(|n| format!("{TYPE}:{}", id(n)))
+        );
+        persist(
+            &mut engine,
+            "Soup",
+            &vars,
+            &response(&[20, 16, 8], json!("next")),
+        )
+        .await;
+        assert_eq!(
+            current_keys(&mut engine, noise(), "DESC").await,
+            [20, 16, 15, 8].map(|n| format!("{TYPE}:{}", id(n)))
+        );
+        let states = engine
+            .storage()
+            .load_projection_states(&[RecordKey::new(format!("{TYPE}:{}", id(15))).unwrap()])
+            .await
+            .unwrap();
+        assert!(
+            matches!(states[0], Some(ProjectionState::Complete(_))),
+            "the authoritative base must survive rollback of a pending edit"
+        );
+    });
+}
+
+async fn pending_mark_read<S: PredicateIndexStorage>(storage: S) {
+    let mut engine = Engine::new(storage);
+    let vars = variables("DESC");
+    persist(
+        &mut engine,
+        "SoupMailBackfill",
+        &vars,
+        &response(&[20, 18, 16, 14, 8], Value::Null),
+    )
+    .await;
+    // 18 was trashed through REST, which the cache does not see, while
+    // its mark read is still queued. The first page is the only evidence.
+    let data = json!({"user":{"id":VIEWER,"soup":{"items":[{"__typename":TYPE,"id":id(18),"isRead":true}]}}});
+    let transaction =
+        begin_pending(&mut engine, "00000000-0000-0000-0000-000000009000", &data).await;
+    persist(
+        &mut engine,
+        "Soup",
+        &vars,
+        &response(&[20, 16, 8], json!("next")),
+    )
+    .await;
+    assert_eq!(
+        current_keys(&mut engine, noise(), "DESC").await,
+        [20, 16, 8].map(|n| format!("{TYPE}:{}", id(n)))
+    );
+
+    // An engine restarted while the mark read is still queued, the mark
+    // read settling, and a restart after that all leave it out too.
+    let mut engine = Engine::new(engine.into_storage());
+    assert_eq!(
+        current_keys(&mut engine, noise(), "DESC").await,
+        [20, 16, 8].map(|n| format!("{TYPE}:{}", id(n)))
+    );
+    let claim = claim(&mut engine).await;
+    let projections = projection_updates(
+        engine.schema(),
+        engine.storage(),
+        PARTIAL,
+        None,
+        &Map::new(),
+        &data,
+    )
+    .await
+    .unwrap();
+    engine
+        .commit_optimistic_write_with_projections(
+            transaction,
+            claim,
+            PARTIAL,
+            None,
+            &Map::new(),
+            &data,
+            projections,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        current_keys(&mut engine, noise(), "DESC").await,
+        [20, 16, 8].map(|n| format!("{TYPE}:{}", id(n)))
+    );
+    let mut engine = Engine::new(engine.into_storage());
+    assert_eq!(
+        current_keys(&mut engine, noise(), "DESC").await,
+        [20, 16, 8].map(|n| format!("{TYPE}:{}", id(n)))
+    );
+}
+
+#[test]
+fn a_pending_mark_read_does_not_keep_a_thread_the_server_dropped() {
+    pollster::block_on(pending_mark_read(InMemoryStorage::new()));
+}
+
+#[test]
+fn turso_pending_mark_read_does_not_keep_a_thread_the_server_dropped() {
+    pollster::block_on(pending_mark_read(
+        cache_turso::TursoStorage::open_in_memory("mail-pending-mark-read").unwrap(),
+    ));
+}
+
+async fn queued_archive_and_undo<S: PredicateIndexStorage>(storage: S) {
+    let mut engine = Engine::new(storage);
+    let vars = variables("DESC");
+    persist(
+        &mut engine,
+        "SoupMailBackfill",
+        &vars,
+        &response(&[20, 18, 16, 14, 8], Value::Null),
+    )
+    .await;
+    // The server has applied the archive of 18 but not yet its Undo, which
+    // the user already sees: the page leaves 18 out, and the queue explains it.
+    let archive = json!({"user":{"id":VIEWER,"soup":{"items":[{"__typename":TYPE,"id":id(18),"inboxVisible":false}]}}});
+    begin_pending(
+        &mut engine,
+        "00000000-0000-0000-0000-000000009000",
+        &archive,
+    )
+    .await;
+    let undo = json!({"user":{"id":VIEWER,"soup":{"items":[{"__typename":TYPE,"id":id(18),"inboxVisible":true}]}}});
+    begin_pending(&mut engine, "00000000-0000-0000-0000-000000009001", &undo).await;
+    persist(
+        &mut engine,
+        "Soup",
+        &vars,
+        &response(&[20, 16, 8], json!("next")),
+    )
+    .await;
+    assert_eq!(
+        current_keys(&mut engine, noise(), "DESC").await,
+        [20, 18, 16, 8].map(|n| format!("{TYPE}:{}", id(n)))
+    );
+}
+
+#[test]
+fn a_queued_undo_keeps_a_thread_the_server_has_only_archived() {
+    pollster::block_on(queued_archive_and_undo(InMemoryStorage::new()));
+}
+
+#[test]
+fn turso_queued_undo_keeps_a_thread_the_server_has_only_archived() {
+    pollster::block_on(queued_archive_and_undo(
+        cache_turso::TursoStorage::open_in_memory("mail-queued-undo").unwrap(),
+    ));
+}
+
+#[test]
+fn a_rolled_back_mark_read_does_not_restore_a_thread_the_server_dropped() {
     pollster::block_on(async {
         let mut engine = Engine::new(InMemoryStorage::new());
         let vars = variables("DESC");
@@ -280,51 +514,9 @@ fn pending_local_edits_survive_negative_server_membership() {
             &response(&[20, 18, 16, 14, 8], Value::Null),
         )
         .await;
-        let data = json!({"user":{"id":VIEWER,"soup":{"items":[{
-            "__typename":TYPE,"id":id(18),"isRead":true
-        }]}}});
-        let projections = optimistic_updates(
-            projection_updates(
-                engine.schema(),
-                engine.storage(),
-                PARTIAL,
-                None,
-                &Map::new(),
-                &data,
-            )
-            .await
-            .unwrap(),
-        );
-        let projections = crate::properties::augment_optimistic(
-            engine.schema(),
-            engine.storage(),
-            PARTIAL,
-            None,
-            &Map::new(),
-            &data,
-            projections,
-        )
-        .await
-        .unwrap();
-        engine
-            .begin_optimistic_write_with_projections(
-                None,
-                BeginOptimisticWrite {
-                    client_metadata: None,
-                    uuid: "00000000-0000-0000-0000-000000009000",
-                    query: PARTIAL,
-                    operation_name: None,
-                    variables: &Map::new(),
-                    data: &data,
-                    link_patches: &[],
-                    revalidations: &[],
-                    created_at_ms: 1,
-                    identity_bindings: &[],
-                },
-                projections,
-            )
-            .await
-            .unwrap();
+        let data = json!({"user":{"id":VIEWER,"soup":{"items":[{"__typename":TYPE,"id":id(18),"isRead":true}]}}});
+        let transaction =
+            begin_pending(&mut engine, "00000000-0000-0000-0000-000000009000", &data).await;
         persist(
             &mut engine,
             "Soup",
@@ -332,18 +524,14 @@ fn pending_local_edits_survive_negative_server_membership() {
             &response(&[20, 16, 8], json!("next")),
         )
         .await;
-        assert_eq!(
-            current_keys(&mut engine, noise(), "DESC").await,
-            [20, 18, 16, 8].map(|n| format!("{TYPE}:{}", id(n)))
-        );
-        let states = engine
-            .storage()
-            .load_projection_states(&[RecordKey::new(format!("{TYPE}:{}", id(18))).unwrap()])
+        let claim = claim(&mut engine).await;
+        engine
+            .rollback_optimistic_write(transaction, claim)
             .await
             .unwrap();
-        assert!(
-            matches!(states[0], Some(ProjectionState::Complete(_))),
-            "the authoritative base must survive rollback of a pending edit"
+        assert_eq!(
+            current_keys(&mut engine, noise(), "DESC").await,
+            [20, 16, 8].map(|n| format!("{TYPE}:{}", id(n)))
         );
     });
 }

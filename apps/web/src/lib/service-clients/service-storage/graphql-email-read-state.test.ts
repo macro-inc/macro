@@ -100,3 +100,21 @@ describe('GraphQL email read-state mutations', () => {
     );
   });
 });
+
+it.each(['seen', 'unread'] as const)(
+  'keeps the %s acknowledgement when permission retirement removes content',
+  async (action) => {
+    mutation.mockReturnValue({
+      toPromise: async () => ({
+        extensions: {
+          normalizedCacheMutationDisposition: { kind: 'committed' },
+        },
+      }),
+    });
+    await expect(
+      action === 'seen'
+        ? markGraphqlEmailThreadSeen(client, 'thread')
+        : markGraphqlEmailThreadUnread(client, 'thread')
+    ).resolves.toBe('committed');
+  }
+);

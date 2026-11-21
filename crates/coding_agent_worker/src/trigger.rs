@@ -202,7 +202,7 @@ pub fn trigger_filters(bots: impl IntoIterator<Item = impl ToString>) -> Vec<Web
 /// Executes translated work. The one capability the stream listener needs,
 /// so tests can drive it without a live service or harness.
 pub trait WorkExecutor: Send + Sync + 'static {
-    /// Do one event's work. SSE has no redelivery, so the listener logs a
+    /// Do one event's work. A delivered event is not redelivered, so the listener logs a
     /// failure and keeps the stream open.
     fn execute(
         &self,

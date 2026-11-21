@@ -1,20 +1,32 @@
-# JavaScript execution
+# Program execution
 
 ## Scope
 
-Runs a bounded JavaScript program in a fresh Deno process inside the calling
-service. Session authentication, token issuance and execution storage belong to
-`crates/agent_code_mode` and its composition root.
+Type-checks a bounded TypeScript program against the SDK, then runs it in a
+fresh Deno process inside the calling service. Session authentication, token
+issuance and execution storage belong to `crates/agent_code_mode` and its
+composition root.
 
 ## Start here
 
 - `README.md`: permissions, limits and the program contract.
-- `src/domain/service.rs`: admission and cancellation.
+- `src/domain/service.rs`: admission, the type check before a run, and
+  cancellation.
+- `src/domain/context.rs`: `CodeContext`, the type of an attended `main`'s
+  argument.
 - `src/outbound/deno.rs`: process lifecycle, restricted permissions and the
   import map (`NODE_ALLOWED`, `NODE_BUILTINS`; blocked built-ins resolve to
   `deno/unavailable.mjs`).
-- `src/outbound/deno/bootstrap.mjs`: program loading, unattended dry runs,
+- `src/outbound/deno/bootstrap.mjs`: program loading, unattended dry runs
+  (a routine's entity knobs, marked `$entity`, reach `main` as SDK handles),
   removing every way to the network but `fetch`, and final JSON protocol.
+  Before building the program's client it installs the process's SDK
+  policies: the per-operation call budget, diagnostics, and a search limit
+  (`limitSearches`, `SEARCHES_IN_FLIGHT` = 4), so every client the program
+  builds sends at most four searches at once and the rest wait in call order:
+  the search cluster's few threads queue every user's search behind a
+  program's burst, while one at a time pushes programs with dozens of searches
+  past their deadline.
 - `src/outbound/deno/check.rs`: type-checking TypeScript against the SDK.
 - `src/domain/operations.rs`: the generated operation catalog (labels, routes,
   read or write) and the SDK fingerprint.
@@ -62,7 +74,17 @@ host fills both from `macro_service_urls`. Leaving `webAppUrl` out of
 `new Macro(...)` makes the SDK default to prod, so `webUrl()` links on dev and
 local would point at macro.com.
 
-The bootstrap bans timers before importing `main.mjs`, and the import map points
+`ExecutionService` checks every attended program before it takes a process
+slot; one with type errors fails with `FailureCode::Compile` and the checker's
+messages, and a busy or failed checker fails the run rather than running it
+unchecked. Unattended (routine) programs are checked by their host as a whole
+routine when saved, so their runs aren't checked again. Hosts call
+`ProgramExecutor::check_program` before doing anything for a run (owner
+approval, credentials), so a type error stops it there; that pass covers the
+next run of the same source and `ContextShape`, which skips its own check
+(`check = prechecked`).
+
+The bootstrap bans timers before importing `main.ts`, and the import map points
 node timer modules (and, in attended runs, worker modules) at `timers.mjs`; every
 other built-in outside `NODE_ALLOWED` goes to `unavailable.mjs`. Bumping
 `DENO_VERSION` means running `every_node_builtin_but_the_allowed_ones_is_unavailable`
@@ -76,6 +98,17 @@ The bootstrap replaces a result's `data` larger than `Limits::max_result_bytes`
 with an outline and preview, keeping `reviews`; the frame limit stays the backstop.
 An unattended result is never summarized: later routine steps read it whole, so
 one over the limit fails the run with a message saying so.
+
+Every Deno child's `code_execution.process` span records how it ended:
+`process.exit_code` or `process.signal`, `process.wall_ms`, `process.cpu_ms`
+and `process.peak_rss_kib` (`outbound/deno/exit.rs`). Peak memory is `VmHWM`
+sampled from procfs every 250 ms while the child runs, since it is gone
+before the child's pipes close (a child that dies within one interval
+shows only its startup peak); CPU time is read once more after they close.
+A run the deadline, a cancellation or a protocol error cuts short records
+the same fields with `process.killed = true` (its status is the runner's
+kill). A child that ends on its own without exit code 0 after its terminal
+frame logs one `Deno child ended abnormally` warning with the same fields.
 
 ## Checks
 

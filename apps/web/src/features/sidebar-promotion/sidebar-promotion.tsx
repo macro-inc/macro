@@ -20,6 +20,7 @@ export { createPromotionVisibility } from './primitives/promotion-visibility';
  * a shown card never pops in late and a hidden one never flashes.
  */
 export function SidebarPromotion(props: {
+  /** Fixed for the card's lifetime; key the card on it to change it. */
   id: string;
   /**
    * Whether the card applies (rollout flags on, goal not yet met):

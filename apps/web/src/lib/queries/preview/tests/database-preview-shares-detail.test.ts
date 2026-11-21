@@ -11,7 +11,6 @@ vi.mock('@core/constant/allBlocks', () => ({ itemToSafeName: () => '' }));
 vi.mock('@service-cognition/client', () => ({ cognitionApiServiceClient: {} }));
 vi.mock('@service-email/client', () => ({ emailClient: {} }));
 vi.mock('@service-storage/messages', () => ({ entityMessagesClient: {} }));
-vi.mock('../../email/thread', () => ({ threadQueryOptions: vi.fn() }));
 vi.mock('../../agent-session/mention-fetchers', () => ({
   fetchAgentSessionMentionPreviews: vi.fn(),
 }));

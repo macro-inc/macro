@@ -9,7 +9,10 @@ import {
   watchEmailSends,
 } from '@queries/email/send-queue';
 import { recordEmailSend, traceEmailSend } from '@queries/email/send-telemetry';
-import type { EmailSendProgress } from '../context/compose-capabilities';
+import type {
+  EmailSendProgress,
+  QueuedSend,
+} from '../context/compose-capabilities';
 
 function emailSendProgress(intent: EmailSendIntent): EmailSendProgress {
   const attempt = settledSendAttempt(intent);
@@ -39,7 +42,7 @@ async function departedSendProgress(
   const attempt = await traceEmailSend(
     'status',
     seen.metadata.payload.input.attempt,
-    () => fetchEmailSendStatus(seen)
+    () => fetchEmailSendStatus(seen.metadata.payload.input.attempt)
   );
   recordEmailSend(
     {
@@ -54,6 +57,58 @@ async function departedSendProgress(
   // A restored send was cancelled, or never reached the server.
   if (!attempt || attempt.status === 'CANCELLED') return { state: 'cancelled' };
   return { state: 'untracked' };
+}
+
+/** The outbox records the server's thread id when the server accepts the send. */
+export function watchSentThread(
+  send: QueuedSend,
+  found: (threadId: string) => void
+): () => void {
+  let departing = false;
+  let finished = false;
+  let latestRead = 0;
+  const finish = (threadId?: string | null) => {
+    if (finished) return;
+    finished = true;
+    unsubscribe();
+    if (threadId) found(threadId);
+  };
+  const read = async () => {
+    if (finished || departing) return;
+    // Only the newest read may act: an older one can predate a cancellation.
+    const readNumber = ++latestRead;
+    const intent = (await readEmailSendIntents()).find(
+      (row) => row.uuid === send.sendAttemptId
+    );
+    if (finished || departing || readNumber !== latestRead) return;
+    if (intent) {
+      // A requested cancellation owns the outcome until delivery overrides it.
+      const delivered = settledSendAttempt(intent)?.status === 'SENT';
+      if (
+        intent.resolvedThreadId &&
+        (delivered || !intent.cancellationRequested)
+      )
+        finish(intent.resolvedThreadId);
+      return;
+    }
+    // Another tab can deliver and retire the send before this one reads it.
+    departing = true;
+    const attempt = { attemptId: send.sendAttemptId, linkId: send.inboxId };
+    let threadId: string | null | undefined;
+    try {
+      const status = await traceEmailSend('status', attempt, () =>
+        fetchEmailSendStatus(attempt)
+      );
+      if (status?.status === 'SENT') threadId = status.threadId;
+    } finally {
+      finish(threadId);
+    }
+  };
+  const unsubscribe = watchEmailSends(() =>
+    fireAndForget(read(), 'email-compose')
+  );
+  fireAndForget(read(), 'email-compose');
+  return () => finish();
 }
 
 export function watchEmailSendProgress(

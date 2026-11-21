@@ -19,6 +19,7 @@ import type {
   TaskEntity,
 } from '@entity';
 import type { PeopleSearch } from '@graphql-cache/people/generated';
+import type { ContactListPriority } from '@queries/contacts/list-priority';
 import type { Accessor } from 'solid-js';
 
 // Note (seamus) : Ideally history would return ownerId or we would get actual
@@ -203,8 +204,17 @@ export type QuickAccessListOptions<
   searchTerm?: Accessor<string>;
   /** Disable this list without affecting other Quick Access consumers. */
   enabled?: Accessor<boolean>;
+  /** While false, an enabled list keeps its in-memory rows but neither
+   * searches the local cache nor rereads it on cache changes. */
+  readsCache?: Accessor<boolean>;
   /** Person scoring policy, applied before the native window limit. */
   peopleMode?: PeopleSearch['mode'];
+  /** Orders the personal people window by contact list within each name
+   * stage. Unset or undefined keeps the order without lists. */
+  peopleListPriority?: Accessor<ContactListPriority | undefined>;
+  /** How long the people window's first page waits for the local cache
+   * before listing the server's people instead. Unset, it waits. */
+  peopleLocalBudgetMs?: number;
   excludeSelf?: boolean;
   /** Explicit scoped participants/guests excluded from personal suggestions. */
   excludedPeople?: Accessor<ReadonlySet<string>>;

@@ -20,8 +20,22 @@ function isMacro(id: string): boolean {
   return isMacroAgentId(id) || isMacroNewId(id);
 }
 
+/**
+ * Whether a row leads every person in the menu, wherever the people land:
+ * Macro in @ menus while browsing (no `rank`), or while its name starts with
+ * the query.
+ */
+export function leadsPeople(
+  id: string,
+  order: MenuOrder,
+  rank?: number
+): boolean {
+  if (!order.mention || !isMacro(id)) return false;
+  return rank === undefined || rank >= NAME_STARTS_WITH_QUERY_RANK;
+}
+
 function browseGroup(id: string, order: MenuOrder): number {
-  if (order.mention && isMacro(id)) return 0;
+  if (leadsPeople(id, order)) return 0;
   if (id === order.viewerId) return 1;
   if (!isBotPrincipalId(id)) return 2;
   if (isMacro(id)) return 3;
@@ -69,10 +83,7 @@ export function placeAgentsAfterPeople<T>(
   id: (row: T) => string,
   order: MenuOrder = {}
 ): T[] {
-  const leads = (agent: T) =>
-    order.mention === true &&
-    isMacro(id(agent)) &&
-    rank(agent) >= NAME_STARTS_WITH_QUERY_RANK;
+  const leads = (agent: T) => leadsPeople(id(agent), order, rank(agent));
   const ranked = [...agents].sort(
     (left, right) =>
       Number(leads(right)) - Number(leads(left)) || rank(right) - rank(left)

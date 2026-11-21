@@ -1631,7 +1631,7 @@ it.each(['standalone', 'reply'] as const)(
 );
 
 it.each(['standalone', 'reply'] as const)(
-  'drops an already-sent background %s draft and cancels pending autosave',
+  'keeps the unsaved edits of an already-sent background %s draft as a new draft',
   async (surface) => {
     const context = createComposeContext();
     let changed!: Parameters<NonNullable<EmailDraftStorage['watchDrafts']>>[0];
@@ -1663,21 +1663,31 @@ it.each(['standalone', 'reply'] as const)(
         code: 'DRAFT_ALREADY_SENT',
       });
       await vi.advanceTimersByTimeAsync(1000);
-      expect(context.notices.feedback.alert).not.toHaveBeenCalled();
+      expect(context.notices.feedback.alert).toHaveBeenCalledWith(
+        'This scheduled email was sent. Your composer has been updated.'
+      );
+      expect(context.notices.feedback.alert).toHaveBeenCalledWith(
+        'This email was already sent. Your newer text was kept as a new draft and was not sent.'
+      );
       expect(context.notices.feedback.failure).not.toHaveBeenCalled();
-      expect(context.drafts.saveDraft).toHaveBeenCalledOnce();
       expect(context.delivery.sendMessage).not.toHaveBeenCalled();
       expect(context.delivery.schedule).not.toHaveBeenCalled();
-      expect(root.editor.read(() => $getRoot().getTextContent())).toBe('');
-      if ('state' in root) {
-        expect(root.state.context.subject()).toBe('');
-        expect(root.state.context.recipients().to).toEqual([]);
-      }
+      // The pending autosave never reaches the sent draft: the edit it held
+      // saves once, under new handles.
+      const saves = vi.mocked(context.drafts.saveDraft).mock.calls;
+      expect(saves).toHaveLength(2);
+      expect(saves[1][0].draft.db_id).toBeUndefined();
+      expect(saves[1][0].clientHandles?.draftId).not.toBe(
+        original.clientHandles?.draftId
+      );
+      expect(root.editor.read(() => $getRoot().getTextContent())).toContain(
+        'Edit awaiting autosave'
+      );
     } finally {
       root.dispose();
     }
     await vi.advanceTimersByTimeAsync(1000);
-    expect(context.drafts.saveDraft).toHaveBeenCalledOnce();
+    expect(context.drafts.saveDraft).toHaveBeenCalledTimes(2);
   }
 );
 

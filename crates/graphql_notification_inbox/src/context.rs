@@ -13,7 +13,7 @@ use notification_inbox::domain::{
     models::{
         ClearAction, ClearRun, InboxChange, InboxClearRequest, InboxDoneOutcome,
         InboxNotificationDoneOutcome, InboxPage, InboxQuery, InboxRowId, InboxRowTarget,
-        InboxScope, StartedClear,
+        InboxScope, StartedClear, UnreadRows,
     },
     service::NotificationInboxService,
 };
@@ -113,6 +113,17 @@ pub trait NotificationInboxGraphqlService: Send + Sync + 'static {
         scope: InboxScope,
         rows: Vec<InboxRowId>,
     ) -> BoxFuture<'_, Result<Changes, FeedError>>;
+
+    /// See [`NotificationInboxService::unread_rows`].
+    fn unread_rows(&self, viewer: FeedViewer) -> BoxFuture<'_, Result<UnreadRows, FeedError>>;
+
+    /// See [`NotificationInboxService::recount_unread_rows`].
+    fn recount_unread_rows(
+        &self,
+        viewer: FeedViewer,
+        unread: UnreadRows,
+        groups: Vec<FeedKey>,
+    ) -> BoxFuture<'_, Result<UnreadRows, FeedError>>;
 }
 
 impl<T> NotificationInboxGraphqlService for T
@@ -229,6 +240,21 @@ where
     ) -> BoxFuture<'_, Result<Changes, FeedError>> {
         Box::pin(NotificationInboxService::mark_seen(
             self, viewer, scope, rows,
+        ))
+    }
+
+    fn unread_rows(&self, viewer: FeedViewer) -> BoxFuture<'_, Result<UnreadRows, FeedError>> {
+        Box::pin(NotificationInboxService::unread_rows(self, viewer))
+    }
+
+    fn recount_unread_rows(
+        &self,
+        viewer: FeedViewer,
+        unread: UnreadRows,
+        groups: Vec<FeedKey>,
+    ) -> BoxFuture<'_, Result<UnreadRows, FeedError>> {
+        Box::pin(NotificationInboxService::recount_unread_rows(
+            self, viewer, unread, groups,
         ))
     }
 }

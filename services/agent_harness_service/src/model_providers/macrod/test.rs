@@ -50,6 +50,7 @@ async fn peer() -> Peer {
         Arc::new(NoCommands),
         ready,
         models.clone(),
+        Arc::new(|_| Box::pin(async {})),
     ));
     tokio::time::timeout(Duration::from_secs(2), readiness.wait_for(|ready| *ready))
         .await

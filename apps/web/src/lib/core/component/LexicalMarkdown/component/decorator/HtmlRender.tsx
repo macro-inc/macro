@@ -1,4 +1,8 @@
-import { processEmailColors, stripColorSchemeMediaQueries } from '@core/email';
+import {
+  applySenderColorScheme,
+  hasLayoutTable,
+  processEmailColors,
+} from '@core/email';
 import { interceptMailtoLinks } from '@core/util/interceptMailtoLinks';
 import { sanitizeEmailHtml } from '@macro-inc/email-renderer';
 import type { HtmlRenderDecoratorProps } from '@macro-inc/lexical-core/nodes/HtmlRenderNode';
@@ -61,12 +65,11 @@ export const HtmlRender: Component<HtmlRenderDecoratorProps> = (props) => {
     el.innerHTML = safeHtml();
     // Raw mailto: anchors open the in-app composer instead of the OS mail client
     interceptMailtoLinks(el);
-    for (const styleEl of el.querySelectorAll('style')) {
-      styleEl.textContent = stripColorSchemeMediaQueries(
-        styleEl.textContent ?? ''
-      );
-    }
-    const adapt = props.adaptColors ?? !el.querySelector('table');
+    const adapt = applySenderColorScheme(
+      el,
+      colors,
+      props.adaptColors ?? !hasLayoutTable(el)
+    );
     queueMicrotask(() => {
       untrack(() => {
         if (!el.isConnected) return;

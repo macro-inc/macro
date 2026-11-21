@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::models::{
-    ContactInfo, ParsedAddresses, RecipientType, ResolvedDraftInput, ThreadRow, UpsertedContacts,
-    UpsertedRecipient,
+    ContactInfo, CreateDraftInput, ParsedAddresses, RecipientType, ResolvedDraftInput, ThreadRow,
+    UpsertedContacts, UpsertedRecipient,
 };
 use chrono::Utc;
 use sqlx::Row;
@@ -308,12 +308,13 @@ async fn test_delete_draft_message_rejects_foreign_link_scope(
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
 async fn test_cross_inbox_reply_drafts(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone());
 
     let msg1 = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
     let thread1 = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
     let own_link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let alt_link = Uuid::parse_str("cccccccc-cccc-cccc-cccc-cccccccccccc")?;
+    let alt_thread = Uuid::parse_str("cccccccc-0000-0000-0000-0000000000c4")?;
     let moved_draft = Uuid::parse_str("ee000005-0000-0000-0000-000000000005")?;
 
     // The reply draft moved to the alt inbox is found, but the same-thread draft
@@ -338,6 +339,71 @@ async fn test_cross_inbox_reply_drafts(pool: Pool<Postgres>) -> anyhow::Result<(
         "same-thread drafts and inaccessible inboxes must be excluded"
     );
 
+    sqlx::query!(
+        "UPDATE email_messages SET provider_id = 'outlook-moved-draft' WHERE id = $1",
+        moved_draft,
+    )
+    .execute(&pool)
+    .await?;
+
+    assert!(
+        repo.cross_inbox_reply_drafts(&[msg1], &[own_link, alt_link], thread1)
+            .await?
+            .is_empty(),
+        "a provider draft without a Macro draft record is excluded"
+    );
+
+    // Outlook binds the same Macro message and thread when it creates the copy.
+    sqlx::query!(
+        "UPDATE email_threads SET provider_id = 'outlook-moved-thread' WHERE id = $1",
+        alt_thread,
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO email_mailbox_drafts (message_id, link_id, generation, actor_id,
+                                          desired_content, provider_id, state)
+        SELECT m.id, m.link_id, l.sync_generation, l.macro_id, '{}', m.provider_id, 'synced'
+        FROM email_messages m JOIN email_links l ON l.id = m.link_id
+        WHERE m.id = $1
+        "#,
+        moved_draft,
+    )
+    .execute(&pool)
+    .await?;
+
+    let found = repo
+        .cross_inbox_reply_drafts(&[msg1], &[own_link, alt_link], thread1)
+        .await?;
+    assert_eq!(found.len(), 1, "show the moved draft once after sync");
+    assert_eq!(found[0].db_id, moved_draft);
+
+    let native = repo
+        .messages_by_thread_id_paginated(alt_thread, 0, 20)
+        .await?;
+    assert_eq!(native.len(), 1);
+    assert_eq!(native[0].db_id, moved_draft);
+    let additional = repo
+        .cross_inbox_reply_drafts(&[msg1], &[alt_link], alt_thread)
+        .await?;
+    assert!(
+        additional.is_empty(),
+        "the draft is already in its own thread"
+    );
+
+    sqlx::query!(
+        "UPDATE email_mailbox_drafts SET delete_requested = TRUE WHERE message_id = $1",
+        moved_draft,
+    )
+    .execute(&pool)
+    .await?;
+    assert!(
+        repo.cross_inbox_reply_drafts(&[msg1], &[own_link, alt_link], thread1)
+            .await?
+            .is_empty(),
+        "a provider-backed draft pending deletion is excluded"
+    );
     Ok(())
 }
 
@@ -1497,5 +1563,84 @@ async fn test_insert_message_reports_applied_on_create(pool: Pool<Postgres>) -> 
 
     assert!(applied.is_some(), "a fresh unclaimed id inserts normally");
 
+    Ok(())
+}
+
+// ── span fields ───────────────────────────────────────────────────
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn draft_save_and_delete_spans_record_no_personal_data(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let telemetry = crate::telemetry_capture::Telemetry::default();
+    let _guard = telemetry.install();
+    let inbox = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let owner = sqlx::query_scalar!("SELECT macro_id FROM email_links WHERE id = $1", inbox)
+        .fetch_one(&pool)
+        .await?;
+    let actor = MacroUserIdStr::parse_from_str(&owner)?;
+    let address = actor.email_str().to_owned();
+    let service = super::thread_unread::service(pool);
+    let input = CreateDraftInput {
+        frozen_signature_html: None,
+        draft_generation: 0,
+        sender_email: None,
+        db_id: Some(macro_uuid::generate_uuid_v7()),
+        provider_id: None,
+        replying_to_id: None,
+        provider_thread_id: None,
+        thread_db_id: Some(macro_uuid::generate_uuid_v7()),
+        subject: "Quarterly plans".to_owned(),
+        to: vec![ContactInfo {
+            email: "alice@example.com".to_owned(),
+            name: Some("Alice Example".to_owned()),
+            photo_url: None,
+        }],
+        cc: vec![],
+        bcc: vec![],
+        body_text: Some("See you Tuesday".to_owned()),
+        body_html: None,
+        body_macro: None,
+        headers_json: None,
+        send_time: None,
+        include_signature: Some(false),
+        actor: None,
+        draft_client_binding: None,
+        thread_client_binding: None,
+    };
+
+    let saved = service
+        .save_draft_for_user_impl(actor.clone(), Some(inbox), input)
+        .await?;
+    service
+        .delete_draft_for_user_impl(actor, saved.draft.db_id, saved.draft.draft_generation)
+        .await?;
+
+    let spans = telemetry.all_spans();
+    for name in ["save_draft_for_user_impl", "delete_draft_for_user_impl"] {
+        assert!(
+            spans.iter().any(|(span, _)| *span == name),
+            "{name} opened no span"
+        );
+    }
+    for (span, fields) in &spans {
+        for (field, value) in fields {
+            for personal in [
+                address.as_str(),
+                "alice@example.com",
+                "Alice Example",
+                "Quarterly plans",
+                "See you Tuesday",
+            ] {
+                assert!(
+                    !value.contains(personal),
+                    "span {span} field {field} records {personal}: {value}"
+                );
+            }
+        }
+    }
     Ok(())
 }

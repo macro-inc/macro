@@ -13,8 +13,9 @@ import { LoadingBlock } from '@core/component/LoadingBlock';
 import { DEV_MODE_ENV, LOCAL_ONLY } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { ViewId } from '@core/types/view';
+import { lazy } from '@core/util/lazy';
 import { lazyNamed } from '@core/util/lazyNamed';
-import { type JSXElement, lazy } from 'solid-js';
+import type { JSXElement } from 'solid-js';
 import {
   RedirectSplit,
   usePageViewTracking,
@@ -33,6 +34,10 @@ const PasswordsRouteView = lazyNamed(
 const ActivityRouteView = lazyNamed(
   () => import('@app/features/activity/route-views'),
   'ActivityRouteView'
+);
+const NewHomeRouteView = lazyNamed(
+  () => import('@app/features/new-home/route-views'),
+  'NewHomeRouteView'
 );
 const NotificationsRouteView = lazyNamed(
   () => import('@app/features/notifications-inbox/route-views'),
@@ -277,6 +282,13 @@ registerComponent(
   'home',
   () => <HomeRouteView />,
   () => composableLayout(true)
+);
+// New Home's rail item and `g h`: it sends the split on to Recent or
+// Notifications, so it takes the shell they draw on desktop.
+registerComponent(
+  'new-home',
+  () => <NewHomeRouteView />,
+  () => composableLayout()
 );
 registerComponent(NOT_FOUND_ROUTE_ID, () => <NotFound />);
 registerComponent('recent', () => <RecentRouteView />);
