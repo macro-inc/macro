@@ -94,10 +94,7 @@ pub struct SearchPeopleResponse {
     (status = 401, body=String),
     (status = 500, body=String)))
 ]
-#[instrument(
-    skip_all,
-    fields(actor = %authorization.acting_entity())
-)]
+#[instrument(skip_all)]
 pub async fn search_people_handler<S: PeopleSearchService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<S>>,
     Cached(authorization): Cached<MacroAuthorizationExtractor<Auth, UserOrInternal>>,
@@ -134,10 +131,7 @@ pub async fn search_people_handler<S: PeopleSearchService, Auth: MacroAuthorizat
     (status = 404, body=String),
     (status = 500, body=String)))
 ]
-#[instrument(
-    skip(authorization, contacts),
-    fields(actor = %authorization.acting_entity())
-)]
+#[instrument(skip_all)]
 pub async fn handler<S: ContactsService, Auth: MacroAuthorizationService>(
     State(contacts): State<Arc<S>>,
     authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
@@ -164,11 +158,7 @@ pub async fn handler<S: ContactsService, Auth: MacroAuthorizationService>(
     (status = 401, body=String),
     (status = 500, body=String)))
 ]
-#[instrument(
-    skip(service, authorization),
-    fields(actor = %authorization.acting_entity()),
-    err
-)]
+#[instrument(skip_all, err)]
 pub async fn add_contact_handler<S: ContactsService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<S>>,
     Cached(authorization): Cached<MacroAuthorizationExtractor<Auth, UserOrInternal>>,

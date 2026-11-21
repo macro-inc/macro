@@ -89,7 +89,7 @@ pub(crate) type ChannelServiceType = ChannelServiceImpl<
             PgChannelSideEffectContext,
             ConnectionGatewayChannelRealtimePublisher,
             NotificationChannelSender<NotificationIngressType>,
-            ContactsChannelDispatcher<SqsContactsIngress<SqsContactsQueue>>,
+            ContactsChannelDispatcher<GatedContactsIngress>,
             AuthenticationEventBroker,
         >,
     >,

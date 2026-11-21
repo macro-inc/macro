@@ -363,10 +363,10 @@ subscription reconciliation still use them. Prices have no fallback. See [requir
   team items retain their immutable creator after a person leaves.
 - Account deletion queues contacts `user_deleted` just before deleting each
   profile (a retry no longer lists a deleted profile); the contacts worker
-  redelivers it until the profile is gone. It and the teams `directory_changed`
-  sends go through `ListWritesGate` (`contacts-list-writes`, service context
-  `contacts-list-writes`), so they are no-ops until the flag is on; legacy
-  contacts messages are not gated.
+  redelivers it until the profile is gone. It, the teams `directory_changed`
+  sends and the channel interactions share one `ListWritesGate`
+  (`contacts-list-writes`, service context `contacts-list-writes`), so they are
+  no-ops until the flag is on; legacy contacts messages are not gated.
 
 - Compose `FlaggedCrmAccessRollout` from the shared flag provider for team CRM
   preference writes. `enable-crm-member-access-changes` is evaluated freshly for

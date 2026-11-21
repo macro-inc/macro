@@ -444,15 +444,9 @@ async fn run_server() -> anyhow::Result<()> {
 
     let crm_enqueuer = teams::outbound::crm_enqueuer::SqsCrmEnqueuer::new(sqs_client.clone());
     let sqs_client = Arc::new(sqs_client);
-    let contacts_ingress = Arc::new(SqsContactsIngress {
-        queue: SqsContactsQueue::new(
-            aws_sdk_sqs::Client::new(&aws_config),
-            macro_queues::ContactsQueue::new().to_string(),
-        ),
-    });
-    // Team membership and account deletion send list-aware directory changes,
-    // which wait for `contacts-list-writes`; their legacy messages do not.
-    let gated_contacts_ingress = Arc::new(ListWritesGate {
+    // Channels, team membership and account deletion send list-aware directory
+    // changes, which wait for `contacts-list-writes`; their legacy messages do not.
+    let contacts_ingress = Arc::new(ListWritesGate {
         inner: SqsContactsIngress {
             queue: SqsContactsQueue::new(
                 aws_sdk_sqs::Client::new(&aws_config),
@@ -461,7 +455,7 @@ async fn run_server() -> anyhow::Result<()> {
         },
         writes: ContactListWrites::new(config.environment, feature_flags.clone()),
     });
-    let contacts_enqueuer = ContactsIngressEnqueuer::new(gated_contacts_ingress.clone());
+    let contacts_enqueuer = ContactsIngressEnqueuer::new(contacts_ingress.clone());
     let team_analytics = AnalyticsClientTeamAnalytics::new(analytics_client.clone());
     let event_broker_tracker = TaskTracker::new();
     let macro_event_broker = MacroEventBrokerService::new(
@@ -484,7 +478,7 @@ async fn run_server() -> anyhow::Result<()> {
         PgChannelSideEffectContext::new(db.clone()),
         ConnectionGatewayChannelRealtimePublisher::new(connection_gateway_client.clone()),
         NotificationChannelSender::new(notification_ingress_service.clone()),
-        ContactsChannelDispatcher::new(contacts_ingress),
+        ContactsChannelDispatcher::new(contacts_ingress.clone()),
     )
     .with_macro_event_broker(macro_event_broker.clone());
     let channel_event_dispatcher = SpawnedChannelEventDispatcher::new(channel_side_effects);
@@ -908,7 +902,7 @@ async fn run_server() -> anyhow::Result<()> {
             document_storage_service_client.clone(),
             teams_service.clone(),
             onboarding::outbound::pg_onboarding_repo::PgOnboardingRepo::new(db.clone()),
-            gated_contacts_ingress,
+            contacts_ingress,
             stripe_client.clone(),
             internal_key,
             harness_url,

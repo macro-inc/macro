@@ -227,3 +227,57 @@ test.describe('removing Teams from an Outlook meeting', () => {
     });
   });
 });
+
+test.describe('a calendar set to the 24-hour clock', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() =>
+      localStorage.setItem(
+        'macro:pref:calendar:settings',
+        JSON.stringify({ timeFormat: '24-hour' })
+      )
+    );
+  });
+
+  // Class web-cal-composer-logic: when this fails, the editor's start and end
+  // read 12:00 PM on a calendar set to 24-hour, while the grid and the event
+  // card read 12:00.
+  test('the editor shows and lists its times on that clock', async ({
+    page,
+  }) => {
+    await answerCalendar(page, { events: [weeklyReview()] });
+    const composer = await editWeeklyReview(page);
+    const start = composer.getByRole('combobox', { name: 'event start time' });
+    const end = composer.getByRole('combobox', { name: 'event end time' });
+    await expect(start).toHaveValue('12:00');
+    await expect(end).toHaveValue('13:00');
+
+    await start.click();
+    await page.getByRole('option', { name: '12:30', exact: true }).click();
+    await expect(start).toHaveValue('12:30');
+    await expect(end).toHaveValue('13:30');
+    await end.click();
+    await expect(page.getByRole('option', { name: /^14:30/ })).toBeVisible();
+    await expect(page.getByRole('option', { name: /PM/ })).toHaveCount(0);
+    await capture(page, 'desktop-24-hour');
+  });
+
+  test.describe('on a phone', () => {
+    test.use({
+      viewport: { width: 390, height: 844 },
+      hasTouch: true,
+      isMobile: true,
+    });
+
+    test('the editor shows its times on that clock', async ({ page }) => {
+      await answerCalendar(page, { events: [weeklyReview()] });
+      const composer = await editWeeklyReview(page);
+      await expect(
+        composer.getByRole('combobox', { name: 'event start time' })
+      ).toHaveValue('12:00');
+      await expect(
+        composer.getByRole('combobox', { name: 'event end time' })
+      ).toHaveValue('13:00');
+      await capture(page, 'phone-24-hour');
+    });
+  });
+});
