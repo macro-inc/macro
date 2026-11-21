@@ -170,3 +170,11 @@ async fn a_key_reused_for_another_operation_is_refused() {
 
     assert!(matches!(reused, Err(ProviderError::Rejected)));
 }
+
+#[test]
+fn ids_never_repeat_across_restarts_of_the_fake() {
+    let mut first_run = VendorState::new();
+    let mut second_run = VendorState::new();
+
+    assert_ne!(first_run.id("inbox"), second_run.id("inbox"));
+}
