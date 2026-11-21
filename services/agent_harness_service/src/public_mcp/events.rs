@@ -25,7 +25,7 @@ pub(crate) mod test;
 
 pub(crate) use compiler::ModelFilterCompiler;
 pub(crate) use dss::DssEvents;
-pub(crate) use protocol::{EXTENSION_ID, METHOD_PREFIX, RequestScope, handle};
+pub(crate) use protocol::{EXTENSION_ID, METHOD_PREFIX, RequestScope, handle, is_confirm_step};
 
 use catalog::Selection;
 use compiler::{CompileError, FilterCompiler};

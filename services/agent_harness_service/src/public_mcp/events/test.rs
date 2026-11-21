@@ -469,6 +469,12 @@ async fn words_alone_are_compiled_and_shown_back_without_subscribing() {
     .await
     .unwrap_err();
 
+    // The one error response the handler leaves unlogged.
+    assert!(super::is_confirm_step(&error));
+    assert!(!super::is_confirm_step(&rmcp::ErrorData::invalid_params(
+        "params: missing field",
+        Some(json!({"field": "query"})),
+    )));
     let reading = "`message.mentioned` events where the message is in a `\"channel\"` and the mentioned item is you.";
     assert_eq!(error.code.0, -32602);
     assert!(error.message.starts_with("Nothing is subscribed yet."));

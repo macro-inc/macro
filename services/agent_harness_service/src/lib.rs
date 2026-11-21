@@ -33,6 +33,7 @@ mod conversation_admission;
 mod external_session_requests;
 mod harness_bindings;
 mod internal_mcp;
+mod mcp_response_errors;
 mod model_providers;
 mod permission_policy;
 mod preview;
@@ -52,6 +53,7 @@ mod test;
 #[cfg(test)]
 mod test_spans;
 
+pub use mcp_response_errors::DROPPED_RMCP_CALLSITES;
 use std::{future::Future, pin::Pin, sync::Arc};
 
 use agent_changes::domain::pull_request::PullRequestChanges;

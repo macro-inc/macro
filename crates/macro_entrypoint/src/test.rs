@@ -497,90 +497,96 @@ fn quiet_dependencies_keep_info_and_drop_debug() {
     assert_eq!(entrypoint.quiet_targets, &["rmcp"]);
 }
 
-#[test]
-fn dropped_dependency_events_match_target_message_and_error() {
-    const DROPPED: &[DroppedDependencyEvent] = &[DroppedDependencyEvent {
-        target: "rmcp::service",
-        message: "failed to send pending response during drain",
-        error_contains: "channel closed",
-    }];
-    let output = SharedWriter::default();
-    let subscriber = Registry::default()
-        .with(DependencyLogFilter {
-            suppressed: &[],
-            quiet: &[],
-        })
-        .with(
-            tracing_subscriber::fmt::layer()
-                .with_ansi(false)
-                .with_writer(output.clone())
-                .with_filter(EnvFilter::new("info").and(DroppedEvents(DROPPED))),
-        );
-    tracing::subscriber::with_default(subscriber, || {
-        let closed = "channel closed";
-        tracing::error!(target: "rmcp::service", error = %closed, "failed to send pending response during drain");
-        tracing::error!(target: "rmcp::service", error = %"broken pipe", "failed to send pending response during drain");
-        tracing::error!(target: "rmcp::service", error = %closed, "fail to response message");
-        tracing::error!(target: "rmcp::service::server", error = %closed, "failed to send pending response during drain");
-        tracing::error!(target: "rmcp::service", "failed to send pending response during drain");
-    });
-    let text = output.contents();
-    let kept = text.lines().count();
-    assert_eq!(kept, 4, "{text}");
-    assert!(text.contains("broken pipe"), "{text}");
-    assert!(text.contains("fail to response message"), "{text}");
-    assert!(text.contains("rmcp::service::server"), "{text}");
-    let entrypoint = MacroEntrypoint::default()
-        .drop_dependency_events(DROPPED)
-        .local()
-        .build();
-    assert_eq!(entrypoint.dropped_events.len(), 1);
+/// Logs rmcp's drain failure and returns the statement's line.
+fn drain_failure() -> u32 {
+    let line = line!() + 1;
+    tracing::error!(target: "rmcp::service", error = %"channel closed", "failed to send pending response during drain");
+    line
 }
 
-#[test]
-fn a_dropped_event_does_not_hide_the_next_event_from_a_stricter_sink() {
-    const DROPPED: &[DroppedDependencyEvent] = &[DroppedDependencyEvent {
+fn rmcp_drain_rules(line: u32, file: &'static str) -> &'static [DroppedCallsite] {
+    Box::leak(Box::new([DroppedCallsite {
         target: "rmcp::service",
-        message: "response error",
-        error_contains: "com.macro/filter",
-    }];
-    let errors = SharedWriter::default();
-    let infos = SharedWriter::default();
-    let subscriber = Registry::default()
+        level: tracing::Level::ERROR,
+        file,
+        line,
+    }]))
+}
+
+/// One subscriber with a strict and a lenient sink, as services run (an error
+/// sink beside an info one), behind the global dependency filter.
+fn two_sinks(
+    dropped: &'static [DroppedCallsite],
+    errors: &SharedWriter,
+    infos: &SharedWriter,
+) -> impl tracing::Subscriber + Send + Sync {
+    Registry::default()
         .with(DependencyLogFilter {
             suppressed: &[],
             quiet: &[],
+            dropped,
         })
         .with(
             tracing_subscriber::fmt::layer()
                 .with_ansi(false)
                 .with_writer(errors.clone())
-                .with_filter(EnvFilter::new("error").and(DroppedEvents(DROPPED))),
+                .with_filter(EnvFilter::new("error")),
         )
         .with(
             tracing_subscriber::fmt::layer()
                 .with_ansi(false)
                 .with_writer(infos.clone())
-                .with_filter(EnvFilter::new("info").and(DroppedEvents(DROPPED))),
-        );
-    fn dropped() {
-        tracing::warn!(target: "rmcp::service", error = %"data com.macro/filter", "response error");
-    }
+                .with_filter(EnvFilter::new("info")),
+        )
+}
+
+#[test]
+fn a_dropped_callsite_reaches_no_sink_and_hides_nothing_after_it() {
+    let line = drain_failure();
+    let dropped = rmcp_drain_rules(line, "macro_entrypoint/src/test.rs");
+    let errors = SharedWriter::default();
+    let infos = SharedWriter::default();
     fn unrelated(round: u8) {
         tracing::error!(round, "unrelated failure");
     }
-    tracing::subscriber::with_default(subscriber, || {
+    fn same_message_elsewhere() {
+        tracing::error!(target: "rmcp::service", error = %"broken pipe", "failed to send pending response during drain");
+    }
+    // A per-event veto left filter state behind here: a debug assertion
+    // aborted the process, and in release the next event was lost.
+    tracing::subscriber::with_default(two_sinks(dropped, &errors, &infos), || {
         for round in 0..3 {
-            dropped();
+            drain_failure();
             unrelated(round);
+            same_message_elsewhere();
         }
     });
     for (sink, text) in [("error", errors.contents()), ("info", infos.contents())] {
-        assert!(!text.contains("com.macro/filter"), "{sink}: {text}");
+        assert!(!text.contains("channel closed"), "{sink}: {text}");
         assert_eq!(
             text.matches("unrelated failure").count(),
             3,
             "{sink}: {text}"
         );
+        assert_eq!(text.matches("broken pipe").count(), 3, "{sink}: {text}");
+    }
+    let entrypoint = MacroEntrypoint::default()
+        .drop_dependency_callsites(dropped)
+        .local()
+        .build();
+    assert_eq!(entrypoint.dropped_callsites.len(), 1);
+}
+
+#[test]
+fn a_callsite_in_another_file_or_version_is_kept() {
+    let line = drain_failure();
+    let errors = SharedWriter::default();
+    let infos = SharedWriter::default();
+    let dropped = rmcp_drain_rules(line, "rmcp-3.9.0/src/service.rs");
+    tracing::subscriber::with_default(two_sinks(dropped, &errors, &infos), || {
+        drain_failure();
+    });
+    for (sink, text) in [("error", errors.contents()), ("info", infos.contents())] {
+        assert!(text.contains("channel closed"), "{sink}: {text}");
     }
 }

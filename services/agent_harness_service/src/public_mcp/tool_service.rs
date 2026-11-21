@@ -1,3 +1,4 @@
+use crate::mcp_response_errors::log_error_response;
 use crate::public_mcp::analytics::{
     McpAnalytics, McpAnalyticsEvent, McpClientSignals, SERVER_NAME, ToolCallOutcome,
 };
@@ -357,7 +358,8 @@ where
         request: InitializeRequestParams,
         context: rmcp::service::RequestContext<rmcp::RoleServer>,
     ) -> Result<InitializeResult, rmcp::ErrorData> {
-        let user_id = Self::authenticated_user_id(&context.extensions)?;
+        let user_id = Self::authenticated_user_id(&context.extensions)
+            .inspect_err(|error| log_error_response(&context.id, error))?;
         // `initialize` is the only message that names the client, so it is
         // where sessions are counted per client.
         self.analytics.record(
@@ -399,6 +401,50 @@ where
         request: CustomRequest,
         context: rmcp::service::RequestContext<rmcp::RoleServer>,
     ) -> Result<CustomResult, rmcp::ErrorData> {
+        let id = context.id.clone();
+        self.custom_request(request, context)
+            .await
+            .inspect_err(|error| {
+                // How that request normally goes, and it reads the caller's
+                // words back in both its message and its data.
+                if !events::is_confirm_step(error) {
+                    log_error_response(&id, error);
+                }
+            })
+    }
+
+    async fn list_tools(
+        &self,
+        request: Option<PaginatedRequestParams>,
+        context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> Result<ListToolsResult, rmcp::ErrorData> {
+        let id = context.id.clone();
+        self.tool_list(request, context)
+            .await
+            .inspect_err(|error| log_error_response(&id, error))
+    }
+
+    async fn call_tool(
+        &self,
+        request: rmcp::model::CallToolRequestParams,
+        context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> Result<rmcp::model::CallToolResponse, rmcp::ErrorData> {
+        let id = context.id.clone();
+        self.tool_call(request, context)
+            .await
+            .inspect_err(|error| log_error_response(&id, error))
+    }
+}
+
+impl<Context> AuthenticatedToolService<Context>
+where
+    Context: Clone + Send + Sync + MarkdownImageResolver + CalledBy + 'static,
+{
+    async fn custom_request(
+        &self,
+        request: CustomRequest,
+        context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> Result<CustomResult, rmcp::ErrorData> {
         let CustomRequest { method, params, .. } = request;
         let Some(events) = method
             .starts_with(events::METHOD_PREFIX)
@@ -430,7 +476,7 @@ where
         .await
     }
 
-    async fn list_tools(
+    async fn tool_list(
         &self,
         _request: Option<PaginatedRequestParams>,
         context: rmcp::service::RequestContext<rmcp::RoleServer>,
@@ -448,7 +494,7 @@ where
         })
     }
 
-    async fn call_tool(
+    async fn tool_call(
         &self,
         request: rmcp::model::CallToolRequestParams,
         context: rmcp::service::RequestContext<rmcp::RoleServer>,

@@ -1,5 +1,6 @@
 //! Macro Internal MCP: session tools served by the harness, separate from workspace MCP.
 
+use crate::mcp_response_errors::log_error_response;
 use agent_code_mode::{domain::SessionCodeMode, inbound::toolset::CodeModeToolContext};
 use agent_code_mode::{domain::reviews::ReviewService, inbound::reviews::ReviewToolContext};
 use std::sync::{Arc, OnceLock};
@@ -212,7 +213,11 @@ impl ServerHandler for InternalTools {
             agent_session_id = tracing::field::Empty,
         );
         genai_telemetry::propagation::set_parent_from_mcp(&span, &context.meta);
-        self.run_tool(request, context).instrument(span).await
+        let id = context.id.clone();
+        self.run_tool(request, context)
+            .instrument(span)
+            .await
+            .inspect_err(|error| log_error_response(&id, error))
     }
 }
 

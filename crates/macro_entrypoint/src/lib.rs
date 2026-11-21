@@ -105,23 +105,31 @@ pub struct MacroEntrypoint {
     /// Dependency targets whose debug and trace events can include credentials; only their
     /// info and higher events reach any sink.
     quiet_targets: &'static [&'static str],
-    /// Single dependency events dropped from every sink.
-    dropped_events: &'static [DroppedDependencyEvent],
+    /// Single dependency log statements dropped from every sink.
+    dropped_callsites: &'static [DroppedCallsite],
 }
 
-/// One event of a dependency that is dropped from every sink: an event at
-/// exactly `target` whose message is `message` and whose `error` field
-/// contains `error_contains`. For an event the dependency logs at a level
-/// that misstates it (an error for how a request normally ends) or with
-/// content in it, when the dependency offers no way to change that.
+/// One log statement of a dependency, dropped from every sink: the event at
+/// `line` of the file whose path ends with `file`, with this target and
+/// level. For a statement the dependency logs at a level that misstates it (an
+/// error for how a request normally ends) or with content in it, when the
+/// dependency offers no way to change that.
+///
+/// It is matched by the callsite, never by the event's fields: a per-event
+/// veto in `tracing-subscriber` 0.3 leaves the per-sink filters' state behind
+/// (a debug assertion, or the next event lost in release). Name the
+/// dependency's version in `file`, so an upgrade that moves the line logs the
+/// statement again rather than dropping another one.
 #[derive(Debug, Clone, Copy)]
-pub struct DroppedDependencyEvent {
+pub struct DroppedCallsite {
     /// The event's target, matched exactly.
     pub target: &'static str,
-    /// The event's message, matched exactly.
-    pub message: &'static str,
-    /// Text the event's `error` field contains.
-    pub error_contains: &'static str,
+    /// The event's level.
+    pub level: tracing::Level,
+    /// The end of the source file's path, such as `rmcp-3.9.0/src/service.rs`.
+    pub file: &'static str,
+    /// The source line.
+    pub line: u32,
 }
 
 impl Default for MacroEntrypoint {
@@ -133,7 +141,7 @@ impl Default for MacroEntrypoint {
             local: Default::default(),
             suppressed_targets: &[],
             quiet_targets: &[],
-            dropped_events: &[],
+            dropped_callsites: &[],
         }
     }
 }
@@ -222,9 +230,9 @@ impl MacroEntrypoint {
         self
     }
 
-    /// Drop single dependency events from every sink; see [DroppedDependencyEvent].
-    pub fn drop_dependency_events(mut self, events: &'static [DroppedDependencyEvent]) -> Self {
-        self.dropped_events = events;
+    /// Drop single dependency log statements from every sink; see [DroppedCallsite].
+    pub fn drop_dependency_callsites(mut self, callsites: &'static [DroppedCallsite]) -> Self {
+        self.dropped_callsites = callsites;
         self
     }
 
@@ -244,8 +252,8 @@ impl MacroEntrypoint {
         let dependency_filter = DependencyLogFilter {
             suppressed: self.suppressed_targets,
             quiet: self.quiet_targets,
+            dropped: self.dropped_callsites,
         };
-        let dropped_events = DroppedEvents(self.dropped_events);
 
         match (self.env, self.local) {
             (Environment::Local, LocalOptions { tree_tracing: None }) => {
@@ -265,22 +273,21 @@ impl MacroEntrypoint {
                     let otel_filter = otel_env_filter();
                     let rootcause_filter = rust_log_filter.clone().or(otel_filter.clone());
                     let otel_layer = otel_layer_with_error_mapping(provider.tracer(service_name()))
-                        .with_filter(otel_filter.and(dropped_events));
+                        .with_filter(otel_filter);
                     let log_bridge = logger_provider.as_ref().map(|p| {
-                        OpenTelemetryTracingBridge::new(p)
-                            .with_filter(otel_logs_filter().and(dropped_events))
+                        OpenTelemetryTracingBridge::new(p).with_filter(otel_logs_filter())
                     });
 
                     Registry::default()
                         .with(dependency_filter)
-                        .with(RootcauseLayer.with_filter(rootcause_filter.and(dropped_events)))
+                        .with(RootcauseLayer.with_filter(rootcause_filter))
                         .with(
                             tracing_subscriber::fmt::layer()
                                 .with_ansi(true)
                                 .with_file(true)
                                 .with_line_number(true)
                                 .pretty()
-                                .with_filter(rust_log_filter.and(dropped_events)),
+                                .with_filter(rust_log_filter),
                         )
                         .with(otel_layer)
                         .with(log_bridge)
@@ -288,16 +295,14 @@ impl MacroEntrypoint {
                 } else {
                     Registry::default()
                         .with(dependency_filter)
-                        .with(
-                            RootcauseLayer.with_filter(rust_log_filter.clone().and(dropped_events)),
-                        )
+                        .with(RootcauseLayer.with_filter(rust_log_filter.clone()))
                         .with(
                             tracing_subscriber::fmt::layer()
                                 .with_ansi(true)
                                 .with_file(true)
                                 .with_line_number(true)
                                 .pretty()
-                                .with_filter(rust_log_filter.and(dropped_events)),
+                                .with_filter(rust_log_filter),
                         )
                         .init();
                 }
@@ -317,11 +322,8 @@ impl MacroEntrypoint {
                 let rust_log_filter = rust_log_env_filter();
                 let subscriber = Registry::default()
                     .with(dependency_filter)
-                    .with(RootcauseLayer.with_filter(rust_log_filter.clone().and(dropped_events)))
-                    .with(
-                        HierarchicalLayer::new(level)
-                            .with_filter(rust_log_filter.and(dropped_events)),
-                    );
+                    .with(RootcauseLayer.with_filter(rust_log_filter.clone()))
+                    .with(HierarchicalLayer::new(level).with_filter(rust_log_filter));
                 tracing::subscriber::set_global_default(subscriber).unwrap();
                 InitializedEntrypoint {
                     tracer_provider: None,
@@ -345,8 +347,7 @@ impl MacroEntrypoint {
                 let otel_filter = otel_env_filter();
                 // Capture anything already enabled for logs or OTEL without enabling new callsites.
                 let rootcause_filter = rust_log_filter.clone().or(otel_filter.clone());
-                let otel_layer = otel_layer_with_error_mapping(tracer)
-                    .with_filter(otel_filter.and(dropped_events));
+                let otel_layer = otel_layer_with_error_mapping(tracer).with_filter(otel_filter);
 
                 // Build the JSON event format, then wrap it with DatadogFormat
                 // to inject dd.trace_id / dd.span_id for trace-log correlation.
@@ -362,11 +363,11 @@ impl MacroEntrypoint {
                     .with_ansi(false)
                     .fmt_fields(tracing_subscriber::fmt::format::JsonFields::new())
                     .event_format(datadog_fmt::DatadogFormat { inner: json_format })
-                    .with_filter(rust_log_filter.and(dropped_events));
+                    .with_filter(rust_log_filter);
 
                 Registry::default()
                     .with(dependency_filter)
-                    .with(RootcauseLayer.with_filter(rootcause_filter.and(dropped_events)))
+                    .with(RootcauseLayer.with_filter(rootcause_filter))
                     .with(fmt_layer)
                     .with(otel_layer)
                     .init();
@@ -578,7 +579,7 @@ impl LocalOptionsBuilder {
             local: self.next,
             suppressed_targets: self.prev.suppressed_targets,
             quiet_targets: self.prev.quiet_targets,
-            dropped_events: self.prev.dropped_events,
+            dropped_callsites: self.prev.dropped_callsites,
         }
     }
 }
@@ -588,12 +589,13 @@ struct LocalOptions {
     tree_tracing: Option<usize>,
 }
 
-/// The global filter for dependency diagnostics: drops suppressed targets and
-/// quiet targets below info, by callsite.
+/// The global filter for dependency diagnostics: drops suppressed targets,
+/// quiet targets below info, and dropped callsites, by callsite.
 #[derive(Debug, Clone, Copy)]
 struct DependencyLogFilter {
     suppressed: &'static [&'static str],
     quiet: &'static [&'static str],
+    dropped: &'static [DroppedCallsite],
 }
 
 impl<S: tracing::Subscriber> Layer<S> for DependencyLogFilter {
@@ -603,88 +605,20 @@ impl<S: tracing::Subscriber> Layer<S> for DependencyLogFilter {
         _: tracing_subscriber::layer::Context<'_, S>,
     ) -> bool {
         dependency_logs_allowed(self.suppressed, self.quiet, metadata)
+            && !is_dropped_callsite(self.dropped, metadata)
     }
 }
 
-/// Drops the single events in [DroppedDependencyEvent] rules. It is a
-/// per-sink filter, joined to each sink's own, because a veto in a global
-/// layer's `event_enabled` would skip dispatch after the per-sink filters
-/// recorded their verdicts for the event, and a verdict left behind would hide
-/// the thread's next event at a cached callsite from that sink.
-#[derive(Debug, Clone, Copy)]
-struct DroppedEvents(&'static [DroppedDependencyEvent]);
-
-impl<S> tracing_subscriber::layer::Filter<S> for DroppedEvents {
-    fn enabled(
-        &self,
-        _: &tracing::Metadata<'_>,
-        _: &tracing_subscriber::layer::Context<'_, S>,
-    ) -> bool {
-        true
-    }
-
-    fn callsite_enabled(
-        &self,
-        _: &'static tracing::Metadata<'static>,
-    ) -> tracing::subscriber::Interest {
-        tracing::subscriber::Interest::always()
-    }
-
-    fn event_enabled(
-        &self,
-        event: &tracing::Event<'_>,
-        _: &tracing_subscriber::layer::Context<'_, S>,
-    ) -> bool {
-        !is_dropped_event(self.0, event)
-    }
-
-    // Joined with `and`, a `None` hint would lift the sink's own level hint.
-    fn max_level_hint(&self) -> Option<LevelFilter> {
-        Some(LevelFilter::TRACE)
-    }
-}
-
-fn is_dropped_event(dropped: &[DroppedDependencyEvent], event: &tracing::Event<'_>) -> bool {
-    let target = event.metadata().target();
-    // Only a dropped event's own target pays for reading its fields.
-    if !dropped.iter().any(|rule| rule.target == target) {
-        return false;
-    }
-    let mut fields = MessageAndError::default();
-    event.record(&mut fields);
-    dropped.iter().any(|rule| {
-        rule.target == target
-            && fields.message.as_deref() == Some(rule.message)
-            && fields
-                .error
-                .as_deref()
-                .is_some_and(|error| error.contains(rule.error_contains))
-    })
-}
-
-/// The `message` and `error` fields of an event, as its sinks would print them.
-#[derive(Default)]
-struct MessageAndError {
-    message: Option<String>,
-    error: Option<String>,
-}
-
-impl tracing::field::Visit for MessageAndError {
-    fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
-        match field.name() {
-            "message" => self.message = Some(value.to_owned()),
-            "error" => self.error = Some(value.to_owned()),
-            _ => {}
-        }
-    }
-
-    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
-        match field.name() {
-            "message" => self.message = Some(format!("{value:?}")),
-            "error" => self.error = Some(format!("{value:?}")),
-            _ => {}
-        }
-    }
+fn is_dropped_callsite(dropped: &[DroppedCallsite], metadata: &tracing::Metadata<'_>) -> bool {
+    metadata.is_event()
+        && dropped.iter().any(|callsite| {
+            metadata.target() == callsite.target
+                && *metadata.level() == callsite.level
+                && metadata.line() == Some(callsite.line)
+                && metadata
+                    .file()
+                    .is_some_and(|file| file.ends_with(callsite.file))
+        })
 }
 
 fn dependency_logs_allowed(

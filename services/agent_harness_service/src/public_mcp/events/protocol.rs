@@ -42,6 +42,16 @@ pub(crate) const FILTER_META: &str = "com.macro/filter";
 /// Where the reading of that filter in words is returned.
 pub(crate) const INTERPRETATION_META: &str = "com.macro/interpretation";
 
+/// Whether `error` is the answer to a subscribe's first step: the filter
+/// compiled from the caller's words, to confirm.
+pub(crate) fn is_confirm_step(error: &McpError) -> bool {
+    error.code == ErrorCode::INVALID_PARAMS
+        && error
+            .data
+            .as_ref()
+            .is_some_and(|data| data.get(FILTER_META).is_some())
+}
+
 impl From<EventsError> for McpError {
     fn from(error: EventsError) -> Self {
         let message = error.to_string();
