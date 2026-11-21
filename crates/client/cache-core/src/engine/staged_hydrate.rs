@@ -52,6 +52,16 @@ impl<S: Storage> Engine<S> {
         if fence.is_some_and(|fence| fence != self.contact_fence) {
             return Ok(None);
         }
+        // Checked before any other storage read, as the whole hydrate does,
+        // so a request it rejects never reads storage here.
+        let data = {
+            let doc = Self::document(&mut self.docs, write.query)?;
+            let op = doc.operation(write.operation_name)?;
+            if op.kind != OperationKind::Query {
+                return Ok(None);
+            }
+            project_hydration_response(&self.schema, &op.prepare(write.variables)?, write.data)?
+        };
         self.ensure_revision_can_advance()?;
         self.hydrate_optimistic().await?;
         if !self.optimistic.is_empty() {
@@ -65,11 +75,6 @@ impl<S: Storage> Engine<S> {
         let entity_resolvers = EntityResolverLookup::compile(&self.schema, &[])?;
         let doc = Self::document(&mut self.docs, write.query)?;
         let op = doc.operation(write.operation_name)?;
-        if op.kind != OperationKind::Query {
-            return Ok(None);
-        }
-        let data =
-            project_hydration_response(&self.schema, &op.prepare(write.variables)?, write.data)?;
         let normalized = Self::network_records(
             &self.schema,
             self.response_records,

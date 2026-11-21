@@ -3075,12 +3075,16 @@ async fn a_staged_hydrate_lets_reads_run_then_commits_as_hydrate_query_does() {
                 JsValue::UNDEFINED,
             )
         };
+        let before = hydrated_state(&engine).await;
+        assert_ne!(before, whole_state, "bound {bound}");
         resolved(prepare_backfill(&engine)).await;
         resolved(read()).await;
         resolved(engine.stage_hydrate()).await;
-        // A read after the staging still sees the cache as it was before.
+        // Reads after the staging still see the cache as it was before:
+        // records, projections and revision.
         let between: serde_json::Value = from_js(resolved(read()).await);
         assert_eq!(between["kind"], "miss");
+        assert_eq!(hydrated_state(&engine).await, before, "bound {bound}");
         let split: serde_json::Value = from_js(resolved(engine.commit_hydrate()).await);
         assert_eq!(split, whole, "bound {bound}");
         let state = engine.state.lock().await;
