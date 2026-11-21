@@ -2349,6 +2349,15 @@ struct StatusCodesSeen {
 }
 
 impl StatusCodes {
+    fn saw(&self, span: &str) -> bool {
+        self.0
+            .lock()
+            .unwrap()
+            .names
+            .values()
+            .any(|name| *name == span)
+    }
+
     fn of(&self, span: &str) -> Vec<String> {
         self.0
             .lock()
@@ -2413,23 +2422,52 @@ impl tracing::Subscriber for StatusCodes {
     fn exit(&self, _: &tracing::span::Id) {}
 }
 
+/// A subscriber that never decides at registration and wants nothing. While
+/// it is registered beside a capture, every thread that registers a callsite
+/// asks both, and none can mark a span unwanted for the capture's thread:
+/// with one subscriber registered, tracing asks only the registering thread's
+/// own default, which beside this test is often none. Its level hint is off,
+/// so it lets no callsite register before a capture does.
+struct Undecided;
+
+impl tracing::Subscriber for Undecided {
+    fn register_callsite(
+        &self,
+        _: &'static tracing::Metadata<'static>,
+    ) -> tracing::subscriber::Interest {
+        tracing::subscriber::Interest::sometimes()
+    }
+
+    fn max_level_hint(&self) -> Option<tracing::level_filters::LevelFilter> {
+        Some(tracing::level_filters::LevelFilter::OFF)
+    }
+
+    fn enabled(&self, _: &tracing::Metadata<'_>) -> bool {
+        false
+    }
+
+    fn new_span(&self, _: &tracing::span::Attributes<'_>) -> tracing::span::Id {
+        tracing::span::Id::from_u64(1)
+    }
+
+    fn record(&self, _: &tracing::span::Id, _: &tracing::span::Record<'_>) {}
+
+    fn record_follows_from(&self, _: &tracing::span::Id, _: &tracing::span::Id) {}
+
+    fn event(&self, _: &tracing::Event<'_>) {}
+
+    fn enter(&self, _: &tracing::span::Id) {}
+
+    fn exit(&self, _: &tracing::span::Id) {}
+}
+
 /// Finding the work ends its span in error when the step fails or runs out
 /// of time, and not when the process shuts down under it.
 #[tokio::test(start_paused = true)]
 async fn the_finding_span_is_an_error_when_the_step_fails_or_times_out_but_not_on_shutdown() {
-    // A callsite registers on first use, and while one capture is the only
-    // subscriber, tracing asks the registering thread's own default whether
-    // it is wanted: a test beside this one that reaches the path first, with
-    // no subscriber, marks its spans unwanted until a capture next registers.
-    // So the path runs once under a capture, and each case's capture then
-    // registers with its spans already known.
-    {
-        let _guard = tracing::subscriber::set_default(StatusCodes::default());
-        build_finding(true, true, finishes, Some(true), Some(Finding::Fails))
-            .onboard()
-            .await
-            .unwrap();
-    }
+    // Registered for the whole test, so each case's capture is never the
+    // only subscriber (see `Undecided`).
+    let _undecided = tracing::Dispatch::new(Undecided);
     for (finding, shut_down, codes) in [
         (Finding::Fails, false, vec!["ERROR"]),
         (Finding::Hangs, false, vec!["ERROR"]),
@@ -2451,6 +2489,10 @@ async fn the_finding_span_is_an_error_when_the_step_fails_or_times_out_but_not_o
         } else {
             h.onboard().await.unwrap();
         }
+        assert!(
+            seen.saw("routine.find_work"),
+            "{finding:?}, shut down: {shut_down}: no finding span captured"
+        );
         assert_eq!(
             seen.of("routine.find_work"),
             codes,
