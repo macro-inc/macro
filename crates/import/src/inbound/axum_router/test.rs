@@ -14,6 +14,7 @@ use crate::domain::ports::Result;
 use crate::domain::service::{DiscardOutcome, ImportNotionPageOutcome, StageOutcome};
 
 const TEST_USER: &str = "macro|test@example.com";
+const TEST_FUSION_USER_ID: &str = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 
 #[derive(Clone)]
 struct FakeAuthorization;
@@ -28,7 +29,7 @@ impl MacroAuthorizationService for FakeAuthorization {
         }
         Ok(UserContext {
             user_id: TEST_USER.to_string(),
-            fusion_user_id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb".to_string(),
+            fusion_user_id: TEST_FUSION_USER_ID.to_string(),
             permissions: None,
             organization_id: None,
         })
@@ -679,4 +680,67 @@ async fn ledger_recording_reports_an_earlier_mapping() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["outcome"], "already_imported");
     assert_eq!(body["entity"]["entity_id"], "document-1");
+}
+
+/// Every field any span recorded, as `(name, value)`.
+#[derive(Clone, Default)]
+struct SpanFields(Arc<Mutex<Vec<(String, String)>>>);
+
+impl tracing::field::Visit for SpanFields {
+    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+        self.0
+            .lock()
+            .unwrap()
+            .push((field.name().to_string(), format!("{value:?}")));
+    }
+}
+
+impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for SpanFields {
+    fn on_new_span(
+        &self,
+        attrs: &tracing::span::Attributes<'_>,
+        _id: &tracing::span::Id,
+        _ctx: tracing_subscriber::layer::Context<'_, S>,
+    ) {
+        attrs.record(&mut self.clone());
+    }
+
+    fn on_record(
+        &self,
+        _id: &tracing::span::Id,
+        values: &tracing::span::Record<'_>,
+        _ctx: tracing_subscriber::layer::Context<'_, S>,
+    ) {
+        values.record(&mut self.clone());
+    }
+}
+
+#[tokio::test]
+async fn route_spans_record_the_opaque_user_id_not_the_email() {
+    use tracing_subscriber::layer::SubscriberExt;
+
+    let fields = SpanFields::default();
+    let _guard =
+        tracing::subscriber::set_default(tracing_subscriber::registry().with(fields.clone()));
+    let (router, _service) = discovery_router(Ok(true));
+    let response = router
+        .oneshot(discovery_request("slack", true))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+    let recorded = fields.0.lock().unwrap().clone();
+    assert!(
+        recorded.contains(&(
+            "fusionauth_user_id".to_string(),
+            TEST_FUSION_USER_ID.to_string()
+        )),
+        "{recorded:?}"
+    );
+    assert!(
+        recorded
+            .iter()
+            .all(|(_, value)| !value.contains("test@example.com")),
+        "{recorded:?}"
+    );
 }

@@ -182,7 +182,9 @@ text ends in a comma or semicolon, so `a@example.com, b@example.com,` adds both.
 Enter or a click picks the highlighted suggestion; on a complete typed address,
 Enter or Tab adds that address unless an arrow key picked another row. Type,
 paste, or Tab straight after picking one and check that both recipients stay
-and the input is empty.
+and the input is empty. With no highlighted row and no complete address (text
+that matches no one, or results still loading), Tab moves on and clears the
+text, as a click elsewhere does.
 
 Outlook connections support personal Outlook.com and individual Microsoft 365
 inboxes. Choose the inbox explicitly when testing mixed-provider accounts. The
@@ -283,9 +285,20 @@ time) stays in until its event is over, or for 7 days after the notice when it i
 recurring event or no time can be read, and is the only mail with the Calendar
 category in Focus. New invites and RSVP notices stay out. A calendar notice counts
 only as the thread's latest message: once anyone writes after it, the thread takes
-the same rules as any other. A thread the owner answered last joins 3 days after
-their message, unless that message only closes the exchange ("Thanks!"). `Follow up`
-marks only threads whose
+the same rules as any other. Plain mail the due-date read finds is about a meeting
+leaves once the meeting's day is over for the owner, unless it names a deadline
+after that day. Mail written after the meeting, such as its notes or thanks, keeps
+it out, unless that mail asks the owner something or for a decision only they
+can make, or the owner's own question is still waiting: then the thread is judged
+on its own. Mail more than two weeks after the meeting, by the day its writer
+wrote it on, is no longer about it. Once the owner has written last, the thread
+leaves Focus. It comes back 3 days after their message with no answer, or on its
+due day if that comes first, unless the
+closing-reply check reads that message as only ending the exchange (a short
+"Thanks!" or a brush-off, nothing else); a closing it misses, such as "Done, sent
+it over", comes back after the wait. An answer from the other side has the thread
+judged again. `Follow up`
+marks only threads that came back after that wait or on their due day, whose
 latest message is the owner's, and `Reply needed` only threads whose latest message
 is someone else's. A thread holding only the owner's sent mail is not listed: it
 has no inbox state, so Mark Done could not remove it. Each row says why it is
@@ -970,9 +983,14 @@ In new emails, replies, reply-alls, and forwards, `Cmd+Shift+C` (`Ctrl+Shift+C`)
 reveals and focuses Cc and `Cmd+Shift+B` does the same for Bcc, expanding a
 collapsed reply header; inside a composer they never fall through to the
 thread's Copy link. Clicking the Cc or Bcc button also focuses the revealed
-field, so typing goes there instead of to app shortcuts. `bunx playwright test
+field, so typing goes there instead of to app shortcuts. Tab runs To, Cc and
+Bcc when shown, Subject (new emails only), then the body, and Shift+Tab goes
+back; the new email's Cc and Bcc buttons are left out of it. In the body,
+Shift+Tab outdents while there is something to outdent and otherwise leaves.
+`bunx playwright test
 --config src/features/email-compose/browser-test/playwright.app.config.ts` (from
-`apps/web`) checks both shortcuts and both buttons in all four composers.
+`apps/web`) checks both shortcuts and both buttons in all four composers, and
+the Tab order (`tab-order.app.e2e.ts`).
 While an editable field is focused, Escape is handled by that field before the
 close-reply shortcut.
 An edited reply remains a draft when navigating away and returning. Standalone

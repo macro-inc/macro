@@ -11,6 +11,10 @@ environments, with trace propagation and typed grouped/ungrouped consumers.
 - `src/msk_iam.rs`: OAuth token refresh; statistics observers must preserve it.
 - `src/statistics.rs`: opt-in callbacks for ungrouped consumers, without changing
   assignment or commit behavior. Observers must not block or log raw statistics.
+- `src/progress.rs`: per-partition position and backlog from a sample, and
+  `assess`, whether a consumer is progressing (fresh sample, brokers up,
+  partitions caught up or advancing). The webhook stream's heartbeat and the
+  notification consumer's health read it.
 
 ## Scope
 

@@ -42,8 +42,8 @@ scenarios.
   stand-ins for the three things it asks outside the database
   (`src/focus.rs`): the model that answers the Focus questions, reached
   through `OVERRIDE_TYPESAFE_API_URL`; the agent harness route that reads
-  a thread's due date, through `OVERRIDE_AGENT_HARNESS_SERVICE_URL`; and
-  PostHog's flag definitions, through `POSTHOG_HOST`, from which it reads
+  the day a thread is due and the day of the meeting it is about, through
+  `OVERRIDE_AGENT_HARNESS_SERVICE_URL`; and PostHog's flag definitions, through `POSTHOG_HOST`, from which it reads
   whether an inbox's owner, or a user it is linked to, has the
   `enable-email-focus` flag. Its
   pushes go to the connection gateway stand-in like every other service's.
@@ -97,7 +97,7 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
   enqueues on `sfs-delete`), `stack.notify_of_mail_feedback(&notification)`
   (`email_suppression_handler`, one bounce or complaint) and
   `stack.run_refresh()` (`email_refresh_handler`, the hourly link
-  maintenance: a `HealthCheck` on `link-manager` for every syncing Gmail inbox, and
+  maintenance: a `HealthCheck` on `link-maintenance` for every syncing Gmail inbox, and
   a `Refresh` for those whose hour it is, which a scenario cannot count
   on). See `tests/maintenance.rs`. Work of the other crons is enqueued by the
   scenario: `stack.send_to_queue("link-manager" | "sfs-delete", …)`, and on a
@@ -156,10 +156,12 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
   no mail worth Focus until the scenario names text such mail holds,
   `stack.focus_classifier()?.put_in_focus_when_mail_contains("Contract
   renewal")`; `due_on_when_mail_contains` sets the day the harness reads
-  as due, and `times_asked_about(text)` tells whether mail reached the
+  as due and `event_on_when_mail_contains` the day of the meeting it is
+  about, and `times_asked_about(text)` tells whether mail reached the
   model at all; `stack.focus_worker_log()` is what the worker logged. The questions and their order are the product's: the
   stand-in answers yes only to the first, "would the owner want this in
-  Focus". The worker classifies an inbox only while its owner, or a user it
+  Focus", and, for text named with `ask_the_owner_when_mail_contains`, to
+  whether the latest message asks the owner something they haven't answered. The worker classifies an inbox only while its owner, or a user it
   is linked to, has the Focus flag: every user has it unless the scenario turns it off with
   `turn_off_focus_flag_for(address)` before linking any inbox, since the
   worker reads the flag on its first look at the inboxes and again only
@@ -171,6 +173,9 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
   the sync, so wait for the list or the thread's `focus`. Keep these
   scenarios in `tests/focus.rs`, whose tests nextest runs one at a time.
 - Mail that must be in the mailbox before it is linked: `stack.seed_mailbox`.
+- Mail written at a given time, for a wait or a day already past: `Mail::dated`;
+  mail the owner sent from another mail client (Gmail's `SENT` label, Outlook's
+  Sent Items): `Mail::sent_from_mailbox`.
 - The labels the owner made at the provider (Gmail labels, Outlook
   categories): `stack.provider_labels(&inbox)` reads them and
   `stack.make_provider_label(&inbox, name)` makes one, through the

@@ -238,6 +238,21 @@ time a picker stays open afterwards is not counted. Reading the same input again
 after a search ended, as a reopened picker or a re-read after a contact change
 does, starts a new span with `contacts.repeat` true. Never add the query text.
 
+A `contacts.read_window` answered by the server (`contacts.source` `server`,
+a tab without a usable local cache) has a `contacts.read_server_window` child.
+On the first page of a typed search it has up to two more, read in parallel:
+`contacts.read_server_exact`, the server's exact-name search (never for text
+that holds an `@`), and `contacts.read_server_named`, the lookup by ID of the
+viewer's teammates or of the one person a whole typed address identifies. Each
+has its own `graphql.transport` request, with one exception: a teammate lookup
+equal to one still in flight, as the previous keystroke's is, shares that
+request, so its span has none under it and the request sits in the trace of the
+search that started it. The window records `contacts.named_exact_count` and
+`contacts.named_word_start_count`, how many of the listed people the text
+names, `contacts.named_failed` when one of the extra reads failed, and
+`contacts.named_late` when one had not answered within its budget; either way
+the page was listed without the people that read would have added.
+
 ## Agent sessions
 
 A session's lifetime is reconstructable from these spans. All of them carry

@@ -9,6 +9,7 @@ import { cn } from '@ui';
 import {
   COMMAND_PRIORITY_CRITICAL,
   COMMAND_PRIORITY_HIGH,
+  COMMAND_PRIORITY_LOW,
   KEY_ENTER_COMMAND,
   KEY_ESCAPE_COMMAND,
   KEY_TAB_COMMAND,
@@ -142,6 +143,12 @@ interface MarkdownTextareaProps {
    * `{ extendedInlineFormats: true }` to also offer underline/super/subscript.
    */
   floatingFormatMenu?: boolean | { extendedInlineFormats?: boolean };
+  /**
+   * Let an Escape no menu of the editor takes leave the editor, as it leaves
+   * a plain input, so a dialog around it closes. Without it the editor keeps
+   * every key to itself.
+   */
+  releaseEscape?: boolean;
 }
 
 export function MarkdownTextarea(props: MarkdownTextareaProps) {
@@ -358,11 +365,22 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
     setShowPlaceholder(editorIsEmpty(editor));
   });
 
+  // The editor's menus take Escape at a higher priority while open, so one
+  // that reaches this listener closed nothing.
+  let unclaimedEscape: KeyboardEvent | null = null;
   autoRegister(
     editor.registerCommand(
       KEY_ESCAPE_COMMAND,
       (e) => (props.onEscape ? props.onEscape(e) : false),
       COMMAND_PRIORITY_CRITICAL
+    ),
+    editor.registerCommand(
+      KEY_ESCAPE_COMMAND,
+      (e) => {
+        unclaimedEscape = e;
+        return false;
+      },
+      COMMAND_PRIORITY_LOW
     ),
     editor.registerCommand(
       KEY_TAB_COMMAND,
@@ -380,6 +398,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
           props.class
         )}
         on:keydown={(e) => {
+          if (props.releaseEscape && e === unclaimedEscape) return;
           e.stopPropagation();
         }}
         on:click={(e) => {

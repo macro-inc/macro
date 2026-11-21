@@ -137,7 +137,7 @@ impl<R: MailboxCommandRepository, G: MailboxCommandGateway> MailboxCommandServic
                     .release_command(
                         &lease,
                         match error {
-                            MailboxError::Provider(e) => super::retry_seconds(e),
+                            MailboxError::Provider(e) => super::retry::retry_seconds(e),
                             _ => 30,
                         },
                     )

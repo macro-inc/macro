@@ -419,8 +419,8 @@ where
                 self.computers.state(record.team_id, computer_id).await?,
                 record.first_online_at.is_some(),
             ),
-            // The account exists but its purchase never completed.
-            None => TeamAgentStatus::Failed,
+            // The account exists and its purchase hasn't completed.
+            None => TeamAgentStatus::without_computer(record.created_at, chrono::Utc::now()),
         };
         Ok(TeamAgent {
             user_id: record.user_id,

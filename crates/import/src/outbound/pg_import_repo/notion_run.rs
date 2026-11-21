@@ -53,7 +53,7 @@ impl NotionRunRepo for PgImportRepo {
         }
     }
 
-    #[tracing::instrument(skip(self, job), err)]
+    #[tracing::instrument(skip(self, job, user), err)]
     async fn take_run(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -96,7 +96,7 @@ impl NotionRunRepo for PgImportRepo {
         Ok(result.rows_affected() > 0)
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user), err)]
     async fn renew_lease(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -121,7 +121,7 @@ impl NotionRunRepo for PgImportRepo {
         Ok(result.rows_affected() > 0)
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user), err)]
     async fn release_lease(&self, user: &MacroUserIdStr<'static>, owner: Uuid) -> Result<bool> {
         // Lapsed as of now, so the next adopter takes it straight away.
         let result = sqlx::query!(
@@ -139,7 +139,7 @@ impl NotionRunRepo for PgImportRepo {
         Ok(result.rows_affected() > 0)
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user), err)]
     async fn adopt_stalled_runs(
         &self,
         user: Option<&MacroUserIdStr<'static>>,
@@ -217,7 +217,7 @@ impl NotionRunRepo for PgImportRepo {
         Ok(adopted)
     }
 
-    #[tracing::instrument(skip(self, event), fields(notified = tracing::field::Empty), err)]
+    #[tracing::instrument(skip(self, event, user), fields(notified = tracing::field::Empty), err)]
     async fn transition_reviewed_run<Event>(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -276,7 +276,7 @@ impl NotionRunRepo for PgImportRepo {
         Ok(Some(run))
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user), err)]
     async fn root_folder(&self, user: &MacroUserIdStr<'static>) -> Result<Option<Uuid>> {
         let folder = sqlx::query_scalar!(
             r#"SELECT root_folder_id FROM import_run WHERE user_id = $1 AND source = $2"#,
@@ -473,7 +473,7 @@ impl NotionRunRepo for PgImportRepo {
         Ok(())
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user), err)]
     async fn set_root_folder(&self, user: &MacroUserIdStr<'static>, folder: Uuid) -> Result<()> {
         sqlx::query!(
             r#"UPDATE import_run SET root_folder_id = $2 WHERE user_id = $1 AND source = $3"#,
@@ -486,7 +486,7 @@ impl NotionRunRepo for PgImportRepo {
         Ok(())
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user), err)]
     async fn settle_importing(&self, user: &MacroUserIdStr<'static>, reason: &str) -> Result<u64> {
         let mut transaction = self.pool.begin().await?;
         let settled = sqlx::query_scalar!(
@@ -774,7 +774,7 @@ SELECT EXISTS (SELECT 1 FROM owned) AS "owned!"
         Ok(())
     }
 
-    #[tracing::instrument(skip(self, user, import_ids), fields(rows = import_ids.len()), err)]
+    #[tracing::instrument(skip(self, import_ids, user), fields(rows = import_ids.len()), err)]
     async fn written(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -796,7 +796,7 @@ SELECT EXISTS (SELECT 1 FROM owned) AS "owned!"
         rows.into_iter().map(WrittenObject::try_from).collect()
     }
 
-    #[tracing::instrument(skip(self, user, objects), fields(objects = objects.len()), err)]
+    #[tracing::instrument(skip(self, objects, user), fields(objects = objects.len()), err)]
     async fn record_written(
         &self,
         user: &MacroUserIdStr<'static>,

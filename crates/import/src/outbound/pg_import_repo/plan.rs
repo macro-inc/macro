@@ -84,7 +84,7 @@ impl NotionPlanRepo for PgImportRepo {
             .await
     }
 
-    #[tracing::instrument(skip(self, rows), fields(rows = rows.len()), err)]
+    #[tracing::instrument(skip(self, rows, user), fields(rows = rows.len()), err)]
     async fn replace_plan(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -206,7 +206,7 @@ impl NotionPlanRepo for PgImportRepo {
         Ok(staged)
     }
 
-    #[tracing::instrument(skip(self, rows), fields(rows = rows.len()), err)]
+    #[tracing::instrument(skip(self, rows, user), fields(rows = rows.len()), err)]
     async fn update_plan_rows(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -246,7 +246,7 @@ impl NotionPlanRepo for PgImportRepo {
         Ok(result.rows_affected())
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user), err)]
     async fn attach_review(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -342,7 +342,7 @@ impl NotionPlanRepo for PgImportRepo {
         Ok(result.rows_affected() > 0)
     }
 
-    #[tracing::instrument(skip(self, foreign_ids), fields(objects = foreign_ids.len()), err)]
+    #[tracing::instrument(skip(self, foreign_ids, user), fields(objects = foreign_ids.len()), err)]
     async fn team_copies(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -398,7 +398,7 @@ impl NotionPlanRepo for PgImportRepo {
         rows.into_iter().map(ImportEntity::try_from).collect()
     }
 
-    #[tracing::instrument(skip(self, shared, personal), fields(shared = shared.len(), personal = personal.len()), err)]
+    #[tracing::instrument(skip(self, shared, personal, user), fields(shared = shared.len(), personal = personal.len()), err)]
     async fn set_plan_sharing(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -425,7 +425,7 @@ impl NotionPlanRepo for PgImportRepo {
         Ok(result.rows_affected())
     }
 
-    #[tracing::instrument(skip(self, ids, shared), fields(rows = ids.len(), shared = shared.len()), err)]
+    #[tracing::instrument(skip(self, ids, shared, user), fields(rows = ids.len(), shared = shared.len()), err)]
     async fn claim_importing(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -481,7 +481,7 @@ impl NotionPlanRepo for PgImportRepo {
         rows.into_iter().map(ImportEntity::try_from).collect()
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user), err)]
     async fn claim_team_object(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -508,7 +508,7 @@ impl NotionPlanRepo for PgImportRepo {
         }
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user), err)]
     async fn wait_on(
         &self,
         user: &MacroUserIdStr<'static>,

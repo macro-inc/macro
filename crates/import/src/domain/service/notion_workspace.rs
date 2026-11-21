@@ -503,7 +503,7 @@ where
 
     /// Write the plan's pending objects and record the outcome on the run.
     #[tracing::instrument(
-        skip(self, set, user),
+        skip(self, user, set),
         fields(
             review_id = %set.review_id,
             items = set.all.len(),

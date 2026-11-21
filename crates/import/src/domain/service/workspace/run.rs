@@ -262,7 +262,6 @@ where
         let span = tracing::info_span!(
             "workspace_import.adopt",
             source = self.workspace_source.as_ref(),
-            user = %run.user,
             status = run.status.as_ref(),
             adoptions = run.adoptions,
             job,

@@ -305,3 +305,23 @@ fn the_due_date_input_collapses_wrapped_lines_and_bounds_each_message() {
     assert_eq!(input.messages[0].text, "Please send it by Friday.");
     assert_eq!(input.messages[1].text.chars().count(), MESSAGE_CHARS);
 }
+
+#[test]
+fn the_last_written_day_counts_mail_the_read_leaves_out_by_the_reads_calendar() {
+    let spoken = message("Notes from the offsite are below.", false);
+    // An attachment alone, written at 03:00 on the 8th at its sender's offset,
+    // still the 7th for an owner in Los Angeles.
+    let attachment_only = FocusMessage {
+        body: Some(String::new()),
+        snippet: None,
+        ..written_late(Some("Thu, 8 Oct 2026 03:00:00 +0100"))
+    };
+    let mail = thread(vec![spoken, attachment_only]);
+
+    assert_eq!(due_date_input(&mail, Some(Los_Angeles)).messages.len(), 1);
+    assert_eq!(
+        last_written_on(&mail, Some(Los_Angeles)),
+        Some(day(2026, 10, 8))
+    );
+    assert_eq!(last_written_on(&thread(Vec::new()), None), None);
+}

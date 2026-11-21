@@ -25,6 +25,7 @@ fn request(keying: CandidateKeying, limit: u16) -> CandidateRequest {
         limit,
         after: None,
         only: None,
+        assume_attention: false,
     }
 }
 
