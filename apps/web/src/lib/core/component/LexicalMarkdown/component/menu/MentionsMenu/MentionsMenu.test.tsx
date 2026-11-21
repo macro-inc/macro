@@ -88,6 +88,7 @@ vi.mock('@core/constant/featureFlags', () => {
   const enableWhatsappLinked = { name: 'whatsapp' };
   return {
     disableCrmContactSearch,
+    enableContactLists: { name: 'enable-contact-lists' },
     enableCrm,
     enableWhatsappLinked,
     isFeatureEnabled: (flag: unknown) => {

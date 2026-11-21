@@ -10,7 +10,13 @@ outbox worker that notifies `connection_gateway`.
 
 - `src/main.rs`: wires `contacts::domain::service::ContactsDomainService`,
   `contacts::inbound::http::contacts_router`, and the SQS/outbox workers — the
-  actual logic lives in `crates/contacts`, not here.
+  actual logic lives in `crates/contacts`, not here. The router reads through
+  `FlaggedContactReads`, so `GET /contacts` and `GET /contacts/search` follow
+  each caller's `contacts-list-reads` flag; the workers write through the
+  domain service directly.
+- `src/config.rs`: optional `POSTHOG_API_KEY`/`POSTHOG_HOST` (Doppler
+  `contacts-service` dev and prd). Unset or blank, every caller reads the
+  legacy graph; a flag load waits at most 300 ms.
 - `src/config.rs`: env vars and per-environment DB pool sizing.
 - `src/health.rs`: health check endpoint.
 - `src/bin/contacts_backfill.rs`: clap CLI for the contact list backfill and

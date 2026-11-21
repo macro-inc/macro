@@ -175,6 +175,121 @@ it('keeps an older native host on its local window down to the policy floor', as
   );
   expect(remote).not.toHaveBeenCalled();
 });
+const MENTION_ORDER = [
+  ['teammates'],
+  ['interacted', 'invited'],
+  ['gmail', 'outlook'],
+];
+const listedPolicy = {
+  mode: 'mention' as const,
+  excluded: [],
+  listPriority: MENTION_ORDER,
+};
+function pageAt(policyVersion: number) {
+  return {
+    kind: 'page' as const,
+    policyVersion,
+    people: [person],
+    truncated: true,
+    nextCursor: 'position',
+  };
+}
+function sentLists(cache: ReturnType<typeof host>) {
+  return cache.people.search.mock.calls.map(([request]) => ({
+    listPriority: request.listPriority,
+    onlyListed: request.onlyListed,
+  }));
+}
+it('sends a list order once the host answers with policy 7, from its first window on', async () => {
+  const cache = host();
+  cache.people.search.mockResolvedValue(pageAt(7));
+  const first = await readContactDirectory(
+    VIEWER,
+    cache,
+    { query: '', policy: listedPolicy },
+    signal()
+  );
+  // The host's policy is unknown until it answers, so the first search goes
+  // without the order and is sent again with it.
+  expect(sentLists(cache)).toEqual([
+    { listPriority: undefined, onlyListed: undefined },
+    { listPriority: MENTION_ORDER, onlyListed: undefined },
+  ]);
+  expect(first.source).toBe('cache');
+  await readContactDirectory(
+    VIEWER,
+    cache,
+    {
+      query: '',
+      policy: listedPolicy,
+      cursor: first.nextCursor ?? undefined,
+    },
+    signal()
+  );
+  await readContactDirectory(
+    VIEWER,
+    cache,
+    { query: 'jo', policy: { ...listedPolicy, onlyListed: true } },
+    signal()
+  );
+  expect(sentLists(cache).slice(2)).toEqual([
+    { listPriority: MENTION_ORDER, onlyListed: undefined },
+    { listPriority: MENTION_ORDER, onlyListed: true },
+  ]);
+  expect(cache.people.search.mock.calls[2][0].cursor).toBe('position');
+});
+it.each([5, 6])(
+  'never sends a list order to a policy %i host, which keeps its window',
+  async (policyVersion) => {
+    const cache = host();
+    cache.people.search.mockResolvedValue(pageAt(policyVersion));
+    for (const query of ['', 'jo']) {
+      const page = await readContactDirectory(
+        VIEWER,
+        cache,
+        { query, policy: listedPolicy },
+        signal()
+      );
+      expect(page.source).toBe('cache');
+      expect(page.users.map((user) => user.id)).toEqual([person.userId]);
+    }
+    expect(sentLists(cache)).toEqual([
+      { listPriority: undefined, onlyListed: undefined },
+      { listPriority: undefined, onlyListed: undefined },
+    ]);
+    expect(remote).not.toHaveBeenCalled();
+  }
+);
+it('sends no list fields without a list order', async () => {
+  const cache = host();
+  for (const policy of [
+    { mode: 'mention' as const, excluded: [] },
+    { mode: 'mention' as const, excluded: [], listPriority: [] },
+  ])
+    await readContactDirectory(VIEWER, cache, { query: '', policy }, signal());
+  expect(cache.people.search).toHaveBeenCalledTimes(2);
+  for (const [request] of cache.people.search.mock.calls) {
+    expect(request).not.toHaveProperty('listPriority');
+    expect(request).not.toHaveProperty('onlyListed');
+  }
+});
+it.each([
+  ['an empty key', [['']]],
+  ['a key over 128 bytes', [['x'.repeat(129)]]],
+  ['17 groups', Array.from({ length: 17 }, (_, index) => [`l${index}`])],
+  ['65 keys', [Array.from({ length: 65 }, (_, index) => `l${index}`)]],
+])('refuses a list order the host would refuse: %s', async (_, groups) => {
+  const cache = host();
+  await expect(
+    readContactDirectory(
+      VIEWER,
+      cache,
+      { query: '', policy: { ...listedPolicy, listPriority: groups } },
+      signal()
+    )
+  ).rejects.toThrow('Invalid contact window');
+  expect(cache.people.search).not.toHaveBeenCalled();
+});
 it.each([
   { pages: 0, completedAt: null },
   { pages: 4, completedAt: null },

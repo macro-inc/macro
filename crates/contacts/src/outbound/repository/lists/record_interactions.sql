@@ -6,13 +6,24 @@
 --
 -- Interactions are between Macro accounts, so an id without a profile is
 -- skipped: a message that arrives after its user was deleted (and their lists
--- dropped) cannot add them back. One primary-key probe per input id.
-WITH users AS (
+-- dropped) cannot add them back. A profile matches by id or, for a legacy
+-- "User" id stored with capitals, by its address (User_lower_email_idx); the
+-- rows name the canonical input id. At most two index probes per input id:
+-- each list is materialized so it is checked once, and OFFSET 0 keeps each
+-- check a probe, never a hash of the whole "User" table when its statistics
+-- are stale.
+WITH users AS MATERIALIZED (
     SELECT input.id FROM unnest($1::text[]) AS input (id)
-    WHERE EXISTS (SELECT 1 FROM "User" WHERE "User".id = input.id)
-), peers AS (
+    WHERE EXISTS (SELECT 1 FROM "User" WHERE "User".id = input.id OFFSET 0)
+       OR EXISTS (
+           SELECT 1 FROM "User" WHERE lower("User".email) = substr(input.id, 7) OFFSET 0
+       )
+), peers AS MATERIALIZED (
     SELECT input.id FROM unnest($2::text[]) AS input (id)
-    WHERE EXISTS (SELECT 1 FROM "User" WHERE "User".id = input.id)
+    WHERE EXISTS (SELECT 1 FROM "User" WHERE "User".id = input.id OFFSET 0)
+       OR EXISTS (
+           SELECT 1 FROM "User" WHERE lower("User".email) = substr(input.id, 7) OFFSET 0
+       )
 )
 INSERT INTO contact_list_members (user_id, contact_user_id, list_key)
 SELECT pair.user_id, pair.contact_user_id, $3

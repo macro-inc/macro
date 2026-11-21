@@ -5438,6 +5438,7 @@ dependencies = [
  "contacts",
  "database_env_vars",
  "doppler-config",
+ "feature_flags",
  "http-body-util",
  "macro_auth",
  "macro_authorization",
