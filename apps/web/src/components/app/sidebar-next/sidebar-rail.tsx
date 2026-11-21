@@ -6,7 +6,14 @@ import { navigateToSidebarView } from '@components/app/app-sidebar/sidebar';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { hotkeyScopeNeutralAttribute } from '@core/dom-selectors';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
-import { createSignal, For, Match, Suspense, Switch } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  For,
+  Match,
+  Suspense,
+  Switch,
+} from 'solid-js';
 import { useNavigationUnread } from '../use-navigation-unread';
 import { SidebarRailCreateButton } from './create-button';
 import { FooterActions } from './footer-actions';
@@ -61,10 +68,15 @@ export const SidebarRail = () => {
     () => [nav, spacer],
     () => {
       if (!nav || !spacer) return;
-      setFitCount(railNavFitCount(nav.offsetHeight + spacer.offsetHeight));
+      const room =
+        nav.getBoundingClientRect().height +
+        spacer.getBoundingClientRect().height;
+      setFitCount(railNavFitCount(room));
     }
   );
-  const navItems = () => visibleNavItems(gates());
+  // Memoized so a fit change only re-slices: Home is rebuilt on every call,
+  // and a new object would remount its button.
+  const navItems = createMemo(() => visibleNavItems(gates()));
   const railItems = () => navItems().slice(0, fitCount());
   const overflowItems = () => navItems().slice(fitCount());
 
