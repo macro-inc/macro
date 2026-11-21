@@ -116,7 +116,13 @@ async function stopLoad(page: Page) {
   });
 }
 
-type ByIdRequest = { sentAt: number; doneAt?: number; failed?: string };
+type ByIdRequest = {
+  sentAt: number;
+  doneAt?: number;
+  failed?: string;
+  // An answered read that carried a GraphQL error or a non-200 status.
+  refused?: string;
+};
 
 const pct = (values: number[], p: number) => {
   if (!values.length) return null;
@@ -195,9 +201,15 @@ try {
       if (channel) restReads.set(channel, (restReads.get(channel) ?? 0) + 1);
     }
   });
-  viewer.on('requestfinished', (request) => {
+  viewer.on('requestfinished', async (request) => {
     const entry = tracked.get(request);
-    if (entry) entry.at.doneAt = Date.now();
+    if (!entry) return;
+    entry.at.doneAt = Date.now();
+    const response = await request.response().catch(() => null);
+    const body = await response?.text().catch(() => '');
+    const message = /"message":"([^"]*)"/.exec(body ?? '')?.[1];
+    if (response?.status() !== 200 || message)
+      entry.at.refused = `${response?.status()} ${message ?? ''}`.trim();
   });
   viewer.on('requestfailed', (request) => {
     const entry = tracked.get(request);
@@ -306,6 +318,7 @@ try {
           requests: requests.length,
           answered: requests.filter((r) => r.doneAt).length,
           failed: requests.filter((r) => r.failed).map((r) => r.failed),
+          refused: requests.filter((r) => r.refused).map((r) => r.refused),
           answerMs: {
             p50: pct(
               requests.filter((r) => r.doneAt).map((r) => r.doneAt! - r.sentAt),
