@@ -21,9 +21,10 @@ fn only_end_to_end_headers_cross_the_forwarder() {
     assert_eq!(names, ["authorization", "content-type"]);
 }
 
-/// A request carries a Macro credential in its `authorization` or
-/// `x-macro-user-api-key` header, its `macro-access-token` cookie (among
-/// others) or its `macro-api-token` query parameter, and in nothing else.
+/// A request carries a Macro credential in its `authorization`, API key, bot
+/// or harness token header, its access-token cookie (among others, in any
+/// environment's name) or its `macro-api-token` query parameter, and in
+/// nothing else.
 #[test]
 fn a_credential_is_found_wherever_a_request_carries_one() {
     let plain = url::Url::parse("http://host/path?q=1").unwrap();
@@ -43,6 +44,19 @@ fn a_credential_is_found_wherever_a_request_carries_one() {
         HeaderValue::from_static("theme=dark; macro-access-token=abc; other=1"),
     );
     assert!(credentialed(&headers, &plain));
+
+    for header in ["x-macro-bot-token", "x-macro-harness-token"] {
+        let mut headers = HeaderMap::new();
+        headers.append(header, HeaderValue::from_static("token"));
+        assert!(credentialed(&headers, &plain), "{header}");
+    }
+
+    // Development and local environments name the cookie with a prefix.
+    for cookie in ["dev-macro-access-token=abc", "local-macro-access-token=abc"] {
+        let mut headers = HeaderMap::new();
+        headers.append("cookie", HeaderValue::from_static(cookie));
+        assert!(credentialed(&headers, &plain), "{cookie}");
+    }
 
     let query = url::Url::parse("http://host/path?macro-api-token=abc").unwrap();
     assert!(credentialed(&HeaderMap::new(), &query));
