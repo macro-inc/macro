@@ -30,7 +30,9 @@ consumer talks to.
   draws the cards, only for sessions the viewer owns.
 - `src/domain/session_task.rs`: a session's task. The `link_task` MCP tool and
   `PUT /agent-sessions/{id}/task` (`inbound/axum_router/task.rs`, owner only)
-  share `SessionTasks::link_task`.
+  share `SessionTasks::link_task`, which also lists the session under the task's
+  References (`SessionTaskReferences`; the harness writes one `agent_session`
+  source row in `comms_entity_mentions`, replaced on relink and removed when the session is deleted).
 - `src/outbound/postgres.rs`: the session repository.
 - `src/outbound/broker_lifecycle_publisher.rs` /
   `broker_log_realtime.rs`: Kafka publication of lifecycle and log events.

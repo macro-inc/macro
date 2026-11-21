@@ -60,12 +60,12 @@ vi.mock('@block-call/call-route', () => ({
 
 import { References } from './References';
 
-function genericReference(sourceId: string) {
+function genericReference(sourceId: string, sourceType = 'document') {
   return {
     reference_type: 'generic',
     entity_type: 'document',
     entity_id: 'referenced-doc',
-    source_entity_type: 'document',
+    source_entity_type: sourceType,
     source_entity_id: sourceId,
     user_id: 'macro|ada@example.com',
     created_at: '2026-11-03T20:00:00Z',
@@ -125,5 +125,27 @@ describe('References generic rows', () => {
       { type: 'md', id: 'doc-1' },
       { preferNewSplit: true }
     );
+  });
+
+  it('opens a referencing agent session as an agent', () => {
+    mocks.references = [genericReference('session-1', 'agent_session')];
+    mocks.previews.set('session-1', {
+      id: 'session-1',
+      type: 'agent_session',
+      access: 'access',
+      loading: false,
+      name: 'Fix the importer',
+      rawName: 'Fix the importer',
+    } satisfies PreviewItem);
+
+    render(() => <References documentId="referenced-doc" />);
+    expect(screen.getByText('session-1')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button'));
+
+    expect(mocks.openWithSplit).toHaveBeenCalledWith(
+      { type: 'agent', id: 'session-1' },
+      { preferNewSplit: true }
+    );
+    expect(mocks.toastFailure).not.toHaveBeenCalled();
   });
 });

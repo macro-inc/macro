@@ -867,6 +867,9 @@ session header (and the side panel's **Task** row) shows a task chip before the
 PR chip: the task title, or `Task` while loading or without access. Clicking it
 opens the task in a new split (in place on touch devices). Linking a different
 task sends the same session-update notification, so mounted headers refresh.
+The session also appears in the task's **References** side panel (a session
+chip under the owner's name) as soon as it is linked; relinking moves it to the
+new task, and clicking it opens the session in a new split.
 When the agent names that task in a reply — after creating or linking it, or
 later — the reply includes an `<m-document-mention>` task chip, not a URL or
 `MACRO-` id.

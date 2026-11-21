@@ -24,7 +24,8 @@ channel/document conversations.
 ## Boundaries
 
 - Depends on: `channels` (message event types), `model` (shared models).
-- Used by: `documents`, `search_service`, and services that read/write
+- Used by: `documents`, `search_service`, `agent_harness` (a session's
+  entry under its task's References), and services that read/write
   channel messages (`document_storage_service`, `authentication_service`,
   `search_processing_service`), plus `tooling/seed_cli`.
 
