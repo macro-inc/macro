@@ -13,7 +13,9 @@ api_credential     .  .  .  .  .  .  .  o  o  o  o  .  o  .
 program            .  .  .  .  .  .  o  R  R  R  R  o  R  .
 scoped_no_send     .  .  .  o  o  o  o  R  R  R  R  o  R  .
 scoped_generation  .  .  o  o  o  o  o  R  R  R  R  o  R  .
-scoped_read_only   .  o  o  o  o  o  o  R  R  R  R  o  R  .
+scoped_dry_run     .  o  o  o  o  o  o  R  R  R  R  o  R  .
+scoped_unknown     .  o  o  o  o  o  o  R  R  R  R  o  R  .
+channel_mention    .  .  .  o  o  o  o  R  R  R  R  o  R  .
 account_manager    .  .  .  .  .  .  .  R  R  R  R  .  R  .
 bot                .  .  .  .  .  .  o  o  o  o  o  .  o  .
 harness            .  .  .  .  .  .  o  o  o  o  o  .  o  .
@@ -116,5 +118,48 @@ fn a_refusal_names_its_rule_and_tells_the_caller_who_must_do_it_instead() {
     assert_eq!(
         refusal.message(),
         "Only Macro's own services can call internal routes."
+    );
+}
+
+#[test]
+fn a_category_set_holds_every_category_and_only_those_added() {
+    let mut set = CategorySet::default();
+    for category in Category::iter() {
+        assert!(!set.contains(category), "{category}");
+        set = set.with(category);
+        assert!(set.contains(category), "{category}");
+    }
+    let only_last = CategorySet::default().with(Category::Public);
+    assert!(only_last.contains(Category::Public));
+    assert!(!only_last.contains(Category::Read));
+}
+
+#[test]
+fn a_channel_mention_is_a_program_that_may_not_send_or_fetch() {
+    use Category as C;
+    for category in [
+        C::Send,
+        C::Delegate,
+        C::ShareMember,
+        C::ShareOutside,
+        C::Egress,
+    ] {
+        assert!(
+            decide(Caller::ChannelMention, category).is_err(),
+            "{category}"
+        );
+    }
+    for category in [C::Read, C::Suggest, C::Write] {
+        assert!(
+            decide(Caller::ChannelMention, category).is_ok(),
+            "{category}"
+        );
+    }
+    assert!(Caller::ChannelMention.is_program());
+    assert_eq!(
+        decide(Caller::Program, Category::Egress)
+            .unwrap_err()
+            .enforcement,
+        Enforcement::Observed
     );
 }

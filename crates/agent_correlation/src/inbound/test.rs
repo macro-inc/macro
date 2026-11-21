@@ -839,9 +839,8 @@ async fn propagate_resolves_the_caller_from_the_signed_claims() {
         (
             Some(mint(None, agent, None, Some("a_newer_scope"))),
             false,
-            "scoped_read_only",
+            "scoped_unknown",
         ),
-        (None, true, "none"),
     ] {
         let mut request = Request::builder().method("GET").uri("/v1/whoami");
         if let Some(bearer) = &bearer {
@@ -859,6 +858,46 @@ async fn propagate_resolves_the_caller_from_the_signed_claims() {
             .await
             .unwrap();
         assert_eq!(String::from_utf8_lossy(&body), expected);
+    }
+}
+
+/// A request with no credential, or one that doesn't verify, resolves no
+/// caller, so a categorized route refuses it before its handler runs.
+#[tokio::test]
+async fn a_request_with_no_verifiable_credential_is_refused_by_a_categorized_route() {
+    use tower::ServiceExt;
+
+    let state = CorrelationState {
+        jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+        repository: Arc::new(Repository {
+            calls: AtomicUsize::new(0),
+        }),
+        rollout: Arc::new(NoRollout),
+    };
+    for request in [
+        // Nothing but the code-execution header.
+        Request::builder()
+            .method("GET")
+            .uri("/v1/whoami")
+            .header(macro_auth::credential::CODE_EXECUTION_HEADER, "1"),
+        // A token that isn't ours.
+        Request::builder()
+            .method("GET")
+            .uri("/whoami")
+            .header("authorization", "Bearer not.a.token"),
+    ] {
+        let response = caller_echo(state.clone())
+            .oneshot(request.body(axum::body::Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&body).unwrap()["code"],
+            "no_caller"
+        );
     }
 }
 

@@ -116,7 +116,7 @@ fn evidence(tokens: &VerifiedTokens, scope: Option<SessionScope>, parts: &Parts)
         None => ScopeEvidence::Unscoped,
         Some(SessionScope::NoSend) => ScopeEvidence::NoSend,
         Some(SessionScope::Generation) => ScopeEvidence::Generation,
-        Some(SessionScope::DryRun) => ScopeEvidence::ReadOnly,
+        Some(SessionScope::DryRun) => ScopeEvidence::DryRun,
     };
     CallerEvidence {
         authenticated: tokens.authenticated,
@@ -126,10 +126,12 @@ fn evidence(tokens: &VerifiedTokens, scope: Option<SessionScope>, parts: &Parts)
                 || token.agent_correlation_id.is_some()
         }),
         scope: if unknown_scope {
-            ScopeEvidence::ReadOnly
+            ScopeEvidence::Unknown
         } else {
             scope
         },
+        // No token carries a channel-mention claim yet.
+        channel_mention: false,
         code_execution: parts
             .headers
             .contains_key(macro_auth::credential::CODE_EXECUTION_HEADER),

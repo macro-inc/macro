@@ -31,9 +31,16 @@ pub enum Caller {
     /// A program in a suggestion generation session: it reads and makes
     /// suggestions.
     ScopedGeneration,
-    /// A program held to reads: a routine step's dry run, or a scope this
-    /// build doesn't know, signed by a newer one.
-    ScopedReadOnly,
+    /// A program in a routine step's dry run: it reads, by declared category
+    /// (a search sent as a POST is a read), and changes nothing.
+    ScopedDryRun,
+    /// A program held to a scope this build doesn't know, signed by a newer
+    /// one: it only reads, and only by method, as `agent_correlation`'s scope
+    /// holds it, so a POST is refused even on a read route.
+    ScopedUnknown,
+    /// A program answering a channel mention: held to what a run that sends
+    /// nothing may do (no sends, no egress). Never `Program`, which may send.
+    ChannelMention,
     /// Another account's manager credential for this account.
     AccountManager,
     /// A bot.
@@ -46,15 +53,17 @@ pub enum Caller {
 
 impl Caller {
     /// Whether the caller is a program acting with the person's access: an
-    /// agent's or routine's run, a scoped session, or another account's
-    /// manager. Their refusals of what only the person may do are enforced
-    /// from the start.
+    /// agent's or routine's run, a scoped session, a channel mention, or
+    /// another account's manager. Their refusals of what only the person may
+    /// do are enforced from the start.
     pub fn is_program(self) -> bool {
         match self {
             Self::Program
             | Self::ScopedNoSend
             | Self::ScopedGeneration
-            | Self::ScopedReadOnly
+            | Self::ScopedDryRun
+            | Self::ScopedUnknown
+            | Self::ChannelMention
             | Self::AccountManager => true,
             Self::Person | Self::ApiCredential | Self::Bot | Self::Harness | Self::Internal => {
                 false

@@ -23,6 +23,8 @@
 //! [`RouteDecision`] goes in the request's extensions for the authorization
 //! extractors, and in the response's, with the request span's fields.
 
+mod walk;
+
 #[cfg(test)]
 mod test;
 
@@ -33,11 +35,13 @@ use std::{
     task::{Context, Poll},
 };
 
+pub use walk::undeclared_routes;
+
 use axum::{
     Json,
     extract::{MatchedPath, Request},
     handler::Handler,
-    http::StatusCode,
+    http::{Method, StatusCode},
     response::{IntoResponse, Response},
     routing::{MethodFilter, MethodRouter},
 };
@@ -45,8 +49,8 @@ use macro_tower_layers::ResponseSpanFields;
 use tower::{Layer, Service};
 
 use crate::{
-    ActiveRollout, Caller, Category, NoRollout, Refusal, RefusalCode, ResolvedCaller,
-    RouteDecision, Verdict,
+    ActiveRollout, Caller, Category, NO_CALLER_MESSAGE, NoRollout, Refusal, RefusalCode,
+    ResolvedCaller, RouteDecision, Verdict,
 };
 
 macro_rules! method_constructor {
@@ -160,12 +164,28 @@ where
             .extensions()
             .get::<ResolvedCaller>()
             .map(|ResolvedCaller(caller)| *caller);
+        let safe_method = matches!(
+            *request.method(),
+            Method::GET | Method::HEAD | Method::OPTIONS
+        );
         let decision = match request.extensions().get::<ActiveRollout>() {
             Some(ActiveRollout(rollout)) => {
-                RouteDecision::new(caller, self.category, rollout.as_ref())
+                RouteDecision::new(caller, self.category, safe_method, rollout.as_ref())
             }
-            None => RouteDecision::new(caller, self.category, &NoRollout),
+            None => RouteDecision::new(caller, self.category, safe_method, &NoRollout),
         };
+        if decision.verdict == Verdict::Unresolved {
+            tracing::warn!(
+                route_policy.category = %self.category,
+                route_policy.code = %RefusalCode::NoCaller,
+                http.route = request.extensions().get::<MatchedPath>().map(MatchedPath::as_str),
+                "route policy refused a request with no caller"
+            );
+            return Box::pin(std::future::ready(Ok(with_decision(
+                no_caller_response(self.category),
+                decision,
+            ))));
+        }
         if let Verdict::Refused(refusal) = decision.verdict {
             tracing::warn!(
                 route_policy.category = %refusal.category,
@@ -214,6 +234,30 @@ pub struct RefusalBody {
     category: Category,
     /// Who was refused.
     caller: Caller,
+}
+
+/// The answer to a request on a route that needs a caller, when Macro
+/// couldn't tell who sent it.
+#[derive(serde::Serialize, utoipa::ToSchema)]
+pub struct NoCallerBody {
+    /// What the caller is told.
+    message: &'static str,
+    /// Always [`RefusalCode::NoCaller`].
+    code: RefusalCode,
+    /// The route's category.
+    category: Category,
+}
+
+fn no_caller_response(category: Category) -> Response {
+    (
+        StatusCode::FORBIDDEN,
+        Json(NoCallerBody {
+            message: NO_CALLER_MESSAGE,
+            code: RefusalCode::NoCaller,
+            category,
+        }),
+    )
+        .into_response()
 }
 
 impl IntoResponse for Refusal {
