@@ -8,6 +8,7 @@ import type {
   MessageTimelinePage,
 } from '@service-storage/messages';
 import { onlineManager } from '@tanstack/solid-query';
+import { ResultAsync } from 'neverthrow';
 import {
   catchUpAndRefresh,
   catchUpChannel,
@@ -288,16 +289,13 @@ export async function loadLocalChannelThread(
     if (!loaded) return undefined;
     const { thread } = loaded;
     // The server's thread cannot carry a reply still waiting to be sent.
-    return await withUnsettledThreadReplies(
-      host,
-      channelId,
-      thread,
-      queued
-    ).catch((error: unknown) => {
-      // The thread that was read still answers.
-      reportDeviceFault(error);
-      return thread;
-    });
+    const overlaid = await ResultAsync.fromPromise(
+      withUnsettledThreadReplies(host, channelId, thread, queued),
+      (error) => error
+    );
+    // The thread that was read still answers.
+    if (overlaid.isErr()) reportDeviceFault(overlaid.error);
+    return overlaid.unwrapOr(thread);
   } catch (error) {
     reportDeviceFault(error);
     return undefined;

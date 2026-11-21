@@ -293,8 +293,8 @@ export async function withUnsettledThreadReplies(
     // Delivered and no longer held, or deleted: the page read drops its note.
     if (!stored || stored.deleted_at) continue;
     if (note?.delivered) {
-      // The record may have been read before the delivery reached it.
-      const reply = note.reply;
+      // The record may still hold the time the reply was written with.
+      const reply = { ...stored, created_at: note.reply.created_at };
       const at = placeAmong(replies, reply);
       replies = [...replies.slice(0, at), reply, ...replies.slice(at)];
     } else {

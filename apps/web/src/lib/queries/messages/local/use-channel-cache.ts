@@ -8,6 +8,7 @@ import {
   getGraphqlSoupCacheHost,
   subscribeGraphqlSoupReconnected,
 } from '@service-storage/graphql-soup';
+import { onlineManager } from '@tanstack/solid-query';
 import {
   type Accessor,
   createEffect,
@@ -73,7 +74,8 @@ async function whenIdle(signal: AbortSignal): Promise<void> {
 async function runPass(host: CacheHost, signal: AbortSignal): Promise<void> {
   await sleep(START_DELAY_MS, signal);
   await whenIdle(signal);
-  if (signal.aborted) return;
+  // Offline the lists cannot be asked for; the pass after the reconnect runs.
+  if (signal.aborted || !onlineManager.isOnline()) return;
   const channelIds = await loadPrewarmChannelIds();
   if (signal.aborted) return;
   const outcome = await runChannelPrewarm(host, channelIds, {
