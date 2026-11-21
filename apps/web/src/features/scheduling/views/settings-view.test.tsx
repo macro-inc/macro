@@ -10,7 +10,8 @@ import {
 import { QueryObserver } from '@tanstack/solid-query';
 import { createSignal, type JSX, type ParentProps } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, onTestFinished, vi } from 'vitest';
+import { useCalendarPreferences } from '../../calendar/utils/preferences';
 import type { BookingLinksState } from '../booking-links-search';
 import { BookingRange } from '../components/booking-range';
 import {
@@ -789,4 +790,24 @@ it('consumes Calendar booking-link creation once and keeps it unsaved until Save
   fireEvent.click(screen.getByRole('button', { name: 'Cancel test event' }));
   expect(screen.queryByRole('button', { name: 'Save test event' })).toBeNull();
   expect(saves).not.toHaveBeenCalled();
+});
+
+it('shows availability hours on the calendar’s 24-hour clock', async () => {
+  const [, setPreferences] = useCalendarPreferences();
+  setPreferences('timeFormat', '24-hour');
+  onTestFinished(() => setPreferences('timeFormat', '12-hour'));
+  const { setSearch } = fixture();
+  setSearch({ tab: 'availability' });
+  expect((await screen.findAllByText(/09:00–17:00/)).length).toBeGreaterThan(0);
+  expect(screen.queryByText(/9:00 AM/)).toBeNull();
+});
+
+it('keeps availability hours on a 12-hour calendar’s clock', async () => {
+  const [, setPreferences] = useCalendarPreferences();
+  setPreferences('timeFormat', '12-hour');
+  const { setSearch } = fixture();
+  setSearch({ tab: 'availability' });
+  expect(
+    (await screen.findAllByText(/9:00 AM–5:00 PM/)).length
+  ).toBeGreaterThan(0);
 });

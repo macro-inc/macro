@@ -24,7 +24,6 @@ import {
   Show,
 } from 'solid-js';
 import { unwrap } from 'solid-js/store';
-import { getDefaultCalendarTimeFormat } from '../../calendar/utils/time-format';
 import {
   type AvailabilityTimeFormat,
   availabilityTimeLabel,
@@ -74,6 +73,8 @@ export function AvailabilityPanel(props: {
   onEdit: (schedule: AvailabilitySchedule, opener?: HTMLElement) => void;
   onDefault: (schedule: AvailabilitySchedule) => void;
   onDelete: (schedule: AvailabilitySchedule) => void;
+  /** The clock the schedules' hours read in. */
+  timeFormat: AvailabilityTimeFormat;
 }) {
   const [remove, setRemove] = createSignal<string>();
   let panel: HTMLDivElement | undefined;
@@ -122,8 +123,7 @@ export function AvailabilityPanel(props: {
         });
     });
   };
-  const timeFormat: AvailabilityTimeFormat =
-    getDefaultCalendarTimeFormat() === '24-hour' ? '24h' : '12h';
+  const timeFormat = () => props.timeFormat;
   const defaultId = () =>
     props.profile.defaultScheduleId ?? props.profile.schedules[0]?.id;
   const usedBy = (id: string) =>
@@ -355,11 +355,11 @@ export function AvailabilityPanel(props: {
                     <For each={week()}>
                       {({ day, hours }) => (
                         <Tooltip
-                          label={`${WEEKDAYS[day]}: ${hoursLabel(hours, timeFormat)}`}
+                          label={`${WEEKDAYS[day]}: ${hoursLabel(hours, timeFormat())}`}
                           class="flex-col justify-center gap-2 rounded-lg border border-edge-muted bg-surface-1/40 px-1 py-2 text-xs"
                         >
                           <span class="sr-only">
-                            {WEEKDAYS[day]}: {hoursLabel(hours, timeFormat)}
+                            {WEEKDAYS[day]}: {hoursLabel(hours, timeFormat())}
                           </span>
                           <span
                             aria-hidden="true"
@@ -397,11 +397,11 @@ export function AvailabilityPanel(props: {
                           </dt>
                           <dd class="min-w-0 flex-1 text-right tabular-nums">
                             <Tooltip
-                              label={hoursLabel(group.hours, timeFormat)}
+                              label={hoursLabel(group.hours, timeFormat())}
                               class="min-w-0 max-w-full"
                             >
                               <span class="min-w-0 truncate">
-                                {hoursLabel(group.hours, timeFormat)}
+                                {hoursLabel(group.hours, timeFormat())}
                               </span>
                             </Tooltip>
                           </dd>
@@ -436,7 +436,7 @@ export function AvailabilityPanel(props: {
                   <SchedulePreview
                     schedule={schedule}
                     groups={groups()}
-                    timeFormat={timeFormat}
+                    timeFormat={timeFormat()}
                   />
                   <Show when={props.canEdit}>
                     <Button
