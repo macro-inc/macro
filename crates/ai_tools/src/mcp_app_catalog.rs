@@ -1,4 +1,4 @@
-//! Pipedream app directory used when an agent pins MCP servers, and the
+//! The connector catalog consulted when an agent pins MCP servers, and the
 //! connector backends (Pipedream plus Macro Connect) built from the
 //! environment.
 
@@ -8,13 +8,14 @@ use anyhow::Context;
 use bots::domain::ports::{BotError, McpAppCatalog};
 use macro_env::Environment;
 use macro_env_var::maybe_env_var;
-use pipedream_mcp::domain::ports::ConnectRollout;
+use pipedream_mcp::domain::ports::{ConnectRollout, ConnectorOverlays};
 use pipedream_mcp::outbound::api::{
     DEFAULT_API_URL, DEFAULT_MCP_URL, PipedreamClient, PipedreamConfig,
 };
 use pipedream_mcp::outbound::connect::{ConnectAdapter, ConnectConfig};
 
 use pipedream_mcp::outbound::dispatch::ConnectorBackends;
+use pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -117,43 +118,6 @@ pub fn macro_connect_rollout(
     Ok(Some(rollout_from(flags, MACRO_CONNECT_FLAG)))
 }
 
-/// The PostHog flag for Canvas artifacts. Keep in sync with the web flag of the
-/// same key.
-pub const CANVAS_ARTIFACTS_FLAG: &str = "enable-canvas-artifacts";
-
-/// The Canvas artifacts rollout read from PostHog, or `None` without a PostHog
-/// key (off for everyone). Answers are cached like [`macro_connect_rollout`], and
-/// a failed read answers `false`.
-pub fn canvas_artifacts_rollout(
-    api_key: Option<&str>,
-    host: Option<&str>,
-    environment: Environment,
-) -> anyhow::Result<Option<documents::domain::canvas::CanvasArtifactsRollout>> {
-    let Some(api_key) = api_key.filter(|key| !key.is_empty()) else {
-        return Ok(None);
-    };
-    let flags = feature_flags::outbound::posthog::PostHogFeatureFlags::new(
-        host.unwrap_or("https://us.i.posthog.com"),
-        api_key.to_owned(),
-        std::time::Duration::from_secs(3),
-        environment,
-    )
-    .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
-    Ok(Some(rollout_from(flags, CANVAS_ARTIFACTS_FLAG)))
-}
-
-/// [`canvas_artifacts_rollout`] from this process's PostHog configuration.
-pub fn canvas_artifacts_rollout_from_env(
-    environment: Environment,
-) -> anyhow::Result<Option<documents::domain::canvas::CanvasArtifactsRollout>> {
-    let env = PipedreamCatalogEnv::new();
-    canvas_artifacts_rollout(
-        env.posthog_api_key.as_ref().and_then(|value| value.value()),
-        env.posthog_host.as_ref().and_then(|value| value.value()),
-        environment,
-    )
-}
-
 fn rollout_from<F>(flags: F, flag: &'static str) -> ConnectRollout
 where
     F: feature_flags::FeatureFlags + Clone + 'static,
@@ -240,22 +204,38 @@ pub fn pipedream_client_from_env() -> anyhow::Result<Option<Arc<PipedreamClient>
     Ok(Some(Arc::new(client)))
 }
 
-/// Confirms agent MCP slugs against Pipedream's app directory.
+/// Confirms agent MCP slugs against the connector catalog.
 ///
-/// With no client, every slug is refused: an unverified app is not stored.
+/// An app overlaid onto the native MCP stack (`mcp_overlays`, e.g. `github`)
+/// is connectable without Pipedream, so it is accepted from the overlay table
+/// alone. Any other slug is asked of Pipedream's app directory; with no
+/// Pipedream client it is refused, because an unverified app is not stored.
 #[derive(Clone)]
-pub struct PipedreamMcpAppCatalog {
+pub struct PipedreamMcpAppCatalog<O = PgConnectionRepo> {
     client: Option<Arc<PipedreamClient>>,
+    overlays: O,
 }
 
-impl PipedreamMcpAppCatalog {
-    /// Consult `client`, or refuse every slug when Pipedream is not configured.
-    pub fn new(client: Option<Arc<PipedreamClient>>) -> Self {
-        Self { client }
+impl<O> PipedreamMcpAppCatalog<O> {
+    /// Accept the apps `overlays` lists and consult `client` for the rest,
+    /// refusing them when Pipedream is not configured.
+    pub fn new(client: Option<Arc<PipedreamClient>>, overlays: O) -> Self {
+        Self { client, overlays }
     }
 }
 
-impl std::fmt::Debug for PipedreamMcpAppCatalog {
+impl PipedreamMcpAppCatalog {
+    /// The catalog this process can consult: overlays from `pool`, and
+    /// Pipedream when its credentials are in the environment.
+    pub fn from_env(pool: sqlx::PgPool) -> anyhow::Result<Self> {
+        Ok(Self::new(
+            pipedream_client_from_env()?,
+            PgConnectionRepo::new(pool),
+        ))
+    }
+}
+
+impl<O> std::fmt::Debug for PipedreamMcpAppCatalog<O> {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("PipedreamMcpAppCatalog")
@@ -264,8 +244,18 @@ impl std::fmt::Debug for PipedreamMcpAppCatalog {
     }
 }
 
-impl McpAppCatalog for PipedreamMcpAppCatalog {
+impl<O: ConnectorOverlays> McpAppCatalog for PipedreamMcpAppCatalog<O> {
     async fn is_connectable_app(&self, slug: &str) -> Result<bool, BotError> {
+        match self.overlays.overlay(slug).await {
+            Ok(Some(_)) => return Ok(true),
+            Ok(None) => {}
+            Err(error) => {
+                tracing::warn!(%slug, error = ?error, "MCP overlay lookup failed");
+                return Err(BotError::Unavailable(format!(
+                    "could not verify MCP app {slug}"
+                )));
+            }
+        }
         let Some(client) = &self.client else {
             return Err(BotError::Unavailable(format!(
                 "cannot verify MCP app {slug}: Pipedream is not configured"

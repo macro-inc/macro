@@ -60,11 +60,13 @@ where
     }
 }
 
-/// The request's user token as [`crate::credential::request_credential`] reads
-/// it, so every reader agrees on it: a `macro-api-token` query parameter or
-/// bearer (both as `Header`), else the access-token cookie. Returns
-/// `UNAUTHORIZED` when the request authenticates with no user token, and
-/// `BAD_REQUEST` when its credentials can't be told apart.
+/// The request's bearer, else its access-token cookie (the last one, as
+/// cookie jars keep it), read from the shared parse
+/// ([`crate::credential::access_token_sources`]) so every reader decodes them
+/// alike. Like it always has, it reads neither the query nor any other
+/// credential header: the agent scope check reads every token the request
+/// carries, so reading one here gives nothing away. Returns `UNAUTHORIZED`
+/// if neither is present.
 pub enum AccessTokenExtractor {
     Header(TypedHeader<Authorization<Bearer>>),
     Cookie(AccessTokenCookieExtractor),
@@ -91,21 +93,17 @@ where
         parts: &mut axum::http::request::Parts,
         _state: &S,
     ) -> Result<Self, Self::Rejection> {
-        let credential =
-            crate::credential::request_credential(parts).map_err(|_| StatusCode::BAD_REQUEST)?;
-        let crate::credential::CredentialKind::UserToken { token, source } = credential.kind else {
-            return Err(StatusCode::UNAUTHORIZED);
-        };
-        Ok(match source {
-            crate::credential::TokenSource::Query | crate::credential::TokenSource::Bearer => {
-                Self::Header(TypedHeader(
-                    Authorization::bearer(&token).map_err(|_| StatusCode::UNAUTHORIZED)?,
-                ))
-            }
-            crate::credential::TokenSource::Cookie => Self::Cookie(AccessTokenCookieExtractor(
-                Cookie::new(crate::credential::access_token_cookie_name(), token),
-            )),
-        })
+        let sources = crate::credential::access_token_sources(parts);
+        if let Some(token) = sources.bearer {
+            return Ok(Self::Header(TypedHeader(
+                Authorization::bearer(&token).map_err(|_| StatusCode::UNAUTHORIZED)?,
+            )));
+        }
+        let token = sources.cookie.ok_or(StatusCode::UNAUTHORIZED)?;
+        Ok(Self::Cookie(AccessTokenCookieExtractor(Cookie::new(
+            crate::credential::access_token_cookie_name(),
+            token,
+        ))))
     }
 }
 

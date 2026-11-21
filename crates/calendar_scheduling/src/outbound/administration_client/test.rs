@@ -59,3 +59,31 @@ async fn stale_revision_response_remains_a_conflict() {
     ));
     server.await.unwrap();
 }
+
+/// A calendar refusal must reach an agent as a refusal, not as an outage
+/// worth retrying.
+#[tokio::test]
+async fn a_calendar_refusal_remains_a_refusal() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let mut bytes = [0u8; 2048];
+        let read = socket.read(&mut bytes).await.unwrap();
+        assert!(read > 0);
+        socket
+            .write_all(b"HTTP/1.1 422 Unprocessable Entity\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}")
+            .await
+            .unwrap();
+    });
+    let client = SchedulingAdministrationClient::new(
+        format!("http://{address}/calendar"),
+        "test-key".into(),
+    );
+    assert!(matches!(
+        client.settings("macro|host@example.com", None).await,
+        Err(Error::CalendarRejected)
+    ));
+    server.await.unwrap();
+}

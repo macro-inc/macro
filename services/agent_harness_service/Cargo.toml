@@ -114,7 +114,6 @@ harnesses = { path = "../../crates/harnesses", default-features = false, feature
 user_api_key = { path = "../../crates/user_api_key", features = ["postgres"] }
 agent_credentials = { path = "../../crates/agent_credentials", features = ["postgres"] }
 hosted_runtimes = { path = "../../crates/hosted_runtimes", default-features = false, features = ["outbound", "ports"] }
-incus_client = { path = "../../crates/incus_client" }
 http = { workspace = true }
 http-body-util = { workspace = true }
 image_generation = { path = "../../crates/image_generation", features = ["axum"] }
@@ -167,6 +166,7 @@ pipedream_mcp = { path = "../../crates/pipedream_mcp" }
 png = { workspace = true }
 prompt = { path = "../../crates/prompt" }
 properties = { path = "../../crates/properties", default-features = false, features = ["outbound"] }
+projects = { path = "../../crates/projects", default-features = false, features = ["outbound", "ports"] }
 rdkafka = { workspace = true }
 readonly_pool = { path = "../../crates/readonly_pool" }
 rate_limit = { path = "../../crates/rate_limit" }
@@ -215,6 +215,7 @@ utoipa = { workspace = true, features = ["axum_extras", "chrono"] }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 uuid = { workspace = true }
 web_search = { path = "../../crates/web_search", features = ["axum"] }
+zeroize = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]
@@ -230,8 +231,11 @@ harnesses = { path = "../../crates/harnesses", default-features = false, feature
 macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
 macro_db_migrator = { path = "../../crates/macro_db_migrator" }
 mcp_select = { path = "../../crates/mcp_select" }
+opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
 schemars = { workspace = true }
-tokio = { workspace = true, features = ["test-util"] }
+tokio = { workspace = true, features = ["io-util", "net", "test-util"] }
+tracing-opentelemetry = { workspace = true }
+tracing-subscriber = { workspace = true }
 wiremock = { workspace = true }
 
 [features]

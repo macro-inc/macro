@@ -27,7 +27,6 @@ import { ParticipantsSearchInput } from './ParticipantsSearchInput';
 
 export function ChannelParticipantsTab(props: {
   channelId: string;
-  botManagementEnabled: boolean;
   inviteBotFocusRequest: number;
   onCreateBot: () => void;
   onOpenBot: (botId: string) => void;
@@ -215,7 +214,7 @@ export function ChannelParticipantsTab(props: {
                 </div>
               </Panel.Body>
             </Panel>
-            <Show when={props.botManagementEnabled}>{bots()}</Show>
+            {bots()}
           </div>
         </div>
       }
@@ -255,7 +254,7 @@ export function ChannelParticipantsTab(props: {
               )
             : undefined
         }
-        bots={props.botManagementEnabled ? bots : undefined}
+        bots={bots}
         settings={
           canManageChannel() && supportsTeamSettings()
             ? teamSettings

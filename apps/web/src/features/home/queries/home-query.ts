@@ -7,7 +7,6 @@ import {
   type FacetSelection,
   mergeAst,
   NIL_UUID,
-  type TargetExpr,
 } from '@app/features/soup/filters';
 import type { SoupAstBody, SoupAstItemsQueryArgs } from '@queries/soup/items';
 import { startOfDay, subWeeks } from 'date-fns';
@@ -16,23 +15,9 @@ import { HOME_FACETS, type HomeFacetContext } from '../home-facets';
 import type { HomeTab } from '../types';
 
 export type HomeQueryCapabilities = {
-  calendar: boolean;
   foreignEntities: boolean;
   notifiedSort: boolean;
-  snippets: boolean;
 };
-
-function documentClause(
-  expressions: TargetExpr[],
-  capabilities: HomeQueryCapabilities
-): TargetExpr {
-  if (capabilities.snippets) return clause.and(...expressions);
-
-  return clause.and(
-    ...expressions,
-    clause.not(clause.eq('subType', 'snippet'))
-  );
-}
 
 function signalClause(
   capabilities: HomeQueryCapabilities,
@@ -42,12 +27,9 @@ function signalClause(
   const recent = subWeeks(startOfDay(now), 2).toISOString();
 
   const filters: FacetClause = {
-    df: documentClause(
-      [
-        clause.eq('documentDone', false),
-        clause.eq('documentUpdatedAt', { gte: recent }),
-      ],
-      capabilities
+    df: clause.and(
+      clause.eq('documentDone', false),
+      clause.eq('documentUpdatedAt', { gte: recent })
     ),
     ef: clause.and(
       clause.eq('emailDone', false),
@@ -89,9 +71,7 @@ function signalClause(
     );
   }
 
-  if (capabilities.calendar) {
-    filters.calf = clause.eq('calendarEventDone', false);
-  }
+  filters.calf = clause.eq('calendarEventDone', false);
 
   return confine(filters);
 }
@@ -107,7 +87,7 @@ function noiseClause(): FacetClause {
 }
 
 function tabClause(
-  tab: HomeTab,
+  tab: Exclude<HomeTab, 'recent'>,
   capabilities: HomeQueryCapabilities,
   now: Date,
   userId: string | undefined
@@ -151,6 +131,20 @@ export function buildHomeQuery(
   context: HomeViewContext,
   options: { now?: Date } = {}
 ): SoupAstItemsQueryArgs {
+  // Recent is the viewer's own activity, newest touch first. Its endpoint
+  // rejects filter trees, so the facets apply on the client instead.
+  if (context.tab === 'recent') {
+    return {
+      params: {
+        expand: true,
+        limit: 100,
+        sort_method: 'touched_by_me',
+        sort_direction: 'desc',
+      },
+      body: {},
+    };
+  }
+
   const base = compileClause(
     tabClause(
       context.tab,

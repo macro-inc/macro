@@ -2,11 +2,8 @@ import { HOME_SETUP_PROMOTION as COPY } from '@app/features/sidebar-promotion/co
 import { createLastKnown } from '@app/features/sidebar-promotion/primitives/last-known';
 import {
   allOf,
-  flagVerdict,
   SidebarPromotion,
 } from '@app/features/sidebar-promotion/sidebar-promotion';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableSidebarPromotions } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
 import { useCurrentTeamQuery, useIsTeamAdmin } from '@queries/team/teams';
@@ -15,9 +12,8 @@ import { z } from 'zod';
 
 /** Home's prompt to connect tools (Settings → Integrations) and invite teammates (Settings → Team). */
 export function HomeSetupPromotion(props: { class?: string }) {
-  const promotions = useFeatureFlag(enableSidebarPromotions);
   const { openSettings } = useSettingsState();
-  const team = useCurrentTeamQuery(() => promotions().enabled);
+  const team = useCurrentTeamQuery();
   const isAdmin = useIsTeamAdmin();
   const userId = useUserId();
   // Settings → Team can invite (or create a team with invites) unless the
@@ -36,10 +32,7 @@ export function HomeSetupPromotion(props: { class?: string }) {
   return (
     <SidebarPromotion
       id={COPY.id}
-      applies={allOf(
-        flagVerdict(promotions()),
-        canInvite() === undefined ? undefined : true
-      )}
+      applies={allOf(canInvite() === undefined ? undefined : true)}
       logos={COPY.logos}
       headline={COPY.headline}
       pitch={COPY.pitch}

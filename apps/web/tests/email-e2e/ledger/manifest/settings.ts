@@ -174,7 +174,6 @@ export const settings = {
       trigger:
         'button "Enable calendar" (aria "Enable calendar for <address>")',
       source: ['src/features/settings/Email.tsx'],
-      flag: 'enable-calendar-ui',
     },
     {
       id: 'AX-006',
@@ -184,7 +183,6 @@ export const settings = {
       trigger:
         'icon button aria "Turn off calendar for <address>" (tooltip "Turn off calendar")',
       source: ['src/features/settings/Email.tsx'],
-      flag: 'enable-calendar-ui',
     },
     {
       id: 'AX-009',
@@ -219,7 +217,6 @@ export const settings = {
       action: 'Toggle read receipts for an own inbox',
       trigger: 'switch "Read receipts for <address>"',
       source: ['src/features/settings/email-settings.tsx'],
-      flag: 'enable-email-read-receipts',
     },
     {
       id: 'AX-015',
@@ -277,7 +274,6 @@ export const settings = {
       action: 'Confirm turn off calendar',
       trigger: 'dialog "Turn off calendar", button "Turn off"',
       source: ['src/features/calendar/components/TurnOffCalendarDialog.tsx'],
-      flag: 'enable-calendar-ui',
     },
     {
       id: 'AX-008',
@@ -286,7 +282,6 @@ export const settings = {
       action: 'Cancel turn off calendar',
       trigger: 'button "Cancel"',
       source: ['src/features/calendar/components/TurnOffCalendarDialog.tsx'],
-      flag: 'enable-calendar-ui',
     },
     {
       id: 'AX-017',
@@ -298,7 +293,6 @@ export const settings = {
         'src/features/settings/SignatureEditor.tsx',
         'src/features/settings/components/signature-workspace.tsx',
       ],
-      flag: 'enable-email-signatures',
     },
     {
       id: 'AX-018',
@@ -308,7 +302,6 @@ export const settings = {
         'Format signature: Font, Font size, Bold (Cmd+B), Italic (Cmd+I), Underline (Cmd+U), Text color, Highlight color, Numbered list, Bulleted list, Link, Clear formatting',
       trigger: 'toolbar buttons / selects',
       source: ['src/features/settings/SignatureEditor.tsx'],
-      flag: 'enable-email-signatures',
     },
     {
       id: 'AX-019',
@@ -317,7 +310,6 @@ export const settings = {
       action: 'Insert an image into the signature (uploaded as a static file)',
       trigger: 'toolbar "Image"; paste or drop an image',
       source: ['src/features/settings/SignatureEditor.tsx'],
-      flag: 'enable-email-signatures',
       needs: 'the static file service',
     },
     {
@@ -327,7 +319,6 @@ export const settings = {
       action: 'Resize an image in the signature',
       trigger: 'drag the resize handle of a selected image',
       source: ['src/features/settings/SignatureEditor.tsx'],
-      flag: 'enable-email-signatures',
     },
     {
       id: 'AX-202',
@@ -339,7 +330,6 @@ export const settings = {
         'src/features/settings/SignatureEditor.tsx',
         'src/features/settings/pastedHyperlinkHref.ts',
       ],
-      flag: 'enable-email-signatures',
     },
     {
       id: 'AX-020',
@@ -348,7 +338,6 @@ export const settings = {
       action: 'Switch signature view: Preview / Rich text / HTML',
       trigger: 'tabs "Signature views for <address>"',
       source: ['src/features/settings/components/signature-workspace.tsx'],
-      flag: 'enable-email-signatures',
     },
     {
       id: 'AX-021',
@@ -357,7 +346,6 @@ export const settings = {
       action: 'Edit signature HTML source',
       trigger: 'textarea "Signature HTML for <address>"',
       source: ['src/features/settings/components/signature-workspace.tsx'],
-      flag: 'enable-email-signatures',
     },
     {
       id: 'AX-022',
@@ -367,7 +355,6 @@ export const settings = {
         'Confirm "Convert to rich text?" when opening Rich text on custom HTML',
       trigger: 'confirm dialog button "Continue to rich text"',
       source: ['src/features/settings/components/signature-workspace.tsx'],
-      flag: 'enable-email-signatures',
     },
     {
       id: 'AX-203',
@@ -376,7 +363,6 @@ export const settings = {
       action: 'Cancel "Convert to rich text?" (stays on the current tab)',
       trigger: 'confirm dialog "Cancel"',
       source: ['src/features/settings/components/signature-workspace.tsx'],
-      flag: 'enable-email-signatures',
     },
     {
       id: 'AX-204',
@@ -386,7 +372,6 @@ export const settings = {
         'Paste a signature with custom HTML into an empty Rich text editor (kept as HTML, no dialog)',
       trigger: 'paste formatted HTML in Rich text',
       source: ['src/features/settings/components/signature-workspace.tsx'],
-      flag: 'enable-email-signatures',
     },
     {
       id: 'AX-023',
@@ -396,7 +381,6 @@ export const settings = {
         'Confirm "Replace with pasted signature?" (pasting custom HTML over an existing signature)',
       trigger: 'confirm dialog button "Use pasted signature"',
       source: ['src/features/settings/components/signature-workspace.tsx'],
-      flag: 'enable-email-signatures',
     },
     {
       id: 'AX-205',
@@ -405,7 +389,6 @@ export const settings = {
       action: 'Cancel "Replace with pasted signature?"',
       trigger: 'confirm dialog "Cancel"',
       source: ['src/features/settings/components/signature-workspace.tsx'],
-      flag: 'enable-email-signatures',
     },
     {
       id: 'AX-024',
@@ -417,7 +400,6 @@ export const settings = {
         'src/features/settings/components/signature-form.tsx',
         'src/features/settings/SignatureSection.tsx',
       ],
-      flag: 'enable-email-signatures',
     },
     {
       id: 'AX-025',
@@ -430,7 +412,6 @@ export const settings = {
         'src/features/settings/SignatureSection.tsx',
       ],
       viewports: BOTH_VIEWPORTS,
-      flag: 'enable-email-signatures',
     },
     {
       id: 'AX-026',
@@ -443,7 +424,6 @@ export const settings = {
         'src/features/settings/SignatureSection.tsx',
       ],
       providers: ['gmail'],
-      flag: 'enable-email-signatures',
     },
     {
       id: 'AX-027',
@@ -456,7 +436,6 @@ export const settings = {
         'src/features/settings/SignatureSection.tsx',
       ],
       viewports: BOTH_VIEWPORTS,
-      flag: 'enable-email-signatures',
     },
     {
       id: 'AX-028',
@@ -620,7 +599,6 @@ export const settings = {
       action: 'Grant calendar access from the Enable calendar prompt',
       trigger: 'toast action "Grant access"',
       source: ['src/features/auth/CalendarPermissionPrompt.tsx'],
-      flag: 'enable-calendar-ui, enable-calendar-prompt-web / enable-calendar-prompt-mobile',
     },
     {
       id: 'AX-209',
@@ -630,7 +608,6 @@ export const settings = {
         'Dismiss the Enable calendar prompt (remembered, not shown again for that inbox)',
       trigger: 'toast button "Not now"',
       source: ['src/features/auth/CalendarPermissionPrompt.tsx'],
-      flag: 'enable-calendar-ui, enable-calendar-prompt-web / enable-calendar-prompt-mobile',
     },
     {
       id: 'AX-041',
@@ -769,7 +746,6 @@ export const settings = {
       state: '"Loading signatures…" / "Loading signature…"',
       trigger: 'links query pending',
       source: ['src/features/settings/email-settings.tsx'],
-      flag: 'enable-email-signatures',
     },
     {
       id: 'STX-004',
@@ -778,7 +754,6 @@ export const settings = {
       state: '"Couldn\'t load signatures" + Try again',
       trigger: 'GET /email/links failed',
       source: ['src/features/settings/email-settings.tsx'],
-      flag: 'enable-email-signatures',
     },
     {
       id: 'STX-005',
@@ -787,7 +762,6 @@ export const settings = {
       state: '"Connect an email account above to add a signature."',
       trigger: 'no linked inbox',
       source: ['src/features/settings/email-settings.tsx'],
-      flag: 'enable-email-signatures',
     },
     {
       id: 'STX-006',
@@ -796,7 +770,6 @@ export const settings = {
       state: '"Connect an email account above to use read receipts."',
       trigger: 'no linked inbox',
       source: ['src/features/settings/email-settings.tsx'],
-      flag: 'enable-email-read-receipts',
     },
     {
       id: 'STX-007',
@@ -885,7 +858,6 @@ export const settings = {
       state: 'Toast "Failed to update read receipts."',
       trigger: 'PATCH /email/settings failed',
       source: ['src/features/settings/email-settings.tsx'],
-      flag: 'enable-email-read-receipts',
     },
     {
       id: 'STX-202',
@@ -926,7 +898,6 @@ export const settings = {
         'Button "Turning off…" with status "Turning off calendar and removing synced events…"',
       trigger: 'turn-off request pending',
       source: ['src/features/calendar/components/TurnOffCalendarDialog.tsx'],
-      flag: 'enable-calendar-ui',
     },
     {
       id: 'STX-014',
@@ -936,7 +907,6 @@ export const settings = {
         'Toast "Calendar turned off" / "Failed to turn off calendar. Please try again."',
       trigger: 'turn-off result',
       source: ['src/features/calendar/components/TurnOffCalendarDialog.tsx'],
-      flag: 'enable-calendar-ui',
     },
     {
       id: 'STX-015',
@@ -947,7 +917,6 @@ export const settings = {
       trigger: 'PATCH /email/settings result',
       source: ['src/features/settings/SignatureSection.tsx'],
       viewports: BOTH_VIEWPORTS,
-      flag: 'enable-email-signatures',
     },
     {
       id: 'STX-206',
@@ -960,7 +929,6 @@ export const settings = {
         'src/features/settings/SignatureSection.tsx',
         'src/features/settings/components/signature-form.tsx',
       ],
-      flag: 'enable-email-signatures',
     },
     {
       id: 'STX-016',
@@ -974,7 +942,6 @@ export const settings = {
         'src/features/settings/components/signature-form.tsx',
       ],
       providers: ['gmail'],
-      flag: 'enable-email-signatures',
     },
     {
       id: 'STX-017',
@@ -983,7 +950,6 @@ export const settings = {
       state: 'Toast "Failed to upload image"',
       trigger: 'static upload failed',
       source: ['src/features/settings/SignatureEditor.tsx'],
-      flag: 'enable-email-signatures',
       needs: 'the static file service',
     },
     {
@@ -994,7 +960,6 @@ export const settings = {
         'Preview tab: rendered signature, or "Write in Rich text or paste your HTML." when empty',
       trigger: 'Preview tab with / without a signature',
       source: ['src/features/settings/components/signature-workspace.tsx'],
-      flag: 'enable-email-signatures',
     },
     {
       id: 'STX-208',
@@ -1005,7 +970,6 @@ export const settings = {
       trigger: 'signature of an inbox shared with the user',
       source: ['src/features/settings/components/signature-form.tsx'],
       viewports: BOTH_VIEWPORTS,
-      flag: 'enable-email-signatures',
     },
     {
       id: 'STX-018',
@@ -1019,7 +983,6 @@ export const settings = {
         'src/features/settings/components/signature-form.tsx',
       ],
       viewports: ['phone'],
-      flag: 'enable-email-signatures',
     },
     {
       id: 'STX-019',
@@ -1072,11 +1035,17 @@ export const settings = {
       surface: 'SX-06',
       fn: ['F-006'],
       state:
-        'toast: "Failed to add inbox" (mobile app) / "Failed to open the browser to connect your account. Please try again." (desktop app)',
-      trigger: 'native link completion failed / system browser failed to open',
-      source: ['src/lib/core/email-link/index.ts'],
+        'toast: "Failed to add inbox", "This address is connected through a different Microsoft account" or "Something changed, try again" (mobile app) / "Failed to open the browser to connect your account. Please try again." (desktop app)',
+      trigger:
+        'native link completion failed (IdentityConflict and Changed have their own toast) / system browser failed to open',
+      source: [
+        'src/lib/core/email-link/index.ts',
+        'src/lib/core/email-link/link-outcome.ts',
+      ],
       toasts: [
         'src/lib/core/email-link/index.ts#Failed to add inbox',
+        'src/lib/core/email-link/index.ts#INBOX_IDENTITY_CONFLICT_MESSAGE',
+        'src/lib/core/email-link/index.ts#INBOX_CHANGED_MESSAGE',
         'src/lib/core/email-link/index.ts#Failed to open the browser to connect your account. Please try again.',
       ],
     },
@@ -1129,10 +1098,13 @@ export const settings = {
       surface: 'SX-08',
       fn: ['F-006', 'F-174'],
       state:
-        'Toasts "Gmail access was not granted. Please allow all requested permissions and try again.", "A professional subscription is required to add another inbox.", "Failed to add inbox", "Failed to finish connecting your account. Please try again from Settings.", "Failed to connect your account. Please try again.", "Missing link id in callback URL"',
+        'Toasts "Gmail access was not granted. Please allow all requested permissions and try again.", "A professional subscription is required to add another inbox.", "This address is connected through a different Microsoft account", "Something changed, try again", "Failed to add inbox", "Failed to finish connecting your account. Please try again from Settings.", "Failed to connect your account. Please try again.", "Missing link id in callback URL"',
       trigger:
-        'init errors (NoGmailGrant, PaymentRequired, other), thrown error, email_link_error other than cancelled, missing link_id',
-      source: ['src/features/auth/EmailAuth.tsx'],
+        'init errors (NoGmailGrant, PaymentRequired, IdentityConflict, Changed, other), thrown error, email_link_error other than cancelled, missing link_id',
+      source: [
+        'src/features/auth/EmailAuth.tsx',
+        'src/lib/core/email-link/link-outcome.ts',
+      ],
     },
     {
       id: 'STX-027',
@@ -1194,7 +1166,6 @@ export const settings = {
         'Persistent toast "Enable calendar": "Macro can now sync your calendar. Grant calendar access for <address> to turn it on."',
       trigger: 'own inbox with needs_calendar_permission, not dismissed before',
       source: ['src/features/auth/CalendarPermissionPrompt.tsx'],
-      flag: 'enable-calendar-ui, enable-calendar-prompt-web / enable-calendar-prompt-mobile',
     },
     {
       id: 'STX-030',
@@ -1245,14 +1216,6 @@ export const settings = {
       source: ['src/features/settings/Email.tsx'],
     },
     {
-      id: 'STX-943',
-      surface: 'SX-01',
-      fn: ['F-162'],
-      state: 'result: the switch shows the chosen setting, also after a reload',
-      trigger: 'after the action succeeds',
-      source: ['src/features/settings/email-settings.tsx'],
-    },
-    {
       id: 'STX-963',
       surface: 'SX-01',
       fn: ['F-009'],
@@ -1286,7 +1249,6 @@ export const settings = {
       trigger: 'after the action succeeds',
       source: ['src/features/settings/components/signature-form.tsx'],
       viewports: BOTH_VIEWPORTS,
-      flag: 'enable-email-signatures',
     },
     {
       id: 'STX-967',

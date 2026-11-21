@@ -63,6 +63,16 @@ describe('Mail capsule capability', () => {
     });
   });
 
+  it('treats a null debug info answer as a failed lookup', async () => {
+    mocks.native = true;
+    mocks.invoke.mockResolvedValue(null);
+    const { mailCacheProfile } = await import('./mail-cache-profile');
+    expect(await mailCacheProfile()).toEqual({
+      profile: 'soup-mail-v2',
+      outcome: 'native_lookup_failed',
+    });
+  });
+
   it('unblocks concurrent callers and keeps the legacy profile after a timeout', async () => {
     vi.useFakeTimers();
     mocks.native = true;

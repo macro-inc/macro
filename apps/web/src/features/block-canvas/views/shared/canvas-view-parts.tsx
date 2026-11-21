@@ -1,7 +1,5 @@
 import { TutorialPill } from '@app/features/video-tutorials';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { createImageActions } from '@core/component/ImageActions';
-import { enableCanvasArtifacts } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type DocumentGeometry,
@@ -35,6 +33,8 @@ import type { CanvasClipboard } from '../../clipboard';
 import type { CanvasEmbedViewProps } from '../../components/embed-view';
 import { EraserTrail } from '../../components/eraser-trail';
 import { MediaUploadPreviews } from '../../components/media-upload-previews';
+import type { CanvasAsset } from '../../core/assets';
+import type { CanvasInsertMode } from '../../core/insert';
 import { registerCanvasZoomHotkeys } from '../../hotkeys';
 import { createCanvasAssetDrop } from '../../primitives/asset-drop';
 import type { CanvasAssetState } from '../../primitives/create-asset-state';
@@ -42,16 +42,20 @@ import type {
   CanvasState,
   CanvasTool,
 } from '../../primitives/create-canvas-state';
-import type { CanvasInsertState } from '../../primitives/create-insert-state';
+import type {
+  CanvasInsertLocation,
+  CanvasInsertState,
+} from '../../primitives/create-insert-state';
+import { pickCanvasMedia } from '../../primitives/pick-media';
 import { attachTextInput } from '../../primitives/text-input';
 import { useCanvasMediaSource } from '../../queries/media';
 import { ArtifactPresentation } from '../artifact-presentation';
 import { CanvasArtifactView } from '../artifact-view';
 import { ConnectorTargets } from '../connector-targets';
 import { CanvasDocumentView, CanvasMediaView } from '../embedded-items';
-import { CanvasInsertMenu } from '../insert-menu';
 import { CanvasTextContent } from '../text-content';
 import { TextEditingView } from '../text-editing-view';
+import { createCanvasFraming } from './canvas-framing';
 
 export type CanvasViewProps = {
   state: CanvasState;
@@ -73,10 +77,7 @@ function createCanvasView(props: CanvasViewProps) {
   const editor = state.editor;
   let host: HTMLDivElement | undefined;
 
-  const viewportSize = () => ({
-    width: host?.clientWidth ?? 0,
-    height: host?.clientHeight ?? 0,
-  });
+  const framing = createCanvasFraming(editor, () => host);
   /** The scene position under a point on the screen. */
   const worldPoint = (clientX: number, clientY: number) => {
     const rect = host?.getBoundingClientRect();
@@ -89,14 +90,9 @@ function createCanvasView(props: CanvasViewProps) {
     host
       ?.querySelector<HTMLElement>('[aria-label="Graphics canvas"]')
       ?.focus({ preventScroll: true });
-  const fit = () => editor.fitScene(viewportSize());
-  const fitSelection = () => editor.fitSelection(viewportSize());
+  const { fit, fitSelection } = framing;
   const zoom = (factor: number) => {
-    const { width, height } = viewportSize();
-    editor.zoomAt(
-      { x: width / 2, y: height / 2 },
-      editor.getCamera().scale * factor
-    );
+    editor.zoomAt(framing.centre(), editor.getCamera().scale * factor);
   };
 
   const selectedItem = () =>
@@ -117,7 +113,60 @@ function createCanvasView(props: CanvasViewProps) {
   const imageActionsDisabled = () =>
     !imageSource.url() || imageActions.isPrefetching() || imageActions.isBusy();
 
-  const artifactsFlag = useFeatureFlag(enableCanvasArtifacts);
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
+  /**
+   * Run `place` where the Attach menu was opened and close the menu. A caller
+   * that answers later (a dropped file that had to be fetched) names the
+   * opening it belongs to, so it never lands where a newer menu was opened,
+   * and lands nowhere once the canvas has gone.
+   */
+  const insertAt = (
+    place: (world: Point) => void,
+    at = props.insert.location()
+  ) => {
+    if (disposed || !at) return;
+    place(at.world);
+    if (props.insert.location() === at) props.insert.close();
+  };
+  /**
+   * What the Attach menu's choices do, at the place the menu was opened for.
+   * Each view draws the menu itself.
+   */
+  const insert = {
+    location: props.insert.location,
+    close: props.insert.close,
+    select: (asset: CanvasAsset, mode: CanvasInsertMode) =>
+      insertAt((world) => {
+        if (mode === 'media')
+          fireAndForget(props.assets.media(asset, world), 'canvas-assets');
+        else props.assets.document(asset, world, 'preview');
+      }),
+    /** Files dropped on the menu that `at` was open for. */
+    files: (files: File[], at?: CanvasInsertLocation) =>
+      insertAt(
+        (world) =>
+          fireAndForget(props.assets.files(files, world), 'canvas-assets'),
+        at
+      ),
+    /**
+     * Ask the device for images or videos. The menu closes at once; the files
+     * arrive whenever the picker answers, unless the canvas has gone by then.
+     */
+    upload: () =>
+      insertAt((world) =>
+        fireAndForget(
+          pickCanvasMedia((files) => {
+            if (disposed) return;
+            fireAndForget(props.assets.files(files, world), 'canvas-assets');
+          }),
+          'canvas-assets'
+        )
+      ),
+    artifact: () => insertAt(props.assets.artifact),
+  };
   const [presenting, setPresenting] = createSignal<string>();
   // Outlives the inspector, which unmounts whenever nothing is selected.
   const [lockAspectRatio, setLockAspectRatio] = createSignal(false);
@@ -128,12 +177,15 @@ function createCanvasView(props: CanvasViewProps) {
     editor,
     setHost(element: HTMLDivElement) {
       host = element;
+      framing.watchPresses(element);
     },
     host: () => host,
     worldPoint,
     focus,
     fit,
     fitSelection,
+    frameWithin: framing.frameWithin,
+    keepInFrame: framing.keepInFrame,
     zoom,
     selectedItem,
     selectedImage,
@@ -154,7 +206,7 @@ function createCanvasView(props: CanvasViewProps) {
               ),
           }
         : undefined,
-    artifactsEnabled: () => artifactsFlag().enabled,
+    insert,
     presenting,
     setPresenting,
     lockAspectRatio,
@@ -169,15 +221,24 @@ function createCanvasView(props: CanvasViewProps) {
     },
     finishText() {
       state.text.finish();
-      state.chooseTool('select');
+      state.toolDone();
       focus();
     },
-    /** Select the item under a screen point, as a context menu's subject. */
-    selectAt(clientX: number, clientY: number) {
+    /**
+     * Select the item under a screen point, as a context menu's subject. A
+     * finger passes a wider `reach` than a cursor's 3px.
+     */
+    selectAt(clientX: number, clientY: number, reach = 3) {
       if (state.embeds.active() || state.text.draft()) return;
       focus();
-      const id = editor.hitTest(worldPoint(clientX, clientY));
-      if (id && !state.session().selectedIds.includes(id)) {
+      const world = worldPoint(clientX, clientY);
+      const selected = state.session().selectedIds;
+      // An item selected on its own inside a group is the subject already:
+      // picking its group again would act on more than was chosen.
+      const inside = editor.hitTest(world, true, reach);
+      if (inside && selected.includes(inside)) return;
+      const id = editor.hitTest(world, false, reach);
+      if (id && !selected.includes(id)) {
         state.chooseTool('select');
         editor.select(id);
       }
@@ -288,6 +349,10 @@ function Surface(props: {
    * screen; nothing while a long press should stay with the tool.
    */
   longPress?: () => ((point: Point) => void) | undefined;
+  /** Lay the selection's handles out for fingers. */
+  touchHandles?: boolean;
+  /** One finger pans instead of going to the tool. */
+  fingerPans?: () => boolean;
 }) {
   const view = useCanvasView();
   const { state, editor } = view;
@@ -332,7 +397,7 @@ function Surface(props: {
             active: state.isConnectorTool,
             appearance: state.defaults,
             style: state.connector.defaults,
-            onCommit: () => state.chooseTool('select'),
+            onCommit: state.toolDone,
           });
           return () => {
             detachEraser();
@@ -435,6 +500,8 @@ function Surface(props: {
           duplicateOnAltDrag: true,
           onShapeCreated: state.shapeCreated,
           longPress: () => props.longPress?.(),
+          touchHandles: props.touchHandles,
+          fingerPans: () => !!props.fingerPans?.(),
         }}
         gridColor={
           state.grid()
@@ -464,6 +531,7 @@ function Surface(props: {
               editor={editor}
               camera={state.camera}
               onFinish={view.finishText}
+              ref={view.keepInFrame}
             />
           )}
         </Show>
@@ -494,52 +562,11 @@ function Surface(props: {
   );
 }
 
-/** The Attach menu and its pickers, open wherever the insert state points. */
-function InsertMenu() {
-  const view = useCanvasView();
-  const { props } = view;
-  return (
-    <Show when={props.insert.location()} keyed>
-      {(location) => (
-        <CanvasInsertMenu
-          location={location}
-          onClose={props.insert.close}
-          onRestoreFocus={view.focus}
-          onArtifact={
-            view.artifactsEnabled()
-              ? () => {
-                  props.assets.artifact(location.world);
-                  props.insert.close();
-                }
-              : undefined
-          }
-          onSelect={(asset, mode) => {
-            if (mode === 'media')
-              fireAndForget(
-                props.assets.media(asset, location.world),
-                'canvas-assets'
-              );
-            else props.assets.document(asset, location.world, 'preview');
-            props.insert.close();
-          }}
-          onFiles={(files) => {
-            fireAndForget(
-              props.assets.files(files, location.world),
-              'canvas-assets'
-            );
-            props.insert.close();
-          }}
-        />
-      )}
-    </Show>
-  );
-}
-
 /** Artifacts shown full screen, from the one Present was chosen on. */
 function Presentation() {
   const view = useCanvasView();
   return (
-    <Show when={view.artifactsEnabled() ? view.presenting() : undefined} keyed>
+    <Show when={view.presenting()} keyed>
       {(startId) => (
         <ArtifactPresentation
           editor={view.editor}
@@ -575,7 +602,6 @@ function EmptyState() {
 export const CanvasViewParts = {
   Root,
   Surface,
-  InsertMenu,
   Presentation,
   EmptyState,
 };

@@ -1,7 +1,5 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
-import { enableMacroComputers } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import HardDrivesIcon from '@icon/system/regular/hard-drives.svg';
 import { useAgentsQuery } from '@queries/agents/agents';
@@ -11,6 +9,8 @@ import {
 } from '@queries/computers/claude';
 import {
   useCancelComputerMutation,
+  useComputerUsageQuery,
+  useMacroComputersRollout,
   useReleaseComputerMutation,
   useRestoreComputerMutation,
   useRetryComputerMutation,
@@ -18,7 +18,11 @@ import {
   useUndoCancelComputerMutation,
 } from '@queries/computers/computers';
 import { useIsTeamAdmin } from '@queries/team/teams';
-import type { ComputerStatus, SizeOffer } from '@service-auth/computers';
+import type {
+  ComputerStatus,
+  ComputerUsage,
+  SizeOffer,
+} from '@service-auth/computers';
 import type { Harness as RegisteredHarness } from '@service-storage/client';
 import { Button, confirmDialog } from '@ui';
 import { createEffect, createSignal, For, on, Show } from 'solid-js';
@@ -41,13 +45,14 @@ import {
   type OffersFailure,
   offersFailure,
 } from '../core/computer-display';
+import { hasReadings } from '../core/computer-usage';
 import {
   computerSetupRequest,
   consumeComputerSetupRequest,
 } from '../primitives/setup-request';
 import { useTeamComputers } from '../primitives/team-computers';
 import { ClaudeSignInDialog } from './claude-sign-in-dialog';
-import { ComputerBuyFlow } from './computer-buy-flow';
+import { type AfterPurchase, ComputerBuyFlow } from './computer-buy-flow';
 import type { SetupStepId } from './computer-setup-dialog';
 
 /**
@@ -125,6 +130,7 @@ export function GetComputerRow(props: {
 /** One computer's row, with its Claude state and the actions the viewer has. */
 function ManagedComputerRow(props: {
   computer: ComputerStatus;
+  usage?: ComputerUsage;
   harness?: RegisteredHarness;
   canManage: boolean;
   canManageClaude: boolean;
@@ -134,7 +140,7 @@ function ManagedComputerRow(props: {
   onSignIn: () => void;
   onRelease: () => void;
 }) {
-  const rollout = useFeatureFlag(enableMacroComputers);
+  const rollout = useMacroComputersRollout();
   const mode = useClaudeModeQuery(() =>
     rollout().enabled && props.canManageClaude
       ? (props.computer.harnessId ?? undefined)
@@ -388,6 +394,11 @@ function ManagedComputerRow(props: {
       claude={claude()}
       primary={primary()}
       menu={menu()}
+      usage={
+        props.computer.poweredOn && props.usage && hasReadings(props.usage)
+          ? props.usage
+          : undefined
+      }
       harness={props.harness?.access === 'owner' ? props.harness : undefined}
     />
   );
@@ -403,11 +414,21 @@ export function MacroComputers(props: {
   /** Get a computer, at the top of Machines, opened the buy flow. */
   buying: boolean;
   onBuyingChange: (buying: boolean) => void;
+  /** Where Buy goes once the computer is up; `close` unless given. */
+  afterPurchase?: AfterPurchase;
 }) {
   const isAdmin = useIsTeamAdmin();
   const { enabled, computers, failed } = useTeamComputers();
   const release = useReleaseComputerMutation();
   const agents = useAgentsQuery();
+  const usage = useComputerUsageQuery(
+    () => enabled() && computers().length > 0
+  );
+  // The rows never wait on usage: a pending or failed read shows none.
+  const usageOf = (computer: ComputerStatus) =>
+    usage.isPending
+      ? undefined
+      : usage.data?.find((entry) => entry.computerId === computer.id);
   const buying = () => props.buying;
   const setBuying = (value: boolean) => props.onBuyingChange(value);
   const [settingUp, setSettingUp] = createSignal<string>();
@@ -481,6 +502,7 @@ export function MacroComputers(props: {
               {(computer) => (
                 <ManagedComputerRow
                   computer={computer}
+                  usage={usageOf(computer)}
                   harness={harnessFor(computer)}
                   canManage={isAdmin()}
                   canManageClaude={canManageClaude(computer)}
@@ -508,6 +530,7 @@ export function MacroComputers(props: {
           here reopens where its setup left off. */}
       <ComputerBuyFlow
         open={buying() || !!settingUp()}
+        afterPurchase={props.afterPurchase}
         computerId={settingUp()}
         resumeStep={resumeAt()}
         onClose={() => {

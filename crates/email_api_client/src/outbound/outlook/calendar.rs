@@ -11,7 +11,7 @@ mod zones;
 
 use super::OutlookApiClientRepository;
 use crate::domain::{
-    models::{AccessToken, EmailApiError, MailboxAccess, StreamToken},
+    models::{AccessToken, EmailApiError, MailboxAccess, RateLimitOrigin, StreamToken},
     ports::ScopedMailboxRepository,
 };
 use calendar_events::domain::{ics::EventSnapshot, models::*, outlook::*, ports::*};
@@ -106,6 +106,18 @@ fn unsupported(message: &str) -> CalendarProviderError {
     CalendarProviderError::new(CalendarProviderErrorKind::Permanent, message)
 }
 fn error(error: EmailApiError) -> CalendarProviderError {
+    // Macro's own admission sent nothing, so a sync retries it shortly
+    // instead of counting a failure.
+    if let EmailApiError::RateLimited {
+        retry_after,
+        origin: RateLimitOrigin::Gate(_) | RateLimitOrigin::Local,
+    } = &error
+    {
+        return CalendarProviderError::deferred(
+            *retry_after,
+            "Microsoft request admission deferred the call",
+        );
+    }
     let kind = match &error {
         EmailApiError::AuthRequired => CalendarProviderErrorKind::ReauthRequired,
         EmailApiError::OutdatedCursor => CalendarProviderErrorKind::SyncTokenExpired,
@@ -308,7 +320,16 @@ impl OutlookApiClientRepository {
         master: Value,
     ) -> Result<CalendarEventUpsert, CalendarProviderError> {
         let instances = self.calendar_occurrences(token, target, &master).await?;
-        Ok(normalize::projection(target, master, instances)?.upsert)
+        let normalize::Projection {
+            mut upsert,
+            skipped,
+        } = normalize::projection(target, master, instances)?;
+        // An edit's echo of a series missing an occurrence Macro could not
+        // read is stored under no role, as the sync stores that series.
+        if !skipped.is_empty() {
+            upsert.source.details_mut().observed_access_role = None;
+        }
+        Ok(upsert)
     }
     async fn calendar_refresh(
         &self,
@@ -435,6 +456,11 @@ impl OutlookCalendarReader for OutlookApiClientRepository {
                         .flatten()
                         .filter_map(|v| v.as_str().map(str::to_owned))
                         .collect(),
+                    owner_address: c["owner"]["address"]
+                        .as_str()
+                        .filter(|address| !address.is_empty())
+                        .map(str::to_owned),
+                    shared_with_me: c["isSharedWithMe"].as_bool() == Some(true),
                 })
             })
             .collect::<Result<_, CalendarProviderError>>()?;
@@ -494,10 +520,15 @@ impl OutlookCalendarReader for OutlookApiClientRepository {
             if !event["@removed"].is_null() {
                 removed.push(id.to_owned());
             } else {
-                members.push((
-                    id.to_owned(),
-                    event["seriesMasterId"].as_str().unwrap_or(id).to_owned(),
-                ));
+                members.push(OutlookPageMember {
+                    provider_id: id.to_owned(),
+                    master_id: event["seriesMasterId"].as_str().unwrap_or(id).to_owned(),
+                    // Only orders a first import's reads, so a time Macro
+                    // cannot read is left out rather than failing the page.
+                    occurs: normalize::instant(&event["start"])
+                        .ok()
+                        .zip(normalize::instant(&event["end"]).ok()),
+                });
             }
         }
         Ok(OutlookCalendarPage {
@@ -551,11 +582,27 @@ fn preserve_meeting_details(
             "Outlook has not finished preparing this online meeting. Try the description edit again shortly.",
         ));
     };
-    if description.contains(join) {
-        return Ok(description.into());
+    if !html_escape::decode_html_entities(description).contains(join) {
+        let (_, meeting) = conference_body::split(existing, join)?;
+        return Ok(format!("{description}{meeting}"));
     }
-    let (_, meeting) = conference_body::split(existing, join)?;
-    Ok(format!("{description}{meeting}"))
+    // Macro's editor shows the block and hands it back as plain paragraphs,
+    // without the markers that let a later edit or a replacement separate it:
+    // Outlook's own block from the current body takes their place. A
+    // description the block cannot be separated from (one an earlier save
+    // already rewrote, or one quoting the link in the person's own text) is
+    // written as given, as before; a body too large to parse whole is refused.
+    match conference_body::with_saved_meeting(description, existing, join) {
+        Ok(body) => Ok(body),
+        Err(error) if error.is_refused() => Err(error),
+        Err(_) => {
+            tracing::warn!(
+                body_bytes = description.len(),
+                "kept an edited Outlook meeting description whose meeting block Macro cannot separate"
+            );
+            Ok(description.into())
+        }
+    }
 }
 
 fn patch_body(

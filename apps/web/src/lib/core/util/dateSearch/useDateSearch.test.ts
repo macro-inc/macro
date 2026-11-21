@@ -208,6 +208,36 @@ describe('formatDateWithContext', () => {
     expect(formatted).toContain('Jan 15, 2025');
     expect(formatted).toContain('2:30 PM');
   });
+
+  describe('across a daylight saving change', () => {
+    // New York springs forward on 2026-03-08 and falls back on 2026-11-01,
+    // so those days are 23 and 25 hours long.
+    const systemTimeZone = process.env.TZ;
+    beforeEach(() => {
+      process.env.TZ = 'America/New_York';
+    });
+    afterEach(() => {
+      // Assigning undefined would store the string "undefined".
+      if (systemTimeZone === undefined) delete process.env.TZ;
+      else process.env.TZ = systemTimeZone;
+    });
+
+    it('counts the day after a 23-hour day as tomorrow', () => {
+      const formatted = formatDateWithContext(
+        new Date(2026, 2, 9, 15, 15),
+        new Date(2026, 2, 8, 12)
+      );
+      expect(formatted).toBe('Tomorrow, 3:15 PM');
+    });
+
+    it('counts a 25-hour day as yesterday the day after', () => {
+      const formatted = formatDateWithContext(
+        new Date(2026, 10, 1, 15, 15),
+        new Date(2026, 10, 2, 12)
+      );
+      expect(formatted).toBe('Yesterday, 3:15 PM');
+    });
+  });
 });
 
 describe('useDateSearch', () => {

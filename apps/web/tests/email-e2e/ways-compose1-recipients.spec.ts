@@ -149,9 +149,11 @@ test.describe('more suggestions than one window holds', () => {
   });
 
   // When this fails, a person beyond the first fifty matches cannot be
-  // reached from the recipient field: PageDown, ArrowDown past the last
-  // suggestion or the Next options button no longer brings the next window.
-  test('PageDown, ArrowDown on the last one and Next options each bring the next window', async ({
+  // reached from the recipient field: PageDown, or scrolling the
+  // suggestions to their end, no longer reads the next window into the
+  // list. (ArrowDown on the last suggestion is not driven apart: reaching
+  // it also scrolls the list to its end, which reads the next window too.)
+  test('PageDown and scrolling to the end each read the next window into the list', async ({
     page,
     mailbox,
   }) => {
@@ -164,49 +166,58 @@ test.describe('more suggestions than one window holds', () => {
     // The app's first pass over the account lands in its cache in the first
     // seconds, and each page restarts the suggestions at their first window.
     await cacheFilled(page);
-    const options = suggestions(page).getByRole('option');
-    const next = page.getByRole('button', { name: 'Next options' });
+    const list = suggestions(page);
     const shown = async () => {
-      const texts = await options.allTextContents();
+      const texts = await list.getByRole('option').allTextContents();
       return pals.filter((pal) => texts.some((text) => text.includes(pal)));
     };
+    // How many people the list holds, in view or not: each window read
+    // appends its people below the earlier ones, which lengthens the list's
+    // scroll by as many rows.
+    const held = () =>
+      list.evaluate((listbox) => {
+        const scroller = [listbox, ...listbox.querySelectorAll('*')].find(
+          (element) =>
+            ['auto', 'scroll'].includes(getComputedStyle(element).overflowY)
+        );
+        const row = listbox.querySelector('[role="option"]');
+        if (!scroller || !row) return 0;
+        return Math.round(
+          scroller.scrollHeight / row.getBoundingClientRect().height
+        );
+      });
+    const scrollToEnd = async () => {
+      await list.hover();
+      await page.mouse.wheel(0, 100_000);
+    };
+    // A write to the cache reads the first window again, and a key pressed
+    // during that read only moves the highlight.
+    const settled = () =>
+      expect(page.getByText('Loading options…')).toBeHidden();
 
     await to.pressSequentially('pal');
-    await expect(next).toBeVisible();
+    await expect.poll(held).toBe(50);
     const first = await shown();
     expect(first.length).toBeGreaterThan(0);
-    expect(first.length).toBeLessThan(pals.length);
 
-    const ways = [
-      {
-        row: 'AC-008',
-        ask: () => to.press('PageDown'),
-      },
-      {
-        row: 'AC-008',
-        ask: async () => {
-          await to.press('End');
-          await to.press('ArrowDown');
-        },
-      },
-      {
-        row: 'AC-317',
-        ask: () => next.click(),
-      },
-    ] as const;
-    let before = first;
-    for (const way of ways) {
-      await way.ask();
-      did(way.row);
-      // A window of people not shown before.
-      await expect
-        .poll(async () => {
-          const now = await shown();
-          return now.length > 0 && now.every((pal) => !before.includes(pal));
-        })
-        .toBe(true);
-      before = [...before, ...(await shown())];
-    }
+    await settled();
+    await to.press('PageDown');
+    did('AC-008');
+    await expect.poll(held).toBe(100);
+    // Out of view: the people shown stay where they were.
+    expect(await shown()).toEqual(first);
+
+    await settled();
+    await scrollToEnd();
+    did('AC-917');
+    await expect.poll(held).toBe(150);
+
+    // The last of them is reached the same way.
+    await expect(async () => {
+      await scrollToEnd();
+      expect(await shown()).toContain(pals.at(-1));
+    }).toPass({ timeout: 20_000 });
+    expect(await held()).toBe(pals.length);
     await expect(to).toBeFocused();
     await expect(to).toHaveValue('pal');
   });

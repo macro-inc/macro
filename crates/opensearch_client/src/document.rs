@@ -4,7 +4,7 @@ use crate::{
     upsert::{
         self,
         document::{EmailAttachmentUpdateResult, UpsertDocumentArgs},
-        properties::IndexedProperty,
+        properties::{IndexedProperty, PropertyUpdate},
     },
 };
 
@@ -48,6 +48,25 @@ impl OpensearchClient {
         .await
     }
 
+    /// Deletes the chunks of a document a reindex did not write: every chunk
+    /// but the ones keyed by `node_ids`. The parent stays.
+    pub async fn delete_stale_document_chunks(
+        &self,
+        document_id: &str,
+        node_ids: &[&str],
+        index_override: Option<&str>,
+    ) -> Result<()> {
+        resend_on_lost_connection(|| {
+            delete::document::delete_document_chunks_except(
+                &self.inner,
+                document_id,
+                node_ids,
+                index_override,
+            )
+        })
+        .await
+    }
+
     /// Deletes a document from the opensearch document index
     #[tracing::instrument(skip(self))]
     pub async fn delete_document(
@@ -79,7 +98,7 @@ impl OpensearchClient {
         &self,
         document_id: &str,
         properties: &[IndexedProperty],
-    ) -> Result<()> {
+    ) -> Result<PropertyUpdate> {
         resend_on_lost_connection(|| {
             upsert::document::update_document_properties(&self.inner, document_id, properties, None)
         })

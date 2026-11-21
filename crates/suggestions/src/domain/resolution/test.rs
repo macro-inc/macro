@@ -174,10 +174,51 @@ fn resolved(reason: &str) -> (String, Option<String>) {
     ("resolved".to_owned(), Some(reason.to_owned()))
 }
 
-/// The person's own send resolves their reply suggestion about the thread, and no
+/// Done, as the person answering a reply suggestion leaves it.
+fn done() -> (String, Option<String>) {
+    ("done".to_owned(), None)
+}
+
+/// A reply suggestion the person opened (its thread or its draft) is still
+/// open, taken on; their reply on the thread makes it done.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_opened_reply_suggestion_is_done_once_the_person_replies(pool: PgPool) {
+    let h = harness(pool).await;
+    let id = h
+        .suggestion(
+            OWNER,
+            "reply",
+            reply(),
+            vec![target(EntityType::EmailThread, THREAD, None)],
+        )
+        .await;
+    h.set(OWNER, id, SuggestionState::Accepted).await;
+
+    let outcome = h
+        .resolution
+        .resolve(&ResolutionEvent::Replied {
+            user: user(OWNER),
+            item: thread_item(),
+            thread: None,
+            at: Utc::now(),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(
+        outcome,
+        Resolved {
+            matched: 1,
+            resolved: 1
+        }
+    );
+    assert_eq!(h.state(id).await, done());
+}
+
+/// The person's own send makes their reply suggestion about the thread done, and no
 /// other: not another kind, not another action, not someone else's.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_reply_resolves_only_the_matching_reply_suggestion_of_that_user(pool: PgPool) {
+async fn a_reply_answers_only_the_matching_reply_suggestion_of_that_user(pool: PgPool) {
     let h = harness(pool).await;
     let about = vec![target(EntityType::EmailThread, THREAD, None)];
     let answer = h.suggestion(OWNER, "reply", reply(), about.clone()).await;
@@ -239,8 +280,8 @@ async fn a_reply_resolves_only_the_matching_reply_suggestion_of_that_user(pool: 
             resolved: 2
         }
     );
-    assert_eq!(h.state(answer).await, resolved("replied"));
-    assert_eq!(h.state(one_message).await, resolved("replied"));
+    assert_eq!(h.state(answer).await, done());
+    assert_eq!(h.state(one_message).await, done());
     for id in [review, prompt, others, elsewhere] {
         assert_eq!(h.state(id).await, open());
     }
@@ -275,7 +316,7 @@ async fn a_reply_from_before_the_suggestion_leaves_it_open(pool: PgPool) {
 /// A reply in a channel thread answers suggestions about that thread or the whole
 /// channel, not suggestions about another thread in it.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_channel_reply_resolves_suggestions_about_its_thread(pool: PgPool) {
+async fn a_channel_reply_answers_suggestions_about_its_thread(pool: PgPool) {
     let h = harness(pool).await;
     let in_thread = h
         .suggestion(
@@ -316,7 +357,7 @@ async fn a_channel_reply_resolves_suggestions_about_its_thread(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(h.state(in_thread).await, open());
-    assert_eq!(h.state(channel).await, resolved("replied"));
+    assert_eq!(h.state(channel).await, done());
 
     h.resolution
         .resolve(&ResolutionEvent::Replied {
@@ -331,8 +372,8 @@ async fn a_channel_reply_resolves_suggestions_about_its_thread(pool: PgPool) {
         .await
         .unwrap();
 
-    assert_eq!(h.state(in_thread).await, resolved("replied"));
-    assert_eq!(h.state(channel).await, resolved("replied"));
+    assert_eq!(h.state(in_thread).await, done());
+    assert_eq!(h.state(channel).await, done());
     assert_eq!(h.state(other_thread).await, open());
 }
 
@@ -425,8 +466,8 @@ async fn deleting_a_part_resolves_only_suggestions_about_it(pool: PgPool) {
     assert_eq!(h.state(channel).await, open());
 }
 
-/// The same event again changes nothing: the suggestion stays resolved as first
-/// resolved.
+/// The same event again changes nothing: the suggestion stays done as first
+/// made done, and a later deletion leaves it so.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn redelivery_is_a_no_op(pool: PgPool) {
     let h = harness(pool).await;
@@ -462,7 +503,7 @@ async fn redelivery_is_a_no_op(pool: PgPool) {
 
     assert_eq!(again, Resolved::default());
     assert_eq!(deleted, Resolved::default());
-    assert_eq!(h.state(id).await, resolved("replied"));
+    assert_eq!(h.state(id).await, done());
     let after = sqlx::query_scalar!("SELECT state_changed_at FROM suggestion WHERE id = $1", id)
         .fetch_one(&h.pool)
         .await

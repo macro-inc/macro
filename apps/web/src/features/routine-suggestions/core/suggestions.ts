@@ -102,7 +102,7 @@ function suggestedKnobs(
 export type SuggestionContext = {
   /** Who runs Ask AI steps. */
   target: RoutineTarget;
-  /** Code steps can be saved (`enable-routine-code-steps`). */
+  /** Code steps can be saved. */
   codeSteps: boolean;
   /** A blank new routine to start from. */
   base: ScheduleDraft;

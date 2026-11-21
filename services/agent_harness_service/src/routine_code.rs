@@ -15,8 +15,9 @@ use agent::{Message, PredefinedModel};
 use agent_code_mode::domain::symbol_reference;
 use agent_egress::outbound::macro_mcp::MacroApiTokenSigner;
 use code_execution::domain::{
-    CheckError, ExecuteRequest, Outcome, ProgramChecker, ProgramExecutor, RunEnvironment,
-    SdkEndpoints, SourceFile, Unattended, operations, sdk_declaration_files, sdk_declarations,
+    CheckError, ExecuteRequest, Outcome, ProgramChecker, ProgramExecutor, ProgramImports,
+    RunEnvironment, SdkEndpoints, SourceFile, Unattended, operations, sdk_declaration_files,
+    sdk_declarations,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -221,7 +222,11 @@ impl<Credentials: RoutineCredentials> RoutineCode for SdkRoutineCode<Credentials
                 source: file.source.clone(),
             })
             .collect();
-        let diagnostics = match self.checker.check_files(&sources, STEP_CONTEXT).await {
+        let diagnostics = match self
+            .checker
+            .check_files(&sources, STEP_CONTEXT, ProgramImports::Sdk)
+            .await
+        {
             Ok(diagnostics) => diagnostics,
             Err(CheckError::InvalidSource) => {
                 return Ok(vec![StepProblems {
@@ -705,20 +710,17 @@ fn area(name: &str, index: &str, guide: Option<&str>) -> AreaReference {
     AreaReference { text, imports }
 }
 
-/// The declaration files of the area `name`, whose index this is: those in
-/// its namespace class's directory, such as `src/entities/tasks/` for
-/// `TaskNamespace`.
+/// Declaration files for every namespace in an area's index. Related namespaces
+/// can share one documentation topic, so taking only the first loses its siblings.
 fn area_declarations(name: &str, index: &str) -> Vec<(&'static str, &'static str)> {
-    let Some(namespace) = index.lines().find_map(|line| {
+    let namespaces = index.lines().filter_map(|line| {
         line.strip_prefix("### ")?
             .split_whitespace()
             .next()
             .filter(|class| class.ends_with("Namespace"))
-    }) else {
-        return Vec::new();
-    };
+    });
     // Most areas live in their name's directory, `agentSessions` in
-    // `agent-sessions`; searching every file is the fallback.
+    // `agent-sessions`; locate sibling namespaces by declaration when needed.
     let kebab: String = name
         .chars()
         .flat_map(|c| {
@@ -728,16 +730,22 @@ fn area_declarations(name: &str, index: &str) -> Vec<(&'static str, &'static str
         })
         .collect();
     let guessed = sdk_declaration_files(&format!("{ENTITY_DECLARATIONS}{kebab}/"));
-    let declared = format!("class {namespace} ");
-    if guessed.iter().any(|(_, text)| text.contains(&declared)) {
-        return guessed;
+    let mut files = std::collections::BTreeMap::new();
+    for namespace in namespaces {
+        let declared = format!("class {namespace} ");
+        if guessed.iter().any(|(_, text)| text.contains(&declared)) {
+            files.extend(guessed.iter().copied());
+            continue;
+        }
+        if let Some(directory) = sdk_declarations(&[namespace], usize::MAX)
+            .into_iter()
+            .filter(|(path, _)| path.starts_with(ENTITY_DECLARATIONS))
+            .find_map(|(path, _)| path.rsplit_once('/').map(|(directory, _)| directory))
+        {
+            files.extend(sdk_declaration_files(&format!("{directory}/")));
+        }
     }
-    sdk_declarations(&[namespace], usize::MAX)
-        .into_iter()
-        .filter(|(path, _)| path.starts_with(ENTITY_DECLARATIONS))
-        .find_map(|(path, _)| path.rsplit_once('/'))
-        .map(|(directory, _)| sdk_declaration_files(&format!("{directory}/")))
-        .unwrap_or_default()
+    files.into_iter().collect()
 }
 
 /// The names an `import` line takes from the SDK's generated clients, such

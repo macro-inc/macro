@@ -32,6 +32,8 @@ mod test;
 
 mod code_execution;
 
+pub use code_execution::UNNAMED_STEP_LABELS;
+
 /// Longest detail a row keeps, in characters.
 const DETAIL_MAX_CHARS: usize = 80;
 

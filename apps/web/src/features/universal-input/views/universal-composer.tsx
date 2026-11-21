@@ -38,6 +38,7 @@ const TYPE_OPTIONS: TypeOption[] = [
 function ComposerFooter(props: {
   state: UniversalInputController;
   statusId: string;
+  modelControl?: JSX.Element;
 }) {
   const s = props.state;
   const action = () => {
@@ -61,6 +62,7 @@ function ComposerFooter(props: {
             {s.savingEmailDraft() ? 'Saving…' : 'Save as draft'}
           </Button>
         </Show>
+        {props.modelControl}
         <Button
           variant="primary"
           aria-label={action()}
@@ -227,9 +229,6 @@ export function UniversalComposer(props: {
               </Button>
             </div>
           </Show>
-          <Show when={type() === 'ai'}>
-            <AiDraft state={s} actions={a} />
-          </Show>
           <Show when={type() === 'search'}>{props.search?.(hotkeyScope)}</Show>
           <Show when={type() === 'note'}>
             <NoteDraft state={s} actions={a} tags={props.noteTags} />
@@ -269,7 +268,15 @@ export function UniversalComposer(props: {
           }
         >
           <div class="shrink-0 border-t border-edge-muted pt-4">
-            <ComposerFooter state={s} statusId={`${listId}-status`} />
+            <ComposerFooter
+              state={s}
+              statusId={`${listId}-status`}
+              modelControl={
+                <Show when={type() === 'ai'}>
+                  <AiDraft state={s} actions={a} />
+                </Show>
+              }
+            />
           </div>
         </Show>
         <Show when={s.error()}>

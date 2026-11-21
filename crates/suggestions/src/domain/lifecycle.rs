@@ -10,6 +10,7 @@
 //! | `take_on` | proposed | accepted |
 //! | `start_run` | proposed, accepted | accepted |
 //! | `complete` | proposed, accepted | done |
+//! | `answer` | proposed, accepted | done |
 //! | `run_finished` | accepted | done |
 //! | `dismiss` | proposed, accepted | dismissed |
 //! | `retire` | proposed, accepted | retired |
@@ -21,8 +22,9 @@
 //! Rules beyond the states sit with the service: a dismissed suggestion comes
 //! back only with a reason, or undismissed by the person within five minutes;
 //! a background prompt suggestion starts a run only while none is unsettled;
-//! and taking on an accepted suggestion or completing a done one changes
-//! nothing.
+//! opening a reply suggestion only takes it on, and the person's own reply on
+//! its item answers it (through resolution); and taking on an accepted
+//! suggestion or completing a done one changes nothing.
 //!
 //! A routine suggestion doesn't follow this table: it moves only with its
 //! routine suggestion, as `RoutineSuggestionState::card` in
@@ -42,13 +44,18 @@ mod test;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr, strum::EnumIter)]
 #[strum(serialize_all = "snake_case")]
 pub enum LifecycleEvent {
-    /// Someone acting for the person takes a background prompt suggestion on,
-    /// for the person to run.
+    /// It is taken on without being done yet: a background prompt suggestion
+    /// by someone acting for the person, for the person to run, or a reply
+    /// suggestion opened (its item or its draft) before it is answered.
     TakeOn,
     /// The person runs a background prompt suggestion.
     StartRun,
-    /// The person acts on a suggestion that doesn't run.
+    /// The person acts on a suggestion that opening does: one that doesn't
+    /// run and doesn't wait for a reply.
     Complete,
+    /// The person answered a reply suggestion's item themself: done, as it
+    /// asked.
+    Answer,
     /// Its background run finished.
     RunFinished,
     /// The person isn't interested.
@@ -75,7 +82,7 @@ pub fn transition(from: SuggestionState, event: LifecycleEvent) -> Option<Sugges
     match (event, from) {
         (E::TakeOn, S::Proposed) => Some(S::Accepted),
         (E::StartRun, S::Proposed | S::Accepted) => Some(S::Accepted),
-        (E::Complete, S::Proposed | S::Accepted) => Some(S::Done),
+        (E::Complete | E::Answer, S::Proposed | S::Accepted) => Some(S::Done),
         (E::RunFinished, S::Accepted) => Some(S::Done),
         (E::Dismiss, S::Proposed | S::Accepted) => Some(S::Dismissed),
         (E::Retire, S::Proposed | S::Accepted) => Some(S::Retired),
@@ -87,6 +94,7 @@ pub fn transition(from: SuggestionState, event: LifecycleEvent) -> Option<Sugges
             E::TakeOn
             | E::StartRun
             | E::Complete
+            | E::Answer
             | E::RunFinished
             | E::Dismiss
             | E::Retire

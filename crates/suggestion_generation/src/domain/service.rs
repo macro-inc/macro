@@ -909,13 +909,11 @@ where
             .await
     }
 
-    /// At onboarding, one routines session per layout group, and one that
-    /// suggested nothing is retried once; otherwise one session for every
-    /// surface. Each group's end, and whether it was retried.
+    /// At onboarding, one routines session per layout group (one for every
+    /// surface unless `with_layout` split them), and one that suggested
+    /// nothing is retried once; otherwise one session for every surface.
+    /// Each group's end, and whether it was retried.
     async fn routine_sessions(&self, run: &Run, stop: Stop<'_>) -> Vec<GroupEnded> {
-        // Onboarding splits the surfaces so the first suggestions arrive
-        // fast; otherwise nobody waits on routines, so one session covers
-        // them all at a third of the cost.
         let single = SessionLayout::single();
         let layout = match run.trigger {
             GenerationTrigger::Onboarding => &self.layout,

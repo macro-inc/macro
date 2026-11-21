@@ -1,5 +1,7 @@
+import { createCloseOnNavigation } from '@components/app/mobile/close-on-navigation';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Dialog as KobalteDialog } from '@kobalte/core/dialog';
 import type { Accessor, JSX, Ref, Setter, ValidComponent } from 'solid-js';
 import {
@@ -38,6 +40,11 @@ export type DialogProps = {
   visibleScrim?: boolean /* if the scrim is visible */;
   /** Desktop opening animation; mobile drawers own their transitions. */
   animate?: boolean;
+  /**
+   * Stay open when the app navigates (touch closes dialogs on navigation).
+   * Only for a dialog whose dismissal records a choice the user didn't make.
+   */
+  keepOpenOnNavigation?: boolean;
 };
 
 export function Dialog(props: DialogProps) {
@@ -72,6 +79,7 @@ function DialogDrawer(props: DialogProps) {
         onFinalFocus={props.onCloseAutoFocus}
         restoreFocus
         noOutsidePointerEvents
+        keepOpenOnNavigation={props.keepOpenOnNavigation}
       >
         <MobileDrawer.Portal>
           <MobileDrawer.Overlay
@@ -100,6 +108,13 @@ function DialogDrawer(props: DialogProps) {
 function DesktopDialog(props: DialogProps) {
   const [animateOnOpen, setAnimateOnOpen] = createSignal(false);
   let countedOpen = false;
+
+  // Touch closes dialogs on navigation as it does sheets (phones' fullscreen
+  // dialogs, tablets' cards); desktop keeps its dialogs.
+  createCloseOnNavigation({
+    open: () => isTouchDevice() && !props.keepOpenOnNavigation && props.open,
+    close: () => props.onOpenChange?.(false),
+  });
 
   createEffect(() => {
     if (props.open) {

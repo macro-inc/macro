@@ -75,6 +75,11 @@ where
         if paused_by_parent {
             input.enabled = false;
         }
+        // A repeated key keeps the look its sub-routine was created with, but
+        // refuses a pick it couldn't save, as the first create does.
+        if let Some(pick) = &input.appearance {
+            check_pick(pick)?;
+        }
 
         if let Some(key) = &key
             && let Some(existing) = self.repo.child_by_key(&parent_id, key).await?
@@ -173,6 +178,7 @@ where
                     enabled: parent.enabled,
                     run_visibility: child.run_visibility,
                     description: child.description.clone(),
+                    appearance: None,
                 };
                 let child_id = child.id;
                 match self.replace_one(child, input, true).await {

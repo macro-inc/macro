@@ -29,7 +29,6 @@ use macro_authorization::{
 };
 use rootcause::prelude::*;
 use sqlx::PgPool;
-use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use uuid::Uuid;
@@ -171,7 +170,7 @@ impl CalendarReads {
                 authorization,
             )));
 
-        let listener = TcpListener::bind("127.0.0.1:0")
+        let listener = crate::host::local_listener()
             .await
             .context("could not bind the calendar read routes")?;
         let address = listener.local_addr()?;

@@ -1,7 +1,5 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { DocumentPreviewContent } from '@core/component/DocumentPreview';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import { enableCanvasArtifacts } from '@core/constant/featureFlags';
 import type { GraphicsEditor } from '@macro-inc/graphics';
 import type { GraphicsPresence } from '@macro-inc/graphics/loro';
 import {
@@ -28,6 +26,7 @@ import { ArtifactPresentation } from '../artifact-presentation';
 import { CanvasArtifactView } from '../artifact-view';
 import { CanvasMediaView } from '../embedded-items';
 import { CanvasTextContent } from '../text-content';
+import { createCanvasFraming } from './canvas-framing';
 
 export type CanvasReadOnlyViewProps = {
   editor: GraphicsEditor;
@@ -44,7 +43,6 @@ function createCanvasReadOnlyView(props: CanvasReadOnlyViewProps) {
   const [tool, setTool] = createSignal<CanvasReadOnlyTool>('select');
   const [activeArtifact, setActiveArtifact] = createSignal<string>();
   const [presenting, setPresenting] = createSignal<string>();
-  const artifactsFlag = useFeatureFlag(enableCanvasArtifacts);
   const [scale, setScale] = createSignal(editor.getCamera().scale);
   const [hasSelection, setHasSelection] = createSignal(
     editor.getSession().selectedIds.length > 0
@@ -58,10 +56,7 @@ function createCanvasReadOnlyView(props: CanvasReadOnlyViewProps) {
   );
   onCleanup(unsubscribeCamera);
 
-  const viewportSize = () => ({
-    width: host?.clientWidth ?? 0,
-    height: host?.clientHeight ?? 0,
-  });
+  const framing = createCanvasFraming(editor, () => host);
   const focus = () =>
     host
       ?.querySelector<HTMLElement>('[aria-label="Graphics canvas"]')
@@ -71,6 +66,7 @@ function createCanvasReadOnlyView(props: CanvasReadOnlyViewProps) {
     editor,
     setHost(element: HTMLDivElement) {
       host = element;
+      framing.watchPresses(element);
     },
     host: () => host,
     tool,
@@ -82,17 +78,13 @@ function createCanvasReadOnlyView(props: CanvasReadOnlyViewProps) {
     hasSelection,
     focus,
     zoom(factor: number) {
-      const { width, height } = viewportSize();
-      editor.zoomAt(
-        { x: width / 2, y: height / 2 },
-        editor.getCamera().scale * factor
-      );
+      editor.zoomAt(framing.centre(), editor.getCamera().scale * factor);
     },
-    fit: () => editor.fitScene(viewportSize()),
-    fitSelection: () => editor.fitSelection(viewportSize()),
+    fit: framing.fit,
+    fitSelection: framing.fitSelection,
+    frameWithin: framing.frameWithin,
     activeArtifact,
     setActiveArtifact,
-    artifactsEnabled: () => artifactsFlag().enabled,
     presenting,
     setPresenting,
   };
@@ -165,7 +157,13 @@ function Root(props: ParentProps<CanvasReadOnlyViewProps>) {
 }
 
 /** The scene and other people's presence. */
-function Surface() {
+function Surface(surfaceProps: {
+  /**
+   * Leave one finger and the plain wheel to the page while this says so: for
+   * a canvas inside a scrolling document.
+   */
+  yieldToPage?: () => boolean;
+}) {
   const view = useCanvasReadOnlyView();
   const { props } = view;
   return (
@@ -175,6 +173,7 @@ function Surface() {
         input={{
           editing: false,
           tool: view.tool,
+          yieldToPage: () => surfaceProps.yieldToPage?.() ?? false,
           ignoreTarget: (target) =>
             target instanceof Element &&
             !!target.closest('[data-graphics-item]') &&
@@ -235,7 +234,7 @@ function Surface() {
 function Presentation() {
   const view = useCanvasReadOnlyView();
   return (
-    <Show when={view.artifactsEnabled() ? view.presenting() : undefined} keyed>
+    <Show when={view.presenting()} keyed>
       {(startId) => (
         <ArtifactPresentation
           editor={view.editor}

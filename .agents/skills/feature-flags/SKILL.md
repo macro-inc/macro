@@ -73,8 +73,8 @@ isFeatureEnabled(enableFoo)            // queries, helpers, env-only
 ```
 
 A thin `useXFlag` wrapper around `useFeatureFlag(flag)` is fine when several
-call sites share the same read. Compose flags in the wrapper (calendar search
-requires calendar UI), not on the flag object.
+call sites share the same read. Compose flags in the wrapper (a sub-feature that
+requires its parent feature), not on the flag object.
 
 `useFeatureFlag` / `ShowFeatureFlag` take a `RemoteFlag`. Passing an env-only
 flag is a type error.
@@ -86,7 +86,11 @@ These are the mistakes past flagged launches had to fix:
 - **Loading is not off.** Until PostHog answers, `isFeatureEnabled` returns
   `false` and `useFeatureFlag` returns `{ loading: true }`. A cold deep link
   must wait for `loading` to clear rather than fall back to the off path (see
-  `block-database`'s `load`), or the page flashes or degrades.
+  the Activity route's `flagsLoaded` gate), or the page flashes or degrades.
+  A build that never starts PostHog (no `VITE_POSTHOG_API_KEY`, or the Vite
+  dev server) answers at once, as an unreachable PostHog does: every flag
+  without a `default` or env override reads off, not loading (on for a reader
+  that passes `enabledWhenUnreachable`).
 - **Read reactively** (FE-52): call `isFeatureEnabled` / `useFeatureFlag` inside
   a reactive scope, never snapshot it at mount or module load.
 - **Gate every entry point**: routes, deep links, previews, copy-link,
@@ -112,6 +116,12 @@ and group conditions ignore this override.
   construct `PostHogFeatureFlags` once at the composition root, load one
   `FlagSnapshot` per authenticated user id, and read it synchronously. A failed
   load returns `Err`; the caller decides the fallback, explicitly. Wire the adapter and its config at the consuming service composition root.
+- **A flag checked per event or per row** (thousands of loads an hour) uses
+  `PostHogLocalFeatureFlags` instead: it polls the named flags' definitions
+  with a project secret key (a second Doppler key) and evaluates them in
+  memory. Keep such a flag's conditions to what it supports (person `email`,
+  `distinct_id` or `environment`, a rollout percentage); anything else fails
+  every load.
 - **Every backend rollout or feature gate**, per user or for everyone, is a
   `crates/feature_flags` flag, never a `MacroConfig`/Doppler boolean.
   `MacroConfig` holds real environment configuration (endpoints, credentials,
@@ -122,7 +132,9 @@ and group conditions ignore this override.
 ## 6. Remove it
 
 When a flag is fully rolled out, delete the `defineFlag`, every reader, and the
-off path in the same change, and say which PostHog flag can be archived.
+off path in the same change, and say which PostHog flag can be archived. A
+rolled-out flag still hides its feature when the flag request fails or is
+blocked, so remove it soon after rollout.
 
 ## Don't
 

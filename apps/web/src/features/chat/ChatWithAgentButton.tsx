@@ -11,10 +11,6 @@ import {
 } from '@core/component/AI/util/chatAttachmentMention';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import {
-  enableChatV3Agents,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import AgentIcon from '@icon/system/regular/sparkle.svg';
 import { buildMentionMarkdownString } from '@macro-inc/lexical-core/utils/mentions';
@@ -82,8 +78,7 @@ async function createAndOpenAgent(seed: {
     seed.input !== undefined &&
     !seed.message &&
     !seed.model &&
-    !seed.instructions &&
-    isFeatureEnabled(enableChatV3Agents)
+    !seed.instructions
   ) {
     openAgentComposer(manager, !seed.replaceSplit, {
       draft: seed.input,
@@ -137,11 +132,15 @@ function entityMentionMarkdown(entity: ChatWithAgentEntity): string {
 /** Prefixes a read-only chat's mention so the agent knows to read that chat and carry on. */
 const CONTINUE_CHAT_PREFIX = 'Continue this chat: ';
 
-export async function openChatWithAgent(entity: ChatWithAgentEntity) {
+export async function openChatWithAgent(
+  entity: ChatWithAgentEntity,
+  /** Typed after the mention, unsent, for the person to finish. */
+  request = ''
+) {
   const mention = `${entityMentionMarkdown(entity)} `;
   const input =
     entity.type === 'chat' ? `${CONTINUE_CHAT_PREFIX}${mention}` : mention;
-  return createAndOpenAgent({ input });
+  return createAndOpenAgent({ input: `${input}${request}` });
 }
 
 /** Open a new agent session with `initialInput` unsent, on `model`, told `instructions` privately. */

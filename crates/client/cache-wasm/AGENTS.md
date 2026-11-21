@@ -13,6 +13,7 @@ wasm-bindgen shell exposing `cache-core` + `cache-turso` + `turso-opfs` as a
   into `cache-core` engine calls behind an async mutex.
 - `src/shell/people.rs`: scoped person-context state/update/search, bounded label-reference reads and local Turso SQL (`peopleReadSql`) under the same engine lock; `shell/test/people.rs` exercises the real browser ABI and stale-generation rejection.
 - `src/query_telemetry.rs`: slow-query callback exposed to JS.
+- `src/shell/authority.rs`: durable policy transitions and interrupted CRM retirement. The shared TS worker compares response generations before writes; queued enqueue/settlement require an explicit generation and call the shared core `_in_generation` methods under the WASM engine lock so stale commands settle without copied snapshots while retaining fresh query revalidations. Reads do not request proof. `tests/authority.rs` covers first-proof offline preservation and reads normalized records after stale-generation enqueue/settlement through real OPFS. Coordinator protocol 18 carries the generation independently of existing hydration/person scopes.
 - `apps/web/src/lib/graphql-cache/`: the JS/TS worker that owns this engine.
 
 ## Scope
@@ -47,6 +48,8 @@ wasm-bindgen shell exposing `cache-core` + `cache-turso` + `turso-opfs` as a
 
 ## Gotchas
 
+- Keep first account binding without a stored policy generation-neutral, including after reopening OPFS; policy-bearing binding and account replacement retain the shared core's fence.
+
 - Preserve successful hydration replies when optional window-proof computation
   fails; empty proofs retain broad invalidation after the durable write.
 - Pass the existing entity-filter `baseline` to Mail pagination too; `retainedKeys`
@@ -58,7 +61,7 @@ wasm-bindgen shell exposing `cache-core` + `cache-turso` + `turso-opfs` as a
 
 - Email send persistence and cancellation belong to the frontend email journal, not the normalized cache or its mutation queue.
 
-- Person search uses the shared core's indexed policy-5 name/recency reader; reference evidence keeps its independent policy-4 contract. Ordinary title search retains its bounded scorer. Browser parity coverage lives in `cache-turso/tests/web.rs`.
+- Person search uses the shared core's indexed policy-7 name/list/recency reader; reference evidence keeps its independent policy-4 contract. Ordinary title search retains its bounded scorer. Browser parity coverage lives in `cache-turso/tests/web.rs`.
 - Hydration forwards an optional shared-core `HydrationScope`; stale pages reject before persistence without changing identity. `shell/test/hydration_scope.rs` covers the real browser ABI. Coordinator protocol 17 also carries contact snapshots/reconciliation and local people SQL without dropping hydration/person-policy scopes. Missing sync, SQL or reference support is independent of existing person search support; none may fall back to directory enumeration, unguarded contact writes or remote SQL. `contactSnapshot` captures admission before fetching; `contactReconcile` publishes ordinary committed invalidations for removals. Contact hydration must forward `HydrationScope.contactFence` unchanged.
 - The engine is guarded by an async mutex so overlapping JS calls serialize
   instead of causing reentrancy — don't bypass it with a second entry point.

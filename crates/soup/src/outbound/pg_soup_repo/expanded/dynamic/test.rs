@@ -62,7 +62,7 @@ fn a_nil_parent_keeps_its_arm_beside_a_live_one() {
     assert!(DynamicArms::can_match(&filter));
     let sort = SimpleSortMethod::UpdatedAt.into();
     let mut arrays = DocumentIdArrays::starting_at(first_document_id_slot(sort, false));
-    let sql = build_query(&filter, false, sort, &mut arrays)
+    let sql = build_query(&filter, false, sort, DocumentGrants::Estimated, &mut arrays)
         .sql()
         .to_owned();
     // The project hydration is the second read of `TopItems`, which keeps
@@ -88,6 +88,7 @@ fn grouped_access_shape() {
         false,
         &grouping,
         sort,
+        DocumentGrants::Estimated,
         &mut DocumentIdArrays::starting_at(first_document_id_slot(sort, true)),
     );
     let candidates = builder.sql().split("GroupedItems AS").next().unwrap();
@@ -130,6 +131,7 @@ fn grouped_candidate_sort_shape() {
                 true,
                 &grouping,
                 sort.into(),
+                DocumentGrants::Estimated,
                 &mut DocumentIdArrays::starting_at(first_document_id_slot(sort.into(), true)),
             );
             let sql = builder.sql();
@@ -174,7 +176,13 @@ fn flat_timestamp_top_clauses_remain_lightweight() {
         SimpleSortMethod::ViewedUpdated,
     ] {
         let mut arrays = DocumentIdArrays::starting_at(first_document_id_slot(sort.into(), false));
-        let query = build_query(&filter, false, sort.into(), &mut arrays);
+        let query = build_query(
+            &filter,
+            false,
+            sort.into(),
+            DocumentGrants::Estimated,
+            &mut arrays,
+        );
         let top = query.sql().split("Combined AS").next().unwrap();
         assert!(!top.contains("JOIN document_sub_type"));
         assert!(!top.contains("property_entity_type"));
@@ -187,7 +195,13 @@ fn flat_timestamp_top_clauses_remain_lightweight() {
         direction: SoupSortDirection::Asc,
     };
     let mut arrays = DocumentIdArrays::starting_at(first_document_id_slot(property, false));
-    let query = build_query(&filter, false, property, &mut arrays);
+    let query = build_query(
+        &filter,
+        false,
+        property,
+        DocumentGrants::Estimated,
+        &mut arrays,
+    );
     let top = query.sql().split("Combined AS").next().unwrap();
     assert!(top.contains("LEFT JOIN document_sub_type"));
     assert!(top.contains("THEN 'TASK'::property_entity_type"));
@@ -218,6 +232,7 @@ fn property_queries_hoist_definition_and_option_lookups() {
             false,
             &grouping,
             sort,
+            DocumentGrants::Estimated,
             &mut DocumentIdArrays::starting_at(first_document_id_slot(sort, true)),
         );
         let sql = query.sql();
@@ -255,9 +270,17 @@ fn option_sorts_build_one_uncorrelated_option_map() {
     for grouped in [false, true] {
         let mut arrays = DocumentIdArrays::starting_at(first_document_id_slot(sort, grouped));
         let query = if grouped {
-            build_grouped_query(&filter, false, &grouping, sort, &mut arrays).0
+            build_grouped_query(
+                &filter,
+                false,
+                &grouping,
+                sort,
+                DocumentGrants::Estimated,
+                &mut arrays,
+            )
+            .0
         } else {
-            build_query(&filter, false, sort, &mut arrays)
+            build_query(&filter, false, sort, DocumentGrants::Estimated, &mut arrays)
         };
         let parameter = if grouped { 11 } else { 9 };
         let sql = query.sql();
@@ -317,6 +340,7 @@ fn task_only_filters_omit_redundant_namespace_joins() {
             &filter,
             false,
             sort,
+            DocumentGrants::Estimated,
             &mut DocumentIdArrays::starting_at(first_document_id_slot(sort, false)),
         );
         let (grouped, _) = build_grouped_query(
@@ -324,6 +348,7 @@ fn task_only_filters_omit_redundant_namespace_joins() {
             false,
             &grouping,
             sort,
+            DocumentGrants::Estimated,
             &mut DocumentIdArrays::starting_at(first_document_id_slot(sort, true)),
         );
         for query in [&flat, &grouped] {
@@ -441,6 +466,7 @@ async fn grouped_query_explain_local(pool: PgPool) -> anyhow::Result<()> {
                 false,
                 &grouping,
                 sort.into(),
+                DocumentGrants::Estimated,
                 &mut DocumentIdArrays::starting_at(first_document_id_slot(sort.into(), true)),
             );
             // Dynamic AST/grouping SQL cannot use a compile-time macro.
@@ -482,6 +508,7 @@ fn initiatives_are_opt_in_and_share_the_existing_sql_pagination() {
             &filter,
             false,
             SimpleSortMethod::UpdatedAt.into(),
+            DocumentGrants::Estimated,
             &mut DocumentIdArrays::starting_at(9),
         )
         .sql()
@@ -495,6 +522,7 @@ fn initiatives_are_opt_in_and_share_the_existing_sql_pagination() {
             &filter,
             false,
             SimpleSortMethod::UpdatedAt.into(),
+            DocumentGrants::Estimated,
             &mut DocumentIdArrays::starting_at(9),
         )
         .sql()
@@ -505,6 +533,7 @@ fn initiatives_are_opt_in_and_share_the_existing_sql_pagination() {
         &filter,
         false,
         SimpleSortMethod::UpdatedAt.into(),
+        DocumentGrants::Estimated,
         &mut DocumentIdArrays::starting_at(9),
     );
     let (candidates, details) = query.sql().split_once("Combined AS").unwrap();
@@ -529,6 +558,7 @@ fn initiatives_are_opt_in_and_share_the_existing_sql_pagination() {
         &filter,
         false,
         SimpleSortMethod::UpdatedAt.into(),
+        DocumentGrants::Estimated,
         &mut DocumentIdArrays::starting_at(9),
     );
     assert!(!named.sql().contains("i.id = ANY(ARRAY("));
@@ -542,6 +572,7 @@ fn initiatives_are_opt_in_and_share_the_existing_sql_pagination() {
         &filter,
         false,
         SimpleSortMethod::UpdatedAt.into(),
+        DocumentGrants::Estimated,
         &mut DocumentIdArrays::starting_at(9),
     );
     assert!(open.sql().contains("i.id = ANY(ARRAY("));
@@ -634,7 +665,13 @@ async fn explain_first_page(
     let mut transaction = begin_dynamic_query(pool).await?;
     let source_ids = fetch_user_source_ids(&mut transaction, viewer).await?;
     let mut document_ids = DocumentIdArrays::starting_at(first_document_id_slot(sort, false));
-    let builder = build_query(filter, false, sort, &mut document_ids);
+    let builder = build_query(
+        filter,
+        false,
+        sort,
+        DocumentGrants::Estimated,
+        &mut document_ids,
+    );
     let sql = format!("EXPLAIN (ANALYZE, FORMAT JSON) {}", builder.sql());
 
     #[expect(
@@ -751,6 +788,7 @@ fn initiative_name_literals_are_escaped_and_not_like_patterns() {
 }
 
 mod bounded_access;
+mod counted_grants;
 mod name_sort;
 mod option_filter;
 mod property_sort;
@@ -786,4 +824,46 @@ fn notification_conjunction_folds_to_the_side_that_implies_the_other() {
     // Neither side implies the other: different rows may witness each.
     assert!(strip(&Expr::and(state(Unseen), state(Seen))).is_none());
     assert!(strip(&Expr::and(inbox(), state(Done))).is_none());
+}
+
+#[test]
+fn scan_bound_limits_source_scans_only() {
+    let bound = |sources, utc| ScanBound {
+        sources,
+        utc,
+        exact: true,
+    };
+    let sources = FeedReads {
+        ordered: Some(OrderedScans::Sources),
+    };
+    let owner = FeedReads {
+        ordered: Some(OrderedScans::Owner),
+    };
+    let lookups = FeedReads { ordered: None };
+    assert!(bound(SOURCE_SCAN_SOURCES, true).allows(sources, 12));
+    assert!(!bound(SOURCE_SCAN_SOURCES + 1, true).allows(sources, 1));
+    assert!(bound(50, true).allows(sources, 100));
+    assert!(!bound(51, true).allows(sources, 100));
+    assert!(
+        bound(SOURCE_SCAN_SOURCES + 1, true).allows(owner, 500),
+        "owner scans do not read sources"
+    );
+    assert!(!bound(1, false).allows(owner, 1));
+    assert!(!bound(1, false).allows(sources, 1));
+    assert!(
+        bound(1, false).allows(lookups, 1),
+        "lookups sort whole and need no UTC"
+    );
+    let stale = |reads| {
+        ScanBound {
+            sources: 1,
+            utc: true,
+            exact: false,
+        }
+        .allows(reads, 1)
+    };
+    assert!(
+        !stale(sources) && !stale(owner) && !stale(lookups),
+        "an unmaintained or unbackfilled table is never read"
+    );
 }

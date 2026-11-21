@@ -3,7 +3,6 @@ import { refreshSharedAccess } from '@queries/access-requests/requests';
 import { calendarKeys } from '@queries/calendar/keys';
 import { queryClient } from '@queries/client';
 import { computerKeys } from '@queries/computers/keys';
-import { emailKeys } from '@queries/email/keys';
 import { invalidateEmailLinks } from '@queries/email/link';
 import { harnessKeys } from '@queries/harnesses/keys';
 import { messageKeys } from '@queries/messages/keys';
@@ -56,9 +55,6 @@ function refreshEmailThread(notification: UnifiedNotification) {
     'notifications'
   );
   invalidateSoupEntity(notification.entity_id);
-  queryClient.invalidateQueries({
-    queryKey: emailKeys.threadMessages(notification.entity_id).queryKey,
-  });
 }
 
 async function refreshDeliveredEmailReminder(threadId: string) {

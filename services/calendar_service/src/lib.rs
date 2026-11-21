@@ -19,13 +19,9 @@ pub mod calendar_outbox;
 pub mod calendar_ratelimit;
 /// Link-manager queue adapter for reauth-required notifications.
 pub mod calendar_reauth;
-/// Connection-gateway calendar refresh notifier.
-pub mod calendar_refresh;
 /// Access-token adapter for user-initiated calendar mutations.
 pub mod calendar_tokens;
 /// Service configuration.
 pub mod config;
 /// Health check router.
 pub mod health;
-/// Shared calendar pubsub helpers.
-pub mod pubsub_util;

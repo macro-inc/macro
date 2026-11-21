@@ -8,10 +8,7 @@ import {
   ViewSwitchTrigger,
 } from '@app/components/view-shell';
 import { CollectionPanes } from '@app/components/view-shell/CollectionPanes';
-import {
-  ListHeader,
-  ListHeaderSearch,
-} from '@app/components/view-shell/ListHeader';
+import { ListHeaderSearch } from '@app/components/view-shell/ListHeader';
 import { ViewCreateMenu } from '@app/features/command/view-create-menu';
 import {
   createSearchParams,
@@ -90,6 +87,7 @@ import {
   type ReviewsStatusTabId,
   scopeMatchesViewerGithubId,
 } from './reviews-types';
+import { ReviewsListHeader } from './views/ReviewsListHeader';
 import { ReviewsListTopBar } from './views/ReviewsListTopBar';
 
 const REVIEW_SCOPE_TITLES: Record<ReviewsScope, string> = {
@@ -350,21 +348,9 @@ function ReviewsRoot() {
       <Show
         when={isTouchDevice()}
         fallback={
-          <ListHeader
-            title={
-              <div class="flex min-w-0 items-center gap-3">
-                <ViewBreadcrumbs.Outlet aria-label="Review location" />
-                <Show when={statusToggle()}>
-                  {(status) => (
-                    <ReviewsStatusTabs
-                      value={status().value}
-                      onChange={status().onChange}
-                      class="shrink-0"
-                    />
-                  )}
-                </Show>
-              </div>
-            }
+          <ReviewsListHeader
+            scope={<ViewBreadcrumbs.Outlet aria-label="Review location" />}
+            status={statusToggle()}
           >
             <ReviewsControls
               {...controls()}
@@ -379,25 +365,23 @@ function ReviewsRoot() {
               focusResults={() => panel.panelRef()?.focus()}
               registerFocus={(focus) => (focusSearch = focus)}
             />
-          </ListHeader>
+          </ReviewsListHeader>
         }
       >
         <ReviewsListTopBar />
         <ViewShell.Header>
           <div class="flex min-w-0 flex-col gap-3">
-            <div class="h-10 min-w-0 flex-1">
+            <div class="flex h-10 min-w-0 flex-1 items-center gap-2">
               <PillTabs
                 scrollable
                 leading={
-                  <>
-                    <ViewSidebar.Toggle action="expand" presentation="pill" />
-                    <ReviewsFilterDrawer {...controls()} />
-                  </>
+                  <ViewSidebar.Toggle action="expand" presentation="pill" />
                 }
                 items={REVIEW_SCOPE_TABS}
                 value={scope()}
                 onChange={selectScope}
               />
+              <ReviewsFilterDrawer {...controls()} />
             </div>
             <SearchBar
               label="Search reviews"

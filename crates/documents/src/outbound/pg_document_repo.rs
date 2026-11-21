@@ -1424,3 +1424,14 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
         Ok(())
     }
 }
+
+impl<B: BotFacts + 'static> crate::domain::ports::DocumentLifecycleReads for PgDocumentRepo<B> {
+    #[tracing::instrument(skip(self), err)]
+    async fn document_is_live(&self, id: uuid::Uuid) -> anyhow::Result<bool> {
+        match self.get_basic_document(&id.to_string()).await {
+            Ok(document) => Ok(document.deleted_at.is_none()),
+            Err(sqlx::Error::RowNotFound) => Ok(false),
+            Err(error) => Err(error.into()),
+        }
+    }
+}

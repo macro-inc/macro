@@ -37,8 +37,9 @@ use entity_access::{
     },
 };
 use macro_authorization::{
-    CODE_EXECUTION_HEADER, CredentialAttribution, CredentialOrigin, MacroAuthorizationExtractor,
-    MacroAuthorizationService, MacroAuthorizationState, UserOrInternal, is_program_run,
+    AnyPrincipal, CODE_EXECUTION_HEADER, CredentialAttribution, CredentialOrigin,
+    MacroAuthorization, MacroAuthorizationExtractor, MacroAuthorizationService,
+    MacroAuthorizationState, OptionalMacroAuthorizationExtractor, UserOrInternal, is_program_run,
 };
 use model_error_response::ErrorResponse;
 use rate_limit::{RateLimitConfig, RateLimitKey, RateLimitService};
@@ -790,12 +791,38 @@ pub async fn get_call_record_handler<
 >(
     State(state): State<CallRouterState<S, Svc, Auth>>,
     access: CallAccessLevelExtractor<ViewAccessLevel, Svc, Auth>,
+    authorization: OptionalMacroAuthorizationExtractor<Auth, AnyPrincipal>,
+    headers: HeaderMap,
 ) -> Result<Json<CallRecord>, CallError> {
     let record = state
         .service
         .get_call_record(access.entity_access_receipt)
         .await?;
-    Ok(Json(record))
+    let attribution = match &authorization.authorization {
+        Some(MacroAuthorization::User(user)) => user.attribution(),
+        _ => CredentialAttribution::Person,
+    };
+    Ok(Json(without_presigned_urls_for_programs(
+        record,
+        attribution,
+        &headers,
+    )))
+}
+
+/// A presigned recording URL is a bearer secret for as long as it lasts, so
+/// a program (`is_program_run`: a credential signed for an agent or a
+/// routine run, or the code-mode header) reads the record without it and
+/// fetches the bytes through `GET /record/{id}/recording` instead.
+pub(super) fn without_presigned_urls_for_programs(
+    mut record: CallRecord,
+    attribution: CredentialAttribution,
+    headers: &HeaderMap,
+) -> CallRecord {
+    if is_program_run(attribution, headers) {
+        record.recording_url = None;
+        record.recording_preview_url = None;
+    }
+    record
 }
 
 /// OpenAPI representation of streamed recording bytes.

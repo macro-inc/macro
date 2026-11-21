@@ -78,13 +78,12 @@ for (const provider of PROVIDERS) {
       await listShows(page, []);
     });
 
-    // Class web-gmail-not-spam-stays-archived: when this fails on Gmail, Not
-    // spam only takes the SPAM label off, so the message never comes back to
-    // the inbox. On Outlook, when this fails the toolbar's Not spam leaves
-    // the selected thread in Junk.
-    test(`${provider === 'GMAIL' ? 'known bug: web-gmail-not-spam-stays-archived: ' : ''}the toolbar's Not spam brings the selected thread back to the inbox`, {
-      tag: provider === 'GMAIL' ? '@known-bug' : [],
-    }, async ({ page, mailbox }) => {
+    // When this fails, the toolbar's Not spam leaves the selected thread in
+    // Spam or Junk, or takes it out without bringing it back to the inbox.
+    test("the toolbar's Not spam brings the selected thread back to the inbox", async ({
+      page,
+      mailbox,
+    }) => {
       await deliverThreads(mailbox, ['Agenda']);
       await deliverToSpam(mailbox, {
         from: 'Hal <hal@example.com>',

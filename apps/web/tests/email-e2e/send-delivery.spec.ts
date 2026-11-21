@@ -160,14 +160,12 @@ for (const provider of PROVIDERS) {
       confirmed('F-137');
     });
 
-    // When this fails, a reply that was sent is offered again as a draft
-    // after a reload: the page was reloaded before it heard that the send
-    // arrived, and the composer reopens with the sent text and a Send button
-    // that answers "This draft session is no longer active". Not in every
-    // run (about two in three here, on either provider): `@sometimes`.
-    test('known bug: sent-reply-reopens-as-draft-after-reload: a reply sent before a reload is not offered again in the composer @known-bug', {
-      tag: ['@known-bug', '@sometimes'],
-    }, async ({ page, mailbox }) => {
+    // Losing the send response must leave the thread with one sent reply
+    // and no editor holding the text that already went out.
+    test('a reply sent before a reload is not offered again in the composer', async ({
+      page,
+      mailbox,
+    }) => {
       const thread = await lunch(mailbox);
       // The service receives the send; its answer never arrives, and until
       // the reload neither does the answer to what became of it.
@@ -199,6 +197,7 @@ for (const provider of PROVIDERS) {
       ).toHaveCount(1);
       await expect(page.getByText('Reply...')).toBeVisible();
       await expect(replyEditor(page)).toHaveCount(0);
+      saw('STC-983');
     });
 
     // When this fails, a reply sent with no network is lost, is reported as
@@ -371,10 +370,10 @@ test.describe('a send an Outlook mailbox rejected', () => {
   // When this fails, Retry send on a reply the provider rejected once does
   // not send it: the reply ends as a draft conflict ("This draft changed in
   // your mailbox. Choose which version to keep.") and nothing goes out.
-  // Not in every run (two in three here): `@sometimes`.
-  test('known bug: outlook-retry-send-after-rejection-conflicts: Retry send delivers the rejected reply once @known-bug', {
-    tag: ['@known-bug', '@sometimes'],
-  }, async ({ page, mailbox }) => {
+  test('Retry send delivers the rejected reply once', async ({
+    page,
+    mailbox,
+  }) => {
     const thread = await lunch(mailbox);
     await injectFault(mailbox, {
       route: 'messages.send',

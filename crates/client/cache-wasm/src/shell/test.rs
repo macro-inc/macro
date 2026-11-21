@@ -315,6 +315,7 @@ async fn resolved(promise: js_sys::Promise) -> JsValue {
 
 fn empty_js_write_result() -> JsWriteResult {
     JsWriteResult {
+        unchanged_views: None,
         field_changes: None,
         identity_errors: Vec::new(),
         mutation_uuid: None,
@@ -804,6 +805,12 @@ fn production_documents_preset_filters() -> Vec<(&'static str, serde_json::Value
     ]
 }
 
+async fn test_generation(engine: &CacheEngine) -> Option<String> {
+    let authority: serde_json::Value =
+        from_js(resolved(engine.current_authority("test-authority".into())).await);
+    Some(authority["generation"].as_str().unwrap().to_owned())
+}
+
 async fn fresh_engine(scope: &str) -> CacheEngine {
     destroy_cache(scope.into())
         .await
@@ -1155,7 +1162,13 @@ async fn soup_updated_v3_recomputes_my_tasks_importance_and_status_locally() {
         ))
         .await,
     );
-    assert_eq!(initial["revision"], "1");
+    let initial_revision = initial["revision"]
+        .as_str()
+        .unwrap()
+        .parse::<u64>()
+        .unwrap();
+    assert!(initial_revision > 0);
+    assert_eq!(initial["revisionAdvanced"], true);
 
     let updates = [
         projected_document_item_with_facts(
@@ -1191,7 +1204,15 @@ async fn soup_updated_v3_recomputes_my_tasks_importance_and_status_locally() {
         ))
         .await,
     );
-    assert_eq!(realtime["revision"], "2");
+    let realtime_revision = realtime["revision"]
+        .as_str()
+        .unwrap()
+        .parse::<u64>()
+        .unwrap();
+    // Property-owner metadata can advance the revision separately from the
+    // normalized write. Filtering must report the final committed revision.
+    assert!(realtime_revision > initial_revision);
+    assert_eq!(realtime["revisionAdvanced"], true);
 
     let filtered: serde_json::Value =
         from_js(resolved(engine.entity_filter(js(my_tasks_filter(VIEWER)))).await);
@@ -1199,7 +1220,7 @@ async fn soup_updated_v3_recomputes_my_tasks_importance_and_status_locally() {
         filtered,
         serde_json::json!({
             "kind": "complete",
-            "revision": "2",
+            "revision": realtime["revision"],
             "keys": [key(ASSIGNED_TASK), key(OWNER_TASK)],
             "optimistic": false,
         })
@@ -1429,6 +1450,7 @@ async fn optimistic_v2_patch_is_filterable_after_enqueue_reopen_and_rollback() {
             100.0,
             js(serde_json::json!({"draftRevision": 10})),
             JsValue::UNDEFINED,
+            test_generation(&engine).await,
         ))
         .await,
     );
@@ -1573,6 +1595,7 @@ async fn queue_and_optimistic_layers_survive_preserve_reopen_in_id_order() {
             50.0,
             JsValue::UNDEFINED,
             JsValue::UNDEFINED,
+            test_generation(&engine).await,
         ))
         .await,
     );
@@ -1597,6 +1620,7 @@ async fn queue_and_optimistic_layers_survive_preserve_reopen_in_id_order() {
             50.0,
             JsValue::UNDEFINED,
             JsValue::UNDEFINED,
+            test_generation(&engine).await,
         ))
         .await,
     );
@@ -1703,6 +1727,7 @@ async fn optimistic_commit_reports_affected_ops_and_rejects_settled_or_malformed
             1_000.0,
             JsValue::UNDEFINED,
             JsValue::UNDEFINED,
+            test_generation(&engine).await,
         ))
         .await,
     );
@@ -1727,6 +1752,7 @@ async fn optimistic_commit_reports_affected_ops_and_rejects_settled_or_malformed
             js(serde_json::json!({
                 "setEntityProperty": { "id": "prop-1", "displayName": "Stage!" }
             })),
+            test_generation(&engine).await,
         ))
         .await,
     );
@@ -1804,6 +1830,7 @@ async fn destroy_recovery_wipes_records_and_queue() {
         100.0,
         JsValue::UNDEFINED,
         JsValue::UNDEFINED,
+        test_generation(&engine).await,
     ))
     .await;
     resolved(engine.close()).await;
@@ -2023,6 +2050,7 @@ async fn storage_reset_errors_latch_and_block_hot_read_write_and_control_methods
         100.0,
         JsValue::UNDEFINED,
         JsValue::UNDEFINED,
+        test_generation(&engine).await,
     ))
     .await;
     assert_reset_required(engine.bound_identity()).await;
@@ -2138,6 +2166,7 @@ async fn physical_reset_serializes_recreates_and_preserves_interner_registration
         100.0,
         JsValue::UNDEFINED,
         JsValue::UNDEFINED,
+        test_generation(&engine).await,
     ))
     .await;
 
@@ -2260,6 +2289,7 @@ async fn every_method_rejects_after_consuming_close() {
         2.0,
         JsValue::UNDEFINED,
         JsValue::UNDEFINED,
+        None,
     ))
     .await;
     assert_closed(engine.inspect_query_variants(
@@ -2295,6 +2325,7 @@ async fn every_method_rejects_after_consuming_close() {
         js(serde_json::json!({
             "setEntityProperty": { "id": "prop-1", "displayName": "Closed" }
         })),
+        None,
     ))
     .await;
     assert_closed(engine.rollback_optimistic_write("1".into(), "closed".into(), "1".into())).await;
@@ -2613,6 +2644,7 @@ async fn queue_one_mutation(engine: &CacheEngine) {
         100.0,
         JsValue::UNDEFINED,
         JsValue::UNDEFINED,
+        test_generation(&engine).await,
     ))
     .await;
 }
@@ -2814,6 +2846,7 @@ async fn calendar_ranges_report_gaps_watermarks_and_uncertain_events_across_the_
         100.0,
         JsValue::UNDEFINED,
         js(serde_json::json!(["GraphqlCalendarEvent:e1"])),
+        test_generation(&engine).await,
     ))
     .await;
     let covered: serde_json::Value = from_js(resolved(engine.calendar_range(js(week))).await);

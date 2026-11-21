@@ -28,7 +28,7 @@ function CanvasReadOnlyToolbars() {
 }
 
 /**
- * The read-only canvas on desktop, and inside a document on any device, where
+ * The read-only canvas on desktop, as its own page or inside a document, where
  * its controls stay within the embed.
  */
 export function CanvasReadOnlyView(props: CanvasReadOnlyViewProps) {

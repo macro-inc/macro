@@ -2,7 +2,6 @@ import { projectRouteId } from '@app/features/projects/core/route';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { toast } from '@core/component/Toast/Toast';
-import { enableProjects, isFeatureEnabled } from '@core/constant/featureFlags';
 import type { OpenEntityTarget } from './context/activity-context';
 
 /** The app's `onOpen` for activity rows: open the entity in the split layout. */
@@ -13,7 +12,6 @@ export function openEntityInSplit({
   newSplit,
 }: OpenEntityTarget): void {
   if (block.toLowerCase() === 'initiative') {
-    if (!isFeatureEnabled(enableProjects)) return;
     globalSplitManager()?.openWithSplit(
       {
         type: 'component',

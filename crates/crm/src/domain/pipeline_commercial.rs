@@ -25,6 +25,10 @@ pub const CURRENCIES: &[&str] = &[
     "IDR", "MYR", "PHP", "TWD", "VND",
 ];
 
+/// Outcome options, in order. Declined is a deal the team turned down: closed,
+/// but not lost.
+const OUTCOMES: &[&str] = &["Open", "Won", "Lost", "Declined"];
+
 /// Stable association between a numeric amount and its per-row denomination.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -71,7 +75,7 @@ fn select(name: String, labels: &[&str]) -> ProvisionedColumn {
 
 /// Extend a new pipeline's ordinary schema with its commercial system fields.
 pub(super) fn provision(columns: &mut Vec<ProvisionedColumn>) -> CommercialFields {
-    let outcome = select("Outcome".into(), &["Open", "Won", "Lost"]);
+    let outcome = select("Outcome".into(), OUTCOMES);
     let mut fields = CommercialFields {
         outcome: Some(outcome.id),
         money: vec![],

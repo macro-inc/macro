@@ -73,7 +73,9 @@ export function useAssigneePicker(
       for (const id of activeIds()) {
         if (id !== NO_ASSIGNEE) add(id);
       }
-      return peopleBeforeAgents(result, (option) => option.id, uid);
+      return peopleBeforeAgents(result, (option) => option.id, {
+        viewerId: uid,
+      });
     },
     undefined,
     {

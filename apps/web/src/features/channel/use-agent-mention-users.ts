@@ -13,7 +13,6 @@ import {
   isMacroNewId,
   macroMentionUser,
 } from './macroAi';
-import { useChatV3AgentsFlag } from './use-chat-v3-agents-flag';
 
 /**
  * Built-in agent entries shared by every message composer. Account setup does
@@ -42,7 +41,6 @@ export function useAgentMentionUserTransform(
 ): (users: readonly IUser[]) => IUser[] {
   const canUseCursor = useCursorAgentsAccess();
   const canUseCodex = useCodexAgentsAccess();
-  const canUseAgents = useChatV3AgentsFlag();
 
   return (users) => {
     // Old participants and saved bot rows must not restore the retired coder.
@@ -61,7 +59,7 @@ export function useAgentMentionUserTransform(
     if (canUseCodex() && !base.some((user) => isCodexBotId(user.id))) {
       base.unshift(codexMentionUser());
     }
-    base.unshift(macroMentionUser(canUseAgents()));
+    base.unshift(macroMentionUser());
     return uniqueByKey(base, (user) => user.id);
   };
 }

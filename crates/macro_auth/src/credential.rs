@@ -145,27 +145,99 @@ impl CredentialError {
     }
 }
 
+/// The bearer and access-token cookie a request carries, read from the same
+/// parse as [`request_credential`], for the extractors that have always
+/// read only those two: the first bearer, else the last cookie, as cookie
+/// jars keep it, whatever else the request carries.
+#[derive(Clone, Default, PartialEq, Eq)]
+pub struct AccessTokenSources {
+    /// The first `Authorization: Bearer` token.
+    pub bearer: Option<String>,
+    /// The last access-token cookie.
+    pub cookie: Option<String>,
+}
+
+impl std::fmt::Debug for AccessTokenSources {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("AccessTokenSources")
+            .field("bearer", &self.bearer.is_some())
+            .field("cookie", &self.cookie.is_some())
+            .finish()
+    }
+}
+
 #[derive(Clone)]
-struct Parsed(Result<RequestCredential, CredentialError>);
+struct Parsed {
+    credential: Result<RequestCredential, CredentialError>,
+    sources: AccessTokenSources,
+}
+
+fn parsed(parts: &mut Parts) -> Parsed {
+    if let Some(parsed) = parts.extensions.get::<Parsed>() {
+        return parsed.clone();
+    }
+    let parsed = parse(&parts.headers, parts.uri.query());
+    parts.extensions.insert(parsed.clone());
+    parsed
+}
 
 /// The credential `parts` carries, parsed on the first call and kept in the
 /// request's extensions for every later one.
 pub fn request_credential(parts: &mut Parts) -> Result<RequestCredential, CredentialError> {
-    if let Some(Parsed(parsed)) = parts.extensions.get::<Parsed>() {
-        return parsed.clone();
-    }
-    let parsed = parse(&parts.headers, parts.uri.query());
-    parts.extensions.insert(Parsed(parsed.clone()));
-    parsed
+    parsed(parts).credential
+}
+
+/// The bearer and access-token cookie `parts` carries; see
+/// [`AccessTokenSources`].
+pub fn access_token_sources(parts: &mut Parts) -> AccessTokenSources {
+    parsed(parts).sources
 }
 
 /// Every candidate from every source: each query parameter whose decoded key
 /// is [`USER_TOKEN_QUERY_KEY`] (repeats included), each bearer, each
 /// access-token cookie (names and values percent-decoded, as cookie jars
 /// read them), and each other credential header.
-fn parse(headers: &HeaderMap, query: Option<&str>) -> Result<RequestCredential, CredentialError> {
-    let mut found: Vec<(String, TokenSource)> = Vec::new();
+fn parse(headers: &HeaderMap, query: Option<&str>) -> Parsed {
+    let mut bearers: Vec<String> = Vec::new();
     let mut malformed = false;
+    for value in headers.get_all(header::AUTHORIZATION) {
+        match value.to_str().ok().and_then(bearer) {
+            Some(token) => bearers.push(token.to_owned()),
+            None => malformed = true,
+        }
+    }
+    let mut cookies: Vec<String> = Vec::new();
+    for value in headers.get_all(header::COOKIE) {
+        let Ok(value) = value.to_str() else {
+            continue;
+        };
+        for cookie in cookie::Cookie::split_parse_encoded(value).flatten() {
+            if cookie.name() == access_token_cookie_name() {
+                cookies.push(cookie.value_trimmed().to_owned());
+            }
+        }
+    }
+    let sources = AccessTokenSources {
+        bearer: bearers.first().cloned(),
+        cookie: cookies.last().cloned(),
+    };
+    let credential = credential(headers, query, bearers, malformed, cookies);
+    Parsed {
+        credential,
+        sources,
+    }
+}
+
+/// The credential from every source, the bearers and cookies already read.
+fn credential(
+    headers: &HeaderMap,
+    query: Option<&str>,
+    bearers: Vec<String>,
+    malformed: bool,
+    cookies: Vec<String>,
+) -> Result<RequestCredential, CredentialError> {
+    let mut found: Vec<(String, TokenSource)> = Vec::new();
     if let Some(query) = query {
         let pairs: Vec<(String, String)> =
             serde_urlencoded::from_str(query).map_err(|_| CredentialError::UnreadableQuery)?;
@@ -175,26 +247,22 @@ fn parse(headers: &HeaderMap, query: Option<&str>) -> Result<RequestCredential, 
             }
         }
     }
-    for value in headers.get_all(header::AUTHORIZATION) {
-        match value.to_str().ok().and_then(bearer) {
-            Some(token) => found.push((token.to_owned(), TokenSource::Bearer)),
-            None => malformed = true,
-        }
-    }
-    for value in headers.get_all(header::COOKIE) {
-        let Ok(value) = value.to_str() else {
-            continue;
-        };
-        for cookie in cookie::Cookie::split_parse_encoded(value).flatten() {
-            if cookie.name() == access_token_cookie_name() {
-                found.push((cookie.value_trimmed().to_owned(), TokenSource::Cookie));
-            }
-        }
-    }
+    found.extend(
+        bearers
+            .into_iter()
+            .map(|token| (token, TokenSource::Bearer)),
+    );
+    found.extend(
+        cookies
+            .into_iter()
+            .map(|token| (token, TokenSource::Cookie)),
+    );
     let mut user_tokens: Vec<String> = found.iter().map(|(token, _)| token.clone()).collect();
     user_tokens.sort();
     user_tokens.dedup();
-    // The first query token, else the first bearer, else the first cookie.
+    // The first query token, else the first bearer, else the last cookie,
+    // which is the one cookie jars keep when a name repeats (a host-only
+    // cookie beside a domain-wide one).
     let explicit = found
         .iter()
         .find(|(_, source)| *source != TokenSource::Cookie)
@@ -203,7 +271,7 @@ fn parse(headers: &HeaderMap, query: Option<&str>) -> Result<RequestCredential, 
         Some((token, source)) => Some(CredentialKind::UserToken { token, source }),
         None if malformed => Some(CredentialKind::MalformedAuthorization),
         None => found
-            .first()
+            .last()
             .map(|(token, source)| CredentialKind::UserToken {
                 token: token.clone(),
                 source: *source,
