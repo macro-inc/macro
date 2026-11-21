@@ -440,7 +440,7 @@ fn dependency_suppression_overrides_enabled_logs_without_hiding_service_logs() {
     let output = SharedWriter::default();
     let subscriber = Registry::default()
         .with(tracing_subscriber::filter::filter_fn(|metadata| {
-            dependency_logs_allowed(&["russh", "rmcp"], metadata.target())
+            dependency_logs_allowed(&["russh", "rmcp"], &[], metadata)
         }))
         .with(
             tracing_subscriber::fmt::layer()
@@ -463,4 +463,36 @@ fn dependency_suppression_overrides_enabled_logs_without_hiding_service_logs() {
         .local()
         .build();
     assert_eq!(entrypoint.suppressed_targets, &["russh"]);
+}
+
+#[test]
+fn quiet_dependencies_keep_info_and_drop_debug() {
+    let output = SharedWriter::default();
+    let subscriber = Registry::default()
+        .with(tracing_subscriber::filter::filter_fn(|metadata| {
+            dependency_logs_allowed(&[], &["rmcp::service"], metadata)
+        }))
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .with_writer(output.clone())
+                .with_filter(EnvFilter::new("trace")),
+        );
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::debug!(target: "rmcp::service", "received request with whsec_test-only");
+        tracing::trace!(target: "rmcp::service::server", "message whsec_test-only");
+        tracing::warn!(target: "rmcp::service", "rejected peer request");
+        tracing::debug!(target: "rmcp::transport", "transport detail");
+        tracing::debug!(target: "agent_harness_service", "service debug");
+    });
+    let text = output.contents();
+    assert!(!text.contains("whsec_test-only"), "{text}");
+    assert!(text.contains("rejected peer request"), "{text}");
+    assert!(text.contains("transport detail"), "{text}");
+    assert!(text.contains("service debug"), "{text}");
+    let entrypoint = MacroEntrypoint::default()
+        .quiet_dependency_debug_logs(&["rmcp"])
+        .local()
+        .build();
+    assert_eq!(entrypoint.quiet_targets, &["rmcp"]);
 }

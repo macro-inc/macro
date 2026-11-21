@@ -102,6 +102,9 @@ pub struct MacroEntrypoint {
     local: LocalOptions,
     /// Dependency targets whose instrumentation can include credentials or application payloads.
     suppressed_targets: &'static [&'static str],
+    /// Dependency targets whose debug and trace events can include credentials; only their
+    /// info and higher events reach any sink.
+    quiet_targets: &'static [&'static str],
 }
 
 impl Default for MacroEntrypoint {
@@ -112,6 +115,7 @@ impl Default for MacroEntrypoint {
             env: Environment::new_or_prod(),
             local: Default::default(),
             suppressed_targets: &[],
+            quiet_targets: &[],
         }
     }
 }
@@ -193,6 +197,13 @@ impl MacroEntrypoint {
         self
     }
 
+    /// Drop debug and trace events of dependency targets whose requests can carry credentials
+    /// (an MCP server logging the requests it receives), keeping their info and higher events.
+    pub fn quiet_dependency_debug_logs(mut self, targets: &'static [&'static str]) -> Self {
+        self.quiet_targets = targets;
+        self
+    }
+
     /// create a new instance of [Self] from an input [Environment]
     pub fn new(env: Environment) -> Self {
         Self {
@@ -232,7 +243,11 @@ impl MacroEntrypoint {
 
                     Registry::default()
                         .with(tracing_subscriber::filter::filter_fn(move |metadata| {
-                            dependency_logs_allowed(self.suppressed_targets, metadata.target())
+                            dependency_logs_allowed(
+                                self.suppressed_targets,
+                                self.quiet_targets,
+                                metadata,
+                            )
                         }))
                         .with(RootcauseLayer.with_filter(rootcause_filter))
                         .with(
@@ -249,7 +264,11 @@ impl MacroEntrypoint {
                 } else {
                     Registry::default()
                         .with(tracing_subscriber::filter::filter_fn(move |metadata| {
-                            dependency_logs_allowed(self.suppressed_targets, metadata.target())
+                            dependency_logs_allowed(
+                                self.suppressed_targets,
+                                self.quiet_targets,
+                                metadata,
+                            )
                         }))
                         .with(RootcauseLayer.with_filter(rust_log_filter.clone()))
                         .with(
@@ -278,7 +297,11 @@ impl MacroEntrypoint {
                 let rust_log_filter = rust_log_env_filter();
                 let subscriber = Registry::default()
                     .with(tracing_subscriber::filter::filter_fn(move |metadata| {
-                        dependency_logs_allowed(self.suppressed_targets, metadata.target())
+                        dependency_logs_allowed(
+                            self.suppressed_targets,
+                            self.quiet_targets,
+                            metadata,
+                        )
                     }))
                     .with(RootcauseLayer.with_filter(rust_log_filter.clone()))
                     .with(HierarchicalLayer::new(level).with_filter(rust_log_filter));
@@ -325,7 +348,11 @@ impl MacroEntrypoint {
 
                 Registry::default()
                     .with(tracing_subscriber::filter::filter_fn(move |metadata| {
-                        dependency_logs_allowed(self.suppressed_targets, metadata.target())
+                        dependency_logs_allowed(
+                            self.suppressed_targets,
+                            self.quiet_targets,
+                            metadata,
+                        )
                     }))
                     .with(RootcauseLayer.with_filter(rootcause_filter))
                     .with(fmt_layer)
@@ -538,6 +565,7 @@ impl LocalOptionsBuilder {
             env: self.prev.env,
             local: self.next,
             suppressed_targets: self.prev.suppressed_targets,
+            quiet_targets: self.prev.quiet_targets,
         }
     }
 }
@@ -547,8 +575,18 @@ struct LocalOptions {
     tree_tracing: Option<usize>,
 }
 
-fn dependency_logs_allowed(suppressed: &[&str], target: &str) -> bool {
-    !suppressed.iter().any(|prefix| {
+fn dependency_logs_allowed(
+    suppressed: &[&str],
+    quiet: &[&str],
+    metadata: &tracing::Metadata<'_>,
+) -> bool {
+    let target = metadata.target();
+    !matches_target(suppressed, target)
+        && (*metadata.level() <= tracing::Level::INFO || !matches_target(quiet, target))
+}
+
+fn matches_target(prefixes: &[&str], target: &str) -> bool {
+    prefixes.iter().any(|prefix| {
         target == *prefix
             || target
                 .strip_prefix(prefix)
