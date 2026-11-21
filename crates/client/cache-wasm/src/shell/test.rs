@@ -2015,6 +2015,7 @@ async fn storage_reset_errors_latch_and_block_hot_read_write_and_control_methods
     ))
     .await;
     assert_reset_required(engine.clear()).await;
+    assert_reset_required(engine.checkpoint_if_due()).await;
 
     resolved(engine.physical_reset()).await;
     let identity: Option<String> = from_js(resolved(engine.bound_identity()).await);
@@ -2335,6 +2336,7 @@ async fn every_method_rejects_after_consuming_close() {
     assert_closed(engine.external_reset()).await;
     assert_closed(engine.teardown_operation("closed:1".into())).await;
     assert_closed(engine.clear()).await;
+    assert_closed(engine.checkpoint_if_due()).await;
     assert_closed(engine.physical_reset()).await;
     assert_closed(engine.close()).await;
 
@@ -2869,5 +2871,52 @@ async fn calendar_ranges_report_gaps_watermarks_and_uncertain_events_across_the_
         .await
         .is_err()
     );
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn idle_checkpoint_copies_a_due_wal_once_and_keeps_reads() {
+    const SCOPE: &str = "cache-wasm-idle-checkpoint";
+    let engine = fresh_engine(SCOPE).await;
+    let checkpoint =
+        || async { from_js::<serde_json::Value>(resolved(engine.checkpoint_if_due()).await) };
+
+    let mut copied = None;
+    for written in 0..2_000 {
+        resolved(engine.write_query(
+            write_context(None),
+            QUERY.into(),
+            Some("Soup".into()),
+            js(variables()),
+            js(soup_data(&format!("doc-{written}"))),
+            Some("user-1".into()),
+        ))
+        .await;
+        let result = checkpoint().await;
+        if result["ran"] == true {
+            copied = Some(result);
+            break;
+        }
+        // Below 500 frames nothing is copied.
+        assert_eq!(result["backfilledFrames"], 0);
+        assert!(result["walFrames"].as_u64().unwrap() < 500);
+    }
+    let copied = copied.expect("the WAL reached 500 frames");
+    assert!(copied["walFrames"].as_u64().unwrap() >= 500);
+    assert_eq!(copied["backfilledFrames"], copied["walFrames"]);
+
+    // Nothing new since the copy: the next call skips it.
+    assert_eq!(checkpoint().await["ran"], false);
+    let read: serde_json::Value = from_js(
+        resolved(engine.read_query(
+            Some("tab:after-checkpoint".into()),
+            QUERY.into(),
+            Some("Soup".into()),
+            js(variables()),
+            JsValue::UNDEFINED,
+        ))
+        .await,
+    );
+    assert_eq!(read["kind"], "hit");
     close_and_destroy(&engine, SCOPE).await;
 }
