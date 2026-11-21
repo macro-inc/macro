@@ -147,6 +147,13 @@ where
                 ));
             }
         };
+        // Joining a project inherits its agents, whose work runs with the
+        // owner's full access: a background job starts no such work.
+        if agent_correlation::context::current_scope()
+            == Some(agent_correlation::scope::SessionScope::Job)
+        {
+            return Err(PropertiesErr::PermissionDenied);
+        }
         self.check_referenced_edit_access(
             access,
             entity_access::domain::models::EntityType::Initiative,
