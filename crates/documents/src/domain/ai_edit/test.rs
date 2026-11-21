@@ -382,3 +382,77 @@ async fn bot_instructions_carry_the_user_and_bot_in_the_token_and_the_bot_name_o
 
     assert_eq!(edited.revision, "AQID");
 }
+
+#[tokio::test]
+async fn audit_skill_instructions_are_not_rewritten_by_mentions_or_no_send_runs() {
+    use agent_correlation::context::{Attribution, scope_attribution};
+    use agent_correlation::scope::SessionScope;
+    for (skill, mention, no_send, allowed) in [
+        (true, false, false, true),
+        (true, true, false, false),
+        (true, true, true, false),
+        (true, false, true, false),
+        (false, true, true, true),
+    ] {
+        let mut metadata = document("md");
+        if skill {
+            metadata.sub_type = Some(document_sub_type::DocumentSubType::Skill);
+        }
+        let attribution = Attribution {
+            correlation_id: Some(uuid::Uuid::from_u128(701)),
+            session_id: Some(uuid::Uuid::from_u128(702)),
+            channel_mention_id: mention.then_some(uuid::Uuid::from_u128(703)),
+            scope: no_send.then_some(SessionScope::NoSend),
+            ..Default::default()
+        };
+        let writes = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let called = writes.clone();
+        let mut worker = MockEditingWorkerService::new();
+        worker
+            .expect_edit()
+            .times(0..=1)
+            .returning(move |_, _, _, _, _| {
+                called.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                Box::pin(async {
+                    Ok(EditResult {
+                        edits_applied: 1,
+                        usage: Vec::new(),
+                        clarification: None,
+                        revision: Some("AQIE".into()),
+                    })
+                })
+            });
+        let editing = ai_editing(
+            worker,
+            Arc::new(ai_billing::domain::admission::DisabledAiAdmissionService),
+        );
+        let result = scope_attribution(
+            attribution,
+            edit_with_instructions(
+                &editing,
+                SECRET,
+                edit_receipt(DOCUMENT),
+                &metadata,
+                "Update the instructions",
+                true,
+            ),
+        )
+        .await;
+        if allowed {
+            assert!(
+                result.is_ok(),
+                "skill={skill} mention={mention} no_send={no_send}: {result:?}"
+            );
+            assert_eq!(writes.load(std::sync::atomic::Ordering::SeqCst), 1);
+        } else {
+            assert!(
+                matches!(
+                    result,
+                    Err(DocumentAiEditError::Document(DocumentError::Forbidden(_)))
+                ),
+                "skill={skill} mention={mention} no_send={no_send}: {result:?}"
+            );
+            assert_eq!(writes.load(std::sync::atomic::Ordering::SeqCst), 0);
+        }
+    }
+}
