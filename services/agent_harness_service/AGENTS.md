@@ -80,7 +80,9 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   `/brain/anthropic/v1/messages` request, after its `tool_result` blocks, as
   `<macro-runtime-notice>{json}</macro-runtime-notice>` text blocks with `<`,
   `>` and `&` escaped (`anthropic_gateway/screen_notices.rs`), and count as
-  delivered only when upstream answered 2xx.
+  delivered only when upstream answered 2xx. They ride whichever brain
+  messages request comes first (a subagent's included) and are not kept in
+  the agent's history: a hint for its next turn, not a record.
 - `src/speech_gateway.rs` + `src/speech_gateway/`: `/brain/inference/stt` and
   `/brain/inference/tts` WebSockets on the egress listener, for agent
   teammates' calls (`MACRO_SPEECH_URL` in the enrollment). Same brain key,
@@ -188,16 +190,23 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   socket (`socket.rs`): binary frames are raw RFB both ways, text frames JSON
   control (`takeOver`, `handBack`, `input`, `stop`; server `state`/`error`/
   `ended`), with access (rollout included) re-checked and the socket marked
-  seen every 30 s; a driver who loses access releases the lease at once. A
-  person opens at most 4 sockets on a computer and a computer 16
-  (`tooManySockets`). The `viewers` count in `state` is this replica's.
+  seen every 30 s (three failed lookups in a row end it); a driver who loses
+  access releases the lease at once. A person opens at most 4 sockets on a
+  computer, and a computer 16 watching sockets (`tooManySockets`; driving
+  sockets don't count against it). Its own task writes the WebSocket
+  through a bounded outbox, so a viewer that stops reading never stalls the
+  loop: media waits when the outbox fills, and a write that takes 10 s ends
+  the socket. The `viewers` count in `state` is this replica's. An open
+  socket, watching or driving, keeps the computer awake (`in_use.rs`).
   Before the first frame the socket wakes a hibernated computer
   (`state.waking`). One driver lease per computer, renewed by driver input at
   most every 15 s; a take-over by the same user moves it to the new socket,
   `state.drivingHere` says which socket holds it, and any socket of the
   driver may hand back. `media.rs` `VncMedia` relays raw RFB from Xvnc (5901)
-  through `rfb.rs` `RfbGate`, which drops input unless this socket drives
-  and fails closed on anything it can't parse; typed `input` goes through
+  through `rfb.rs` `RfbGate`, which drops input unless this socket drives,
+  strips the ExtendedClipboard encoding (so the clipboard is plain Latin-1
+  ServerCutText/ClientCutText both ways), and fails closed on anything it
+  can't parse; typed `input` goes through
   `RfbInjector`'s own RFB connection (handshake and each input bounded to
   10 s). Xvnc is reached only by a `socat`
   tunnel over `tunnel.rs` `GuestExec` (the operator's `Fleet::exec`,

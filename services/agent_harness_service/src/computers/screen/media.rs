@@ -100,34 +100,40 @@ impl ScreenMedia for VncMedia {
             } = context;
             let stream = tunnel.open(computer_id, GuestPort::Rfb).await?;
             let (mut guest_reader, mut guest_writer) = tokio::io::split(stream);
-            let mut gate = RfbGate::new();
-            let mut buffer = vec![0u8; READ_CHUNK];
-            loop {
-                tokio::select! {
-                    read = guest_reader.read(&mut buffer) => {
-                        let read = read?;
-                        if read == 0 {
-                            return Ok(MediaEnd::GuestClosed);
-                        }
-                        let frame = Bytes::copy_from_slice(buffer.get(..read).unwrap_or_default());
-                        if to_viewer.send(ToViewer::Binary(frame)).await.is_err() {
-                            return Ok(MediaEnd::ViewerClosed);
-                        }
+            // The two directions run apart: a viewer that reads slowly holds
+            // up the guest's frames, never its own input on the way in.
+            let to_the_viewer = async {
+                let mut buffer = vec![0u8; READ_CHUNK];
+                loop {
+                    let read = guest_reader.read(&mut buffer).await?;
+                    if read == 0 {
+                        return Ok(MediaEnd::GuestClosed);
                     }
-                    message = from_viewer.recv() => {
-                        let Some(message) = message else {
-                            return Ok(MediaEnd::ViewerClosed);
-                        };
-                        let FromViewer::Binary(bytes) = message;
-                        let filtered = gate.filter(&bytes, *driving.borrow())?;
-                        if !filtered.forward.is_empty() {
-                            guest_writer.write_all(&filtered.forward).await?;
-                        }
-                        if filtered.input {
-                            activity.notify_one();
-                        }
+                    let frame = Bytes::copy_from_slice(buffer.get(..read).unwrap_or_default());
+                    if to_viewer.send(ToViewer::Binary(frame)).await.is_err() {
+                        return Ok(MediaEnd::ViewerClosed);
                     }
                 }
+            };
+            let to_the_guest = async {
+                let mut gate = RfbGate::new();
+                loop {
+                    let Some(message) = from_viewer.recv().await else {
+                        return Ok(MediaEnd::ViewerClosed);
+                    };
+                    let FromViewer::Binary(bytes) = message;
+                    let filtered = gate.filter(&bytes, *driving.borrow())?;
+                    if !filtered.forward.is_empty() {
+                        guest_writer.write_all(&filtered.forward).await?;
+                    }
+                    if filtered.input {
+                        activity.notify_one();
+                    }
+                }
+            };
+            tokio::select! {
+                ended = to_the_viewer => ended,
+                ended = to_the_guest => ended,
             }
         })
     }

@@ -703,4 +703,121 @@ mod brain_route {
         assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
         assert!(seen.lock().unwrap().is_empty());
     }
+
+    /// Answers every request with `status`, recording the bodies.
+    async fn upstream_answering(status: StatusCode) -> (String, Arc<Mutex<Vec<String>>>) {
+        let seen = Arc::new(Mutex::new(Vec::<String>::new()));
+        let recorded = seen.clone();
+        let app = Router::new().fallback(move |request: Request| {
+            let recorded = recorded.clone();
+            async move {
+                let body = to_bytes(request.into_body(), usize::MAX).await.unwrap();
+                recorded
+                    .lock()
+                    .unwrap()
+                    .push(String::from_utf8(body.to_vec()).unwrap());
+                let mut response = Response::new(Body::from(UPSTREAM_JSON));
+                *response.status_mut() = status;
+                response.headers_mut().insert(
+                    header::CONTENT_TYPE,
+                    HeaderValue::from_static("application/json"),
+                );
+                response
+            }
+        });
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        (format!("http://{address}"), seen)
+    }
+
+    /// The agent's computer was driven and handed back: a notice waits.
+    async fn handed_back(screens: &crate::computers::screen::Screens) {
+        use computer_screen::domain::models::{Mode, ScreenGrant, Surface, Transport};
+        let grant = ScreenGrant {
+            harness_id: harness_id::HarnessId::TEST_A,
+            computer_id: COMPUTER,
+            agent_user_id: Some(MacroUserIdStr::parse_from_str(AGENT).unwrap().into_owned()),
+            user_id: MacroUserIdStr::parse_from_str(CREATOR)
+                .unwrap()
+                .into_owned(),
+            transport: Transport::Vnc,
+            surface: Surface::Desktop,
+            mode: Mode::Drive,
+        };
+        let session = screens.open_session(&grant).await.unwrap();
+        screens.take_over(&grant, session).await.unwrap();
+        screens
+            .hand_back(
+                COMPUTER,
+                grant.user_id.clone(),
+                Some("signed you in".to_owned()),
+            )
+            .await
+            .unwrap();
+    }
+
+    fn brain_message(key: &str) -> HttpRequest<Body> {
+        HttpRequest::post("/brain/anthropic/v1/messages")
+            .header("authorization", format!("Bearer {key}"))
+            .header("anthropic-version", "2023-06-01")
+            .body(Body::from(
+                r#"{"model":"claude-haiku-4-5-20251001","max_tokens":16,"messages":[{"role":"user","content":"go on"}]}"#,
+            ))
+            .unwrap()
+    }
+
+    async fn gateway_with_screens(
+        upstream_url: &str,
+        screens: Arc<crate::computers::screen::Screens>,
+    ) -> Router {
+        let state = GatewayState::new(
+            Arc::new(InMemoryAgentSessionRepo::new()),
+            FixedComputer(None),
+            Arc::new(DisabledAiAdmissionService),
+            Arc::new(RecordingUsage::default()),
+            upstream_url,
+            "upstream-key",
+        )
+        .unwrap()
+        .with_brains(Arc::new(OneAgent), rollout_for_creator(true))
+        .with_screen_notices(screens);
+        router(state)
+    }
+
+    #[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
+    async fn a_screen_notice_counts_as_delivered_only_when_the_model_accepted_it(
+        pool: sqlx::PgPool,
+    ) {
+        let screens = crate::computers::screen::test_screens(pool).await;
+        handed_back(&screens).await;
+        let agent = MacroUserIdStr::parse_from_str(AGENT).unwrap().into_owned();
+        let pending = screens.pending_notices(&agent).await.unwrap().len();
+        assert_eq!(pending, 2);
+
+        // Upstream refuses the request that carried them: they wait.
+        let (refusing, refused_bodies) = upstream_answering(StatusCode::SERVICE_UNAVAILABLE).await;
+        let response = gateway_with_screens(&refusing, Arc::clone(&screens))
+            .await
+            .oneshot(brain_message("mak_agent"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert!(refused_bodies.lock().unwrap()[0].contains("macro-runtime-notice"));
+        assert_eq!(
+            screens.pending_notices(&agent).await.unwrap().len(),
+            pending
+        );
+
+        // The next request is accepted: they are delivered.
+        let (accepting, accepted_bodies) = upstream_answering(StatusCode::OK).await;
+        let response = gateway_with_screens(&accepting, Arc::clone(&screens))
+            .await
+            .oneshot(brain_message("mak_agent"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(accepted_bodies.lock().unwrap()[0].contains("signed you in"));
+        assert!(screens.pending_notices(&agent).await.unwrap().is_empty());
+    }
 }

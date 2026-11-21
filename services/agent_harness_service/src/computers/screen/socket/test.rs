@@ -171,6 +171,45 @@ fn any_tab_of_the_driver_may_hand_back_and_nobody_else() {
     assert!(!may_hand_back(None, &alice));
 }
 
+/// A guest port that accepts and then says nothing, ever.
+struct SilentXvnc;
+
+impl GuestTunnel for SilentXvnc {
+    fn open(
+        &self,
+        _computer: ComputerId,
+        _port: GuestPort,
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<super::super::tunnel::GuestStream, TunnelError>> + Send + '_,
+        >,
+    > {
+        Box::pin(async {
+            let (harness_end, guest_end) = tokio::io::duplex(1024);
+            // Held open, never written.
+            std::mem::forget(guest_end);
+            let (reader, writer) = tokio::io::split(harness_end);
+            let reader: Pin<Box<dyn tokio::io::AsyncRead + Send>> = Box::pin(reader);
+            let writer: Pin<Box<dyn tokio::io::AsyncWrite + Send>> = Box::pin(writer);
+            Ok(tokio::io::join(reader, writer))
+        })
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_xvnc_that_never_answers_gives_up_the_injector_in_time() {
+    let computer = ComputerId::new_from_uuid(uuid::Uuid::from_u128(0xC0));
+
+    let connected = tokio::time::timeout(
+        INJECTOR_HANDSHAKE_TIMEOUT * 2,
+        connect_injector(&SilentXvnc, computer),
+    )
+    .await
+    .expect("the handshake waited forever");
+
+    assert!(connected.is_err());
+}
+
 mod over_the_wire {
     //! The socket's loop against a real WebSocket client, a fake Xvnc and
     //! the real lease in Postgres.
@@ -202,8 +241,7 @@ mod over_the_wire {
     struct FakeXvnc {
         received: Mutex<Vec<u8>>,
         changed: Notify,
-        /// What it sends after its version, once the viewer's ClientInit
-        /// arrived.
+        /// What it sends right after its version.
         script: Mutex<Vec<u8>>,
     }
 
@@ -244,7 +282,7 @@ mod over_the_wire {
                 tokio::spawn(async move {
                     guest_end.write_all(b"RFB 003.008\n").await.unwrap();
                     let script = std::mem::take(&mut *xvnc.script.lock().unwrap());
-                    let (mut guest_reader, mut guest_writer) = tokio::io::split(guest_end);
+                    let (guest_reader, mut guest_writer) = tokio::io::split(guest_end);
                     tokio::spawn(async move {
                         let _ = guest_writer.write_all(&script).await;
                         // Keep the stream open: the guest doesn't hang up.
@@ -354,7 +392,7 @@ mod over_the_wire {
                     viewers: Arc::clone(&viewers),
                     reauthorize: Arc::new(move || {
                         let allowed = allowed.load(Ordering::SeqCst);
-                        Box::pin(async move { allowed })
+                        Box::pin(async move { Some(allowed) })
                     }),
                     reauthorize_every: Duration::from_millis(100),
                     shutdown: CancellationToken::new(),
@@ -567,5 +605,114 @@ mod over_the_wire {
 
         assert_eq!(received.len(), expected.len());
         assert!(received == expected, "the relay changed the guest's bytes");
+    }
+
+    /// A guest that greets, then sends screen data as fast as it can be read.
+    struct FloodTunnel;
+
+    impl GuestTunnel for FloodTunnel {
+        fn open(
+            &self,
+            _computer: ComputerId,
+            _port: GuestPort,
+        ) -> Pin<Box<dyn Future<Output = Result<GuestStream, TunnelError>> + Send + '_>> {
+            Box::pin(async move {
+                let (harness_end, guest_end) = tokio::io::duplex(1 << 16);
+                let (mut guest_reader, mut guest_writer) = tokio::io::split(guest_end);
+                tokio::spawn(async move {
+                    let mut sink = [0u8; 4096];
+                    while let Ok(read) = guest_reader.read(&mut sink).await {
+                        if read == 0 {
+                            return;
+                        }
+                    }
+                });
+                tokio::spawn(async move {
+                    guest_writer.write_all(b"RFB 003.008\n").await.unwrap();
+                    let chunk = vec![0u8; 64 * 1024];
+                    while guest_writer.write_all(&chunk).await.is_ok() {}
+                });
+                let (reader, writer) = tokio::io::split(harness_end);
+                let reader: Pin<Box<dyn tokio::io::AsyncRead + Send>> = Box::pin(reader);
+                let writer: Pin<Box<dyn tokio::io::AsyncWrite + Send>> = Box::pin(writer);
+                Ok(tokio::io::join(reader, writer))
+            })
+        }
+    }
+
+    /// A viewer on a slow link that keeps sending (frame requests, pointer
+    /// moves) must not wedge its socket: access is still rechecked.
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+    async fn a_slow_viewer_that_keeps_sending_does_not_wedge_the_socket(pool: PgPool) {
+        let rig = rig(pool.clone(), grant("alice", Mode::View)).await;
+        // Same rig, flooding guest.
+        let tasks = TaskTracker::new();
+        let _ = &tasks;
+        let allowed = Arc::new(AtomicBool::new(true));
+        let screens = Arc::clone(&rig.screens);
+        let route = {
+            let allowed = Arc::clone(&allowed);
+            move |upgrade: WebSocketUpgrade| {
+                let allowed = Arc::clone(&allowed);
+                let deps = SocketDeps {
+                    screens: Arc::clone(&screens),
+                    tunnel: Arc::new(FloodTunnel),
+                    waker: Arc::new(AwakeComputer),
+                    media: Arc::new(VncMedia),
+                    viewers: Arc::new(Viewers::default()),
+                    reauthorize: Arc::new(move || {
+                        let allowed = allowed.load(Ordering::SeqCst);
+                        Box::pin(async move { Some(allowed) })
+                    }),
+                    reauthorize_every: Duration::from_millis(100),
+                    shutdown: CancellationToken::new(),
+                };
+                let grant = grant("alice", Mode::View);
+                async move { upgrade.on_upgrade(move |socket| serve(socket, grant, deps, None)) }
+            }
+        };
+        let app = axum::Router::new().route("/ws", axum::routing::get(route));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let (client, _) = tokio_tungstenite::connect_async(format!("ws://{address}/ws"))
+            .await
+            .unwrap();
+        let (mut writer, reader) = client.split();
+        // A slow link: the viewer reads a frame every 20 ms.
+        // A viewer that stops reading (a sleeping laptop, a hostile script).
+        let _keep = reader;
+        let mut hello: Vec<u8> = b"RFB 003.008\n".to_vec();
+        hello.push(1);
+        hello.push(1);
+        writer.send(ClientFrame::binary(hello)).await.unwrap();
+        let request = [3u8, 1, 0, 0, 0, 0, 0, 10, 0, 10];
+        for _ in 0..50 {
+            writer
+                .send(ClientFrame::binary(request.to_vec()))
+                .await
+                .unwrap();
+            tokio::time::sleep(Duration::from_millis(2)).await;
+        }
+        allowed.store(false, Ordering::SeqCst);
+
+        let ended = tokio::time::timeout(Duration::from_secs(20), async {
+            loop {
+                let reason =
+                    sqlx::query_scalar!(r#"SELECT end_reason FROM computer_screen_sessions"#)
+                        .fetch_one(&pool)
+                        .await
+                        .unwrap();
+                if let Some(reason) = reason {
+                    return reason;
+                }
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+        })
+        .await;
+        assert_eq!(
+            ended.expect("the socket never noticed it lost access: its loop is wedged"),
+            "accessRevoked"
+        );
     }
 }

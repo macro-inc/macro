@@ -174,7 +174,14 @@ impl Drop for ViewerGuard {
 }
 
 /// Checks the viewer still may watch (or drive) as their ticket allowed.
-pub type Reauthorize = Arc<dyn Fn() -> Pin<Box<dyn Future<Output = bool> + Send>> + Send + Sync>;
+/// `None` when the lookup failed.
+pub type Reauthorize =
+    Arc<dyn Fn() -> Pin<Box<dyn Future<Output = Option<bool>> + Send>> + Send + Sync>;
+
+/// Access checks in a row that may fail to look anything up before the
+/// socket ends: a passing outage doesn't drop viewers, a lasting one
+/// doesn't leave them unchecked.
+const MAX_FAILED_ACCESS_CHECKS: u8 = 3;
 
 /// What a socket runs with.
 pub struct SocketDeps {
@@ -249,9 +256,10 @@ async fn serve_in_span(
         Ok(session) => session,
         Err(ScreenError::TooManySockets) => {
             span.record("screen.end_reason", EndReason::Error.as_ref());
-            let (mut sender, _) = socket.split();
+            let (sink, _) = socket.split();
+            let (outbox, writer) = Outbox::start(sink);
             let _ = send(
-                &mut sender,
+                &outbox,
                 &ServerMessage::Error {
                     code: ErrorCode::TooManySockets,
                     message: "too many screens are open on this computer",
@@ -259,13 +267,14 @@ async fn serve_in_span(
             )
             .await;
             let _ = send(
-                &mut sender,
+                &outbox,
                 &ServerMessage::Ended {
                     reason: EndReason::Error,
                 },
             )
             .await;
-            let _ = sender.close().await;
+            drop(outbox);
+            let _ = writer.await;
             return;
         }
         Err(error) => {
@@ -284,12 +293,13 @@ async fn serve_in_span(
         bytes_from_viewer: 0,
         waking: false,
     };
-    let (mut sender, receiver) = socket.split();
-    let ending = connection.run(&mut sender, receiver).await;
+    let (sink, receiver) = socket.split();
+    let (outbox, writer) = Outbox::start(sink);
+    let ending = connection.run(&outbox, receiver).await;
 
     if let Some((code, message)) = &ending.error {
         let _ = send(
-            &mut sender,
+            &outbox,
             &ServerMessage::Error {
                 code: *code,
                 message,
@@ -298,13 +308,14 @@ async fn serve_in_span(
         .await;
     }
     let _ = send(
-        &mut sender,
+        &outbox,
         &ServerMessage::Ended {
             reason: ending.reason,
         },
     )
     .await;
-    let _ = sender.close().await;
+    // The writer flushes and closes, or gives up after its timeout.
+    drop(outbox);
 
     span.record("screen.end_reason", ending.reason.as_ref());
     span.record("screen.bytes_to_viewer", connection.bytes_to_viewer);
@@ -326,14 +337,78 @@ async fn serve_in_span(
             |error| tracing::error!(error = ?error, "could not close the screen audit row"),
         )
         .ok();
+    let _ = writer.await;
 }
 
-type Sender = futures::stream::SplitSink<WebSocket, Message>;
+type Sink = futures::stream::SplitSink<WebSocket, Message>;
 type Receiver = futures::stream::SplitStream<WebSocket>;
 
-async fn send(sender: &mut Sender, message: &ServerMessage<'_>) -> Result<(), axum::Error> {
+/// Messages waiting for a viewer.
+const OUTBOX_MESSAGES: usize = 64;
+/// Room in the outbox kept for control messages: media waits once only
+/// this much is left.
+const CONTROL_HEADROOM: usize = 8;
+/// How long one message may take to reach a viewer before the viewer counts
+/// as gone: a link this slow can't show a screen anyway.
+const SEND_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// The viewer couldn't take another message: its outbox is full or its
+/// writer gave up.
+#[derive(Debug)]
+struct Stalled;
+
+/// The way to a viewer. Its own task writes the WebSocket, so a viewer that
+/// stops reading never stalls the socket's loop (shutdown, access checks,
+/// lease changes keep running): the outbox fills, media waits, and a write
+/// that takes longer than [`SEND_TIMEOUT`] ends the socket.
+struct Outbox {
+    queue: mpsc::Sender<Message>,
+    stalled: CancellationToken,
+}
+
+impl Outbox {
+    /// Write to `sink` from a task of its own, until the outbox is dropped.
+    fn start(mut sink: Sink) -> (Self, tokio::task::JoinHandle<()>) {
+        let (queue, mut pending) = mpsc::channel(OUTBOX_MESSAGES);
+        let stalled = CancellationToken::new();
+        let writer_stalled = stalled.clone();
+        let writer = tokio::spawn(
+            async move {
+                while let Some(message) = pending.recv().await {
+                    match tokio::time::timeout(SEND_TIMEOUT, sink.send(message)).await {
+                        Ok(Ok(())) => {}
+                        Ok(Err(_)) => {
+                            writer_stalled.cancel();
+                            return;
+                        }
+                        Err(_) => {
+                            tracing::info!("a screen viewer stopped reading");
+                            writer_stalled.cancel();
+                            return;
+                        }
+                    }
+                }
+                let _ = tokio::time::timeout(SEND_TIMEOUT, sink.close()).await;
+            }
+            .in_current_span(),
+        );
+        (Self { queue, stalled }, writer)
+    }
+
+    /// Queue `message`; an outbox that is full means the viewer is gone.
+    fn push(&self, message: Message) -> Result<(), Stalled> {
+        self.queue.try_send(message).map_err(|_| Stalled)
+    }
+
+    /// Whether media may queue another frame.
+    fn has_room_for_media(&self) -> bool {
+        self.queue.capacity() > CONTROL_HEADROOM
+    }
+}
+
+async fn send(sender: &Outbox, message: &ServerMessage<'_>) -> Result<(), Stalled> {
     let text = serde_json::to_string(message).unwrap_or_default();
-    sender.send(Message::Text(Utf8Bytes::from(text))).await
+    sender.push(Message::Text(Utf8Bytes::from(text)))
 }
 
 struct Connection {
@@ -367,10 +442,10 @@ impl Connection {
 
     async fn state(
         &self,
-        sender: &mut Sender,
+        sender: &Outbox,
         lease: Option<&Lease>,
         surface: Surface,
-    ) -> Result<(), axum::Error> {
+    ) -> Result<(), Stalled> {
         send(
             sender,
             &ServerMessage::State {
@@ -391,10 +466,10 @@ impl Connection {
     /// tried anyway: its display may be up before its runtime is.
     async fn wake(
         &mut self,
-        sender: &mut Sender,
+        sender: &Outbox,
         lease: Option<&Lease>,
         surface: Surface,
-    ) -> Result<Result<Woken, TunnelError>, axum::Error> {
+    ) -> Result<Result<Woken, TunnelError>, Stalled> {
         let waker = Arc::clone(&self.deps.waker);
         let harness = self.grant.harness_id;
         let span = tracing::info_span!(
@@ -425,11 +500,11 @@ impl Connection {
         Ok(woken)
     }
 
-    async fn error(sender: &mut Sender, code: ErrorCode, message: &str) -> Result<(), axum::Error> {
+    async fn error(sender: &Outbox, code: ErrorCode, message: &str) -> Result<(), Stalled> {
         send(sender, &ServerMessage::Error { code, message }).await
     }
 
-    async fn run(&mut self, sender: &mut Sender, mut receiver: Receiver) -> Ending {
+    async fn run(&mut self, sender: &Outbox, mut receiver: Receiver) -> Ending {
         let computer = self.grant.computer_id;
         let _viewer = self.deps.viewers.join(computer);
         let mut lease_changes = self.deps.screens.changes();
@@ -444,6 +519,7 @@ impl Connection {
         let surface = self.grant.surface;
         let mut injector: Option<RfbInjector> = None;
         let mut last_renew = tokio::time::Instant::now();
+        let mut failed_checks: u8 = 0;
         let mut reauthorize = tokio::time::interval_at(
             tokio::time::Instant::now() + self.deps.reauthorize_every,
             self.deps.reauthorize_every,
@@ -484,6 +560,9 @@ impl Connection {
             tokio::select! {
                 () = self.deps.shutdown.cancelled() => return Ending::plain(EndReason::Shutdown),
 
+                // The viewer stopped reading, or its connection broke.
+                () = sender.stalled.cancelled() => return Ending::plain(EndReason::Stopped),
+
                 ended = run => {
                     return match media_ending(ended) {
                         Ok(ending) => ending,
@@ -494,7 +573,7 @@ impl Connection {
                     };
                 }
 
-                out = to_viewer.recv() => {
+                out = to_viewer.recv(), if sender.has_room_for_media() => {
                     let message = match out {
                         Some(ToViewer::Binary(bytes)) => {
                             self.bytes_to_viewer += bytes.len() as u64;
@@ -502,7 +581,7 @@ impl Connection {
                         }
                         None => continue,
                     };
-                    if sender.send(message).await.is_err() {
+                    if sender.push(message).is_err() {
                         return Ending::plain(EndReason::Stopped);
                     }
                 }
@@ -637,7 +716,17 @@ impl Connection {
                 }
 
                 _ = reauthorize.tick() => {
-                    if !(self.deps.reauthorize)().await {
+                    let allowed = match (self.deps.reauthorize)().await {
+                        Some(allowed) => {
+                            failed_checks = 0;
+                            allowed
+                        }
+                        None => {
+                            failed_checks += 1;
+                            failed_checks < MAX_FAILED_ACCESS_CHECKS
+                        }
+                    };
+                    if !allowed {
                         // A driver who lost access stops holding the agent now,
                         // not when the lease lapses.
                         if lease.as_ref().is_some_and(|lease| may_hand_back(Some(lease), &self.grant.user_id))
@@ -663,20 +752,8 @@ impl Connection {
         event: &InputEvent,
     ) -> Result<(), String> {
         if injector.is_none() {
-            let stream = self
-                .deps
-                .tunnel
-                .open(self.grant.computer_id, GuestPort::Rfb)
-                .await
-                .map_err(|error| error.to_string())?;
-            // An Xvnc that accepts but never speaks must not stall the
-            // socket's loop.
-            let connected =
-                tokio::time::timeout(INJECTOR_HANDSHAKE_TIMEOUT, RfbInjector::connect(stream))
-                    .await
-                    .map_err(|_| "the computer's display did not answer".to_owned())?
-                    .map_err(|error| error.to_string())?;
-            *injector = Some(connected);
+            *injector =
+                Some(connect_injector(self.deps.tunnel.as_ref(), self.grant.computer_id).await?);
         }
         let Some(connected) = injector.as_mut() else {
             return Err("the computer's display is not connected".to_owned());
@@ -686,6 +763,23 @@ impl Connection {
             .map_err(|_| "the computer's display did not take the input in time".to_owned())?
             .map_err(|error| error.to_string())
     }
+}
+
+/// The injector's own RFB connection to `computer`'s Xvnc. An Xvnc that
+/// accepts but never speaks must not stall the socket's loop: the
+/// handshake gets [`INJECTOR_HANDSHAKE_TIMEOUT`].
+async fn connect_injector(
+    tunnel: &dyn GuestTunnel,
+    computer: ComputerId,
+) -> Result<RfbInjector, String> {
+    let stream = tunnel
+        .open(computer, GuestPort::Rfb)
+        .await
+        .map_err(|error| error.to_string())?;
+    tokio::time::timeout(INJECTOR_HANDSHAKE_TIMEOUT, RfbInjector::connect(stream))
+        .await
+        .map_err(|_| "the computer's display did not answer".to_owned())?
+        .map_err(|error| error.to_string())
 }
 
 async fn sleep_until_some(at: Option<tokio::time::Instant>) {

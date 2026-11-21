@@ -36,6 +36,27 @@ pub mod tunnel;
 use media::ScreenMedia;
 use socket::{SocketDeps, Viewers};
 
+/// The screen service over `pool`, with no fleet: for tests.
+#[cfg(test)]
+pub(crate) async fn test_screens(pool: sqlx::PgPool) -> Arc<Screens> {
+    let tasks = tokio_util::task::TaskTracker::new();
+    let shutdown = CancellationToken::new();
+    Arc::new(ScreenService::new(
+        PgScreenRepo::new(pool.clone()),
+        guest_files::GuestFiles::new(None, &tasks, shutdown.clone()),
+        PgLeaseChanges::listen(pool.clone(), &tasks, shutdown).await,
+        access::HarnessScreenAccess::new(
+            Arc::new(harnesses::domain::service::HarnessServiceImpl::new(
+                harnesses::outbound::pg_harness_repo::PgHarnessRepo::new(pool.clone()),
+                hosted_runtimes::outbound::pg::PgComputerAgents::new(pool.clone()),
+            )),
+            hosted_runtimes::domain::rollout::ComputerRollout::default(),
+            hosted_runtimes::outbound::pg::PgComputerAgents::new(pool.clone()),
+        ),
+        access::MacroPeople::new(pool),
+    ))
+}
+
 /// The largest message a viewer may send.
 const MAX_VIEWER_MESSAGE_BYTES: usize = 1 << 20;
 
@@ -277,7 +298,8 @@ where
     let grant = redeemed.grant;
     let media = state.medias.of(grant.transport);
 
-    // The rollout and the harness's permissions, every 30 s.
+    // The rollout and the harness's permissions, every 30 s; a lookup that
+    // fails is retried, up to three in a row.
     let reauthorize: socket::Reauthorize = {
         let screens = Arc::clone(&state.screens);
         let grant = grant.clone();
@@ -291,9 +313,7 @@ where
                     .inspect_err(
                         |error| tracing::warn!(error = ?error, "could not recheck screen access"),
                     )
-                    // A lookup that failed keeps the socket: access is
-                    // checked again in 30 s.
-                    .unwrap_or(true)
+                    .ok()
             })
         })
     };

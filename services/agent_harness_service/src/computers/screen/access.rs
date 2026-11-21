@@ -19,10 +19,19 @@ use hosted_runtimes::outbound::pg::PgComputerAgents;
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 
-/// A lookup behind a screen port failed.
+/// A lookup behind a screen port failed, and which one.
 #[derive(Debug, thiserror::Error)]
-#[error("{0}")]
-pub struct LookupError(String);
+pub enum LookupError {
+    /// Reading the harness or its permissions.
+    #[error("the harness lookup failed")]
+    Harness(rootcause::Report),
+    /// Reading which agent the computer runs.
+    #[error("the computer's agent lookup failed")]
+    Agent(rootcause::Report),
+    /// Reading the account.
+    #[error("the account lookup failed")]
+    Account(rootcause::Report),
+}
 
 /// The permission a screen mode needs: watching is `View`, driving is
 /// `Manage` (the team's owner and admins on a computer).
@@ -78,7 +87,9 @@ impl ScreenAccess for HarnessScreenAccess {
                 .computer_id
                 .map_or(Access::NotAComputer, Access::Granted)),
             Err(HarnessError::NotFound(_)) => Ok(Access::NotFound),
-            Err(HarnessError::Repo(error)) => Err(LookupError(format!("{error:?}"))),
+            Err(HarnessError::Repo(error)) => {
+                Err(LookupError::Harness(rootcause::report!("{error:?}")))
+            }
             Err(
                 HarnessError::Unauthorized
                 | HarnessError::BadRequest(_)
@@ -96,7 +107,7 @@ impl ScreenAccess for HarnessScreenAccess {
         self.agents
             .agent_of(computer)
             .await
-            .map_err(|error| LookupError(error.to_string()))
+            .map_err(|error| LookupError::Agent(rootcause::report!("{error}")))
     }
 }
 
@@ -128,14 +139,14 @@ impl People for MacroPeople {
                 {
                     return Ok(None);
                 }
-                Err(error) => return Err(LookupError(error.to_string())),
+                Err(error) => return Err(LookupError::Account(rootcause::report!("{error:#}"))),
             };
         let names = macro_db_client::user::get_user_name::get_user_names(
             &self.pool,
             &vec![user.as_ref().to_owned()],
         )
         .await
-        .map_err(|error| LookupError(error.to_string()))?;
+        .map_err(|error| LookupError::Account(rootcause::report!("{error:#}")))?;
         let name = names.into_iter().next().and_then(|name| {
             let full = [name.first_name, name.last_name]
                 .into_iter()
