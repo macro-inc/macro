@@ -109,3 +109,62 @@ async fn get_user_link_status_surfaces_github_rate_limits() {
         Err(GithubError::Upstream(UpstreamError { failure, .. })) if failure == rate_limited
     ));
 }
+
+#[tokio::test]
+async fn get_user_access_token_checks_a_token_with_github_once_per_window() {
+    let user_id = test_user_id();
+    let oauth = StubGithubOauth::new(false);
+    let service = service(
+        StubGithubRepo::linked(test_link(&user_id)),
+        oauth.clone(),
+        StubAuth::new("valid-token"),
+    );
+
+    for _ in 0..3 {
+        let token = service.get_user_access_token(&user_id).await.unwrap();
+        assert_eq!(token.as_str(), "valid-token");
+    }
+
+    assert_eq!(oauth.validated_tokens(), vec!["valid-token".to_string()]);
+}
+
+#[tokio::test]
+async fn get_user_access_token_checks_a_token_again_once_the_window_passes() {
+    let user_id = test_user_id();
+    let oauth = StubGithubOauth::new(false);
+    let service = service(
+        StubGithubRepo::linked(test_link(&user_id)),
+        oauth.clone(),
+        StubAuth::new("valid-token"),
+    )
+    .with_token_validation_window(std::time::Duration::ZERO);
+
+    service.get_user_access_token(&user_id).await.unwrap();
+    service.get_user_access_token(&user_id).await.unwrap();
+
+    assert_eq!(
+        oauth.validated_tokens(),
+        vec!["valid-token".to_string(), "valid-token".to_string()]
+    );
+}
+
+#[tokio::test]
+async fn get_user_access_token_never_remembers_a_token_github_rejected() {
+    let user_id = test_user_id();
+    let oauth = StubGithubOauth::new(true);
+    let service = service(
+        StubGithubRepo::linked(test_link(&user_id)),
+        oauth.clone(),
+        StubAuth::new("expired-token"),
+    );
+
+    for _ in 0..2 {
+        let result = service.get_user_access_token(&user_id).await;
+        assert!(matches!(result, Err(GithubError::ReauthenticationRequired)));
+    }
+
+    assert_eq!(
+        oauth.validated_tokens(),
+        vec!["expired-token".to_string(), "expired-token".to_string()]
+    );
+}
