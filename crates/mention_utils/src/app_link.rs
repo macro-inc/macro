@@ -92,16 +92,18 @@ impl AppLinkChips {
     pub fn rewrite<'a>(&self, markdown: &'a str) -> Rewritten<'a> {
         let mut out = String::new();
         let mut chips = 0;
-        let mut open_fence: Option<&str> = None;
+        let mut open_fence: Option<Fence> = None;
         for line in markdown.split_inclusive('\n') {
             match (open_fence, fence(line)) {
-                (None, Some((opening, _))) => {
+                (None, Some(opening)) => {
                     open_fence = Some(opening);
                     out.push_str(line);
                     continue;
                 }
-                (Some(opening), Some((closing, info)))
-                    if closing.starts_with(opening) && info.trim().is_empty() =>
+                (Some(opening), Some(closing))
+                    if closing.quotes == opening.quotes
+                        && closing.run.starts_with(opening.run)
+                        && closing.info.trim().is_empty() =>
                 {
                     open_fence = None;
                     out.push_str(line);
@@ -217,15 +219,27 @@ fn bare_host(host: &str) -> &str {
     host.strip_prefix("www.").unwrap_or(host)
 }
 
-/// The fence (its run of backticks or tildes) a line opens or closes a fenced
-/// code block with, and the rest of the line after it. Fences in list items
-/// are indented and fences in quotes follow `>`, so both count.
-fn fence(line: &str) -> Option<(&str, &str)> {
+/// A line that opens or closes a fenced code block.
+#[derive(Debug, Clone, Copy)]
+struct Fence<'a> {
+    /// How many `>` quote markers come before it: a fence closes only at the
+    /// quote depth it opened at.
+    quotes: usize,
+    /// Its run of backticks or tildes.
+    run: &'a str,
+    /// The rest of the line after the run.
+    info: &'a str,
+}
+
+/// The fence `line` opens or closes a fenced code block with. Fences in list
+/// items are indented and fences in quotes follow `>`, so both count.
+fn fence(line: &str) -> Option<Fence<'_>> {
     let trimmed = line.trim_start_matches(|c: char| c == '>' || c.is_whitespace());
+    let quotes = line[..line.len() - trimmed.len()].matches('>').count();
     let marker = trimmed.chars().next().filter(|c| matches!(c, '`' | '~'))?;
-    let rest = trimmed.trim_start_matches(marker);
-    let run = &trimmed[..trimmed.len() - rest.len()];
-    (run.len() >= 3).then_some((run, rest))
+    let info = trimmed.trim_start_matches(marker);
+    let run = &trimmed[..trimmed.len() - info.len()];
+    (run.len() >= 3).then_some(Fence { quotes, run, info })
 }
 
 /// The byte ranges of `line` to leave as written: mention tags, and code

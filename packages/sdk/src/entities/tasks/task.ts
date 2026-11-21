@@ -95,7 +95,7 @@ export class Task extends Document {
       team?: Team;
       /** Defaults to team sharing, or private when the session cannot share. */
       shareWithTeam?: boolean;
-      /** What the task came from; linked as a chip above `markdown` and set as its Source. */
+      /** What the task came from; linked as a chip above `markdown` and set as its Source. A team bot with no acting user can't pass it yet. */
       source?: TaskSource;
     },
   ): Promise<Task> {
@@ -118,7 +118,8 @@ export class Task extends Document {
       throw new MacroError('tasks.create needs `name`, the task title.');
     const source = opts.source && sourceReference(opts.source);
     // A reply's chip opens its thread only with the thread id, which
-    // `channel.message(id)` hasn't loaded yet.
+    // `channel.message(id)` hasn't loaded yet; `content()` loads the whole
+    // message (messages are never seeded from listings).
     if (opts.source?.entityType === 'channel_message')
       await opts.source.content();
     const { documentId } = unwrap(

@@ -163,6 +163,11 @@ fn fences_in_quotes_stay_code() {
         prod().rewrite(&quoted).markdown,
         format!("> ```\n> {TASK_URL}\n> ```\n> {TASK_CHIP}\n")
     );
+    let shown = format!("```md\n> ```\n> {TASK_URL}\n> ```\n```\n{TASK_URL}\n");
+    assert_eq!(
+        prod().rewrite(&shown).markdown,
+        format!("```md\n> ```\n> {TASK_URL}\n> ```\n```\n{TASK_CHIP}\n")
+    );
 }
 
 #[test]
