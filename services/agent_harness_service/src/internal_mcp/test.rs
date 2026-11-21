@@ -2,6 +2,21 @@ use super::*;
 use agent_egress::domain::model::SessionToken;
 use axum::http::StatusCode;
 
+/// rmcp logs the error a call returns, so a withheld call's misfit
+/// arguments say where they stopped fitting, never what they held.
+#[tokio::test]
+async fn misfit_arguments_of_a_withheld_call_are_not_quoted() {
+    let misfit = || {
+        serde_json::from_value::<u64>(serde_json::json!("the private supplier list")).unwrap_err()
+    };
+    let shown = invalid_arguments(misfit()).message;
+    assert!(shown.contains("private supplier"), "{shown}");
+    let withheld =
+        genai_telemetry::withhold_content(async { invalid_arguments(misfit()).message }).await;
+    assert!(!withheld.contains("private"), "{withheld}");
+    assert!(withheld.contains("Data error"), "{withheld}");
+}
+
 #[test]
 fn task_tools_accept_only_a_task() {
     let tools = toolset();

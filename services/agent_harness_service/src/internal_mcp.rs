@@ -312,7 +312,12 @@ impl InternalTools {
                         &serde_json::Value::Object(request.arguments.unwrap_or_default()),
                     )
                     .await
-                    .map_err(|error| rmcp::ErrorData::invalid_params(error.to_string(), None))?;
+                    .map_err(|error| match error {
+                        ai_toolset::ToolSetError::Deserialization(error) => {
+                            invalid_arguments(error)
+                        }
+                        error => rmcp::ErrorData::invalid_params(error.to_string(), None),
+                    })?;
                 let result = match result {
                     // A failed program is a completed execution with a receipt.
                     // MCP errors discard structured content in some runtimes.
@@ -342,9 +347,7 @@ impl InternalTools {
             )
             .await
             .map_err(|error| match error {
-                ai_toolset::ToolSetError::Deserialization(error) => {
-                    rmcp::ErrorData::invalid_params(error.to_string(), None)
-                }
+                ai_toolset::ToolSetError::Deserialization(error) => invalid_arguments(error),
                 ai_toolset::ToolSetError::NotFound(message) => {
                     rmcp::ErrorData::resource_not_found(message, None)
                 }
@@ -355,6 +358,24 @@ impl InternalTools {
         };
         Ok(result.into())
     }
+}
+
+/// A tool call whose arguments don't fit, as rmcp returns and logs it.
+/// serde quotes the value it refused, so inside
+/// `genai_telemetry::withhold_content` it says only where they stopped
+/// fitting; the model still has the tool's schema to correct them by.
+fn invalid_arguments(error: serde_json::Error) -> rmcp::ErrorData {
+    let message = if genai_telemetry::content_withheld() {
+        format!(
+            "error deserializing tool call: the arguments stop fitting the tool's input at line {} column {} ({:?} error); the rest is withheld with the call's content",
+            error.line(),
+            error.column(),
+            error.classify()
+        )
+    } else {
+        ai_toolset::ToolSetError::Deserialization(error).to_string()
+    };
+    rmcp::ErrorData::invalid_params(message, None)
 }
 
 /// The receipt as structured content, which Macro's own agent reads with its

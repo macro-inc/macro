@@ -80,6 +80,12 @@ const TURN_IDLE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 /// read. The failure itself goes to the prompt's error, not to them.
 pub(crate) const TURN_FAILED_REPLY: &str = "I ran into an error and stopped before finishing.";
 
+/// A failed turn's error inside `genai_telemetry::withhold_content`: the
+/// model library's text can quote the prompt or the answer, and the ACP
+/// error a turn ends with is logged and recorded on its span.
+pub(crate) const WITHHELD_TURN_FAILURE: &str =
+    "the model call failed; its text is withheld with the turn's content";
+
 /// Whole milliseconds since `started`, saturating; a span field, not a clock.
 fn elapsed_ms(started: Instant) -> u64 {
     u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX)
@@ -1135,6 +1141,8 @@ async fn run_turn(
             Ok(Some(Err(error))) => {
                 if error.was_cancelled() {
                     was_cancelled = true;
+                } else if genai_telemetry::content_withheld() {
+                    failure = Some(WITHHELD_TURN_FAILURE.to_owned());
                 } else {
                     failure = Some(error.to_string());
                 }
