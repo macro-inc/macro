@@ -89,6 +89,14 @@ disk after a reopen must come out the same.
   with a probe and the case again. `"b a"` against `"a a"` is NEW's file opened by OLD,
   compared with OLD alone; `"b a b a"` alternates builds across reopens. Add
   `--mask-source-hashes` when the builds hash records differently.
+- A migrated file against a fresh one: `CHAIN_A="b b" CHAIN_B="a b"` with SIDE_A the older
+  build and SIDE_B the newer: side a is NEW from an empty file, side b is OLD's file migrated
+  by NEW, each then running the case again.
+- Interrupted migration: build NEW with `MIGRATION_HOOKS=1` (its `cache-turso` needs the
+  `migration-test-hooks` feature) and give it `FUZZ_ARGS_B="--interrupt-migration-after K"`:
+  its first open fails right after committing step K, as a killed process would, and the open
+  after it finishes the migration. Stats count `migration.interrupted` (only opens that had
+  that step to run are interrupted, so count them before trusting a clean run).
 - Rerun one seed: `bin/SIDE --seed N --schema static_assets/schema.graphql --assets
   crates/client/cache-diff-fuzz/assets --out D --work D/w --full`. Use
   `--emit-case` and `--case FILE` to save a case and rerun it. A seed's case

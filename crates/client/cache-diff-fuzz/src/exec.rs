@@ -61,6 +61,8 @@ pub struct Exec<'a> {
     /// Hydrates staged ahead, by op index.
     #[cfg(staged_hydrate)]
     staged: Vec<(usize, crate::host::engine::fuzz_hooks::FuzzStagedHydrate)>,
+    /// Stop the first open's migration after this many steps (see `interrupt_open`).
+    interrupt_migration: Option<u32>,
 }
 
 type Outcome = Result<Value, String>;
@@ -83,7 +85,11 @@ impl<'a> Exec<'a> {
         root: &Path,
         source_hashes: crate::normalize::SourceHashes,
         hot_capacity: Option<u32>,
+        interrupt_migration: Option<u32>,
     ) -> Result<Self, String> {
+        if interrupt_migration.is_some() && cfg!(not(migration_hooks)) {
+            return Err("this build was made without MIGRATION_HOOKS=1".into());
+        }
         std::fs::create_dir_all(root.join("db-0")).map_err(|error| error.to_string())?;
         let path = root.join("db-0").join("cache.turso");
         let case = serde_json::to_value(generated).map_err(|error| error.to_string())?;
@@ -122,6 +128,7 @@ impl<'a> Exec<'a> {
             concurrent_reads: 0.0,
             #[cfg(staged_hydrate)]
             staged: Vec::new(),
+            interrupt_migration,
         };
         exec.open(0)?;
         Ok(exec)
@@ -135,6 +142,7 @@ impl<'a> Exec<'a> {
         // browser host's prepared hydrate belongs to its engine.
         #[cfg(staged_hydrate)]
         self.staged.clear();
+        self.interrupt_open()?;
         let database =
             cache_turso::TursoFileDatabase::new(&self.path).map_err(|error| error.to_string())?;
         let storage = match database.open(SCOPE) {
@@ -153,6 +161,47 @@ impl<'a> Exec<'a> {
             self.hot_capacity,
             cache_core::meta::bundled_schema(),
         ));
+        Ok(())
+    }
+
+    /// With `--interrupt-migration-after K`, the first open runs with the
+    /// storage told to fail right after committing migration step K, as a
+    /// process killed there would, and is dropped; the open after it runs the
+    /// rest. Not traced, since a file with nothing to migrate opens whole and
+    /// the other side's run need not migrate: counted as
+    /// `migration.interrupted` or `migration.not-interrupted`. An interrupted
+    /// open that asks for a reset fails the run.
+    fn interrupt_open(&mut self) -> Result<(), String> {
+        let Some(steps) = self.interrupt_migration.take() else {
+            return Ok(());
+        };
+        #[cfg(migration_hooks)]
+        {
+            use cache_turso::migration_test_hooks::interrupt_after_steps;
+            let database = cache_turso::TursoFileDatabase::new(&self.path)
+                .map_err(|error| error.to_string())?;
+            interrupt_after_steps(Some(
+                steps
+                    .try_into()
+                    .map_err(|_| "--interrupt-migration-after is too large")?,
+            ));
+            let opened = database.open(SCOPE);
+            interrupt_after_steps(None);
+            match opened {
+                Ok(storage) => {
+                    drop(storage);
+                    self.count("migration.not-interrupted");
+                }
+                Err(error) if error.requires_physical_reset() => {
+                    return Err(format!(
+                        "migration interrupted after step {steps} asked for a reset: {error}"
+                    ));
+                }
+                Err(_) => self.count("migration.interrupted"),
+            }
+        }
+        #[cfg(not(migration_hooks))]
+        let _ = steps;
         Ok(())
     }
 

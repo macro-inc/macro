@@ -97,6 +97,12 @@ struct Args {
     /// sides, so both read the same before and after.
     #[arg(long, default_value_t = 0.0, value_parser = share)]
     concurrent_reads: f64,
+    /// Fail the first open right after it commits migration step K, as a
+    /// process killed there would, then open again (a side built with
+    /// MIGRATION_HOOKS=1). Meant for a run that starts from an older build's
+    /// file (`--start-from`, `UPGRADE`, a `CHAIN_*` segment).
+    #[arg(long, value_name = "K")]
+    interrupt_migration_after: Option<u32>,
 }
 
 fn main() -> Result<(), rootcause::Report> {
@@ -202,6 +208,7 @@ fn run(
             (false, false) => normalize::SourceHashes::Raw,
         },
         args.hot_capacity,
+        args.interrupt_migration_after,
     )
     .map_err(|error| rootcause::report!("{error}"))?;
     exec.pause_ms = args.real_pause;

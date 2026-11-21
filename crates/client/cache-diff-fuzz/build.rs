@@ -53,6 +53,14 @@ fn main() {
     if std::env::var_os("CACHE_DIFF_FUZZ_STAGED_HYDRATE").is_some_and(|value| value == "1") {
         println!("cargo::rustc-cfg=staged_hydrate");
     }
+    // A side whose storage can stop a migration after a given step
+    // (`cache_turso::migration_test_hooks`) is built with CACHE_DIFF_FUZZ_MIGRATION_HOOKS=1
+    // and that crate's `migration-test-hooks` feature, so `--interrupt-migration-after` can.
+    println!("cargo::rustc-check-cfg=cfg(migration_hooks)");
+    println!("cargo:rerun-if-env-changed=CACHE_DIFF_FUZZ_MIGRATION_HOOKS");
+    if std::env::var_os("CACHE_DIFF_FUZZ_MIGRATION_HOOKS").is_some_and(|value| value == "1") {
+        println!("cargo::rustc-cfg=migration_hooks");
+    }
 }
 
 fn read(path: &Path) -> String {
