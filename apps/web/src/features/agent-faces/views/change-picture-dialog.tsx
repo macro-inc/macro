@@ -113,19 +113,30 @@ function ChangePictureSkeleton(props: { onCancel: () => void }) {
                 </For>
               </div>
               <ListSkeleton.Bar class="h-8 w-full" />
-              <For each={[0, 1]}>
-                {() => (
+              {/* Shape, then Skin, which wraps to a second line on touch. */}
+              <For each={[1, 2]}>
+                {(lines) => (
                   <div class="flex flex-col gap-1.5">
                     <ListSkeleton.Bar class="w-10" />
-                    <div class="flex gap-1.5 touch:gap-3">
-                      <For each={Array.from({ length: 6 })}>
-                        {() => <ListSkeleton.Bar class="size-8" />}
-                      </For>
-                    </div>
+                    <For each={Array.from({ length: lines })}>
+                      {(_, line) => (
+                        <div
+                          class="flex gap-1.5 touch:gap-3"
+                          classList={{ 'hidden touch:flex': line() > 0 }}
+                        >
+                          <For each={Array.from({ length: 6 })}>
+                            {() => (
+                              <ListSkeleton.Bar class="size-8 touch:my-1.5" />
+                            )}
+                          </For>
+                        </div>
+                      )}
+                    </For>
                   </div>
                 )}
               </For>
-              <div class="h-8" />
+              {/* Upload photo and Reset. */}
+              <div class="h-8 touch:h-11" />
             </div>
           </div>
         </ListSkeleton.Root>
