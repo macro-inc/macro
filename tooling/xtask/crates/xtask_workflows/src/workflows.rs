@@ -27,6 +27,7 @@ mod cancel_stuck_cloud_storage_deploys;
 mod cargo_deny;
 mod cargo_deny_advisories;
 mod cargo_workspace_dependency_check;
+mod channels_e2e;
 mod check_generated;
 mod check_node_modules_nix;
 mod check_tauri_lockfiles;
@@ -171,6 +172,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "build_agent_daemon_on_tag",
         file_name: "build_agent_daemon_on_tag.yml",
         render_yaml: || render_gh_workflow(build_agent_daemon_on_tag::build_agent_daemon_on_tag)(),
+    },
+    WorkflowFile {
+        slug: "channels_e2e",
+        file_name: "channels_e2e.yml",
+        render_yaml: || render_gh_workflow(channels_e2e::channels_e2e)(),
     },
     WorkflowFile {
         slug: "test_macrod_update",

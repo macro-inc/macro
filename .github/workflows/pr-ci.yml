@@ -28,6 +28,7 @@ jobs:
       sdk: ${{ steps.filter.outputs.sdk }}
       observability_image: ${{ steps.filter.outputs.observability_image }}
       macrod_update: ${{ steps.filter.outputs.macrod_update }}
+      channels_e2e: ${{ steps.filter.outputs.channels_e2e }}
     timeout-minutes: 5
     steps:
     - name: Take the request
@@ -553,6 +554,16 @@ jobs:
           macrod_update:
             - 'crates/coding_agent_worker/**'
             - '.github/workflows/test_macrod_update.yml'
+          channels_e2e:
+            - 'apps/web/tests/channels-e2e/**'
+            - 'apps/web/src/features/channel/**'
+            - 'apps/web/src/lib/queries/messages/**'
+            - 'apps/web/src/lib/queries/channel/**'
+            - 'tooling/seed_cli/seed/scenarios/channels-e2e.json'
+            - 'apps/web/justfile'
+            - 'tooling/xtask/crates/xtask_local/**'
+            - 'tooling/xtask/crates/xtask_workflows/src/workflows/scripts/channels_e2e.sh'
+            - '.github/workflows/channels_e2e.yml'
   cloud-storage:
     needs:
     - start
@@ -635,6 +646,13 @@ jobs:
     name: macrod update
     uses: ./.github/workflows/test_macrod_update.yml
     secrets: inherit
+  channels-e2e:
+    needs:
+    - start
+    if: needs.start.outputs.channels_e2e == 'true'
+    name: Channels
+    uses: ./.github/workflows/channels_e2e.yml
+    secrets: inherit
   gate:
     needs:
     - start
@@ -650,6 +668,7 @@ jobs:
     - sdk
     - observability-image
     - macrod-update
+    - channels-e2e
     if: '!cancelled() && needs.start.result != ''skipped'''
     name: CI gate
     runs-on: namespace-profile-linux-tiny-no-cache
