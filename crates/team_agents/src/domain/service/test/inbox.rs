@@ -319,3 +319,34 @@ async fn with_only_the_inbox_rollout_off_the_list_shows_no_inboxes_and_asks_noth
     assert_eq!(listed.agents[0].inbox, None);
     assert!(!journal.entries().contains(&"inbox.refresh".to_owned()));
 }
+
+#[tokio::test]
+async fn a_member_sees_no_inbox_addresses_and_asks_nothing() {
+    let (service, journal, _) = with_inboxes(true, None);
+    service.create(receipt(), with_inbox()).await.unwrap();
+
+    let listed = service.list(team_receipt(TeamRole::Member)).await.unwrap();
+
+    assert_eq!(listed.agents.len(), 1);
+    assert_eq!(listed.agents[0].inbox, None);
+    assert!(!journal.entries().contains(&"inbox.refresh".to_owned()));
+}
+
+#[tokio::test]
+async fn a_repeated_invite_still_makes_the_inbox_the_first_never_made() {
+    let (service, journal, _) = with_inboxes(true, None);
+    // The first request bought the computer and then died before the inbox.
+    service.create(receipt(), request()).await.unwrap();
+
+    let repeated = service.create(receipt(), with_inbox()).await.unwrap();
+
+    assert_eq!(
+        repeated.inbox.map(|inbox| inbox.state),
+        Some(AgentInboxState::Active)
+    );
+    assert!(
+        journal
+            .entries()
+            .contains(&"inbox.provision Sam Rivera sam-rivera".to_owned())
+    );
+}

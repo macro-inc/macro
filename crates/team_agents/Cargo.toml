@@ -14,6 +14,7 @@ inbound = [
   "hosted_runtimes/schema",
   "entity_access/axum",
   "entity_access/inbound",
+  "dep:tokio",
 ]
 outbound = [
   "agent_git/client",
@@ -52,7 +53,7 @@ sqlx = { workspace = true, optional = true }
 strum = { workspace = true }
 teams = { path = "../teams", optional = true, default-features = false, features = ["ports"] }
 thiserror = { workspace = true }
-tokio = { workspace = true, optional = true, features = ["time"] }
+tokio = { workspace = true, optional = true, features = ["macros", "time"] }
 tracing = { workspace = true }
 user_api_key = { path = "../user_api_key", optional = true, features = ["ports"] }
 utoipa = { workspace = true, optional = true, features = ["chrono", "uuid"] }

@@ -325,6 +325,14 @@ where
         &self,
         receipt: &EntityAccessReceipt<MemberTeamRole>,
     ) -> Result<HashMap<String, AgentInbox>, TeamAgentError> {
+        // Addresses are for those who manage agents; members see none.
+        if receipt
+            .clone()
+            .try_into_requirement::<AdminTeamRole>()
+            .is_err()
+        {
+            return Ok(HashMap::new());
+        }
         if let Err(error) = self.ensure_inboxes_enabled(&acting_user(receipt)?).await {
             tracing::debug!(error = ?error, "agent inboxes are off for this admin; listing without them");
             return Ok(HashMap::new());
@@ -620,7 +628,21 @@ where
             .await
         {
             Ok(Prepared::New(user_id, seed)) => (user_id, seed),
-            Ok(Prepared::Repeat(record)) => return self.repeated_invite(record).await,
+            Ok(Prepared::Repeat(record)) => {
+                let mut agent = self.repeated_invite(record).await?;
+                // The first request may have died before it made the inbox;
+                // provisioning is idempotent, so the repeat asks again.
+                if request.inbox && self.ensure_inboxes_enabled(&created_by).await.is_ok() {
+                    agent.inbox = self
+                        .provision_inbox(agent.team_id, &agent.user_id, &agent.name)
+                        .await
+                        .inspect_err(|error| {
+                            tracing::warn!(error = ?error, "could not give the invited agent an inbox");
+                        })
+                        .ok();
+                }
+                return Ok(agent);
+            }
             Err(error) => {
                 self.undo(receipt, undo).await;
                 return Err(error);

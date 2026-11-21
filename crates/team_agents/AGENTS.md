@@ -86,20 +86,27 @@ agent runtime reports the same way.
 
 An agent may have its own email inbox (`domain::inbox`, behind
 `enable-agent-inboxes` for the acting admin): `inbox: true` on the invite
-(best effort after the purchase) or `PUT /team_agents/{agent}/inbox`.
-`InboxService` reserves one `team_agent_inboxes` row per agent whose
-`request_id` every retry reuses, calls email_service's agent mailboxes
-(`AgentMailboxes` port), and mirrors the answer (`provisioning`, `active`,
-`failed` with a reason), so listing agents makes no email call except to
-ask about inboxes still `provisioning` (all at once, and only for an admin in
-the inbox rollout). The mailbox's owner is the agent's account; its address
-lives only on the inbox. Removing the agent pauses the mailbox before its seat
-goes (email_service releases it after 30 days); `undo_invite` releases it.
-Winding down marks the record first (`paused`/`releasing`, creating one if the
-agent has none) and provisioning writes only through `update_live`, which
-refuses a marked record: a provision that finishes after a removal pauses what
-it made, and a removed agent never gets an inbox again. A pause or release
-email_service misses fails the step, so the removal is retried.
+(best effort after the purchase, and again on a repeated invite) or
+`PUT /team_agents/{agent}/inbox`. `InboxService` reserves one
+`team_agent_inboxes` row per agent whose `request_id` every retry reuses,
+calls email_service's agent mailboxes (`AgentMailboxes` port), and mirrors the
+answer (`provisioning`, `active`, `failed` with a reason). The list shows
+inboxes to team admins and owners only, and asks about inboxes still
+`provisioning` (all at once). The mailbox's owner is the agent's account; its
+address lives only on the inbox.
+
+Winding an inbox down marks the record first (`pausing` when the agent is
+removed, `releasing` when its invite is taken back or its team is deleted),
+creating it if the agent has none; only email_service's confirmation settles
+it (`paused`, `released`). Provisioning writes only through `update_live`,
+which refuses a marked record, and then finishes what the mark asks for. The
+record outlives the seat and the team (it goes only with the agent's
+account), and `inbound::inbox_sweep` (every replica, each minute) retries
+marks older than a minute until they settle; a mark with no mailbox at
+email_service settles after 15 minutes. Team deletion calls
+`InboxService::release_team` through the teams crate's
+`OwnedEntityCleanup::release_agent_inboxes`. A pause or release email_service
+misses fails the removal step, so the removal is retried too.
 
 ## Start here
 

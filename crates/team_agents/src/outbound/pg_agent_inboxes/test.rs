@@ -138,7 +138,7 @@ async fn an_update_keeps_a_known_mailbox_and_address_and_lists_by_team(pool: PgP
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn removing_the_agents_seat_drops_its_inbox_record(pool: PgPool) {
+async fn the_inbox_record_outlives_the_agents_seat_and_its_team(pool: PgPool) {
     team_with_agent(&pool).await;
     let inboxes = PgAgentInboxes::new(pool.clone());
     inboxes
@@ -146,7 +146,7 @@ async fn removing_the_agents_seat_drops_its_inbox_record(pool: PgPool) {
             &user(AGENT),
             TEAM,
             Uuid::from_u128(1),
-            AgentInboxState::Provisioning,
+            AgentInboxState::Pausing,
         )
         .await
         .unwrap();
@@ -155,23 +155,20 @@ async fn removing_the_agents_seat_drops_its_inbox_record(pool: PgPool) {
         .remove_seat(&user(AGENT))
         .await
         .unwrap();
+    sqlx::query!("DELETE FROM team WHERE id = $1", TEAM)
+        .execute(&pool)
+        .await
+        .unwrap();
 
-    assert_eq!(inboxes.get(&user(AGENT)).await.unwrap(), None);
-    assert!(matches!(
-        inboxes
-            .update(
-                &user(AGENT),
-                &InboxUpdate {
-                    mailbox_id: None,
-                    address: None,
-                    state: AgentInboxState::Released,
-                    last_error: None,
-                    fake_provider: false,
-                },
-            )
-            .await,
-        Err(PgAgentInboxesError::Missing)
-    ));
+    // Still there for the sweep, which finds it once it is old enough.
+    let record = inboxes.get(&user(AGENT)).await.unwrap().unwrap();
+    assert_eq!(record.state, AgentInboxState::Pausing);
+    let later = record.updated_at + chrono::Duration::minutes(5);
+    assert_eq!(
+        inboxes.unsettled(record.updated_at, 10).await.unwrap(),
+        vec![]
+    );
+    assert_eq!(inboxes.unsettled(later, 10).await.unwrap(), vec![record]);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

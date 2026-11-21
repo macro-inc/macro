@@ -36,6 +36,7 @@ pub struct TeamOwnedEntityCleanupAdapter<B, R> {
     harness_url: String,
     scheduled_action_url: String,
     computers: Arc<dyn crate::domain::computer_billing::TeamComputers>,
+    agent_inboxes: Arc<dyn crate::domain::computer_billing::TeamAgentInboxes>,
 }
 
 impl<B, R> TeamOwnedEntityCleanupAdapter<B, R> {
@@ -51,6 +52,7 @@ impl<B, R> TeamOwnedEntityCleanupAdapter<B, R> {
         documents: Arc<DocumentStorageServiceClient>,
         config: TeamOwnedEntityCleanupConfig,
         computers: Arc<dyn crate::domain::computer_billing::TeamComputers>,
+        agent_inboxes: Arc<dyn crate::domain::computer_billing::TeamAgentInboxes>,
     ) -> Result<Self, Report> {
         Ok(Self {
             vault_metadata,
@@ -65,6 +67,7 @@ impl<B, R> TeamOwnedEntityCleanupAdapter<B, R> {
             harness_url: config.harness_url,
             scheduled_action_url: config.scheduled_action_url,
             computers,
+            agent_inboxes,
         })
     }
 
@@ -206,6 +209,13 @@ where
     #[tracing::instrument(skip(self), err)]
     async fn release_computers(&self, team_id: Uuid) -> Result<(), Self::Err> {
         self.computers
+            .release_team(team_id)
+            .await
+            .map_err(ReportAsError::from)
+    }
+    #[tracing::instrument(skip(self), err)]
+    async fn release_agent_inboxes(&self, team_id: Uuid) -> Result<(), Self::Err> {
+        self.agent_inboxes
             .release_team(team_id)
             .await
             .map_err(ReportAsError::from)

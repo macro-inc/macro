@@ -45,6 +45,9 @@ pub enum AgentInboxState {
     Active,
     /// Couldn't be created; see the failure. Adding it again retries.
     Failed,
+    /// The agent was removed and email_service hasn't confirmed the pause
+    /// yet; the inbox sweep keeps asking.
+    Pausing,
     /// The agent was removed: nothing syncs or sends, mail is kept until
     /// it is released.
     Paused,
@@ -140,6 +143,15 @@ pub enum MailboxError {
     Unavailable(rootcause::Report),
 }
 
+/// What a release did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReleaseOutcome {
+    /// The mailbox is gone, or there was none.
+    Released,
+    /// email_service is still deleting it and finishes on its own.
+    Releasing,
+}
+
 /// Agent mailboxes in email_service. Every call is idempotent.
 pub trait AgentMailboxes: Send + Sync + 'static {
     /// Create the agent's mailbox, or answer with the one this request id
@@ -163,12 +175,11 @@ pub trait AgentMailboxes: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), MailboxError>> + Send;
 
     /// Delete the agent's mailbox and its mail; the address stops
-    /// receiving. No mailbox, or one email_service is still deleting, is
-    /// success.
+    /// receiving. No mailbox is [`ReleaseOutcome::Released`].
     fn release(
         &self,
         agent: &MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<(), MailboxError>> + Send;
+    ) -> impl Future<Output = Result<ReleaseOutcome, MailboxError>> + Send;
 }
 
 /// The agent's pointer to its mailbox and the last answer about it.
@@ -268,15 +279,23 @@ pub trait AgentInboxRepository: Send + Sync + 'static {
         update: &InboxUpdate,
     ) -> impl Future<Output = Result<InboxRecord, Self::Err>> + Send;
 
-    /// [`Self::update`], unless the inbox is being wound down (paused,
-    /// releasing or released) or its record is gone: then `None`, and
-    /// nothing changes. Provisioning writes through this, so a removal that
+    /// [`Self::update`], unless the inbox is being wound down (pausing,
+    /// paused, releasing or released) or its record is gone: then `None`,
+    /// and nothing changes. Provisioning writes through this, so a removal that
     /// marked the record first always wins over a provision in flight.
     fn update_live(
         &self,
         agent: &MacroUserIdStr<'_>,
         update: &InboxUpdate,
     ) -> impl Future<Output = Result<Option<InboxRecord>, Self::Err>> + Send;
+
+    /// Records marked `pausing` or `releasing` that last changed before
+    /// `changed_before`, oldest first, at most `limit`.
+    fn unsettled(
+        &self,
+        changed_before: DateTime<Utc>,
+        limit: u32,
+    ) -> impl Future<Output = Result<Vec<InboxRecord>, Self::Err>> + Send;
 }
 
 /// Why an inbox request failed.
@@ -441,21 +460,33 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes>
         {
             return Ok(stored.view());
         }
-        tracing::warn!("the agent was removed while its inbox was being made; pausing it");
-        match self.mailboxes.pause(agent).await {
-            Ok(()) | Err(MailboxError::NotConfigured) => {}
-            Err(error) => return Err(InboxError::from(error)),
-        }
+        // A removal or a taken-back invite marked the record while
+        // email_service was making the mailbox: finish what the mark asks for
+        // now. If email_service doesn't answer, the mark stays and the inbox
+        // sweep finishes it.
+        let Some(record) = self.record(agent).await? else {
+            return Ok(AgentInbox {
+                address: update.address,
+                state: AgentInboxState::Pausing,
+                failure: None,
+                fake_provider: update.fake_provider,
+            });
+        };
+        let step = WindDown::for_mark(record.state);
+        tracing::warn!(
+            ?step,
+            "the agent was removed while its inbox was being made"
+        );
+        let _ = self
+            .wind_down(record.team_id, agent, step, Utc::now())
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(error = ?error, "could not wind down a just-made inbox; the sweep retries");
+            });
         Ok(self
             .record(agent)
             .await?
-            .map(|record| record.view())
-            .unwrap_or(AgentInbox {
-                address: update.address,
-                state: AgentInboxState::Paused,
-                failure: None,
-                fake_provider: update.fake_provider,
-            }))
+            .map_or(record.view(), |record| record.view()))
     }
 
     /// The agent's mailbox id: the stored one, else email_service's answer,
@@ -477,17 +508,22 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes>
     }
 
     /// Pause or release the agent's mailbox. The record is marked first
-    /// (created if the agent has none), so a provision in flight sees it and
-    /// pauses what it made; then email_service is told, then the outcome is
-    /// stored. Nothing at the provider, or no provider, is done.
+    /// (`pausing` or `releasing`, created if the agent has none), so a
+    /// provision in flight sees it and finishes it; then email_service is
+    /// told, and only its confirmation settles the mark (`paused`,
+    /// `released`). A mark email_service hasn't confirmed stays for the
+    /// inbox sweep, which retries it. No mailbox at all settles once
+    /// [`SETTLE_WITHOUT_MAILBOX`] has passed since the mark, since a
+    /// provision in flight could still make one until then.
     async fn wind_down(
         &self,
         team_id: Uuid,
         agent: &MacroUserIdStr<'_>,
         step: WindDown,
+        now: DateTime<Utc>,
     ) -> Result<(), InboxError> {
-        let (marked, after) = match step {
-            WindDown::Pause => (AgentInboxState::Paused, AgentInboxState::Paused),
+        let (marked, settled) = match step {
+            WindDown::Pause => (AgentInboxState::Pausing, AgentInboxState::Paused),
             WindDown::Release => (AgentInboxState::Releasing, AgentInboxState::Released),
         };
         let mark = Uuid::now_v7();
@@ -496,37 +532,6 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes>
             .reserve(agent, team_id, mark, marked)
             .await
             .map_err(InboxError::internal)?;
-        // This call made the record: no provision ever reserved one, so
-        // nothing exists at the provider and email_service isn't asked. A
-        // removal never depends on email_service for an agent without an
-        // inbox.
-        if record.request_id == mark {
-            if matches!(step, WindDown::Release) {
-                self.store(
-                    agent,
-                    InboxUpdate {
-                        mailbox_id: None,
-                        address: None,
-                        state: AgentInboxState::Released,
-                        last_error: None,
-                        fake_provider: false,
-                    },
-                )
-                .await?;
-            }
-            return Ok(());
-        }
-        let done_already = match step {
-            // Already further down: a pause never undoes a release.
-            WindDown::Pause => matches!(
-                record.state,
-                AgentInboxState::Releasing | AgentInboxState::Released
-            ),
-            WindDown::Release => record.state == AgentInboxState::Released,
-        };
-        if done_already {
-            return Ok(());
-        }
         let keep = |state| InboxUpdate {
             mailbox_id: record.mailbox_id,
             address: record.address.clone(),
@@ -534,29 +539,55 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes>
             last_error: record.last_error,
             fake_provider: record.fake_provider,
         };
-        if record.state != marked {
-            self.store(agent, keep(marked)).await?;
+        // This call made the record: no provision ever reserved one, so
+        // nothing exists at the provider and email_service isn't asked. A
+        // removal never depends on email_service for an agent without an
+        // inbox.
+        if record.request_id == mark {
+            self.store(agent, keep(settled)).await?;
+            return Ok(());
         }
+        let done_already = match step {
+            // Already further down: a pause never undoes a release.
+            WindDown::Pause => matches!(
+                record.state,
+                AgentInboxState::Paused | AgentInboxState::Releasing | AgentInboxState::Released
+            ),
+            WindDown::Release => record.state == AgentInboxState::Released,
+        };
+        if done_already {
+            return Ok(());
+        }
+        let marked_at = if record.state == marked {
+            record.updated_at
+        } else {
+            self.store(agent, keep(marked)).await?;
+            now
+        };
         let mailbox_id = match self.mailbox_id(agent, &record).await {
             Ok(Some(mailbox_id)) => mailbox_id,
-            // Nothing was created at the provider: the mark stands; a release
-            // has nothing left to delete.
             Ok(None) | Err(MailboxError::NotConfigured) => {
-                if matches!(step, WindDown::Release) {
-                    self.store(agent, keep(AgentInboxState::Released)).await?;
+                if now - marked_at >= SETTLE_WITHOUT_MAILBOX {
+                    self.store(agent, keep(settled)).await?;
                 }
                 return Ok(());
             }
             Err(error) => return Err(InboxError::from(error)),
         };
-        let done = match step {
-            WindDown::Pause => self.mailboxes.pause(agent).await,
-            WindDown::Release => self.mailboxes.release(agent).await,
+        let after = match step {
+            WindDown::Pause => match self.mailboxes.pause(agent).await {
+                Ok(()) | Err(MailboxError::NotConfigured) => AgentInboxState::Paused,
+                Err(error) => return Err(InboxError::from(error)),
+            },
+            WindDown::Release => match self.mailboxes.release(agent).await {
+                Ok(ReleaseOutcome::Released) | Err(MailboxError::NotConfigured) => {
+                    AgentInboxState::Released
+                }
+                // Still deleting: the mark stays for the sweep to confirm.
+                Ok(ReleaseOutcome::Releasing) => AgentInboxState::Releasing,
+                Err(error) => return Err(InboxError::from(error)),
+            },
         };
-        match done {
-            Ok(()) | Err(MailboxError::NotConfigured) => {}
-            Err(error) => return Err(InboxError::from(error)),
-        }
         self.store(
             agent,
             InboxUpdate {
@@ -568,7 +599,88 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes>
         .await?;
         Ok(())
     }
+
+    /// Finish wind-downs email_service hasn't confirmed: every record marked
+    /// `pausing` or `releasing` for longer than [`SWEEP_AFTER`], at most
+    /// [`SWEEP_BATCH`] a round. Answers how many it found.
+    #[tracing::instrument(
+        name = "team_agents.inbox.sweep",
+        skip_all,
+        fields(found = tracing::field::Empty, failed = tracing::field::Empty),
+        err
+    )]
+    pub async fn sweep_once(&self, now: DateTime<Utc>) -> Result<usize, InboxError> {
+        let records = self
+            .repository
+            .unsettled(now - SWEEP_AFTER, SWEEP_BATCH)
+            .await
+            .map_err(InboxError::internal)?;
+        let mut failed = 0_usize;
+        for record in &records {
+            if let Err(error) = self
+                .wind_down(
+                    record.team_id,
+                    &record.agent,
+                    WindDown::for_mark(record.state),
+                    now,
+                )
+                .await
+            {
+                failed += 1;
+                tracing::warn!(
+                    error = ?error,
+                    agent_user_id = %agent_credentials::telemetry_id(record.agent.as_ref()),
+                    "could not finish an inbox wind-down; next round retries"
+                );
+            }
+        }
+        let span = tracing::Span::current();
+        span.record("found", records.len());
+        span.record("failed", failed);
+        Ok(records.len())
+    }
+
+    /// The team is being deleted: release every agent's inbox. Each one is
+    /// marked first, so whatever email_service doesn't confirm now the sweep
+    /// finishes; an error means some weren't even marked, and deleting the
+    /// team again retries them.
+    #[tracing::instrument(
+        name = "team_agents.inbox.release_team",
+        skip_all,
+        fields(team_id = %team_id, inboxes = tracing::field::Empty),
+        err
+    )]
+    pub async fn release_team(&self, team_id: Uuid) -> Result<(), InboxError> {
+        let records = self
+            .repository
+            .list_for_team(team_id)
+            .await
+            .map_err(InboxError::internal)?;
+        tracing::Span::current().record("inboxes", records.len());
+        let mut first_error = None;
+        for record in records {
+            if let Err(error) = self
+                .wind_down(team_id, &record.agent, WindDown::Release, Utc::now())
+                .await
+            {
+                tracing::warn!(error = ?error, "could not release an agent's inbox");
+                first_error.get_or_insert(error);
+            }
+        }
+        first_error.map_or(Ok(()), Err)
+    }
 }
+
+/// How long a wind-down that found no mailbox waits before it settles: a
+/// provision in flight (one bounded attempt) may still make one until then.
+pub const SETTLE_WITHOUT_MAILBOX: chrono::Duration = chrono::Duration::minutes(15);
+
+/// How old an unconfirmed wind-down is before the sweep retries it, so it
+/// doesn't race the request that is still making it.
+pub const SWEEP_AFTER: chrono::Duration = chrono::Duration::minutes(1);
+
+/// The most wind-downs one sweep round retries.
+pub const SWEEP_BATCH: u32 = 100;
 
 /// What winding an inbox down does.
 #[derive(Debug, Clone, Copy)]
@@ -577,6 +689,20 @@ enum WindDown {
     Pause,
     /// Delete it.
     Release,
+}
+
+impl WindDown {
+    /// The wind-down a record's mark asks for.
+    fn for_mark(state: AgentInboxState) -> Self {
+        match state {
+            AgentInboxState::Releasing | AgentInboxState::Released => Self::Release,
+            AgentInboxState::Provisioning
+            | AgentInboxState::Active
+            | AgentInboxState::Failed
+            | AgentInboxState::Pausing
+            | AgentInboxState::Paused => Self::Pause,
+        }
+    }
 }
 
 fn failed(error: AgentInboxFailure, record: &InboxRecord) -> InboxUpdate {
@@ -621,6 +747,7 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes> AgentInboxes
         if matches!(
             record.state,
             AgentInboxState::Active
+                | AgentInboxState::Pausing
                 | AgentInboxState::Paused
                 | AgentInboxState::Releasing
                 | AgentInboxState::Released
@@ -708,7 +835,8 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes> AgentInboxes
         err
     )]
     async fn pause(&self, team_id: Uuid, agent: &MacroUserIdStr<'_>) -> Result<(), InboxError> {
-        self.wind_down(team_id, agent, WindDown::Pause).await
+        self.wind_down(team_id, agent, WindDown::Pause, Utc::now())
+            .await
     }
 
     #[tracing::instrument(
@@ -718,6 +846,7 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes> AgentInboxes
         err
     )]
     async fn release(&self, team_id: Uuid, agent: &MacroUserIdStr<'_>) -> Result<(), InboxError> {
-        self.wind_down(team_id, agent, WindDown::Release).await
+        self.wind_down(team_id, agent, WindDown::Release, Utc::now())
+            .await
     }
 }
