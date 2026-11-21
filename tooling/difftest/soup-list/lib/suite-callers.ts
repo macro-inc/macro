@@ -32,13 +32,15 @@ export type CallerResult = {
   byCaller: Record<string, { cases: number; rows: number; dataRuleHits: Record<string, number> }>;
   failures: CallerFailure[];
   slash: { user: UserKey; oracle: number; branch: number; mainMenu: number }[];
+  /** PR-link one-shots main refused (deep OR chain), checked against main run in slices. */
+  splitOracle: { user: UserKey; targets: number; oldError: string; sliceError?: string; dataEqual?: boolean; callerEqual?: boolean; diffs: Diff[] }[];
   /** Quick Access before main's cache holds the branch's reads (the known, visible difference). */
   quickAccessRaw: { user: UserKey; buckets: string[]; old: number; new: number; onlyNew: number; onlyOld: number; equal: boolean }[];
   replayedReads: number;
 };
 
 export function emptyCallerResult(): CallerResult {
-  return { cases: 0, byCaller: {}, failures: [], slash: [], quickAccessRaw: [], replayedReads: 0 };
+  return { cases: 0, byCaller: {}, failures: [], slash: [], splitOracle: [], quickAccessRaw: [], replayedReads: 0 };
 }
 
 /** Readers that set QUICK_ACCESS_FEED_OPTIONS (ignoresNotifications) on the branch. */
@@ -238,6 +240,26 @@ export async function runOneShots(args: { session: UserSession; user: UserKey; w
     }[];
     const fail = (level: CallerFailure['level'], detail: string, diffs?: Diff[]) =>
       result.failures.push({ user, caller: shot.name, params: shot.params, level, detail, ...(diffs && { diffs }) });
+    // Main's PR links ask REST for every linked task in one right-leaning OR
+    // chain, which REST's JSON parser refuses past 63 ids (HTTP 400,
+    // repro/or-chain-depth.ts). Then main's answer is rebuilt from slices of
+    // 8 targets, each far under that depth, and the branch must equal it.
+    if (shot.name === 'prLinks' && !o.ok && n.ok && /status: 400/.test(o.error ?? '')) {
+      const targets = (shot.params as { targets: unknown[] }).targets;
+      const merged: Record<string, Record<string, unknown>> = {};
+      let sliceError: string | undefined;
+      for (let i = 0; i < targets.length && !sliceError; i += 8) {
+        const r = (await oneShot(session.pages.old, shot.name, { targets: targets.slice(i, i + 8) })) as { ok: boolean; value?: Record<string, Record<string, unknown>>; error?: string };
+        if (!r.ok) sliceError = r.error;
+        else for (const [k, v] of Object.entries(r.value ?? {})) merged[k] = { ...merged[k], ...v };
+      }
+      const data = sliceError ? undefined : compareData(merged, n.value, DATA_RULES);
+      const view = sliceError ? undefined : compareCaller(parseTimes(merged), parseTimes(n.value));
+      result.splitOracle.push({ user, targets: targets.length, oldError: o.error ?? '', sliceError, dataEqual: data?.equal, callerEqual: view?.equal, diffs: [...(data?.diffs ?? []), ...(view?.diffs ?? [])].slice(0, 8) });
+      if (sliceError || !data?.equal || !view?.equal) fail('status', `old ${o.error}; main in slices ${sliceError ?? 'differs from the branch'}`, [...(data?.diffs ?? []), ...(view?.diffs ?? [])]);
+      coverage.hit('one-shot', 'prLinks:split-oracle');
+      continue;
+    }
     if (o.ok !== n.ok) {
       fail('status', `old ${o.ok ? 'ok' : o.error} new ${n.ok ? 'ok' : n.error}`);
       continue;

@@ -46,6 +46,10 @@ function summarize(r: Json) {
       byCaller: Object.fromEntries(Object.entries((r.callers?.byCaller ?? {}) as Record<string, Json>).map(([k, v]) => [k, v.cases])),
       failures: r.callers?.failures?.length ?? 0,
       failureKinds: count(r.callers?.failures),
+      /** Slash-menu PR counts per user: main's menu, the oracle, the branch. */
+      slash: r.callers?.slash,
+      /** PR-link one-shots main refused, against main run in slices. */
+      splitOracle: r.callers?.splitOracle,
     },
     sequences: {
       sequences: seq.sequences ?? 0,
