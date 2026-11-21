@@ -1426,9 +1426,16 @@ once the tab is visible: a lookup still asking for one, the queue of records
 lacking a field, or the fallback's confirmations read it again, and an id
 nobody asks for any more is not read. Readers that decide from absence
 (section membership, scope checks) wait for `complete()`. Actions on a whole
-built-in section (mute, snooze, mark read) call `readComplete()`, which always
-pages the network, as the REST list did for each action: a complete directory
-can still miss a channel joined on another device since its last pass. When the lane gives up in a generation, the backfill marks it
+built-in section (mute, snooze, mark read) call `readComplete(signal)`, which
+always pages the network, as the REST list did for each action: a complete
+directory can still miss a channel joined on another device since its last
+pass. The pages read a replica, which can lag what the cache already shows, so
+the cached directory settles each channel the walk and the cache disagree on
+(joined in one and not the other) with a read from the primary
+(`ChannelDirectoryEntity`, up to 200 of them, four at a time); a read that
+fails keeps the walk's answer, and so does every disagreement past the 200th.
+The walk is the action's own, not the directory's pages query, so the rail
+aborts it, and the primary reads after it, when it unmounts. When the lane gives up in a generation, the backfill marks it
 (`markSoupBackfillLaneFailed`, cleared by its next saved page, and kept in
 memory for the tab when storage refuses the write) and the directory pages the
 joined channels from the network instead. It does the same when the lane
@@ -1473,9 +1480,8 @@ the directory is not complete and that read failed; `retry()` reads again.
 Channel writes outside the cache's soup updates (join links, renames, new
 DMs, people added or removed) call `refreshChannelDirectory`, which rereads the in-memory directory,
 reading again after a first read that was already in flight; a full read
-(`readComplete()`, and the network list behind a filling cache) reads until
-one began after the latest write, since nothing else refetches a query nobody
-observes. Those pages, and the cache's soup update, can lag the write: the
+(`readComplete()`) walks the pages itself (`walkCurrentJoinedChannels`) and
+walks again until no write of that QueryClient landed during its walk. Those pages, and the cache's soup update, can lag the write: the
 pages read a replica, and the update arrives a second or more later. So a
 caller that names the channels it wrote (`refreshChannelDirectory([id])`;
 message sends name none) also reads each one from the primary

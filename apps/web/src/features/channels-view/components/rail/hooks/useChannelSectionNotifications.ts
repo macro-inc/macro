@@ -27,12 +27,14 @@ export function useChannelSectionNotifications(
   const directory = useChannelDirectory();
   const notificationPreferences = useBulkNotificationPreferencesMutation();
   const [pending, setPending] = createSignal<{ actorId: string }>();
-  // The directory's read is shared and runs on; what it resolves after
-  // unmount is dropped by `isCurrent`.
+  // Each action's read of the section's members, ended when the rail goes:
+  // a full read pages every joined channel.
+  const reads = new Set<AbortController>();
   let disposed = false;
 
   onCleanup(() => {
     disposed = true;
+    for (const read of reads) read.abort();
   });
 
   const favoriteIds = () =>
@@ -70,7 +72,8 @@ export function useChannelSectionNotifications(
   };
 
   const channelIdsFor = (
-    section: ChannelSectionKey
+    section: ChannelSectionKey,
+    signal: AbortSignal
   ): string[] | Promise<string[]> => {
     if (section === 'favorites') {
       return [...new Set(favoriteIds())];
@@ -82,7 +85,7 @@ export function useChannelSectionNotifications(
       section === 'direct_messages'
     ) {
       return Telemetry.span('channels.section.members', async () =>
-        channelGroupIds(section, [], await directory.readComplete())
+        channelGroupIds(section, [], await directory.readComplete(signal))
       );
     }
 
@@ -110,13 +113,15 @@ export function useChannelSectionNotifications(
       options.dialogOwner() === owner;
 
     setPending(request);
+    const read = new AbortController();
+    reads.add(read);
 
     try {
       await Telemetry.span('channels.section.notifications', async (span) => {
         span.setAttr('section.id', section);
         span.setAttr('notification.action', action);
 
-        const ids = channelIdsFor(section);
+        const ids = channelIdsFor(section, read.signal);
         const channelIds = Array.isArray(ids) ? ids : await ids;
 
         if (!isCurrent() || channelIds.length === 0) {
@@ -184,12 +189,15 @@ export function useChannelSectionNotifications(
         );
       });
     } catch (error) {
+      // The rail went while the members were read: nothing is left to tell.
+      if (read.signal.aborted) return;
       if (isCurrent()) {
         toast.failure(t('channelSections.notificationsFailed'));
       }
 
       throw error;
     } finally {
+      reads.delete(read);
       setPending((current) => (current === request ? undefined : current));
     }
   };

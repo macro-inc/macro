@@ -34,10 +34,8 @@ import {
 import { promiseTimeout, until } from '@solid-primitives/promise';
 import { AsyncQueuer, Batcher } from '@tanstack/pacer';
 import {
-  hashKey,
   type Query,
   type QueryClient,
-  type QueryKey,
   queryOptions,
   useQuery,
   useQueryClient,
@@ -147,6 +145,11 @@ const OWN_WRITE_REREADS = 4;
 // source, as it would without the reads.
 const OWN_WRITE_READ_LIMIT = 20;
 const OWN_WRITE_READ_CONCURRENCY = 4;
+// A full read of the cached directory settles the channels its walk of a
+// replica and the cache disagree on by reading each from the primary, a few
+// at a time, for at most this many; past them the walk's answer stands.
+const FULL_READ_PRIMARY_LIMIT = 200;
+const FULL_READ_PRIMARY_CONCURRENCY = 4;
 // The fallback's by-id reads settle a batch at a time; the channels they
 // decide are laid over the network's at most this often.
 const CONFIRM_RENDER_MS = 250;
@@ -200,8 +203,10 @@ export type ChannelDirectory = {
   lookup: (channelId: string, trace?: TraceContext) => ChannelLookup;
   /** Every joined channel, read from the network now, for an action on all
    * of them: what the directory shows can trail a change made on another
-   * device. */
-  readComplete: () => Promise<readonly DirectoryChannel[]>;
+   * device. The network's pages read a replica; the cached directory settles
+   * each channel they and the cache disagree on with a read of the primary.
+   * `signal` ends the read, for a caller that no longer needs it. */
+  readComplete: (signal?: AbortSignal) => Promise<readonly DirectoryChannel[]>;
   /** Whether filling the directory failed and stays failed until `retry`.
    * The cached directory fails only when its backfill lane gave up and the
    * network's pages failed too. */
@@ -690,23 +695,18 @@ function fetchChannelsById(
   );
 }
 
-/** Per query client, the channel writes `refreshChannelDirectory` has seen,
- * and how many it had seen when each directory read started. */
-type DirectoryWrites = { seen: number; readFrom: Map<string, number> };
+/** Per query client, how many channel writes `refreshChannelDirectory` has
+ * seen. */
+type DirectoryWrites = { seen: number };
 
 const DIRECTORY_WRITES = new WeakMap<QueryClient, DirectoryWrites>();
 
 function directoryWrites(client: QueryClient): DirectoryWrites {
   const known = DIRECTORY_WRITES.get(client);
   if (known) return known;
-  const created: DirectoryWrites = { seen: 0, readFrom: new Map() };
+  const created: DirectoryWrites = { seen: 0 };
   DIRECTORY_WRITES.set(client, created);
   return created;
-}
-
-function readsBeforeWrite(client: QueryClient, queryKey: QueryKey) {
-  const writes = directoryWrites(client);
-  return (writes.readFrom.get(hashKey(queryKey)) ?? 0) < writes.seen;
 }
 
 /** Whether data updated at `updatedAt` was read in this page, not restored
@@ -721,44 +721,42 @@ function readInThisPage(updatedAt: number): boolean {
 const REFETCH_RESTORED_PAGES = (query: Pick<Query, 'state'>) =>
   readInThisPage(query.state.dataUpdatedAt) ? true : ('always' as const);
 
-/** Every joined channel, paged from the network into memory. For the
- * directory without a cache, and for a full read before the cache is
- * complete. */
+/** Every joined channel, paged from the network into memory, for the
+ * directory without a cache. */
 export function channelDirectoryPagesQueryOptions(
   userId: string,
   client: () => UrqlQuery
 ) {
   return queryOptions({
     queryKey: channelKeys.directory(userId).queryKey,
-    queryFn: ({ signal, client: queries, queryKey }) => {
-      const writes = directoryWrites(queries);
-      writes.readFrom.set(hashKey(queryKey), writes.seen);
-      return fetchJoinedChannels(client(), signal);
-    },
+    queryFn: ({ signal }) => fetchJoinedChannels(client(), signal),
     staleTime: DIRECTORY_STALE_MS,
     refetchOnMount: REFETCH_RESTORED_PAGES,
   });
 }
 
 /**
- * The directory's pages, read now and again until a read began after the
- * latest channel write. A read that started before one may hold the pages
- * before it, and nothing reads again for a caller of `fetchQuery`: an
- * invalidation refetches only observed queries, and the read's success
- * clears it. The writes are this client's own, one per action the viewer
- * takes, so the reads end once the viewer pauses. Never an earlier read: an
- * action on every joined channel needs the membership as it is now, and
- * another device may have changed it since.
+ * Every joined channel, paged from the network now, and again until no
+ * channel write of `queryClient`'s landed during the walk: a walk that
+ * started before one may hold the membership before it. The writes are this
+ * client's own, one per action the viewer takes, so the walks end once the
+ * viewer pauses. Never an earlier read: an action on every joined channel
+ * needs the membership as it is now, and another device may have changed it
+ * since. A walk of its own, not the directory's shared pages query, so that
+ * `signal` ends it without cancelling another reader's.
  */
-export async function fetchCurrentDirectoryPages(
-  client: QueryClient,
-  options: ReturnType<typeof channelDirectoryPagesQueryOptions>
+export async function walkCurrentJoinedChannels(
+  queryClient: QueryClient,
+  client: UrqlQuery,
+  signal?: AbortSignal
 ): Promise<readonly DirectoryChannel[]> {
-  const now = { ...options, staleTime: 0 };
-  let channels = await client.fetchQuery(now);
-  while (readsBeforeWrite(client, options.queryKey))
-    channels = await client.fetchQuery(now);
-  return channels;
+  const writes = directoryWrites(queryClient);
+  for (;;) {
+    const seen = writes.seen;
+    const channels = await fetchJoinedChannels(client, signal);
+    if (writes.seen === seen)
+      return channels.filter(({ isParticipant }) => isParticipant);
+  }
 }
 
 type RefreshChannelDirectoryOptions = {
@@ -816,7 +814,7 @@ export async function refreshChannelDirectory(
   await ownWrites;
 }
 
-type PrimaryChannelRead =
+export type PrimaryChannelRead =
   | { kind: 'read'; channel: DirectoryChannel | null }
   | { kind: 'failed' };
 
@@ -842,6 +840,60 @@ async function readChannelFromPrimary(
         ? toDirectoryChannel(entity)
         : null,
   };
+}
+
+/**
+ * The joined channels of a full read, `walked`, with each channel it and
+ * the cache disagree on settled on the primary database. The walk reads a
+ * replica, which can lag a join or a removal that already reached the cache
+ * from the primary, and the cache can lag the replica in turn; neither tells
+ * which is behind. The disagreements: a channel the cache shows joined and
+ * the walk left out, one the walk shows joined and the cache holds as left,
+ * and one the walk shows that a complete cache does not hold at all. The
+ * primary's read decides each: joined, its record is listed; not, or no
+ * longer readable, it is left out. Past `FULL_READ_PRIMARY_LIMIT` of them,
+ * and for a read that failed, the walk's answer stands.
+ */
+async function settleFullReadOnPrimary(
+  walked: readonly DirectoryChannel[],
+  cached: ChannelDirectoryState,
+  readFromPrimary: (channelId: string) => Promise<PrimaryChannelRead>,
+  signal?: AbortSignal
+): Promise<readonly DirectoryChannel[]> {
+  const settled = new Map(walked.map((channel) => [channel.id, channel]));
+  const disputed: string[] = [];
+  for (const { id } of cached.joined) if (!settled.has(id)) disputed.push(id);
+  for (const { id } of walked) {
+    const record = cached.records[id];
+    if (record ? !record.isParticipant : cached.complete) disputed.push(id);
+  }
+  if (disputed.length === 0) return walked;
+  return Telemetry.span('channel_directory.full_read_settle', async (span) => {
+    const reading = disputed.slice(0, FULL_READ_PRIMARY_LIMIT);
+    span.setAttr('channel_directory.disputed', disputed.length);
+    span.setAttr('channel_directory.primary_reads', reading.length);
+    let failed = 0;
+    let changed = 0;
+    for (let at = 0; at < reading.length; at += FULL_READ_PRIMARY_CONCURRENCY) {
+      signal?.throwIfAborted();
+      const batch = reading.slice(at, at + FULL_READ_PRIMARY_CONCURRENCY);
+      const reads = await Promise.all(batch.map(readFromPrimary));
+      for (const [index, id] of batch.entries()) {
+        const read = reads[index];
+        if (!read || read.kind === 'failed') {
+          failed += 1;
+          continue;
+        }
+        const joined = read.channel?.isParticipant ? read.channel : undefined;
+        if (settled.has(id) !== Boolean(joined)) changed += 1;
+        if (joined) settled.set(id, joined);
+        else settled.delete(id);
+      }
+    }
+    span.setAttr('channel_directory.primary_failed', failed);
+    span.setAttr('channel_directory.primary_changed', changed);
+    return [...settled.values()];
+  });
 }
 
 /** Reads the channels a write of the viewer's changed and holds what the
@@ -1229,7 +1281,10 @@ type CachedDirectoryDeps = {
     options: Pick<FetchGraphqlSoupOptions, 'signal'>
   ) => Promise<GraphqlSoupHydrationPage>;
   /** Every joined channel, read from the network now, for `readComplete`. */
-  fetchAll: () => Promise<readonly DirectoryChannel[]>;
+  fetchAll: (signal?: AbortSignal) => Promise<readonly DirectoryChannel[]>;
+  /** One channel as the primary shows it, for `readComplete` to settle a
+   * channel the network's pages and the cache disagree on. */
+  readFromPrimary: (channelId: string) => Promise<PrimaryChannelRead>;
   /** Every joined channel, paged from the network now, for the fallback,
    * and the cache's writes of its pages. */
   pageAll: (signal: AbortSignal) => Promise<FallbackWalk>;
@@ -2093,12 +2148,21 @@ export function createCachedChannelDirectory(
         reader.request(channelId, trace);
       return result;
     },
-    async readComplete() {
+    async readComplete(signal) {
       // Even a complete directory can trail a change made on another
-      // device, by as long as its update takes or until a pass of the lane.
-      return inDirectoryOrder(
-        views.applyList(own.applyList(await deps.fetchAll()))
+      // device, by as long as its update takes or until a pass of the lane;
+      // the walk can trail one the cache already shows.
+      const context = Telemetry.captureContext();
+      const walked = await deps.fetchAll(signal);
+      const settled = await context.run(() =>
+        settleFullReadOnPrimary(
+          walked,
+          untrack(view),
+          deps.readFromPrimary,
+          signal
+        )
       );
+      return inDirectoryOrder(views.applyList(own.applyList(settled)));
     },
     failed: () => {
       const { state: current, fallback: status } = shown();
@@ -2206,16 +2270,15 @@ export function createMemoryChannelDirectory(
       if (result.status === 'pending') reader.request(channelId, trace);
       return result;
     },
-    async readComplete() {
-      const channels = await fetchCurrentDirectoryPages(
+    async readComplete(signal) {
+      // The pages read the same replica as the walk, and only the viewer's
+      // own writes, read from the primary, can be ahead of it here.
+      const channels = await walkCurrentJoinedChannels(
         deps.queryClient,
-        options()
+        deps.client(),
+        signal
       );
-      return inDirectoryOrder(
-        views.applyList(
-          own.applyList(channels.filter(({ isParticipant }) => isParticipant))
-        )
-      );
+      return inDirectoryOrder(views.applyList(own.applyList(channels)));
     },
     failed: () => pages.isError && !pages.isFetching,
     retry: () => fireAndForget(pages.refetch(), 'channel-directory'),
@@ -2298,13 +2361,10 @@ export function createAppChannelDirectory(): ChannelDirectory {
           { input },
           options
         ),
-      fetchAll: async () => {
-        const channels = await fetchCurrentDirectoryPages(
-          queryClient,
-          channelDirectoryPagesQueryOptions(userId, getGraphqlSoupClient)
-        );
-        return channels.filter(({ isParticipant }) => isParticipant);
-      },
+      fetchAll: (signal) =>
+        walkCurrentJoinedChannels(queryClient, getGraphqlSoupClient(), signal),
+      readFromPrimary: (channelId) =>
+        readChannelFromPrimary(getGraphqlSoupClient(), channelId),
       pageAll: async (signal) => {
         const walk = await pageJoinedChannels(getGraphqlSoupClient(), signal);
         return {
@@ -2321,7 +2381,7 @@ export function createAppChannelDirectory(): ChannelDirectory {
     channels: () => directory().channels(),
     complete: () => directory().complete(),
     lookup: (channelId, trace) => directory().lookup(channelId, trace),
-    readComplete: () => untrack(directory).readComplete(),
+    readComplete: (signal) => untrack(directory).readComplete(signal),
     failed: () => directory().failed(),
     retry: () => untrack(directory).retry(),
     recordView: (channelId, viewedAt) =>

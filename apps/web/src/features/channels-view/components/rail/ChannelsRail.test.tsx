@@ -56,7 +56,8 @@ const mocks = vi.hoisted(() => ({
   actualRows: (): ChannelRailRow[] => [],
   activityChannels: (): readonly ChannelEntity[] => [],
   additionalActivityChannels: (): readonly ChannelEntity[] => [],
-  readComplete: vi.fn<() => Promise<readonly { id: string }[]>>(),
+  readComplete:
+    vi.fn<(signal?: AbortSignal) => Promise<readonly { id: string }[]>>(),
   hydrate:
     vi.fn<
       (
@@ -1795,6 +1796,27 @@ describe('section notification actions', () => {
       expect(mocks.source.muteEntity).not.toHaveBeenCalled();
     }
   );
+
+  it('ends the membership read when the rail goes, without reporting a failure', async () => {
+    let read: AbortSignal | undefined;
+    mocks.readComplete.mockImplementationOnce(
+      (signal) =>
+        new Promise((_, reject) => {
+          read = signal;
+          signal?.addEventListener('abort', () => reject(signal.reason));
+        })
+    );
+    const actions = mountActions();
+    const pending = actions.muteSection('team_channels', true);
+    expect(read?.aborted).toBe(false);
+
+    cleanup();
+
+    expect(read?.aborted).toBe(true);
+    await expect(pending).resolves.toBeUndefined();
+    expect(mocks.failure).not.toHaveBeenCalled();
+    expect(mocks.source.muteEntity).not.toHaveBeenCalled();
+  });
 
   it('keeps the section retryable after membership lookup fails without applying partial updates', async () => {
     const error = new Error('offline');

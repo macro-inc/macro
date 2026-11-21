@@ -45,13 +45,14 @@ import {
   createByIdReader,
   createCachedChannelDirectory,
   createMemoryChannelDirectory,
-  fetchCurrentDirectoryPages,
   fetchJoinedChannels,
   lookupChannel,
+  type PrimaryChannelRead,
   pageJoinedChannels,
   refreshChannelDirectory,
   settledChannelLookup,
   staticChannelDirectory,
+  walkCurrentJoinedChannels,
 } from './directory';
 import type { DirectoryChannel } from './directory-core';
 import { CHANNEL_DIRECTORY_CHECKPOINT_ID } from './directory-lane';
@@ -844,6 +845,29 @@ describe('in-memory channel directory', () => {
     expect(ids(await directory.readComplete())).toEqual(['a', 'b']);
   });
 
+  it("stops paging a full read once its signal aborts, leaving the directory's pages alone", async () => {
+    const network = fakeNetwork(
+      ['a', 'b', 'c', 'd', 'e'].map((name) => channelRecord(name)),
+      { holdPages: true }
+    );
+    const directory = mountMemoryDirectory(network);
+    // The directory's own pages: the first of three, held.
+    await vi.waitFor(() => expect(network.inputs).toHaveLength(1));
+
+    const controller = new AbortController();
+    const read = directory.readComplete(controller.signal);
+    await vi.waitFor(() => expect(network.inputs).toHaveLength(2));
+    controller.abort();
+    network.release();
+
+    await expect(read).rejects.toMatchObject({ name: 'AbortError' });
+    // The directory read its three pages; the aborted read stopped after
+    // its first.
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    expect(ids(directory.channels())).toEqual(['a', 'b', 'c', 'd', 'e']);
+    expect(network.inputs).toHaveLength(4);
+  });
+
   it('reads pages restored from an earlier page again, and only then has their views current', async () => {
     const network = fakeNetwork([channelRecord('a', { viewedAt: VIEWED_2 })]);
     const queryClient = new QueryClient({
@@ -925,7 +949,10 @@ describe('in-memory channel directory', () => {
 type CachedDirectoryOptions = {
   viewer?: string;
   generation?: string;
-  fetchAll?: () => Promise<readonly DirectoryChannel[]>;
+  fetchAll?: (signal?: AbortSignal) => Promise<readonly DirectoryChannel[]>;
+  /** One channel as the primary shows it; a failed read when left out, so
+   * the walk's answer stands. */
+  readFromPrimary?: (channelId: string) => Promise<PrimaryChannelRead>;
   /** The network's joined channels, paged once the lane gave up. */
   pageAll?: (signal: AbortSignal) => Promise<readonly DirectoryChannel[]>;
   /** How many pages the cache wrote of those `pageAll` read, once it
@@ -994,7 +1021,12 @@ function mountCachedDirectory(
       return { nextCursor: null, entityIds: found.map(({ id }) => id) };
     }
   );
-  const fetchAll = vi.fn(options.fetchAll ?? (async () => []));
+  const fetchAll = vi.fn<
+    (signal?: AbortSignal) => Promise<readonly DirectoryChannel[]>
+  >(options.fetchAll ?? (async () => []));
+  const readFromPrimary = vi.fn<
+    (channelId: string) => Promise<PrimaryChannelRead>
+  >(options.readFromPrimary ?? (async () => ({ kind: 'failed' })));
   const pageAll = vi.fn<
     (signal: AbortSignal) => Promise<readonly DirectoryChannel[]>
   >(options.pageAll ?? (async () => []));
@@ -1009,6 +1041,7 @@ function mountCachedDirectory(
       session: ACCOUNT.session,
       hydrate,
       fetchAll,
+      readFromPrimary,
       pageAll: async (signal) => ({
         channels: await pageAll(signal),
         pages: 1,
@@ -1025,6 +1058,7 @@ function mountCachedDirectory(
     directory,
     hydrate,
     fetchAll,
+    readFromPrimary,
     pageAll,
     stampView,
     /** The view the cached record holds. */
@@ -1518,6 +1552,131 @@ describe('cached channel directory', () => {
     expect(ids(directory.channels())).toEqual(['a']);
     expect(ids(await directory.readComplete())).toEqual(['a', 'b']);
     expect(fetchAll).toHaveBeenCalledTimes(2);
+  });
+
+  it('settles a join the cache holds and the replica walk missed on the primary', async () => {
+    // 'b' and 'c' are joined in the cache; the walk, of a replica, lags both.
+    const { cache, directory, readFromPrimary } = mountCachedDirectory([], {
+      fetchAll: async () => [directoryChannel('a')],
+      readFromPrimary: async (id) => ({
+        kind: 'read',
+        // The primary has 'b' joined, and 'c' left since the cache saw it.
+        channel:
+          id === channelUuid('b')
+            ? directoryChannel('b', { name: 'b on the primary' })
+            : null,
+      }),
+    });
+    cache.put(channelRecord('a'));
+    cache.put(channelRecord('b'));
+    cache.put(channelRecord('c'));
+    completeLane('g1');
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+
+    const channels = await directory.readComplete();
+    expect(ids(channels)).toEqual(['a', 'b']);
+    expect(channels.find(({ id }) => id === channelUuid('b'))?.name).toBe(
+      'b on the primary'
+    );
+    expect(
+      readFromPrimary.mock.calls.map(([id]) => channelName(id)).sort()
+    ).toEqual(['b', 'c']);
+  });
+
+  it('drops a channel the replica walk still lists once the primary shows it left', async () => {
+    const { cache, directory, readFromPrimary } = mountCachedDirectory([], {
+      fetchAll: async () => [
+        directoryChannel('a'),
+        directoryChannel('left'),
+        directoryChannel('removed'),
+      ],
+      readFromPrimary: async (id) => ({
+        kind: 'read',
+        channel:
+          id === channelUuid('left')
+            ? directoryChannel('left', { isParticipant: false })
+            : null,
+      }),
+    });
+    cache.put(channelRecord('a'));
+    // Left on another device, as the cache already shows.
+    cache.put(channelRecord('left', { isParticipant: false }));
+    // 'removed' was deleted: the cache no longer holds it at all.
+    completeLane('g1');
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+
+    expect(ids(await directory.readComplete())).toEqual(['a']);
+    expect(
+      readFromPrimary.mock.calls.map(([id]) => channelName(id)).sort()
+    ).toEqual(['left', 'removed']);
+  });
+
+  it('reads nothing on the primary when the walk and the cache agree, and keeps the walk where a read fails', async () => {
+    let walked = [directoryChannel('a'), directoryChannel('b')];
+    const { cache, directory, readFromPrimary } = mountCachedDirectory([], {
+      fetchAll: async () => walked,
+    });
+    cache.put(channelRecord('a'));
+    cache.put(channelRecord('b'));
+    completeLane('g1');
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+
+    expect(ids(await directory.readComplete())).toEqual(['a', 'b']);
+    expect(readFromPrimary).not.toHaveBeenCalled();
+
+    walked = [directoryChannel('a')];
+    // The primary read of 'b' fails: the walk's answer stands.
+    expect(ids(await directory.readComplete())).toEqual(['a']);
+    expect(readFromPrimary).toHaveBeenCalledOnce();
+  });
+
+  it('reads at most 200 disagreements on the primary and keeps the walk for the rest', async () => {
+    const walked = Array.from({ length: 205 }, (_, index) =>
+      directoryChannel(`walked${index}`)
+    );
+    const { cache, directory, readFromPrimary } = mountCachedDirectory([], {
+      fetchAll: async () => [directoryChannel('a'), ...walked],
+      // None of them is the viewer's on the primary.
+      readFromPrimary: async () => ({ kind: 'read', channel: null }),
+    });
+    cache.put(channelRecord('a'));
+    completeLane('g1');
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+
+    const channels = await directory.readComplete();
+    expect(readFromPrimary).toHaveBeenCalledTimes(200);
+    expect(channels).toHaveLength(6);
+  });
+
+  it('passes its signal to the walk and reads nothing more on the primary once it aborts', async () => {
+    const reads: (() => void)[] = [];
+    const { cache, directory, fetchAll, readFromPrimary } =
+      mountCachedDirectory([], {
+        fetchAll: async () =>
+          Array.from({ length: 8 }, (_, index) =>
+            directoryChannel(`walked${index}`)
+          ),
+        readFromPrimary: (id) =>
+          new Promise((done) => {
+            reads.push(() =>
+              done({ kind: 'read', channel: directoryChannel(channelName(id)) })
+            );
+          }),
+      });
+    cache.put(channelRecord('a'));
+    completeLane('g1');
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+
+    const controller = new AbortController();
+    const read = directory.readComplete(controller.signal);
+    await vi.waitFor(() => expect(reads).toHaveLength(4));
+    expect(fetchAll).toHaveBeenCalledExactlyOnceWith(controller.signal);
+
+    controller.abort();
+    for (const finish of reads) finish();
+    await expect(read).rejects.toMatchObject({ name: 'AbortError' });
+    // One batch of four; none after the abort.
+    expect(readFromPrimary).toHaveBeenCalledTimes(4);
   });
 
   describe('a lane that stalls', () => {
@@ -2664,25 +2823,40 @@ function changingNetwork(
 
 describe('refreshChannelDirectory', () => {
   it('gives a full read the pages after a write that landed during it', async () => {
-    const network = changingNetwork(
-      [channelRecord('a')],
-      [channelRecord('a'), channelRecord('b')]
-    );
+    let release!: () => void;
+    const held = new Promise<void>((done) => {
+      release = done;
+    });
+    let walks = 0;
+    // The directory's own pages, then the full read's walk, held: it misses
+    // the write that lands during it, and every walk after sees it.
+    const client = fakeClient(() => ({
+      toPromise: async () => {
+        walks += 1;
+        if (walks === 1) return page([channelRecord('a')], null);
+        if (walks === 2) {
+          await held;
+          return page([channelRecord('a')], null);
+        }
+        return page([channelRecord('a'), channelRecord('b')], null);
+      },
+    }));
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
-    const directory = mountMemoryDirectory(network, queryClient);
+    const directory = mountMemoryDirectory({ client }, queryClient);
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
     const complete = directory.readComplete();
-    await vi.waitFor(() => expect(network.walks()).toBe(1));
+    await vi.waitFor(() => expect(walks).toBe(2));
 
     const refreshed = refreshChannelDirectory([], { client: queryClient });
-    network.release();
+    release();
     await refreshed;
 
     expect(ids(await complete)).toEqual(['a', 'b']);
   });
 
-  it('reads again for a read nobody observes when a write lands during it', async () => {
+  it('walks again when a write lands during a full walk', async () => {
     const network = changingNetwork(
       [channelRecord('a')],
       [channelRecord('a'), channelRecord('b')]
@@ -2691,11 +2865,7 @@ describe('refreshChannelDirectory', () => {
       defaultOptions: { queries: { retry: false } },
     });
     disposers.push(() => queryClient.clear());
-    const options = channelDirectoryPagesQueryOptions(
-      VIEWER,
-      () => network.client
-    );
-    const read = fetchCurrentDirectoryPages(queryClient, options);
+    const read = walkCurrentJoinedChannels(queryClient, network.client);
     await vi.waitFor(() => expect(network.walks()).toBe(1));
 
     const refreshed = refreshChannelDirectory([], { client: queryClient });
@@ -2706,13 +2876,13 @@ describe('refreshChannelDirectory', () => {
     expect(network.walks()).toBe(2);
     // A later read reads the network again: another device may have changed
     // the membership since.
-    expect(ids(await fetchCurrentDirectoryPages(queryClient, options))).toEqual(
-      ['a', 'b']
-    );
+    expect(
+      ids(await walkCurrentJoinedChannels(queryClient, network.client))
+    ).toEqual(['a', 'b']);
     expect(network.walks()).toBe(3);
   });
 
-  it('reads until no write landed during the read', async () => {
+  it('walks until no write landed during the walk', async () => {
     const releases: (() => void)[] = [];
     let walks = 0;
     const client = fakeClient(() => ({
@@ -2733,10 +2903,7 @@ describe('refreshChannelDirectory', () => {
       defaultOptions: { queries: { retry: false } },
     });
     disposers.push(() => queryClient.clear());
-    const read = fetchCurrentDirectoryPages(
-      queryClient,
-      channelDirectoryPagesQueryOptions(VIEWER, () => client)
-    );
+    const read = walkCurrentJoinedChannels(queryClient, client);
 
     // A write lands during each of the first three reads.
     for (let walk = 1; walk <= 3; walk += 1) {
