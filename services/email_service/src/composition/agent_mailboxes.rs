@@ -88,7 +88,7 @@ pub(crate) fn spawn_sweep(
                 tracing::warn!(error = %error, "agent mailbox sweep round failed");
             }
             // The orphan check reads every live mailbox, so it runs hourly.
-            if rounds % ORPHAN_SWEEP_EVERY == 0
+            if rounds.is_multiple_of(ORPHAN_SWEEP_EVERY)
                 && let Err(error) = service.sweep_orphans(now).await
             {
                 tracing::warn!(error = %error, "agent mailbox orphan sweep failed");
