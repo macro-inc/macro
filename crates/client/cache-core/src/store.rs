@@ -7,6 +7,7 @@
 //! `Send`.
 
 use crate::calendar::{CalendarRangeRow, CalendarSpan, CalendarSyncState, project_calendar_range};
+use crate::channel_timeline::{ChannelTimelineRow, project_channel_timeline};
 use crate::predicate::reconciliation::{
     PredicateBaselineEntry, PredicateMembership, PredicateReconciliation, predicate_membership,
     reconcile_predicate_baseline,
@@ -37,6 +38,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 mod calendar;
+mod channel_timeline;
 
 /// Whether a storage implementation can provide queue diagnostics.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -368,6 +370,8 @@ pub struct InMemoryStorage {
     calendar_ranges: HashMap<EntityKey<'static>, CalendarRangeRow>,
     calendar_coverage: Vec<CalendarSpan>,
     calendar_sync: CalendarSyncState,
+    channel_rows: HashMap<EntityKey<'static>, ChannelTimelineRow>,
+    channel_state: BTreeMap<String, channel_timeline::ChannelTimelineState>,
 }
 
 #[derive(Clone, Debug)]
@@ -407,6 +411,14 @@ impl InMemoryStorage {
                 self.calendar_ranges.remove(&key);
             }
         }
+        match project_channel_timeline(&key, &record) {
+            Some(row) => {
+                self.channel_rows.insert(key.clone(), row);
+            }
+            None => {
+                self.channel_rows.remove(&key);
+            }
+        }
         self.records.insert(key, record);
     }
 
@@ -416,6 +428,7 @@ impl InMemoryStorage {
         self.search_documents
             .retain(|(_, existing_key), _| existing_key != key);
         self.calendar_ranges.remove(key);
+        self.channel_rows.remove(key);
     }
 
     fn rebase_projections(&mut self, keys: &[PredicateRecordKey]) {
@@ -1028,6 +1041,8 @@ impl Storage for InMemoryStorage {
         self.calendar_ranges.clear();
         self.calendar_coverage.clear();
         self.calendar_sync = CalendarSyncState::default();
+        self.channel_rows.clear();
+        self.channel_state.clear();
         Ok(())
     }
 

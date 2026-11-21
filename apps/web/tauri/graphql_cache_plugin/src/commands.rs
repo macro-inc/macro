@@ -10,7 +10,8 @@
 //! worker's `{ok: false, error}` responses.
 
 use crate::engine::{
-    AffectedOperationsResultWire, CalendarRangeResultWire, ClaimedMutationWire,
+    AffectedOperationsResultWire, CalendarRangeResultWire, ChannelCommitResultWire,
+    ChannelEvictionResultWire, ChannelTimelineResultWire, ClaimedMutationWire,
     CommitOptimisticWriteResultWire, DeferOptimisticWriteResultWire, EngineHandle,
     EnqueueOptimisticMutationResultWire, EntityFilterRequest, EntityFilterResult,
     MutationUpsertKindWire, ReadResultWire, RecordSelectionResultWire,
@@ -21,6 +22,9 @@ use crate::{
     emit_mutation_settled, emit_ops_affected,
 };
 use cache_core::calendar::{CalendarCommit, CalendarRangeRequest};
+use cache_core::channel_timeline::{
+    ChannelEviction, ChannelTimelineCommit, ChannelTimelineRequest, ChannelTimelineStats,
+};
 use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use cache_core::query_inspection::{CachedQueryInstance, CachedQueryVariant};
@@ -479,6 +483,81 @@ pub async fn graphql_cache_calendar_commit<R: Runtime>(
         );
     }
     Ok(result)
+}
+
+/// Answers one channel or thread page from the native timeline index.
+#[tauri::command]
+pub async fn graphql_cache_channel_timeline(
+    state: State<'_, CacheState>,
+    request: ChannelTimelineRequest,
+) -> Result<ChannelTimelineResultWire, String> {
+    engine_handle(&state)?.channel_timeline(request).await
+}
+
+fn emit_channel_write<R: Runtime>(
+    app: &AppHandle<R>,
+    result: &WriteResultWire,
+    generation: Option<uuid::Uuid>,
+) {
+    let generation = generation_tag(generation);
+    emit_ops_affected(
+        app,
+        &result.affected_ops,
+        result.field_changes.as_ref(),
+        generation.as_deref(),
+    );
+    if result.revision_advanced {
+        emit_cache_changed_with_hints(
+            app,
+            &result.revision,
+            result.reset,
+            result.search_changed_buckets.as_ref(),
+            result.unchanged_views.as_ref(),
+            generation.as_deref(),
+        );
+    }
+}
+
+/// Applies fetched coverage, deletions and the applied change sequence of
+/// one channel, then broadcasts the deleted records like a write.
+#[tauri::command]
+pub async fn graphql_cache_channel_timeline_commit<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, CacheState>,
+    generation: Option<uuid::Uuid>,
+    commit: ChannelTimelineCommit,
+) -> Result<ChannelCommitResultWire, String> {
+    let result = engine_handle(&state)?
+        .with_generation(generation)
+        .channel_timeline_commit(commit)
+        .await?;
+    emit_channel_write(&app, &result.write, generation);
+    Ok(result)
+}
+
+/// Removes the channels touched longest ago, then broadcasts the deleted
+/// records like a write.
+#[tauri::command]
+pub async fn graphql_cache_channel_timeline_evict<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, CacheState>,
+    generation: Option<uuid::Uuid>,
+    eviction: ChannelEviction,
+) -> Result<ChannelEvictionResultWire, String> {
+    let result = engine_handle(&state)?
+        .with_generation(generation)
+        .channel_timeline_evict(eviction)
+        .await?;
+    emit_channel_write(&app, &result.write, generation);
+    Ok(result)
+}
+
+/// Counts the channels and entries the native timeline index holds.
+#[tauri::command]
+pub async fn graphql_cache_channel_timeline_stats(
+    state: State<'_, CacheState>,
+) -> Result<ChannelTimelineStats, String> {
+    engine_handle(&state)?.channel_timeline_stats().await
 }
 
 /// Active-query registration installed by a network write.

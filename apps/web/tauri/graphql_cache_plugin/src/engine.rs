@@ -38,9 +38,13 @@ mod authority;
 pub use authority::AuthorityTransitionWire;
 
 mod calendar;
+mod channel_timeline;
 mod people;
 mod soup;
 pub use calendar::CalendarRangeResultWire;
+pub use channel_timeline::{
+    ChannelCommitResultWire, ChannelEvictionResultWire, ChannelTimelineResultWire,
+};
 pub use soup::{
     EntityFilterRequest, EntityFilterResult, LiveQueryResult, PredicateBaselineEntry,
     PredicateFilterResult,

@@ -579,12 +579,16 @@ export function operationCategoryForRequest(
       'people-context',
       'entity-filter',
       'calendar-range',
+      'channel-timeline',
+      'channel-timeline-stats',
       () => 'read' as const
     )
     .with(
       'write',
       'hydrate',
       'calendar-commit',
+      'channel-timeline-commit',
+      'channel-timeline-evict',
       'people-update',
       'contact-reconcile',
       () => 'write' as const
@@ -623,6 +627,8 @@ export function isStorageTransactionRequest(
     'hydrate',
     'people-update',
     'calendar-commit',
+    'channel-timeline-commit',
+    'channel-timeline-evict',
     'enqueue-optimistic-mutation',
     'claim-next-mutation',
     'defer-optimistic-write',

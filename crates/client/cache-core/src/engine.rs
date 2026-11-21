@@ -4,9 +4,11 @@
 
 pub mod authority;
 mod calendar;
+mod channel_timeline;
 mod hydration;
 mod people;
 mod retirement;
+pub use channel_timeline::{ChannelCommitResult, ChannelEvictionResult};
 pub use hydration::HydrationScope;
 #[cfg(test)]
 mod test;
@@ -96,6 +98,9 @@ pub enum EngineError<S: std::error::Error + 'static> {
     People(#[from] crate::people::PeopleError),
     #[error(transparent)]
     Calendar(#[from] CalendarError),
+    /// Channel timeline request or commit validation error.
+    #[error(transparent)]
+    ChannelTimeline(#[from] crate::channel_timeline::ChannelTimelineError),
     #[error("unknown or already-settled optimistic transaction {0}")]
     UnknownTransaction(OptimisticTransactionId),
     #[error("stale claim for optimistic transaction {0}")]
