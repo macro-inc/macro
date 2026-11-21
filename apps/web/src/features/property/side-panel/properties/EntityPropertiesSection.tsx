@@ -5,6 +5,7 @@ import {
 } from '@components/app/side-panel/SidePanel';
 import { fireAndForget } from '@core/util/fireAndForget';
 import Plus from '@icon/system/regular/plus.svg';
+import { Telemetry } from '@macro-inc/observability';
 import { Property as PropertyNS, useProperty } from '@property';
 import { AddPropertyButton } from '@property/component/AddPropertyButton';
 import { EntityLinkPill } from '@property/component/EntityLinkPill';
@@ -37,6 +38,7 @@ import type { EntityType } from '@service-properties/generated/schemas/entityTyp
 import { Key } from '@solid-primitives/keyed';
 import { Badge, Button, Layer } from '@ui';
 import { cn } from '@ui/utils/classname';
+import { ResultAsync } from 'neverthrow';
 import {
   createEffect,
   createMemo,
@@ -292,7 +294,14 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
   };
   const saveOne = async (property: Property, apiValues: PropertyApiValues) => {
     await savePropertyValues(property, apiValues);
-    await props.onPropertiesChanged?.();
+    // The value is saved; a refresh failing afterwards is not a failed save.
+    const refreshed = await ResultAsync.fromPromise(
+      Promise.resolve(props.onPropertiesChanged?.()),
+      (error) => error
+    );
+    if (refreshed.isErr()) {
+      Telemetry.error(refreshed.error, { surface: 'property-side-panel' });
+    }
   };
   const refreshCollection = async (outcome: CollectionSaveOutcome) => {
     // The cache already holds a committed save; a network read could bring a

@@ -12,7 +12,7 @@ import {
   type PropertyRootContextValue,
 } from '../../core/context';
 import type { DateProperty } from '../../types';
-import { StartDueEditor } from './StartDueEditor';
+import { StartDueEditor, type StartDueEditorProps } from './StartDueEditor';
 
 vi.mock('../../utils', async () => ({
   ...(await import('../../utils/typeGuards')),
@@ -53,8 +53,10 @@ function dateProperty(
 const start = dateProperty('start', 'Start Date', new Date(2026, 10, 23));
 const due = dateProperty('due', 'Due Date', new Date(2026, 10, 27));
 
-function setup(onSave: PropertyRootContextValue['onSave']) {
-  const saveOther = vi.fn(async () => {});
+function setup(
+  onSave: PropertyRootContextValue['onSave'],
+  saveOther: StartDueEditorProps['saveOther'] = vi.fn(async () => {})
+) {
   const [editorOpen, setEditorOpen] = createSignal(true);
   const context: PropertyRootContextValue = {
     property: () => due,
@@ -96,7 +98,7 @@ it('keeps a cleared start and shows the due date again when clearing it fails', 
 
   fireEvent.click(screen.getByRole('button', { name: 'Clear both' }));
 
-  expect(saveOther).toHaveBeenCalledWith(start, null);
+  await waitFor(() => expect(saveOther).toHaveBeenCalledWith(start, null));
   await waitFor(() => expect(field('Due')).toBe('DueFri, Nov 27'));
   expect(field('Start')).toBe('StartNone');
 });
@@ -112,4 +114,51 @@ it('shows both ends cleared once both saves succeed', async () => {
   );
   expect(field('Start')).toBe('StartNone');
   expect(field('Due')).toBe('DueNone');
+});
+
+function pickStartInCalendar(day: number) {
+  fireEvent.click(screen.getByRole('button', { name: /^Start/ }));
+  fireEvent.click(screen.getByText('Custom date...'));
+  fireEvent.click(screen.getByRole('button', { name: String(day) }));
+}
+
+it('saves dates in the order they were picked, even while an earlier save is pending', async () => {
+  const startSave = Promise.withResolvers<void>();
+  const saveOther = vi
+    .fn<StartDueEditorProps['saveOther']>()
+    .mockReturnValueOnce(startSave.promise)
+    .mockResolvedValue(undefined);
+  const onSave = vi.fn(async () => {});
+  setup(onSave, saveOther);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Clear both' }));
+  pickStartInCalendar(25);
+  await waitFor(() => expect(saveOther).toHaveBeenCalledTimes(1));
+
+  startSave.resolve();
+  await waitFor(() => expect(saveOther).toHaveBeenCalledTimes(2));
+  expect(saveOther.mock.calls.map(([, value]) => value)).toEqual([
+    null,
+    new Date(2026, 10, 25),
+  ]);
+  expect(onSave).toHaveBeenCalledWith(due, { valueType: 'DATE', value: null });
+});
+
+it('keeps a newer pick on screen when an older save of that end fails', async () => {
+  const startSave = Promise.withResolvers<void>();
+  const saveOther = vi
+    .fn<StartDueEditorProps['saveOther']>()
+    .mockReturnValueOnce(startSave.promise)
+    .mockResolvedValue(undefined);
+  setup(
+    vi.fn(async () => {}),
+    saveOther
+  );
+
+  fireEvent.click(screen.getByRole('button', { name: 'Clear start' }));
+  pickStartInCalendar(25);
+  startSave.reject(new Error());
+
+  await waitFor(() => expect(saveOther).toHaveBeenCalledTimes(2));
+  expect(field('Start')).toBe('StartWed, Nov 25');
 });

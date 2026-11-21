@@ -1,5 +1,6 @@
 import { PickerSheet } from '@components/app/mobile/PickerSheet';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { ResultAsync } from 'neverthrow';
 import { createSignal, Show } from 'solid-js';
 import { useProperty } from '../../core/context';
 import type { DateProperty } from '../../types';
@@ -73,21 +74,46 @@ function StartDueEditorBody(
 
   // What the server holds, so a failed save shows the persisted ends again.
   let saved: StartDue = dates();
-  const commit = async (next: StartDue, changed: DateField[]) => {
+  // How many edits each end has had, so a failed save never undoes a newer one.
+  const edits: Record<DateField, number> = { start: 0, due: 0 };
+  // Saves run in the order they were made, so an older one never lands last.
+  let pending: Promise<void> = Promise.resolve();
+
+  const commit = async (
+    next: StartDue,
+    changed: DateField[],
+    made: Record<DateField, number>
+  ) => {
     for (const [index, field] of changed.entries()) {
-      try {
-        await save(field, next[field]);
+      const result = await ResultAsync.fromPromise(
+        save(field, next[field]),
+        (error) => error
+      );
+      if (result.isOk()) {
         saved = { ...saved, [field]: next[field] };
-      } catch {
-        // mutation onError owns toast
-        const unsaved = changed.slice(index);
-        setDates((shown) => ({
-          start: unsaved.includes('start') ? saved.start : shown.start,
-          due: unsaved.includes('due') ? saved.due : shown.due,
-        }));
-        return;
+        continue;
       }
+      // mutation onError owns toast
+      const restore = changed
+        .slice(index)
+        .filter((end) => edits[end] === made[end]);
+      setDates((shown) => ({
+        start: restore.includes('start') ? saved.start : shown.start,
+        due: restore.includes('due') ? saved.due : shown.due,
+      }));
+      return;
     }
+  };
+
+  const enqueue = (next: StartDue, changed: DateField[]) => {
+    for (const end of changed) edits[end] += 1;
+    const made = { ...edits };
+    const previous = pending;
+    pending = (async () => {
+      await previous;
+      await commit(next, changed, made);
+    })();
+    return pending;
   };
 
   return (
@@ -100,7 +126,7 @@ function StartDueEditorBody(
       }}
       onChange={(next, changed) => {
         setDates(next);
-        fireAndForget(commit(next, changed), 'property-editor');
+        fireAndForget(enqueue(next, changed), 'property-editor');
       }}
       onClose={() => ctx.closeEditor()}
       fillHeight={props.fillHeight}
