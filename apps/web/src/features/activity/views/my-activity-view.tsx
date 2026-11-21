@@ -2,7 +2,10 @@ import { useViewTabHotkeys, ViewSidebar } from '@app/components/view-shell';
 import { SoupSectionHeader } from '@app/features/next-soup/soup-view/section-header';
 import { usePending } from '@app/observability/flow';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
-import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
+import {
+  splitRootScope,
+  useSplitPanel,
+} from '@components/app/split-layout/layoutUtils';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createElementSize } from '@solid-primitives/resize-observer';
@@ -94,7 +97,7 @@ export function MyActivityView(props: {
   const panel = useSplitPanel();
   if (panel) {
     useViewTabHotkeys<ActivityScope>({
-      scopeId: panel.splitHotkeyScope,
+      scopeId: splitRootScope(panel),
       enabled: panel.isPanelActive,
       tabs: scopeTabs,
       ids: () => SCOPE_TABS.map((tab) => tab.value),

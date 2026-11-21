@@ -35,6 +35,7 @@ import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import {
+  splitRootScope,
   useSplitDisplayName,
   useSplitPanel,
   useSplitPanelOrThrow,
@@ -175,7 +176,7 @@ export function ChannelDetailTabs(props: {
   const panel = useSplitPanel();
   if (panel) {
     useViewTabHotkeys<ChannelTabId>({
-      scopeId: panel.splitHotkeyScope,
+      scopeId: splitRootScope(panel),
       enabled: panel.isPanelActive,
       tabs: tabsElement,
       ids: () => tabs().map((tab) => tab.value),

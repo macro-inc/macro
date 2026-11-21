@@ -1,3 +1,12 @@
+import { SplitHeaderScope } from '@components/app/SplitHeaderScope';
+import {
+  SplitPanelContext,
+  type SplitPanelContextType,
+} from '@components/app/split-layout/context';
+import {
+  splitRootScope,
+  useSplitPanelOrThrow,
+} from '@components/app/split-layout/layoutUtils';
 import {
   attachGlobalDOMScope,
   useHotKeyRoot,
@@ -6,10 +15,13 @@ import {
 import { setActiveScope } from '@core/hotkey/state';
 import { fireEvent, render } from '@solidjs/testing-library';
 import { createSignal, Show } from 'solid-js';
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { useViewTabHotkeys } from './use-view-tab-hotkeys';
 
-afterEach(() => setActiveScope('global'));
+afterEach(() => {
+  setActiveScope('global');
+  vi.unstubAllGlobals();
+});
 
 // The hotkey engine tracks held keys, so every press is released.
 function press(key: string, init: KeyboardEventInit = {}) {
@@ -156,4 +168,105 @@ it('keeps the list tabs working after the conversation beside it closes', () => 
   expect(listTab()).toBe('notifications');
   press('Tab', { shiftKey: true });
   expect(listTab()).toBe('recent');
+});
+
+/**
+ * A database previewed beside a sidebar without tabs, as Drive shows one: the
+ * preview gives its content a hotkey scope of its own, between the tabs and
+ * the split, and the split has focus after the item opens.
+ */
+function previewSetup() {
+  // jsdom has no ResizeObserver; the preview's header measures with one.
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+  const [table, setTable] = createSignal('tasks');
+  let split!: HTMLDivElement;
+
+  function Database() {
+    const [tabs, setTabs] = createSignal<HTMLElement>();
+    useViewTabHotkeys({
+      scopeId: splitRootScope(useSplitPanelOrThrow()),
+      tabs,
+      ids: () => ['tasks', 'people'],
+      activeId: table,
+      setActiveId: setTable,
+      label: (id) => id,
+    });
+    return (
+      <div
+        ref={(element) => {
+          onScreen(element);
+          setTabs(element);
+        }}
+        role="radiogroup"
+        aria-label="Database tables"
+      />
+    );
+  }
+
+  function Harness() {
+    useHotKeyRoot();
+    const [attachSplit, splitScope] = useHotkeyDOMScope('split');
+    const [attachPreview, previewScope] = useHotkeyDOMScope('preview-panel');
+    // The fields the preview and the tab keys read, set as `SplitPanel` sets them.
+    const panel = {
+      splitHotkeyScope: splitScope,
+      splitRootHotkeyScope: splitScope,
+      isPanelActive: () => true,
+    } as SplitPanelContextType;
+    return (
+      <div ref={(element) => attachGlobalDOMScope(element)}>
+        <div
+          ref={(element) => {
+            split = element;
+            attachSplit(element);
+          }}
+          tabIndex={-1}
+        >
+          <SplitPanelContext.Provider value={panel}>
+            <div ref={onScreen} data-view-shell-aside="">
+              <button type="button">Drive</button>
+            </div>
+            <div ref={onScreen} data-view-shell-detail="">
+              <div ref={attachPreview} tabIndex={-1}>
+                <SplitHeaderScope.Root
+                  splitHotkeyScope={previewScope}
+                  isInlinePreview
+                >
+                  <Database />
+                </SplitHeaderScope.Root>
+              </div>
+            </div>
+          </SplitPanelContext.Provider>
+        </div>
+      </div>
+    );
+  }
+
+  const view = render(() => <Harness />);
+  return {
+    table,
+    split: () => split,
+    sidebarButton: () => view.getByRole('button', { name: 'Drive' }),
+  };
+}
+
+it('gives Tab on the split itself to tabs inside a preview', () => {
+  const { table, split, sidebarButton } = previewSetup();
+
+  split().focus();
+  press('Tab');
+  expect(table()).toBe('people');
+  press('1');
+  expect(table()).toBe('tasks');
+
+  sidebarButton().focus();
+  press('Tab');
+  expect(table()).toBe('tasks');
 });

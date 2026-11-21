@@ -1,6 +1,9 @@
 import { useViewTabHotkeys } from '@app/components/view-shell';
 import { t } from '@app/lib/i18n';
-import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
+import {
+  splitRootScope,
+  useSplitPanel,
+} from '@components/app/split-layout/layoutUtils';
 import { createSignal } from 'solid-js';
 import type { CrmRecordSection } from '../core/record';
 
@@ -17,7 +20,7 @@ export function useRecordTabKeys<S extends CrmRecordSection>(props: {
   const panel = useSplitPanel();
   if (panel) {
     useViewTabHotkeys<S>({
-      scopeId: panel.splitHotkeyScope,
+      scopeId: splitRootScope(panel),
       enabled: panel.isPanelActive,
       tabs,
       ids: props.sections,
