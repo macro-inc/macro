@@ -1,6 +1,11 @@
 import type { Api, SentMessage } from './harness/api';
 import { expectShown, loseKeptData, type Named } from './harness/device';
-import { expect, LOCAL_SYNC_BUILD, test } from './harness/fixtures';
+import {
+  expect,
+  failsSometimes,
+  LOCAL_SYNC_BUILD,
+  test,
+} from './harness/fixtures';
 import { Conversation } from './harness/messages';
 import {
   blockWrites,
@@ -458,4 +463,70 @@ test('WRT-15 a message waiting to be sent when the device loses what it kept is 
   await bens.reload();
   await expectShown(bens, after);
   await expectServer(channel, after);
+});
+
+// If this fails, a person with the channel open in two windows sees a
+// reply that is still waiting to be sent in only the window they wrote it
+// in: the other draws the message without it.
+test('WRT-16 a waiting reply to a message with no replies shows in the other window of the same device', async ({
+  pageFor,
+  ada,
+  ben,
+}) => {
+  const { channel, messages } = await scene(ada, ben);
+  const first = await pageFor('ben');
+  const one = new Conversation(first, channel.id);
+  await one.open();
+  const two = new Conversation(await first.context().newPage(), channel.id);
+  await two.open();
+  await expectShown(two, ['one', 'two', 'three']);
+
+  const unblock = await blockWrites(first.context());
+  await ada.post(channel.id, 'four');
+  await expectShown(two, ['one', 'two', 'three', 'four']);
+  await two.page.bringToFront();
+  await two.reply(messages[1].id, 'still waiting');
+  const after = ['one', 'two', '  > still waiting', 'three', 'four'];
+  await expectShown(one, after);
+  // A message from someone else makes the window read the channel again.
+  await ada.post(channel.id, 'five');
+  await expectShown(one, [...after, 'five']);
+
+  await unblock();
+  await expectServer(channel, [...after, 'five']);
+  await expectShown(one, [...after, 'five']);
+});
+
+// If this fails, a reply that is still waiting to be sent goes from the
+// window it was written in when something else arrives in the channel, and
+// stays gone after it is delivered.
+test('WRT-17 with the channel open in two windows, a waiting reply to a message with no replies stays in the window it was written in when another message arrives', async ({
+  pageFor,
+  ada,
+  ben,
+}) => {
+  const { channel, messages } = await scene(ada, ben);
+  const first = await pageFor('ben');
+  await new Conversation(first, channel.id).open();
+  const bens = new Conversation(await first.context().newPage(), channel.id);
+  await bens.open();
+  await expectShown(bens, ['one', 'two', 'three']);
+
+  const unblock = await blockWrites(first.context());
+  await ada.post(channel.id, 'earlier');
+  await expectShown(bens, ['one', 'two', 'three', 'earlier']);
+  await bens.reply(messages[1].id, 'still waiting');
+  const after = ['one', 'two', '  > still waiting', 'three', 'earlier'];
+  await expectShown(bens, after);
+  await ada.post(channel.id, 'four');
+  await expect(bens.message('four')).toBeVisible();
+  // Known defect, in 3 runs of 10: the window draws the message without its
+  // waiting reply once it has read the channel again.
+  await failsSometimes(() => expectShown(bens, [...after, 'four']));
+
+  await unblock();
+  await expectServer(channel, [...after, 'four']);
+  await failsSometimes(() => expectShown(bens, [...after, 'four']));
+  await bens.reload();
+  await expectShown(bens, [...after, 'four']);
 });

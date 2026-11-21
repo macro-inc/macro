@@ -79,7 +79,7 @@ queue-reload	Writes that could not be sent survive a reload and are sent once wh
 queue-lost-answer	A write the services took but whose answer was lost is in the channel once	WRT-05	
 queue-refused	A write the services refuse is taken back off the screen and shown as failed	WRT-09	
 queue-waiting-mark	A message still waiting to be sent says so	WRT-10,WRT-11	
-queue-two-windows	Two windows of one device show each other's offline writes and send each once	WRT-12,WRT-14	
+queue-two-windows	Two windows of one device show each other's offline writes and send each once	WRT-12,WRT-14,WRT-16,WRT-17	
 queue-two-devices	Two devices of one person, one of them offline, end up showing what the services hold	WRT-13	
 queue-storage-reset	Writes still queued when the device's storage is reset are not sent later or shown as sent	WRT-15	
 discussions-unchanged	Document discussions, and channels without the flag, read and write as before the device cache		Not written for discussions: the suite covers channels only; without the flag the whole earlier suite runs as before
