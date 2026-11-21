@@ -295,3 +295,37 @@ fn readable_dependencies_default_to_copy_even_when_triage_prefers_tasks() {
     let meta: NotionDocMeta = serde_json::from_value(rows[0].metadata.clone()).unwrap();
     assert_eq!(meta.plan.unwrap().decision, Some(NotionDecision::Copy));
 }
+
+#[test]
+fn audit_snapshot_warnings_use_titles_without_raw_notion_ids() {
+    let summary = DataSourceSummary {
+        source: NotionDataSource {
+            id: id('d'),
+            database_id: id('a'),
+            title: "Budget".into(),
+            database_parent: NotionParent::Workspace,
+            in_trash: false,
+            properties: vec![
+                NotionPropertySchema {
+                    id: "formula".into(),
+                    name: "Cost".into(),
+                    kind: NotionPropertyKind::Formula,
+                },
+                NotionPropertySchema {
+                    id: "rollup".into(),
+                    name: "Total".into(),
+                    kind: NotionPropertyKind::Rollup,
+                },
+            ],
+        },
+        row_count: 0,
+        sample_titles: vec![],
+    };
+    let node = data_source_node(&summary);
+    assert_eq!(node.warnings.len(), 2);
+    assert!(
+        node.warnings
+            .iter()
+            .all(|warning| warning.contains("Budget") && !warning.contains(id('d').as_str()))
+    );
+}

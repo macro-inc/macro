@@ -100,6 +100,12 @@ pub struct TaskImportNoticeCount {
 )]
 #[strum(serialize_all = "snake_case")]
 pub enum WrittenKind {
+    /// A newer worker wrote an unrecognised prerequisite; stop this source safely.
+    Unsupported,
+    /// This dependency was offered as excluded in a saved draft, keyed by review UUID.
+    DependencyReviewed,
+    /// Explicit inclusion approved for this review UUID, required on resumed writes too.
+    DependencyIncluded,
     /// The folder a page with children became.
     Folder,
     /// The document a page became; minted before it is written.

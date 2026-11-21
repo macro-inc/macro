@@ -50,6 +50,9 @@ struct FakeNotion {
     bodies: HashMap<NotionId, String>,
     /// How many page bodies were read.
     fetched: Mutex<usize>,
+    queries: Mutex<usize>,
+    scan_stop: Option<std::sync::Arc<Cancel>>,
+    paginated: bool,
 }
 
 impl NotionApi for FakeNotion {
@@ -112,11 +115,21 @@ impl NotionApi for FakeNotion {
     async fn query_data_source(
         &self,
         _id: &NotionId,
-        _cursor: Option<String>,
+        cursor: Option<String>,
     ) -> std::result::Result<RowsPage, NotionError> {
+        *self.queries.lock().unwrap() += 1;
+        if let Some(cancel) = &self.scan_stop {
+            cancel.stop();
+        }
         Ok(RowsPage {
             rows: self.rows.clone(),
-            next: RowsNext::End,
+            next: if self.paginated && cursor.is_none() {
+                RowsNext::More {
+                    cursor: "next".into(),
+                }
+            } else {
+                RowsNext::End
+            },
         })
     }
 
@@ -436,6 +449,9 @@ async fn a_data_source_becomes_a_database_with_typed_columns_rows_bodies_and_pen
     let notion = FakeNotion {
         views: Vec::new(),
         fetched: Mutex::new(0),
+        queries: Mutex::new(0),
+        scan_stop: None,
+        paginated: false,
         source: NotionDataSource {
             id: id('e'),
             database_id: id('f'),
@@ -675,6 +691,9 @@ async fn a_shared_database_is_shared_with_its_row_bodies_folder() {
     let notion = FakeNotion {
         views: Vec::new(),
         fetched: Mutex::new(0),
+        queries: Mutex::new(0),
+        scan_stop: None,
+        paginated: false,
         source: NotionDataSource {
             id: id('e'),
             database_id: id('f'),
@@ -744,6 +763,9 @@ async fn a_cancelled_import_stops_before_writing_rows() {
     let notion = FakeNotion {
         views: Vec::new(),
         fetched: Mutex::new(0),
+        queries: Mutex::new(0),
+        scan_stop: None,
+        paginated: false,
         source: NotionDataSource {
             id: id('e'),
             database_id: id('f'),
@@ -780,11 +802,14 @@ async fn a_cancelled_import_stops_before_writing_rows() {
 
     assert_eq!(outcome.unwrap_err().to_string(), "Cancelled");
     let batches = writer.batches.lock().unwrap();
-    assert_eq!(batches.len(), 1, "only the schema was written");
     assert!(
-        !batches[0]
-            .iter()
-            .any(|op| matches!(op, DatabaseOp::Rows { .. }))
+        batches.is_empty(),
+        "an already cancelled reservation writes no schema or rows"
+    );
+    assert_eq!(
+        *writer.databases.lock().unwrap(),
+        0,
+        "no database is created after cancellation"
     );
 }
 
@@ -808,6 +833,9 @@ async fn a_database_whose_rows_have_no_content_gets_no_page_column() {
     let notion = FakeNotion {
         views: Vec::new(),
         fetched: Mutex::new(0),
+        queries: Mutex::new(0),
+        scan_stop: None,
+        paginated: false,
         source: NotionDataSource {
             id: id('e'),
             database_id: id('f'),
@@ -882,6 +910,9 @@ async fn date_ranges_are_planned_before_schema_is_written() {
     let notion = FakeNotion {
         views: Vec::new(),
         fetched: Mutex::new(0),
+        queries: Mutex::new(0),
+        scan_stop: None,
+        paginated: false,
         source: NotionDataSource {
             id: id('e'),
             database_id: id('f'),

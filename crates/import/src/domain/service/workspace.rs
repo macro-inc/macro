@@ -52,6 +52,16 @@ pub trait WorkspaceImporter: NotionWorkspaceImporter {
         review: Uuid,
         choices: NotionWriteChoices,
     ) -> impl Future<Output = Result<NotionImportReport>> + Send;
+    /// Reconcile dependency defaults; `saved` acknowledges only a successfully saved draft.
+    fn review_workspace_dependencies(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        review: Uuid,
+        excluded: &[Uuid],
+        saved: bool,
+    ) -> impl Future<Output = Result<crate::domain::models::NotionDependencyReview>> + Send;
+
     /// Cancel this source only; imported entities remain.
     fn cancel_workspace_import(
         &self,
@@ -156,6 +166,20 @@ where
             .start_notion_write(user, review, choices)
             .await
     }
+    async fn review_workspace_dependencies(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        review: Uuid,
+        excluded: &[Uuid],
+        saved: bool,
+    ) -> Result<crate::domain::models::NotionDependencyReview> {
+        workspace_source(source)?;
+        self.scoped(source)
+            .review_dependencies(user, review, excluded, saved)
+            .await
+    }
+
     async fn cancel_workspace_import(
         &self,
         user: &MacroUserIdStr<'static>,

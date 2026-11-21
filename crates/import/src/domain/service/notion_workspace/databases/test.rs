@@ -12,6 +12,11 @@ struct LinkedNotion {
     denied: bool,
     body: Option<&'static str>,
     body_calls: std::sync::atomic::AtomicUsize,
+    source_calls: std::sync::atomic::AtomicUsize,
+    container_calls: std::sync::atomic::AtomicUsize,
+    view_list_calls: std::sync::atomic::AtomicUsize,
+    view_calls: std::sync::atomic::AtomicUsize,
+    source_gate: Option<tokio::sync::Semaphore>,
     row_calls: std::sync::atomic::AtomicUsize,
     gate: Option<tokio::sync::Semaphore>,
     fail_body: bool,
@@ -43,6 +48,8 @@ impl NotionApi for LinkedNotion {
         })
     }
     async fn database_sources(&self, _: &NotionId) -> Result<Vec<NotionId>, NotionError> {
+        self.container_calls
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         Ok(vec![])
     }
     async fn list_views(
@@ -50,6 +57,8 @@ impl NotionApi for LinkedNotion {
         scope: &ViewScope,
         cursor: Option<String>,
     ) -> Result<Paged<NotionId>, NotionError> {
+        self.view_list_calls
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         assert_eq!(
             scope,
             &ViewScope::Database(NotionId::parse("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap())
@@ -67,6 +76,8 @@ impl NotionApi for LinkedNotion {
         })
     }
     async fn retrieve_view(&self, id: &NotionId) -> Result<NotionView, NotionError> {
+        self.view_calls
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         if self.unavailable_view.as_ref() == Some(id) {
             return Err(NotionError::NotFound);
         }
@@ -78,6 +89,12 @@ impl NotionApi for LinkedNotion {
         .unwrap())
     }
     async fn data_source(&self, id: &NotionId) -> Result<NotionDataSource, NotionError> {
+        self.source_calls
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let _permit = match &self.source_gate {
+            Some(gate) => Some(gate.acquire().await.unwrap()),
+            None => None,
+        };
         if self.denied {
             return Err(NotionError::NotFound);
         }

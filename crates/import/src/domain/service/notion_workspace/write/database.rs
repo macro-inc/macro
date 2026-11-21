@@ -112,7 +112,7 @@ pub(in super::super) async fn write_database<
     cancel: &Cancel,
     personal_folder: Option<Uuid>,
 ) -> anyhow::Result<WrittenDatabase> {
-    let prepared = prepare_database(api, writer, user, item, Some(folder), progress).await;
+    let prepared = prepare_database(api, writer, user, item, Some(folder), progress, cancel).await;
     progress.flush_warnings().await?;
     let prepared = prepared?;
     let result = write_prepared_database(
@@ -480,6 +480,7 @@ pub(in super::super) async fn recorded_database<Api: NotionApi, Store: WrittenOb
     item: &WriteItem,
     progress: &Progress<'_, Store>,
 ) -> anyhow::Result<Option<WrittenDatabase>> {
+    progress.ensure_supported()?;
     let (Some(database_id), Some(table)) = (
         progress.get(WrittenKind::Database),
         progress.get(WrittenKind::Table),

@@ -466,3 +466,17 @@ it('counts tracker issues as tasks independently of their projects', () => {
     { label: 'Tasks', value: '1' },
   ]);
 });
+
+it('including a parent does not opt in an external dependency below it', () => {
+  const dependency: ImportPlanEntry = {
+    ...entries[1],
+    id: 'linked',
+    parentId: 'wiki',
+    decision: 'copy',
+    linkedFrom: ['Wiki'],
+  };
+  const nodes = buildPlanTree([entries[0], dependency]);
+  const draft = { ...EMPTY_IMPORT_DRAFT, excluded: ['wiki', 'linked'] };
+  expect(setExcluded(draft, nodes, 'wiki', false).excluded).toEqual(['linked']);
+  expect(setExcluded(draft, nodes, 'linked', false).excluded).toEqual(['wiki']);
+});

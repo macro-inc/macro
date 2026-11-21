@@ -1016,6 +1016,13 @@ pub trait NotionPlanRepo: Send + Sync + 'static {
         rows: &[PlanRow],
     ) -> impl Future<Output = Result<u64>> + Send;
 
+    /// External dependency ids in this owner's exact staged Notion review.
+    fn dependency_ids(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        review: Uuid,
+    ) -> impl Future<Output = Result<Vec<Uuid>>> + Send;
+
     /// Teammates' rows for the Notion objects `foreign_ids` that hold the
     /// user's team's claim (`importing` or `imported`, shared with the team).
     fn team_copies(

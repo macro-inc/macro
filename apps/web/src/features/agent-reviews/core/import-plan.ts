@@ -267,7 +267,14 @@ export function setExcluded(
   const written = new Set(
     nodes.filter((node) => isWritten(node.decision)).map((node) => node.id)
   );
-  const affected = subtree(nodes, id).filter((entry) => written.has(entry));
+  const dependencies = new Set(
+    nodes.filter((node) => node.linkedFrom?.length).map((node) => node.id)
+  );
+  const affected = subtree(nodes, id).filter(
+    (entry) =>
+      written.has(entry) &&
+      (excluded || entry === id || !dependencies.has(entry))
+  );
   const next = draft.excluded.filter((entry) => !affected.includes(entry));
   return {
     ...draft,

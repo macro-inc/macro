@@ -506,3 +506,9 @@ attachment answers typed 503 before any command. macrod ingress keeps its
 existing authorization.
 Authentication checks the owning hosted host heartbeat per request, so its
 attachment observation can briefly differ from this service's operator presence.
+
+Import review actions reconcile external dependency defaults through the import
+service before saving. Record offered exclusions only after the review save
+succeeds, and pass the current saved review's explicit dependency whitelist when
+starting a write. The import domain owns consent, retry and source-stop policy;
+the host never queries import tables directly.

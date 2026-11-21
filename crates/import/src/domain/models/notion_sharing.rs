@@ -46,6 +46,8 @@ pub enum NotionSharing {
 /// What the owner changed in a plan before approving it.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct NotionWriteChoices {
+    /// External dependencies explicitly included by this saved review; never inferred by SDK defaults.
+    pub included_dependencies: Vec<Uuid>,
     /// Plan rows left out of the import.
     pub excluded: Vec<Uuid>,
     /// Plan rows to share with the team although the plan keeps them.
@@ -65,4 +67,14 @@ pub struct NotionImporter {
     pub by: String,
     /// How many of the plan's objects they imported.
     pub count: u32,
+}
+
+/// Internal reconciliation of a saved review with its external dependencies.
+pub struct NotionDependencyReview {
+    /// Exclusions including dependencies not yet offered in this review.
+    pub excluded: Vec<Uuid>,
+    /// Explicitly included dependencies with a matching saved-review receipt.
+    pub included: Vec<Uuid>,
+    /// The saved exclusions still need their review receipt recorded.
+    pub needs_receipt: bool,
 }

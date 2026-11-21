@@ -350,12 +350,14 @@ fn data_source_node(summary: &DataSourceSummary) -> Node {
             .iter()
             .filter_map(|property| match property.kind {
                 NotionPropertyKind::Formula => Some(format!(
-                    "Source {}: {} (Notion formula snapshot)",
-                    source.id, property.name
+                    "Database {}: {} (Notion formula snapshot)",
+                    titled(&source.title, UNTITLED_DATABASE),
+                    property.name
                 )),
                 NotionPropertyKind::Rollup => Some(format!(
-                    "Source {}: {} (Notion rollup snapshot)",
-                    source.id, property.name
+                    "Database {}: {} (Notion rollup snapshot)",
+                    titled(&source.title, UNTITLED_DATABASE),
+                    property.name
                 )),
                 _ => None,
             })

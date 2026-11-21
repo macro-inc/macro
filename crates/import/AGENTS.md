@@ -92,7 +92,7 @@ from this import's other databases into it are not linked.
 - `src/domain/service/tracker_workspace.rs` (+ `plan`, `values`): Linear/Jira
   group decisions, frozen source snapshots, task/project writes and relationships.
 - `src/domain/service/notion_workspace.rs` (+ `plan`, `triage`, `sharing`,
-  `object`, `databases`, `reserve`, `write`, `values`, `report`): the Notion workspace import —
+  `object`, `databases`, `reserve`, `start`, `dependency_review`, `write`, `values`, `report`): the Notion workspace import —
   planning, the decision model, who sees what, writing one object (claim,
   link or write), cancel and the report. Database columns and cells come
   from `import_notion::domain::macro_cells`.
@@ -315,16 +315,23 @@ paths reject workspace-plan rows so approval cannot be bypassed.
 - Scan standalone page bodies before triage with at most four concurrent reads.
   Reuse inventory's search row counts/titles; do not query source rows during
   dependency discovery. Check cancellation and publish scan counters inside the
-  loops, and discard each markdown body after extracting its references. Object
-  read failures become named warnings instead of aborting the plan.
+  loops, and discard each markdown body after extracting its references. Permanent
+  read failures become named warnings; transient errors abort retryably
+  rather than freezing unavailable dependencies into the plan.
   `plan.dependencyOf` names the pages referencing an external source; readable
-  dependencies start included, and
-  unavailable dependencies are visible by-hand rows without sharing controls.
+  external dependencies start unticked as Link. A saved draft first offers
+  each dependency as excluded; removing its id explicitly opts in. Review-scoped
+  `DependencyReviewed` / `DependencyIncluded` markers fail closed for missing,
+  legacy or different-review consent, including adopted writes. These markers
+  are prerequisites, not resumable output. In-scope inline sources retain their
+  default Copy suggestion. Unavailable dependencies are visible by-hand rows without sharing controls.
   `plan.inlineOn` includes referenced sources already in selected roots; suggest
-  Copy for every inline source. Preserve approved Tasks or exclusion choices at
+  Copy for in-scope inline sources. Preserve approved Tasks or exclusion choices at
   write time and report their `notImported` occurrence fallbacks.
-- Finish ancestor folder sharing, then reserve every approved database and saved
-  view before converting any body. Use the source UUID as identity within the
+- Finish ancestor folder sharing, then reserve approved databases and saved
+  views with at most four sources in flight before converting any body. Drain
+  admitted reservations before returning a transient error; retry without
+  converting temporary failures into permanent fallback links. Use the source UUID as identity within the
   user/team ledger; globally unique Notion source UUIDs never dedupe by title.
 - File owner-only databases with their page when safe. Keep each database's
   reviewed sharing separate. Before filing a Personal source, use the shared
@@ -337,8 +344,12 @@ paths reject workspace-plan rows so approval cannot be bypassed.
   reported. Excluded sources retain `notImported` links. Keep permanently unreadable
   tab slots in list order; a missing default never silently selects the next tab.
   Retain other readable tabs and propagate transient detail failures.
-- Stream rows once to collect date-range property ids, union timeline usage,
-  and retain schemas/ids/views only until writing. Re-read rows under the normal
+- Stream rows once, checking cancellation per page, to collect date-range
+  property ids and union timeline usage. Skip that scan when SchemaPlan exists;
+  resumed writes use its recorded shapes. Cache source/container/view metadata
+  per attempt, seed inventory schemas, and invalidate source schemas before
+  write-time drift detection. Do not cache transient failures. Then
+  retain schemas/ids/views only until writing. Re-read rows under the normal
   write pacer and concurrency bound; report schema or date-shape drift and write
   the values fitting the reserved schema. Record API row counts per pass. Persist
   `SchemaPlan` and `DateRangeProperty` markers atomically before applying schema
@@ -347,7 +358,9 @@ paths reject workspace-plan rows so approval cannot be bypassed.
   mismatch fail that source and report unresolved card fallbacks. Names and option
   metadata drift warn instead. `ColumnOption` facts preserve the reserved option
   ids and labels; match row values by option id when present, otherwise by name.
-  Omit unmatched values with counted losses naming the matching method. Keep
+  Omit unmatched values with counted losses naming the column and matching
+  method, warning that wholly unmatched options leave empty cells and may be
+  hidden by views filtering that column. Do not rewrite saved filters on resume. Keep
   other sources and pages running; never rebuild columns or store full snapshots.
   An older interrupted database without planning facts stops with a typed warning
   asking the user to re-import it; do not guess live schema through a new port.
@@ -371,3 +384,17 @@ paths reject workspace-plan rows so approval cannot be bypassed.
   Before inserting Personal rows, recheck the reserved database's actual folder
   and ancestors for explicit grants. Stop that source with a typed sharing-change
   warning if a grant appeared after reservation; do not relocate it implicitly.
+
+The inline writer adds `view`, `view_name`, `loss`, `schema_plan`,
+`schema_metadata`, `column_option`, `date_range_property`, `dependency_reviewed`
+and `dependency_included` written kinds. Unknown future kinds stay readable as
+`Unsupported` prerequisites and stop only the affected source with a typed
+report warning. Deploy compatible readers before writers; drain affected import
+runs or keep compatible readers before rolling back to an older binary. Renewal
+clears generation-specific fidelity warnings as well as markers. Bound display
+labels in durable loss facts to 512 UTF-8 bytes before serializing marker keys.
+
+Keep `NotionPlanRepo::dependency_ids`' literal Notion/data_source/staged/non-null
+review predicates aligned with `import_entity_notion_review_sources_idx`.
+Reconcile only the exact owned review; never scan an owner's import history for
+review defaults on each edit.

@@ -8,7 +8,7 @@ async fn row_body_losses_are_flushed_at_most_once_per_source_phase() {
     let notion = FakeNotion { views: vec![serde_json::from_value(serde_json::json!({
         "id": id('b'), "name": "All work", "type": "table", "parent":{"database_id":id('f')}, "data_source_id":id('e')
     })).unwrap()], source: NotionDataSource { id:id('e'), database_id:id('f'), title:"Work".into(), database_parent:NotionParent::Workspace, in_trash:false, properties:vec![] },
-        rows, bodies, fetched:Mutex::new(0) };
+        rows, bodies, fetched: Mutex::new(0), queries: Mutex::new(0), scan_stop: None, paginated: false };
     let store = FakeStore::default();
     let user = user();
     let item = source_item("Work");
@@ -50,7 +50,7 @@ async fn an_unavailable_saved_view_keeps_an_editable_default_database_card() {
     let notion = FakeNotion { views: vec![serde_json::from_value(serde_json::json!({
         "id": id('b'), "name": "All work", "type": "table", "parent":{"database_id":id('f')}, "data_source_id":id('e')
     })).unwrap()], source: NotionDataSource { id:id('e'), database_id:id('f'), title:"Work".into(), database_parent:NotionParent::Workspace, in_trash:false, properties:vec![] },
-        rows:vec![], bodies:HashMap::from([(row.clone(), "<database url=\"https://www.notion.so/ffffffffffffffffffffffffffffffff?v=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\">Work</database>".into())]), fetched:Mutex::new(0) };
+        rows:vec![], bodies:HashMap::from([(row.clone(), "<database url=\"https://www.notion.so/ffffffffffffffffffffffffffffffff?v=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\">Work</database>".into())]), fetched: Mutex::new(0), queries: Mutex::new(0), scan_stop: None, paginated: false };
     let destinations = HashMap::from([(
         id('e'),
         crate::domain::service::notion_workspace::databases::DatabaseDestination::Ready(
@@ -98,6 +98,9 @@ async fn saved_view_names_are_readable_and_unique_without_notion_identifiers() {
         rows: vec![],
         bodies: HashMap::new(),
         fetched: Mutex::new(0),
+        queries: Mutex::new(0),
+        scan_stop: None,
+        paginated: false,
     };
     let writer = FakeWriter::default();
     let user = user();
@@ -110,6 +113,7 @@ async fn saved_view_names_are_readable_and_unique_without_notion_identifiers() {
         &item,
         Some(Uuid::from_u128(42)),
         &Progress::new(&store, &user, item.import_id, &[]),
+        &Cancel::default(),
     )
     .await
     .unwrap();
@@ -130,7 +134,7 @@ async fn resumed_body_markers_restore_counted_losses_without_rereading_bodies() 
     let notion = FakeNotion { views: vec![serde_json::from_value(serde_json::json!({
         "id": id('b'), "name": "All work", "type": "table", "parent":{"database_id":id('f')}, "data_source_id":id('e')
     })).unwrap()], source: NotionDataSource { id:id('e'), database_id:id('f'), title:"Work".into(), database_parent:NotionParent::Workspace, in_trash:false, properties:vec![] },
-        rows, bodies, fetched:Mutex::new(0) };
+        rows, bodies, fetched: Mutex::new(0), queries: Mutex::new(0), scan_stop: None, paginated: false };
     let store = FakeStore::default();
     let user = user();
     let item = source_item("Work");
@@ -190,6 +194,9 @@ async fn resumed_selects_keep_reserved_option_ids_and_report_omissions() {
     let mut notion = FakeNotion {
         views: vec![],
         fetched: Mutex::new(0),
+        queries: Mutex::new(0),
+        scan_stop: None,
+        paginated: false,
         bodies: HashMap::new(),
         rows: vec![],
         source: NotionDataSource {
@@ -222,6 +229,7 @@ async fn resumed_selects_keep_reserved_option_ids_and_report_omissions() {
         &item,
         Some(Uuid::from_u128(42)),
         &Progress::new(&store, &user, item.import_id, &[]),
+        &Cancel::default(),
     )
     .await
     .unwrap();
@@ -333,6 +341,9 @@ async fn a_legacy_schema_without_planning_facts_reports_how_to_reimport() {
     let notion = FakeNotion {
         views: vec![],
         fetched: Mutex::new(0),
+        queries: Mutex::new(0),
+        scan_stop: None,
+        paginated: false,
         rows: vec![],
         bodies: HashMap::new(),
         source: NotionDataSource {

@@ -1756,7 +1756,11 @@ queries and cancellation to the saved draft source. Issue tracker handoffs
 call the reviewed workspace tools, and show separate task/project totals.
 Import review metadata decodes `plan.dependencyOf` into **Linked from** and
 `plan.inlineOn` into **Shown inline on** labels on existing rows. Readable sources
-shown inline default to Copy, with ordinary inclusion and sharing controls;
+inside the selection default to Copy. External dependencies start unticked as
+Link; ticking removes their id from the saved draft's excluded list. Including
+a parent must not opt in external children. Refresh the saved review when new
+dependencies arrive, keeping them excluded until its defaults are saved. Use
+ordinary inclusion and sharing controls;
 unavailable by-hand rows stay disabled and show their reason. Desktop and touch
 use the same row layout.
 Desktop shows every import run in the corner's import tray

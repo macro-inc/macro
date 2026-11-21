@@ -17,6 +17,10 @@ pub(in super::super::super) struct PreparedDatabase {
 }
 
 /// Create the owner-only database, then schema and deterministic saved views.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "reservation needs its source, durable facts, destination and cancellation"
+)]
 #[tracing::instrument(name = "notion.prepare_database", skip_all, fields(source_id = %item.notion_id, database_id = tracing::field::Empty, views = tracing::field::Empty, rows_read_scan = tracing::field::Empty), err)]
 pub(in super::super::super) async fn prepare_database<
     Api: NotionApi,
@@ -29,7 +33,10 @@ pub(in super::super::super) async fn prepare_database<
     item: &WriteItem,
     folder: Option<Uuid>,
     progress: &Progress<'_, Store>,
+    cancel: &Cancel,
 ) -> anyhow::Result<PreparedDatabase> {
+    cancel.ensure_running()?;
+    progress.ensure_supported()?;
     let source = api.data_source(&item.notion_id).await?;
     let created = database_once(writer, user, item, folder, progress).await?;
     let schema = super::schema::fingerprint(&source, created.database_id)?;
@@ -77,8 +84,10 @@ pub(in super::super::super) async fn prepare_database<
     let mut ranges = HashSet::new();
     let mut rows_read = 0usize;
     let mut cursor = None;
-    loop {
+    while progress.get(WrittenKind::SchemaPlan).is_none() {
+        cancel.ensure_running()?;
         let page = api.query_data_source(&item.notion_id, cursor).await?;
+        cancel.ensure_running()?;
         rows_read += page.rows.len();
         ranges.extend(date_range_properties(&source, &page.rows));
         match page.next {
@@ -146,9 +155,6 @@ pub(in super::super::super) async fn prepare_database<
             .all(WrittenKind::DateRangeProperty)
             .into_keys()
             .collect();
-        if planned != ranges {
-            progress.warn(&[format!("Database {}: date-range usage changed after schema planning; preserving the recorded column shapes", item.title)]).await?;
-        }
         ranges = planned;
     } else {
         // Persist both empty and populated sets atomically, before the schema

@@ -9,7 +9,7 @@ use serde_json::Value;
 use crate::domain::model::NotionId;
 
 /// The container or source whose view references are listed.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ViewScope {
     /// Views on this particular container.
     Database(NotionId),

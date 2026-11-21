@@ -281,6 +281,15 @@ impl<'a, Store: WrittenObjects> Progress<'a, Store> {
         }
     }
 
+    /// Refuse unknown prerequisites before changing an interrupted source.
+    pub fn ensure_supported(&self) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            self.all(WrittenKind::Unsupported).is_empty(),
+            crate::domain::models::SourceStopReason::UnsupportedMarker
+        );
+        Ok(())
+    }
+
     /// The row's own object of `kind`, when an earlier attempt made it.
     pub fn get(&self, kind: WrittenKind) -> Option<Uuid> {
         self.get_for(kind, "")
@@ -380,7 +389,8 @@ impl<'a, Store: WrittenObjects> Progress<'a, Store> {
     }
 
     /// Keep a typed loss until the same batch records its completed object.
-    pub fn loss(&self, fact: crate::domain::models::SourceLossFact) -> anyhow::Result<()> {
+    pub fn loss(&self, mut fact: crate::domain::models::SourceLossFact) -> anyhow::Result<()> {
+        fact.bound_display_text();
         self.losses
             .lock()
             .map_err(|_| anyhow::anyhow!("loss buffer unavailable"))?

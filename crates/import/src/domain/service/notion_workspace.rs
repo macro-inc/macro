@@ -39,11 +39,13 @@ use object::{Outcome, Target};
 use run::{IMPORT_STOPPED, JobControl, Stop, WriteSet};
 
 mod databases;
+mod dependency_review;
 mod object;
 mod personal;
 pub(super) mod plan;
 mod report;
 mod reserve;
+mod start;
 use super::workspace::Importer;
 use super::workspace::run;
 use super::workspace::scan;
@@ -262,102 +264,7 @@ where
         review_id: Uuid,
         choices: NotionWriteChoices,
     ) -> Result<NotionImportReport> {
-        if self.workspace_source != ImportSource::Notion {
-            return self.start_tracker_write(user, review_id, choices).await;
-        }
-        let staged = self
-            .repo
-            .list(
-                user,
-                Some(self.workspace_source),
-                Some(ImportStatus::Staged),
-            )
-            .await?;
-        let mut planned: Vec<(ImportEntity, write::WriteItem)> = staged
-            .into_iter()
-            .filter(|row| row.review_id == Some(review_id))
-            .filter_map(|row| write::WriteItem::from_entity(&row).map(|item| (row, item)))
-            .collect();
-        if planned.is_empty() {
-            return Err(ImportError::NotReady(
-                "This plan has nothing left to import.",
-            ));
-        }
-        // The owner's sharing changes are recorded on the rows first, so a
-        // resumed write shares exactly what they approved.
-        let items: Vec<write::WriteItem> = planned.iter().map(|(_, item)| item.clone()).collect();
-        let (to_share, to_keep) =
-            sharing::sharing_changes(&items, &choices.shared, &choices.personal);
-        self.repo
-            .set_plan_sharing(user, &to_share, &to_keep)
-            .await?;
-        for (_, item) in &mut planned {
-            if to_share.contains(&item.import_id) {
-                item.shared = true;
-            } else if to_keep.contains(&item.import_id) {
-                item.shared = false;
-            }
-        }
-        let team_id = self.repo.user_team_id(user).await?;
-        if !self
-            .repo
-            .transition_run(
-                user,
-                self.workspace_source,
-                &SETTLED,
-                RunStatus::Importing,
-                None,
-            )
-            .await?
-        {
-            return Err(ImportError::NotReady(
-                "A workspace import is already being planned or written.",
-            ));
-        }
-        self.hold_new_run(user, RunStatus::Importing, &NotionJob::Write { review_id })
-            .await?;
-
-        let mut to_write = Vec::new();
-        for (row, item) in planned {
-            let left_out = choices.excluded.contains(&row.id);
-            match (left_out, item.decision) {
-                (true, _) | (false, NotionDecision::Skip) => {
-                    self.repo.discard(user, row.id).await?;
-                }
-                // Left staged for the agent, which handles it by hand.
-                (false, NotionDecision::Hand) => {}
-                (false, NotionDecision::Copy | NotionDecision::Tasks) => to_write.push(item),
-            }
-        }
-        let ids: Vec<Uuid> = to_write.iter().map(|item| item.import_id).collect();
-        // Shared objects are claimed for the team now, before anything is
-        // written, so a teammate writing the same object links to this copy.
-        let shared: Vec<Uuid> = to_write
-            .iter()
-            .filter(|item| item.shared && item.writes())
-            .map(|item| item.import_id)
-            .collect();
-        let claimed: std::collections::HashSet<Uuid> = self
-            .repo
-            .claim_importing(user, &ids, &shared, team_id)
-            .await?
-            .into_iter()
-            .map(|row| row.id)
-            .collect();
-        to_write.retain(|item| claimed.contains(&item.import_id));
-        self.notify(user).await;
-
-        let service = self.clone();
-        let owner = user.clone();
-        let set = WriteSet {
-            review_id,
-            all: to_write.clone(),
-            pending: to_write,
-        };
-        self.jobs
-            .tracker
-            .spawn(async move { service.write_plan(&owner, set).await }.in_current_span());
-        self.notion_import_report(user).await
+        self.start_write(user, review_id, choices).await
     }
 
     async fn cancel_notion_import(&self, user: &MacroUserIdStr<'static>) -> Result<bool> {
@@ -473,6 +380,7 @@ where
             .for_user(user)
             .await?
             .ok_or(ImportError::NotionNotConnected)?;
+        let api = databases::CachedNotion::new(api);
         let (counts, scanned) = tokio::sync::watch::channel(ScanCounts::default());
         let walk = async {
             let publish = |progress: import_notion::domain::model::InventoryProgress| {
@@ -482,6 +390,7 @@ where
                 });
             };
             let found = inventory(&api, &scope, &publish).await?;
+            api.seed_sources(&found.data_sources).await;
             if control.reason().is_some() {
                 drop(counts);
                 return Ok(None);
@@ -675,10 +584,38 @@ where
             .for_user(user)
             .await?
             .ok_or(ImportError::NotionNotConnected)?;
+        let api = databases::CachedNotion::new(api);
         let team_id = self.repo.user_team_id(user).await?;
         let people = self.people(&api, user).await;
         let ids: Vec<Uuid> = set.all.iter().map(|item| item.import_id).collect();
         let written = self.repo.written(user, &ids).await?;
+        let scope = set.review_id.to_string();
+        let mut set = set.clone();
+        let mut excluded_dependencies = std::collections::HashSet::new();
+        for item in &mut set.all {
+            if item.writes()
+                && !item.dependency_of.is_empty()
+                && !written.iter().any(|fact| {
+                    fact.import_id == item.import_id
+                        && fact.kind == crate::domain::models::WrittenKind::DependencyIncluded
+                        && fact.object == scope
+                        && fact.macro_id == set.review_id
+                })
+            {
+                excluded_dependencies.insert(item.import_id);
+                item.decision = NotionDecision::Skip;
+                let reason = crate::domain::models::SourceStopReason::DependencyNotApproved;
+                let progress = write::Progress::new(&self.repo, user, item.import_id, &written);
+                progress.source_stopped(&item.title, reason).await?;
+                progress.flush_warnings().await?;
+                self.repo
+                    .mark_import_failed(user, item.import_id, &reason.to_string())
+                    .await?;
+            }
+        }
+        set.pending
+            .retain(|item| !excluded_dependencies.contains(&item.import_id));
+        let set = &set;
         let (links, unavailable) = self.links(user, &set.all, &people).await?;
         let links = tokio::sync::RwLock::new(links);
         let root = self.root_folder(user).await?;
@@ -687,12 +624,19 @@ where
         // when everything written inside it is; it is shared again on every
         // attempt, which is harmless, so a stop between creating and sharing
         // it heals on resume.
-        let layout = write::folder_layout(&set.all);
-        let shared_folders = sharing::shared_folders(&set.all, &layout);
-        let by_id: HashMap<Uuid, &write::WriteItem> =
-            set.all.iter().map(|item| (item.import_id, item)).collect();
-        let parents: HashMap<Uuid, Option<Uuid>> = set
+        // Link-only sources stay in the occurrence map, but must not create
+        // folders or change the placement/sharing of the selected pages.
+        let filing: Vec<_> = set
             .all
+            .iter()
+            .filter(|item| item.decision != NotionDecision::Skip)
+            .cloned()
+            .collect();
+        let layout = write::folder_layout(&filing);
+        let shared_folders = sharing::shared_folders(&filing, &layout);
+        let by_id: HashMap<Uuid, &write::WriteItem> =
+            filing.iter().map(|item| (item.import_id, item)).collect();
+        let parents: HashMap<Uuid, Option<Uuid>> = filing
             .iter()
             .map(|item| (item.import_id, item.parent))
             .collect();
@@ -741,6 +685,7 @@ where
         let reservations = self
             .reserve_databases(&api, user, set, &place, team_id, &written, cancel)
             .await?;
+        api.refresh_sources().await;
         // Reservation records must be visible to every object writer in this attempt.
         let written = self.repo.written(user, &ids).await?;
         let target = Target {
@@ -776,7 +721,7 @@ where
 
         // Objects a teammate was writing: link to what they finished, take
         // over what they gave up, and wait on the rest.
-        let mut failed = unavailable;
+        let mut failed = unavailable + excluded_dependencies.len();
         let mut waiting = Vec::new();
         for (item, outcome) in outcomes {
             match outcome {
@@ -804,6 +749,7 @@ where
                 item.kind == ImportKind::DataSource
                     && item.decision == NotionDecision::Copy
                     && !databases.contains_key(&item.notion_id)
+                    && !reservations.failures.contains_key(&item.notion_id)
             })
             .collect();
         for item in finished {
@@ -850,7 +796,11 @@ where
 
     /// Notion users matched to the user's team by email. Empty when Notion
     /// will not share emails; people columns then stay empty.
-    async fn people(&self, api: &N::Api, user: &MacroUserIdStr<'static>) -> PeopleMap {
+    async fn people(
+        &self,
+        api: &databases::CachedNotion<N::Api>,
+        user: &MacroUserIdStr<'static>,
+    ) -> PeopleMap {
         let notion_users = match all_users(api).await {
             Ok(users) => users,
             Err(error) => {

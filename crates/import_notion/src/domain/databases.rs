@@ -7,11 +7,14 @@
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 
+#[cfg(test)]
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
 use super::inventory::full_markdown;
-use super::model::{Inventory, NotionDataSource, NotionId};
+#[cfg(test)]
+use super::model::Inventory;
+use super::model::{NotionDataSource, NotionId};
 use super::ports::{NotionApi, NotionError};
 
 mod markdown;
@@ -164,6 +167,7 @@ pub struct PageDatabases {
 /// A source outside the selected inventory, requiring an explicit review choice.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg(test)]
 pub struct DatabaseDependency {
     /// Source metadata only; this discovery does not query or copy its rows.
     pub source: NotionDataSource,
@@ -174,6 +178,7 @@ pub struct DatabaseDependency {
 /// Body placements and dependencies, without expanding the reviewed inventory.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg(test)]
 pub struct DatabaseDiscovery {
     /// Bodies of the inventory's standalone pages.
     pub pages: Vec<PageDatabases>,
@@ -199,6 +204,7 @@ pub async fn read_page_databases<Api: NotionApi>(
 /// This walks the inventory's standalone pages. Call [`read_page_databases`] for
 /// row bodies as needed. It never follows a dependency's body or expands scope
 /// transitively, queries dependency rows, copies data, or creates grants.
+#[cfg(test)]
 #[tracing::instrument(skip_all, err, fields(pages = inventory.pages.len(), dependencies))]
 pub async fn discover_database_dependencies<Api: NotionApi>(
     api: &Api,

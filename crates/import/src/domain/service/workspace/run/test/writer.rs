@@ -12,6 +12,7 @@ pub(super) struct Writer {
     pub(super) folder_delay: Option<std::time::Duration>,
     pub(super) folder_visibilities: Mutex<Vec<(String, crate::domain::ports::ImportVisibility)>>,
     pub(super) databases: Mutex<Vec<(Uuid, Option<Uuid>)>>,
+    pub(super) reservation_gate: Option<(Arc<tokio::sync::Semaphore>, Arc<tokio::sync::Semaphore>)>,
     pub(super) saved_views: Mutex<
         Vec<(
             Uuid,
@@ -24,6 +25,7 @@ pub(super) struct Writer {
     pub(super) deny_database_access: bool,
     pub(super) grant_on_database: bool,
     pub(super) database_insert_rows: std::sync::atomic::AtomicUsize,
+    pub(super) database_error_once: std::sync::atomic::AtomicBool,
 
     pub(super) tasks: Mutex<Vec<Uuid>>,
     pub(super) documents: Mutex<Vec<(Uuid, String, NotionLinks)>>,
@@ -358,6 +360,16 @@ impl WorkspaceWriter for Writer {
         _: &str,
         folder: Option<Uuid>,
     ) -> anyhow::Result<NewDatabase> {
+        if self
+            .database_error_once
+            .swap(false, std::sync::atomic::Ordering::SeqCst)
+        {
+            anyhow::bail!("database service temporarily unavailable");
+        }
+        if let Some((started, gate)) = &self.reservation_gate {
+            started.add_permits(1);
+            gate.acquire().await?.forget();
+        }
         {
             let mut databases = self.databases.lock().unwrap();
             if !databases.iter().any(|(known, _)| *known == id) {

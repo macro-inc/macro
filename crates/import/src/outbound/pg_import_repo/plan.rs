@@ -26,6 +26,31 @@ fn is_unique_violation(error: &sqlx::Error) -> bool {
 }
 
 impl NotionPlanRepo for PgImportRepo {
+    #[tracing::instrument(skip_all, fields(review_id = %review), err)]
+    async fn dependency_ids(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        review: Uuid,
+    ) -> Result<Vec<Uuid>> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query!("SET LOCAL statement_timeout = '15s'")
+            .execute(&mut *tx)
+            .await?;
+        let ids = sqlx::query_scalar!(
+            r#"SELECT id FROM import_entity
+               WHERE review_id IS NOT NULL AND review_id = $2 AND user_id = $1 AND source = 'notion'
+                 AND status = 'staged' AND kind = 'data_source'
+                 AND metadata #> '{plan,dependencyOf}' <> '[]'::jsonb
+               ORDER BY id"#,
+            user.as_ref(),
+            review,
+        )
+        .fetch_all(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        Ok(ids)
+    }
+
     async fn require_replan(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -97,7 +122,7 @@ impl NotionPlanRepo for PgImportRepo {
                       (entity.status IN ('importing', 'imported') AND entity.parent_id IS NOT NULL)
                       OR EXISTS (
                           SELECT 1 FROM import_entity_written AS written
-                          WHERE written.import_id = entity.id AND written.kind <> 'task_notice'
+                          WHERE written.import_id = entity.id AND written.kind NOT IN ('task_notice', 'dependency_reviewed', 'dependency_included')
                           OFFSET 0
                       )
                   )

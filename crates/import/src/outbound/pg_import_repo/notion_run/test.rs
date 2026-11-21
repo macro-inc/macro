@@ -780,13 +780,13 @@ async fn malformed_task_notice_payloads_fail_loudly(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_recreated_generation_drops_old_task_notices_and_folder_reports(pool: PgPool) {
+async fn audit_a_recreated_generation_drops_old_task_notices_and_folder_reports(pool: PgPool) {
     use crate::domain::{models::Initiator, ports::TaskImportNoticeReason};
     let repo = PgImportRepo::new(pool);
     let owner = user("renew-notices");
     let target = Uuid::now_v7().to_string();
     let folder = Uuid::now_v7();
-    let metadata = serde_json::json!({"title":"Tasks","plan":{"decision":"tasks","shared":false,"shareable":true},"personalFolderId":folder,"separateFolder":{"visibility":"personal","reason":"shared_branch","folderId":folder}});
+    let metadata = serde_json::json!({"title":"Tasks","warnings":[{"reason":"not_reviewed","title":"Old dependency","count":7}],"plan":{"decision":"tasks","shared":false,"shareable":true},"personalFolderId":folder,"separateFolder":{"visibility":"personal","reason":"shared_branch","folderId":folder}});
     let row = repo
         .upsert_imported(
             &owner,
@@ -834,6 +834,10 @@ async fn a_recreated_generation_drops_old_task_notices_and_folder_reports(pool: 
     );
     assert!(renewed.metadata.get("personalFolderId").is_none());
     assert!(renewed.metadata.get("separateFolder").is_none());
+    assert!(
+        renewed.metadata.get("warnings").is_none(),
+        "a new generation must not inherit old fidelity counts"
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -924,4 +928,16 @@ async fn fidelity_warnings_survive_retries_and_cannot_change_another_owners_row(
     assert_eq!(warnings.len(), 2);
     assert!(warnings.contains(&serde_json::json!("View: filter approximated")));
     assert!(warnings.contains(&serde_json::json!("Formula snapshot")));
+}
+
+#[test]
+fn audit_unknown_written_marker_preserves_a_typed_source_stop() {
+    let object = WrittenObject::try_from(super::WrittenDbRow {
+        import_id: Uuid::from_u128(1),
+        kind: "future_prerequisite".into(),
+        object: String::new(),
+        macro_id: Uuid::from_u128(2),
+    })
+    .expect("an unknown marker must remain readable so the source can stop safely");
+    assert_eq!(object.kind, WrittenKind::Unsupported);
 }

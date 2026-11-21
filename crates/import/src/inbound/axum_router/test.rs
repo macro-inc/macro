@@ -309,6 +309,17 @@ async fn cancelling_a_notion_import_cancels_it_for_the_caller_and_reports_where_
 }
 
 impl WorkspaceImporter for FakeImportService {
+    async fn review_workspace_dependencies(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: ImportSource,
+        _: Uuid,
+        _: &[Uuid],
+        _: bool,
+    ) -> Result<crate::domain::models::NotionDependencyReview> {
+        unreachable!("router does not save review drafts")
+    }
+
     async fn prepare_workspace_import(
         &self,
         _: &MacroUserIdStr<'static>,

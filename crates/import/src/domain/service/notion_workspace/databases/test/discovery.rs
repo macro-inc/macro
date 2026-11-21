@@ -73,7 +73,7 @@ async fn planning_reads_four_page_bodies_at_once_with_a_fixed_bound() {
 }
 
 #[tokio::test]
-async fn planning_keeps_the_inventory_and_warns_when_one_page_read_exhausts_retries() {
+async fn audit_planning_transient_page_reads_remain_retryable() {
     let api = LinkedNotion {
         fail_body: true,
         ..Default::default()
@@ -98,13 +98,13 @@ async fn planning_keeps_the_inventory_and_warns_when_one_page_read_exhausts_retr
         &|_| {},
     )
     .await;
-    let found = result.expect("a page read failure must not discard the whole import plan");
-    assert_eq!(found.inventory.pages.len(), 1);
-    assert!(
-        found.warnings[&id]
-            .iter()
-            .any(|warning| warning.contains("Roadmap"))
-    );
+    let error = result
+        .err()
+        .expect("a transient page failure must not become a permanent reviewed omission");
+    assert!(matches!(
+        error.downcast_ref::<NotionError>(),
+        Some(NotionError::Upstream { status: 503, .. })
+    ));
 }
 
 #[tokio::test]
@@ -186,4 +186,61 @@ async fn review_permanent_tab_failure_retains_readable_tabs_and_missing_position
         assert!(tabs[usize::from(missing == 'c')].view().is_none());
         assert!(tabs[usize::from(missing == 'b')].view().is_some());
     }
+}
+
+#[tokio::test]
+async fn audit_cache_reuses_metadata_across_page_references() {
+    let api = CachedNotion::new(LinkedNotion::default());
+    let pages = ['1', '2']
+        .into_iter()
+        .map(|value| {
+            let id = NotionId::parse(&value.to_string().repeat(32)).unwrap();
+            NotionPage {
+                url: id.url(),
+                id,
+                title: "Project".into(),
+                parent: NotionParent::Workspace,
+                created: "2026-11-17T00:00:00Z".parse().unwrap(),
+                last_edited: "2026-11-17T00:00:00Z".parse().unwrap(),
+                in_trash: false,
+                properties: Default::default(),
+            }
+        })
+        .collect();
+    discover(
+        &api,
+        Inventory {
+            pages,
+            data_sources: vec![],
+        },
+        &Cancel::default(),
+        &|_| {},
+    )
+    .await
+    .unwrap();
+    assert_eq!(api.inner.body_calls.load(Ordering::SeqCst), 2);
+    assert_eq!(api.inner.container_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(api.inner.source_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(api.inner.view_list_calls.load(Ordering::SeqCst), 2);
+    assert_eq!(api.inner.view_calls.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
+async fn audit_cache_coalesces_concurrent_source_reads() {
+    let api = CachedNotion::new(LinkedNotion {
+        source_gate: Some(tokio::sync::Semaphore::new(0)),
+        ..Default::default()
+    });
+    let id = NotionId::parse(&"d".repeat(32)).unwrap();
+    let reads = futures::future::join(api.data_source(&id), api.data_source(&id));
+    futures::pin_mut!(reads);
+    assert!(futures::poll!(&mut reads).is_pending());
+    assert_eq!(
+        api.inner.source_calls.load(Ordering::SeqCst),
+        1,
+        "concurrent references share a single metadata request"
+    );
+    api.inner.source_gate.as_ref().unwrap().add_permits(1);
+    let (first, second) = reads.await;
+    assert_eq!(first.unwrap().id, second.unwrap().id);
 }

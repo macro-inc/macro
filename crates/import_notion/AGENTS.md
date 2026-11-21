@@ -70,12 +70,10 @@ maps a data source onto Macro database columns and cells
   `database_id` (externally synced sources); retain that database identity.
   Isolate malformed source metadata as `SourceUnavailable` rather than losing
   other sources in the same placement. Transient provider errors still propagate.
-- `databases::discover_database_dependencies` reads standalone page bodies
-  without expanding `Inventory` or querying dependency rows. Its cache and
-  source deduplication belong to one workspace client; import mappings must
-  also include workspace identity. The convenience helper retains its bodies;
-  workspace planning instead streams bounded `read_page_databases` calls and
-  drops markdown immediately. Row bodies are read only during writing.
+- Workspace planning uses `import::…::databases::discover`: bounded standalone
+  `read_page_databases` calls, cancellation and progress, discarding markdown
+  immediately. Metadata is cached per attempt; transient failures remain retryable.
+  Row bodies are read only during writing. The older discovery helper is test-only.
 - Database occurrences retain their original tags and byte ranges, including
   unresolved placements. Both Rust and TypeScript read the shared
   `fixtures/database_occurrences.md` grammar fixture; inline/self-closing tags

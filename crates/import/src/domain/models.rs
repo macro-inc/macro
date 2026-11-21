@@ -20,7 +20,8 @@ pub use notion_run::{
 };
 
 pub use notion_sharing::{
-    NotionAlreadyImported, NotionImporter, NotionSharing, NotionWriteChoices,
+    NotionAlreadyImported, NotionDependencyReview, NotionImporter, NotionSharing,
+    NotionWriteChoices,
 };
 
 #[cfg(test)]

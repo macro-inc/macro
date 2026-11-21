@@ -53,6 +53,7 @@ function taskFieldsLine(fields: ImportTaskFields): string {
 }
 
 function DecisionBadge(props: {
+  link: boolean;
   decision: ImportPlanDecision | null;
   reason: string | null;
 }) {
@@ -67,7 +68,7 @@ function DecisionBadge(props: {
           'text-ink-extra-muted'
       )}
     >
-      {decisionLabel(props.decision)}
+      {props.link ? 'Link' : decisionLabel(props.decision)}
     </Badge>
   );
   return (
@@ -314,6 +315,11 @@ export function ImportPlanRow(props: {
           when={props.showStatus}
           fallback={
             <DecisionBadge
+              link={
+                isWritten(props.node.decision) &&
+                Boolean(props.node.linkedFrom?.length) &&
+                props.excluded
+              }
               decision={props.node.decision}
               reason={props.node.reason}
             />

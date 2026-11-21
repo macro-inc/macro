@@ -139,6 +139,7 @@ async fn excluded_sources_keep_named_notion_links_in_the_page(pool: PgPool) {
         .unwrap();
     let mut source = planned_page('d', "Work", false);
     source.kind = ImportKind::DataSource;
+    source.parent_foreign_id = Some(page_id('e').to_string());
     source.metadata["plan"]["dependencyOf"] = serde_json::json!([page_id('e')]);
     let (review, rows) = approved(
         &pool,
@@ -173,6 +174,16 @@ async fn excluded_sources_keep_named_notion_links_in_the_page(pool: PgPool) {
                 == NotionDatabaseTarget::Fallback(NotionDatabaseFallback::NotImported))
     );
     assert!(service.creator.databases.lock().unwrap().is_empty());
+    assert!(
+        !service
+            .creator
+            .folders
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|name| name == "Project"),
+        "an excluded child source must not turn its page into a folder"
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -320,7 +331,7 @@ async fn same_titles_from_distinct_workspaces_keep_distinct_source_destinations(
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_waiting_database_keeps_its_own_outcome_when_a_page_finishes_later(pool: PgPool) {
+async fn a_waiting_database_stops_bodies_until_a_retry_can_resolve_its_holder(pool: PgPool) {
     let team = Uuid::now_v7();
     let first = teammate(&pool, "inline-holder", team).await;
     let owner = teammate(&pool, "inline-waiter", team).await;
@@ -360,15 +371,6 @@ async fn a_waiting_database_keeps_its_own_outcome_when_a_page_finishes_later(poo
         &[planned_page('e', "Project", false), source],
     )
     .await;
-    // Put the page first in the input even though its body/write needs more
-    // service calls than the already-claimed source's waiting outcome.
-    sqlx::query!(
-        "UPDATE import_entity SET created_at = created_at + INTERVAL '1 minute' WHERE id = $1",
-        rows[0]
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
     planned(&repo, &owner).await;
     let tracker = TaskTracker::new();
     let service = service(
@@ -384,21 +386,47 @@ async fn a_waiting_database_keeps_its_own_outcome_when_a_page_finishes_later(poo
         .unwrap();
     tracker.close();
     tracker.wait().await;
-    let waiting = repo.get(&owner, rows[1]).await.unwrap().unwrap();
-    assert_eq!(waiting.waiting_on, Some(holders[0]));
+    assert!(
+        service.creator.documents.lock().unwrap().is_empty(),
+        "a waiting reservation must not permanently downgrade page cards"
+    );
+    assert_eq!(
+        service.notion_import_report(&owner).await.unwrap().status,
+        Some(RunStatus::Failed)
+    );
+    let database = Uuid::from_u128(6001);
+    repo.record_written(
+        &first,
+        &[
+            crate::domain::models::WrittenObject::own(
+                holders[0],
+                crate::domain::models::WrittenKind::Database,
+                database,
+            ),
+            crate::domain::models::WrittenObject::own(
+                holders[0],
+                crate::domain::models::WrittenKind::Table,
+                Uuid::from_u128(501),
+            ),
+        ],
+    )
+    .await
+    .unwrap();
+    repo.mark_imported(&first, holders[0], &database.to_string(), "database", None)
+        .await
+        .unwrap();
+    service
+        .start_notion_write(&owner, review, NotionWriteChoices::default())
+        .await
+        .unwrap();
+    tracker.wait().await;
     assert_eq!(
         repo.get(&owner, rows[0]).await.unwrap().unwrap().status,
         ImportStatus::Imported
     );
-    assert_eq!(service.creator.documents.lock().unwrap().len(), 1);
-    assert_eq!(
-        service
-            .notion_import_report(&owner)
-            .await
-            .unwrap()
-            .waiting_on_teammates,
-        1
-    );
+    let documents = service.creator.documents.lock().unwrap();
+    assert_eq!(documents.len(), 1);
+    assert!(documents[0].2.databases.iter().all(|occurrence| matches!(occurrence.target, NotionDatabaseTarget::Resolved { database_id, .. } if database_id == database)));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

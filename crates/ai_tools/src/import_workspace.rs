@@ -676,9 +676,7 @@ fn imported_database(
         .tables
         .iter()
         .find(|entry| entry.table.id == table)
-        .ok_or_else(|| {
-            anyhow::anyhow!("the recorded source table no longer exists in this database")
-        })?;
+        .ok_or(import::domain::models::SourceStopReason::RecordedTableMissing)?;
     Ok(import::domain::ports::ImportedDatabase {
         database_id: detail.database.id.into_uuid(),
         table: table.table.id,

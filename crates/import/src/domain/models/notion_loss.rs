@@ -29,19 +29,31 @@ pub enum ReferenceLossReason {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SourceStopReason {
+    /// The interrupted run never approved this external dependency in its current review.
+    DependencyNotApproved,
+    /// A newer worker recorded prerequisites this reader cannot interpret.
+    UnsupportedMarker,
     /// An ancestor acquired an explicit grant after reservation.
     PersonalFolderShared,
     /// An older interrupted writer did not record its column-planning facts.
     MissingSchemaPlan,
     /// Stable property ids or kinds no longer fit the reserved schema.
     SchemaChanged,
+    /// A readable shared database has no durable holder table marker.
+    HolderMarkerMissing,
+    /// Its recorded table is no longer present in the readable database.
+    RecordedTableMissing,
 }
 impl std::fmt::Display for SourceStopReason {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
+            Self::DependencyNotApproved => "external dependency was not explicitly included in this review; re-plan to include it",
+            Self::UnsupportedMarker => "this import contains unsupported written markers; resume with an upgraded importer before writing this source",
             Self::PersonalFolderShared => "folder sharing changed after reservation; no personal rows were added; re-import into an owner-only folder",
             Self::MissingSchemaPlan => "this interrupted database has no recorded schema-planning facts; re-import this source to reserve its columns safely",
             Self::SchemaChanged => "Notion source schema changed after schema planning; re-import this source to reserve compatible columns",
+            Self::HolderMarkerMissing => "the source holder's recorded table marker is missing; references retain their Notion links",
+            Self::RecordedTableMissing => "the recorded source table no longer exists in this database; references retain their Notion links",
         })
     }
 }
@@ -194,7 +206,7 @@ impl FidelityWarning {
                 matched_by,
                 count,
             } => format!(
-                "{count} values of option \"{option}\" in \"{property}\" were omitted: no reserved option matched by {matched_by}."
+                "{count} values of option \"{option}\" in \"{property}\" were omitted: no reserved option matched by {matched_by}. Rows containing only unmatched options show an empty cell, so views filtering on this column may hide them."
             ),
         }
     }
@@ -245,6 +257,42 @@ pub enum SourceLossDetail {
 }
 
 impl SourceLossFact {
+    /// Keep display text out of the ledger key's btree tuple budget. Source
+    /// identities and occurrence ordinals remain exact for deduplication.
+    pub fn bound_display_text(&mut self) {
+        fn bounded(text: &mut String) {
+            const MAX_BYTES: usize = 512;
+            let mut output = String::new();
+            let mut truncated = false;
+            for character in text.chars() {
+                let character = if character.is_control() {
+                    ' '
+                } else {
+                    character
+                };
+                if output.len() + character.len_utf8() > MAX_BYTES - '…'.len_utf8() {
+                    truncated = true;
+                    break;
+                }
+                output.push(character);
+            }
+            if truncated {
+                output.push('…');
+            }
+            *text = output;
+        }
+        match &mut self.detail {
+            SourceLossDetail::Reference { title, .. } => bounded(title),
+            SourceLossDetail::Option {
+                property, option, ..
+            } => {
+                bounded(property);
+                bounded(option);
+            }
+            SourceLossDetail::Text { message } => bounded(message),
+        }
+    }
+
     /// Count unique facts from completed rows together with this phase's new facts.
     pub fn warnings(facts: impl IntoIterator<Item = Self>) -> Vec<FidelityWarning> {
         let mut text = BTreeSet::new();

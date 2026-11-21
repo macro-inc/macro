@@ -152,7 +152,9 @@ async fn scan_pages<Api: NotionApi>(
                 // The potentially large markdown and view payloads are dropped here.
             }
             Some(Err(error)) => {
-                let reason = read_failure(&error).unwrap_or(ReadFailure::TemporarilyUnavailable);
+                let Some(reason) = read_failure(&error) else {
+                    return Err(error.into());
+                };
                 losses.push(format!("Page \"{title}\": database references could not be checked because {reason}. The page remains in the plan."));
             }
             None => cancel.ensure_running()?,
@@ -203,8 +205,10 @@ async fn load_dependencies<Api: NotionApi>(
             }
             Some(Ok(_)) => dependency.unavailable = Some(ReadFailure::Trashed),
             Some(Err(error)) => {
-                dependency.unavailable =
-                    Some(read_failure(&error).unwrap_or(ReadFailure::TemporarilyUnavailable))
+                let Some(reason) = read_failure(&error) else {
+                    return Err(error.into());
+                };
+                dependency.unavailable = Some(reason);
             }
             None => {}
         }

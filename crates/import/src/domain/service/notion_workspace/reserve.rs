@@ -12,6 +12,27 @@ pub(super) struct Reservations {
     pub failures: HashMap<NotionId, String>,
 }
 
+/// Independent source reservations share the normal Notion pacer.
+const RESERVATION_CONCURRENCY: usize = 4;
+
+struct ReservationContext<'a, Api> {
+    api: &'a super::databases::CachedNotion<Api>,
+    user: &'a MacroUserIdStr<'static>,
+    place: &'a Place<'a>,
+    team: Option<Uuid>,
+    written: &'a [crate::domain::models::WrittenObject],
+    cancel: &'a write::Cancel,
+    pending: HashSet<Uuid>,
+    source_titles: HashMap<&'a str, &'a str>,
+}
+
+#[derive(Default)]
+struct ReservedSource {
+    prepared: Option<write::PreparedDatabase>,
+    destination: Option<DatabaseDestination>,
+    failure: Option<String>,
+}
+
 impl<R, S, C, W, N> ImportServiceImpl<R, S, C, W, N>
 where
     R: ImportRepo + CanonicalImportRepo + NotionPlanRepo + NotionRunRepo + WrittenObjects + Clone,
@@ -24,10 +45,10 @@ where
         clippy::too_many_arguments,
         reason = "the reviewed set, destination layout and durable ledger"
     )]
-    #[tracing::instrument(name = "notion.reserve_databases", skip_all, fields(databases = tracing::field::Empty), err)]
+    #[tracing::instrument(name = "notion.reserve_databases", skip_all, fields(databases = tracing::field::Empty, failures = tracing::field::Empty), err)]
     pub(super) async fn reserve_databases(
         &self,
-        api: &N::Api,
+        api: &super::databases::CachedNotion<N::Api>,
         user: &MacroUserIdStr<'static>,
         set: &WriteSet,
         place: &Place<'_>,
@@ -35,8 +56,6 @@ where
         written: &[crate::domain::models::WrittenObject],
         cancel: &write::Cancel,
     ) -> Result<Reservations> {
-        let writer = self.creator.as_ref();
-        let store = &self.repo;
         let pending: HashSet<Uuid> = set.pending.iter().map(|item| item.import_id).collect();
         let mut prepared = HashMap::new();
         let mut destinations: DatabaseDestinations = set
@@ -59,12 +78,98 @@ where
             .filter(|item| item.kind == ImportKind::DataSource)
             .map(|item| (item.notion_id.as_str(), item.title.as_str()))
             .collect();
-        for item in set.all.iter().filter(|item| {
-            item.kind == ImportKind::DataSource && item.decision == NotionDecision::Copy
-        }) {
-            cancel.ensure_running()?;
-            let progress = write::Progress::new(store, user, item.import_id, written);
-            let outcome: anyhow::Result<()> = async {
+        let context = ReservationContext {
+            api,
+            user,
+            place,
+            team,
+            written,
+            cancel,
+            pending,
+            source_titles,
+        };
+        let sources: Vec<_> = set
+            .all
+            .iter()
+            .filter(|item| {
+                item.kind == ImportKind::DataSource && item.decision == NotionDecision::Copy
+            })
+            .cloned()
+            .collect();
+        let requests: Vec<_> = sources
+            .into_iter()
+            .map(|item| {
+                let context = &context;
+                async move {
+                    (
+                        item.notion_id.clone(),
+                        self.reserve_source(&item, context).await,
+                    )
+                }
+                .boxed()
+            })
+            .collect();
+        let mut reservations = stream::iter(requests).buffer_unordered(RESERVATION_CONCURRENCY);
+        let mut first_error = None;
+        // Drain every admitted reservation before returning a transient error.
+        // Dropping one after a remote create but before its marker would leave
+        // another source's retry without its durable schema facts.
+        let mut failed = 0i64;
+        while let Some((source, result)) = reservations.next().await {
+            match result {
+                Ok(reserved) => {
+                    if let Some(destination) = reserved.destination {
+                        destinations.insert(source.clone(), destination);
+                    }
+                    if let Some(database) = reserved.prepared {
+                        prepared.insert(source.clone(), database);
+                    }
+                    if let Some(reason) = reserved.failure {
+                        failed += 1;
+                        failures.insert(source, reason);
+                    }
+                }
+                Err(error) => {
+                    failed += 1;
+                    if first_error.is_none() {
+                        first_error = Some(error);
+                    }
+                }
+            }
+        }
+        tracing::Span::current().record("failures", failed);
+        if let Some(error) = first_error {
+            return Err(error);
+        }
+        tracing::Span::current().record("databases", destinations.len() as i64);
+        Ok(Reservations {
+            prepared,
+            destinations,
+            failures,
+        })
+    }
+
+    #[tracing::instrument(name = "notion.reserve_database", skip_all, fields(source_id = %item.notion_id), err)]
+    async fn reserve_source(
+        &self,
+        item: &write::WriteItem,
+        context: &ReservationContext<'_, N::Api>,
+    ) -> Result<ReservedSource> {
+        let writer = self.creator.as_ref();
+        let store = &self.repo;
+        let api = context.api;
+        let user = context.user;
+        let place = context.place;
+        let team = context.team;
+        let written = context.written;
+        let cancel = context.cancel;
+        let pending = &context.pending;
+        let source_titles = &context.source_titles;
+        let mut reserved = ReservedSource::default();
+        cancel.ensure_running()?;
+        let progress = write::Progress::new(store, user, item.import_id, written);
+        let outcome: anyhow::Result<()> = async {
+            progress.ensure_supported()?;
             if !pending.contains(&item.import_id) {
                 if let Some(row) = store.get(user, item.import_id).await?
                     && row.entity_type.as_deref() == Some(write::DATABASE_ENTITY)
@@ -81,7 +186,7 @@ where
                     if matches!(destination, DatabaseDestination::Fallback(NotionDatabaseFallback::NoAccess)) {
                         progress.warn(&[format!("Database {}: database view access unavailable; occurrences retain Notion links", item.title)]).await?;
                     }
-                    destinations.insert(item.notion_id.clone(), destination);
+                    reserved.destination = Some(destination);
                 }
                 return Ok(());
             }
@@ -95,13 +200,12 @@ where
                     if matches!(destination, DatabaseDestination::Fallback(NotionDatabaseFallback::NoAccess)) {
                         progress.warn(&[format!("Database {}: database view access unavailable; occurrences retain Notion links", item.title)]).await?;
                     }
-                    destinations.insert(item.notion_id.clone(), destination);
+                    reserved.destination = Some(destination);
                     return Ok(());
                 }
                 TeamClaim::Linked { .. } => return Ok(()),
                 TeamClaim::Waiting { .. } => {
-                    progress.warn(&[format!("Database {}: another import is still creating its database; occurrences retain Notion links", item.title)]).await?;
-                    return Ok(());
+                    anyhow::bail!("Another import is still creating a database; retry this import when it finishes");
                 }
                 TeamClaim::Held | TeamClaim::Free => {}
             }
@@ -115,7 +219,7 @@ where
                     user, item.import_id, planned, place.path_for(planned)?,
                 ).await?),
             };
-            let database = write::prepare_database(api, writer, user, item, folder, &progress).await?;
+            let database = write::prepare_database(api, writer, user, item, folder, &progress, cancel).await?;
             if item.parent.is_none() && folder == Some(place.root) && !item.dependency_of.is_empty() {
                 let row_sources: Vec<&str> = item.dependency_of.iter()
                     .filter_map(|id| source_titles.get(id.as_str()).copied()).collect();
@@ -123,29 +227,44 @@ where
                     progress.warn(&[format!("Database {}: filed at the Notion folder because it is only referenced from rows of {}", item.title, row_sources.join(", "))]).await?;
                 }
             }
-            destinations.insert(item.notion_id.clone(), DatabaseDestination::Ready(ImportedDatabase { database_id: database.created.database_id, table: database.created.table, views: database.views.iter().copied().collect() }));
-            prepared.insert(item.notion_id.clone(), database);
+            reserved.destination = Some(DatabaseDestination::Ready(ImportedDatabase { database_id: database.created.database_id, table: database.created.table, views: database.views.iter().copied().collect() }));
+            reserved.prepared = Some(database);
             Ok(())
         }.await;
-            if let Err(error) = outcome {
-                let reason = super::super::admission::failure_reason(&error);
-                if !error.is::<crate::domain::models::SourceStopReason>() {
-                    progress.warn(&[format!("Database {}: unresolved database destination: {reason}; occurrences retain Notion links", item.title)]).await?;
-                }
-                destinations.insert(
-                    item.notion_id.clone(),
-                    DatabaseDestination::Fallback(NotionDatabaseFallback::Unresolved),
-                );
-                failures.insert(item.notion_id.clone(), reason);
-            }
-            progress.flush_warnings().await?;
+        if let Err(error) = outcome {
+            let fallback = if let Some(reason) =
+                error.downcast_ref::<crate::domain::models::SourceStopReason>()
+            {
+                progress.source_stopped(&item.title, *reason).await?;
+                Some(NotionDatabaseFallback::Unresolved)
+            } else if let Some(error) =
+                error.downcast_ref::<import_notion::domain::ports::NotionError>()
+            {
+                super::databases::read_failure(error).map(|reason| match reason {
+                    import_notion::domain::databases::ReadFailure::Forbidden => {
+                        NotionDatabaseFallback::NoAccess
+                    }
+                    import_notion::domain::databases::ReadFailure::NotFound
+                    | import_notion::domain::databases::ReadFailure::Trashed => {
+                        NotionDatabaseFallback::NotFound
+                    }
+                    _ => NotionDatabaseFallback::Unresolved,
+                })
+            } else {
+                None
+            };
+            let Some(fallback) = fallback else {
+                tracing::warn!(source_id = %item.notion_id, retryable = true, "database reservation stopped before body conversion");
+                progress.flush_warnings().await?;
+                return Err(ImportError::Other(error));
+            };
+            let reason = super::super::admission::failure_reason(&error);
+            progress.warn(&[format!("Database {}: unresolved database destination: {reason}; occurrences retain Notion links", item.title)]).await?;
+            reserved.destination = Some(DatabaseDestination::Fallback(fallback));
+            reserved.failure = Some(reason);
         }
-        tracing::Span::current().record("databases", destinations.len() as i64);
-        Ok(Reservations {
-            prepared,
-            destinations,
-            failures,
-        })
+        progress.flush_warnings().await?;
+        Ok(reserved)
     }
 }
 
@@ -167,7 +286,7 @@ async fn reuse_database<Writer: WorkspaceWriter, Store: WrittenObjects>(
     let mapping = store
         .database_mapping(user, source, database)
         .await?
-        .ok_or_else(|| anyhow::anyhow!("the source holder's recorded table marker is missing"))?;
+        .ok_or(crate::domain::models::SourceStopReason::HolderMarkerMissing)?;
     let database = writer.database(user, database, mapping.table).await?;
     progress.warn_fidelity(&mapping.warnings).await?;
     Ok(DatabaseDestination::Ready(database))

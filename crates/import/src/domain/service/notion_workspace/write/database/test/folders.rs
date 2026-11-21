@@ -10,6 +10,9 @@ async fn task_lists_apply_the_reviewed_link_policy_to_each_task_and_folder() {
         let notion = FakeNotion {
             views: Vec::new(),
             fetched: Mutex::new(0),
+            queries: Mutex::new(0),
+            scan_stop: None,
+            paginated: false,
             source: NotionDataSource {
                 id: id('e'),
                 database_id: id('f'),
@@ -71,6 +74,9 @@ async fn private_destinations_override_old_body_and_task_folder_markers() {
         let notion = FakeNotion {
             views: Vec::new(),
             fetched: Mutex::new(0),
+            queries: Mutex::new(0),
+            scan_stop: None,
+            paginated: false,
             source: NotionDataSource {
                 id: id('e'),
                 database_id: id('f'),
@@ -213,6 +219,9 @@ async fn sharing_an_incomplete_source_reuses_only_that_sources_private_outputs()
         let notion = FakeNotion {
             views: Vec::new(),
             fetched: Mutex::new(0),
+            queries: Mutex::new(0),
+            scan_stop: None,
+            paginated: false,
             source: NotionDataSource {
                 id: id('e'),
                 database_id: id('f'),
@@ -366,6 +375,9 @@ async fn a_shared_retry_reapplies_only_the_assignee_to_a_marked_notion_task() {
     let notion = FakeNotion {
         views: Vec::new(),
         fetched: Mutex::new(0),
+        queries: Mutex::new(0),
+        scan_stop: None,
+        paginated: false,
         source: NotionDataSource {
             id: id('e'),
             database_id: id('f'),
@@ -443,6 +455,9 @@ async fn an_assignee_replay_failure_is_reported_even_when_other_rows_succeed() {
     let notion = FakeNotion {
         views: Vec::new(),
         fetched: Mutex::new(0),
+        queries: Mutex::new(0),
+        scan_stop: None,
+        paginated: false,
         source: NotionDataSource {
             id: id('e'),
             database_id: id('f'),
@@ -523,6 +538,9 @@ async fn a_shared_retry_preserves_assignments_without_an_omission_notice() {
     let notion = FakeNotion {
         views: Vec::new(),
         fetched: Mutex::new(0),
+        queries: Mutex::new(0),
+        scan_stop: None,
+        paginated: false,
         source: NotionDataSource {
             id: id('e'),
             database_id: id('f'),

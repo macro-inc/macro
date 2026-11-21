@@ -136,9 +136,10 @@ row's caret (**Show rows of …**) shows its row count with a few sample row
 titles and, for a task list, which Notion columns become status, priority,
 due date and assignee. Linked sources outside the selected roots appear as
 **Linked from <page title>** dependencies when a selected standalone page refers
-to them, included when readable. Sources already
-inside the selection show **Shown inline on <page title>**. Every source shown
-inline defaults to a database copy; an approved task-list choice or exclusion
+to them. External dependencies start unticked with **Link**; tick one to copy
+it. An old or missing saved selection never implicitly imports a dependency.
+Sources already inside the selection show **Shown inline on <page title>** and
+default to a database copy; an approved task-list choice or exclusion
 keeps Notion links in its cards and reports why. Excluding one
 keeps a named Notion link in the page; unreadable dependencies show the reason
 and cannot be included. The same source is copied once across repeated inline

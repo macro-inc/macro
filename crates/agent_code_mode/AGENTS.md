@@ -36,7 +36,10 @@ stacks. Process isolation belongs to
   `agent_harness_service/src/code_mode/images.rs`.
 - `src/domain/user.rs`: `UserCodeMode`, runs as an authenticated user with no
   session, journal or reviews; shares outcome validation with the session path.
-- `src/domain/reviews.rs`: review revisions, claims and outcomes.
+- `src/domain/reviews.rs`: review revisions, claims and outcomes. Normalize
+  pending import dependency defaults before saves and refreshed reads; only
+  successfully saved exclusions establish per-dependency review scope. Never
+  infer inclusion from an older draft's missing exclusion id.
   `src/domain/reviews/drafts.rs` holds the typed drafts and results: items
   keyed by kind, reusing `SendEmail`, `CreateCalendarEvent` and their
   responses, and the import plan selection. Decoding is the only validation

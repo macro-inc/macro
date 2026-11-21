@@ -8,6 +8,9 @@ async fn a_database_stopped_part_way_through_its_rows_resumes_without_duplicates
     let notion = FakeNotion {
         views: Vec::new(),
         fetched: Mutex::new(0),
+        queries: Mutex::new(0),
+        scan_stop: None,
+        paginated: false,
         source: NotionDataSource {
             id: id('e'),
             database_id: id('f'),
@@ -90,6 +93,9 @@ async fn resumed_row_bodies_are_neither_read_nor_created_again() {
     let notion = FakeNotion {
         views: Vec::new(),
         fetched: Mutex::new(0),
+        queries: Mutex::new(0),
+        scan_stop: None,
+        paginated: false,
         source: NotionDataSource {
             id: id('e'),
             database_id: id('f'),
@@ -189,6 +195,9 @@ async fn a_committed_view_with_a_lost_response_is_reused_before_its_marker_is_wr
     let notion = FakeNotion {
         views: vec![view],
         fetched: Mutex::new(0),
+        queries: Mutex::new(0),
+        scan_stop: None,
+        paginated: false,
         source: NotionDataSource {
             id: id('e'),
             database_id: id('f'),
@@ -212,7 +221,8 @@ async fn a_committed_view_with_a_lost_response_is_reused_before_its_marker_is_wr
             &user,
             &item,
             Some(Uuid::from_u128(42)),
-            &Progress::new(&store, &user, item.import_id, &[])
+            &Progress::new(&store, &user, item.import_id, &[]),
+            &Cancel::default(),
         )
         .await
         .err()
@@ -234,6 +244,7 @@ async fn a_committed_view_with_a_lost_response_is_reused_before_its_marker_is_wr
         &item,
         Some(Uuid::from_u128(42)),
         &progress,
+        &Cancel::default(),
     )
     .await
     .unwrap();
@@ -269,6 +280,9 @@ async fn rows_are_read_again_after_reservation_and_schema_drift_is_reported() {
     let mut notion = FakeNotion {
         views: vec![],
         fetched: Mutex::new(0),
+        queries: Mutex::new(0),
+        scan_stop: None,
+        paginated: false,
         source: NotionDataSource {
             id: id('e'),
             database_id: id('f'),
@@ -296,6 +310,7 @@ async fn rows_are_read_again_after_reservation_and_schema_drift_is_reported() {
         &item,
         Some(Uuid::from_u128(42)),
         &progress,
+        &Cancel::default(),
     )
     .await
     .unwrap();
@@ -347,10 +362,13 @@ async fn rows_are_read_again_after_reservation_and_schema_drift_is_reported() {
 }
 
 #[tokio::test]
-async fn resumed_schema_keeps_its_original_date_shape_when_rows_change() {
+async fn audit_resumed_schema_keeps_its_date_shape_without_scanning_rows() {
     let mut notion = FakeNotion {
         views: vec![],
         fetched: Mutex::new(0),
+        queries: Mutex::new(0),
+        scan_stop: None,
+        paginated: false,
         source: NotionDataSource {
             id: id('e'),
             database_id: id('f'),
@@ -377,6 +395,7 @@ async fn resumed_schema_keeps_its_original_date_shape_when_rows_change() {
         &item,
         Some(Uuid::from_u128(42)),
         &Progress::new(&store, &user, item.import_id, &[]),
+        &Cancel::default(),
     )
     .await
     .unwrap();
@@ -389,6 +408,7 @@ async fn resumed_schema_keeps_its_original_date_shape_when_rows_change() {
     );
     let recorded = store.written(&user, &[item.import_id]).await.unwrap();
     let progress = Progress::new(&store, &user, item.import_id, &recorded);
+    *notion.queries.lock().unwrap() = 0;
     let resumed = prepare_database(
         &notion,
         &writer,
@@ -396,18 +416,16 @@ async fn resumed_schema_keeps_its_original_date_shape_when_rows_change() {
         &item,
         Some(Uuid::from_u128(42)),
         &progress,
+        &Cancel::default(),
     )
     .await
     .unwrap();
     progress.flush_warnings().await.unwrap();
     assert_eq!(resumed.plan.columns[0].shape, ColumnShape::Date);
-    assert!(
-        store
-            .warnings
-            .lock()
-            .unwrap()
-            .iter()
-            .any(|loss| loss.contains("date-range usage changed"))
+    assert_eq!(
+        *notion.queries.lock().unwrap(),
+        0,
+        "durable schema facts avoid another full scan"
     );
     assert_eq!(
         writer.batches.lock().unwrap().len(),
@@ -422,6 +440,9 @@ async fn a_column_rename_and_added_option_do_not_block_schema_resume() {
     let mut notion = FakeNotion {
         views: vec![],
         fetched: Mutex::new(0),
+        queries: Mutex::new(0),
+        scan_stop: None,
+        paginated: false,
         rows: vec![],
         bodies: HashMap::new(),
         source: NotionDataSource {
@@ -454,6 +475,7 @@ async fn a_column_rename_and_added_option_do_not_block_schema_resume() {
         &item,
         Some(Uuid::from_u128(42)),
         &Progress::new(&store, &user, item.import_id, &[]),
+        &Cancel::default(),
     )
     .await
     .unwrap();
@@ -474,6 +496,7 @@ async fn a_column_rename_and_added_option_do_not_block_schema_resume() {
         &item,
         Some(Uuid::from_u128(42)),
         &Progress::new(&store, &user, item.import_id, &recorded),
+        &Cancel::default(),
     )
     .await;
     assert!(
@@ -484,5 +507,55 @@ async fn a_column_rename_and_added_option_do_not_block_schema_resume() {
         writer.batches.lock().unwrap().len(),
         1,
         "the reserved schema is reused"
+    );
+}
+
+#[tokio::test]
+async fn audit_reservation_scan_checks_cancellation_between_pages() {
+    let cancel = std::sync::Arc::new(Cancel::default());
+    let notion = FakeNotion {
+        views: vec![],
+        fetched: Mutex::new(0),
+        queries: Mutex::new(0),
+        scan_stop: Some(cancel.clone()),
+        paginated: true,
+        source: NotionDataSource {
+            id: id('e'),
+            database_id: id('f'),
+            title: "Schedule".into(),
+            database_parent: NotionParent::Workspace,
+            in_trash: false,
+            properties: vec![NotionPropertySchema {
+                id: "dates".into(),
+                name: "Dates".into(),
+                kind: NotionPropertyKind::Date,
+            }],
+        },
+        rows: vec![],
+        bodies: HashMap::new(),
+    };
+    let writer = FakeWriter::default();
+    let store = FakeStore::default();
+    let user = user();
+    let item = source_item("Schedule");
+    let result = write_database(
+        &notion,
+        &writer,
+        &user,
+        &item,
+        Uuid::from_u128(42),
+        false,
+        &PeopleMap::new(),
+        &tokio::sync::RwLock::new(NotionLinks::default()),
+        &Progress::new(&store, &user, item.import_id, &[]),
+        &cancel,
+        None,
+    )
+    .await;
+    assert!(result.is_err());
+    assert_eq!(
+        *notion.queries.lock().unwrap(),
+        1,
+        "stop before reading the second page"
     );
 }

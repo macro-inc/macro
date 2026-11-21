@@ -4,6 +4,8 @@ use import_notion::domain::views::{NotionView, ViewScope};
 #[derive(Default)]
 pub(super) struct Inline {
     pub(super) external_rows: usize,
+    pub(super) external_title: Option<String>,
+    pub(super) transient_query: Option<Arc<std::sync::atomic::AtomicBool>>,
 }
 impl NotionApi for Inline {
     async fn page(&self, id: &NotionId) -> std::result::Result<NotionPage, NotionError> {
@@ -26,14 +28,17 @@ impl NotionApi for Inline {
     }
     async fn page_markdown(&self, id: &NotionId) -> std::result::Result<PageMarkdown, NotionError> {
         let markdown = if *id == page_id('e') {
-            "Before\n<database url=\"https://www.notion.so/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa?v=cccccccccccccccccccccccccccccccc\" inline=\"true\">Work</database>\nBetween\n<database url=\"https://www.notion.so/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\" inline=\"true\">Work</database>\nAfter"
+            "Before\n<database url=\"https://www.notion.so/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa?v=cccccccccccccccccccccccccccccccc\" inline=\"true\">Work</database>\nBetween\n<database url=\"https://www.notion.so/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\" inline=\"true\">Work</database>\nAfter".to_owned()
         } else if self.external_rows > 0 {
-            "<database url=\"https://www.notion.so/66666666666666666666666666666666\">External plans</database>"
+            format!(
+                "<database url=\"https://www.notion.so/66666666666666666666666666666666\">{}</database>",
+                self.external_title.as_deref().unwrap_or("External plans")
+            )
         } else {
-            "Row before\n<database url=\"https://www.notion.so/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa?v=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\" inline=\"true\">Work</database>\nRow after"
+            "Row before\n<database url=\"https://www.notion.so/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa?v=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\" inline=\"true\">Work</database>\nRow after".to_owned()
         };
         Ok(PageMarkdown {
-            markdown: markdown.into(),
+            markdown,
             unknown_block_ids: vec![],
         })
     }
@@ -109,6 +114,16 @@ impl NotionApi for Inline {
         id: &NotionId,
         _: Option<String>,
     ) -> std::result::Result<RowsPage, NotionError> {
+        if self
+            .transient_query
+            .as_ref()
+            .is_some_and(|fail| fail.swap(false, std::sync::atomic::Ordering::SeqCst))
+        {
+            return Err(NotionError::Upstream {
+                status: 503,
+                body: "temporarily unavailable".into(),
+            });
+        }
         let rows = if *id == page_id('d') {
             if self.external_rows == 0 {
                 vec![self.page(&page_id('f')).await?]

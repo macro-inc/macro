@@ -51,7 +51,7 @@ where
         &self,
         user: &MacroUserIdStr<'static>,
         item: &write::WriteItem,
-        target: &Target<'_, N::Api>,
+        target: &Target<'_, databases::CachedNotion<N::Api>>,
         control: &JobControl,
     ) -> Outcome {
         for _ in 0..WAIT_CHECKS {
@@ -81,7 +81,7 @@ where
         &self,
         user: &MacroUserIdStr<'static>,
         item: &write::WriteItem,
-        target: &Target<'_, N::Api>,
+        target: &Target<'_, databases::CachedNotion<N::Api>>,
         control: &JobControl,
     ) -> Outcome {
         let progress = write::Progress::new(&self.repo, user, item.import_id, target.written);
@@ -124,9 +124,18 @@ where
         &self,
         user: &MacroUserIdStr<'static>,
         item: &write::WriteItem,
-        target: &Target<'_, N::Api>,
+        target: &Target<'_, databases::CachedNotion<N::Api>>,
         progress: &write::Progress<'_, R>,
     ) -> Result<Written> {
+        if let Err(error) = progress.ensure_supported() {
+            progress
+                .source_stopped(
+                    &item.title,
+                    crate::domain::models::SourceStopReason::UnsupportedMarker,
+                )
+                .await?;
+            return Err(error.into());
+        }
         let claim = match target.team_id {
             Some(team_id) if item.shared || item.already_imported => {
                 super::super::lifecycle::claim_team_object(

@@ -38,8 +38,7 @@ impl TryFrom<WrittenDbRow> for WrittenObject {
     fn try_from(row: WrittenDbRow) -> Result<Self> {
         Ok(Self {
             import_id: row.import_id,
-            kind: WrittenKind::from_str(&row.kind)
-                .map_err(|_| anyhow::anyhow!("unknown written kind: {}", row.kind))?,
+            kind: WrittenKind::from_str(&row.kind).unwrap_or(WrittenKind::Unsupported),
             object: row.object,
             macro_id: row.macro_id,
         })

@@ -10,6 +10,8 @@ use import_notion::domain::model::NotionId;
 use import_notion::domain::ports::{NotionApi, NotionError};
 use import_notion::domain::views::{NotionView, ViewScope};
 
+mod cache;
+pub(super) use cache::CachedNotion;
 pub(super) mod discovery;
 pub(super) use discovery::discover;
 mod body;

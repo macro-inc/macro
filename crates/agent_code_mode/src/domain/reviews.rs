@@ -279,6 +279,9 @@ pub trait ReviewActions: Send + Sync + 'static {
         record: &ReviewRecord,
         draft: &ImportDraft,
     ) -> Result<ImportResult, CodeModeError>;
+    /// Add safe defaults to a pending review before saving or returning it.
+    /// Return true when its draft or a missing saved-draft receipt needs a save.
+    async fn normalize(&self, record: &mut ReviewRecord) -> Result<bool, CodeModeError>;
     /// Persist and stream a completed presentation without waiting for user action.
     /// Repeated calls with the same review ID must not duplicate its ACP frames.
     async fn present(
@@ -461,6 +464,15 @@ impl ReviewService {
         if record.presented_at.is_none() {
             record = self.present(record).await?;
         }
+        if self.normalize(&mut record).await? {
+            match self.save(&mut record, None).await {
+                Ok(()) => {}
+                Err(CodeModeError::Conflict) => {
+                    record = self.store.get(record.session_id, record.id).await?
+                }
+                Err(error) => return Err(error),
+            }
+        }
         // A killed replica cannot leave a permanent spinner or permit a blind retry.
         if chrono::Utc::now().timestamp_millis() - record.updated_at > STALE_SUBMISSION_MS
             && record
@@ -490,11 +502,25 @@ impl ReviewService {
         }
         Ok(record)
     }
+    async fn normalize(&self, record: &mut ReviewRecord) -> Result<bool, CodeModeError> {
+        if record.decision.is_some()
+            || record
+                .items
+                .states()
+                .iter()
+                .any(|item| item.status != ReviewItemStatus::Pending)
+        {
+            return Ok(false);
+        }
+        self.actions.normalize(record).await
+    }
+
     async fn save(
         &self,
         record: &mut ReviewRecord,
         event: Option<NotificationEvent>,
     ) -> Result<(), CodeModeError> {
+        self.normalize(record).await?;
         if serde_json::to_vec(record).map_err(|_| invalid())?.len() > MAX_RECORD_BYTES {
             return Err(invalid());
         }
