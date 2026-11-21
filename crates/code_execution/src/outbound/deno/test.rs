@@ -2211,10 +2211,7 @@ async fn recording_server(
                 _ = &mut stopped => break,
             };
             let request = read_request(&mut stream).await;
-            stream
-                .write_all(answer(&request).as_bytes())
-                .await
-                .unwrap();
+            stream.write_all(answer(&request).as_bytes()).await.unwrap();
             sent.push(request);
         }
         sent
@@ -2289,7 +2286,9 @@ async fn rewriting_deno_s_inner_request_neither_unmarks_nor_writes() {
         );
         let sent = server.await.unwrap();
         assert_eq!(
-            sent.iter().map(|request| method_and_mark(request)).collect::<Vec<_>>(),
+            sent.iter()
+                .map(|request| method_and_mark(request))
+                .collect::<Vec<_>>(),
             vec![("GET", true)],
             "dry run {dry_run}"
         );
