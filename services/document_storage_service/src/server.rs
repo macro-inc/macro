@@ -1451,7 +1451,7 @@ async fn run_server() -> anyhow::Result<()> {
             },
             writes: contacts::domain::list_writes::ContactListWrites::new(
                 config.environment,
-                Some(flags),
+                Some(flags.clone()),
             ),
         })),
     )
