@@ -86,7 +86,8 @@ export default {
   inboxFailed: "Couldn't create its inbox.",
   inboxAddressTaken: "Couldn't create its inbox: the address is taken.",
   inboxQuotaExceeded: "Couldn't create its inbox: no inboxes left.",
-  inboxTeamLimit: "Couldn't create its inbox: the team has reached its inbox limit.",
+  inboxTeamLimit:
+    "Couldn't create its inbox: the team has reached its inbox limit.",
   inboxNotConfigured: "Email inboxes aren't available yet.",
   inboxAddFailed: "Couldn't add an inbox for {{name}}. Try again.",
   inboxOption: 'Give it an email address',
