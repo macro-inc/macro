@@ -78,6 +78,7 @@ vi.mock('@queries/notification/unsubscribes', () => ({
 }));
 vi.mock('@queries/notification/notification-soup', () => ({
   updateSoupForNotification: vi.fn(),
+  revalidateNotifiedGraphqlSoupLists: vi.fn(),
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
   mapGraphqlNotification: (notification: UnifiedNotification) => notification,

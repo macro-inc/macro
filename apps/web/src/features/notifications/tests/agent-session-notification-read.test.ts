@@ -31,6 +31,7 @@ vi.mock('@queries/notification/user-notifications', () => ({
 }));
 vi.mock('@queries/notification/notification-soup', () => ({
   updateSoupForNotification: vi.fn(),
+  revalidateNotifiedGraphqlSoupLists: vi.fn(),
 }));
 vi.mock('@queries/notification/unsubscribes', () => ({
   useMuteItemMutation: () => ({ mutateAsync: vi.fn() }),

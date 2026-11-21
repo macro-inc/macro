@@ -23,6 +23,7 @@ vi.mock('@queries/notification/unsubscribes', () => ({
 }));
 vi.mock('@queries/notification/notification-soup', () => ({
   updateSoupForNotification: vi.fn(),
+  revalidateNotifiedGraphqlSoupLists: vi.fn(),
 }));
 vi.mock('@queries/auth/account-scope', () => ({
   currentQueryAccount: () => undefined,

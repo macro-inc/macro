@@ -13,7 +13,10 @@ import {
   ActiveNotificationIdsTimeoutError,
   fetchActiveNotificationIds,
 } from '@queries/notification/graphql/active-notification-ids';
-import { updateSoupForNotification } from '@queries/notification/notification-soup';
+import {
+  revalidateNotifiedGraphqlSoupLists,
+  updateSoupForNotification,
+} from '@queries/notification/notification-soup';
 import {
   useMuteItemMutation,
   useUnmuteItemMutation,
@@ -442,7 +445,15 @@ export function createNotificationSource(
     (patch) => {
       if (!enabled()) return;
       scheduleGraphqlNotificationRefetch();
-      if (patch.__typename !== 'GraphqlNewNotification') return;
+      if (patch.__typename !== 'GraphqlNewNotification') {
+        // Main's REST Home rows render this source, which the refetch above
+        // brings current. Rows of GraphQL notified lists render their own
+        // notifications as last read, and nothing patches an entity the
+        // refetch no longer returns (notifications deleted, access lost):
+        // read those lists again too.
+        revalidateNotifiedGraphqlSoupLists();
+        return;
+      }
       const notification = mapGraphqlNotification(patch.notification);
       updateSoupForNotification(notification);
       dispatchIncomingNotification(notification);

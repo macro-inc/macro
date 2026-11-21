@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   mutedEntitiesQuery: {} as Record<string, unknown>,
   notificationsQuery: {} as Record<string, unknown>,
   updateSoupForNotification: vi.fn(),
+  revalidateNotifiedGraphqlSoupLists: vi.fn(),
   seenMutation: {
     isPending: false,
     mutateAsync: vi.fn(),
@@ -51,6 +52,7 @@ vi.mock(
 
 vi.mock('@queries/notification/notification-soup', () => ({
   updateSoupForNotification: mocks.updateSoupForNotification,
+  revalidateNotifiedGraphqlSoupLists: mocks.revalidateNotifiedGraphqlSoupLists,
 }));
 
 vi.mock('@queries/notification/user-notifications', () => ({
@@ -131,6 +133,7 @@ describe('createNotificationSource', () => {
     mocks.graphqlPatchCallback = undefined;
     mocks.fetchActiveNotificationIds.mockReset().mockResolvedValue([]);
     mocks.updateSoupForNotification.mockReset();
+    mocks.revalidateNotifiedGraphqlSoupLists.mockReset();
     mocks.seenMutation.mutateAsync.mockReset().mockResolvedValue(undefined);
     mocks.doneMutation.mutateAsync.mockReset().mockResolvedValue(undefined);
     mocks.mutedEntitiesQuery = {
@@ -816,6 +819,52 @@ describe('createNotificationSource', () => {
       expect(mutedEntitiesValue()).toHaveLength(1);
       expect(mutedEntitiesValue()).not.toBe(initialMutedEntities);
       expect(memoRuns).toBeGreaterThan(runsBeforeUpdate);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('reads notified lists again for every patch that is not a new notification', () => {
+    const incoming = notification(
+      'updated-notification',
+      'email_thread',
+      'thread-1'
+    );
+    mocks.notificationsQuery = {
+      data: [],
+      fetchNextPage: vi.fn(),
+      refetch: vi.fn().mockResolvedValue(undefined),
+      hasNextPage: false,
+      isFetching: false,
+      isLoading: false,
+    };
+    let dispose = () => {};
+    createRoot((rootDispose) => {
+      dispose = rootDispose;
+      createNotificationSource(vi.fn());
+    });
+
+    try {
+      mocks.graphqlPatchCallback?.({
+        __typename: 'GraphqlUpdatedNotification',
+        notification: { ...incoming, state: 'done' },
+      });
+      expect(mocks.revalidateNotifiedGraphqlSoupLists).toHaveBeenCalledOnce();
+
+      mocks.graphqlPatchCallback?.({
+        __typename: 'GraphqlCacheDeletion',
+        graphqlTypeName: 'GraphqlNotification',
+        entityId: incoming.id,
+      });
+      expect(mocks.revalidateNotifiedGraphqlSoupLists).toHaveBeenCalledTimes(2);
+
+      // A new notification reads them through updateSoupForNotification.
+      mocks.graphqlPatchCallback?.({
+        __typename: 'GraphqlNewNotification',
+        notification: incoming,
+      });
+      expect(mocks.revalidateNotifiedGraphqlSoupLists).toHaveBeenCalledTimes(2);
+      expect(mocks.updateSoupForNotification).toHaveBeenCalledOnce();
     } finally {
       dispose();
     }

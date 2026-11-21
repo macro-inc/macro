@@ -147,12 +147,14 @@ const rereadAfterReplicaLag = debounce(
  * A flat list's read runs the notified page query, whose cost grows with the
  * viewer's notifications, for every loaded page; a grouped list's runs the
  * grouped query by update time for its first page and each loaded
- * continuation page, as every write to it already does. A notification marks
- * the lists for a read, and so does the replica lag timer after the last one;
+ * continuation page, as every write to it already does. Every notification
+ * patch (new, updated or deleted; the notification source calls this for the
+ * last two) marks the lists for a read, and so does the replica lag timer
+ * after the last one;
  * a read starts at once unless one started within the interval or is still
  * running, and then after it. A hidden tab keeps the mark and reads when shown.
  */
-function revalidateNotifiedGraphqlSoupLists(): void {
+export function revalidateNotifiedGraphqlSoupLists(): void {
   notifiedListRereader().markDirty();
   rereadAfterReplicaLag();
 }
