@@ -828,7 +828,7 @@ fn widened_windows_match_the_set_based_plan_on_every_page() {
                     .await
                     .unwrap();
                 // The re-owned keys move between owners: "Thing:00010" from "a"
-                // to "b", "Thing:00038" from "b" to "a".
+                // to "b", "Thing:00066" from "b" to "a".
                 let all_pages = |predicate: PredicateExpr| {
                     let mut page =
                         query_with_limit(predicate, SortDirection::Asc, SortDirection::Asc, 100);
@@ -851,7 +851,7 @@ fn widened_windows_match_the_set_based_plan_on_every_page() {
                 let owned_by_b = all_pages(owner("b"));
                 for (key, new_owner, old_owner) in [
                     ("Thing:00010", &owned_by_b, &owned_by_a),
-                    ("Thing:00038", &owned_by_a, &owned_by_b),
+                    ("Thing:00066", &owned_by_a, &owned_by_b),
                 ] {
                     assert!(new_owner.contains(key), "{key} missing from its new owner");
                     assert!(
