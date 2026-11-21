@@ -40,9 +40,11 @@ pub struct WalCheckpoint {
     pub backfilled_frames: u64,
 }
 
-/// Where the WAL ends: every committed write moves it, and nothing else does
-/// until a write starts the log over. Two equal positions mean no write
-/// committed in between.
+/// Where the WAL ends, as this connection sees it: every write it commits
+/// moves it, and nothing else does until a write starts the log over. Two
+/// equal positions taken on one connection mean it committed no write in
+/// between; a write on another connection may not show until this one starts
+/// a read.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WalPosition {
     checkpoint_seq_no: u32,

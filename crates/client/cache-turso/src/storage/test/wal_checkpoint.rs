@@ -256,7 +256,18 @@ fn the_wal_position_moves_with_every_committed_write_and_only_then() {
     // ended on the same frame would sit in a new log.
     write(&mut storage, AFTER).unwrap();
     let restarted = storage.wal_position().unwrap();
+    let restarted_frames = wal_frames(&storage);
     assert_ne!(restarted, start);
     write(&mut storage, AFTER + 1).unwrap();
+    assert_ne!(storage.wal_position().unwrap(), restarted);
+
+    // The same write after the next copy ends on the same frame of a new
+    // log: only the log's sequence tells the two positions apart.
+    for later in 2..=DUE_WRITES {
+        write(&mut storage, AFTER + later).unwrap();
+    }
+    assert!(storage.checkpoint_if_due().unwrap().ran);
+    write(&mut storage, AFTER).unwrap();
+    assert_eq!(wal_frames(&storage), restarted_frames);
     assert_ne!(storage.wal_position().unwrap(), restarted);
 }
