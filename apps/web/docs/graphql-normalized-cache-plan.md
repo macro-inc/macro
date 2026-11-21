@@ -1350,8 +1350,11 @@ one such id would fail the whole read. The deletes carry the cache session
 taken before the reads, so the cache refuses them after a session transition,
 and a channel whose cached record changed while it was read (the viewer was
 added back) is read again instead of deleted, three rounds in all. The recheck
-and the delete are still two cache calls: a write landing between them is
-deleted and comes back with the channel's next update or the next pass.
+and the delete are still two cache calls, so a write landing between them is
+deleted too: every deleted channel is read once more with the next round's
+reads (a round of its own after the last), and one the viewer can read again
+is written back by that read. A failed second look keeps the pass, whose
+evidence stands (`channel_directory.restored`, `reread_failed`).
 A pass that cannot reconcile (it resumed from a cursor, a page lacked entity
 ids, or the cache belongs to another viewer) deletes nothing; one whose cache
 changed hands or generation, or whose reads or records kept failing or
@@ -1406,12 +1409,16 @@ whose record the cache wrote or changed after a read was sent that found it
 absent (the viewer may have joined it since), whether that write lands
 before the answer or after it. A read that wrote no record leaves the
 directory as it was, and one whose records match what the directory held
-publishes nothing. An id that failed twice stays pending, and the failed ids are read
-again together at most every 30 seconds without anyone asking, once the tab
-is visible. Readers that decide from absence (section
-membership, notification bulk actions, scope checks, built-in section mute)
-wait for `complete()` or call `readComplete()`, which pages the network while
-the cache is still filling. When the lane gives up in a generation, the backfill marks it
+publishes nothing. A batch still unanswered after 20 seconds has failed, so
+one that never settles cannot hold a read slot. An id that failed twice stays
+pending, and the failed ids are forgotten together at most every 30 seconds,
+once the tab is visible: a lookup still asking for one, the queue of records
+lacking a field, or the fallback's confirmations read it again, and an id
+nobody asks for any more is not read. Readers that decide from absence
+(section membership, scope checks) wait for `complete()`. Actions on a whole
+built-in section (mute, snooze, mark read) call `readComplete()`, which always
+pages the network, as the REST list did for each action: a complete directory
+can still miss a channel joined on another device since its last pass. When the lane gives up in a generation, the backfill marks it
 (`markSoupBackfillLaneFailed`, cleared by its next saved page, and kept in
 memory for the tab when storage refuses the write) and the directory pages the
 joined channels from the network instead. It does the same when the lane
@@ -1454,7 +1461,7 @@ the old cache. A lane pass that finishes later stops the walk and makes the
 cache answer alone again. `failed()` says
 the directory is not complete and that read failed; `retry()` reads again.
 Channel writes outside the cache's soup updates (join links, renames, new
-DMs) call `refreshChannelDirectory`, which rereads the in-memory directory,
+DMs, people added or removed) call `refreshChannelDirectory`, which rereads the in-memory directory,
 reading again after a first read that was already in flight; a full read
 (`readComplete()`, and the network list behind a filling cache) reads until
 one began after the latest write, since nothing else refetches a query nobody
@@ -1466,7 +1473,14 @@ message sends name none) also reads each one from the primary
 QueryClient show the result (`own-writes.ts`) over whatever their source
 still holds, for at most a minute, until the source shows it or a later
 update. A channel the viewer can no longer read leaves the list the same
-way. The in-memory directory reads its pages again while they lag, after
+way, and channels the write deleted (`removed`) leave it without a read. Once
+the source shows a write, it is let go for every directory, so a later
+removal or update is the source's to show; a write that took a channel away
+holds only while the source still lists the viewer as it did. Writes carry
+the account, the sign-in session and the order their reads were sent in, so
+an earlier read never replaces a later one; a storage reset or a new sign-in
+lets them all go. A write of many channels reads at most twenty, four at a
+time; a link join, whose response names no channel, reads none. The in-memory directory reads its pages again while they lag, after
 1, 2, 4 and 8 seconds. A read that fails, or that lands after the account
 changed, holds nothing (`channel_directory.own_writes` span). The viewer's
 own views reach no soup update, so the channel view
@@ -1484,7 +1498,9 @@ view it was read with until a pass of the lane rereads it: the cached
 directory's `viewsCurrent()` turns true only once a pass that started after
 the page loaded (`performance.timeOrigin`) has finished in the current storage
 generation, judged by the checkpoint's watermark, which is that pass's start.
-The in-memory directory read its pages in this page, so it always is. Until
+The in-memory directory is current once its pages were read in this page:
+pages restored from the device (kept for a week) are read again on mount and
+count only once that read lands. Until
 then `useChannelLastViewed` also asks `user.channelViewedAt` when a joined
 channel opens and shows the later of the record's view and the answer (the
 record's on no answer within five seconds); a tab that does not run the
