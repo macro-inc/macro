@@ -52,7 +52,8 @@ not run the base commit's modules, or a mutant was not applied or not caught.
   which fetches into the live cache and would otherwise repair a stale
   reader before it was compared. Each sequence ends with a real page reload
   of every side. An out-of-band SQL write that fails or changes no rows fails
-  the run.
+  the run, unless the database itself refused it (a duplicate name for the
+  owner, or a reserved system property name: `sqlRefusals` in the results).
 - Differences are classed `equal`; `timestamp-format` (the same instant to the
   nanosecond, only on a row's `created_at`/`updated_at`); `tie-order` (only
   rows whose server sort key is equal swap: definitions by lowercased name,

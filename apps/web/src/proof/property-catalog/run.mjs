@@ -1466,8 +1466,17 @@ async function step(pair, g, gen) {
   }
   return null;
 }
+// The database's own refusals of a write, which the server enforces for every
+// writer alike (property_definitions' unique owner/name indexes, and the
+// check_property_name_not_system trigger): the write did not happen, on
+// either side, and is counted as refused rather than as a harness failure.
+const DB_REFUSALS = [
+  ['duplicate name', /duplicate key value violates unique constraint "unique_property_definitions_(user|team)_display_name"/],
+  ['reserved system name', /Cannot create custom property with reserved system property name/],
+];
 // An out-of-band write. It must change exactly the rows it names: a failed
-// statement or one that matched nothing is a harness failure, not a quiet skip.
+// statement or one that matched nothing is a harness failure, not a quiet
+// skip, unless the database refused it for one of the reasons above.
 function sql(statement, vars) {
   let out;
   try {
@@ -1475,8 +1484,13 @@ function sql(statement, vars) {
     for (const [k, v] of Object.entries(vars)) args.push('-v', `${k}=${v}`);
     out = execFileSync('docker', args, { input: `${statement};\n`, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
   } catch (e) {
+    const refusal = DB_REFUSALS.find(([, re]) => re.test(String(e.stderr ?? '')));
+    if (refusal) {
+      bump((R.sqlRefusals ??= {}), refusal[0]);
+      return false;
+    }
     R.sqlFailures++;
-    harnessError(`sql failed: ${firstLine(e)}`);
+    harnessError(`sql failed: ${firstLine(e)}: ${String(e.stderr ?? '').trim().split('\n')[0].slice(0, 160)}`);
     return false;
   }
   const rows = Number(/^(?:UPDATE|DELETE|INSERT \d+) (\d+)/m.exec(out)?.[1] ?? NaN);
