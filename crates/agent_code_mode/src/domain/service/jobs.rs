@@ -396,7 +396,23 @@ impl Jobs {
             revoke(credentials, &record).await;
             super::activity::finish(&mut record.activity);
             record.status = ExecutionStatus::Interrupted;
-            record.error = Some(INTERRUPTED.into());
+            // A job binds its credential before its program starts, so one
+            // with none never ran.
+            let never_ran = record
+                .job
+                .as_ref()
+                .is_some_and(|job| job.correlation.is_none());
+            if let Some(job) = &mut record.job {
+                job.never_ran = never_ran;
+            }
+            record.error = Some(
+                if never_ran {
+                    INTERRUPTED_BEFORE_START
+                } else {
+                    INTERRUPTED
+                }
+                .into(),
+            );
             match settle_job(self.runtime.store.as_ref(), session, &record).await {
                 Ok(true) => {
                     settled += 1;

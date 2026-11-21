@@ -21018,6 +21018,7 @@ export const ExecutionReceipt = z.object({
         title: z.string(),
         startedAt: z.string().datetime({ offset: true }),
         deadline: z.string().datetime({ offset: true }),
+        neverRan: z.boolean().optional(),
       }),
       z.null(),
     ])

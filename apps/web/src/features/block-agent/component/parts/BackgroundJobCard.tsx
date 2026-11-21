@@ -36,7 +36,8 @@ export function jobOutcome(
   status: ExecutionStatus,
   neverRan = false
 ): string | undefined {
-  if (neverRan && status !== 'running') return t('agentJobs.didNotRun');
+  if (neverRan && (status === 'timed_out' || status === 'interrupted'))
+    return t('agentJobs.didNotRun');
   return match(status)
     .with('running', () => undefined)
     .with('succeeded', () => t('agentJobs.done'))
@@ -48,11 +49,12 @@ export function jobOutcome(
 }
 
 /**
- * A cancel someone asked for is not a failure, and neither is a job that never
- * ran: both read muted, not red.
+ * A cancel someone asked for is not a failure, and neither is a job that
+ * timed out or was interrupted before it ran: they read muted, not red.
  */
 function toolStatus(status: ExecutionStatus, neverRan = false): ToolStatus {
-  if (neverRan && status !== 'running') return 'completed';
+  if (neverRan && (status === 'timed_out' || status === 'interrupted'))
+    return 'completed';
   return match(status)
     .with('running', () => 'running' as const)
     .with('succeeded', 'cancelled', () => 'completed' as const)

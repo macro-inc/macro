@@ -17,7 +17,7 @@ code, not in its prompt. The harness also signs the scope into the credential
 
 - `src/domain.rs`: repository contract and agent-binding validation. A
   correlation can be revoked (`revoke`, `agent_correlations.revoked_at`;
-  the harness revokes a background job's when its program stops):
+  the harness revokes a background job's when its program stops normally):
   `validate` then refuses it (`Revoked`, 401) while `find` still attributes
   past work.
 - `src/scope.rs`: session scopes and the requests each allows. `generation`:

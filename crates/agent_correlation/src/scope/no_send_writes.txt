@@ -39,18 +39,12 @@ PUT /agent-sessions/{session_id}/task
 PUT /agent-sessions/{session_id}/work-registration
 
 [auth]
-DELETE /gtm-invite/links/{id}
-DELETE /team/invite-link
-DELETE /team/invite/{team_invite_id}
 DELETE /team/join/{team_invite_id}
 PATCH /user/group
 PATCH /user/onboarding
 PATCH /user/tutorial
 POST /email/generate/link
 POST /github_pull_requests/enrich
-POST /gtm-invite/redeem
-POST /team/invite-link/join
-POST /team/non-admin-invites/toggle
 POST /user/profile_picture/file
 POST /user/profile_pictures
 PUT /user/language
@@ -236,7 +230,6 @@ PATCH /saved_views/definitions/{saved_view_id}
 PATCH /saved_views/{saved_view_id}
 PATCH /threads/{thread_id}
 PATCH /v2/projects/{id}
-PATCH /webhook/webhooks/{webhook_id}
 POST /annotations/anchors/document/{document_id}
 POST /calendar-events/team/availability
 POST /call/meetings/prepare

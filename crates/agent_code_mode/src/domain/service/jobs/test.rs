@@ -1007,3 +1007,45 @@ async fn a_settled_job_frees_its_place_on_the_replica() {
     harness.service.shutdown_jobs().await;
     assert_eq!(harness.jobs().taken.available_permits(), JOBS_ON_REPLICA);
 }
+
+/// A dead replica's job that never got its credential never ran, and the
+/// sweep says so.
+#[tokio::test]
+async fn the_sweep_says_a_dead_replicas_queued_job_never_ran() {
+    let harness = harness(Credentials::default());
+    let id = ExecutionId::mint();
+    let long_ago = chrono::Utc::now() - chrono::TimeDelta::hours(1);
+    harness.rows.records.lock().unwrap().insert(
+        id,
+        (
+            harness.session.id,
+            ExecutionRecord {
+                execution_id: id,
+                acting_as: Some(ai_toolset::actor::ToolActor::Owner),
+                turn_id: Some(TURN),
+                source: check_routine().source,
+                status: ExecutionStatus::Running,
+                result: None,
+                error: None,
+                calls: Vec::new(),
+                activity: Vec::new(),
+                activity_truncated: false,
+                job: Some(JobInfo {
+                    title: "Scanning inbox".into(),
+                    started_at: long_ago,
+                    deadline: long_ago + chrono::TimeDelta::minutes(10),
+                    correlation: None,
+                    never_ran: false,
+                }),
+            },
+            false,
+            false,
+        ),
+    );
+    assert_eq!(harness.service.sweep_jobs().await.unwrap(), 1);
+    let settlement = &harness.rows.settlements()[0];
+    assert_eq!(settlement.status, JobStatus::Interrupted);
+    assert_eq!(settlement.error.as_deref(), Some(INTERRUPTED_BEFORE_START));
+    assert!(harness.rows.record(id).job.unwrap().never_ran);
+    assert!(harness.credentials.revoked.lock().unwrap().is_empty());
+}

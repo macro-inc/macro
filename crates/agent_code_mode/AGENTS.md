@@ -51,9 +51,12 @@ stacks. Process isolation belongs to
   and document permission tokens, lasting what is left of its 10 minutes
   plus margin, traced under `agent.job.execute`); its correlation is saved
   on the record (`JobInfo.correlation`, never shown to readers), and
-  revoked (`ExecutionCredentials::revoke_job`) as soon as its program stops,
-  and by the sweep, so a copied token stops working. A job that never
-  started settles saying nothing ran, and its record says `neverRan`. It runs without `watch_turn`:
+  revoked (`ExecutionCredentials::revoke_job`) as soon as its program stops
+  on a normal stop (finish, cancel, archive, timeout, shutdown), so a copied
+  token stops working. A replica that crashed leaves it to expire; the
+  sweep's revoke comes after that. A job that never
+  started settles saying nothing ran, and its record says `neverRan`; the
+  sweep says the same of a dead replica's job that had no credential yet. It runs without `watch_turn`:
   its row (`JobStore::control`, every second), its
   session being archived or gone, a local cancel or shutdown stop it.
   `JobStore::settle` writes the final record and its waking `job.settled`

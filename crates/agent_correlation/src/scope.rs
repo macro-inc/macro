@@ -294,6 +294,15 @@ const SENDS: &[(&str, &str)] = &[
     ("POST", "/team_agents/me/online"),
     ("DELETE", "/team_agents/{id}"),
     ("PUT", "/team_agents/{id}/voice"),
+    ("POST", "/team/invite-link/join"),
+    ("DELETE", "/team/invite-link"),
+    ("DELETE", "/team/invite/{id}"),
+    ("POST", "/team/non-admin-invites/toggle"),
+    ("POST", "/gtm-invite/redeem"),
+    ("DELETE", "/gtm-invite/links/{id}"),
+    ("PATCH", "/user/ai_consent"),
+    // A webhook's filters and status decide what an outside endpoint hears.
+    ("PATCH", "/webhook/webhooks/{id}"),
     // Secrets in the team's password vault, shown or handed elsewhere.
     ("POST", "/passwords/agent/teams/{id}/items/{id}/disclose"),
     ("POST", "/passwords/agent/teams/{id}/items/{id}/totp/code"),

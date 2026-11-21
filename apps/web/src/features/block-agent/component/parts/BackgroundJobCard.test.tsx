@@ -23,6 +23,9 @@ it('says how a settled job ended and nothing while it runs', () => {
   // A job that settled before its program started says it didn't run.
   expect(jobOutcome('interrupted', true)).toBe("Didn't run");
   expect(jobOutcome('timed_out', true)).toBe("Didn't run");
+  // A cancel or a failure still says so.
+  expect(jobOutcome('cancelled', true)).toBe('Cancelled');
+  expect(jobOutcome('failed', true)).toBe('Failed');
 });
 
 it('shows a job that never ran muted, not as a failure', () => {

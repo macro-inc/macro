@@ -275,13 +275,7 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
     // Send-looking writes that reach nobody else.
     let reviewed = [
         "auth.generateEmailLink",
-        "auth.deleteTeamInviteLink",
-        "auth.deleteTeamInviteHandler",
         "auth.rejectInvitation",
-        "auth.revokeGtmInviteLink",
-        "auth.redeemGtmInviteLink",
-        "auth.joinTeamByInviteLink",
-        "auth.toggleTeamNonAdminInvites",
         "auth.postProfilePictures",
         // Its route refuses a scoped session tools.
         "cognition.sendChatMessage",
@@ -328,7 +322,6 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         "storage.cancelChannelAccessRequest",
         "storage.deleteWebhook",
         "storage.deleteDatabaseWebhook",
-        "storage.patchWebhook",
         "storage.externalChatRead",
         "storage.externalChatUpload",
         "storage.externalChatRemove",
