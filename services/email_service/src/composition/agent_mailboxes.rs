@@ -74,7 +74,9 @@ pub(crate) fn spawn_sweep(
 ) {
     tracker.spawn(async move {
         let mut interval = tokio::time::interval(SWEEP_INTERVAL);
-        let mut rounds: u32 = 0;
+        // From 1, so a replica's first orphan check comes an hour after it
+        // starts, not at boot alongside every other replica's.
+        let mut rounds: u32 = 1;
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {
             tokio::select! {

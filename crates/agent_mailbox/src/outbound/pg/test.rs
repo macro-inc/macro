@@ -917,3 +917,83 @@ async fn the_orphan_check_pages_through_live_mailboxes_by_id(pool: PgPool) {
     );
     assert_eq!(after_second, None);
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_key_retried_after_its_ledger_row_is_pruned_answers_from_the_audit(pool: PgPool) {
+    let repository = PgAgentMailboxRepository::new(pool);
+    let ada = mailbox(&repository, active_mailbox(&repository).await).await;
+    let now = Utc::now();
+    let replayable = now - Duration::hours(1);
+    let sent = SentMessage {
+        id: ProviderMessageId("sent-1".to_owned()),
+        thread_id: Some("thread-1".to_owned()),
+    };
+    repository
+        .reserve_send(&ada, &attempt(1, 1), ROOMY, now, replayable)
+        .await
+        .unwrap();
+    repository
+        .complete_send(ada.id, Uuid::from_u128(1), &sent)
+        .await
+        .unwrap();
+    repository
+        .reserve_send(&ada, &attempt(2, 1), ROOMY, now, replayable)
+        .await
+        .unwrap();
+    repository
+        .reserve_send(&ada, &attempt(3, 1), ROOMY, now, replayable)
+        .await
+        .unwrap();
+    repository
+        .cancel_send(ada.id, Uuid::from_u128(3))
+        .await
+        .unwrap();
+    repository
+        .prune_sends(now + Duration::seconds(1))
+        .await
+        .unwrap();
+
+    let was_sent = repository
+        .reserve_send(&ada, &attempt(1, 1), ROOMY, now, replayable)
+        .await
+        .unwrap();
+    let was_unknown = repository
+        .reserve_send(&ada, &attempt(2, 1), ROOMY, now, replayable)
+        .await
+        .unwrap();
+    let was_refused = repository
+        .reserve_send(&ada, &attempt(3, 1), ROOMY, now, replayable)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        was_sent,
+        SendReservation::AlreadySent(SentMessage {
+            id: ProviderMessageId("sent-1".to_owned()),
+            thread_id: None,
+        })
+    );
+    assert_eq!(was_unknown, SendReservation::OutcomeUnknown);
+    assert_eq!(was_refused, SendReservation::Proceed { fresh: true });
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn provisioning_needs_only_one_connection(pool: PgPool) {
+    let single = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .acquire_timeout(std::time::Duration::from_secs(2))
+        .connect_with(pool.connect_options().as_ref().clone())
+        .await
+        .unwrap();
+    let repository = PgAgentMailboxRepository::new(single);
+
+    let first = repository
+        .reserve(&request(1), AgentMailboxId::generate(), TEAM, 25)
+        .await;
+    let again = repository
+        .reserve(&request(1), AgentMailboxId::generate(), TEAM, 25)
+        .await;
+
+    assert!(matches!(first, Ok(Reservation::New(_))), "{first:?}");
+    assert!(matches!(again, Ok(Reservation::Existing(_))), "{again:?}");
+}

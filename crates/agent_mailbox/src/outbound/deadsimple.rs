@@ -407,11 +407,18 @@ impl MailboxProvisioner for DeadSimple {
         // The tag filter is the provider's; the match is ours. An inbox that
         // doesn't carry exactly this owner's tag is never taken for it, and
         // two that do are refused rather than guessed between.
+        let listed = list.inboxes.len();
         let mut owned = list
             .inboxes
             .into_iter()
             .filter(|inbox| inbox.tags.iter().any(|candidate| candidate == &tag));
         let first = owned.next();
+        if first.is_none() && listed > 0 {
+            // The provider listed inboxes but none carries the tag: its tag
+            // filter or field isn't what this adapter expects, and a lost
+            // create can't be found.
+            tracing::warn!(agent_mailbox.id = %owner_tag, listed, "provider tag listing matched no inbox");
+        }
         if owned.next().is_some() {
             tracing::error!(agent_mailbox.id = %owner_tag, "two provider inboxes carry one mailbox's owner tag");
             return Err(ProviderError::Unavailable);

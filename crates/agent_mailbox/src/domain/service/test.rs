@@ -506,6 +506,10 @@ impl AgentMailboxRepository for FakeRepository {
             .rows
             .iter()
             .filter(|row| row.mailbox.team == team && row.mailbox.state != MailboxState::Released)
+            .filter(|row| {
+                !(row.mailbox.state == MailboxState::Failed
+                    && row.mailbox.provider_mailbox_id.is_none())
+            })
             .count();
         if team_live >= team_mailbox_limit as usize {
             return Ok(Reservation::TeamFull);

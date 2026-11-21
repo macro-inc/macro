@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT count(*) AS \"count!\" FROM agent_mailboxes\n            WHERE team_id = $1 AND state <> 'released'\n              AND NOT (state = 'failed' AND provider_mailbox_id IS NULL)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ba3040850d5cdef4894469ad4c5e3ad8e94392b5f4a17b33782e7dcc84a970ba"
+}

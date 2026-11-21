@@ -91,6 +91,13 @@ pub struct AgentMailboxService<Repository, Vendor, Cipher, Directory> {
     limits: SendLimits,
 }
 
+/// What the orphan check changed, for its span.
+#[derive(Default)]
+struct OrphanCounts {
+    paused: usize,
+    released: usize,
+}
+
 /// What one sweep round did.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct SweepReport {
@@ -672,7 +679,7 @@ where
         now: DateTime<Utc>,
     ) -> Result<SweepReport, AgentMailboxError> {
         let released_before = now - ORPHAN_GRACE;
-        let mut paused = 0_usize;
+        let mut counts = OrphanCounts::default();
         let mut report = SweepReport::default();
         let mut after = None;
         loop {
@@ -682,7 +689,7 @@ where
                 .await
                 .map_err(internal)?;
             for mailbox in orphans {
-                self.settle_orphan(&mailbox, released_before, now, &mut paused, &mut report)
+                self.settle_orphan(&mailbox, released_before, now, &mut counts, &mut report)
                     .await;
             }
             match last {
@@ -692,8 +699,8 @@ where
         }
 
         let span = tracing::Span::current();
-        span.record("agent_mailbox.orphans.paused", paused);
-        span.record("agent_mailbox.orphans.released", report.advanced - paused);
+        span.record("agent_mailbox.orphans.paused", counts.paused);
+        span.record("agent_mailbox.orphans.released", counts.released);
         span.record("agent_mailbox.orphans.failed", report.failed);
         Ok(report)
     }
@@ -704,12 +711,27 @@ where
         mailbox: &AgentMailbox,
         released_before: DateTime<Utc>,
         now: DateTime<Utc>,
-        paused: &mut usize,
+        counts: &mut OrphanCounts,
         report: &mut SweepReport,
     ) {
         let id = mailbox.id;
         let outcome = match mailbox.state {
-            MailboxState::Paused => self.expire_paused(id, released_before, now).await,
+            MailboxState::Paused => {
+                match self
+                    .repository
+                    .release_if_paused_before(id, released_before, now)
+                    .await
+                    .map_err(internal)
+                {
+                    Ok(true) => {
+                        tracing::warn!(agent_mailbox.id = %id, agent_mailbox.team_id = %mailbox.team, "releasing an agent mailbox whose agent account or team is gone");
+                        counts.released += 1;
+                        self.tear_down(id, now).await
+                    }
+                    Ok(false) => Ok(()),
+                    Err(error) => Err(error),
+                }
+            }
             MailboxState::Provisioning | MailboxState::Active | MailboxState::Failed => {
                 let moved = self
                     .repository
@@ -727,7 +749,7 @@ where
                     .map_err(internal);
                 if matches!(moved, Ok(true)) {
                     tracing::warn!(agent_mailbox.id = %id, agent_mailbox.team_id = %mailbox.team, "paused an agent mailbox whose agent account or team is gone");
-                    *paused += 1;
+                    counts.paused += 1;
                 }
                 moved.map(|_| ())
             }
