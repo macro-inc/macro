@@ -1,0 +1,18 @@
+{
+  "pr": 11792,
+  "head": "212ff294cf4c1c5bea4d54e57c78cbf17fd68df9",
+  "tree": "21dff6810e3dca6aeb9d70482efb27a63b349545",
+  "base": "e0ece1d1bed67a298c3ab375cc2e222944b239b9",
+  "scope": "Isolated Source fixture with production metadata plugin and real Lexical rich-text paste and history handlers. No hosted backend flow is claimed.",
+  "lexical_version": "0.45.0",
+  "clean_before_and_after_capture": true,
+  "page_errors": 0,
+  "result": "Actual clipboard paste, keyboard Undo and Redo restore text, metadata and caret.",
+  "files": {
+    "source-legacy-redo.mp4": "87c1ef34e3f93c43d3dee35a4e3f8e9a677ba9f73f071f198321fcdbedc4d833",
+    "bare.png": "21f9e909b317b74dd4b2fa2d38ae49008b65a48ac679a6a5f91dccbbeab71c54",
+    "pasted.png": "f6dcce3ba8f1cb523f4c6263f562a8ff92a1302cab9f7605b9cca7288f600605",
+    "undo.png": "122c0faa792bf96f5485afb1a0aa80727dbbb9e0be1fb8bf0cc1e0f9fa978124",
+    "redo.png": "0caa5a558259a1dc6de3f077b4bf706c748305ec54a56c0af9716a213f092e85"
+  }
+}
