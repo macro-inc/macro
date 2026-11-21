@@ -846,7 +846,6 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
 
     async fn orphaned(
         &self,
-        paused_before: DateTime<Utc>,
         after: Option<AgentMailboxId>,
         page: u16,
     ) -> Result<(Vec<AgentMailbox>, Option<AgentMailboxId>), Self::Err> {
@@ -854,13 +853,13 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
         // ("User" by id, team_user by its key), so the check never scans the
         // account tables. team_user rows go with their user or team (ON DELETE
         // CASCADE), so one probe covers a deleted account and a deleted team.
+        // Paused mailboxes are left to the paused retention.
         let rows = sqlx::query!(
             r#"
             SELECT id, request_id, user_id, team_id, provider, requested_local_part, display_name,
                    provider_mailbox_id, address, grant_id, grant_key_ciphertext,
                    grant_kms_key_id, grant_encryption_version, state, last_error, paused_at,
-                   (state <> 'paused' OR paused_at < $1)
-                   AND NOT EXISTS (
+                   NOT EXISTS (
                        SELECT 1
                        FROM "User" AS account
                        JOIN team_user ON team_user.user_id = account.id
@@ -868,14 +867,13 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
                        WHERE account.id = mailbox.user_id AND account."isAgent"
                    ) AS "orphan!"
             FROM agent_mailboxes AS mailbox
-            WHERE state IN ('provisioning', 'active', 'failed', 'paused')
+            WHERE state IN ('provisioning', 'active', 'failed')
               -- A plain key bound (nil for the first page), so a generic
               -- plan seeks the primary key instead of filtering from its start.
-              AND id > $2
+              AND id > $1
             ORDER BY id
-            LIMIT $3
+            LIMIT $2
             "#,
-            paused_before,
             after.map_or(Uuid::nil(), |id| id.0),
             i64::from(page),
         )
@@ -910,6 +908,55 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
             })
             .collect::<Result<_, _>>()?;
         Ok((orphans, last))
+    }
+
+    async fn pause_if_orphaned(
+        &self,
+        id: AgentMailboxId,
+        now: DateTime<Utc>,
+    ) -> Result<bool, Self::Err> {
+        // The orphan test is repeated in the write, so an agent added back
+        // since the scan keeps its mailbox.
+        let result = sqlx::query!(
+            r#"
+            UPDATE agent_mailboxes AS mailbox
+            SET state = 'paused', paused_at = $2, next_sweep_at = NULL, updated_at = $2
+            WHERE id = $1
+              AND state IN ('provisioning', 'active', 'failed')
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM "User" AS account
+                  JOIN team_user ON team_user.user_id = account.id
+                                AND team_user.team_id = mailbox.team_id
+                  WHERE account.id = mailbox.user_id AND account."isAgent"
+              )
+            "#,
+            id.0,
+            now,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected() == 1)
+    }
+
+    async fn claim_orphan_check(
+        &self,
+        now: DateTime<Utc>,
+        every: Duration,
+    ) -> Result<bool, Self::Err> {
+        let claimed = sqlx::query!(
+            r#"
+            UPDATE agent_mailbox_sweep_claims
+            SET next_run_at = $1 + $2::interval
+            WHERE name = 'orphans' AND next_run_at <= $1
+            "#,
+            now,
+            sqlx::postgres::types::PgInterval::try_from(every)
+                .map_err(|_| PgAgentMailboxError::Corrupt("orphan check interval"))?,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(claimed.rows_affected() == 1)
     }
 }
 

@@ -305,7 +305,7 @@ impl MailboxClient for FakeVendor {
         &self,
         mailbox: &ProviderMailboxId,
         key: &MailboxKey,
-        _message: &OutgoingMessage,
+        message: &OutgoingMessage,
         idempotency_key: Uuid,
     ) -> Result<SentMessage, ProviderError> {
         let mut state = self.0.lock().unwrap();
@@ -323,6 +323,19 @@ impl MailboxClient for FakeVendor {
             thread_id: None,
         };
         state.sent_by_key.insert(idempotency_key, sent.clone());
+        // The sent copy, readable from the mailbox like the provider's.
+        state.messages.push(MailMessage {
+            id: sent.id.clone(),
+            mailbox: mailbox.clone(),
+            thread_id: None,
+            direction: MessageDirection::Outbound,
+            from: mailbox.0.clone(),
+            to: message.to.clone(),
+            cc: message.cc.clone(),
+            subject: message.subject.clone(),
+            text_body: Some(message.text_body.clone()),
+            created_at: None,
+        });
         Ok(sent)
     }
 
@@ -440,6 +453,10 @@ struct RepositoryState {
     sends: Vec<SendRow>,
     audit: Vec<AuditRow>,
     members: Members,
+    /// Put this agent back on its team right after the orphan scan reads
+    /// its page, as a person re-adding it between the read and the pause would.
+    readd_after_orphan_scan: Option<(String, TeamId)>,
+    orphan_check_next: Option<DateTime<Utc>>,
     /// Resume this mailbox right after the sweep reads its batch, as a
     /// person resuming it between the read and the release would.
     resume_after_sweep_read: Option<AgentMailboxId>,
@@ -944,19 +961,17 @@ impl AgentMailboxRepository for FakeRepository {
 
     async fn orphaned(
         &self,
-        paused_before: DateTime<Utc>,
         after: Option<AgentMailboxId>,
         page: u16,
     ) -> Result<(Vec<AgentMailbox>, Option<AgentMailboxId>), FakeError> {
-        let state = self.0.lock().unwrap();
-        let members = state.members.lock().unwrap();
+        let mut state = self.0.lock().unwrap();
         let mut live: Vec<&StoredRow> = state
             .rows
             .iter()
             .filter(|row| {
-                !matches!(
+                matches!(
                     row.mailbox.state,
-                    MailboxState::Releasing | MailboxState::Released
+                    MailboxState::Provisioning | MailboxState::Active | MailboxState::Failed
                 )
             })
             .filter(|row| after.is_none_or(|after| row.mailbox.id.0 > after.0))
@@ -966,16 +981,57 @@ impl AgentMailboxRepository for FakeRepository {
         let last = (live.len() == usize::from(page))
             .then(|| live.last().map(|row| row.mailbox.id))
             .flatten();
-        let orphans = live
-            .into_iter()
-            .filter(|row| {
-                row.mailbox.state != MailboxState::Paused
-                    || row.mailbox.paused_at.is_some_and(|at| at < paused_before)
-            })
-            .filter(|row| members.get(row.mailbox.agent.as_ref()) != Some(&row.mailbox.team))
-            .map(|row| row.mailbox.clone())
-            .collect();
+        let orphans: Vec<AgentMailbox> = {
+            let members = state.members.lock().unwrap();
+            live.into_iter()
+                .filter(|row| members.get(row.mailbox.agent.as_ref()) != Some(&row.mailbox.team))
+                .map(|row| row.mailbox.clone())
+                .collect()
+        };
+        if let Some((agent, team)) = state.readd_after_orphan_scan.take() {
+            state.members.lock().unwrap().insert(agent, team);
+        }
         Ok((orphans, last))
+    }
+
+    async fn pause_if_orphaned(
+        &self,
+        id: AgentMailboxId,
+        now: DateTime<Utc>,
+    ) -> Result<bool, FakeError> {
+        let mut state = self.0.lock().unwrap();
+        let members = state.members.clone();
+        let row = state
+            .rows
+            .iter_mut()
+            .find(|row| row.mailbox.id == id)
+            .unwrap();
+        let orphan =
+            members.lock().unwrap().get(row.mailbox.agent.as_ref()) != Some(&row.mailbox.team);
+        let live = matches!(
+            row.mailbox.state,
+            MailboxState::Provisioning | MailboxState::Active | MailboxState::Failed
+        );
+        if !(orphan && live) {
+            return Ok(false);
+        }
+        row.mailbox.state = MailboxState::Paused;
+        row.mailbox.paused_at = Some(now);
+        row.updated_at = now;
+        Ok(true)
+    }
+
+    async fn claim_orphan_check(
+        &self,
+        now: DateTime<Utc>,
+        every: Duration,
+    ) -> Result<bool, FakeError> {
+        let mut state = self.0.lock().unwrap();
+        if state.orphan_check_next.is_some_and(|next| next > now) {
+            return Ok(false);
+        }
+        state.orphan_check_next = Some(now + every);
+        Ok(true)
     }
 }
 
@@ -2012,27 +2068,6 @@ async fn a_request_id_reused_for_another_agent_is_refused() {
     ));
 }
 
-#[test]
-fn reserved_role_names_are_not_mailbox_names() {
-    for reserved in [
-        "admin",
-        "administrator",
-        "postmaster",
-        "abuse",
-        "hostmaster",
-        "webmaster",
-        "root",
-        "security",
-        "noreply",
-        "no-reply",
-        "support",
-        "billing",
-    ] {
-        assert!(LocalPart::parse(reserved).is_err(), "{reserved}");
-    }
-    assert!(LocalPart::parse("admin-helper").is_ok());
-}
-
 #[tokio::test]
 async fn every_provider_operation_gets_its_own_idempotency_key() {
     let world = world();
@@ -2316,50 +2351,6 @@ async fn an_agent_on_no_team_gets_no_mailbox() {
 }
 
 #[tokio::test]
-async fn a_mailbox_whose_agent_left_its_team_is_paused_then_released_after_the_grace() {
-    let world = world();
-    world
-        .service
-        .provision(request(ADA, 1, "ada"))
-        .await
-        .unwrap();
-    world
-        .service
-        .provision(request(BEN, 2, "ben"))
-        .await
-        .unwrap();
-    world.members.lock().unwrap().remove(ADA);
-    let now = Utc::now();
-
-    world.service.sweep_orphans(now).await.unwrap();
-    let paused = world.service.status(&user(ADA)).await.unwrap();
-    world.service.sweep_orphans(now).await.unwrap();
-    let still_paused = world.service.status(&user(ADA)).await.unwrap();
-    world
-        .service
-        .sweep_orphans(now + ORPHAN_GRACE + Duration::minutes(1))
-        .await
-        .unwrap();
-
-    assert_eq!(paused.state, MailboxState::Paused);
-    assert_eq!(
-        still_paused.state,
-        MailboxState::Paused,
-        "repeating within the grace changes nothing"
-    );
-    assert!(matches!(
-        world.service.status(&user(ADA)).await,
-        Err(AgentMailboxError::NotFound)
-    ));
-    assert_eq!(
-        world.service.status(&user(BEN)).await.unwrap().state,
-        MailboxState::Active,
-        "a mailbox whose agent is still on its team is left alone"
-    );
-    assert_eq!(world.vendor.live_mailbox_count(), 1);
-}
-
-#[tokio::test]
 async fn a_sweep_step_another_attempt_holds_is_skipped_not_deferred() {
     let world = world();
     let ada = world
@@ -2386,15 +2377,59 @@ async fn a_sweep_step_another_attempt_holds_is_skipped_not_deferred() {
 }
 
 #[tokio::test]
-async fn display_names_that_pass_for_macro_or_an_administrator_are_refused() {
+async fn a_reserved_name_gets_the_suffixed_address_instead() {
     let world = world();
-    for name in [
-        "Macro Security",
+
+    let support = world
+        .service
+        .provision(request(ADA, 1, "support"))
+        .await
+        .unwrap();
+
+    assert_eq!(support.state, MailboxState::Active);
+    let address = support.address.unwrap();
+    assert!(address.starts_with("support-"), "{address}");
+    assert_ne!(address, "support@fake-vendor.invalid");
+}
+
+#[test]
+fn reserved_names_are_named_but_still_parse() {
+    for reserved in [
         "admin",
-        "Ada\r\nBcc: x@example.com",
-        &"a".repeat(65),
-        " ",
+        "administrator",
+        "postmaster",
+        "abuse",
+        "hostmaster",
+        "webmaster",
+        "root",
+        "security",
+        "noreply",
+        "support",
     ] {
+        let local_part = LocalPart::parse(reserved).unwrap();
+        assert!(local_part.is_reserved(), "{reserved}");
+    }
+    assert!(!LocalPart::parse("admin-helper").unwrap().is_reserved());
+}
+
+#[tokio::test]
+async fn a_display_name_naming_macro_or_an_administrator_is_dropped_not_refused() {
+    let world = world();
+    let request = ProvisionRequest {
+        display_name: Some("Macro Security Reviewer".to_owned()),
+        ..request(ADA, 1, "ada")
+    };
+
+    let view = world.service.provision(request).await.unwrap();
+
+    assert_eq!(view.state, MailboxState::Active);
+    assert_eq!(world.repository.row(view.id).display_name, None);
+}
+
+#[tokio::test]
+async fn a_malformed_display_name_is_refused() {
+    let world = world();
+    for name in ["Ada\r\nBcc: x@example.com", &"a".repeat(65), " "] {
         let request = ProvisionRequest {
             display_name: Some(name.to_owned()),
             ..request(ADA, 1, "ada")
@@ -2405,9 +2440,141 @@ async fn display_names_that_pass_for_macro_or_an_administrator_are_refused() {
             "{name:?}: {refused:?}"
         );
     }
-    let fine = ProvisionRequest {
-        display_name: Some("Ada, research assistant".to_owned()),
-        ..request(ADA, 1, "ada")
-    };
-    assert!(world.service.provision(fine).await.is_ok());
+}
+
+#[tokio::test]
+async fn a_mailbox_whose_agent_is_gone_is_only_paused_and_released_after_the_usual_thirty_days() {
+    let world = world();
+    let ada = world
+        .service
+        .provision(request(ADA, 1, "ada"))
+        .await
+        .unwrap();
+    world
+        .service
+        .provision(request(BEN, 2, "ben"))
+        .await
+        .unwrap();
+    world.members.lock().unwrap().remove(ADA);
+    let now = Utc::now();
+
+    world.service.sweep_orphans(now).await.unwrap();
+    world
+        .service
+        .sweep_orphans(now + Duration::days(2))
+        .await
+        .unwrap();
+    world.service.sweep(now + Duration::days(2)).await.unwrap();
+    let after_two_days = world.service.status(&user(ADA)).await.unwrap();
+    world
+        .repository
+        .age(ada.id, PAUSED_RETENTION + Duration::minutes(1));
+    world.service.sweep(Utc::now()).await.unwrap();
+
+    assert_eq!(
+        after_two_days.state,
+        MailboxState::Paused,
+        "removal never deletes mail early"
+    );
+    assert!(matches!(
+        world.service.status(&user(ADA)).await,
+        Err(AgentMailboxError::NotFound)
+    ));
+    assert_eq!(
+        world.service.status(&user(BEN)).await.unwrap().state,
+        MailboxState::Active
+    );
+}
+
+#[tokio::test]
+async fn an_agent_added_back_before_the_pause_lands_keeps_its_mailbox() {
+    let world = world();
+    world
+        .service
+        .provision(request(ADA, 1, "ada"))
+        .await
+        .unwrap();
+    world.members.lock().unwrap().remove(ADA);
+    // Back on its team between the scan and the write.
+    world.repository.0.lock().unwrap().readd_after_orphan_scan = Some((ADA.to_owned(), ADA_TEAM));
+
+    world.service.sweep_orphans(Utc::now()).await.unwrap();
+
+    assert_eq!(
+        world.service.status(&user(ADA)).await.unwrap().state,
+        MailboxState::Active
+    );
+}
+
+#[tokio::test]
+async fn the_orphan_check_runs_once_an_hour_across_replicas() {
+    let world = world();
+    world
+        .service
+        .provision(request(ADA, 1, "ada"))
+        .await
+        .unwrap();
+    let now = Utc::now();
+
+    let first = world.service.sweep_orphans(now).await.unwrap();
+    world.members.lock().unwrap().remove(ADA);
+    let same_hour = world
+        .service
+        .sweep_orphans(now + Duration::minutes(1))
+        .await
+        .unwrap();
+    let next_hour = world
+        .service
+        .sweep_orphans(now + Duration::minutes(61))
+        .await
+        .unwrap();
+
+    assert!(first.is_some());
+    assert!(
+        same_hour.is_none(),
+        "another round inside the hour skips the scan"
+    );
+    assert!(next_hour.is_some());
+    assert_eq!(
+        world.service.status(&user(ADA)).await.unwrap().state,
+        MailboxState::Paused
+    );
+}
+
+#[tokio::test]
+async fn a_reply_counts_the_recipients_it_goes_to() {
+    let world = world();
+    world
+        .service
+        .provision(request(ADA, 1, "ada"))
+        .await
+        .unwrap();
+    let mut wide = outgoing("Hi");
+    wide.to = vec!["one@example.com".to_owned(), "two@example.com".to_owned()];
+    wide.cc = vec!["three@example.com".to_owned()];
+    let sent = world
+        .service
+        .send(&user(ADA), approved(), Uuid::from_u128(1), wide)
+        .await
+        .unwrap();
+
+    world
+        .service
+        .reply(
+            &user(ADA),
+            approved(),
+            &sent.id,
+            Uuid::from_u128(2),
+            ReplyMessage {
+                text_body: "More".to_owned(),
+            },
+        )
+        .await
+        .unwrap();
+
+    let audit = world.repository.0.lock().unwrap().audit.clone();
+    assert_eq!(
+        audit[1].recipients, 3,
+        "a reply to an outbound message goes to its recipients"
+    );
 }

@@ -349,15 +349,29 @@ pub trait AgentMailboxRepository: Send + Sync + 'static {
         before: DateTime<Utc>,
     ) -> impl Future<Output = Result<u64, Self::Err>> + Send;
 
-    /// Of the next `page` live mailboxes (not releasing or released) by id
+    /// Of the next `page` provisioning, active or failed mailboxes by id
     /// after `after`, those whose agent account is gone, is no longer an
-    /// agent's, or is no longer on the mailbox's team, leaving out those
-    /// paused since `paused_before` or later. Returns them with the last id
-    /// read, `None` once there are no more.
+    /// agent's, or is no longer on the mailbox's team (or the team is gone).
+    /// Returns them with the last id read, `None` once there are no more.
     fn orphaned(
         &self,
-        paused_before: DateTime<Utc>,
         after: Option<AgentMailboxId>,
         page: u16,
     ) -> impl Future<Output = Result<(Vec<AgentMailbox>, Option<AgentMailboxId>), Self::Err>> + Send;
+
+    /// Pause a provisioning, active or failed mailbox only if it is still an
+    /// orphan, rechecked in the same write. Returns whether it paused.
+    fn pause_if_orphaned(
+        &self,
+        id: AgentMailboxId,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Take this round of the orphan check for the whole cluster: true for
+    /// exactly one caller per `every`.
+    fn claim_orphan_check(
+        &self,
+        now: DateTime<Utc>,
+        every: chrono::Duration,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 }

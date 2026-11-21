@@ -161,9 +161,7 @@ pub const MAX_LOCAL_PART_LENGTH: usize = 40;
 
 /// A local part that cannot be used.
 #[derive(Debug, thiserror::Error)]
-#[error(
-    "a mailbox name uses lowercase letters, digits, '.' and '-', at most 40 characters, and is not a reserved role name"
-)]
+#[error("a mailbox name uses lowercase letters, digits, '.' and '-', at most 40 characters")]
 pub struct InvalidLocalPart;
 
 impl LocalPart {
@@ -189,11 +187,19 @@ impl LocalPart {
             || !valid_characters
             || !edges_are_alphanumeric
             || value.contains("..")
-            || RESERVED_LOCAL_PARTS.contains(&value)
         {
             return Err(InvalidLocalPart);
         }
         Ok(Self(value.to_owned()))
+    }
+
+    /// Whether this is a role or staff name no agent may take as is; a new
+    /// mailbox asking for one gets the suffixed form. Checked only when a
+    /// mailbox is created, so a name added to the list later never makes a
+    /// stored row unreadable.
+    #[must_use]
+    pub fn is_reserved(&self) -> bool {
+        RESERVED_LOCAL_PARTS.contains(&self.0.as_str())
     }
 
     /// The same local part with a short suffix from the mailbox id, for when it is taken.

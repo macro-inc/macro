@@ -123,3 +123,12 @@ CREATE TABLE agent_mailbox_send_audit (
 -- Pruning audit records past their retention.
 CREATE INDEX agent_mailbox_send_audit_approved_idx
     ON agent_mailbox_send_audit (approved_at);
+
+-- Background checks that run once per cluster per interval: a replica that
+-- moves next_run_at forward has the round.
+CREATE TABLE agent_mailbox_sweep_claims (
+    name TEXT PRIMARY KEY CHECK (name IN ('orphans')),
+    next_run_at TIMESTAMPTZ NOT NULL
+);
+
+INSERT INTO agent_mailbox_sweep_claims (name, next_run_at) VALUES ('orphans', '-infinity');

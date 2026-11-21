@@ -15,10 +15,10 @@ use uuid::Uuid;
 
 use crate::domain::models::{
     AgentMailbox, AgentMailboxError, AgentMailboxId, AgentMailboxView, CreateMailbox, MailMessage,
-    MailboxState, MessageList, MessagePage, OutgoingMessage, OwnerApproval, ProviderMailboxId,
-    ProviderMessageId, ProvisionRequest, ProvisionedMailbox, ProvisioningFailure, ReplyMessage,
-    Reservation, SendAttempt, SendKind, SendLimits, SendReservation, SentMessage, StoredGrant,
-    VendorMode,
+    MailboxState, MessageDirection, MessageList, MessagePage, OutgoingMessage, OwnerApproval,
+    ProviderMailboxId, ProviderMessageId, ProvisionRequest, ProvisionedMailbox,
+    ProvisioningFailure, ReplyMessage, Reservation, SendAttempt, SendKind, SendLimits,
+    SendReservation, SentMessage, StoredGrant, VendorMode,
 };
 use crate::domain::ports::{
     AgentDirectory, AgentMailboxRepository, LeaseToken, MailboxClient, MailboxKeyCipher,
@@ -68,9 +68,9 @@ pub const SEND_AUDIT_RETENTION: Duration = Duration::days(400);
 /// Most live agent mailboxes one team may have.
 pub const MAX_TEAM_MAILBOXES: u32 = 25;
 
-/// A mailbox whose agent account or team went away is paused at once and
-/// released after this long.
-pub const ORPHAN_GRACE: Duration = Duration::days(1);
+/// How often one replica checks for mailboxes whose agent account or team
+/// went away.
+pub const ORPHAN_CHECK_EVERY: Duration = Duration::hours(1);
 
 /// Send records the sweep prunes per round (the literal in the repository's query).
 pub const PRUNE_BATCH: u32 = 1000;
@@ -89,13 +89,6 @@ pub struct AgentMailboxService<Repository, Vendor, Cipher, Directory> {
     directory: Directory,
     vendor_mode: VendorMode,
     limits: SendLimits,
-}
-
-/// What the orphan check changed, for its span.
-#[derive(Default)]
-struct OrphanCounts {
-    paused: usize,
-    released: usize,
 }
 
 /// What one sweep round did.
@@ -194,8 +187,14 @@ where
         &self,
         request: ProvisionRequest,
     ) -> Result<AgentMailboxView, AgentMailboxError> {
+        let mut request = request;
         if let Some(name) = &request.display_name {
             validate_display_name(name)?;
+            // A name that would pass for Macro or an administrator is left
+            // off; the mailbox is still made, under the agent's address.
+            if names_a_reserved_role(name) {
+                request.display_name = None;
+            }
         }
         let team = self
             .directory
@@ -371,10 +370,18 @@ where
             return Ok(existing);
         }
 
+        // A role name is never taken as is: it goes straight to the suffixed form.
+        let local_part = mailbox.requested_local_part.as_ref().map(|local_part| {
+            if local_part.is_reserved() {
+                local_part.with_suffix(mailbox.id)
+            } else {
+                local_part.clone()
+            }
+        });
         let request = CreateMailbox {
             idempotency_key: provider_key(mailbox.id, b"create"),
             owner_tag: mailbox.id,
-            local_part: mailbox.requested_local_part.clone(),
+            local_part,
             display_name: mailbox.display_name.clone(),
         };
         match self.vendor.create_mailbox(&request).await {
@@ -670,27 +677,43 @@ where
 
     /// The safety net under the teammate lifecycle: pause every live mailbox
     /// whose agent account is gone, is no longer an agent's, or left the
-    /// mailbox's team, and release it once it has been paused for
-    /// [`ORPHAN_GRACE`]. Goes through the same transitions and fenced
-    /// teardown as a release, so repeating it is harmless.
-    #[tracing::instrument(skip_all, fields(agent_mailbox.orphans.paused, agent_mailbox.orphans.released, agent_mailbox.orphans.failed), err)]
+    /// mailbox's team, or whose team is gone. Pausing keeps the mail; the
+    /// usual [`PAUSED_RETENTION`] releases it later. One replica runs it per
+    /// [`ORPHAN_CHECK_EVERY`]; `None` when another has this round.
+    #[tracing::instrument(skip_all, fields(agent_mailbox.orphans.paused, agent_mailbox.orphans.failed), err)]
     pub async fn sweep_orphans(
         &self,
         now: DateTime<Utc>,
-    ) -> Result<SweepReport, AgentMailboxError> {
-        let released_before = now - ORPHAN_GRACE;
-        let mut counts = OrphanCounts::default();
+    ) -> Result<Option<SweepReport>, AgentMailboxError> {
+        let claimed = self
+            .repository
+            .claim_orphan_check(now, ORPHAN_CHECK_EVERY)
+            .await
+            .map_err(internal)?;
+        if !claimed {
+            return Ok(None);
+        }
+
         let mut report = SweepReport::default();
         let mut after = None;
         loop {
             let (orphans, last) = self
                 .repository
-                .orphaned(released_before, after, ORPHAN_SCAN_PAGE)
+                .orphaned(after, ORPHAN_SCAN_PAGE)
                 .await
                 .map_err(internal)?;
             for mailbox in orphans {
-                self.settle_orphan(&mailbox, released_before, now, &mut counts, &mut report)
-                    .await;
+                match self.repository.pause_if_orphaned(mailbox.id, now).await {
+                    Ok(true) => {
+                        tracing::warn!(agent_mailbox.id = %mailbox.id, agent_mailbox.team_id = %mailbox.team, "paused an agent mailbox whose agent account or team is gone");
+                        report.advanced += 1;
+                    }
+                    Ok(false) => report.skipped += 1,
+                    Err(error) => {
+                        tracing::warn!(agent_mailbox.id = %mailbox.id, error = %error, "agent mailbox orphan pause failed");
+                        report.failed += 1;
+                    }
+                }
             }
             match last {
                 Some(last) => after = Some(last),
@@ -699,70 +722,9 @@ where
         }
 
         let span = tracing::Span::current();
-        span.record("agent_mailbox.orphans.paused", counts.paused);
-        span.record("agent_mailbox.orphans.released", counts.released);
+        span.record("agent_mailbox.orphans.paused", report.advanced);
         span.record("agent_mailbox.orphans.failed", report.failed);
-        Ok(report)
-    }
-
-    /// Pause one orphan, or release it once paused past the grace.
-    async fn settle_orphan(
-        &self,
-        mailbox: &AgentMailbox,
-        released_before: DateTime<Utc>,
-        now: DateTime<Utc>,
-        counts: &mut OrphanCounts,
-        report: &mut SweepReport,
-    ) {
-        let id = mailbox.id;
-        let outcome = match mailbox.state {
-            MailboxState::Paused => {
-                match self
-                    .repository
-                    .release_if_paused_before(id, released_before, now)
-                    .await
-                    .map_err(internal)
-                {
-                    Ok(true) => {
-                        tracing::warn!(agent_mailbox.id = %id, agent_mailbox.team_id = %mailbox.team, "releasing an agent mailbox whose agent account or team is gone");
-                        counts.released += 1;
-                        self.tear_down(id, now).await
-                    }
-                    Ok(false) => Ok(()),
-                    Err(error) => Err(error),
-                }
-            }
-            MailboxState::Provisioning | MailboxState::Active | MailboxState::Failed => {
-                let moved = self
-                    .repository
-                    .transition(
-                        id,
-                        &[
-                            MailboxState::Provisioning,
-                            MailboxState::Active,
-                            MailboxState::Failed,
-                        ],
-                        MailboxState::Paused,
-                        now,
-                    )
-                    .await
-                    .map_err(internal);
-                if matches!(moved, Ok(true)) {
-                    tracing::warn!(agent_mailbox.id = %id, agent_mailbox.team_id = %mailbox.team, "paused an agent mailbox whose agent account or team is gone");
-                    counts.paused += 1;
-                }
-                moved.map(|_| ())
-            }
-            MailboxState::Releasing | MailboxState::Released => Ok(()),
-        };
-        match outcome {
-            Ok(()) => report.advanced += 1,
-            Err(AgentMailboxError::Busy) => report.skipped += 1,
-            Err(error) => {
-                tracing::warn!(agent_mailbox.id = %id, error = %error, "agent mailbox orphan step failed");
-                report.failed += 1;
-            }
-        }
+        Ok(Some(report))
     }
 
     /// Release a mailbox paused past retention, unless it was resumed since
@@ -952,13 +914,21 @@ where
 
         // Confined before replying: a model-supplied id from another mailbox
         // is a NotFound here, never a reply.
-        self.confined_message(&mailbox, &provider_mailbox, &key, message)
+        let original = self
+            .confined_message(&mailbox, &provider_mailbox, &key, message)
             .await?;
+        // A reply answers the sender of a received message; replying to one
+        // of the mailbox's own sent messages goes to that message's
+        // recipients. Counted from the message, never assumed.
+        let recipients = match original.direction {
+            MessageDirection::Inbound => 1,
+            MessageDirection::Outbound => (original.to.len() + original.cc.len()).max(1),
+        };
 
         let attempt = SendAttempt {
             idempotency_key,
             kind: SendKind::Reply,
-            recipient_count: 1,
+            recipient_count: u32::try_from(recipients).unwrap_or(u32::MAX),
             fingerprint: fingerprint(&[b"reply", message.0.as_bytes(), reply.text_body.as_bytes()]),
         };
         self.with_reserved_send(&mailbox, &attempt, async || {
@@ -1071,13 +1041,12 @@ fn validate_display_name(name: &str) -> Result<(), AgentMailboxError> {
     if name.chars().any(char::is_control) {
         return invalid("may not contain control characters");
     }
-    let reserved = name
-        .split(|character: char| !character.is_alphanumeric() && character != '-')
-        .any(|word| RESERVED_DISPLAY_WORDS.contains(&word.to_lowercase().as_str()));
-    if reserved {
-        return invalid("may not name Macro or an administrator role");
-    }
     Ok(())
+}
+
+fn names_a_reserved_role(name: &str) -> bool {
+    name.split(|character: char| !character.is_alphanumeric() && character != '-')
+        .any(|word| RESERVED_DISPLAY_WORDS.contains(&word.to_lowercase().as_str()))
 }
 
 fn validate_body(body: &str) -> Result<(), AgentMailboxError> {

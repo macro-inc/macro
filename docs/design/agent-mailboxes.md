@@ -61,9 +61,10 @@ flowchart LR
 - **Audit.** Every send leaves a record of its mailbox, team, key, kind,
   recipient count, outcome and approval time, kept 400 days. No recipients,
   subjects, bodies or approval text.
-- **Names.** Role names (`admin`, `postmaster`, `abuse`, the CA domain-validation
-  addresses and the like) are never mailbox names, and display names may not
-  name Macro or an administrator.
+- **Names.** A role name (`admin`, `postmaster`, `abuse`, `support`, the CA
+  domain-validation addresses and the like) is never taken as is: the mailbox
+  gets the suffixed form. A display name that names Macro or an administrator
+  is left off.
 - **Provider content is data.** Headers, the provider's prompt-injection score and
   any provider event never grant access or trigger an action.
 - **No payment.** The provider offers per-call payment when a key is missing; the
@@ -94,9 +95,10 @@ flowchart LR
   mailboxes paused for more than 30 days (rechecked in the write that starts
   the release, so a resume in between wins). A step that fails is set aside
   for five minutes so failing mailboxes never crowd out the rest.
-- Hourly, the sweep pauses any live mailbox whose agent account was deleted,
-  is no longer an agent, or left the mailbox's team, and releases it once it
-  has been paused a day, through the same transitions and fenced teardown.
+- Hourly, one replica pauses any live mailbox whose agent account was deleted,
+  is no longer an agent, or left the mailbox's team, or whose team was
+  deleted; the write rechecks it. Pausing keeps the mail: the usual 30-day
+  paused retention releases it.
 - A lost create is matched by its exact owner tag on Macro's side, never by
   trusting the provider's filter; two inboxes with one owner tag are refused.
 - A send whose outcome is unknown is retried under the same provider
