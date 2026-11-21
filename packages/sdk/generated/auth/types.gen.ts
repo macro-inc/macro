@@ -50,7 +50,7 @@ export type AgentInboxFailure = 'not_configured' | 'address_taken' | 'quota_exce
 /**
  * Where an agent's inbox is.
  */
-export type AgentInboxState = 'provisioning' | 'active' | 'failed' | 'paused' | 'releasing' | 'released';
+export type AgentInboxState = 'provisioning' | 'active' | 'failed' | 'pausing' | 'paused' | 'releasing' | 'released';
 
 /**
  * What an agent needs to start using the SDK.
