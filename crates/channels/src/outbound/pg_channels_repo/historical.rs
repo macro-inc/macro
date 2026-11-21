@@ -236,9 +236,9 @@ pub async fn ensure_dm_in(
 /// which of several such DMs it answers.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DmRoster<'a> {
-    /// Every row counts, a removed member's too, and the oldest DM wins. An
-    /// import maps a conversation onto the channel it reserved for it, so it
-    /// keeps the rule that channel was chosen by.
+    /// Every row counts, a removed member's too, and the oldest DM wins, then
+    /// the lowest id. An import maps a conversation onto the channel it
+    /// reserved for it, so it keeps the rule that channel was chosen by.
     Stored,
     /// A removed bot's row does not count, and while both people are still
     /// in the DM neither does a departed third person's in a legacy DM: the
@@ -248,10 +248,10 @@ pub enum DmRoster<'a> {
     /// always did here: that conversation was a group's, which no list
     /// showed as the pair's, and a first message starts a DM of their own.
     /// Of several, one both people are still in wins, then one only the
-    /// other person left, then one this member left, then the oldest: a
-    /// legacy duplicate never takes over the DM they use, and this member
-    /// lands where they can still write if they can anywhere. Live
-    /// get-or-create, by its actor.
+    /// other person left, then one this member left, then one both left;
+    /// then the oldest, then the lowest id: a legacy duplicate never takes
+    /// over the DM they use, and this member lands where they can still
+    /// write if they can anywhere. Live get-or-create, by its actor.
     Listed(&'a MacroUserIdStr<'a>),
     /// As `Listed`, among the DMs this member is still in, the only ones
     /// open to them: the read-only lookup answers its viewer the DM their

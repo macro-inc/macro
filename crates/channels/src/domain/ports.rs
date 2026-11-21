@@ -332,7 +332,8 @@ pub trait ChannelRepo: Send + Sync + 'static {
 
     /// The exact two-member DM `user_id` is still in that their get-or-create
     /// would reuse: of several, one both are in, then one only `recipient_id`
-    /// left, then the oldest. `None` when `user_id` is in none.
+    /// left, then the oldest, then the lowest id. `None` when `user_id` is in
+    /// none.
     fn maybe_get_dm<'a>(
         &self,
         user_id: MacroUserIdStr<'a>,

@@ -321,8 +321,8 @@ impl GraphqlChannelUserQuery {
     /// The id of the authenticated user's direct message with `userId`, the
     /// one a first message to them would reuse, while the authenticated user
     /// is still in it: of several, one both are in, then one only `userId`
-    /// left, then the oldest. Null when they are in none, or when `userId` is
-    /// the authenticated user. Asking never creates one.
+    /// left, then the oldest, then the lowest id. Null when they are in none,
+    /// or when `userId` is the authenticated user. Asking never creates one.
     async fn direct_message_channel_id(
         &self,
         ctx: &Context<'_>,
