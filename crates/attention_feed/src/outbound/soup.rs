@@ -130,30 +130,31 @@ async fn read_page<T: AttentionPages, E: ViewerInboxes>(
     request: CandidateRequest,
 ) -> Result<CandidatePage<SoupProjectionHydration>, Report> {
     let link_ids = email.inbox_ids(&request.viewer.user).await?;
-    let page = soup
-        .attention_page(
-            AttentionSoupRequest {
-                user: request.viewer.user.clone(),
-                link_ids,
-                limit: request.limit,
-                own_work: request.own_work,
-                keying: match request.keying {
-                    CandidateKeying::ThreadScoped => AttentionKeying::ThreadScoped,
-                    CandidateKeying::FiledEntity => AttentionKeying::FiledEntity,
-                },
-                types: request.types,
-                filter: request.filter,
-                after: request.after.map(|after| AttentionPagePosition {
-                    sort_at: after.sort_at,
-                    entity_id: after.entity_id,
-                }),
-                only: request.only,
-                assume_attention: request.assume_attention,
+    // Boxed: the Soup read's future is large, and in an unoptimized build each
+    // of `page`'s two awaits of this read adds it to the stack again.
+    let page = Box::pin(soup.attention_page(
+        AttentionSoupRequest {
+            user: request.viewer.user.clone(),
+            link_ids,
+            limit: request.limit,
+            own_work: request.own_work,
+            keying: match request.keying {
+                CandidateKeying::ThreadScoped => AttentionKeying::ThreadScoped,
+                CandidateKeying::FiledEntity => AttentionKeying::FiledEntity,
             },
-            request.viewer.team,
-        )
-        .await
-        .map_err(|error| rootcause::report!("failed to load feed candidates: {error}"))?;
+            types: request.types,
+            filter: request.filter,
+            after: request.after.map(|after| AttentionPagePosition {
+                sort_at: after.sort_at,
+                entity_id: after.entity_id,
+            }),
+            only: request.only,
+            assume_attention: request.assume_attention,
+        },
+        request.viewer.team,
+    ))
+    .await
+    .map_err(|error| rootcause::report!("failed to load feed candidates: {error}"))?;
 
     Ok(CandidatePage {
         items: page
