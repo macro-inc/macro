@@ -23,6 +23,8 @@ import {
  * Never edit, merge or delete the tasks `findSimilar` matches unless the user asks.
  * A task made from a message, document or chat passes it as `source`, so the
  * task links back to it with a chip; never paste its text or URL in its place.
+ * A team bot with no acting user leaves `source` out (it needs `/user/me` to
+ * assign the creator) and links the source's URL in `markdown` instead.
  */
 export class TaskNamespace {
   constructor(private readonly client: MacroClient) {}
@@ -53,7 +55,7 @@ export class TaskNamespace {
     team?: Team;
     /** Defaults to team sharing, or private when the session cannot share. */
     shareWithTeam?: boolean;
-    /** What the task came from, e.g. `channel.message(id)`; linked as a chip above `markdown` and set as its Source. */
+    /** What the task came from, e.g. `channel.message(id)`; linked as a chip above `markdown` and set as its Source. A team bot with no acting user can't pass it yet. */
     source?: TaskSource;
   }): Promise<Task> {
     return Task.create(this.client, opts);

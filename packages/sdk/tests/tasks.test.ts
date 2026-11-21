@@ -273,14 +273,35 @@ describe('Task.create', () => {
     ]);
   });
 
-  test('links the source message with a chip and records it as Source', async () => {
+  test('links a source reply with a chip that opens its thread and records it as Source', async () => {
     const requests: Request[] = [];
     globalThis.fetch = (async (input, init) => {
       const request =
         input instanceof Request ? input : new Request(input, init);
       requests.push(request.clone());
-      if (new URL(request.url).pathname === '/user/me') {
+      const { pathname } = new URL(request.url);
+      if (pathname === '/user/me') {
         return Response.json({ user_id: 'macro|creator@example.test' });
+      }
+      if (
+        pathname ===
+        '/messages/channel/0195d2dd-5de9-71f2-9d59-5d9734f1adb7/items/01a1eaa3-102a-7bbc-8d8f-8a427f9efecb'
+      ) {
+        return Response.json({
+          id: '01a1eaa3-102a-7bbc-8d8f-8a427f9efecb',
+          parent: {
+            type: 'channel',
+            id: '0195d2dd-5de9-71f2-9d59-5d9734f1adb7',
+          },
+          thread_id: '01a1eaa3-0f00-7000-8000-000000000001',
+          sender_id: 'macro|asker@example.test',
+          content: 'Can we chip these links?',
+          mentions: [],
+          attachments: [],
+          reactions: [],
+          created_at: '2026-11-20T12:00:00Z',
+          updated_at: '2026-11-20T12:00:00Z',
+        });
       }
       return Response.json({
         documentId: '0198a4cc-e138-7670-a308-a6b766602723',
@@ -303,12 +324,13 @@ describe('Task.create', () => {
     });
 
     expect(requests.map((request) => new URL(request.url).pathname)).toEqual([
+      '/messages/channel/0195d2dd-5de9-71f2-9d59-5d9734f1adb7/items/01a1eaa3-102a-7bbc-8d8f-8a427f9efecb',
       '/user/me',
       '/documents/create_task',
     ]);
-    const body = await requests[1].json();
+    const body = await requests[2].json();
     expect(body.markdown).toBe(
-      'Source: <m-document-mention>{"documentId":"0195d2dd-5de9-71f2-9d59-5d9734f1adb7","documentName":"","blockName":"channel","blockParams":{"channel_message_id":"01a1eaa3-102a-7bbc-8d8f-8a427f9efecb"}}</m-document-mention>\n\nAgents should link what they quote.',
+      'Source: <m-document-mention>{"documentId":"0195d2dd-5de9-71f2-9d59-5d9734f1adb7","documentName":"","blockName":"channel","blockParams":{"channel_message_id":"01a1eaa3-102a-7bbc-8d8f-8a427f9efecb","channel_thread_id":"01a1eaa3-0f00-7000-8000-000000000001"}}</m-document-mention>\n\nAgents should link what they quote.',
     );
     expect(body.propertyValues).toEqual([
       {

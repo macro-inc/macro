@@ -117,6 +117,10 @@ export class Task extends Document {
     if (typeof opts.name !== 'string' || !opts.name.trim())
       throw new MacroError('tasks.create needs `name`, the task title.');
     const source = opts.source && sourceReference(opts.source);
+    // A reply's chip opens its thread only with the thread id, which
+    // `channel.message(id)` hasn't loaded yet.
+    if (opts.source?.entityType === 'channel_message')
+      await opts.source.content();
     const { documentId } = unwrap(
       await client.storage.createTaskHandler({
         body: {
