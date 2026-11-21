@@ -3,9 +3,9 @@ import { RecordTabs } from './components/record-tabs';
 import { CrmProvider } from './context/crm-context';
 import { CONTACT_SECTIONS, type ContactSection } from './core/record';
 import { createAppCrmContext } from './crm-adapter';
-import { useRecordTabKeys } from './record-tab-keys';
 import { Contact as View } from './views/contact-detail';
 import { ContactVisibilityButton as VisibilityButton } from './views/contact-visibility-button';
+import { useRecordTabKeys } from './views/record-tab-keys';
 
 export type { ContactSection } from './core/record';
 
@@ -24,7 +24,7 @@ export function ContactTabs(props: {
   compact?: boolean;
 }) {
   const tabsRef = useRecordTabKeys({
-    sections: CONTACT_SECTIONS,
+    sections: () => CONTACT_SECTIONS,
     value: () => props.value,
     onChange: (section) => props.onChange(section),
   });
