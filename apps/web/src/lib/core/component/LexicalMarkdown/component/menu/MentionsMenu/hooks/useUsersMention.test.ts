@@ -693,7 +693,7 @@ it('orders the personal mention window by contact list only while enable-contact
     expect(options?.peopleListPriority?.()).toEqual([
       ['teammates'],
       ['interacted', 'invited'],
-      ['gmail', 'outlook'],
+      ['gmail', 'outlook', 'imap'],
     ]);
     expect(options?.peopleListPriority?.()).toBe(MENTION_LIST_PRIORITY);
     dispose();
