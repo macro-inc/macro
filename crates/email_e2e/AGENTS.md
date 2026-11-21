@@ -163,9 +163,15 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
   is linked to, has the Focus flag: every user has it unless the scenario turns it off with
   `turn_off_focus_flag_for(address)` before linking any inbox, since the
   worker reads the flag on its first look at the inboxes and again only
-  five minutes later. `stack.focus_skipped_without_flag(thread_id)`
+  five minutes later. It also needs that person to use Macro: every user
+  the harness makes has Macro open (`User::create` records them as seen,
+  as the connection gateway does), `user.away_for(duration)` makes them
+  someone who stopped, and `user.opens_macro()` brings them back. The
+  worker keeps that answer for `FOCUS_ACTIVITY_CACHE_SECS` (300 s); a
+  scenario about leaving and coming back sets it to 0 through
+  `StackOptions.env`. `stack.focus_skipped_without_flag(thread_id)`
   tells that the worker is done with a thread and left it unclassified
-  because nobody whose tab shows it has the flag; it reads a debug line the
+  because nobody whose tab shows it is in the rollout; it reads a debug line the
   stack's `RUST_LOG` for the worker turns on, so a scenario that sets
   its own `RUST_LOG` loses it. Classifying follows
   the sync, so wait for the list or the thread's `focus`. Keep these
@@ -432,7 +438,8 @@ shared with the web app's suite) and backend entry points second.
   `email-e2e-focus` test group runs `tests/focus.rs` serially. The harness
   gives the group an offset before its first worker starts, so mail that
   arrives while a worker joins is still read. The worker's later sweeps
-  are an hour apart and no scenario sees one, but it looks at every linked
+  are an hour apart unless a scenario sets `FOCUS_SWEEP_INTERVAL_SECS`
+  (60 at least) to see them, and it looks at every linked
   inbox once a minute and backfills those whose owner, or a user they are
   linked to, has the flag, so a
   scenario longer than a minute may see a thread classified by that too.

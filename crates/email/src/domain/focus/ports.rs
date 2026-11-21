@@ -98,7 +98,9 @@ pub trait ProfileSource: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<String>, Report>> + Send;
 }
 
-/// Who is in the Focus rollout.
+/// Who is in the Focus rollout. The worker counts someone in only while they
+/// use Macro (`email_focus_worker`'s `ActiveEnrollment`), so nobody away
+/// has mail classified, backfilled or swept.
 pub trait FocusEnrollment: Send + Sync + 'static {
     /// Whether `user` is in the rollout, which classifies every inbox whose
     /// Focus tab they see: their own and those linked to them. An error leaves

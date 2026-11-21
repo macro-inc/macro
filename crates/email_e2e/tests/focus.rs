@@ -374,3 +374,113 @@ async fn gmail_a_linked_inbox_follows_the_flag_of_the_user_who_linked_it() -> Re
 
     stack.finish().await
 }
+
+/// What the worker logs when a sweep is done, whatever it found.
+const SWEEP_FINISHED: &str = "focus sweep finished";
+/// What the worker logs when a backfill pass over an inbox is done.
+const BACKFILL_PASS_FINISHED: &str = "focus backfill pass finished";
+
+/// How many lines the worker has logged so far: a mark to count from.
+fn log_mark(stack: &Stack) -> usize {
+    stack.focus_worker_log().lines().count()
+}
+
+/// How many lines after `mark` say `message`, and name `id` when given.
+fn logged_since(stack: &Stack, mark: usize, message: &str, id: Option<&str>) -> usize {
+    stack
+        .focus_worker_log()
+        .lines()
+        .skip(mark)
+        .filter(|line| line.contains(message) && id.is_none_or(|id| line.contains(id)))
+        .count()
+}
+
+/// Waits until `count` lines after `mark` say `message`, naming `id` when
+/// given. A minute apart at most, so this waits for up to two of them and
+/// what they took.
+async fn wait_for_logged(
+    stack: &Stack,
+    mark: usize,
+    message: &str,
+    id: Option<&str>,
+    count: usize,
+) -> Result<(), Report> {
+    eventually(
+        &format!("the worker to log {message:?} {count} times"),
+        DEFAULT_TIMEOUT * 2,
+        async || Ok((logged_since(stack, mark, message, id) >= count).then_some(())),
+    )
+    .await
+}
+
+/// Focus works an inbox only while someone whose tab shows it uses Macro.
+/// Bob had Macro open a week and a day ago and not since: mail arriving in
+/// Bob's inbox is not shown to the model, the sweeps leave the inbox though
+/// it holds Focus, and the minute's look no longer counts it in the
+/// rollout, so it forgets the inbox. Once Bob opens Macro again the next
+/// sweep classifies the mail that came in the meantime, and the next look
+/// finds the inbox joining and backfills it, whichever runs first.
+///
+/// When it fails: the worker spends the model on the mail of people who
+/// stopped using Macro, or someone who comes back never has the mail of
+/// their time away classified.
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_an_owner_away_from_macro_gets_no_focus_until_they_come_back() -> Result<(), Report> {
+    let stack = Stack::start_with(StackOptions {
+        document_storage: true,
+        focus: true,
+        env: vec![
+            // Sweeps a minute apart, so the scenario sees them.
+            ("FOCUS_SWEEP_INTERVAL_SECS".to_owned(), "60".to_owned()),
+            // Whether someone is active is read on every check, so leaving
+            // and coming back show at once.
+            ("FOCUS_ACTIVITY_CACHE_SECS".to_owned(), "0".to_owned()),
+        ],
+        ..StackOptions::default()
+    })
+    .await?;
+    let classifier = stack.focus_classifier()?;
+    classifier.put_in_focus_when_mail_contains("Contract renewal");
+    let bob = stack.user("bob").await?;
+    let inbox = bob.link(Provider::Gmail, bob.email()).await?;
+    let link_id = inbox.link_id().to_string();
+
+    // While Bob uses Macro the mail is classified, and the look finds the
+    // inbox and fills it in its two passes.
+    let march = arrives(&inbox, MALLORY, "Contract renewal in March").await?;
+    wait_until_classified(&bob, &march).await?;
+    wait_for_logged(&stack, 0, BACKFILL_PASS_FINISHED, Some(&link_id), 2).await?;
+
+    bob.away_for(email_e2e::chrono::Duration::days(8)).await?;
+    let away = log_mark(&stack);
+    let april = arrives(&inbox, MALLORY, "Contract renewal in April").await?;
+    eventually(
+        "the worker to leave the mail that came while Bob was away",
+        DEFAULT_TIMEOUT,
+        async || Ok(stack.focus_skipped_without_flag(&april).then_some(())),
+    )
+    .await?;
+    // The second sweep since Bob left started after the first ended.
+    wait_for_logged(&stack, away, SWEEP_FINISHED, None, 2).await?;
+    assert_eq!(thread_focus(&bob, &april).await?, Value::Null);
+    assert_eq!(classifier.times_asked_about("April"), 0);
+
+    // No pass over the inbox while Bob was away: the look left it out.
+    assert_eq!(
+        logged_since(&stack, away, BACKFILL_PASS_FINISHED, Some(&link_id)),
+        0
+    );
+
+    bob.opens_macro().await?;
+    let back = log_mark(&stack);
+    let verdict = wait_until_classified(&bob, &april).await?;
+    assert_eq!(verdict, json!({ "isFocus": true, "category": "OTHER" }));
+    wait_for_logged(&stack, back, BACKFILL_PASS_FINISHED, Some(&link_id), 1).await?;
+    wait_for_home(
+        &bob,
+        &["Contract renewal in April", "Contract renewal in March"],
+    )
+    .await?;
+
+    stack.finish().await
+}
