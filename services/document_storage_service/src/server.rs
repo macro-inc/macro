@@ -2013,20 +2013,34 @@ async fn run_server() -> anyhow::Result<()> {
         repository: contacts::outbound::repository::DbContactsRepository::new(db.clone()),
         notifier: None::<contacts::outbound::gateway::ConnectionGatewayNotifier>,
     });
+    let contact_lists = Arc::new(contacts::outbound::repository::DbContactsRepository::new(
+        db.clone(),
+    ));
+    // Each viewer's `people` rows and GraphQL directory come from the legacy
+    // graph or the list-aware tables, by the per-viewer `contacts-list-reads`
+    // flag; a failed flag read means the legacy graph.
+    let contact_reads = Arc::new(contacts::domain::list_reads::FlaggedContactReads::new(
+        contacts_service,
+        contact_lists.clone(),
+        contacts::domain::list_reads::ContactListReads::new(flags),
+    ));
     // SQL predicates and follow-up reads use the primary, matching the catalog
     // versions and writes; replica lag must not select stale rows for an edit.
     let sql_service = databases_sql::DatabasesSql::new(
         databases_service.clone(),
         entity_access_service.clone(),
         primary_entity_soup.clone(),
-        contacts_service.clone(),
+        contact_reads.clone(),
     );
 
     // Directory refreshes follow contacts_invalidation immediately after writes.
-    // Keep membership and names on the primary, matching the legacy contacts read.
+    // Keep membership, lists and names on the primary, matching the legacy
+    // contacts read. Lists come from the list-aware tables whichever store
+    // chose the contacts.
     let graphql_contacts_context = graphql_contacts::ContactsGraphqlContext::new(Arc::new(
         contacts::domain::service::directory::ContactsDirectoryService::new(
-            contacts_service,
+            contact_reads,
+            contact_lists,
             contacts::outbound::names::DbContactNames::new(db.clone()),
         ),
     ));
