@@ -20,6 +20,7 @@ import {
   mkdirSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -184,19 +185,36 @@ const call = <T>(
     [method, params] as const
   );
 
+// Sizes and modification times of the dataset files: a profile seeded from
+// another dataset, or from this directory before it was regenerated, does not
+// match.
+function datasetFingerprint() {
+  return ['seed.ndjson', 'foreground.ndjson', 'meta.json']
+    .map((file) => {
+      const stat = statSync(`${dataDir}/${file}`);
+      return `${file}:${stat.size}:${stat.mtimeMs}`;
+    })
+    .join(' ');
+}
+
 async function main() {
   const fresh = args.reseed || !existsSync(`${profileDir}/.seeded`);
   if (!fresh) {
     // OPFS belongs to the origin, port included: another port opens an empty
     // database while this marker skips the seed.
-    const seededOrigin = readFileSync(`${profileDir}/.seeded`, 'utf8').split(
-      '\n'
-    )[0];
+    const [seededOrigin, seededDataset] = readFileSync(
+      `${profileDir}/.seeded`,
+      'utf8'
+    ).split('\n');
     if (seededOrigin !== origin)
       throw new Error(
         seededOrigin.startsWith('http')
           ? `profile was seeded on ${seededOrigin}; rerun with that --port or --reseed`
           : 'profile predates origin markers; pass a new --profile path'
+      );
+    if (seededDataset !== datasetFingerprint())
+      throw new Error(
+        `profile was seeded from another dataset than ${dataDir}; rerun with --reseed`
       );
   }
   if (fresh) {
@@ -278,7 +296,7 @@ async function runBench(
     await page.close();
     writeFileSync(
       `${profileDir}/.seeded`,
-      `${origin}\n${new Date().toISOString()}\n`
+      `${origin}\n${datasetFingerprint()}\n${new Date().toISOString()}\n`
     );
     log('seed', result.seed);
   }
