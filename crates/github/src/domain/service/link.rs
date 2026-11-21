@@ -150,6 +150,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService>
     #[tracing::instrument(
         name = "github.link_access_token",
         skip_all,
+        err,
         fields(token_check = tracing::field::Empty)
     )]
     async fn validated_link_access_token(
