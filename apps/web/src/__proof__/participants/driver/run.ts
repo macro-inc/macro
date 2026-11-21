@@ -5,7 +5,14 @@
 import { createHash } from 'node:crypto';
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { type BrowserContext, chromium, type Page } from 'playwright';
-import { expectAfter, judge, type Row, type Snap, tieKey } from './compare';
+import {
+  expectAfter,
+  explain,
+  judge,
+  type Row,
+  type Snap,
+  tieKey,
+} from './compare';
 import {
   type ChannelPlan,
   type Op,
@@ -37,6 +44,10 @@ const SEQS = Number(env.PX_SEQS ?? 100);
 const STEPS = Number(env.PX_STEPS ?? 24);
 const BATCH = Number(env.PX_BATCH ?? 50);
 const LIVE_MS = Number(env.PX_LIVE_MS ?? 5000);
+// How long, from a write, a reader still out of step at LIVE_MS keeps being
+// read: one that catches up by then with no reload got its update late; one
+// that never does lost it.
+const LATE_MS = Number(env.PX_LATE_MS ?? 30_000);
 const MUTANT = env.PX_MUTANT ?? 'none';
 const FORMS_EVERY = Number(env.PX_FORMS_EVERY ?? 6);
 const RUN =
@@ -835,6 +846,26 @@ async function step(batch: Channel[], round: number) {
         }
         if (waiting.size) await sleep(100);
       }
+      // Past the bound, the snapshot taken at it is the one compared; a read
+      // still differing unexplained keeps being read until it catches up or
+      // LATE_MS passes, and the record says when (the report's `live.late`).
+      const caughtUp = new Map<string, number>();
+      const unsettled = (id: string, snap: Snap | null | undefined) => {
+        if (!snap) return false;
+        const verdict = judge(snap, after.get(id));
+        return verdict.bucket !== 'same' && !explain(verdict);
+      };
+      let behind = live
+        .map((channel) => channel.id)
+        .filter((id) => unsettled(id, last[id]));
+      while (behind.length && Date.now() - start < LATE_MS) {
+        await sleep(250);
+        const snaps = await snapshot(viewer.u, behind);
+        for (const id of behind)
+          if (snaps[id] && !unsettled(id, snaps[id]))
+            caughtUp.set(id, Date.now() - start);
+        behind = behind.filter((id) => !caughtUp.has(id));
+      }
       for (const channel of live) {
         const snap = last[channel.id] ?? null;
         const verdict = record(
@@ -847,6 +878,8 @@ async function step(batch: Channel[], round: number) {
           {
             liveMs: converged.get(channel.id) ?? null,
             boundMs: LIVE_MS,
+            caughtUpMs: caughtUp.get(channel.id) ?? null,
+            lateBoundMs: LATE_MS,
           }
         );
         if (!verdict) continue;
@@ -995,7 +1028,7 @@ try {
   writeFileSync(
     `${OUT}/config.json`,
     JSON.stringify(
-      { RUN, SEED, LOAD, SEQS, STEPS, BATCH, LIVE_MS, MUTANT, ORIGIN },
+      { RUN, SEED, LOAD, SEQS, STEPS, BATCH, LIVE_MS, LATE_MS, MUTANT, ORIGIN },
       null,
       2
     )

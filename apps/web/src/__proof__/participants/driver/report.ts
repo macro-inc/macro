@@ -10,40 +10,15 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { createInterface } from 'node:readline';
-import { judge, type Verdict } from './compare';
+import { explain, judge } from './compare';
 
 const root = process.argv[2];
 if (!root) throw new Error('usage: report.ts <results dir>');
-
-/** Data fields whose difference is explained, with where the cause lives. */
-const EXPLAINED_FIELDS: Record<string, string> = {
-  'field.joined_at.format':
-    'join time written "Z" (REST) vs "+00:00" (GraphQL): the same instant',
-  'field.left_at.missing':
-    "head's REST fallback and overlay rows carry left_at: null; main's rows omit it",
-  'field.joined_at.client-stamped':
-    'a row both sides show with the time each stamped when the add was sent',
-  'field.joined_at.main-stamped':
-    "a landed add main still shows with the time it stamped when sending it (main/participants.ts:61); the head shows the database's",
-  'order.ties':
-    'rows that joined at the same instant, in an order neither read defines',
-};
 
 /** The entry for a key, made on first use. */
 function slot<T>(table: Record<string, T>, key: string, make: () => T): T {
   if (!(key in table)) table[key] = make();
   return table[key] as T;
-}
-
-function classify(verdict: Verdict): string | undefined {
-  if (verdict.bucket === 'tie-order') return 'tie-order';
-  if (verdict.bucket === 'main-stale') return 'main-stale';
-  if (verdict.bucket !== 'data-only') return undefined;
-  const unexplained = verdict.dataFields.filter(
-    (field) => !(field in EXPLAINED_FIELDS)
-  );
-  if (unexplained.length) return undefined;
-  return verdict.dataFields.join('+');
 }
 
 type RunReport = {
@@ -56,6 +31,8 @@ type RunReport = {
   coverage: Record<string, Record<string, number>>;
   same: number;
   explained: Record<string, number>;
+  /** How long after a live write each late reader caught up, with no reload. */
+  lateMs: number[];
   unexplained: Record<string, { count: number; first: string }>;
   forms: unknown;
   live: unknown;
@@ -75,6 +52,7 @@ for (const name of readdirSync(root).sort()) {
   const summary = JSON.parse(readFileSync(`${dir}/summary.json`, 'utf8'));
   const config = JSON.parse(readFileSync(`${dir}/config.json`, 'utf8'));
   const explained: Record<string, number> = {};
+  const lateMs: number[] = [];
   const unexplained: Record<string, { count: number; first: string }> = {};
   let differing = 0;
   if (existsSync(`${dir}/records.jsonl`)) {
@@ -98,7 +76,15 @@ for (const name of readdirSync(root).sort()) {
       }
       differing += 1;
       const verdict = judge(record.snap, record.truth);
-      const known = classify(verdict);
+      // A live read past the bound that caught up later, with no reload in
+      // between: a late live update, not a lost one (run.ts, LATE_MS).
+      const late =
+        record.mode === 'live' && typeof record.caughtUpMs === 'number'
+          ? record.caughtUpMs
+          : undefined;
+      const known =
+        explain(verdict) ?? (late === undefined ? undefined : 'live.late');
+      if (known === 'live.late' && late !== undefined) lateMs.push(late);
       if (known) {
         explained[known] = (explained[known] ?? 0) + 1;
         continue;
@@ -126,6 +112,7 @@ for (const name of readdirSync(root).sort()) {
     coverage: summary.coverage,
     same: summary.reads - differing,
     explained,
+    lateMs,
     unexplained,
     forms: summary.forms,
     live: {
@@ -178,6 +165,10 @@ for (const report of reports) {
   );
   console.log(`   modes ${JSON.stringify(report.byMode)}`);
   console.log(`   explained ${JSON.stringify(report.explained)}`);
+  if (report.lateMs.length)
+    console.log(
+      `   live.late caught up after ${JSON.stringify([...report.lateMs].sort((a, b) => a - b))} ms`
+    );
   for (const [signature, entry] of Object.entries(report.unexplained))
     console.log(
       `   UNEXPLAINED ${entry.count}× ${signature}  (${entry.first})`

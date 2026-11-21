@@ -339,3 +339,48 @@ export function expectAfter(
       })),
   ];
 }
+
+/** Data fields whose difference is explained, with where the cause lives. */
+export const EXPLAINED_FIELDS: Record<string, string> = {
+  'field.joined_at.format':
+    'join time written "Z" (REST) vs "+00:00" (GraphQL): the same instant',
+  'field.left_at.missing':
+    "head's REST fallback and overlay rows carry left_at: null; main's rows omit it",
+  'field.joined_at.client-stamped':
+    'a row both sides show with the time each stamped when the add was sent',
+  'field.joined_at.main-stamped':
+    "a landed add main still shows with the time it stamped when sending it (main/participants.ts:61); the head shows the database's",
+  'order.ties':
+    'rows that joined at the same instant, in an order neither read defines',
+};
+
+const STATE_FIELDS = new Set([
+  'state.isPending',
+  'state.isLoading',
+  'state.isSuccess',
+]);
+
+/**
+ * The explained class of a verdict (README.md, "Differences"), or undefined
+ * when it has none.
+ */
+export function explain(verdict: Verdict): string | undefined {
+  if (verdict.bucket === 'tie-order') return 'tie-order';
+  if (verdict.bucket === 'main-stale') return 'main-stale';
+  if (verdict.bucket !== 'data-only') return undefined;
+  // Neither reader has rows, and every caller decides the same (the contract
+  // reads the flags as each caller does): only the flags differ, such as main
+  // still pending where the head's read failed.
+  const empty = (vs: Verdict['oldVsTruth']) => vs === 'no-data' || vs === 'na';
+  if (
+    verdict.dataFields.every((field) => STATE_FIELDS.has(field)) &&
+    empty(verdict.oldVsTruth) &&
+    empty(verdict.newVsTruth)
+  )
+    return 'state.both-empty';
+  const unexplained = verdict.dataFields.filter(
+    (field) => !(field in EXPLAINED_FIELDS)
+  );
+  if (unexplained.length) return undefined;
+  return verdict.dataFields.join('+');
+}
