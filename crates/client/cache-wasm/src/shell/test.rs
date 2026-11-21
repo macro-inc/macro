@@ -2920,3 +2920,175 @@ async fn idle_checkpoint_copies_a_due_wal_once_and_keeps_reads() {
     assert_eq!(read["kind"], "hit");
     close_and_destroy(&engine, SCOPE).await;
 }
+
+const BACKFILL_ITEM: &str = "00000000-0000-0000-0000-0000000000b1";
+
+fn backfill_variables() -> JsValue {
+    js(serde_json::json!({ "input": { "initial": { "limit": 1 } } }))
+}
+
+fn backfill_page() -> JsValue {
+    js(serde_json::json!({
+        "user": {
+            "id": "user-1",
+            "soup": {
+                "nextCursor": "next",
+                "items": [projected_document_item(
+                    BACKFILL_ITEM,
+                    "macro|user@example.com",
+                    false,
+                    None,
+                    10,
+                )]
+            }
+        }
+    }))
+}
+
+fn hydrate_backfill(engine: &CacheEngine) -> js_sys::Promise {
+    engine.hydrate_query(
+        SOUP_BACKFILL_WITH_PROJECTION_QUERY.into(),
+        Some("SoupBackfill".into()),
+        backfill_variables(),
+        backfill_page(),
+        Some("user-1".into()),
+        JsValue::UNDEFINED,
+    )
+}
+
+fn prepare_backfill(engine: &CacheEngine) -> js_sys::Promise {
+    engine.prepare_hydrate(
+        SOUP_BACKFILL_WITH_PROJECTION_QUERY.into(),
+        Some("SoupBackfill".into()),
+        backfill_variables(),
+        backfill_page(),
+        Some("user-1".into()),
+        JsValue::UNDEFINED,
+    )
+}
+
+fn write_soup(engine: &CacheEngine, document_id: &str) -> js_sys::Promise {
+    engine.write_query(
+        write_context(None),
+        QUERY.into(),
+        Some("Soup".into()),
+        js(variables()),
+        js(soup_data(document_id)),
+        Some("user-1".into()),
+    )
+}
+
+/// Both queries and the projection rows the backfill wrote, as JSON.
+async fn hydrated_state(engine: &CacheEngine) -> serde_json::Value {
+    let read = |query: &str, name: &str, variables: JsValue| {
+        engine.read_query(
+            None,
+            query.into(),
+            Some(name.into()),
+            variables,
+            JsValue::UNDEFINED,
+        )
+    };
+    serde_json::json!({
+        "soup": from_js::<serde_json::Value>(resolved(read(QUERY, "Soup", js(variables()))).await),
+        "backfill": from_js::<serde_json::Value>(
+            resolved(read(SOUP_BACKFILL_WITH_PROJECTION_QUERY, "SoupBackfill", backfill_variables()))
+                .await
+        ),
+        "revision": from_js::<String>(resolved(engine.current_revision()).await),
+    })
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_prepared_hydrate_lets_reads_run_then_commits_as_hydrate_query_does() {
+    const SCOPE: &str = "cache-wasm-prepared-hydrate";
+    let engine = fresh_engine(SCOPE).await;
+    let whole: serde_json::Value = from_js(resolved(hydrate_backfill(&engine)).await);
+    let whole_state = hydrated_state(&engine).await;
+    close_and_destroy(&engine, SCOPE).await;
+
+    let engine = fresh_engine(SCOPE).await;
+    resolved(prepare_backfill(&engine)).await;
+    // A read between the halves sees the cache as it was before the hydrate.
+    let between: serde_json::Value = from_js(
+        resolved(engine.read_query(
+            None,
+            SOUP_BACKFILL_WITH_PROJECTION_QUERY.into(),
+            Some("SoupBackfill".into()),
+            backfill_variables(),
+            JsValue::UNDEFINED,
+        ))
+        .await,
+    );
+    assert_eq!(between["kind"], "miss");
+    let split: serde_json::Value = from_js(resolved(engine.commit_hydrate()).await);
+    assert_eq!(split, whole);
+    assert!(split.get("projectionsReread").is_none());
+    assert_eq!(hydrated_state(&engine).await, whole_state);
+
+    // The kept hydrate is gone once committed.
+    let error = JsFuture::from(engine.commit_hydrate())
+        .await
+        .expect_err("nothing left to commit");
+    assert_eq!(
+        js_sys::Reflect::get(&error, &"message".into())
+            .unwrap()
+            .as_string()
+            .unwrap(),
+        "no prepared hydrate to commit"
+    );
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_write_between_prepare_and_commit_makes_the_commit_read_projections_again() {
+    const SCOPE: &str = "cache-wasm-prepared-hydrate-moved";
+    // The order the split one must match: the write, then the hydrate.
+    let engine = fresh_engine(SCOPE).await;
+    resolved(write_soup(&engine, "doc-between")).await;
+    let whole: serde_json::Value = from_js(resolved(hydrate_backfill(&engine)).await);
+    let whole_state = hydrated_state(&engine).await;
+    close_and_destroy(&engine, SCOPE).await;
+
+    let engine = fresh_engine(SCOPE).await;
+    resolved(prepare_backfill(&engine)).await;
+    resolved(write_soup(&engine, "doc-between")).await;
+    let mut split: serde_json::Value = from_js(resolved(engine.commit_hydrate()).await);
+    assert_eq!(split["projectionsReread"], true);
+    split.as_object_mut().unwrap().remove("projectionsReread");
+    assert_eq!(split, whole);
+    assert_eq!(hydrated_state(&engine).await, whole_state);
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_failed_prepare_leaves_nothing_to_commit() {
+    const SCOPE: &str = "cache-wasm-prepared-hydrate-failed";
+    let engine = fresh_engine(SCOPE).await;
+    resolved(prepare_backfill(&engine)).await;
+    // A second prepare replaces the first, and a failed one leaves none.
+    JsFuture::from(engine.prepare_hydrate(
+        SOUP_BACKFILL_WITH_PROJECTION_QUERY.into(),
+        Some("SoupBackfill".into()),
+        backfill_variables(),
+        js(
+            serde_json::json!({ "user": { "id": "user-1", "soup": { "nextCursor": null, "items": [{
+            "__typename": "GraphqlSoupDocument",
+            "id": "00000000-0000-0000-0000-0000000000b2",
+            "cacheProjection": null,
+            "displayName": "Invalid backfill item",
+            "ownerId": "macro|user@example.com"
+        }] } } }),
+        ),
+        Some("user-1".into()),
+        JsValue::UNDEFINED,
+    ))
+    .await
+    .expect_err("an incomplete required projection rejects");
+    assert!(JsFuture::from(engine.commit_hydrate()).await.is_err());
+    assert_eq!(
+        from_js::<String>(resolved(engine.current_revision()).await),
+        "0"
+    );
+    close_and_destroy(&engine, SCOPE).await;
+}
