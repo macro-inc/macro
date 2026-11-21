@@ -152,7 +152,7 @@ fn sample_local_state_msg() -> wire::LocalStateMsg {
 }
 fn sample_storage_op_msg() -> wire::StorageOpMsg {
     wire::StorageOpMsg {
-        kind: 0,
+        kind: wire::StorageOpKind::Load,
         doc: "fixture 😀 é".into(),
         owner: "fixture 😀 é".into(),
         user: "fixture 😀 é".into(),

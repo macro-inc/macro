@@ -82,7 +82,7 @@ pub(crate) fn loaded(msg: wire::LocalStateMsg) -> Result<LocalState, BoundaryErr
 }
 pub(crate) fn encode(op: &StorageOp, terminal: bool) -> wire::StorageOpMsg {
     let mut m = wire::StorageOpMsg {
-        kind: 0,
+        kind: wire::StorageOpKind::Load,
         doc: String::new(),
         owner: String::new(),
         user: String::new(),
@@ -101,9 +101,9 @@ pub(crate) fn encode(op: &StorageOp, terminal: bool) -> wire::StorageOpMsg {
     match op {
         StorageOp::Load { doc, owner, user } | StorageOp::LoadOrphans { doc, owner, user } => {
             m.kind = if matches!(op, StorageOp::Load { .. }) {
-                0
+                wire::StorageOpKind::Load
             } else {
-                1
+                wire::StorageOpKind::LoadOrphans
             };
             m.doc = doc.to_string();
             m.owner = owner.0.to_string();
@@ -115,7 +115,7 @@ pub(crate) fn encode(op: &StorageOp, terminal: bool) -> wire::StorageOpMsg {
             record,
             retry,
         } => {
-            m.kind = 2;
+            m.kind = wire::StorageOpKind::WalAppend;
             m.doc = doc.to_string();
             m.owner = owner.0.to_string();
             m.record = wire_record(record);
@@ -132,9 +132,9 @@ pub(crate) fn encode(op: &StorageOp, terminal: bool) -> wire::StorageOpMsg {
             through,
         } => {
             m.kind = if matches!(op, StorageOp::WalMarkDelivered { .. }) {
-                3
+                wire::StorageOpKind::WalMarkDelivered
             } else {
-                4
+                wire::StorageOpKind::WalPrune
             };
             m.doc = doc.to_string();
             m.owner = owner.0.to_string();
@@ -148,7 +148,7 @@ pub(crate) fn encode(op: &StorageOp, terminal: bool) -> wire::StorageOpMsg {
             covers,
             expected,
         } => {
-            m.kind = 5;
+            m.kind = wire::StorageOpKind::WalAdopt;
             m.doc = doc.to_string();
             m.from = owner_string(from);
             m.owner = to.0.to_string();
@@ -163,19 +163,19 @@ pub(crate) fn encode(op: &StorageOp, terminal: bool) -> wire::StorageOpMsg {
                 .collect();
         }
         StorageOp::WalDropExpired { doc, from, before } => {
-            m.kind = 6;
+            m.kind = wire::StorageOpKind::WalDropExpired;
             m.doc = doc.to_string();
             m.from = owner_string(from);
             m.before = before.0;
         }
         StorageOp::WalQuarantine { doc, owner, seq } => {
-            m.kind = 7;
+            m.kind = wire::StorageOpKind::WalQuarantine;
             m.doc = doc.to_string();
             m.owner = owner.0.to_string();
             m.seq = seq.0;
         }
         StorageOp::SnapshotSave { doc, bytes, covers } => {
-            m.kind = 8;
+            m.kind = wire::StorageOpKind::SnapshotSave;
             m.doc = doc.to_string();
             m.snapshot = bytes.clone();
             if let Some((id, seq)) = covers {
@@ -184,7 +184,7 @@ pub(crate) fn encode(op: &StorageOp, terminal: bool) -> wire::StorageOpMsg {
             }
         }
         StorageOp::SnapshotDelete { doc } => {
-            m.kind = 9;
+            m.kind = wire::StorageOpKind::SnapshotDelete;
             m.doc = doc.to_string();
         }
     }

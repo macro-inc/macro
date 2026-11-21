@@ -158,7 +158,10 @@ impl Driver {
                 }
                 6 => {
                     let op = w::StorageOpMsg::deserialize(&data).unwrap();
-                    if op.kind == 0 || op.kind == 1 {
+                    if matches!(
+                        op.kind,
+                        w::StorageOpKind::Load | w::StorageOpKind::LoadOrphans
+                    ) {
                         let data = bytes(&w::LocalStateMsg {
                             snapshot: vec![],
                             covers_owner: String::new(),

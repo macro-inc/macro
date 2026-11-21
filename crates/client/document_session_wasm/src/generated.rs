@@ -2377,9 +2377,84 @@ impl<'raw> ::bebop::SubRecord<'raw> for LocalStateMsg<'raw> {
 
 impl<'raw> ::bebop::Record<'raw> for LocalStateMsg<'raw> {}
 
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum StorageOpKind {
+    Load = 0,
+    LoadOrphans = 1,
+    WalAppend = 2,
+    WalMarkDelivered = 3,
+    WalPrune = 4,
+    WalAdopt = 5,
+    WalDropExpired = 6,
+    WalQuarantine = 7,
+    SnapshotSave = 8,
+    SnapshotDelete = 9,
+}
+
+impl ::core::convert::TryFrom<u8> for StorageOpKind {
+    type Error = ::bebop::DeserializeError;
+
+    fn try_from(value: u8) -> ::bebop::DeResult<Self> {
+        match value {
+            0 => Ok(StorageOpKind::Load),
+            1 => Ok(StorageOpKind::LoadOrphans),
+            2 => Ok(StorageOpKind::WalAppend),
+            3 => Ok(StorageOpKind::WalMarkDelivered),
+            4 => Ok(StorageOpKind::WalPrune),
+            5 => Ok(StorageOpKind::WalAdopt),
+            6 => Ok(StorageOpKind::WalDropExpired),
+            7 => Ok(StorageOpKind::WalQuarantine),
+            8 => Ok(StorageOpKind::SnapshotSave),
+            9 => Ok(StorageOpKind::SnapshotDelete),
+            d => Err(::bebop::DeserializeError::InvalidEnumDiscriminator(d.into())),
+        }
+    }
+}
+
+impl ::core::convert::From<StorageOpKind> for u8 {
+    fn from(value: StorageOpKind) -> Self {
+        match value {
+            StorageOpKind::Load => 0,
+            StorageOpKind::LoadOrphans => 1,
+            StorageOpKind::WalAppend => 2,
+            StorageOpKind::WalMarkDelivered => 3,
+            StorageOpKind::WalPrune => 4,
+            StorageOpKind::WalAdopt => 5,
+            StorageOpKind::WalDropExpired => 6,
+            StorageOpKind::WalQuarantine => 7,
+            StorageOpKind::SnapshotSave => 8,
+            StorageOpKind::SnapshotDelete => 9,
+        }
+    }
+}
+
+impl ::bebop::SubRecord<'_> for StorageOpKind {
+    const MIN_SERIALIZED_SIZE: usize = ::std::mem::size_of::<u8>();
+    const EXACT_SERIALIZED_SIZE: Option<usize> = Some(::std::mem::size_of::<u8>());
+
+    #[inline]
+    fn serialized_size(&self) -> usize { ::std::mem::size_of::<u8>() }
+
+    ::bebop::define_serialize_chained!(*Self => |zelf, dest| {
+        u8::from(zelf)._serialize_chained(dest)
+    });
+
+    #[inline]
+    fn _deserialize_chained(raw: &[u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let (n, v) = u8::_deserialize_chained(raw)?;
+        Ok((n, v.try_into()?))
+    }
+}
+
+impl ::bebop::FixedSized for StorageOpKind {
+    const SERIALIZED_SIZE: usize = ::std::mem::size_of::<u8>();
+}
+
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct StorageOpMsg<'raw> {
-    pub kind: u8,
+    pub kind: StorageOpKind,
     pub doc: &'raw str,
     pub owner: &'raw str,
     pub user: &'raw str,
@@ -2398,7 +2473,7 @@ pub struct StorageOpMsg<'raw> {
 
 impl<'raw> ::bebop::SubRecord<'raw> for StorageOpMsg<'raw> {
     const MIN_SERIALIZED_SIZE: usize =
-        <u8>::MIN_SERIALIZED_SIZE +
+        <StorageOpKind>::MIN_SERIALIZED_SIZE +
         <&'raw str>::MIN_SERIALIZED_SIZE +
         <&'raw str>::MIN_SERIALIZED_SIZE +
         <&'raw str>::MIN_SERIALIZED_SIZE +
@@ -5924,9 +5999,11 @@ pub mod owned {
 
     impl<'raw> ::bebop::Record<'raw> for LocalStateMsg {}
 
+    pub use super::StorageOpKind;
+
     #[derive(Clone, Debug, PartialEq)]
     pub struct StorageOpMsg {
-        pub kind: u8,
+        pub kind: StorageOpKind,
         pub doc: String,
         pub owner: String,
         pub user: String,
@@ -5967,7 +6044,7 @@ pub mod owned {
 
     impl<'raw> ::bebop::SubRecord<'raw> for StorageOpMsg {
         const MIN_SERIALIZED_SIZE: usize =
-            <u8>::MIN_SERIALIZED_SIZE +
+            <StorageOpKind>::MIN_SERIALIZED_SIZE +
             <String>::MIN_SERIALIZED_SIZE +
             <String>::MIN_SERIALIZED_SIZE +
             <String>::MIN_SERIALIZED_SIZE +

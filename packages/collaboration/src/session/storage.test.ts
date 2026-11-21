@@ -1,7 +1,12 @@
 import 'fake-indexeddb/auto';
 import { openDB } from 'idb';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { Failure, type IStorageOpMsg, LocalStateMsg } from './abi.generated';
+import {
+  Failure,
+  type IStorageOpMsg,
+  LocalStateMsg,
+  StorageOpKind,
+} from './abi.generated';
 import { ownerLock, StorageAdapter } from './storage';
 
 const owner = '00000000-0000-0000-0000-000000000001';
@@ -17,7 +22,10 @@ const locks = {
   query: async () => ({ held: [], pending: [] }),
   request: navigator.locks.request.bind(navigator.locks),
 };
-function op(kind: number, extra: Partial<IStorageOpMsg> = {}): IStorageOpMsg {
+function op(
+  kind: StorageOpKind,
+  extra: Partial<IStorageOpMsg> = {}
+): IStorageOpMsg {
   return {
     kind,
     doc,
@@ -42,7 +50,7 @@ function op(kind: number, extra: Partial<IStorageOpMsg> = {}): IStorageOpMsg {
     coversOwner: '',
     coversSeq: 0n,
     expected:
-      kind === 5
+      kind === StorageOpKind.WalAdopt
         ? [
             {
               seq: 1n,
@@ -62,7 +70,7 @@ function op(kind: number, extra: Partial<IStorageOpMsg> = {}): IStorageOpMsg {
 test('literal v1 append survives a new adapter and uncertain retry without duplication', async () => {
   const adapter = new StorageAdapter(doc, owner, 'fixture-user', locks);
   const append: IStorageOpMsg = {
-    kind: 2,
+    kind: StorageOpKind.WalAppend,
     doc,
     owner,
     user: 'fixture-user',
@@ -112,13 +120,17 @@ test('literal v1 append survives a new adapter and uncertain retry without dupli
 });
 test('two adopters atomically move an orphan once and retain all metadata', async () => {
   const a = new StorageAdapter(doc, owner, 'fixture-user', locks);
-  await a.execute(op(2));
+  await a.execute(op(StorageOpKind.WalAppend));
   const b = new StorageAdapter(doc, other, 'fixture-user', locks);
   const third = '00000000-0000-0000-0000-000000000003';
   const c = new StorageAdapter(doc, third, 'fixture-user', locks);
   const results = await Promise.all([
-    b.execute(op(5, { owner: other, from: owner, seq: 10n })),
-    c.execute(op(5, { owner: third, from: owner, seq: 10n })),
+    b.execute(
+      op(StorageOpKind.WalAdopt, { owner: other, from: owner, seq: 10n })
+    ),
+    c.execute(
+      op(StorageOpKind.WalAdopt, { owner: third, from: owner, seq: 10n })
+    ),
   ]);
   expect(
     results.filter((r) => r.kind === 'adopted' && r.adopted === 1)
@@ -130,10 +142,14 @@ test('two adopters atomically move an orphan once and retain all metadata', asyn
       { kind: 'adopted', adopted: -1, failure: Failure.Other },
     ]).toContainEqual(result);
   expect(
-    await b.execute(op(5, { owner: other, from: owner, seq: 10n }))
+    await b.execute(
+      op(StorageOpKind.WalAdopt, { owner: other, from: owner, seq: 10n })
+    )
   ).toEqual({ kind: 'adopted', adopted: 0, failure: Failure.None });
   expect(
-    await c.execute(op(5, { owner: third, from: owner, seq: 10n }))
+    await c.execute(
+      op(StorageOpKind.WalAdopt, { owner: third, from: owner, seq: 10n })
+    )
   ).toEqual({ kind: 'adopted', adopted: 0, failure: Failure.None });
   const db = await openDB('macro-document-wal', 1);
   const rows = await db.getAllFromIndex('updates', 'scopeId', doc);
@@ -180,7 +196,7 @@ test('load separates legacy/free owners, live assistance and other users', async
     }),
   };
   const a = new StorageAdapter(doc, owner, 'fixture-user', live);
-  const result = await a.execute(op(0));
+  const result = await a.execute(op(StorageOpKind.Load));
   expect(result.kind).toBe('loaded');
   if (result.kind !== 'loaded' || !result.payload) throw new Error('load');
   const state = LocalStateMsg.decode(result.payload);
@@ -190,19 +206,23 @@ test('load separates legacy/free owners, live assistance and other users', async
 });
 test('quarantine retains rows and pruning deletes only delivered own rows', async () => {
   const a = new StorageAdapter(doc, owner, 'fixture-user', locks);
-  await a.execute(op(2));
-  await a.execute(op(7, { seq: 1n }));
-  await a.execute(op(4, { through: 1n }));
+  await a.execute(op(StorageOpKind.WalAppend));
+  await a.execute(op(StorageOpKind.WalQuarantine, { seq: 1n }));
+  await a.execute(op(StorageOpKind.WalPrune, { through: 1n }));
   let db = await openDB('macro-document-wal', 1);
   let rows = await db.getAllFromIndex('updates', 'scopeId', doc);
   db.close();
   expect(rows).toHaveLength(1);
   expect(rows[0].quarantined).toBe(true);
-  await a.execute(op(3, { through: 1n }));
+  await a.execute(op(StorageOpKind.WalMarkDelivered, { through: 1n }));
   await a.execute(
-    op(8, { snapshot: new Uint8Array([9]), coversOwner: owner, coversSeq: 1n })
+    op(StorageOpKind.SnapshotSave, {
+      snapshot: new Uint8Array([9]),
+      coversOwner: owner,
+      coversSeq: 1n,
+    })
   );
-  await a.execute(op(4, { through: 1n }));
+  await a.execute(op(StorageOpKind.WalPrune, { through: 1n }));
   db = await openDB('macro-document-wal', 1);
   rows = await db.getAllFromIndex('updates', 'scopeId', doc);
   db.close();
@@ -210,15 +230,19 @@ test('quarantine retains rows and pruning deletes only delivered own rows', asyn
 });
 test('snapshot save/delete never removes WAL and old snapshots carry no covers', async () => {
   const a = new StorageAdapter(doc, owner, 'fixture-user', locks);
-  await a.execute(op(2));
+  await a.execute(op(StorageOpKind.WalAppend));
   await a.execute(
-    op(8, { snapshot: new Uint8Array([9]), coversOwner: owner, coversSeq: 1n })
+    op(StorageOpKind.SnapshotSave, {
+      snapshot: new Uint8Array([9]),
+      coversOwner: owner,
+      coversSeq: 1n,
+    })
   );
   const b = new StorageAdapter(doc, other, 'fixture-user', locks);
-  const result = await b.execute(op(0, { owner: other }));
+  const result = await b.execute(op(StorageOpKind.Load, { owner: other }));
   if (result.kind !== 'loaded' || !result.payload) throw new Error('load');
   expect(LocalStateMsg.decode(result.payload).coversSeq).toBe(1n);
-  await a.execute(op(9));
+  await a.execute(op(StorageOpKind.SnapshotDelete));
   const db = await openDB('macro-document-wal', 1);
   expect(await db.countFromIndex('updates', 'scopeId', doc)).toBe(1);
   db.close();
@@ -238,7 +262,7 @@ test('a proven rolled-back append retries once and does not duplicate', async ()
     }
     return add.apply(this, args);
   });
-  expect(await a.execute(op(2))).toEqual({
+  expect(await a.execute(op(StorageOpKind.WalAppend))).toEqual({
     kind: 'done',
     ok: true,
     failure: Failure.None,
@@ -249,9 +273,11 @@ test('a proven rolled-back append retries once and does not duplicate', async ()
 });
 test('foreign-user adoption is refused without changing or deleting the source', async () => {
   const a = new StorageAdapter(doc, owner, 'fixture-user', locks);
-  await a.execute(op(2));
+  await a.execute(op(StorageOpKind.WalAppend));
   const b = new StorageAdapter(doc, other, 'another-fixture-user', locks);
-  const result = await b.execute(op(5, { owner: other, from: owner, seq: 2n }));
+  const result = await b.execute(
+    op(StorageOpKind.WalAdopt, { owner: other, from: owner, seq: 2n })
+  );
   expect(result).toEqual({
     kind: 'adopted',
     adopted: -1,
@@ -266,21 +292,41 @@ test('foreign-user adoption is refused without changing or deleting the source',
 test('adoption follows stored sequences rather than physical insertion order', async () => {
   const a = new StorageAdapter(doc, owner, 'fixture-user', locks);
   await a.execute(
-    op(2, { record: { ...op(2).record, seq: 2n, bytes: new Uint8Array([2]) } })
+    op(StorageOpKind.WalAppend, {
+      record: {
+        ...op(StorageOpKind.WalAppend).record,
+        seq: 2n,
+        bytes: new Uint8Array([2]),
+      },
+    })
   );
   await a.execute(
-    op(2, { record: { ...op(2).record, seq: 1n, bytes: new Uint8Array([1]) } })
+    op(StorageOpKind.WalAppend, {
+      record: {
+        ...op(StorageOpKind.WalAppend).record,
+        seq: 1n,
+        bytes: new Uint8Array([1]),
+      },
+    })
   );
   const b = new StorageAdapter(doc, other, 'fixture-user', locks);
   expect(
     await b.execute(
-      op(5, {
+      op(StorageOpKind.WalAdopt, {
         owner: other,
         from: owner,
         seq: 10n,
         expected: [
-          { ...op(2).record, seq: 1n, bytes: new Uint8Array([1]) },
-          { ...op(2).record, seq: 2n, bytes: new Uint8Array([2]) },
+          {
+            ...op(StorageOpKind.WalAppend).record,
+            seq: 1n,
+            bytes: new Uint8Array([1]),
+          },
+          {
+            ...op(StorageOpKind.WalAppend).record,
+            seq: 2n,
+            bytes: new Uint8Array([2]),
+          },
         ],
       })
     )
@@ -301,8 +347,10 @@ test('adoption follows stored sequences rather than physical insertion order', a
 test('adoption refuses a changed selection without mutating either database', async () => {
   const a = new StorageAdapter(doc, owner, 'fixture-user', locks);
   const b = new StorageAdapter(doc, other, 'fixture-user', locks);
-  await a.execute(op(2));
-  await a.execute(op(8, { snapshot: new Uint8Array([9]) }));
+  await a.execute(op(StorageOpKind.WalAppend));
+  await a.execute(
+    op(StorageOpKind.SnapshotSave, { snapshot: new Uint8Array([9]) })
+  );
   const db = await openDB('macro-document-wal', 1);
   const original = (await db.getAllFromIndex('updates', 'scopeId', doc))[0];
   for (const changed of [
@@ -315,7 +363,9 @@ test('adoption refuses a changed selection without mutating either database', as
   ]) {
     await db.put('updates', changed);
     expect(
-      await b.execute(op(5, { owner: other, from: owner, seq: 10n }))
+      await b.execute(
+        op(StorageOpKind.WalAdopt, { owner: other, from: owner, seq: 10n })
+      )
     ).toEqual({ kind: 'adopted', adopted: -1, failure: Failure.Other });
     expect(await db.getAllFromIndex('updates', 'scopeId', doc)).toEqual([
       changed,
@@ -333,13 +383,13 @@ test('adoption refuses a changed selection without mutating either database', as
 test('adoption refuses both advanced and regressed snapshot covers', async () => {
   const a = new StorageAdapter(doc, owner, 'fixture-user', locks);
   const b = new StorageAdapter(doc, other, 'fixture-user', locks);
-  await a.execute(op(2));
+  await a.execute(op(StorageOpKind.WalAppend));
   for (const [actual, observed] of [
     [2n, 1n],
     [1n, 2n],
   ]) {
     await a.execute(
-      op(8, {
+      op(StorageOpKind.SnapshotSave, {
         snapshot: new Uint8Array([9]),
         coversOwner: owner,
         coversSeq: actual,
@@ -347,7 +397,12 @@ test('adoption refuses both advanced and regressed snapshot covers', async () =>
     );
     expect(
       await b.execute(
-        op(5, { owner: other, from: owner, seq: 10n, through: observed })
+        op(StorageOpKind.WalAdopt, {
+          owner: other,
+          from: owner,
+          seq: 10n,
+          through: observed,
+        })
       )
     ).toEqual({ kind: 'adopted', adopted: -1, failure: Failure.Other });
     const db = await openDB('macro-document-wal', 1);
@@ -373,10 +428,12 @@ test('adoption refuses both advanced and regressed snapshot covers', async () =>
 test('an owner that reacquires its lease cannot have its rows adopted', async () => {
   const a = new StorageAdapter(doc, owner, 'fixture-user', locks);
   const b = new StorageAdapter(doc, other, 'fixture-user', locks);
-  await a.execute(op(2));
+  await a.execute(op(StorageOpKind.WalAppend));
   await locks.request(ownerLock(doc, owner), async () => {
     expect(
-      await b.execute(op(5, { owner: other, from: owner, seq: 10n }))
+      await b.execute(
+        op(StorageOpKind.WalAdopt, { owner: other, from: owner, seq: 10n })
+      )
     ).toEqual({ kind: 'adopted', adopted: -1, failure: Failure.Other });
     const db = await openDB('macro-document-wal', 1);
     const rows = await db.getAllFromIndex('updates', 'scopeId', doc);
@@ -385,28 +442,40 @@ test('an owner that reacquires its lease cannot have its rows adopted', async ()
     expect(rows[0].owner).toBe(owner);
   });
   expect(
-    await b.execute(op(5, { owner: other, from: owner, seq: 10n }))
+    await b.execute(
+      op(StorageOpKind.WalAdopt, { owner: other, from: owner, seq: 10n })
+    )
   ).toEqual({ kind: 'adopted', adopted: 1, failure: Failure.None });
 });
 
 test('adoption rejects destination collisions and sequence overflow atomically', async () => {
   const a = new StorageAdapter(doc, owner, 'fixture-user', locks);
   const b = new StorageAdapter(doc, other, 'fixture-user', locks);
-  await a.execute(op(2));
-  await a.execute(op(2, { record: { ...op(2).record, seq: 2n } }));
+  await a.execute(op(StorageOpKind.WalAppend));
+  await a.execute(
+    op(StorageOpKind.WalAppend, {
+      record: { ...op(StorageOpKind.WalAppend).record, seq: 2n },
+    })
+  );
   await b.execute(
-    op(2, { owner: other, record: { ...op(2).record, seq: 10n } })
+    op(StorageOpKind.WalAppend, {
+      owner: other,
+      record: { ...op(StorageOpKind.WalAppend).record, seq: 10n },
+    })
   );
   const db = await openDB('macro-document-wal', 1);
   const before = await db.getAllFromIndex('updates', 'scopeId', doc);
   for (const seq of [10n, 0xffff_ffff_ffff_ffffn]) {
     expect(
       await b.execute(
-        op(5, {
+        op(StorageOpKind.WalAdopt, {
           owner: other,
           from: owner,
           seq,
-          expected: [op(2).record, { ...op(2).record, seq: 2n }],
+          expected: [
+            op(StorageOpKind.WalAppend).record,
+            { ...op(StorageOpKind.WalAppend).record, seq: 2n },
+          ],
         })
       )
     ).toEqual({ kind: 'adopted', adopted: -1, failure: Failure.Other });
@@ -417,8 +486,8 @@ test('adoption rejects destination collisions and sequence overflow atomically',
 
 test('pruning uses the current snapshot cover after legacy writers replace it', async () => {
   const a = new StorageAdapter(doc, owner, 'fixture-user', locks);
-  await a.execute(op(2));
-  await a.execute(op(3, { through: 1n }));
+  await a.execute(op(StorageOpKind.WalAppend));
+  await a.execute(op(StorageOpKind.WalMarkDelivered, { through: 1n }));
   const snapshots = await openDB('macro-document-snapshots', 1);
   for (const row of [
     undefined,
@@ -431,7 +500,9 @@ test('pruning uses the current snapshot cover after legacy writers replace it', 
     { scopeId: doc, snapshot: new Uint8Array([9]), covers: { owner, seq: 0n } },
   ]) {
     if (row) await snapshots.put('snapshots', row);
-    expect(await a.execute(op(4, { through: 1n }))).toEqual({
+    expect(
+      await a.execute(op(StorageOpKind.WalPrune, { through: 1n }))
+    ).toEqual({
       kind: 'done',
       ok: true,
       failure: Failure.None,
@@ -443,9 +514,13 @@ test('pruning uses the current snapshot cover after legacy writers replace it', 
     expect(rows[0]).toMatchObject({ owner, seq: 1n, delivered: true });
   }
   await a.execute(
-    op(8, { snapshot: new Uint8Array([9]), coversOwner: owner, coversSeq: 1n })
+    op(StorageOpKind.SnapshotSave, {
+      snapshot: new Uint8Array([9]),
+      coversOwner: owner,
+      coversSeq: 1n,
+    })
   );
-  await a.execute(op(4, { through: 1n }));
+  await a.execute(op(StorageOpKind.WalPrune, { through: 1n }));
   const db = await openDB('macro-document-wal', 1);
   expect(await db.countFromIndex('updates', 'scopeId', doc)).toBe(0);
   db.close();
@@ -455,17 +530,29 @@ test('pruning uses the current snapshot cover after legacy writers replace it', 
 test('TTL cleanup cannot delete rows after their owner reacquires its lease', async () => {
   const a = new StorageAdapter(doc, owner, 'fixture-user', locks);
   const b = new StorageAdapter(doc, other, 'fixture-user', locks);
-  await a.execute(op(2));
+  await a.execute(op(StorageOpKind.WalAppend));
   await locks.request(ownerLock(doc, owner), async () => {
     expect(
-      await b.execute(op(6, { owner: other, from: owner, before: 2n }))
+      await b.execute(
+        op(StorageOpKind.WalDropExpired, {
+          owner: other,
+          from: owner,
+          before: 2n,
+        })
+      )
     ).toEqual({ kind: 'done', ok: false, failure: Failure.Other });
     const db = await openDB('macro-document-wal', 1);
     expect(await db.countFromIndex('updates', 'scopeId', doc)).toBe(1);
     db.close();
   });
   expect(
-    await b.execute(op(6, { owner: other, from: owner, before: 2n }))
+    await b.execute(
+      op(StorageOpKind.WalDropExpired, {
+        owner: other,
+        from: owner,
+        before: 2n,
+      })
+    )
   ).toEqual({ kind: 'done', ok: true, failure: Failure.None });
   const db = await openDB('macro-document-wal', 1);
   expect(await db.countFromIndex('updates', 'scopeId', doc)).toBe(0);
@@ -483,12 +570,14 @@ test('a session row without a user cannot become current-user recovery history',
     createdAt: 1,
   });
   const adapter = new StorageAdapter(doc, owner, 'fixture-user', locks);
-  const loaded = await adapter.execute(op(0));
+  const loaded = await adapter.execute(op(StorageOpKind.Load));
   if (loaded.kind !== 'loaded' || !loaded.payload) throw new Error('load');
   expect(
     LocalStateMsg.decode(loaded.payload).orphans[0]?.records[0]?.user
   ).toBe('');
-  expect(await adapter.execute(op(5, { from: other, seq: 1n }))).toEqual({
+  expect(
+    await adapter.execute(op(StorageOpKind.WalAdopt, { from: other, seq: 1n }))
+  ).toEqual({
     kind: 'adopted',
     adopted: -1,
     failure: Failure.Other,
@@ -497,5 +586,144 @@ test('a session row without a user cannot become current-user recovery history',
   expect(rows).toHaveLength(1);
   expect(rows[0]).toMatchObject({ owner: other, seq: 1n });
   expect(rows[0]?.user).toBeUndefined();
+  db.close();
+});
+
+test('every named storage operation dispatches with the original WAL and snapshot locks', async () => {
+  const requested = vi.spyOn(navigator.locks, 'request');
+  const observedLocks = {
+    query: locks.query,
+    request: navigator.locks.request.bind(navigator.locks),
+  };
+  const adapter = new StorageAdapter(doc, owner, 'fixture-user', observedLocks);
+  expect((await adapter.execute(op(StorageOpKind.Load))).failure).toBe(
+    Failure.None
+  );
+  const db = await openDB('macro-document-wal', 1);
+  const legacyId = await db.add('updates', {
+    scopeId: doc,
+    update: new Uint8Array([1, 255]),
+    delivered: false,
+    createdAt: 1,
+  });
+  if (typeof legacyId !== 'number')
+    throw new Error('Expected auto-increment WAL key');
+  await db.add('updates', {
+    scopeId: doc,
+    update: new Uint8Array([3]),
+    owner: other,
+    seq: 1n,
+    user: 'fixture-user',
+    delivered: false,
+    createdAt: 1,
+  });
+  const operations = [
+    op(StorageOpKind.Load),
+    op(StorageOpKind.LoadOrphans),
+    op(StorageOpKind.WalAppend),
+    op(StorageOpKind.WalMarkDelivered, { through: 1n }),
+    op(StorageOpKind.WalQuarantine, { seq: 1n }),
+    op(StorageOpKind.SnapshotSave, {
+      snapshot: new Uint8Array([9]),
+      coversOwner: owner,
+      coversSeq: 1n,
+    }),
+    op(StorageOpKind.WalPrune, { through: 1n }),
+    op(StorageOpKind.SnapshotDelete),
+    op(StorageOpKind.WalAdopt, {
+      seq: 2n,
+      expected: [
+        { ...op(StorageOpKind.WalAppend).record, seq: BigInt(legacyId) },
+      ],
+    }),
+    op(StorageOpKind.WalDropExpired, { from: other, before: 2n }),
+  ];
+  for (const operation of operations) {
+    requested.mockClear();
+    const result = await adapter.execute(operation);
+    const acquired = requested.mock.calls.map((call) => call[0]);
+    expect(result.failure, StorageOpKind[operation.kind]).toBe(Failure.None);
+    if (
+      [
+        StorageOpKind.Load,
+        StorageOpKind.LoadOrphans,
+        StorageOpKind.WalPrune,
+        StorageOpKind.WalAdopt,
+        StorageOpKind.SnapshotSave,
+        StorageOpKind.SnapshotDelete,
+      ].includes(operation.kind)
+    )
+      expect(acquired).toContain(`macro-snapshot:${doc}`);
+    else if (operation.kind !== StorageOpKind.WalDropExpired)
+      expect(acquired).toEqual([]);
+    if (operation.kind === StorageOpKind.WalDropExpired)
+      expect(acquired).toEqual([
+        ownerLock(doc, other),
+        `macro-snapshot:${doc}`,
+      ]);
+    if (operation.kind === StorageOpKind.WalQuarantine) {
+      const rows = await db.getAllFromIndex('updates', 'scopeId', doc);
+      expect(rows.find((row) => row.owner === owner)).toMatchObject({
+        delivered: true,
+        quarantined: true,
+      });
+    }
+    if (operation.kind === StorageOpKind.WalPrune)
+      expect(
+        (await db.getAllFromIndex('updates', 'scopeId', doc)).some(
+          (row) => row.owner === owner
+        )
+      ).toBe(false);
+  }
+  expect(await db.getAllFromIndex('updates', 'scopeId', doc)).toEqual([
+    expect.objectContaining({
+      owner,
+      seq: 2n,
+      update: new Uint8Array([1, 255]),
+    }),
+  ]);
+  db.close();
+});
+
+test('unknown kinds and malformed WAL payloads fail before locks or storage mutation', async () => {
+  const requested = vi.spyOn(navigator.locks, 'request');
+  const guardedLocks = {
+    query: vi.fn(locks.query),
+    request: navigator.locks.request.bind(navigator.locks),
+  };
+  const adapter = new StorageAdapter(doc, owner, 'fixture-user', guardedLocks);
+  expect((await adapter.execute(op(StorageOpKind.Load))).failure).toBe(
+    Failure.None
+  );
+  guardedLocks.query.mockClear();
+  requested.mockClear();
+  const db = await openDB('macro-document-wal', 1);
+  const original = {
+    scopeId: doc,
+    update: new Uint8Array([7]),
+    delivered: false,
+    createdAt: 1,
+  };
+  await db.add('updates', original);
+  const before = await db.getAllFromIndex('updates', 'scopeId', doc);
+  for (const kind of [10, 255, -1, 1.5, 'WalPrune', undefined]) {
+    const invalid = op(StorageOpKind.WalPrune, { through: 100n });
+    Object.defineProperty(invalid, 'kind', { value: kind });
+    expect(await adapter.execute(invalid)).toEqual({
+      kind: 'done',
+      ok: false,
+      failure: Failure.Corrupt,
+    });
+  }
+  const malformed = op(StorageOpKind.WalAppend);
+  Object.defineProperty(malformed.record, 'seq', { value: -1n });
+  expect(await adapter.execute(malformed)).toEqual({
+    kind: 'done',
+    ok: false,
+    failure: Failure.Corrupt,
+  });
+  expect(requested).not.toHaveBeenCalled();
+  expect(guardedLocks.query).not.toHaveBeenCalled();
+  expect(await db.getAllFromIndex('updates', 'scopeId', doc)).toEqual(before);
   db.close();
 });

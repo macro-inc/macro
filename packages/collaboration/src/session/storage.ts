@@ -1,4 +1,6 @@
+import { BebopTypeGuard, BebopView } from 'bebop';
 import type { DBSchema } from 'idb';
+import { match, P } from 'ts-pattern';
 import { RecoverableDatabase } from '../collab/recoverable-database';
 import { snapshotWriteLock } from '../collab/snapshot-store';
 import {
@@ -8,7 +10,146 @@ import {
   type IStorageOpMsg,
   type IWalRecordMsg,
   LocalStateMsg,
+  StorageOpKind,
+  StorageOpMsg,
 } from './abi.generated';
+
+const storagePolicy = {
+  [StorageOpKind.Load]: { name: 'load', snapshot: true, sourceOwner: false },
+  [StorageOpKind.LoadOrphans]: {
+    name: 'load_orphans',
+    snapshot: true,
+    sourceOwner: false,
+  },
+  [StorageOpKind.WalAppend]: {
+    name: 'wal_append',
+    snapshot: false,
+    sourceOwner: false,
+  },
+  [StorageOpKind.WalMarkDelivered]: {
+    name: 'wal_mark_delivered',
+    snapshot: false,
+    sourceOwner: false,
+  },
+  [StorageOpKind.WalPrune]: {
+    name: 'wal_prune',
+    snapshot: true,
+    sourceOwner: false,
+  },
+  [StorageOpKind.WalAdopt]: {
+    name: 'wal_adopt',
+    snapshot: true,
+    sourceOwner: true,
+  },
+  [StorageOpKind.WalDropExpired]: {
+    name: 'wal_drop_expired',
+    snapshot: false,
+    sourceOwner: true,
+  },
+  [StorageOpKind.WalQuarantine]: {
+    name: 'wal_quarantine',
+    snapshot: false,
+    sourceOwner: false,
+  },
+  [StorageOpKind.SnapshotSave]: {
+    name: 'snapshot_save',
+    snapshot: true,
+    sourceOwner: false,
+  },
+  [StorageOpKind.SnapshotDelete]: {
+    name: 'snapshot_delete',
+    snapshot: true,
+    sourceOwner: false,
+  },
+} satisfies Record<
+  StorageOpKind,
+  { name: string; snapshot: boolean; sourceOwner: boolean }
+>;
+
+export function storageOperationName(kind: StorageOpKind): string {
+  if (!Number.isInteger(kind) || !Object.hasOwn(storagePolicy, kind))
+    throw new DOMException('Unknown storage operation', 'DataError');
+  return storagePolicy[kind].name;
+}
+
+// Bebop 3.1.3's generated validator treats byte[] as Array, while its decoder
+// returns Uint8Array. Validate the actual decoded representation at this boundary.
+function validateStorageOperation(op: IStorageOpMsg): void {
+  storageOperationName(op.kind);
+  for (const value of [op.doc, op.owner, op.user, op.from, op.coversOwner])
+    BebopTypeGuard.ensureString(value);
+  for (const value of [op.seq, op.through, op.coversSeq]) {
+    if (typeof value !== 'bigint')
+      throw new DOMException('Invalid storage sequence', 'DataError');
+    BebopTypeGuard.ensureUint64(value);
+  }
+  if (typeof op.before !== 'bigint')
+    throw new DOMException('Invalid storage timestamp', 'DataError');
+  BebopTypeGuard.ensureInt64(op.before);
+  BebopTypeGuard.ensureBoolean(op.retry);
+  BebopTypeGuard.ensureBoolean(op.terminal);
+  if (!(op.snapshot instanceof Uint8Array) || !Array.isArray(op.expected))
+    throw new DOMException(
+      'Invalid storage bytes or WAL selection',
+      'DataError'
+    );
+  for (const row of [op.record, ...op.expected]) {
+    if (
+      typeof row.seq !== 'bigint' ||
+      typeof row.createdAt !== 'bigint' ||
+      !(row.bytes instanceof Uint8Array)
+    )
+      throw new DOMException('Invalid storage WAL record', 'DataError');
+    BebopTypeGuard.ensureUint64(row.seq);
+    BebopTypeGuard.ensureInt64(row.createdAt);
+    BebopTypeGuard.ensureString(row.user);
+    BebopTypeGuard.ensureBoolean(row.foreign);
+    BebopTypeGuard.ensureBoolean(row.quarantined);
+    BebopTypeGuard.ensureBoolean(row.delivered);
+  }
+}
+
+export function decodeStorageOperation(bytes: Uint8Array): IStorageOpMsg {
+  storageOperationName(bytes[0]);
+  const op = StorageOpMsg.decode(bytes);
+  if (BebopView.getInstance().index !== bytes.byteLength)
+    throw new DOMException(
+      'Truncated or trailing storage payload',
+      'DataError'
+    );
+  validateStorageOperation(op);
+  return op;
+}
+
+// Numeric enums accept arbitrary numbers in TypeScript. Stringifying generated
+// members gives ts-pattern a closed, enum-derived union without a second tag list.
+export function storageFailure(
+  kind: StorageOpKind,
+  code: Failure
+): StorageResult {
+  return match<`${StorageOpKind}`>(`${kind}`)
+    .with(
+      P.union(`${StorageOpKind.Load}`, `${StorageOpKind.LoadOrphans}`),
+      (): StorageResult => ({ kind: 'loaded', failure: code })
+    )
+    .with(
+      `${StorageOpKind.WalAdopt}`,
+      (): StorageResult => ({ kind: 'adopted', adopted: -1, failure: code })
+    )
+    .with(
+      P.union(
+        `${StorageOpKind.WalAppend}`,
+        `${StorageOpKind.WalMarkDelivered}`,
+        `${StorageOpKind.WalPrune}`,
+        `${StorageOpKind.WalDropExpired}`,
+        `${StorageOpKind.WalQuarantine}`,
+        `${StorageOpKind.SnapshotSave}`,
+        `${StorageOpKind.SnapshotDelete}`
+      ),
+      (): StorageResult => ({ kind: 'done', ok: false, failure: code })
+    )
+    .exhaustive(() => ({ kind: 'done', ok: false, failure: Failure.Corrupt }));
+}
 
 interface WalRow {
   id?: number;
@@ -105,30 +246,31 @@ export class StorageAdapter {
   execute(op: IStorageOpMsg): Promise<StorageResult> {
     const run = this.queue.then(async (): Promise<StorageResult> => {
       try {
+        validateStorageOperation(op);
+      } catch {
+        return storageFailure(op.kind, Failure.Corrupt);
+      }
+      try {
+        const policy = storagePolicy[op.kind];
         if (op.doc !== this.doc || (op.owner && op.owner !== this.owner))
           throw new DOMException('Storage scope mismatch', 'DataError');
         const guarded = () =>
           this.locks.request(snapshotWriteLock(this.doc), () => this.apply(op));
-        if ((op.kind === 5 || op.kind === 6) && op.from)
+        if (policy.sourceOwner && op.from)
           return await this.locks.request(
             ownerLock(this.doc, op.from),
             { ifAvailable: true },
             async (lock): Promise<StorageResult> =>
               lock
                 ? guarded()
-                : op.kind === 5
+                : op.kind === StorageOpKind.WalAdopt
                   ? { kind: 'adopted', adopted: -1, failure: Failure.Other }
                   : { kind: 'done', ok: false, failure: Failure.Other }
           );
-        if ([0, 1, 4, 5, 8, 9].includes(op.kind)) return await guarded();
+        if (policy.snapshot) return await guarded();
         return await this.apply(op);
       } catch (error) {
-        const code = failure(error);
-        if (op.kind === 0 || op.kind === 1)
-          return { kind: 'loaded', failure: code };
-        if (op.kind === 5)
-          return { kind: 'adopted', adopted: -1, failure: code };
-        return { kind: 'done', ok: false, failure: code };
+        return storageFailure(op.kind, failure(error));
       }
     });
     this.queue = run.then(() => undefined);
@@ -258,28 +400,55 @@ export class StorageAdapter {
       }
     }
   }
-  private async apply(op: IStorageOpMsg): Promise<StorageResult> {
-    if (op.kind === 0 || op.kind === 1) return this.load(op.kind === 0);
-    if (op.kind === 2) {
-      await this.append(op);
-      return { kind: 'done', ok: true, failure: Failure.None };
-    }
-    if (op.kind === 8 || op.kind === 9) {
-      const tx = await this.snapshots.transaction('snapshots', 'readwrite');
-      if (op.kind === 8)
-        await tx.store.put({
-          scopeId: this.doc,
-          snapshot: op.snapshot,
-          ...(op.coversOwner
-            ? { covers: { owner: op.coversOwner, seq: op.coversSeq } }
-            : {}),
-        });
-      else await tx.store.delete(this.doc);
-      await tx.done;
-      return { kind: 'done', ok: true, failure: Failure.None };
-    }
+  private apply(op: IStorageOpMsg): Promise<StorageResult> {
+    return match<`${StorageOpKind}`>(`${op.kind}`)
+      .with(`${StorageOpKind.Load}`, () => this.load(true))
+      .with(`${StorageOpKind.LoadOrphans}`, () => this.load(false))
+      .with(`${StorageOpKind.WalAppend}`, async (): Promise<StorageResult> => {
+        await this.append(op);
+        return { kind: 'done', ok: true, failure: Failure.None };
+      })
+      .with(
+        P.union(
+          `${StorageOpKind.SnapshotSave}`,
+          `${StorageOpKind.SnapshotDelete}`
+        ),
+        () => this.applySnapshot(op)
+      )
+      .with(
+        P.union(
+          `${StorageOpKind.WalMarkDelivered}`,
+          `${StorageOpKind.WalPrune}`,
+          `${StorageOpKind.WalAdopt}`,
+          `${StorageOpKind.WalDropExpired}`,
+          `${StorageOpKind.WalQuarantine}`
+        ),
+        () => this.applyWal(op)
+      )
+      .exhaustive(() => {
+        throw new DOMException('Unknown storage operation', 'DataError');
+      });
+  }
+  private async applySnapshot(op: IStorageOpMsg): Promise<StorageResult> {
+    const tx = await this.snapshots.transaction('snapshots', 'readwrite');
+    if (op.kind === StorageOpKind.SnapshotSave)
+      await tx.store.put({
+        scopeId: this.doc,
+        snapshot: op.snapshot,
+        ...(op.coversOwner
+          ? { covers: { owner: op.coversOwner, seq: op.coversSeq } }
+          : {}),
+      });
+    else await tx.store.delete(this.doc);
+    await tx.done;
+    return { kind: 'done', ok: true, failure: Failure.None };
+  }
+  private async applyWal(op: IStorageOpMsg): Promise<StorageResult> {
     let pruneCover = 0n;
-    if (op.kind === 4 || op.kind === 5) {
+    if (
+      op.kind === StorageOpKind.WalPrune ||
+      op.kind === StorageOpKind.WalAdopt
+    ) {
       const snapshot = await this.snapshots.transaction(
         'snapshots',
         'readonly'
@@ -289,7 +458,7 @@ export class StorageAdapter {
       pruneCover = row?.covers?.owner === this.owner ? row.covers.seq : 0n;
       const covers =
         op.from && row?.covers?.owner === op.from ? row.covers.seq : 0n;
-      if (op.kind === 5 && covers !== op.through)
+      if (op.kind === StorageOpKind.WalAdopt && covers !== op.through)
         return { kind: 'adopted', adopted: -1, failure: Failure.Other };
     }
     const tx = await this.wal.transaction('updates', 'readwrite');
@@ -297,23 +466,30 @@ export class StorageAdapter {
     const changes: [bigint, number | undefined][] = [];
     let adopted = 0;
     try {
-      if (op.kind === 3 || op.kind === 7) {
+      if (
+        op.kind === StorageOpKind.WalMarkDelivered ||
+        op.kind === StorageOpKind.WalQuarantine
+      ) {
         for (const [seq, id] of this.keys) {
           if (
-            (op.kind === 3 && seq <= op.through) ||
-            (op.kind === 7 && seq === op.seq)
+            (op.kind === StorageOpKind.WalMarkDelivered && seq <= op.through) ||
+            (op.kind === StorageOpKind.WalQuarantine && seq === op.seq)
           ) {
             const row = await tx.store.get(id);
             if (row?.owner === this.owner && row.seq === seq)
               await tx.store.put({
                 ...row,
-                ...(op.kind === 3
+                ...(op.kind === StorageOpKind.WalMarkDelivered
                   ? { delivered: true }
                   : { quarantined: true }),
               });
           }
         }
-      } else if (op.kind === 4 || op.kind === 5 || op.kind === 6) {
+      } else if (
+        op.kind === StorageOpKind.WalPrune ||
+        op.kind === StorageOpKind.WalAdopt ||
+        op.kind === StorageOpKind.WalDropExpired
+      ) {
         const rows: { row: WalRow; id: number }[] = [];
         let cursor = await tx.store.index('scopeId').openCursor(this.doc);
         while (cursor) {
@@ -325,7 +501,7 @@ export class StorageAdapter {
             right = b.row.seq ?? BigInt(b.id);
           return left < right ? -1 : left > right ? 1 : 0;
         });
-        if (op.kind === 5) {
+        if (op.kind === StorageOpKind.WalAdopt) {
           const selected = rows.filter(
             ({ row, id }) =>
               (row.owner ?? '') === op.from &&
@@ -365,7 +541,7 @@ export class StorageAdapter {
         }
         for (const { row, id } of rows) {
           if (
-            op.kind === 4 &&
+            op.kind === StorageOpKind.WalPrune &&
             row.owner === this.owner &&
             row.seq !== undefined &&
             row.seq <= op.through &&
@@ -376,13 +552,16 @@ export class StorageAdapter {
             changes.push([row.seq, undefined]);
           }
           if (
-            op.kind === 6 &&
+            op.kind === StorageOpKind.WalDropExpired &&
             (row.owner ?? '') === op.from &&
             !row.delivered &&
             row.createdAt < Number(op.before)
           )
             await tx.store.delete(id);
-          if (op.kind === 5 && (row.owner ?? '') === op.from) {
+          if (
+            op.kind === StorageOpKind.WalAdopt &&
+            (row.owner ?? '') === op.from
+          ) {
             if (record(row, this.user).user !== this.user)
               throw new DOMException('Foreign user adoption', 'DataError');
             if (row.delivered && (row.seq ?? BigInt(id)) <= op.through)
@@ -412,7 +591,7 @@ export class StorageAdapter {
       if (id === undefined) this.keys.delete(seq);
       else this.keys.set(seq, id);
     }
-    return op.kind === 5
+    return op.kind === StorageOpKind.WalAdopt
       ? { kind: 'adopted', adopted, failure: Failure.None }
       : { kind: 'done', ok: true, failure: Failure.None };
   }

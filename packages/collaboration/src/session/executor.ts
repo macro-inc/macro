@@ -13,7 +13,6 @@ import {
   NodeCursorMsg,
   SaveReason,
   SessionInputMsg,
-  StorageOpMsg,
   TelemetryMsg,
 } from './abi.generated';
 import { emptyInput } from './input';
@@ -26,7 +25,13 @@ import {
   withSingleCodeTokenCause,
 } from './output';
 import type { SessionRouter } from './router';
-import { StorageAdapter, type StorageResult } from './storage';
+import {
+  decodeStorageOperation,
+  StorageAdapter,
+  type StorageResult,
+  storageFailure,
+  storageOperationName,
+} from './storage';
 import type { SessionTelemetry } from './telemetry';
 import type { DocSession, EditorSession } from './wasm.generated';
 
@@ -905,40 +910,20 @@ export class SessionExecutor<S extends NativeSession = EditorSession> {
       return;
     }
     if (effect.tag === 6) {
-      const op = StorageOpMsg.decode(effect.payload);
+      const op = decodeStorageOperation(effect.payload);
       this.storageQueue = this.storageQueue
         .then(async () => {
           let result: StorageResult | undefined;
           try {
             await this.lease.ready;
             await this.options.telemetry.storage(
-              [
-                'load',
-                'load_orphans',
-                'wal_append',
-                'wal_mark_delivered',
-                'wal_prune',
-                'wal_adopt',
-                'wal_drop_expired',
-                'wal_quarantine',
-                'snapshot_save',
-                'snapshot_delete',
-              ][op.kind] ?? 'unknown',
+              storageOperationName(op.kind),
               async () => {
                 result = await this.storage.execute(op);
               }
             );
           } catch {
-            result ??=
-              op.kind === 0 || op.kind === 1
-                ? { kind: 'loaded', failure: Failure.Unavailable }
-                : op.kind === 5
-                  ? {
-                      kind: 'adopted',
-                      adopted: -1,
-                      failure: Failure.Unavailable,
-                    }
-                  : { kind: 'done', ok: false, failure: Failure.Unavailable };
+            result ??= storageFailure(op.kind, Failure.Unavailable);
           }
           const completion = result;
           if (!completion)

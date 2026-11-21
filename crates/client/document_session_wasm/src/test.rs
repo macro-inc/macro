@@ -9,6 +9,7 @@ mod mention_user;
 mod paste_intent;
 mod search;
 mod session_bop;
+mod storage_abi;
 mod stored_comparison;
 #[cfg(test)]
 mod table_selection_actions;
@@ -715,7 +716,7 @@ fn adoption_boundary_preserves_the_exact_loaded_selection() {
     };
     let encoded = storage::encode(&op, false);
     let decoded = wire::StorageOpMsg::deserialize(&bytes(&encoded).unwrap()).unwrap();
-    assert_eq!(decoded.kind, 5);
+    assert_eq!(decoded.kind, wire::StorageOpKind::WalAdopt);
     assert_eq!(decoded.seq, 11);
     assert_eq!(decoded.through, 7);
     assert_eq!(decoded.expected.len(), 1);

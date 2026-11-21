@@ -549,7 +549,13 @@ fn encode_inner(
             }
             IoEffect::Storage { id, op } => {
                 let m = storage::encode(op, terminal);
-                entry(&mut entries, 6, id.0, u32::from(m.kind), &bytes(&m)?);
+                entry(
+                    &mut entries,
+                    6,
+                    id.0,
+                    u32::from(u8::from(m.kind)),
+                    &bytes(&m)?,
+                );
             }
             IoEffect::ChatterPost(c) => match c {
                 ChatterMessage::Update(v) => entry(&mut entries, 7, 0, 0, v),

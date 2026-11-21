@@ -56,6 +56,7 @@ Query kind 8 returns the selection's durable Loro cursors in `nodes` and its exa
 - `src/router.rs`: shared RouterCore boundary; outer protocol remains unframed.
 - `src/telemetry.rs`: content-free cold native spans forwarded to the host.
 - `src/storage.rs`: durable metadata conversions; no storage I/O in Rust.
+- Keep `StorageOpKind : byte` in `abi/session.bop` authoritative for storage tags 0 through 9; regenerate Rust and TypeScript together and preserve existing one-byte wire layout and field order.
 - `packages/collaboration/src/session/`: JS executor and browser adapters.
 
 ## Boundaries

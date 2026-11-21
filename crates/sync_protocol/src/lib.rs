@@ -35,4 +35,6 @@ impl std::fmt::Display for FromPeer<'_> {
 }
 
 #[cfg(test)]
+mod schema_test;
+#[cfg(test)]
 mod test;
