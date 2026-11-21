@@ -280,15 +280,6 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     for (const cb of affectedSubscribers) cb(keys);
   }
 
-  // Tells the native side this caller stopped waiting for a read.
-  async function abandon(requestId: string) {
-    try {
-      await invoke(ABANDON_COMMAND, { requestId });
-    } catch {
-      // Older binaries lack the command; the read then runs as before.
-    }
-  }
-
   async function request<T>(
     command: string,
     args: Record<string, unknown>
@@ -332,7 +323,9 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         'graphql_cache.ipc.outcome',
         deadline.timedOut ? 'timeout' : 'error'
       );
-      if (deadline.timedOut && requestId) void abandon(requestId);
+      // Older binaries lack the abandon command; the read then runs as before.
+      if (deadline.timedOut && requestId)
+        void invoke(ABANDON_COMMAND, { requestId }).catch(() => undefined);
       span.error(
         deadline.timedOut
           ? 'Native cache request timed out'
