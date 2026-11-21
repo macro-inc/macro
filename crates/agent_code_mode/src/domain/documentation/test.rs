@@ -643,3 +643,14 @@ fn the_properties_guide_shows_a_typed_custom_field_on_a_task() {
     assert!(guide.contains("task.setProperty(hours, {type: 'number', value: 3.5})"));
     assert!(guide.contains("pass `scope: 'team'` only when the user asks"));
 }
+
+#[test]
+fn a_method_reference_repeats_the_small_option_types_it_takes() {
+    let create = symbol_reference("PropertiesNamespace.create").unwrap();
+    assert!(create.contains("#### Option types"), "{create}");
+    assert!(
+        create.contains("- `CreatePropertyScope` = `\"user\"` \\| `\"team\"`"),
+        "{create}"
+    );
+    assert!(create.contains("- `PropertyDataType` = "), "{create}");
+}

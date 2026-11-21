@@ -18,6 +18,10 @@ HTML worker belong to `packages/sdk-docs`.
   retain other details in following paragraphs. A discriminated union over
   the 16 KiB reference size, such as `EditOp`, lists its members, each read as
   `EditOp.<discriminator>`.
+  A class built on another concrete class (`Task` on `Document`) lists its
+  inherited methods under its own name in the index. A method's reference
+  ends with the declarations of the small type aliases its parameters name
+  (`#### Option types`, up to 1 KiB each and 2 KiB per method).
 - `scripts/catalog.ts`: the entity directories agents discover, one topic per
   directory except tasks and task templates, which share the tasks topic.
   Jev routes the catalog in parallel 32-question calls, so its size is not capped.

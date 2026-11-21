@@ -196,6 +196,7 @@ export function packageEntityDocs(
 
   const symbols: Record<string, string> = {};
   const abstractClasses = new Set<string>();
+  const methodSymbols: string[] = [];
   for (const path of [...documented].sort()) {
     const symbol = symbolOf.get(path) ?? '';
     const markdown = relink(path, pages.get(path) ?? '');
@@ -212,9 +213,13 @@ export function packageEntityDocs(
     symbols[symbol] = guide
       ? `${header}\n\n${GUIDE_HEADING}\n\n${guide}`
       : header;
-    for (const method of methods)
+    for (const method of methods) {
       symbols[`${symbol}.${method.name}`] = method.markdown;
+      methodSymbols.push(`${symbol}.${method.name}`);
+    }
   }
+  for (const method of methodSymbols)
+    symbols[method] = withOptionTypes(symbols[method] ?? '', symbols);
 
   // Where each namespace class is reached from: `macro.tasks`.
   const accessors = new Map<string, string>();
@@ -260,6 +265,46 @@ function pageGroup(path: string) {
 }
 
 type Method = { name: string; markdown: string; inherited: boolean };
+
+/** Largest type alias declaration a method's reference repeats. */
+const OPTION_TYPE_BYTES = 1024;
+
+/** Most bytes of type declarations one method's reference repeats. */
+const OPTION_TYPES_BYTES = 2048;
+
+/**
+ * A method's reference followed by the declarations of the small type
+ * aliases its parameters name (`CreatePropertyScope = "user" | "team"`), one
+ * level deep, so the options can be written without another read. A larger
+ * alias, or one past the method's budget, stays a symbol to read.
+ */
+function withOptionTypes(
+  markdown: string,
+  symbols: Readonly<Record<string, string>>
+) {
+  const parameters =
+    markdown.split(/^#### Parameters$/m)[1]?.split(/^#### /m)[0] ?? '';
+  const named = new Set(
+    [...parameters.matchAll(/`([A-Za-z][\w.-]*)`/g)].map((match) => match[1] ?? '')
+  );
+  const lines: string[] = [];
+  let bytes = 0;
+  for (const name of named) {
+    const reference = Object.hasOwn(symbols, name) ? symbols[name] : undefined;
+    if (!reference?.startsWith('# Type Alias:')) continue;
+    const declaration = reference.match(/^> \*\*[^*]+\*\* = (.+)$/m)?.[1];
+    if (!declaration) continue;
+    const line = `- \`${name}\` = ${declaration}`;
+    const size = Buffer.byteLength(line);
+    if (size > OPTION_TYPE_BYTES || bytes + size > OPTION_TYPES_BYTES) continue;
+    bytes += size;
+    lines.push(line);
+  }
+  const extended = `${markdown}\n\n#### Option types\n\n${lines.join('\n')}`;
+  return lines.length && Buffer.byteLength(extended) < REFERENCE_BYTES
+    ? extended
+    : markdown;
+}
 
 /** Largest reference ReadCodeDocs serves whole. */
 const REFERENCE_BYTES = 16 * 1024;

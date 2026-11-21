@@ -169,6 +169,24 @@ describe('TypeDoc documentation packaging', () => {
     expect(Object.values(symbols).join('\n')).not.toContain('.md');
   });
 
+  it('repeats the declarations of small type aliases a method takes', () => {
+    const pages = fixturePages();
+    pages.set(
+      'generated/example/types.gen/type-aliases/Request.md',
+      '# Type Alias: Request\n\n> **Request** = `"draft"` \\| `"final"`\n\nA request.'
+    );
+    expect(pack(pages).symbols['ExampleNamespace.create']).toContain(
+      '#### Option types\n\n- `Request` = `"draft"` \\| `"final"`'
+    );
+    pages.set(
+      'generated/example/types.gen/type-aliases/Request.md',
+      `# Type Alias: Request\n\n> **Request** = ${'`"x"` \\| '.repeat(200)}\`"y"\`\n`
+    );
+    expect(pack(pages).symbols['ExampleNamespace.create']).not.toContain(
+      '#### Option types'
+    );
+  });
+
   it('keeps transitive and cyclic wire references, qualifying shared names', () => {
     const { symbols } = pack();
     expect(symbols.Request).toBe('# Request\n`example.Child`');
