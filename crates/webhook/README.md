@@ -234,7 +234,8 @@ A resuming stream (`resume=true` with a readable `Last-Event-ID`) that falls
 more than 1,024 events behind its process's feed ends rather than skipping what
 it missed, so its client reopens it and replays them from the retained events.
 Any other stream skips them and continues, as before: its client could not
-replay them, and the SDK's listener does not reopen a stream that ends.
+replay them on a reconnect either. The SDK's listener resumes, and so replays,
+only when it is given `resume`.
 
 ## Queue contract, deduplication, and ordering
 

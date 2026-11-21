@@ -484,8 +484,8 @@ where
                 Ok(FeedItem::Event(candidate)) => candidate,
                 Ok(FeedItem::Heartbeat) => return Some(StreamItem::Heartbeat),
                 // Ending lets a resuming client reconnect from its cursor and
-                // replay what it missed. Any other client could not replay
-                // them, and the SDK listener does not reopen an ended stream.
+                // replay what it missed. A client that does not resume could
+                // not replay them on a reconnect either, so it keeps going.
                 Err(broadcast::error::RecvError::Lagged(skipped)) if self.ends_when_behind => {
                     tracing::warn!(
                         skipped,
