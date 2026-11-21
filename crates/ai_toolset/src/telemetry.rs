@@ -121,8 +121,17 @@ impl ToolCallSpan {
                 self.span.set_error("tool_not_found", "no such tool");
             }
             Err(error @ ToolSetError::Deserialization(_)) => {
-                tracing::warn!(tool_name = %self.tool_name, error = %error, "tool call could not be dispatched");
-                // The message quotes the arguments it could not read.
+                // The message quotes the arguments it could not read, and the
+                // event lands on the caller's span too: inside
+                // `withhold_content` it says only what kind of failure it was.
+                if genai_telemetry::content_withheld() {
+                    tracing::warn!(
+                        tool_name = %self.tool_name,
+                        "tool call could not be dispatched: its arguments did not match the tool's schema"
+                    );
+                } else {
+                    tracing::warn!(tool_name = %self.tool_name, error = %error, "tool call could not be dispatched");
+                }
                 self.span.set_error(
                     "invalid_arguments",
                     self.error_description(

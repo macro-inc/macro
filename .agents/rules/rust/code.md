@@ -84,8 +84,8 @@ Type design, idioms, errors and observability, performance, and tests.
   run inside `genai_telemetry::withhold_content` records none; a task spawned
   from it carries the scope with `withhold_content_if(content_withheld(), fut)`.
   An error made inside the scope that is logged, recorded or returned to a
-  library that logs it says only its kind: a model or serde error's text can
-  quote the content.
+  library that logs it says only its kind and what was wanted: a model or
+  serde error's text can quote the content.
 - **CS-73** A function that reaches a service's router or composition root is
   never a non-generic `pub async fn`, even in a private module: rustc compiles
   the body of every such function in every build, so the lib test compiles the

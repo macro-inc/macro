@@ -285,7 +285,7 @@ impl InternalTools {
                     &serde_json::Value::Object(request.arguments.unwrap_or_default()),
                 )
                 .await
-                .map_err(|error| rmcp::ErrorData::invalid_params(error.to_string(), None))?;
+                .map_err(refused_call)?;
             let result = match result {
                 Ok(value) => CallToolResult::structured(value),
                 Err(error) => CallToolResult::error(vec![ContentBlock::text(error.description)]),
@@ -312,12 +312,7 @@ impl InternalTools {
                         &serde_json::Value::Object(request.arguments.unwrap_or_default()),
                     )
                     .await
-                    .map_err(|error| match error {
-                        ai_toolset::ToolSetError::Deserialization(error) => {
-                            invalid_arguments(error)
-                        }
-                        error => rmcp::ErrorData::invalid_params(error.to_string(), None),
-                    })?;
+                    .map_err(refused_call)?;
                 let result = match result {
                     // A failed program is a completed execution with a receipt.
                     // MCP errors discard structured content in some runtimes.
@@ -360,22 +355,67 @@ impl InternalTools {
     }
 }
 
+/// rmcp's error for a call a toolset refused before running it, for the
+/// review and code-mode tools; the session tools map a missing tool to
+/// `resource_not_found` themselves.
+fn refused_call(error: ai_toolset::ToolSetError) -> rmcp::ErrorData {
+    match error {
+        ai_toolset::ToolSetError::Deserialization(error) => invalid_arguments(error),
+        error => rmcp::ErrorData::invalid_params(error.to_string(), None),
+    }
+}
+
 /// A tool call whose arguments don't fit, as rmcp returns and logs it.
 /// serde quotes the value it refused, so inside
-/// `genai_telemetry::withhold_content` it says only where they stopped
-/// fitting; the model still has the tool's schema to correct them by.
+/// `genai_telemetry::withhold_content` it says only what the input wanted;
+/// the model still has the tool's schema to correct them by.
 fn invalid_arguments(error: serde_json::Error) -> rmcp::ErrorData {
     let message = if genai_telemetry::content_withheld() {
         format!(
-            "error deserializing tool call: the arguments stop fitting the tool's input at line {} column {} ({:?} error); the rest is withheld with the call's content",
-            error.line(),
-            error.column(),
-            error.classify()
+            "error deserializing tool call (possible hallucination): {}; the value is withheld with the call's content",
+            misfit_without_value(&error)
         )
     } else {
         ai_toolset::ToolSetError::Deserialization(error).to_string()
     };
     rmcp::ErrorData::invalid_params(message, None)
+}
+
+/// serde's account of arguments that don't fit, without the value. Its own
+/// messages say what came (`string "…"` quotes it), then what the input
+/// wanted, which comes from the tool's input type, as does the name of a
+/// missing or repeated field. Arguments are read from a parsed value, so
+/// there is no line or column to give. A message of any other shape, such as
+/// a custom one, says only its kind.
+fn misfit_without_value(error: &serde_json::Error) -> String {
+    let text = error.to_string();
+    let field = |prefix: &str| {
+        text.strip_prefix(prefix)
+            .and_then(|rest| rest.strip_suffix('`'))
+            .filter(|name| {
+                !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+            })
+            .map(|name| format!("{prefix}{name}`"))
+    };
+    if let Some(field) = field("missing field `").or_else(|| field("duplicate field `")) {
+        return field;
+    }
+    for kind in [
+        "invalid type",
+        "invalid value",
+        "invalid length",
+        "unknown variant",
+        "unknown field",
+    ] {
+        // The last separator: a quoted value can hold the words too.
+        if let Some((_, wanted)) = text
+            .strip_prefix(kind)
+            .and_then(|rest| rest.rsplit_once(", expected "))
+        {
+            return format!("{kind}, expected {wanted}");
+        }
+    }
+    format!("a {:?} error", error.classify())
 }
 
 /// The receipt as structured content, which Macro's own agent reads with its

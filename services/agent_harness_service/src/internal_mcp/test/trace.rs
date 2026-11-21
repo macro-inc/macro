@@ -58,6 +58,58 @@ impl agent_egress::domain::service::EgressService for NoAppEgress {
     }
 }
 
+/// A call marked withheld in its `_meta` gets its misfit arguments back
+/// without their value, through the handler that reads the mark; an
+/// unmarked call keeps serde's message.
+#[tokio::test]
+async fn a_marked_calls_misfit_arguments_come_back_without_their_value() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_agent_session(AgentSessionId::new());
+    repo.insert_session(session.clone());
+    repo.set_egress_token_hash(session.id, &SessionToken::new("secret").hash())
+        .await
+        .unwrap();
+    let tasks = FixedTasks::default();
+    let app = router(
+        Arc::new(repo.clone()),
+        Vec::new(),
+        InternalTools {
+            service: Arc::new(SessionPullRequestService::new(
+                repo.clone(),
+                RecordingRealtime::new(),
+                Arc::new(tasks.clone()),
+            )),
+            tasks: Arc::new(tasks),
+            code_mode: Some(Arc::new(SpanRecordingCodeMode::default())),
+            cognition: None,
+            reviews: Arc::new(OnceLock::new()),
+            gate: Arc::new(agent_inmem::domain::tool_gate::UngatedNativeTools),
+            app_url: "https://macro.com".into(),
+        },
+    );
+    for marked in [false, true] {
+        let mut params = serde_json::json!({
+            "name": "ExecuteCode",
+            "arguments": {
+                "turn_id": "00000000-0000-0000-0000-000000000003",
+                "source": "export async function main() { return {data: 1}; }",
+                "timeout_ms": "the private supplier list",
+            },
+        });
+        if marked {
+            params["_meta"] = serde_json::json!({ "macro.dev/withhold-content": true });
+        }
+        let (_, response) = rpc(app.clone(), Some("secret"), "tools/call", params).await;
+        let message = response["error"]["message"]
+            .as_str()
+            .unwrap_or_else(|| panic!("the call is refused: {response}"));
+        assert_eq!(message.contains("private supplier"), !marked, "{message}");
+        if marked {
+            assert!(message.contains("invalid type, expected u64"), "{message}");
+        }
+    }
+}
+
 /// The in-process agent's ExecuteCode reaches the internal MCP server with
 /// the turn's trace context, so the execution (and the sandbox and SDK spans
 /// under it) joins the session's trace instead of starting its own.

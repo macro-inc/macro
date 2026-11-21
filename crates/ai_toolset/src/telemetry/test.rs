@@ -343,6 +343,66 @@ async fn content_capture_off_records_structure_only() {
     }
 }
 
+/// Every event's fields, as text.
+#[derive(Clone, Default)]
+struct Events(std::sync::Arc<std::sync::Mutex<Vec<String>>>);
+
+impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Events {
+    fn on_event(&self, event: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
+        struct Text<'a>(&'a mut String);
+        impl tracing::field::Visit for Text<'_> {
+            fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+                use std::fmt::Write as _;
+                let _ = write!(self.0, "{}={value:?} ", field.name());
+            }
+        }
+        let mut text = String::new();
+        event.record(&mut Text(&mut text));
+        self.0.lock().expect("events lock").push(text);
+    }
+}
+
+/// The warning for arguments that don't fit quotes them, so inside
+/// `withhold_content` it says only what kind of failure it was.
+#[tokio::test]
+async fn a_withheld_calls_misfit_arguments_are_not_logged() {
+    let events = Events::default();
+    let _guard =
+        tracing::subscriber::set_default(tracing_subscriber::registry().with(events.clone()));
+    let refuse = || {
+        let misfit: Result<ToolResult<serde_json::Value>, ToolSetError> =
+            Err(ToolSetError::Deserialization(
+                serde_json::from_value::<u64>(json!("the private supplier list")).unwrap_err(),
+            ));
+        ToolCallSpan::begin("echo_tool", &json!({})).finish(&misfit);
+    };
+    // Register the callsites, then recompute their interest on this thread:
+    // another test's thread can cache them as never wanted.
+    refuse();
+    tracing::callsite::rebuild_interest_cache();
+    events.0.lock().expect("events lock").clear();
+
+    refuse();
+    genai_telemetry::withhold_content(async { refuse() }).await;
+    let logged: Vec<String> = events
+        .0
+        .lock()
+        .expect("events lock")
+        .iter()
+        .filter(|event| event.contains("could not be dispatched"))
+        .cloned()
+        .collect();
+    let [shown, withheld] = logged.as_slice() else {
+        panic!("one warning a call: {logged:?}");
+    };
+    assert!(shown.contains("private supplier"), "{shown}");
+    assert!(!withheld.contains("private"), "{withheld}");
+    assert!(
+        withheld.contains("did not match the tool's schema"),
+        "{withheld}"
+    );
+}
+
 #[tokio::test]
 async fn oversized_content_is_bounded_and_flagged() {
     let (exporter, provider, _guard) = otel_test_pipeline();

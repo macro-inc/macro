@@ -170,7 +170,10 @@ async fn a_failed_one_shot_inside_withhold_content_records_no_content() {
         format!("{error:#}"),
         "the model call failed with a provider error; its text is withheld with the call's content"
     );
-    assert!(!format!("{error:?}").contains("private"), "{error:?}");
+    // Not "private" alone: with a backtrace, the error names `anyhow::__private`.
+    for planted in ["private answer", "private instructions", "private prompt"] {
+        assert!(!format!("{error:?}").contains(planted), "{error:?}");
+    }
 
     let spans = finished(&exporter, &provider);
     let chats = chat_spans(&spans);

@@ -2,19 +2,61 @@ use super::*;
 use agent_egress::domain::model::SessionToken;
 use axum::http::StatusCode;
 
+#[expect(dead_code, reason = "Only refused arguments are read")]
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MisfitInput {
+    count: u64,
+    cadence: MisfitCadence,
+}
+
+#[expect(dead_code, reason = "Only refused arguments are read")]
+#[derive(Debug, serde::Deserialize)]
+enum MisfitCadence {
+    Weekly,
+    Daily,
+}
+
 /// rmcp logs the error a call returns, so a withheld call's misfit
-/// arguments say where they stopped fitting, never what they held.
+/// arguments say what the input wanted, never what they held.
 #[tokio::test]
 async fn misfit_arguments_of_a_withheld_call_are_not_quoted() {
-    let misfit = || {
-        serde_json::from_value::<u64>(serde_json::json!("the private supplier list")).unwrap_err()
-    };
-    let shown = invalid_arguments(misfit()).message;
-    assert!(shown.contains("private supplier"), "{shown}");
+    let secret = "the private supplier list";
+    let cases = [
+        (
+            serde_json::json!({ "count": secret, "cadence": "Weekly" }),
+            "invalid type, expected u64",
+        ),
+        (
+            serde_json::json!({ "count": 1, "cadence": secret }),
+            "unknown variant, expected `Weekly` or `Daily`",
+        ),
+        (
+            serde_json::json!({ "count": 1, "cadence": "Weekly", secret: 1 }),
+            "unknown field, expected `count` or `cadence`",
+        ),
+        (serde_json::json!({ "count": 1 }), "missing field `cadence`"),
+    ];
+    for (arguments, wanted) in cases {
+        let misfit = || serde_json::from_value::<MisfitInput>(arguments.clone()).unwrap_err();
+        let shown = invalid_arguments(misfit()).message;
+        let withheld =
+            genai_telemetry::withhold_content(async { invalid_arguments(misfit()).message }).await;
+        assert!(!withheld.contains("private"), "{withheld}");
+        assert!(withheld.contains(wanted), "{withheld}");
+        // Outside the scope serde's message is kept as it was.
+        assert_eq!(
+            shown,
+            ai_toolset::ToolSetError::Deserialization(misfit()).to_string()
+        );
+    }
+    // A custom message says only its kind.
+    let custom = || <serde_json::Error as serde::de::Error>::custom(secret);
     let withheld =
-        genai_telemetry::withhold_content(async { invalid_arguments(misfit()).message }).await;
+        genai_telemetry::withhold_content(async { invalid_arguments(custom()).message }).await;
     assert!(!withheld.contains("private"), "{withheld}");
-    assert!(withheld.contains("Data error"), "{withheld}");
+    assert!(withheld.contains("a Data error"), "{withheld}");
+    assert!(invalid_arguments(custom()).message.contains(secret));
 }
 
 #[test]
