@@ -1419,8 +1419,9 @@ row ("Scanning inbox finished") appears, and the agent replies in a
 system turn, or within the next turn when the person already queued a prompt.
 Stop ends only the current turn; jobs keep running. Archiving or deleting the
 session cancels them. A job runs at most 10 minutes; 3 run per session and 10
-per account. A job may only read, change items the person owns and draft
-reviews; anything else it tries is refused. In a turn someone else
+per account. A job may only read, and draft reviews or present views in its
+session; changing any existing item and everything else it tries is
+refused. In a turn someone else
 prompted, a system turn, with the flag off, for a program that sends
 (email, messages, routine saves, connected apps, the web: a job can't yet),
 or when the server already holds 8 jobs,

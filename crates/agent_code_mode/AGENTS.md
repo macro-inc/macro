@@ -48,7 +48,8 @@ stacks. Process isolation belongs to
   receipt with `job`, and runs on the `JobRuntime`'s own executor (4 slots
   a replica) on a `TaskTracker`. Only once it holds a slot is its credential minted (`mint_job`: the
   `job` scope, default deny: it makes only the requests on
-  `agent_correlation`'s job lists and changes only items its owner owns,
+  `agent_correlation`'s job lists, reads and its session's reviews and
+  views, and gets no unfurl host (`run_endpoints`),
   lasting what is left of its 10 minutes
   plus margin, traced under `agent.job.execute`); its correlation is saved
   on the record (`JobInfo.correlation`, never shown to readers), and
