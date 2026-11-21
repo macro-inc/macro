@@ -330,6 +330,16 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   token refresh puts it back for the rest of its 5 minutes, so client retries
   of a 500 work. Never record the code, the redirect URL carrying `token=`, or
   a refresh token in spans, logs, or `Debug`; the span records `outcome`.
+- A client can bind the code to its sign-in (`session_code_binding.rs`): it
+  sends an RFC 7636 S256 `session_code_challenge` on `/login/sso`, the state
+  carries it to `/oauth/redirect`, which stores it with the code, and
+  `/session/login/{code}` must get the verifier in the
+  `x-session-code-verifier` header (never the URL: load balancer logs keep
+  it). A bound code with a missing, malformed or wrong verifier answers 400
+  and is spent, and so does an unbound code sent with a verifier; a code
+  minted and redeemed without either (older clients) still redeems. Never
+  record the verifier, or the `/login/sso` redirect URL, which names the
+  client's attempt.
 - When the FusionAuth JWT populate lambda fails (its `fetch` to
   `/webhooks/user/jwt` times out after 2 s or gets a non-200), FusionAuth still
   issues the access token, just without the Macro claims. `/jwt/refresh`

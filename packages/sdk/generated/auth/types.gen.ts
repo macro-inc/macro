@@ -4190,6 +4190,10 @@ export type SsoLoginData = {
          * **OPTIONAL**. If the sign-in started on the agent signup page. A new account becomes an agent.
          */
         is_agent: boolean;
+        /**
+         * With `is_mobile`: base64url(SHA-256(verifier)), unpadded. The session code then redeems only with that verifier in the `x-session-code-verifier` header.
+         */
+        session_code_challenge?: string;
     };
     url: '/login/sso';
 };
@@ -4462,6 +4466,12 @@ export type SessionCreationResponse = SessionCreationResponses[keyof SessionCrea
 
 export type SessionLoginData = {
     body?: never;
+    headers?: {
+        /**
+         * The verifier whose S256 challenge the sign-in sent as `session_code_challenge`. A code minted with a challenge redeems only with it, and a request that sends one redeems only such a code.
+         */
+        'x-session-code-verifier'?: string | null;
+    };
     path: {
         /**
          * The session code

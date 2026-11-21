@@ -97,6 +97,7 @@ async fn it_works_with_no_params() {
             is_mobile: false,
             referral_code: None,
             is_agent: false,
+            session_code_challenge: None,
         })
     );
 }
@@ -122,6 +123,7 @@ async fn it_works_with_mobile() {
             is_mobile: true,
             referral_code: None,
             is_agent: false,
+            session_code_challenge: None,
         })
     );
 }
@@ -148,6 +150,7 @@ async fn it_works_with_mobile_false() {
 
             referral_code: None,
             is_agent: false,
+            session_code_challenge: None,
         })
     );
 }
@@ -178,7 +181,8 @@ async fn it_works_with_everything() {
        original_url: Some(original_url),
        is_mobile: true,
         referral_code: Some(code),
-       is_agent: false
+       is_agent: false,
+       session_code_challenge: None
     }) => {
         assert_eq!(idp_name, "testing");
         assert_eq!(idp_id, "something");
@@ -203,7 +207,8 @@ async fn it_works_with_macro_scheme() {
        original_url: Some(original_url),
        is_mobile: true,
        referral_code: _,
-       is_agent: false
+       is_agent: false,
+       session_code_challenge: None
     }) => {
         assert_eq!(idp_name, "google");
         assert_eq!(original_url.0.as_str(), "macro://login");
@@ -225,7 +230,8 @@ async fn it_works_with_double_encoded_scheme() {
        original_url: Some(original_url),
        is_mobile: true,
        referral_code: _,
-       is_agent: false
+       is_agent: false,
+       session_code_challenge: None
     }) => {
         assert_eq!(idp_name, "google");
         assert_eq!(original_url.0.as_str(), "https://example.com/");
@@ -280,4 +286,55 @@ fn it_should_read_the_agent_signup_flag() {
     .unwrap();
 
     assert!(query.is_agent);
+}
+
+/// RFC 7636 appendix B's challenge.
+const CHALLENGE: &str = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
+
+#[tokio::test]
+async fn it_takes_a_session_code_challenge() {
+    let request = Request::builder()
+        .uri(format!(
+            "https://example.com/login/sso?idp_name=google&is_mobile=true&session_code_challenge={CHALLENGE}"
+        ))
+        .body(Body::from(()))
+        .unwrap();
+
+    let extracted = Query::<LoginQueryParams>::from_request(request, &())
+        .await
+        .expect("it should extract");
+
+    assert_matches!(extracted, Query(LoginQueryParams {
+        session_code_challenge: Some(challenge),
+        is_mobile: true,
+        ..
+    }) => {
+        assert_eq!(challenge.as_str(), CHALLENGE);
+    });
+}
+
+#[tokio::test]
+async fn it_refuses_a_malformed_session_code_challenge() {
+    let request = Request::builder()
+        .uri("https://example.com/login/sso?idp_name=google&is_mobile=true&session_code_challenge=plain")
+        .body(Body::from(()))
+        .unwrap();
+    let _rejection = Query::<LoginQueryParams>::from_request(request, &())
+        .await
+        .unwrap_err();
+}
+
+#[test]
+fn state_without_a_challenge_serializes_as_before() {
+    let state = SsoState {
+        original_url: None,
+        is_mobile: true,
+        referral_code: None,
+        is_agent: false,
+        session_code_challenge: None,
+    };
+    assert_eq!(
+        serde_json::to_string(&state).unwrap(),
+        r#"{"original_url":null,"is_mobile":true,"referral_code":null,"is_agent":false}"#
+    );
 }

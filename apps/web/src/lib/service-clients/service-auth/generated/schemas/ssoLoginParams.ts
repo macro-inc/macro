@@ -34,4 +34,8 @@ export type SsoLoginParams = {
    * **OPTIONAL**. If the sign-in started on the agent signup page. A new account becomes an agent.
    */
   is_agent: boolean;
+  /**
+   * With `is_mobile`: base64url(SHA-256(verifier)), unpadded. The session code then redeems only with that verifier in the `x-session-code-verifier` header.
+   */
+  session_code_challenge?: string;
 };
