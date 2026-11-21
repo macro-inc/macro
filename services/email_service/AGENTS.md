@@ -328,6 +328,16 @@ the gateway `/email` prefix.
   Skip the bad address with a WARN that omits it (the parse error echoes it)
   instead of failing the step; see
   `email::domain::mailbox::inbox_sync::build_contact_connections`.
+- Link-manager messages go to one of two queues by
+  `models_email`'s `LinkManagerMessage::lane(sender)`: the interactive
+  `LinkManagerQueue` (a person's removal, account deletion, reauth notices,
+  health checks a person asked for) or `LinkMaintenanceQueue` (the refresh handler's
+  refreshes, health polls and removal sweeps). Each producer names its
+  `LinkManagerSender`. A sweep removal's purge is re-sent by the lifecycle's
+  effect publisher, so unused and inactive removals keep the maintenance lane
+  by their reason; a new message kind or reason decides its lane there. Each
+  task runs one consumer per lane; `email.link_manager.message` records `lane`,
+  `kind` and `queue_wait_ms` (since SQS accepted the message).
 - The `link_manager` worker receives one message at a time and renews its
   visibility while processing. Don't raise its receive batch: messages queued
   behind a long mailbox purge would be redelivered and purged twice. A

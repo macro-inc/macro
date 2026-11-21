@@ -299,16 +299,16 @@ queue	gmail-ops:DeleteLabel	gmail	/operation/delete_label	crates/models_email/sr
 queue	gmail-ops:ModifyMessageLabels	gmail	/operation/modify_message_labels	crates/models_email/src/gmail/gmail_ops.rs:24
 queue	gmail-ops:ModifyMessageLabelsBatch	gmail	/operation/modify_message_labels_batch	crates/models_email/src/gmail/gmail_ops.rs:26
 queue	gmail-ops:UnblockSender	gmail	/operation/unblock_sender	crates/models_email/src/gmail/gmail_ops.rs:32
-queue	link-manager:DeleteLink	both	/operation=DeleteLink	crates/models_email/src/email/service/pubsub.rs:88
-queue	link-manager:DeleteUser	both	/operation=DeleteUser	crates/models_email/src/email/service/pubsub.rs:93
-queue	link-manager:HealthCheck	both	/operation=HealthCheck	crates/models_email/src/email/service/pubsub.rs:101
-queue	link-manager:NotifyReauthRequired	gmail	/operation=NotifyReauthRequired	crates/models_email/src/email/service/pubsub.rs:97
-queue	link-manager:Refresh	both	/operation=Refresh	crates/models_email/src/email/service/pubsub.rs:86
+queue	link-manager:DeleteLink	both	/operation=DeleteLink	crates/models_email/src/email/service/pubsub.rs:89
+queue	link-manager:DeleteUser	both	/operation=DeleteUser	crates/models_email/src/email/service/pubsub.rs:94
+queue	link-manager:HealthCheck	both	/operation=HealthCheck	crates/models_email/src/email/service/pubsub.rs:102
+queue	link-manager:NotifyReauthRequired	gmail	/operation=NotifyReauthRequired	crates/models_email/src/email/service/pubsub.rs:98
+queue	link-manager:Refresh	both	/operation=Refresh	crates/models_email/src/email/service/pubsub.rs:87
 queue	reminder-dispatch:Deliver	both	/operation/deliver	crates/reminders/src/domain/models.rs:87
 queue	reminder-dispatch:Sweep	both	/operation=sweep	crates/reminders/src/domain/models.rs:85
-queue	scheduled:ScheduledPubsubMessage	both	*	crates/models_email/src/email/service/pubsub.rs:107
-queue	sfs-delete:SFSDeleteMessage	both	*	crates/sqs_client/src/email.rs:358
-queue	sfs-uploader:SFSUploaderMessage	gmail	*	crates/models_email/src/email/service/pubsub.rs:114
+queue	scheduled:ScheduledPubsubMessage	both	*	crates/models_email/src/email/service/pubsub.rs:165
+queue	sfs-delete:SFSDeleteMessage	both	*	crates/sqs_client/src/email.rs:373
+queue	sfs-uploader:SFSUploaderMessage	gmail	*	crates/models_email/src/email/service/pubsub.rs:172
 tool	GetThread	both		crates/email/src/inbound/toolset/get_thread.rs:109
 tool	ListInboxes	both		crates/email/src/inbound/toolset/list_inboxes.rs:55
 tool	ListLabels	both		crates/email/src/inbound/toolset/list_labels.rs:88
