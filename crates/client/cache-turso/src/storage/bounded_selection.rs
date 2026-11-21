@@ -1,10 +1,13 @@
 //! Speculative sort-index windows for single-partition filters. A window that
-//! cannot prove a full page reads on from its last candidate, never re-reading
-//! the ones before, by an amount sized from the hit rate it saw, up to
+//! cannot prove a full page reads on from its last candidate, never returning
+//! the ones before again, by an amount sized from the hit rate it saw, up to
 //! `MAX_CANDIDATES` per fact source. Filters sparser than that fall back to the
 //! set-based SQL plan. Optimistic facts hold only pending local writes, so
 //! their window runs out long before the cap. Both plans run inside the
-//! caller's read transaction over the same snapshot.
+//! caller's read transaction over the same snapshot. Inside a tie a
+//! continuation seeks to the tie's value and steps over the index entries of
+//! the tied candidates already read, at a fraction of a returned candidate's
+//! cost each.
 
 use super::*;
 use predicate_index::{IndexQuery, ReferenceHit};
@@ -275,7 +278,7 @@ fn try_select(
     loop {
         let mut hits = windows
             .iter()
-            .flat_map(|window| window.hits.iter().cloned())
+            .flat_map(|window| window.hits.iter())
             .collect::<Vec<_>>();
         hits.sort_by(|left, right| {
             let value = match query.sort_direction {
@@ -292,8 +295,7 @@ fn try_select(
             .iter()
             .all(|window| window.proves(cutoff, &query.sort_direction))
         {
-            hits.truncate(limit);
-            return Ok(Some(hits));
+            return Ok(Some(hits.into_iter().take(limit).cloned().collect()));
         }
         // A window short of a full page sizes the next one by its hit rate; one
         // that holds a page but ends inside the cutoff's tie only doubles, since
