@@ -174,6 +174,7 @@ where
                         &item,
                         &progress,
                         (self.reservation_clock)(),
+                        set.review_id,
                         cause.error_type,
                     )
                     .await
@@ -280,7 +281,7 @@ where
                 return Ok(());
             }
             let claim = match team {
-                Some(team) if item.shared || item.already_imported => super::super::lifecycle::claim_team_object(store, writer, user, item.import_id, team, item.shared).await.map_err(|error| crate::domain::ports::DatabaseWriteFailure::from_backend(error.into()))?,
+                Some(team) if item.shared || item.already_imported => super::super::lifecycle::claim_team_object(store, writer, user, item.import_id, team, item.shared).await.map_err(failure::claim_failure)?,
                 _ => TeamClaim::Free,
             };
             match claim {

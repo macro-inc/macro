@@ -27,6 +27,7 @@ pub(super) struct Writer {
     pub(super) grant_on_database: bool,
     pub(super) database_insert_rows: std::sync::atomic::AtomicUsize,
     pub(super) database_error_once: std::sync::atomic::AtomicBool,
+    pub(super) fail_database_rows: bool,
     pub(super) mirror_service_error: Option<&'static str>,
     pub(super) unknown_database: Option<&'static str>,
     pub(super) folder_access_error: std::sync::atomic::AtomicBool,
@@ -426,6 +427,19 @@ impl WorkspaceWriter for Writer {
         ops: Vec<models_databases::DatabaseOp>,
     ) -> anyhow::Result<Vec<models_databases::OpResult>> {
         use models_databases::{DatabaseOp, OpResult, RowId, RowsChange, RowsResult, TableVersion};
+        if self.fail_database_rows
+            && ops.iter().any(|op| {
+                matches!(
+                    op,
+                    DatabaseOp::Rows {
+                        change: RowsChange::Insert { .. },
+                        ..
+                    }
+                )
+            })
+        {
+            return Err(crate::domain::ports::DatabaseWriteFailure::Unavailable.into());
+        }
         self.steps.lock().unwrap().push("ops");
         Ok(ops
             .into_iter()

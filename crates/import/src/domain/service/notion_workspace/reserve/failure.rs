@@ -260,9 +260,10 @@ pub(super) async fn without_peer<Store: WrittenObjects>(
     item: &write::WriteItem,
     progress: &write::Progress<'_, Store>,
     now: chrono::DateTime<chrono::Utc>,
+    review_id: Uuid,
     error_type: &'static str,
 ) -> Result<ReservedSource> {
-    if progress.prolonged_notion_failure(now).await? {
+    if progress.prolonged_notion_failure(now, review_id).await? {
         return degrade(
             item,
             progress,
@@ -298,6 +299,17 @@ async fn degrade<Store: WrittenObjects>(
         error_type: Some(error_type),
         ..Default::default()
     })
+}
+
+/// Claim failures keep their run-wide scope and name the failing phase.
+pub(super) fn claim_failure(error: ImportError) -> anyhow::Error {
+    let error = error.into();
+    RunFailure {
+        reason: "the team-object claim failed; retry this import".into(),
+        error_type: error_type(&error),
+        unexpected: false,
+    }
+    .into()
 }
 
 #[cfg(test)]
@@ -353,5 +365,18 @@ mod test {
             !text.contains("private title") && !text.contains("private payload"),
             "{text}"
         );
+    }
+
+    #[test]
+    fn audit_sustained_team_claim_failure_is_named_and_run_wide() {
+        let error = claim_failure(ImportError::NotReady(
+            "The team's copy changed; import again.",
+        ));
+        let failure = error
+            .downcast_ref::<RunFailure>()
+            .expect("claim errors must retain run-wide scope");
+        assert!(!failure.unexpected);
+        assert!(failure.reason.contains("team-object claim"));
+        assert!(!failure.reason.contains("database service"));
     }
 }

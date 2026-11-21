@@ -1307,6 +1307,17 @@ pub trait WrittenObjects: Send + Sync + 'static {
         import_id: Uuid,
     ) -> impl Future<Output = Result<()>> + Send;
 
+    /// Atomically replace only this active source review's outage snapshot.
+    /// The expected payload fences stale reads; output/ordinary/terminal facts survive.
+    fn replace_database_outage(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+        review_id: Uuid,
+        expected: Option<&str>,
+        facts: &[WrittenObject],
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// Replace only this owned review's dependency consent. The selected ids
     /// must be a subset of its staged source ids; created-object markers stay immutable.
     fn replace_dependency_inclusions(

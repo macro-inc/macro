@@ -559,3 +559,22 @@ async fn audit_reservation_scan_checks_cancellation_between_pages() {
         "stop before reading the second page"
     );
 }
+
+#[tokio::test]
+async fn audit_sustained_same_review_does_not_advance_outage_window() {
+    let store = FakeStore::default();
+    let owner = user();
+    let item = source_item("Work");
+    let review = Uuid::now_v7();
+    for hours in [0, 12, 24] {
+        let written = store.written(&owner, &[item.import_id]).await.unwrap();
+        let progress = Progress::new(&store, &owner, item.import_id, &written);
+        let now = chrono::DateTime::from_timestamp(1_800_000_000 + hours * 3600, 0).unwrap();
+        assert!(
+            !progress
+                .prolonged_notion_failure(now, review)
+                .await
+                .unwrap()
+        );
+    }
+}

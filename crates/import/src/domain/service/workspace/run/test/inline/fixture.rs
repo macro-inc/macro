@@ -7,6 +7,7 @@ pub(super) struct Inline {
     pub(super) external_title: Option<String>,
     pub(super) transient_query: Option<Arc<std::sync::atomic::AtomicBool>>,
     pub(super) incomplete_views: bool,
+    pub(super) views_error: Option<u16>,
     pub(super) query_failures: std::collections::HashMap<NotionId, u16>,
     pub(super) notion_reads: Option<Arc<Mutex<Vec<(NotionId, bool)>>>>,
 }
@@ -87,6 +88,14 @@ impl NotionApi for Inline {
         scope: &ViewScope,
         _: Option<String>,
     ) -> std::result::Result<Paged<NotionId>, NotionError> {
+        if let Some(status) = self.views_error
+            && matches!(scope, ViewScope::DataSource(id) if *id == page_id('d'))
+        {
+            return Err(NotionError::Upstream {
+                status,
+                body: "unavailable".into(),
+            });
+        }
         if self.incomplete_views
             && matches!(scope, ViewScope::DataSource(id) if *id == page_id('d'))
         {

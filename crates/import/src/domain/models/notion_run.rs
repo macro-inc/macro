@@ -93,6 +93,9 @@ pub struct TaskImportNoticeCount {
     pub count: u32,
 }
 
+/// Canonical tagged outage payload prefix within the existing failure kind.
+pub const NOTION_OUTAGE_PREFIX: &str = "{\"state\":\"notion_failure\",";
+
 /// One thing a write created for a ledger row, recorded as it is created so
 /// a resumed write reuses it.
 #[derive(
@@ -102,7 +105,7 @@ pub struct TaskImportNoticeCount {
 pub enum WrittenKind {
     /// A newer worker wrote an unrecognised prerequisite; stop this source safely.
     Unsupported,
-    /// One source-scoped reservation failure, retained across attempts of this generation.
+    /// Bounded source retry/outage state or a terminal link outcome for this generation.
     DatabaseReservationFailure,
     /// This dependency was offered as excluded in a saved draft, keyed by review UUID.
     DependencyReviewed,

@@ -15,8 +15,9 @@ pub use notion_loss::{
 };
 mod notion_sharing;
 pub use notion_run::{
-    AdoptedRun, NotionJob, ReviewedRun, RunReview, TEAMMATE_STOPPED, TaskImportNotice,
-    TaskImportNoticeCount, TaskImportNoticeReason, TeamClaim, WrittenKind, WrittenObject,
+    AdoptedRun, NOTION_OUTAGE_PREFIX, NotionJob, ReviewedRun, RunReview, TEAMMATE_STOPPED,
+    TaskImportNotice, TaskImportNoticeCount, TaskImportNoticeReason, TeamClaim, WrittenKind,
+    WrittenObject,
 };
 
 pub use notion_sharing::{

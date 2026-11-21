@@ -173,13 +173,18 @@ Authentication, rate limits, storage and folder-access failures stop the attempt
 without permanently replacing cards with links. A repeatedly timing-out Notion
 source counts toward its budget only when another source answers a fresh read
 after the failure. Without a healthy peer, it stays retryable until at least
-three observed failures span 24 hours, then the report says the database was
-imported as a link. Rate limits never trigger this fallback.
+three failed attempts on distinct reviews form a sustained chain spanning
+24 hours, with no gap over 12 hours and no successful reservation in between.
+A longer gap or a success restarts the chain; redelivering one review never
+counts twice. Then the report says the database was imported as a link.
+Rate limits never trigger this fallback.
 Cancellation stays cancelled even if an in-flight reservation later returns an
 error. A teammate still
 creating a shared copy produces a named waiting error; a later import retry
 finishes it. Failed cards currently have no resume action, and degraded database
-links have no retry/reset action. **Open full review** shows the whole plan in a dialog
+links have no retry/reset action. Partial results point to the report rather
+than promising that another plan retries terminal links. **Open full review**
+shows the whole plan in a dialog
 (a full-height sheet on phones). **Import …** approves straight from the
 card, with no confirmation step. The agent ends that
 message with "Should I kick it off?"; when the owner answers yes in chat, it

@@ -11,6 +11,54 @@ pub(super) struct FakeStore {
 }
 
 impl WrittenObjects for FakeStore {
+    async fn replace_database_outage(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+        _: Uuid,
+        expected: Option<&str>,
+        facts: &[WrittenObject],
+    ) -> crate::domain::ports::Result<()> {
+        let prefix = crate::domain::models::NOTION_OUTAGE_PREFIX;
+        let mut stored = self.written.lock().unwrap();
+        let current: Vec<_> = stored
+            .iter()
+            .filter(|fact| {
+                fact.import_id == import_id
+                    && fact.kind == WrittenKind::DatabaseReservationFailure
+                    && fact.object.starts_with(prefix)
+            })
+            .map(|fact| fact.object.as_str())
+            .collect();
+        let next = facts
+            .iter()
+            .find(|fact| fact.object.starts_with(prefix))
+            .unwrap();
+        if current == [next.object.as_str()] {
+            return Ok(());
+        }
+        if current != expected.into_iter().collect::<Vec<_>>() {
+            return Err(crate::domain::ports::ImportError::NotReady(
+                "Retry state changed.",
+            ));
+        }
+        stored.retain(|fact| {
+            fact.import_id != import_id
+                || fact.kind != WrittenKind::DatabaseReservationFailure
+                || !fact.object.starts_with(prefix)
+        });
+        for fact in facts {
+            if !stored.iter().any(|known| {
+                known.import_id == fact.import_id
+                    && known.kind == fact.kind
+                    && known.object == fact.object
+            }) {
+                stored.push(fact.clone());
+            }
+        }
+        Ok(())
+    }
+
     async fn clear_database_reservation_failures(
         &self,
         _: &MacroUserIdStr<'static>,

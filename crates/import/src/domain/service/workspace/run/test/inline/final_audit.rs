@@ -83,6 +83,12 @@ async fn audit_final_unknown_source_error_survives_replanning_and_is_not_an_outa
             assert_eq!(report.failures.len(), 1);
             assert!(
                 report
+                    .error
+                    .as_deref()
+                    .is_none_or(|line| !line.contains("Plan again to retry"))
+            );
+            assert!(
+                report
                     .warnings
                     .iter()
                     .any(|line| line.contains("Work") && line.contains('3'))
@@ -536,9 +542,25 @@ async fn audit_terminal_no_peer_outage_requires_three_observations_and_twenty_fo
     pool: PgPool,
 ) {
     for (name, status, schedule, terminal_at) in [
-        ("outage-window", 503, vec![0, 1, 23, 24, 25, 48, 72], 3),
-        ("outage-count", 503, vec![0, 48, 49, 50, 51, 52], 2),
-        ("outage-rate-limit", 429, vec![0, 1, 23, 24, 25, 48, 72], 3),
+        ("outage-blips", 503, vec![0, 300, 25 * 3600], usize::MAX),
+        (
+            "outage-window",
+            503,
+            vec![0, 12 * 3600, 24 * 3600, 36 * 3600, 48 * 3600],
+            2,
+        ),
+        (
+            "outage-gap-reset",
+            503,
+            vec![0, 48 * 3600, 49 * 3600, 60 * 3600, 72 * 3600, 84 * 3600],
+            4,
+        ),
+        (
+            "outage-rate-limit",
+            429,
+            vec![0, 12 * 3600, 24 * 3600, 36 * 3600],
+            2,
+        ),
     ] {
         let owner = user(name);
         let tracker = TaskTracker::new();
@@ -566,8 +588,8 @@ async fn audit_terminal_no_peer_outage_requires_three_observations_and_twenty_fo
         source.kind = ImportKind::DataSource;
         let rows = [planned_page('e', "Project", false), source];
         let mut terminal_reads = None;
-        for (attempt, hours) in schedule.into_iter().enumerate() {
-            now.store(hours * 3600, std::sync::atomic::Ordering::SeqCst);
+        for (attempt, seconds) in schedule.into_iter().enumerate() {
+            now.store(seconds, std::sync::atomic::Ordering::SeqCst);
             let (review, _) = approved(&pool, &owner, &rows).await;
             planned(&service.repo, &owner).await;
             service
@@ -589,6 +611,12 @@ async fn audit_terminal_no_peer_outage_requires_three_observations_and_twenty_fo
                 report.error
             );
             if degraded {
+                assert!(
+                    report
+                        .error
+                        .as_deref()
+                        .is_none_or(|line| !line.contains("Plan again to retry"))
+                );
                 assert!(report.warnings.iter().any(|line| {
                     line.contains("Notion kept failing for Work, so it was imported as a link")
                 }));

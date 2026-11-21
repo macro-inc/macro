@@ -18,6 +18,8 @@ use crate::domain::models::{
 };
 use crate::domain::ports::{ImportError, NotionRunRepo, Result, WrittenObjects};
 
+mod outage;
+
 #[cfg(test)]
 mod test;
 
@@ -520,6 +522,18 @@ impl NotionRunRepo for PgImportRepo {
 
 impl WrittenObjects for PgImportRepo {
     #[tracing::instrument(skip(self, user), err)]
+    async fn replace_database_outage(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+        review_id: Uuid,
+        expected: Option<&str>,
+        facts: &[WrittenObject],
+    ) -> Result<()> {
+        self.replace_outage_snapshot(user, import_id, review_id, expected, facts)
+            .await
+    }
+
     async fn clear_database_reservation_failures(
         &self,
         user: &MacroUserIdStr<'static>,

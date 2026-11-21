@@ -534,7 +534,7 @@ where
                 Ok(failed) => (
                     RunStatus::Completed,
                     Some(format!(
-                        "{failed} objects could not be imported. Plan again to retry them."
+                        "{failed} objects could not be fully imported. See the report for details."
                     )),
                 ),
                 Err(error) => {

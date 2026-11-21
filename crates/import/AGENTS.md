@@ -338,10 +338,10 @@ paths reject workspace-plan rows so approval cannot be bypassed.
   missing destinations and explicit source permissions degrade only that source.
   Incomplete view lists, source conflicts and unclassified source errors spend
   durable consecutive-failure receipts, capped at three before a named link
-  fallback. Reset receipts only on successful reservation. Persist the terminal
+  fallback. Reset ordinary budget receipts only on successful reservation. Persist the terminal
   link outcome before reporting it, and bypass reservation on later re-plans of
-  that generation. Retain at most three source attempts, three timed outage
-  observations and one terminal receipt. Consent markers never retain a generation.
+  that generation. Retain at most three ordinary source attempts, one bounded
+  outage snapshot and one terminal receipt. Consent markers never retain a generation.
   Unknown failures say
   "An unexpected error stopped <title>" in the report. Trace only the safe
   `error_type` and source UUID, never error text or titles.
@@ -350,18 +350,23 @@ paths reject workspace-plan rows so approval cannot be bypassed.
   when a fresh uncached, paced read of another successfully reserved source
   succeeds after the failed pass. Count that single health probe in its child
   span; cached earlier successes do not qualify. Without a healthy peer, record
-  at most three outage observations under the existing failure-receipt kind.
-  Degrade only after at least three observations spanning 24 hours, using the
-  injected reservation clock; record observation count and age in its child span.
-  A 429 never records an observation. Persist that terminal link
-  too. Folder creation/existence and other untyped Macro service errors are
+  a bounded outage snapshot under the existing failure-receipt kind. Require
+  three distinct review attempts spanning 24 hours, with each gap at most
+  12 hours; a longer gap restarts the chain and any successful reservation
+  resets it. Re-delivery of the same review advances neither count nor time.
+  Use the injected clock and record count/age in the child span. A 429 never
+  records an observation. Atomically compare-and-swap only that snapshot under
+  its owned current-review parent lock; preserve ordinary/output facts and write
+  an eligible snapshot with its terminal outcome in the same transaction.
+  Folder creation/existence and other untyped Macro service errors are
   run-wide; only source-local errors spend the unexpected budget.
   Folder access is rechecked next run instead of leaving permanent
   links. Recheck persisted cancellation before bodies and preserve Dismissed
   at settlement, with a typed cancellation checkpoint.
   Every failed reservation names its source; a pending teammate copy fails the
-  attempt with a named wait message and remains safe to retry. Use the source UUID as identity within the
-  user/team ledger; globally unique Notion source UUIDs never dedupe by title.
+  attempt with a named wait message and remains safe to retry. Label claim
+  operation errors as team-object claim failures, never as database outages.
+  Use the source UUID as identity within the user/team ledger; globally unique Notion source UUIDs never dedupe by title.
 - File owner-only databases with their page when safe. Keep each database's
   reviewed sharing separate. Before filing a Personal source, use the shared
   `personal_item_folder` / `personal_mirror_folder` path: explicit grants on a
@@ -422,10 +427,12 @@ The inline writer adds `view`, `view_name`, `loss`, `schema_plan`,
 `schema_metadata`, `column_option`, `date_range_property`, `dependency_reviewed`,
 `dependency_included` and `database_reservation_failure` written kinds.
 The failure kind also stores validated typed outage/terminal payloads. Its at
-most seven facts retain their generation; clear them atomically on success.
+most five facts retain their generation; clear them atomically on success.
 A terminal outcome stays a link until a new generation replaces it. Retrying a
 degraded source has no card action/API yet; report the link outcome without
-promising a retry control. Unknown future kinds stay readable as
+promising a retry control. Partial-run summaries direct users to the report,
+without telling them to retry terminal outcomes. Unknown future kinds stay
+readable as
 `Unsupported` prerequisites and stop only the affected source with a typed
 report warning. Deploy compatible readers before writers; drain affected import
 runs or keep compatible readers before rolling back to an older binary. Renewal
