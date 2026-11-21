@@ -47,8 +47,8 @@ function isOnScreen(element: Element | undefined): boolean {
  * holding the tabs (a list beside a detail is its own pane), else the whole
  * split. Nothing focused counts as the pane, as the split keeps the keyboard
  * after a load or an item opening, unless the user last put the keyboard in
- * another of the split's panes (`lastPlace`, that pane: a press on plain text
- * in a detail beside the list focuses the split itself).
+ * another of the split's panes still on screen (`lastPlace`, that pane: a
+ * press on plain text in a detail beside the list focuses the split itself).
  */
 function keyboardIsOnPane(
   target: EventTarget | null | undefined,
@@ -64,7 +64,10 @@ function keyboardIsOnPane(
     target === split
   )
     return (
-      !lastPlace || !split?.contains(lastPlace) || !!pane?.contains(lastPlace)
+      !lastPlace ||
+      !split?.contains(lastPlace) ||
+      !isOnScreen(lastPlace) ||
+      !!pane?.contains(lastPlace)
     );
   if (!pane?.contains(target)) return false;
   return target.matches(PANE_FOCUS_SELECTOR) && !isEditableInput(target);

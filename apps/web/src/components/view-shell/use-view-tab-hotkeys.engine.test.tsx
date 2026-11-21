@@ -49,7 +49,7 @@ function setup() {
       label: (id) => id,
     });
     return (
-      <div data-view-shell-main="">
+      <div ref={onScreen} data-view-shell-main="">
         <div
           ref={(element) => {
             onScreen(element);
@@ -89,7 +89,7 @@ function setup() {
           }}
           tabIndex={-1}
         >
-          <div data-view-shell-aside="">
+          <div ref={onScreen} data-view-shell-aside="">
             <div
               ref={(element) => {
                 onScreen(element);
