@@ -15,6 +15,7 @@ from unittest import mock
 import datadog_spans
 import markdown_export
 import reconstruct
+import token_usage
 import turn_context
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -535,6 +536,290 @@ class Cli(unittest.TestCase):
         payload = page.split('type="application/json">', 1)[1].split("</script>", 1)[0]
         self.assertNotIn("<", payload)
         self.assertEqual(json.loads(payload)["session"]["name"], text)
+
+
+BASE_MS = 1_794_218_400_000  # 2026-11-09T10:00:00Z, frame(0)'s time
+
+
+def span(model, start, end, input_tokens, cache_read, cache_write, output, eager=13):
+    return {
+        "model": model, "start_ms": BASE_MS + start * 1000, "end_ms": BASE_MS + end * 1000,
+        "input_tokens": input_tokens, "cache_read_tokens": cache_read, "cache_write_tokens": cache_write,
+        "output_tokens": output, "eager_tools": eager, "loaded_tools": 0, "prompt_bytes": {},
+        "first_chunk_ms": None, "first_chunk_kind": None, "finish_reasons": None,
+    }
+
+
+def row(row_id, model, at, uncached, cache_read, cache_write, output, cost, feature="agent_session"):
+    return {
+        "id": row_id, "feature": feature, "model": model, "created_at": f"2026-11-09 10:00:{at:06.3f}+00",
+        "input_tokens": uncached, "cache_read_input_tokens": cache_read, "cache_write_input_tokens": cache_write,
+        "output_tokens": output, "total": cost, "price_per_million_cache_read": 0.2,
+    }
+
+
+class TokenUsage(unittest.TestCase):
+    def test_a_session_of_anthropic_rounds_and_a_gemini_turn(self):
+        export = {
+            "session": {"id": "s"},
+            "frames": [prompt(0), end(10), prompt(20), end(40)],
+            "spans": {"tools": {}, "model_calls": [
+                # Turn 1: two Anthropic rounds, one row each, written just before the span ends.
+                span("claude-opus-5-5", 1, 3, 4, 0, 100_000, 50),
+                span("claude-opus-5-5", 4, 6, 2, 100_000, 2_000, 70),
+                # Turn 2: three Gemini rounds (input includes cache), one row for the turn.
+                span("gemini-3.8-flash", 21, 23, 50_000, 0, 0, 10),
+                span("gemini-3.8-flash", 24, 26, 52_000, 49_000, 0, 20),
+                span("gemini-3.8-flash", 27, 29, 53_000, 51_000, 0, 30),
+            ]},
+            "usage": [
+                row("r1", "claude-opus-5-5", 2.99, 4, 0, 100_000, 50, 0.50),
+                row("r2", "claude-opus-5-5", 5.99, 2, 100_000, 2_000, 70, 0.03),
+                # Billed output 100 includes 40 reasoning tokens the spans don't count.
+                row("r3", "gemini-3.8-flash", 29.01, 55_000, 100_000, 0, 100, 0.02),
+                row("r4", "nemotron", 30, 300, 0, 0, 5, 0.0001, feature="agent_activity_summary"),
+            ],
+        }
+        tokens = token_usage.reconcile(export)
+
+        self.assertEqual([call["status"] for call in tokens["calls"]], ["matched"] * 5)
+        self.assertEqual([call["cost"] for call in tokens["calls"]], [0.50, 0.03, None, None, None])
+        self.assertEqual(tokens["calls"][3]["tokens"], {"uncached": 3_000, "cache_read": 49_000, "cache_write": 0, "output": 20})
+        self.assertEqual(tokens["calls"][3]["context"], 52_000)
+        self.assertEqual([call["cache_miss"] for call in tokens["calls"][:2]], [False, False])
+        self.assertEqual(tokens["rows"][2]["calls"], [2, 3, 4])
+        self.assertEqual(tokens["rows"][2]["reasoning_not_in_spans"], 40)
+        self.assertEqual(tokens["coverage"], {
+            "have_usage": True, "billed": 3, "matched": 3, "partial": 0, "billed_no_span": 0,
+            "spans": 5, "spans_no_usage": 0, "spans_not_billed": 0, "side": 1,
+        })
+        gemini = next(model for model in tokens["models"] if model["model"] == "gemini-3.8-flash")
+        # Totals are the billed row, not the spans' (whose output lacks reasoning).
+        self.assertEqual(gemini["tokens"], {"uncached": 55_000, "cache_read": 100_000, "cache_write": 0, "output": 100})
+        self.assertEqual((gemini["rows"], gemini["spans"]), (1, 3))
+        self.assertAlmostEqual(gemini["cost"], 0.02)
+        self.assertAlmostEqual(tokens["agent_cost"], 0.55)
+        self.assertAlmostEqual(tokens["cost"], 0.5501)
+        self.assertEqual(tokens["side"], [{"feature": "agent_activity_summary", "rows": 1, "cost": 0.0001, "models": ["nemotron"]}])
+        self.assertEqual(tokens["turns"][0]["mix"], [{"label": "claude-opus-5-5", "calls": 2}])
+        self.assertAlmostEqual(tokens["turns"][0]["cost"], 0.53)
+        self.assertEqual(tokens["turns"][1]["contexts"], [50_000, 52_000, 53_000])
+
+    def test_missing_usage_spans_and_rows_are_reported_not_summed(self):
+        export = {
+            "session": {"id": "s"},
+            "frames": [prompt(0), end(20)],
+            "spans": {"tools": {}, "model_calls": [
+                span("gemini-3.8-flash", 1, 2, 10_000, 0, 0, 5),
+                {**span("gemini-3.8-flash", 3, 4, None, None, None, None)},
+                span("claude-opus-5-5", 5, 6, 2, 1_000, 10, 7),
+            ]},
+            "usage": [
+                row("g", "gemini-3.8-flash", 4.5, 21_000, 0, 0, 9, 0.01),
+                row("lost", "claude-sonnet-5-5", 10, 4, 500, 5, 3, 0.002),
+            ],
+        }
+        tokens = token_usage.reconcile(export)
+
+        self.assertEqual([call["status"] for call in tokens["calls"]], ["partial", "no usage", "not billed"])
+        self.assertEqual([found["status"] for found in tokens["rows"]], ["partial", "billed, no span"])
+        self.assertEqual(tokens["coverage"]["spans_no_usage"], 1)
+        self.assertEqual(tokens["coverage"]["spans_not_billed"], 1)
+        self.assertEqual(tokens["coverage"]["billed_no_span"], 1)
+        opus = next(model for model in tokens["models"] if model["model"] == "claude-opus-5-5")
+        # Billed totals: the unbilled span is not added in.
+        self.assertEqual(opus["tokens"], {"uncached": 0, "cache_read": 0, "cache_write": 0, "output": 0})
+        self.assertEqual(tokens["turns"][0]["billed_without_span"], [{"label": "claude-sonnet-5-5", "rows": 1}])
+
+    def test_without_usage_rows_totals_come_from_spans_and_cost_is_unknown(self):
+        export = {
+            "session": {"id": "s"}, "frames": [prompt(0), end(10)],
+            "spans": {"tools": {}, "model_calls": [span("gpt-5.6", 1, 2, 1_000, 800, 0, 9)]},
+        }
+        tokens = token_usage.reconcile(export)
+
+        self.assertEqual(tokens["source"], "telemetry")
+        self.assertEqual(tokens["calls"][0]["status"], "from telemetry")
+        self.assertEqual(tokens["models"][0]["tokens"], {"uncached": 200, "cache_read": 800, "cache_write": 0, "output": 9})
+        self.assertIsNone(tokens["models"][0]["cost"])
+        self.assertIsNone(tokens["turns"][0]["cost"])
+        self.assertIsNone(token_usage.reconcile({"session": {"id": "s"}, "frames": []}))
+
+    def test_the_opener_is_labelled_and_owns_only_the_message_it_races(self):
+        export = {
+            "session": {"id": "s"},
+            "frames": [
+                prompt(0),
+                update(1.5, sessionUpdate="agent_message_chunk", content={"text": "Let me look."}),
+                update(1.6, sessionUpdate="agent_thought_chunk", content={"text": "hmm"}),
+                call(3.1, "a"),
+                update(8, sessionUpdate="agent_message_chunk", content={"text": "late"}),
+                end(9),
+            ],
+            "spans": {"tools": {}, "model_calls": [
+                span("claude-opus-5-5", 1, 3, 2, 1_000, 10, 70),
+                span("gpt-5.4-mini", 1.1, 1.8, 500, 0, 0, 12, eager=0),
+            ]},
+        }
+        tokens = token_usage.reconcile(export)
+
+        self.assertEqual([call["opener"] for call in tokens["calls"]], [False, True])
+        self.assertEqual(tokens["turns"][0]["mix"], [
+            {"label": "claude-opus-5-5", "calls": 1}, {"label": "opener (fast first line)", "calls": 1},
+        ])
+        # The message during the race is the opener's; the thought and the
+        # tool call (just after the round closes) are the turn model's; the
+        # late message has no round.
+        self.assertEqual(token_usage.frame_rounds(export), [None, 1, 0, 0, None, None])
+
+    def test_a_row_priced_with_a_speed_or_long_context_suffix_matches_its_bare_span(self):
+        export = {
+            "session": {"id": "s"}, "frames": [prompt(0), end(10)],
+            "spans": {"tools": {}, "model_calls": [
+                span("claude-opus-5-5", 1, 2, 2, 1_000, 10, 7),
+                span("gpt-5.6", 3, 4, 300_000, 0, 0, 9),
+            ]},
+            "usage": [
+                row("fast", "claude-opus-5-5:fast", 1.99, 2, 1_000, 10, 7, 0.06),
+                row("long", "gpt-5.6:priority:long", 4.5, 300_000, 0, 0, 9, 0.9),
+            ],
+        }
+        tokens = token_usage.reconcile(export)
+
+        self.assertEqual([call["status"] for call in tokens["calls"]], ["matched", "matched"])
+        self.assertEqual([found["model"] for found in tokens["rows"]], ["claude-opus-5-5", "gpt-5.6"])
+        self.assertEqual([found["price_key"] for found in tokens["rows"]], ["claude-opus-5-5:fast", "gpt-5.6:priority:long"])
+        self.assertEqual([(model["model"], model["rows"], model["spans"], model["pricing"]) for model in tokens["models"]], [
+            ("claude-opus-5-5", 1, 1, ["fast"]), ("gpt-5.6", 1, 1, ["priority:long"]),
+        ])
+
+    def test_a_row_written_as_a_queued_turn_starts_is_that_turns(self):
+        export = {
+            "session": {"id": "s"},
+            # Turn 2 is queued: it starts 0.2 s after turn 1's stop frame.
+            "frames": [prompt(0), end(10), prompt(10.2), end(20)],
+            "spans": {"tools": {}, "model_calls": [
+                span("claude-opus-5-5", 1, 9, 2, 1_000, 10, 7),
+                span("claude-opus-5-5", 10.5, 12, 3, 1_100, 20, 8),
+            ]},
+            "usage": [
+                row("r1", "claude-opus-5-5", 8.99, 2, 1_000, 10, 7, 0.01),
+                row("r2", "claude-opus-5-5", 11.99, 3, 1_100, 20, 8, 0.01),
+                # Turn 1's row written just after its stop frame, before turn 2 starts.
+                row("late", "gemini-3.8-flash", 10.1, 1, 0, 0, 1, 0.0),
+            ],
+        }
+        tokens = token_usage.reconcile(export)
+
+        self.assertEqual([(found["id"], found["turn"], found["status"]) for found in tokens["rows"]], [
+            ("r1", 1, "matched"), ("late", 1, "billed, no span"), ("r2", 2, "matched"),
+        ])
+        self.assertEqual([call["status"] for call in tokens["calls"]], ["matched", "matched"])
+
+    def test_a_per_turn_row_written_after_its_stop_frame_stays_with_its_turn_when_the_next_is_queued(self):
+        export = {
+            "session": {"id": "s"},
+            "frames": [prompt(0), end(10), prompt(10.2), end(30)],
+            "spans": {"tools": {}, "model_calls": [
+                span("gemini-3.8-flash", 1, 3, 100, 0, 0, 1),
+                span("gemini-3.8-flash", 4, 9, 200, 0, 0, 1),
+                span("gemini-3.8-flash", 11, 20, 300, 0, 0, 1),
+            ]},
+            "usage": [
+                # Turn 1's one row, written after its stop frame, once turn 2 has started.
+                row("t1", "gemini-3.8-flash", 10.5, 300, 0, 0, 2, 0.01),
+                row("t2", "gemini-3.8-flash", 20.5, 300, 0, 0, 1, 0.01),
+            ],
+        }
+        tokens = token_usage.reconcile(export)
+
+        self.assertEqual([(found["id"], found["turn"], found["status"], found["calls"]) for found in tokens["rows"]], [
+            ("t1", 1, "matched", [0, 1]), ("t2", 2, "matched", [2]),
+        ])
+
+    def test_a_span_with_no_usage_or_no_row_does_not_make_the_next_row_partial(self):
+        export = {
+            "session": {"id": "s"}, "frames": [prompt(0), end(20)],
+            "spans": {"tools": {}, "model_calls": [
+                span("claude-opus-5-5", 1, 2, None, None, None, None),
+                span("claude-opus-5-5", 3, 4, 5, 900, 0, 6),
+                span("claude-opus-5-5", 5, 6, 2, 1_000, 10, 7),
+            ]},
+            # The cancelled first call has no usage; the second was never billed.
+            "usage": [row("r", "claude-opus-5-5", 5.99, 2, 1_000, 10, 7, 0.01)],
+        }
+        tokens = token_usage.reconcile(export)
+
+        self.assertEqual([call["status"] for call in tokens["calls"]], ["no usage", "not billed", "matched"])
+        self.assertEqual(tokens["rows"][0]["status"], "matched")
+        self.assertEqual(tokens["rows"][0]["calls"], [2])
+
+    def test_a_row_with_no_span_does_not_take_a_later_rows_exact_span(self):
+        export = {
+            "session": {"id": "s"}, "frames": [prompt(0), end(20)],
+            "spans": {"tools": {}, "model_calls": [span("claude-opus-5-5", 3, 4, 2, 1_000, 10, 7)]},
+            "usage": [
+                # Its span was lost; the next round's span ends within its window.
+                row("lost", "claude-opus-5-5", 2.5, 9, 900, 0, 5, 0.01),
+                row("own", "claude-opus-5-5", 3.99, 2, 1_000, 10, 7, 0.01),
+            ],
+        }
+        tokens = token_usage.reconcile(export)
+
+        self.assertEqual([(found["id"], found["status"]) for found in tokens["rows"]], [
+            ("lost", "billed, no span"), ("own", "matched"),
+        ])
+        self.assertEqual(tokens["calls"][0]["status"], "matched")
+
+    def test_a_model_whose_spans_report_no_usage_is_not_the_opener(self):
+        export = {
+            "session": {"id": "s"}, "frames": [prompt(0), end(10)],
+            "spans": {"tools": {}, "model_calls": [span("claude-opus-5-5", 1, 2, None, None, None, None)]},
+        }
+        tokens = token_usage.reconcile(export)
+
+        self.assertEqual(tokens["models"][0]["label"], "claude-opus-5-5")
+
+    def test_a_row_matching_runs_from_two_starts_takes_the_one_nearest_it(self):
+        export = {
+            "session": {"id": "s"}, "frames": [prompt(0), end(20)],
+            "spans": {"tools": {}, "model_calls": [
+                span("claude-opus-5-5", 1, 2, 2, 1_000, 10, 7),
+                span("claude-opus-5-5", 3, 4, 2, 1_000, 10, 7),
+            ]},
+            "usage": [row("r", "claude-opus-5-5", 3.99, 2, 1_000, 10, 7, 0.01)],
+        }
+        tokens = token_usage.reconcile(export)
+
+        self.assertEqual([call["status"] for call in tokens["calls"]], ["not billed", "matched"])
+
+    def test_each_models_first_call_is_a_cold_write_not_a_cache_miss(self):
+        export = {
+            "session": {"id": "s"}, "frames": [prompt(0), end(20)],
+            "spans": {"tools": {}, "model_calls": [
+                span("claude-opus-5-5", 1, 2, 4, 0, 100_000, 50),
+                span("claude-sonnet-5-5", 3, 4, 4, 0, 90_000, 50),
+                span("claude-opus-5-5", 5, 6, 4, 0, 101_000, 50),
+            ]},
+        }
+        tokens = token_usage.reconcile(export)
+
+        self.assertEqual([call["cache_miss"] for call in tokens["calls"]], [False, False, True])
+
+    def test_the_page_and_markdown_carry_the_reconciliation(self):
+        export = {
+            "session": {"id": "s"}, "frames": [prompt(0), end(10)],
+            "spans": {"tools": {}, "model_calls": [span("claude-opus-5-5", 1, 2, 2, 1_000, 10, 7)]},
+            "usage": [row("r", "claude-opus-5-5", 1.99, 2, 1_000, 10, 7, 0.01)],
+        }
+        page = cli.render(export, [])
+        payload = json.loads(page.split('type="application/json">', 1)[1].split("</script>", 1)[0])
+        self.assertEqual(payload["tokens"]["coverage"]["matched"], 1)
+        self.assertEqual(payload["frame_rounds"], [None, None])
+        summary, _ = markdown_export.render(export, [], token_usage.reconcile(export))
+        self.assertIn("| claude-opus-5-5 | 1 | 1 | 2 | 1000 | 10 | 7 | 1012 | 1012 | 0 | $0.0100 |", summary)
+        self.assertIn("coverage: 1 billed calls, 1 matched to spans", summary)
+        self.assertIn("Models: claude-opus-5-5 x1.", summary)
 
 
 def seconds(t):

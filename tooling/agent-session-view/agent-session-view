@@ -37,6 +37,7 @@ import urllib.parse
 import datadog_spans
 import markdown_export
 import reconstruct
+import token_usage
 import turn_context
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -65,7 +66,20 @@ select json_build_object(
           'id', id, 'stored_at', created_at, 'direction', direction, 'user_id', user_id,
           'content', content)
         order by created_at, id)
-      from agent_session_log where agent_session_id = :'id'), '[]'::json))
+      from agent_session_log where agent_session_id = :'id'), '[]'::json),
+  -- What the session was billed: its own model calls (feature agent_session)
+  -- and side calls made for it (activity summaries, renames).
+  'usage', coalesce((
+      select json_agg(json_build_object(
+          'id', id, 'feature', feature, 'model', model, 'input_tokens', input_tokens,
+          'output_tokens', output_tokens, 'cache_read_input_tokens', cache_read_input_tokens,
+          'cache_write_input_tokens', cache_write_input_tokens,
+          'price_per_million_in', price_per_million_in, 'price_per_million_out', price_per_million_out,
+          'price_per_million_cache_read', price_per_million_cache_read,
+          'price_per_million_cache_write', price_per_million_cache_write,
+          'total', total, 'created_at', created_at)
+        order by created_at, id)
+      from ai_usage where agent_session_id = :'id'), '[]'::json))
 """
 
 
@@ -289,7 +303,7 @@ def export_batch(url, args):
         print(f"[{number}/{len(found)}] {match['id']}", file=sys.stderr)
         export = query_session(url, match["id"], args.env, args.datadog)
         contexts = contexts_for(export, eager_source, args)
-        summary, full = markdown_export.render(export, contexts)
+        summary, full = markdown_export.render(export, contexts, token_usage.reconcile(export))
         (out_dir / f"{match['id']}.md").write_text(summary)
         (out_dir / f"{match['id']}.full.md").write_text(full)
         rows.append(markdown_export.index_row(export, contexts))
@@ -329,7 +343,9 @@ def render(export, contexts=None):
     # changes the script element it is inlined in.
     literal = reconstruct.texts(contexts)
     payload = json.dumps(
-        {**export, "turn_context": contexts, "literal_texts": literal}, ensure_ascii=False,
+        {**export, "turn_context": contexts, "literal_texts": literal,
+         "tokens": token_usage.reconcile(export), "frame_rounds": token_usage.frame_rounds(export)},
+        ensure_ascii=False,
     ).replace("<", "\\u003c")
     return TEMPLATE.read_text().replace("__SESSION_JSON__", payload)
 
@@ -422,7 +438,7 @@ def main():
     out.parent.mkdir(parents=True, exist_ok=True)
     contexts = contexts_for(export, turn_context.eager_names_from_source(), args)
     if args.markdown:
-        summary, full = markdown_export.render(export, contexts)
+        summary, full = markdown_export.render(export, contexts, token_usage.reconcile(export))
         out.write_text(summary)
         out.with_suffix(".full.md").write_text(full)
     else:

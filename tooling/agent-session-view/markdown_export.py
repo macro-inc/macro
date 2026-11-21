@@ -265,9 +265,10 @@ class Totals:
         self.wall = sum(turn.bound - turn.started for turn in turns)
 
 
-def render(export, contexts=()):
+def render(export, contexts=(), tokens=None):
     """The main markdown and the side file of uncut code and results.
-    `contexts` is `turn_context.for_session(export, ...)`, one per turn."""
+    `contexts` is `turn_context.for_session(export, ...)`, one per turn;
+    `tokens` is `token_usage.reconcile(export)`."""
     session = export["session"]
     spans = export.get("spans")
     turns = parse(export["frames"], (spans or {}).get("tools"))
@@ -286,6 +287,7 @@ def render(export, contexts=()):
         "- times are when each frame was appended (its log id); tool times come from "
         + ("their execute_tool spans" if spans else "their frames, so streamed output between "
            "them counts as tool time; pass --datadog for span timings"),
+        *token_lines(tokens),
         "",
         "## Slowest gaps",
         "",
@@ -320,6 +322,7 @@ def render(export, contexts=()):
             "",
             "> " + cut(turn.prompt, TEXT_BUDGET).replace("\n", "\n> "),
             *(context_lines(contexts[turn.number - 1]) if contexts else []),
+            *(turn_token_lines(tokens["turns"][turn.number - 1], tokens["source"]) if tokens else []),
             "",
             "| # | at | gap | kind | tool | size | took | status | error |",
             "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
@@ -353,7 +356,7 @@ def render(export, contexts=()):
                 "",
                 "Model calls:",
                 "",
-                "| at | took | first chunk | model | input | cache read | cache write | output | finish | largest prompt parts |",
+                "| at | took | first chunk | model | input (as reported) | cache read | cache write | output | finish | largest prompt parts (bytes) |",
                 "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
             ]
             for call in calls:
@@ -449,6 +452,64 @@ def literal_lines(literal):
 def flag_text(found):
     steps = found.get("steps")
     return found["text"] + (f" (steps {', '.join(str(step) for step in steps)})" if steps else "")
+
+
+def money(value):
+    return "unpriced" if value is None else f"${value:.4f}"
+
+
+def token_lines(tokens):
+    """The session's tokens per model, from ai_usage when the export has it."""
+    if not tokens:
+        return []
+    billed = tokens["source"] == "ai_usage"
+    out = [
+        "",
+        "## Tokens and cost",
+        "",
+        "Cache read counts the re-sent conversation once per call: it is history counted again, "
+        "not unique context. Uncached, cache read and cache write never overlap; context = all three. "
+        + ("Totals and cost from ai_usage (billing); billed output includes reasoning."
+           if billed else "No ai_usage rows: totals from spans, cost unknown."),
+        "",
+        "| model | billed calls | spans | uncached | cache read | cache write | output | avg context | max context | cache misses | cost |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    for model in tokens["models"]:
+        t = model["tokens"]
+        out.append(
+            f"| {model['label']}{'' if model['label'] == model['model'] else ' (' + model['model'] + ')'} "
+            f"| {model['rows'] if billed else '-'} | {model['spans']} | {t['uncached']} | {t['cache_read']} "
+            f"| {t['cache_write']} | {t['output']} | {count_text(model['context_avg'])} | {count_text(model['context_max'])} "
+            f"| {model['cache_misses']} | {money(model['cost']) if billed else 'cost unknown'} |"
+        )
+    for entry in tokens["side"]:
+        out.append(f"| side: {entry['feature']} ({', '.join(entry['models'])}) | {entry['rows']} | - | | | | | | | | {money(entry['cost'])} |")
+    c = tokens["coverage"]
+    if billed:
+        out += [
+            "",
+            f"- cost: session {money(tokens['cost'])}, agent model calls {money(tokens['agent_cost'])}",
+            f"- coverage: {c['billed']} billed calls, {c['matched']} matched to spans, {c['partial']} partial, "
+            f"{c['billed_no_span']} billed without a span, {c['spans_no_usage']} spans with no usage, "
+            f"{c['spans_not_billed']} spans not billed, {c['side']} side calls",
+        ]
+    return out
+
+
+def turn_token_lines(turn, source):
+    mix = ", ".join(f"{entry['label']} x{entry['calls']}" for entry in turn["mix"])
+    unspanned = ", ".join(f"{entry['label']} x{entry['rows']} billed without a span" for entry in turn["billed_without_span"])
+    t = turn["tokens"]
+    cost = money(turn["cost"]) if source == "ai_usage" else "cost unknown"
+    contexts = turn["contexts"]
+    span = f", context {min(contexts)} -> {max(contexts)}" if contexts else ""
+    misses = f", {turn['cache_misses']} cache misses" if turn["cache_misses"] else ""
+    return [
+        "",
+        f"Models: {', '.join(filter(None, [mix, unspanned])) or 'none recorded'}. Tokens: uncached {t['uncached']}, "
+        f"cache read {t['cache_read']}, cache write {t['cache_write']}, output {t['output']}, {cost}{span}{misses}.",
+    ]
 
 
 def kilobytes(size):

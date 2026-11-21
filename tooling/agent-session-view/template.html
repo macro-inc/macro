@@ -79,7 +79,7 @@ main { padding: 16px 24px 80px; min-width: 0; }
 div.calls { overflow-x: auto; }
 table.calls { border-collapse: collapse; font-size: 12px; margin: 6px 0; white-space: nowrap; }
 table.calls td, table.calls th { padding: 2px 8px; border-bottom: 1px solid var(--line); text-align: right; }
-table.calls td:nth-child(4), table.calls th:nth-child(4), table.calls td:last-child, table.calls th:last-child { text-align: left; }
+table.calls td:nth-child(5), table.calls th:nth-child(5), table.calls td:last-child, table.calls th:last-child { text-align: left; }
 .timeline .tick { position: absolute; bottom: 0; font-size: 10px; color: var(--muted); padding-left: 2px; border-left: 1px solid var(--line); height: 12px; line-height: 12px; }
 .legend { display: flex; gap: 12px; font-size: 11.5px; color: var(--muted); margin-top: 4px; }
 .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
@@ -120,6 +120,30 @@ details.ctx { margin-top: 6px; font-size: 12px; color: var(--muted); }
 details.ctx pre { white-space: pre-wrap; }
 .end { color: var(--muted); font-size: 12.5px; padding: 6px 2px 0; }
 .hidden { display: none !important; }
+section.tokens { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 20px; padding: 14px 16px; }
+section.tokens h2 { margin: 0 0 6px; font-size: 15px; }
+section.tokens p { margin: 6px 0; max-width: 80ch; }
+table.tokens { border-collapse: collapse; font-size: 12.5px; margin: 8px 0; white-space: nowrap; font-variant-numeric: tabular-nums; }
+table.tokens td, table.tokens th { padding: 3px 10px; border-bottom: 1px solid var(--line); text-align: right; }
+table.tokens td:first-child, table.tokens th:first-child { text-align: left; }
+table.tokens tr.sum td { font-weight: 600; border-top: 2px solid var(--line); }
+table.tokens tr.side td { color: var(--muted); }
+div.tokens-scroll { overflow-x: auto; }
+.coverage { font-size: 12.5px; }
+.semantics { font-size: 12px; color: var(--muted); margin: 6px 0 0; padding-left: 18px; }
+svg.spark { display: block; margin: 6px 0; max-width: 100%; }
+svg.spark .axis { stroke: var(--line); }
+svg.spark text { fill: var(--muted); font-size: 10px; font-family: var(--sans); }
+.turn-tokens { font-size: 12.5px; margin-top: 8px; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; }
+.turn-tokens .chip.model { background: var(--model-soft); }
+.turn-tokens .chip.opener, .turn-tokens .chip.nospan { background: var(--chip); color: var(--muted); }
+.turn-tokens .miss { color: var(--fail); font-weight: 600; }
+.round { display: inline-block; font-size: 11px; color: var(--model); font-family: var(--mono); border: 1px solid var(--model); border-radius: 4px; padding: 0 5px; margin-right: 6px; white-space: nowrap; }
+.round.none { color: var(--muted); border-color: var(--line); }
+.message > .round { margin: 4px 0 0; }
+.tool { border-style: dashed; }
+.tool .exec { color: var(--tool); font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+.legend i.exec { background: transparent; border: 1px dashed var(--tool); }
 .card.literal { grid-column: 1 / -1; }
 .card.literal .part { margin: 3px 0; }
 .card.literal summary { cursor: pointer; }
@@ -212,6 +236,13 @@ const parseTime = s => Date.parse(String(s).replace(' ', 'T').replace(/(\.\d{3})
 const secs = ms => ms == null ? '–' : ms < 1000 ? `${Math.round(ms)}ms` : ms < 60000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.floor(ms / 60000)}m${Math.round(ms % 60000 / 1000)}s`;
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const el = (tag, attrs = {}, html = '') => { const n = document.createElement(tag); for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v); n.innerHTML = html; return n; };
+// token_usage.reconcile: spans normalized and matched to ai_usage rows.
+const TOKENS = DATA.tokens || null;
+const MODEL_CALLS = (DATA.spans?.model_calls || []).map((call, index) => ({ ...call, index, usage: TOKENS?.calls?.[index] || null }));
+const count = n => n == null ? '' : Math.round(n).toLocaleString();
+const short = n => n == null ? '?' : n >= 1e6 ? `${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}k` : String(Math.round(n));
+const dollars = v => v == null ? null : v >= 1 ? `$${v.toFixed(2)}` : v >= 0.01 ? `$${v.toFixed(3)}` : `$${v.toFixed(4)}`;
+const callLabel = call => call.usage?.opener ? 'opener' : call.model;
 
 // The language of each code tool's program; ExecuteCode's is in
 // `rawInput.source`, the others' in `rawInput.input`.
@@ -235,8 +266,10 @@ function buildTurns(frames) {
   // the n-th call with an id takes the n-th span carrying it.
   const turns = [], tools = {}, occurrences = {};
   let turn = null;
-  for (const frame of frames) {
+  for (const [index, frame] of frames.entries()) {
     const content = frame.content || {}, t = parseTime(frame.t);
+    // The model call (span index) this frame streamed in: token_usage.frame_rounds.
+    const round = DATA.frame_rounds?.[index] ?? null;
     if (content.method === 'session/prompt') {
       turn = { n: turns.length + 1, start: t, end: null, last: t, prompt: content.params?.prompt || [], user: frame.user_id, items: [], stop: null };
       turns.push(turn);
@@ -249,10 +282,12 @@ function buildTurns(frames) {
     if (kind === 'agent_thought_chunk' || kind === 'agent_message_chunk') {
       const k = kind === 'agent_thought_chunk' ? 'thought' : 'message';
       const text = update.content?.text || '';
-      if (previous && previous.kind === k) { previous.text += text; previous.end = t; }
-      else turn.items.push({ kind: k, text, start: t, end: t });
+      // Chunks of one step merge; a new model call (the opener, then the turn's model) starts a new one.
+      const sameRound = previous?.round == null || round == null || previous.round === round;
+      if (previous && previous.kind === k && sameRound) { previous.text += text; previous.end = t; }
+      else turn.items.push({ kind: k, text, start: t, end: t, round });
     } else if (kind === 'tool_call') {
-      const item = { kind: 'tool', id: update.toolCallId, title: update.title, name: (update._meta?.macro?.toolName || update.title || '?').replace(/^mcp__macro_internal__/, ''), input: {}, source: undefined, start: t, end: null, status: update.status || 'pending', output: undefined, content: null };
+      const item = { kind: 'tool', id: update.toolCallId, title: update.title, name: (update._meta?.macro?.toolName || update.title || '?').replace(/^mcp__macro_internal__/, ''), input: {}, source: undefined, start: t, end: null, status: update.status || 'pending', output: undefined, content: null, round };
       takeInput(item, update.rawInput);
       item.occurrence = occurrences[update.toolCallId] = (occurrences[update.toolCallId] ?? -1) + 1;
       tools[update.toolCallId] = item;
@@ -297,7 +332,11 @@ function buildTurns(frames) {
     turn.failures = turn.tools.filter(i => i.status === 'failed' || i.softFail).length;
     turn.toolMs = unionMs(turn.tools.map(i => [i.start, i.end]));
     turn.totalMs = turn.end - turn.start;
-    turn.calls = (DATA.spans?.model_calls || []).filter(call => call.start_ms >= turn.start && call.start_ms <= turn.end);
+    turn.calls = MODEL_CALLS.filter(call => call.start_ms >= turn.start && call.start_ms <= turn.end);
+    // The opener races the first round and takes no round number of its own.
+    let round = 0;
+    turn.calls.forEach(call => { call.round = call.usage?.opener ? null : ++round; });
+    turn.tokens = TOKENS?.turns?.[turn.n - 1] || null;
     turn.context = DATA.turn_context?.[turn.n - 1] || null;
     turn.flags = turn.context?.flags || [];
   }
@@ -442,10 +481,10 @@ function renderTool(item) {
   node.dataset.tool = item.name;
   node.dataset.code = item.source ? '1' : '';
   node.dataset.failed = status === 'failed' || status === 'soft' ? '1' : '';
-  node.append(el('summary', {}, `<span class="dot"></span><span class="num">#${item.n}</span><span class="name">${esc(item.name)}</span>` +
+  node.append(el('summary', {}, `<span class="dot"></span><span class="num">#${item.n}</span>${roundTag(item)}<span class="name">${esc(item.name)}</span>` +
     `<span class="args-inline">${esc(item.source ? item.source.replace(/\s+/g, ' ').slice(0, 160) : oneLine(item.input))}</span>` +
     (item.resultBytes != null ? `<span class="args-inline" title="result size${item.resultCut ? '; the model read only its beginning' : ''}">${(item.resultBytes / 1000).toFixed(1)} KB${item.resultCut ? ' cut' : ''}</span>` : '') +
-    `<span class="dur ${ms > SLOW_TOOL_MS ? 'slow' : ''}">${secs(ms)}</span>`));
+    `<span class="dur ${ms > SLOW_TOOL_MS ? 'slow' : ''}" title="tool / SDK execution: deterministic, no model"><span class="exec">⚙ ran</span> ${secs(ms)}</span>`));
   if (item.errorText) node.append(el('div', { class: 'err' }, esc(item.errorText)));
   let rendered = false;
   node.addEventListener('toggle', () => { if (node.open && !rendered) { node.append(toolBody(item)); rendered = true; } });
@@ -495,18 +534,131 @@ function renderModelLane(turn) {
   return lane;
 }
 
+const BILLING_STATUS = {
+  matched: ['ok', 'billed'], partial: ['warn', 'partial'], 'no usage': ['warn', 'no usage'],
+  'not billed': ['bad', 'not billed'], 'from telemetry': ['muted', 'telemetry only'],
+};
+const BILLING_TITLE = {
+  matched: 'its ai_usage row matched these spans exactly',
+  partial: 'its ai_usage row does not add up to its spans (one is missing or reported no usage)',
+  'no usage': 'the span reported no token usage',
+  'not billed': 'no ai_usage row covers this span',
+  'from telemetry': 'no ai_usage rows in this export: tokens from the span, cost unknown',
+};
+
+// One row per model call (chat_streaming span), its tokens as four disjoint
+// counters. Cost only where one billed row covers exactly this call.
 function renderModelCalls(turn) {
-  const count = n => n == null ? '' : Math.round(n).toLocaleString();
   const scale = Math.max(...turn.calls.map(call => promptTotal(call.prompt_bytes)), 1);
   const details = el('details', { class: 'ctx' }, `<summary>${turn.calls.length} model calls · ${secs(turn.calls.reduce((a, c) => a + c.end_ms - c.start_ms, 0))}</summary>`);
   const rows = turn.calls.map(call => {
+    const usage = call.usage, tokens = usage?.tokens;
     const largest = Object.entries(call.prompt_bytes || {}).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([name, bytes]) => `${esc(name)} ${(bytes / 1000).toFixed(0)} KB`).join(', ');
-    return `<tr><td>+${secs(call.start_ms - turn.start)}</td><td>${secs(call.end_ms - call.start_ms)}</td><td>${secs(call.first_chunk_ms)} ${esc(call.first_chunk_kind || '')}</td><td>${esc(call.model)}</td>` +
-      `<td>${count(call.input_tokens)}</td><td>${count(call.cache_read_tokens)}</td><td>${count(call.cache_write_tokens)}</td><td>${count(call.output_tokens)}</td>` +
+    const [klass, text] = BILLING_STATUS[usage?.status] || ['muted', usage?.status || '?'];
+    const sharedRow = usage?.row && usage.cost == null && usage.status === 'matched';
+    const costCell = usage?.cost != null ? dollars(usage.cost) : sharedRow ? '<span class="muted" title="one billed row covers several rounds; its cost is on the turn">in turn</span>' : '<span class="muted">—</span>';
+    return `<tr${usage?.cache_miss ? ' style="background:var(--fail-soft)" title="cache miss: the whole context was written to the cache again"' : ''}><td>${call.round ?? '–'}</td><td>+${secs(call.start_ms - turn.start)}</td><td>${secs(call.end_ms - call.start_ms)}</td><td>${secs(call.first_chunk_ms)} ${esc(call.first_chunk_kind || '')}</td><td>${esc(call.model)}${usage?.opener ? ' <span class="muted">opener</span>' : ''}</td>` +
+      (tokens ? `<td>${count(tokens.uncached)}</td><td>${count(tokens.cache_read)}</td><td>${count(tokens.cache_write)}</td><td>${count(tokens.output)}</td><td><b>${count(usage.context)}</b></td>` : `<td colspan="5" class="muted">no usage reported</td>`) +
+      `<td>${costCell}</td><td><span class="status ${klass}" title="${esc(BILLING_TITLE[usage?.status] || '')}">${esc(text)}</span></td>` +
       `<td>${count(call.eager_tools)}${call.loaded_tools ? ' + ' + count(call.loaded_tools) : ''}</td><td>${promptStack(call.prompt_bytes, scale, true).outerHTML}</td><td>${largest}</td></tr>`;
   }).join('');
-  details.append(el('div', { class: 'calls' }, `<table class="calls"><tr><th>at</th><th>took</th><th>first chunk</th><th>model</th><th>input</th><th>cache read</th><th>cache write</th><th>output</th><th>tools</th><th>prompt</th><th>largest prompt parts</th></tr>${rows}</table>`));
+  details.append(el('div', { class: 'calls' }, `<table class="calls"><tr><th>round</th><th>at</th><th>took</th><th>first chunk</th><th>model</th><th title="input not served from the cache">uncached in</th><th title="tokens re-read from the prompt cache">cache read</th><th title="tokens written to the prompt cache">cache write</th><th>output</th><th title="tokens the model read: uncached + cache read + cache write">context</th><th>cost</th><th>billing</th><th>tools</th><th title="prompt parts in BYTES, not tokens">prompt BYTES</th><th>largest prompt parts (bytes)</th></tr>${rows}</table>`));
   return details;
+}
+
+// Context size per call as dots on a line, one colour per model; a cache
+// miss (whole context written again) is red.
+const MODEL_COLORS = ['var(--model)', 'var(--msg)', 'var(--tool)', 'var(--warn)', 'var(--p-results)', 'var(--p-system)'];
+function sparkline(calls, { width = 560, height = 64, labels = true } = {}) {
+  const points = calls.filter(call => call.usage?.context != null && !call.usage.opener);
+  if (!points.length) return null;
+  const max = Math.max(...points.map(call => call.usage.context), 1);
+  const models = [...new Set(points.map(call => call.model))];
+  const pad = labels ? 34 : 2, top = 6, bottom = labels ? 14 : 2;
+  const x = i => pad + (points.length === 1 ? 0 : i / (points.length - 1) * (width - pad - 4));
+  const y = v => top + (1 - v / max) * (height - top - bottom);
+  const line = models.map((model, m) => {
+    const own = points.map((call, i) => [call, i]).filter(([call]) => call.model === model);
+    return `<polyline fill="none" stroke="${MODEL_COLORS[m % MODEL_COLORS.length]}" stroke-width="1.2" opacity=".6" points="${own.map(([call, i]) => `${x(i).toFixed(1)},${y(call.usage.context).toFixed(1)}`).join(' ')}"/>`;
+  }).join('');
+  const dots = points.map((call, i) => {
+    const miss = call.usage.cache_miss;
+    const color = miss ? 'var(--fail)' : MODEL_COLORS[models.indexOf(call.model) % MODEL_COLORS.length];
+    const title = `${call.model} · context ${count(call.usage.context)} tokens${miss ? ` · cache miss: whole context written again${call.usage.cost != null ? ', ' + dollars(call.usage.cost) : ''}` : ''}`;
+    return `<circle cx="${x(i).toFixed(1)}" cy="${y(call.usage.context).toFixed(1)}" r="${miss ? 3.5 : 2}" fill="${color}"><title>${esc(title)}</title></circle>`;
+  }).join('');
+  const axis = labels ? `<line class="axis" x1="${pad}" x2="${width - 4}" y1="${y(0)}" y2="${y(0)}"/><text x="0" y="${top + 4}">${short(max)}</text><text x="0" y="${y(0)}">0</text><text x="${pad}" y="${height - 2}">call 1</text><text x="${width - 4}" y="${height - 2}" text-anchor="end">call ${points.length}</text>` : '';
+  return `<svg class="spark" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="context size per model call">${axis}${line}${dots}</svg>`;
+}
+
+const TOKEN_HEADS = `<th>uncached input</th><th>cache read</th><th>cache write</th><th title="billed output includes reasoning tokens">output</th>`;
+const tokenCells = tokens => `<td>${count(tokens.uncached)}</td><td>${count(tokens.cache_read)}</td><td>${count(tokens.cache_write)}</td><td>${count(tokens.output)}</td>`;
+
+// The session's tokens and cost: a plain explanation first, then the per-model
+// table, then how the billed rows and the spans line up.
+function renderTokens() {
+  if (!TOKENS) return null;
+  const billed = TOKENS.source === 'ai_usage';
+  const section = el('section', { class: 'tokens', id: 'tokens' }, `<h2>Tokens & cost <span class="muted" style="font-weight:400;font-size:12.5px">${billed ? 'from ai_usage (billing)' : 'from telemetry spans · cost unknown'}</span></h2>`);
+  const main = TOKENS.models.filter(model => model.label !== 'opener (fast first line)' && model.spans >= 2).sort((a, b) => b.tokens.cache_read - a.tokens.cache_read);
+  section.append(el('p', {}, 'Every model call sends the whole conversation again. <b>Cache read</b> counts those re-sent tokens on every call, so its total is the same history counted once per call, not the size of the context.'));
+  const lines = main.filter(model => model.tokens.cache_read).map(model => {
+    const readCost = model.cache_read_cost != null ? ` (${dollars(model.cache_read_cost)})` : '';
+    const miss = model.cache_misses ? ` <span style="color:var(--fail)"><b>${model.cache_misses} missed the cache</b></span> and wrote the whole context again${model.cache_miss_cost != null ? `: <b>${dollars(model.cache_miss_cost)}</b>${model.cost != null ? ` of its ${dollars(model.cost)}` : ''}` : ''}.` : '';
+    return `<li><b>${esc(model.model)}</b>: ${model.spans} calls read <b>${short(model.context_avg)}</b> tokens of context each on average, growing from ${short(model.context_first)} to ${short(model.context_max)}; the ${short(model.tokens.cache_read)} cache read${readCost} is that history counted ${model.spans} times.${miss}</li>`;
+  });
+  if (lines.length) section.append(el('ul', {}, lines.join('')));
+  const spark = sparkline(MODEL_CALLS);
+  if (spark) section.append(el('div', { title: 'context size of each model call, in tokens' }, spark));
+  section.append(el('div', { class: 'legend' }, TOKENS.models.filter(model => model.contexts.length && model.label !== 'opener (fast first line)').map(model => {
+    const models = [...new Set(MODEL_CALLS.filter(call => call.usage?.context != null && !call.usage.opener).map(call => call.model))];
+    return `<span><i style="background:${MODEL_COLORS[models.indexOf(model.model) % MODEL_COLORS.length]}"></i>${esc(model.model)}</span>`;
+  }).join('') + `<span><i style="background:var(--fail)"></i>cache miss</span>`));
+
+  const rows = TOKENS.models.map(model => `<tr><td>${esc(model.label)}${model.label !== model.model ? ` <span class="muted">${esc(model.model)}</span>` : ''}${model.pricing?.length ? ` <span class="muted" title="ai_usage price key suffix">priced ${esc(model.pricing.map(key => ':' + key).join(', '))}</span>` : ''}</td><td>${billed ? model.rows : '–'}</td><td>${model.spans}</td>${tokenCells(model.tokens)}<td>${billed ? (dollars(model.cost) ?? 'unpriced') : 'cost unknown'}</td></tr>`).join('');
+  const sum = TOKENS.models.reduce((a, model) => { for (const k of ['uncached', 'cache_read', 'cache_write', 'output']) a[k] += model.tokens[k]; return a; }, { uncached: 0, cache_read: 0, cache_write: 0, output: 0 });
+  const side = TOKENS.side.map(entry => `<tr class="side"><td>side: ${esc(entry.feature)} <span class="muted">${esc(entry.models.join(', '))}</span></td><td>${entry.rows}</td><td>–</td><td colspan="4"></td><td>${dollars(entry.cost) ?? 'unpriced'}</td></tr>`).join('');
+  section.append(el('div', { class: 'tokens-scroll' }, `<table class="tokens"><tr><th>model</th><th title="ai_usage rows">billed calls</th><th title="chat_streaming spans">spans</th>${TOKEN_HEADS}<th>cost</th></tr>${rows}` +
+    `<tr class="sum"><td>agent model calls</td><td>${billed ? TOKENS.rows.length : '–'}</td><td>${TOKENS.calls.length}</td>${tokenCells(sum)}<td>${billed ? (dollars(TOKENS.agent_cost) ?? 'unpriced') : 'cost unknown'}</td></tr>${side}` +
+    (billed ? `<tr class="sum"><td>session</td><td>${TOKENS.rows.length + TOKENS.side.reduce((a, e) => a + e.rows, 0)}</td><td></td><td colspan="4"></td><td>${dollars(TOKENS.cost) ?? 'unpriced'}</td></tr>` : '') + `</table>`));
+
+  const c = TOKENS.coverage;
+  const parts = c.have_usage
+    ? [`${c.billed} billed calls`, `${c.matched} matched to spans`, c.partial && `<span class="warn-text">${c.partial} partial</span>`, c.billed_no_span && `${c.billed_no_span} billed without a span`,
+       c.spans_no_usage && `${c.spans_no_usage} span${c.spans_no_usage > 1 ? 's' : ''} with no usage`, c.spans_not_billed && `<span style="color:var(--fail)">${c.spans_not_billed} spans not billed</span>`, `${c.side} side calls`]
+    : [`${c.spans} spans`, 'no ai_usage rows in this export: totals from telemetry, cost unknown'];
+  section.append(el('div', { class: 'coverage' }, `<b>Coverage</b> · ${parts.filter(Boolean).join(' · ')}`));
+  section.append(el('ul', { class: 'semantics' },
+    '<li>Uncached input, cache read and cache write never overlap; context = all three. Anthropic reports them that way; Gemini and OpenAI count cached tokens inside input, shown here as uncached = input − cache read.</li>' +
+    '<li>Billed output includes reasoning tokens; Gemini spans count output without them, so a turn&#39;s billed output can exceed its calls&#39;.</li>' +
+    '<li>Some models are billed one row per model call (Opus), others one row per turn (Gemini, Sonnet): their cost is on the turn, not split across calls. Totals come from ai_usage when present, never added to span totals.</li>' +
+    '<li>The opener is the fast model writing a turn&#39;s first line (<code>opener.rs</code>), identified by model, no tools and ≤64 output tokens.</li>'));
+  return section;
+}
+
+function renderTurnTokens(turn) {
+  const t = turn.tokens;
+  if (!t) return null;
+  const billed = TOKENS.source === 'ai_usage';
+  const chips = t.mix.map(entry => `<span class="chip ${entry.label.startsWith('opener') ? 'opener' : 'model'}">${esc(entry.label.replace(' (fast first line)', ''))} ×${entry.calls}</span>`).join(' ') +
+    (t.billed_without_span || []).map(entry => ` <span class="chip nospan" title="billed in ai_usage, no chat_streaming span">${esc(entry.label.replace(' (fast first line)', ''))} ×${entry.rows} billed, no span</span>`).join('');
+  const contexts = t.contexts;
+  const spark = sparkline(turn.calls, { width: 120, height: 22, labels: false });
+  const cost = billed ? (t.cost != null ? `<b>${dollars(t.cost)}</b>` : '<span class="muted">unpriced</span>') : '<span class="muted">cost unknown</span>';
+  return el('div', { class: 'turn-tokens' },
+    `<span>${chips || '<span class="muted">no model calls recorded</span>'}</span>` +
+    `<span title="${billed ? 'billed (ai_usage)' : 'from spans'}">uncached ${short(t.tokens.uncached)} · cache read ${short(t.tokens.cache_read)} · cache write ${short(t.tokens.cache_write)} · output ${short(t.tokens.output)} · ${cost}</span>` +
+    (contexts.length ? `<span title="tokens the model read per call">context ${short(Math.min(...contexts))} → ${short(Math.max(...contexts))}</span>${spark || ''}` : '') +
+    (t.cache_misses ? `<span class="miss" title="calls that wrote their whole context to the cache again">${t.cache_misses} cache miss${t.cache_misses > 1 ? 'es' : ''}</span>` : ''));
+}
+
+// Which model call (round) produced a step, from the frame it streamed in.
+function roundTag(item) {
+  const call = item.round == null ? null : MODEL_CALLS[item.round];
+  if (!DATA.spans?.model_calls) return '';
+  return call
+    ? `<span class="round" title="streamed during this model call">${call.round == null ? '' : `round ${call.round} · `}${esc(callLabel(call))}</span>`
+    : `<span class="round none" title="no model call span covers this step's first frame">unattributed</span>`;
 }
 
 // Prompt parts by group, as turn_context.PROMPT_GROUPS stacks them.
@@ -604,7 +756,7 @@ function renderContext(turn) {
   if (largest) {
     const parts = Object.assign({}, ...largest.map(group => group.parts));
     const total = promptTotal(parts);
-    const promptCard = el('div', { class: 'card' }, `<h5>Largest prompt of ${context.prompt.calls} model calls</h5><div><b>${kb(total)}</b> in all</div>`);
+    const promptCard = el('div', { class: 'card' }, `<h5>Largest prompt of ${context.prompt.calls} model calls · bytes, not tokens</h5><div><b>${kb(total)}</b> in all</div>`);
     promptCard.append(promptStack(parts, total));
     promptCard.append(el('div', { class: 'parts' }, PROMPT_GROUPS.map(([group, color, names]) => {
       const bytes = names.reduce((a, name) => a + (parts[name] || 0), 0);
@@ -717,11 +869,13 @@ function renderTurn(turn) {
     `<span><b>${secs(turn.totalMs)}</b> total</span><span>gaps ${secs(modelMs)} (${Math.round(modelMs / Math.max(turn.totalMs, 1) * 100)}%)</span>` +
     `<span>recorded tool time ${secs(turn.toolMs)}</span><span>${turn.tools.length} tool calls</span>` +
     `<span style="color:var(--fail)">${turn.failures ? turn.failures + ' failed' : ''}</span><span>${turn.stop ? 'stop: ' + esc(turn.stop) : 'no stop frame (still running or crashed)'}</span>`));
+  const turnTokens = renderTurnTokens(turn);
+  if (turnTokens) head.append(turnTokens);
   if (turn.flags.length) head.append(renderFlags(turn));
   if (turn.context) head.append(renderContext(turn));
   head.append(renderTimeline(turn));
   if (turn.calls.length) head.append(renderModelLane(turn), renderModelCalls(turn));
-  head.append(el('div', { class: 'legend' }, `<span><i style="background:var(--model-soft);border:1px solid var(--model)"></i>model / unrecorded</span><span><i style="background:var(--tool)"></i>tool</span><span><i style="background:var(--warn)"></i>tool reported failure</span><span><i style="background:var(--fail)"></i>tool failed</span><span><i style="background:var(--msg);opacity:.5"></i>reply</span>`));
+  head.append(el('div', { class: 'legend' }, `<span><i style="background:var(--model-soft);border:1px solid var(--model)"></i>model / unrecorded</span><span><i style="background:var(--tool)"></i>tool</span><span><i class="exec"></i>⚙ tool / SDK execution (deterministic)</span><span><i style="background:transparent;border:1px solid var(--model)"></i>round N: model generation</span><span><i style="background:var(--warn)"></i>tool reported failure</span><span><i style="background:var(--fail)"></i>tool failed</span><span><i style="background:var(--msg);opacity:.5"></i>reply</span>`));
   section.append(renderTurnBar(turn), head);
 
   const items = el('div', { class: 'items' });
@@ -733,14 +887,17 @@ function renderTurn(turn) {
     if (item.kind === 'thought') {
       const details = el('details', { class: 'thought' });
       const first = item.text.trim().split('\n').find(Boolean) || '';
-      details.append(el('summary', {}, `<b>Thinking</b> · ${esc(first.replace(/\*\*/g, ''))} <span style="opacity:.7">· ${item.text.length.toLocaleString()} chars</span>`));
+      details.append(el('summary', {}, `${roundTag(item)}<b>Thinking</b> · ${esc(first.replace(/\*\*/g, ''))} <span style="opacity:.7">· ${item.text.length.toLocaleString()} chars</span>`));
       const textBody = el('div', { class: 'body' }); textBody.textContent = item.text.trim();
       details.append(textBody);
       wrapper.append(details);
       wrapper.dataset.kind = 'thought';
       wrapper.searchText = item.text.toLowerCase();
     } else if (item.kind === 'message') {
-      wrapper.append(el('div', { class: 'message' }, markdown(item.text)));
+      const message = el('div', { class: 'message' }, markdown(item.text));
+      const tag = roundTag(item);
+      if (tag) message.prepend(el('div', {}, tag));
+      wrapper.append(message);
       wrapper.dataset.kind = 'message';
       wrapper.searchText = item.text.toLowerCase();
     } else if (item.kind === 'tool') {
@@ -785,6 +942,7 @@ function render() {
     [turns.length, 'turns'], [allTools.length, 'tool calls'], [failures, 'failed'], [secs(active), 'active time'],
     [`${Math.round((active - toolMs) / Math.max(active, 1) * 100)}%`, 'outside recorded tool time'], [(DATA.frames || []).length, 'log frames'],
     ...(DATA.turn_context?.length ? [[turns.reduce((a, t) => a + t.flags.filter(f => f.level === 'warn').length, 0), 'warning flags']] : []),
+    ...(TOKENS ? [[TOKENS.source === 'ai_usage' ? (dollars(TOKENS.cost) ?? 'unpriced') : 'cost unknown', TOKENS.source === 'ai_usage' ? '<a href="#tokens">billed</a>' : '<a href="#tokens">tokens</a>']] : []),
   ].map(([v, l]) => `<div class="stat"><b>${v}</b> ${l}</div>`).join('');
 
   const counts = {};
@@ -798,6 +956,8 @@ function render() {
   }
 
   const nav = document.getElementById('nav'), main = document.getElementById('main');
+  const tokens = renderTokens();
+  if (tokens) main.append(tokens);
   for (const turn of turns) {
     const { body } = splitContext(promptText(turn.prompt));
     nav.append(el('a', { href: `#turn-${turn.n}` }, `<span class="n">Turn ${turn.n}</span><span class="d">${secs(turn.totalMs)}</span>` +
