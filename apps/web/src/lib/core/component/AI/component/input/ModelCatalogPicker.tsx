@@ -69,8 +69,10 @@ export function ModelRow(props: ModelRowProps) {
     <Dropdown.Item
       closeOnSelect
       disabled={props.disabled}
+      // shrink-0: menu groups are flex columns, and a scrolling one would
+      // otherwise squeeze rows below their wrapped names.
       class={cn(
-        'min-h-8 gap-2',
+        'min-h-8 shrink-0 gap-2',
         props.selected && 'bg-ink/5 text-ink font-medium',
         props.option.locked && 'opacity-50'
       )}
@@ -618,7 +620,8 @@ export function ModelCatalogMenu(
           </div>
         }
       >
-        <Dropdown.Group class="max-h-72 overflow-y-auto overscroll-contain">
+        {/* A capped flex column: keep its label and custom rows from shrinking too. */}
+        <Dropdown.Group class="max-h-72 overflow-y-auto overscroll-contain *:shrink-0">
           <Dropdown.GroupLabel>
             {filtered().length === 1
               ? '1 matching model'
