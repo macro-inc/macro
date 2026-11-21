@@ -191,7 +191,7 @@ try {
     for (let hop = 0; hop <= 20; hop++) {
       if (reachesFetcher(request.url)) throw refusal();
       const retry = request.body === null ? undefined : request.clone();
-      const response = await route(new Request(request, {redirect: "manual"}));
+      const response = await route(request);
       const location = redirects.has(response.status) ? response.headers.get("location") : null;
       if (location === null) return response;
       const next = new URL(location, request.url).href;
@@ -202,13 +202,14 @@ try {
         headers.delete("cookie");
       }
       request = asGet
-        ? new Request(next, {method: request.method === "HEAD" ? "HEAD" : "GET", headers})
-        : new Request(next, retry ? {method: request.method, headers, body: retry.body, duplex: "half"} : {method: request.method, headers});
+        ? new Request(next, {method: request.method === "HEAD" ? "HEAD" : "GET", headers, redirect: "manual"})
+        : new Request(next, retry ? {method: request.method, headers, body: retry.body, duplex: "half", redirect: "manual"} : {method: request.method, headers, redirect: "manual"});
     }
     throw new TypeError("Too many redirects.");
   };
   globalThis.fetch = (input, init) => {
-    const request = new Request(input, init);
+    // Set where the request is made, so its body keeps its length.
+    const request = new Request(input, scoped ? {...init, redirect: "manual"} : init);
     return scoped ? guarded(request) : route(request);
   };
   const route = (request) => {
