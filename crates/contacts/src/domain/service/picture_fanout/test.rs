@@ -98,6 +98,15 @@ impl ContactListReader for PagedRepo {
         unreachable!("fan-out does not search")
     }
 
+    async fn name_listed_people(
+        &self,
+        _viewer: MacroUserIdStr<'_>,
+        _query: &crate::domain::models::people::NamedPeopleQuery,
+        _limit: PeopleSearchLimit,
+    ) -> Result<Vec<PersonMatch>, Report> {
+        unreachable!("fan-out does not name people")
+    }
+
     async fn inbox_contacts(
         &self,
         _viewer: MacroUserIdStr<'_>,
