@@ -2192,7 +2192,7 @@ export type SetupStep = 'billing' | 'creating' | 'booting' | 'connecting' | 'rea
  */
 export type SizeOffer = {
     /**
-     * Root disk size in GiB.
+     * Whole disk quota in GiB: root and `/home` together.
      */
     diskGb: number;
     /**

@@ -1,6 +1,8 @@
 import { match } from 'ts-pattern';
 import type { UnifiedNotification } from './types';
 
+type MetadataAgent = { name: string; avatarUrl?: string | null };
+
 type SenderMetadataContent = {
   sender?: string;
   senderDisplayName?: string | null;
@@ -9,8 +11,11 @@ type SenderMetadataContent = {
   botName?: string;
   routineName?: string;
   computerName?: string;
-  /** An agent teammate's computer setup names the agent. */
-  agent?: { name: string } | null;
+  /**
+   * An agent teammate's computer setup names the agent; a ping from agent
+   * code also carries its avatar.
+   */
+  agent?: MetadataAgent | null;
   mentionedBy?: string;
 };
 
@@ -36,6 +41,10 @@ export function getNotificationSenderFallbackName(
     .with('routine_run_finished', () => content?.routineName)
     .with('agent_sign_in_expiry', () => content?.computerName)
     .with('computer_setup', () => content?.agent?.name ?? content?.computerName)
+    .with(
+      'ping',
+      () => content?.agent?.name ?? notification.sender_id ?? undefined
+    )
     .with(
       'agent_session_settled',
       'agent_session_waiting_for_input',
@@ -71,7 +80,10 @@ export function getNotificationSenderFallbackName(
 export function getNotificationSenderAvatarUrl(
   notification: UnifiedNotification
 ): string | undefined {
-  return senderContent(notification)?.senderProfilePictureUrl ?? undefined;
+  const content = senderContent(notification);
+  return (
+    content?.senderProfilePictureUrl ?? content?.agent?.avatarUrl ?? undefined
+  );
 }
 
 export type NotificationAgentSender = {
@@ -87,6 +99,14 @@ export type NotificationAgentSender = {
 export function getNotificationAgentSender(
   notification: UnifiedNotification
 ): NotificationAgentSender | undefined {
+  // Agent code sends pings as its user, so they keep the
+  // user's id as sender and read as from the agent.
+  if (notification.notification_metadata.tag === 'ping') {
+    const agent = senderContent(notification)?.agent;
+    if (!agent?.name) return undefined;
+    return { name: agent.name, avatarUrl: agent.avatarUrl ?? undefined };
+  }
+
   if (notification.sender_id) return undefined;
 
   return match(notification.notification_metadata.tag)
@@ -104,6 +124,20 @@ export function getNotificationAgentSender(
       }
     )
     .otherwise(() => undefined);
+}
+
+/**
+ * The user a notification reads as being from. A ping an agent
+ * sent keeps its user's id as sender but reads as from the agent alone, so it
+ * names no user.
+ */
+export function getNotificationUserSenderId(
+  notification: UnifiedNotification
+): string | undefined {
+  const fromAgent =
+    notification.notification_metadata.tag === 'ping' &&
+    getNotificationAgentSender(notification) !== undefined;
+  return fromAgent ? undefined : (notification.sender_id ?? undefined);
 }
 
 /** Unique agent senders across a stack, by name, preserving order. */

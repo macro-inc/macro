@@ -2712,8 +2712,8 @@ impl ChannelRepo for PgChannelsRepo {
         &self,
         team_id: &Uuid,
         user_id: &MacroUserIdStr<'_>,
-    ) -> Result<(), Self::Err> {
-        sqlx::query!(
+    ) -> Result<Vec<Uuid>, Self::Err> {
+        sqlx::query_scalar!(
             r#"
             INSERT INTO comms_channel_participants (channel_id, user_id, role)
             SELECT id, $2, 'member'::comms_participant_role
@@ -2724,14 +2724,14 @@ impl ChannelRepo for PgChannelsRepo {
                 joined_at = NOW(),
                 left_at = NULL
             WHERE comms_channel_participants.left_at IS NOT NULL
+            RETURNING channel_id
             "#,
             team_id,
             user_id.as_ref(),
         )
-        .execute(&self.pool)
+        .fetch_all(&self.pool)
         .await
-        .context("unable to auto-join team channels")?;
-        Ok(())
+        .context("unable to auto-join team channels")
     }
 
     async fn leave_by_team_id(
@@ -2839,7 +2839,7 @@ impl ChannelRepo for PgChannelsRepo {
         user_id: String,
         team_id: Option<Uuid>,
         req: PatchChannelRequest,
-    ) -> Result<(), Self::Err> {
+    ) -> Result<Vec<String>, Self::Err> {
         let PatchChannelRequest {
             channel_name,
             convert_to_team_channel,
@@ -2926,8 +2926,8 @@ impl ChannelRepo for PgChannelsRepo {
         .await
         .context("unable to patch channel")?;
 
-        if enables_auto_join {
-            sqlx::query!(
+        let added_user_ids = if enables_auto_join {
+            sqlx::query_scalar!(
                 r#"
                 INSERT INTO comms_channel_participants (channel_id, role, user_id)
                 SELECT $1, 'member'::comms_participant_role, user_id
@@ -2938,20 +2938,23 @@ impl ChannelRepo for PgChannelsRepo {
                     joined_at = NOW(),
                     left_at = NULL
                 WHERE comms_channel_participants.left_at IS NOT NULL
+                RETURNING user_id
                 "#,
                 channel_id,
                 team_id,
             )
-            .execute(&mut *transaction)
+            .fetch_all(&mut *transaction)
             .await
-            .context("unable to add current team members to channel")?;
-        }
+            .context("unable to add current team members to channel")?
+        } else {
+            Vec::new()
+        };
 
         transaction
             .commit()
             .await
             .context("unable to commit channel patch")?;
-        Ok(())
+        Ok(added_user_ids)
     }
 
     #[tracing::instrument(err, skip(self, user_id))]

@@ -3,6 +3,7 @@
 use super::super::purge::{LinkPurgeRepository, LinkPurgeService, PurgePacing, PurgeSummary};
 use crm::domain::{model::CrmError, service::CrmService};
 use email_api_client::domain::models::EmailApiError;
+use macro_user_id::user_id::MacroUserIdStr;
 use models_email::service::{cache::TokenCacheKey, link::Link};
 use std::error::Error;
 use uuid::Uuid;
@@ -112,4 +113,8 @@ impl<R: LinkPurgeRepository> LinkPurger for LinkPurgeService<R> {
 pub trait LinkDeletionRefresh: Send + Sync + 'static {
     /// Notify the owner that the link has been removed.
     fn link_removed(&self, owner: &str, link_id: Uuid) -> impl Future<Output = ()> + Send;
+    /// Tell the owner's clients their directory changed: the inbox's contacts
+    /// went with its rows, and which of them left is not known.
+    fn directory_changed(&self, owner: &MacroUserIdStr<'static>)
+    -> impl Future<Output = ()> + Send;
 }

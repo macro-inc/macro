@@ -14,6 +14,7 @@ import type {
 } from '../Message';
 import type { FocusRequest } from './focus-request';
 import type { MessageElementMount } from './message-element-lifecycle';
+import type { ThreadGutter } from './ThreadGutterSlot';
 
 export type ThreadActions = {
   onDismissNewMessages?: () => void;
@@ -98,6 +99,8 @@ export type ThreadProps = {
   hideRail?: boolean;
   /** Render replies with root-message headers, without changing thread ownership. */
   repliesAsRoots?: boolean;
+  /** Controls in the channel gutter beside the root and its replies. */
+  gutter?: ThreadGutter;
   /** Draws the root as something other than a message, such as a call's row. */
   rootSlot?: () => JSX.Element;
   /** Collapse to the indicator alone rather than previewing replies. */

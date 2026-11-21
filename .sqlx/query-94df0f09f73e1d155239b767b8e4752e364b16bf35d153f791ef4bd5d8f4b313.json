@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- The inviter gains the invitee in their invited list. Directed: the\n-- invitee's directory is unchanged. A self-invite writes nothing, and a\n-- repeat conflicts on the primary key and returns no row.\nINSERT INTO contact_list_members (user_id, contact_user_id, list_key)\nSELECT $1, $2, $3\nWHERE $1 <> $2\nON CONFLICT (user_id, contact_user_id, list_key) DO NOTHING\nRETURNING contact_user_id\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "contact_user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "94df0f09f73e1d155239b767b8e4752e364b16bf35d153f791ef4bd5d8f4b313"
+}
