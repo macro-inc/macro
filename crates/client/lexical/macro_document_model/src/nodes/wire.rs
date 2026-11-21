@@ -13,12 +13,7 @@ pub(super) fn import_node<T: ImportPolicy>(
     {
         // Source importJSON coalesces these nulls to undefined. Raw Loro slot
         // loading uses the unmarked builder and must retain the stored nulls.
-        let fields: &[&str] = match T::TYPE {
-            "pr-mention" | "agent-session-mention" | "date-mention" => &["mentionUuid"],
-            "image" | "video" => &["constrainedWidth", "constrainedHeight"],
-            _ => &[],
-        };
-        for field in fields {
+        for field in T::SERVICE_JSON_NULLISH_FIELDS {
             if json.get(*field).is_some_and(Value::is_null) {
                 json.shift_remove(*field);
             }

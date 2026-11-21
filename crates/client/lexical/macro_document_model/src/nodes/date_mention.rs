@@ -29,6 +29,7 @@ impl NodeType for DateMentionNode {
     }
 }
 impl ImportPolicy for DateMentionNode {
+    const SERVICE_JSON_NULLISH_FIELDS: &'static [&'static str] = &["mentionUuid"];
     const IMPORTED_STATE: ImportedState = ImportedState::Full;
     const IMPORT_ELEMENT_DATA: bool = true;
 }

@@ -46,6 +46,8 @@ impl NodeType for VideoNode {
     }
 }
 impl ImportPolicy for VideoNode {
+    const SERVICE_JSON_NULLISH_FIELDS: &'static [&'static str] =
+        &["constrainedWidth", "constrainedHeight"];
     const IMPORTED_STATE: ImportedState = ImportedState::Full;
     const IMPORT_ELEMENT_DATA: bool = true;
 }

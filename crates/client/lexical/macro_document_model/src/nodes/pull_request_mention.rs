@@ -32,6 +32,7 @@ impl NodeType for PullRequestMentionNode {
     }
 }
 impl ImportPolicy for PullRequestMentionNode {
+    const SERVICE_JSON_NULLISH_FIELDS: &'static [&'static str] = &["mentionUuid"];
     const IMPORTED_STATE: ImportedState = ImportedState::IdOnly;
     const IMPORT_ELEMENT_DATA: bool = true;
 }

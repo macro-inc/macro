@@ -42,6 +42,8 @@ pub trait ImportPolicy: NodeType {
     const IMPORTED_STATE: ImportedState;
     /// Whether framework element/text properties are restored.
     const IMPORT_ELEMENT_DATA: bool = true;
+    /// Own fields whose null values use Source defaults only at service JSON ingress.
+    const SERVICE_JSON_NULLISH_FIELDS: &'static [&'static str] = &[];
 }
 /// Macro-specific search override; None uses ordinary node text or traversal.
 pub trait SearchText {
