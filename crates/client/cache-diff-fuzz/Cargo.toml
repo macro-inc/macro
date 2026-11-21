@@ -8,11 +8,6 @@ version = "0.1.0"
 name = "cache-diff-fuzz"
 path = "src/main.rs"
 
-[features]
-default = []
-# The build under test checkpoints the WAL between requests, as its engine host does.
-idle-checkpoint = []
-
 [dependencies]
 apollo-compiler = { workspace = true }
 cache-core = { path = "../cache-core" }

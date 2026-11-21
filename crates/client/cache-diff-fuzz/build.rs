@@ -36,6 +36,14 @@ fn main() {
     .unwrap();
     println!("cargo:rerun-if-changed={}", host.display());
     println!("cargo:rerun-if-changed={}", hooks.display());
+    // A side whose engine host checkpoints the WAL when idle (`TursoStorage::checkpoint_if_due`)
+    // is built with CACHE_DIFF_FUZZ_IDLE_CHECKPOINT=1, so the fuzzer calls it at `idle` ops. A
+    // cfg rather than a feature: `--all-features` must still build against a cache without it.
+    println!("cargo::rustc-check-cfg=cfg(idle_checkpoint)");
+    println!("cargo:rerun-if-env-changed=CACHE_DIFF_FUZZ_IDLE_CHECKPOINT");
+    if std::env::var_os("CACHE_DIFF_FUZZ_IDLE_CHECKPOINT").is_some_and(|value| value == "1") {
+        println!("cargo::rustc-cfg=idle_checkpoint");
+    }
 }
 
 fn read(path: &Path) -> String {

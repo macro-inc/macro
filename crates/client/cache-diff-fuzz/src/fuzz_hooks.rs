@@ -8,7 +8,7 @@ impl EngineHandle {
     /// without the idle checkpoint keep Turso's own checkpoint in COMMIT, and
     /// this does nothing. Returns `(ran, wal_frames, backfilled_frames)`.
     pub(crate) async fn fuzz_idle(&self) -> Option<(bool, u64, u64)> {
-        #[cfg(feature = "idle-checkpoint")]
+        #[cfg(idle_checkpoint)]
         {
             let state = self.inner.lock().await;
             let checkpoint = state.engine.storage().checkpoint_if_due().ok()?;
@@ -18,7 +18,7 @@ impl EngineHandle {
                 checkpoint.backfilled_frames,
             ))
         }
-        #[cfg(not(feature = "idle-checkpoint"))]
+        #[cfg(not(idle_checkpoint))]
         None
     }
 }

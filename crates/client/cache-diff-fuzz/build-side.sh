@@ -3,7 +3,7 @@
 #
 #   build-side.sh NAME BASE [BRANCH...]
 #
-# FEATURES=idle-checkpoint builds the side with the host's idle point (the side must
+# IDLE_CHECKPOINT=1 builds the side with the host's idle point (the side must
 # have TursoStorage::checkpoint_if_due). TARGET=x builds in target-x instead of
 # target-NAME, so sides that differ little share one. The binary lands in
 # $CACHE_DIFF_FUZZ_HOME/bin/NAME, and $CACHE_DIFF_FUZZ_HOME/bin/NAME.side records the commits it was built from.
@@ -47,8 +47,8 @@ fi
 
 (
   cd "$tree"
-  CARGO_TARGET_DIR=$home/target-${TARGET:-$name} cargo build --quiet --release -p cache-diff-fuzz \
-    ${FEATURES:+--features "$FEATURES"}
+  CACHE_DIFF_FUZZ_IDLE_CHECKPOINT=${IDLE_CHECKPOINT:-0} CARGO_TARGET_DIR=$home/target-${TARGET:-$name} \
+    cargo build --quiet --release -p cache-diff-fuzz
 )
 cp "$home/target-${TARGET:-$name}/release/cache-diff-fuzz" "$home/bin/$name"
 {
@@ -57,7 +57,7 @@ cp "$home/target-${TARGET:-$name}/release/cache-diff-fuzz" "$home/bin/$name"
     echo "branch $branch $(git -C "$repo" rev-parse "$branch")"
   done
   echo "tree $(git -C "$tree" rev-parse HEAD)"
-  echo "features ${FEATURES:-}"
+  echo "idle-checkpoint ${IDLE_CHECKPOINT:-0}"
   [ -n "${MUTATE_FILE:-}" ] && echo "mutate $MUTATE_FILE $MUTATE_PERL"
   echo "fuzzer $(git -C "$repo" rev-parse HEAD) $(cd "$crate" && find . -type f -not -path './target/*' | sort | xargs cat | sha256sum | cut -c1-16)"
 } > "$home/bin/$name.side"
