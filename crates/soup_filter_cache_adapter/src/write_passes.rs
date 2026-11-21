@@ -18,9 +18,9 @@ pub enum WritePassError<E: std::error::Error + 'static> {
 }
 
 /// Runs the notification pass (when `reuse_stored_identity`), then the Mail
-/// and property passes over `response`, after `projections`. The passes read
-/// through the engine's hot tier, and the engine keeps what they read from
-/// storage for the write that follows, so that write does not read it again.
+/// and property passes over `response`, after `projections`, all at once. The
+/// passes read storage, each key once, and the engine keeps what they read for
+/// the write that follows, so that write does not read it again.
 pub async fn write_passes<S>(
     engine: &mut Engine<S>,
     response: &WriteResponse<'_>,
@@ -33,7 +33,7 @@ where
 {
     let mut passes = WritePasses::new(reuse_stored_identity, projections);
     loop {
-        if let WritePassStep::Done(projections) = passes.step(engine, response).await? {
+        if let WritePassStep::Done(projections) = passes.advance(engine, response, false).await? {
             return Ok(projections);
         }
     }
@@ -114,6 +114,20 @@ impl WritePasses {
         S: PredicateIndexStorage,
         for<'a> PassReads<'a, S>: DurableRead<Error = S::Error>,
     {
+        self.advance(engine, response, true).await
+    }
+
+    /// One pass, or with `one` false every pass left, then the position check.
+    async fn advance<S>(
+        &mut self,
+        engine: &mut Engine<S>,
+        response: &WriteResponse<'_>,
+        one: bool,
+    ) -> Result<WritePassStep, WritePassError<S::Error>>
+    where
+        S: PredicateIndexStorage,
+        for<'a> PassReads<'a, S>: DurableRead<Error = S::Error>,
+    {
         if self.restarts >= MAX_RESTARTS {
             while self.next.is_some() {
                 let reads = engine.pass_reads();
@@ -127,7 +141,7 @@ impl WritePasses {
         }
         let stepping = self.position.is_some();
         let reads = engine.resume_pass_reads(std::mem::take(&mut self.reads));
-        let result = self.run(&reads, response, stepping).await;
+        let result = self.run(&reads, response, stepping && one).await;
         self.reads = reads.finish();
         result?;
         // What the passes computed so far holds only if every key they read

@@ -23,9 +23,12 @@ pub struct PassReadSet {
     states: HashMap<PredicateRecordKey, Option<ProjectionState>>,
 }
 
-/// [`DurableRead`] from storage, reading each key at most once.
+/// [`DurableRead`] from storage, reading each key at most once. A record the
+/// hot tier holds is read from storage like any other, but not kept: the
+/// write merges onto the hot copy, so keeping it would only copy it.
 pub struct PassReads<'a, S> {
     storage: &'a S,
+    hot: &'a LruCache<EntityKey<'static>, Record>,
     read: Mutex<PassReadSet>,
 }
 
@@ -66,15 +69,33 @@ impl<S: crate::predicate::PredicateIndexStorage + MaybeSync> DurableRead for Pas
             }
             missing
         };
+        let mut unkept = HashMap::new();
         if !missing.is_empty() {
             let fetched = self.storage.get_batch(&missing).await?;
-            self.read().records.extend(missing.into_iter().zip(fetched));
+            let mut read = self.read();
+            for (key, record) in missing.into_iter().zip(fetched) {
+                if self.hot.contains(&key) {
+                    unkept.insert(key, record);
+                } else {
+                    read.records.insert(key, record);
+                }
+            }
         }
         let read = self.read();
-        Ok(keys
-            .iter()
-            .map(|key| read.records.get(key).cloned().flatten())
-            .collect())
+        let mut records: Vec<Option<Record>> = Vec::with_capacity(keys.len());
+        let mut handed: HashMap<&EntityKey<'static>, usize> = HashMap::new();
+        for key in &keys {
+            let record = if let Some(&index) = handed.get(key) {
+                records[index].clone()
+            } else if let Some(record) = unkept.remove(key) {
+                handed.insert(key, records.len());
+                record
+            } else {
+                read.records.get(key).cloned().flatten()
+            };
+            records.push(record);
+        }
+        Ok(records)
     }
 
     async fn read_projection_states(
@@ -128,6 +149,7 @@ impl<S: Storage> Engine<S> {
     pub fn resume_pass_reads(&self, set: PassReadSet) -> PassReads<'_, S> {
         PassReads {
             storage: &self.storage,
+            hot: &self.hot,
             read: Mutex::new(set),
         }
     }
