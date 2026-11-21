@@ -1,5 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { CacheHost } from '@graphql-cache/index';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { Telemetry } from '@macro-inc/observability';
 import {
   ChannelChangesDocument,
@@ -82,6 +83,7 @@ async function runCatchUp(
 ): Promise<ChannelCatchUp> {
   return Telemetry.span('channel.catch_up', async (span) => {
     span.setAttr('channel.id', channelId);
+    const generation = cacheSessionGeneration.capture();
     const from = await storedSeq(host, channelId);
     if (from === null) {
       span.setAttr('catch_up.outcome', 'not-held');
@@ -97,16 +99,19 @@ async function runCatchUp(
         delta.activities.length +
         delta.removedIds.length;
       if (delta.seq !== after || delta.removedIds.length > 0) {
-        const committed = await host.channelTimelineCommit({
-          channelId,
-          removedKeys: delta.removedIds.flatMap((id) => [
-            channelMessageKey(id),
-            channelActivityKey(id),
-          ]),
-          ...(delta.seq !== after && {
-            seq: { kind: 'advance', from: after, to: delta.seq },
-          }),
-        });
+        const committed = await host.channelTimelineCommit(
+          {
+            channelId,
+            removedKeys: delta.removedIds.flatMap((id) => [
+              channelMessageKey(id),
+              channelActivityKey(id),
+            ]),
+            ...(delta.seq !== after && {
+              seq: { kind: 'advance', from: after, to: delta.seq },
+            }),
+          },
+          generation
+        );
         if (committed.kind !== 'committed') break;
         // A page fetched meanwhile lowered the sequence: replay from there.
         if (committed.channelSeq === null) break;
@@ -122,7 +127,7 @@ async function runCatchUp(
           : { kind: 'applied', from, seq: after };
       }
     }
-    await host.channelTimelineCommit({ channelId, reset: true });
+    await host.channelTimelineCommit({ channelId, reset: true }, generation);
     span.setAttr('catch_up.outcome', 'reset');
     return { kind: 'reset' };
   });

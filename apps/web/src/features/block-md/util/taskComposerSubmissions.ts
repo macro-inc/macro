@@ -69,18 +69,28 @@ export function clearTaskSubmission(userId: string, id: string) {
   localStorage.removeItem(taskSubmissionDraftStorage(userId, id).storageKey);
 }
 
-/** Other composers must observe a submission completing after its host closes. */
+/** Recovery lists exclude live attempts but retain durable input after an unconfirmed result. */
 export function createTaskSubmissionList(
   client: QueryClient,
   userId: string,
   contextKey?: string
 ) {
-  const [submissions, setSubmissions] = createSignal(
-    loadTaskSubmissions(userId, contextKey)
-  );
+  const cache = client.getMutationCache();
+  const recoverable = () =>
+    loadTaskSubmissions(userId, contextKey).filter(
+      (submission) =>
+        !cache.find({
+          mutationKey: taskSubmissionKey(userId, submission.id),
+          exact: true,
+          // A mutation is added before execute marks it pending.
+          predicate: ({ state }) =>
+            state.status === 'idle' || state.status === 'pending',
+        })
+    );
+  const [submissions, setSubmissions] = createSignal(recoverable());
   onCleanup(
-    client.getMutationCache().subscribe(() => {
-      setSubmissions(loadTaskSubmissions(userId, contextKey));
+    cache.subscribe(() => {
+      setSubmissions(recoverable());
     })
   );
   return submissions;
@@ -97,10 +107,8 @@ export async function submitTaskDraft<T extends { documentId: string }>(
   return Telemetry.span('task.compose.submit', async (span) => {
     span.setAttr('task.draft_id', submission.id);
     // Do not send when this fails: closing the app would otherwise lose the input.
-    localStorage.setItem(
-      storageKey(submission.userId, submission.id),
-      JSON.stringify(submission)
-    );
+    const key = storageKey(submission.userId, submission.id);
+    localStorage.setItem(key, JSON.stringify(submission));
     let confirmed: T | undefined;
     const confirm = (created: T) => {
       confirmed = created;

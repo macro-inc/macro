@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
+import type { PropertyApiValues } from '@property/types';
 import { QueryClient } from '@tanstack/solid-query';
-import { createRoot } from 'solid-js';
+import { createComputed, createRoot } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
   loadTaskComposerDraft,
@@ -63,6 +64,46 @@ it('saves before sending and recovers a pending request after a restart and prol
   await pending;
   expect(loadTaskSubmissions('alice')).toHaveLength(1);
 });
+
+it.each([true, false, null])(
+  'recovers DATE_RANGE properties and template defaults with allDay=%s',
+  async (allDay) => {
+    const range: PropertyApiValues = {
+      valueType: 'DATE_RANGE',
+      value:
+        allDay === null
+          ? null
+          : {
+              allDay,
+              start: new Date('2026-10-22T00:00:00Z'),
+              end: new Date('2026-10-23T00:00:00Z'),
+            },
+    };
+    const next: TaskComposerSubmission = {
+      ...submission,
+      draft: {
+        ...submission.draft,
+        propertyValues: { range },
+        templateBaseline: {
+          propertyIds: ['range'],
+          propertyDefaults: { range },
+          descriptionMarkdown: '',
+        },
+      },
+    };
+    saveTaskComposerDraft(next.draft);
+    expect(loadTaskComposerDraft()?.propertyValues.range).toEqual(range);
+    expect(
+      loadTaskComposerDraft()?.templateBaseline?.propertyDefaults.range
+    ).toEqual(range);
+    await submitTaskDraft(client, next, async () => null);
+    const recovered = loadTaskSubmissions('alice')[0];
+    expect(recovered?.draft.propertyValues.range).toEqual(range);
+    expect(recovered?.draft.templateBaseline?.propertyDefaults.range).toEqual(
+      range
+    );
+  }
+);
 
 it('late success removes only its own submission and leaves newer composer input intact', async () => {
   const response = Promise.withResolvers<{ documentId: string }>();
@@ -156,16 +197,101 @@ it('preserves confirmed success when storage cleanup fails', async () => {
   ).toEqual({ documentId: 'created' });
 });
 
-it('removes a completed request from a composer opened while it was pending', async () => {
+it('keeps an active request durable without offering recovery in a newly opened composer', async () => {
   const response = Promise.withResolvers<{ documentId: string }>();
   const pending = submitTaskDraft(client, submission, () => response.promise);
   const view = createRoot((dispose) => ({
     dispose,
     drafts: createTaskSubmissionList(client, 'alice'),
   }));
-  expect(view.drafts().map((draft) => draft.id)).toEqual(['first']);
+  expect(view.drafts()).toEqual([]);
+  expect(loadTaskSubmissions('alice').map((draft) => draft.id)).toEqual([
+    'first',
+  ]);
   response.resolve({ documentId: 'created' });
   await pending;
+  expect(view.drafts()).toEqual([]);
+  view.dispose();
+});
+
+it.each(['none', 'saved'] as const)(
+  'does not publish an active submission as recovery text with %s template selection',
+  async (kind) => {
+    const snapshots: string[][] = [];
+    const view = createRoot((dispose) => {
+      const drafts = createTaskSubmissionList(client, 'alice');
+      createComputed(() => snapshots.push(drafts().map((draft) => draft.id)));
+      return { dispose, drafts };
+    });
+    const input: TaskComposerSubmission = {
+      ...submission,
+      draft: {
+        ...submission.draft,
+        templateSelection:
+          kind === 'none'
+            ? { kind: 'none' }
+            : {
+                kind: 'saved',
+                template: {
+                  id: 'template-1',
+                  name: 'Checklist',
+                  revision: 1,
+                  teamId: null,
+                  contents: {
+                    propertyIds: ['due'],
+                    propertyDefaults: submission.draft.propertyValues,
+                    descriptionMarkdown: 'Keep this description',
+                  },
+                },
+              },
+      },
+    };
+    const started = Promise.withResolvers<void>();
+    const response = Promise.withResolvers<{ documentId: string }>();
+    const pending = submitTaskDraft(client, input, () => {
+      started.resolve();
+      return response.promise;
+    });
+    await started.promise;
+    expect(view.drafts()).toEqual([]);
+    expect(loadTaskSubmissions('alice')[0].draft.content).toBe(
+      'Keep this description'
+    );
+    response.resolve({ documentId: 'created' });
+    await pending;
+    expect(view.drafts()).toEqual([]);
+    expect(snapshots.every((ids) => ids.length === 0)).toBe(true);
+    view.dispose();
+  }
+);
+
+it('offers an unconfirmed result only after the active attempt settles and hides retries', async () => {
+  const view = createRoot((dispose) => ({
+    dispose,
+    drafts: createTaskSubmissionList(client, 'alice'),
+  }));
+  const started = Promise.withResolvers<void>();
+  const response = Promise.withResolvers<null>();
+  const pending = submitTaskDraft(client, submission, () => {
+    started.resolve();
+    return response.promise;
+  });
+  await started.promise;
+  expect(view.drafts()).toEqual([]);
+  response.resolve(null);
+  await pending;
+  expect(view.drafts()[0].draft.title).toBe('Offline task');
+
+  const retryStarted = Promise.withResolvers<void>();
+  const retryResponse = Promise.withResolvers<{ documentId: string }>();
+  const retry = submitTaskDraft(client, submission, () => {
+    retryStarted.resolve();
+    return retryResponse.promise;
+  });
+  await retryStarted.promise;
+  expect(view.drafts()).toEqual([]);
+  retryResponse.resolve({ documentId: 'created' });
+  await retry;
   expect(view.drafts()).toEqual([]);
   view.dispose();
 });

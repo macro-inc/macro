@@ -10,16 +10,9 @@ import {
 } from '@app/components/view-shell';
 import { CreateMenuItem } from '@app/components/view-shell/CreateMenuItem';
 import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
-import {
-  type EntityActionListState,
-  type EntityActionViewContext,
-  toEntityActionListState,
-} from '@app/features/next-soup/actions';
+import { toEntityActionListState } from '@app/features/next-soup/actions';
 import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
-import {
-  MaybeSoupEntityActionDrawerManager,
-  SoupEntityContextMenu,
-} from '@app/features/soup';
+import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -36,13 +29,7 @@ import { Key } from '@solid-primitives/keyed';
 import { makePersisted } from '@solid-primitives/storage';
 import { cn, Dropdown } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
-import {
-  createEffect,
-  createSignal,
-  createUniqueId,
-  type JSX,
-  Show,
-} from 'solid-js';
+import { createEffect, createSignal, createUniqueId, Show } from 'solid-js';
 import type { AgentKind } from '../core/agent-kind';
 import {
   activeFilterCount,
@@ -62,6 +49,7 @@ import {
 } from '../core/recent-conversations';
 import { AGENTS_TOUR } from '../tour';
 import { AgentSessionListItem } from '../views/AgentSessionListItem';
+import { ConversationContextMenu } from '../views/shared/conversation-context-menu/conversation-context-menu';
 import { AgentSessionListSkeleton } from './AgentSessionListSkeleton';
 import {
   ConversationListControls,
@@ -73,13 +61,6 @@ const FILTERED_PAGE_FILL = 20;
 
 /** Rows from the end of the list at which moving down loads the next page. */
 const LOAD_MORE_DISTANCE = 3;
-
-const AGENTS_ACTION_VIEW_CONTEXT: EntityActionViewContext = {
-  supportsMarkDone: false,
-  supportsOpenInNewSplit: true,
-  senderBucket: undefined,
-};
-
 export type AgentsSidebarProps = Omit<
   ConversationListControlsProps,
   'filters' | 'grouping'
@@ -109,43 +90,13 @@ export type AgentsSidebarProps = Omit<
   onLoadMore: () => void;
 };
 
-/**
- * One listed occurrence of a conversation: an open PR also lists among the
- * conversations, so each section keys its own rows.
- */
+/** Legacy Home sections keep independent row keys for keyboard focus. */
 type ConversationRow = {
   key: string;
   conversation: AgentConversationEntity;
 };
 
 type ConversationSection = 'pull-request' | 'conversation' | 'archived';
-
-function ConversationContextMenu(props: {
-  conversation: AgentConversationEntity;
-  rowKey: string;
-  list: EntityActionListState;
-  children: JSX.Element;
-}) {
-  return (
-    <SoupEntityContextMenu
-      entity={props.conversation}
-      list={props.list}
-      selectedEntities={() => []}
-      viewContext={AGENTS_ACTION_VIEW_CONTEXT}
-      as="div"
-      // The nav is a fixed-height flex column, so the trigger's default
-      // `h-full` would split that height between the rows; keep rows content-sized.
-      class="block h-auto w-full shrink-0"
-      onOpenChange={(open) => {
-        if (!open) return;
-        props.list.focus.set(props.rowKey);
-      }}
-    >
-      {props.children}
-    </SoupEntityContextMenu>
-  );
-}
-
 function Row(props: {
   id: string;
   conversation: AgentConversationEntity;
@@ -346,7 +297,7 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
       {(row) => (
         <ConversationContextMenu
           conversation={row().conversation}
-          rowKey={row().key}
+          focusKey={row().key}
           list={actionList}
         >
           <Row
@@ -396,7 +347,11 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
 
   return (
     <MaybeSoupEntityActionDrawerManager>
-      <ViewSidebar.Root ref={sidebar} aria-label="Agents navigation">
+      <ViewSidebar.Root
+        reorderId="agents"
+        ref={sidebar}
+        aria-label="Agents navigation"
+      >
         <ViewSidebar.Header
           searchLabel="Search conversations"
           searchOpen={searchOpen() || props.search.trim().length > 0}
@@ -438,39 +393,47 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
         >
           <SidebarRoutineSuggestions surface="agents" />
           <Show when={!isTouchDevice()}>
-            <ViewSidebar.Nav aria-label="Agent tools">
-              <ViewSidebar.Item
-                active={props.activePage === 'agents'}
-                onClick={() => props.onOpenPage('agents')}
-                ref={tourTarget(AGENTS_TOUR.rosterNav)}
-              >
-                <ViewSidebar.Icon>
-                  <AgentIcon />
-                </ViewSidebar.Icon>
-                <span>Agents</span>
-              </ViewSidebar.Item>
-              <ViewSidebar.Item
-                active={props.activePage === 'routines'}
-                onClick={() => props.onOpenPage('routines')}
-              >
-                <ViewSidebar.Icon>
-                  <RoutineIcon />
-                </ViewSidebar.Icon>
-                <span>Routines</span>
-              </ViewSidebar.Item>
-              <ViewSidebar.Item
-                active={props.activePage === 'connections'}
-                onClick={() => props.onOpenPage('connections')}
-              >
-                <ViewSidebar.Icon>
-                  <PlugIcon />
-                </ViewSidebar.Icon>
-                <span>Connections</span>
-              </ViewSidebar.Item>
-            </ViewSidebar.Nav>
+            <ViewSidebar.Section
+              id="tools"
+              label={t('viewMenus.agentViews')}
+              headerless
+            >
+              <ViewSidebar.Nav aria-label="Agent tools">
+                <ViewSidebar.Item
+                  active={props.activePage === 'agents'}
+                  onClick={() => props.onOpenPage('agents')}
+                  ref={tourTarget(AGENTS_TOUR.rosterNav)}
+                >
+                  <ViewSidebar.Icon>
+                    <AgentIcon />
+                  </ViewSidebar.Icon>
+                  <span>Agents</span>
+                </ViewSidebar.Item>
+                <ViewSidebar.Item
+                  active={props.activePage === 'routines'}
+                  onClick={() => props.onOpenPage('routines')}
+                >
+                  <ViewSidebar.Icon>
+                    <RoutineIcon />
+                  </ViewSidebar.Icon>
+                  <span>Routines</span>
+                </ViewSidebar.Item>
+                <ViewSidebar.Item
+                  active={props.activePage === 'connections'}
+                  onClick={() => props.onOpenPage('connections')}
+                >
+                  <ViewSidebar.Icon>
+                    <PlugIcon />
+                  </ViewSidebar.Icon>
+                  <span>Connections</span>
+                </ViewSidebar.Item>
+              </ViewSidebar.Nav>
+            </ViewSidebar.Section>
           </Show>
           <Show when={agentUpdates().enabled && openPullRequests().length > 0}>
             <CollapsibleSection.Root
+              sectionId="open-pull-requests"
+              sectionLabel="Open PRs"
               open={openPullRequestsOpen()}
               onOpenChange={setOpenPullRequestsOpen}
               class={cn(
@@ -498,6 +461,8 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
             </CollapsibleSection.Root>
           </Show>
           <CollapsibleSection.Root
+            sectionId="conversations"
+            sectionLabel="Conversations"
             open={conversationsOpen()}
             onOpenChange={setConversationsOpen}
             class={cn(
@@ -599,6 +564,8 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
           </CollapsibleSection.Root>
           <Show when={archived().length}>
             <CollapsibleSection.Root
+              sectionId="archived"
+              sectionLabel="Archived"
               open={archivedOpen()}
               onOpenChange={setArchivedOpen}
               as="section"

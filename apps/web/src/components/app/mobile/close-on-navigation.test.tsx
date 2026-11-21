@@ -10,7 +10,7 @@ import {
 import { batch, createSignal, Show } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { closeSheetsForNavigation } from './close-on-navigation';
-import { MobileDrawer } from './MobileDrawer';
+import { type DrawerSnapPoint, MobileDrawer } from './MobileDrawer';
 
 /**
  * What the active pane shows. `view` names the mounted view: navigating to
@@ -190,6 +190,35 @@ it('leaves the sheet open when its owner refuses, until the next navigation', ()
   setPage({ split: 'front', view: 'notes' });
   expect(onOpenChange).toHaveBeenCalledTimes(3);
   expect(onOpenChange).toHaveBeenLastCalledWith(false);
+});
+
+it('preserves the controlled half-height snap when navigation dismissal is refused', () => {
+  const [point, setPoint] = createSignal<DrawerSnapPoint>(0.5);
+  const onOpenChange = vi.fn();
+  let drawer: ReturnType<typeof MobileDrawer.useContext> | undefined;
+  const Content = () => {
+    drawer = MobileDrawer.useContext();
+    return <MobileDrawer.Content aria-label="Snapping sheet" />;
+  };
+  render(() => (
+    <MobileDrawer
+      open
+      snapPoints={[0, 0.5, 1]}
+      defaultSnapPoint={0.5}
+      activeSnapPoint={point()}
+      onActiveSnapPointChange={setPoint}
+      onOpenChange={onOpenChange}
+    >
+      <Content />
+    </MobileDrawer>
+  ));
+  expect(drawer?.activeSnapPoint()).toBe(0.5);
+
+  setPage({ split: 'channel-pane', view: 'general' });
+
+  expect(onOpenChange).toHaveBeenLastCalledWith(false);
+  expect(drawer?.activeSnapPoint()).toBe(0.5);
+  expect(screen.getByRole('dialog', { name: 'Snapping sheet' })).toBeTruthy();
 });
 
 it('keeps a sheet that opts out', async () => {

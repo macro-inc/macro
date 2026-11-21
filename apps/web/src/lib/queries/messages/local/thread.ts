@@ -6,6 +6,7 @@ import {
   readRecordsByKeys,
   selectRecords,
 } from '@graphql-cache/index';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { Telemetry } from '@macro-inc/observability';
 import {
   ChannelMessageDocument,
@@ -119,6 +120,7 @@ async function fetchServerThread(
   rootId: string,
   fetchPage: FetchChannelThreadPage
 ): Promise<MessageThread | undefined> {
+  const generation = cacheSessionGeneration.capture();
   const first = await fetchPage({
     channelId,
     rootId,
@@ -143,17 +145,20 @@ async function fetchServerThread(
       cursor = direction === 'before' ? page.olderCursor : page.newerCursor;
     }
   }
-  await host.channelTimelineCommit({
-    channelId,
-    coverage: [
-      {
-        threadRootId: rootId,
-        start: CHANNEL_TIMELINE_START,
-        end: CHANNEL_TIMELINE_HEAD,
-      },
-    ],
-    seq: { kind: 'lower', seq },
-  });
+  await host.channelTimelineCommit(
+    {
+      channelId,
+      coverage: [
+        {
+          threadRootId: rootId,
+          start: CHANNEL_TIMELINE_START,
+          end: CHANNEL_TIMELINE_HEAD,
+        },
+      ],
+      seq: { kind: 'lower', seq },
+    },
+    generation
+  );
   // Sort keys compare bytewise in display order.
   const ordered = [...replies.keys()]
     .sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))

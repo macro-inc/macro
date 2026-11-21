@@ -1035,11 +1035,17 @@ export const settings = {
       surface: 'SX-06',
       fn: ['F-006'],
       state:
-        'toast: "Failed to add inbox" (mobile app) / "Failed to open the browser to connect your account. Please try again." (desktop app)',
-      trigger: 'native link completion failed / system browser failed to open',
-      source: ['src/lib/core/email-link/index.ts'],
+        'toast: "Failed to add inbox", "This address is connected through a different Microsoft account" or "Something changed, try again" (mobile app) / "Failed to open the browser to connect your account. Please try again." (desktop app)',
+      trigger:
+        'native link completion failed (IdentityConflict and Changed have their own toast) / system browser failed to open',
+      source: [
+        'src/lib/core/email-link/index.ts',
+        'src/lib/core/email-link/link-outcome.ts',
+      ],
       toasts: [
         'src/lib/core/email-link/index.ts#Failed to add inbox',
+        'src/lib/core/email-link/index.ts#INBOX_IDENTITY_CONFLICT_MESSAGE',
+        'src/lib/core/email-link/index.ts#INBOX_CHANGED_MESSAGE',
         'src/lib/core/email-link/index.ts#Failed to open the browser to connect your account. Please try again.',
       ],
     },
@@ -1092,10 +1098,13 @@ export const settings = {
       surface: 'SX-08',
       fn: ['F-006', 'F-174'],
       state:
-        'Toasts "Gmail access was not granted. Please allow all requested permissions and try again.", "A professional subscription is required to add another inbox.", "Failed to add inbox", "Failed to finish connecting your account. Please try again from Settings.", "Failed to connect your account. Please try again.", "Missing link id in callback URL"',
+        'Toasts "Gmail access was not granted. Please allow all requested permissions and try again.", "A professional subscription is required to add another inbox.", "This address is connected through a different Microsoft account", "Something changed, try again", "Failed to add inbox", "Failed to finish connecting your account. Please try again from Settings.", "Failed to connect your account. Please try again.", "Missing link id in callback URL"',
       trigger:
-        'init errors (NoGmailGrant, PaymentRequired, other), thrown error, email_link_error other than cancelled, missing link_id',
-      source: ['src/features/auth/EmailAuth.tsx'],
+        'init errors (NoGmailGrant, PaymentRequired, IdentityConflict, Changed, other), thrown error, email_link_error other than cancelled, missing link_id',
+      source: [
+        'src/features/auth/EmailAuth.tsx',
+        'src/lib/core/email-link/link-outcome.ts',
+      ],
     },
     {
       id: 'STX-027',

@@ -1,3 +1,4 @@
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { Button, cn } from '@ui';
 import {
@@ -124,7 +125,7 @@ export function ListHeaderSearch(props: {
     <div
       ref={props.ref}
       class={cn(
-        !expanded() && 'w-8 shrink-0',
+        !expanded() && 'w-8 shrink-0 touch:w-10',
         expanded() && !props.wide && 'w-56 max-w-[40cqw] min-w-24',
         expanded() && props.wide && 'min-w-24 flex-1'
       )}
@@ -136,18 +137,20 @@ export function ListHeaderSearch(props: {
             aria-label={props.label}
             tooltip={props.label}
             ref={trigger}
-            variant="secondary"
-            size="icon-md"
+            variant={isTouchDevice() ? 'ghost' : 'secondary'}
+            size={isTouchDevice() ? 'icon-lg' : 'icon-md'}
+            class="touch:island"
             aria-expanded="false"
             onClick={focus}
           >
-            <SearchIcon class="size-4" />
+            <SearchIcon class="size-4 touch:size-6" />
           </Button>
         }
       >
         <SearchBar
           ref={input}
           size="sm"
+          class="touch:island touch:h-10"
           label={props.label}
           placeholder={props.placeholder ?? props.label}
           value={props.value}

@@ -8,6 +8,7 @@ import {
   readRecordsByKeys,
   selectRecords,
 } from '@graphql-cache/index';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { type Span, Telemetry } from '@macro-inc/observability';
 import {
   ChannelMessageFieldsFragmentDoc,
@@ -355,6 +356,8 @@ async function loadPage(
   span: Span
 ): Promise<LoadedChannelPage | ChannelPageUnavailable> {
   const cacheHost = host as CacheHost;
+  // The session the page is read under: a later one must not store it.
+  const generation = cacheSessionGeneration.capture();
   const pendingKey = JSON.stringify(cacheArgs(request));
   const latest =
     request.before === undefined &&
@@ -439,12 +442,15 @@ async function loadPage(
       return null;
     }
     markChannelCacheAnswered(cacheHost);
-    const committed = await host.channelTimelineCommit({
-      channelId: request.channelId,
-      ...(coverage && { coverage: [coverage] }),
-      seq: { kind: 'lower', seq: server.seq },
-      touchedAtMs: (options.now ?? Date.now)(),
-    });
+    const committed = await host.channelTimelineCommit(
+      {
+        channelId: request.channelId,
+        ...(coverage && { coverage: [coverage] }),
+        seq: { kind: 'lower', seq: server.seq },
+        touchedAtMs: (options.now ?? Date.now)(),
+      },
+      generation
+    );
     if (committed.kind !== 'committed') return held.storedSeq;
     if (latest && coverage) heldChannels.add(request.channelId);
     return committed.channelSeq;
