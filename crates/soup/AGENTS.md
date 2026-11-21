@@ -94,7 +94,8 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   reads the viewer's pending notifications, so its cost stays flat however
   many they have (`a_probe_costs_the_same_however_many_notifications_are_pending`;
   past Postgres's JIT threshold a probe took hundreds of milliseconds).
-  Normal pages build byte-identical SQL (`only_a_probe_changes_the_query`).
+  A page builds exactly `query.sql` with the page fragments, and a probe
+  reads `pending.sql` emptied by `AND FALSE` (`only_a_probe_changes_the_query`).
 
 - Project grouping uses the system Project property (initiative membership),
   including canonical TASK assignments, rather than legacy folder `project_id`.
