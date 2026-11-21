@@ -443,7 +443,7 @@ fn concrete_typed(path: &str) -> String {
     path.split('/')
         .map(|segment| match segment {
             word if WORD_PLACEHOLDERS.contains(&word) => "document",
-            id if id.starts_with('{') => "01a1",
+            id if id.starts_with('{') => "0192f1a0-0000-7000-8000-000000000001",
             literal => literal,
         })
         .collect::<Vec<_>>()
@@ -474,18 +474,6 @@ fn the_no_send_scope_classifies_every_write_in_the_specs() {
         }
         reviewed.insert(format!("{service} {line}"));
     }
-    let concrete = |path: &str| {
-        path.split('/')
-            .map(|segment| {
-                if segment.starts_with('{') {
-                    "x"
-                } else {
-                    segment
-                }
-            })
-            .collect::<Vec<_>>()
-            .join("/")
-    };
     let scope = SessionScope::NoSend;
     let mut unclassified = Vec::new();
     let mut seen = std::collections::BTreeSet::new();
@@ -591,10 +579,13 @@ fn a_job_is_refused_whatever_its_lists_do_not_name() {
         ("POST", "/notification/v1/device/register"),
         ("POST", "/device/register"),
         ("DELETE", "/notification/device/unregister"),
-        ("POST", "/agent-harness/preview/agent-sessions/01a1/open"),
         (
             "POST",
-            "/agent-harness/agent-git/01a1/repo.git/git-upload-pack",
+            "/agent-harness/preview/agent-sessions/0192f1a0-0000-7000-8000-000000000001/open",
+        ),
+        (
+            "POST",
+            "/agent-harness/agent-git/0192f1a0-0000-7000-8000-000000000001/repo.git/git-upload-pack",
         ),
         // Fetches a caller-chosen URL from Macro's servers.
         ("GET", "/unfurl/proxy"),
@@ -603,52 +594,112 @@ fn a_job_is_refused_whatever_its_lists_do_not_name() {
         ("GET", "/agent-harness/agent-repositories/branches"),
         // Credentials and sign-in.
         ("GET", "/auth/jwt/macro_api_token"),
-        ("GET", "/dss/bots/01a1/tokens"),
-        ("GET", "/dss/passwords/teams/01a1/items"),
+        (
+            "GET",
+            "/dss/bots/0192f1a0-0000-7000-8000-000000000001/tokens",
+        ),
+        (
+            "GET",
+            "/dss/passwords/teams/0192f1a0-0000-7000-8000-000000000001/items",
+        ),
         // Writes a job doesn't make, sends included.
         ("POST", "/email/messages"),
         ("POST", "/scheduled-actions"),
         ("PATCH", "/email/settings"),
-        ("PATCH", "/dss/forms/01a1"),
-        ("PATCH", "/dss/webhook/webhooks/01a1"),
-        ("DELETE", "/dss/documents/01a1/permanent"),
+        ("PATCH", "/dss/forms/0192f1a0-0000-7000-8000-000000000001"),
+        (
+            "PATCH",
+            "/dss/webhook/webhooks/0192f1a0-0000-7000-8000-000000000001",
+        ),
+        (
+            "DELETE",
+            "/dss/documents/0192f1a0-0000-7000-8000-000000000001/permanent",
+        ),
         // Drafts can go into an inbox someone delegated; team-wide CRM
         // records and tags; GETs that change something.
         ("POST", "/email/drafts"),
         ("POST", "/dss/crm/companies"),
         ("POST", "/properties/tags"),
-        ("GET", "/auth/team/join/01a1"),
-        ("GET", "/dss/call/01a1"),
-        ("POST", "/dss/chats/01a1/tool/call"),
+        (
+            "GET",
+            "/auth/team/join/0192f1a0-0000-7000-8000-000000000001",
+        ),
+        ("GET", "/dss/call/0192f1a0-0000-7000-8000-000000000001"),
+        (
+            "POST",
+            "/dss/chats/0192f1a0-0000-7000-8000-000000000001/tool/call",
+        ),
         ("POST", "/items/soup/graphql"),
         // Changes to existing items, the owner's own included: an item's
         // audience would read what a job writes there.
-        ("PUT", "/dss/documents/01a1/markdown"),
-        ("PUT", "/properties/entities/document/01a1/02b2"),
-        ("PATCH", "/email/threads/01a1/archived"),
-        ("POST", "/dss/databases/01a1/ops"),
-        ("DELETE", "/dss/projects/01a1"),
-        ("PUT", "/agent-harness/agent-sessions/01a1/task"),
-        ("PUT", "/agent-harness/agent-sessions/01a1/pull-requests"),
+        (
+            "PUT",
+            "/dss/documents/0192f1a0-0000-7000-8000-000000000001/markdown",
+        ),
+        (
+            "PUT",
+            "/properties/entities/document/0192f1a0-0000-7000-8000-000000000001/0192f1a0-0000-7000-8000-000000000002",
+        ),
+        (
+            "PATCH",
+            "/email/threads/0192f1a0-0000-7000-8000-000000000001/archived",
+        ),
+        (
+            "POST",
+            "/dss/databases/0192f1a0-0000-7000-8000-000000000001/ops",
+        ),
+        (
+            "DELETE",
+            "/dss/projects/0192f1a0-0000-7000-8000-000000000001",
+        ),
+        (
+            "PUT",
+            "/agent-harness/agent-sessions/0192f1a0-0000-7000-8000-000000000001/task",
+        ),
+        (
+            "PUT",
+            "/agent-harness/agent-sessions/0192f1a0-0000-7000-8000-000000000001/pull-requests",
+        ),
         // An OPTIONS request with a job's token is not a browser preflight.
         ("OPTIONS", "/notification/device/register"),
-        ("OPTIONS", "/dss/documents/01a1"),
-        ("OPTIONS", "/agent-harness/preview/01a1/x"),
+        (
+            "OPTIONS",
+            "/dss/documents/0192f1a0-0000-7000-8000-000000000001",
+        ),
+        (
+            "OPTIONS",
+            "/agent-harness/preview/0192f1a0-0000-7000-8000-000000000001/x",
+        ),
         // Typed placeholders: a word is no id, so an unannotated route that
         // differs from a listed one by a literal is refused.
-        ("GET", "/dss/documents/01a1/duplicates"),
-        ("GET", "/dss/documents/01a1/cached_snapshot_url"),
+        (
+            "GET",
+            "/dss/documents/0192f1a0-0000-7000-8000-000000000001/duplicates",
+        ),
+        (
+            "GET",
+            "/dss/documents/0192f1a0-0000-7000-8000-000000000001/cached_snapshot_url",
+        ),
         ("GET", "/agent-harness/agent-sessions/unlisted"),
     ] {
         assert!(!scope.allows(method, path), "{method} {path}");
     }
     for (method, path) in [
-        ("GET", "/dss/documents/01a1"),
-        ("HEAD", "/dss/documents/01a1"),
-        ("GET", "/properties/entities/document/01a1"),
+        ("GET", "/dss/documents/0192f1a0-0000-7000-8000-000000000001"),
+        (
+            "HEAD",
+            "/dss/documents/0192f1a0-0000-7000-8000-000000000001",
+        ),
+        (
+            "GET",
+            "/properties/entities/document/0192f1a0-0000-7000-8000-000000000001",
+        ),
         ("POST", "/search"),
         ("POST", "/scheduled-actions/check"),
-        ("POST", "/agent-harness/agent-sessions/01a1/reviews"),
+        (
+            "POST",
+            "/agent-harness/agent-sessions/0192f1a0-0000-7000-8000-000000000001/reviews",
+        ),
         ("PATCH", "/notification/v1/user_notifications/bulk/done"),
     ] {
         assert!(scope.allows(method, path), "{method} {path}");

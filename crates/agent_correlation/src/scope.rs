@@ -571,18 +571,32 @@ const WORD_PLACEHOLDERS: &[&str] = &[
 ];
 
 /// [`matches`] for a job's lists, with typed placeholders: an id
-/// placeholder matches only a segment that looks like an id (a digit, or a
-/// user id's `|` or `@`), so a template never admits a route that differs
-/// from it by a literal word, such as an unannotated
-/// `/documents/{id}/duplicates` under `/documents/{id}/{version}`.
+/// placeholder matches only a segment shaped like an id (a UUID, a user or
+/// bot id with `|` or `@`, a number, `me`, or a long opaque token with a
+/// digit), so a template never admits a route that differs from it by a
+/// literal word, such as an unannotated `/documents/{id}/duplicates` under
+/// `/documents/{id}/{version}` or a short `/documents/{id}/v2`.
 fn job_matches(path: &str, template: &str) -> bool {
     matches_with(path, template, |placeholder, segment| {
         if WORD_PLACEHOLDERS.contains(&placeholder) {
-            lazy_regex::regex_is_match!(r"^[A-Za-z0-9_-]+$", segment)
+            !segment.is_empty() && !segment.contains('/')
         } else {
-            lazy_regex::regex_is_match!(r"^[^/]*[0-9|@][^/]*$", segment)
+            id_like(segment)
         }
     })
+}
+
+/// Whether `segment` is shaped like an id rather than a route's word.
+fn id_like(segment: &str) -> bool {
+    segment == "me"
+        || lazy_regex::regex_is_match!(
+            r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            segment
+        )
+        || lazy_regex::regex_is_match!(r"^[^/]*[|@][^/]*$", segment)
+        || lazy_regex::regex_is_match!(r"^[0-9]+$", segment)
+        || (lazy_regex::regex_is_match!(r"^[A-Za-z0-9_-]{12,}$", segment)
+            && segment.chars().any(|character| character.is_ascii_digit()))
 }
 
 fn matches_with(path: &str, template: &str, placeholder: impl Fn(&str, &str) -> bool) -> bool {

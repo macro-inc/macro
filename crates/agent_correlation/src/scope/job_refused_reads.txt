@@ -32,6 +32,8 @@ GET /email/attachments/{id}/document_id  # uploads the attachment as a document 
 GET /opens/{token}  # an open-tracking pixel: records an open
 
 [storage]
+GET /harness-pairings/{code}  # a pairing code for connecting a computer
+GET /foreign_entity/by_source/{source}/{foreign_entity_id}  # its id is a wildcard path (owner/repo/pull/12) no typed placeholder can bound
 GET /github/install-sync  # syncs a GitHub installation
 GET /call/{channel_id}  # creates a call
 GET /bots/{bot_id}/tokens  # bot credentials

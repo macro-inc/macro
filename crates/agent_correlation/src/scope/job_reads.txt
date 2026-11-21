@@ -302,7 +302,6 @@ GET /external-chats/{chat_id}/messages/{message_id}
 GET /external-chats/{chat_id}/permissions
 GET /external-chats/{chat_id}/sends
 GET /favorites
-GET /foreign_entity/by_source/{source}/{foreign_entity_id}
 GET /foreign_entity/{id}
 GET /forms
 GET /forms/accessible
@@ -315,7 +314,6 @@ GET /github_pull_requests/facets
 GET /github_pull_requests/{id}
 GET /github_pull_requests/{id}/changes
 GET /github_pull_requests/{id}/changes/patch
-GET /harness-pairings/{code}
 GET /harnesses
 GET /harnesses/directory
 GET /harnesses/me

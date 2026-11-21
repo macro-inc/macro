@@ -5,6 +5,9 @@
 # items the session creates and its owner decides on), the owner's own
 # notification inbox, and a tool-free AI completion. It changes no existing
 # item, shared or not: `a_job_writes_only_its_session_and_its_owners_inbox`.
+# Its reviews and views go only into its own session (the router refuses
+# another session), where whoever the session is shared with reads them, as
+# they read the job's result there anyway.
 # Everything not listed here or in job_reads.txt is refused.
 
 [agent-harness]
