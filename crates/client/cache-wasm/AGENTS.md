@@ -45,6 +45,11 @@ wasm-bindgen shell exposing `cache-core` + `cache-turso` + `turso-opfs` as a
 - Real coverage is wasm32: `cargo test --target wasm32-unknown-unknown -p cache-wasm`
   (see `crates/client/turso-opfs/README.md` for the `wasm-bindgen-test` pattern
   this crate also follows).
+- Browser upgrade cost: serve the directory `CACHE_MIGRATION_OUT` filled (see
+  `cache-turso`'s Checks) with CORS, then
+  `CACHE_MIGRATION_URL=<url of one tier> cargo test --release --target wasm32-unknown-unknown -p cache-wasm --lib -- carry_forward_and_upgrade_cost --include-ignored --nocapture`
+  times a reopen, the carry-forward alone, and the carry-forward with the 11 to 12
+  upgrade over real OPFS.
 
 ## Gotchas
 

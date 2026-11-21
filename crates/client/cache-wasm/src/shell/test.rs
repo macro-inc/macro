@@ -11,6 +11,7 @@ wasm_bindgen_test_configure!(run_in_dedicated_worker);
 
 mod hydration_scope;
 mod mail_projection;
+mod migration_cost;
 mod people;
 
 #[wasm_bindgen_test]
