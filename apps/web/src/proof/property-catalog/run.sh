@@ -20,6 +20,11 @@ ROOT="$(cd "$HERE/../../../../.." && pwd)"
 export OLD_COMMIT="${OLD_COMMIT:-a03c481f726}"
 PROPS="$ROOT/apps/web/src/lib/queries/properties"
 MODES=("${@:-all}")
+# The run shape comes from each mode below, never from the caller's
+# environment; only smoke takes SEED and MUTANT from it.
+SMOKE_SEED="${SEED:-1}"
+SMOKE_MUTANT="${MUTANT:-}"
+unset SEED SEQS STEPS LANES ROTATE READS_PER_STEP SWEEP VOLUME LOAD CONTROL MUTANT MUTANT_RATE BASELINE SETTLE_MS STOP_ON_CATCH OUT
 
 # Every run this invocation will make, cleared before anything else can fail:
 # a mode that never starts reads INCOMPLETE, never as an earlier pass.
@@ -39,7 +44,8 @@ outs_for() {
 for m in "${MODES[@]}"; do
   dirs=$(outs_for "$m") || exit 2
   for d in $dirs; do
-    mkdir -p "$HERE/out/$d" && rm -f "$HERE/out/$d/results.json" && date -Is > "$HERE/out/$d/started"
+    { mkdir -p "$HERE/out/$d" && rm -f "$HERE/out/$d/results.json" && date -Is > "$HERE/out/$d/started"; } ||
+      { echo "cannot clear out/$d" >&2; exit 1; }
   done
 done
 
@@ -61,7 +67,9 @@ node_run() {
   local name="$1"
   # Before Node starts, so a run that never gets that far leaves no earlier
   # result behind: summarize reads it as INCOMPLETE from the marker.
-  mkdir -p "$OUT" && rm -f "$OUT/results.json" && date -Is > "$OUT/started"
+  if ! { mkdir -p "$OUT" && rm -f "$OUT/results.json" && date -Is > "$OUT/started"; }; then
+    FAILED+=("$name"); return
+  fi
   if ! (cd "$ROOT" && nix develop --command node "$HERE/run.mjs"); then
     FAILED+=("$name")
   fi
@@ -70,20 +78,20 @@ node_run() {
 run_mode() {
   case "$1" in
     smoke)
-      SEED=${SEED:-1} SEQS=1 STEPS=3 LANES=1 SWEEP=0 VOLUME=0 OUT="$HERE/out/smoke" node_run smoke ;;
+      SEED=$SMOKE_SEED MUTANT=$SMOKE_MUTANT SEQS=1 STEPS=3 LANES=1 SWEEP=0 VOLUME=0 OUT="$HERE/out/smoke" node_run smoke ;;
     quiet)
-      SEED=1 OUT="$HERE/out/seed-1" node_run quiet ;;
+      MUTANT= BASELINE= SEED=1 OUT="$HERE/out/seed-1" node_run quiet ;;
     load)
-      SEED=2 LOAD=6 OUT="$HERE/out/seed-2-load" node_run load ;;
+      MUTANT= BASELINE= SEED=2 LOAD=6 OUT="$HERE/out/seed-2-load" node_run load ;;
     seed4)
-      SEED=4 SEQS=100 VOLUME=0 OUT="$HERE/out/seed-4" node_run seed4 ;;
+      MUTANT= BASELINE= SEED=4 SEQS=100 VOLUME=0 OUT="$HERE/out/seed-4" node_run seed4 ;;
     control)
-      SEED=3 CONTROL=1 SEQS=40 VOLUME=500 OUT="$HERE/out/control" node_run control ;;
+      MUTANT= BASELINE= SEED=3 CONTROL=1 SEQS=40 VOLUME=500 OUT="$HERE/out/control" node_run control ;;
     mutants)
       # The clean run the mutants are measured against: same seed and shape,
       # no fault. A mutant counts as caught only at a difference this run
       # does not have.
-      SEED=1 SEQS=2 LANES=1 SWEEP=0 VOLUME=0 OUT="$HERE/out/mutant-baseline" node_run mutant-baseline
+      MUTANT= BASELINE= SEED=1 SEQS=2 LANES=1 SWEEP=0 VOLUME=0 OUT="$HERE/out/mutant-baseline" node_run mutant-baseline
       # run.mjs also refuses a baseline without a passing verdict
       if [[ " ${FAILED[*]} " == *" mutant-baseline "* ]]; then echo "baseline failed; mutants not run" >&2; return; fi
       for m in "${MUTANTS[@]}"; do

@@ -392,6 +392,14 @@ const BASELINE_RESULT = E.BASELINE ? JSON.parse(fs.readFileSync(E.BASELINE, 'utf
 // A baseline that failed or never finished has not reached every signature a
 // clean run has, so a mutant measured against it could be credited with one.
 if (BASELINE_RESULT && !BASELINE_RESULT.verdict?.passed) throw new Error(`baseline ${E.BASELINE} did not pass: ${JSON.stringify(BASELINE_RESULT.verdict ?? 'no verdict')}`);
+// ...and one of another shape, commit or with a fault of its own measures something else.
+const BASELINE_SHAPE = ['base', 'seed', 'seqs', 'steps', 'lanes', 'rotate', 'readsPerStep', 'sweep', 'volume', 'load', 'control', 'settleMs'];
+if (BASELINE_RESULT) {
+  const off = BASELINE_SHAPE.filter((k) => J(BASELINE_RESULT.config?.[k]) !== J(CONFIG[k]));
+  if (BASELINE_RESULT.config?.mutant) off.push('mutant');
+  if (BASELINE_RESULT.commit !== git('rev-parse', 'HEAD')) off.push('commit');
+  if (off.length) throw new Error(`baseline ${E.BASELINE} differs from this run in ${off.join(', ')}`);
+}
 const BASELINE = new Set(BASELINE_RESULT ? Object.keys(BASELINE_RESULT.diffSignatures) : []);
 if (CONFIG.mutant && !E.BASELINE) log('warning: no BASELINE; every difference counts as a catch');
 function git(...args) {
@@ -1298,9 +1306,9 @@ async function write(pair, actor, name, vars) {
   // created or changed (fetchPropertyDefinitionWithOptions), OLD vs NEW.
   const defId = name === 'createDef' ? (n.ok ? (n.value?.id ?? n.value?.definition?.id) : null) : (vars?.propertyDefinitionId ?? null);
   if (defId) (pair.imperative ??= []).push({ actor, id: defId });
-  // Both sides refused it on a server answer (every request answered with a
-  // status, replayed one for one): a refusal, not a transport failure.
-  const refused = !n.ok && !o.ok && replay.requests > 0 && !replay.unused.length && !replay.mismatches.length && acct.neu.tap.rec.every((x) => !x.failed && x.status >= 400);
+  // Both sides refused it on a client-error answer (every request answered
+  // 4xx, replayed one for one): a refusal, not a transport or server failure.
+  const refused = !n.ok && !o.ok && replay.requests > 0 && !replay.unused.length && !replay.mismatches.length && acct.neu.tap.rec.every((x) => !x.failed && x.status >= 400 && x.status < 500);
   return { n, refused };
 }
 const canonDefWithOptions = (x) => (x && Array.isArray(x.property_options) ? { ...x, property_options: canonOptions(x.property_options) } : x);

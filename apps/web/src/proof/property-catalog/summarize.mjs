@@ -12,7 +12,7 @@ for (const dir of fs.readdirSync(OUT).sort()) {
   const file = path.join(OUT, dir, 'results.json');
   if (!fs.existsSync(file)) {
     // a run that started here but never wrote a result
-    if (fs.existsSync(path.join(OUT, dir, 'started'))) console.log(`${dir} [INCOMPLETE]: no results written`);
+    if (fs.existsSync(path.join(OUT, dir, 'started'))) runs[dir] = { verdict: null, incomplete: 'no results written' };
     continue;
   }
   let r;
@@ -20,7 +20,7 @@ for (const dir of fs.readdirSync(OUT).sort()) {
     r = JSON.parse(fs.readFileSync(file, 'utf8'));
   } catch {
     // removed by a run starting in this directory, between the check and the read
-    console.log(`${dir} [INCOMPLETE]: results unreadable`);
+    runs[dir] = { verdict: null, incomplete: 'results unreadable' };
     continue;
   }
   // level families: raw (by phase), write replay, imperative, mutation results, readers, callers, staleness
@@ -88,6 +88,10 @@ for (const dir of fs.readdirSync(OUT).sort()) {
 }
 fs.writeFileSync(path.join(OUT, 'summary.json'), JSON.stringify(runs, null, 2));
 for (const [name, s] of Object.entries(runs)) {
+  if (s.incomplete) {
+    console.log(`${name} [INCOMPLETE]: ${s.incomplete}`);
+    continue;
+  }
   const sigs = Object.entries(s.differenceSignatures);
   const verdict = s.verdict ? (s.verdict.passed ? 'PASSED' : `FAILED (${s.verdict.failures.join('; ')})`) : 'INCOMPLETE';
   console.log(`${name} [${verdict}] at ${s.commit}: ${s.counts.sequences} seq, ${s.counts.steps} steps, ${s.counts.rawCases} raw, ${s.counts.readerComparisons} reader, ${s.counts.callerComparisons} caller; ${sigs.length} signatures; ${s.totals?.differences ?? '?'} differences; harness errors ${s.harnessErrors}; crashes ${s.crashes?.length ?? 0}${s.mutant ? `; mutant applied ${s.mutantResult.applied}, caught ${s.mutantResult.firstCatch ? 'yes' : 'NO'}` : ''}`);
