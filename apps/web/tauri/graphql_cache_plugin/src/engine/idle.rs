@@ -3,8 +3,8 @@
 //! the others caused. Once the engine has been quiet for a moment after a
 //! command, this copies it from 500 frames instead, while no command waits.
 //! The browser host does the same (`worker-core.ts`).
+use super::access::IdleHolds;
 use super::{EngineAccess, EngineState};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
 
@@ -17,37 +17,28 @@ const QUIET: Duration = Duration::from_millis(100);
 /// while it waits, so the engine can still close.
 pub(super) fn install(access: &Arc<EngineAccess<EngineState>>) {
     let weak = Arc::downgrade(access);
-    access.on_quiet(move |busy| {
-        tauri::async_runtime::spawn(wait_then_checkpoint(weak.clone(), busy));
+    access.on_quiet(move |holds, released| {
+        tauri::async_runtime::spawn(wait_then_checkpoint(weak.clone(), holds, released));
     });
 }
 
-async fn wait_then_checkpoint(access: Weak<EngineAccess<EngineState>>, busy: Arc<AtomicBool>) {
-    let Some(mut seen) = access.upgrade().map(|access| access.quiet_releases()) else {
-        return;
-    };
+async fn wait_then_checkpoint(
+    access: Weak<EngineAccess<EngineState>>,
+    holds: Arc<IdleHolds>,
+    mut seen: u64,
+) {
     loop {
         tokio::time::sleep(QUIET).await;
-        // Set before the upgrade, so shutdown sees it whenever this task
-        // could hold a strong reference.
-        busy.store(true, Ordering::SeqCst);
-        let done = match access.upgrade() {
-            None => true,
-            Some(engine) => {
-                let releases = engine.quiet_releases();
-                if releases == seen {
-                    checkpoint(&engine);
-                    true
-                } else {
-                    seen = releases;
-                    false
-                }
-            }
+        // Counted, so shutdown waits for this reference instead of failing.
+        let Some(engine) = holds.hold(&access) else {
+            return;
         };
-        busy.store(false, Ordering::SeqCst);
-        if done {
+        let releases = engine.quiet_releases();
+        if releases == seen {
+            checkpoint(&engine);
             return;
         }
+        seen = releases;
     }
 }
 

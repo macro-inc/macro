@@ -748,7 +748,12 @@ fn quiet_engine_checkpoints_the_wal_off_the_command_path() {
             serde_json::json!({"user": {"id": "user-1", "soup": {"nextCursor": null, "items": items}}}),
             None,
         );
-        std::thread::sleep(std::time::Duration::from_secs(1));
+        // The write armed the idle task; wait until it has run.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        while !handle.inner.idle_settled() {
+            assert!(std::time::Instant::now() < deadline, "idle task never ran");
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
         let state = block_on(handle.inner.lock());
         let checkpoint = state.engine.storage().checkpoint_if_due().unwrap();
         if checkpoint.wal_frames >= 500 {

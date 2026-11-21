@@ -486,23 +486,14 @@ impl EngineHandle {
     }
 
     /// Consumes the sole handle and explicitly closes native Turso storage.
-    /// An idle checkpoint already copying is waited for, up to
+    /// An idle checkpoint holding the engine is waited for, up to
     /// [`SHUTDOWN_IDLE_WAIT`]; none starts after this.
     pub fn shutdown(self) -> Result<(), String> {
-        self.inner.close_quiet();
-        let mut inner = self.inner;
         let deadline = std::time::Instant::now() + SHUTDOWN_IDLE_WAIT;
-        let mutex = loop {
-            match Arc::try_unwrap(inner) {
-                Ok(mutex) => break mutex,
-                Err(shared) if shared.idle_running() && std::time::Instant::now() < deadline => {
-                    inner = shared;
-                    std::thread::sleep(std::time::Duration::from_millis(1));
-                }
-                Err(_) => return Err("graphql cache still has active command handles".to_string()),
-            }
+        let Ok(access) = access::unwrap_after_idle(self.inner, deadline) else {
+            return Err("graphql cache still has active command handles".to_string());
         };
-        let state = mutex.into_inner();
+        let state = access.into_inner();
         let outcome = state
             .engine
             .into_storage()
