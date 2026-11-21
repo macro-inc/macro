@@ -97,12 +97,32 @@ export class HttpError extends Error {
   }
 }
 
+// Access tokens last an hour and a run lasts many: a 401 signs the user in
+// again (once per user at a time, updating the shared User) and retries once.
+const refreshing = new Map<string, Promise<void>>();
+
+async function refreshSession(stack: Stack, user: User) {
+  let pending = refreshing.get(user.key);
+  if (!pending) {
+    pending = signIn(stack, user.key, user.email)
+      .then((fresh) => {
+        user.cookie = fresh.cookie;
+        user.token = fresh.token;
+      })
+      .finally(() => refreshing.delete(user.key));
+    refreshing.set(user.key, pending);
+  }
+  await pending;
+}
+
 export async function call<T = unknown>(
   stack: Stack,
   user: User | undefined,
   path: string,
-  init: { method?: string; body?: unknown; headers?: Record<string, string> } = {}
+  init: { method?: string; body?: unknown; headers?: Record<string, string> } = {},
+  retried = false
 ): Promise<T> {
+  const sentToken = user?.token;
   const response = await fetch(`${stack.proxyUrl}${path}`, {
     method: init.method ?? (init.body === undefined ? 'GET' : 'POST'),
     headers: {
@@ -114,6 +134,10 @@ export async function call<T = unknown>(
     redirect: 'manual',
   });
   const text = await response.text();
+  if (response.status === 401 && user && !retried) {
+    if (user.token === sentToken) await refreshSession(stack, user);
+    return call<T>(stack, user, path, init, true);
+  }
   if (!response.ok) throw new HttpError(response.status, text, path);
   return (text ? JSON.parse(text) : undefined) as T;
 }
@@ -153,10 +177,9 @@ export async function signIn(stack: Stack, key: string, email: string): Promise<
     macro_user_id: string;
   };
   const user: User = { key, email, macroUserId: claims.macro_user_id, cookie, token };
-  await call(stack, user, '/auth/user/tutorial', {
-    method: 'PATCH',
-    body: { tutorialComplete: true },
-  }).catch(() => undefined);
+  await call(stack, user, '/auth/user/tutorial', { method: 'PATCH', body: { tutorialComplete: true } }, true).catch(
+    () => undefined
+  );
   return user;
 }
 

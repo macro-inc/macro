@@ -423,6 +423,11 @@ async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
           steps[kind] ??= {};
           const outcome = step.ok ? 'ok' : `refused:${step.status ?? 'error'}`;
           steps[kind][outcome] = (steps[kind][outcome] ?? 0) + 1;
+          // A write the harness could not make (its session lapsed) tests
+          // nothing; it fails the run instead of passing as a quiet step.
+          if (!step.ok && step.status === 401) {
+            tallyInto(classes, [classify({ signature: 'harness:step-unauthorized', kind: 'error', detail: step.note ?? '' })], 'sequences');
+          }
           const at = { lane: viewerKey, sequence: s, step: k, kind, entity: step.entity, entityKind: step.entityKind };
           const checks: Record<string, unknown> = {};
 
