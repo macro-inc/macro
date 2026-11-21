@@ -66,7 +66,7 @@ import { TeamMemberRow } from './components/team-member-row';
 import { TeammateCommand } from './components/teammate-command';
 import { TeammateRunsOn } from './components/teammate-runs-on';
 import { teamAgentComputer, teamAgentSetupStep } from './core/team-agent-setup';
-import { ownMachineRemoveBody } from './core/teammate-host';
+import { canMoveTeammate, ownMachineRemoveBody } from './core/teammate-host';
 import { installProblemLine } from './core/teammate-install-problem';
 import {
   SettingsCard,
@@ -218,6 +218,11 @@ export function TeamMembers(props: { team: TeamSummary }) {
       t('teamAgents.ownersComputer')
     );
   };
+  /** The viewer's own machines: who may move an agent depends on them. */
+  const ownHarnessIds = () =>
+    hostsQuery.isSuccess
+      ? hostsQuery.data.hosts.map((host) => host.harnessId)
+      : [];
   const [moveAgent, setMoveAgent] = createSignal<TeamAgent>();
   const [voiceAgent, setVoiceAgent] = createSignal<TeamAgent>();
   const [pictureAgent, setPictureAgent] = createSignal<AgentPictureSelection>();
@@ -576,7 +581,9 @@ export function TeamMembers(props: { team: TeamSummary }) {
                               : undefined
                           }
                           onMove={
-                            selfHosted() && isAdminOrOwner() && agent.harnessId
+                            selfHosted() &&
+                            isAdminOrOwner() &&
+                            canMoveTeammate(agent, userId(), ownHarnessIds())
                               ? () => setMoveAgent(agent)
                               : undefined
                           }

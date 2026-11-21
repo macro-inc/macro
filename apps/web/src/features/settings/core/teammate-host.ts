@@ -77,3 +77,19 @@ export function firstEligibleHost(
 export function ownMachineRemoveBody(hostName: string): string {
   return t('teammateHosts.removeBodyOwn', { host: hostName });
 }
+
+/**
+ * Whether the viewer may move an agent to another of their machines: only
+ * the admin who invited it, or the owner of the machine it runs on now. The
+ * service enforces the same rule.
+ */
+export function canMoveTeammate(
+  agent: { createdBy?: string | null; harnessId?: string | null },
+  viewerId: string | undefined,
+  ownHarnessIds: readonly string[]
+): boolean {
+  if (!agent.harnessId || !viewerId) return false;
+  return (
+    agent.createdBy === viewerId || ownHarnessIds.includes(agent.harnessId)
+  );
+}

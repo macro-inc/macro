@@ -251,7 +251,7 @@ network namespace, never in the host's firewall:
    has no network: it fails closed.
 
 Before every teammate start, including after adopting a running container,
-macrod reads the ruleset back (`nft -j list ruleset`, normalized) and compares
+macrod reads its table back (`nft -j list table inet macro_teammate`, normalized; drops in any base chain are final, so other tables can't loosen it) and compares
 it with the one it rendered. If the rules are missing, changed or can't be
 applied, the start is refused with `failed:
 networkIsolationUnavailable`; it never falls back to an open network. A
@@ -375,9 +375,10 @@ addresses, as it gives a local Macro computer. Production never sets it.
      minted. Minting revokes the old key and repo token.
 
   The old install is never revoked while it may still be pushing its
-  checkpoint. An offline old machine loses only the work since its last
-  push. That work was never in the repo, and its key is revoked before it
-  could come back.
+  checkpoint. When the move finishes, the old key and repo token are
+  revoked at once, not at the new machine's first delivery. An offline old
+  machine loses only the work since its last push, which was never in the
+  repo.
 - **Removing** works as today (`revoke_all`, a new repo token, the seat
   removed). The checkpoint stop of the move runs first; the row is deleted
   last.
@@ -396,10 +397,11 @@ addresses, as it gives a local Macro computer. Production never sets it.
   install store and finds each container by its label. One that is still
   running is adopted, never recreated. A container that is gone, or exited
   while macrod was down, is started again.
-- **Crash loop.** More than 3 failed exits (not 0, not 75) within 10
-  minutes, before a run that reached `running`, is `failed: crashLoop`.
-  macrod doesn't start it again until a new delivery arrives (the same
-  generation with a higher `delivery` counts). An exit is counted only
+- **Crash loop.** Failed exits (not 0, not 75) restart with a backoff from
+  2 to 60 seconds, for as long as they keep failing; macrod never gives up
+  on a generation by itself. `crashLoop` is only the reason an image update
+  rolls back, when the new image's container doesn't stay up. An exit is
+  counted only
   against the container with the current delivery's label, so a container
   being replaced never counts against the new one.
 - **Logs**: `macrod teammate logs <install>` (the engine's logs for the
@@ -688,11 +690,19 @@ is lowered.
 
 ### Trust
 
-Anyone with admin or root on the machine can read the teammate's files and
-credentials, and act as it. The Invite dialog says so before Invite, as does
-the teammate's profile, with the network line from *Network*. Only the
-machine's owner can host a teammate there. Hosted team agents keep their own
-computers.
+Anything running as the machine's owner can read the teammate's
+credentials (`agent.env`) and its volume, and so act as it: the owner, any
+program they run, including the coding agents macrod runs there (which other
+people can prompt), and anyone with admin or root on the machine. A path
+deny wouldn't help: those coding agents aren't sandboxed and have the owner's
+uid and the engine socket. The Invite dialog says so before Invite, in the
+warning tone, with the network line from *Network*.
+
+Only the machine's owner can host a teammate there, and only the admin who
+invited it or the owner of the machine it runs on can move it. When the
+hosting owner is removed from the team, stops being an admin, or unpairs the
+machine, the service stops the install and revokes its key and repo token.
+Hosted team agents keep their own computers.
 
 ### Observability
 

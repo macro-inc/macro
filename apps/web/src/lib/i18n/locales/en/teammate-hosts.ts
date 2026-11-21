@@ -26,9 +26,9 @@ export default {
   hostNetworkIsolation: "Can't lock down an agent's network on this machine",
   hostEngine: '{{engine}} {{version}}',
   hostRootless: 'rootless',
-  trustTitle: 'Anyone with admin on {{host}} can act as {{name}}',
+  trustTitle: 'Anything running as you on {{host}} can act as {{name}}',
   trustBody:
-    "They can read {{name}}'s files and credentials. {{name}} reaches the internet, but not {{host}} or the other machines on its network.",
+    "That includes coding agents macrod runs there and anyone with admin on {{host}}: they can read {{name}}'s files and credentials. {{name}} reaches the internet, but not {{host}} or the other machines on its network.",
   ownComputerCaption:
     '{{name}} gets its own account and runs on {{host}}. It says hi once it starts.',
   chooseHost: 'Choose one of your computers to continue.',

@@ -1,6 +1,7 @@
 import type { TeammateHost } from '@service-auth/team-agents';
 import { describe, expect, it } from 'vitest';
 import {
+  canMoveTeammate,
   firstEligibleHost,
   hostEngineLabel,
   hostUnavailableReason,
@@ -77,5 +78,15 @@ describe('teammate hosts', () => {
     );
     expect(firstEligibleHost([offline, zebra, bee])?.harnessId).toBe('b');
     expect(firstEligibleHost([offline])).toBeUndefined();
+  });
+
+  it('lets only the inviter or the machine it runs on move an agent', () => {
+    const agent = { createdBy: 'macro|a@x.test', harnessId: 'laptop-a' };
+    expect(canMoveTeammate(agent, 'macro|a@x.test', [])).toBe(true);
+    expect(canMoveTeammate(agent, 'macro|b@x.test', ['laptop-a'])).toBe(true);
+    expect(canMoveTeammate(agent, 'macro|b@x.test', ['laptop-b'])).toBe(false);
+    expect(
+      canMoveTeammate({ ...agent, harnessId: null }, 'macro|a@x.test', [])
+    ).toBe(false);
   });
 });
