@@ -222,8 +222,10 @@ fn candidate_sql(
     let sql = match source {
         // An authority candidate in scope brings its facts blob, and its own
         // partition's predicate is tested on it in Rust: one row read instead
-        // of a fact-table seek per fact the predicate names. The engine may
-        // still read an out-of-scope candidate's blob; CASE discards it.
+        // of a fact-table seek per fact the predicate names. A join, unlike a
+        // correlated subquery, opens the facts cursor once per statement. Every
+        // candidate seeks its facts row, but the blob column is read only
+        // behind the CASE, for a candidate in scope.
         conjunction::FactSource::Authority => {
             let partitions = searched_partitions(query)
                 .map(|partition| {
@@ -233,7 +235,7 @@ fn candidate_sql(
                 .collect::<Vec<_>>()
                 .join(", ");
             format!(
-                "{candidates} SELECT d.record_key, s.value, s.document_id, d.partition, CASE WHEN d.profile = ? AND d.state = 0{shadow} AND d.partition IN ({partitions}) THEN (SELECT f.facts FROM index_document_facts AS f WHERE f.document_id = d.id) END FROM candidates AS s CROSS JOIN {documents} AS d ON d.id = s.document_id"
+                "{candidates} SELECT d.record_key, s.value, s.document_id, d.partition, CASE WHEN d.profile = ? AND d.state = 0{shadow} AND d.partition IN ({partitions}) THEN f.facts END FROM candidates AS s CROSS JOIN {documents} AS d ON d.id = s.document_id LEFT JOIN index_document_facts AS f ON f.document_id = d.id"
             )
         }
         conjunction::FactSource::Optimistic => {
