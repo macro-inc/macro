@@ -17,7 +17,7 @@ use super::ports::{
 use crate::domain::delivery::{MAX_HTTP_ATTEMPTS, retry_delay};
 use crate::domain::models::{NormalizedWebhookEvent, WebhookWorkerDisposition};
 use chrono::Utc;
-use futures::future::try_join_all;
+use futures::{StreamExt as _, TryStreamExt as _};
 use macro_user_id::user_id::MacroUserIdStr;
 use std::time::Duration;
 use uuid::Uuid;
@@ -32,6 +32,9 @@ pub const AUDIENCE_CHUNK: usize = 100;
 /// Expired subscriptions one sweep statement deletes. The repository's SQL
 /// writes it as a literal, so the planner knows the limit in every plan.
 pub const SWEEP_BATCH: u32 = 500;
+/// Most queue sends in flight for one event's fan-out.
+const MAX_CONCURRENT_ENQUEUES: usize = 16;
+
 /// Most sweep statements in one round; the next round continues.
 pub const SWEEP_MAX_BATCHES: u32 = 20;
 
@@ -248,7 +251,9 @@ where
             return Ok(0);
         }
         let mut candidate_count = 0;
-        let mut matched = Vec::new();
+        // Only the matching row ids are kept; each chunk's filters are dropped
+        // with it.
+        let mut matched: Vec<Uuid> = Vec::new();
         // Each chunk is one bounded query; most events have a small audience
         // and run one.
         for chunk in audience.chunks(AUDIENCE_CHUNK) {
@@ -258,24 +263,34 @@ where
                 .await
                 .map_err(McpSubscriptionError::internal)?;
             candidate_count += candidates.len();
-            matched.extend(candidates.into_iter().filter(|candidate| {
-                candidate.filter.matches(
-                    &event.event_name,
-                    &event.entity_id,
-                    &event.broker_envelope,
-                    candidate.user_id.as_ref(),
-                )
-            }));
+            matched.extend(
+                candidates
+                    .into_iter()
+                    .filter(|candidate| {
+                        candidate.filter.matches(
+                            &event.event_name,
+                            &event.entity_id,
+                            &event.broker_envelope,
+                            candidate.user_id.as_ref(),
+                        )
+                    })
+                    .map(|candidate| candidate.id),
+            );
         }
         let span = tracing::Span::current();
         span.record("candidate_count", candidate_count);
         span.record("match_count", matched.len());
-        try_join_all(matched.iter().map(|candidate| {
-            self.queue
-                .enqueue_mcp(McpEventQueueMessage::new(candidate.id, event.clone()))
-        }))
-        .await
-        .map_err(McpSubscriptionError::internal)?;
+        // A few sends at a time; each message's copy of the event is made
+        // only when its send starts.
+        futures::stream::iter(matched.iter().copied())
+            .map(|id| {
+                self.queue
+                    .enqueue_mcp(McpEventQueueMessage::new(id, event.clone()))
+            })
+            .buffer_unordered(MAX_CONCURRENT_ENQUEUES)
+            .try_collect::<()>()
+            .await
+            .map_err(McpSubscriptionError::internal)?;
         Ok(matched.len())
     }
 }
@@ -365,6 +380,12 @@ where
         message: McpEventQueueMessage,
         receive_count: u32,
     ) -> WebhookWorkerDisposition {
+        // The queue can hand a message out again after its last attempt (a
+        // delete that did not land); it gets no further attempt.
+        if receive_count > MAX_HTTP_ATTEMPTS {
+            tracing::Span::current().record("outcome", "exhausted");
+            return WebhookWorkerDisposition::Acknowledge;
+        }
         let disposition = self.attempt(&message, receive_count).await;
         let outcome = match disposition {
             Attempt::Delivered => "delivered",
