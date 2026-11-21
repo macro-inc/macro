@@ -58,6 +58,15 @@ const IGNORED_PARAMS: &[&str] = &["referral_code"];
 /// Characters that end a sentence after a bare URL rather than belong to it.
 const TRAILING_PUNCTUATION: &[char] = &['.', ',', ';', ':', '!', '?', '\'', '"'];
 
+/// Markdown with its app links chipped.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Rewritten<'a> {
+    /// The markdown, borrowed when it had no app links.
+    pub markdown: Cow<'a, str>,
+    /// How many links became chips.
+    pub chips: usize,
+}
+
 /// Rewrites links to items in one Macro web app into mention chips.
 #[derive(Debug, Clone)]
 pub struct AppLinkChips {
@@ -80,19 +89,19 @@ impl AppLinkChips {
 
     /// Replace every link to an app item in `markdown` with its chip. Code
     /// blocks, code spans and existing mention tags are left as written.
-    pub fn rewrite<'a>(&self, markdown: &'a str) -> Cow<'a, str> {
+    pub fn rewrite<'a>(&self, markdown: &'a str) -> Rewritten<'a> {
         let mut out = String::new();
-        let mut changed = false;
+        let mut chips = 0;
         let mut open_fence: Option<&str> = None;
         for line in markdown.split_inclusive('\n') {
             match (open_fence, fence(line)) {
-                (None, Some(opening)) => {
+                (None, Some((opening, _))) => {
                     open_fence = Some(opening);
                     out.push_str(line);
                     continue;
                 }
-                (Some(opening), Some(closing))
-                    if closing.starts_with(opening) && line.trim().len() == closing.len() =>
+                (Some(opening), Some((closing, info)))
+                    if closing.starts_with(opening) && info.trim().is_empty() =>
                 {
                     open_fence = None;
                     out.push_str(line);
@@ -105,25 +114,26 @@ impl AppLinkChips {
                 (None, None) => {}
             }
             let mut written = 0;
-            for protected in
-                lazy_regex::regex!(r"<(m-[a-z-]+)>.*?</m-[a-z-]+>|`+[^`]*`+").find_iter(line)
-            {
-                changed |= self.rewrite_text(&line[written..protected.start()], &mut out);
-                out.push_str(protected.as_str());
-                written = protected.end();
+            for protected in protected_spans(line) {
+                chips += self.rewrite_text(&line[written..protected.start], &mut out);
+                out.push_str(&line[protected.clone()]);
+                written = protected.end;
             }
-            changed |= self.rewrite_text(&line[written..], &mut out);
+            chips += self.rewrite_text(&line[written..], &mut out);
         }
-        if changed {
-            Cow::Owned(out)
-        } else {
-            Cow::Borrowed(markdown)
+        Rewritten {
+            markdown: if chips > 0 {
+                Cow::Owned(out)
+            } else {
+                Cow::Borrowed(markdown)
+            },
+            chips,
         }
     }
 
-    /// Append `text` to `out` with its app links chipped; whether any were.
-    fn rewrite_text(&self, text: &str, out: &mut String) -> bool {
-        let mut changed = false;
+    /// Append `text` to `out` with its app links chipped; how many were.
+    fn rewrite_text(&self, text: &str, out: &mut String) -> usize {
+        let mut chips = 0;
         let mut written = 0;
         for captures in lazy_regex::regex!(
             r"\[[^\[\]\n]*\]\((?P<inline>[^()\s]+)\)|<(?P<auto>https?://[^<>\s]+)>|(?P<bare>https?://[^\s<>()\[\]`]+)"
@@ -161,10 +171,10 @@ impl AppLinkChips {
             out.push_str(&chip);
             out.push_str(trailing);
             written = whole.end();
-            changed = true;
+            chips += 1;
         }
         out.push_str(&text[written..]);
-        changed
+        chips
     }
 
     /// The chip for `url` when it opens an item of this app.
@@ -208,10 +218,40 @@ fn bare_host(host: &str) -> &str {
 }
 
 /// The fence (its run of backticks or tildes) a line opens or closes a fenced
-/// code block with. Fences in list items are indented, so any indent counts.
-fn fence(line: &str) -> Option<&str> {
-    let trimmed = line.trim_start();
+/// code block with, and the rest of the line after it. Fences in list items
+/// are indented and fences in quotes follow `>`, so both count.
+fn fence(line: &str) -> Option<(&str, &str)> {
+    let trimmed = line.trim_start_matches(|c: char| c == '>' || c.is_whitespace());
     let marker = trimmed.chars().next().filter(|c| matches!(c, '`' | '~'))?;
-    let run = &trimmed[..trimmed.len() - trimmed.trim_start_matches(marker).len()];
-    (run.len() >= 3).then_some(run)
+    let rest = trimmed.trim_start_matches(marker);
+    let run = &trimmed[..trimmed.len() - rest.len()];
+    (run.len() >= 3).then_some((run, rest))
+}
+
+/// The byte ranges of `line` to leave as written: mention tags, and code
+/// spans, which close only on a backtick run as long as the one they open
+/// with. A run with no match is a literal backtick, not a span.
+fn protected_spans(line: &str) -> Vec<std::ops::Range<usize>> {
+    let mut spans = Vec::new();
+    let mut from = 0;
+    while let Some(found) = lazy_regex::regex!(r"<m-[a-z-]+>.*?</m-[a-z-]+>|`+").find_at(line, from)
+    {
+        if !found.as_str().starts_with('`') {
+            spans.push(found.range());
+            from = found.end();
+            continue;
+        }
+        let closing = lazy_regex::regex!(r"`+")
+            .find_iter(&line[found.end()..])
+            .find(|run| run.len() == found.len());
+        match closing {
+            Some(closing) => {
+                let end = found.end() + closing.end();
+                spans.push(found.start()..end);
+                from = end;
+            }
+            None => from = found.end(),
+        }
+    }
+    spans
 }

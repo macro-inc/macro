@@ -1094,6 +1094,13 @@ so a failure in that follow-up does not present an already-created task for retr
 Tasks are documents under the hood (creation hits `POST /dss/documents/create_task`), so they
 also show up in Files/`All` and in AI-chat document listings.
 
+`create_task` turns links to app items in the body (a bare URL, an autolink or
+a markdown link to `<app>/app/<route>/<uuid>`) into the mention chip a paste of
+that URL makes, for every caller: the composer, imports, agents and the SDK.
+Code, existing `<m-*>` tags and other links stay as written, so the composer's
+own `<m-link>` links keep their text. An SDK `tasks.create({ source })` puts a
+`Source:` chip above the body and sets the Source property.
+
 To bring tasks over from Linear, Jira, Asana, and other apps, use the **Import
 tasks** card at the bottom of the Tasks sidebar; see
 [Import from connected apps](setup-cards.md#import-from-connected-apps).

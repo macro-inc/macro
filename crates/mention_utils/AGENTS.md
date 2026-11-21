@@ -16,8 +16,8 @@ AI editors, lexical, and notification text.
 - `src/app_link.rs`: `AppLinkChips` turns links to the web app's items
   (`<app>/app/<route>/<uuid>`, bare, autolinked or as a markdown link) into the
   document mention chip a paste of that URL makes, skipping code and existing
-  tags. Its route table mirrors the web app's `block-registry.ts`; keep them
-  in step.
+  tags, and counts the chips it made. Its route table mirrors the web app's
+  `block-registry.ts`; keep them in step.
 - `src/tests.rs`: round-trip parse/serialize cases.
 
 ## Scope
