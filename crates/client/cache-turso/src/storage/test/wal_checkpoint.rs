@@ -1,8 +1,12 @@
-//! Deferred checkpoints under real I/O failures: whatever fails, every
+//! The idle checkpoint under real I/O failures: whatever fails, every
 //! committed write survives a crash or a close and the next open.
+//!
+//! `MemoryIO` keeps every write whether or not it was synced, so these tests
+//! cannot lose an unsynced page themselves. They check what decides it in a
+//! real file: after a failed checkpoint, Turso never starts the log over the
+//! frames it could not sync into the database file.
 
 use super::*;
-use crate::driver::{CheckpointFault, arm_before_truncate, arm_checkpoint_failure};
 
 /// About 3 KB of hex, distinct per write: some 27 WAL frames per write of 50.
 fn incompressible(write: usize, index: usize) -> String {
@@ -18,8 +22,14 @@ fn incompressible(write: usize, index: usize) -> String {
 }
 
 const RECORDS: usize = 50;
-/// Writes that take the WAL past the 1,000-frame due threshold.
-const DUE_WRITES: usize = 60;
+/// Writes that take the WAL past the 500-frame due mark and stay below
+/// Turso's own 1,000.
+const DUE_WRITES: usize = 22;
+/// Written once before every other write and never again, so a lost early
+/// frame shows even when later writes rewrite the other records.
+const SENTINEL: &str = "Sentinel:0";
+/// The write after the checkpoint.
+const AFTER: usize = 1_000;
 
 fn keys() -> Vec<EntityKey<'static>> {
     (0..RECORDS)
@@ -39,8 +49,16 @@ fn write(storage: &mut TursoStorage, write: usize) -> Result<(), TursoStorageErr
     )
 }
 
-/// Every record holds what write `write` stored.
+fn sentinel() -> Record {
+    record(&incompressible(usize::MAX, 0))
+}
+
+/// The sentinel and every record of write `write` read back.
 fn assert_holds(storage: &TursoStorage, write: usize) {
+    assert_eq!(
+        block_on(storage.get_batch(&[key(SENTINEL)])).unwrap(),
+        vec![Some(sentinel())]
+    );
     let expected: Vec<_> = (0..RECORDS)
         .map(|index| Some(record(&incompressible(write, index))))
         .collect();
@@ -49,16 +67,36 @@ fn assert_holds(storage: &TursoStorage, write: usize) {
 
 fn open(io: &Arc<FaultIo>, path: &str, fresh: bool) -> TursoStorage {
     let io: Arc<dyn IO> = io.clone();
-    let (storage, _) = open_native_database(io, path, "scope", fresh).unwrap();
-    storage.defer_checkpoints();
-    storage
+    open_native_database(io, path, "scope", fresh).unwrap().0
 }
 
+fn wal_frames(storage: &TursoStorage) -> u64 {
+    storage
+        .connection
+        .checkpoint_over(u64::MAX)
+        .unwrap()
+        .wal_frames
+}
+
+/// A fresh database whose WAL is due for an idle checkpoint, with no
+/// checkpoint yet, not even Turso's own.
 fn due(io: &Arc<FaultIo>, path: &str) -> TursoStorage {
     let mut storage = open(io, path, true);
+    block_on(storage.put_batch(vec![(key(SENTINEL), sentinel())])).unwrap();
+    let mut previous = 0;
     for writes in 0..DUE_WRITES {
         write(&mut storage, writes).unwrap();
+        let frames = wal_frames(&storage);
+        assert!(
+            frames > previous,
+            "a commit checkpointed at {previous} frames"
+        );
+        previous = frames;
     }
+    assert!(
+        previous >= driver::CHECKPOINT_DUE_FRAMES,
+        "{previous} frames"
+    );
     storage
 }
 
@@ -70,8 +108,14 @@ enum End {
     Close,
 }
 
-/// Ends the session as `end` says, reopens, and checks the last write.
-fn end_and_reopen(io: &Arc<FaultIo>, path: &str, mut storage: TursoStorage, end: End) {
+/// Ends the session as `end` says, reopens, and checks every write since.
+fn end_and_reopen(
+    io: &Arc<FaultIo>,
+    path: &str,
+    mut storage: TursoStorage,
+    last_written: usize,
+    end: End,
+) {
     let last = match end {
         End::WriteAndCrash => {
             write(&mut storage, DUE_WRITES).unwrap();
@@ -84,15 +128,14 @@ fn end_and_reopen(io: &Arc<FaultIo>, path: &str, mut storage: TursoStorage, end:
                 storage.try_close().unwrap(),
                 TursoStorageCloseOutcome::Healthy
             );
-            DUE_WRITES - 1
+            last_written
         }
     };
     let mut reopened = open(io, path, false);
     assert_holds(&reopened, last);
     // The reopened WAL takes writes and checkpoints normally.
     write(&mut reopened, last + 1).unwrap();
-    let checkpoint = reopened.checkpoint_if_due().unwrap();
-    assert!(!checkpoint.ran || checkpoint.truncated, "{checkpoint:?}");
+    reopened.checkpoint_if_due().unwrap();
     assert_eq!(
         reopened.try_close().unwrap(),
         TursoStorageCloseOutcome::Healthy
@@ -101,58 +144,42 @@ fn end_and_reopen(io: &Arc<FaultIo>, path: &str, mut storage: TursoStorage, end:
 }
 
 #[test]
-fn a_copy_that_fails_to_sync_leaves_every_write_in_the_wal() {
+fn a_checkpoint_that_fails_to_sync_keeps_the_log() {
     for end in [End::WriteAndCrash, End::Close] {
         let io = FaultIo::new();
-        let path = format!("checkpoint-copy-sync-{end:?}.db");
-        let storage = due(&io, &path);
-        let before = storage
-            .connection
-            .checkpoint_over(u64::MAX)
-            .unwrap()
-            .wal_frames;
+        let path = format!("checkpoint-sync-{end:?}.db");
+        let mut storage = due(&io, &path);
+        let before = wal_frames(&storage);
         io.arm(IoFault::Sync);
         assert_eq!(
             storage.checkpoint_if_due(),
             Err(TursoStorageError::Database)
         );
-        assert!(io.is_clear(), "the copy never synced");
-        // The log was never restarted: the WAL still holds every frame.
-        let after = storage
-            .connection
-            .checkpoint_over(u64::MAX)
-            .unwrap()
-            .wal_frames;
-        assert_eq!(after, before);
-        end_and_reopen(&io, &path, storage, end);
+        assert!(io.is_clear(), "the checkpoint never synced");
+
+        // The next write appends: Turso did not start the log over frames
+        // that may be missing from the database file.
+        write(&mut storage, AFTER).unwrap();
+        assert!(wal_frames(&storage) > before);
+        end_and_reopen(&io, &path, storage, AFTER, end);
     }
 }
 
 #[test]
-fn a_truncation_that_fails_after_the_log_restarts_loses_nothing() {
-    for fault in [IoFault::Truncate, IoFault::Sync] {
-        for end in [End::WriteAndCrash, End::Close] {
-            let io = FaultIo::new();
-            let path = format!("checkpoint-truncate-{fault:?}-{end:?}.db");
-            let storage = due(&io, &path);
-            let armed = io.clone();
-            arm_before_truncate(move || armed.arm(fault));
-            let checkpoint = storage.checkpoint_if_due().unwrap();
-            assert!(
-                io.is_clear(),
-                "the truncating checkpoint never hit the fault"
-            );
-            assert!(checkpoint.ran && !checkpoint.truncated, "{checkpoint:?}");
-            assert_eq!(checkpoint.backfilled_frames, checkpoint.wal_frames);
-            // Turso had already restarted the log when the I/O failed.
-            let frames = storage
-                .connection
-                .checkpoint_over(u64::MAX)
-                .unwrap()
-                .wal_frames;
-            assert_eq!(frames, 0, "{fault:?} failed before the log restarted");
-            end_and_reopen(&io, &path, storage, end);
-        }
+fn a_checkpoint_lets_the_next_write_start_the_log_over() {
+    for end in [End::WriteAndCrash, End::Close] {
+        let io = FaultIo::new();
+        let path = format!("checkpoint-restart-{end:?}.db");
+        let mut storage = due(&io, &path);
+        let before = wal_frames(&storage);
+        let checkpoint = storage.checkpoint_if_due().unwrap();
+        assert!(checkpoint.ran, "{checkpoint:?}");
+        assert_eq!(checkpoint.wal_frames, before);
+        assert_eq!(checkpoint.backfilled_frames, before);
+
+        write(&mut storage, AFTER).unwrap();
+        assert!(wal_frames(&storage) < before / 4);
+        end_and_reopen(&io, &path, storage, AFTER, end);
     }
 }
 
@@ -160,14 +187,15 @@ fn a_truncation_that_fails_after_the_log_restarts_loses_nothing() {
 fn checkpoint_failures_never_fence_the_storage() {
     let io = FaultIo::new();
     let mut storage = due(&io, "checkpoint-no-fence.db");
-    arm_checkpoint_failure(CheckpointFault::FailCopy);
+    io.arm(IoFault::Sync);
     assert_eq!(
         storage.checkpoint_if_due(),
         Err(TursoStorageError::Database)
     );
     write(&mut storage, DUE_WRITES).unwrap();
     let retried = storage.checkpoint_if_due().unwrap();
-    assert!(retried.ran && retried.truncated, "{retried:?}");
+    assert!(retried.ran, "{retried:?}");
+    assert_eq!(retried.backfilled_frames, retried.wal_frames, "{retried:?}");
     assert_holds(&storage, DUE_WRITES);
     assert_eq!(
         storage.try_close().unwrap(),

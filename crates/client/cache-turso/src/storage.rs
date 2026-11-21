@@ -321,7 +321,6 @@ impl TursoStorage {
     /// Close failure exposes no recoverable session and requires replacing the
     /// worker before a recovery wipe.
     pub fn try_close(self) -> Result<TursoStorageCloseOutcome, TursoStorageCloseFailure> {
-        self.checkpoint_before_close();
         let reason = self.latched_reason();
         let Self {
             session,
@@ -888,7 +887,6 @@ impl TursoStorage {
 
     /// Consumes and explicitly closes the native Turso connection.
     pub fn try_close(self) -> Result<TursoStorageCloseOutcome, TursoStorageError> {
-        self.checkpoint_before_close();
         let reason = self.latched_reason();
         self.connection.release_statements();
         self.connection.close().map_err(|_| {
@@ -908,20 +906,11 @@ impl TursoStorage {
 }
 
 impl TursoStorage {
-    /// Moves the WAL checkpoint out of COMMIT. A host that calls this promises
-    /// to call [`Self::checkpoint_if_due`] when its queue is idle; until then a
-    /// commit checkpoints only once the WAL passes 4,000 frames. Without it,
-    /// Turso backfills the WAL into the database file inside the COMMIT that
-    /// takes it past 1,000 frames, about 3.6 MB of writes in one request on a
-    /// production-size cache.
-    pub fn defer_checkpoints(&self) {
-        self.connection.defer_checkpoints();
-    }
-
-    /// Checkpoints and truncates the WAL once it holds 1,000 frames or more.
-    /// Run it between requests, never inside one; it reports whether it ran,
-    /// whether it truncated and how many frames it copied into the database
-    /// file. A reader on another connection leaves the WAL untruncated.
+    /// Copies the WAL into the database file once it holds 500 frames or more,
+    /// the checkpoint Turso otherwise runs inside the COMMIT that takes it past
+    /// 1,000. Run it between requests, never inside one; it reports whether it
+    /// ran and how many frames it copied. A host that never calls it keeps
+    /// Turso's own checkpoint.
     ///
     /// A failure is never a reset: like Turso's own checkpoint, it leaves the
     /// WAL whole, and the next call tries again.
@@ -929,14 +918,6 @@ impl TursoStorage {
         self.require_healthy()?;
         self.connection
             .checkpoint_over(driver::CHECKPOINT_DUE_FRAMES)
-    }
-
-    /// The truncating checkpoint Turso runs on close, which deferring turns
-    /// off; best effort, as Turso's own is.
-    fn checkpoint_before_close(&self) {
-        if self.connection.checkpoints_deferred() && self.latched_reason().is_none() {
-            let _ = self.connection.checkpoint_over(1);
-        }
     }
 
     fn latched_reason(&self) -> Option<PhysicalResetReason> {

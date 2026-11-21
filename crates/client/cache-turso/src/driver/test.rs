@@ -256,7 +256,7 @@ fn a_text_is_kept_only_from_its_second_use() {
     assert_eq!(db.cached_copies(SELECT), 1);
 }
 
-fn deferred_pair(name: &str) -> (Db, Db) {
+fn connection_pair(name: &str) -> (Db, Db) {
     let database = Database::open(
         Arc::new(MemoryIO::new()),
         name,
@@ -264,7 +264,6 @@ fn deferred_pair(name: &str) -> (Db, Db) {
     )
     .unwrap();
     let writer = Db::cached(database.connect().unwrap());
-    writer.defer_checkpoints();
     execute(
         &writer,
         "CREATE TABLE t (id INTEGER PRIMARY KEY, label TEXT NOT NULL)",
@@ -288,77 +287,83 @@ fn write_pages(db: &Db, from: i64, rows: i64) {
     .unwrap();
 }
 
-fn count(db: &Db) -> Value {
-    read_transaction(db, || query(db, "SELECT count(*) FROM t", vec![])).unwrap()[0][0].clone()
+fn wal_frames(db: &Db) -> u64 {
+    db.connection.wal_state().unwrap().max_frame
 }
 
 #[test]
-fn a_reader_on_another_connection_gets_a_copy_without_truncation() {
-    let (writer, reader) = deferred_pair("checkpoint-reader.db");
+fn an_idle_checkpoint_lets_the_next_write_restart_the_log() {
+    let (writer, _reader) = connection_pair("checkpoint-restart.db");
+    write_pages(&writer, 0, 40);
+    assert_eq!(
+        writer.checkpoint_over(u64::MAX).unwrap(),
+        WalCheckpoint {
+            ran: false,
+            wal_frames: wal_frames(&writer),
+            backfilled_frames: 0
+        },
+        "not due"
+    );
+    let copied = writer.checkpoint_over(1).unwrap();
+    assert!(copied.ran, "{copied:?}");
+    assert_eq!(copied.backfilled_frames, copied.wal_frames, "{copied:?}");
+
+    // Every frame is in the database file, so Turso starts the log over.
+    write_pages(&writer, 40, 1);
+    assert!(wal_frames(&writer) < copied.wal_frames / 4);
+}
+
+#[test]
+fn a_reader_on_another_connection_holds_back_the_restart_until_it_ends() {
+    let (writer, reader) = connection_pair("checkpoint-reader.db");
     write_pages(&writer, 0, 40);
     execute(&reader, "BEGIN", vec![]).unwrap();
     let rows = query(&reader, "SELECT count(*) FROM t", vec![]).unwrap();
     assert_eq!(rows[0][0], Value::from_i64(40));
 
-    // The reader pins the log, so it stays; its frames are still copied.
+    // The reader's snapshot holds every frame, so all of them are copied,
+    // but the log cannot start over beneath the reader.
     let pinned = writer.checkpoint_over(1).unwrap();
-    assert!(pinned.ran && !pinned.truncated, "{pinned:?}");
+    assert!(pinned.ran, "{pinned:?}");
     assert_eq!(pinned.backfilled_frames, pinned.wal_frames, "{pinned:?}");
     write_pages(&writer, 40, 5);
+    assert!(wal_frames(&writer) > pinned.wal_frames);
 
     execute(&reader, "COMMIT", vec![]).unwrap();
     let released = writer.checkpoint_over(1).unwrap();
-    assert!(released.ran && released.truncated, "{released:?}");
-    assert_eq!(count(&writer), Value::from_i64(45));
+    assert!(released.ran, "{released:?}");
+    assert_eq!(
+        released.backfilled_frames,
+        released.wal_frames - pinned.wal_frames
+    );
+    write_pages(&writer, 45, 1);
+    assert!(wal_frames(&writer) < pinned.wal_frames / 4);
+    let rows =
+        read_transaction(&writer, || query(&writer, "SELECT count(*) FROM t", vec![])).unwrap();
+    assert_eq!(rows[0][0], Value::from_i64(46));
 }
 
 #[test]
-fn a_busy_truncation_keeps_the_copy() {
-    let (writer, _reader) = deferred_pair("checkpoint-busy.db");
-    write_pages(&writer, 0, 10);
-    arm_checkpoint_failure(CheckpointFault::TruncateBusy);
-    let busy = writer.checkpoint_over(1).unwrap();
-    assert!(busy.ran && !busy.truncated, "{busy:?}");
-    assert_eq!(busy.backfilled_frames, busy.wal_frames, "{busy:?}");
-}
+fn a_write_open_on_another_connection_does_not_hold_back_the_copy() {
+    let (writer, other) = connection_pair("checkpoint-writer.db");
+    write_pages(&writer, 0, 40);
+    execute(&other, "BEGIN IMMEDIATE", vec![]).unwrap();
+    execute(
+        &other,
+        INSERT,
+        vec![Value::from_i64(100), Value::build_text("y".to_owned())],
+    )
+    .unwrap();
 
-#[test]
-fn a_failed_copy_is_reported_and_leaves_the_wal_for_the_next_checkpoint() {
-    let (writer, _reader) = deferred_pair("checkpoint-copy-failure.db");
-    write_pages(&writer, 0, 10);
-    arm_checkpoint_failure(CheckpointFault::FailCopy);
-    assert_eq!(writer.checkpoint_over(1), Err(TursoStorageError::Database));
-    write_pages(&writer, 10, 5);
-    let retried = writer.checkpoint_over(1).unwrap();
-    assert!(retried.ran && retried.truncated, "{retried:?}");
-    assert_eq!(retried.backfilled_frames, retried.wal_frames, "{retried:?}");
-    assert_eq!(count(&writer), Value::from_i64(15));
-}
+    // A passive copy never waits for a writer: it copies every committed frame.
+    let copied = writer.checkpoint_over(1).unwrap();
+    assert!(copied.ran, "{copied:?}");
+    assert_eq!(copied.backfilled_frames, copied.wal_frames, "{copied:?}");
 
-#[test]
-fn a_failed_truncation_keeps_the_copy() {
-    let (writer, _reader) = deferred_pair("checkpoint-truncate-failure.db");
-    write_pages(&writer, 0, 10);
-    arm_checkpoint_failure(CheckpointFault::FailTruncate);
-    let failed = writer.checkpoint_over(1).unwrap();
-    assert!(failed.ran && !failed.truncated, "{failed:?}");
-    assert_eq!(failed.backfilled_frames, failed.wal_frames, "{failed:?}");
-}
-
-#[test]
-fn a_ceiling_checkpoint_failure_does_not_fail_the_commit() {
-    let (writer, _reader) = deferred_pair("checkpoint-ceiling-failure.db");
-    let mut id = 0;
-    while writer.connection.wal_state().unwrap().max_frame < CHECKPOINT_CEILING_FRAMES - 200 {
-        write_pages(&writer, id, 50);
-        id += 50;
-        assert!(id < 10_000, "the WAL stopped growing");
-    }
-    arm_checkpoint_failure(CheckpointFault::FailCopy);
-    for _ in 0..10 {
-        write_pages(&writer, id, 50);
-        id += 50;
-    }
-    assert!(writer.connection.wal_state().unwrap().max_frame < CHECKPOINT_CEILING_FRAMES);
-    assert_eq!(count(&writer), Value::from_i64(id));
+    execute(&other, "COMMIT", vec![]).unwrap();
+    let later = writer.checkpoint_over(1).unwrap();
+    assert!(later.ran && later.backfilled_frames >= 1, "{later:?}");
+    let rows =
+        read_transaction(&writer, || query(&writer, "SELECT count(*) FROM t", vec![])).unwrap();
+    assert_eq!(rows[0][0], Value::from_i64(41));
 }

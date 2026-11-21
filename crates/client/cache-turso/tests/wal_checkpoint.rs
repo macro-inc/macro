@@ -1,10 +1,10 @@
 #![cfg(not(target_arch = "wasm32"))]
 
-//! Moving the WAL checkpoint out of COMMIT (`TursoStorage::defer_checkpoints`).
+//! The idle WAL checkpoint (`TursoStorage::checkpoint_if_due`).
 
 use cache_core::store::Storage;
 use cache_core::value::{CacheValue, EntityKey, Record};
-use cache_turso::{TursoFileDatabase, TursoStorage, TursoStorageCloseOutcome, WalCheckpoint};
+use cache_turso::{TursoFileDatabase, TursoStorage, TursoStorageCloseOutcome};
 use pollster::block_on;
 use std::path::{Path, PathBuf};
 
@@ -58,104 +58,87 @@ fn open(directory: &tempfile::TempDir) -> (TursoFileDatabase, PathBuf) {
     (TursoFileDatabase::new(&path).unwrap(), path)
 }
 
+fn assert_reads(storage: &TursoStorage, write: usize) {
+    let keys: Vec<_> = (0..RECORDS_PER_WRITE)
+        .map(|index| record(write, index).0)
+        .collect();
+    let expected: Vec<_> = (0..RECORDS_PER_WRITE)
+        .map(|index| Some(record(write, index).1))
+        .collect();
+    assert_eq!(block_on(storage.get_batch(&keys)).unwrap(), expected);
+}
+
 #[test]
-fn deferred_commits_leave_the_checkpoint_to_the_idle_call() {
+fn the_idle_call_copies_the_wal_before_a_commit_would() {
     let directory = tempfile::tempdir().unwrap();
     let (database, path) = open(&directory);
     let mut storage = database.open("scope").unwrap();
-    storage.defer_checkpoints();
 
-    // Past Turso's 1,000-frame threshold, a COMMIT would have checkpointed
-    // and the next write restarted the WAL; deferred, the WAL keeps growing.
-    // Some 26 frames a write: 60 writes pass 1,500 frames.
+    // Some 27 frames a write: not due until about the 19th.
     let mut writes = 0;
-    while writes < 60 {
+    let checkpoint = loop {
         write(&mut storage, writes);
         writes += 1;
-    }
-    let before = wal_frames(&path);
-    assert!(before >= 1_500, "the WAL holds {before} frames");
-
-    let checkpoint = storage.checkpoint_if_due().unwrap();
-    assert!(checkpoint.ran && checkpoint.truncated, "{checkpoint:?}");
-    assert_eq!(checkpoint.wal_frames, before, "{checkpoint:?}");
-    // Every frame was left to this call: no COMMIT backfilled any of them.
-    assert_eq!(checkpoint.backfilled_frames, before, "{checkpoint:?}");
-    assert_eq!(wal_frames(&path), 0, "the checkpoint truncates the WAL");
-
-    // Nothing left to do, and writes after a truncation start a new WAL.
-    assert_eq!(
-        storage.checkpoint_if_due().unwrap(),
-        WalCheckpoint {
-            ran: false,
-            truncated: false,
-            wal_frames: 0,
-            backfilled_frames: 0
+        let checkpoint = storage.checkpoint_if_due().unwrap();
+        if checkpoint.ran {
+            break checkpoint;
         }
-    );
+        assert!(checkpoint.wal_frames < 500, "{checkpoint:?}");
+        assert!(writes < 40, "never due");
+    };
+    // Every frame was left to this call: no COMMIT copied any of them.
+    assert!(checkpoint.wal_frames >= 500, "{checkpoint:?}");
+    assert_eq!(checkpoint.backfilled_frames, checkpoint.wal_frames);
+    assert_eq!(wal_frames(&path), checkpoint.wal_frames);
+
+    // The next write starts the log over.
     write(&mut storage, writes);
-    assert!(wal_frames(&path) > 0);
-    let below = storage.checkpoint_if_due().unwrap();
-    assert!(!below.ran && below.wal_frames > 0, "{below:?}");
+    let after = storage.checkpoint_if_due().unwrap();
+    assert!(!after.ran && after.wal_frames < 100, "{after:?}");
+    assert!(wal_frames(&path) < 100);
 
     assert_eq!(
         storage.try_close().unwrap(),
         TursoStorageCloseOutcome::Healthy
     );
     assert_eq!(wal_frames(&path), 0, "close still checkpoints");
-
     let storage = database.open("scope").unwrap();
-    let keys: Vec<_> = (0..RECORDS_PER_WRITE)
-        .map(|index| record(writes, index).0)
-        .collect();
-    let expected: Vec<_> = (0..RECORDS_PER_WRITE)
-        .map(|index| Some(record(writes, index).1))
-        .collect();
-    assert_eq!(block_on(storage.get_batch(&keys)).unwrap(), expected);
+    assert_reads(&storage, writes);
     storage.try_close().unwrap();
 }
 
 #[test]
-fn a_host_that_never_idles_still_bounds_the_wal() {
+fn a_host_that_idles_between_writes_never_checkpoints_in_a_commit() {
     let directory = tempfile::tempdir().unwrap();
     let (database, path) = open(&directory);
     let mut storage = database.open("scope").unwrap();
-    storage.defer_checkpoints();
 
+    let mut checkpoints = 0;
     let mut largest = 0;
-    let mut truncations = 0;
-    let mut previous = 0;
     for writes in 0..200 {
         write(&mut storage, writes);
-        let frames = wal_frames(&path);
-        if frames < previous {
-            truncations += 1;
+        largest = largest.max(wal_frames(&path));
+        let checkpoint = storage.checkpoint_if_due().unwrap();
+        if checkpoint.ran {
+            checkpoints += 1;
+            // A COMMIT that had checkpointed would leave less to copy.
+            assert_eq!(
+                checkpoint.backfilled_frames, checkpoint.wal_frames,
+                "{checkpoint:?}"
+            );
         }
-        largest = largest.max(frames);
-        previous = frames;
     }
-    assert!(truncations >= 1, "the ceiling never checkpointed");
+    assert!(checkpoints >= 8, "{checkpoints} checkpoints");
     assert!(
-        largest < 4_000 + 2 * RECORDS_PER_WRITE as u64,
+        largest < 500 + 2 * RECORDS_PER_WRITE as u64,
         "the WAL grew to {largest} frames"
     );
-    assert!(
-        largest >= 3_900,
-        "commits checkpointed early, at {largest} frames"
-    );
-
-    let keys: Vec<_> = (0..RECORDS_PER_WRITE)
-        .map(|index| record(199, index).0)
-        .collect();
-    let expected: Vec<_> = (0..RECORDS_PER_WRITE)
-        .map(|index| Some(record(199, index).1))
-        .collect();
-    assert_eq!(block_on(storage.get_batch(&keys)).unwrap(), expected);
+    assert_reads(&storage, 199);
     storage.try_close().unwrap();
 }
 
 #[test]
-fn without_deferral_turso_checkpoints_inside_commits() {
+fn without_idle_calls_turso_still_checkpoints_inside_commits() {
     let directory = tempfile::tempdir().unwrap();
     let (database, path) = open(&directory);
     let mut storage = database.open("scope").unwrap();
@@ -165,13 +148,10 @@ fn without_deferral_turso_checkpoints_inside_commits() {
         write(&mut storage, writes);
         largest = largest.max(wal_frames(&path));
     }
-    // The WAL file is restarted in place, not truncated, so its length stays
-    // near Turso's threshold rather than growing with every write.
+    // The COMMIT past 1,000 frames checkpoints and the next write starts the
+    // log over, so the file never grows far past that.
+    assert!(largest >= 1_000, "{largest}");
     assert!(largest < 1_000 + 2 * RECORDS_PER_WRITE as u64, "{largest}");
-    let checkpoint = storage.checkpoint_if_due().unwrap();
-    assert!(
-        checkpoint.wal_frames < 1_000 + 2 * RECORDS_PER_WRITE as u64,
-        "{checkpoint:?}"
-    );
+    assert_reads(&storage, 59);
     storage.try_close().unwrap();
 }

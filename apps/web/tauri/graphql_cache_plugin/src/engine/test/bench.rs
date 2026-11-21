@@ -192,7 +192,7 @@ impl Samples {
 }
 
 /// `CACHE_BENCH_IDLE_CHECKPOINT` runs the host the way an engine with an idle
-/// point does: COMMIT never checkpoints, and [`idle`] checkpoints between steps.
+/// point does: [`idle`] checkpoints between steps once the WAL is due.
 fn idle_checkpoints() -> bool {
     std::env::var_os("CACHE_BENCH_IDLE_CHECKPOINT").is_some()
 }
@@ -202,9 +202,6 @@ fn open(path: &Path) -> EngineHandle {
         .unwrap()
         .open_or_reset(SCOPE)
         .unwrap();
-    if idle_checkpoints() {
-        storage.defer_checkpoints();
-    }
     EngineHandle::with_schema(storage, None, cache_core::meta::bundled_schema())
 }
 
