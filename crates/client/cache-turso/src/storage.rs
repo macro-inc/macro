@@ -243,6 +243,18 @@ impl TursoStorage {
         }
     }
 
+    /// Browser-test-only: whether the open-time checks could be skipped, after
+    /// running all of them anyway.
+    #[cfg(feature = "browser-test-hooks")]
+    #[doc(hidden)]
+    pub fn browser_test_run_skippable_open_checks(&self) -> Result<bool, TursoStorageError> {
+        let connection = self.connection();
+        let fresh_schema = has_fresh_schema(&connection)?;
+        validate_frozen_schema(&connection)?;
+        validate_statements(&connection)?;
+        Ok(fresh_schema)
+    }
+
     /// Browser-test-artifact-only helper used by the storage-control worker.
     #[cfg(feature = "browser-test-hooks")]
     #[doc(hidden)]

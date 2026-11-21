@@ -51,6 +51,7 @@ GraphQL cache — native for tests/Tauri, OPFS-backed on wasm32.
 
 ## Gotchas
 
+- Opening skips the structural schema checks and statement prepares when a digest of `sqlite_schema` equals `FRESH_SCHEMA_DIGEST`. A change to `CREATE_SCHEMA`, the calendar schema, or how a new turso revision records them changes the digest: `used_database_reopens_with_the_pinned_schema_digest` fails with the new value to pin. Run the browser check with `--features browser-test-hooks --test web` (see Checks).
 - Email send persistence and cancellation belong to the frontend email journal, not the normalized cache or its mutation queue.
 - Permission retirement pages raw and projection-only keys through covering keys, retaining the distinction between an initial cursor and an empty ID. Whole-projection deletion skips old fact reconstruction but still rebases ordered pending contributions; preserve queue rows, retry metadata, and identity bindings.
 

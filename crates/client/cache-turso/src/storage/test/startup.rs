@@ -348,6 +348,8 @@ fn used_database_reopens_with_the_pinned_schema_digest() {
 
         let storage = database.open("scope").unwrap();
         let reopened = schema_digest(&storage.connection()).unwrap();
+        validate_frozen_schema(&storage.connection()).unwrap();
+        validate_statements(&storage.connection()).unwrap();
         assert_eq!(created, reopened);
         assert_eq!(
             reopened,
