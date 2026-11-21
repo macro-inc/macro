@@ -8,15 +8,8 @@ use std::path::Path;
 
 /// The storage 11 shape, from the parent of the commit that introduced 12:
 /// the browse index without the text and hash columns and no contact index.
-fn downgrade_to_storage_11(storage: &TursoStorage) {
-    for sql in [
-        "DROP INDEX records_contacts_cover_idx",
-        "DROP INDEX search_documents_browse_idx",
-        "CREATE INDEX search_documents_browse_idx ON search_documents(profile, bucket, timestamp_ms DESC, __typename, id)",
-        "UPDATE meta SET value = '11' WHERE key = 'storage_schema_version'",
-    ] {
-        raw_execute(storage, sql, vec![]);
-    }
+fn downgrade_to_storage_11(storage: &mut TursoStorage) {
+    test_hooks::rewrite_as_storage_11(storage).unwrap();
 }
 
 fn contact(name: &str) -> Record {
@@ -159,7 +152,7 @@ fn storage_11_cache_is_upgraded_in_place_keeping_records_queue_and_generation() 
         let fresh_fingerprint = schema_fingerprint(&storage.connection());
         let rows = table_rows(&storage.connection());
         let pending = storage.load_mutation_queue().await.unwrap();
-        downgrade_to_storage_11(&storage);
+        downgrade_to_storage_11(&mut storage);
         assert_ne!(schema_rows(&storage.connection()), fresh_schema);
         storage.try_close().unwrap();
 
@@ -194,8 +187,8 @@ fn storage_11_cache_is_upgraded_in_place_keeping_records_queue_and_generation() 
 #[test]
 fn upgrade_reports_the_previous_version_once() {
     let database = TursoMemoryDatabase::new("reports-upgrade.db");
-    let storage = database.open("scope").unwrap();
-    downgrade_to_storage_11(&storage);
+    let mut storage = database.open("scope").unwrap();
+    downgrade_to_storage_11(&mut storage);
     storage.try_close().unwrap();
     let state = database.state.lock().unwrap();
     let open = || {
@@ -281,7 +274,7 @@ fn hook_stops_after_a_committed_step_and_the_next_open_finishes() {
         let mut storage = database.open("scope").unwrap();
         populate(&mut storage).await;
         let rows = table_rows(&storage.connection());
-        downgrade_to_storage_11(&storage);
+        downgrade_to_storage_11(&mut storage);
         storage.try_close().unwrap();
 
         test_hooks::interrupt_after_steps(Some(1));

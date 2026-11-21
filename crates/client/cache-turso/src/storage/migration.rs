@@ -152,7 +152,28 @@ fn upgrade_11_to_12(connection: &Arc<Connection>) -> Result<(), TursoStorageErro
 /// fuzzer. Not part of the production build.
 #[cfg(any(test, feature = "migration-test-hooks"))]
 pub mod test_hooks {
+    use super::super::TursoStorage;
+    use crate::{TursoStorageError, driver};
     use std::cell::Cell;
+
+    /// Rewrites a database of this build as storage 11 wrote it, the inverse
+    /// of the 11 to 12 step, so a test can open it as a file an older build
+    /// left behind.
+    pub fn rewrite_as_storage_11(storage: &mut TursoStorage) -> Result<(), TursoStorageError> {
+        storage.require_healthy()?;
+        let connection = storage.connection();
+        storage.latch_result(driver::write_transaction(&connection, || {
+            for sql in [
+                "DROP INDEX records_contacts_cover_idx",
+                "DROP INDEX search_documents_browse_idx",
+                "CREATE INDEX search_documents_browse_idx ON search_documents(profile, bucket, timestamp_ms DESC, __typename, id)",
+                "UPDATE meta SET value = '11' WHERE key = 'storage_schema_version'",
+            ] {
+                driver::execute(&connection, sql, Vec::new())?;
+            }
+            Ok(())
+        }))
+    }
 
     thread_local! {
         static STOP_AFTER: Cell<Option<u32>> = const { Cell::new(None) };
