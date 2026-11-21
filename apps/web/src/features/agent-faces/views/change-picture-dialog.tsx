@@ -8,6 +8,7 @@ import { Button, Dialog, Panel } from '@ui';
 import { createSignal, For, Match, onCleanup, Show, Switch } from 'solid-js';
 import { FaceEditor } from '../components/face-editor';
 import { FaceImage } from '../components/face-image';
+import { FACE_TABS, partsOfTab } from '../core/face-tabs';
 import { createFaceDraft } from '../primitives/create-face-draft';
 import {
   type AgentPicture,
@@ -113,25 +114,25 @@ function ChangePictureSkeleton(props: { onCancel: () => void }) {
                 </For>
               </div>
               <ListSkeleton.Bar class="h-8 w-full" />
-              {/* Shape, then Skin, which wraps to a second line on touch. */}
-              <For each={[1, 2]}>
-                {(lines) => (
+              {/* The first tab's rows, each Any then its options, on the
+                  editor's wrapping rows and touch-sized hit areas, so they
+                  wrap where the editor's do. */}
+              <For each={partsOfTab(FACE_TABS[0])}>
+                {(row) => (
                   <div class="flex flex-col gap-1.5">
                     <ListSkeleton.Bar class="w-10" />
-                    <For each={Array.from({ length: lines })}>
-                      {(_, line) => (
-                        <div
-                          class="flex gap-1.5 touch:gap-3"
-                          classList={{ 'hidden touch:flex': line() > 0 }}
-                        >
-                          <For each={Array.from({ length: 6 })}>
-                            {() => (
-                              <ListSkeleton.Bar class="size-8 touch:my-1.5" />
-                            )}
-                          </For>
-                        </div>
-                      )}
-                    </For>
+                    <div class="flex flex-wrap gap-1.5 touch:gap-y-2">
+                      <span class="flex items-center touch:min-h-[44px]">
+                        <ListSkeleton.Bar class="h-6 w-11" />
+                      </span>
+                      <For each={Array.from({ length: row.options })}>
+                        {() => (
+                          <span class="flex items-center justify-center touch:size-11">
+                            <ListSkeleton.Bar class="size-8" />
+                          </span>
+                        )}
+                      </For>
+                    </div>
                   </div>
                 )}
               </For>
