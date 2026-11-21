@@ -572,6 +572,118 @@ async fn each_person_reuses_a_dm_they_are_still_in(pool: PgPool) {
     }
 }
 
+async fn insert_dm(pool: &PgPool, seconds: i64, rows: &[(&str, bool)]) -> Uuid {
+    let id = macro_uuid::generate_uuid_v7();
+    sqlx::query!(
+        "INSERT INTO comms_channels (id, owner_id, channel_type, created_at) VALUES ($1, 'macro|a@example.com', 'direct_message', $2)",
+        id,
+        timestamp(seconds),
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    for (user_id, left) in rows {
+        sqlx::query!(
+            "INSERT INTO comms_channel_participants (channel_id, user_id, role, left_at) VALUES ($1, $2, 'member', CASE WHEN $3 THEN NOW() END)",
+            id,
+            *user_id,
+            *left,
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+    id
+}
+
+/// A legacy group conversation is the pair's DM while both people are still
+/// in it, its departed third member gone, as channel lists show it. Once the
+/// other person has left too, it is not: no list showed it as theirs and
+/// get-or-create never reused it, so the lookup answers nothing and a first
+/// message starts a DM of their own. A removed bot's row never counts.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_group_the_other_person_left_is_not_their_dm(pool: PgPool) {
+    let repo = PgChannelsRepo::new(pool.clone());
+    let (lo, hi) = (
+        pair().lo().as_ref().to_owned(),
+        pair().hi().as_ref().to_owned(),
+    );
+    let bot = format!("bot|{}", macro_uuid::generate_uuid_v7());
+    let group = insert_dm(
+        &pool,
+        1_000,
+        &[
+            (&lo, false),
+            (&hi, false),
+            ("macro|third@example.com", true),
+        ],
+    )
+    .await;
+    for (viewer, other) in [
+        (pair().lo().clone(), pair().hi().clone()),
+        (pair().hi().clone(), pair().lo().clone()),
+    ] {
+        assert_eq!(repo.maybe_get_dm(viewer, other).await.unwrap(), Some(group));
+    }
+
+    sqlx::query!(
+        "UPDATE comms_channel_participants SET left_at = NOW() WHERE channel_id = $1 AND user_id = $2",
+        group,
+        hi,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        repo.maybe_get_dm(pair().lo().clone(), pair().hi().clone())
+            .await
+            .unwrap(),
+        None,
+        "the other person and a third left: a group, not their DM"
+    );
+    let created = repo
+        .ensure_dm(pair(), DmCreation::Live(pair().lo().clone()))
+        .await
+        .unwrap();
+    assert!(created.created);
+    assert_ne!(created.id, group);
+    for (viewer, other) in [
+        (pair().lo().clone(), pair().hi().clone()),
+        (pair().hi().clone(), pair().lo().clone()),
+    ] {
+        assert_eq!(
+            repo.maybe_get_dm(viewer, other).await.unwrap(),
+            Some(created.id)
+        );
+    }
+
+    // With a removed bot instead of a third person, the DM the other person
+    // left is still theirs, as get-or-create always reused it.
+    let bot_dm = insert_dm(&pool, 500, &[(&lo, false), (&hi, true), (&bot, true)]).await;
+    sqlx::query!(
+        "UPDATE comms_channel_participants SET left_at = NOW() WHERE channel_id = $1",
+        created.id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        repo.maybe_get_dm(pair().lo().clone(), pair().hi().clone())
+            .await
+            .unwrap(),
+        Some(bot_dm)
+    );
+    assert_eq!(
+        repo.ensure_dm(pair(), DmCreation::Live(pair().lo().clone()))
+            .await
+            .unwrap(),
+        EnsuredChannel {
+            id: bot_dm,
+            created: false
+        }
+    );
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn importing_a_live_dm_preserves_owner_and_creates_no_additional_activity(pool: PgPool) {
     let repo = PgChannelsRepo::new(pool.clone());

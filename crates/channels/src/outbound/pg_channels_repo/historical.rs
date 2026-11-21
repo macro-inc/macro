@@ -240,14 +240,18 @@ pub enum DmRoster<'a> {
     /// import maps a conversation onto the channel it reserved for it, so it
     /// keeps the rule that channel was chosen by.
     Stored,
-    /// The row of anyone else who left does not count, a removed bot's or a
-    /// departed third person's in a legacy DM: the DM is the pair's again, as
-    /// every channel list shows it, so messaging the other person reopens
-    /// that DM instead of starting a second one. Of several, one both people
-    /// are still in wins, then one only the other person left, then one this
-    /// member left, then the oldest: a legacy duplicate never takes over the
-    /// DM they use, and this member lands where they can still write if they
-    /// can anywhere. Live get-or-create, by its actor.
+    /// A removed bot's row does not count, and while both people are still
+    /// in the DM neither does a departed third person's in a legacy DM: the
+    /// DM is then the pair's, as every channel list shows it, so messaging
+    /// the other person reopens it instead of starting a second one. Once
+    /// one of the two has left too, a departed person's row counts, as it
+    /// always did here: that conversation was a group's, which no list
+    /// showed as the pair's, and a first message starts a DM of their own.
+    /// Of several, one both people are still in wins, then one only the
+    /// other person left, then one this member left, then the oldest: a
+    /// legacy duplicate never takes over the DM they use, and this member
+    /// lands where they can still write if they can anywhere. Live
+    /// get-or-create, by its actor.
     Listed(&'a MacroUserIdStr<'a>),
     /// As `Listed`, among the DMs this member is still in, the only ones
     /// open to them: the read-only lookup answers its viewer the DM their
@@ -259,13 +263,13 @@ pub enum DmRoster<'a> {
 /// Discover an exact pair without modifying it.
 ///
 /// A DM is any channel both people have a row in, active or left, with no
-/// third row; `roster` says whether the row of a third member who left is
+/// third row; `roster` says when the row of a third member who left is
 /// one, and which DM wins. A third member still in the channel always is.
 /// The two people's rows are intersected first, through the partial
 /// `(user_id, channel_id)` indexes on active and on left rows, behind an
-/// `OFFSET 0` fence; only the channels they share are then checked, each
-/// through its own rows. The read is bounded by the two people's
-/// memberships, never by the table.
+/// `OFFSET 0` fence; only the direct messages among the channels they
+/// share are then checked, each by one read of its own rows. The read is
+/// bounded by the two people's memberships, never by the table.
 pub async fn find_dm(
     connection: &mut PgConnection,
     pair: &DmPair,
@@ -294,24 +298,33 @@ pub async fn find_dm(
             OFFSET 0
         ) shared
         JOIN comms_channels c ON c.id = shared.channel_id
+        CROSS JOIN LATERAL (
+            SELECT COUNT(*) AS all_rows,
+                   COUNT(*) FILTER (
+                       WHERE p.left_at IS NULL OR p.user_id NOT LIKE 'bot|%'
+                   ) AS without_removed_bots,
+                   COUNT(*) FILTER (WHERE p.left_at IS NULL) AS active,
+                   COUNT(*) FILTER (
+                       WHERE p.left_at IS NULL AND p.user_id IN ($1, $2)
+                   ) AS pair_active,
+                   COUNT(*) FILTER (
+                       WHERE p.left_at IS NULL AND p.user_id = $4
+                   ) AS member_active,
+                   -- 0 while both are in, 1 when only the other left, 2
+                   -- when the member left, 3 when both did.
+                   COALESCE(SUM(CASE WHEN p.user_id = $4 THEN 2 ELSE 1 END) FILTER (
+                       WHERE p.left_at IS NOT NULL AND p.user_id IN ($1, $2)
+                   ), 0) AS departed
+            FROM comms_channel_participants p
+            WHERE p.channel_id = c.id
+        ) roster
         WHERE c.channel_type = 'direct_message'
-          AND (SELECT COUNT(*) FROM comms_channel_participants p
-               WHERE p.channel_id = c.id
-                 AND ($3 OR p.left_at IS NULL OR p.user_id IN ($1, $2))) = 2
-          AND (NOT $5 OR EXISTS (
-               SELECT 1 FROM comms_channel_participants p
-               WHERE p.channel_id = c.id AND p.user_id = $4 AND p.left_at IS NULL))
-        ORDER BY
-          -- 0 while both are in, 1 when only the other left, 2 when the
-          -- member left, 3 when both did.
-          CASE WHEN $3 THEN 0 ELSE (
-              SELECT COALESCE(SUM(CASE WHEN p.user_id = $4 THEN 2 ELSE 1 END), 0)
-              FROM comms_channel_participants p
-              WHERE p.channel_id = c.id
-                AND p.user_id IN ($1, $2)
-                AND p.left_at IS NOT NULL)
-          END,
-          c.created_at, c.id
+          AND CASE WHEN $3 THEN roster.all_rows = 2
+              ELSE roster.without_removed_bots = 2
+                OR (roster.active = 2 AND roster.pair_active = 2)
+              END
+          AND (NOT $5 OR roster.member_active = 1)
+        ORDER BY CASE WHEN $3 THEN 0 ELSE roster.departed END, c.created_at, c.id
         LIMIT 1
         "#,
         pair.lo().as_ref(),

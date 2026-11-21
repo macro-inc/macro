@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT c.id\n        FROM (\n            (SELECT p.channel_id FROM comms_channel_participants p\n             WHERE p.user_id = $1 AND p.left_at IS NULL\n             UNION ALL\n             SELECT p.channel_id FROM comms_channel_participants p\n             WHERE p.user_id = $1 AND p.left_at IS NOT NULL)\n            INTERSECT\n            (SELECT p.channel_id FROM comms_channel_participants p\n             WHERE p.user_id = $2 AND p.left_at IS NULL\n             UNION ALL\n             SELECT p.channel_id FROM comms_channel_participants p\n             WHERE p.user_id = $2 AND p.left_at IS NOT NULL)\n            OFFSET 0\n        ) shared\n        JOIN comms_channels c ON c.id = shared.channel_id\n        CROSS JOIN LATERAL (\n            SELECT COUNT(*) AS all_rows,\n                   COUNT(*) FILTER (\n                       WHERE p.left_at IS NULL OR p.user_id NOT LIKE 'bot|%'\n                   ) AS without_removed_bots,\n                   COUNT(*) FILTER (WHERE p.left_at IS NULL) AS active,\n                   COUNT(*) FILTER (\n                       WHERE p.left_at IS NULL AND p.user_id IN ($1, $2)\n                   ) AS pair_active,\n                   COUNT(*) FILTER (\n                       WHERE p.left_at IS NULL AND p.user_id = $4\n                   ) AS member_active,\n                   -- 0 while both are in, 1 when only the other left, 2\n                   -- when the member left, 3 when both did.\n                   COALESCE(SUM(CASE WHEN p.user_id = $4 THEN 2 ELSE 1 END) FILTER (\n                       WHERE p.left_at IS NOT NULL AND p.user_id IN ($1, $2)\n                   ), 0) AS departed\n            FROM comms_channel_participants p\n            WHERE p.channel_id = c.id\n        ) roster\n        WHERE c.channel_type = 'direct_message'\n          AND CASE WHEN $3 THEN roster.all_rows = 2\n              ELSE roster.without_removed_bots = 2\n                OR (roster.active = 2 AND roster.pair_active = 2)\n              END\n          AND (NOT $5 OR roster.member_active = 1)\n        ORDER BY CASE WHEN $3 THEN 0 ELSE roster.departed END, c.created_at, c.id\n        LIMIT 1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Bool",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e64eeea5cd5913f1a424635a915164d3004e9eae1687ec13be858d5d0d3bb62d"
+}

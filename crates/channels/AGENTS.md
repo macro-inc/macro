@@ -86,14 +86,17 @@ DMs, and the shared message store other domains discuss things on.
   (`idx_comms_cp_left_by_user_channel`), then checks the shared channels. Left
   rows count: an imported DM both people left is still the one to reuse. A
   third member still in it (a bot) makes it a group. A third member who left
-  (a removed bot, or a departed person in a legacy DM) counts only for the
-  Slack importer (`DmRoster::Stored`), which maps a conversation onto the
-  channel it reserved by that rule and takes the oldest; live get-or-create
-  (`DmRoster::Listed`) and the lookup (`DmRoster::Joined`) skip that row, so
-  the DM is the pair's again, as channel lists show it. Of several DMs, live
-  get-or-create takes one both people are still in, then one only the other
-  left, then one its actor left, then the oldest, so a legacy duplicate never
-  takes over the DM in use. The lookup ranks the same among the DMs its viewer
+  counts for the Slack importer (`DmRoster::Stored`), which maps a
+  conversation onto the channel it reserved by that rule and takes the
+  oldest. Live get-or-create (`DmRoster::Listed`) and the lookup
+  (`DmRoster::Joined`) skip a removed bot's row, and a departed person's in a
+  legacy DM while both people are still in it, so the DM is the pair's again,
+  as channel lists show it; once one of the two has left too, a departed
+  person's row counts, so a group conversation never becomes the DM of
+  whoever is left in it. Of several DMs, live get-or-create takes one both
+  people are still in, then one only the other left, then one its actor left,
+  then the oldest, then the lowest id, so a legacy duplicate never takes over
+  the DM in use. The lookup ranks the same among the DMs its viewer
   is still in: it answers the DM their first message would reuse whenever
   they can open it, and nothing otherwise, as the joined list it replaced.
   So when a pair's only DM had a bot removed, a Slack import of that pair
