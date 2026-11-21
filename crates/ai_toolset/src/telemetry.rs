@@ -153,33 +153,39 @@ impl ToolCallSpan {
     }
 }
 
-/// The result with each `modelMedia` image's base64 `data` replaced by its
-/// length in `dataBytes`: pixels are not content a trace can use.
-fn without_image_pixels(value: &serde_json::Value) -> std::borrow::Cow<'_, serde_json::Value> {
-    let Some(media) = value
-        .get("modelMedia")
-        .and_then(serde_json::Value::as_array)
-    else {
-        return std::borrow::Cow::Borrowed(value);
-    };
-    let media = media
-        .iter()
-        .map(|item| match item {
-            serde_json::Value::Object(fields) => serde_json::Value::Object(
-                fields
-                    .iter()
-                    .map(|(key, field)| match (key.as_str(), field) {
-                        ("data", serde_json::Value::String(data)) => {
-                            ("dataBytes".to_owned(), serde_json::Value::from(data.len()))
-                        }
-                        _ => (key.clone(), field.clone()),
-                    })
-                    .collect(),
-            ),
-            other => other.clone(),
-        })
-        .collect();
+/// The result with the base64 `data` of every `modelMedia` image, at any
+/// depth (a tool may wrap another tool's result), replaced by the decoded size
+/// in `dataBytes`: pixels are not content a trace can use.
+fn without_image_pixels(value: &serde_json::Value) -> serde_json::Value {
     let mut value = value.clone();
-    value["modelMedia"] = serde_json::Value::Array(media);
-    std::borrow::Cow::Owned(value)
+    redact_image_pixels(&mut value);
+    value
+}
+
+fn redact_image_pixels(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Object(fields) => {
+            for (key, field) in fields.iter_mut() {
+                match (key.as_str(), field) {
+                    ("modelMedia", serde_json::Value::Array(images)) => {
+                        images.iter_mut().for_each(redact_image_data);
+                    }
+                    (_, field) => redact_image_pixels(field),
+                }
+            }
+        }
+        serde_json::Value::Array(items) => items.iter_mut().for_each(redact_image_pixels),
+        _ => {}
+    }
+}
+
+fn redact_image_data(image: &mut serde_json::Value) {
+    let Some(fields) = image.as_object_mut() else {
+        return;
+    };
+    if let Some(serde_json::Value::String(data)) = fields.remove("data") {
+        let padding = data.bytes().rev().take_while(|byte| *byte == b'=').count();
+        let decoded = (data.len() / 4 * 3).saturating_sub(padding);
+        fields.insert("dataBytes".to_owned(), serde_json::Value::from(decoded));
+    }
 }
