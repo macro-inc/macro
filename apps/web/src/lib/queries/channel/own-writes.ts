@@ -6,7 +6,9 @@
  * shows the same channel or a later update of it, or the hold ends. Once a
  * source has, the write is let go for every directory: what the channel does
  * next (a deletion, a rejoin, someone else's rename) is the source's to show,
- * never a lag the write covers.
+ * never a lag the write covers. A directory watches each channel from the
+ * moment its read is sent, so what its source shows while the read is in
+ * flight counts as shown after the write too.
  */
 import type { QueryClient } from '@tanstack/solid-query';
 import { type Accessor, createSignal, untrack } from 'solid-js';
@@ -28,15 +30,36 @@ export type OwnChannelWrite = {
   sequence: number;
 };
 
+/** A read of the primary sent and not settled yet. */
+export type OwnWriteRead = {
+  sequence: number;
+  account: QueryAccount;
+  channelIds: readonly string[];
+};
+
+/** A read of the primary, sent. */
+export type SentOwnWriteRead = {
+  sequence: number;
+  /** Holds what the read found, by channel id (null for a channel the
+   * viewer can no longer read), as writes of its sequence, and ends the
+   * read. Only the first call counts; a channel left out gets no write. */
+  settle: (channels: Readonly<Record<string, DirectoryChannel | null>>) => void;
+};
+
 export type OwnChannelWrites = {
   /** The writes held now, by channel id. */
   writes: Accessor<Readonly<Record<string, OwnChannelWrite>>>;
-  /** The order of a read of the primary sent now. */
-  nextSequence: () => number;
-  /** Holds each write for `OWN_WRITE_HOLD_MS` in place of its channel's
-   * last, all at once. A write whose read was sent before one the store
-   * already took for its channel, or before the last `clear`, is dropped. */
-  record: (writes: Readonly<Record<string, OwnChannelWrite>>) => void;
+  /** The reads in flight. Not reactive: a directory reads it when its own
+   * source changes, which is all it has to watch while they are. */
+  inFlight: () => readonly OwnWriteRead[];
+  /** Starts a read of `channelIds` for `account`, ordered after every read
+   * sent before it. Its writes are held for `OWN_WRITE_HOLD_MS` in place of
+   * their channel's last; one is dropped when the store already took a
+   * read of its channel sent later, or was cleared since it was sent. */
+  send: (
+    account: QueryAccount,
+    channelIds: readonly string[]
+  ) => SentOwnWriteRead;
   /** Lets `write` go before its hold ends, unless a later write of the
    * channel replaced it. */
   release: (channelId: string, write: OwnChannelWrite) => void;
@@ -61,6 +84,7 @@ export function ownChannelWrites(client: QueryClient): OwnChannelWrites {
   // The latest read taken for each channel, kept after its write goes, so a
   // read sent before it can never land later.
   const latest = new Map<string, number>();
+  const inFlight = new Map<number, OwnWriteRead>();
   let sequence = 0;
   let clearedAt = 0;
   const release = (channelId: string, write: OwnChannelWrite) => {
@@ -72,31 +96,42 @@ export function ownChannelWrites(client: QueryClient): OwnChannelWrites {
       return rest;
     });
   };
+  const record = (read: OwnWriteRead, found: SettledChannels) => {
+    if (read.sequence <= clearedAt) return;
+    const taken: Record<string, OwnChannelWrite> = {};
+    for (const [channelId, channel] of Object.entries(found)) {
+      if ((latest.get(channelId) ?? 0) > read.sequence) continue;
+      latest.set(channelId, read.sequence);
+      const write = { channel, account: read.account, sequence: read.sequence };
+      taken[channelId] = write;
+      clearTimeout(expiries.get(channelId));
+      expiries.set(
+        channelId,
+        setTimeout(() => release(channelId, write), OWN_WRITE_HOLD_MS)
+      );
+    }
+    if (Object.keys(taken).length === 0) return;
+    setWrites((previous) => ({ ...previous, ...taken }));
+  };
   const created: OwnChannelWrites = {
     writes,
-    nextSequence: () => {
+    inFlight: () => [...inFlight.values()],
+    send(account, channelIds) {
       sequence += 1;
-      return sequence;
-    },
-    record(next) {
-      const taken: Record<string, OwnChannelWrite> = {};
-      for (const [channelId, write] of Object.entries(next)) {
-        if (write.sequence <= clearedAt) continue;
-        if ((latest.get(channelId) ?? 0) > write.sequence) continue;
-        latest.set(channelId, write.sequence);
-        taken[channelId] = write;
-        clearTimeout(expiries.get(channelId));
-        expiries.set(
-          channelId,
-          setTimeout(() => release(channelId, write), OWN_WRITE_HOLD_MS)
-        );
-      }
-      if (Object.keys(taken).length === 0) return;
-      setWrites((previous) => ({ ...previous, ...taken }));
+      const read = { sequence, account, channelIds: [...channelIds] };
+      inFlight.set(read.sequence, read);
+      return {
+        sequence: read.sequence,
+        settle(found) {
+          if (!inFlight.delete(read.sequence)) return;
+          record(read, found);
+        },
+      };
     },
     release,
     clear() {
       clearedAt = sequence;
+      inFlight.clear();
       for (const timer of expiries.values()) clearTimeout(timer);
       expiries.clear();
       if (Object.keys(untrack(writes)).length > 0) setWrites({});
@@ -106,15 +141,23 @@ export function ownChannelWrites(client: QueryClient): OwnChannelWrites {
   return created;
 }
 
-/** What one directory has seen of a channel since a write of it: whether
- * its source showed a record of it, and since when the writer was in the
- * first one it showed. */
+type SettledChannels = Readonly<Record<string, DirectoryChannel | null>>;
+
+/** What one directory has seen of a channel since a read of it was sent:
+ * whether its source showed a record of it, since when the writer was in
+ * the first one it showed (`baseline`), and since when they were in the
+ * last one that listed them in it (`lastJoined`). */
 export type WriteSighting = {
   baseline: number | undefined;
   held: boolean;
+  lastJoined: number | undefined;
 };
 
-export const UNSEEN: WriteSighting = { baseline: undefined, held: false };
+export const UNSEEN: WriteSighting = {
+  baseline: undefined,
+  held: false,
+  lastJoined: undefined,
+};
 
 /** Since when `userId` is in `channel`: when they joined, or, with no
  * record of them in it, its last update. A rejoin sets the join time again
@@ -126,43 +169,58 @@ function memberSince(channel: DirectoryChannel, userId: string): number {
   return instantMicros(participant?.joinedAt ?? channel.updatedAt);
 }
 
-/** `sighting` with `source` seen too. */
+/** `sighting` with `source` seen too, for a write or read by `writer`. */
 export function sightWrite(
-  write: OwnChannelWrite,
+  writer: { account: QueryAccount },
   sighting: WriteSighting,
   source: DirectoryChannel | undefined
 ): WriteSighting {
-  if (!source || sighting.held) return sighting;
-  return {
-    baseline: memberSince(source, write.account.userId),
-    held: true,
-  };
+  if (!source) return sighting;
+  const since = memberSince(source, writer.account.userId);
+  const baseline = sighting.held ? sighting.baseline : since;
+  const lastJoined = source.isParticipant ? since : sighting.lastJoined;
+  if (
+    sighting.held &&
+    baseline === sighting.baseline &&
+    lastJoined === sighting.lastJoined
+  )
+    return sighting;
+  return { baseline, held: true, lastJoined };
 }
 
 /** Whether `source` has yet to show the write, given what the directory saw
- * of the channel since (`sighting`, with `source` already in it). The source
- * is behind while it lacks a channel it has not shown since the write, or
- * shows the channel otherwise than the primary did and not updated after;
- * or, for a channel the viewer can no longer read, while it lists them in
- * it as it did when it first showed the channel. A channel the source
- * showed and then lost was removed after the write, and the viewer joining
- * it again is past it. */
+ * of the channel since its read was sent (`sighting`, with `source` already
+ * in it). The source is behind while it lacks a channel it has not shown
+ * since, or shows the channel otherwise than the primary did and not
+ * updated after. A channel the source showed and then lost was removed
+ * after the read. Whether the writer is in it is judged by their join:
+ * removing someone leaves a channel's update time as it was. The source is
+ * past a write that has them in once it showed them in since that join and
+ * no longer does (they were removed after), and past one that has them out
+ * once it shows them joined since it first showed the channel (they joined
+ * again after), which is also how a channel they can no longer read stays
+ * behind only while it lists them in it as it first did. */
 export function sourceBehindWrite(
   write: OwnChannelWrite,
   source: DirectoryChannel | undefined,
   sighting: WriteSighting
 ): boolean {
   const { channel } = write;
-  if (!channel) {
-    if (source?.isParticipant !== true) return false;
-    return (
-      sighting.baseline === undefined ||
-      memberSince(source, write.account.userId) <= sighting.baseline
-    );
-  }
+  const { userId } = write.account;
+  const rejoinedSince = (shown: DirectoryChannel) =>
+    sighting.baseline !== undefined &&
+    memberSince(shown, userId) > sighting.baseline;
+  if (!channel) return source?.isParticipant === true && !rejoinedSince(source);
   if (!source) return !sighting.held;
   if (instantMicros(source.updatedAt) > instantMicros(channel.updatedAt))
     return false;
+  if (channel.isParticipant && !source.isParticipant)
+    return !(
+      sighting.lastJoined !== undefined &&
+      memberSince(channel, userId) <= sighting.lastJoined
+    );
+  if (!channel.isParticipant && source.isParticipant)
+    return !rejoinedSince(source);
   return writtenFields(source) !== writtenFields(channel);
 }
 
@@ -190,43 +248,74 @@ export function overlayOwnWrites(
   };
 }
 
+const sightingKey = (sequence: number, channelId: string) =>
+  `${sequence}:${channelId}`;
+
 /**
  * One directory's view of the held writes: which of them its source is
- * behind. It remembers what its source showed of each written channel, and
- * a write its source caught up with is past for good and let go from the
- * store, so no later absence or update of the channel reads as lag.
+ * behind. It remembers what its source showed of each channel from the
+ * moment a read of it was sent, and a write its source caught up with is
+ * past for good and let go from the store, so no later absence or update
+ * of the channel reads as lag.
  */
 export function createOwnWriteTracker(
   own: OwnChannelWrites,
   account: QueryAccount
 ) {
-  const sightings = new WeakMap<OwnChannelWrite, WriteSighting>();
+  const sightings = new Map<string, WriteSighting>();
   const past = new WeakSet<OwnChannelWrite>();
-  const mine = (write: OwnChannelWrite) =>
-    write.account.userId === account.userId &&
-    write.account.session === account.session;
+  // What the source showed last: a read sent since starts from it.
+  let lastShown: Readonly<Record<string, DirectoryChannel>> | undefined;
+  const mine = ({ account: writer }: { account: QueryAccount }) =>
+    writer.userId === account.userId && writer.session === account.session;
+  const sightingOf = (
+    writer: { account: QueryAccount },
+    key: string,
+    channelId: string,
+    source: DirectoryChannel | undefined
+  ) => {
+    const seen =
+      sightings.get(key) ??
+      (lastShown ? sightWrite(writer, UNSEEN, lastShown[channelId]) : UNSEEN);
+    return sightWrite(writer, seen, source);
+  };
   const pendingIn = (
     records: Readonly<Record<string, DirectoryChannel>>,
     writes: Readonly<Record<string, OwnChannelWrite>>,
     observe: boolean
   ) => {
+    const watched = new Set<string>();
+    if (observe)
+      for (const read of own.inFlight()) {
+        if (!mine(read)) continue;
+        for (const id of read.channelIds) {
+          const key = sightingKey(read.sequence, id);
+          watched.add(key);
+          sightings.set(key, sightingOf(read, key, id, records[id]));
+        }
+      }
     const pending: [string, OwnChannelWrite][] = [];
     for (const [id, write] of Object.entries(writes)) {
       if (!mine(write) || past.has(write)) continue;
+      const key = sightingKey(write.sequence, id);
       const source = records[id];
-      const sighting = sightWrite(
-        write,
-        sightings.get(write) ?? UNSEEN,
-        source
-      );
+      const sighting = sightingOf(write, key, id, source);
       if (sourceBehindWrite(write, source, sighting)) {
-        if (observe) sightings.set(write, sighting);
+        if (observe) {
+          watched.add(key);
+          sightings.set(key, sighting);
+        }
         pending.push([id, write]);
       } else if (observe) {
         past.add(write);
         // Not from inside the computation reading the writes.
         queueMicrotask(() => own.release(id, write));
       }
+    }
+    if (observe) {
+      for (const key of sightings.keys())
+        if (!watched.has(key)) sightings.delete(key);
+      lastShown = records;
     }
     return pending;
   };

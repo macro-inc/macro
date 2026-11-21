@@ -38,13 +38,40 @@ const written = directoryChannel(A, {
   ],
 });
 
+/** `channel` with the viewer in it since `joinedAt`, or out of it. */
+const withViewer = (channel: DirectoryChannel, joinedAt?: string) =>
+  joinedAt
+    ? {
+        ...channel,
+        isParticipant: true,
+        participants: [
+          ...channel.participants,
+          directoryParticipant(VIEWER, { joinedAt }),
+        ],
+      }
+    : { ...channel, isParticipant: false };
+
 /** Whether `source` is behind `w` when it is the first record of the
- * channel the directory sees since the write, or after `seen`. */
+ * channel the directory sees since the read, or after `seen`. */
 const behind = (
   w: OwnChannelWrite,
   source: DirectoryChannel | undefined,
   seen: WriteSighting = UNSEEN
 ) => sourceBehindWrite(w, source, sightWrite(w, seen, source));
+
+/** What the directory saw of the channel, record after record. */
+const seenOf = (...shown: (DirectoryChannel | undefined)[]) =>
+  shown.reduce<WriteSighting>(
+    (sighting, source) => sightWrite(write(null), sighting, source),
+    UNSEEN
+  );
+
+/** Sends a read of `channels` and settles it with what it found. */
+const settle = (
+  own: ReturnType<typeof ownChannelWrites>,
+  found: Record<string, DirectoryChannel | null>,
+  account = ACCOUNT
+) => own.send(account, Object.keys(found)).settle(found);
 
 describe('sourceBehindWrite', () => {
   it('is caught up when only the viewer’s own view, interaction or frecency moved', () => {
@@ -111,13 +138,7 @@ describe('sourceBehindWrite', () => {
   });
 
   it('is past a channel the viewer can no longer read once they joined it again', () => {
-    const member = {
-      ...written,
-      participants: [
-        ...written.participants,
-        { ...directoryParticipant(VIEWER), joinedAt: '2026-11-01T00:00:00Z' },
-      ],
-    };
+    const member = withViewer(written, '2026-11-01T00:00:00Z');
     const seen = sightWrite(write(null), UNSEEN, member);
     // Messages and renames move the update time, not the viewer's join.
     expect(
@@ -127,14 +148,49 @@ describe('sourceBehindWrite', () => {
         seen
       )
     ).toBe(true);
-    const rejoined = {
-      ...member,
-      participants: [
-        ...written.participants,
-        { ...directoryParticipant(VIEWER), joinedAt: '2026-11-03T00:00:00Z' },
-      ],
-    };
+    const rejoined = withViewer(written, '2026-11-03T00:00:00Z');
     expect(behind(write(null), rejoined, seen)).toBe(false);
+  });
+
+  it('is behind a write that has the viewer in while it shows them out, until it showed them in since that join', () => {
+    const joined = withViewer(written, '2026-11-01T00:00:00Z');
+    const out = withViewer(written);
+    // Lagging behind their join.
+    expect(behind(write(joined), out)).toBe(true);
+    expect(behind(write(joined), out, seenOf(out))).toBe(true);
+    // In at that join, then out at the same update time: removed after.
+    expect(behind(write(joined), out, seenOf(joined))).toBe(false);
+    // In at an earlier join, which the write's join came after.
+    const earlier = withViewer(written, '2026-10-01T00:00:00Z');
+    expect(behind(write(joined), out, seenOf(earlier))).toBe(true);
+  });
+
+  it('is behind a write that has the viewer out while it shows them in as it first did', () => {
+    const member = withViewer(written, '2026-11-01T00:00:00Z');
+    const out = withViewer(written);
+    expect(behind(write(out), member)).toBe(true);
+    expect(behind(write(out), member, seenOf(member))).toBe(true);
+    // They joined again after.
+    expect(
+      behind(
+        write(out),
+        withViewer(written, '2026-11-03T00:00:00Z'),
+        seenOf(member)
+      )
+    ).toBe(false);
+    expect(behind(write(out), out, seenOf(member))).toBe(false);
+  });
+});
+
+describe('sightWrite', () => {
+  it('keeps the first join it saw, and the last one that listed the viewer', () => {
+    const first = withViewer(written, '2026-11-01T00:00:00Z');
+    const later = withViewer(written, '2026-11-03T00:00:00Z');
+    const seen = seenOf(first, withViewer(written), later, withViewer(written));
+    expect(seen.held).toBe(true);
+    expect(seen.baseline).toBe(seenOf(first).baseline);
+    expect(seen.lastJoined).toBe(seenOf(later).lastJoined);
+    expect(seenOf(undefined)).toBe(UNSEEN);
   });
 });
 
@@ -179,8 +235,9 @@ describe('createOwnWriteTracker', () => {
 
   it('lets a write go for good once its source showed it, so a later removal is not lag', async () => {
     const own = ownChannelWrites(new QueryClient());
-    const w = write(written);
-    own.record({ [A]: w });
+    settle(own, { [A]: written });
+    const w = own.writes()[A];
+    if (!w) throw new Error('no write');
     const tracker = createOwnWriteTracker(own, ACCOUNT);
     expect(tracker.pending({ [A]: stale }, own.writes())).toEqual([[A, w]]);
     expect(tracker.pending({ [A]: written }, own.writes())).toEqual([]);
@@ -192,8 +249,8 @@ describe('createOwnWriteTracker', () => {
 
   it('remembers nothing from a one-time read', () => {
     const own = ownChannelWrites(new QueryClient());
-    const w = write(written);
-    own.record({ [A]: w });
+    settle(own, { [A]: written });
+    const w = own.writes()[A];
     const tracker = createOwnWriteTracker(own, ACCOUNT);
     expect(tracker.pendingFor({ [A]: stale }, own.writes())).toEqual([[A, w]]);
     // The directory's own source never showed the channel, so its absence
@@ -201,6 +258,27 @@ describe('createOwnWriteTracker', () => {
     expect(tracker.pending({}, own.writes())).toEqual([[A, w]]);
     expect(tracker.pendingFor({ [A]: written }, own.writes())).toEqual([]);
     expect(tracker.pending({}, own.writes())).toEqual([[A, w]]);
+  });
+
+  it('counts what its source showed while the read was in flight', () => {
+    const own = ownChannelWrites(new QueryClient());
+    const tracker = createOwnWriteTracker(own, ACCOUNT);
+    tracker.pending({ [A]: stale }, own.writes());
+    const sent = own.send(ACCOUNT, [A]);
+    // Removed after the primary read the rename.
+    tracker.pending({}, own.writes());
+    sent.settle({ [A]: written });
+    expect(tracker.pending({}, own.writes())).toEqual([]);
+  });
+
+  it('starts from what its source showed when the read was sent', () => {
+    const own = ownChannelWrites(new QueryClient());
+    const tracker = createOwnWriteTracker(own, ACCOUNT);
+    tracker.pending({ [A]: stale }, own.writes());
+    // Nothing changed while the read was in flight, and then the channel
+    // went.
+    settle(own, { [A]: written });
+    expect(tracker.pending({}, own.writes())).toEqual([]);
   });
 });
 
@@ -220,42 +298,56 @@ describe('ownChannelWrites', () => {
   it('holds each write for its own full hold', () => {
     vi.useFakeTimers();
     const own = ownChannelWrites(new QueryClient());
-    own.record({ [A]: write(written, { sequence: own.nextSequence() }) });
+    settle(own, { [A]: written });
     vi.advanceTimersByTime(OWN_WRITE_HOLD_MS / 2);
-    const later = write(
-      { ...written, name: 'again' },
-      { sequence: own.nextSequence() }
-    );
-    own.record({ [A]: later, [B]: write(null, { sequence: later.sequence }) });
+    const again = { ...written, name: 'again' };
+    settle(own, { [A]: again, [B]: null });
 
     vi.advanceTimersByTime(OWN_WRITE_HOLD_MS / 2);
-    expect(own.writes()[A]).toBe(later);
+    expect(own.writes()[A]?.channel).toBe(again);
     vi.advanceTimersByTime(OWN_WRITE_HOLD_MS / 2);
     expect(own.writes()).toEqual({});
   });
 
   it('never lets a read sent earlier replace one sent later, even after it went', () => {
     const own = ownChannelWrites(new QueryClient());
-    const first = own.nextSequence();
-    const second = own.nextSequence();
-    const newer = write({ ...written, name: 'newer' }, { sequence: second });
-    own.record({ [A]: newer });
-    own.record({ [A]: write(written, { sequence: first }) });
-    expect(own.writes()[A]).toBe(newer);
-    own.release(A, newer);
-    own.record({ [A]: write(written, { sequence: first }) });
+    const first = own.send(ACCOUNT, [A]);
+    const second = own.send(ACCOUNT, [A]);
+    const third = own.send(ACCOUNT, [A]);
+    const newer = { ...written, name: 'newer' };
+    third.settle({ [A]: newer });
+    const held = own.writes()[A];
+    expect(held?.channel).toBe(newer);
+    second.settle({ [A]: written });
+    expect(own.writes()[A]).toBe(held);
+    if (held) own.release(A, held);
+    first.settle({ [A]: written });
     expect(own.writes()).toEqual({});
+  });
+
+  it('keeps a read in flight until it settles, once', () => {
+    const own = ownChannelWrites(new QueryClient());
+    const sent = own.send(ACCOUNT, [A, B]);
+    expect(own.inFlight()).toEqual([
+      { sequence: sent.sequence, account: ACCOUNT, channelIds: [A, B] },
+    ]);
+    sent.settle({ [A]: written });
+    expect(own.inFlight()).toEqual([]);
+    expect(Object.keys(own.writes())).toEqual([A]);
+    sent.settle({ [B]: null });
+    expect(Object.keys(own.writes())).toEqual([A]);
   });
 
   it('lets every write go on clear, and drops the reads still in flight', () => {
     const own = ownChannelWrites(new QueryClient());
-    own.record({ [A]: write(written, { sequence: own.nextSequence() }) });
-    const inFlight = own.nextSequence();
+    settle(own, { [A]: written });
+    const inFlight = own.send(ACCOUNT, [B]);
     own.clear();
     expect(own.writes()).toEqual({});
-    own.record({ [B]: write(null, { sequence: inFlight }) });
+    expect(own.inFlight()).toEqual([]);
+    inFlight.settle({ [B]: null });
     expect(own.writes()).toEqual({});
-    own.record({ [B]: write(null, { sequence: own.nextSequence() }) });
+    settle(own, { [B]: null });
     expect(Object.keys(own.writes())).toEqual([B]);
   });
 
@@ -269,11 +361,7 @@ describe('ownChannelWrites', () => {
       });
       return done;
     });
-    const sequence = own.nextSequence();
-    own.record({
-      [A]: write(written, { sequence }),
-      [B]: write(null, { sequence }),
-    });
+    settle(own, { [A]: written, [B]: null });
     dispose();
     expect(runs).toBe(2);
   });

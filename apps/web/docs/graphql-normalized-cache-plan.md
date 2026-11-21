@@ -1475,11 +1475,17 @@ still holds, for at most a minute, until the source shows it or a later
 update. A channel the viewer can no longer read leaves the list the same
 way, and channels the write deleted (`removed`) leave it without a read. Once
 the source shows a write, it is let go for every directory, so a later
-removal or update is the source's to show; a write that took a channel away
-holds only while the source still lists the viewer as it did. Writes carry
-the account, the sign-in session and the order their reads were sent in, so
-an earlier read never replaces a later one; a storage reset or a new sign-in
-lets them all go. A write of many channels reads at most twenty, four at a
+removal or update is the source's to show. Each directory watches a channel
+from the moment its read is sent (`send`, then `settle` with what it found),
+so a channel its source lost while the read was in flight counts as removed
+after the write. Whether the viewer is in a channel is judged by their join
+time, since removing someone leaves the update time as it was: a write that
+has them in lets go once the source showed them in since that join and then
+out, and one that has them out (a leave, or a channel they can no longer
+read) holds only while the source lists them in it as it first did. Writes
+carry the account, the sign-in session and the order their reads were sent
+in, so an earlier read never replaces a later one; a storage reset or a new
+sign-in lets them all go, with the reads still in flight. A write of many channels reads at most twenty, four at a
 time; a link join, whose response names no channel, reads none. The in-memory directory reads its pages again while they lag, after
 1, 2, 4 and 8 seconds. A read that fails, or that lands after the account
 changed, holds nothing (`channel_directory.own_writes` span). The viewer's

@@ -869,43 +869,48 @@ async function readOwnWrites(
     span.setAttr('channel_directory.removed', gone.length);
     const reading = channelIds.length <= OWN_WRITE_READ_LIMIT ? channelIds : [];
     span.setAttr('channel_directory.over_limit', reading !== channelIds);
-    // Taken as the reads are sent: a read of the channel sent after this
-    // one replaces it, whichever lands first.
-    const sequence = own.nextSequence();
-    const reads: PrimaryChannelRead[] = [];
-    // Chunks after the first start past an await, outside the span.
-    for (let at = 0; at < reading.length; at += OWN_WRITE_READ_CONCURRENCY)
-      reads.push(
-        ...(await span.run(() =>
-          Promise.all(
-            reading
-              .slice(at, at + OWN_WRITE_READ_CONCURRENCY)
-              .map((id) => readChannelFromPrimary(soup(), id))
-          )
-        ))
-      );
-    const now = account();
-    if (now?.userId !== writer.userId || now.session !== writer.session) {
-      span.setAttr('channel_directory.scope', 'other_viewer');
-      return;
-    }
-    const writes: Record<string, OwnChannelWrite> = {};
-    for (const id of gone)
-      writes[id] = { channel: null, account: writer, sequence };
-    let failed = 0;
-    let unreadable = 0;
-    reads.forEach((read, index) => {
-      const channelId = reading[index];
-      if (read.kind === 'failed' || !channelId) {
-        failed += 1;
+    // Sent before the reads: a read of the channel sent after this one
+    // replaces it, whichever lands first, and the directories watch the
+    // channels from now on.
+    const sent = own.send(writer, [...reading, ...gone]);
+    // Settled however the reads end: with what they found for this viewer,
+    // or with nothing once the account changed or a read threw.
+    const found: Record<string, DirectoryChannel | null> = {};
+    try {
+      const reads: PrimaryChannelRead[] = [];
+      // Chunks after the first start past an await, outside the span.
+      for (let at = 0; at < reading.length; at += OWN_WRITE_READ_CONCURRENCY)
+        reads.push(
+          ...(await span.run(() =>
+            Promise.all(
+              reading
+                .slice(at, at + OWN_WRITE_READ_CONCURRENCY)
+                .map((id) => readChannelFromPrimary(soup(), id))
+            )
+          ))
+        );
+      const now = account();
+      if (now?.userId !== writer.userId || now.session !== writer.session) {
+        span.setAttr('channel_directory.scope', 'other_viewer');
         return;
       }
-      if (!read.channel) unreadable += 1;
-      writes[channelId] = { channel: read.channel, account: writer, sequence };
-    });
-    own.record(writes);
-    span.setAttr('channel_directory.failed', failed);
-    span.setAttr('channel_directory.unreadable', unreadable);
+      for (const id of gone) found[id] = null;
+      let failed = 0;
+      let unreadable = 0;
+      reads.forEach((read, index) => {
+        const channelId = reading[index];
+        if (read.kind === 'failed' || !channelId) {
+          failed += 1;
+          return;
+        }
+        if (!read.channel) unreadable += 1;
+        found[channelId] = read.channel;
+      });
+      span.setAttr('channel_directory.failed', failed);
+      span.setAttr('channel_directory.unreadable', unreadable);
+    } finally {
+      sent.settle(found);
+    }
   });
 }
 

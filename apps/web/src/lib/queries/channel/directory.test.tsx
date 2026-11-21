@@ -2801,6 +2801,45 @@ function writeOf(
   });
 }
 
+/** `network`, its answers held until `land` is called. */
+function heldNetwork(network: Pick<ReturnType<typeof fakeNetwork>, 'client'>) {
+  let land!: () => void;
+  const landed = new Promise<void>((done) => {
+    land = done;
+  });
+  return {
+    land,
+    client: {
+      query: (...args: Parameters<typeof network.client.query>) => ({
+        toPromise: async () => {
+          await landed;
+          return network.client.query(...args).toPromise();
+        },
+      }),
+    } as typeof network.client,
+  };
+}
+
+/** Public channel `a`, named `name`, with the viewer in it since `joinedAt`
+ * or, without it, not in it. */
+function publicChannel(name: string, updatedAt: string, joinedAt?: string) {
+  const record = channelRecord('a', { name, updatedAt });
+  if (!joinedAt) return { ...record, isParticipant: false };
+  return {
+    ...record,
+    participants: [
+      ...record.participants,
+      {
+        channelId: channelUuid('a'),
+        userId: VIEWER,
+        role: 'MEMBER' as const,
+        joinedAt,
+        leftAt: null,
+      },
+    ],
+  };
+}
+
 describe("the viewer's own channel writes", () => {
   const queryClient = () =>
     new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -3053,6 +3092,136 @@ describe("the viewer's own channel writes", () => {
 
     await vi.waitFor(() => expect(nameOf(directory, 'a')).toBe('missing'));
     expect(ids(directory.channels())).toEqual([]);
+  });
+
+  it('does not bring back a channel removed while the read of a rename was in flight', async () => {
+    const client = queryClient();
+    const { cache, directory, reopen } = mountCachedDirectory([], {
+      queryClient: client,
+    });
+    cache.put(channelRecord('a', { name: 'before' }));
+    completeLane('g1');
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    const primary = heldNetwork(
+      fakeNetwork([], {
+        primary: [
+          channelRecord('a', { name: 'after', updatedAt: UPDATED_MID }),
+        ],
+      })
+    );
+
+    // The primary read the rename's snapshot before the removal, and its
+    // answer lands after the directory showed the removal.
+    const write = writeOf(client, primary, ['a']);
+    cache.records.delete(`GraphqlSoupChannel:${channelUuid('a')}`);
+    reopen();
+    await vi.waitFor(() => expect(nameOf(directory, 'a')).toBe('missing'));
+    primary.land();
+    await write;
+
+    await new Promise((done) => setTimeout(done, 20));
+    expect(nameOf(directory, 'a')).toBe('missing');
+    expect(ids(directory.channels())).toEqual([]);
+  });
+
+  it('lets a rename go once the cache shows the viewer removed at the same update time', async () => {
+    const client = queryClient();
+    const { cache, directory, reopen } = mountCachedDirectory([], {
+      queryClient: client,
+    });
+    cache.put(publicChannel('before', UPDATED_OLD, UPDATED_OLD));
+    completeLane('g1');
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    await writeOf(
+      client,
+      fakeNetwork([], {
+        primary: [publicChannel('after', UPDATED_MID, UPDATED_OLD)],
+      }),
+      ['a']
+    );
+    expect(nameOf(directory, 'a')).toBe('after');
+
+    // Someone removes the viewer: removing a participant leaves the
+    // channel's update time as it was.
+    cache.put(publicChannel('after', UPDATED_MID), { sourceHash: 'a-out' });
+    reopen();
+
+    await vi.waitFor(() => expect(ids(directory.channels())).toEqual([]));
+    await vi.waitFor(() =>
+      expect(ownChannelWrites(client).writes()).toEqual({})
+    );
+  });
+
+  it('lets a rename go when the viewer was removed before its read landed', async () => {
+    const client = queryClient();
+    const { cache, directory, reopen } = mountCachedDirectory([], {
+      queryClient: client,
+    });
+    cache.put(publicChannel('before', UPDATED_OLD, UPDATED_OLD));
+    completeLane('g1');
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    const primary = heldNetwork(
+      fakeNetwork([], {
+        primary: [publicChannel('after', UPDATED_MID, UPDATED_OLD)],
+      })
+    );
+
+    const write = writeOf(client, primary, ['a']);
+    cache.put(publicChannel('after', UPDATED_MID), { sourceHash: 'a-out' });
+    reopen();
+    await vi.waitFor(() => expect(ids(directory.channels())).toEqual([]));
+    primary.land();
+    await write;
+
+    await new Promise((done) => setTimeout(done, 20));
+    expect(ids(directory.channels())).toEqual([]);
+  });
+
+  it('holds a leave and a join of a public channel until the cache shows each', async () => {
+    const client = queryClient();
+    const { cache, directory, reopen } = mountCachedDirectory([], {
+      queryClient: client,
+    });
+    cache.put(publicChannel('a', UPDATED_OLD, UPDATED_OLD));
+    completeLane('g1');
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+
+    // They leave; the channel stays readable to them.
+    await writeOf(
+      client,
+      fakeNetwork([], { primary: [publicChannel('a', UPDATED_OLD)] }),
+      ['a']
+    );
+    expect(ids(directory.channels())).toEqual([]);
+    cache.put(publicChannel('a', UPDATED_OLD), { sourceHash: 'a-left' });
+    reopen();
+    await vi.waitFor(() =>
+      expect(ownChannelWrites(client).writes()).toEqual({})
+    );
+
+    // They join again, at the same update time; the cache has yet to show
+    // it, through another change too.
+    await writeOf(
+      client,
+      fakeNetwork([], {
+        primary: [publicChannel('a', UPDATED_OLD, UPDATED_NEW)],
+      }),
+      ['a']
+    );
+    expect(ids(directory.channels())).toEqual(['a']);
+    cache.put(publicChannel('a', UPDATED_OLD), { sourceHash: 'a-lagging' });
+    reopen();
+    await new Promise((done) => setTimeout(done, 20));
+    expect(ids(directory.channels())).toEqual(['a']);
+
+    cache.put(publicChannel('a', UPDATED_OLD, UPDATED_NEW), {
+      sourceHash: 'a-joined',
+    });
+    reopen();
+    await vi.waitFor(() =>
+      expect(ownChannelWrites(client).writes()).toEqual({})
+    );
+    expect(ids(directory.channels())).toEqual(['a']);
   });
 
   it('shows a channel the viewer left again once they are added back', async () => {
