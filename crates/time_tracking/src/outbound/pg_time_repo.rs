@@ -36,6 +36,18 @@ use crate::domain::{
 /// Postgres's `lock_not_available`, raised when a lock wait passes `lock_timeout`.
 const LOCK_NOT_AVAILABLE: &str = "55P03";
 
+/// The constraint keeping running timer ids unique across people.
+const RUNNING_TIMER_ID_KEY: &str = "time_timer_id_key";
+
+/// Points in a write where tests hold one writer to race another against it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Checkpoint {
+    /// A task's sum is read and not yet stored as Time logged.
+    TotalSummed,
+    /// A new timer's id was checked and the timer is not yet inserted.
+    TimerIdChecked,
+}
+
 /// Errors from the Postgres time tracking repository.
 #[derive(Debug, thiserror::Error)]
 pub enum PgTimeTrackingError {
@@ -51,6 +63,13 @@ pub enum PgTimeTrackingError {
     /// A stored row breaks the domain's types.
     #[error("invalid stored time entry: {0}")]
     InvalidRow(String),
+}
+
+fn violates(error: &sqlx::Error, constraint: &str) -> bool {
+    error
+        .as_database_error()
+        .and_then(|database| database.constraint())
+        .is_some_and(|name| name == constraint)
 }
 
 fn is_lock_timeout(error: &sqlx::Error) -> bool {
@@ -109,13 +128,13 @@ impl PgTimeTrackingRepository {
         Ok(tx)
     }
 
-    /// Between reading a task's sum and storing it as Time logged; tests hold
-    /// a writer here to race another one against it.
-    async fn between_sum_and_write(&self) {
+    async fn reached(&self, checkpoint: Checkpoint) {
         #[cfg(test)]
         if let Some(pause) = &self.pause {
-            pause.wait().await;
+            pause.wait(checkpoint).await;
         }
+        #[cfg(not(test))]
+        let _ = checkpoint;
     }
 
     /// Rewrite the task's Time logged from the sum of its entries.
@@ -144,7 +163,7 @@ impl PgTimeTrackingRepository {
             PgTimeTrackingError::InvalidRow(format!("task {task_id} total {total}"))
         })?;
 
-        self.between_sum_and_write().await;
+        self.reached(Checkpoint::TotalSummed).await;
         time_logged::write_task_time_logged(tx, task_id, total).await?;
         tracing::Span::current().record("total_minutes", i64::from(total));
         Ok(total)
@@ -571,9 +590,12 @@ impl TimeTrackingRepository for PgTimeTrackingRepository {
         if running_elsewhere {
             return Ok(StartTimerOutcome::IdTaken);
         }
+        self.reached(Checkpoint::TimerIdChecked).await;
 
-        // A timer another device started meanwhile holds the person's row.
-        let inserted = sqlx::query!(
+        // A timer another device started meanwhile holds the person's row;
+        // another person's start of the same id since the check hits the
+        // id's unique constraint instead.
+        let insert = sqlx::query!(
             r#"
             INSERT INTO time_timer (user_id, id, task_id, started_at)
             VALUES ($1, $2, $3, $4)
@@ -585,8 +607,14 @@ impl TimeTrackingRepository for PgTimeTrackingRepository {
             timer.started_at,
         )
         .execute(&mut *tx)
-        .await?
-        .rows_affected();
+        .await;
+        let inserted = match insert {
+            Ok(result) => result.rows_affected(),
+            Err(error) if violates(&error, RUNNING_TIMER_ID_KEY) => {
+                return Ok(StartTimerOutcome::IdTaken);
+            }
+            Err(error) => return Err(error.into()),
+        };
         if inserted == 0 {
             return Ok(StartTimerOutcome::TimerChanged);
         }

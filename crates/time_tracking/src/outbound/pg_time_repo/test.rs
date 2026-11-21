@@ -14,14 +14,18 @@ const OTHER_TASK: &str = "00000000-0000-0000-0000-0000000000a2";
 const NOTE_DOCUMENT: &str = "00000000-0000-0000-0000-0000000000b1";
 const TRASHED_TASK: &str = "00000000-0000-0000-0000-0000000000c1";
 
-/// Holds the first writer that reaches it until the test releases it.
+/// Holds the first writer that reaches its checkpoint until the test releases it.
 pub(super) struct Pause {
+    checkpoint: Checkpoint,
     reached: Mutex<Option<oneshot::Sender<()>>>,
     release: Mutex<Option<oneshot::Receiver<()>>>,
 }
 
 impl Pause {
-    pub(super) async fn wait(&self) {
+    pub(super) async fn wait(&self, checkpoint: Checkpoint) {
+        if checkpoint != self.checkpoint {
+            return;
+        }
         let reached = self.reached.lock().unwrap().take();
         let release = self.release.lock().unwrap().take();
         if let (Some(reached), Some(release)) = (reached, release) {
@@ -33,6 +37,7 @@ impl Pause {
 
 fn paused(
     pool: PgPool,
+    checkpoint: Checkpoint,
 ) -> (
     PgTimeTrackingRepository,
     oneshot::Receiver<()>,
@@ -43,6 +48,7 @@ fn paused(
     let repo = PgTimeTrackingRepository {
         pool,
         pause: Some(Arc::new(Pause {
+            checkpoint,
             reached: Mutex::new(Some(reached_tx)),
             release: Mutex::new(Some(release_rx)),
         })),
@@ -273,7 +279,8 @@ async fn an_edit_of_an_entry_changed_since_it_was_read_writes_nothing(
     fixtures(path = "../../../fixtures", scripts("time_tracking"))
 )]
 async fn concurrent_writers_on_one_task_store_the_full_total(pool: PgPool) -> anyhow::Result<()> {
-    let (first_writer, first_reached, release_first) = paused(pool.clone());
+    let (first_writer, first_reached, release_first) =
+        paused(pool.clone(), Checkpoint::TotalSummed);
     let second_writer = PgTimeTrackingRepository::new(pool.clone());
 
     let first = tokio::spawn(async move {
@@ -733,6 +740,37 @@ async fn a_stop_never_returns_another_persons_entry(pool: PgPool) -> anyhow::Res
     assert_eq!(
         repo.entry(authors.id).await?.map(|entry| entry.user_id),
         Some(user(AUTHOR))
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("time_tracking"))
+)]
+async fn two_people_starting_one_timer_id_at_once_get_one_timer(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let (late, checked, release) = paused(pool.clone(), Checkpoint::TimerIdChecked);
+    let late_start = tokio::spawn(async move {
+        late.start_timer(&user(AUTHOR), &timer(0x71, TASK, at(9, 0)), None)
+            .await
+    });
+    checked.await?;
+
+    let first = PgTimeTrackingRepository::new(pool.clone())
+        .start_timer(&user(EDITOR), &timer(0x71, OTHER_TASK, at(9, 0)), None)
+        .await?;
+    release.send(()).unwrap();
+    let late = late_start.await??;
+
+    assert_eq!(first, StartTimerOutcome::Started(None));
+    assert_eq!(late, StartTimerOutcome::IdTaken);
+    let repo = PgTimeTrackingRepository::new(pool.clone());
+    assert_eq!(repo.timer(&user(AUTHOR)).await?, None);
+    assert_eq!(
+        repo.timer(&user(EDITOR)).await?.map(|timer| timer.task_id),
+        Some(OTHER_TASK.to_string())
     );
     Ok(())
 }
