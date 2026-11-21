@@ -32,6 +32,7 @@ const CONFIG = {
   control: E.CONTROL === '1', // both sides OLD: the old code against itself
   settleMs: Number(E.SETTLE_MS ?? 5000), // live-update bound
   pg: E.PG_CONTAINER ?? 'macro-gqlprops-postgres-1',
+  redis: E.REDIS_CONTAINER ?? 'macro-gqlprops-redis-1', // '' to wait out the sign-up limit instead
   headless: E.HEADED !== '1',
 };
 const OUT = path.resolve(
@@ -135,18 +136,36 @@ function instant(s) {
   let offMin = 0;
   if (off !== 'Z') {
     const digits = off.slice(1).replace(':', '');
-    offMin = (off[0] === '-' ? -1 : 1) * (Number(digits.slice(0, 2)) * 60 + Number(digits.slice(2, 4) || 0));
+    const oh = Number(digits.slice(0, 2));
+    const om = Number(digits.slice(2, 4) || 0);
+    if (oh > 23 || om > 59) return null;
+    offMin = (off[0] === '-' ? -1 : 1) * (oh * 60 + om);
   }
-  return `@${utc.getTime() / 1000 - offMin * 60}.${frac.padEnd(9, '0')}`;
+  // NUL-prefixed, so no literal field value can collide with a normalized one
+  // (a literal that starts with NUL gets a second one, below).
+  return `\u0000@${utc.getTime() / 1000 - offMin * 60}.${frac.padEnd(9, '0')}`;
 }
 const TS_KEY = /^(created|updated)_?at$/i;
 // A row: an object that names itself (a definition, option, tag set, or a
 // caller's property built from one).
 const ROW_ID_KEYS = ['id', 'propertyId', 'definitionId', 'propertyDefinitionId', 'property_definition_id'];
 const isRow = (o) => !!o && typeof o === 'object' && !Array.isArray(o) && ROW_ID_KEYS.some((k) => typeof o[k] === 'string');
-const tsNorm = (s, key, parent) => (TS_KEY.test(key) && isRow(parent) ? (instant(s) ?? s) : s);
+const tsNorm = (s, key, parent) => {
+  if (!TS_KEY.test(key) || !isRow(parent)) return s;
+  return instant(s) ?? (s.startsWith('\u0000') ? `\u0000${s}` : s);
+};
 const JT = (x) => JSON.stringify(sortKeys(x, tsNorm));
-const lower = (s) => String(s ?? '').toLowerCase();
+// The tie key lowercases like JavaScript. The server lowercases definitions
+// with options in Rust (`to_lowercase`) and plain definitions and option
+// strings in PostgreSQL (`LOWER` under the database collation); every string
+// a key was built from is kept, and the run checks at its end that
+// PostgreSQL lowercases each one the same way (checkCollation), or fails.
+const LOWERED = new Set();
+const lower = (s) => {
+  const str = String(s ?? '');
+  if (LOWERED.size < 200000) LOWERED.add(str);
+  return str.toLowerCase();
+};
 
 // Tie order. The server sorts definitions by lowercased display_name and
 // options by (display_order, number_value, LOWER(string_value)) (tag options:
@@ -206,19 +225,24 @@ const readerKind = (id) => {
 function tieGroups(snapshot) {
   const g = new Map();
   const put = (id, key) => {
-    if (!id || key === null) return;
+    if (!id || key === null || key === undefined) return;
     if (g.has(id) && g.get(id) !== key) g.set(id, null);
     else if (!g.has(id)) g.set(id, key);
+  };
+  // An option with no key keeps its place: no group, never a shared `id|null` one.
+  const optIn = (scope, o) => {
+    const k = optKey(o);
+    return k === null ? null : `${scope}|${k}`;
   };
   const defs = (list) => {
     for (const e of Array.isArray(list) ? list : []) {
       const id = rowId(e);
       put(id, defKey(e));
-      for (const o of e?.property_options ?? []) put(o?.id, `${id}|${optKey(o)}`);
+      for (const o of e?.property_options ?? []) put(o?.id, optIn(id, o));
     }
   };
   const tagSets = (sets) => {
-    for (const s of Array.isArray(sets) ? sets : []) for (const o of s?.options ?? []) put(o?.id, `${s?.definition?.id}|${optKey(o)}`);
+    for (const s of Array.isArray(sets) ? sets : []) for (const o of s?.options ?? []) put(o?.id, optIn(s?.definition?.id, o));
   };
   for (const [id, r] of Object.entries(snapshot ?? {})) {
     if (id === 'callers' || !r?.isSuccess) continue;
@@ -227,7 +251,7 @@ function tieGroups(snapshot) {
     else if (k === 'tags') tagSets(r.data);
     else if (k === 'opts') {
       const defId = JSON.parse(id.replace(/^reader/, '')).id;
-      for (const o of Array.isArray(r.data) ? r.data : []) put(o?.id, `${defId}|${optKey(o)}`);
+      for (const o of Array.isArray(r.data) ? r.data : []) put(o?.id, optIn(defId, o));
     }
   }
   const src = snapshot?.callers?.__sources;
@@ -280,12 +304,12 @@ function classify(a, b, canon = (x) => x) {
   if (JT(canon(a)) === JT(canon(b))) return 'tie-order';
   return 'diff';
 }
-// The part of an error a caller can see: the query client retries anything
-// but UNAUTHORIZED and FORBIDDEN codes (lib/queries/client.ts).
+// The part of an error a caller can see. `retry` is the query client's own
+// decision, computed in the page with the app's predicate (lib/queries/client.ts).
 function errorView(e) {
   if (!e) return null;
-  const codes = [...(e.codes ?? []), ...(e.graphqlCodes ?? [])];
-  return { ...e, retry: codes.includes('UNAUTHORIZED') || codes.includes('FORBIDDEN') ? 'terminal' : 'retried' };
+  if (!e.retry) throw new Error(`error without the page's retry decision: ${JSON.stringify(e)}`);
+  return e;
 }
 
 // --------------------------------------------------------------- results ----
@@ -315,6 +339,10 @@ const R = {
   ops: {},
   rejections: {},
   traffic: {},
+  otherWrites: {}, // side:tapMode -> route -> n, writes outside the properties service
+  pageErrors: {}, // side -> masked message -> n
+  sqlFailures: 0,
+  collation: null,
   settle: { samples: 0, maxMs: 0, timeouts: 0, buckets: {}, fresh: { samples: 0, maxMs: 0, timeouts: 0 } },
   staleness: { byOp: {}, mismatches: 0 },
   visibility: { checks: 0, oldMissing: 0, newMissing: 0, readFailures: 0 },
@@ -417,6 +445,21 @@ async function baseRoutes(ctx) {
 }
 const CTX_OPTS = { ignoreHTTPSErrors: true, viewport: { width: 1024, height: 700 }, serviceWorkers: 'block' };
 
+// The auth service counts sign-ups per client address an hour in Redis
+// (crates/macro_cache_client/src/create_user_rate_limit.rs). Only this
+// stack instance's own Redis is touched.
+function clearSignUpCounter() {
+  if (!CONFIG.redis) return false;
+  try {
+    const keys = execFileSync('docker', ['exec', CONFIG.redis, 'redis-cli', '--raw', 'KEYS', 'rtl_create_user_hourly:*'], { encoding: 'utf8' }).split('\n').filter(Boolean);
+    if (keys.length) execFileSync('docker', ['exec', CONFIG.redis, 'redis-cli', 'DEL', ...keys], { encoding: 'utf8' });
+    R.signUpCountersCleared = (R.signUpCountersCleared ?? 0) + 1;
+    return true;
+  } catch (e) {
+    harnessError(`clearing the sign-up counter: ${firstLine(e)}`);
+    return false;
+  }
+}
 async function login(email) {
   const ctx = await browser.newContext(CTX_OPTS);
   await baseRoutes(ctx);
@@ -433,11 +476,16 @@ async function login(email) {
       ]);
       if (outcome === 'in') break;
       if (outcome === 'timeout') throw new Error('Timeout: no sign-in after 90 s');
-      // Signup rate limit: wait for the hour to roll over, then try again.
+      // Signup rate limit: clear this instance's counter, as the email e2e
+      // tier does (tests/email-e2e/harness/sign-up-limit.ts); with no Redis
+      // container to clear, wait for the hour to roll over.
       R.loginWaits = (R.loginWaits ?? 0) + 1;
       if (attempt >= 20) throw new Error(`signup still refused after ${attempt} waits`);
-      log(`signup refused for ${email.split('@')[0]} (rate limit); waiting 5 min`);
-      await sleep(300000);
+      if (clearSignUpCounter()) log(`signup refused for ${email.split('@')[0]} (rate limit); cleared the instance's sign-up counter`);
+      else {
+        log(`signup refused for ${email.split('@')[0]} (rate limit); waiting 5 min`);
+        await sleep(300000);
+      }
     } catch (e) {
       if (attempt >= 20 || !/Timeout/.test(String(e.message))) throw e;
       log(`login retry ${email.split('@')[0]}: ${String(e.message).slice(0, 120)}`);
@@ -455,19 +503,38 @@ const OLD_MODULE = /\/src\/lib\/queries\/properties\/(definitions|options|tags)\
 const PROPS_PATH = /(^|\/)properties(\/|$)/;
 const isWrite = (req) => !['GET', 'HEAD', 'OPTIONS'].includes(req.method());
 // A GraphQL request that writes (the catalog's writes are all REST).
+// Comments are stripped first, every operation of a batch counts, and a body
+// with no query text (a persisted query) counts as a write unless it names a
+// catalog read.
 const isGraphqlMutation = (req) => {
+  // A GET (the app's cached reads) or an empty POST carries no operation.
+  if (!isWrite(req)) return false;
+  let body;
   try {
-    return /^\s*mutation\b/.test(req.postDataJSON()?.query ?? '');
+    body = req.postDataJSON();
   } catch {
     return false;
   }
+  if (body === null || body === undefined) return false;
+  return (Array.isArray(body) ? body : [body]).some((b) => {
+    if (typeof b?.query !== 'string') return !String(b?.operationName ?? '').startsWith('PropertyCatalog');
+    return /(^|[\s}])(mutation|subscription)\b/.test(b.query.replace(/#[^\n\r]*/g, ' '));
+  });
 };
+// Writes the page sends outside the properties service and GraphQL, by side,
+// tap mode and route (ids masked): a census, and in a write window a stray.
+const maskPath = (p) => p.replace(/[0-9a-f]{8}-[0-9a-f-]{27}/gi, '<id>').replace(/\/\d+(?=\/|$)/g, '/<n>');
+// Writes either page sends that never touch the catalog, seen in a smoke run:
+// the session token refresh, which the auth client sends on its own clock.
+// Still counted in `otherWrites`; never a stray.
+const IGNORED_WRITE = /^POST [^ ]+\/auth\/jwt\/refresh$/;
 
 // One side (OLD or NEW) of one account: its own browser context and page.
 async function openSide(storageState, side, label) {
   const bctx = await browser.newContext({ ...CTX_OPTS, storageState });
   await baseRoutes(bctx);
-  // mode: pass (no write expected from the hooks), record (NEW), replay (OLD)
+  // mode: pass (no write expected), setup (the runner's own NEW writes),
+  // record (NEW, in a write window), replay (OLD, in a write window)
   const tap = { mode: 'pass', rec: [], queue: [], mismatches: [], stray: [], mutantArmed: false };
   const sameUserLoad = CONFIG.load > 0 && side === 'neu' && /^L\d/.test(label);
   if (sameUserLoad)
@@ -494,12 +561,14 @@ async function openSide(storageState, side, label) {
     if (!isWrite(req)) return r.fallback();
     const u = new URL(req.url());
     const entry = { method: req.method(), path: u.pathname + u.search, body: req.postData() ?? null };
-    if (tap.mode === 'pass') {
-      // Setup writes come from NEW pages only; the OLD side never writes on its own.
-      if (side === 'old') {
-        tap.stray.push(entry);
-        return r.fulfill({ status: 599, body: 'harness: OLD side wrote outside a replay' });
-      }
+    // setup: the runner's own writes (accounts, volume, load), NEW pages only.
+    if (tap.mode === 'setup' && side === 'neu') return r.fallback();
+    if (tap.mode === 'pass' || tap.mode === 'setup') {
+      // No write is expected here: the OLD side never writes on its own, and a
+      // NEW write outside a write window (a late retry) bypasses the replay.
+      // Either is held as a stray and recorded as a difference.
+      tap.stray.push({ ...entry, mode: tap.mode });
+      if (side === 'old') return r.fulfill({ status: 599, body: 'harness: OLD side wrote outside a replay' });
       return r.fallback();
     }
     if (tap.mode === 'record') {
@@ -556,12 +625,27 @@ async function openSide(storageState, side, label) {
         op = req.postDataJSON()?.operationName ?? null;
       } catch {}
       if (op?.startsWith('PropertyCatalog')) bump(R.traffic, role, `GraphQL ${op}`);
-      // A GraphQL write during a catalog write would bypass the tap.
-      if (tap.mode !== 'pass' && isGraphqlMutation(req)) tap.stray.push({ method: 'POST', path: p, body: op });
+      // A GraphQL write bypasses the tap: from OLD at any time, from NEW
+      // outside the runner's setup.
+      if (isGraphqlMutation(req)) {
+        bump(R.otherWrites, `${side}:${tap.mode}`, `GraphQL ${req.method()} ${op ?? '(unnamed)'}`);
+        if (side === 'old' || tap.mode !== 'setup') tap.stray.push({ method: 'POST', path: p, body: op, mode: tap.mode });
+      }
+    } else if (isWrite(req) && !PROPS_PATH.test(p)) {
+      const u = new URL(req.url());
+      const route = `${req.method()} ${u.host}${maskPath(p)}`;
+      bump(R.otherWrites, `${side}:${tap.mode}`, route);
+      if (!IGNORED_WRITE.test(route) && (tap.mode === 'record' || tap.mode === 'replay' || side === 'old')) tap.stray.push({ method: req.method(), path: route, body: null, mode: tap.mode });
     }
   });
   const page = await bctx.newPage();
-  page.on('pageerror', (e) => harnessError(`${label}: pageerror ${String(e.message).slice(0, 200)}`));
+  // Uncaught page errors, by side and message: one seen on one side only is a
+  // difference (checked at the end of the run).
+  page.on('pageerror', (e) => {
+    const msg = String(e.message).replace(/[0-9a-f]{8}-[0-9a-f-]{27}/gi, '<id>').slice(0, 200);
+    if (!/^load\d/.test(label)) bump(R.pageErrors, side, msg);
+    harnessError(`${label}: pageerror ${msg}`);
+  });
   // Module loads that failed or errored, for diagnosing a page that never got ready.
   const note = (x) => {
     s.netlog ??= [];
@@ -606,14 +690,24 @@ async function loadHarness(s) {
 function firstLine(e) {
   return String(e?.message ?? e).split('\n')[0].slice(0, 200);
 }
-const ev = (s, fnPath, ...args) =>
-  s.page.evaluate(
-    ([p, a]) => {
-      const f = p.split('.').reduce((o, k) => o[k], window.__h);
-      return f(...a);
-    },
-    [fnPath, args]
-  );
+// The runner's own setup writes (`setup.*`) run in the tap's setup mode, so
+// the tap tells them apart from a write the page sends by itself.
+async function ev(s, fnPath, ...args) {
+  const setup = fnPath.startsWith('setup.');
+  const before = s.tap.mode;
+  if (setup) s.tap.mode = 'setup';
+  try {
+    return await s.page.evaluate(
+      ([p, a]) => {
+        const f = p.split('.').reduce((o, k) => o[k], window.__h);
+        return f(...a);
+      },
+      [fnPath, args]
+    );
+  } finally {
+    if (setup) s.tap.mode = before;
+  }
+}
 
 // Mutants for the response path: break the GraphQL answer the new code reads.
 function mutateResponse(json, kind, g) {
@@ -654,7 +748,7 @@ function mutateResponse(json, kind, g) {
 
 // ------------------------------------------------------------ comparisons ----
 const STATE_FIELDS = ['status', 'fetchStatus', 'isPending', 'isSuccess', 'isError', 'isFetched', 'isPlaceholderData', 'isLoading', 'isStale', 'isRefetching', 'isRefetchError', 'isLoadingError', 'failureCount'];
-const errorLabel = (e) => (e ? `${e.class}/${JSON.stringify(e.codes)}/${e.httpStatus}/${JSON.stringify(e.graphqlCodes)}/${e.retry}` : 'none');
+const errorLabel = (e) => (e ? `${e.class}/${JSON.stringify(e.codes)}/${e.httpStatus}/${JSON.stringify(e.graphqlCodes)}/${e.retry}/${JSON.stringify(e.message)}` : 'none');
 // Errors are always compared, whatever the data did. A different error with
 // the same retry decision is error-shape (each old=>new pair its own
 // signature); one side failing alone, or a different retry decision, is a diff.
@@ -842,17 +936,35 @@ async function setKeys(pair, keys) {
 }
 async function settleAll(pair) {
   const res = await Promise.all(sides(pair).map((s) => ev(s, 'settle', CONFIG.settleMs)));
+  // A side that did not settle within the bound broke the live-update bound:
+  // a difference, and its snapshot is not compared as data.
+  res.forEach((t, i) => {
+    if (t.timedOut) record('settle', `${SIDE_NAMES[i]} did not settle within ${CONFIG.settleMs}ms`, 'state', null, { ms: t.ms });
+  });
   for (const t of res) {
     R.settle.samples++;
     R.settle.maxMs = Math.max(R.settle.maxMs, t.ms);
     if (t.timedOut) R.settle.timeouts++;
     bump(R.settle.buckets, t.ms < 250 ? '<250ms' : t.ms < 1000 ? '250ms-1s' : t.ms < 2500 ? '1-2.5s' : '2.5-5s');
   }
+  return res.map((t) => t.timedOut);
+}
+const SIDE_NAMES = ['A old', 'A new', 'B old', 'B new'];
+// Writes a side sent outside a write window (OLD on its own, a late NEW
+// retry, a GraphQL mutation): each is a difference, checked before any
+// window resets the list and at every comparison.
+function checkStray(pair) {
+  for (const [who, s] of [['A new', pair.A.neu], ['A old', pair.A.old], ['B new', pair.B.neu], ['B old', pair.B.old]]) {
+    if (!s.tap.stray.length) continue;
+    record('write-replay', `write outside the tap (${who})`, 'diff', [], s.tap.stray.map(({ method, path, mode }) => ({ method, path: path.replace(/[0-9a-f]{8}-[0-9a-f-]{27}/gi, '<id>'), mode })));
+    s.tap.stray = [];
+  }
 }
 // After a step: live (open readers) OLD vs NEW, fresh (a cold load) OLD vs
 // NEW, and within each side live vs fresh, whose staleness must match.
 async function compareStep(pair, level, op) {
-  await settleAll(pair);
+  checkStray(pair);
+  const timedOut = await settleAll(pair);
   if (CONFIG.mutant === 'stale-cache') {
     const restored = await Promise.all([pair.A.neu, pair.B.neu].map((s) => ev(s, 'mutant.restoreCache')));
     if (restored.some((n) => n > 0)) R.mutant.applied++;
@@ -868,12 +980,20 @@ async function compareStep(pair, level, op) {
     R.settle.fresh.maxMs = Math.max(R.settle.fresh.maxMs, f.timing.ms);
     if (f.timing.timedOut) R.settle.fresh.timeouts++;
   }
+  fresh.forEach((f, i) => {
+    if (f.timing.timedOut) record('settle', `${SIDE_NAMES[i]} fresh mount did not settle within ${CONFIG.settleMs}ms`, 'state', null, { ms: f.timing.ms });
+  });
+  const freshOut = fresh.map((f) => f.timing.timedOut);
   const [frAo, frAn, frBo, frBn] = fresh.map((f) => f.snap);
   const c = here();
   for (const [who, lo, ln, fo, fn] of [['A', liveAo, liveAn, frAo, frAn], ['B', liveBo, liveBn, frBo, frBn]]) {
     c.account = who;
-    compareSnapshots(`${level}:live`, lo, ln, expected);
-    compareSnapshots(`${level}:fresh`, fo, fn, expected);
+    const at = who === 'A' ? 0 : 2;
+    const liveOut = timedOut[at] || timedOut[at + 1];
+    const freshOutHere = freshOut[at] || freshOut[at + 1];
+    if (!liveOut) compareSnapshots(`${level}:live`, lo, ln, expected);
+    if (!freshOutHere) compareSnapshots(`${level}:fresh`, fo, fn, expected);
+    if (liveOut || freshOutHere) continue;
     // staleness: which readers differ live vs fresh, per side. Each side is
     // compared with itself, so only tie order is removed.
     const stale = (live, fr) => {
@@ -896,6 +1016,13 @@ async function compareStep(pair, level, op) {
     } else record(`${level}:staleness`, `stale keys ${who}`, 'equal');
   }
   delete c.account;
+  // The property editor's imperative read after a write, run only now: it
+  // fetches into the live cache, which would repair a stale reader before
+  // the live comparison above saw it.
+  const pending = pair.imperative ?? [];
+  pair.imperative = [];
+  for (const { actor, id } of pending) await compareImperative(pair[actor], id);
+  checkStray(pair);
 }
 async function takeSkipped(...pages) {
   const n = await Promise.all(pages.map((s) => ev(s, 'mutant.takeSkipped')));
@@ -908,8 +1035,8 @@ async function write(pair, actor, name, vars) {
   const acct = pair[actor];
   if (CONFIG.mutant === 'stale-cache') await ev(acct.neu, 'mutant.takeCache');
   acct.neu.tap.mutantArmed = true;
+  checkStray(pair);
   acct.neu.tap.rec = [];
-  acct.neu.tap.stray = [];
   acct.neu.tap.mode = 'record';
   const n = await ev(acct.neu, 'mutate', name, vars);
   acct.neu.tap.mode = 'pass';
@@ -918,7 +1045,6 @@ async function write(pair, actor, name, vars) {
   await readAfterWrite(acct.neu, name, vars, n);
   acct.old.tap.queue = [...acct.neu.tap.rec];
   acct.old.tap.mismatches = [];
-  acct.old.tap.stray = [];
   acct.old.tap.mode = 'replay';
   const o = await ev(acct.old, 'mutate', name, vars);
   acct.old.tap.mode = 'pass';
@@ -926,9 +1052,11 @@ async function write(pair, actor, name, vars) {
   // OLD sent differently, or did not send, is a difference in the write path.
   const replay = { requests: acct.neu.tap.rec.length, unused: acct.old.tap.queue.map(({ method, path, body }) => ({ method, path, body })), mismatches: acct.old.tap.mismatches };
   bump(R.coverage, 'write requests per mutation', String(replay.requests));
-  record('write-replay', name, replay.unused.length || replay.mismatches.length ? 'diff' : 'equal', { sent: 'as recorded' }, replay);
-  for (const [who, s] of [['new', acct.neu], ['old', acct.old]])
-    if (s.tap.stray.length) record('write-replay', `${name}: write outside the tap (${who})`, 'diff', [], s.tap.stray);
+  // Every catalog write sends at least one request: a hook that succeeded
+  // without one (on either side) wrote nothing the replay could compare.
+  const empty = (n.ok || o.ok) && replay.requests === 0;
+  record('write-replay', empty ? `${name}: succeeded without a request` : name, replay.unused.length || replay.mismatches.length || empty ? 'diff' : 'equal', { sent: 'as recorded' }, replay);
+  checkStray(pair);
   bump(R.ops, `${name}:${actor}`, n.ok ? 'ok' : 'rejected');
   if (!n.ok) {
     const why = (R.rejections[`${name}:${actor}`] ??= {});
@@ -942,7 +1070,7 @@ async function write(pair, actor, name, vars) {
   // The imperative read the property editor runs on a definition it just
   // created or changed (fetchPropertyDefinitionWithOptions), OLD vs NEW.
   const defId = name === 'createDef' ? (n.ok ? (n.value?.id ?? n.value?.definition?.id) : null) : (vars?.propertyDefinitionId ?? null);
-  if (defId) await compareImperative(acct, defId);
+  if (defId) (pair.imperative ??= []).push({ actor, id: defId });
   return { n };
 }
 const canonDefWithOptions = (x) => (x && Array.isArray(x.property_options) ? { ...x, property_options: canonOptions(x.property_options) } : x);
@@ -972,12 +1100,14 @@ async function readAfterWrite(s, name, vars, result) {
   R.visibility.checks++;
   if (!o.ok || !n.ok) {
     R.visibility.readFailures++;
-    return;
+    return record('visibility', `${name}: listing failed`, 'diff', { ok: o.ok, error: o.error ?? null }, { ok: n.ok, error: n.error ?? null });
   }
   const has = (x) => x.value.some((d) => (d.definition?.id ?? d.id) === id);
   const want = name === 'createDef';
   if (has(o) !== want) R.visibility.oldMissing++;
   if (has(n) !== want) R.visibility.newMissing++;
+  const shown = { expected: want, old: has(o), new: has(n) };
+  record('visibility', name, shown.old === want && shown.new === want ? 'equal' : 'diff', { listed: want }, { listed: { old: shown.old, new: shown.new } });
 }
 
 // A seeded operation over what the account can see.
@@ -1119,15 +1249,43 @@ async function step(pair, g, gen) {
   }
   return null;
 }
+// An out-of-band write. It must change exactly the rows it names: a failed
+// statement or one that matched nothing is a harness failure, not a quiet skip.
 function sql(statement, vars) {
+  let out;
   try {
-    const args = ['exec', '-i', CONFIG.pg, 'psql', '-U', 'user', '-d', 'macrodb', '-q', '-v', 'ON_ERROR_STOP=1'];
+    const args = ['exec', '-i', CONFIG.pg, 'psql', '-U', 'user', '-d', 'macrodb', '-v', 'ON_ERROR_STOP=1'];
     for (const [k, v] of Object.entries(vars)) args.push('-v', `${k}=${v}`);
-    execFileSync('docker', args, { input: `${statement};\n`, stdio: ['pipe', 'ignore', 'pipe'] });
-    return true;
-  } catch {
+    out = execFileSync('docker', args, { input: `${statement};\n`, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+  } catch (e) {
+    R.sqlFailures++;
+    harnessError(`sql failed: ${firstLine(e)}`);
     return false;
   }
+  const rows = Number(/^(?:UPDATE|DELETE|INSERT \d+) (\d+)/m.exec(out)?.[1] ?? NaN);
+  if (!(rows > 0)) {
+    R.sqlFailures++;
+    harnessError(`sql changed no rows: ${out.trim().slice(0, 80)}`);
+    return false;
+  }
+  return true;
+}
+// PostgreSQL's LOWER, under the database's own collation, for every string a
+// tie key lowercased (see `lower`): one call over stdin, strings as JSON.
+function checkCollation() {
+  const all = [...LOWERED].filter((x) => !x.includes('\u0000'));
+  const res = { strings: all.length, skippedWithNul: LOWERED.size - all.length, mismatches: [] };
+  if (!all.length) return res;
+  let tag = 'j';
+  const json = JSON.stringify(all);
+  while (json.includes(`$${tag}$`)) tag += 'j';
+  const statement = `SELECT json_agg(lower(s) ORDER BY i) FROM json_array_elements_text($${tag}$${json}$${tag}$::json) WITH ORDINALITY AS t(s, i);\n`;
+  const out = execFileSync('docker', ['exec', '-i', CONFIG.pg, 'psql', '-U', 'user', '-d', 'macrodb', '-At', '-v', 'ON_ERROR_STOP=1'], { input: statement, encoding: 'utf8', maxBuffer: 1 << 28 });
+  const pg = JSON.parse(out);
+  all.forEach((x, i) => {
+    if (pg[i] !== x.toLowerCase() && res.mismatches.length < 50) res.mismatches.push({ s: x, js: x.toLowerCase(), pg: pg[i] });
+  });
+  return res;
 }
 
 // Every listing key, every option id the account can name, and the tags.
@@ -1175,6 +1333,7 @@ async function runLane(lane, seqCount) {
       c.phase = 'random-read';
       for (let i = 0; i < CONFIG.readsPerStep; i++) {
         const acct = g.chance(0.7) ? pair.A : pair.B;
+        c.account = acct.name;
         const cat = await catalog(acct.neu);
         const kind = g.weighted([['defs', 5], ['opts', 3], ['tags', 1]]);
         const ids = [...cat.selects.map((d) => d.definition.id), ...cat.tagSets.filter((t) => t.definition).map((t) => t.definition.id)];
@@ -1182,6 +1341,7 @@ async function runLane(lane, seqCount) {
         await rawCase(acct.neu, key);
       }
       delete c.phase;
+      delete c.account;
       await compareStep(pair, 'step', c.op);
       R.counts.steps++;
     }
@@ -1211,6 +1371,7 @@ async function volumePhase() {
   setCtx({ lane: 'V', phase: 'volume' });
   const bodies = Array.from({ length: CONFIG.volume }, (_, i) => ({ body: { display_name: `${gen.name()} v${i % 700}`, data_type: g.chance(0.3) ? gen.dataType() : { type: 'string' }, scope: 'user' } }));
   const big = { body: { display_name: 'Big select', data_type: { type: 'select_string', multi: true, options: [] }, scope: 'user' } };
+  pair.A.neu.tap.mode = 'setup';
   const res = await pair.A.neu.page.evaluate(
     async ([bodies, big, nOpts, nTags]) => {
       const h = window.__h;
@@ -1236,13 +1397,14 @@ async function volumePhase() {
     },
     [bodies, big, 600, 300]
   );
+  pair.A.neu.tap.mode = 'pass';
   R.volume = { requested: CONFIG.volume, options: 600, tags: 300, ...res };
   log(`volume: ${JSON.stringify(res)}`);
-  if (!res.bigId || !res.tagDef || res.ok < CONFIG.volume * 0.95) throw new Error(`volume setup incomplete: ${JSON.stringify(res)}`);
+  if (!res.bigId || !res.tagDef || res.ok < CONFIG.volume * 0.95 || res.optionsOk < 600 * 0.95 || res.tagsOk < 300 * 0.95) throw new Error(`volume setup incomplete: ${JSON.stringify(res)}`);
   for (const lk of LIST_KEYS) await rawCase(pair.A.neu, { k: 'defs', ...lk });
   await rawCase(pair.A.neu, { k: 'tags' });
-  await rawCase(pair.A.neu, { k: 'opts', id: res.bigId, why: 'definition with 600 options' });
-  await rawCase(pair.A.neu, { k: 'opts', id: res.tagDef, why: 'tag set with 300 tags' });
+  await rawCase(pair.A.neu, { k: 'opts', id: res.bigId, why: `definition with ${res.optionsOk} options` });
+  await rawCase(pair.A.neu, { k: 'opts', id: res.tagDef, why: `tag set with ${res.tagsOk} tags` });
   await setKeys(pair, [{ k: 'tags' }, { k: 'defs', scope: 'all', includeOptions: true }, { k: 'defs', scope: 'user', includeOptions: false }, { k: 'defs', scope: 'all', includeOptions: true, forEntityType: 'TASK' }, { k: 'opts', id: res.bigId }, { k: 'opts', id: res.tagDef }]);
   await compareStep(pair, 'volume', 'volume');
   for (let st = 1; st <= 20; st++) {
@@ -1262,6 +1424,7 @@ async function startLoad() {
   for (let i = 0; i < CONFIG.load; i++) {
     const st = await login(`pc-load-${CONFIG.seed}-${i}-${STAMP}@load-${CONFIG.seed}-${i}-${STAMP}.fuzz.test`);
     const s = await openSide(st, 'neu', `load${i}`);
+    s.tap.mode = 'setup'; // a load page only ever writes on the runner's behalf
     loadPages.push(s);
     await s.page.evaluate((seed) => {
       window.__loadStats = { ops: 0, errors: 0 };
@@ -1337,6 +1500,18 @@ try {
   flush();
   await browser.close();
 }
+// An uncaught page error one side has and the other does not is a difference.
+for (const msg of new Set([...Object.keys(R.pageErrors.old ?? {}), ...Object.keys(R.pageErrors.neu ?? {})])) {
+  const o = R.pageErrors.old?.[msg] ?? 0;
+  const n = R.pageErrors.neu?.[msg] ?? 0;
+  record('page-errors', msg, (o > 0) === (n > 0) ? 'equal' : 'diff', { seen: o > 0 }, { seen: n > 0 });
+}
+try {
+  R.collation = checkCollation();
+} catch (e) {
+  R.collation = { error: firstLine(e) };
+}
+flush();
 const real = Object.entries(R.diffSignatures);
 log(`done: ${R.counts.sequences} sequences, ${R.counts.steps} steps, ${R.counts.rawCases} raw cases, ${R.counts.readerComparisons} reader and ${R.counts.callerComparisons} caller comparisons; ${R.totals.differences} differences in ${real.length} signatures; ${R.totals.harnessErrors} harness errors; module checks ${JSON.stringify(R.moduleChecks)}`);
 for (const [s, n] of real.sort((a, b) => b[1] - a[1])) log(`  ${n}x ${s}`);
@@ -1345,6 +1520,9 @@ const failures = [...R.crashes];
 const stoppedOnCatch = !!R.mutant?.firstCatch && E.STOP_ON_CATCH !== '0';
 if (R.counts.sequences < CONFIG.seqs && !stoppedOnCatch) failures.push(`ran ${R.counts.sequences} of ${CONFIG.seqs} sequences`);
 if (!R.moduleChecks.old || !R.moduleChecks.neu) failures.push('no module check passed on one side');
+if (R.sqlFailures) failures.push(`${R.sqlFailures} out-of-band SQL writes failed or changed no rows`);
+if (!R.collation || R.collation.error || R.collation.mismatches.length) failures.push(`collation check: ${JSON.stringify(R.collation).slice(0, 300)}`);
+log(`collation: ${R.collation?.strings ?? 0} tie-key strings lowercase the same in PostgreSQL${R.collation?.mismatches?.length ? ` except ${R.collation.mismatches.length}` : ''}`);
 if (R.mutant) {
   log(`mutant ${R.mutant.name}: applied ${R.mutant.applied}, caught ${R.mutant.firstCatch ? `at ${JSON.stringify(R.mutant.firstCatch).slice(0, 300)}` : 'NO'}`);
   if (!R.mutant.applied) failures.push(`mutant ${R.mutant.name} never applied`);
