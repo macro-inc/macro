@@ -770,9 +770,10 @@ The first scenario covers Signal → Noise → All after disconnecting both nati
 HTTP and WebSockets. iOS shares the native cache code but is not yet covered by
 that driver.
 
-**Reading pane.** On desktop the header's columns button (or `Shift+V`) shows
-threads beside the list instead of in its place; the choice is remembered per
-browser. The list keeps its own keys: j/k and arrows move the cursor and the
+**Reading pane.** On desktop the header's columns button (or `Space` or
+`Shift+V`) shows threads beside the list instead of in its place; the choice is
+remembered per browser. `Space` stands down while the reader has the keyboard,
+so it still scrolls the open thread. The list keeps its own keys: j/k and arrows move the cursor and the
 pane follows it (replacing history rather than adding entries) while the list
 keeps focus, even if the thread is still loading; Mark done on
 the open row follows the next row (an action on another row, such as the one
