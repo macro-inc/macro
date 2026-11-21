@@ -9,6 +9,11 @@ import { pool } from './pool';
 import { Coverage, Rng } from './rng';
 import { lit, sql } from './sql';
 
+// Document creates per world. Each one makes DSS ask the lexical service for a
+// snapshot, which asks the sync service; four worlds at 24 each timed the sync
+// service out on a loaded machine and failed the build.
+const CREATE_CONCURRENCY = 8;
+
 export type UserKey = 'owner' | 'member' | 'outsider' | 'empty' | 'boundary';
 export const USER_KEYS: UserKey[] = ['owner', 'member', 'outsider', 'empty', 'boundary'];
 
@@ -166,7 +171,7 @@ export async function buildWorld(args: {
   }
   if (users.outsider) add('md', 'outsider', sizes.outsiderMd);
   const docNames = jobs.map((job) => name(job.kind, job.i));
-  const docs = await pool(jobs, 24, async (job, index) => {
+  const docs = await pool(jobs, CREATE_CONCURRENCY, async (job, index) => {
     const user = users[job.owner];
     const docName = docNames[index];
     const projectId = job.owner === 'owner' && rng.bool(0.25) ? rng.pick(projects) : undefined;
@@ -218,7 +223,7 @@ export async function buildWorld(args: {
 
   // Permissions across the owner's documents.
   const ownerDocs = docs.filter((d) => d.owner === 'owner');
-  await pool(ownerDocs, 24, async (doc) => {
+  await pool(ownerDocs, CREATE_CONCURRENCY, async (doc) => {
     const access = rng.weighted<Access>([
       [40, 'private'],
       [22, 'team'],
