@@ -77,6 +77,11 @@ code, not in its prompt. The harness also signs the scope into the credential
 - Caller resolution: `propagate`, `enforce_signed_scope` and
   `refuse_signed_scopes` feed every verified token's claims to
   `route_policy::resolve_caller` and put the `ResolvedCaller` in the request.
+  A bot, harness, user API key or internal-key header is not verified here:
+  beside a verified token it only narrows (a program's claim and any scope
+  still win), and an internal key beside a user token reads that token. A
+  service with no database takes its rollout from an `ActiveRollout` an outer
+  layer puts in the request; none means `NoRollout`.
 - `src/outbound.rs`: invocation mappings and session-agent lookup on the primary.
 
 ## Boundaries

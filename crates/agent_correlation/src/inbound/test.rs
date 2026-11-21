@@ -1124,3 +1124,170 @@ async fn ordinary_agents_reach_policy_put_while_restricted_agents_do_not() {
         );
     }
 }
+
+/// A header that nothing here verifies (a bot, harness or user API key) may
+/// only narrow a request beside a verified token, never pick a wider caller:
+/// a program's claim still wins, and a plain token beside a bot header is the
+/// bot's, which may do less than an API credential.
+#[tokio::test]
+async fn an_unverified_header_never_widens_the_caller_a_verified_token_resolves() {
+    use tower::ServiceExt;
+
+    let state = CorrelationState {
+        jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+        repository: Arc::new(Repository {
+            calls: AtomicUsize::new(0),
+        }),
+        rollout: Arc::new(NoRollout),
+    };
+    let cookie_name = macro_auth::credential::access_token_cookie_name();
+    let plain = mint(None, None, None, None);
+    let program = mint(None, Some(Uuid::from_u128(3)), None, None);
+    let no_send = mint(None, Some(Uuid::from_u128(3)), None, Some("no_send"));
+    for (header, token, expected) in [
+        (macro_auth::credential::BOT_TOKEN_HEADER, &plain, "bot"),
+        (
+            macro_auth::credential::HARNESS_TOKEN_HEADER,
+            &plain,
+            "harness",
+        ),
+        (
+            macro_auth::credential::USER_API_KEY_HEADER,
+            &plain,
+            "api_credential",
+        ),
+        (
+            macro_auth::credential::BOT_TOKEN_HEADER,
+            &program,
+            "program",
+        ),
+        (
+            macro_auth::credential::HARNESS_TOKEN_HEADER,
+            &program,
+            "program",
+        ),
+        (
+            macro_auth::credential::BOT_TOKEN_HEADER,
+            &no_send,
+            "scoped_no_send",
+        ),
+        (
+            macro_auth::credential::INTERNAL_API_KEY_HEADER,
+            &plain,
+            "api_credential",
+        ),
+        (
+            macro_auth::credential::INTERNAL_API_KEY_HEADER,
+            &program,
+            "program",
+        ),
+    ] {
+        let response = caller_echo(state.clone())
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/whoami")
+                    .header(header, "unverified")
+                    .header("cookie", format!("{cookie_name}={token}"))
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(String::from_utf8_lossy(&body), expected, "{header}");
+    }
+}
+
+/// Two tokens in one request, held to different scopes: the narrowest wins,
+/// whichever authenticates.
+#[tokio::test]
+async fn the_narrowest_scope_of_two_tokens_in_one_request_wins() {
+    use tower::ServiceExt;
+
+    let state = CorrelationState {
+        jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+        repository: Arc::new(Repository {
+            calls: AtomicUsize::new(0),
+        }),
+        rollout: Arc::new(NoRollout),
+    };
+    let cookie_name = macro_auth::credential::access_token_cookie_name();
+    let agent = Some(Uuid::from_u128(3));
+    let no_send = mint(None, agent, None, Some("no_send"));
+    let generation = mint(None, agent, None, Some("generation"));
+    for (bearer, cookie, expected) in [
+        (&no_send, &generation, "scoped_generation"),
+        (&generation, &no_send, "scoped_generation"),
+    ] {
+        let response = caller_echo(state.clone())
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/whoami")
+                    .header("authorization", format!("Bearer {bearer}"))
+                    .header("cookie", format!("{cookie_name}={cookie}"))
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(String::from_utf8_lossy(&body), expected);
+    }
+}
+
+/// A rollout an outer layer puts in the request is kept by a service with no
+/// database, so its observed refusals can be enforced there too.
+#[tokio::test]
+async fn a_rollout_from_an_outer_layer_reaches_a_service_with_no_database() {
+    use tower::ServiceExt;
+
+    struct EnforceCredentials;
+    impl Rollout for EnforceCredentials {
+        fn enforced(&self, caller: route_policy::Caller) -> route_policy::CategorySet {
+            match caller {
+                route_policy::Caller::ApiCredential => route_policy::CategorySet::default()
+                    .with(route_policy::Category::CredentialMint),
+                _ => route_policy::CategorySet::default(),
+            }
+        }
+    }
+    async fn minted() -> &'static str {
+        "minted"
+    }
+    let app = axum::Router::new()
+        .route(
+            "/keys",
+            route_policy::inbound::axum::post(route_policy::Category::CredentialMint, minted),
+        )
+        .layer(axum::middleware::from_fn_with_state(
+            JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+            enforce_signed_scope,
+        ))
+        .layer(axum::middleware::from_fn(
+            |mut request: Request<axum::body::Body>, next: axum::middleware::Next| async move {
+                request
+                    .extensions_mut()
+                    .insert(route_policy::ActiveRollout(Arc::new(EnforceCredentials)));
+                next.run(request).await
+            },
+        ));
+    let bearer = mint(None, None, None, None);
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/keys")
+                .header("authorization", format!("Bearer {bearer}"))
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+}

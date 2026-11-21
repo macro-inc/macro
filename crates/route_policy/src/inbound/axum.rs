@@ -168,11 +168,16 @@ where
             *request.method(),
             Method::GET | Method::HEAD | Method::OPTIONS
         );
+        let preflight = *request.method() == Method::OPTIONS;
         let decision = match request.extensions().get::<ActiveRollout>() {
-            Some(ActiveRollout(rollout)) => {
-                RouteDecision::new(caller, self.category, safe_method, rollout.as_ref())
-            }
-            None => RouteDecision::new(caller, self.category, safe_method, &NoRollout),
+            Some(ActiveRollout(rollout)) => RouteDecision::new(
+                caller,
+                self.category,
+                safe_method,
+                preflight,
+                rollout.as_ref(),
+            ),
+            None => RouteDecision::new(caller, self.category, safe_method, preflight, &NoRollout),
         };
         if decision.verdict == Verdict::Unresolved {
             tracing::warn!(
@@ -199,6 +204,12 @@ where
                 decision,
             ))));
         }
+        if request.extensions().get::<walk::Probe>().is_some() {
+            return Box::pin(std::future::ready(Ok(with_decision(
+                Response::new(axum::body::Body::empty()),
+                decision,
+            ))));
+        }
         request.extensions_mut().insert(decision);
         let handling = self.inner.call(request);
         Box::pin(async move { Ok(with_decision(handling.await?, decision)) })
@@ -215,8 +226,12 @@ fn with_decision(mut response: Response, decision: RouteDecision) -> Response {
     if let Some(caller) = decision.verdict.caller() {
         fields.push(("route_policy.caller", caller.into()));
     }
-    if let Verdict::Refused(refusal) | Verdict::Observed(refusal) = decision.verdict {
-        fields.push(("route_policy.code", refusal.code.into()));
+    match decision.verdict {
+        Verdict::Refused(refusal) | Verdict::Observed(refusal) => {
+            fields.push(("route_policy.code", refusal.code.into()));
+        }
+        Verdict::Unresolved => fields.push(("route_policy.code", RefusalCode::NoCaller.into())),
+        Verdict::Allowed(_) | Verdict::Public => {}
     }
     response.extensions_mut().insert(decision);
     response.extensions_mut().insert(ResponseSpanFields(fields));
