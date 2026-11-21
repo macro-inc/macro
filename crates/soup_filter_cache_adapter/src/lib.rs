@@ -307,12 +307,16 @@ fn walk_authoritative_object(
 
     let mut visited = HashSet::new();
     for field in fields {
+        // Only objects and arrays are walked. Every duplicate of a field reads the
+        // same value, so a scalar skip before the visited check changes nothing.
+        let Some(value @ (serde_json::Value::Object(_) | serde_json::Value::Array(_))) =
+            object.get(&field.response_key)
+        else {
+            continue;
+        };
         if !visited.insert((field.name.as_str(), field.response_key.as_str())) {
             continue;
         }
-        let Some(value) = object.get(&field.response_key) else {
-            continue;
-        };
         let Some(field_meta) = schema.field_meta(concrete_type, &field.name) else {
             continue;
         };
