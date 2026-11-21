@@ -130,7 +130,7 @@ B=crates/suggestion_generation/bench
 bun $B/bench.ts run routines --label main           # one section at its default size
 bun $B/bench.ts run feed --label main --seats 1 --reps 1   # a quick look: one attempt a persona
 bun $B/bench.ts all --label main                    # every section
-bun $B/bench.ts compare <main run.json> <mine run.json>
+bun $B/bench.ts compare <main run.json> <mine run.json> --margins <score,found,bad>
 bun $B/bench.ts report <run.json>...
 bun $B/bench.ts rescore <run.json>...               # after changing an answer key: free, no model calls
 ```
@@ -149,22 +149,35 @@ Each run writes `~/.cache/suggestions-bench/runs/<label>-<section>-<set>-<time>/
 with each attempt's suggestions, the judge's marks, the score and the
 sessions' transcripts beside it. A routines attempt is written as soon as it
 has generated, marked not judged until it is, so `rejudge` can judge a run
-that stopped first. `run` starts the stand-in if it isn't up and holds the
+that stopped first; `rejudge` reads each work list again from the
+transcripts (where they were saved, or beside `run.json`). A list it
+finds replaces the run's reading, and a list it can't read is an error;
+finding no list, the run's reading stands (its list, its error, or none
+read). Where both transcripts are gone, or the one found holds no prompt,
+the run's reading stands too, and a run with neither a list nor an error
+has an unknown list. The harness sends a brief to its
+runtime as Markdown, which backslash-escapes characters such as `_`; the
+bench undoes those escapes. A brief that says it carries a list (the
+drafting brief's words at the start of a line, outside the mail's
+`<untrusted>` block) the bench still can't parse is that attempt's list
+error, as is an unknown list: counted as not judged, by `rescore` too, never
+an empty list. `run` starts the stand-in if it isn't up and holds the
 stack while it runs (the drafting eval's lock), so two runs never share it.
 
 To compare a change: run main, switch the stack to your build (`just
 run_local --instance sugbench ...` from your branch, or reload the harness),
-run the same section with another `--label`, then `compare`. A difference
-inside the section's margin (`MARGINS` in `bench.ts`) is noise.
+run the same section with another `--label`, then `compare` with the
+margins two runs of main measured. A difference inside them is noise.
 
 ### Noise
 
 `compare` takes, for each persona both runs have, B's mean less A's, and
 averages over personas; its 95% interval is that ± t standard errors, from
 how much each persona's attempts spread on each side. It calls a change a
-win or a loss only when the score moved past the section's margin
-(`MARGINS` in `bench.ts`: how far two runs of main land apart at the
-default size) and the interval leaves zero. *found* and *bad* get the same
+win or a loss only when the score moved past its margin (`--margins
+score,found,bad`: how far two runs of main land apart at the default size,
+on the same kind of set and judged by the same judge) and the interval
+leaves zero. *found* and *bad* get the same
 test against margins of their own, and show a change in one before the
 score can. Measure the margins again after changing the personas, the
 judge or the default size:
@@ -173,6 +186,11 @@ judge or the default size:
 bun $B/bench.ts run routines --label main-a && bun $B/bench.ts run routines --label main-b
 bun $B/bench.ts noise <main-a run.json> <main-b run.json>
 ```
+
+`compare` has no margins of its own and refuses to run without
+`--margins`: ones measured on another kind of set or by another judge
+would decide nothing. The week-set margins below were measured with the
+judge from before judges were recorded.
 
 A side of `compare`, `noise` or `report` may be several runs of one section
 and set, judged by one recorded judge on personas read the same way, joined by
@@ -191,16 +209,78 @@ bun $B/bench.ts run routines --set h1 --label mine
 bun $B/bench.ts heldout list            # how often each set was read
 ```
 
-Writing a set takes about 15 minutes and $3 a person (Opus 5.5, about 22
-short model calls each, since the stack gives one 90 seconds). If one still times out, `heldout make`
+Writing a person takes about 17 minutes and $3 (Opus 5.5, about 22
+short model calls each, since the stack gives one 90 seconds), and three
+are written at once, so a set of three or of nine takes under an hour. If one still times out, `heldout make`
 says which people are missing; run the same command again to write just
 those.
 
 Held-out sets live outside the repository and are reported only in
-aggregate. A set written before keys placed every catalog routine (`h2`
+aggregate: `report`, `summary`, `compare` and `noise` show a measure only
+over two held-out people or more who have it (scored in every run set side by
+side; timed, rated, or with a work list read, for those measures), and say
+why where they show none. A set written before keys placed every catalog routine (`h2`
 and earlier) can't be read by the `routines` section: write a new one. Don't open their files while tuning. Each run is recorded in the
 set's ledger; after a baseline and one candidate a set is spent and the bench
 says so: make a new one.
+
+### A month of mail
+
+`heldout make <name> <count> month` writes people with a month of mail
+instead: 30 days, up to 500 messages, enough recurring work that five good
+drafted routines are within reach, and a streams key (`streams-truth.json`)
+that spells out every stream in the mail: its senders, count, cadence, what
+each message asks and what the person does with it, as `work` (mail they act
+on), `noise` (mail they read or ignore) or `thread` (a one-off
+conversation). Every message is the inbox's. The writer refuses a person
+whose month keeps fewer than 250 messages or whose key has fewer than five
+needs (by id, with a drafted routine that isn't blank) a drafted routine can
+meet. Both writers refuse a workspace where two people share a first name in
+any case (each is mailed as first name at the domain) or a colleague is named
+Owner (the person's own place), when sketching and when finishing a set.
+`run`, `find` and `heldout make` take counts from 1 to 1000.
+Writing one took $4.50 to $4.91 a person (three at once in about ten
+minutes). The stand-in serves the month to the read the finding step makes
+(`?days=30&limit=500&texts=100&snippet_chars=500`), refuses any other
+window, and serves the newest 100 to the old read; both hold the inbox
+alone, as Gmail and Outlook are read, cut at the exact start of the window
+and with texts cut by characters, as the service cuts them.
+
+On a month set a routines run also reports good suggestions: a drafted
+routine or a catalog pick that meets a need of the key with nothing wrong
+with it, counted apart, and how many generations reached five good drafts.
+They have no measured margin; `compare` reports their change without a
+verdict.
+
+`find` measures the finding step on its own: one model call reads a month
+person's mail as the service reads it (`mailText`, the lines
+`suggestions/work.rs` writes) with `find.md`, the list is bounded as the
+service bounds it before a session reads it (`boundedList`), and the judge
+matches each listed stream to the streams key, with the addresses of every
+seat and copy read as the key writes them (`asWritten`). A judge whose marks
+leave an entry unmarked, mark one twice or name a stream the key doesn't have
+is asked again, twice at most. A list scores the key's work streams it names,
+as the stream an entry mostly covers or one it covers in full (*found*), and
+the entries that name none (*unreal*: noise, a one-off thread, or nothing in
+the mail). It runs on a set whose every person has a streams key, times each
+list from just before its call, and prints per-person results only for
+people who aren't held out; for held-out people it prints only whether each
+call answered, and their aggregate only over two people or more:
+
+```sh
+bun $B/bench.ts find --set m1 --label flash --model google/gemini-3.8-flash --thinking low --reps 2
+```
+
+A candidate behind a flag runs with it on: `--flags
+routine-suggestions-find-work` (comma-separated) adds flags to the
+section's. With `routine-suggestions-find-work` on, the run scores the work
+list each generation's drafting session read the same way (`workListOf`
+reads it from the earliest `session/prompt` the harness sent a runtime that
+holds one), a generation whose session read none as finding nothing, its
+build failed or not, and a list the judge couldn't mark apart from the
+routines, which are scored all the same. `rescore` scores the lists again
+from their marks, and refuses marks that no longer fit the list and the key. The run reports
+time to the last suggestion beside the first.
 
 The seed CLI refuses an address whose local part isn't ASCII, so as a
 persona is loaded, each such address in its mail, workspace and answer keys
@@ -293,6 +373,28 @@ once a run (`judgeLast`), 2026-11-19, on one stack:
 0.35), bad +0.04 (−0.17 to 0.24), each inside its margin: judging once a
 run leaves `MARGINS` as they were.
 
+### Main on a month of mail
+
+Main `1d77cd00fd` on a readable month set (3 people, 10 needs each on
+average, of which 5 to 8 only a drafted routine meets), 27 attempts,
+2026-11-20:
+
+| Score | Found / needs | Bad | Suggested | Drafted | Good drafts | Five good | Good picks | First | End | $ / gen |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 19.3 (12.2 to 26.8) | 2.67 / 10.0 | 0.67 | 5.3 | 2.26 | 0.56 | 0 of 27 | 1.67 | 76 s | 173 s | $0.072 |
+
+The finding step alone on the same people, 2026-11-20 (time includes the
+bench's retries):
+
+| Model | Lists | Found | Unreal a list | Median time | $ a list |
+| --- | --- | --- | --- | --- | --- |
+| `google/gemini-3.8-flash`, thinking low | 3 of 3 | 95% (39 of 41) | 0.3 | 33 s | $0.016 |
+| `anthropic/claude-sonnet-5-5` | 4 of 6 | 96% (52 of 54) | 0.25 | 175 s | $0.12 |
+| `anthropic/claude-haiku-4-5` | 3 of 3 | 80% (33 of 41) | 3.7 | 87 s | $0.086 |
+
+Sonnet's two missing lists, and every list of Gemini 3.8 Flash at its
+default thinking (6 of 6), ran past the stack's 90-second limit.
+
 ## Cost and time
 
 An attempt's cost, from the baseline runs (`feed`, 2026-11-18) and main's
@@ -327,8 +429,9 @@ cost nothing beyond the model calls.
   under the name `stack.env` points at: PostHog's `/flags` answers with the
   section's flags, and email_service's `/internal/recent_messages/{user}`
   answers with the persona's mailbox (the routines brief reads it from Gmail
-  or Outlook, which seeded mail never reaches); everything else goes to
-  email_service. The suggestions service trusts a flag for a minute, so the
+  or Outlook, which seeded mail never reaches): the newest 100, or the month
+  for exactly the month read. A person with a month answers any other window
+  with a 400; everything else goes to email_service. The suggestions service trusts a flag for a minute, so the
   bench waits a minute after changing them.
 - **Clean runs.** Every attempt seeds its persona again with the seed CLI's
   `apply`, which replaces the persona's seeded rows. A person signs up

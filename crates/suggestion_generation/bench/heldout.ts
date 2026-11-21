@@ -4,6 +4,7 @@
 // confirmed a change (a baseline and one candidate) it is spent, and the
 // next confirmation needs a fresh set: `heldout make <name>`.
 
+import { SQL } from 'bun';
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -11,12 +12,15 @@ import { type Stack, call, login } from '../../scheduled_action/bench/stack';
 import { CATALOG } from './catalog';
 import { ANCHOR } from './clock';
 import { HELDOUT_DIR, type Persona, folders, personas } from './personas';
-import { seed } from './run';
+import type { MonthSketch } from './month';
+import { costOf, seed, userId } from './run';
 
 const AUTHOR_MODEL = 'anthropic/claude-opus-5-5';
 const AUTHOR = 'author@suggestions-bench.example';
 /** Uses of a set per section before its numbers stop being held-out: a baseline and one candidate. */
 const USES = 2;
+/** How many people of a set are written at once. */
+const WRITERS = 3;
 
 const ledgerPath = (set: string) => join(HELDOUT_DIR, set, 'ledger.jsonl');
 
@@ -55,7 +59,7 @@ let authorSeeded: Promise<void> | undefined;
 let authorToken: Promise<string> | undefined;
 
 /** The author's token, seeding the author once per process. */
-async function author(at: Stack): Promise<string> {
+export async function author(at: Stack): Promise<string> {
   authorSeeded ??= (async () => {
     const account = {
       name: 'author',
@@ -77,14 +81,14 @@ async function author(at: Stack): Promise<string> {
   return authorToken;
 }
 
-async function write<T>(at: Stack, prompt: string, schema: object): Promise<T> {
+export async function write<T>(at: Stack, prompt: string, schema: object, model = AUTHOR_MODEL, thinking?: 'low'): Promise<T> {
   let last: unknown;
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0, busy = 0; attempt < 3; attempt++) {
     try {
       const response = await call<{ outcome: { status: string; result?: T; reason?: string } }>(`${at.harness}/cognition/structured-completion`, {
         method: 'POST',
         token: await author(at),
-        body: JSON.stringify({ prompt, model: AUTHOR_MODEL, output_schema: { name: 'authored', schema }, toolset: { type: 'none' } }),
+        body: JSON.stringify({ prompt, model, output_schema: { name: 'authored', schema }, toolset: { type: 'none' }, ...(thinking ? { thinking } : {}) }),
       });
       if (response.outcome.status === 'completed' && response.outcome.result) return response.outcome.result;
       last = response.outcome.reason;
@@ -92,14 +96,19 @@ async function write<T>(at: Stack, prompt: string, schema: object): Promise<T> {
       last = error;
       // Local tokens last an hour: sign in again.
       if (/ 401: /.test(String(error))) authorToken = undefined;
+      // The harness runs 16 completions at once and refuses the rest: wait for a slot without spending an attempt.
+      if (/ 503: .*busy/.test(String(error)) && busy++ < 60) {
+        attempt--;
+        await Bun.sleep(5_000 + Math.random() * 10_000);
+      }
     }
   }
   throw new Error(`writing failed: ${String(last).slice(0, 300)}`);
 }
 
-const str = { type: 'string' };
-const strs = { type: 'array', items: str };
-const obj = (properties: Record<string, object>) => ({ type: 'object', additionalProperties: false, required: Object.keys(properties), properties });
+export const str = { type: 'string' };
+export const strs = { type: 'array', items: str };
+export const obj = (properties: Record<string, object>) => ({ type: 'object', additionalProperties: false, required: Object.keys(properties), properties });
 
 type Sketch = {
   slug: string;
@@ -187,7 +196,7 @@ const ROUTINES_TRUTH = obj({
   misfit: strs,
 });
 
-type WrittenRoutinesTruth = { needs: { catalog: string[]; drafted?: string }[]; decoys: { catalog?: string[] }[]; misfit: string[]; fine?: string[] };
+export type WrittenRoutinesTruth = { needs: { catalog: string[]; drafted?: string }[]; decoys: { catalog?: string[] }[]; misfit: string[]; fine?: string[] };
 
 /**
  * Give every catalog routine exactly one place, as the bench requires
@@ -208,25 +217,34 @@ export function placeAll(truth: WrittenRoutinesTruth): WrittenRoutinesTruth {
 const anchor = new Date(ANCHOR).toISOString();
 
 /**
- * Write `count` new personas into held-out set `name`. A set whose writing
- * stopped part way (the model timed out) is finished by running it again:
- * the people are kept in `people.json`, and each is written into a hidden
- * folder that becomes theirs only once all of it is written.
+ * Write `count` new personas into held-out set `name`: with `month`, month
+ * personas (month.ts). A set whose writing stopped part way (the model timed
+ * out) is finished by running it again: the people are kept in
+ * `people.json`, and each is written into a hidden folder that becomes
+ * theirs only once all of it is written. Prints what the set cost to write.
  */
-export async function makeHeldout(at: Stack, name: string, count: number) {
-  if (!name) throw new Error('heldout make <name> [count]');
+export async function makeHeldout(at: Stack, name: string, count: number, month = false) {
+  if (!name) throw new Error('heldout make <name> [count] [month]');
+  // Loaded here: month.ts builds on this module.
+  const { sketchMonth, writeMonthPersona } = await import('./month');
   const root = join(HELDOUT_DIR, name);
   const sketches = join(root, 'people.json');
   const written = (slug: string) => existsSync(join(root, slug));
-  let people: Sketch[];
+  const started = new Date();
+  let people: (Sketch | MonthSketch)[];
   if (existsSync(sketches)) {
     people = JSON.parse(readFileSync(sketches, 'utf8'));
     if (people.every((sketch) => written(sketch.slug))) throw new Error(`held-out set ${name} exists; pick a new name`);
+    const unusable = rosterProblems(people.filter((sketch) => !written(sketch.slug)));
+    if (unusable) throw new Error(`${unusable}: held-out set ${name} can't be finished as first planned; make a new one under a new name`);
     console.log(`finishing held-out set ${name}: ${people.length} people, as first written`);
   } else {
     // A folder left before its people were saved has nothing else in it: reuse it.
     if (existsSync(root) && readdirSync(root).some((entry) => entry !== 'people.json.partial')) throw new Error(`held-out set ${name} exists; pick a new name`);
-    people = (await sketch(at, count)).slice(0, count);
+    people = (await (month ? sketchMonth(at, count) : sketch(at, count))).slice(0, count);
+    if (people.length < count) throw new Error(`the author sketched ${people.length} of ${count} people; run heldout make again`);
+    const unusable = rosterProblems(people);
+    if (unusable) throw new Error(`${unusable}; run heldout make again`);
     const slugs = people.map((person) => person.slug);
     if (slugs.some((slug) => !/^[a-z]+$/.test(slug)) || new Set(slugs).size !== slugs.length) {
       throw new Error(`the people came back with unusable slugs (${slugs.join(', ')}); run heldout make again`);
@@ -237,21 +255,79 @@ export async function makeHeldout(at: Stack, name: string, count: number) {
     renameSync(`${sketches}.partial`, sketches);
   }
   const failed: string[] = [];
-  for (const person of people) {
-    if (written(person.slug)) continue;
-    try {
-      await writePersona(at, name, root, person);
-    } catch (error) {
-      failed.push(person.slug);
-      console.error(`${person.slug}: ${String(error).slice(0, 300)}`);
+  // People are written WRITERS at a time: each is its own chain of model
+  // calls, so a set of nine takes about as long as a set of three.
+  const queue = people.filter((person) => !written(person.slug));
+  const writing = queue.length;
+  const writer = async () => {
+    for (let person = queue.shift(); person; person = queue.shift()) {
+      try {
+        if ('mail' in person && person.mail === 'month') await writeMonthPersona(at, name, root, person);
+        else await writePersona(at, name, root, person as Sketch);
+      } catch (error) {
+        failed.push(person.slug);
+        console.error(`${person.slug}: ${String(error).slice(0, 300)}`);
+      }
     }
-  }
+  };
+  await Promise.all(Array.from({ length: WRITERS }, writer));
+  // What writing cost is reported when it can be read; the set is ready or not all the same.
+  await reportCost(at, started, writing - failed.length).catch((error) => console.error(`the writing cost could not be read: ${String(error).slice(0, 200)}`));
   if (failed.length) throw new Error(`held-out set ${name}: ${failed.join(', ')} not written; run heldout make ${name} again to finish it`);
   console.log(`held-out set ${name} is ready; run it with --set ${name}. Don't open its files while tuning.`);
 }
 
+/**
+ * Why a person's workspace can't be written as sketched, or undefined. Each
+ * person is mailed as their first name at the domain and seeded under it,
+ * and `owner` is the person themself.
+ */
+export function rosterProblem(sketch: Pick<Sketch, 'owner_first' | 'colleagues'>): string | undefined {
+  const firsts = [sketch.owner_first, ...sketch.colleagues.map((colleague) => colleague.first)].map((first) => first.toLowerCase());
+  if (new Set(firsts).size !== firsts.length) return 'two people of one workspace share a first name, and so an address';
+  if (sketch.colleagues.some((colleague) => colleague.first.toLowerCase() === 'owner')) return "a colleague named Owner would take the person's own place";
+  return undefined;
+}
+
+/** Every sketched person whose workspace can't be written, with why, in one line; undefined when all can. */
+const rosterProblems = (people: (Sketch | MonthSketch)[]) =>
+  people
+    .flatMap((person) => {
+      const problem = rosterProblem(person);
+      return problem ? [`${person.slug}: ${problem}`] : [];
+    })
+    .join('; ') || undefined;
+
+/** What the author spent since `started`, in all and per person written. */
+async function reportCost(at: Stack, started: Date, people: number) {
+  const db = new SQL(at.postgres);
+  try {
+    const cost = await costOf(db, userId(AUTHOR), started, new Date());
+    const each = people ? `, $${(cost.usd / people).toFixed(2)} for each of ${people} people written` : '';
+    const minutes = ((Date.now() - started.getTime()) / 60_000).toFixed(1);
+    console.log(`writing cost $${cost.usd.toFixed(2)}${each}, in ${cost.calls} calls (${cost.inputTokens} tokens in, ${cost.outputTokens} out) over ${minutes} minutes`);
+  } finally {
+    await db.close();
+  }
+}
+
+/**
+ * Every person already written, tune and held-out alike, in a line each: a
+ * new set is told to differ from all of them. Without the held-out sets two
+ * sets sketched from the same prompt came back as the same people, and a set
+ * that repeats a read one is not unseen.
+ */
+export function takenPeople(): string[] {
+  const sets = existsSync(HELDOUT_DIR) ? readdirSync(HELDOUT_DIR, { withFileTypes: true }).filter((e) => e.isDirectory()) : [];
+  const written = sets.flatMap((set) => {
+    const listed = join(HELDOUT_DIR, set.name, 'people.json');
+    return existsSync(listed) ? (JSON.parse(readFileSync(listed, 'utf8')) as { persona: string }[]).map((person) => person.persona) : [];
+  });
+  return [...personas('tune').map((persona) => persona.inbox.persona), ...written];
+}
+
 async function sketch(at: Stack, count: number): Promise<Sketch[]> {
-  const tune = personas('tune').map((persona) => persona.inbox.persona);
+  const tune = takenPeople();
   const { people } = await write<{ people: Sketch[] }>(
     at,
     `Invent ${count} people who would use a work app with email, tasks, documents, chat channels, calls, a CRM and calendar. Each runs or works in a small organization; make them differ from each other in industry, role, seniority and how they work, and differ from these existing ones: ${tune.join(' | ')}.

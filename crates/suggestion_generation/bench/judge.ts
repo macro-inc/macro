@@ -10,7 +10,7 @@ import { SQL } from 'bun';
 import { seedId } from '../../scheduled_action/bench/setup';
 import { type Stack, call, login } from '../../scheduled_action/bench/stack';
 import { CATALOG } from './catalog';
-import { CONTENT_KINDS, type FeedTruth, type Persona, type RoutinesTruth, type Variant, asFirstSeat, contentKey, plainKey, recentMessages, renamesExactly, scenario, scenarioName, seatOf, truthAt } from './personas';
+import { CONTENT_KINDS, type FeedTruth, type Persona, type RoutinesTruth, type Variant, WINDOW_DAYS, WINDOW_TEXTS, asFirstSeat, contentKey, plainKey, recentMessages, renamesExactly, scenario, scenarioName, seatOf, truthAt, windowMessages } from './personas';
 import { shiftDays } from './clock';
 import type { CardRow, Generation, RoutineRow } from './run';
 import { CACHE, seed } from './run';
@@ -20,7 +20,9 @@ export const JUDGE_MODEL = 'anthropic/claude-opus-5-5';
  * The judge a run's marks come from: its model and a version of what it
  * reads and how it is asked. Bump the version with any change to a rubric, a
  * schema or what a judgement reads, so `compare` never weighs the marks of
- * two judges against each other.
+ * two judges against each other. A month persona's judgement (its month of
+ * mail, its streams key and the streams marks) began at v4; a change to it
+ * bumps the version too.
  */
 export const JUDGE = `${JUDGE_MODEL} v4`;
 /**
@@ -81,7 +83,7 @@ function token(at: Stack, grader: string) {
 
 async function complete<T>(at: Stack, grader: string, prompt: string, instructions: string, schema: object): Promise<T> {
   let last: unknown;
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0, busy = 0; attempt < 3; attempt++) {
     try {
       const response = await call<{ outcome: { status: string; result?: T; reason?: string } }>(
         `${at.harness}/cognition/structured-completion`,
@@ -102,6 +104,12 @@ async function complete<T>(at: Stack, grader: string, prompt: string, instructio
     } catch (error) {
       last = error;
       if (/\b401\b/.test(String(error))) tokens.delete(grader);
+      // The harness runs 16 completions at once and refuses the rest: wait for a slot without spending an attempt.
+      if (/ 503: .*busy/.test(String(error)) && busy++ < 60) {
+        attempt--;
+        await Bun.sleep(5_000 + Math.random() * 10_000);
+        continue;
+      }
     }
     await Bun.sleep(3000);
   }
@@ -127,12 +135,16 @@ const iso = (ms: number) => new Date(ms).toISOString();
 /** Mail text with any <mail> or </mail> in it opened by a look-alike, so it can't close the judge's own <mail> tag. A sender's address goes through it with its brackets. */
 const shown = (text: string) => text.replace(/<(\/?mail\b)/gi, '‹$1');
 
-/** The mailbox the generation read: the same copy, so addresses match what it quoted. */
+/**
+ * The mailbox the generation read: the same copy, so addresses match what it
+ * quoted. For a month persona, its whole month, which a build that reads only
+ * the newest mail reads part of: older messages have no text.
+ */
 const inboxDigest = (persona: Persona, variant: Variant, now: number) =>
-  recentMessages(persona, variant, now)
+  (persona.streamsTruth ? windowMessages : recentMessages)(persona, variant, now)
     .messages.map(
       (m, i) =>
-        `[${i + 1}] ${m.received_at.slice(0, 16)} from ${shown(m.from.name)} ${shown(`<${m.from.email}>`)} | ${shown(m.subject)} | labels: ${m.labels.map(shown).join(', ')}\n${shown(m.snippet)}`,
+        `[${i + 1}] ${m.received_at.slice(0, 16)} from ${shown(m.from.name)} ${shown(`<${m.from.email}>`)} | ${shown(m.subject)} | labels: ${m.labels.map(shown).join(', ')}${m.snippet === null ? '' : `\n${shown(m.snippet)}`}`,
     )
     .join('\n\n');
 
@@ -158,6 +170,8 @@ export type RoutineMark = {
   unsafe: boolean;
   /** Its reason states something the mailbox doesn't show. */
   invented: boolean;
+  /** For a month persona: ids of the streams key's streams whose mail it acts on. */
+  streams?: string[];
   why: string;
 };
 
@@ -211,6 +225,15 @@ const ROUTINES_SCHEMA = {
   },
 };
 
+/** The routines schema for a month persona: each mark also names the streams the suggestion acts on. */
+const MONTH_ROUTINES_SCHEMA = (() => {
+  const schema = structuredClone(ROUTINES_SCHEMA);
+  const item = schema.schema.properties.marks.items as { required: string[]; properties: Record<string, unknown> };
+  item.required = [...item.required.slice(0, -1), 'streams', 'why'];
+  item.properties = { ...item.properties, streams: { type: 'array', items: { type: 'string' } } };
+  return schema;
+})();
+
 /** A suggestion as the judge reads it: no ids, no keepProbability, nothing about the run. */
 export function describeRoutine(row: RoutineRow): string {
   const surfaces = `sidebars: ${row.surfaces.join(', ')}`;
@@ -256,11 +279,13 @@ export async function judgeRoutines(at: Stack, grader: string, persona: Persona,
   // What the seats of one `now` share (the person, their mail, the catalog
   // and the key) goes as instructions after the rubric, which the route caches.
   const evidence = routinesEvidence(persona, generation);
+  // A month persona's key also lists every stream of its mail, and each mark names the ones it acts on.
+  const streams = persona.streamsTruth && truthAt(persona.streamsTruth, generation.now);
   const person = `Now is ${iso(generation.now)}; the person's time zone is ${generation.timezone}.
 
 Who they are: ${persona.inbox.persona}
 
-Their newest mail, newest first:
+${streams ? `Their mail of the last ${WINDOW_DAYS} days, newest first: the text of the newest ${WINDOW_TEXTS}, and the sender, subject and labels of the rest` : 'Their newest mail, newest first'}:
 <mail>
 ${evidence.mail}
 </mail>
@@ -269,7 +294,9 @@ The catalog of ready-made routines:
 ${catalog}
 
 Answer key:
-${JSON.stringify(truth, null, 1)}`;
+${JSON.stringify(streams ? { ...truth, ...streams } : truth, null, 1)}${
+    streams ? `\n\nThe answer key's streams are every stream of this mail. For each suggestion also give streams: ids of the streams whose mail it acts on, or none.` : ''
+  }`;
   const suggestions = evidence.suggestions.map((text, i) => `S${i + 1}. ${text}`).join('\n\n');
   const prompt = `The suggestions, in the order they were made:
 ${suggestions}
@@ -278,7 +305,7 @@ Mark every suggestion, S1 to S${generation.routines.length}, in order.`;
   const judge = async () => {
     // A suggestion the judge left unmarked, or marked twice, can't be scored: ask again, then give up.
     for (let attempt = 0; ; attempt++) {
-      const result = await complete<{ marks: RoutineMark[] }>(at, grader, prompt, `${ROUTINES_RUBRIC}\n\n${person}`, ROUTINES_SCHEMA);
+      const result = await complete<{ marks: RoutineMark[] }>(at, grader, prompt, `${ROUTINES_RUBRIC}\n\n${person}`, streams ? MONTH_ROUTINES_SCHEMA : ROUTINES_SCHEMA);
       const marks = generation.routines.map((_, i) => result.marks.filter((mark) => mark.suggestion.replace(/^S/, '') === String(i + 1)));
       const missing = marks.flatMap((found, i) => (found.length === 1 ? [] : [`S${i + 1}`]));
       if (!missing.length) return marks.map(([mark]) => mark);
