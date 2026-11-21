@@ -10,7 +10,8 @@ use tower::ServiceExt as _;
 use tracing_subscriber::Layer as _;
 use tracing_subscriber::layer::SubscriberExt as _;
 
-/// A server whose one tool refuses with data holding the caller's words, and
+/// A server whose one tool refuses with a message and data holding the
+/// caller's words, and
 /// logs the refusal as this process's servers do.
 #[derive(Clone)]
 struct Refusing;
@@ -22,10 +23,10 @@ impl rmcp::ServerHandler for Refusing {
         context: RequestContext<RoleServer>,
     ) -> Result<CallToolResponse, ErrorData> {
         Err(ErrorData::invalid_params(
-            "confirm the filter",
+            "invalid value: the caller's own words",
             Some(serde_json::json!({"query": "the caller's own words"})),
         ))
-        .inspect_err(|error| log_error_response(&context.id, error))
+        .inspect_err(|error| log_error_response(McpMethod::CallTool, &context.id, error))
     }
 }
 
@@ -124,7 +125,7 @@ fn error_responses_are_logged_without_their_data_and_rmcps_own_log_is_the_droppe
         .into_owned();
     assert!(ours.contains("response error"), "{ours}");
     assert!(ours.contains("-32602"), "{ours}");
-    assert!(ours.contains("confirm the filter"), "{ours}");
+    assert!(ours.contains("call_tool"), "{ours}");
     assert!(!ours.contains("caller's own words"), "{ours}");
 
     // rmcp's own warning, which prints the data, is the statement the first

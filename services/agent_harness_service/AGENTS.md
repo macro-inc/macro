@@ -497,9 +497,10 @@ listener failure shuts down the process so ECS can replace the task.
 - rmcp's own logs of error responses (with their data) and of a stream
   closed mid-drain are dropped by callsite (`DROPPED_RMCP_CALLSITES` in
   `src/mcp_response_errors.rs`, pinned to rmcp 3.9.0's lines). Each MCP
-  server handler logs its errors with `log_error_response` (code and message,
-  never data); a new handler method that can fail does the same. On an rmcp
-  upgrade, move the rules to the new lines (the test checks the first).
+  server handler logs its errors with `log_error_response` (method and code;
+  message and data can quote the caller); a new failing handler does the
+  same. On an rmcp upgrade, move the rules to the new lines (the test
+  checks the first).
 - Analytics record the tool name, outcome, duration, and client headers only;
   never add tool arguments or results to them.
 - Public MCP tool calls run for the `ToolCaller` the bearer middleware

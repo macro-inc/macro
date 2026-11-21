@@ -1,4 +1,4 @@
-use crate::mcp_response_errors::log_error_response;
+use crate::mcp_response_errors::{McpMethod, log_error_response};
 use crate::public_mcp::analytics::{
     McpAnalytics, McpAnalyticsEvent, McpClientSignals, SERVER_NAME, ToolCallOutcome,
 };
@@ -359,7 +359,7 @@ where
         context: rmcp::service::RequestContext<rmcp::RoleServer>,
     ) -> Result<InitializeResult, rmcp::ErrorData> {
         let user_id = Self::authenticated_user_id(&context.extensions)
-            .inspect_err(|error| log_error_response(&context.id, error))?;
+            .inspect_err(|error| log_error_response(McpMethod::Initialize, &context.id, error))?;
         // `initialize` is the only message that names the client, so it is
         // where sessions are counted per client.
         self.analytics.record(
@@ -405,10 +405,9 @@ where
         self.custom_request(request, context)
             .await
             .inspect_err(|error| {
-                // How that request normally goes, and it reads the caller's
-                // words back in both its message and its data.
+                // How that request normally goes, not a failure.
                 if !events::is_confirm_step(error) {
-                    log_error_response(&id, error);
+                    log_error_response(McpMethod::Custom, &id, error);
                 }
             })
     }
@@ -421,7 +420,7 @@ where
         let id = context.id.clone();
         self.tool_list(request, context)
             .await
-            .inspect_err(|error| log_error_response(&id, error))
+            .inspect_err(|error| log_error_response(McpMethod::ListTools, &id, error))
     }
 
     async fn call_tool(
@@ -432,7 +431,7 @@ where
         let id = context.id.clone();
         self.tool_call(request, context)
             .await
-            .inspect_err(|error| log_error_response(&id, error))
+            .inspect_err(|error| log_error_response(McpMethod::CallTool, &id, error))
     }
 }
 
