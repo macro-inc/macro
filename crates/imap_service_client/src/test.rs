@@ -1,7 +1,7 @@
 use super::*;
 use wiremock::{
     Mock, MockServer, ResponseTemplate,
-    matchers::{header, method, path},
+    matchers::{body_partial_json, header, method, path},
 };
 
 #[tokio::test]
@@ -47,7 +47,7 @@ async fn provider_failure_text_and_passwords_never_escape_client_errors() {
     };
     let input = VerifyRequest {
         user_id: "macro|owner@example.net".into(),
-        email: "owner@example.net".into(),
+        email: macro_user_id::email::EmailStr::parse_from_str("owner@example.net").unwrap(),
         imap: login.clone(),
         smtp: login,
         confirmed_hosts: vec!["imap.example.net".into()],
@@ -56,4 +56,25 @@ async fn provider_failure_text_and_passwords_never_escape_client_errors() {
     let error = client.verify(&input).await.unwrap_err();
     assert!(matches!(error, Error::CredentialsRejected));
     assert!(!format!("{error:?} {error}").contains("sentinel"));
+}
+
+#[tokio::test]
+async fn discovery_serializes_the_validated_identity_without_normalization() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/internal/v1/discover"))
+        .and(body_partial_json(
+            serde_json::json!({"email": "Owner+Tag@Example.com"}),
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "provider": null, "imap": null, "smtp": null, "steer": null,
+            "hostConfirmationRequired": true, "helpUrl": null
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let client = ImapServiceClient::new(server.uri(), "internal-test-key".into()).unwrap();
+    let email = macro_user_id::email::EmailStr::parse_from_str("Owner+Tag@Example.com").unwrap();
+    let settings = client.discover(&email.0).await.unwrap();
+    assert!(settings.host_confirmation_required);
 }

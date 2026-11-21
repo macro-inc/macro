@@ -5,12 +5,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { InvitationResolutionOneOf } from './invitationResolutionOneOf';
+import type { InvitationResolutionOneOfThree } from './invitationResolutionOneOfThree';
 import type { InvitationResolutionOneOfFive } from './invitationResolutionOneOfFive';
+import type { InvitationResolutionOneOfSeven } from './invitationResolutionOneOfSeven';
 import type { InvitationResolutionOneOfNine } from './invitationResolutionOneOfNine';
 import type { InvitationResolutionOneOfOneone } from './invitationResolutionOneOfOneone';
 import type { InvitationResolutionOneOfOnethree } from './invitationResolutionOneOfOnethree';
-import type { InvitationResolutionOneOfSeven } from './invitationResolutionOneOfSeven';
-import type { InvitationResolutionOneOfThree } from './invitationResolutionOneOfThree';
 
 /**
  * Refreshable result, distinct from the immutable email contents.

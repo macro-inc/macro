@@ -100,3 +100,13 @@ policy, before slower contact and indexing effects. Import completion is queued
 once per generation with its durable completion marker, including empty
 imports. Gateway failures retry the projection; clients coalesce refreshes and
 catch up on reconnect.
+
+Enrollment and password-free discovery use the existing validated Email/EmailStr
+identity types. Discovery retains the submitted spelling and plus suffix through
+catalog and XML username selection after a case-insensitive ownership check.
+Enrollment uses the actor's existing canonical identity; catalog domain matching
+is case-insensitive. HTTP
+identities reject surrounding whitespace rather than implicitly trimming.
+Provider usernames, SMTP envelopes and received MIME headers remain raw protocol
+strings, including SMTPUTF8 addresses outside Macro's ASCII sign-in grammar.
+Persisted protocol credentials are checked at the settings/discovery boundary.

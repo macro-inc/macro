@@ -802,3 +802,8 @@ reclassifies retained Trash descendants and schedules unwanted body downloads.
 Mailbox claim queues carry parent-derived provider routing metadata. Keep both
 the queue index predicate and the authoritative link/provider/generation/health
 checks, and keep claim transactions bounded by their statement timeout.
+
+IMAP enrollment inputs and durable promotion attempts carry EmailStr identities.
+After ownership comparison, discovery retains the submitted spelling and
+verification uses the actor's canonical email part; catalog domains are case-folded. Do not normalize mailbox identity
+or replace raw IMAP/SMTP protocol usernames with sign-in address types.

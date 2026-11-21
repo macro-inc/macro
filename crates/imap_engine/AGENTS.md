@@ -82,3 +82,9 @@ accepts bearer access to a remote mail server.
   SMTP authentication replies are separate from submission replies: 535 rejects
   credentials, temporary failures and transport closes never imply bad passwords.
   Trace closed stage/error fields only; never emit login commands or provider text.
+
+Discovery and verification identities deserialize as the existing EmailStr;
+borrow its validated Email through catalog, DNS and XML discovery. Keep raw
+provider logins and SMTP envelope/MIME addresses as protocol strings: Macro's
+ASCII sign-in parser cannot represent every SMTPUTF8 sender. Never normalize
+case or plus suffixes when deriving a protocol username.

@@ -40,7 +40,7 @@ fn input(id: u128) -> ImapConnectRequest {
     ImapConnectRequest {
         request_id: Uuid::from_u128(id),
         link_id: None,
-        email: "owner@example.com".into(),
+        email: macro_user_id::email::EmailStr::parse_from_str("owner@example.com").unwrap(),
         imap: login.clone(),
         smtp: login,
         confirmed_hosts: vec!["mail.example.com".into()],

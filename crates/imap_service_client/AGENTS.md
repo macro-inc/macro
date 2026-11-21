@@ -24,3 +24,7 @@ and the service validates the credential binding before reading any bytes.
 
 - Regenerate the error schema when adding a closed engine failure category;
   network failures must remain distinct from verified credential rejection.
+
+Discovery accepts the existing validated Email identity and converts to a string
+only in the generated HTTP DTO. Preserve spelling and plus suffixes; keep server
+usernames as raw protocol values.

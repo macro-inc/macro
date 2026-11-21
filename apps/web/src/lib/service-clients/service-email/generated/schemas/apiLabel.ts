@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ApiLabelListVisibility } from './apiLabelListVisibility';
-import type { ApiLabelType } from './apiLabelType';
 import type { ApiMessageListVisibility } from './apiMessageListVisibility';
+import type { ApiLabelType } from './apiLabelType';
 
 export interface ApiLabel {
   createdAt: string;

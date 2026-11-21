@@ -1,6 +1,10 @@
 //! Password-free provider catalog and discovery policy for mail setup.
 use super::models::{Discovery, Endpoint, Error, TlsMode};
 use async_trait::async_trait;
+use macro_user_id::{
+    cowlike::ArcCowStr,
+    email::{Email, ReadEmailParts},
+};
 use regex::Regex;
 use serde::Deserialize;
 use std::{collections::BTreeSet, net::IpAddr, sync::LazyLock};
@@ -9,7 +13,7 @@ use std::{collections::BTreeSet, net::IpAddr, sync::LazyLock};
 #[async_trait]
 pub trait DiscoveryProvider: Send + Sync {
     /// Return a catalog suggestion, live advertisement or manual fallback.
-    async fn discover(&self, email: &str) -> Result<Discovery, Error>;
+    async fn discover(&self, email: &Email<ArcCowStr<'_>>) -> Result<Discovery, Error>;
 }
 
 #[derive(Deserialize)]
@@ -83,14 +87,9 @@ pub fn valid_host(host: &str) -> bool {
 }
 
 /// Validate the submitted address before extracting its domain for anonymous lookup.
-pub fn address_domain(email: &str) -> Result<String, Error> {
-    let (local, domain) = email.rsplit_once('@').ok_or(Error::Invalid)?;
-    if email.len() > 254
-        || local.is_empty()
-        || local.contains('@')
-        || email.chars().any(|c| c.is_whitespace() || c.is_control())
-        || !valid_host(domain)
-    {
+pub fn address_domain(email: &Email<ArcCowStr<'_>>) -> Result<String, Error> {
+    let domain = email.domain_part();
+    if email.email_str().len() > 254 || !valid_host(domain) {
         return Err(Error::Invalid);
     }
     Ok(domain.to_ascii_lowercase())
@@ -109,12 +108,12 @@ pub fn manual() -> Discovery {
 }
 
 impl Provider {
-    fn suggestion(&self, email: &str) -> Discovery {
+    fn suggestion(&self, email: &Email<ArcCowStr<'_>>) -> Discovery {
         let login = |local_part| {
             if local_part {
-                email.split_once('@').map_or(email, |(l, _)| l)
+                email.local_part()
             } else {
-                email
+                email.email_str()
             }
         };
         let endpoint = |host: &str, port, local_part| Endpoint {
@@ -146,7 +145,7 @@ impl Provider {
 }
 
 /// Catalog matches for an address's own domain avoid all network access.
-pub fn discover(email: &str) -> Result<Discovery, Error> {
+pub fn discover(email: &Email<ArcCowStr<'_>>) -> Result<Discovery, Error> {
     let domain = address_domain(email)?;
     Ok(CATALOG
         .as_ref()
@@ -158,7 +157,7 @@ pub fn discover(email: &str) -> Result<Discovery, Error> {
 
 /// Match the lowest-preference MX exchange to a known provider. Only a tightly
 /// matched AWS WorkMail exchange contributes a region to a server hostname.
-pub fn from_mx(email: &str, exchange: &str) -> Result<Option<Discovery>, Error> {
+pub fn from_mx(email: &Email<ArcCowStr<'_>>, exchange: &str) -> Result<Option<Discovery>, Error> {
     address_domain(email)?;
     let exchange = exchange.trim_end_matches('.').to_ascii_lowercase();
     if !valid_host(&exchange) {
@@ -181,7 +180,7 @@ pub fn from_mx(email: &str, exchange: &str) -> Result<Option<Discovery>, Error> 
             host: format!("{service}.mail.{region}.awsapps.com"),
             port,
             tls: TlsMode::Implicit,
-            username: email.into(),
+            username: email.email_str().into(),
         };
         return Ok(Some(Discovery {
             provider: Some("AWS WorkMail".into()),

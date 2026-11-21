@@ -391,3 +391,8 @@ the gateway `/email` prefix.
 - Preserve typed IMAP verification failures through the public boundary: rejected
   credentials use 422, DNS/TCP/TLS use 502, and a bounded timeout uses 504.
   Return only closed domain messages, never provider authentication replies.
+
+IMAP discovery/connect request identities deserialize as EmailStr before domain
+admission. Discovery forwards the validated ownership-checked address, while persisted
+promotion identities are validated once when read. Parse failures map to closed
+errors without logging the address.

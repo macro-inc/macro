@@ -5,6 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
+macro_user_id = { path = "../macro_user_id" }
 imap-proto = { workspace = true }
 subtle = { workspace = true }
 hickory-resolver = { workspace = true }

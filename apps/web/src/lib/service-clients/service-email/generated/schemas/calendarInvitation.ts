@@ -4,7 +4,7 @@
  * email_service
  * OpenAPI spec version: 0.1.0
  */
-
+import type { InvitationParticipant } from './invitationParticipant';
 import type { CalendarInvitationComment } from './calendarInvitationComment';
 import type { CalendarInvitationConferenceUrl } from './calendarInvitationConferenceUrl';
 import type { CalendarInvitationDescription } from './calendarInvitationDescription';
@@ -12,6 +12,7 @@ import type { CalendarInvitationDtstamp } from './calendarInvitationDtstamp';
 import type { CalendarInvitationEnd } from './calendarInvitationEnd';
 import type { CalendarInvitationLastModified } from './calendarInvitationLastModified';
 import type { CalendarInvitationLocation } from './calendarInvitationLocation';
+import type { InvitationMethod } from './invitationMethod';
 import type { CalendarInvitationOrganizer } from './calendarInvitationOrganizer';
 import type { CalendarInvitationRecurrence } from './calendarInvitationRecurrence';
 import type { CalendarInvitationRecurrenceId } from './calendarInvitationRecurrenceId';
@@ -19,8 +20,6 @@ import type { CalendarInvitationRecurrenceIdRaw } from './calendarInvitationRecu
 import type { CalendarInvitationStart } from './calendarInvitationStart';
 import type { CalendarInvitationStatus } from './calendarInvitationStatus';
 import type { CalendarInvitationTitle } from './calendarInvitationTitle';
-import type { InvitationMethod } from './invitationMethod';
-import type { InvitationParticipant } from './invitationParticipant';
 
 /**
  * Display snapshot of one meaningful VEVENT, owned by the email domain.

@@ -6,6 +6,10 @@ use imap_service_client::{
     Binding, ConnectRequest, Discovery, ImapServiceClient, Verification, VerifyRequest,
 };
 use macro_user_id::user_id::MacroUserIdStr;
+use macro_user_id::{
+    cowlike::ArcCowStr,
+    email::{Email, EmailStr},
+};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -81,7 +85,8 @@ impl ImapConnectionRepository for PgImapConnections {
                 owner: MacroUserIdStr::try_from(row.user_id)
                     .map_err(|_| ImapConnectionError::Unavailable)?,
                 credential_owner: row.credential_owner,
-                email: row.email,
+                email: EmailStr::try_from(row.email)
+                    .map_err(|_| ImapConnectionError::Unavailable)?,
                 verification_id: row.verification_id,
                 binding: Binding {
                     link_id: row.link_id,
@@ -323,7 +328,7 @@ impl ImapConnectionRepository for PgImapConnections {
             FROM
                 pg_advisory_xact_lock(hashtextextended($1, 0))
             "#,
-            attempt.email.to_ascii_lowercase(),
+            attempt.email.0.as_ref().to_ascii_lowercase(),
         )
         .fetch_one(&mut *tx)
         .await
@@ -365,7 +370,7 @@ impl ImapConnectionRepository for PgImapConnections {
             LIMIT 1
             FOR UPDATE
             "#,
-            attempt.email,
+            attempt.email.0.as_ref(),
         )
         .fetch_optional(&mut *tx)
         .await
@@ -587,7 +592,10 @@ impl ImapConnectionRepository for PgImapConnections {
 #[derive(Clone)]
 pub struct ImapConnectionClient(pub ImapServiceClient);
 impl ImapConnectionGateway for ImapConnectionClient {
-    async fn discover(&self, email: &str) -> Result<Discovery, ImapConnectionError> {
+    async fn discover(
+        &self,
+        email: &Email<ArcCowStr<'_>>,
+    ) -> Result<Discovery, ImapConnectionError> {
         Ok(self.0.discover(email).await?)
     }
     async fn verify(&self, input: &VerifyRequest) -> Result<Verification, ImapConnectionError> {

@@ -9,6 +9,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{get, post, put},
 };
+use macro_user_id::email::EmailStr;
 use std::sync::Arc;
 use utoipa::OpenApi;
 use uuid::Uuid;
@@ -68,7 +69,8 @@ async fn authenticate(
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryRequest {
     /// User's verified sign-in address.
-    pub email: String,
+    #[schema(value_type = String, format = Email)]
+    pub email: EmailStr<'static>,
 }
 /// Closed HTTP failure body. Provider text and credentials are never serialized.
 pub struct ApiError(Error);
@@ -154,7 +156,7 @@ async fn discover(
     State(state): State<ApiState>,
     Json(input): Json<DiscoveryRequest>,
 ) -> Result<Json<Discovery>, ApiError> {
-    Ok(Json(state.engine.discover_remote(&input.email).await?))
+    Ok(Json(state.engine.discover_remote(&input.email.0).await?))
 }
 #[utoipa::path(post,path="/internal/v1/verify",request_body=VerifyRequest,responses((status=200,body=Verification)))]
 async fn verify(

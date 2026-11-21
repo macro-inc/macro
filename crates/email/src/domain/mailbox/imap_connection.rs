@@ -3,7 +3,11 @@
 use imap_engine::domain::models::{
     Binding, ConnectRequest, Discovery, Login, Verification, VerifyRequest,
 };
-use macro_user_id::user_id::MacroUserIdStr;
+use macro_user_id::{
+    cowlike::{ArcCowStr, CowLike},
+    email::{Email, EmailStr, ReadEmailParts},
+    user_id::MacroUserIdStr,
+};
 use std::future::Future;
 use uuid::Uuid;
 
@@ -17,7 +21,8 @@ pub struct ImapConnectRequest {
     /// Required by a reconnect surface to reject stale settings dialogs.
     pub link_id: Option<Uuid>,
     /// Must be an address Macro has independently verified for the actor.
-    pub email: String,
+    #[cfg_attr(feature = "axum", schema(value_type = String, format = Email))]
+    pub email: EmailStr<'static>,
     /// IMAP login.
     pub imap: Login,
     /// SMTP login.
@@ -32,7 +37,7 @@ pub struct ImapConnectionAttempt {
     pub id: Uuid,
     pub owner: MacroUserIdStr<'static>,
     pub credential_owner: String,
-    pub email: String,
+    pub email: EmailStr<'static>,
     pub verification_id: Uuid,
     pub binding: Binding,
     pub expected_generation: Option<i64>,
@@ -92,7 +97,7 @@ pub trait ImapConnectionRepository: Send + Sync + 'static {
 pub trait ImapConnectionGateway: Send + Sync + 'static {
     fn discover(
         &self,
-        email: &str,
+        email: &Email<ArcCowStr<'_>>,
     ) -> impl Future<Output = Result<Discovery, ImapConnectionError>> + Send;
     fn verify(
         &self,
@@ -134,14 +139,17 @@ impl<R: ImapConnectionRepository, G: ImapConnectionGateway, F: ImapConnectionEnr
         actor: &MacroUserIdStr<'_>,
     ) -> Result<ImapConnectionOffer, ImapConnectionError> {
         if !self.enrollment.enabled(actor).await
-            || actor.email_str().ends_with("@privaterelay.appleid.com")
+            || actor
+                .email_part()
+                .domain_part()
+                .eq_ignore_ascii_case("privaterelay.appleid.com")
             || self.repository.owned_address_is_connected(actor).await?
         {
             return Ok(ImapConnectionOffer::None);
         }
         // A passive offer uses only the bundled catalog; the signed-in address
         // is never disclosed to a third-party discovery server on page load.
-        let discovery = imap_engine::domain::discovery::discover(actor.email_str())?;
+        let discovery = imap_engine::domain::discovery::discover(&actor.email_part())?;
         Ok(match discovery.steer.as_deref() {
             Some("gmail") => ImapConnectionOffer::Gmail,
             Some("outlook") => ImapConnectionOffer::Outlook,
@@ -151,13 +159,16 @@ impl<R: ImapConnectionRepository, G: ImapConnectionGateway, F: ImapConnectionEnr
     pub async fn discover(
         &self,
         actor: &MacroUserIdStr<'_>,
-        email: &str,
+        email: &Email<ArcCowStr<'_>>,
     ) -> Result<Discovery, ImapConnectionError> {
         if !self.enrollment.enabled(actor).await {
             return Err(ImapConnectionError::Disabled);
         }
-        if !actor.email_str().eq_ignore_ascii_case(email.trim())
-            || actor.email_str().ends_with("@privaterelay.appleid.com")
+        if !actor.email_str().eq_ignore_ascii_case(email.email_str())
+            || actor
+                .email_part()
+                .domain_part()
+                .eq_ignore_ascii_case("privaterelay.appleid.com")
         {
             return Err(ImapConnectionError::AddressUnverified);
         }
@@ -173,8 +184,13 @@ impl<R: ImapConnectionRepository, G: ImapConnectionGateway, F: ImapConnectionEnr
         if !self.enrollment.enabled(&actor).await {
             return Err(ImapConnectionError::Disabled);
         }
-        if !actor.email_str().eq_ignore_ascii_case(input.email.trim())
-            || actor.email_str().ends_with("@privaterelay.appleid.com")
+        if !actor
+            .email_str()
+            .eq_ignore_ascii_case(input.email.0.as_ref())
+            || actor
+                .email_part()
+                .domain_part()
+                .eq_ignore_ascii_case("privaterelay.appleid.com")
         {
             return Err(ImapConnectionError::AddressUnverified);
         }
@@ -193,7 +209,7 @@ impl<R: ImapConnectionRepository, G: ImapConnectionGateway, F: ImapConnectionEnr
                     .gateway
                     .verify(&VerifyRequest {
                         user_id: actor.to_string(),
-                        email: actor.email_str().to_owned(),
+                        email: EmailStr(actor.email_part().into_owned()),
                         imap: input.imap.clone(),
                         smtp: input.smtp.clone(),
                         confirmed_hosts: input.confirmed_hosts.clone(),

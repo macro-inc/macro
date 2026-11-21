@@ -1,6 +1,7 @@
 //! Shared typed API and durable account state.
 
 use chrono::{DateTime, Utc};
+use macro_user_id::email::EmailStr;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use utoipa::ToSchema;
@@ -54,7 +55,8 @@ pub struct Endpoint {
     pub port: u16,
     /// Required TLS policy.
     pub tls: TlsMode,
-    /// Account login.
+    /// Raw protocol login: providers may require a local part or account ID
+    /// rather than an email address.
     pub username: String,
 }
 
@@ -75,7 +77,8 @@ pub struct VerifyRequest {
     /// Authenticated owner, supplied by email_service.
     pub user_id: String,
     /// Address already verified by Macro sign-in or a mailbox challenge.
-    pub email: String,
+    #[schema(value_type = String, format = Email)]
+    pub email: EmailStr<'static>,
     /// IMAP login.
     pub imap: Login,
     /// SMTP login.
@@ -500,7 +503,8 @@ pub struct Credentials {
     pub binding: Option<Binding>,
     /// Verified owner.
     pub user_id: String,
-    /// Verified sender address.
+    /// Raw protocol sender: SMTPUTF8 may contain non-ASCII local parts that
+    /// Macro's validated sign-in identity type deliberately does not accept.
     pub email: String,
     /// IMAP login.
     pub imap: Login,

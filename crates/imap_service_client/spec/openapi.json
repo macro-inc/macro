@@ -339,6 +339,7 @@
         "properties": {
           "email": {
             "description": "User's verified sign-in address.",
+            "format": "email",
             "type": "string"
           }
         },
@@ -470,7 +471,7 @@
             "description": "Required TLS policy."
           },
           "username": {
-            "description": "Account login.",
+            "description": "Raw protocol login: providers may require a local part or account ID\nrather than an email address.",
             "type": "string"
           }
         },
@@ -1379,6 +1380,7 @@
           },
           "email": {
             "description": "Address already verified by Macro sign-in or a mailbox challenge.",
+            "format": "email",
             "type": "string"
           },
           "imap": {

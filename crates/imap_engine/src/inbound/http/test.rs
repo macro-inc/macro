@@ -62,6 +62,45 @@ async fn actual_router_rejects_missing_wrong_and_empty_keys() {
             );
         }
         if !configured.is_empty() {
+            for email in [
+                "not-an-address",
+                "bad..local@example.net",
+                "owner@@example.net",
+                " owner@example.net",
+            ] {
+                let login = serde_json::json!({
+                    "endpoint": {"host": "mail.example.net", "port": 993, "tls": "implicit", "username": "account-id"},
+                    "password": "synthetic-test-secret"
+                });
+                for (route, body) in [
+                    ("discover", serde_json::json!({"email": email})),
+                    (
+                        "verify",
+                        serde_json::json!({
+                            "userId": "macro|owner@example.net", "email": email,
+                            "imap": login, "smtp": login, "confirmedHosts": ["mail.example.net"]
+                        }),
+                    ),
+                ] {
+                    let response = client
+                        .post(format!("http://{address}/internal/v1/{route}"))
+                        .header("x-internal-auth-key", configured)
+                        .json(&body)
+                        .send()
+                        .await
+                        .unwrap();
+                    // Json extraction refuses the identity before either engine
+                    // operation can reach its credential or discovery adapter.
+                    assert_eq!(response.status(), reqwest::StatusCode::UNPROCESSABLE_ENTITY);
+                    assert!(
+                        !response
+                            .text()
+                            .await
+                            .unwrap()
+                            .contains("synthetic-test-secret")
+                    );
+                }
+            }
             assert_eq!(
                 client
                     .post(format!("http://{address}/internal/v1/discover"))

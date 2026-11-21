@@ -7,6 +7,7 @@ struct Fake(Arc<Mutex<State>>);
 #[derive(Default)]
 struct State {
     enabled: bool,
+    discoveries: Vec<String>,
     attempt: Option<ImapConnectionAttempt>,
     verifies: u32,
     promotions: u32,
@@ -19,12 +20,20 @@ impl ImapConnectionEnrollment for Fake {
     }
 }
 impl ImapConnectionGateway for Fake {
-    async fn discover(&self, _: &str) -> Result<Discovery, ImapConnectionError> {
-        unreachable!()
+    async fn discover(
+        &self,
+        email: &Email<ArcCowStr<'_>>,
+    ) -> Result<Discovery, ImapConnectionError> {
+        self.0
+            .lock()
+            .unwrap()
+            .discoveries
+            .push(email.email_str().to_owned());
+        Ok(imap_engine::domain::discovery::manual())
     }
     async fn verify(&self, request: &VerifyRequest) -> Result<Verification, ImapConnectionError> {
         assert_eq!(request.user_id, "macro|owner@example.com");
-        assert_eq!(request.email, "owner@example.com");
+        assert_eq!(request.email.0.as_ref(), "owner@example.com");
         self.0.lock().unwrap().verifies += 1;
         Ok(Verification {
             id: Uuid::from_u128(2),
@@ -128,7 +137,7 @@ fn request(email: &str) -> ImapConnectRequest {
     ImapConnectRequest {
         request_id: Uuid::from_u128(1),
         link_id: None,
-        email: email.into(),
+        email: EmailStr::try_from(email.to_owned()).unwrap(),
         imap: login.clone(),
         smtp: login,
         confirmed_hosts: vec!["mail.example.com".into()],
@@ -218,12 +227,64 @@ async fn live_discovery_does_not_disclose_unverified_addresses() {
     let service = ImapConnectionService {
         repository: fake.clone(),
         gateway: fake.clone(),
-        enrollment: fake,
+        enrollment: fake.clone(),
     };
     let actor = MacroUserIdStr::try_from("macro|owner@example.com").unwrap();
-    // The fake gateway's discover method panics if the boundary is bypassed.
+    let submitted = EmailStr::parse_from_str("someone-else@example.com").unwrap();
     assert!(matches!(
-        service.discover(&actor, "someone-else@example.com").await,
+        service.discover(&actor, &submitted.0).await,
         Err(ImapConnectionError::AddressUnverified)
     ));
+    assert!(fake.0.lock().unwrap().discoveries.is_empty());
+}
+
+#[tokio::test]
+async fn authorized_discovery_preserves_the_submitted_validated_spelling() {
+    let fake = Fake::default();
+    fake.0.lock().unwrap().enabled = true;
+    let service = ImapConnectionService {
+        repository: fake.clone(),
+        gateway: fake.clone(),
+        enrollment: fake.clone(),
+    };
+    let actor = MacroUserIdStr::try_from("macro|owner+tag@example.com").unwrap();
+    let submitted = EmailStr::parse_from_str("Owner+Tag@Example.com").unwrap();
+    assert_eq!(actor.email_str(), "owner+tag@example.com");
+    service.discover(&actor, &submitted.0).await.unwrap();
+    assert_eq!(
+        fake.0.lock().unwrap().discoveries,
+        ["Owner+Tag@Example.com"]
+    );
+}
+
+#[tokio::test]
+async fn private_relay_policy_remains_enforced_with_validated_domain_parts() {
+    let fake = Fake::default();
+    fake.0.lock().unwrap().enabled = true;
+    let service = ImapConnectionService {
+        repository: fake.clone(),
+        gateway: fake.clone(),
+        enrollment: fake.clone(),
+    };
+    let domain = "PRIVATERELAY.APPLEID.COM";
+    let address = format!("owner@{domain}");
+    let actor = MacroUserIdStr::try_from(format!("macro|{address}")).unwrap();
+    assert!(matches!(
+        service.suggestion(&actor).await.unwrap(),
+        ImapConnectionOffer::None
+    ));
+    let submitted = EmailStr(actor.email_part());
+    assert!(matches!(
+        service.discover(&actor, &submitted.0).await,
+        Err(ImapConnectionError::AddressUnverified)
+    ));
+    assert!(matches!(
+        service
+            .connect(actor.into_owned(), "owner", request(&address))
+            .await,
+        Err(ImapConnectionError::AddressUnverified)
+    ));
+    let state = fake.0.lock().unwrap();
+    assert!(state.discoveries.is_empty());
+    assert_eq!(state.verifies, 0);
 }

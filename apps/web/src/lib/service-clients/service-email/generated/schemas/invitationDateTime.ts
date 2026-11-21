@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { InvitationDateTimeOneOf } from './invitationDateTimeOneOf';
-import type { InvitationDateTimeOneOfFive } from './invitationDateTimeOneOfFive';
 import type { InvitationDateTimeOneOfThree } from './invitationDateTimeOneOfThree';
+import type { InvitationDateTimeOneOfFive } from './invitationDateTimeOneOfFive';
 
 /**
  * Preserve date-only and unresolved times without manufacturing UTC instants.

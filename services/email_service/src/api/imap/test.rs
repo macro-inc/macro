@@ -44,3 +44,29 @@ async fn verification_errors_preserve_closed_categories_and_accurate_statuses() 
         );
     }
 }
+
+#[test]
+fn public_mailbox_inputs_reject_malformed_identities_before_domain_admission() {
+    for email in [
+        "not-an-address",
+        "bad..local@example.net",
+        "owner@@example.net",
+        " owner@example.net",
+    ] {
+        assert!(
+            serde_json::from_value::<ImapDiscoverRequest>(serde_json::json!({"email": email}))
+                .is_err()
+        );
+        let login = serde_json::json!({
+            "endpoint": {"host": "mail.example.net", "port": 993, "tls": "implicit", "username": "account-id"},
+            "password": "synthetic-test-secret"
+        });
+        assert!(
+            serde_json::from_value::<ImapConnectRequest>(serde_json::json!({
+                "requestId": "00000000-0000-7000-8000-000000000001", "linkId": null,
+                "email": email, "imap": login, "smtp": login, "confirmedHosts": ["mail.example.net"]
+            }))
+            .is_err()
+        );
+    }
+}

@@ -5,6 +5,7 @@ pub use imap_engine::domain::account_settings::{
     AccountMailSettings, FolderSetting, UpdateFolderSettings,
 };
 pub use imap_engine::domain::models::*;
+use macro_user_id::{cowlike::ArcCowStr, email::Email};
 use serde::{Serialize, de::DeserializeOwned};
 
 /// API generated from the engine's utoipa document.
@@ -47,11 +48,11 @@ impl ImapServiceClient {
     }
     /// Query catalog settings without accepting a password.
     #[tracing::instrument(skip_all, err)]
-    pub async fn discover(&self, email: &str) -> Result<Discovery, Error> {
+    pub async fn discover(&self, email: &Email<ArcCowStr<'_>>) -> Result<Discovery, Error> {
         response(
             self.client
                 .discover(&generated::types::DiscoveryRequest {
-                    email: email.into(),
+                    email: email.as_ref().to_owned(),
                 })
                 .await,
         )

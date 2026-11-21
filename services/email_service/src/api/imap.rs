@@ -12,6 +12,7 @@ use email::domain::mailbox::imap_connection::{
     ImapConnectRequest, ImapConnectionError, ImapConnectionOffer,
 };
 use macro_authorization::{AccountHolderOrInternal, MacroAuthorizationExtractor};
+use macro_user_id::email::EmailStr;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -30,7 +31,8 @@ pub(crate) fn router() -> Router<ApiContext> {
 
 #[derive(Deserialize, ToSchema)]
 pub(crate) struct ImapDiscoverRequest {
-    email: String,
+    #[schema(value_type = String, format = Email)]
+    email: EmailStr<'static>,
 }
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -134,7 +136,7 @@ pub(crate) async fn discover(
         ctx.imap_connections
             .discover(
                 &authorization.authorization.user.macro_user_id,
-                &input.email,
+                &input.email.0,
             )
             .await?,
     ))

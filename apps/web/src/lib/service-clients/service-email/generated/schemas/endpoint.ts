@@ -19,6 +19,7 @@ export interface Endpoint {
   port: number;
   /** Required TLS policy. */
   tls: TlsMode;
-  /** Account login. */
+  /** Raw protocol login: providers may require a local part or account ID
+rather than an email address. */
   username: string;
 }

@@ -834,6 +834,7 @@
         "properties": {
           "email": {
             "type": "string",
+            "format": "email",
             "description": "User's verified sign-in address."
           }
         }
@@ -973,7 +974,7 @@
           },
           "username": {
             "type": "string",
-            "description": "Account login."
+            "description": "Raw protocol login: providers may require a local part or account ID\nrather than an email address."
           }
         }
       },
@@ -1914,6 +1915,7 @@
           },
           "email": {
             "type": "string",
+            "format": "email",
             "description": "Address already verified by Macro sign-in or a mailbox challenge."
           },
           "imap": {

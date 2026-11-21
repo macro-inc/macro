@@ -12,6 +12,10 @@ use futures::{
 };
 use hickory_resolver::{TokioResolver, proto::rr::RData};
 use macro_service_urls::ThunderbirdAutoconfigUrl;
+use macro_user_id::{
+    cowlike::ArcCowStr,
+    email::{Email, ReadEmailParts},
+};
 use reqwest::{Client, Url, redirect};
 use std::{sync::OnceLock, time::Duration};
 use tokio::time::timeout;
@@ -45,7 +49,7 @@ impl MailDiscovery {
         self.resolver.get()
     }
 
-    async fn mx(&self, email: &str, domain: &str) -> Option<Discovery> {
+    async fn mx(&self, email: &Email<ArcCowStr<'_>>, domain: &str) -> Option<Discovery> {
         let answer = self.dns()?.mx_lookup(format!("{domain}.")).await.ok()?;
         let mx = answer
             .answers()
@@ -88,7 +92,7 @@ impl MailDiscovery {
             .filter(|host| discovery::valid_host(host))
     }
 
-    async fn srv_settings(&self, email: &str, domain: &str) -> Option<Discovery> {
+    async fn srv_settings(&self, email: &Email<ArcCowStr<'_>>, domain: &str) -> Option<Discovery> {
         let (imap, submission, upgrade) = tokio::join!(
             self.srv(domain, "_imaps", 993),
             self.srv(domain, "_submissions", 465),
@@ -98,7 +102,7 @@ impl MailDiscovery {
             host,
             port,
             tls,
-            username: email.into(),
+            username: email.email_str().into(),
         };
         let d = Discovery {
             imap: imap.map(|host| endpoint(host, 993, TlsMode::Implicit)),
@@ -110,13 +114,13 @@ impl MailDiscovery {
         usable(d)
     }
 
-    async fn autodiscover(&self, email: &str, domain: &str) -> Option<Discovery> {
+    async fn autodiscover(&self, email: &Email<ArcCowStr<'_>>, domain: &str) -> Option<Discovery> {
         let host = self
             .srv(domain, "_autodiscover", 443)
             .await
             .unwrap_or_else(|| format!("autodiscover.{domain}"));
         // Only this explicit flow includes a mailbox identifier. Its requests contain no credentials.
-        let mail = quick_xml::escape::escape(email);
+        let mail = quick_xml::escape::escape(email.email_str());
         let pox = format!(
             r#"<?xml version="1.0"?><Autodiscover xmlns="http://schemas.microsoft.com/exchange/autodiscover/outlook/requestschema/2006"><Request><EMailAddress>{mail}</EMailAddress><AcceptableResponseSchema>http://schemas.microsoft.com/exchange/autodiscover/outlook/responseschema/2006a</AcceptableResponseSchema></Request></Autodiscover>"#
         );
@@ -175,7 +179,11 @@ async fn pinned_client(url: &Url) -> Option<Client> {
 }
 
 /// Each redirect or Autodiscover POX redirect is checked again before creating the socket.
-async fn document(start: String, email: &str, body: Option<String>) -> Option<Discovery> {
+async fn document(
+    start: String,
+    email: &Email<ArcCowStr<'_>>,
+    body: Option<String>,
+) -> Option<Discovery> {
     let mut url = Url::parse(&start).ok()?;
     for _ in 0..=REDIRECT_LIMIT {
         let client = pinned_client(&url).await?;
@@ -233,7 +241,7 @@ async fn document(start: String, email: &str, body: Option<String>) -> Option<Di
 
 #[async_trait]
 impl DiscoveryProvider for MailDiscovery {
-    async fn discover(&self, email: &str) -> Result<Discovery, Error> {
+    async fn discover(&self, email: &Email<ArcCowStr<'_>>) -> Result<Discovery, Error> {
         let direct = discovery::discover(email)?;
         if direct.provider.is_some() {
             return Ok(direct);

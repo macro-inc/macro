@@ -3,6 +3,7 @@ use super::{models::*, ports::*};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use chrono::{Duration, Utc};
 use email_api_client::domain::models::{MessageAction, SendRequest};
+use macro_user_id::{cowlike::ArcCowStr, email::Email};
 use mailparse::MailHeaderMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -121,11 +122,11 @@ impl Engine {
         self
     }
     /// Pure embedded-catalog discovery, also used when no network adapter is configured.
-    pub fn discover(email: &str) -> Result<Discovery, Error> {
+    pub fn discover(email: &Email<ArcCowStr<'_>>) -> Result<Discovery, Error> {
         super::discovery::discover(email)
     }
     /// Password-free discovery through catalog, MX, ISPDB and guarded advertisements.
-    pub async fn discover_remote(&self, email: &str) -> Result<Discovery, Error> {
+    pub async fn discover_remote(&self, email: &Email<ArcCowStr<'_>>) -> Result<Discovery, Error> {
         match &self.discovery {
             Some(discovery) => discovery.discover(email).await,
             None => Self::discover(email),
@@ -138,8 +139,6 @@ impl Engine {
             return Err(Error::Forbidden);
         }
         if input.user_id.is_empty()
-            || !input.email.contains('@')
-            || input.email.chars().any(char::is_control)
             || input.imap.password.0.len() > 1024
             || input.smtp.password.0.len() > 1024
         {
@@ -181,7 +180,7 @@ impl Engine {
             features: None,
             binding: None,
             user_id: input.user_id.clone(),
-            email: input.email,
+            email: input.email.0.as_ref().to_owned(),
             imap: input.imap,
             smtp: input.smtp,
         };

@@ -7,10 +7,10 @@
 import type { CalendarEventSourceContentCreatorEmail } from './calendarEventSourceContentCreatorEmail';
 import type { CalendarEventSourceContentCreatorName } from './calendarEventSourceContentCreatorName';
 import type { CalendarEventSourceContentDescription } from './calendarEventSourceContentDescription';
+import type { EventType } from './eventType';
 import type { CalendarEventSourceContentLocation } from './calendarEventSourceContentLocation';
 import type { EventReminders } from './eventReminders';
 import type { EventTransparency } from './eventTransparency';
-import type { EventType } from './eventType';
 import type { EventVisibility } from './eventVisibility';
 
 /**

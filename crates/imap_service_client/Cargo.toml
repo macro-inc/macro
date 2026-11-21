@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 [dependencies]
+macro_user_id = { path = "../macro_user_id" }
 progenitor-client = { workspace = true }
 base64 = { workspace = true }
 imap_engine = { workspace = true }

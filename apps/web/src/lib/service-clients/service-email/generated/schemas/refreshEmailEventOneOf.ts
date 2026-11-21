@@ -4,9 +4,8 @@
  * email_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { BackfillStatus } from './backfillStatus';
 import type { RefreshEmailEventOneOfEvent } from './refreshEmailEventOneOfEvent';
+import type { BackfillStatus } from './backfillStatus';
 
 /**
  * Backfill progress for `link_id`; see [`BackfillStatus`].

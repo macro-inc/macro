@@ -2,6 +2,7 @@
 use super::discovery::discover;
 use super::models::{Binding, Credentials, Endpoint, Error, Folder, FolderRole};
 use async_trait::async_trait;
+use macro_user_id::email::EmailStr;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use utoipa::ToSchema;
@@ -118,7 +119,9 @@ impl AccountMailSettings {
         folders: Vec<ObservedFolder>,
         prefs: &FolderPreferences,
     ) -> Result<Self, Error> {
-        let catalog = discover(&c.email)?;
+        // Old encrypted protocol credentials are a persisted raw-string boundary.
+        let identity = EmailStr::parse_from_str(&c.email).map_err(|_| Error::Invalid)?;
+        let catalog = discover(&identity.0)?;
         let mut prefs = prefs.clone();
         prefs.retain_listed(folders.iter().map(|entry| entry.folder.id.as_str()));
         let folders = folders
