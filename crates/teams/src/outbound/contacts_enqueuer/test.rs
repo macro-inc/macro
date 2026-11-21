@@ -35,6 +35,13 @@ impl ContactsIngress for FakeContactsIngress {
             .push(connections);
         Ok(())
     }
+
+    async fn enqueue_contact_disconnections(
+        &self,
+        _disconnections: Vec<ContactConnection>,
+    ) -> Result<(), Report> {
+        panic!("unexpected contacts disconnections enqueue")
+    }
 }
 
 impl ContactListIngress for FakeContactsIngress {

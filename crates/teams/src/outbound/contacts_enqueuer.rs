@@ -55,6 +55,22 @@ where
             .map_err(|e| anyhow::anyhow!("{e:?}"))
     }
 
+    #[tracing::instrument(skip_all, fields(count = disconnections.len() as i64), err)]
+    async fn enqueue_contact_disconnections(
+        &self,
+        disconnections: Vec<(MacroUserIdStr<'static>, MacroUserIdStr<'static>)>,
+    ) -> Result<(), Self::Err> {
+        let disconnections = disconnections
+            .into_iter()
+            .map(|(first, second)| ContactConnection::new(first, second))
+            .collect();
+
+        self.ingress
+            .enqueue_contact_disconnections(disconnections)
+            .await
+            .map_err(|e| anyhow::anyhow!("{e:?}"))
+    }
+
     #[tracing::instrument(
         skip_all,
         fields(users = users.len() as i64, changed = changed.len() as i64),

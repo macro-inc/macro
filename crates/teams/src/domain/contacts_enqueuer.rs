@@ -1,7 +1,8 @@
 //! Outbound port for the contacts changes team membership causes.
 //!
 //! The teams service uses this port to publish explicit connections between a
-//! joining user and their teammates, and to tell members whose teammates
+//! joining user and their teammates, to delete them once the membership ends,
+//! and to tell members whose teammates
 //! changed which contacts to re-read, without depending on a particular queue
 //! or contacts service implementation.
 
@@ -17,6 +18,13 @@ pub trait ContactsEnqueuer: Clone + Send + Sync + 'static {
     fn enqueue_contact_connections(
         &self,
         connections: Vec<(MacroUserIdStr<'static>, MacroUserIdStr<'static>)>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Enqueues owned pairs of users whose membership-derived connection
+    /// ended, so it is deleted.
+    fn enqueue_contact_disconnections(
+        &self,
+        disconnections: Vec<(MacroUserIdStr<'static>, MacroUserIdStr<'static>)>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Tells each user's clients to re-read `changed`. Teammates are computed
@@ -39,6 +47,13 @@ impl ContactsEnqueuer for NoOpContactsEnqueuer {
     async fn enqueue_contact_connections(
         &self,
         _connections: Vec<(MacroUserIdStr<'static>, MacroUserIdStr<'static>)>,
+    ) -> Result<(), Self::Err> {
+        Ok(())
+    }
+
+    async fn enqueue_contact_disconnections(
+        &self,
+        _disconnections: Vec<(MacroUserIdStr<'static>, MacroUserIdStr<'static>)>,
     ) -> Result<(), Self::Err> {
         Ok(())
     }

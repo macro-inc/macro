@@ -46,6 +46,22 @@ impl ContactConnections {
     }
 }
 
+/// A contacts SQS message carrying legacy relationships to remove, such as
+/// the ones a team membership wrote once that membership ends.
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ContactDisconnections {
+    /// Relationships to delete.
+    pub disconnections: Vec<ContactConnection>,
+}
+
+impl ContactDisconnections {
+    /// Creates a remove-relationships message.
+    pub fn new(disconnections: Vec<ContactConnection>) -> Self {
+        Self { disconnections }
+    }
+}
+
 /// A change to directed, list-aware directory membership. Each variant names
 /// bounded id lists; [`crate::domain::ports::ContactListIngress`] chunks them.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -94,6 +110,8 @@ pub enum ContactsMessage {
     Nodes(ContactsNodes),
     /// A message containing explicit relationships.
     Connections(ContactConnections),
+    /// A message naming legacy relationships to delete.
+    Disconnections(ContactDisconnections),
 }
 
 impl ContactsMessage {
@@ -103,6 +121,7 @@ impl ContactsMessage {
             Self::Change(_) => "change",
             Self::Nodes(_) => "nodes",
             Self::Connections(_) => "connections",
+            Self::Disconnections(_) => "disconnections",
         }
     }
 }

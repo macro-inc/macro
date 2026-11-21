@@ -7,7 +7,7 @@ use crate::domain::models::invalidation::ContactsInvalidation;
 use crate::domain::models::list::InboxSource;
 use crate::domain::models::listed::ListedContact;
 use crate::domain::models::messages::{
-    ContactConnection, ContactConnections, ContactsNodes, DirectoryChange,
+    ContactConnection, ContactConnections, ContactDisconnections, ContactsNodes, DirectoryChange,
 };
 use crate::domain::models::page::{ContactCursor, ContactIdPage, ContactPageSize};
 use crate::domain::models::people::{PeopleSearchLimit, PeopleSearchQuery, PersonMatch};
@@ -31,6 +31,13 @@ pub trait ContactsRepository: Send + Sync + 'static {
         &self,
         connections: Vec<(MacroUserIdStr<'_>, MacroUserIdStr<'_>)>,
     ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Deletes connection pairs, in either order. Returns the users who lost
+    /// a connection.
+    fn delete_connections(
+        &self,
+        connections: Vec<(MacroUserIdStr<'_>, MacroUserIdStr<'_>)>,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Report>> + Send;
 }
 
 /// Writes to directed, list-aware directory membership. Every write is
@@ -291,6 +298,12 @@ pub trait ContactsIngressQueue: Send + Sync + 'static {
         message: ContactConnections,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
+    /// Publishes legacy contact relationships to delete to the queue.
+    fn publish_disconnections(
+        &self,
+        message: ContactDisconnections,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
     /// Publishes one bounded list-aware directory change to the queue.
     fn publish_change(
         &self,
@@ -310,6 +323,13 @@ pub trait ContactsIngress: Send + Sync + 'static {
     fn enqueue_contact_connections(
         &self,
         connections: Vec<ContactConnection>,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Enqueues legacy contact relationships for deletion, such as the ones
+    /// a team membership wrote once it ends.
+    fn enqueue_contact_disconnections(
+        &self,
+        disconnections: Vec<ContactConnection>,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 

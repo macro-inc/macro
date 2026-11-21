@@ -77,7 +77,10 @@ event contract (schema, sanitization, delivery semantics).
 - `src/domain/contacts_enqueuer.rs` (`ContactsEnqueuer`, adapter
   `outbound/contacts_enqueuer.rs`): the contacts side effects of membership,
   best-effort after the change commits. A join also enqueues legacy edges
-  joiner ↔ teammates. Joins and removals send `directory_changed` both ways
+  joiner ↔ teammates; a removal deletes them again (leaver ↔ remaining
+  roster), and team deletion deletes every member pair, through
+  `enqueue_contact_disconnections`. That also drops an edge some other source
+  explains, until that source writes it again. Joins and removals send `directory_changed` both ways
   (the roster re-reads the member; the member re-reads the roster), and team
   deletion sends every member the whole roster. Teammates are computed from the
   roster, so nothing is written; a roster over 500 is sent as unknown.

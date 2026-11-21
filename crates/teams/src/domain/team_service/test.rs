@@ -1883,6 +1883,7 @@ type DirectoryChange = (Vec<String>, Vec<String>);
 #[derive(Clone, Default)]
 struct RecordingContactsEnqueuer {
     batches: ContactBatches,
+    disconnections: ContactBatches,
     directory_changes: Arc<Mutex<Vec<DirectoryChange>>>,
     fail: bool,
 }
@@ -1904,6 +1905,18 @@ impl ContactsEnqueuer for RecordingContactsEnqueuer {
         connections: Vec<ContactPair>,
     ) -> Result<(), Self::Err> {
         self.batches.lock().unwrap().push(connections);
+        if self.fail {
+            Err("contacts enqueue failed")
+        } else {
+            Ok(())
+        }
+    }
+
+    async fn enqueue_contact_disconnections(
+        &self,
+        disconnections: Vec<ContactPair>,
+    ) -> Result<(), Self::Err> {
+        self.disconnections.lock().unwrap().push(disconnections);
         if self.fail {
             Err("contacts enqueue failed")
         } else {

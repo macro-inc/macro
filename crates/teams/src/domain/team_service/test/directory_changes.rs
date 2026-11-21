@@ -205,3 +205,74 @@ async fn deleting_a_team_names_every_member_to_every_member() {
         vec![(members.clone(), members)]
     );
 }
+
+fn pairs(pairs: &[(&str, &str)]) -> Vec<Vec<ContactPair>> {
+    vec![
+        pairs
+            .iter()
+            .map(|(first, second)| {
+                (
+                    MacroUserIdStr::parse_from_str(first).unwrap().into_owned(),
+                    MacroUserIdStr::parse_from_str(second).unwrap().into_owned(),
+                )
+            })
+            .collect(),
+    ]
+}
+
+#[tokio::test]
+async fn removing_a_member_disconnects_them_from_the_remaining_roster() {
+    let team_id = uuid::Uuid::from_u128(0x6330_0009);
+    let owner = MacroUserIdStr::parse_from_str(OWNER).unwrap();
+    let member = MacroUserIdStr::parse_from_str(MEMBER).unwrap();
+    let team_repository =
+        make_enterprise_remove_user_repository(team_id, &member, TeamRole::Member)
+            .with_team(team(team_id))
+            .with_team_members(vec![make_team_member(team_id, TEAMMATE, TeamRole::Member)]);
+    let contacts_enqueuer = RecordingContactsEnqueuer::default();
+
+    service(team_repository, &contacts_enqueuer)
+        .remove_user_from_team(test_team_receipt::<AdminTeamRole>(team_id, &owner), &member)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        *contacts_enqueuer.disconnections.lock().unwrap(),
+        pairs(&[(MEMBER, OWNER), (MEMBER, TEAMMATE)])
+    );
+}
+
+#[tokio::test]
+async fn deleting_a_team_disconnects_every_pair_of_members() {
+    let team_id = uuid::Uuid::from_u128(0x6330_000a);
+    let owner = MacroUserIdStr::parse_from_str(OWNER).unwrap();
+    let mut team_repository =
+        MockTeamRepository::new(Vec::new(), "Team", Arc::new(Mutex::new(Vec::new())));
+    team_repository.team_members = vec![
+        make_team_member(team_id, OWNER, TeamRole::Owner),
+        make_team_member(team_id, TEAMMATE, TeamRole::Member),
+        make_team_member(team_id, MEMBER, TeamRole::Member),
+    ];
+    let contacts_enqueuer = RecordingContactsEnqueuer::default();
+    let service = TeamServiceImpl::new(
+        team_repository,
+        MockCustomerRepository::default(),
+        RecordingChannelService::default(),
+        MockUserRolesAndPermissionsService::default(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    )
+    .with_contacts_enqueuer(contacts_enqueuer.clone())
+    .with_owned_entity_cleanup(RecordingOwnedEntityCleanup::default());
+
+    service
+        .delete_team(test_team_receipt::<OwnerTeamRole>(team_id, &owner))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        *contacts_enqueuer.disconnections.lock().unwrap(),
+        pairs(&[(OWNER, TEAMMATE), (OWNER, MEMBER), (TEAMMATE, MEMBER)])
+    );
+}

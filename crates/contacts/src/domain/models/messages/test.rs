@@ -51,6 +51,25 @@ fn consumer_deserializes_explicit_connections_message() {
 }
 
 #[test]
+fn consumer_deserializes_disconnections_message() {
+    let message: ContactsMessage = serde_json::from_str(
+        r#"{"disconnections":[{"first":"macro|owner@example.com","second":"macro|contact@example.com"}]}"#,
+    )
+    .unwrap();
+
+    let ContactsMessage::Disconnections(ContactDisconnections { disconnections }) = message else {
+        panic!("expected disconnections, got {message:?}");
+    };
+    assert_eq!(
+        disconnections,
+        vec![ContactConnection::new(
+            user("owner@example.com"),
+            user("contact@example.com")
+        )]
+    );
+}
+
+#[test]
 fn consumer_deserializes_directory_changes() {
     let message: ContactsMessage = serde_json::from_str(
         r#"{"type":"inbox_contacts","inbox":{"owner":"macro|owner@example.com","link_id":"00000000-0000-7000-8000-000000000001","provider":"gmail"},"contacts":["macro|contact@example.com"]}"#,

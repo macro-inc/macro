@@ -936,6 +936,16 @@ where
             .await
             .map_err(DeleteTeamError::TeamError)?;
         // Every member lost every other member as a teammate.
+        let ended = member_user_ids
+            .iter()
+            .enumerate()
+            .flat_map(|(index, member)| {
+                member_user_ids[index + 1..]
+                    .iter()
+                    .map(move |other| (member.clone(), other.clone()))
+            })
+            .collect();
+        self.enqueue_ended_contacts(&team_id, ended).await;
         if member_user_ids.len() > 1 {
             self.send_directory_changed(&team_id, member_user_ids.clone(), member_user_ids.clone())
                 .await;
@@ -1186,6 +1196,11 @@ where
         }
 
         let remaining_members = self.teammate_ids_except(&team_id, user_id).await;
+        let ended = remaining_members
+            .iter()
+            .map(|teammate| (user_id.clone().into_owned(), teammate.clone()))
+            .collect();
+        self.enqueue_ended_contacts(&team_id, ended).await;
         self.send_teammates_changed(&team_id, user_id, &remaining_members)
             .await;
 
@@ -1291,6 +1306,33 @@ where
                     error = ?error,
                     user_id = %user_id,
                     "failed to enqueue team contact connections"
+                );
+            })
+            .ok();
+    }
+
+    /// Deletes the legacy contact edges joining the team wrote for pairs who
+    /// are no longer teammates, so a membership's contacts end with it. The
+    /// edge may also stand for something else (an inbox, a shared channel);
+    /// those sources write it again the next time they see the pair.
+    /// Best-effort, like the other contacts side effects.
+    async fn enqueue_ended_contacts(
+        &self,
+        team_id: &uuid::Uuid,
+        ended: Vec<(MacroUserIdStr<'static>, MacroUserIdStr<'static>)>,
+    ) {
+        if ended.is_empty() {
+            return;
+        }
+
+        self.contacts_enqueuer
+            .enqueue_contact_disconnections(ended)
+            .await
+            .inspect_err(|error| {
+                tracing::error!(
+                    error = ?error,
+                    team_id = %team_id,
+                    "failed to enqueue team contact disconnections"
                 );
             })
             .ok();

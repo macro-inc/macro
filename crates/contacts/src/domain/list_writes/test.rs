@@ -1,6 +1,8 @@
 use super::*;
 use crate::domain::models::list::InboxProvider;
-use crate::domain::models::messages::{ContactConnections, ContactsNodes, DirectoryChange};
+use crate::domain::models::messages::{
+    ContactConnections, ContactDisconnections, ContactsNodes, DirectoryChange,
+};
 use crate::domain::ports::ContactsIngressQueue;
 use crate::domain::service::SqsContactsIngress;
 use feature_flags::{FlagSnapshot, FlagValue};
@@ -51,6 +53,11 @@ impl ContactsIngressQueue for &'static Sent {
     }
 
     async fn publish_connections(&self, _: ContactConnections) -> Result<(), Report> {
+        *self.legacy.lock().unwrap() += 1;
+        Ok(())
+    }
+
+    async fn publish_disconnections(&self, _: ContactDisconnections) -> Result<(), Report> {
         *self.legacy.lock().unwrap() += 1;
         Ok(())
     }

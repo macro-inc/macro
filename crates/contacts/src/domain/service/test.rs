@@ -9,6 +9,7 @@ type Pair = (MacroUserIdStr<'static>, MacroUserIdStr<'static>);
 #[derive(Default)]
 struct RecordingRepository {
     connections: Mutex<Vec<Pair>>,
+    deleted_connections: Mutex<Vec<Pair>>,
     /// What `record_interactions` reports as added.
     interactions_added: Vec<Pair>,
     /// What `missing_profiles` reports as deleted accounts.
@@ -36,6 +37,20 @@ impl ContactsRepository for RecordingRepository {
                 .map(|(first, second)| (first.into_owned(), second.into_owned())),
         );
         Ok(())
+    }
+
+    async fn delete_connections(
+        &self,
+        connections: Vec<(MacroUserIdStr<'_>, MacroUserIdStr<'_>)>,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, rootcause::Report> {
+        let mut deleted = self.deleted_connections.lock().unwrap();
+        let mut disconnected = HashSet::new();
+        for (first, second) in connections {
+            disconnected.insert(first.clone().into_owned());
+            disconnected.insert(second.clone().into_owned());
+            deleted.push((first.into_owned(), second.into_owned()));
+        }
+        Ok(disconnected.into_iter().collect())
     }
 }
 
@@ -109,6 +124,13 @@ impl ContactsIngressQueue for RecordingQueue {
     async fn publish_connections(
         &self,
         _message: ContactConnections,
+    ) -> Result<(), rootcause::Report> {
+        Ok(())
+    }
+
+    async fn publish_disconnections(
+        &self,
+        _message: ContactDisconnections,
     ) -> Result<(), rootcause::Report> {
         Ok(())
     }
@@ -301,6 +323,51 @@ async fn notified(message: ContactsMessage) -> Vec<(String, Option<Vec<String>>)
         .collect();
     notified.sort();
     notified
+}
+
+#[tokio::test]
+async fn disconnections_delete_the_edges_and_tell_each_end_to_rescan() {
+    let service = ContactsDomainService {
+        repository: RecordingRepository::default(),
+        notifier: RecordingNotifier::default(),
+    };
+    let message = ContactsMessage::Disconnections(ContactDisconnections::new(vec![
+        ContactConnection::new(user("leaver@example.com"), user("first@example.com")),
+        ContactConnection::new(user("leaver@example.com"), user("second@example.com")),
+    ]));
+
+    service.process_message(message).await.unwrap();
+
+    assert_eq!(
+        *service.repository.deleted_connections.lock().unwrap(),
+        vec![
+            (user("leaver@example.com"), user("first@example.com")),
+            (user("leaver@example.com"), user("second@example.com")),
+        ]
+    );
+    assert!(service.repository.connections.lock().unwrap().is_empty());
+    let mut notified: Vec<_> = service
+        .notifier
+        .invalidations
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|invalidation| {
+            (
+                invalidation.user().as_ref().to_owned(),
+                invalidation.changed().is_none(),
+            )
+        })
+        .collect();
+    notified.sort();
+    assert_eq!(
+        notified,
+        [
+            ("macro|first@example.com".to_owned(), true),
+            ("macro|leaver@example.com".to_owned(), true),
+            ("macro|second@example.com".to_owned(), true),
+        ]
+    );
 }
 
 #[tokio::test]
