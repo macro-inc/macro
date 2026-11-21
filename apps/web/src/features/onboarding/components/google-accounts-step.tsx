@@ -48,14 +48,13 @@ export function GoogleAccountsStep(props: GoogleAccountsStepProps) {
   const blocked = () =>
     !!props.disabled || !!props.loading || !!props.connecting;
   const withImap = () => !personal() && !!props.imapAddress && !connected();
-  const withMicrosoft = () =>
-    !personal() && !!props.onConnectMicrosoft && !withImap();
+  const withMicrosoft = () => !personal() && !!props.onConnectMicrosoft;
   const googleConnecting = () =>
     !!props.connecting && !props.microsoftConnecting;
   const googleLabel = () => {
     if (props.loading) return 'Checking connection…';
     if (googleConnecting()) return 'Opening Google…';
-    if (withMicrosoft()) return 'Continue with Google';
+    if (withMicrosoft() || withImap()) return 'Continue with Google';
     if (personal()) return 'Connect personal email';
     if (props.workNeedsReconnect) return 'Reconnect work email';
     return 'Connect work email';
@@ -139,40 +138,25 @@ export function GoogleAccountsStep(props: GoogleAccountsStepProps) {
               type="button"
               disabled={blocked()}
               onClick={() =>
-                withImap()
-                  ? props.onConnectImap?.()
-                  : personal()
-                    ? props.onConnectPersonal()
-                    : props.onConnectWork()
+                personal() ? props.onConnectPersonal() : props.onConnectWork()
               }
               class="ph-no-capture flex min-h-14 w-full items-center justify-center gap-3 rounded-full border border-transparent bg-ink px-6 py-4 text-base font-medium text-surface transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink disabled:opacity-40"
             >
               <Show
                 when={googleConnecting() || props.loading}
                 fallback={
-                  <Show
-                    when={withImap()}
-                    fallback={
-                      <GoogleIcon
-                        viewBox="0 0 24 24"
-                        class="size-5 shrink-0"
-                        fill="currentColor"
-                        stroke="none"
-                        aria-hidden="true"
-                      />
-                    }
-                  >
-                    <EnvelopeIcon class="size-5 shrink-0" aria-hidden="true" />
-                  </Show>
+                  <GoogleIcon
+                    viewBox="0 0 24 24"
+                    class="size-5 shrink-0"
+                    fill="currentColor"
+                    stroke="none"
+                    aria-hidden="true"
+                  />
                 }
               >
                 <SpinnerIcon class="size-5 animate-spin" />
               </Show>
-              {withImap()
-                ? props.connecting
-                  ? 'Connecting inbox…'
-                  : `Connect ${props.imapAddress}`
-                : googleLabel()}
+              {googleLabel()}
             </button>
           }
         >
@@ -212,6 +196,17 @@ export function GoogleAccountsStep(props: GoogleAccountsStepProps) {
             {props.microsoftConnecting
               ? 'Opening Microsoft…'
               : 'Continue with Microsoft'}
+          </button>
+        </Show>
+        <Show when={withImap() && props.onConnectImap}>
+          <button
+            type="button"
+            disabled={blocked()}
+            onClick={() => props.onConnectImap?.()}
+            class="ph-no-capture flex min-h-12 w-full items-center justify-center gap-3 rounded-full border border-edge bg-surface px-5 py-3 text-sm font-medium text-ink hover:bg-ink/5 disabled:opacity-40"
+          >
+            <EnvelopeIcon class="size-5 shrink-0" aria-hidden="true" />
+            Connect {props.imapAddress}
           </button>
         </Show>
         <Show when={withImap() && props.onChooseAccount}>

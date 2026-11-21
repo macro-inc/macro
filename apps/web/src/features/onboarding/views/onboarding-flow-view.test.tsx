@@ -1213,12 +1213,48 @@ describe('after a Microsoft sign-up', () => {
     expect(screen.queryByText('Continuing with Microsoft')).toBeNull();
   });
 
+  it.each([
+    ['Continue with Google', 'google'],
+    ['Continue with Microsoft', 'microsoft'],
+  ])(
+    'keeps %s independent of an extra IMAP suggestion',
+    async (label, provider) => {
+      const { fake } = setup({
+        resume: 'work',
+        world: { imapSuggestion: 'ada@example.com', outlookAvailable: true },
+      });
+      await heading('Connect your work email.');
+      click(label);
+      await waitFor(() =>
+        expect(connects(fake.calls())).toEqual([`connectInbox:${provider}`])
+      );
+    }
+  );
+
+  it('starts Google directly when IMAP is extra and Microsoft is unavailable', async () => {
+    const { fake } = setup({
+      resume: 'work',
+      world: { imapSuggestion: 'ada@example.com', outlookAvailable: false },
+    });
+    await heading('Connect your work email.');
+    click('Continue with Google');
+    await waitFor(() =>
+      expect(connects(fake.calls())).toEqual(['connectInbox:google'])
+    );
+  });
+
   it('opens IMAP enrollment from the suggested sign-in address without claiming calendar access', async () => {
     const { fake } = setup({
       resume: 'work',
-      world: { imapSuggestion: 'ada@example.com' },
+      world: { imapSuggestion: 'ada@example.com', outlookAvailable: true },
     });
     await heading('Connect your work email.');
+    expect(
+      screen.getByRole('button', { name: 'Continue with Google' })
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: 'Continue with Microsoft' })
+    ).toBeTruthy();
     expect(screen.queryByText(/Your password stays with Google/)).toBeNull();
     expect(
       screen.getByRole('button', { name: 'Use a different account' })

@@ -337,7 +337,10 @@ function ConnectForm(props: ImapConnectProps) {
         return { code: 'OUTLOOK', name: 'Microsoft' } as const;
     }
   };
-  const canUsePassword = () => steer() !== 'outlook' && steer() !== 'none';
+  const canUsePassword = () => {
+    if (steer() === 'gmail') return !!props.linkId;
+    return steer() !== 'outlook' && steer() !== 'none';
+  };
   const helpUrl = () => {
     const value = discovery()?.helpUrl;
     if (!value) return;
@@ -355,7 +358,7 @@ function ConnectForm(props: ImapConnectProps) {
       onOpenChange={props.onOpenChange}
       position="center"
       fullscreen={isMobile()}
-      class={isMobile() ? 'py-(--safe-top)' : 'w-118'}
+      class={isMobile() ? 'pt-(--safe-top) pb-(--safe-bottom)' : 'w-118'}
     >
       <Panel
         depth={2}
@@ -404,12 +407,17 @@ function ConnectForm(props: ImapConnectProps) {
                   {(provider) => (
                     <Button
                       type="button"
-                      variant="secondary"
+                      variant={canUsePassword() ? 'secondary' : 'primary'}
                       onClick={() => props.onResult(provider().code)}
                     >
                       {t('imap.continueWith', { provider: provider().name })}
                     </Button>
                   )}
+                </Show>
+                <Show when={steer() === 'gmail' && !props.linkId}>
+                  <p class="text-sm text-ink-muted">
+                    {t('imap.googlePermissions')}
+                  </p>
                 </Show>
                 <Show when={steer() === 'none'}>
                   <p class="text-sm text-ink-muted">

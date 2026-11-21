@@ -315,3 +315,63 @@ it('keeps reconnect secrets empty and forgets an unselected outgoing password', 
   );
   expect(mail.connect).not.toHaveBeenCalled();
 });
+
+it('steers Google-hosted mail to OAuth without collecting a password', async () => {
+  mail.discover.mockResolvedValue(ok({ steer: 'gmail', provider: 'Google' }));
+  const result = vi.fn();
+  render(() => (
+    <ImapConnectDialog
+      open
+      onOpenChange={() => {}}
+      onResult={result}
+      emailAddress="owner@example.com"
+    />
+  ));
+  const google = await screen.findByRole('button', {
+    name: 'Continue with Google',
+  });
+  expect(screen.queryByLabelText('Password or app password')).toBeNull();
+  fireEvent.click(google);
+  expect(result).toHaveBeenCalledWith('GMAIL');
+  expect(mail.connect).not.toHaveBeenCalled();
+});
+
+it('keeps an existing Google IMAP reconnect on its bound password flow', async () => {
+  mail.discover.mockResolvedValue(
+    ok({
+      steer: 'gmail',
+      provider: 'Google',
+      imap: {
+        host: 'imap.example.com',
+        username: 'owner@example.com',
+        port: 993,
+        tls: 'implicit',
+      },
+      smtp: {
+        host: 'smtp.example.com',
+        username: 'owner@example.com',
+        port: 465,
+        tls: 'implicit',
+      },
+      hostConfirmationRequired: true,
+    })
+  );
+  mail.connect.mockResolvedValue(ok({ linkId: 'existing-inbox' }));
+  const result = vi.fn();
+  render(() => (
+    <ImapConnectDialog
+      open
+      onOpenChange={() => {}}
+      onResult={result}
+      emailAddress="owner@example.com"
+      linkId="existing-inbox"
+    />
+  ));
+  const password = await screen.findByLabelText('Password or app password');
+  fireEvent.click(screen.getByRole('checkbox', { name: /I trust/ }));
+  fireEvent.input(password, { target: { value: 'synthetic-app-password' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Connect inbox' }));
+  await vi.waitFor(() => expect(result).toHaveBeenCalledWith('connected'));
+  expect(mail.connect.mock.calls[0][0].linkId).toBe('existing-inbox');
+  expect(result).not.toHaveBeenCalledWith('GMAIL');
+});

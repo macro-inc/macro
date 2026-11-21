@@ -119,6 +119,17 @@ unchanged open inbox without navigating or reloading. Repeat with signal
 notifications disabled.
 
 Open **Settings → Email** to check import progress, reconnect or disconnect.
+Known custom Google Workspace and Microsoft 365 domains use domain-only MX
+hints. Unknown hosts keep the provider chooser; an Outlook hint never bypasses
+the server’s Outlook availability policy.
+
+Google-hosted discovery offers **Continue with Google** with no new IMAP password
+form. Reconnecting an existing IMAP link keeps its bound password workflow.
+Fastmail opens the direct password flow. Onboarding retains its Google and
+Microsoft actions; a suggested IMAP inbox is an additional secondary choice.
+Phone connection and server-settings dialogs reserve both top and bottom safe
+areas so the final actions stay above the home indicator.
+
 The IMAP connection and server settings dialogs use the interface language,
 including connection errors, folder roles and accessible labels. Password fields
 clear after a verification attempt; confirmed non-secret settings remain.

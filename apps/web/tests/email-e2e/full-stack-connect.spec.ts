@@ -397,9 +397,8 @@ for (const provider of PROVIDERS) {
       saw('STX-921');
     });
 
-    test.describe('with a provider-hosted sign-in address', () => {
-      const domain = provider === 'GMAIL' ? 'gmail.com' : 'outlook.com';
-      test.use({ address: `macroe2e@${domain}` });
+    test.describe('with a company sign-in address', () => {
+      test.use({ address: 'macroe2e@company.example.com' });
 
       // When this fails, the onboarding step cannot connect the work inbox,
       // does not come back to itself after consent, or does not show the inbox

@@ -55,10 +55,7 @@ export function EmailStep(props: {
       }
       onRetry={inboxes.retry}
       onConnectWork={() =>
-        fireAndForget(
-          inboxes.connect('work', offerOutlook() ? 'google' : undefined),
-          'onboarding'
-        )
+        fireAndForget(inboxes.connect('work', 'google'), 'onboarding')
       }
       onConnectMicrosoft={
         offerOutlook()

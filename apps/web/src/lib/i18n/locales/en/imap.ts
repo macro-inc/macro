@@ -1,4 +1,5 @@
 export default {
+  googlePermissions: 'Keep email access enabled on Google’s permission screen.',
   addressUnverified:
     'Connect a verified address associated with your Macro account.',
   providerConflict: 'This address already has an inbox connection.',

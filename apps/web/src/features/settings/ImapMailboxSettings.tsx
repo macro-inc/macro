@@ -265,7 +265,7 @@ function SettingsDialog(props: {
       }}
       fullscreen={isMobile()}
       position="center"
-      class={isMobile() ? 'py-(--safe-top)' : 'w-128'}
+      class={isMobile() ? 'pt-(--safe-top) pb-(--safe-bottom)' : 'w-128'}
     >
       <Panel
         depth={2}
