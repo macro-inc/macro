@@ -7,7 +7,12 @@ import {
   describeCacheError,
   isolateCacheTelemetry,
 } from '../telemetry';
-import { offerCompiledEngine } from './compiled-engine';
+import {
+  type CompiledEngine,
+  dropPrefetchedCompiledEngine,
+  offerCompiledEngine,
+  prefetchCompiledEngine,
+} from './compiled-engine';
 import {
   CACHE_COORDINATOR_PROTOCOL_VERSION,
   type CacheReadState,
@@ -33,6 +38,7 @@ import {
   staleCacheDatabaseIdentities,
 } from './stale-databases';
 import { CacheBootstrapExhaustedError } from './startup';
+import { compileCacheWasm } from './wasm-compile';
 
 export interface SharedWorkerLike {
   readonly port: MessagePort;
@@ -86,6 +92,10 @@ export interface CacheCoordinatorPageAdapterOptions {
   onProtocolError?: (error: Error) => void;
   /** Fatal SharedWorker/MessagePort/envelope failure after resources close. */
   onTerminalError?: (error: Error) => void;
+  /** Compiles the engine for the first engine worker before this page knows
+   * it owns the cache; `null` leaves the compile to the worker. Defaults to
+   * the production asset outside the dev server. */
+  compileEngine?: (() => Promise<CompiledEngine>) | null;
   gracefulTimeoutMs?: number;
   /** Privacy-safe lifecycle recorder supplied by the browser host. */
   telemetry?: CacheTelemetryRecorderLike;
@@ -132,6 +142,19 @@ const defaultDedicatedWorkerFactory = (
     type: 'module',
     name: `graphql-cache-engine:${scope}:${ownerEpoch}`,
   });
+
+const compileProductionEngine =
+  (telemetry: CacheTelemetryRecorderLike) =>
+  async (): Promise<CompiledEngine> => {
+    // The same asset the engine worker would load: the worker only takes a
+    // module compiled from it.
+    const url = new URL('../wasm/cache_wasm_bg.wasm', import.meta.url);
+    const now = (): number => performance.now();
+    return {
+      assetUrl: url.href,
+      module: await compileCacheWasm(url, telemetry, now),
+    };
+  };
 
 const defaultCleanupWorkerFactory = (scope: string): DedicatedWorkerLike =>
   new Worker(new URL('./cache.engine-worker.ts', import.meta.url), {
@@ -417,6 +440,17 @@ export class CacheCoordinatorPageAdapter {
     }
     if (!lockManager) throw new Error('Web Locks are unavailable');
 
+    // Most pages become the owner, and their engine worker starts only after
+    // the liveness lock, the coordinator and the election. The engine's
+    // download and compile run meanwhile, off the main thread.
+    const compileEngine =
+      this.options.compileEngine === undefined
+        ? import.meta.env.DEV || typeof WebAssembly !== 'object'
+          ? null
+          : compileProductionEngine(this.telemetry)
+        : this.options.compileEngine;
+    if (compileEngine) prefetchCompiledEngine(compileEngine);
+
     const livenessLockName = tabLivenessLockName(
       this.options.scope,
       this.tabId
@@ -552,6 +586,14 @@ export class CacheCoordinatorPageAdapter {
         Math.max(this.latestEngineReplacedEpoch, this.latestReadStateEpoch)
       ) {
         this.latestReadStateEpoch = message.ownerEpoch;
+        // Another page runs the engine: a compile kept for this one is only
+        // memory until this page is elected, which then compiles again.
+        if (
+          message.state === 'ready' &&
+          message.ownerEpoch !== this.ownerEpoch
+        ) {
+          dropPrefetchedCompiledEngine();
+        }
         this.options.onCacheReadAvailabilityChanged?.(message.state);
       }
       return;

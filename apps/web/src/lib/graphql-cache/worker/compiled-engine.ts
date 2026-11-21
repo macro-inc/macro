@@ -37,16 +37,33 @@ function isCompiledEngine(value: unknown): value is CompiledEngine {
 // Kept for the life of the page, through hidden stretches too: the next
 // engine worker is the one that needs it. A new build loads a new page.
 let retained: CompiledEngine | undefined;
+// A compile the page started before any engine worker existed, so that the
+// first one finds the engine compiled. Never rejects.
+let prefetched: Promise<CompiledEngine | undefined> | undefined;
 
-/** Page side: offers the retained engine once, then keeps what is reported. */
-export function offerCompiledEngine(port: ExchangePort): void {
-  port.onmessage = (event) => {
-    // The worker answers `null` when it could not receive what was offered.
-    retained = isCompiledEngine(event.data) ? event.data : undefined;
-  };
-  port.onmessageerror = null;
+/**
+ * Page side: compiles the engine ahead of the first engine worker, while the
+ * page is still waiting to learn whether it owns the cache. Does nothing when
+ * the page already holds one.
+ */
+export function prefetchCompiledEngine(
+  compile: () => Promise<CompiledEngine>
+): void {
+  if (retained || prefetched) return;
+  prefetched = compile().catch(() => undefined);
+}
+
+/**
+ * Page side: forgets a compile no engine worker took, once another page runs
+ * the engine. The compiled code is then only memory this page holds.
+ */
+export function dropPrefetchedCompiledEngine(): void {
+  prefetched = undefined;
+}
+
+function post(port: ExchangePort, engine: CompiledEngine | undefined): void {
   try {
-    port.postMessage(retained ?? null);
+    port.postMessage(engine ?? null);
   } catch {
     retained = undefined;
     try {
@@ -55,6 +72,31 @@ export function offerCompiledEngine(port: ExchangePort): void {
       // The worker is already gone; its loss is reported elsewhere.
     }
   }
+}
+
+/**
+ * Page side: offers the retained engine once, or the one still compiling
+ * ahead of the worker, then keeps what is reported.
+ */
+export function offerCompiledEngine(port: ExchangePort): void {
+  port.onmessage = (event) => {
+    // The worker answers `null` when it could not receive what was offered.
+    retained = isCompiledEngine(event.data) ? event.data : undefined;
+  };
+  port.onmessageerror = null;
+  const pending = retained ? undefined : prefetched;
+  prefetched = undefined;
+  if (pending) {
+    // `pending` never rejects: a failed compile ahead resolves to nothing.
+    pending
+      .then((engine) => {
+        // Kept like a compile the worker reports, for the worker that starts
+        // when the tab returns; a worker that cannot receive it answers `null`.
+        retained ??= engine;
+        post(port, engine);
+      })
+      .catch(() => undefined);
+  } else post(port, retained);
 }
 
 /** Worker side: the page's offer, and where to report a fresh compile. */
@@ -91,4 +133,5 @@ export function compiledEngineFromPage(
 /** Test seam: forget what an earlier case retained. */
 export function forgetCompiledEngine(): void {
   retained = undefined;
+  prefetched = undefined;
 }

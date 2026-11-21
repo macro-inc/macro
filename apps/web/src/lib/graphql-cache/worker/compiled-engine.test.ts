@@ -1,8 +1,11 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import {
+  type CompiledEngine,
   compiledEngineFromPage,
+  dropPrefetchedCompiledEngine,
   forgetCompiledEngine,
   offerCompiledEngine,
+  prefetchCompiledEngine,
 } from './compiled-engine';
 
 // The smallest valid module: magic number and version.
@@ -67,4 +70,82 @@ it('offers nothing when what arrives is not a compiled engine', async () => {
   channel.port1.postMessage({ assetUrl: 'https://app.test/engine-a.wasm' });
 
   await expect(worker.offered).resolves.toBeUndefined();
+});
+
+async function compiledAhead(): Promise<CompiledEngine> {
+  return {
+    assetUrl: 'https://app.test/engine-a.wasm',
+    module: await WebAssembly.compile(EMPTY_WASM),
+  };
+}
+
+it('gives the first engine worker the module the page compiled ahead of it', async () => {
+  let finish: (engine: CompiledEngine) => void = () => undefined;
+  prefetchCompiledEngine(
+    () => new Promise<CompiledEngine>((resolve) => (finish = resolve))
+  );
+  // The worker starts before the compile ends and waits for it.
+  const worker = engineStart();
+  let offered: CompiledEngine | undefined | 'pending' = 'pending';
+  worker.offered.then((engine) => (offered = engine)).catch(() => undefined);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  expect(offered).toBe('pending');
+
+  finish(await compiledAhead());
+  const engine = await worker.offered;
+  expect(engine?.assetUrl).toBe('https://app.test/engine-a.wasm');
+  expect(engine?.module).toBeInstanceOf(WebAssembly.Module);
+});
+
+it('leaves the compile to the worker when the one ahead failed', async () => {
+  prefetchCompiledEngine(() => Promise.reject(new Error('download failed')));
+  await expect(engineStart().offered).resolves.toBeUndefined();
+});
+
+it('keeps a compile ahead for the worker that starts when the tab returns', async () => {
+  prefetchCompiledEngine(compiledAhead);
+  await expect(engineStart().offered).resolves.toBeDefined();
+  // The first worker started from it and reported nothing back.
+  const next = await engineStart().offered;
+  expect(next?.assetUrl).toBe('https://app.test/engine-a.wasm');
+  expect(next?.module).toBeInstanceOf(WebAssembly.Module);
+});
+
+it('stops offering a compile ahead the worker could not receive', async () => {
+  prefetchCompiledEngine(compiledAhead);
+  const channel = new MessageChannel();
+  channels.push(channel);
+  // A worker answers `null` only after the offer reached it.
+  const delivered = new Promise<unknown>((resolve) => {
+    channel.port2.onmessage = (event) => resolve(event.data);
+  });
+  offerCompiledEngine(channel.port1);
+  await expect(delivered).resolves.toBeDefined();
+  channel.port2.postMessage(null);
+
+  await vi.waitFor(async () => {
+    expect(await engineStart().offered).toBeUndefined();
+  });
+});
+
+it('forgets a compile ahead once another page runs the engine', async () => {
+  prefetchCompiledEngine(compiledAhead);
+  dropPrefetchedCompiledEngine();
+  await expect(engineStart().offered).resolves.toBeUndefined();
+});
+
+it('compiles nothing ahead when the page holds a module or a compile', async () => {
+  const first = engineStart();
+  first.report(await compiledAhead());
+  await vi.waitFor(async () => {
+    expect(await engineStart().offered).toBeDefined();
+  });
+  const compile = vi.fn(compiledAhead);
+  prefetchCompiledEngine(compile);
+  expect(compile).not.toHaveBeenCalled();
+
+  forgetCompiledEngine();
+  prefetchCompiledEngine(compile);
+  prefetchCompiledEngine(compile);
+  expect(compile).toHaveBeenCalledTimes(1);
 });
