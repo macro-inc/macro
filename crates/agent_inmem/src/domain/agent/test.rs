@@ -80,8 +80,8 @@ impl TurnEngine for UnknownToolEngine {
                 .await;
             let unknown = PromptError::UnknownToolCall {
                 tool_name: "ReadInitiative".to_owned(),
-                available_tools: vec!["LoadTools".to_owned()],
-                allowed_tools: vec!["LoadTools".to_owned()],
+                available_tools: vec!["mcp__macro_internal__ExecuteCode".to_owned()],
+                allowed_tools: vec!["mcp__macro_internal__ExecuteCode".to_owned()],
                 chat_history: Box::default(),
             };
             let error = agent::AgentError::Streaming(StreamingError::Prompt(Box::new(unknown)));
