@@ -289,16 +289,19 @@ function Callers(props: { registry: Registry; optionIds: Accessor<string[]> }) {
   };
 
   const read = () => ({
+    // Each caller's own list, by name (run.mjs `CALLER_SOURCES`).
     __sources: {
-      defs: [all, system, crmExport].map((q) =>
-        q.isSuccess ? plain(q.data) : null
-      ),
+      all: all.isSuccess ? plain(all.data) : null,
+      system: system.isSuccess ? plain(system.data) : null,
+      crmExport: crmExport.isSuccess ? plain(crmExport.data) : null,
       tags: tags.isSuccess ? plain(tags.data) : null,
       // The select editors' tie keys come from the list each one shows.
-      opts: props.optionIds().map((id) => ({
-        id,
-        options: plain(editorOptions(id).usable),
-      })),
+      opts: safe(() =>
+        props.optionIds().map((id) => ({
+          id,
+          options: plain(editorOptions(id).usable),
+        }))
+      ),
     },
     propertyPanel: safe(() => plain(allProperties())),
     filterBar: safe(() => ({

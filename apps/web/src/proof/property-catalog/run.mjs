@@ -260,20 +260,31 @@ function tieGroups(snapshot, source) {
   // listing sorted another way (plain definitions, by SQL) must not change a
   // caller row's key.
   const src = snapshot?.callers?.__sources;
-  if (source === 'editors') {
-    for (const e of src?.opts ?? []) for (const o of Array.isArray(e?.options) ? e.options : []) put(o?.id, optIn(e.id, o));
-    return g;
-  }
-  for (const list of src?.defs ?? []) defs(list);
-  tagSets(src?.tags);
+  if (source === 'opts') {
+    for (const e of Array.isArray(src?.opts) ? src.opts : []) for (const o of Array.isArray(e?.options) ? e.options : []) put(o?.id, optIn(e.id, o));
+  } else if (source === 'tags') tagSets(src?.tags);
+  else if (source) defs(src?.[source]);
   return g;
 }
-// Each caller's rows are keyed by the lists that caller shows: the select
-// editors by their own option lists, every other caller by the catalog.
+// The one list each caller derives its rows from (harness.tsx): rows tie only
+// as that list's server sort tied them. A caller missing here gets no ties.
+const CALLER_SOURCES = {
+  propertyPanel: 'all', // useAllProperties: scope all, with options
+  crmStages: 'all', // stage-adapter.ts: scope all, with options
+  crmExport: 'crmExport',
+  taskBoard: 'system',
+  projects: 'system',
+  filterBar: 'tags', // tag-filter-state: useTagsQuery
+  tagPickerAndSettings: 'tags',
+  selectEditors: 'opts',
+};
 const callerGroups = (a, b) => {
-  const catalog = bothSides(tieGroups(a, 'catalog'), tieGroups(b, 'catalog'));
-  const editors = bothSides(tieGroups(a, 'editors'), tieGroups(b, 'editors'));
-  return (caller) => (caller === 'selectEditors' ? editors : catalog);
+  const memo = new Map();
+  return (caller) => {
+    const source = CALLER_SOURCES[caller];
+    if (!memo.has(source)) memo.set(source, source ? bothSides(tieGroups(a, source), tieGroups(b, source)) : () => null);
+    return memo.get(source);
+  };
 };
 const canonCallerSet = (x, groupsFor) => (x && typeof x === 'object' ? Object.fromEntries(Object.keys(x).map((k) => [k, canonCallers(x[k], groupsFor(k))])) : x);
 function canonCallers(x, groupOf) {
@@ -368,7 +379,7 @@ const R = {
   diffs: [], // first 400 real differences with context
   diffSignatures: {}, // signature -> count
   examples: {}, // class -> first few examples
-  mutant: CONFIG.mutant ? { name: CONFIG.mutant, applied: 0, caughtBy: {}, firstCatch: null, ignoredAsInBaseline: 0, beforeApplied: 0 } : null,
+  mutant: CONFIG.mutant ? { name: CONFIG.mutant, applied: 0, caughtBy: {}, firstCatch: null, ignoredAsInBaseline: 0, beforeApplied: 0, candidate: {}, tainted: {}, discardedCatches: 0, taintedSequences: 0 } : null,
   load: CONFIG.load ? { pages: CONFIG.load, ops: 0, errors: 0, sameUserReads: 0, sameUserErrors: 0 } : null,
   crashes: [],
 };
@@ -434,10 +445,26 @@ function record(level, kind, cls, a, b, extra = {}, canon = (x) => x) {
       else if (BASELINE.has(s)) R.mutant.ignoredAsInBaseline++;
       else {
         bump(R.mutant.caughtBy, level);
-        if (!R.mutant.firstCatch) R.mutant.firstCatch = { level, kind, signature: s, appliedBefore: R.mutant.applied, ...at, diff: d };
+        R.mutant.candidate[laneOf(at)] ??= { level, kind, signature: s, appliedBefore: R.mutant.applied, ...at, diff: d };
       }
     }
+    if (R.mutant && NOT_A_CATCH.has(level)) R.mutant.tainted[laneOf(at)] = true;
   }
+}
+const laneOf = (at) => String(at.lane ?? 'none');
+// A sequence's first catch stands only if the sequence had no harness-level
+// difference: a replay failure, a timeout or a page error can leave the two
+// sides' caches apart and so make differences of its own. Each sequence ends
+// with a reload, so what it left behind does not reach the next one.
+function settleCatch(lane) {
+  if (!R.mutant) return;
+  const k = String(lane ?? 'none');
+  const c = R.mutant.candidate[k];
+  if (c && R.mutant.tainted[k]) R.mutant.discardedCatches++;
+  else if (c && !R.mutant.firstCatch) R.mutant.firstCatch = c;
+  if (R.mutant.tainted[k]) R.mutant.taintedSequences++;
+  delete R.mutant.candidate[k];
+  delete R.mutant.tainted[k];
 }
 // A failure of the harness itself (setup, a write the tap could not pair):
 // counted, sampled, and never mistaken for an equal comparison.
@@ -784,9 +811,18 @@ const errorLabel = (e) => (e ? `${e.class}/${JSON.stringify(e.codes)}/${e.httpSt
 // both, so the signature keeps which id fills which role on each side
 // (`<id1> on <id2>` vs `<id2> on <id1>`) without the ids themselves.
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+// The message's own `\` and `<` are escaped first, so literal text can
+// never read as an id token.
 function pairLabel(A, B) {
   const n = new Map();
-  const mask = (e) => e && { ...e, message: String(e.fullMessage).replace(UUID, (u) => `<id${n.get(u.toLowerCase()) ?? (n.set(u.toLowerCase(), n.size + 1), n.size)}>`) };
+  const num = (u) => n.get(u.toLowerCase()) ?? (n.set(u.toLowerCase(), n.size + 1), n.size);
+  const mask = (e) =>
+    e && {
+      ...e,
+      message: String(e.fullMessage)
+        .replace(/[\\<]/g, (c) => `\\${c}`)
+        .replace(UUID, (u) => `<id${num(u)}>`),
+    };
   const a = mask(A);
   const b = mask(B);
   return `${errorLabel(a)}=>${errorLabel(b)}`;
@@ -1392,12 +1428,14 @@ async function runLane(lane, seqCount) {
     await setKeys(pair, pair.keys);
     await compareStep(pair, 'reload', 'reload');
     R.counts.sequences++;
+    settleCatch(lane);
     log(`lane ${lane} seq ${seq + 1}/${seqCount}: steps ${R.counts.steps}, raw ${R.counts.rawCases}, differences ${R.totals.differences}`);
     flush();
     if (R.mutant?.firstCatch && E.STOP_ON_CATCH !== '0') break;
   }
   if (pair) {
     if (CONFIG.sweep) await sweep(pair, 'end');
+    settleCatch(lane);
     await closePair(pair);
   }
 }
@@ -1564,7 +1602,7 @@ if (R.sqlFailures) failures.push(`${R.sqlFailures} out-of-band SQL writes failed
 if (!R.collation || R.collation.error || R.collation.mismatches.length) failures.push(`collation check: ${JSON.stringify(R.collation).slice(0, 300)}`);
 log(`collation: ${R.collation?.strings ?? 0} tie-key strings lowercase the same in PostgreSQL${R.collation?.mismatches?.length ? ` except ${R.collation.mismatches.length}` : ''}`);
 if (R.mutant) {
-  log(`mutant ${R.mutant.name}: applied ${R.mutant.applied}, caught ${R.mutant.firstCatch ? `at ${JSON.stringify(R.mutant.firstCatch).slice(0, 300)}` : 'NO'}`);
+  log(`mutant ${R.mutant.name}: applied ${R.mutant.applied}, caught ${R.mutant.firstCatch ? `at ${JSON.stringify(R.mutant.firstCatch).slice(0, 300)}` : 'NO'}; ${R.mutant.discardedCatches} catches discarded in ${R.mutant.taintedSequences} sequences with harness-level differences`);
   if (!R.mutant.applied) failures.push(`mutant ${R.mutant.name} never applied`);
   if (!R.mutant.firstCatch) failures.push(`mutant ${R.mutant.name} not caught`);
 }

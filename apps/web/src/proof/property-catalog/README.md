@@ -57,7 +57,7 @@ not run the base commit's modules, or a mutant was not applied or not caught.
   nanosecond, only on a row's `created_at`/`updated_at`); `tie-order` (only
   rows whose server sort key is equal swap: definitions by lowercased name,
   options by display order then value, and caller rows only when both sides'
-  lists, as that caller reads them (the select editors their own option lists, every other caller the catalog), give them the same key; an option without a key never ties). Tie
+  list, the one that caller derives its rows from (`CALLER_SOURCES` in `run.mjs`: the all, system or CRM export definitions listing, the tag sets, or a select editor's own option list), gives them the same key; an option without a key never ties). Tie
   keys lowercase the way the server sorted that list: definitions with options
   like Rust's `to_lowercase` (JavaScript's `toLowerCase`), plain definitions,
   options and tag options like PostgreSQL's `LOWER` under its libc collation
@@ -68,7 +68,8 @@ not run the base commit's modules, or a mutant was not applied or not caught.
   object; the retry decision is the app's own, computed in the page with
   `thrownResultErrorHasCode`; equality compares the whole message, and each
   old→new pair is its own signature: both whole messages with each id
-  replaced by its number in order of first appearance across the pair, so a
+  replaced by its number in order of first appearance across the pair (the
+  message's own `\` and `<` escaped first), so a
   pair that names other ids, or the same ids in other roles, is a signature of
   its own); `state`
   (query state fields, or a reader missing on one side); and `diff`. Reader
@@ -78,7 +79,9 @@ not run the base commit's modules, or a mutant was not applied or not caught.
   shape, and a mutant counts as caught only at a `diff` or `state` signature
   the baseline does not have, after the fault was applied, at a level that
   compares what the app read or showed: a settle timeout, a write-replay
-  difference or an uncaught page error never counts as a catch. `CONTROL=1` runs OLD
+  difference or an uncaught page error never counts as a catch, and a catch in
+  a sequence that had one is discarded (each sequence ends with a reload, so
+  its fallout stays inside it). `CONTROL=1` runs OLD
   against OLD.
 - `LOAD=n` adds `n` other accounts writing and reading on the server, and has
   each fuzzed account's NEW page read both catalogs in the background.
