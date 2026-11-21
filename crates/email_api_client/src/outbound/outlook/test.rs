@@ -1129,6 +1129,110 @@ async fn recent_inbox_messages_follow_short_pages_and_leave_out_unreadable_messa
 }
 
 #[tokio::test]
+async fn each_page_of_a_window_read_passes_the_mailbox_gate_and_a_rate_limited_page_cools_it() {
+    use crate::domain::ports::{MailboxRequestGate, ScopedMailboxRepository};
+    use std::{
+        future::Future,
+        pin::Pin,
+        sync::{Arc, Mutex},
+        time::Duration,
+    };
+    struct Gate {
+        acquired: Mutex<u32>,
+        finished: Mutex<Vec<Option<Duration>>>,
+    }
+    impl MailboxRequestGate for Gate {
+        fn acquire(
+            &self,
+            _: MailboxAccess,
+        ) -> Pin<Box<dyn Future<Output = Result<Uuid, EmailApiError>> + Send + '_>> {
+            *self.acquired.lock().unwrap() += 1;
+            Box::pin(async { Ok(Uuid::now_v7()) })
+        }
+        fn finish(
+            &self,
+            _: MailboxAccess,
+            _: Uuid,
+            retry_after: Option<Duration>,
+        ) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
+            self.finished.lock().unwrap().push(retry_after);
+            Box::pin(async {})
+        }
+        fn admitted(
+            &self,
+            _: MailboxAccess,
+        ) -> Pin<Box<dyn Future<Output = Option<u64>> + Send + '_>> {
+            Box::pin(async { None })
+        }
+    }
+    let (server, mut api, token) = setup().await;
+    let mailbox = MailboxAccess {
+        sync_generation: 1,
+        link_id: Uuid::now_v7(),
+        grant_generation: 7,
+    };
+    let gate = Arc::new(Gate {
+        acquired: Mutex::new(0),
+        finished: Mutex::new(Vec::new()),
+    });
+    api.gate = Some(gate.clone());
+    let api = api.for_mailbox(mailbox);
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/mailFolders/sentitems/messages"))
+        .and(query_param("$top", "10"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "value": [{
+                "id": "m1", "conversationId": "c1", "parentFolderId": "sentitems",
+                "subject": "Invoice", "isRead": true, "isDraft": false, "flag": {},
+                "receivedDateTime": "2026-10-27T09:00:00Z",
+                "sentDateTime": "2026-10-27T09:00:00Z"
+            }],
+            "@odata.nextLink": format!(
+                "{}/v1.0/me/mailFolders/sentitems/messages?$skiptoken=page-2",
+                server.uri()
+            )
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/mailFolders/sentitems/messages"))
+        .and(query_param("$skiptoken", "page-2"))
+        .respond_with(ResponseTemplate::new(429).insert_header("Retry-After", "90"))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let messages = api
+        .recent_inbox_messages(
+            &token,
+            mailbox.link_id,
+            RecentMailFolder::Sent,
+            10,
+            None,
+            &[],
+        )
+        .await
+        .unwrap();
+
+    // The read keeps the first page, and the gate admitted both pages and
+    // took the provider's Retry-After from the second, so the mailbox cools
+    // down for every caller.
+    assert_eq!(
+        messages
+            .iter()
+            .map(|message| message.content.message.provider_id.clone())
+            .collect::<Vec<_>>(),
+        vec![Some("m1".to_owned())]
+    );
+    assert_eq!(*gate.acquired.lock().unwrap(), 2);
+    assert_eq!(
+        *gate.finished.lock().unwrap(),
+        vec![None, Some(Duration::from_secs(90))]
+    );
+}
+
+#[tokio::test]
 async fn recent_inbox_messages_stop_at_a_link_already_followed_and_keep_pages_before_a_failure() {
     let (server, api, token) = setup().await;
     let message = |id: &str| {
