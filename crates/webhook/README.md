@@ -398,10 +398,11 @@ encrypts the secret before calling it.
   by `McpLiveSubscribers`; an audience with none costs no query.
   `document_storage_service` reloads the set every 2 s in each replica with
   one index-only read of the live end of the `(expires_at) INCLUDE (user_id)`
-  index. A new subscription is matched from its replica's next reload, so its
-  first 2 s of events can pass unmatched. Past 10,000 live subscriptions, or
-  when the set is 10 s old because reloads fail, fan-out matches every
-  audience member by query instead.
+  index. A new subscription is matched from the first reload that starts after it
+  commits, in each replica, so its events until then (up to 2 s plus that
+  reload's time) pass unmatched. When a reload fails the replica forgets the
+  set, and past 10,000 live subscriptions, or when the set is 5 s old because a
+  reload hangs, fan-out matches every audience member by query instead.
 - **Filter.** `domain/mcp/filter.rs`: an OR of clauses, each exact event
   names, optional parent ids (the webhook `ids` semantics) and an AND of
   conditions on whitelisted message fields (`parent_type`, `parent_id`,
