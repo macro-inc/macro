@@ -31,6 +31,7 @@ import nav from './en/nav';
 import notificationsInbox from './en/notifications-inbox';
 import passwords from './en/passwords';
 import routineDrafts from './en/routine-drafts';
+import routineFilters from './en/routine-filters';
 import routineMenu from './en/routine-menu';
 import routineSuggestions from './en/routine-suggestions';
 import runtimeSharing from './en/runtime-sharing';
@@ -87,6 +88,7 @@ export default {
   notificationsInbox,
   passwords,
   routineDrafts,
+  routineFilters,
   routineMenu,
   routineSuggestions,
   settingsBilling,

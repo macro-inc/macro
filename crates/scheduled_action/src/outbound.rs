@@ -1,5 +1,6 @@
 pub mod agent_session_client;
 pub mod conn_gateway_live_updates;
+pub mod email_owner_inboxes;
 pub mod event_access;
 pub mod event_content;
 pub mod inprocess_executor;

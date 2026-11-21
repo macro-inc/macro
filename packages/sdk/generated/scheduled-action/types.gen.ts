@@ -733,6 +733,11 @@ export type EventFilter = {
     github?: null | GithubSelector;
     ids?: Array<string> | null;
     /**
+     * The inboxes (email link ids) whose new mail starts the routine. Absent:
+     * every inbox the owner reads, their own and those delegated to them.
+     */
+    inboxes?: Array<string> | null;
+    /**
      * Exact tests on the payload, all of which must pass.
      */
     match?: Array<PayloadCondition> | null;

@@ -4292,6 +4292,13 @@
               "type": "string"
             }
           },
+          "inboxes": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "The inboxes (email link ids) whose new mail starts the routine. Absent:\nevery inbox the owner reads, their own and those delegated to them."
+          },
           "match": {
             "type": ["array", "null"],
             "items": {

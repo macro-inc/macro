@@ -24,10 +24,28 @@ const email: RoutineTriggerDraft = {
   condition: 'Is this about money?',
 };
 
+const TEAM_INBOX = '01900000-0000-7000-8000-0000000000a1';
+
 function renderRows(initial: RoutineTriggerDraft[]) {
   const [triggers, setTriggers] = createSignal(initial);
   const onChange = vi.fn(setTriggers);
   const slots = {
+    renderInboxPicker: (
+      inboxes: () => string[],
+      change: (inboxes: string[]) => void
+    ) => (
+      <label>
+        team@example.com
+        <input
+          type="checkbox"
+          checked={inboxes().includes(TEAM_INBOX)}
+          onChange={(event) =>
+            change(event.currentTarget.checked ? [TEAM_INBOX] : [])
+          }
+        />
+      </label>
+    ),
+    renderInboxesLabel: (inboxes: string[]) => <>{inboxes.length} picked</>,
     renderEventLabel: () => <>Your inbox</>,
     renderEventScope: () => null,
     renderEventCondition: (
@@ -110,16 +128,57 @@ describe('routine triggers on the routine page', () => {
     });
     fireEvent.click(within(panel).getByRole('button', { name: 'Done' }));
     expect(triggers()).toMatchObject([{ condition: 'Is this an invoice?' }]);
-    // × takes the check away; + Filter adds one back.
+    // × takes the check away; + Filter adds one back, once it is picked
+    // among the filters an email trigger can take.
     fireEvent.click(screen.getByRole('button', { name: 'Remove condition' }));
     expect(triggers()[0]).toMatchObject({ condition: undefined });
-    fireEvent.click(screen.getByRole('button', { name: 'Add filter' }));
+    press(screen.getByRole('button', { name: 'Add filter' }), 'Enter');
+    press(item(/^AI check/), 'Enter');
     const filter = screen.getByRole('dialog', { name: 'Add filter' });
     fireEvent.input(within(filter).getByRole('textbox'), {
       target: { value: 'Is it urgent?' },
     });
     fireEvent.click(within(filter).getByRole('button', { name: 'Done' }));
     expect(triggers()).toMatchObject([{ condition: 'Is it urgent?' }]);
+  });
+
+  it('narrows an email trigger to some inboxes from + Filter', () => {
+    const { triggers } = renderRows([{ ...email, condition: undefined }]);
+    press(screen.getByRole('button', { name: 'Add filter' }), 'Enter');
+    press(item(/^Inbox/), 'Enter');
+    const editor = screen.getByRole('dialog', { name: 'Add filter' });
+    fireEvent.click(
+      within(editor).getByRole('checkbox', { name: 'team@example.com' })
+    );
+    fireEvent.click(within(editor).getByRole('button', { name: 'Done' }));
+    expect(triggers()).toMatchObject([{ inboxes: [TEAM_INBOX] }]);
+    expect(screen.getByText('1 picked')).toBeTruthy();
+
+    // Only the AI check is left to add, so + Filter opens it straight away.
+    fireEvent.click(screen.getByRole('button', { name: 'Add filter' }));
+    expect(
+      within(screen.getByRole('dialog', { name: 'Add filter' })).getByRole(
+        'textbox'
+      )
+    ).toBeTruthy();
+
+    // × watches every inbox again.
+    fireEvent.click(screen.getByRole('button', { name: 'Watch every inbox' }));
+    expect(triggers()[0]).toMatchObject({ inboxes: undefined });
+  });
+
+  it('drops picked inboxes when an email trigger becomes another event', () => {
+    const { triggers } = renderRows([{ ...email, inboxes: [TEAM_INBOX] }]);
+    press(
+      screen.getByRole('button', { name: 'Change New email received trigger' }),
+      'Enter'
+    );
+    press(item('Tasks'), 'ArrowRight');
+    press(item(/^Task created/), 'Enter');
+    expect(triggers()[0]).toMatchObject({
+      events: ['task.created'],
+      inboxes: undefined,
+    });
   });
 
   it('adds a trigger from its type’s submenu', () => {

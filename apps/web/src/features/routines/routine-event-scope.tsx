@@ -7,6 +7,7 @@ import {
   callEventScopeLabel,
   type RoutineEventName,
 } from './core/routine-triggers';
+import { InboxScopeLabel } from './routine-event-inboxes';
 
 type ScopeProps = {
   kind: 'CHANNEL' | 'DOCUMENT' | 'TASK' | 'THREAD' | 'CALL_RECORD';
@@ -28,7 +29,6 @@ export function RoutineEventScopeLabel(props: ScopeProps) {
   const entities = useQuickAccessEntities(() => props.kind);
   const label = () => {
     const singular = entityLabel(props.kind);
-    if (props.kind === 'THREAD' && props.ids === undefined) return 'Your inbox';
     if (props.kind === 'CALL_RECORD' && props.ids === undefined)
       return callEventScopeLabel(props.events ?? ['call.ended']);
     if (props.ids === undefined) return `Any ${singular}`;
@@ -37,7 +37,14 @@ export function RoutineEventScopeLabel(props: ScopeProps) {
     const entity = entities.items().find((item) => item.id === props.ids?.[0]);
     return entity?.data.name ?? `Selected ${singular}`;
   };
-  return <span title={label()}>{label()}</span>;
+  return (
+    <Show
+      when={props.kind === 'THREAD' && props.ids === undefined}
+      fallback={<span title={label()}>{label()}</span>}
+    >
+      <InboxScopeLabel />
+    </Show>
+  );
 }
 
 /** Inline search inside the trigger panel; never opens another popover. */

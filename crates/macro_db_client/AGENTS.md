@@ -189,6 +189,15 @@ owner-only Notion mirror. No existing folders or import rows are backfilled.
   build replacement indexes before dropping old constraints, and validate large
   table checks in a later transaction. See the Outlook rollout notes in
   `docs/design/outlook-email-support.md` for failure recovery and deployment order.
+- `macro_user_links_link_primary_idx` `(link_id, primary_macro_id)` (migration
+  `20261119030403`) replaced `macro_user_links_link_idx` (dropped by
+  `20261119030951`): it serves every lookup by `link_id`, the `email_links`
+  delete cascade included, and probes one delegation by link and account.
+  Apply both with a short session `lock_timeout` (for SQLx CLI,
+  `PGOPTIONS='-c lock_timeout=5s'`). If the build is interrupted, drop the
+  invalid index (`DROP INDEX CONCURRENTLY macro_user_links_link_primary_idx`)
+  before retrying: the migration has no `IF NOT EXISTS`, so the old index is
+  never dropped while the new one is unusable.
 - Quote and alias camelCase columns to Rust field names
   (`SELECT "userId" AS user_id`); don't guess spelling — check `migrations/`.
 - Saved-view sharing uses current team membership and chronological owner/team indexes.

@@ -272,6 +272,7 @@ deny = [
     "passwords",                 # Provider credential-redaction tests only (dev-dependency)
     "projects",                  # Dev logging only
     "rootcause-tracing",         # External rootcause integration requires tracing-subscriber
+    "scheduled_action",          # Admission span status tests only (dev-dependency)
     "search_processing_service", # Kafka consumer span tests only (dev-dependency)
     "search_service",            # Search-term redaction span tests only (dev-dependency)
     "sync_service",              # Cloudflare/WASM tracing setup uses tracing-web
