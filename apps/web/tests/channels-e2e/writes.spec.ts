@@ -520,8 +520,8 @@ test('WRT-17 with the channel open in two windows, a waiting reply to a message 
   await expectShown(bens, after);
   await ada.post(channel.id, 'four');
   await expect(bens.message('four')).toBeVisible();
-  // Known defect, in 3 runs of 10: the window draws the message without its
-  // waiting reply once it has read the channel again.
+  // Known defect, in about 1 run in 10: the window draws the message without
+  // its waiting reply once it has read the channel again.
   await failsSometimes(() => expectShown(bens, [...after, 'four']));
 
   await unblock();
