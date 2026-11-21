@@ -2037,8 +2037,10 @@ or an initiative) loads its item with the viewer's own access and opens it; a
 routine's card can pause it or run it now. An agenda loads its events live
 from the viewer's calendars and groups them by day. A tags widget nests tags
 to any depth as coloured pills. A connect card names an app (by Pipedream app
-slug) or an MCP server (by URL) the agent needs, with one **Connect** button
-that starts its sign-in directly; once connected it reads **Connected**. In
+slug) or an MCP server (by URL) the agent needs, fills the transcript column,
+and has one **Connect** button that starts its sign-in directly; once
+connected it reads **Connected**. The agent ends its turn after presenting
+it, with no text asking again to connect. In
 the session that presented it, connecting an app continues the session through
 `app.connected`, as the `Connect <app>` chip does. Elsewhere (a DM reply, a
 custom MCP server) a toast asks the reader to reply when ready. A server whose

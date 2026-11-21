@@ -198,4 +198,13 @@ describe('connect card', () => {
     ).toBe(true);
     expect(mocks.connectMcpServer).not.toHaveBeenCalled();
   });
+  it('fills the transcript column, as the other cards the user acts on do', () => {
+    const { container } = render(() => (
+      <ConnectCard name="Acme" target={{ kind: 'app', appSlug: 'acme' }} />
+    ));
+
+    const card = container.querySelector('[data-agent-card="connect"]');
+    expect(card?.classList.contains('max-w-none')).toBe(true);
+    expect(card?.classList.contains('max-w-md')).toBe(false);
+  });
 });

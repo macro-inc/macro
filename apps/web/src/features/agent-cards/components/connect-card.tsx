@@ -40,7 +40,7 @@ export function ConnectCardView(props: {
   disabled?: boolean;
 }) {
   return (
-    <Card width="compact" data-agent-card="connect">
+    <Card width="column" data-agent-card="connect">
       <CardSingle
         media={<Item.Media class="self-center">{props.icon}</Item.Media>}
         title={props.name}
