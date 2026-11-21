@@ -153,6 +153,11 @@ one() {
           status="$status $side-failed"
           break
         fi
+        # Only the last segment's end would show in the side's trace: check each.
+        if [ "$(tail -n 1 "$seg/$seed.trace" 2> /dev/null)" != end ]; then
+          status="$status $side-segment-$segment-no-trace"
+          break
+        fi
         { echo "segment $segment"; cat "$seg/$seed.trace"; } >> "$up/$side.trace"
         [ "$segment" -eq 0 ] && cp "$seg/$seed.stats.json" "$out/$side/$seed.stats.json"
         # A crash moves the engine to the next copy: the last is what the segment left.
@@ -203,7 +208,7 @@ one() {
 }
 export -f one
 recorded=0
-seq "$first" $((first + count - 1)) | xargs -P "$jobs" -I{} bash -c 'one {}' || recorded=$?
+seq "$first" $((first + count - 1)) | xargs -P "$jobs" -I{} bash -c 'set -euo pipefail; one "$1"' _ {} || recorded=$?
 total=$(find "$out/a" -name '*.stats.json' | wc -l)
 lines() { if [ -f "$1" ]; then wc -l < "$1"; else echo 0; fi; }
 diffs=$(lines "$out/diffs.txt")
