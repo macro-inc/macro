@@ -533,7 +533,12 @@ function afterExpiry(
   );
 }
 
-/** A confirmed change whose recheck has not answered: the newest answer decides who shows. */
+/**
+ * A confirmed change whose recheck has not answered: the newest answer decides
+ * who shows. A failed recheck leaves the newest answer to decide for good, once
+ * every check sent since the confirmation has answered: one still out may be
+ * newer than the answer so far.
+ */
 function whileRechecking(
   shown: ParticipantChange,
   seen: SettledChange,
@@ -549,7 +554,11 @@ function whileRechecking(
   const refuted = members
     ? shown.userIds.filter((userId) => !holdsFor(shown.kind, userId, members))
     : [];
-  if (says.kind !== 'failed')
+  const stillOut = context.questions.some(
+    (q) =>
+      q.channelId === shown.channelId && q.sent > seen.confirmedBy && !q.answer
+  );
+  if (says.kind !== 'failed' || stillOut)
     return {
       seen,
       shown: stillShown(shown, refuted),
