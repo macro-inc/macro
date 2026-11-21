@@ -226,7 +226,7 @@ impl BackfillLifecycleEffects for Fake {
     }
     async fn connect_contacts(
         &self,
-        _: &MacroUserIdStr<'static>,
+        _: &Link,
         contacts: Vec<MacroUserIdStr<'static>>,
     ) -> Result<(), rootcause::Report> {
         self.lifecycle_call("connect_contacts")

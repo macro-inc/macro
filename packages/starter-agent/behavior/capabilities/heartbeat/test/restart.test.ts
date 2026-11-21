@@ -4,6 +4,8 @@ import { fixedClock, memoryDisk } from '../../../context/test/fakes.ts';
 import { markHealthy, restartExitCode, restarter } from '../restart.ts';
 
 const restartFile = '/home/agent/.restart';
+const listening = async () => undefined;
+const deadline = () => new Promise<void>(() => undefined);
 const lastGood = '/home/agent/state/last-good';
 
 test('a restart touches the supervisor’s marker, then exits 75', async () => {
@@ -36,7 +38,9 @@ test('a healthy boot writes the HEAD it booted from as the last good', async () 
     asked.push(args.join(' '));
     return { code: 0, stdout: `${sha}\n`, stderr: '' };
   };
-  expect(await markHealthy({ git, disk, file: lastGood })).toBe(sha);
+  expect(
+    await markHealthy({ git, disk, file: lastGood, listening, deadline })
+  ).toBe(sha);
   expect(asked).toEqual(['rev-parse --verify HEAD']);
   expect(disk.files.get(lastGood)).toBe(`${sha}\n`);
 });
@@ -48,8 +52,28 @@ test('no HEAD to read: nothing is written, and it says why', async () => {
     stdout: '',
     stderr: 'fatal: not a git repository',
   });
-  await expect(markHealthy({ git, disk, file: lastGood })).rejects.toThrow(
-    'not a git repository'
-  );
+  await expect(
+    markHealthy({ git, disk, file: lastGood, listening, deadline })
+  ).rejects.toThrow('not a git repository');
+  expect(disk.files.has(lastGood)).toBe(false);
+});
+
+test('a boot that never hears Macro is not healthy, so the launcher can roll it back', async () => {
+  const disk = memoryDisk();
+  const asked: string[] = [];
+  const git = async (args: readonly string[]): Promise<Ran> => {
+    asked.push(args.join(' '));
+    return { code: 0, stdout: `${'a'.repeat(40)}\n`, stderr: '' };
+  };
+  await expect(
+    markHealthy({
+      git,
+      disk,
+      file: lastGood,
+      listening: () => new Promise<void>(() => undefined),
+      deadline: async () => undefined,
+    })
+  ).rejects.toThrow('not listening');
+  expect(asked).toEqual([]);
   expect(disk.files.has(lastGood)).toBe(false);
 });

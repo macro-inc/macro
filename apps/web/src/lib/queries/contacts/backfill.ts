@@ -15,6 +15,7 @@ import { useQueryAccount } from '../auth/use-query-account';
 import { ContactDirectoryScopeError } from './cache-scope';
 import { reconcileContactPage } from './reconcile';
 import { contactRefreshRevision } from './refresh';
+import { withContactWriteTurn } from './write-turn';
 
 const CHECKPOINT_VERSION = 2;
 const REFRESH_INTERVAL_MS = 15 * 60_000;
@@ -221,7 +222,9 @@ export const runContactBackfill = Effect.fn('runContactBackfill')(function* (
   const fetchPage = options.fetchPage ?? hydrateGraphqlContacts;
   while (checkpoint.phase === 'hydrate') {
     const page = yield* Effect.tryPromise((signal) =>
-      fetchPage(host, scope, checkpoint.nextCursor, signal)
+      withContactWriteTurn(host, () =>
+        fetchPage(host, scope, checkpoint.nextCursor, signal)
+      )
     );
     const currentGeneration = yield* Effect.tryPromise(() =>
       host.currentStorageGeneration()
@@ -251,7 +254,9 @@ export const runContactBackfill = Effect.fn('runContactBackfill')(function* (
   const reconcile = options.reconcilePage ?? reconcileContactPage;
   while (true) {
     const page = yield* Effect.tryPromise((signal) =>
-      reconcile(host, scope, checkpoint.nextCursor, signal)
+      withContactWriteTurn(host, () =>
+        reconcile(host, scope, checkpoint.nextCursor, signal)
+      )
     );
     if (
       (yield* Effect.tryPromise(() => host.currentStorageGeneration())) !==

@@ -471,10 +471,19 @@ where
         }
 
         let channel_name = req.channel_name.clone();
-        self.repo
+        let auto_joined = self
+            .repo
             .patch_channel(channel_id, actor.as_ref().to_string(), team_id, req)
             .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        self.dispatch_members_auto_joined(
+            channel_id,
+            auto_joined
+                .into_iter()
+                .filter_map(|id| MacroUserIdStr::try_from(id).ok())
+                .collect(),
+        )
+        .await;
         if channel_name.is_some() {
             self.events.dispatch(ChannelEvent::ChannelUpdated {
                 channel_id,
@@ -829,6 +838,37 @@ where
             channel_id: ensured.id.to_string(),
             action,
         })
+    }
+
+    /// Tell contacts that team auto-join added these members to a channel.
+    /// The memberships are already stored, so a failed participant read is
+    /// logged rather than failing the mutation; the contacts backfill repairs
+    /// the missed pairs.
+    async fn dispatch_members_auto_joined(
+        &self,
+        channel_id: Uuid,
+        added_user_ids: Vec<MacroUserIdStr<'static>>,
+    ) {
+        if added_user_ids.is_empty() {
+            return;
+        }
+        let participants = match self.repo.get_participants(channel_id).await {
+            Ok(participants) => participants,
+            Err(error) => {
+                let error: anyhow::Error = error.into();
+                tracing::error!(
+                    error=?error,
+                    %channel_id,
+                    "unable to read participants after team auto-join"
+                );
+                return;
+            }
+        };
+        self.events.dispatch(ChannelEvent::MembersAutoJoined {
+            channel_id,
+            added_user_ids,
+            active_participant_user_ids: participant_ids(&participants),
+        });
     }
 
     async fn create_channel_record<'a>(
@@ -1211,10 +1251,16 @@ where
         team_id: &Uuid,
         user_id: &MacroUserIdStr<'_>,
     ) -> Result<(), ChannelMutationErr> {
-        self.repo
+        let channel_ids = self
+            .repo
             .auto_join_by_team_id(team_id, user_id)
             .await
-            .map_err(|e| ChannelMutationErr::Repo(e.into()))
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        for channel_id in channel_ids {
+            self.dispatch_members_auto_joined(channel_id, vec![user_id.clone().into_owned()])
+                .await;
+        }
+        Ok(())
     }
 
     #[tracing::instrument(err, skip(self, user_id))]

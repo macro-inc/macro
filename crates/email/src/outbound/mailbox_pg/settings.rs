@@ -269,7 +269,7 @@ impl MailboxSettingsRepository for PgMailboxSync {
         let row=sqlx::query!(r#"WITH candidate AS (
             SELECT s.id FROM email_links l JOIN email_mailbox_settings_work s ON s.link_id=l.id
             WHERE (l.provider<>'OUTLOOK' OR (s.kind='catalog' AND $2) OR (s.kind<>'catalog' AND $3))
-            AND l.is_sync_active AND l.disconnect_requested_at IS NULL AND s.next_run_at<=now() AND (s.kind='catalog' OR s.revision>s.completed_revision)
+            AND l.is_sync_active AND l.disconnect_requested_at IS NULL AND l.mailbox_unavailable_at IS NULL AND s.next_run_at<=now() AND (s.kind='catalog' OR s.revision>s.completed_revision)
             AND (s.lease_until IS NULL OR s.lease_until<now())
             AND (s.kind<>'delete_label' OR NOT EXISTS(SELECT 1 FROM email_mailbox_commands c
                 WHERE c.link_id=s.link_id AND c.generation=l.sync_generation AND c.status IN ('pending','running','confirming')

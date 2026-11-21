@@ -288,11 +288,22 @@ where
     }
 
     async fn people_page(&self, ids: Option<&[String]>) -> Result<Page, SoupSourceError> {
-        let people = self
-            .contacts
-            .query_contacts(self.viewer.clone())
-            .await
-            .map_err(SoupSourceError::Contacts)?;
+        let people = match ids {
+            None => self.contacts.query_contacts(self.viewer.clone()).await,
+            // A hint names the people wanted, so only they are looked up. An id
+            // that is not a user id names nobody.
+            Some(ids) => {
+                let ids: Vec<_> = ids
+                    .iter()
+                    .filter_map(|id| MacroUserIdStr::try_from(id.clone()).ok())
+                    .collect();
+                self.contacts
+                    .query_contacts_among(self.viewer.clone(), &ids)
+                    .await
+            }
+        }
+        .map_err(SoupSourceError::Contacts)?;
+        // Ids match exactly, as the rows' cells do.
         let wanted: Option<HashSet<&str>> = ids.map(|ids| ids.iter().map(String::as_str).collect());
         Ok(Page {
             rows: people

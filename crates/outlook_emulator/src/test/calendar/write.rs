@@ -6,7 +6,9 @@ use calendar_events::domain::ports::{
     CalendarMutationProvider, CalendarProviderErrorKind, ProviderInstanceUpdateOutcome,
     ProviderSeriesMutationOutcome,
 };
-use calendar_events::domain::replacement::CalendarReplacementProvider;
+use calendar_events::domain::replacement::{
+    CalendarReplacement, CalendarReplacementProvider, ReplacementWriteOutcome,
+};
 use serde_json::json;
 use uuid::Uuid;
 
@@ -285,7 +287,14 @@ async fn a_series_is_inspected_for_replacement_with_its_changed_and_deleted_occu
     let series = stored_id(&emulator, ADA, "Weekly sync");
 
     let snapshot = api
-        .inspect_replacement(&token, &target, &series, None, false)
+        .inspect_replacement(
+            &token,
+            &target,
+            &series,
+            None,
+            false,
+            &CalendarEventPatch::default(),
+        )
         .await
         .unwrap();
 
@@ -311,4 +320,75 @@ async fn a_series_is_inspected_for_replacement_with_its_changed_and_deleted_occu
     );
     let moved = refreshed(&api, &token, &target, &series).await;
     assert_eq!(moved.overrides.len(), 1);
+}
+
+#[tokio::test]
+async fn a_replacement_creates_its_event_with_the_editors_unsaved_changes() {
+    let (emulator, api) = start(SEED).await;
+    let token = access_token(&emulator);
+    let target = target(&emulator, ADA, "Calendar");
+    let original = stored_id(&emulator, ADA, "Design review");
+    let changes = CalendarEventPatch {
+        title: Some("Design review, moved".into()),
+        location: Some("Room 9".into()),
+        time: Some(timed(
+            "2026-11-13T18:00:00Z",
+            "2026-11-13T19:00:00Z",
+            "America/New_York",
+        )),
+        attendees: Some(vec![guest("grace@example.com")]),
+        ..CalendarEventPatch::default()
+    };
+
+    let snapshot = api
+        .inspect_replacement(&token, &target, &original, None, true, &changes)
+        .await
+        .unwrap();
+    let operation = CalendarReplacement {
+        id: Uuid::from_u128(0x6274),
+        user_id: "owner".into(),
+        calendar_id: target.calendar_id,
+        event_id: Uuid::from_u128(3),
+        master_id: original.clone(),
+        recurrence_id: None,
+        snapshot,
+        next_step: 0,
+        command: None,
+        replacement_provider_id: None,
+        result: None,
+    };
+    let command = api
+        .prepare_replacement_write(&token, &target, &operation)
+        .await
+        .unwrap();
+    let ReplacementWriteOutcome::Applied(Some(created)) = api
+        .apply_replacement_write(&token, &target, &command, true)
+        .await
+        .unwrap()
+    else {
+        panic!("the replacement was not created");
+    };
+
+    let held = stored(&emulator, ADA, "default", "Design review, moved");
+    assert_eq!(held["id"], created);
+    assert_eq!(held["location"]["displayName"], "Room 9");
+    assert_eq!(
+        held["start"],
+        json!({"dateTime": "2026-11-13T18:00:00.0000000", "timeZone": "UTC"})
+    );
+    assert_eq!(
+        held["attendees"][0]["emailAddress"]["address"],
+        "grace@example.com"
+    );
+    assert_eq!(
+        held["body"]["content"]
+            .as_str()
+            .map(|body| body.contains("Bring the mocks.")),
+        Some(true)
+    );
+    // Nothing was written to the original before the replacement exists.
+    assert_eq!(
+        stored(&emulator, ADA, "default", "Design review")["location"]["displayName"],
+        "Room 4"
+    );
 }

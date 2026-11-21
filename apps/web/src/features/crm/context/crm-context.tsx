@@ -93,6 +93,8 @@ export type CrmContext = {
     record: Accessor<PipelineEntryRecord>
   ): AddToPipelineSource;
   PipelineSharing: PipelineSharing;
+  /** CRM settings' Who can use CRM; renders nothing for viewers who can't change it. */
+  MemberAccess: Component;
   createPipelineTransfer(pipeline: Pipeline): PipelineTransfer;
   downloadCsv(content: string, filename: string): Promise<{ saved: boolean }>;
   /** Profile picture lookup for a contact; presentation owns the fallback. */

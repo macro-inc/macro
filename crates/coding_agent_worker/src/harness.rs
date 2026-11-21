@@ -284,12 +284,18 @@ async fn relay(
                         });
                     }
                     Some(ToRuntimeMessage::AgentsChanged) => agents_changed.notify_one(),
-                    Some(ToRuntimeMessage::ApplyAgent { environment }) => {
+                    Some(ToRuntimeMessage::ApplyAgent { environment, traceparent }) => {
                         // Read by the guest's agent units; outside a Macro
                         // computer nothing installs it, so it does nothing.
-                        match apply_agent(&environment.0) {
+                        let span = tracing::info_span!("macrod.agent.apply", otel.status_code = tracing::field::Empty);
+                        hosted_runtimes::domain::telemetry::attach(&span, traceparent.as_deref());
+                        let _entered = span.enter();
+                        match apply_agent(&environment.0, traceparent.as_deref()) {
                             Ok(staged) => tracing::info!(?staged, "handled the agent teammate's environment"),
-                            Err(error) => tracing::error!(error = ?error, "could not stage the agent teammate's environment"),
+                            Err(error) => {
+                                span.record("otel.status_code", "ERROR");
+                                tracing::error!(error = ?error, "could not stage the agent teammate's environment");
+                            }
                         }
                     }
                     Some(other) => tracing::debug!(message = ?other, "ignoring an unknown runtime message"),
@@ -374,7 +380,16 @@ async fn hand_off(
 #[cfg(unix)]
 fn apply_agent(
     environment: &std::collections::BTreeMap<String, String>,
+    traceparent: Option<&str>,
 ) -> rootcause::Result<crate::agent_env::Staged> {
+    // The trace first, since the environment is what starts the agent. A trace
+    // that can't be staged only costs the start's spans, never the hand-off.
+    if let Err(error) = crate::agent_env::stage_setup_traceparent(
+        Path::new(crate::agent_env::SETUP_TRACEPARENT_INBOX),
+        traceparent,
+    ) {
+        tracing::warn!(error = ?error, "could not stage the setup trace for the agent's start");
+    }
     crate::agent_env::stage_agent_env(
         Path::new(crate::agent_env::AGENT_ENV_INBOX),
         Path::new(crate::agent_env::AGENT_ENV_INSTALLED),
@@ -385,6 +400,7 @@ fn apply_agent(
 #[cfg(not(unix))]
 fn apply_agent(
     _environment: &std::collections::BTreeMap<String, String>,
+    _traceparent: Option<&str>,
 ) -> rootcause::Result<std::convert::Infallible> {
     Err(rootcause::report!(
         "agent teammates run only on Macro computers"

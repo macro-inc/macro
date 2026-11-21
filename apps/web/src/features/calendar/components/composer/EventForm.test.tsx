@@ -315,3 +315,189 @@ it('moves the end with the start until the end is picked', async () => {
     screen.queryByText('End time must be after the start time.')
   ).toBeNull();
 });
+
+it('shows and lists times on the calendar’s 24-hour clock', async () => {
+  const user = userEvent.setup();
+  showForm({ timeFormat: '24-hour' });
+  const start = screen.getByRole<HTMLInputElement>('combobox', {
+    name: 'event start time',
+  });
+  const end = screen.getByRole<HTMLInputElement>('combobox', {
+    name: 'event end time',
+  });
+  expect(start.value).toBe('12:00');
+  expect(end.value).toBe('13:00');
+
+  await user.click(start);
+  expect(screen.getByRole('option', { name: /^14:00/ })).toBeTruthy();
+  expect(screen.queryByRole('option', { name: /PM/ })).toBeNull();
+  await user.keyboard('3p{Enter}');
+  expect(start.value).toBe('15:00');
+  expect(end.value).toBe('16:00');
+
+  await user.click(end);
+  expect(screen.getByRole('option', { name: /^16:15.*15min/ })).toBeTruthy();
+  expect(screen.queryByRole('option', { name: /PM/ })).toBeNull();
+});
+
+it('keeps a 12-hour calendar’s times on the 12-hour clock', () => {
+  showForm({ timeFormat: '12-hour' });
+  expect(
+    screen.getByRole<HTMLInputElement>('combobox', { name: 'event start time' })
+      .value
+  ).toBe('12:00 PM');
+});
+
+const TEAMS_REMOVAL_NOTICE =
+  'Outlook can’t remove Teams from an existing event. To drop it, replace the event: guests get a new invitation with your changes and respond again.';
+
+const OUTLOOK_CALENDAR: EventEditorCalendarOption = {
+  ...WORK_CALENDAR,
+  id: 'outlook-calendar',
+  provider: 'outlook',
+  capabilities: {
+    autoDecline: true,
+    emailReminders: false,
+    customRecurrence: false,
+    removeConference: false,
+    resetRsvp: false,
+    guestPolicy: false,
+    conferenceProvider: 'microsoft_teams',
+  },
+};
+
+const MEET_CALENDAR: EventEditorCalendarOption = {
+  ...WORK_CALENDAR,
+  capabilities: {
+    autoDecline: true,
+    emailReminders: true,
+    customRecurrence: false,
+    removeConference: true,
+    resetRsvp: false,
+    guestPolicy: true,
+    conferenceProvider: 'google_meet',
+  },
+};
+
+/** Opens the editor of a saved event that holds the calendar's own meeting. */
+function showMeetingEdit(
+  calendarOption: EventEditorCalendarOption,
+  props: Partial<ComponentProps<typeof EventForm>> = {}
+) {
+  render(() => {
+    const controller = createCalendarEventFormController({
+      initialValue: {
+        title: 'Customer demo',
+        allDay: false,
+        start: '2030-01-01T12:00',
+        end: '2030-01-01T13:00',
+        recurrenceLines: [],
+        guests: '',
+        location: '',
+        description: '',
+        conference:
+          calendarOption.capabilities?.conferenceProvider === 'google_meet'
+            ? 'google_meet'
+            : 'microsoft_teams',
+        calendarId: calendarOption.id,
+      },
+      isEdit: true,
+      calendarOptions: () => [calendarOption],
+      guestOptions: () => [],
+    });
+    return (
+      <EventForm
+        controller={controller}
+        macroCallsEnabled
+        isEdit
+        disabledFields={{ calendar: true }}
+        pending={false}
+        onCancel={vi.fn()}
+        onSubmit={vi.fn()}
+        {...props}
+      />
+    );
+  });
+}
+
+async function turnOffMeeting(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: /Video conferencing/ }));
+  await user.click(screen.getByRole('option', { name: 'No meeting link' }));
+}
+
+it('turning Teams off on an Outlook event asks for a replacement until Undo brings it back', async () => {
+  const user = userEvent.setup();
+  const onSubmit = vi.fn();
+  showMeetingEdit(OUTLOOK_CALENDAR, { onSubmit, onReplace: vi.fn() });
+  const save = screen.getByRole('button', { name: 'Save' });
+  expect((save as HTMLButtonElement).disabled).toBe(false);
+
+  await user.click(screen.getByRole('button', { name: /Video conferencing/ }));
+  expect(screen.queryByRole('option', { name: 'Macro call' })).toBeNull();
+  await user.click(screen.getByRole('option', { name: 'No meeting link' }));
+
+  expect(screen.getByText(TEAMS_REMOVAL_NOTICE)).toBeTruthy();
+  expect(
+    screen.getByRole('button', { name: /Video conferencing/ }).textContent
+  ).toContain('No meeting link');
+  expect((save as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.submit(save.closest('form')!);
+  expect(onSubmit).not.toHaveBeenCalled();
+
+  await user.click(screen.getByRole('button', { name: 'Undo' }));
+
+  expect(screen.queryByText(TEAMS_REMOVAL_NOTICE)).toBeNull();
+  expect(
+    screen.getByRole('button', { name: /Video conferencing/ }).textContent
+  ).toContain('Microsoft Teams');
+  expect((save as HTMLButtonElement).disabled).toBe(false);
+  await user.click(save);
+  expect(onSubmit).toHaveBeenCalledTimes(1);
+});
+
+it('Replace event… hands the form’s unsaved edits to the host instead of saving', async () => {
+  const user = userEvent.setup();
+  const onSubmit = vi.fn();
+  const onReplace = vi.fn();
+  showMeetingEdit(OUTLOOK_CALENDAR, { onSubmit, onReplace });
+
+  await user.type(screen.getByRole('textbox', { name: 'Title' }), ' moved');
+  await turnOffMeeting(user);
+  await user.click(screen.getByRole('button', { name: 'Replace event…' }));
+
+  expect(onReplace).toHaveBeenCalledWith(
+    expect.objectContaining({
+      title: 'Customer demo moved',
+      conferenceChoice: 'none',
+    }),
+    undefined
+  );
+  expect(onSubmit).not.toHaveBeenCalled();
+});
+
+it('keeps Teams locked where the host cannot replace the event', () => {
+  showMeetingEdit(OUTLOOK_CALENDAR);
+
+  expect(
+    (
+      screen.getByRole('button', {
+        name: /Video conferencing/,
+      }) as HTMLButtonElement
+    ).disabled
+  ).toBe(true);
+});
+
+it('removing Google Meet stays an ordinary save with no notice', async () => {
+  const user = userEvent.setup();
+  const onSubmit = vi.fn();
+  showMeetingEdit(MEET_CALENDAR, { onSubmit, onReplace: vi.fn() });
+
+  await turnOffMeeting(user);
+
+  expect(screen.queryByText(TEAMS_REMOVAL_NOTICE)).toBeNull();
+  await user.click(screen.getByRole('button', { name: 'Save' }));
+  expect(onSubmit).toHaveBeenCalledWith(
+    expect.objectContaining({ conference: 'none' }),
+    undefined
+  );
+});

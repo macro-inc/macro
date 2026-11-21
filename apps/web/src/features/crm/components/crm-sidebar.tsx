@@ -189,6 +189,7 @@ export function CrmSidebar(props: {
             </ViewSidebar.Item>
             <ViewSidebar.Item
               active={props.active === 'settings'}
+              aria-label={t('crm.settingsLabel')}
               onClick={props.onSettings}
             >
               <ViewSidebar.Icon>

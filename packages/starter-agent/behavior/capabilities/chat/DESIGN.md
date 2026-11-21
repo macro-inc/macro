@@ -18,8 +18,21 @@ owner, and it needs nothing but `MACRO_API_KEY`: sending, reading, the relevance
 
 ## From a message to a reply
 
+0. **Hear** (`macro.ts`, `incoming`). One live event stream. Macro doesn't replay a gap in it
+   for long, so the stream keeps a cursor in `state/run/chat/stream-cursor.json`: the last event
+   received, and an instant no later than the oldest message received but not yet recorded (the
+   listener says when it has recorded one), so a restart with a backlog reads it again. After a
+   restart it resumes from that event (the events service replays a short window, in one
+   process), and every time the stream opens after a gap it also reads, from a minute before the
+   cursor and at most a day back, the channels with activity since, each root's replies
+   included. A cursor that can't be read reads the whole day. A catch-up waits a random 0–5 s first, so agents restarted together don't all read at once, and skips a root deleted in the gap. It skips only what the agent can't read (a 403 or 404: a channel, thread or message); any other failure, such as a backend still coming back, fails the pass, which is tried again from the channel that failed; a channel that fails 5 times is given up on and counted (`chat.catch_up.failed`), so it can't hold the cursor. Caught-up mentions and DMs up to a day old are answered like new ones (a shorter reply window is a follow-up). The cursor and the reply queue live in `state/run`, outside git, while history is in git-tracked `state/private`: a rollback rewinds history but not the cursor, so a message answered within the minute before the cursor can be judged, and answered, again. Bounds: 50 channels, DMs first,
+   then the most recently active; 200 roots per channel, the newest kept, since a channel that
+   busy is read for context more than for replies. A cap hit is counted on the
+   `agent.chat.catch_up` span. A message seen twice is delivered once, and one already in
+   history is not judged again. Caught-up messages are sorted within a channel only, and arrive
+   after live ones that came in meanwhile, so history can hold a thread slightly out of order.
 1. **Listen** (`events/handlers/chat.ts`). Every message in a channel the agent is in is recorded
-   in its history (`state/private/chat/history`, never committed), then judged. Its own posts and
+   in its history (`state/private/chat/history`, committed with the agent's private state), then judged. Its own posts and
    bots' are ignored. A DM or an @mention is always for it, without asking anyone. Anything else
    goes to the relevance screen.
 2. **Screen** (`screen.ts`). Yes/no questions put to Macro's cheap decision model, with the

@@ -35,6 +35,10 @@ const ActivityRouteView = lazyNamed(
   () => import('@app/features/activity/route-views'),
   'ActivityRouteView'
 );
+const NewHomeRouteView = lazyNamed(
+  () => import('@app/features/new-home/route-views'),
+  'NewHomeRouteView'
+);
 const NotificationsRouteView = lazyNamed(
   () => import('@app/features/notifications-inbox/route-views'),
   'NotificationsRouteView'
@@ -278,6 +282,13 @@ registerComponent(
   'home',
   () => <HomeRouteView />,
   () => composableLayout(true)
+);
+// New Home's rail item and `g h`: it sends the split on to Recent or
+// Notifications, so it takes the shell they draw on desktop.
+registerComponent(
+  'new-home',
+  () => <NewHomeRouteView />,
+  () => composableLayout()
 );
 registerComponent(NOT_FOUND_ROUTE_ID, () => <NotFound />);
 registerComponent('recent', () => <RecentRouteView />);
