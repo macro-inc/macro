@@ -51,6 +51,8 @@ const postMessage = uncurry(MessagePort.prototype.postMessage);
 const mapGet = uncurry(Map.prototype.get);
 const mapSet = uncurry(Map.prototype.set);
 const mapDelete = uncurry(Map.prototype.delete);
+const mapForEach = uncurry(Map.prototype.forEach);
+const mapClear = uncurry(Map.prototype.clear);
 // Each search is heavy for the search cluster's few threads, so a program that
 // fans searches out makes every other user's search wait behind it. Four at once
 // still lets a program with dozens of searches finish inside its deadline.
@@ -174,11 +176,21 @@ try {
   const {port1: fetcher, port2} = new NativeMessageChannel();
   // The worker takes its first message as the run's settings and ignores any
   // later one, and this is posted before the program loads.
-  new NativeWorker(new URL("./fetcher.mjs", import.meta.url), {type: "module"}).postMessage({
+  const sender = new NativeWorker(new URL("./fetcher.mjs", import.meta.url), {type: "module"});
+  sender.postMessage({
     port: port2, hosts: context.hosts, operations: operations ?? [], dryRun,
     traceHeaders: context.traceHeaders ?? {}, forwarder: context.forwarder ?? {},
   }, [port2]);
   const pending = new Map();
+  // A worker that fails fails every fetch, waiting or later, instead of
+  // leaving them unanswered.
+  let senderFailed;
+  sender.onerror = (event) => {
+    event.preventDefault();
+    senderFailed = {name: "TypeError", message: `fetch is unavailable: ${event.message}`};
+    mapForEach(pending, (settle) => settle({error: senderFailed}));
+    mapClear(pending);
+  };
   let nextRequest = 0;
   // `data` is the event's own property, which no prototype rewrite reaches.
   fetcher.onmessage = ({data}) => {
@@ -211,6 +223,7 @@ try {
     if (init !== null && typeof init === "object" && typeof init.priority === "string") options.priority = init.priority;
     // Read whole, so the request keeps its length, as a direct fetch sends it.
     const body = requestBody(request) === null ? null : await requestArrayBuffer(request);
+    if (senderFailed !== undefined) throw failure(senderFailed);
     const id = nextRequest++;
     const answer = await new NativePromise((resolve, reject) => {
       mapSet(pending, id, resolve);
