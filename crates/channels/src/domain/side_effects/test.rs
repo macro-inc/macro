@@ -1,4 +1,5 @@
 mod answered;
+mod interactions;
 mod mention_fallback;
 
 use super::*;
@@ -124,6 +125,7 @@ impl ChannelNotificationSender for FakeNotifications {
 #[derive(Clone, Default)]
 struct FakeContacts {
     users: Arc<Mutex<Vec<HashSet<MacroUserIdStr<'static>>>>>,
+    interactions: Arc<Mutex<Vec<Interactions>>>,
 }
 
 impl ChannelContactsDispatcher for FakeContacts {
@@ -134,6 +136,18 @@ impl ChannelContactsDispatcher for FakeContacts {
         users: HashSet<MacroUserIdStr<'static>>,
     ) -> Result<(), Self::Err> {
         self.users.lock().unwrap().push(users);
+        Ok(())
+    }
+
+    async fn record_interactions(
+        &self,
+        users: Vec<MacroUserIdStr<'static>>,
+        peers: Vec<MacroUserIdStr<'static>>,
+    ) -> Result<(), Self::Err> {
+        self.interactions
+            .lock()
+            .unwrap()
+            .push(Interactions { users, peers });
         Ok(())
     }
 }

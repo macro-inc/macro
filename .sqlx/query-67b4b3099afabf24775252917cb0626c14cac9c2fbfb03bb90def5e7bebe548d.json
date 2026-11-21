@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- One page of listed contacts after $1, found by skipping through the\n-- contact index one contact at a time, each with their `interacted` rows\n-- when no account matches them (by id or address). Invited and inbox\n-- contacts may be addresses without an account, so only `interacted` rows\n-- count.\nWITH RECURSIVE contacts (id) AS (\n    (\n        SELECT m.contact_user_id\n        FROM contact_list_members m\n        WHERE m.contact_user_id > $1\n        ORDER BY m.contact_user_id\n        LIMIT 1\n    )\n    UNION ALL\n    SELECT (\n        SELECT m.contact_user_id\n        FROM contact_list_members m\n        WHERE m.contact_user_id > contacts.id\n        ORDER BY m.contact_user_id\n        LIMIT 1\n    )\n    FROM contacts\n    WHERE contacts.id IS NOT NULL\n),\npage AS (\n    SELECT id FROM contacts WHERE id IS NOT NULL LIMIT $2\n)\nSELECT\n    page.id AS \"id!\",\n    CASE\n        WHEN EXISTS (SELECT 1 FROM \"User\" u WHERE u.id = page.id COLLATE \"default\")\n          OR EXISTS (SELECT 1 FROM \"User\" u WHERE lower(u.email) = substr(page.id, 7) COLLATE \"default\")\n        THEN NULL\n        ELSE (\n            SELECT count(*)\n            FROM contact_list_members m\n            WHERE m.contact_user_id = page.id AND m.list_key = $3\n        )\n    END AS orphaned_rows\nFROM page\nORDER BY page.id\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "orphaned_rows",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "67b4b3099afabf24775252917cb0626c14cac9c2fbfb03bb90def5e7bebe548d"
+}

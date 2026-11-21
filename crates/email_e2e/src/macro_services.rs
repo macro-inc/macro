@@ -38,7 +38,7 @@ const FORWARD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 /// The largest request body the stand-ins read.
 const BODY_LIMIT: usize = 32 * 1024 * 1024;
 /// The PostHog flag that turns the Outlook import live pass on, as
-/// `email_service::mailbox_sync_worker::LIVE_IMPORT_PASS_FLAG` names it.
+/// `email_service::outlook_flags::LIVE_IMPORT_PASS_FLAG` names it.
 const LIVE_IMPORT_PASS_FLAG: &str = "enable-outlook-import-live-pass";
 
 /// A request one of the email services made to another Macro service.

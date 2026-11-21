@@ -528,24 +528,18 @@ export function ProjectsCollection(props: {
     else collection.setPriority(selected ? id : '');
   };
   const filterControl = () => (
-    <div class="relative shrink-0">
-      <ListFilterDropdown
-        grouped
-        size="icon-md"
-        label="Filter projects"
-        groups={filters()}
-        open={openMenu() === 'filters'}
-        onOpenChange={(open) => setOpenMenu(open ? 'filters' : undefined)}
-        isSelected={isFilterSelected}
-        onSelectionChange={selectFilter}
-        onClear={clearFilters}
-      />
-      <Show when={activeCount()}>
-        <span class="pointer-events-none absolute -top-0.5 right-0 z-10 flex size-4 translate-x-1/2 not-touch:top-0.5 not-touch:right-0.5 not-touch:size-3.5 not-touch:translate-x-0 items-center justify-center rounded-full bg-accent text-xxs font-medium leading-none text-surface">
-          {activeCount()}
-        </span>
-      </Show>
-    </div>
+    <ListFilterDropdown
+      grouped
+      size={activeCount() ? 'md' : 'icon-md'}
+      label="Filter projects"
+      activeCount={activeCount()}
+      groups={filters()}
+      open={openMenu() === 'filters'}
+      onOpenChange={(open) => setOpenMenu(open ? 'filters' : undefined)}
+      isSelected={isFilterSelected}
+      onSelectionChange={selectFilter}
+      onClear={clearFilters}
+    />
   );
   const dueDateControl = () => (
     <Dropdown>

@@ -18,7 +18,11 @@ import {
 import { useSyncedCalendarEvent } from '@app/features/calendar/hooks/use-synced-calendar-event';
 import type { CalendarEvent } from '@app/features/calendar/types';
 import { viewerReplacesGuests } from '@app/features/calendar/utils/event-guest-editing';
-import { EventReplacementAction } from '@app/features/calendar/views/event-replacement';
+import { useCalendarPreferences } from '@app/features/calendar/utils/preferences';
+import {
+  EventReplacement,
+  useEventReplacement,
+} from '@app/features/calendar/views/event-replacement';
 import { EventForwardInvitationAction } from '@app/features/calendar-view/components/EventGuests';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
@@ -93,6 +97,7 @@ function EventComposerContent(
   const close = () => panel.handle.close();
   const guestInvitesEnabled = useCalendarGuestInvitesFlag();
   const invitationForwardEnabled = useCalendarInvitationForwardFlag();
+  const [preferences] = useCalendarPreferences();
   const editor = useEventEditor({
     event: () => props.event,
     macroCallsEnabled,
@@ -107,6 +112,17 @@ function EventComposerContent(
     },
   });
   const isEdit = () => props.event !== undefined;
+  // Only the organizer of an Outlook event replaces it; Teams stays locked
+  // for everyone else.
+  const replaceable = () => {
+    const event = props.event;
+    return (
+      event?.calendar.provider === 'outlook' &&
+      !event.isCancelled &&
+      viewerReplacesGuests(event)
+    );
+  };
+  const replacement = useEventReplacement(() => props.event?.eventId);
 
   const initialValues =
     editor.initialValues() ??
@@ -183,45 +199,32 @@ function EventComposerContent(
         guestPolicyEditable={editor.guestPolicyEditable()}
         detailsReadOnlyReason={editor.detailsReadOnlyReason()}
         showRecurringEditNotice={editor.showRecurringEditNotice()}
+        timeFormat={preferences.timeFormat}
         pending={editor.pending()}
         onCalendarChange={props.onCalendarChange}
         onDirtyChange={props.onDirtyChange}
         onCancel={close}
         onSubmit={editor.save}
-      />
-      <Show
-        when={
-          props.event?.calendar.provider === 'outlook' &&
-          props.event &&
-          !props.event.isCancelled &&
-          viewerReplacesGuests(props.event)
-            ? props.event
+        onReplace={
+          replaceable()
+            ? (values, scope) => {
+                const request = editor.replacementRequest(values, scope);
+                if (request)
+                  fireAndForget(
+                    replacement.start(request),
+                    'calendar-replacement'
+                  );
+              }
             : undefined
         }
-      >
-        {(event) => (
-          <EventReplacementAction
-            target={{
-              eventId: event().eventId,
-              calendarId: event().calendarId,
-              recurrenceId: event().recurrenceId,
-            }}
-            hasConference={
-              event().conferenceUrl !== undefined &&
-              event().conferenceProvider !== undefined
-            }
-            recurring={
-              event().recurrenceLines.length > 0 ||
-              event().recurrenceId !== undefined
-            }
-            disabled={controller.isDirty() || editor.pending()}
-            onDone={() => {
-              props.onSaveSuccess?.();
-              close();
-            }}
-          />
-        )}
-      </Show>
+      />
+      <EventReplacement
+        controller={replacement}
+        onDone={() => {
+          props.onSaveSuccess?.();
+          close();
+        }}
+      />
     </div>
   );
 }

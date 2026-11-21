@@ -1,4 +1,4 @@
-import type { WithCustomUserInput } from '@core/user';
+import { recipientEntityMapper, type WithCustomUserInput } from '@core/user';
 import {
   cleanup,
   fireEvent,
@@ -158,5 +158,45 @@ describe('RecipientSelector scrolling', () => {
     setEmails(['a@example.com', 'b@example.com']);
     await nextFrame();
     expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' });
+  });
+});
+
+describe('RecipientSelector when full', () => {
+  it('takes no typing and opens no suggestions, but Backspace still removes the chip', async () => {
+    const user = userEvent.setup();
+    const [selected, setSelected] = createSignal<WithCustomUserInput[]>([
+      {
+        kind: 'custom',
+        id: 'qa@example.com',
+        data: { id: 'qa@example.com', email: 'qa@example.com', invalid: false },
+      },
+    ]);
+    render(() => (
+      <RecipientSelector
+        options={() => [
+          recipientEntityMapper('user')({
+            id: 'macro|ana@example.com',
+            email: 'ana@example.com',
+            name: 'Ana',
+          }),
+        ]}
+        selectedOptions={selected()}
+        setSelectedOptions={setSelected}
+        full={selected().length > 0}
+      />
+    ));
+    const input = screen.getByRole<HTMLInputElement>('combobox');
+
+    await user.click(input);
+    await user.keyboard('ana');
+    expect(input.value).toBe('');
+    expect(screen.queryByRole('listbox')).toBeNull();
+
+    await user.keyboard('{Backspace}');
+    expect(selected()).toEqual([]);
+
+    await user.keyboard('ana');
+    expect(input.value).toBe('ana');
+    expect(await screen.findByRole('listbox')).toBeTruthy();
   });
 });

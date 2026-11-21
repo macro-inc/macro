@@ -9,6 +9,7 @@ import calendarPrompt from './en/calendar-prompt';
 import calls from './en/calls';
 import channelComposer from './en/channel-composer';
 import channelLabels from './en/channel-labels';
+import channelNotificationStacks from './en/channel-notification-stacks';
 import channelSections from './en/channel-sections';
 import commandMenu from './en/command-menu';
 import commands from './en/commands';
@@ -63,6 +64,7 @@ export default {
   calls,
   channelComposer,
   channelLabels,
+  channelNotificationStacks,
   channelSections,
   commandMenu,
   commands,

@@ -318,6 +318,11 @@ export type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   allowCustomRecipients?: boolean;
   /** Show each person's address beside their name on chips, as email does. */
   showChipAddresses?: boolean;
+  /**
+   * Takes no more recipients: chips can still be removed, with their X or
+   * Backspace, but the field takes no typing and opens no suggestions.
+   */
+  full?: boolean;
 } & (
   | {
       /** Explicit scoped options, such as team participants or agents. */
@@ -372,12 +377,13 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     createSignal(Boolean(props.focusOnMount));
 
   const setComboboxOpen = (next: boolean) => {
-    if (next && suppressOpenUntilInputChange()) return;
+    if (next && (suppressOpenUntilInputChange() || props.full)) return;
     setIsOpen(next);
   };
 
   const hasValidCustomEmail = () => {
-    const input = inputValue();
+    // Trimmed as commitEmails trims, so a padded address still counts.
+    const input = inputValue().trim();
     if (!input || !EmailValidator.validate(input)) return false;
     return true;
   };
@@ -807,7 +813,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
         noResetInputOnBlur={props.noResetInputOnBlur}
         shouldFocusWrap
         placeholder={
-          props.selectedOptions?.length === 0 || isMobile()
+          !props.full && (props.selectedOptions?.length === 0 || isMobile())
             ? (props.placeholder ?? placeholderText())
             : undefined
         }
@@ -981,6 +987,9 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                   <Combobox.Input
                     id={props.inputId}
                     disabled={disabled()}
+                    // Read-only rather than disabled: Backspace still removes
+                    // the last chip.
+                    readOnly={props.full}
                     ref={(el) => {
                       setInputRef(el);
                       props.inputRef?.(el);
@@ -1059,7 +1068,19 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                         return;
                       }
 
-                      if (e.key === 'Tab' && context.isOpen()) {
+                      // Tab accepts the highlighted row or a complete typed
+                      // address, as Enter would. With neither (no match, or
+                      // results still loading) it moves focus on, so the
+                      // field never keeps focus on Tab.
+                      const focusedKey = list.selectionManager().focusedKey();
+                      const hasHighlightedRow =
+                        focusedKey !== undefined &&
+                        list.collection().getItem(focusedKey) !== undefined;
+                      if (
+                        e.key === 'Tab' &&
+                        context.isOpen() &&
+                        (hasHighlightedRow || hasValidCustomEmail())
+                      ) {
                         e.preventDefault();
                         e.stopPropagation();
                         inputRef()?.dispatchEvent(

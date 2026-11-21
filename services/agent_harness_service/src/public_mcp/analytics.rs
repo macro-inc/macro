@@ -94,6 +94,15 @@ pub enum ToolCallOutcome {
 }
 
 impl ToolCallOutcome {
+    /// Stable lowercase label for spans.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Success => "success",
+            Self::InvalidRequest => "invalid_request",
+            Self::ToolError => "tool_error",
+        }
+    }
+
     /// PostHog's `$mcp_error_type` bucket. Tool errors carry no reliable
     /// cause, so they leave the bucket unset rather than guess one.
     fn error_type(self) -> Option<&'static str> {

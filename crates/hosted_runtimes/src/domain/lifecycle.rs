@@ -354,13 +354,13 @@ enum SignOfLife {
 }
 
 impl ComputerState {
-    /// The purchase context to parent work under while first setup is running.
-    /// Completed or untimed setups return `None`; their work links instead.
+    /// The purchase context to parent work under during the first start,
+    /// including handing an agent teammate over until it reports online.
+    /// Later work returns `None` and links instead.
     pub fn setup_traceparent(&self) -> Option<&str> {
-        self.setup
-            .as_ref()
-            .filter(|setup| !setup.complete())
-            .and(self.provision_traceparent.as_deref())
+        self.provision_traceparent
+            .as_deref()
+            .filter(|_| self.first_start())
     }
 
     /// Whether the computer is still on its first start: setup hasn't
@@ -743,6 +743,9 @@ pub fn transition(
                 });
             }
         }
+
+        // Only timed: see `SetupTimeline::advance_agent`.
+        Event::AgentDelivered => {}
 
         Event::AgentRedeliver => {
             if state.awaiting_agent

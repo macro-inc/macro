@@ -83,6 +83,33 @@ describe('MacroEvents', () => {
     ]);
   });
 
+  test('listen() skips the stream heartbeats a newer server sends', async () => {
+    const delivered = Promise.withResolvers<string>();
+    const errors: unknown[] = [];
+    const onError = (error: unknown) => errors.push(error);
+    process.on('unhandledRejection', onError);
+    globalThis.fetch = (async (_input) =>
+      new Response(`event: heartbeat\ndata: {}\n\n${sseBody(created)}`, {
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' },
+      })) as typeof fetch;
+
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { storage: 'https://storage.example.test' },
+    });
+    macro.events.on('document.created', (event) => {
+      delivered.resolve(event.event_type);
+    });
+    const stop = await macro.events.listen();
+    const eventType = await delivered.promise;
+    stop();
+    process.off('unhandledRejection', onError);
+
+    expect(eventType).toBe('document.created');
+    expect(errors).toEqual([]);
+  });
+
   test('listen() sends explicit filters and scope', async () => {
     const seen = Promise.withResolvers<Request>();
     globalThis.fetch = (async (input) => {
