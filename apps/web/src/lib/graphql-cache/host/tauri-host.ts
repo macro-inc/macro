@@ -324,8 +324,11 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         deadline.timedOut ? 'timeout' : 'error'
       );
       // Older binaries lack the abandon command; the read then runs as before.
-      if (deadline.timedOut && requestId)
+      // The native read span records whether it gave up its wait.
+      if (deadline.timedOut && requestId) {
+        span.setAttr('graphql_cache.ipc.abandoned', true);
         void invoke(ABANDON_COMMAND, { requestId }).catch(() => undefined);
+      }
       span.error(
         deadline.timedOut
           ? 'Native cache request timed out'
