@@ -20,13 +20,13 @@ impl rmcp::ServerHandler for Refusing {
     async fn call_tool(
         &self,
         _: CallToolRequestParams,
-        context: RequestContext<RoleServer>,
+        _: RequestContext<RoleServer>,
     ) -> Result<CallToolResponse, ErrorData> {
         Err(ErrorData::invalid_params(
             "invalid value: the caller's own words",
             Some(serde_json::json!({"query": "the caller's own words"})),
         ))
-        .inspect_err(|error| log_error_response(McpMethod::CallTool, &context.id, error))
+        .inspect_err(|error| log_error_response(McpMethod::CallTool, error))
     }
 }
 
@@ -103,7 +103,7 @@ fn error_responses_are_logged_without_their_data_and_rmcps_own_log_is_the_droppe
                             .header("accept", "application/json, text/event-stream")
                             .body(Body::from(
                                 serde_json::json!({
-                                    "jsonrpc": "2.0", "id": 7, "method": "tools/call",
+                                    "jsonrpc": "2.0", "id": "the caller's own words, as an id", "method": "tools/call",
                                     "params": {"name": "anything", "arguments": {}},
                                 })
                                 .to_string(),

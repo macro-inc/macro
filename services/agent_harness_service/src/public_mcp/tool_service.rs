@@ -359,7 +359,7 @@ where
         context: rmcp::service::RequestContext<rmcp::RoleServer>,
     ) -> Result<InitializeResult, rmcp::ErrorData> {
         let user_id = Self::authenticated_user_id(&context.extensions)
-            .inspect_err(|error| log_error_response(McpMethod::Initialize, &context.id, error))?;
+            .inspect_err(|error| log_error_response(McpMethod::Initialize, error))?;
         // `initialize` is the only message that names the client, so it is
         // where sessions are counted per client.
         self.analytics.record(
@@ -401,13 +401,12 @@ where
         request: CustomRequest,
         context: rmcp::service::RequestContext<rmcp::RoleServer>,
     ) -> Result<CustomResult, rmcp::ErrorData> {
-        let id = context.id.clone();
         self.custom_request(request, context)
             .await
             .inspect_err(|error| {
                 // How that request normally goes, not a failure.
                 if !events::is_confirm_step(error) {
-                    log_error_response(McpMethod::Custom, &id, error);
+                    log_error_response(McpMethod::Custom, error);
                 }
             })
     }
@@ -417,10 +416,9 @@ where
         request: Option<PaginatedRequestParams>,
         context: rmcp::service::RequestContext<rmcp::RoleServer>,
     ) -> Result<ListToolsResult, rmcp::ErrorData> {
-        let id = context.id.clone();
         self.tool_list(request, context)
             .await
-            .inspect_err(|error| log_error_response(McpMethod::ListTools, &id, error))
+            .inspect_err(|error| log_error_response(McpMethod::ListTools, error))
     }
 
     async fn call_tool(
@@ -428,10 +426,9 @@ where
         request: rmcp::model::CallToolRequestParams,
         context: rmcp::service::RequestContext<rmcp::RoleServer>,
     ) -> Result<rmcp::model::CallToolResponse, rmcp::ErrorData> {
-        let id = context.id.clone();
         self.tool_call(request, context)
             .await
-            .inspect_err(|error| log_error_response(McpMethod::CallTool, &id, error))
+            .inspect_err(|error| log_error_response(McpMethod::CallTool, error))
     }
 }
 

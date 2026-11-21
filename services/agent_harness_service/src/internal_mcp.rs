@@ -213,11 +213,10 @@ impl ServerHandler for InternalTools {
             agent_session_id = tracing::field::Empty,
         );
         genai_telemetry::propagation::set_parent_from_mcp(&span, &context.meta);
-        let id = context.id.clone();
         self.run_tool(request, context)
             .instrument(span)
             .await
-            .inspect_err(|error| log_error_response(McpMethod::CallTool, &id, error))
+            .inspect_err(|error| log_error_response(McpMethod::CallTool, error))
     }
 }
 

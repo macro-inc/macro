@@ -14,7 +14,6 @@ mod test;
 
 use macro_entrypoint::DroppedCallsite;
 use rmcp::ErrorData;
-use rmcp::model::RequestId;
 
 /// The rmcp 3.9.0 log statements dropped from every sink of this process. A
 /// different rmcp version matches neither, so they are logged again until
@@ -56,9 +55,10 @@ pub(crate) enum McpMethod {
     CallTool,
 }
 
-/// Logs an error response by the request's method and the error's code. The
+/// Logs an error response by the request's method and the error's code only:
+/// not its message or data, nor the request id, which a client chooses. The
 /// caller still receives the message and data.
-pub(crate) fn log_error_response(method: McpMethod, id: &RequestId, error: &ErrorData) {
+pub(crate) fn log_error_response(method: McpMethod, error: &ErrorData) {
     let method: &'static str = method.into();
-    tracing::warn!(%id, method, code = error.code.0, "response error");
+    tracing::warn!(method, code = error.code.0, "response error");
 }
