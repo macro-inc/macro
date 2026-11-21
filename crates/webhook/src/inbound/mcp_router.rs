@@ -108,10 +108,6 @@ impl From<McpSubscriptionError> for McpRouterError {
                 StatusCode::BAD_REQUEST,
                 McpSubscriptionErrorBody::InvalidParams { message },
             ),
-            McpSubscriptionError::FilterRequired => (
-                StatusCode::UNPROCESSABLE_ENTITY,
-                McpSubscriptionErrorBody::FilterRequired,
-            ),
             McpSubscriptionError::NotFound => {
                 (StatusCode::NOT_FOUND, McpSubscriptionErrorBody::NotFound)
             }

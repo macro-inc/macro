@@ -246,10 +246,10 @@ pub struct McpSubscribeRequest {
     pub arguments: serde_json::Value,
     /// Callback URL.
     pub endpoint_url: String,
-    /// The compiled filter, when the caller compiled one. A refresh of a
-    /// stored subscription may omit it, and the stored filter is kept.
-    #[cfg_attr(feature = "inbound", schema(value_type = Option<Object>))]
-    pub filter: Option<McpEventFilter>,
+    /// The filter delivery evaluates. The caller derives it from the
+    /// arguments, so a refresh sends the same one.
+    #[cfg_attr(feature = "inbound", schema(value_type = Object))]
+    pub filter: McpEventFilter,
     /// The new `whsec_` signing secret in plaintext, to sign the endpoint
     /// challenge.
     #[cfg_attr(feature = "inbound", schema(value_type = String))]
@@ -318,8 +318,6 @@ pub enum McpSubscriptionErrorBody {
         /// What is wrong.
         message: String,
     },
-    /// A new subscription needs a compiled filter.
-    FilterRequired,
     /// No subscription has this key.
     NotFound,
     /// The user holds the most subscriptions allowed.

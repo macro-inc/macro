@@ -223,9 +223,6 @@ pub enum McpSubscriptionError {
     /// The request is invalid.
     #[error("{0}")]
     InvalidParams(String),
-    /// No stored subscription to keep the filter of, and none was supplied.
-    #[error("a filter is required for a new subscription")]
-    FilterRequired,
     /// No subscription has this key.
     #[error("no subscription matches")]
     NotFound,

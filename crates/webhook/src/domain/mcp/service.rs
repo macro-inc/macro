@@ -97,16 +97,10 @@ where
             .get(&key.user_id, &subscription_id)
             .await
             .map_err(McpSubscriptionError::internal)?;
-        let refreshed = existing.as_ref().is_some_and(|row| row.is_live(now));
+        let refreshed = existing.is_some_and(|row| row.is_live(now));
         span.record("refreshed", refreshed);
 
-        // The filter is a pure function of the arguments, so a refresh keeps
-        // the one already compiled for them.
-        let filter = match (request.filter, existing) {
-            (Some(filter), _) => filter,
-            (None, Some(existing)) => existing.filter,
-            (None, None) => return Err(McpSubscriptionError::FilterRequired),
-        };
+        let filter = request.filter;
         filter
             .validate()
             .map_err(|error| McpSubscriptionError::InvalidParams(error.to_string()))?;

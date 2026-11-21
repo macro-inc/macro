@@ -303,7 +303,7 @@ fn mentions_of_me_in_channels() -> McpEventFilter {
     }
 }
 
-fn request(query: &str, filter: Option<McpEventFilter>) -> McpSubscribeRequest {
+fn request(query: &str, filter: McpEventFilter) -> McpSubscribeRequest {
     McpSubscribeRequest {
         event_type: "macro.events".to_owned(),
         arguments: serde_json::json!({ "query": query }),
@@ -329,19 +329,15 @@ async fn subscribe_verifies_once_and_refresh_keeps_the_filter() {
     let service = service(&repo, &endpoint);
 
     let first = service
-        .subscribe(
-            user(ME),
-            request("mentions", Some(mentions_of_me_in_channels())),
-        )
+        .subscribe(user(ME), request("mentions", mentions_of_me_in_channels()))
         .await
         .expect("subscribed");
     assert!(first.refresh_before > Utc::now());
     assert_eq!(endpoint.verify_count(), 1);
 
-    // A refresh sends no filter, so nothing is compiled again, and the
-    // endpoint is not challenged again.
+    // A refresh does not challenge the endpoint again.
     let refreshed = service
-        .subscribe(user(ME), request("mentions", None))
+        .subscribe(user(ME), request("mentions", mentions_of_me_in_channels()))
         .await
         .expect("refreshed");
     assert_eq!(refreshed.id, first.id);
@@ -351,23 +347,12 @@ async fn subscribe_verifies_once_and_refresh_keeps_the_filter() {
 }
 
 #[tokio::test]
-async fn a_new_subscription_needs_a_filter() {
-    let repo = FakeRepo::default();
-    let endpoint = FakeEndpoint::accepting();
-    let result = service(&repo, &endpoint)
-        .subscribe(user(ME), request("mentions", None))
-        .await;
-    assert!(matches!(result, Err(McpSubscriptionError::FilterRequired)));
-    assert_eq!(endpoint.verify_count(), 0);
-}
-
-#[tokio::test]
 async fn an_invalid_filter_is_refused_before_the_endpoint_is_called() {
     let repo = FakeRepo::default();
     let endpoint = FakeEndpoint::accepting();
     let filter = McpEventFilter::for_events(vec!["email.received".to_owned()], None);
     let result = service(&repo, &endpoint)
-        .subscribe(user(ME), request("email", Some(filter)))
+        .subscribe(user(ME), request("email", filter))
         .await;
     assert!(matches!(
         result,
@@ -386,10 +371,7 @@ async fn a_failed_challenge_stores_nothing() {
         ..FakeEndpoint::accepting()
     };
     let result = service(&repo, &endpoint)
-        .subscribe(
-            user(ME),
-            request("mentions", Some(mentions_of_me_in_channels())),
-        )
+        .subscribe(user(ME), request("mentions", mentions_of_me_in_channels()))
         .await;
     assert!(matches!(
         result,
@@ -405,7 +387,7 @@ async fn verification_is_per_user() {
     let repo = FakeRepo::default();
     let endpoint = FakeEndpoint::accepting();
     let service = service(&repo, &endpoint);
-    let filter = Some(mentions_of_me_in_channels());
+    let filter = mentions_of_me_in_channels();
     service
         .subscribe(user(ME), request("mentions", filter.clone()))
         .await
@@ -423,7 +405,7 @@ async fn the_quota_counts_live_subscriptions_only() {
     let repo = FakeRepo::default();
     let endpoint = FakeEndpoint::accepting();
     let service = service(&repo, &endpoint);
-    let filter = Some(mentions_of_me_in_channels());
+    let filter = mentions_of_me_in_channels();
     for index in 0..MAX_SUBSCRIPTIONS_PER_USER {
         service
             .subscribe(user(ME), request(&format!("q{index}"), filter.clone()))
@@ -439,7 +421,7 @@ async fn the_quota_counts_live_subscriptions_only() {
     ));
     // Refreshing one already held is not a new subscription.
     service
-        .subscribe(user(ME), request("q0", None))
+        .subscribe(user(ME), request("q0", filter.clone()))
         .await
         .expect("refresh at the quota");
 
@@ -458,10 +440,7 @@ async fn unsubscribe_removes_by_key() {
     let endpoint = FakeEndpoint::accepting();
     let service = service(&repo, &endpoint);
     let made = service
-        .subscribe(
-            user(ME),
-            request("mentions", Some(mentions_of_me_in_channels())),
-        )
+        .subscribe(user(ME), request("mentions", mentions_of_me_in_channels()))
         .await
         .expect("subscribed");
     let key = McpSubscriptionKey {
@@ -513,16 +492,13 @@ async fn fan_out_reaches_matching_subscribers_in_the_audience_only() {
     let endpoint = FakeEndpoint::accepting();
     let subscriptions = service(&repo, &endpoint);
     subscriptions
-        .subscribe(
-            user(ME),
-            request("mentions", Some(mentions_of_me_in_channels())),
-        )
+        .subscribe(user(ME), request("mentions", mentions_of_me_in_channels()))
         .await
         .expect("subscribed");
     subscriptions
         .subscribe(
             user(OTHER),
-            request("mentions", Some(mentions_of_me_in_channels())),
+            request("mentions", mentions_of_me_in_channels()),
         )
         .await
         .expect("subscribed");
@@ -567,10 +543,7 @@ async fn oversized_arguments_and_filters_are_refused() {
 
     let long_query = "x".repeat(MAX_ARGUMENTS_BYTES);
     let refused = service
-        .subscribe(
-            user(ME),
-            request(&long_query, Some(mentions_of_me_in_channels())),
-        )
+        .subscribe(user(ME), request(&long_query, mentions_of_me_in_channels()))
         .await;
     assert!(matches!(
         refused,
@@ -591,9 +564,7 @@ async fn oversized_arguments_and_filters_are_refused() {
         any_of: (0..8).map(clause).collect(),
     };
     assert_eq!(large.validate(), Err(McpFilterError::TooLarge));
-    let refused = service
-        .subscribe(user(ME), request("ids", Some(large)))
-        .await;
+    let refused = service.subscribe(user(ME), request("ids", large)).await;
     assert!(matches!(
         refused,
         Err(McpSubscriptionError::InvalidParams(_))
@@ -611,10 +582,7 @@ async fn a_large_audience_is_matched_in_bounded_chunks() {
     let repo = FakeRepo::default();
     let endpoint = FakeEndpoint::accepting();
     service(&repo, &endpoint)
-        .subscribe(
-            user(ME),
-            request("mentions", Some(mentions_of_me_in_channels())),
-        )
+        .subscribe(user(ME), request("mentions", mentions_of_me_in_channels()))
         .await
         .expect("subscribed");
     let queue = FakeQueue::default();
@@ -658,10 +626,7 @@ async fn the_sweeper_deletes_expired_rows_in_bounded_rounds() {
         }
     }
     subscriptions
-        .subscribe(
-            user(ME),
-            request("live", Some(mentions_of_me_in_channels())),
-        )
+        .subscribe(user(ME), request("live", mentions_of_me_in_channels()))
         .await
         .expect("subscribed");
 
@@ -678,10 +643,7 @@ async fn the_sweeper_deletes_expired_rows_in_bounded_rounds() {
 
 async fn subscribed(repo: &FakeRepo) -> McpEventSubscription {
     service(repo, &FakeEndpoint::accepting())
-        .subscribe(
-            user(ME),
-            request("mentions", Some(mentions_of_me_in_channels())),
-        )
+        .subscribe(user(ME), request("mentions", mentions_of_me_in_channels()))
         .await
         .expect("subscribed");
     repo.rows().remove(0)

@@ -1,5 +1,4 @@
 use super::*;
-use crate::domain::mcp::filter::McpEventFilter;
 use crate::domain::mcp::models::{McpEndpointFailure, McpSubscriptionId, McpSubscriptionKey};
 use axum::body::{Body, to_bytes};
 use axum::http::Request;
@@ -95,10 +94,7 @@ impl McpEventSubscriptionService for FakeService {
         request: McpSubscribeRequest,
     ) -> Result<McpSubscribeResult, McpSubscriptionError> {
         self.take_error()?;
-        let filter = request
-            .filter
-            .clone()
-            .unwrap_or_else(|| McpEventFilter::for_events(vec!["message.posted".to_owned()], None));
+        let filter = request.filter.clone();
         self.calls
             .lock()
             .expect("lock")
@@ -277,11 +273,6 @@ async fn a_malformed_secret_is_refused() {
 #[tokio::test]
 async fn errors_carry_their_code() {
     for (error, status, expected) in [
-        (
-            McpSubscriptionError::FilterRequired,
-            StatusCode::UNPROCESSABLE_ENTITY,
-            json!({ "code": "filter_required" }),
-        ),
         (
             McpSubscriptionError::NotFound,
             StatusCode::NOT_FOUND,

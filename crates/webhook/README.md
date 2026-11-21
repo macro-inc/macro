@@ -397,8 +397,9 @@ encrypts the secret before calling it.
   names, optional parent ids (the webhook `ids` semantics) and an AND of
   conditions on whitelisted message fields (`parent_type`, `parent_id`,
   `actor`, `mentioned_type`, `mentioned_id`), where a value is literal text or
-  `me` (the subscriber). It is compiled once, at subscribe time, and evaluated
-  deterministically at delivery; a request that does not fit is refused,
+  `me` (the subscriber). The MCP server compiles it from words, shows it to the
+  caller and stores only the filter the caller confirms, which delivery
+  evaluates deterministically; a request that does not fit is refused,
   never approximated. `stream_groups` splits it for the live stream, which
   applies `ids` itself but does not report an event's parent id: one stream per
   distinct `ids`, matched without them.
@@ -424,8 +425,9 @@ encrypts the secret before calling it.
 - **Internal calls.** `inbound/mcp_router.rs`, nested under `/internal` in
   `document_storage_service`: `PUT /mcp/event_subscriptions` and
   `POST /mcp/event_subscriptions/unsubscribe`, internal key plus acting user.
-  A subscribe without a filter refreshes a live row; for a new key it answers
-  `422 filter_required`, and the MCP server compiles one and retries.
+  Every subscribe carries its filter, which the MCP server derives from the
+  arguments (a `macro.events` filter is one the caller confirmed and sent
+  back), so a refresh sends the same one.
 - **Rolling deploys.** A worker from before this change acknowledges an MCP
   queue message as malformed and deletes it. Rows are created only through the
   internal subscribe call, whose one caller is the MCP server, so roll this
