@@ -226,6 +226,8 @@ struct PreparedHydrate {
     request: HydrateRequest,
     projections: Vec<ProjectionMutation>,
     wal_position: Option<WalPosition>,
+    /// The identity the cache was bound to when the projections were read.
+    bound_identity: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -572,9 +574,13 @@ impl CacheState {
         let Some(observed) = identity else {
             return Ok(true);
         };
-        let result = self.engine_mut()?.current_identity().await;
-        let bound = self.engine_result(result)?;
+        let bound = self.bound_identity().await?;
         Ok(bound.as_deref().is_none_or(|bound| bound == observed))
+    }
+
+    async fn bound_identity(&mut self) -> Result<Option<String>, JsValue> {
+        let result = self.engine_mut()?.current_identity().await;
+        self.engine_result(result)
     }
 
     /// Where the WAL ends, or `None` when it can't be read, which makes a
@@ -644,11 +650,13 @@ impl CacheState {
         request: HydrateRequest,
     ) -> Result<PreparedHydrate, JsValue> {
         let wal_position = self.wal_position();
+        let bound_identity = self.bound_identity().await?;
         let projections = self.hydrate_projections(&request).await?;
         Ok(PreparedHydrate {
             request,
             projections,
             wal_position,
+            bound_identity,
         })
     }
 
@@ -664,7 +672,18 @@ impl CacheState {
             request,
             mut projections,
             wal_position,
+            bound_identity,
         } = prepared;
+        // A write that bound the cache to another identity than this
+        // hydrate's wiped what it was read against, and would have wiped it
+        // had the hydrate run first. Writing it now would undo that write or
+        // file its data under the new identity, so it is dropped.
+        let bound_now = self.bound_identity().await?;
+        if bound_now != bound_identity && bound_now.as_deref() != request.identity.as_deref() {
+            return Err(err_js(
+                "the cache was rebound since the hydrate was prepared",
+            ));
+        }
         let projections_reread = wal_position.is_none() || self.wal_position() != wal_position;
         if projections_reread {
             projections = self.hydrate_projections(&request).await?;
@@ -1990,7 +2009,8 @@ impl CacheEngine {
     /// two the host may run requests that only read. A write in between makes
     /// the commit read the projections again; a clear, an external reset, an
     /// authority transition, a physical reset or a close drops the kept
-    /// hydrate, and the commit then rejects.
+    /// hydrate, and the commit then rejects. So does a write in between that
+    /// bound the cache to an identity other than the hydrate's.
     #[wasm_bindgen(js_name = prepareHydrate)]
     pub fn prepare_hydrate(
         &self,

@@ -3102,26 +3102,103 @@ async fn a_failed_prepare_leaves_nothing_to_commit() {
     close_and_destroy(&engine, SCOPE).await;
 }
 
+/// `hydrated_state` without the revisions, which count the dropped
+/// hydrate's write in the order it is compared with.
+async fn stored_state(engine: &CacheEngine) -> serde_json::Value {
+    let mut state = hydrated_state(engine).await;
+    state.as_object_mut().unwrap().remove("revision");
+    if let Some(owned) = state["owned"].as_object_mut() {
+        owned.remove("revision");
+    }
+    state
+}
+
+fn write_soup_as(engine: &CacheEngine, document_id: &str, identity: &str) -> js_sys::Promise {
+    engine.write_query(
+        write_context(None),
+        QUERY.into(),
+        Some("Soup".into()),
+        js(variables()),
+        js(soup_data(document_id)),
+        Some(identity.into()),
+    )
+}
+
 #[wasm_bindgen_test(async)]
 async fn a_clear_between_prepare_and_commit_drops_the_prepared_hydrate() {
     const SCOPE: &str = "cache-wasm-prepared-hydrate-cleared";
+    // The response predates the clear: run first, the clear would have
+    // removed it, so the split one must leave what that order leaves.
+    let engine = fresh_engine(SCOPE).await;
+    resolved(write_soup(&engine, "doc-before-clear")).await;
+    resolved(hydrate_backfill(&engine)).await;
+    resolved(engine.clear()).await;
+    let expected = stored_state(&engine).await;
+    close_and_destroy(&engine, SCOPE).await;
+
     let engine = fresh_engine(SCOPE).await;
     resolved(write_soup(&engine, "doc-before-clear")).await;
     resolved(prepare_backfill(&engine)).await;
     resolved(engine.clear()).await;
-    // The response predates the clear: writing it would bring back what the
-    // clear removed.
     assert!(JsFuture::from(engine.commit_hydrate()).await.is_err());
-    let backfill: serde_json::Value = from_js(
-        resolved(engine.read_query(
-            None,
-            SOUP_BACKFILL_WITH_PROJECTION_QUERY.into(),
-            Some("SoupBackfill".into()),
-            backfill_variables(),
-            JsValue::UNDEFINED,
-        ))
-        .await,
+    assert_eq!(stored_state(&engine).await, expected);
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_write_that_rebinds_the_cache_between_prepare_and_commit_drops_the_hydrate() {
+    const SCOPE: &str = "cache-wasm-prepared-hydrate-rebound";
+    // Run first, the hydrate would have been wiped by the rebind; run after
+    // it, it would bind the cache back to its own identity and wipe the
+    // rebinding write. The split one must leave what the first order leaves.
+    let engine = fresh_engine(SCOPE).await;
+    resolved(write_soup(&engine, "doc-before-rebind")).await;
+    resolved(hydrate_backfill(&engine)).await;
+    let rebound: serde_json::Value =
+        from_js(resolved(write_soup_as(&engine, "doc-of-user-2", "user-2")).await);
+    assert_eq!(rebound["reset"], true);
+    let expected = stored_state(&engine).await;
+    close_and_destroy(&engine, SCOPE).await;
+
+    let engine = fresh_engine(SCOPE).await;
+    resolved(write_soup(&engine, "doc-before-rebind")).await;
+    resolved(prepare_backfill(&engine)).await;
+    resolved(write_soup_as(&engine, "doc-of-user-2", "user-2")).await;
+    let error = JsFuture::from(engine.commit_hydrate())
+        .await
+        .expect_err("the hydrate was read against another identity");
+    assert_eq!(
+        js_sys::Reflect::get(&error, &"message".into())
+            .unwrap()
+            .as_string()
+            .unwrap(),
+        "the cache was rebound since the hydrate was prepared"
     );
-    assert_eq!(backfill["kind"], "miss");
+    let identity: Option<String> = from_js(resolved(engine.bound_identity()).await);
+    assert_eq!(identity.as_deref(), Some("user-2"));
+    assert_eq!(stored_state(&engine).await, expected);
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_write_that_rebinds_the_cache_to_the_hydrates_identity_keeps_the_hydrate() {
+    const SCOPE: &str = "cache-wasm-prepared-hydrate-rebound-to-own";
+    // The hydrate rebinds the cache to user-1 whichever order it runs in.
+    let engine = fresh_engine(SCOPE).await;
+    resolved(write_soup_as(&engine, "doc-of-user-2", "user-2")).await;
+    resolved(write_soup(&engine, "doc-of-user-1")).await;
+    let whole: serde_json::Value = from_js(resolved(hydrate_backfill(&engine)).await);
+    let expected = hydrated_state(&engine).await;
+    close_and_destroy(&engine, SCOPE).await;
+
+    let engine = fresh_engine(SCOPE).await;
+    resolved(write_soup_as(&engine, "doc-of-user-2", "user-2")).await;
+    resolved(prepare_backfill(&engine)).await;
+    resolved(write_soup(&engine, "doc-of-user-1")).await;
+    let mut split: serde_json::Value = from_js(resolved(engine.commit_hydrate()).await);
+    assert_eq!(split["projectionsReread"], true);
+    split.as_object_mut().unwrap().remove("projectionsReread");
+    assert_eq!(split, whole);
+    assert_eq!(hydrated_state(&engine).await, expected);
     close_and_destroy(&engine, SCOPE).await;
 }
