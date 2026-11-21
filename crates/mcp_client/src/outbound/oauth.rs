@@ -217,7 +217,7 @@ where
         let auth_url = auth_manager.get_authorization_url(&scope_refs).await?;
         // The server picks this page and the web app opens it in a tab of its
         // own origin: refuse it before anything is saved unless it is https.
-        vet_authorization_url(&auth_url)?;
+        vet_authorization_url(&auth_url, self.http.policy())?;
         let csrf_token = extract_state_param(&auth_url)?;
 
         let pkce_state = in_memory_state

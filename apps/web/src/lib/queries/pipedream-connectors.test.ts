@@ -460,6 +460,20 @@ describe('apps Macro Connect serves', () => {
     expect(mocks.setData).toHaveBeenCalled();
   });
 
+  it('fails at once when Connect hands back a page the tab must not open', async () => {
+    mocks.assignUrl.mockReturnValue(false);
+
+    const pending = connectPipedreamApp({ appSlug: 'linear' });
+    const outcome = pending.then(
+      () => 'resolved',
+      () => 'rejected'
+    );
+    await vi.runAllTimersAsync();
+
+    expect(await outcome).toBe('rejected');
+    expect(mocks.completeConnect).not.toHaveBeenCalled();
+  });
+
   it('reports closed when the tab closes before Connect has the app', async () => {
     mocks.completeConnect.mockImplementation(async () => {
       popup.closed = true;

@@ -670,7 +670,9 @@ async function connectThroughMacroConnect(
   span: Span
 ): Promise<PipedreamConnectOutcome> {
   const userId = currentUserId();
-  assignOauthUrl(popup, connectUrl);
+  if (!assignOauthUrl(popup, connectUrl)) {
+    throw new Error('Macro Connect returned a page that is not https');
+  }
   return span.span('macro_connect.consent', async () => {
     const deadline = Date.now() + MACRO_CONNECT_TIMEOUT_MS;
     while (Date.now() < deadline && currentUserId() === userId) {

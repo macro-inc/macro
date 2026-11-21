@@ -204,3 +204,23 @@ async fn deleting_without_a_hook_does_not_read_the_record() {
     assert!(store.records.lock().unwrap().is_empty());
     assert_eq!(store.loads.load(std::sync::atomic::Ordering::SeqCst), 0);
 }
+
+#[test]
+fn a_refused_sign_in_page_is_a_bad_request() {
+    let error = start_auth_error(anyhow::Error::new(UnsafeAuthorizationUrl::Scheme(
+        "javascript".to_owned(),
+    )));
+
+    assert!(matches!(error, McpHandlerErr::OAuthRejected(_)));
+    assert_eq!(error.into_response().status(), StatusCode::BAD_REQUEST);
+}
+
+#[test]
+fn other_start_failures_stay_internal() {
+    let error = start_auth_error(anyhow::anyhow!("metadata discovery failed"));
+
+    assert_eq!(
+        error.into_response().status(),
+        StatusCode::INTERNAL_SERVER_ERROR
+    );
+}

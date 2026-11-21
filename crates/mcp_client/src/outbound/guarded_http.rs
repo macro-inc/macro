@@ -49,6 +49,11 @@ impl McpHttp {
             oauth: GuardedOAuthHttpClient::new(policy)?,
         })
     }
+
+    /// The addresses these clients may reach.
+    pub fn policy(&self) -> AddressPolicy {
+        self.policy
+    }
 }
 
 impl McpServerHttp for McpHttp {

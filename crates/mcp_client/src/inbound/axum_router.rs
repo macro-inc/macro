@@ -498,6 +498,14 @@ where
         (status = 500, body = ErrorResponse),
     )
 )]
+/// A refused sign-in page is the provider's fault (400); anything else is ours.
+fn start_auth_error(error: anyhow::Error) -> McpHandlerErr {
+    match error.downcast::<UnsafeAuthorizationUrl>() {
+        Ok(unsafe_url) => McpHandlerErr::OAuthRejected(unsafe_url.to_string()),
+        Err(error) => McpHandlerErr::Internal(error),
+    }
+}
+
 /// Start the OAuth authorization flow for an MCP server.
 #[tracing::instrument(skip_all, err)]
 pub async fn start_auth<S, O, Auth>(
@@ -515,10 +523,7 @@ where
         .oauth
         .start_authorization(&user.macro_user_id, &body.server_url, &body.server_name)
         .await
-        .map_err(|error| match error.downcast::<UnsafeAuthorizationUrl>() {
-            Ok(unsafe_url) => McpHandlerErr::OAuthRejected(unsafe_url.to_string()),
-            Err(error) => McpHandlerErr::Internal(error),
-        })?;
+        .map_err(start_auth_error)?;
 
     Ok(Json(StartAuthResponse { authorization_url }))
 }
