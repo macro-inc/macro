@@ -1394,6 +1394,76 @@ async fn a_drafting_session_retried_drafts_from_the_same_work() {
     assert_eq!(h.reports()[0].retries, 1);
 }
 
+/// Picks and the suggestions session finish; drafting never does.
+fn drafts_hang(prompt: &str, _: usize) -> Turn {
+    if prompt.contains(" drafts ") {
+        Turn::Hangs
+    } else {
+        ends(RoutineActionStatus::Succeeded, 1)
+    }
+}
+
+/// An onboarding that finds the work and is stopped while it drafts is
+/// cancelled, so it runs again, not kept as the picks alone.
+#[tokio::test(start_paused = true)]
+async fn an_onboarding_stopped_while_drafting_is_cancelled_not_partial() {
+    let h = build_finding(true, true, drafts_hang, Some(true), Some(Finding::Found(6)));
+    assert_eq!(
+        h.service
+            .start(&user(), GenerationTrigger::Onboarding, chrono_tz::UTC)
+            .await
+            .unwrap(),
+        StartOutcome::Started
+    );
+    tokio::time::sleep(Duration::from_secs(60)).await;
+    let finished = h
+        .repo
+        .sessions()
+        .into_iter()
+        .filter(|session| session.ending == Some(SessionEnding::Finished))
+        .count();
+    assert_eq!(finished, 2, "the picks and suggestions sessions finished");
+    h.shutdown.cancel();
+    h.service.wait().await;
+    assert_eq!(h.repo.only().status, GenerationStatus::Cancelled);
+    assert_eq!(h.reports()[0].outcome, "cancelled");
+}
+
+/// Without the finding step, a stop after a session finished keeps what
+/// the others did, as before.
+#[tokio::test(start_paused = true)]
+async fn without_the_finding_step_a_stop_after_one_finished_is_partial() {
+    let h = harness(true, true, |prompt, _| {
+        if prompt.starts_with("routines") {
+            Turn::Hangs
+        } else {
+            ends(RoutineActionStatus::Succeeded, 1)
+        }
+    });
+    assert_eq!(
+        h.service
+            .start(&user(), GenerationTrigger::Onboarding, chrono_tz::UTC)
+            .await
+            .unwrap(),
+        StartOutcome::Started
+    );
+    tokio::time::sleep(Duration::from_secs(60)).await;
+    h.shutdown.cancel();
+    h.service.wait().await;
+    assert_eq!(h.repo.only().status, GenerationStatus::Partial);
+}
+
+/// An onboarding whose heartbeat is lost while it drafts stays interrupted,
+/// and its report says so rather than partial.
+#[tokio::test(start_paused = true)]
+async fn an_onboarding_that_loses_its_heartbeat_while_drafting_reports_interrupted() {
+    let h = build_finding(true, true, drafts_hang, Some(true), Some(Finding::Found(6)));
+    h.repo.lose_heartbeat.store(true, Ordering::SeqCst);
+    h.onboard().await.unwrap();
+    assert_eq!(h.repo.only().status, GenerationStatus::Interrupted);
+    assert_eq!(h.reports()[0].outcome, "interrupted");
+}
+
 /// Onboarding cut short (its process stopped, or its heartbeat did) starts
 /// again as the next attempt, with a new id, up to the last attempt.
 #[tokio::test(start_paused = true)]

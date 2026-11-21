@@ -94,7 +94,8 @@ scheduling runtime.
 
 - Generation (`generation.rs`): `generating` → `ready` (every session
   finished) | `partial` (some finished, or something changed) | `failed`
-  (nothing) | `cancelled` (its process stopped it before any finished) |
+  (nothing) | `cancelled` (its process stopped it before any finished, or,
+  in an onboarding that finds the work, cut a routines session short) |
   `interrupted` (heartbeat lost). All but `generating` are final; `cancelled`
   and `interrupted` are retryable. `admit` decides a start from whether one
   runs and the latest of the same trigger: each trigger has its own window

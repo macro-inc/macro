@@ -799,11 +799,18 @@ where
             .iter()
             .chain(routines.iter().map(|group| &group.ended))
             .collect();
-        let results: Vec<SessionResult> = ended
+        // An onboarding that finds the work drafts long after it picks: a
+        // stop that cuts a routines session short runs the generation again
+        // rather than keeping only what came first.
+        let must_finish = run.trigger == GenerationTrigger::Onboarding && run.find_work;
+        let results: Vec<SessionResult> = suggestions
             .iter()
-            .map(|ended| SessionResult {
+            .map(|ended| (ended, false))
+            .chain(routines.iter().map(|group| (&group.ended, must_finish)))
+            .map(|(ended, must_finish)| SessionResult {
                 finished: ended.ending == SessionEnding::Finished,
                 changed: ended.work.any(),
+                cut_short: must_finish && ended.ending == SessionEnding::Cancelled,
             })
             .collect();
         let event = conclude(&results, shutdown.is_cancelled());
@@ -837,7 +844,8 @@ where
             tracing::warn!(?error, "could not record a week's routine suggestions");
         }
         if run.routines {
-            self.report_routines(&run, &routines, &shutdown).await;
+            self.report_routines(&run, &routines, &shutdown, event, lost.is_cancelled())
+                .await;
         }
         // A nightly run cut short is due again at once, for its next attempt.
         if run.trigger == GenerationTrigger::Nightly
@@ -900,9 +908,17 @@ where
         run: &Run,
         routines: &[GroupEnded],
         shutdown: &CancellationToken,
+        event: GenerationEvent,
+        lost: bool,
     ) {
         let suggested: u32 = routines.iter().map(|group| group.ended.work.count()).sum();
-        let outcome = if shutdown.is_cancelled() && suggested == 0 {
+        // A generation that runs again is reported as stopped, never as
+        // partial: the sweep marked a lost one interrupted.
+        let outcome = if lost {
+            "interrupted"
+        } else if event == GenerationEvent::ProcessStopped
+            || (shutdown.is_cancelled() && suggested == 0)
+        {
             "cancelled"
         } else if routines.iter().all(|group| group.ended.work.any()) {
             "ready"

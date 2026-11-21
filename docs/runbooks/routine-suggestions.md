@@ -41,8 +41,10 @@ In the log event, `ready` means every routines session kept a suggestion,
 `partial` that some did not (only when a layout splits the surfaces across
 sessions, or the picking and drafting sessions of an onboarding that finds the
 work, where a drafting session whose streams the catalog already covers rightly
-keeps none), `failed` that none did (after a retry at onboarding), and
-`cancelled` that the process shut down first. A nightly run that finds
+keeps none), `failed` that none did (after a retry at onboarding),
+`cancelled` that the process shut down first (or, for an onboarding that
+finds the work, while a routines session was still running), and
+`interrupted` that its heartbeat was lost. A nightly run that finds
 nothing missing is `failed` by this measure, so the generation metrics and
 the alert below count onboarding runs only.
 
