@@ -438,6 +438,6 @@ async fn every_documented_example_type_checks() {
             );
         }
     }
-    assert_eq!(examples, 9);
+    assert_eq!(examples, 10);
     service.shutdown().await;
 }

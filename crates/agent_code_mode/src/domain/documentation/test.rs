@@ -334,7 +334,7 @@ fn inline_guides_carry_every_area_but_the_search_guide() {
         };
         assert_eq!(
             direct.contains(guide),
-            !["search", "agentSessions", "tasks"].contains(&doc.name.as_str()),
+            !["search", "agentSessions", "properties", "tasks"].contains(&doc.name.as_str()),
             "{}",
             doc.name
         );
@@ -621,4 +621,25 @@ fn a_short_unknown_symbol_is_near_only_one_edit_away() {
     assert_eq!(read.suggestions.len(), 1);
     assert_eq!(read.suggestions[0].symbol, "Tasks");
     assert_eq!(read.suggestions[0].did_you_mean[0], "Task");
+}
+
+#[test]
+fn a_class_index_names_the_methods_it_inherits() {
+    let tasks = sdk_documentation()
+        .iter()
+        .find(|doc| doc.name == "tasks")
+        .and_then(|doc| doc.index.as_deref())
+        .expect("tasks has an index");
+    // A turn that loads only tasks can still set a custom field.
+    assert!(tasks.contains("Inherited from `Document`: "), "{tasks}");
+    assert!(tasks.contains("`Task.setProperty`"), "{tasks}");
+    assert!(symbol_reference("Task.setProperty").is_some());
+}
+
+#[test]
+fn the_properties_guide_shows_a_typed_custom_field_on_a_task() {
+    let guide = entity_guide("properties").expect("properties has a guide");
+    assert!(guide.contains("dataType: {type: 'number'}"));
+    assert!(guide.contains("task.setProperty(hours, {type: 'number', value: 3.5})"));
+    assert!(guide.contains("pass `scope: 'team'` only when the user asks"));
 }

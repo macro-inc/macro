@@ -191,7 +191,7 @@ pub enum GuideHost {
 
 /// Entities whose guidance is about calling the SDK, which direct-tool hosts
 /// cannot do; those hosts keep their own tool guidance for them.
-const SDK_ONLY_GUIDES: [&str; 2] = ["agentSessions", "tasks"];
+const SDK_ONLY_GUIDES: [&str; 3] = ["agentSessions", "properties", "tasks"];
 
 /// Every area's guidance as one prompt section, for prompts that do not route
 /// entities per turn. The search guide stays a `DescribeCodeTools` topic, as

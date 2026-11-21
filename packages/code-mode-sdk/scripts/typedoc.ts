@@ -195,6 +195,7 @@ export function packageEntityDocs(
       .replace(/`([^`]+)`\.`\1\.([^`]+)`/g, '`$1.$2`');
 
   const symbols: Record<string, string> = {};
+  const abstractClasses = new Set<string>();
   for (const path of [...documented].sort()) {
     const symbol = symbolOf.get(path) ?? '';
     const markdown = relink(path, pages.get(path) ?? '');
@@ -206,6 +207,7 @@ export function packageEntityDocs(
       continue;
     }
     const { header, methods } = splitClass(markdown);
+    if (markdown.startsWith('# Abstract Class')) abstractClasses.add(symbol);
     const guide = guideByPage.get(path);
     symbols[symbol] = guide
       ? `${header}\n\n${GUIDE_HEADING}\n\n${guide}`
@@ -237,7 +239,8 @@ export function packageEntityDocs(
           symbol: symbolOf.get(path) ?? '',
           markdown: relink(path, pages.get(path) ?? ''),
         })),
-        accessors
+        accessors,
+        abstractClasses
       ),
     })),
     symbols,
@@ -350,7 +353,8 @@ function entityIndex(
   name: string,
   description: string,
   pages: { path: string; symbol: string; markdown: string }[],
-  accessors: ReadonlyMap<string, string>
+  accessors: ReadonlyMap<string, string>,
+  abstractClasses: ReadonlySet<string>
 ) {
   const lines = [
     `## ${name}`,
@@ -384,6 +388,18 @@ function entityIndex(
       return result ? `${match[1]}(): ${result}` : match[1];
     });
     if (fields.length) lines.push(`Fields: ${fields.join(', ')}`);
+    // A class built on another entity's concrete class (`Task` on
+    // `Document`) names what it inherits, read under its own name, so a turn
+    // that loads only this entity still finds `Task.setProperty`. The
+    // abstract bases every handle shares are left to their own index.
+    const inherited =
+      parent && !abstractClasses.has(parent)
+        ? methods
+            .filter((method) => method.inherited)
+            .map((method) => `\`${symbol}.${method.name}\``)
+        : [];
+    if (inherited.length)
+      lines.push(`Inherited from \`${parent}\`: ${inherited.join(', ')}`);
     for (const method of methods.filter((method) => !method.inherited)) {
       const signature = method.markdown.match(/^> (.+)$/m)?.[1] ?? '';
       const about = summary(method.markdown);
