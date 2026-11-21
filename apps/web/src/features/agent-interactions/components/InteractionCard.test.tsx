@@ -126,7 +126,9 @@ describe('InteractionCard', () => {
       <InteractionCard request={formQuestion} controller={value} />
     ));
     const card = within(view.getByRole('region', { name: 'Agent question' }));
-    const submit = card.getByRole('button', { name: 'Submit' }) as HTMLButtonElement;
+    const submit = card.getByRole('button', {
+      name: 'Submit',
+    }) as HTMLButtonElement;
     expect(submit.disabled).toBe(true);
     fireEvent.click(submit);
     expect(respond).not.toHaveBeenCalled();
