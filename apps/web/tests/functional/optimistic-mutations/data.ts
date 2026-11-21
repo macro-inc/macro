@@ -38,6 +38,35 @@ export const tagSets: TagSetResponse[] = [
   },
 ];
 
+// The same tag sets as the GraphQL `user.tagSets` field returns them.
+export const graphqlTagSets = tagSets.map(({ scope, definition, options }) => ({
+  scope: scope.toUpperCase(),
+  definition: definition && {
+    id: definition.id,
+    owner: { scope: 'USER', principalId: 'functional-viewer' },
+    displayName: definition.displayName,
+    dataType: definition.dataType,
+    isMultiSelect: definition.isMultiSelect,
+    specificEntityType: null,
+    isSystem: definition.isSystem,
+    isMetadata: definition.isMetadata,
+    createdAt: '2026-10-01T00:00:00Z',
+    updatedAt: '2026-10-01T00:00:00Z',
+  },
+  options: options.map((option) => ({
+    id: option.id,
+    propertyDefinitionId: option.propertyDefinitionId,
+    displayOrder: option.displayOrder,
+    value: {
+      __typename: 'GraphqlStringPropertyOptionValue',
+      value: option.value.value,
+    },
+    color: null,
+    createdAt: '2026-10-01T00:00:00Z',
+    updatedAt: '2026-10-01T00:00:00Z',
+  })),
+}));
+
 export function tagAssignment(optionIds: string[]): SoupPropertyFieldsFragment {
   return {
     id: ASSIGNMENT_ID,
