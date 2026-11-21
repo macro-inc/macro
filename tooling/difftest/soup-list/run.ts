@@ -19,7 +19,7 @@ import { Coverage, Rng } from './lib/rng';
 import { emptyCallerResult, runCallerLane, runOneShots } from './lib/suite-callers';
 import { emptyFuzzResult, runFuzzLane } from './lib/suite-fuzz';
 import { emptySeqResult, openTruthPage, runSequenceLane, setAaControl, type SeqResult } from './lib/suite-seq';
-import { buildWorld, linkPullRequests, type UserKey, USER_KEYS, type World } from './lib/world';
+import { buildWorld, linkPullRequests, setupRetries, type UserKey, USER_KEYS, type World } from './lib/world';
 
 const { values: a } = parseArgs({
   options: {
@@ -300,6 +300,7 @@ try {
   out.coverage = coverage.toJSON();
   (out.meta as Record<string, unknown>).finishedAt = new Date().toISOString();
   (out.meta as Record<string, unknown>).seconds = Math.round((Date.now() - started) / 1000);
+  (out.meta as Record<string, unknown>).setupRetries = setupRetries;
   await Bun.write(a.out as string, JSON.stringify(out, null, 1));
   log(`wrote ${a.out}`);
   await closeBrowser();

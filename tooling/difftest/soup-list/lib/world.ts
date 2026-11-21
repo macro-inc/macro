@@ -3,7 +3,7 @@
  * the services' own APIs (and SQL only for GitHub pull requests, which only a
  * GitHub sync creates, and for exact timestamp ties).
  */
-import { ApiUser } from './api';
+import { ApiError, ApiUser } from './api';
 import { oddName } from './names';
 import { pool } from './pool';
 import { Coverage, Rng } from './rng';
@@ -13,6 +13,26 @@ import { lit, sql } from './sql';
 // snapshot, which asks the sync service; four worlds at 24 each timed the sync
 // service out on a loaded machine and failed the build.
 const CREATE_CONCURRENCY = 8;
+
+/** Setup creates that failed on a service hop (DSS to lexical or sync) and were retried. */
+export const setupRetries: Record<string, number> = {};
+
+/**
+ * Retries a world-building write that failed because a backend hop timed out
+ * or ran out of sockets on a loaded machine (DSS answers 500 "error sending
+ * request"). Only world building uses it: a sequence step that fails is a
+ * result, not something to retry.
+ */
+async function setupWrite<T>(what: string, write: () => Promise<T>, attempt = 0): Promise<T> {
+  try {
+    return await write();
+  } catch (error) {
+    if (attempt >= 5 || !(error instanceof ApiError) || error.status !== 500 || !/error sending request/.test(error.message)) throw error;
+    setupRetries[what] = (setupRetries[what] ?? 0) + 1;
+    await Bun.sleep(1000 * 2 ** attempt);
+    return setupWrite(what, write, attempt + 1);
+  }
+}
 
 export type UserKey = 'owner' | 'member' | 'outsider' | 'empty' | 'boundary';
 export const USER_KEYS: UserKey[] = ['owner', 'member', 'outsider', 'empty', 'boundary'];
@@ -179,12 +199,14 @@ export async function buildWorld(args: {
     switch (job.kind) {
       case 'md':
         id = (
-          await user.post<{ documentId: string }>('/dss/documents/create_markdown', {
-            documentName: docName,
-            markdown: `synthetic ${index}`,
-            skipHistory: true,
-            ...(projectId && { projectId }),
-          })
+          await setupWrite('create_markdown', () =>
+            user.post<{ documentId: string }>('/dss/documents/create_markdown', {
+              documentName: docName,
+              markdown: `synthetic ${index}`,
+              skipHistory: true,
+              ...(projectId && { projectId }),
+            })
+          )
         ).documentId;
         break;
       case 'task':
@@ -223,7 +245,7 @@ export async function buildWorld(args: {
 
   // Permissions across the owner's documents.
   const ownerDocs = docs.filter((d) => d.owner === 'owner');
-  await pool(ownerDocs, CREATE_CONCURRENCY, async (doc) => {
+  await pool(ownerDocs, 24, async (doc) => {
     const access = rng.weighted<Access>([
       [40, 'private'],
       [22, 'team'],
