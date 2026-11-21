@@ -340,6 +340,8 @@ describe('channel directory reconciliation', () => {
       .fn()
       .mockResolvedValueOnce(final)
       .mockRejectedValueOnce(new Error('network'))
+      .mockResolvedValueOnce({ nextCursor: null, entityIds: [] })
+      // The look after the delete.
       .mockResolvedValueOnce({ nextCursor: null, entityIds: [] });
     const fetchPage = await createChannelDirectoryBackfillFetcher(
       'viewer',
@@ -463,6 +465,74 @@ describe('channel directory reconciliation', () => {
     expect(byIdReads).toBe(2);
   });
 
+  it('reads a deleted channel once more, writing back one the viewer was added back to as it was deleted', async () => {
+    const { cache, host } = reconcileHost(['removed', 'readded']);
+    const asked: string[][] = [];
+    let readable: string[] = [];
+    const fetch = vi.fn(async (input: GraphqlSoupInput): Promise<Page> => {
+      const filter = input.initial?.filters?.channelFilter;
+      if (!filter) return { nextCursor: null, entityIds: [] };
+      const ids = [...JSON.stringify(filter).matchAll(/"channelId":"([^"]+)"/g)]
+        .map(([, id]) => id)
+        .filter((id): id is string => id !== undefined);
+      asked.push(ids.map(channelName).sort());
+      // Hydration writes what the read returns.
+      const entityIds = ids.filter((id) => readable.includes(id));
+      for (const id of entityIds)
+        cache.put(recordWithId(id), { sourceHash: `${id}-back` });
+      return { nextCursor: null, entityIds };
+    });
+    host.deleteRecords.mockImplementationOnce(async (keys) => {
+      // The viewer is added back after the check, and the update lands just
+      // before the delete takes it out.
+      readable = [channelUuid('readded')];
+      for (const key of keys) cache.records.delete(key);
+      return { revision: INITIAL_CACHE_REVISION, affectedOps: [] };
+    });
+    const fetchPage = await createChannelDirectoryBackfillFetcher(
+      'viewer',
+      host,
+      fetch
+    );
+
+    await fetchPage(FIRST);
+
+    // To decide both, then the look after their delete.
+    expect(asked).toEqual([
+      ['readded', 'removed'],
+      ['readded', 'removed'],
+    ]);
+    expect(
+      cache.records.has(`GraphqlSoupChannel:${channelUuid('readded')}`)
+    ).toBe(true);
+    expect(
+      cache.records.has(`GraphqlSoupChannel:${channelUuid('removed')}`)
+    ).toBe(false);
+  });
+
+  it('keeps the pass when only the second look at a deleted channel fails', async () => {
+    const { host } = reconcileHost(['removed']);
+    let byIdReads = 0;
+    const fetch = vi.fn(async (input: GraphqlSoupInput): Promise<Page> => {
+      if (!input.initial?.filters?.channelFilter)
+        return { nextCursor: null, entityIds: [] };
+      byIdReads += 1;
+      // The second look reaches its limit short of the ids it named: no
+      // evidence.
+      if (byIdReads > 1) return { nextCursor: 'more', entityIds: [] };
+      return { nextCursor: null, entityIds: [] };
+    });
+    const fetchPage = await createChannelDirectoryBackfillFetcher(
+      'viewer',
+      host,
+      fetch
+    );
+
+    await expect(fetchPage(FIRST)).resolves.toMatchObject({ nextCursor: null });
+    expect(byIdReads).toBe(2);
+    expect(deleted(host)).toEqual(['GraphqlSoupChannel:removed']);
+  });
+
   it('fails the last page when a channel keeps changing under its by-id reads', async () => {
     const { cache, host } = reconcileHost(['busy']);
     let byIdReads = 0;
@@ -558,8 +628,9 @@ describe('channel directory reconciliation', () => {
     );
     await runPass(fetchPage, [FIRST, SECOND, SECOND, THIRD]);
 
-    // Only the removed channel is read by id: the first page was kept.
-    expect(namedInReads(fetch)).toEqual(['removed']);
+    // Only the removed channel is read by id, the first page was kept: to
+    // decide, and once more after its delete.
+    expect(namedInReads(fetch)).toEqual(['removed', 'removed']);
     expect(deleted(host)).toEqual(['GraphqlSoupChannel:removed']);
   });
 });

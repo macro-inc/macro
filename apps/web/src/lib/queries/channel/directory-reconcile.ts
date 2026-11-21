@@ -194,8 +194,10 @@ async function cachedHashes(
  * A by-id read that found a channel gone is as of the moment it answered. A
  * record the cache rewrote since (the viewer was added back, and the update
  * landed before the delete) is read again instead of deleted. The check and
- * the delete are separate cache calls, so a write that lands between them is
- * still deleted; it comes back with the channel's next update or lane pass.
+ * the delete are separate cache calls, so a write can land between them and
+ * be deleted too: every deleted channel is read once more after its delete,
+ * with the next round's reads, and one the viewer can read again is written
+ * back by that read.
  */
 async function removeUnreadableChannels(
   input: Reconciliation
@@ -203,33 +205,55 @@ async function removeUnreadableChannels(
   return Telemetry.span('channel_directory.reconcile', async (span) => {
     span.setAttr('channel_directory.candidates', input.candidates.length);
     let pending = input.candidates;
+    // Deleted in the last round, and not read since.
+    let deleted: string[] = [];
     let removed = 0;
+    let restored = 0;
     let round = 0;
     const finish = (outcome: ReconcileOutcome) => {
       span.setAttr('channel_directory.removed', removed);
+      span.setAttr('channel_directory.restored', restored);
       span.setAttr('channel_directory.reconcile_rounds', round);
       span.setAttr('channel_directory.reconcile_outcome', outcome);
       return outcome;
     };
-    while (pending.length > 0) {
-      if (round === VERIFY_ROUNDS) return finish('unsettled');
+    while (pending.length > 0 || deleted.length > 0) {
+      // Only channels still to decide count against the rounds: a read of
+      // those already deleted decides nothing about the pass.
+      if (pending.length > 0 && round === VERIFY_ROUNDS)
+        return finish('unsettled');
       round += 1;
       // Taken before the evidence, so a removal it proves is refused once the
       // session it was read in has ended.
       const session = input.session();
       const before = await cachedHashes(input.host, pending, input.signal);
+      // A channel no longer cached needs no read.
+      const deciding = pending.filter((id) => before.has(id));
+      const rereading = deleted;
+      deleted = [];
       const gone = await unreadableChannels(
         input.lane,
-        // A channel no longer cached needs no read.
-        pending.filter((id) => before.has(id)),
+        [...deciding, ...rereading],
         input.fetch,
         input.signal
       );
-      if (!gone) return finish('incomplete');
+      if (!gone) {
+        if (deciding.length > 0) return finish('incomplete');
+        // The pass proved what it deleted; only this second look failed.
+        span.setAttr('channel_directory.reread_failed', rereading.length);
+        return finish('complete');
+      }
+      const goneIds = new Set(gone);
+      restored += rereading.filter((id) => !goneIds.has(id)).length;
+      const decided = deciding.filter((id) => goneIds.has(id));
+      if (decided.length === 0) {
+        pending = [];
+        continue;
+      }
       // Delete only for the viewer and storage the evidence was read for.
       if (!(await stillInScope(input))) return finish('scope_changed');
-      const after = await cachedHashes(input.host, gone, input.signal);
-      const stale = gone.filter((id) => after.get(id) === before.get(id));
+      const after = await cachedHashes(input.host, decided, input.signal);
+      const stale = decided.filter((id) => after.get(id) === before.get(id));
       for (const batch of chunks(stale, DELETE_BATCH)) {
         input.signal?.throwIfAborted();
         await input.host.deleteRecords(
@@ -238,7 +262,8 @@ async function removeUnreadableChannels(
         );
       }
       removed += stale.length;
-      pending = gone.filter(
+      deleted = stale;
+      pending = decided.filter(
         (id) => after.has(id) && after.get(id) !== before.get(id)
       );
     }
