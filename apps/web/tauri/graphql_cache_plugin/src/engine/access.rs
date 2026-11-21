@@ -2,13 +2,15 @@
 //! ahead of them. Superseded warming must be fetched again, not replayed after
 //! the authoritative write that overtook it.
 use std::ops::{Deref, DerefMut};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, OnceLock};
 use tokio::sync::{Mutex, MutexGuard, Notify};
 
 pub(super) struct EngineAccess<T> {
     value: Mutex<T>,
     available: Notify,
     write_epoch: AtomicU64,
+    quiet: Quiet,
 }
 
 impl<T> EngineAccess<T> {
@@ -17,6 +19,55 @@ impl<T> EngineAccess<T> {
             value: Mutex::new(value),
             available: Notify::new(),
             write_epoch: AtomicU64::new(0),
+            quiet: Quiet::default(),
+        }
+    }
+
+    /// Calls `start` after a release when no idle task is armed. The task it
+    /// starts waits for [`Self::quiet_releases`] to stop changing, then takes
+    /// the engine with [`Self::try_idle`]; `busy` is set while it holds it.
+    pub(super) fn on_quiet(&self, start: impl Fn(Arc<AtomicBool>) + Send + Sync + 'static) {
+        let _ = self.quiet.start.set(Box::new(start));
+    }
+
+    /// Counts guard releases, so an idle task can tell the engine was used.
+    pub(super) fn quiet_releases(&self) -> u64 {
+        self.quiet.releases.load(Ordering::SeqCst)
+    }
+
+    /// Takes the engine for idle work without waiting, or `None` when it is
+    /// held, a command is queued for it, or shutdown began. Either way the
+    /// idle task is done: the next release starts another. Its own release
+    /// wakes waiters but starts nothing.
+    pub(super) fn try_idle(&self) -> Option<AccessGuard<'_, T>> {
+        self.quiet.armed.store(false, Ordering::SeqCst);
+        if self.quiet.closed.load(Ordering::SeqCst) {
+            return None;
+        }
+        let value = self.value.try_lock().ok()?;
+        Some(AccessGuard {
+            value,
+            _release: ReleaseNotice {
+                available: &self.available,
+                quiet: None,
+            },
+        })
+    }
+
+    /// Stops idle work for good, before the engine is closed.
+    pub(super) fn close_quiet(&self) {
+        self.quiet.closed.store(true, Ordering::SeqCst);
+    }
+
+    /// Whether an idle task may hold a strong reference right now.
+    pub(super) fn idle_running(&self) -> bool {
+        self.quiet.busy.load(Ordering::SeqCst)
+    }
+
+    fn release_notice(&self) -> ReleaseNotice<'_> {
+        ReleaseNotice {
+            available: &self.available,
+            quiet: Some(&self.quiet),
         }
     }
 
@@ -29,7 +80,7 @@ impl<T> EngineAccess<T> {
         let _wait = AcquisitionWait::new();
         AccessGuard {
             value: self.value.lock().await,
-            _release: ReleaseNotice(&self.available),
+            _release: self.release_notice(),
         }
     }
 
@@ -55,7 +106,7 @@ impl<T> EngineAccess<T> {
             if let Ok(value) = self.value.try_lock() {
                 let guard = AccessGuard {
                     value,
-                    _release: ReleaseNotice(&self.available),
+                    _release: self.release_notice(),
                 };
                 if epoch != self.write_epoch.load(Ordering::SeqCst) {
                     return Err(
@@ -109,10 +160,41 @@ impl<T> DerefMut for AccessGuard<'_, T> {
     }
 }
 // Struct fields drop in declaration order: unlock before waking waiters.
-struct ReleaseNotice<'a>(&'a Notify);
+struct ReleaseNotice<'a> {
+    available: &'a Notify,
+    /// Absent on an idle task's own guard, so idle work never restarts itself.
+    quiet: Option<&'a Quiet>,
+}
 impl Drop for ReleaseNotice<'_> {
     fn drop(&mut self) {
-        self.0.notify_waiters();
+        self.available.notify_waiters();
+        if let Some(quiet) = self.quiet {
+            quiet.released();
+        }
+    }
+}
+
+/// Idle work for the host to run once commands stop: at most one task armed
+/// at a time, started by the first release after the last one finished.
+#[derive(Default)]
+struct Quiet {
+    releases: AtomicU64,
+    armed: AtomicBool,
+    closed: AtomicBool,
+    busy: Arc<AtomicBool>,
+    start: OnceLock<Box<dyn Fn(Arc<AtomicBool>) + Send + Sync>>,
+}
+impl Quiet {
+    fn released(&self) {
+        self.releases.fetch_add(1, Ordering::SeqCst);
+        if self.closed.load(Ordering::SeqCst) {
+            return;
+        }
+        if let Some(start) = self.start.get()
+            && !self.armed.swap(true, Ordering::SeqCst)
+        {
+            start(Arc::clone(&self.busy));
+        }
     }
 }
 
@@ -172,6 +254,67 @@ mod test {
             .await;
             drop(read.await);
             assert_eq!(*hydration.await.expect("still current"), 0);
+        });
+    }
+
+    #[test]
+    fn releases_arm_one_idle_task_that_its_own_guard_never_rearms() {
+        pollster::block_on(async {
+            let access = EngineAccess::new(0);
+            let starts = Arc::new(AtomicU64::new(0));
+            let counted = Arc::clone(&starts);
+            access.on_quiet(move |_| {
+                counted.fetch_add(1, Ordering::SeqCst);
+            });
+            drop(access.lock().await);
+            drop(access.write().await);
+            drop(access.hydrate().await.expect("current"));
+            assert_eq!(starts.load(Ordering::SeqCst), 1, "one task while armed");
+            assert_eq!(access.quiet_releases(), 3);
+
+            let held = access.lock().await;
+            assert!(access.try_idle().is_none(), "a command holds the engine");
+            drop(held);
+            assert_eq!(starts.load(Ordering::SeqCst), 2, "its release re-arms");
+
+            let idle = access.try_idle().expect("quiet engine");
+            drop(idle);
+            assert_eq!(
+                starts.load(Ordering::SeqCst),
+                2,
+                "idle work never restarts itself"
+            );
+            assert_eq!(access.quiet_releases(), 4);
+
+            access.close_quiet();
+            drop(access.lock().await);
+            assert!(access.try_idle().is_none(), "closed");
+            assert_eq!(
+                starts.load(Ordering::SeqCst),
+                2,
+                "nothing starts after close"
+            );
+        });
+    }
+
+    #[test]
+    fn idle_work_never_overtakes_a_queued_command() {
+        pollster::block_on(async {
+            let access = EngineAccess::new(0);
+            let blocker = access.lock().await;
+            let mut queued = std::pin::pin!(access.lock());
+            poll_fn(|cx| {
+                assert!(queued.as_mut().poll(cx).is_pending());
+                Poll::Ready(())
+            })
+            .await;
+            drop(blocker);
+            assert!(
+                access.try_idle().is_none(),
+                "the queued command owns the next turn"
+            );
+            drop(queued.await);
+            assert!(access.try_idle().is_some());
         });
     }
 }

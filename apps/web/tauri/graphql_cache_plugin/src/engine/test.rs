@@ -729,6 +729,41 @@ fn sole_engine_handle_shuts_turso_down_explicitly() {
     spawn_handle().shutdown().unwrap();
 }
 
+/// Writes until the WAL is due, then leaves the engine quiet: the idle task has
+/// copied it by the time the next command looks, so a copy there finds
+/// nothing to do. Without the idle caller that copy still runs.
+#[test]
+fn quiet_engine_checkpoints_the_wal_off_the_command_path() {
+    let dir = tempfile::tempdir().unwrap();
+    let database = cache_turso::TursoFileDatabase::new(dir.path().join("cache.turso")).unwrap();
+    let handle = EngineHandle::new(database.open_or_reset("scope-1").unwrap(), None);
+    let mut due = None;
+    for batch in 0..200 {
+        let items: Vec<_> = (0..200)
+            .map(|n| serde_json::json!({"__typename": "GraphqlSoupDocument", "id": format!("{batch:04}-{n:04}-{}", "x".repeat(200))}))
+            .collect();
+        write(
+            &handle,
+            None,
+            serde_json::json!({"user": {"id": "user-1", "soup": {"nextCursor": null, "items": items}}}),
+            None,
+        );
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        let state = block_on(handle.inner.lock());
+        let checkpoint = state.engine.storage().checkpoint_if_due().unwrap();
+        if checkpoint.wal_frames >= 500 {
+            due = Some(checkpoint);
+            break;
+        }
+    }
+    let checkpoint = due.expect("the WAL reached 500 frames");
+    assert!(
+        !checkpoint.ran,
+        "the idle task already copied it: {checkpoint:?}"
+    );
+    handle.shutdown().unwrap();
+}
+
 #[test]
 fn bad_transaction_id_is_an_error() {
     let handle = spawn_handle();

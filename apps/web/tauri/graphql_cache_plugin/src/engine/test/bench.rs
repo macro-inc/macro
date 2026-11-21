@@ -191,8 +191,8 @@ impl Samples {
     }
 }
 
-/// `CACHE_BENCH_IDLE_CHECKPOINT` runs the host the way an engine with an idle
-/// point does: [`idle`] checkpoints between steps once the WAL is due.
+/// `CACHE_BENCH_IDLE_CHECKPOINT` leaves the engine quiet between steps, as a
+/// person using the app does, so its idle task copies the WAL once it is due.
 fn idle_checkpoints() -> bool {
     std::env::var_os("CACHE_BENCH_IDLE_CHECKPOINT").is_some()
 }
@@ -207,18 +207,21 @@ fn open(path: &Path) -> EngineHandle {
     EngineHandle::with_schema(storage, None, cache_core::meta::bundled_schema())
 }
 
-/// The engine's idle point, outside every timed step: checkpoint when due,
-/// recording how long it took and how many frames it copied.
+/// A quiet moment outside every timed step, long enough for the engine's idle
+/// task to run; the lock waits out a copy still going. Records each copy that
+/// ran: how long it took and how many frames it copied.
 async fn idle(handle: &EngineHandle, samples: &mut Samples) {
     if !idle_checkpoints() {
         return;
     }
-    let started = Mark::now();
-    let state = handle.inner.lock().await;
-    let checkpoint = state.engine.storage().checkpoint_if_due().unwrap();
-    drop(state);
-    if checkpoint.ran {
-        samples.record("idle.checkpoint", started);
+    std::thread::sleep(std::time::Duration::from_millis(150));
+    drop(handle.inner.lock().await);
+    for (ms, checkpoint) in crate::engine::idle::take_copies() {
+        samples
+            .ms
+            .entry("idle.checkpoint".to_owned())
+            .or_default()
+            .push(ms);
         samples
             .ms
             .entry("idle.checkpoint.frames".to_owned())
