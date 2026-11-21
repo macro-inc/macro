@@ -12,7 +12,7 @@ mod test;
 
 use crate::domain::{
     events::WebhookTopicEvent,
-    mcp::ports::{McpEventFanout, McpSubscriptionError, NoMcpFanout},
+    mcp::ports::{McpEventFanout, NoMcpFanout},
     models::{NormalizedWebhookEvent, WebhookEventQueueMessage},
     ports::{WebhookEventEnqueuer, WebhookRepo, WebhookWorkspaceResolver},
 };
@@ -73,9 +73,6 @@ pub enum WebhookEventIngestionError {
     /// Failed to enqueue at least one matched webhook event.
     #[error("failed to enqueue webhook event: {0}")]
     Enqueue(#[source] anyhow::Error),
-    /// Failed to queue the event to matching MCP Events subscriptions.
-    #[error("failed to fan out to mcp subscriptions: {0}")]
-    McpFanout(#[source] McpSubscriptionError),
 }
 
 impl WebhookEventIngestionError {
@@ -93,7 +90,6 @@ impl WebhookEventIngestionError {
                 | Self::WorkspaceResolution(_)
                 | Self::Repository(_)
                 | Self::Enqueue(_)
-                | Self::McpFanout(_)
         )
     }
 }
@@ -157,6 +153,11 @@ pub trait WebhookEventIngestionService: Clone + Send + Sync + 'static {
         event: Event<PasswordTopicEvent>,
     ) -> impl Future<Output = Result<(), WebhookEventIngestionError>> + Send;
 }
+
+/// Attempts at queueing one event to MCP Events subscriptions.
+const MCP_FANOUT_ATTEMPTS: u32 = 3;
+/// The wait before the second attempt; the third waits twice as long.
+const MCP_FANOUT_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(200);
 
 /// Webhook event ingestion service implementation.
 #[derive(Clone)]
@@ -253,6 +254,7 @@ where
             workspace_count = workspace_ids.len(),
             match_count = tracing::field::Empty,
             mcp_match_count = tracing::field::Empty,
+            mcp_fanout_outcome = tracing::field::Empty,
         ),
         err
     )]
@@ -274,13 +276,41 @@ where
         // MCP subscribers are users, so of this audience only the personal
         // workspaces (user ids) can match: the same people webhooks reach.
         self.enqueue_all(webhooks, event.clone()).await?;
-        let mcp_match_count = self
-            .mcp_fanout
-            .fan_out(&event, &workspace_ids)
-            .await
-            .map_err(WebhookEventIngestionError::McpFanout)?;
-        tracing::Span::current().record("mcp_match_count", mcp_match_count);
+        self.fan_out_mcp(&event, &workspace_ids).await;
         Ok(())
+    }
+
+    /// Queue the event to matching MCP Events subscriptions, retrying a
+    /// failure a few times. MCP Events delivery is at most once: a fan-out
+    /// that keeps failing is dropped for this event instead of failing
+    /// ingestion, which would hold the partition and queue the webhooks above
+    /// again.
+    async fn fan_out_mcp(&self, event: &NormalizedWebhookEvent, audience: &[String]) {
+        let span = tracing::Span::current();
+        let mut attempt = 1;
+        loop {
+            match self.mcp_fanout.fan_out(event, audience).await {
+                Ok(count) => {
+                    span.record("mcp_match_count", count);
+                    span.record("mcp_fanout_outcome", "queued");
+                    return;
+                }
+                Err(error) if attempt < MCP_FANOUT_ATTEMPTS => {
+                    tracing::warn!(error = ?error, attempt, "retrying mcp events fan-out");
+                    tokio::time::sleep(MCP_FANOUT_RETRY_DELAY * attempt).await;
+                    attempt += 1;
+                }
+                Err(error) => {
+                    tracing::error!(
+                        error = ?error,
+                        attempts = attempt,
+                        "dropping mcp events fan-out for this event"
+                    );
+                    span.record("mcp_fanout_outcome", "dropped");
+                    return;
+                }
+            }
+        }
     }
 
     async fn enqueue_all(

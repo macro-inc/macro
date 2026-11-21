@@ -80,7 +80,13 @@ impl SigningSecret {
     /// The `whsec_` form, for storing or handing to a receiver.
     #[must_use]
     pub fn expose(&self) -> Zeroizing<String> {
-        Zeroizing::new(format!("{SECRET_PREFIX}{}", BASE64.encode(&*self.0)))
+        let encoded = Zeroizing::new(BASE64.encode(&*self.0));
+        // Sized up front, so no growth leaves a copy behind.
+        let mut exposed =
+            Zeroizing::new(String::with_capacity(SECRET_PREFIX.len() + encoded.len()));
+        exposed.push_str(SECRET_PREFIX);
+        exposed.push_str(&encoded);
+        exposed
     }
 
     fn mac(&self, message_id: &str, timestamp: i64, body: &[u8]) -> Option<HmacSha256> {

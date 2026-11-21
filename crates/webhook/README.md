@@ -412,11 +412,16 @@ encrypts the secret before calling it.
   subscription to the same URL counts as already verified. Failures map to
   the spec's `CallbackEndpointError` reasons.
 - **Delivery.** Fan-out queues one message per matched row on the webhook FIFO
-  queue (group `mcp:<row id>`, dedup `mcp:<row id>:<event id>`); the webhook
+  queue, 16 sends at a time (group `mcp:<row id>`, dedup
+  `mcp:<row id>:<event id>`). Ingestion runs it after queueing the event's
+  webhooks and tries it three times; a fan-out that still fails is dropped
+  for that event with an error log, so it never fails ingestion or queues the
+  webhooks again. The webhook
   worker tells the two message kinds apart by shape. Each POST is a Standard
   Webhooks signed `{eventId, name, timestamp, data, cursor: null}` with
   `X-MCP-Subscription-Id`, `data` being the envelope webhooks deliver. Attempts follow the
-  webhook retry schedule, counted by SQS's receive count (5 attempts); `410` and
+  webhook retry schedule, counted by SQS's receive count (5 attempts; a later receipt is acknowledged
+  without a POST); `410` and
   `413` are not retried and leave the subscription alone. Nothing is recorded
   per delivery: a row that is gone by delivery time drops the event.
 - **Secret.** The client supplies the `whsec_` secret. The MCP server

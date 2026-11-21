@@ -795,3 +795,18 @@ async fn a_kms_failure_is_retried() {
     );
     assert!(endpoint.delivered.lock().expect("lock").is_empty());
 }
+
+#[tokio::test]
+async fn a_receipt_past_the_attempt_limit_is_acknowledged_without_a_post() {
+    let repo = FakeRepo::default();
+    let row = subscribed(&repo).await;
+    let endpoint = FakeEndpoint::accepting();
+    let disposition = delivery(&repo, &endpoint, false)
+        .deliver(
+            McpEventQueueMessage::new(row.id, mentioned_event("channel", ME)),
+            MAX_HTTP_ATTEMPTS + 1,
+        )
+        .await;
+    assert_eq!(disposition, WebhookWorkerDisposition::Acknowledge);
+    assert!(endpoint.delivered.lock().expect("lock").is_empty());
+}
