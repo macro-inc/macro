@@ -10,6 +10,7 @@ use axum::{
     routing::get,
 };
 use macro_auth::middleware::decode_jwt::{JwtToken, JwtValidationArgs};
+use std::sync::Arc;
 use tower::ServiceExt;
 
 const PRIVATE: &str = include_str!(concat!(
