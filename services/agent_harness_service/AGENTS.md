@@ -206,13 +206,15 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   `events/list`, `events/subscribe`/`unsubscribe` (webhook mode) and
   `events/stream` (push); poll is Unsupported. `macro.events` takes a request
   in words that the fast model compiles once (`compiler.rs`, prompt in
-  `compiler_prompt.md`, admitted and metered as `Automation`) into
-  `webhook::domain::mcp::filter`; each webhook event name is also a type with
+  `compiler_prompt.md`) into `webhook::domain::mcp::filter`, and a second
+  fast-model call checks `describe.rs`'s reading of it against the words
+  (`checker_prompt.md`), refusing any difference; both are admitted and
+  metered as `Automation`; each webhook event name is also a type with
   optional `ids`. Results carry the filter and `describe.rs`'s reading of it
   in `_meta` (`com.macro/filter`, `com.macro/interpretation`). Subscriptions
   live in document storage (`dss.rs`: internal routes, secret sealed with the
   MCP OAuth KMS key under purpose `mcp-event-subscription-secret`); a refresh
-  sends no filter, so only a new subscription costs a model call, and the
+  sends no filter, so only a new subscription costs model calls, and the
   same words compile once per user per process. Streams (`stream.rs`) read
   document storage's live event stream as the user, one connection per
   distinct `ids`, reconnect with resume, heartbeat every 5–45 s and are capped

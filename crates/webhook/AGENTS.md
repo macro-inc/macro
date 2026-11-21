@@ -77,7 +77,7 @@ before changing ingestion or delivery behavior.
 - Let MCP filters compare a new payload field: `McpFilterField` in
   `src/domain/mcp/filter.rs` (its `applies_to` and envelope pointer), then the
   filter compiler's prompt and reading in `agent_harness_service`
-  (`src/public_mcp/events/compiler_prompt.md`, `describe.rs`). Never add free-text
+  (`src/public_mcp/events/compiler_prompt.md`, `checker_prompt.md`, `describe.rs`). Never add free-text
   or pattern matching: the filter stays exact so delivery is deterministic.
 
 ## Checks
