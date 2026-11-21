@@ -7,14 +7,14 @@
 
 use crate::domain::models::{
     messages::ContactsNodes,
-    page::{ContactCursor, ContactIdPage, ContactPageSize},
+    page::{ContactCursor, ContactIdPage, ContactPageSize, MAX_CONTACT_PAGE_SIZE},
     query::ContactLookup,
 };
 use crate::domain::ports::{ContactListReader, ContactsPageService, ContactsService};
 use feature_flags::FeatureFlags;
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 use tokio::time::Instant;
@@ -88,9 +88,7 @@ impl<F> ContactListReads<F> {
                 .retain(|_, (at, _)| now.duration_since(*at) < DECISION_LIFETIME);
             decisions.prune_at = Some(now + DECISION_LIFETIME);
         }
-        decisions
-            .by_viewer
-            .insert(viewer.to_owned(), (now, source));
+        decisions.by_viewer.insert(viewer.to_owned(), (now, source));
     }
 }
 
@@ -245,6 +243,41 @@ where
                     }
                 }
                 tracing::Span::current().record("pages", pages);
+                contacts
+            }
+        };
+        tracing::Span::current().record("count", contacts.len() as i64);
+        Ok(contacts)
+    }
+
+    /// The list-aware path looks the ids up 500 at a time instead of reading
+    /// the whole directory.
+    #[tracing::instrument(
+        name = "contacts.reads.among",
+        skip_all,
+        fields(requested = ids.len() as i64, source = tracing::field::Empty, count = tracing::field::Empty),
+        err
+    )]
+    async fn query_contacts_among(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        ids: &[MacroUserIdStr<'static>],
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
+        let contacts = match self.source_for(&user_id).await {
+            DirectorySource::Legacy => self.legacy.query_contacts_among(user_id, ids).await?,
+            DirectorySource::Lists => {
+                let mut seen = HashSet::new();
+                let ids: Vec<_> = ids.iter().filter(|id| seen.insert(*id)).cloned().collect();
+                let mut contacts = Vec::new();
+                for chunk in ids.chunks(usize::from(MAX_CONTACT_PAGE_SIZE)) {
+                    let lookup = ContactLookup::new(chunk.to_vec())
+                        .ok_or_else(|| rootcause::report!("contact lookup exceeded its bound"))?;
+                    contacts.extend(
+                        self.lists
+                            .lookup_listed_contacts(user_id.clone(), &lookup)
+                            .await?,
+                    );
+                }
                 contacts
             }
         };

@@ -278,7 +278,7 @@ async fn enriched_rows_and_empty_pages_preserve_opaque_continuations() {
                 Request::new(
                     "{ user { contacts { nodes { id userId email name lists } nextCursor } } }",
                 )
-                    .data(viewer.clone()),
+                .data(viewer.clone()),
             )
             .await;
         assert!(result.errors.is_empty(), "{:?}", result.errors);

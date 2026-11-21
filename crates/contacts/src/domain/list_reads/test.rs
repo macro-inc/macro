@@ -102,6 +102,8 @@ impl ContactsService for Legacy {
 struct Lists {
     pages: Vec<ContactIdPage>,
     reads: Mutex<Vec<Option<String>>>,
+    /// The size of each lookup.
+    lookups: Mutex<Vec<usize>>,
 }
 
 impl Lists {
@@ -109,6 +111,7 @@ impl Lists {
         Self {
             pages,
             reads: Mutex::new(Vec::new()),
+            lookups: Mutex::new(Vec::new()),
         }
     }
 }
@@ -131,9 +134,16 @@ impl ContactListReader for Lists {
     async fn lookup_listed_contacts(
         &self,
         _viewer: MacroUserIdStr<'_>,
-        _lookup: &ContactLookup,
+        lookup: &ContactLookup,
     ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
-        Ok(vec![user("listed@example.com")])
+        self.lookups.lock().unwrap().push(lookup.ids().len());
+        // The directory holds everyone whose address starts with `listed`.
+        Ok(lookup
+            .ids()
+            .iter()
+            .filter(|id| id.email_str().starts_with("listed"))
+            .cloned()
+            .collect())
     }
 
     async fn contact_lists(
@@ -196,7 +206,7 @@ async fn each_read_follows_the_viewers_flag_and_reads_legacy_when_it_cannot_tell
         let lookup = reads
             .lookup_contact_ids(
                 user("viewer@example.com"),
-                &ContactLookup::new(vec![user("anyone@example.com")]).unwrap(),
+                &ContactLookup::new(vec![user("listed@example.com")]).unwrap(),
             )
             .await
             .unwrap();
@@ -288,4 +298,42 @@ async fn the_full_listing_reads_legacy_when_the_flag_is_off() {
         ["legacy@example.com", "viewer@example.com"]
     );
     assert!(reads.lists.reads.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn requested_ids_are_looked_up_in_bounded_chunks_once_each() {
+    let (reads, _) = router(Flags::new(Ok(Some(true))), Vec::new());
+    let mut ids: Vec<_> = (0..1000)
+        .map(|i| user(&format!("other{i}@example.com")))
+        .collect();
+    ids.push(user("listed1@example.com"));
+    ids.push(user("listed1@example.com"));
+    ids.push(user("listed2@example.com"));
+    let found = reads
+        .query_contacts_among(user("viewer@example.com"), &ids)
+        .await
+        .unwrap();
+    assert_eq!(
+        found.iter().map(|id| id.email_str()).collect::<Vec<_>>(),
+        ["listed1@example.com", "listed2@example.com"]
+    );
+    assert_eq!(*reads.lists.lookups.lock().unwrap(), [500, 500, 2]);
+    assert!(
+        reads.lists.reads.lock().unwrap().is_empty(),
+        "no directory pages"
+    );
+}
+
+#[tokio::test]
+async fn requested_ids_filter_the_legacy_listing_when_the_flag_is_off() {
+    let (reads, _) = router(Flags::new(Ok(Some(false))), Vec::new());
+    let found = reads
+        .query_contacts_among(
+            user("viewer@example.com"),
+            &[user("viewer@example.com"), user("stranger@example.com")],
+        )
+        .await
+        .unwrap();
+    assert_eq!(found, [user("viewer@example.com")]);
+    assert!(reads.lists.lookups.lock().unwrap().is_empty());
 }

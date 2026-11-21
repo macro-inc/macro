@@ -95,7 +95,11 @@ async fn scan_budget_returns_progress_instead_of_false_exhaustion() {
         .collect();
     rows.push(ContactIdEntry::parse("macro|winner@example.com".into()).unwrap());
     let names = Arc::new(Names::default());
-    let service = ContactsDirectoryService::new(Arc::new(ScanPages(rows)), Arc::new(Lists::default()), names.clone());
+    let service = ContactsDirectoryService::new(
+        Arc::new(ScanPages(rows)),
+        Arc::new(Lists::default()),
+        names.clone(),
+    );
     let viewer = MacroUserIdStr::try_from_email("viewer@example.com").unwrap();
     let query = ContactSearch::new("winner").unwrap();
     let first = service
@@ -129,7 +133,11 @@ async fn exact_reference_matching_keeps_the_scan_budget_and_filters_before_limit
         .collect();
     rows.push(ContactIdEntry::parse("macro|known@example.com".into()).unwrap());
     let names = Arc::new(Names::default());
-    let service = ContactsDirectoryService::new(Arc::new(ScanPages(rows)), Arc::new(Lists::default()), names.clone());
+    let service = ContactsDirectoryService::new(
+        Arc::new(ScanPages(rows)),
+        Arc::new(Lists::default()),
+        names.clone(),
+    );
     let viewer = MacroUserIdStr::try_from_email("viewer@example.com").unwrap();
     let query = ContactSearch::exact("SECOND").unwrap();
     let page = service
@@ -269,7 +277,12 @@ async fn search_reads_lists_once_for_the_matches_only() {
         "no matches, no list read"
     );
     let next = service
-        .search_contacts(viewer, &query, first.next_cursor.as_ref(), ContactPageSize::DEFAULT)
+        .search_contacts(
+            viewer,
+            &query,
+            first.next_cursor.as_ref(),
+            ContactPageSize::DEFAULT,
+        )
         .await
         .unwrap();
     assert_eq!(next.contacts.len(), 1);

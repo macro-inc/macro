@@ -45,14 +45,18 @@ impl ContactListReader for Lists {
         _after: Option<&ContactCursor>,
         _limit: ContactPageSize,
     ) -> Result<ContactIdPage, Report> {
-        Err(rootcause::report!("the directory service never pages lists"))
+        Err(rootcause::report!(
+            "the directory service never pages lists"
+        ))
     }
     async fn lookup_listed_contacts(
         &self,
         _viewer: MacroUserIdStr<'_>,
         _lookup: &ContactLookup,
     ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
-        Err(rootcause::report!("the directory service never looks up lists"))
+        Err(rootcause::report!(
+            "the directory service never looks up lists"
+        ))
     }
     async fn contact_lists(
         &self,
@@ -80,7 +84,9 @@ impl ContactListReader for Lists {
         _after: Option<&ContactCursor>,
         _limit: ContactPageSize,
     ) -> Result<ContactIdPage, Report> {
-        Err(rootcause::report!("the directory service never reads audiences"))
+        Err(rootcause::report!(
+            "the directory service never reads audiences"
+        ))
     }
 }
 

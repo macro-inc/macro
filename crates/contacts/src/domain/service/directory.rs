@@ -23,7 +23,11 @@ impl<P, L, N> ContactsDirectoryService<P, L, N> {
     /// lists never create membership: they are read only for the ids `pages`
     /// chose.
     pub fn new(pages: Arc<P>, lists: Arc<L>, names: N) -> Self {
-        Self { pages, lists, names }
+        Self {
+            pages,
+            lists,
+            names,
+        }
     }
 }
 
@@ -95,7 +99,10 @@ impl<P: ContactsPageService, L: ContactListReader, N: ContactNameReader>
         let lists = self
             .lists_of(
                 viewer,
-                contacts.iter().map(|contact| contact.user_id.clone()).collect(),
+                contacts
+                    .iter()
+                    .map(|contact| contact.user_id.clone())
+                    .collect(),
             )
             .await?;
         Ok(with_lists(contacts, lists))
