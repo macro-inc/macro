@@ -4276,8 +4276,9 @@ export type Widget_Deserialize =
    *  connected yet. Present it instead of telling them to open settings,
    *  then end your turn without asking them in text to connect: the card
    *  asks, and shows Connected once they have. Once they connect an app,
-   *  an agent session continues by itself; after they sign in to a server,
-   *  they reply to continue, so say only to reply once it is connected.
+   *  an agent session continues by itself; for a server they reply to
+   *  continue, so say only to reply once they have used Connect (a server
+   *  that needs no sign-in works without one and never shows Connected).
    */
   | ({
       type: 'connect';
@@ -4593,8 +4594,9 @@ export type Widget_Serialize =
    *  connected yet. Present it instead of telling them to open settings,
    *  then end your turn without asking them in text to connect: the card
    *  asks, and shows Connected once they have. Once they connect an app,
-   *  an agent session continues by itself; after they sign in to a server,
-   *  they reply to continue, so say only to reply once it is connected.
+   *  an agent session continues by itself; for a server they reply to
+   *  continue, so say only to reply once they have used Connect (a server
+   *  that needs no sign-in works without one and never shows Connected).
    */
   | ({
       type: 'connect';

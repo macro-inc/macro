@@ -494,6 +494,7 @@ fn a_not_connected_answer_names_the_chip_and_the_code_mode_widget() {
         text.contains(r#"<m-connect-app>{"appSlug":"linear","name":"Linear"}</m-connect-app>"#)
     );
     assert!(text.contains(
-        "In an agent session's code mode, present a connect widget with an app target for this appSlug instead of the markup."
+        "In an agent session's code mode, present a connect widget with an app target for this appSlug and end your turn without asking in text to connect"
     ));
+    assert!(text.contains("Otherwise tell them so in your reply, and include this exact markup"));
 }
