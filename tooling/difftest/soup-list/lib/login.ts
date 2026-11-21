@@ -1,4 +1,5 @@
 import type { Page } from 'playwright';
+import { pageLoad, pendingRequests } from './inflight';
 
 /**
  * Opens the app signed in. The driver gives each browser context the cookies
@@ -9,6 +10,10 @@ import type { Page } from 'playwright';
  * change the user's state.
  */
 export async function login(page: Page, origin: string, email: string) {
+  await pageLoad(() => signIn(page, origin, email));
+}
+
+async function signIn(page: Page, origin: string, email: string) {
   await page.goto(`${origin}/app`, { waitUntil: 'domcontentloaded' });
   const emailButton = page.getByRole('button', { name: 'Continue with email' });
   // Now and then a dev-server page never renders (a blank body for minutes,
@@ -35,7 +40,7 @@ export async function login(page: Page, origin: string, email: string) {
   }
   if (!(await emailButton.isVisible().catch(() => false))) {
     const text = await page.evaluate(() => (document.body?.innerText ?? '').slice(0, 300)).catch((e) => `evaluate failed: ${e}`);
-    throw new Error(`app did not open signed in or at sign-in: ${page.url()} shows ${JSON.stringify(text)}`);
+    throw new Error(`app did not open signed in or at sign-in: ${page.url()} shows ${JSON.stringify(text)}; open requests: ${pendingRequests(page).join(', ') || 'none'}`);
   }
   const verified = page.waitForResponse(
     (r) => r.url().includes('/auth/oauth/passwordless/') && r.status() === 200,

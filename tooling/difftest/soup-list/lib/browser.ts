@@ -9,6 +9,7 @@ import {
   chromium,
   type Page,
 } from 'playwright';
+import { pendingRequests, trackRequests } from './inflight';
 import { login } from './login';
 
 export type Side = 'old' | 'new';
@@ -172,6 +173,7 @@ export function registerPage(page: Page, home: { origin: string; email: string; 
 export type CacheEvent = { at: number; text: string };
 const cacheEvents = new WeakMap<Page, CacheEvent[]>();
 export function watchCacheErrors(page: Page) {
+  trackRequests(page);
   const events: CacheEvent[] = [];
   cacheEvents.set(page, events);
   page.on('console', (msg) => {
@@ -218,12 +220,14 @@ async function importProbe(page: Page, path: string) {
   // Vite may still be serving the reload's module graph: retry the import.
   for (let attempt = 0; ; attempt++) {
     try {
-      await page.evaluate(async (p) => {
+      const imported = page.evaluate(async (p) => {
         await import(/* @vite-ignore */ p);
       }, path);
+      // A module request that never answers would hold this await forever.
+      await Promise.race([imported, Bun.sleep(120_000).then(() => { throw new Error(`probe import still loading after 120 s; open requests: ${pendingRequests(page).join(', ') || 'none'}`); })]);
       return;
     } catch (error) {
-      if (attempt >= 4 || !String(error).includes('dynamically imported module')) throw error;
+      if (attempt >= 4 || !/dynamically imported module|probe import still loading/.test(String(error))) throw error;
       await Bun.sleep(1_000 * (attempt + 1));
       // A module that failed once stays failed in this document: load it again.
       if (attempt >= 1) {

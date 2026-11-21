@@ -24,6 +24,7 @@ import { AstGen } from './ast-gen';
 import { cacheEventsBetween, ensurePage, loadProbe, rebootPage, registerPage, watchCacheErrors, type CacheEvent, type ExportedSpan, type UserSession } from './browser';
 import { CALLERS } from './callers';
 import { compareCaller, compareData, DATA_RULES, type Diff, PREVIEW_DROPS_NOTIFICATIONS } from './compare';
+import { pageLoad, pendingRequests } from './inflight';
 import { login } from './login';
 import { oddName } from './names';
 import { mount, resetQueries, settle, unmount } from './probe';
@@ -63,7 +64,7 @@ async function withDeadline<T>(work: Promise<T>, ms: number, what: string): Prom
 }
 
 /** What each page showed when a step ran out of time: where it was and whether the probe answered. */
-async function describePages(ctx: SeqContext): Promise<{ page: string; url: string; probe: string }[]> {
+async function describePages(ctx: SeqContext): Promise<{ page: string; url: string; probe: string; pending: string[] }[]> {
   const pages: [string, Page][] = [['old', ctx.session.pages.old], ['new', ctx.session.pages.new], ['truth', ctx.truth]];
   return await Promise.all(
     pages.map(async ([name, page]) => {
@@ -71,7 +72,7 @@ async function describePages(ctx: SeqContext): Promise<{ page: string; url: stri
         page.evaluate(() => JSON.stringify({ probe: Boolean((window as any).__probe), ready: document.readyState, text: (document.body?.innerText ?? '').trim().length })).catch((e) => `evaluate failed: ${String(e).slice(0, 80)}`),
         Bun.sleep(10_000).then(() => 'evaluate did not answer in 10 s'),
       ]);
-      return { page: name, url: page.url().replace(/^https?:\/\/[^/]+/, ''), probe };
+      return { page: name, url: page.url().replace(/^https?:\/\/[^/]+/, ''), probe, pending: pendingRequests(page) };
     })
   );
 }
@@ -129,7 +130,7 @@ export type SeqResult = {
   /** Pages put back in the app, and sequences the harness broke and ran again. */
   repairs: { where: string; error: string }[];
   /** Steps that ran past STEP_DEADLINE_MS, with what each page showed then. */
-  hangs: { seq: number; step: number; kind: string; pages: { page: string; url: string; probe: string }[] }[];
+  hangs: { seq: number; step: number; kind: string; pages: { page: string; url: string; probe: string; pending: string[] }[] }[];
   aborted: { seq: number; attempt: number; error: string; droppedFailures: number }[];
   /**
    * A reader stale on both sides after an earlier step, which this step's own
@@ -842,8 +843,10 @@ async function reloadBoth(ctx: SeqContext, readers: Reader[]) {
   await Promise.all(
     (['old', 'new'] as const).map(async (side) => {
       try {
-        await session.pages[side].reload({ waitUntil: 'domcontentloaded' });
-        await loadProbe(session, side, ctx.probePaths[side]);
+        await pageLoad(async () => {
+          await session.pages[side].reload({ waitUntil: 'domcontentloaded' });
+          await loadProbe(session, side, ctx.probePaths[side]);
+        });
       } catch (error) {
         ctx.result.repairs.push({ where: `reload ${side}`, error: String(error).slice(0, 200) });
       }
@@ -867,7 +870,11 @@ export async function runSequence(ctx: SeqContext, seq: number) {
   ];
   const readers = readersFor(ctx, focus, seq);
   const hung = async (step: number, kind: string, error: unknown) => {
-    if (error instanceof StepTimeout) result.hangs.push({ seq, step, kind, pages: await describePages(ctx) });
+    if (error instanceof StepTimeout) {
+      const pages = await describePages(ctx);
+      result.hangs.push({ seq, step, kind, pages });
+      ctx.log(`seq ${seq} step ${step} ${kind} ran out of time: ${JSON.stringify(pages).slice(0, 600)}`);
+    }
     throw error;
   };
   const initial = await withDeadline(
