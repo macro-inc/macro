@@ -437,9 +437,11 @@ encrypts the secret before calling it.
   waiting on it; `410` and
   `413` are not retried and leave the subscription alone. Nothing is recorded
   per delivery: a row that is gone by delivery time drops the event. Each
-  message carries the W3C context of the send that queued it
-  (`trace_context`), so every attempt (`mcp_events.receive` and
-  `mcp_events.deliver`) joins the trace of the ingested event.
+  message carries the W3C context of the send that queued it as the SQS
+  message attributes `traceparent` and `tracestate`, outside the body, so a
+  worker that does not read them still parses it. Every attempt
+  (`mcp_events.receive` and `mcp_events.deliver`) joins the trace of the
+  ingested event.
 - **Secret.** The client supplies the `whsec_` secret. The MCP server
   encrypts it with its KMS key (purpose `mcp-event-subscription-secret`,
   bound to the user); this service only decrypts it, per delivery.

@@ -430,11 +430,6 @@ pub struct McpEventQueueMessage {
     pub webhook_message_id: String,
     /// Normalized broker event to deliver.
     pub event: NormalizedWebhookEvent,
-    /// W3C trace context (`traceparent`, `tracestate`) of the fan-out that
-    /// queued it, so its delivery attempts join the ingesting event's trace.
-    /// The queue adapter fills it; empty when there was no trace.
-    #[serde(default, skip_serializing_if = "serde_json::Map::is_empty")]
-    pub trace_context: serde_json::Map<String, serde_json::Value>,
 }
 
 impl McpEventQueueMessage {
@@ -446,7 +441,6 @@ impl McpEventQueueMessage {
             mcp_subscription_id,
             webhook_message_id: new_message_id(),
             event,
-            trace_context: serde_json::Map::new(),
         }
     }
 

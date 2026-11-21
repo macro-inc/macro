@@ -192,7 +192,7 @@ where
             event_id = %mcp_message.event.event_id,
             attempt = receive_count,
         );
-        genai_telemetry::propagation::set_parent_from_mcp(&span, &mcp_message.trace_context);
+        genai_telemetry::propagation::set_parent_from_mcp(&span, &message.trace_context);
         async {
             let disposition = self.mcp.deliver(mcp_message, receive_count).await;
             self.settle(receipt_handle, disposition).await;
