@@ -27,6 +27,8 @@ function summarize(r: Json) {
     apps: r.meta?.apps,
     harness: r.meta?.harness,
     seconds: r.meta?.seconds,
+    setupRetries: r.meta?.setupRetries,
+    openRetries: r.meta?.openRetries?.length ?? 0,
     fuzz: {
       cases: sum('cases'),
       sameAsRest: sum('translatable'),

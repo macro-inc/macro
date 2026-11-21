@@ -164,16 +164,21 @@ export async function openTruthPage(
   context.setDefaultNavigationTimeout(180_000);
   context.setDefaultTimeout(180_000);
   if (cookies) await context.addCookies(cookies);
-  const page = await context.newPage();
-  await page.route('**/i/otlp/v1/traces', (route) => route.fulfill({ status: 200, body: '{}' }));
-  watchCacheErrors(page);
-  await login(page, origin, email);
-  registerPage(page, { origin, email, probePath });
-  await page.waitForFunction(() => document.readyState === 'complete');
-  await page.evaluate(async (p) => {
-    await import(/* @vite-ignore */ p);
-  }, probePath);
-  return page;
+  try {
+    const page = await context.newPage();
+    await page.route('**/i/otlp/v1/traces', (route) => route.fulfill({ status: 200, body: '{}' }));
+    watchCacheErrors(page);
+    await login(page, origin, email);
+    registerPage(page, { origin, email, probePath });
+    await page.waitForFunction(() => document.readyState === 'complete');
+    await page.evaluate(async (p) => {
+      await import(/* @vite-ignore */ p);
+    }, probePath);
+    return page;
+  } catch (error) {
+    await context.close().catch(() => {});
+    throw error;
+  }
 }
 
 // ---------------------------------------------------------------- projections

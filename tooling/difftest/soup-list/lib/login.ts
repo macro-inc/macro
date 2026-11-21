@@ -10,7 +10,22 @@ import { pageLoad, pendingRequests } from './inflight';
  * change the user's state.
  */
 export async function login(page: Page, origin: string, email: string) {
-  await pageLoad(() => signIn(page, origin, email));
+  // What the page threw while opening, for the error if it never does.
+  const errors: string[] = [];
+  const onError = (e: Error) => errors.push(String(e).slice(0, 160));
+  const onConsole = (m: { type(): string; text(): string }) => {
+    if (m.type() === 'error') errors.push(m.text().slice(0, 160));
+  };
+  page.on('pageerror', onError);
+  page.on('console', onConsole);
+  try {
+    await pageLoad(() => signIn(page, origin, email));
+  } catch (error) {
+    throw new Error(`${String(error).slice(0, 600)}; page errors: ${errors.slice(-4).join(' | ') || 'none'}`);
+  } finally {
+    page.off('pageerror', onError);
+    page.off('console', onConsole);
+  }
 }
 
 async function signIn(page: Page, origin: string, email: string) {

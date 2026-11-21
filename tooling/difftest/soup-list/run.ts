@@ -85,7 +85,27 @@ async function serialOpen<T>(fn: () => Promise<T>): Promise<T> {
 
 async function session(b: Browser, w: World, user: UserKey): Promise<UserSession> {
   const u = w.users[user];
-  return await serialOpen(() => openUser(b, origins, u.email, probePaths, u.browserCookies()));
+  return await reopen(`session ${w.tag} ${user}`, () => serialOpen(() => openUser(b, origins, u.email, probePaths, u.browserCookies())));
+}
+
+/** Pages a lane opened only on a retry: a dev-server page that stayed blank at sign-in, then opened. */
+const openRetries: { what: string; error: string }[] = [];
+
+/**
+ * Opens a lane's pages, up to three times: now and then a dev-server page
+ * stays blank at sign-in for minutes, and the lane would otherwise lose all
+ * its sequences. Each try opens a new context.
+ */
+async function reopen<T>(what: string, open: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await open();
+    } catch (error) {
+      if (attempt >= 2) throw error;
+      openRetries.push({ what, error: String(error).slice(0, 300) });
+      log(`${what}: opening again after: ${String(error).slice(0, 160)}`);
+    }
+  }
 }
 
 /** Runs `fn`, recording a crash as the lane's error instead of ending the run. */
@@ -220,7 +240,7 @@ try {
     lane(`seq:${k}`, errors, async () => {
       const viewer: UserKey = k % 2 === 0 ? 'owner' : 'member';
       const s = await session(b, w, viewer);
-      const truth = await serialOpen(() => openTruthPage(b, w.users[viewer].email, origins.old, probePaths.old, w.users[viewer].browserCookies()));
+      const truth = await reopen(`truth ${w.tag} ${viewer}`, () => serialOpen(() => openTruthPage(b, w.users[viewer].email, origins.old, probePaths.old, w.users[viewer].browserCookies())));
       const cov = new Coverage();
       await runSequenceLane({
         world: w,
@@ -302,6 +322,7 @@ try {
   (out.meta as Record<string, unknown>).finishedAt = new Date().toISOString();
   (out.meta as Record<string, unknown>).seconds = Math.round((Date.now() - started) / 1000);
   (out.meta as Record<string, unknown>).setupRetries = setupRetries;
+  (out.meta as Record<string, unknown>).openRetries = openRetries;
   await Bun.write(a.out as string, JSON.stringify(out, null, 1));
   log(`wrote ${a.out}`);
   await closeBrowser();

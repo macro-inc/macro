@@ -105,6 +105,22 @@ export async function openUser(
   // A dev server loading many app pages at once is slow to answer.
   context.setDefaultNavigationTimeout(180_000);
   context.setDefaultTimeout(180_000);
+  try {
+    return await fillSession(context, origins, email, probePath, cookies);
+  } catch (error) {
+    // A page that never opened leaves its context behind: close it, so a retry starts clean.
+    await context.close().catch(() => {});
+    throw error;
+  }
+}
+
+async function fillSession(
+  context: BrowserContext,
+  origins: Origins,
+  email: string,
+  probePath: Record<Side, string>,
+  cookies?: Parameters<BrowserContext["addCookies"]>[0]
+): Promise<UserSession> {
   if (cookies) await context.addCookies(cookies);
   const session: UserSession = {
     email,
