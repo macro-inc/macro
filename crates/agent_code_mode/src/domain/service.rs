@@ -270,6 +270,7 @@ impl CodeModeService {
 
     // Cancellation must finish even if the journal is unavailable. No program
     // starts on these paths, so a stale Running row cannot spend this credential.
+    #[tracing::instrument(name = "code_mode.cancel_save", skip_all, fields(code_execution_id = %record.execution_id, error = tracing::field::Empty, otel.status_code = tracing::field::Empty))]
     async fn save_cancelled(&self, session: AgentSessionId, record: &ExecutionRecord) {
         match tokio::time::timeout(
             std::time::Duration::from_secs(1),
@@ -278,7 +279,12 @@ impl CodeModeService {
         .await
         {
             Ok(Ok(())) => {}
-            Ok(Err(error)) => tracing::warn!(%error, "could not save cancelled execution"),
+            Ok(Err(error)) => {
+                let span = tracing::Span::current();
+                span.record("error", tracing::field::display(&error));
+                span.record("otel.status_code", "ERROR");
+                tracing::error!(code_execution_id = %record.execution_id, %error, "could not save cancelled execution");
+            }
             Err(_) => tracing::warn!("cancelled execution save timed out"),
         }
     }
