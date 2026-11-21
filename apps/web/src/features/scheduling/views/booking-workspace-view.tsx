@@ -7,6 +7,7 @@ import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
 import { t } from '@app/lib/i18n';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { fireAndForget } from '@core/util/fireAndForget';
 import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
 import ChartIcon from '@icon/system/regular/chart-bar.svg';
@@ -369,7 +370,10 @@ export function BookingWorkspaceView(props: {
           </ViewSidebar.Content>
         </ViewSidebar.Root>
       </ViewShell.Aside>
-      <ViewShell.Main class="relative touch:pt-[calc(var(--safe-top,0px)+3.75rem)] touch:pb-(--mobile-content-inset-bottom)">
+      <ViewShell.Main
+        ref={followContentInsetBottom}
+        class="relative touch:pt-[calc(var(--safe-top,0px)+3.75rem)] touch:pb-(--mobile-content-inset-bottom)"
+      >
         <Show when={isTouchDevice()}>
           <SchedulingMobileHeader
             tabs={TABS}

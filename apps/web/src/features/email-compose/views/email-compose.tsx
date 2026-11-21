@@ -6,6 +6,7 @@ import {
   StaticSplitLabel,
 } from '@components/app/split-layout/components/SplitLabel';
 import { EmailPermissionsBanner } from '@core/component/EmailPermissionsBanner';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { WrapUnlessMobile } from '@core/mobile/WrapUnlessMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { ComposerSurface } from '@ui';
@@ -330,6 +331,7 @@ function LoadedEmailComposeView(
               // Full-frame mobile/tablet: the surface runs under the floating
               // chrome while the body, signature and attachment pills rest
               // above it (ComposeLayout owns the top inset).
+              ref={followContentInsetBottom}
               class="size-full p-4 touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+1rem)] touch:bg-surface max-h-full touch:max-h-none overflow-hidden flex flex-col min-h-0 touch:min-h-full"
             />
           </WrapUnlessMobile>

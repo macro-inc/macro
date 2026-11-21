@@ -16,6 +16,7 @@ import {
 } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { isMobile } from '@core/mobile/isMobile';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Layer } from '@ui';
 import { Pager, PagerSwipeGestures } from '@ui/components/Pager';
@@ -198,7 +199,11 @@ function CalendarPages() {
 function CalendarPageContent() {
   return (
     <div
-      ref={tourTarget(CALENDAR_TOUR.grid)}
+      ref={(element) => {
+        tourTarget(CALENDAR_TOUR.grid)(element);
+        // calendar.css pads it by the bottom chrome on touch.
+        followContentInsetBottom(element);
+      }}
       class="calendar-view-content flex min-w-0 min-h-0 flex-1 flex-col"
     >
       <CalendarPages />

@@ -1,6 +1,7 @@
 import { LoadingSpinner } from '@core/component/LoadingSpinner';
 import { toast } from '@core/component/Toast/Toast';
 import { useChannelsContext } from '@core/context/channels';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
 import RobotIcon from '@icon/system/regular/robot.svg';
 import {
@@ -177,7 +178,10 @@ export function BotCreate(props: { channelId?: string; onBack: () => void }) {
       {/* Mobile chrome insets live inside the scroll content so the page is
           full-frame, matching SettingsPage (this create view only renders
           inside the settings panel). */}
-      <main class="mx-auto w-full max-w-[560px] px-8 pt-4 pb-24 touch:px-5 touch:pt-[calc(var(--mobile-content-inset-top,0px)+2rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+3rem)]">
+      <main
+        ref={followContentInsetBottom}
+        class="mx-auto w-full max-w-[560px] px-8 pt-4 pb-24 touch:px-5 touch:pt-[calc(var(--mobile-content-inset-top,0px)+2rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+3rem)]"
+      >
         <Button
           type="button"
           variant="ghost"

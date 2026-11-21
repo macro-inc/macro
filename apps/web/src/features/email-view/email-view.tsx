@@ -30,6 +30,7 @@ import { useUserId } from '@core/context/user';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { useAndroidBackNavigation } from '@core/mobile/androidBack';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
@@ -109,7 +110,10 @@ function EmailViewBreadcrumbs(props: ParentProps) {
 
 function EmailListFallback() {
   return (
-    <div class="grid size-full min-h-0 min-w-0 place-items-center text-ink-muted touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
+    <div
+      ref={followContentInsetBottom}
+      class="grid size-full min-h-0 min-w-0 place-items-center text-ink-muted touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)"
+    >
       <SpinnerIcon
         aria-hidden={false}
         aria-label="Loading email"

@@ -27,6 +27,7 @@ import { UserContextProvider, useUserInfo } from '@core/context/user';
 import { useHotKeyRoot } from '@core/hotkey/hotkeys';
 import { IosPushNotificationModal } from '@core/mobile/IosPushNotificationModal';
 import { IpadUnsupportedDialog } from '@core/mobile/IpadUnsupportedDialog';
+import { followViewportHeight } from '@core/mobile/viewport-insets';
 import { formatTabTitle, tabTitleSignal } from '@core/signal/tabTitle';
 import { setCookie } from '@core/util/cookies';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -205,6 +206,11 @@ export function Root() {
   setHotkeyRoot(useHotKeyRoot());
 
   clearBodyInlineStyleColor();
+
+  // The page shrinks above the keyboard (the `--dvh` squish) on every route,
+  // sign-in included: Android publishes the keyboard from TauriProvider.
+  const appRoot = document.getElementById('root');
+  if (appRoot) followViewportHeight(appRoot);
 
   createEffect(() => {
     const cleanup = licenseChannel.subscribe(() => {

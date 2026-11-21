@@ -29,6 +29,7 @@ import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isModality } from '@core/mobile/inputModality';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { fireAndForget } from '@core/util/fireAndForget';
 import EmptyStateInboxTrayGraphic from '@design/empty-state-inbox-tray.svg';
 import { formatTimestamp } from '@entity/utils/timestamp';
@@ -799,7 +800,10 @@ export function NotificationsView(props: NotificationsViewProps) {
       </Match>
       <Match when={view().t === 'ready'}>
         <div
-          ref={setViewport}
+          ref={(element) => {
+            setViewport(element);
+            followContentInsetBottom(element);
+          }}
           class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto overscroll-none pb-[max(0.5rem,var(--mobile-content-inset-bottom,0px))]"
           onScroll={checkNearEnd}
         >

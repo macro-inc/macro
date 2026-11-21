@@ -13,6 +13,7 @@ jobs:
       i18n_changed: ${{ steps.filter.outputs.i18n_changed }}
       database_grid_changed: ${{ steps.filter.outputs.database_grid_changed }}
       calendar_details_changed: ${{ steps.filter.outputs.calendar_details_changed }}
+      mobile_insets_changed: ${{ steps.filter.outputs.mobile_insets_changed }}
     timeout-minutes: 10
     steps:
       - name: Checkout Repo # zizmor: ignore[artipacked] path-check runs git over the PR's commits
@@ -102,6 +103,12 @@ jobs:
               - 'apps/web/src/features/calendar-view/**'
               - 'apps/web/src/features/calendar/**'
               - 'apps/web/src/lib/queries/calendar/**'
+            mobile_insets_changed:
+              - 'apps/web/src/lib/core/mobile/viewport-insets.ts'
+              - 'apps/web/src/lib/core/mobile/virtualKeyboard.ts'
+              - 'apps/web/src/components/app/useAppSquishHandlers.ts'
+              - 'apps/web/src/components/app/mobile/float-regions/**'
+              - 'apps/web/src/components/app/mobile/browser-test/insets*'
       - id: codegen
         name: Detect schema changes
         run: |
@@ -1516,6 +1523,12 @@ jobs:
         run: |-
           bunx playwright install-deps chromium
           just test-calendar-details-browser
+        working-directory: apps/web
+      - name: Mobile Insets Browser Tests
+        if: needs.path-check.outputs.mobile_insets_changed == 'true'
+        run: |-
+          bunx playwright install-deps chromium
+          just test-mobile-insets-browser
         working-directory: apps/web
       - name: Teardown Nix
         if: always()

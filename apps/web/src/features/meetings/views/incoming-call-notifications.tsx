@@ -1,3 +1,4 @@
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { For, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { IncomingCallNotification } from '../components/incoming-call-notification';
@@ -11,6 +12,7 @@ export function IncomingCallNotifications() {
     <Show when={incoming.invitations().length > 0}>
       <Portal>
         <div
+          ref={followContentInsetBottom}
           role="region"
           aria-label="Incoming calls"
           class="pointer-events-none fixed bottom-[max(1rem,var(--safe-bottom,0px))] left-[max(1rem,env(safe-area-inset-left,0px))] z-toast-region flex max-h-[calc(100dvh-2rem)] w-88 max-w-[calc(100vw-2rem)] flex-col gap-3 overflow-y-auto touch:bottom-[calc(var(--mobile-content-inset-bottom,var(--safe-bottom,0px))+12px)]"

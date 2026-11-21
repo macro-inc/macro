@@ -58,7 +58,7 @@ async function connect(waitForApp = false) {
       for (let ready = 0; ready < 120; ready++) {
         if (
           await evaluate(
-            `!!window.__TAURI_INTERNALS__ && !!document.documentElement.style.getPropertyValue('--dvh') && (${!waitForApp} || document.body.innerText.trim().length > 30)`
+            `!!window.__TAURI_INTERNALS__ && !!document.documentElement.style.getPropertyValue('--tauri-inset-top') && (${!waitForApp} || document.body.innerText.trim().length > 30)`
           )
         )
           return;
@@ -243,23 +243,32 @@ try {
     Math.abs(shown.viewportHeight - start.viewportHeight) < 1,
     'IME must not resize the WebView; the layout root shrinks through --dvh'
   );
+  // The keyboard reaches only the elements that read it (#root's height,
+  // sheets and composers that follow it), never <html>.
   const css = await evaluate(
     `(() => {
-      const probe = document.createElement('div');
-      probe.style.cssText = 'position:fixed;height:calc(var(--dvh)*100);pointer-events:none';
-      document.body.append(probe);
-      const dvh = probe.getBoundingClientRect().height;
-      probe.remove();
-      return {dvh,offset:document.documentElement.style.getPropertyValue('--virtual-keyboard-height')};
+      // A follower has the value itself; other inline styles may only read it.
+      const follower = [...document.querySelectorAll('[style*="--virtual-keyboard-height"]')]
+        .find((element) => element.style.getPropertyValue('--virtual-keyboard-height'));
+      return {dvh: document.getElementById('root').getBoundingClientRect().height,
+        sheetLift: follower ? parseFloat(follower.style.getPropertyValue('--virtual-keyboard-height')) : null,
+        onRoot: document.documentElement.style.getPropertyValue('--virtual-keyboard-height')};
     })()`
   );
   assert.ok(
     Math.abs(css.dvh - (shown.viewportHeight - shown.imeHeight)) < 1,
     'The layout root must shrink by exactly the keyboard height'
   );
-  assert.ok(
-    Math.abs(Number.parseFloat(css.offset) - shown.imeHeight) < 1,
-    'Fixed sheets lift by the keyboard height'
+  // Only when the screen has a follower mounted (a composer or a sheet).
+  if (css.sheetLift !== null)
+    assert.ok(
+      Math.abs(css.sheetLift - shown.imeHeight) < 1,
+      'Fixed sheets lift by the keyboard height'
+    );
+  assert.equal(
+    css.onRoot,
+    '',
+    'The keyboard must not be written on <html>, where every element inherits it'
   );
   await adbRun('shell', 'input', 'keyevent', '4');
   for (let attempt = 0; attempt < 40; attempt++) {
@@ -271,7 +280,13 @@ try {
     await evaluate(`document.getElementById('android-smoke-input').value`),
     'Unsent Android draft'
   );
-  results.keyboard = { start, shown, css, backPreservedDraft: true };
+  results.keyboard = {
+    start,
+    shown,
+    css,
+    sheetLiftChecked: css.sheetLift !== null,
+    backPreservedDraft: true,
+  };
   console.log('Keyboard overlay and Back passed');
 
   // Font/display settings previously recreated the Activity while the native
@@ -309,9 +324,6 @@ try {
     fontScale === 'null' ? '1.0' : fontScale
   );
   await pause(500);
-  await evaluate(
-    `document.getElementById('android-smoke-input').style.top = 'calc(var(--dvh)*100 - 100px)'`
-  );
   await adbRun(
     'shell',
     'wm',
@@ -319,14 +331,16 @@ try {
     initialDensity === 240 ? '420' : '240'
   );
   await pause(1500);
+  // #root's height is the app's published viewport, which bottom composers
+  // sit at the end of.
   const resized = await evaluate(`(() => {
     const field = document.getElementById('android-smoke-input');
-    return {height:innerHeight,bottom:field.getBoundingClientRect().bottom,draft:field.value,
+    return {height:innerHeight,bottom:document.getElementById('root').getBoundingClientRect().bottom,draft:field.value,
       topInset:parseFloat(document.documentElement.style.getPropertyValue('--tauri-inset-top'))};
   })()`);
   assert.equal(resized.draft, 'Unsent Android draft');
   assert.ok(
-    Math.abs(resized.height - resized.bottom - 20) < 2,
+    Math.abs(resized.height - resized.bottom) < 2,
     'Display density changes must keep bottom composers inside the CSS viewport'
   );
   const densityInsets = await invoke('getInsets');
@@ -344,10 +358,10 @@ try {
     await pause(1000);
     const viewport = await evaluate(`(() => {
       const field = document.getElementById('android-smoke-input');
-      return {width:innerWidth,height:innerHeight,bottom:field.getBoundingClientRect().bottom,draft:field.value};
+      return {width:innerWidth,height:innerHeight,bottom:document.getElementById('root').getBoundingClientRect().bottom,draft:field.value};
     })()`);
     assert.equal(viewport.draft, 'Unsent Android draft');
-    assert.ok(Math.abs(viewport.height - viewport.bottom - 20) < 2);
+    assert.ok(Math.abs(viewport.height - viewport.bottom) < 2);
     results.windowSizes.push({ size, ...viewport });
   }
   await adbRun('shell', 'wm', 'size', sizeOverride ?? 'reset');

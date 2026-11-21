@@ -1,6 +1,7 @@
 import { t } from '@app/lib/i18n';
 import { getAttachmentKindFromFile } from '@channel/Input/utils/file-helpers';
 import { toast } from '@core/component/Toast/Toast';
+import { followKeyboardViewport } from '@core/mobile/viewport-insets';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { IMAGE_INPUT_WARNING } from '../state/image-input';
 /**
@@ -310,7 +311,13 @@ export function AgentInput(props: AgentInputProps) {
       }}
     >
       <div
-        ref={containerRef}
+        ref={(element) => {
+          containerRef = element;
+          // The editor's max height reads the keyboard's `--dvh`. Written
+          // here, outside the layout the composer watches, so a keyboard
+          // publish doesn't make it measure again.
+          followKeyboardViewport(element);
+        }}
         data-keep-keyboard
         onFocusIn={() => fireAndForget(preloadAgentFold(), 'agent-composer')}
         class="flex flex-col gap-1.5"

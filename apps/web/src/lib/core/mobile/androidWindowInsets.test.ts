@@ -1,11 +1,31 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createRoot } from 'solid-js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { applyAndroidWindowInsets } from './androidWindowInsets';
+import {
+  followKeyboardViewport,
+  publishKeyboardViewport,
+} from './viewport-insets';
 import {
   virtualKeyboardHeight,
   virtualKeyboardVisible,
 } from './virtualKeyboard';
 
+// A sheet that sits above the keyboard, as the app's readers do.
+let sheet: HTMLElement;
+let dispose: () => void;
+
+beforeEach(() => {
+  sheet = createRoot((disposeRoot) => {
+    dispose = disposeRoot;
+    const element = document.createElement('div');
+    followKeyboardViewport(element);
+    return element;
+  });
+});
+
 afterEach(() => {
+  dispose();
+  publishKeyboardViewport(undefined);
   document.documentElement.removeAttribute('style');
   vi.restoreAllMocks();
 });
@@ -26,16 +46,14 @@ describe('Android window insets', () => {
       400
     );
     // The WebView is not resized: 500 - 300 = 200 CSS px of layout root.
-    expect(document.documentElement.style.getPropertyValue('--dvh')).toBe(
-      '2px'
-    );
+    expect(sheet.style.getPropertyValue('--dvh')).toBe('2px');
     expect(virtualKeyboardHeight()).toBe(300);
-    expect(
-      document.documentElement.style.getPropertyValue(
-        '--virtual-keyboard-height'
-      )
-    ).toBe('300px');
+    expect(sheet.style.getPropertyValue('--virtual-keyboard-height')).toBe(
+      '300px'
+    );
     expect(virtualKeyboardVisible()).toBe(true);
+    // On <html>, every element would inherit it and restyle.
+    expect(document.documentElement.style.getPropertyValue('--dvh')).toBe('');
   });
 
   it('updates every safe edge on rotation and restores the navigation inset after hiding', () => {
@@ -53,7 +71,7 @@ describe('Android window insets', () => {
       800
     );
     const style = document.documentElement.style;
-    expect(style.getPropertyValue('--dvh')).toBe('1dvh');
+    expect(sheet.style.getPropertyValue('--dvh')).toBe('1dvh');
     expect(style.getPropertyValue('--tauri-inset-right')).toBe('24px');
     expect(style.getPropertyValue('--tauri-inset-left')).toBe('32px');
     expect(style.getPropertyValue('--tauri-inset-bottom')).toBe('20px');
@@ -78,7 +96,7 @@ describe('Android window insets', () => {
     expect(style.getPropertyValue('--tauri-inset-top')).toBe('24px');
     expect(style.getPropertyValue('--tauri-inset-bottom')).toBe('16px');
     expect(style.getPropertyValue('--tauri-inset-left')).toBe('12px');
-    expect(style.getPropertyValue('--dvh')).toBe('1dvh');
+    expect(sheet.style.getPropertyValue('--dvh')).toBe('1dvh');
   });
 
   it('keeps the safe areas when a keyboard resize shrinks only the height', () => {
@@ -103,7 +121,7 @@ describe('Android window insets', () => {
     expect(setProperty).not.toHaveBeenCalled();
   });
 
-  it('writes only the root properties whose value changed', () => {
+  it('writes only the properties whose value changed, and the keyboard only on its readers', () => {
     const style = document.documentElement.style;
     const closed = {
       top: 36,
@@ -117,15 +135,17 @@ describe('Android window insets', () => {
     };
     applyAndroidWindowInsets(closed, 384);
     const setProperty = vi.spyOn(style, 'setProperty');
+    const setSheetProperty = vi.spyOn(sheet.style, 'setProperty');
     applyAndroidWindowInsets(
       { ...closed, bottom: 0, imeHeight: 358, imeVisible: true },
       384
     );
     // Only the values the keyboard changes: no top/left/right rewrite.
-    expect(setProperty).toHaveBeenCalledTimes(3);
+    expect(setProperty).toHaveBeenCalledTimes(1);
     expect(setProperty).toHaveBeenCalledWith('--tauri-inset-bottom', '0px');
-    expect(setProperty).toHaveBeenCalledWith('--dvh', '4.74px');
-    expect(setProperty).toHaveBeenCalledWith(
+    expect(setSheetProperty).toHaveBeenCalledTimes(2);
+    expect(setSheetProperty).toHaveBeenCalledWith('--dvh', '4.74px');
+    expect(setSheetProperty).toHaveBeenCalledWith(
       '--virtual-keyboard-height',
       '358px'
     );

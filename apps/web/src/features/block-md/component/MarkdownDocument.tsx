@@ -1,4 +1,5 @@
 import { TraceFlow, useFlow } from '@app/observability/flow';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { DocumentEntity } from '@entity';
 import {
@@ -316,7 +317,10 @@ export function MarkdownDocumentContent(props: MarkdownDocumentContentProps) {
           });
         }}
       >
-        <div class="relative portal-scope touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
+        <div
+          ref={followContentInsetBottom}
+          class="relative portal-scope touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)"
+        >
           <Suspense>
             <TraceFlow name="doc.editor">
               <Notebook

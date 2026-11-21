@@ -32,7 +32,7 @@ check *ARGS:
     manifests=$(grep -E '(^|/)Cargo\.toml$' <<<"$changed" || true)
     # Match the SDK and collaboration Biome configs: preserve generator output verbatim.
     js=$(grep -E '^(apps/(web|marketing)|packages|services/(analytics-proxy|ai-editing-worker|lexical-service|websocket-service))/.*\.(ts|tsx)$' <<<"$changed" | grep -Ev '^packages/(sdk/generated|collaboration/src/sync-service/generated)/' || true)
-    sg=$(grep -E '^(apps|crates|packages|services|tooling)/.*\.(rs|ts|tsx|plist)$' <<<"$changed" || true)
+    sg=$(grep -E '^(apps|crates|packages|services|tooling)/.*\.(rs|ts|tsx|plist|css)$' <<<"$changed" || true)
 
     fail=0
     if [ -n "$rs" ]; then

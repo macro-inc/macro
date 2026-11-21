@@ -14,6 +14,7 @@ import { useAuthor, useUserId } from '@core/context/user';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -430,6 +431,7 @@ export function CallOverlay(props: {
         ref={(element) => {
           setCallRoot(element);
           attachCallScope(element);
+          followContentInsetBottom(element);
         }}
         tabIndex={-1}
         class={cn(

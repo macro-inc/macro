@@ -1,3 +1,4 @@
+import { followKeyboardViewport } from '@core/mobile/viewport-insets';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
 import PencilSimple from '@icon/system/regular/pencil-simple.svg';
@@ -250,7 +251,10 @@ export function EventEditor(props: EventEditorProps) {
   );
   return (
     <form
-      ref={formElement}
+      ref={(element) => {
+        formElement = element;
+        followKeyboardViewport(element);
+      }}
       class={`flex flex-col ${
         props.step === 'review'
           ? 'h-auto min-h-[min(36rem,calc(100dvh-var(--virtual-keyboard-height,0px)-var(--safe-top,0px)-var(--safe-bottom,0px)-4rem))] max-h-[calc(100dvh-var(--virtual-keyboard-height,0px)-var(--safe-top,0px)-var(--safe-bottom,0px)-4rem)]'

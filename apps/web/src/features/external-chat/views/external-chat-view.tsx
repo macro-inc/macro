@@ -21,6 +21,7 @@ import type {
   MessageActions,
 } from '@core/messages/types';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { getDisplayName, tryMacroId } from '@core/user';
 import type { IUser } from '@core/user/types';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -527,7 +528,10 @@ export function ExternalChatView(props: {
               custom scrollbar, rows in the centered message column. */}
                   <div class="relative min-h-0 flex-1">
                     <div
-                      ref={setScroller}
+                      ref={(element) => {
+                        setScroller(element);
+                        followContentInsetBottom(element);
+                      }}
                       class="scrollbar-hidden h-full overflow-y-auto overscroll-contain px-2 pb-4 [overflow-anchor:none] touch:pb-(--mobile-content-inset-bottom)"
                       role="log"
                       aria-label={`${provider()?.label} messages`}

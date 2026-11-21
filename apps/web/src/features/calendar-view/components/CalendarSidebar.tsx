@@ -22,6 +22,7 @@ import { t } from '@app/lib/i18n';
 import { UserIcon } from '@core/component/UserIcon';
 import { enableCalendarTeamOoo } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { Key } from '@solid-primitives/keyed';
@@ -386,7 +387,10 @@ export function CalendarSidebar() {
       </ViewSidebar.Content>
       {/* Outside the scrolling list, so a long list never slides it under Settings. */}
       <ConnectCalendarsPromotion class="px-(--sidebar-gutter) pt-2" />
-      <ViewSidebar.Footer class="border-0 touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+0.75rem)]">
+      <ViewSidebar.Footer
+        ref={followContentInsetBottom}
+        class="border-0 touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+0.75rem)]"
+      >
         <ViewSidebar.Nav aria-label="Calendar tools">
           <CalendarSettingsDropdown sidebar />
         </ViewSidebar.Nav>

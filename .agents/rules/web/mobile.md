@@ -141,8 +141,15 @@ read their code, and follow that pattern rather than inventing a new one.
   `data-composer-scroll` (a `textarea` counts already): a drag that starts in
   it scrolls the draft, and dismisses only after the text reaches its top.
 - Size against the keyboard with `var(--dvh,1dvh)` and
-  `var(--virtual-keyboard-height,0px)`, fallback included (Android leaves it
-  unset); in JS read `virtualKeyboardVisible()`. Sheets with inputs call
+  `var(--virtual-keyboard-height,0px)`, fallback included, on an element that
+  registers with `ref={followKeyboardViewport}` (`@core/mobile/viewport-insets`)
+  or inside one (sheets, dialogs and `ChannelInputContainer` do); the app frame
+  uses `followViewportHeight`. Publish through that module, never on `<html>`:
+  every element inherits a root property, so each write restyles the whole page.
+  Register a composer's follower outside the layout `createComposerLayout`
+  watches, or each keyboard publish re-measures the draft. Checked by ast-grep
+  `tsx-keyboard-viewport-reader-follows`, warning.
+  In JS read `virtualKeyboardVisible()`. Sheets with inputs call
   `scrollToFocusedInput` from `onFocusIn`.
   Native iOS viewport clearance must be remeasured on fold/rotation even when
   the keyboard does not emit another show event.
@@ -159,6 +166,14 @@ read their code, and follow that pattern rather than inventing a new one.
   an in-flow header consumes the inset, reset it to `0px` on its content subtree
   so nested lists/editors do not reserve it again. Otherwise pad the scroller
   with the top and bottom content insets so content scrolls under the chrome.
+- `--mobile-content-inset-bottom` (the bottom chrome's height) reaches only
+  elements that register with `ref={followContentInsetBottom}`, and is not
+  inherited: register the element whose own styles read it (merge into an
+  existing ref), not an ancestor. Content in a sheet over the chrome sits in
+  `NoContentInsetBottomProvider`. Enforced by ast-grep
+  `tsx-content-inset-reader-follows`, CI error; a stylesheet that reads any of
+  the three values fails `css-viewport-inset-readers` until its file is listed
+  with the element that registers.
 - Top edge fades (`MobileTopEdgeFade`) size from `--mobile-content-inset-top`
   and draw nothing when it is 0, so panes without a top safe area or floating
   chrome (the iPhone Duo) get no fade; place them where that inset is set.

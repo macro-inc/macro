@@ -32,6 +32,7 @@ import { pressedKeys } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { isMobile } from '@core/mobile/isMobile';
+import { followKeyboardViewport } from '@core/mobile/viewport-insets';
 import {
   createCanvasFile,
   createCodeFileFromText,
@@ -1479,9 +1480,10 @@ const DesktopLauncher = (props: LauncherProps) => {
       <Dialog.Portal>
         <Dialog.Overlay class="fixed inset-0 z-modal scrim-glass dialog-overlay-open-animation" />
         <Dialog.Content
+          ref={(element: HTMLDivElement) => followKeyboardViewport(element)}
           aria-label={t('create.createNew')}
           class="fixed inset-x-0 top-0 bottom-(--virtual-keyboard-height,0) z-modal flex items-start justify-center px-2 pt-[10vh] outline-none [--color-surface:var(--color-dialog)]"
-          onClick={(e) => {
+          onClick={(e: MouseEvent) => {
             if (e.target === e.currentTarget) {
               props.onOpenChange(false);
             }

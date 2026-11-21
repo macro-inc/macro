@@ -1,6 +1,7 @@
 import { BackgroundWorkIndicator } from '@core/component/BackgroundWork/BackgroundWorkIndicator';
 import { UploadProgressIndicator } from '@core/component/UploadProgress/UploadProgressIndicator';
 import { isMobile } from '@core/mobile/isMobile';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { Toast } from '@kobalte/core/toast';
 import { createElementSize } from '@solid-primitives/resize-observer';
@@ -32,7 +33,10 @@ function MobileToastStack(props: {
 }) {
   return (
     <div
-      ref={props.ref}
+      ref={(element) => {
+        followContentInsetBottom(element);
+        props.ref?.(element);
+      }}
       class={cn(
         'fixed left-(--safe-left) right-(--safe-right) mx-auto max-w-lg px-(--mobile-chrome-gutter) pointer-events-none flex flex-col gap-5',
         props.class

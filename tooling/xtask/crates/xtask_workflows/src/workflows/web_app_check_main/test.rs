@@ -481,6 +481,7 @@ fn browser_suites_build_the_wasm_they_load_first() {
         "just test-i18n-browser",
         "just test-database-browser",
         "just test-calendar-details-browser",
+        "just test-mobile-insets-browser",
     ] {
         let at = browser
             .find(suite)
@@ -523,6 +524,39 @@ fn calendar_details_browser_tests_run_when_the_replaced_queries_change() {
         step.contains("needs.path-check.outputs.calendar_details_changed == 'true'")
             && step.contains("just test-calendar-details-browser"),
         "the step runs the suite when calendar details change: {step}"
+    );
+}
+
+/// The mobile insets suite runs when a publisher of the bottom chrome or the
+/// keyboard, or the module that writes their values, changes.
+#[test]
+fn mobile_insets_browser_tests_run_when_the_publishers_change() {
+    let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    let filters = yaml
+        .split("filters: |")
+        .nth(1)
+        .and_then(|rest| rest.split("id: filter").next())
+        .expect("path-check filters");
+    let insets = filters
+        .split("mobile_insets_changed:")
+        .nth(1)
+        .expect("mobile_insets_changed filter");
+    for path in [
+        "apps/web/src/lib/core/mobile/viewport-insets.ts",
+        "apps/web/src/components/app/useAppSquishHandlers.ts",
+        "apps/web/src/components/app/mobile/float-regions/**",
+    ] {
+        assert!(insets.contains(path), "{path} runs the suite: {insets}");
+    }
+    let step = browser_job(&yaml)
+        .split("- name: Mobile Insets Browser Tests")
+        .nth(1)
+        .and_then(|rest| rest.split("- name:").next())
+        .expect("mobile insets browser step");
+    assert!(
+        step.contains("needs.path-check.outputs.mobile_insets_changed == 'true'")
+            && step.contains("just test-mobile-insets-browser"),
+        "the step runs the suite when the publishers change: {step}"
     );
 }
 

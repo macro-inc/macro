@@ -31,6 +31,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
+import { followKeyboardViewport } from '@core/mobile/viewport-insets';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { handleFileFolderDrop } from '@core/util/upload';
 import PaperclipIcon from '@icon/system/regular/paperclip.svg';
@@ -398,7 +399,13 @@ export function ChatInput(props: ChatInputComponentProps) {
           }}
           onFocusIn={() => setIsFocused(true)}
           class="relative flex flex-col"
-          ref={containerRef}
+          ref={(element) => {
+            containerRef = element;
+            // The editor's max height reads the keyboard's `--dvh`. Written
+            // here, outside the line the composer layout watches, so a
+            // keyboard publish doesn't make it measure again.
+            followKeyboardViewport(element);
+          }}
           id="chat-input"
         >
           <Show when={!isTallVariant()}>

@@ -52,6 +52,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useNativeNavigationEdge } from '@core/mobile/nativeNavigationEdge';
+import { followViewportHeight } from '@core/mobile/viewport-insets';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { hasLoginCookie, updateCookie } from '@core/util/cookies';
 import { lazy } from '@core/util/lazy';
@@ -181,8 +182,9 @@ export function RootFrame(props: ParentProps) {
   return (
     <MobileSettingsProvider>
       <div
+        ref={followViewportHeight}
         class={cn(
-          'relative flex flex-col justify-between not-touch:bg-page touch:bg-panel w-dvw h-[calc(var(--dvh,1dvh)*100)] pl-(--safe-left) pr-(--safe-right)',
+          'relative flex flex-col justify-between not-touch:bg-page touch:bg-panel w-dvw h-dvh pl-(--safe-left) pr-(--safe-right)',
           hasOverlayTitleBar && 'pt-[40px]'
         )}
       >

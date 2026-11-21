@@ -10,6 +10,7 @@ import { Compartment, EditorState, type Extension } from '@codemirror/state';
 import { EditorView, keymap, type Panel } from '@codemirror/view';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { debounce, throttle } from '@solid-primitives/scheduled';
 import { basicSetup } from 'codemirror';
@@ -216,6 +217,8 @@ export function CodeMirror(props: CodeMirrorProps) {
         ],
       }),
     });
+    // The inset is read on the scroller, which doesn't inherit it.
+    followContentInsetBottom(view.scrollDOM);
 
     let languageLoadId = 0;
     createEffect(

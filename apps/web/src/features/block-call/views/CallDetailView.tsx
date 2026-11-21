@@ -18,6 +18,7 @@ import {
 } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { createFileDownload } from '@core/util/createFileDownload';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ShareIcon from '@icon/share.svg';
@@ -248,7 +249,10 @@ export function CallDetailContent(props: {
         fallback={
           <Switch>
             <Match when={props.query.status === 'pending'}>
-              <div class="grid size-full place-items-center text-ink-muted touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
+              <div
+                ref={followContentInsetBottom}
+                class="grid size-full place-items-center text-ink-muted touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)"
+              >
                 <SpinnerIcon
                   aria-hidden={false}
                   aria-label={t('calls.detailLoadingRecording')}
@@ -257,7 +261,10 @@ export function CallDetailContent(props: {
               </div>
             </Match>
             <Match when={props.query.status === 'error'}>
-              <div class="grid size-full place-items-center text-ink-muted touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
+              <div
+                ref={followContentInsetBottom}
+                class="grid size-full place-items-center text-ink-muted touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)"
+              >
                 <div class="flex flex-col items-center gap-3 text-sm">
                   <span>{t('calls.detailFailedRecording')}</span>
                   <Button
@@ -278,7 +285,10 @@ export function CallDetailContent(props: {
         {(data) => (
           <Suspense
             fallback={
-              <div class="grid size-full place-items-center text-ink-muted touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
+              <div
+                ref={followContentInsetBottom}
+                class="grid size-full place-items-center text-ink-muted touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)"
+              >
                 <SpinnerIcon
                   aria-hidden={false}
                   aria-label={t('calls.detailLoadingRecording')}

@@ -12,6 +12,7 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { toast } from '@core/component/Toast/Toast';
 import type { QuickAccessItem } from '@core/context/quickAccess';
 import { useIsAuthenticated, useUserId } from '@core/context/user';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useOpenDirectMessage } from '@core/util/open-direct-message';
 import { isTransientRequestError } from '@core/util/request-error';
@@ -181,7 +182,10 @@ function MobileNameResults(props: {
   };
   return (
     <div
-      ref={setContainer}
+      ref={(element) => {
+        setContainer(element);
+        followContentInsetBottom(element);
+      }}
       onWheel={restoration.cancel}
       onTouchStart={restoration.cancel}
       onPointerDown={restoration.cancel}
@@ -336,7 +340,10 @@ function MobileFullTextResults(props: {
   };
   return (
     <div
-      ref={setContainer}
+      ref={(element) => {
+        setContainer(element);
+        followContentInsetBottom(element);
+      }}
       role="region"
       aria-label={t('commandMenu.searchResults')}
       onScroll={loadMoreNearEnd}
