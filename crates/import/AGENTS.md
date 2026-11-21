@@ -50,11 +50,33 @@ which. Each
 plan item records `shared`, `sharedReason` and `shareable`
 (`notion_workspace/sharing.rs`). The owner can flip items on the review card;
 the draft's `shared`/`personal` lists are written onto the rows before the
-write starts. Users without a team keep everything personal. The write
-shares documents, databases (with their row bodies' folder) and task-list
-folders it makes (`WorkspaceWriter::share_with_team`), and a page's folder only
-when everything written inside it is shared, since sharing a folder shares its
-contents. A teammate's shared database is linked like a page, but relations
+write starts. Users without a team keep everything personal. Personal pages,
+row bodies and tasks cross `WorkspaceWriter` with `ImportVisibility::Personal`
+and are created with link sharing explicitly off, even when the owner team
+defaults to TEAM or PUBLIC. Shared verdicts keep the entity/team defaults. New
+root and mixed-content folders also start with link sharing off; folders that
+contain only shared content retain defaults. Existing entities are not changed.
+Convert reviewed sharing once with `ImportVisibility::from_shared`; derive team
+and link policy from that verdict instead of passing independent flags. Keep
+Shared link defaults when the user has left the team since review; team claims
+only control explicit team grants.
+
+Resolve each personal destination through
+`ImportServiceImpl::personal_item_folder(user, import_id, destination, path)`.
+`WorkspaceWriter::folder_has_explicit_grant` reads the folder and its ancestors
+through Projects; links alone do not grant descendant access. An unsafe
+folder is mirrored by `personal_mirror_folder(user, path)` under the lazily
+created, top-level "Notion (personal)" folder, with Personal subfolders. These
+public domain helpers also serve database filing. `notion_workspace/personal.rs`
+owns the contract. The root and path identities live on `import_run`
+(`personal_root_folder_id`, `personal_folder_ids`), survive subsequent runs,
+and are checked for liveness and new grants before reuse. Relocations are
+recorded in the item's metadata and listed in the report's warnings. Old shared
+folders are never changed.
+The write shares documents, databases (with their row bodies' folder) and
+task-list folders it makes (`WorkspaceWriter::share_with_team`), and a page's
+new shared folder branch only when everything written inside it is shared, since explicitly
+sharing a folder grants access to its contents. A teammate's shared database is linked like a page, but relations
 from this import's other databases into it are not linked.
 
 ## Start here
@@ -146,7 +168,7 @@ from this import's other databases into it are not linked.
   their database, and folders, databases, inserted rows, the Page column and
   relation columns are recorded in `import_entity_written` as they are made.
   Every import reuses the user's "Notion" folder (`import_run.root_folder_id`)
-  while it exists. Left open: a crash between creating a folder, a database
+  while it exists outside trash; a deleted root is replaced on the next write. Left open: a crash between creating a folder, a database
   or a row batch and recording it duplicates that one object or batch, and a
   crash between applying a schema op and recording it fails that database on
   resume (Macro refuses the column id).
@@ -156,7 +178,34 @@ from this import's other databases into it are not linked.
   personal copy never takes it, so teammates never see or link to it and
   import their own copy. Planning marks objects a teammate already imported
   and shared as `alreadyImported` (no decision-model call, not counted as
-  copies); the write links them. At write time `claim_team_object` decides per
+  copies); the write links them. `service/lifecycle.rs` checks finished targets
+  through `ImportedTargetReader` during planning and immediately before linking.
+  Reviewed Notion, Linear and Jira all use that policy, including tracker tasks
+  and initiative project identities. `ImportedTarget` maps ledger types once.
+  Inventory reads run with at most eight concurrent requests; generation
+  renewals stay sequential so parent and child locks keep a stable order.
+  Liveness is independent of viewer permissions: losing access alone never
+  renews a still-active target's generation.
+  Missing or trashed documents, folders and database entities get a fresh ledger
+  generation and write ids on explicit re-import; the old trash copy stays
+  untouched. Renewal clears that generation's written markers, team claim and
+  obsolete plan link/rationale fields,
+  preserves child rows, and never resets an `importing` row. Under the ledger
+  row lock the domain rechecks physical liveness, preserving a target restored
+  while that lock was pending. A later restore is a separate lifecycle action
+  and may coexist with the explicitly requested new copy. Delete handlers
+  do not release claims eagerly: liveness checks repair stale claims, including
+  deletion between planning and writing. A replacement write uses its own
+  generation's document id even if the link snapshot still names the old team
+  copy, and clears the review's obsolete `alreadyImported` target. Page, task
+  and database-body writes read the run's shared destinations immediately before
+  creation, so later writes use a replacement's id while live team ids stay put.
+  A missing linked data source requires a fresh plan instead of guessing between
+  a database and tasks folder without its original task mapping. Transient
+  read errors preserve claims. A finished object deleted during a resumed write
+  is staged and reported individually; unrelated objects still finish. Its
+  target is omitted from new links. Personal verdicts never acquire the team
+  slot when replacing a deleted linked copy. At write time `claim_team_object` decides per
   shared object: hold the claim and write, link to a finished copy, take over a
   claim whose holder's run has no live lease, or wait. A waiting row is
   checked again after the rest is written, then parks with `waiting_on` the
@@ -197,6 +246,37 @@ from this import's other databases into it are not linked.
 - Rules: `.agents/rules/rust/architecture.md`
 - Skill: `cloud-storage-hexagonal-architecture`
 
+Keep structural folder roles separate in `import_entity_written`: the ordinary
+`folder` marker is personal/mixed, and `folder` with object `shared` is the
+all-shared branch. Replace its pointer when a user removed the previous folder's
+grant; never restore that grant or add one to the ordinary marker. Reuse a legacy
+ordinary folder only while the actual owner's team already has a direct Edit
+grant; never promote a mirror folder. Record a separate-folder report warning
+when a new visibility branch must be created beside an existing one. The
+per-user write lease excludes other processes, and weak per-user async
+locks serialize parallel mirror resolutions within a process. Never hold a
+process-wide lock across folder creation calls.
+
+Treat a Shared re-review of an incomplete data source as consent to share that
+source's existing database, task list and body folders, plus direct grants on
+its recorded tasks and row bodies that may have been relocated into the personal
+mirror. Do not share a mirror or parent that also holds unrelated personal items.
+Personal task imports omit teammate assignees to prevent assignment grants;
+persist a typed `WrittenKind::TaskNotice` payload per task. Aggregate notice
+counts once per source in report warnings; do not rewrite growing source metadata.
+Use a dedicated written kind and typed payload for notices, never document markers.
+Older workers reject TaskNotice markers until upgraded; interrupted writes resume
+on updated workers. Exclude TaskNotice from resumable-output retention checks;
+renewing a deleted generation clears notices and generation-specific folder reports.
+Read counts only for Personal items in the current review, reject malformed
+payloads, and clear the source's notices after a successful Shared retry. Reapply only the omitted
+assignee on marked Notion tasks with this source's omission notice during that retry; preserve contents and other
+properties, and keep the source retryable if a roster lookup or assignee write fails.
+Strip obsolete claim metadata without rewriting the current reviewed visibility. Preserve
+writer-owned folder report fields when staging or updating plans. Keep verdict
+updates behind the exact-key lookup fence and recheck the owner on the updated
+tuple; stale statistics must not turn a small batch into a user-wide ledger scan.
+
 ## Issue tracker workspace imports
 
 `ImportFromLinear` and `ImportFromJira` use the same reviewed lifecycle as Notion.
@@ -212,10 +292,13 @@ and group projects are initiatives. Project and Parent Task properties link only
 targets available in Macro. Assignees match team emails. Source values without a
 Macro property equivalent stay in the body.
 
+Personal tracker tasks and projects use the same `ImportVisibility::Personal`
+policy as Notion items; shared verdicts retain ordinary link defaults.
 Tasks and projects use UUIDv5 identities derived from ledger rows. Tasks record a
-written marker before relationship enrichment and stay private until it
-succeeds; only then are they shared with the team and marked imported. Failures remain staged and appear in the report; replanning preserves
-rows with written markers, so retrying a partial write reuses its identity.
+written marker before relationship enrichment and defer explicit team sharing
+until it succeeds; only then are they shared with the team and marked imported.
+Failures remain staged and appear in the report; replanning preserves rows with
+written markers, so retrying a partial write reuses its identity.
 Teammate copies are linked without editing them; only the holder keeps `team_id`.
 A selected parent/project that failed or is still waiting is reported for retry.
 Optional task properties and tags follow the existing best-effort enrichment

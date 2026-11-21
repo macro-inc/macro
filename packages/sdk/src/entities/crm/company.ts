@@ -136,7 +136,7 @@ export class Company extends PropertiedEntity<CompanyDetail> {
     return records.map((r) => Contact.from(this.client, r));
   }
 
-  /** Search CRM companies by name/domain, most relevant first, auto-paginated. */
+  /** Search CRM companies by name/domain, most relevant first, auto-paginated; `maxItems` caps the total. */
   static search = entitySearch({
     filters: { crm_company_filters: {} },
     type: 'company',

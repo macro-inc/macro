@@ -25,6 +25,12 @@ import { match } from 'ts-pattern';
 import { HOSTS, type ServiceName } from '../../../packages/sdk/src/config';
 import { Macro } from '../../../packages/sdk/src/macro';
 import type { Config } from './config';
+import {
+  keyBytes,
+  PersonTokenError,
+  type PersonTokens,
+  personTokenKey,
+} from './person-tokens';
 
 /** Where MCP clients discover this resource server's authorization server. */
 export const PROTECTED_RESOURCE_PATH = '/.well-known/oauth-protected-resource';
@@ -33,6 +39,51 @@ export const PROTECTED_RESOURCE_PATH = '/.well-known/oauth-protected-resource';
 export const OPENAI_APPS_CHALLENGE_PATH = '/.well-known/openai-apps-challenge';
 
 const SERVER_INFO = { name: 'macro', title: 'Macro', version: '1.0.0' };
+
+/** The tool that turns person tokens back into names and emails. */
+export const PEOPLE_TOOL = 'people_read';
+
+const MAX_PEOPLE = 20;
+
+const PEOPLE_LISTED = {
+  name: PEOPLE_TOOL,
+  title: 'Look up people',
+  description:
+    "Other tools return people as tokens (person_u_… for a Macro user, person_e_… for an email address) instead of their user ids and emails. Pass those tokens back as they are wherever a tool takes a user id or email (assigning, mentioning, sharing, filtering by person). Call this tool only when the user asks for someone's contact details or needs their email address: it returns each token's name and email.",
+  inputSchema: {
+    type: 'object' as const,
+    properties: {
+      tokens: {
+        type: 'array',
+        items: { type: 'string' },
+        minItems: 1,
+        maxItems: MAX_PEOPLE,
+        description: 'Person tokens from earlier results.',
+      },
+    },
+    required: ['tokens'],
+    additionalProperties: false,
+  },
+  annotations: {
+    title: 'Look up people',
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+};
+
+/** Viewer ids by a hash of the bearer, so a person token costs one lookup per token, not per call. */
+const VIEWERS = new Map<string, Promise<string>>();
+const MAX_VIEWERS = 1000;
+
+async function bearerKey(token: string) {
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(token)
+  );
+  return btoa(String.fromCharCode(...new Uint8Array(digest)));
+}
 
 function isServiceName(name: string): name is ServiceName {
   return name in HOSTS.local;
@@ -114,6 +165,88 @@ export function createHandler(config: Config) {
     )
   );
   const mcpPath = new URL(config.RESOURCE_URL).pathname;
+  const personKey = personTokenKey(
+    (config.PERSON_TOKEN_KEY && keyBytes(config.PERSON_TOKEN_KEY)) ||
+      crypto.getRandomValues(new Uint8Array(32))
+  );
+
+  function macroFor(token: string) {
+    return new Macro({
+      token,
+      env: config.MACRO_ENV,
+      ...(Object.keys(hosts).length ? { hosts } : {}),
+    });
+  }
+
+  /** Person tokens for the bearer's user, who is looked up only when needed. */
+  function personTokens(token: string): PersonTokens {
+    return personKey(async () => {
+      const key = await bearerKey(token);
+      let viewer = VIEWERS.get(key);
+      if (!viewer) {
+        if (VIEWERS.size >= MAX_VIEWERS) VIEWERS.clear();
+        viewer = macroFor(token).myPrincipalId();
+        viewer.catch(() => VIEWERS.delete(key));
+        VIEWERS.set(key, viewer);
+      }
+      return viewer;
+    });
+  }
+
+  /** `people_read`: each token's name and email, the only output that carries them. */
+  async function lookUpPeople(
+    args: Readonly<Record<string, unknown>>,
+    token: string
+  ): Promise<OperationResult> {
+    const tokens = args.tokens;
+    if (
+      !Array.isArray(tokens) ||
+      !tokens.length ||
+      tokens.length > MAX_PEOPLE ||
+      !tokens.every((item) => typeof item === 'string')
+    )
+      return errorResult(
+        new OperationError(
+          'invalid',
+          `tokens: pass 1 to ${MAX_PEOPLE} person tokens`
+        )
+      );
+    const people = personTokens(token);
+    const macro = macroFor(token);
+    const found = await Promise.all(
+      tokens.map(async (personToken: string) => {
+        try {
+          const identifier = await people.open(personToken);
+          const email = identifier.replace(/^macro\|/, '');
+          if (identifier === email) return { token: personToken, email };
+          const name = await macro.users
+            .byId(identifier)
+            .name()
+            .catch(() => undefined);
+          return { token: personToken, ...(name ? { name } : {}), email };
+        } catch (error) {
+          if (error instanceof PersonTokenError)
+            return { token: personToken, error: error.message };
+          throw error;
+        }
+      })
+    );
+    return {
+      content: [
+        {
+          type: 'text',
+          text: found
+            .map((person) =>
+              'email' in person
+                ? `${person.token}: ${'name' in person ? `${person.name} <${person.email}>` : person.email}`
+                : `${person.token}: ${person.error}`
+            )
+            .join('\n'),
+        },
+      ],
+      structuredContent: { people: found },
+    };
+  }
 
   async function callTool(
     tool: Tool,
@@ -134,19 +267,41 @@ export function createHandler(config: Config) {
       }
       span.setAttr('mcp.operation', selected.operation.name);
       span.setAttr('mcp.hint', selected.operation.hint);
-      const macro = new Macro({
-        token,
-        env: config.MACRO_ENV,
-        ...(Object.keys(hosts).length ? { hosts } : {}),
-      });
-      const result = await runOperation({
+      const people = personTokens(token);
+      let input: Record<string, unknown>;
+      try {
+        const revealed = await people.reveal(selected.input);
+        input =
+          typeof revealed === 'object' && revealed !== null
+            ? { ...revealed }
+            : {};
+      } catch (error) {
+        span.setAttr('mcp.outcome', 'invalid');
+        if (error instanceof PersonTokenError)
+          return errorResult(new OperationError('invalid', error.message));
+        throw error;
+      }
+      const raw = await runOperation({
         operation: selected.operation,
-        input: selected.input,
-        macro,
+        input,
+        macro: macroFor(token),
         catalog,
         classes: handleClasses,
         validators,
       });
+      // ChatGPT sees people as tokens, never their user ids or emails.
+      let result: OperationResult;
+      try {
+        result = (await people.conceal(raw)) as OperationResult;
+      } catch {
+        span.setAttr('mcp.outcome', 'internal');
+        return errorResult(
+          new OperationError(
+            'internal',
+            "Couldn't protect people in the result."
+          )
+        );
+      }
       const error = result.structuredContent.error;
       const code =
         typeof error === 'object' && error !== null && 'code' in error
@@ -159,8 +314,15 @@ export function createHandler(config: Config) {
 
   function mcpServer(token: string) {
     const server = new Server(SERVER_INFO, { capabilities: { tools: {} } });
-    server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: listed }));
+    server.setRequestHandler(ListToolsRequestSchema, () => ({
+      tools: [...listed, PEOPLE_LISTED],
+    }));
     server.setRequestHandler(CallToolRequestSchema, async (request) => {
+      if (request.params.name === PEOPLE_TOOL)
+        return Telemetry.span('mcp_chatgpt.tool_call', async (span) => {
+          span.setAttr('mcp.tool', PEOPLE_TOOL);
+          return lookUpPeople(request.params.arguments ?? {}, token);
+        });
       const tool = toolsByName.get(request.params.name);
       if (!tool)
         throw new McpError(

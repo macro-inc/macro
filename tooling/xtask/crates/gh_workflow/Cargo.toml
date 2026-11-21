@@ -1,0 +1,23 @@
+[package]
+description = "Typed GitHub Actions workflow model, vendored from tailcallhq/gh-workflow (see AGENTS.md)"
+edition = "2021"
+license = "Apache-2.0"
+name = "gh_workflow"
+publish = false
+version = "0.8.1"
+
+[dependencies]
+derive_setters = { workspace = true }
+indexmap = { workspace = true, features = ["serde"] }
+merge = { workspace = true }
+nom = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+serde_yaml = { workspace = true }
+
+[[test]]
+name = "test-workflow"
+path = "tests/test-workflow.rs"

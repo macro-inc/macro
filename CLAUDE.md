@@ -139,9 +139,9 @@ Real files live in `.agents/`; tool-specific directories only symlink to it.
 - For code changes, run `just check` (format/lint/code rules scoped to changes).
   `just check full` adds TypeScript checking and Rust clippy; `just rust-check` is
   the workspace Rust type check. These checks do not replace tests.
-- Exercise user-visible changes in a browser. If routes, creation flows, editors,
-  AI surfaces, or composer behavior change, update the corresponding
-  [app agent guide](docs/agent-guide/README.md) in the same change.
+- Leave browser checks, browser fixtures, and screenshots to the user when requested; keep the requested preview running and stop browsers or local stacks you started solely for verification.
+- If routes, creation flows, editors, AI surfaces, or composer behavior change,
+  update the corresponding [app agent guide](docs/agent-guide/README.md) in the same change.
 - Report what you tested and any checks blocked by the environment.
 
 ## Keeping guidance current

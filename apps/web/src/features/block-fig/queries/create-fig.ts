@@ -1,3 +1,4 @@
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 /**
  * Creating a new, empty design document.
  */
@@ -21,6 +22,7 @@ export async function createFigDocument(args: {
   /** UI surface the creation originated from, for analytics. */
   source?: string;
 }): Promise<string | undefined> {
+  const generation = cacheSessionGeneration.capture();
   const title = args.title ?? 'Untitled design';
   const bytes = await FigEngine.blank(title);
   const sha = await contentHash(bytes);
@@ -46,6 +48,7 @@ export async function createFigDocument(args: {
     'create-fig-document'
   );
   setPreviewOnCreate({
+    generation,
     itemId: documentId,
     itemType: 'document',
     name: title,

@@ -181,13 +181,13 @@ for (const provider of PROVIDERS) {
       confirmed('F-076');
     });
 
-    // Class web-gmail-not-spam-stays-archived: when this fails on Gmail, Not
-    // spam only takes the SPAM label off, so the message lands in All Mail
-    // and never comes back to the inbox, at Gmail or in Macro. Outlook moves
-    // it to the Inbox folder, as Gmail's own Not spam does.
-    test(`${provider === 'GMAIL' ? 'known bug: web-gmail-not-spam-stays-archived: ' : ''}not spam brings a message from spam back to the inbox`, {
-      tag: provider === 'GMAIL' ? '@known-bug' : [],
-    }, async ({ page, mailbox }) => {
+    // When this fails, Not spam leaves the message in Spam or Junk, or takes
+    // it out without bringing it back to the inbox, at the provider or in
+    // Macro.
+    test('not spam brings a message from spam back to the inbox', async ({
+      page,
+      mailbox,
+    }) => {
       await mailbox.deliver({
         from: 'Grace <grace@example.com>',
         subject: 'Agenda',
@@ -222,7 +222,8 @@ for (const provider of PROVIDERS) {
       await expect
         .poll(async () => (await held())?.labels)
         .not.toContain(spamFolder(provider));
-      expect((await held())?.inInbox).toBe(true);
+      // On Gmail Not spam is two label writes, which can land in either order.
+      await expect.poll(async () => (await held())?.inInbox).toBe(true);
       confirmed('F-078');
 
       // Back in Macro's inbox too.

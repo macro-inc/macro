@@ -19,8 +19,6 @@ use uuid::Uuid;
 const PRIMARY: &str = "primary";
 /// The Outlook emulator's name for a mailbox's own calendar.
 const DEFAULT: &str = "default";
-/// The stand-in that receives what the services tell open clients.
-const CONNECTION_GATEWAY: &str = "connection-gateway";
 
 async fn calendar_stack() -> Result<Stack, Report> {
     Stack::start_with(StackOptions {
@@ -75,28 +73,20 @@ async fn team_out_of_office(
 #[derive(Debug)]
 struct Refresh {
     #[expect(dead_code, reason = "shown when an assertion fails")]
-    path: String,
+    to: String,
     message: Value,
 }
 
+/// Every calendar refresh, one per recipient, however the services batched
+/// them into requests.
 fn refreshes(requests: &[ServiceRequest]) -> Vec<Refresh> {
     requests
         .iter()
-        .filter(|request| request.service == CONNECTION_GATEWAY)
-        .filter_map(|request| {
-            let body = request.body.as_ref()?;
-            if body["message_type"] != "refresh_calendar" {
-                return None;
-            }
-            // The message travels as JSON text or as an object.
-            let message = match &body["message"] {
-                Value::String(text) => serde_json::from_str(text).ok()?,
-                message => message.clone(),
-            };
-            Some(Refresh {
-                path: request.path.clone(),
-                message,
-            })
+        .flat_map(ServiceRequest::gateway_messages)
+        .filter(|sent| sent.message_type == "refresh_calendar")
+        .map(|sent| Refresh {
+            to: sent.entity_id,
+            message: sent.message,
         })
         .collect()
 }

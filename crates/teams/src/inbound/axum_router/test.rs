@@ -560,6 +560,15 @@ impl TeamService for FakeTeamService {
     ) -> Result<(), RemoveUserFromTeamError> {
         panic!("unexpected remove_team_agent call")
     }
+
+    async fn take_back_team_agent(
+        &self,
+        _team_id: uuid::Uuid,
+        _agent_user_id: &MacroUserIdStr<'_>,
+        _removed_by: MacroUserIdStr<'static>,
+    ) -> Result<(), RemoveUserFromTeamError> {
+        panic!("unexpected take_back_team_agent call")
+    }
 }
 
 impl TeamInviteLinkService for FakeTeamService {

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { APPEARANCE_COLORS } from '../entity-appearance/core/appearance';
 import type { ScheduleDraft } from './core/draft';
 import { stepDraftSchema } from './core/routine-steps';
 import { routineModelSchema, routineTargetSchema } from './core/routine-target';
@@ -38,6 +39,18 @@ const draftFields = {
       })
     )
     .max(64)
+    .optional(),
+  // The look AI picked for a drafted routine; drafts from before have none.
+  appearance: z
+    .strictObject({
+      icon: z
+        .discriminatedUnion('kind', [
+          z.strictObject({ kind: z.literal('macro'), name: z.string() }),
+          z.strictObject({ kind: z.literal('emoji'), value: z.string() }),
+        ])
+        .nullish(),
+      color: z.enum(APPEARANCE_COLORS).nullish(),
+    })
     .optional(),
   // Drafts saved before routines took apps have none.
   apps: z

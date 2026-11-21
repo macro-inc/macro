@@ -14,6 +14,7 @@ use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use macro_service_urls::{
     AuthServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl, StaticFileServiceUrl,
 };
+use models_email::email::service::pubsub::LinkManagerLane;
 use notification::domain::service::SqsNotificationIngress;
 use notification::outbound::queue::SqsQueue;
 use sqlx::PgPool;
@@ -103,6 +104,7 @@ async fn main() -> anyhow::Result<()> {
     let sfs_uploader_queue = macro_queues::SfsUploaderQueue::new();
     let sfs_delete_queue = macro_queues::SfsDeleteQueue::new();
     let link_manager_queue = macro_queues::LinkManagerQueue::new();
+    let link_maintenance_queue = macro_queues::LinkMaintenanceQueue::new();
     let contacts_queue = macro_queues::ContactsQueue::new();
     let notification_queue = macro_queues::NotificationIngressQueue::new();
 
@@ -116,7 +118,8 @@ async fn main() -> anyhow::Result<()> {
         .email_scheduled_queue(&email_scheduled_queue)
         .sfs_uploader_queue(&sfs_uploader_queue)
         .sfs_delete_queue(&sfs_delete_queue)
-        .email_link_manager_queue(&link_manager_queue);
+        .email_link_manager_queue(&link_manager_queue)
+        .email_link_maintenance_queue(&link_maintenance_queue);
 
     let worker_cancellation_token = CancellationToken::new();
     let worker_tracker = TaskTracker::new();
@@ -133,12 +136,12 @@ async fn main() -> anyhow::Result<()> {
         event_broker_tracker.clone(),
     );
 
-    let contacts_ingress = Arc::new(contacts::domain::service::SqsContactsIngress {
-        queue: contacts::outbound::ingress::SqsContactsQueue::new(
-            aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
-            contacts_queue.to_string(),
-        ),
-    });
+    let contacts_ingress = Arc::new(email_service::composition::contacts_producer(
+        aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
+        contacts_queue.to_string(),
+        config.environment,
+        email_service::outlook_flags::posthog(&config)?,
+    ));
 
     // One message per receive: messages are processed one at a time and only the one in
     // progress renews its visibility, so the rest of a batch would time out behind a long
@@ -146,6 +149,14 @@ async fn main() -> anyhow::Result<()> {
     let link_manager_worker = sqs_worker::SQSWorker::new(
         aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
         link_manager_queue.to_string(),
+        1,
+        config.queue_wait_time_seconds,
+    );
+    // The maintenance lane gets consumers of its own, so the daily removal sweep's
+    // purges never hold the consumer a person's removal waits for.
+    let link_maintenance_worker = sqs_worker::SQSWorker::new(
+        aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
+        link_maintenance_queue.to_string(),
         1,
         config.queue_wait_time_seconds,
     );
@@ -296,27 +307,55 @@ async fn main() -> anyhow::Result<()> {
         RateBudget::Live,
     );
     let outlook_repository = email_api_client::OutlookApiClientRepository::with_gate(Arc::new(
-        email_service::outbound::email_api::RedisMicrosoftRequestGate(redis_conn.clone()),
+        email_service::outbound::email_api::RedisMicrosoftRequestGate::new(
+            redis_conn.clone(),
+            email_api_client::outbound::microsoft_gate::RequestBudget::Live,
+        ),
     ))?;
+    let outlook_credentials = email::domain::mailbox::credentials::MailboxCredentials::new(
+        email::outbound::mailbox_pg::PgMailboxSync::new(db.clone()),
+        email_service::outbound::email_api::MicrosoftCredentialsClient(auth_service_client.clone()),
+    );
     let outlook_api = email_api_client::domain::service::mailbox::MailboxApiService::new(
         outlook_repository.clone(),
-        email::domain::mailbox::credentials::MailboxCredentials::new(
-            email::outbound::mailbox_pg::PgMailboxSync::new(db.clone()),
-            email_service::outbound::email_api::MicrosoftCredentialsClient(
-                auth_service_client.clone(),
-            ),
-        ),
+        outlook_credentials.clone(),
         // Admission is applied to each actual Graph request by the injected gate.
         email_api_client::domain::ports::AlwaysAllowRateLimiter,
     );
     let mailbox_repository = email::outbound::mailbox_pg::PgMailboxSync::new(db.clone())
         .with_imports_paused(config.outlook_imports_paused);
     if config.outlook_sync_enabled {
+        let outlook_import_api = email_api_client::domain::service::mailbox::MailboxApiService::new(
+            email_api_client::OutlookApiClientRepository::with_gate(Arc::new(
+                email_service::outbound::email_api::RedisMicrosoftRequestGate::new(
+                    redis_conn.clone(),
+                    email_api_client::outbound::microsoft_gate::RequestBudget::Import,
+                ),
+            ))?,
+            outlook_credentials,
+            email_api_client::domain::ports::AlwaysAllowRateLimiter,
+        );
+        // Newest-first imports and the live pass beside them follow
+        // `enable-outlook-import-live-pass`; without a PostHog key they are off.
+        let feature_flags = email_service::outlook_flags::posthog(&config)?;
+        let live_import_pass = email::domain::mailbox::live_pass::LiveImportPass::default();
+        let switch = live_import_pass.clone();
+        worker_tracker.spawn(email_service::outlook_flags::run(
+            feature_flags,
+            email_service::outlook_flags::OutlookFlag {
+                key: email_service::outlook_flags::LIVE_IMPORT_PASS_FLAG,
+                name: "outlook import live pass",
+                set: move |on| switch.set(on),
+            },
+            worker_cancellation_token.clone(),
+        ));
         let mailbox_sync = email::domain::mailbox::MailboxSyncService::new(
             mailbox_repository.clone(),
             email_service::outbound::email_api::ProviderMailboxGateway(outlook_api.clone()),
+            email_service::outbound::email_api::ProviderMailboxGateway(outlook_import_api),
             mailbox_repository.clone(),
-        );
+        )
+        .with_live_import_pass(live_import_pass);
         worker_tracker.spawn(email_service::mailbox_sync_worker::run_health(
             email::domain::mailbox::progress::MailboxProgressService::new(
                 mailbox_repository.clone(),
@@ -410,6 +449,10 @@ async fn main() -> anyhow::Result<()> {
         metadata_resolver,
     );
     worker_tracker.spawn(email_service::email_policy_worker::run(
+        crm_service_backfill.clone(),
+        worker_cancellation_token.clone(),
+    ));
+    worker_tracker.spawn(email_service::email_policy_worker::run_previews(
         crm_service_backfill.clone(),
         worker_cancellation_token.clone(),
     ));
@@ -714,35 +757,42 @@ async fn main() -> anyhow::Result<()> {
         "crm cleanup workers started"
     );
 
-    let db_link_manager = db.clone();
-    let email_api_link_manager = email_api_live.clone();
-    let auth_service_client_link_manager = auth_service_client.clone();
-    let redis_client_link_manager = redis_client.clone();
-    let sqs_client_link_manager = sqs_client.clone();
-    let crm_service_link_manager = crm_service.clone();
-    let connection_gateway_client_link_manager = connection_gateway_client.clone();
-    let notification_ingress_service_link_manager = notification_ingress_service.clone();
-    let macro_event_broker_link_manager = macro_event_broker.clone();
-    let contacts_ingress_link_manager = contacts_ingress.clone();
-    let cancellation_token = worker_cancellation_token.clone();
-    // daily link_manager operations for user contacts and inbox subscriptions
-    worker_tracker.spawn(async move {
-        email_service::pubsub::link_manager::worker::run_worker_with_cancellation(
-            link_manager_worker,
-            db_link_manager,
-            email_api_link_manager,
-            auth_service_client_link_manager,
-            redis_client_link_manager,
-            sqs_client_link_manager,
-            crm_service_link_manager,
-            connection_gateway_client_link_manager,
-            notification_ingress_service_link_manager,
-            macro_event_broker_link_manager,
-            contacts_ingress_link_manager,
-            cancellation_token,
-        )
-        .await;
-    });
+    // link_manager operations: removals, health probes, inbox subscriptions and
+    // contacts, one consumer per lane
+    for (lane, worker) in [
+        (LinkManagerLane::Interactive, link_manager_worker),
+        (LinkManagerLane::Maintenance, link_maintenance_worker),
+    ] {
+        let db_link_manager = db.clone();
+        let email_api_link_manager = email_api_live.clone();
+        let auth_service_client_link_manager = auth_service_client.clone();
+        let redis_client_link_manager = redis_client.clone();
+        let sqs_client_link_manager = sqs_client.clone();
+        let crm_service_link_manager = crm_service.clone();
+        let connection_gateway_client_link_manager = connection_gateway_client.clone();
+        let notification_ingress_service_link_manager = notification_ingress_service.clone();
+        let macro_event_broker_link_manager = macro_event_broker.clone();
+        let contacts_ingress_link_manager = contacts_ingress.clone();
+        let cancellation_token = worker_cancellation_token.clone();
+        worker_tracker.spawn(async move {
+            email_service::pubsub::link_manager::worker::run_worker_with_cancellation(
+                lane,
+                worker,
+                db_link_manager,
+                email_api_link_manager,
+                auth_service_client_link_manager,
+                redis_client_link_manager,
+                sqs_client_link_manager,
+                crm_service_link_manager,
+                connection_gateway_client_link_manager,
+                notification_ingress_service_link_manager,
+                macro_event_broker_link_manager,
+                contacts_ingress_link_manager,
+                cancellation_token,
+            )
+            .await;
+        });
+    }
 
     let db_scheduled = db.clone();
     let email_api_scheduled = email_api_live;

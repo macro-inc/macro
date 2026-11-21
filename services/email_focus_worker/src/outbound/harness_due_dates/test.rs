@@ -45,8 +45,7 @@ async fn asks_as_the_owner_and_reads_the_date_back() {
         .mount(&harness)
         .await;
 
-    let due_dates =
-        HarnessDueDates::new(&format!("{}/agent-harness/", harness.uri()), "internal-key").unwrap();
+    let (due_dates, _) = harness_at(&format!("{}/agent-harness/", harness.uri()));
 
     assert_eq!(
         due_dates
@@ -64,7 +63,7 @@ async fn no_deadline_reads_as_no_date() {
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"due_on": null})))
         .mount(&harness)
         .await;
-    let due_dates = HarnessDueDates::new(&harness.uri(), "internal-key").unwrap();
+    let (due_dates, _) = harness_at(&harness.uri());
 
     assert_eq!(
         due_dates
@@ -82,7 +81,7 @@ async fn a_failure_reports_no_mail_text() {
         .respond_with(ResponseTemplate::new(503).set_body_string(MAIL))
         .mount(&harness)
         .await;
-    let due_dates = HarnessDueDates::new(&harness.uri(), "internal-key").unwrap();
+    let (due_dates, metrics) = harness_at(&harness.uri());
 
     let error = due_dates
         .due_on(&owner(), Uuid::now_v7(), &input())
@@ -91,4 +90,56 @@ async fn a_failure_reports_no_mail_text() {
 
     assert!(format!("{error:?}").contains("503"));
     assert!(!format!("{error:?}").contains("signed contract"));
+    let batch = metrics.take();
+    assert_eq!(batch.sums[&Metric::DueDateCalls], 1.0);
+    assert_eq!(batch.sums[&Metric::DueDateFailures], 1.0);
+}
+
+fn harness_at(base: &str) -> (HarnessDueDates, FocusMetrics) {
+    let metrics = FocusMetrics::default();
+    let prices = Prices::fixed([(
+        "nemotron",
+        ai_usage::ModelPricing::Tokens {
+            input: 0.05,
+            output: 0.2,
+            cache_read: Some(0.01),
+            cache_write: None,
+        },
+    )]);
+    let due_dates =
+        HarnessDueDates::new(base, "internal-key", metrics.clone(), Arc::new(prices)).unwrap();
+    (due_dates, metrics)
+}
+
+#[tokio::test]
+async fn each_ask_counts_with_the_tokens_and_cost_the_harness_reports() {
+    let harness = MockServer::start().await;
+    Mock::given(matchers::any())
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "due_on": null,
+            "usage": {
+                "model": "fireworks/nemotron",
+                "input_tokens": 2_000_000,
+                "output_tokens": 1_000_000,
+                "cache_read_tokens": 1_000_000,
+                "cache_write_tokens": 0,
+            },
+        })))
+        .mount(&harness)
+        .await;
+    let (due_dates, metrics) = harness_at(&harness.uri());
+
+    due_dates
+        .due_on(&owner(), Uuid::now_v7(), &input())
+        .await
+        .unwrap();
+
+    let batch = metrics.take();
+    assert_eq!(batch.sums[&Metric::DueDateCalls], 1.0);
+    assert_eq!(batch.sums[&Metric::DueDateFailures], 0.0);
+    assert_eq!(batch.sums[&Metric::DueDateInputTokens], 3_000_000.0);
+    assert_eq!(batch.sums[&Metric::DueDateOutputTokens], 1_000_000.0);
+    // 2M input at $0.05, 1M output at $0.20 and 1M cached at $0.01 a million.
+    let cost = batch.sums[&Metric::DueDateCostUsd];
+    assert!((cost - 0.31).abs() < 1e-6, "{cost}");
 }

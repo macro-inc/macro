@@ -1,0 +1,107 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, computer_id, from_host, to_host, stage AS \"stage: MoveStage\", ticket,\n                   rounds, last_round_bytes, was_running, flipped_at, error, created_by, created_at\n            FROM computer_move\n            WHERE stage IN ('seeding', 'cutting_over', 'verifying', 'rolling_back')\n            ORDER BY created_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "computer_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "from_host",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "to_host",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "stage: MoveStage",
+        "type_info": {
+          "Custom": {
+            "name": "computer_move_stage",
+            "kind": {
+              "Enum": [
+                "seeding",
+                "cutting_over",
+                "verifying",
+                "rolling_back",
+                "committed",
+                "rolled_back",
+                "failed"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "ticket",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "rounds",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "last_round_bytes",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 8,
+        "name": "was_running",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 9,
+        "name": "flipped_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "error",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "created_by",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "fb2af9d5e5a39c37167f9a2bdbab12b996111b19d7123e1675256b25e00bf5a7"
+}

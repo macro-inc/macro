@@ -13,12 +13,15 @@ import {
   failureMessage,
   type Job,
   jobsLine,
+  LOOK_BACK,
   type Names,
   passed,
+  readStream,
   readMore,
   recoveryMessage,
   rustFindings,
   type StreamRun,
+  suiteFindings,
 } from './email_e2e_alert.ts';
 
 const NAMES: Names = {
@@ -268,6 +271,71 @@ describe('decide', () => {
   });
 });
 
+describe('readStream', () => {
+  /** Reads a stream whose runs have the jobs `jobs` gives, and which runs it read. */
+  const read = async (stream: StreamRun[], red: boolean, jobs: (run: StreamRun) => Job[], run = THIS) => {
+    const asked: number[] = [];
+    const decision = await readStream(
+      stream,
+      NAMES,
+      (entries) => decideThis(red, entries, run),
+      async (each) => {
+        asked.push(each.run_number);
+        return jobs(each);
+      },
+    );
+    return { decision, asked };
+  };
+
+  test('reads past pushes replaced while they waited, to the pass before them', async () => {
+    // Run 100 fails; 99 to 60 were replaced while they waited, and started no job.
+    const run = streamRun(100, 'a');
+    const stream = Array.from({ length: 42 }, (_, i) => streamRun(100 - i));
+    const jobs = (each: StreamRun) =>
+      each.run_number === 100
+        ? entry(100, 'red').jobs
+        : each.run_number === 59
+          ? entry(59, 'green', [alert({ minute: 5, shows: 'passing' })]).jobs
+          : [];
+    const { decision } = await read(stream, true, jobs, run);
+
+    assert.equal(decision.post, 'failure');
+    const lastGreen = decision.post === 'failure' ? decision.lastGreen : null;
+    assert.equal(lastGreen?.run_number, 59);
+    // The changes since the last pass span the replaced pushes' commits.
+    assert.match(failureMessage(CONTEXT, [], null, lastGreen), new RegExp(`compare/${sha('9')}\\.\\.\\.${sha('a')}`));
+  });
+
+  test('reads a run whose job ran out of time for what it recorded, though the run was cancelled', async () => {
+    // The runs API lists run 11 as cancelled: a job of it ran out of time.
+    const run = streamRun(12, 'a');
+    const timedOut = Object.assign(streamRun(11), { conclusion: 'cancelled' });
+    const jobs = (each: StreamRun) =>
+      each.run_number === 11
+        ? [job(110, 'Email end-to-end (1/3)', 'cancelled'), alert({ minute: 30, posted: true, shows: 'failing' })]
+        : each.run_number === 10
+          ? entry(10, 'green', [alert({ minute: 20, shows: 'passing' })]).jobs
+          : entry(12, 'green').jobs;
+    const { decision } = await read([run, timedOut, streamRun(10)], false, jobs, run);
+
+    assert.equal(decision.post, 'recovery');
+    assert.equal(decision.post === 'recovery' && decision.failingSince?.run_number, 11);
+  });
+
+  test('stops at LOOK_BACK runs with jobs, and counts no replaced push toward them', async () => {
+    const stream = Array.from({ length: 100 }, (_, i) => streamRun(100 - i));
+    // Nothing recorded, so only the bound stops it.
+    const ran = await read(stream, false, (each) => entry(each.run_number, 'green').jobs);
+    assert.equal(ran.asked.length, LOOK_BACK);
+
+    // Three of every four replaced: 25 runs with jobs, fewer than LOOK_BACK, so it reads the whole listing.
+    const replaced = await read(stream, false, (each) =>
+      each.run_number % 4 === 0 ? entry(each.run_number, 'green').jobs : [],
+    );
+    assert.equal(replaced.asked.length, stream.length);
+  });
+});
+
 describe('readMore', () => {
   test('reads on until something was recorded, and until the message has what it names', () => {
     const recorded = [entry(9, 'green', [alert({ minute: 20, shows: 'passing' })])];
@@ -359,6 +427,24 @@ describe('findings', () => {
 
   test('a Playwright report: the specs that failed, however deep', () => {
     assert.deepEqual(failedSpecs(report), ['inbox.spec.ts:20 archives a thread']);
+  });
+
+  test('a suite with one report and no coverage check: the specs that failed', () => {
+    const marked = (title: string, line: number, status: string) => ({
+      title,
+      file: 'inbox.spec.ts',
+      line,
+      tests: [{ status, expectedStatus: 'failed' }],
+    });
+    const suites = [...report.suites, { specs: [marked('fixed defect', 40, 'unexpected'), marked('defect', 50, 'expected')] }];
+    assert.deepEqual(suiteFindings({ suites }), {
+      failedTests: [
+        'inbox.spec.ts:20 archives a thread',
+        'inbox.spec.ts:40 fixed defect (marked as a known defect, and now passes)',
+      ],
+      knownBugsPassing: [],
+      otherProblems: [],
+    });
   });
 
   test('the browser suite: failed tests of the gating runs, once each, and known bugs that pass', () => {

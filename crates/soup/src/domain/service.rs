@@ -978,6 +978,7 @@ where
                     hydratable,
                     crm: legs.crm.is_some(),
                     only: req.only.as_deref(),
+                    assume_attention: req.assume_attention,
                 })
                 .await
                 .map_err(anyhow::Error::from)?;
@@ -2300,5 +2301,18 @@ where
         team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
     ) -> Result<AttentionSoupPage, SoupErr> {
         self.handle_attention_request(req, team_receipt).await
+    }
+
+    async fn get_attention_unread_entities(
+        &self,
+        user: MacroUserIdStr<'static>,
+        types: Vec<EntityType>,
+        limit: u16,
+    ) -> Result<Vec<Entity<'static>>, SoupErr> {
+        Ok(self
+            .soup_storage
+            .attention_unread_entities(user.copied(), &types, limit)
+            .await
+            .map_err(anyhow::Error::from)?)
     }
 }

@@ -78,8 +78,8 @@ for (const provider of PROVIDERS) {
     // When this fails, choosing Email in the universal input does not bring
     // up the email's fields, or a field does not keep what is put in it: the
     // sender chosen, a recipient in To, Cc or Bcc, the subject, the message.
-    // Sending and saving are a known bug (universal-input-email-needs-draft-id,
-    // elsewhere.spec.ts), so this stops at an email that is ready to send.
+    // Sending and saving are elsewhere.spec.ts's, so this stops at an email
+    // that is ready to send.
     test('the Email type offers its fields, and they keep what is filled in', async ({
       page,
       mailbox,

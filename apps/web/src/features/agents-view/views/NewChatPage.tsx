@@ -8,8 +8,10 @@ import {
   uploadInputAttachments,
 } from '@channel/Input';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
-import { SpeedSelector } from '@core/component/AI/component/input/SpeedSelector';
-import { catalogModelLabel } from '@core/component/AI/constant/model-label';
+import {
+  catalogModelLabel,
+  modelLabel,
+} from '@core/component/AI/constant/model-label';
 import { nativeSpeeds, resolveSpeed } from '@core/component/AI/constant/speed';
 import {
   preferredSpeed,
@@ -41,11 +43,9 @@ import {
   Show,
 } from 'solid-js';
 import { AgentUpdatesStack } from '../../agent-updates/views/AgentUpdatesStack';
-import { EffortSelector } from '../../block-agent/component/EffortSelector';
 import {
   type EffortChoice,
   effortConfigOption,
-  effortLabel,
   selectConfigOption,
 } from '../../block-agent/state/session-config';
 import { ChatComposer } from '../components/ChatComposer';
@@ -57,6 +57,7 @@ import {
 } from '../core/mode';
 import { defaultBranchFor, sameRepository } from '../core/repository';
 import { MACRO_PERSONA_ID, type RosterAgent } from '../core/roster';
+import { UnifiedModelSelector } from '../model-selector';
 import {
   createPersistedComposerAttachments,
   createPersistedComposerDraft,
@@ -71,7 +72,6 @@ import { createComposerModels } from '../queries/composer-models';
 import { createReachableRepositories } from '../queries/reachable-repositories';
 import { createRepositoryBranches } from '../queries/repository-branches';
 import { AGENTS_TOUR } from '../tour';
-import { AgentPicker } from './AgentPicker';
 import { RepositoryPicker } from './RepositoryPicker';
 
 /** Another surface asking the composer to select an agent. */
@@ -97,6 +97,8 @@ export type StartConversation = {
 /** One agent choice determines the session kind, default model, and repository context. */
 export function NewChatPage(props: {
   compact?: boolean;
+  /** Keep Home's original settings drawer and mode tabs. */
+  homeLayout?: boolean;
   active?: boolean;
   workspaceId?: string;
   draft?: string;
@@ -157,7 +159,6 @@ export function NewChatPage(props: {
   /** One-shot model from a coding agent's submenu; Macro uses {@link preferredInmem}. */
   const [modelOverride, setModelOverride] = createSignal<string>();
   const [effortPickerOpen, setEffortPickerOpen] = createSignal(false);
-  const [speedPickerOpen, setSpeedPickerOpen] = createSignal(false);
   const [repositoryPickerOpen, setRepositoryPickerOpen] = createSignal(false);
   const preferredRepository = createPreferredRepository(userId());
   // An explicit Auto-detect pick must override a saved repository, too.
@@ -195,6 +196,8 @@ export function NewChatPage(props: {
   };
   const selected = createMemo(() => preferredAgent(agentsMode(), agentId()));
   const selectedCatalog = createComposerModels(selected);
+  const macro = () => options().find((agent) => agent.id === MACRO_PERSONA_ID);
+  const macroCatalog = createComposerModels(macro);
   /** In-memory choices come from the owner's catalog; other runtimes keep their rules. */
   const composerModelOverride = () => {
     const agent = selected();
@@ -495,21 +498,67 @@ export function NewChatPage(props: {
     event.preventDefault();
     focusInput?.();
   };
+  // Keep catalog identities stable when capability discovery updates the menu.
+  // Recreating option objects remounts their discovery observers and restarts requests.
+  const catalogModels = createMemo(() =>
+    selectedCatalog.models().map((option) => ({
+      id: option.id,
+      label: modelLabel(option.id, option.name, option.description),
+      group: option.group ?? undefined,
+    }))
+  );
+  const suggestedModels = createMemo(() =>
+    (macro() ? macroCatalog.models() : selectedCatalog.models()).map(
+      (option) => ({
+        id: option.id,
+        label: modelLabel(option.id, option.name, option.description),
+        group: option.group ?? undefined,
+      })
+    )
+  );
   const agentSelector = () => (
-    <AgentPicker
-      agents={options()}
-      selected={selected()}
-      modelOverride={composerModelOverride()}
-      loading={props.rosterLoading}
-      effortLabel={
-        selectedEffort()?.name ?? effortLabel(effort(), effortOverride()?.value)
-      }
-      effortSelection={effortOverride()}
-      onCloseAutoFocus={restoreInputFocus}
-      onSelect={selectAgent}
-      onSelectEffort={selectAgent}
-      onConnect={connect}
-      onCreate={() => props.onOpenRoster(coding() ? 'coder' : 'agent')}
+    <UnifiedModelSelector
+      state={{
+        agent: selected(),
+        agents: options().filter((agent) => agent.id !== MACRO_PERSONA_ID),
+        model:
+          composerModelOverride() ??
+          selected()?.defaultModel ??
+          selectedCatalog.currentModel(),
+        models: catalogModels(),
+        suggestedModels: suggestedModels(),
+        suggestedDisabled: Boolean((macro() ?? selected())?.unavailableReason),
+        suggestedSelected: !macro() || selected()?.id === macro()?.id,
+        loading: props.rosterLoading,
+        effort: effort(),
+        effortValue: effortOverride()?.value,
+        speeds: speedOption()?.option.options.map((option) => option.value),
+        speedValue: speedOverride()?.value,
+        suggestedHarness: macro()?.harness ?? selected()?.harness,
+        suggestedSpeeds:
+          selected()?.id === MACRO_PERSONA_ID &&
+          composerModelOverride() &&
+          speedOption()
+            ? { [composerModelOverride()!]: speedOption()!.offered }
+            : undefined,
+        onModel: (model) => {
+          const agent = selected();
+          if (agent) selectAgent(agent, model);
+        },
+        onSuggestedModel: (model) => {
+          const agent =
+            options().find((option) => option.id === MACRO_PERSONA_ID) ??
+            selected();
+          if (agent && !agent.unavailableReason) selectAgent(agent, model);
+        },
+        onAgent: (agent) => selectAgent(agent),
+        onConnect: connect,
+        onCreate: () => props.onOpenRoster(coding() ? 'coder' : 'agent'),
+        onEffort: rememberEffort,
+        onSpeed: setPreferredSpeed,
+        onOpenChange: setEffortPickerOpen,
+        onCloseAutoFocus: restoreInputFocus,
+      }}
     />
   );
 
@@ -520,6 +569,7 @@ export function NewChatPage(props: {
     else ownMode.setMode(next);
   };
 
+  const phoneComposer = () => !!props.compact && isTouchDevice();
   const modeSwitch = () => (
     <div ref={tourTarget(AGENTS_TOUR.modeSwitch)} class="shrink-0">
       <Tabs
@@ -537,19 +587,30 @@ export function NewChatPage(props: {
           { value: 'chat', label: agentsModeLabel('chat'), icon: ChatIcon },
           { value: 'code', label: agentsModeLabel('code'), icon: CodeIcon },
         ]}
-        variant="track"
-        fullWidth
+        {...(props.homeLayout
+          ? {
+              variant: 'track' as const,
+              fullWidth: true,
+              class: ownMode.autoAvailable()
+                ? 'w-72 touch:w-36'
+                : 'w-56 touch:w-24',
+            }
+          : {
+              variant: 'grouped' as const,
+              touch: 'inset' as const,
+              size: isTouchDevice() ? ('composer' as const) : ('sm' as const),
+            })}
         // Phones keep the icons; the name stays for assistive tech.
         iconOnly={isTouchDevice()}
         value={mode()}
         onChange={setMode}
-        class={ownMode.autoAvailable() ? 'w-72 touch:w-36' : 'w-56 touch:w-24'}
       />
     </div>
   );
 
   const repositoryPicker = () => (
     <RepositoryPicker
+      compactPhone={phoneComposer()}
       onOpenChange={setRepositoryPickerOpen}
       repoUrl={repoUrl()}
       branch={repoBranch()}
@@ -573,9 +634,9 @@ export function NewChatPage(props: {
     <ChatComposer
       autoFocus={props.autoFocus}
       collapseOnBlur={props.compact}
-      controlsOpen={
-        repositoryPickerOpen() || effortPickerOpen() || speedPickerOpen()
-      }
+      phoneLayout={phoneComposer()}
+      settingsPlacement={props.homeLayout ? 'below' : 'inside'}
+      controlsOpen={repositoryPickerOpen() || effortPickerOpen()}
       registerFocus={(focus) => {
         focusInput = focus;
         props.registerFocus?.(focus);
@@ -587,29 +648,26 @@ export function NewChatPage(props: {
         // Auto picks the agent per prompt, so it has no agent, model, or effort to choose.
         <div class="flex min-w-0 items-center gap-1" hidden={auto()}>
           {agentSelector()}
-          <EffortSelector
-            onCloseAutoFocus={restoreInputFocus}
-            onOpenChange={setEffortPickerOpen}
-            config={effort()}
-            value={effortOverride()?.value}
-            disabled={Boolean(blocked())}
-            onChange={rememberEffort}
-          />
-          <SpeedSelector
-            onCloseAutoFocus={restoreInputFocus}
-            onOpenChange={setSpeedPickerOpen}
-            offered={speedOption()?.option.options ?? []}
-            value={speedOverride()?.value ?? 'standard'}
-            disabled={Boolean(blocked())}
-            onChange={setPreferredSpeed}
-          />
         </div>
       }
       drawer={
-        <div class="flex w-full min-w-0 items-center gap-2">
+        <div
+          class="flex min-w-0 items-center gap-2"
+          classList={{
+            'w-full': isTouchDevice() || props.homeLayout,
+            'flex-wrap not-touch:justify-end': !props.homeLayout,
+          }}
+        >
           {modeSwitch()}
           <Show when={coding()}>
-            <div class="min-w-0 flex-1 touch:[&>div]:justify-end">
+            <div
+              class="min-w-0"
+              classList={{
+                'w-60 max-w-full': !phoneComposer() && !props.homeLayout,
+                'flex-1 touch:[&>div]:justify-end': props.homeLayout,
+                'w-fit max-w-[calc(100%_-_96px)]': phoneComposer(),
+              }}
+            >
               {repositoryPicker()}
             </div>
           </Show>
@@ -658,7 +716,7 @@ export function NewChatPage(props: {
           >
             <div
               data-agent-new-composer={props.workspaceId}
-              class="agents-view-portal touch:px-(--mobile-chrome-gutter) pointer-events-auto min-w-0"
+              class="agents-view-portal agents-scope touch:px-(--mobile-chrome-gutter) pointer-events-auto min-w-0"
             >
               <LocalRuntimePrompt />
               {composer()}

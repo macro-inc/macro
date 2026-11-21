@@ -1,4 +1,7 @@
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { propertyPillClasses } from '@property/extractors/property-pill-classes';
 import { usePropertyEntityDisplay } from '@property/hooks/usePropertyEntityDisplay';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
@@ -38,6 +41,21 @@ export function EntityReferenceProperties(props: {
   const accessible = () =>
     displays().filter((value) => value.display.hasPreviewAccess());
 
+  // A closing menu hands focus back to the overflow control. After a menu row
+  // opened a record, that focus would make this list's split the active one
+  // again, so the control lets go of it and focus follows the record, as after
+  // other menus that open an item. On touch that could raise the keyboard.
+  let overflowControl: HTMLButtonElement | undefined;
+  let openedFromMenu = false;
+  const moveFocusAfterOpening = () => {
+    if (!openedFromMenu) return;
+    openedFromMenu = false;
+    queueMicrotask(() => {
+      overflowControl?.blur();
+      if (!isTouchDevice()) globalSplitManager()?.returnFocus();
+    });
+  };
+
   return (
     <Show when={accessible().length > 0}>
       <div
@@ -60,13 +78,14 @@ export function EntityReferenceProperties(props: {
         <Show when={accessible().length > 2}>
           <Dropdown placement="bottom-start">
             <Dropdown.Trigger
+              ref={overflowControl}
               variant="ghost"
               size="xs"
               aria-label={`Show ${accessible().length - 2} more property values`}
             >
               +{accessible().length - 2}
             </Dropdown.Trigger>
-            <Dropdown.Content>
+            <Dropdown.Content onCloseAutoFocus={moveFocusAfterOpening}>
               <For each={accessible().slice(2)}>
                 {(value) => (
                   <ReferencePill
@@ -75,6 +94,9 @@ export function EntityReferenceProperties(props: {
                     display={value.display}
                     compact={false}
                     menu
+                    onOpen={() => {
+                      openedFromMenu = true;
+                    }}
                   />
                 )}
               </For>
@@ -92,19 +114,30 @@ function ReferencePill(props: {
   display: ReturnType<typeof usePropertyEntityDisplay>;
   compact: boolean;
   menu?: boolean;
+  onOpen?: () => void;
 }) {
   const display = props.display;
-  const open = createCallback((event?: MouseEvent) => {
-    event?.stopPropagation();
+  const open = createCallback((inNewSplit: boolean) => {
     const type = display.blockOrFileType();
     if (!type || !display.hasPreviewAccess()) return;
     openDocument(
       type,
       props.reference.entity_id,
       display.linkParams(),
-      event?.shiftKey
+      inNewSplit
     );
+    props.onOpen?.();
   });
+  const navHandlers = useSplitNavigationHandler<HTMLButtonElement>((event) => {
+    event.stopPropagation();
+    open(event.shiftKey);
+  });
+  // A menu selection carries no event, so Shift is read from the release or
+  // key press that makes it.
+  let shiftHeld = false;
+  const captureSplitIntent = (event: PointerEvent | KeyboardEvent) => {
+    shiftHeld = event.shiftKey;
+  };
   const content = () => (
     <>
       <span class="flex size-3.5 shrink-0 items-center justify-center [&_svg]:size-3.5">
@@ -120,7 +153,12 @@ function ReferencePill(props: {
       <Show
         when={!props.menu}
         fallback={
-          <Dropdown.Item disabled={display.isLoading()} onSelect={() => open()}>
+          <Dropdown.Item
+            disabled={display.isLoading()}
+            onPointerUp={captureSplitIntent}
+            onKeyDown={captureSplitIntent}
+            onSelect={() => open(shiftHeld)}
+          >
             {content()}
           </Dropdown.Item>
         }
@@ -135,7 +173,7 @@ function ReferencePill(props: {
             })}
             aria-label={`${props.label}: ${display.name()}`}
             disabled={display.isLoading()}
-            onClick={open}
+            {...navHandlers}
           >
             {content()}
           </button>

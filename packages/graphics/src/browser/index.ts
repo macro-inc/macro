@@ -72,11 +72,25 @@ export type GraphicsInputOptions = {
    */
   longPress?: () => ((point: Point) => void) | undefined;
   /**
+   * One finger pans instead of going to the tool, as two already do, once it
+   * has moved far enough not to be a hand settling. A host answers yes while a
+   * pen does the drawing, so that the hand holding it leaves no marks. Asked
+   * as the first finger lands.
+   */
+  fingerPans?: () => boolean;
+  /**
    * Lay the selection's handles out for fingers: the rotation knob stands
    * further off the frame, and corner-radius handles are left to the host's
    * inspector. Fingers get larger handle targets whether or not this is set.
    */
   touchHandles?: boolean;
+  /**
+   * Leave one finger, a pen and the plain wheel to the page. A surface inside
+   * a scrolling document sets this until the person asks to interact with it:
+   * swipes and the wheel scroll the document, while two fingers (and a pinch
+   * or Ctrl/Cmd wheel) still move the canvas. A mouse works as ever.
+   */
+  yieldToPage?: () => boolean;
 };
 
 /** Attach camera controls to a focusable viewport. No document-global keyboard shortcuts. */
@@ -117,6 +131,7 @@ export function attachCameraControls(
     ignoreTarget: options.ignoreTarget,
     navigation: options.navigation,
     longPress: options.longPress,
+    fingerPans: options.fingerPans,
   });
   let hoverPointer: PointerEvent | undefined;
   const clearHover = () => {
@@ -273,7 +288,65 @@ export function attachCameraControls(
       y: event.clientY - rect.top,
     });
   };
+  /** The handle drawn under a press, by its name. */
+  const drawnHandle = (target: EventTarget | null) => {
+    const handle =
+      target instanceof Element
+        ? target
+            .closest('[data-graphics-handle]')
+            ?.getAttribute('data-graphics-handle')
+        : undefined;
+    return isResizeHandle(handle) ||
+      isRadiusHandle(handle) ||
+      handle === 'rotate'
+      ? handle
+      : undefined;
+  };
+  /**
+   * The handle a press takes, given the one `drawn` under it. A finger near
+   * the frame takes the handle it is nearest, which can be a corner while it
+   * covers the strip drawn along an edge. Only paint that belongs to something
+   * else ends that reach.
+   */
+  const pressedHandle = (
+    drawn: ReturnType<typeof drawnHandle>,
+    event: PointerEvent,
+    frame: SelectionFrame | undefined,
+    point: Point
+  ) => {
+    if (
+      event.pointerType !== 'touch' ||
+      isRadiusHandle(drawn) ||
+      pressesAnotherItem(frame, point)
+    )
+      return drawn;
+    // Where the reach finds no handle there is none for a finger, whatever is
+    // drawn under it: the strips along a thin shape's edges cover its middle,
+    // which moves it.
+    return touchHandle(frame, event);
+  };
+  /**
+   * A finger resizes or rotates once it moves. One that only taps near a handle
+   * must not resize by nothing (which still fixes the width of auto-width
+   * text).
+   */
+  const waitsForMovement = (
+    event: PointerEvent,
+    handle: ReturnType<typeof drawnHandle>
+  ): handle is ResizeHandle | 'rotate' =>
+    event.pointerType === 'touch' &&
+    (isResizeHandle(handle) || handle === 'rotate');
+  /** What a release without movement does with the press that was waiting. */
+  const settlePendingTap = () => {
+    const pending = pendingSelection;
+    if (!pending) return;
+    if (pending.toggle) editor.toggleSelection(pending.id);
+    if (pending.tap) editor.select(pending.tap);
+    else if (pending.tap === null) editor.selectMany([]);
+  };
   const pointerDown = (event: PointerEvent) => {
+    // A pen pans the page like a finger does; only a mouse cannot.
+    if (options.yieldToPage?.() && event.pointerType !== 'mouse') return;
     if (
       options.suspended?.() ||
       options.ignoreTarget?.(event.target) ||
@@ -312,10 +385,6 @@ export function attachCameraControls(
     let boxing = false;
     let cursor: string | undefined;
     if (selecting) {
-      const target = event.target instanceof Element ? event.target : undefined;
-      const handle = target
-        ?.closest('[data-graphics-handle]')
-        ?.getAttribute('data-graphics-handle');
       const point = worldPoint(event);
       const deep = options.duplicateOnAltDrag
         ? event.metaKey || event.ctrlKey
@@ -325,18 +394,8 @@ export function attachCameraControls(
         editor.getSession().selectedIds
       );
       const touch = event.pointerType === 'touch';
-      const drawn =
-        isResizeHandle(handle) || isRadiusHandle(handle) || handle === 'rotate'
-          ? handle
-          : undefined;
-      // A finger near the frame takes the handle it is nearest, which can be a
-      // corner while it covers the strip drawn along an edge. Only paint that
-      // belongs to something else ends that reach. Where the reach finds no
-      // handle there is none for a finger, whatever is drawn under it: the
-      // strips along a thin shape's edges cover its middle, which moves it.
-      const reaches =
-        touch && !isRadiusHandle(drawn) && !pressesAnotherItem(frame, point);
-      const transformHandle = reaches ? touchHandle(frame, event) : drawn;
+      const drawn = drawnHandle(event.target);
+      const transformHandle = pressedHandle(drawn, event, frame, point);
       const { scale } = editor.getCamera();
       const pick = (handle: boolean) =>
         selectionTarget(
@@ -382,14 +441,9 @@ export function attachCameraControls(
               ? (options.createId ?? (() => crypto.randomUUID()))
               : undefined,
         };
-      } else if (
-        id &&
-        touch &&
-        (isResizeHandle(transformHandle) || transformHandle === 'rotate')
-      ) {
-        // A finger resizes or rotates once it moves. One that only taps near a
-        // handle must not resize by nothing (which still fixes the width of
-        // auto-width text): outside the frame it is a tap on whatever is there.
+      } else if (id && waitsForMovement(event, transformHandle)) {
+        // Released without moving, a press outside the frame was a tap on
+        // whatever is there; one inside it leaves the selection as it is.
         const outside =
           !drawn && !!frame && !selectionContainsPoint(frame, point);
         pendingSelection = {
@@ -478,12 +532,7 @@ export function attachCameraControls(
     if (drag?.id !== event.pointerId) return;
     if (drag.mode === 'select') pointerMove(event);
     if (!drag) return;
-    if (drag.mode === 'select' && pendingSelection?.toggle)
-      editor.toggleSelection(pendingSelection.id);
-    if (drag.mode === 'select' && pendingSelection?.tap !== undefined) {
-      if (pendingSelection.tap) editor.select(pendingSelection.tap);
-      else editor.selectMany([]);
-    }
+    if (drag.mode === 'select') settlePendingTap();
     if (drag.mode === 'box') {
       editor.updateBoxSelection(worldPoint(event));
       editor.commitBoxSelection();
@@ -541,6 +590,8 @@ export function attachCameraControls(
   };
   const wheel = (event: WheelEvent) => {
     if (options.suspended?.()) return;
+    // The page scrolls, unless this is a pinch or a deliberate zoom.
+    if (options.yieldToPage?.() && !event.ctrlKey && !event.metaKey) return;
     event.preventDefault();
     if (drag) return;
     const rect = element.getBoundingClientRect();

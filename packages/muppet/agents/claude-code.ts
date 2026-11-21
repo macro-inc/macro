@@ -5,6 +5,7 @@ import {
 } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import type { Agent } from '../core/agent.ts';
+import { codeTools } from './code-tools.ts';
 
 const server = 'muppet';
 
@@ -26,7 +27,7 @@ export const claudeCode = ({
       name: server,
       tools: [
         tool(
-          'RunCapabilityScript',
+          codeTools.run,
           'Type-check a TypeScript module that exports `async function main({ context, log })`, then run it with your context, and get back what main returned and everything it passed to log, or the type errors that kept it from running. Use it to use your capabilities.',
           { source: z.string() },
           async ({ source }) => {
@@ -38,7 +39,7 @@ export const claudeCode = ({
           }
         ),
         tool(
-          'DescribeCapabilities',
+          codeTools.describe,
           'Read the full docs of capabilities in your catalog, several at once.',
           { names: z.array(z.string()) },
           async ({ names }) => ({

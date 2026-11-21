@@ -42,7 +42,7 @@ pub use focus::FocusClassifier;
 pub use gmail_emulator;
 pub use host::raise_open_file_limit;
 pub use inbox::{Inbox, Mail, MailAttachment, Provider, ProviderMessage};
-pub use macro_services::{HeldRequest, ServiceRequest};
+pub use macro_services::{GatewayMessage, HeldRequest, ServiceRequest};
 /// The Outlook emulator's own API, for what the inbox methods do not cover.
 pub use outlook_emulator;
 /// The Redis client [`Stack::redis`] answers with.

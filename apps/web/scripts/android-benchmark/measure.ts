@@ -1,5 +1,6 @@
 import type { CapturedSpan } from './otlp';
 import type { PageRequest, Session } from './session';
+import type { TargetChoice } from './targets';
 
 export type Variant = 'cold' | 'warm';
 
@@ -12,6 +13,10 @@ export type Sample = {
   readyMs: number;
   /** The root span's own `ui.elapsed_ms`, which the field data reports. */
   spanMs: number | undefined;
+  /** From the touch to the paint of the content the step also waits for. */
+  contentMs?: number;
+  /** The targets-file item the step opened, by position, never by name. */
+  target?: TargetChoice;
   root: string;
   routeId: string | undefined;
   traceIds: string[];
@@ -32,6 +37,10 @@ export type Sample = {
   /** Soup reads answered from the local cache vs. the network. */
   soup: { local: number; network: number };
   longAnimationFrameBlockingMs: number | undefined;
+  /** The WebView's CPU throttle rate while the step ran (1: none). */
+  cpuThrottle: number;
+  /** The slowdown measured just before and just after the step. */
+  cpuThrottleMeasured?: [number, number];
   /** Host one-minute load average when the step ran (emulators share it). */
   hostLoad?: number;
   /** The flow's spans, from the touch: for finding where the time went. */
@@ -52,6 +61,11 @@ export type Readiness = {
   root: (span: CapturedSpan) => boolean;
   /** Later roots (such as `doc.editor`) the content waits for. */
   also?: ((span: CapturedSpan) => boolean)[];
+  /**
+   * A selector for content that must also be painted, for a view that
+   * reports ready before its content arrives.
+   */
+  visible?: string;
 };
 
 const IGNORED_REQUESTS = [
@@ -97,9 +111,15 @@ export function sampleFrom(
   iteration: number,
   start: number,
   root: CapturedSpan,
-  extra: CapturedSpan[]
+  extra: CapturedSpan[],
+  /** When the content `Readiness.visible` names was painted. */
+  contentPainted?: number
 ): Sample {
-  const ready = Math.max(root.end, ...extra.map((span) => span.end));
+  const ready = Math.max(
+    root.end,
+    ...extra.map((span) => span.end),
+    contentPainted ?? Number.NEGATIVE_INFINITY
+  );
   const traceIds = [...new Set([root, ...extra].map((span) => span.traceId))];
   const spans = traceIds.flatMap((traceId) => session.trace(traceId));
   const flowRoots = [root, ...extra];
@@ -111,7 +131,10 @@ export function sampleFrom(
     variant,
     iteration,
     readyMs: ready - start,
+    cpuThrottle: session.cpuThrottle,
     spanMs: numberAttribute(root, 'ui.elapsed_ms'),
+    contentMs:
+      contentPainted === undefined ? undefined : contentPainted - start,
     root: root.name,
     routeId:
       typeof root.attributes['route.id'] === 'string'

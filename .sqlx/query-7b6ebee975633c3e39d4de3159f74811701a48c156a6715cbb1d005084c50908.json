@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- The DMs among a page of ids with a message a person sent, at or after $2\n-- when given. Each probe walks one DM's messages newest first\n-- (idx_comms_messages_parent_history) and stops at the first that counts:\n-- a message, not a call root, from a Macro user, not imported.\nSELECT dm.id AS \"id!\"\nFROM unnest($1::uuid[]) AS dm (id)\nWHERE EXISTS (\n    SELECT 1\n    FROM comms_messages m\n    WHERE m.parent_entity_type = 'channel'\n      AND m.parent_entity_id = dm.id::text\n      AND m.created_at >= COALESCE($2::timestamptz, '-infinity')\n      AND m.kind = 'message'\n      AND m.sender_id COLLATE \"C\" LIKE 'macro|%'\n      AND m.import_metadata IS NULL\n)\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "7b6ebee975633c3e39d4de3159f74811701a48c156a6715cbb1d005084c50908"
+}

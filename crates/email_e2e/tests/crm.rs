@@ -467,7 +467,6 @@ async fn gmail_a_correspondent_leaves_the_crm_with_their_mail() -> Result<(), Re
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "known bug: outlook-crm-cleanup"]
 async fn outlook_a_correspondent_leaves_the_crm_with_their_mail() -> Result<(), Report> {
     a_correspondent_leaves_the_crm_with_their_mail(Provider::Outlook).await
 }

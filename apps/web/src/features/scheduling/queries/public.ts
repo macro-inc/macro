@@ -1,10 +1,18 @@
 import { ThrownResultError, throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { schedulingClient } from '@service-email/scheduling';
-import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
+import {
+  queryOptions,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
-import { BookingRejectedError } from '../core/booking-error';
-import type { BookingReceipt, BookingRequest } from '../core/types';
+import {
+  BookingRejectedError,
+  RescheduleRefusedError,
+} from '../core/booking-error';
+import type { Booking, BookingReceipt, BookingRequest } from '../core/types';
 import { schedulingKeys } from './keys';
 
 function validateReceipt(receipt: BookingReceipt): BookingReceipt {
@@ -68,7 +76,8 @@ function receiptQueryOptions(id: string, token: string) {
     gcTime: 0,
     refetchInterval: (q) =>
       q.state.data?.booking.status === 'processing' ||
-      q.state.data?.booking.status === 'failed'
+      (q.state.data?.booking.status === 'failed' &&
+        !q.state.data.booking.abandonedAt)
         ? 5000
         : false,
   });
@@ -143,24 +152,61 @@ export function createBookingReceiptSource(
   token: Accessor<string>
 ) {
   const receipt = useQuery(() => receiptQueryOptions(id(), token()));
+  const client = useQueryClient();
+  const receiptKey = () => receiptQueryOptions(id(), token()).queryKey;
+  // Show the changed booking even if the refresh that follows fails. The key
+  // is read before the request, so a route change cannot redirect the write.
+  const keep = (key: ReturnType<typeof receiptKey>, booking: Booking) =>
+    client.setQueryData(key, (current) =>
+      current ? { ...current, booking } : current
+    );
   const cancel = useMutation(() => ({
     mutationFn: () =>
       throwOnErr(() => schedulingClient.cancelPublic(id(), token())),
     retry: false,
   }));
   const reschedule = useMutation(() => ({
-    mutationFn: (startsAt: string) =>
-      throwOnErr(() => schedulingClient.reschedule(id(), token(), startsAt)),
+    mutationFn: async (startsAt: string) => {
+      try {
+        return await throwOnErr(() =>
+          schedulingClient.reschedule(id(), token(), startsAt)
+        );
+      } catch (error) {
+        if (
+          error instanceof ThrownResultError &&
+          error.errors.some(
+            (e) =>
+              e.code === 'HTTP_ERROR' && /status: 422$/.test(e.message ?? '')
+          )
+        )
+          throw new RescheduleRefusedError();
+        throw error;
+      }
+    },
     retry: false,
   }));
   return {
     receipt,
     cancel: async () => {
-      await cancel.mutateAsync();
+      const key = receiptKey();
+      const { booking } = await cancel.mutateAsync().catch(async (error) => {
+        // A lost response may hide a change that landed: read it back once.
+        await receipt.refetch();
+        throw error;
+      });
+      keep(key, booking);
       await receipt.refetch();
+      return booking;
     },
     reschedule: async (startsAt: string) => {
-      await reschedule.mutateAsync(startsAt);
+      const key = receiptKey();
+      const moved = await reschedule
+        .mutateAsync(startsAt)
+        .catch(async (error) => {
+          await receipt.refetch();
+          throw error;
+        });
+      keep(key, moved.booking);
       await receipt.refetch();
     },
     replacementSlots: (date: string, timeZone: string) =>

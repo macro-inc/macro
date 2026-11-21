@@ -1,3 +1,4 @@
+import { $isLinkNode } from '@lexical/link';
 import { $isListItemNode, $isListNode, type ListNode } from '@lexical/list';
 import {
   $convertFromMarkdownString,
@@ -20,6 +21,7 @@ import {
   $createTextNode,
   $getRoot,
   $isElementNode,
+  $isTextNode,
   createEditor,
 } from 'lexical';
 import { describe, expect, it } from 'vitest';
@@ -28,9 +30,17 @@ import {
   $createDateMentionNode,
   $isDateMentionNode,
 } from '../nodes/DateMentionNode';
+import { $isEquationNode } from '../nodes/EquationNode';
+import { $isGroupMentionNode } from '../nodes/GroupMentionNode';
 import { $createImageNode, $isImageNode } from '../nodes/ImageNode';
+import { $isUserMentionNode } from '../nodes/UserMentionNode';
 import { $createVideoNode, $isVideoNode } from '../nodes/VideoNode';
-import { EXTERNAL_TRANSFORMERS, INTERNAL_TRANSFORMERS } from '../transformers';
+import {
+  ALL_TRANSFORMERS,
+  EXTERNAL_TRANSFORMERS,
+  INTERNAL_TRANSFORMERS,
+} from '../transformers';
+import { E_TABLE_NODE, isolatePipeTables } from '../transformers/tables';
 
 function createTestEditor() {
   return createEditor({
@@ -330,7 +340,7 @@ describe('lists inside table cells', () => {
     );
 
     const markdown = exportMarkdown(editor, EXTERNAL_TRANSFORMERS);
-    expect(markdown).toBe('| - one\\n- two | plain |');
+    expect(markdown).toBe('| - one\\n- two | plain |\n| --- | --- |');
 
     await buildEditorState(editor, () => {
       $getRoot().clear();
@@ -540,7 +550,9 @@ describe('images inside table cells', () => {
     );
 
     const markdown = exportMarkdown(editor, EXTERNAL_TRANSFORMERS);
-    expect(markdown).toBe('| ![cat](https://example.com/cat.png) | plain |');
+    expect(markdown).toBe(
+      '| ![cat](https://example.com/cat.png) | plain |\n| --- | --- |'
+    );
 
     await buildEditorState(editor, () => {
       $getRoot().clear();
@@ -663,8 +675,660 @@ describe('pipe table external transformer', () => {
 
     const markdown = exportMarkdown(editor, EXTERNAL_TRANSFORMERS);
     const lines = markdown.split('\n');
-    expect(lines[0]).toBe('| wide |  | c |');
-    expect(lines[1]).toBe('| x | y | z |');
+    expect(lines).toEqual([
+      '| wide |  | c |',
+      '| --- | --- | --- |',
+      '| x | y | z |',
+    ]);
+  });
+});
+
+describe('pipe characters inside pipe-table cells', () => {
+  const GAB_MENTION =
+    '<m-user-mention>{"userId":"macro|gab@macro.com","email":"gab@macro.com"}</m-user-mention>';
+
+  async function importWith(
+    editor: ReturnType<typeof createEditor>,
+    markdown: string,
+    transformers = EXTERNAL_TRANSFORMERS
+  ) {
+    await buildEditorState(editor, () => {
+      $getRoot().clear();
+      $convertFromMarkdownString(markdown, transformers);
+    });
+  }
+
+  function $cellGrid(): TableCellNode[][] {
+    return $getFirstTable()
+      .getChildren()
+      .filter($isTableRowNode)
+      .map((row) => row.getChildren().filter($isTableCellNode));
+  }
+
+  function $cellTexts(): string[][] {
+    return $cellGrid().map((row) =>
+      row.map((cell) => cell.getTextContent().trim())
+    );
+  }
+
+  function $inlineNodes(cell: TableCellNode) {
+    return cell
+      .getChildren()
+      .flatMap((child) => ($isElementNode(child) ? child.getChildren() : []));
+  }
+
+  for (const [name, transformers] of [
+    ['external', EXTERNAL_TRANSFORMERS],
+    ['all (static renderers)', ALL_TRANSFORMERS],
+  ] as const) {
+    it(`keeps a macro| user mention in one cell as a mention node (${name})`, async () => {
+      const editor = createTestEditor();
+      await importWith(
+        editor,
+        [
+          '| Person | Bug Reports | Share |',
+          '| :--- | :---: | :---: |',
+          `| ${GAB_MENTION} | 206 | $$ 26.8\\% $$ |`,
+        ].join('\n'),
+        transformers
+      );
+
+      editor.getEditorState().read(() => {
+        const grid = $cellGrid();
+        expect(grid.map((row) => row.length)).toEqual([3, 3]);
+        expect($cellTexts()[0]).toEqual(['Person', 'Bug Reports', 'Share']);
+
+        const [mention] = $inlineNodes(grid[1][0]).filter($isUserMentionNode);
+        expect(mention).toBeDefined();
+        expect(mention.getUserId()).toBe('macro|gab@macro.com');
+        expect(mention.getEmail()).toBe('gab@macro.com');
+        expect(grid[1][1].getTextContent().trim()).toBe('206');
+        const [share] = $inlineNodes(grid[1][2]).filter($isEquationNode);
+        expect(share?.getEquation().trim()).toBe('26.8\\%');
+      });
+    });
+  }
+
+  it('imports in-app chip tags written inside cells (agent chat replies)', async () => {
+    const editor = createTestEditor();
+    await importWith(
+      editor,
+      [
+        '| Person | Share | Notify |',
+        '| --- | --- | --- |',
+        `| ${GAB_MENTION} | <m-katex-equation>{"equation":"26.8\\\\%","inline":true}</m-katex-equation> | <m-group-mention>{"groupAlias":"here"}</m-group-mention> |`,
+      ].join('\n'),
+      ALL_TRANSFORMERS
+    );
+
+    editor.getEditorState().read(() => {
+      const grid = $cellGrid();
+      expect(grid.map((row) => row.length)).toEqual([3, 3]);
+      const [person, share, notify] = grid[1];
+
+      const [mention] = $inlineNodes(person).filter($isUserMentionNode);
+      expect(mention?.getUserId()).toBe('macro|gab@macro.com');
+
+      const [equation] = $inlineNodes(share).filter($isEquationNode);
+      expect(equation?.getEquation()).toBe('26.8\\%');
+      expect(equation?.getInline()).toBe(true);
+
+      const [group] = $inlineNodes(notify).filter($isGroupMentionNode);
+      expect(group?.getGroupAlias()).toBe('here');
+    });
+  });
+
+  it('exports cell chips the way a paragraph exports them', async () => {
+    const editor = createTestEditor();
+    await importWith(editor, `${GAB_MENTION} $$ 26.8\\% $$`, ALL_TRANSFORMERS);
+    const paragraph = exportMarkdown(editor, EXTERNAL_TRANSFORMERS).trim();
+
+    await importWith(
+      editor,
+      ['| Person |', '| --- |', `| ${GAB_MENTION} $$ 26.8\\% $$ |`].join('\n'),
+      ALL_TRANSFORMERS
+    );
+    const table = exportMarkdown(editor, EXTERNAL_TRANSFORMERS);
+
+    expect(paragraph).not.toContain('<m-');
+    expect(table.split('\n')).toContain(`| ${paragraph} |`);
+  });
+
+  it('exports every chip in a cell the way a paragraph exports it', async () => {
+    const editor = createTestEditor();
+    const chips = [
+      '<m-group-mention>{"groupAlias":"here"}</m-group-mention>',
+      '<m-tag>{"optionId":"tag-1","propertyDefinitionId":"prop-1","scope":"team","name":"Launch","color":"#0091FF"}</m-tag>',
+      '<m-pr-mention>{"id":"foreign-1","label":"macro-inc/macro#7945","url":"https://github.com/macro-inc/macro/pull/7945"}</m-pr-mention>',
+      '<m-agent-session-mention>{"id":"01a10ac3-013f-72f8-afbb-3bad148dee04","label":"Agent"}</m-agent-session-mention>',
+      '<m-not-a-real-tag>{"x":1}</m-not-a-real-tag>',
+    ].join(' ');
+    await importWith(editor, chips, ALL_TRANSFORMERS);
+    const paragraph = exportMarkdown(editor, EXTERNAL_TRANSFORMERS).trim();
+
+    await importWith(
+      editor,
+      ['| Chips |', '| --- |', `| ${chips} |`].join('\n'),
+      ALL_TRANSFORMERS
+    );
+    const table = exportMarkdown(editor, EXTERNAL_TRANSFORMERS);
+
+    expect(table.split('\n')).toContain(`| ${paragraph} |`);
+  });
+
+  it('imports a header row with alignment markers and an empty first cell', async () => {
+    const editor = createTestEditor();
+    await importWith(
+      editor,
+      [
+        '| Rank | Person |',
+        '| ---: | :--- |',
+        '| 1 | a |',
+        '| | **Total** |',
+      ].join('\n')
+    );
+
+    editor.getEditorState().read(() => {
+      expect($cellTexts()).toEqual([
+        ['Rank', 'Person'],
+        ['1', 'a'],
+        ['', 'Total'],
+      ]);
+    });
+  });
+
+  it('keeps inline formatting, code with an escaped pipe, escaped pipes and inline math in their cells', async () => {
+    const editor = createTestEditor();
+    await importWith(
+      editor,
+      [
+        '| Bold | Code | Escaped | Math |',
+        '| --- | --- | --- | --- |',
+        '| **strong** | `a\\|b` | x \\| y | $$27.4\\%$$ |',
+      ].join('\n')
+    );
+
+    editor.getEditorState().read(() => {
+      const grid = $cellGrid();
+      expect(grid.map((row) => row.length)).toEqual([4, 4]);
+      const [bold, code, escaped, math] = grid[1];
+
+      const [strong] = $inlineNodes(bold);
+      expect(strong.getTextContent()).toBe('strong');
+      expect($isTextNode(strong) && strong.hasFormat('bold')).toBe(true);
+
+      const [codeText] = $inlineNodes(code);
+      expect(codeText.getTextContent()).toBe('a|b');
+      expect($isTextNode(codeText) && codeText.hasFormat('code')).toBe(true);
+
+      expect(escaped.getTextContent().trim()).toBe('x | y');
+
+      const [equation] = $inlineNodes(math).filter($isEquationNode);
+      expect(equation).toBeDefined();
+      expect(equation.getEquation()).toBe('27.4\\%');
+    });
+  });
+
+  it('escapes literal pipes in cell text on export', async () => {
+    const editor = createTestEditor();
+    await buildEditorState(editor, () => {
+      const table = $createTableNode();
+      const row = $createTableRowNode();
+      row.append($createCell('a|b'), $createCell('c'));
+      table.append(row);
+      $getRoot().append(table);
+    });
+
+    const markdown = exportMarkdown(editor, EXTERNAL_TRANSFORMERS);
+    expect(markdown).toBe('| a\\|b | c |\n| --- | --- |');
+
+    await importWith(editor, markdown);
+    editor.getEditorState().read(() => {
+      expect($cellTexts()).toEqual([['a|b', 'c']]);
+    });
+  });
+
+  it('writes the GFM delimiter row, with alignment, after the first row only', async () => {
+    const editor = createTestEditor();
+    await importWith(
+      editor,
+      [
+        '| Person | Bug Reports |',
+        '| :--- | :---: |',
+        `| ${GAB_MENTION} | 206 |`,
+        '| Plain row | 117 |',
+      ].join('\n'),
+      ALL_TRANSFORMERS
+    );
+
+    expect(exportMarkdown(editor, EXTERNAL_TRANSFORMERS).split('\n')).toEqual([
+      '| Person | Bug Reports |',
+      '| :--- | :---: |',
+      '| @gab | 206 |',
+      '| Plain row | 117 |',
+    ]);
+  });
+
+  it('makes the row above a delimiter a header and aligns its columns', async () => {
+    const editor = createTestEditor();
+    await importWith(
+      editor,
+      [
+        '| Person | Bug Reports | Share | Note |',
+        '| :--- | :---: | ---: | --- |',
+        '| a | 206 | 26.8% | x |',
+        '| b | 117 | 15.3% | y |',
+      ].join('\n')
+    );
+
+    editor.getEditorState().read(() => {
+      const grid = $cellGrid();
+      expect(
+        grid.map((row) =>
+          row.map((cell) => cell.hasHeaderState(TableCellHeaderStates.ROW))
+        )
+      ).toEqual([
+        [true, true, true, true],
+        [false, false, false, false],
+        [false, false, false, false],
+      ]);
+      expect(
+        grid.map((row) => row.map((cell) => cell.getFormatType()))
+      ).toEqual([
+        ['left', 'center', 'right', ''],
+        ['left', 'center', 'right', ''],
+        ['left', 'center', 'right', ''],
+      ]);
+    });
+  });
+
+  it('loads a table without a delimiter row as body rows, as before', async () => {
+    const editor = createTestEditor();
+    await importWith(editor, ['| a | b |', '| c | d |'].join('\n'));
+
+    editor.getEditorState().read(() => {
+      const grid = $cellGrid();
+      expect($cellTexts()).toEqual([
+        ['a', 'b'],
+        ['c', 'd'],
+      ]);
+      expect(
+        grid
+          .flat()
+          .some((cell) => cell.hasHeaderState(TableCellHeaderStates.ROW))
+      ).toBe(false);
+    });
+  });
+
+  it('keeps the full mention, header and alignment through the internal (lossless) set', async () => {
+    const editor = createTestEditor();
+    await importWith(
+      editor,
+      [
+        '| Person | Share |',
+        '| :--- | :---: |',
+        `| ${GAB_MENTION} | $$ 26.8\\% $$ |`,
+      ].join('\n'),
+      ALL_TRANSFORMERS
+    );
+    const first = exportMarkdown(editor, INTERNAL_TRANSFORMERS);
+    expect(first).toContain(
+      '<m-user-mention>{"userId":"macro|gab@macro.com","email":"gab@macro.com"'
+    );
+    expect(first).toContain('<m-table-cell header="row" align="left">Person');
+
+    await importWith(editor, first, INTERNAL_TRANSFORMERS);
+    expect(exportMarkdown(editor, INTERNAL_TRANSFORMERS)).toBe(first);
+
+    editor.getEditorState().read(() => {
+      const grid = $cellGrid();
+      const [mention] = $inlineNodes(grid[1][0]).filter($isUserMentionNode);
+      expect(mention?.getUserId()).toBe('macro|gab@macro.com');
+      expect(mention?.getEmail()).toBe('gab@macro.com');
+      expect(grid[0][1].hasHeaderState(TableCellHeaderStates.ROW)).toBe(true);
+      expect(grid[1][1].getFormatType()).toBe('center');
+    });
+  });
+
+  it('round-trips a literal backslash before a pipe in cell text', async () => {
+    const editor = createTestEditor();
+    await buildEditorState(editor, () => {
+      const table = $createTableNode();
+      const row = $createTableRowNode();
+      row.append($createCell('C:\\|x'), $createCell('y'));
+      table.append(row);
+      $getRoot().append(table);
+    });
+
+    const markdown = exportMarkdown(editor, EXTERNAL_TRANSFORMERS);
+    await importWith(editor, markdown);
+    editor.getEditorState().read(() => {
+      expect($cellTexts()).toEqual([['C:\\|x', 'y']]);
+    });
+  });
+
+  it('keeps an empty row after the first row as a row, not a delimiter', async () => {
+    const editor = createTestEditor();
+    await importWith(
+      editor,
+      ['| Name | Score |', '| | |', '| a | 1 |'].join('\n')
+    );
+
+    editor.getEditorState().read(() => {
+      const grid = $cellGrid();
+      expect($cellTexts()).toEqual([
+        ['Name', 'Score'],
+        ['', ''],
+        ['a', '1'],
+      ]);
+      expect(
+        grid
+          .flat()
+          .some((cell) => cell.hasHeaderState(TableCellHeaderStates.ROW))
+      ).toBe(false);
+    });
+  });
+
+  it('keeps start and end alignment through the internal table XML', async () => {
+    const editor = createTestEditor();
+    await buildEditorState(editor, () => {
+      const table = $createTableNode();
+      const row = $createTableRowNode();
+      const start = $createCell('a');
+      start.setFormat('start');
+      const end = $createCell('b');
+      end.setFormat('end');
+      row.append(start, end);
+      table.append(row);
+      $getRoot().append(table);
+    });
+
+    const first = exportMarkdown(editor, INTERNAL_TRANSFORMERS);
+    await importWith(editor, first, INTERNAL_TRANSFORMERS);
+    editor.getEditorState().read(() => {
+      expect($cellGrid()[0].map((cell) => cell.getFormatType())).toEqual([
+        'start',
+        'end',
+      ]);
+    });
+  });
+
+  it('splits on an unescaped pipe inside backticks, as GFM does', async () => {
+    const editor = createTestEditor();
+    await importWith(
+      editor,
+      [
+        '| a | b | c |',
+        '| --- | --- | --- |',
+        '| press ` key | b | then ` again |',
+      ].join('\n')
+    );
+
+    editor.getEditorState().read(() => {
+      expect($cellGrid().map((row) => row.length)).toEqual([3, 3]);
+    });
+  });
+
+  it('round-trips literal backslash-pipe text typed in a cell', async () => {
+    const editor = createTestEditor();
+    await buildEditorState(editor, () => {
+      const table = $createTableNode();
+      const row = $createTableRowNode();
+      row.append($createCell('x \\| y'), $createCell('z'));
+      table.append(row);
+      $getRoot().append(table);
+    });
+
+    await importWith(editor, exportMarkdown(editor, EXTERNAL_TRANSFORMERS));
+    editor.getEditorState().read(() => {
+      expect($cellTexts()[0]).toEqual(['x \\| y', 'z']);
+    });
+  });
+
+  it('protects pipes only inside a complete <m-…>{json}</m-…> tag in one cell', async () => {
+    const editor = createTestEditor();
+    await importWith(
+      editor,
+      [
+        '| a | b | c |',
+        '| --- | --- | --- |',
+        '| <m-user-mention>broken | b | x</m-user-mention> |',
+      ].join('\n')
+    );
+
+    editor.getEditorState().read(() => {
+      expect($cellGrid().map((row) => row.length)).toEqual([3, 3]);
+    });
+  });
+
+  it('imports every inline chip a paragraph imports, unknown tags included', async () => {
+    const editor = createTestEditor();
+    const chips = [
+      '<m-tag-mention>{"tagId":"t1","name":"urgent"}</m-tag-mention>',
+      '<m-not-a-real-tag>{"x":1}</m-not-a-real-tag>',
+    ];
+    await importWith(editor, chips.join(' '), ALL_TRANSFORMERS);
+    const paragraphTypes = editor.getEditorState().read(() =>
+      $getRoot()
+        .getChildren()
+        .flatMap((child) => ($isElementNode(child) ? child.getChildren() : []))
+        .map((node) => node.getType())
+        .filter((type) => type !== 'text')
+    );
+
+    await importWith(
+      editor,
+      ['| a |', '| --- |', `| ${chips.join(' ')} |`].join('\n'),
+      ALL_TRANSFORMERS
+    );
+    editor.getEditorState().read(() => {
+      const cellTypes = $inlineNodes($cellGrid()[1][0])
+        .map((node) => node.getType())
+        .filter((type) => type !== 'text');
+      expect(paragraphTypes.length).toBe(2);
+      expect(cellTypes).toEqual(paragraphTypes);
+    });
+  });
+
+  it('keeps justify alignment through the internal table XML', async () => {
+    const editor = createTestEditor();
+    await buildEditorState(editor, () => {
+      const table = $createTableNode();
+      const row = $createTableRowNode();
+      const cell = $createCell('a');
+      cell.setFormat('justify');
+      row.append(cell);
+      table.append(row);
+      $getRoot().append(table);
+    });
+
+    await importWith(
+      editor,
+      exportMarkdown(editor, INTERNAL_TRANSFORMERS),
+      INTERNAL_TRANSFORMERS
+    );
+    editor.getEditorState().read(() => {
+      expect($cellGrid()[0][0].getFormatType()).toBe('justify');
+    });
+  });
+
+  it('keeps a delimiter-looking row after the second row as a text row', async () => {
+    const editor = createTestEditor();
+    await importWith(
+      editor,
+      ['| a | b |', '| c | d |', '| --- | :---: |', '| e | f |'].join('\n')
+    );
+
+    editor.getEditorState().read(() => {
+      expect($cellTexts()).toEqual([
+        ['a', 'b'],
+        ['c', 'd'],
+        ['---', ':---:'],
+        ['e', 'f'],
+      ]);
+    });
+  });
+
+  it('never overwrites the alignment of a cell that already has one', async () => {
+    const editor = createTestEditor();
+    await buildEditorState(editor, () => {
+      const table = $createTableNode();
+      const header = $createTableRowNode();
+      const kept = $createCell('kept');
+      kept.setFormat('right');
+      header.append(kept, $createCell('set'));
+      table.append(header);
+      $getRoot().append(table);
+    });
+
+    // Lines typed under the table go through the markdown shortcut one by one.
+    for (const line of ['| :---: | :---: |', '| x | y |']) {
+      editor.update(
+        () => {
+          const paragraph = $createParagraphNode().append(
+            $createTextNode(line)
+          );
+          $getRoot().append(paragraph);
+          const match = line.match(E_TABLE_NODE.regExp);
+          if (match) E_TABLE_NODE.replace(paragraph, [], match, true);
+        },
+        { discrete: true }
+      );
+    }
+
+    editor.getEditorState().read(() => {
+      expect(
+        $cellGrid().map((row) => row.map((cell) => cell.getFormatType()))
+      ).toEqual([
+        ['right', 'center'],
+        ['right', 'center'],
+      ]);
+    });
+  });
+
+  it('turns $x$ into math in a cell exactly when a paragraph does', async () => {
+    const editor = createTestEditor();
+    const samples = ['$x+1$', '$5 and $10', 'costs $3'];
+    for (const sample of samples) {
+      await importWith(editor, sample);
+      const inParagraph = editor.getEditorState().read(() =>
+        $getRoot()
+          .getChildren()
+          .flatMap((child) =>
+            $isElementNode(child) ? child.getChildren() : []
+          )
+          .some($isEquationNode)
+      );
+      await importWith(
+        editor,
+        ['| a |', '| --- |', `| ${sample} |`].join('\n')
+      );
+      const inCell = editor
+        .getEditorState()
+        .read(() => $inlineNodes($cellGrid()[1][0]).some($isEquationNode));
+      expect([sample, inCell]).toEqual([sample, inParagraph]);
+    }
+  });
+
+  it('keeps a headerless table headerless through the internal table XML', async () => {
+    const editor = createTestEditor();
+    await buildEditorState(editor, () => {
+      const table = $createTableNode();
+      const row = $createTableRowNode();
+      row.append($createCell('a'), $createCell('b'));
+      table.append(row);
+      $getRoot().append(table);
+    });
+
+    await importWith(
+      editor,
+      exportMarkdown(editor, INTERNAL_TRANSFORMERS),
+      INTERNAL_TRANSFORMERS
+    );
+    editor.getEditorState().read(() => {
+      expect(
+        $cellGrid()
+          .flat()
+          .some((cell) => cell.hasHeaderState(TableCellHeaderStates.ROW))
+      ).toBe(false);
+    });
+  });
+
+  it('keeps every cell chip through the internal (lossless) table XML', async () => {
+    const editor = createTestEditor();
+    const chips = [
+      '<m-group-mention>{"groupAlias":"here"}</m-group-mention>',
+      '<m-tag-mention>{"tagId":"t1","name":"urgent"}</m-tag-mention>',
+      '<m-pr-mention>{"url":"https://github.com/o/r/pull/1","label":""}</m-pr-mention>',
+    ];
+    await importWith(
+      editor,
+      ['| a |', '| --- |', `| ${chips.join(' ')} |`].join('\n'),
+      ALL_TRANSFORMERS
+    );
+    const $chipTypes = () =>
+      $inlineNodes($cellGrid()[1][0])
+        .map((node) => node.getType())
+        .filter((type) => type !== 'text');
+    const imported = editor.getEditorState().read($chipTypes);
+
+    const saved = exportMarkdown(editor, INTERNAL_TRANSFORMERS);
+    await importWith(editor, saved, INTERNAL_TRANSFORMERS);
+
+    expect(imported).toHaveLength(3);
+    expect(editor.getEditorState().read($chipTypes)).toEqual(imported);
+  });
+
+  it('imports an <m-link> in a cell as a link and keeps it through the internal XML', async () => {
+    const editor = createTestEditor();
+    const link =
+      '<m-link>{"url":"https://example.com/a","text":"example"}</m-link>';
+    await importWith(
+      editor,
+      ['| a |', '| --- |', `| ${link} |`].join('\n'),
+      ALL_TRANSFORMERS
+    );
+    const $linkUrls = () =>
+      $inlineNodes($cellGrid()[1][0])
+        .filter($isLinkNode)
+        .map((node) => node.getURL());
+    expect(editor.getEditorState().read($linkUrls)).toEqual([
+      'https://example.com/a',
+    ]);
+
+    await importWith(
+      editor,
+      exportMarkdown(editor, INTERNAL_TRANSFORMERS),
+      INTERNAL_TRANSFORMERS
+    );
+    expect(editor.getEditorState().read($linkUrls)).toEqual([
+      'https://example.com/a',
+    ]);
+  });
+
+  it('round-trips markdown -> lexical -> markdown stably', async () => {
+    const source = [
+      '| Person | Code | Note |',
+      '| --- | --- | --- |',
+      `| ${GAB_MENTION} | \`a\\|b\` | x \\| y |`,
+    ].join('\n');
+
+    const editor = createTestEditor();
+    await importWith(editor, source);
+    const first = exportMarkdown(editor, EXTERNAL_TRANSFORMERS);
+
+    await importWith(editor, first);
+    const second = exportMarkdown(editor, EXTERNAL_TRANSFORMERS);
+    expect(second).toBe(first);
+
+    editor.getEditorState().read(() => {
+      const grid = $cellGrid();
+      expect(grid.map((row) => row.length)).toEqual([3, 3]);
+      // External Markdown writes a mention as its label, as in a paragraph.
+      expect(grid[1][0].getTextContent().trim()).toBe('@gab');
+      expect(grid[1][1].getTextContent()).toBe('a|b');
+      expect(grid[1][2].getTextContent().trim()).toBe('x | y');
+    });
   });
 });
 
@@ -763,5 +1427,44 @@ describe('video link transformer', () => {
       expect($getRoot().getTextContent()).toContain('Document');
     });
     expect(exportMarkdown(editor)).toContain('document.pdf?next=clip.mp4');
+  });
+});
+
+describe('isolatePipeTables', () => {
+  it('keeps a header-and-delimiter table and gives it a blank line above', () => {
+    expect(
+      isolatePipeTables(
+        '<m-table><m-table-row><m-table-cell>Old</m-table-cell></m-table-row></m-table>\n| Step | Done |\n| --- | :---: |\n| Ship | yes |\nAfter'
+      )
+    ).toBe(
+      '<m-table><m-table-row><m-table-cell>Old</m-table-cell></m-table-row></m-table>\n\n| Step | Done |\n| --- | :---: |\n| Ship | yes |\nAfter'
+    );
+  });
+
+  it('escapes pipe lines that are not a table so they stay text', () => {
+    expect(
+      isolatePipeTables(
+        '| plain text |\n\n| a | b |\n| --- |\n\n| --- |\n| x |'
+      )
+    ).toBe('\\| plain text |\n\n\\| a | b |\n\\| --- |\n\n\\| --- |\n\\| x |');
+  });
+
+  it('keeps a table run that is already text in an existing paragraph', () => {
+    expect(
+      isolatePipeTables('| H |\n| --- |\n| B |\n\n| N |\n| --- |', [
+        'Intro\n| H |\n| --- |\n| B |',
+      ])
+    ).toBe('\\| H |\n\\| --- |\n\\| B |\n\n| N |\n| --- |');
+  });
+
+  it('pads a short body row with empty cells to the header width', () => {
+    expect(isolatePipeTables('| A | B | C |\n| --- | --- | --- |\n| x |')).toBe(
+      '| A | B | C |\n| --- | --- | --- |\n| x | | |'
+    );
+  });
+
+  it('leaves pipe lines in fenced code alone', () => {
+    const markdown = '```\n| a |\n| --- |\n| plain |\n```';
+    expect(isolatePipeTables(markdown)).toBe(markdown);
   });
 });

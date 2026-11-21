@@ -235,6 +235,14 @@ struct FakeLifecycle {
 }
 
 impl EntityLifecycleService for FakeLifecycle {
+    async fn thread_channel_shares(
+        &self,
+        _thread_id: uuid::Uuid,
+        _viewer: &macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> Result<Vec<super::super::ThreadChannelShare>, LifecycleError> {
+        unreachable!("folder duplication never reads thread shares")
+    }
+
     async fn update_thread_share_policy(
         &self,
         _actor: &EntityMutationActor,

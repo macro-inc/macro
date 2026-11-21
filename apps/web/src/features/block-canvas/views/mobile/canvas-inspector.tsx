@@ -24,7 +24,7 @@ export function MobileCanvasInspectorSheet(props: {
         <MobileDrawer.Content aria-label="Canvas inspector" maxHeight={50}>
           <MobileDrawer.Handle />
           <MobileDrawer.ScrollBody data-canvas-inspector-scroll>
-            <CanvasInspectorSections />
+            <CanvasInspectorSections swatchRows />
           </MobileDrawer.ScrollBody>
         </MobileDrawer.Content>
       </MobileDrawer.Portal>

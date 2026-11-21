@@ -9,6 +9,7 @@ fragment NotificationInboxEntryFields on NotificationInboxEntry {
 	rows {
 		id
 		rowType
+		alsoListedAs
 		threadId
 		revision
 		latestAt
@@ -141,5 +142,14 @@ mutation MarkNotificationInboxRowsSeen(
 subscription NotificationInboxUpdates($scope: NotificationInboxScopeInput) {
 	notificationInboxUpdates(scope: $scope) {
 		...NotificationInboxPatchFields
+	}
+}
+
+# Unread rows of the whole inbox by kind: the current counts at once, then
+# again whenever they change. Each payload replaces the last.
+subscription NotificationInboxUnreadUpdates {
+	notificationInboxUnreadUpdates {
+		rowType
+		count
 	}
 }

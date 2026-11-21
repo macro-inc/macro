@@ -236,3 +236,94 @@ async fn gmail_agent_archive_reaches_the_provider() -> Result<(), Report> {
 async fn outlook_agent_archive_reaches_the_provider() -> Result<(), Report> {
     agent_archive_reaches_the_provider(Provider::Outlook).await
 }
+
+/// The agent reporting a thread as spam (adding `SPAM`) files it under the
+/// provider's junk and takes it out of the inbox, as the Report spam button
+/// does; taking `SPAM` off brings it back to the inbox. On Gmail the report
+/// passes the label's id from ListLabels, as ListLabels tells the agent to,
+/// and the take-back its name. When this fails the reported thread stays in
+/// the inbox, or the rescued one stays out of it.
+async fn agent_reports_spam_and_takes_it_back(provider: Provider) -> Result<(), Report> {
+    let stack = Stack::start().await?;
+    let (ada, _primary, second, _correspondent, thread) =
+        second_inbox_with_mail(&stack, provider).await?;
+    let tools = stack.email_tools()?;
+    let junk = match provider {
+        Provider::Gmail => "SPAM",
+        Provider::Outlook => "Junk Email",
+    };
+    let in_junk = |labels: &[String]| labels.iter().any(|label| label == junk);
+    // Outlook has no SPAM label row, so there the label is always named.
+    let report_by_id = match provider {
+        Provider::Gmail => {
+            let labels = tools
+                .call(&ada, "ListLabels", &json!({ "thread_id": thread["db_id"] }))
+                .await?
+                .map_err(refused)?;
+            let id = labels["labels"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .find(|label| label["name"] == "SPAM")
+                .map(|label| label["id"].clone());
+            assert!(id.is_some(), "ListLabels has no SPAM label: {labels}");
+            id
+        }
+        Provider::Outlook => None,
+    };
+    let spam = async |add: bool| -> Result<(), Report> {
+        let label = match (&report_by_id, add) {
+            (Some(id), true) => json!({ "thread_id": thread["db_id"], "label_id": id, "add": add }),
+            _ => json!({ "thread_id": thread["db_id"], "label": "SPAM", "add": add }),
+        };
+        let done = tools
+            .call(&ada, "UpdateThreadLabels", &label)
+            .await?
+            .map_err(refused)?;
+        assert_eq!(done["failedCount"], 0, "{done}");
+        Ok(())
+    };
+    let listed = async |view: &str| -> Result<bool, Report> {
+        Ok(second
+            .previews(view)
+            .await?
+            .iter()
+            .any(|preview| preview["name"] == "Contract draft"))
+    };
+
+    spam(true).await?;
+    second
+        .wait_for_provider_message("the reported message in junk", |message| {
+            message.subject == "Contract draft" && in_junk(&message.labels) && !message.in_inbox
+        })
+        .await?;
+    second.wait_for_preview("spam", "Contract draft").await?;
+    assert!(
+        !listed("inbox").await?,
+        "the reported thread is still in the inbox"
+    );
+
+    spam(false).await?;
+    second
+        .wait_for_provider_message("the message back in the inbox", |message| {
+            message.subject == "Contract draft" && !in_junk(&message.labels) && message.in_inbox
+        })
+        .await?;
+    second.wait_for_preview("inbox", "Contract draft").await?;
+    assert!(
+        !listed("spam").await?,
+        "the thread taken out of spam is still under Spam"
+    );
+
+    stack.finish().await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_agent_reports_spam_and_takes_it_back() -> Result<(), Report> {
+    agent_reports_spam_and_takes_it_back(Provider::Gmail).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_agent_reports_spam_and_takes_it_back() -> Result<(), Report> {
+    agent_reports_spam_and_takes_it_back(Provider::Outlook).await
+}

@@ -12,8 +12,8 @@ use super::*;
 use crate::domain::{
     focus::{
         ClassifyOutcome, DueDateExtractor, DueDateInput, FocusAnswers, FocusClassifier,
-        FocusClassifierError, FocusNotifier, FocusQueries, FocusQuestion, FocusService,
-        FocusThread, FocusVerdict, ProfileSource,
+        FocusClassifierError, FocusEnrollment, FocusNotifier, FocusQueries, FocusQuestion,
+        FocusService, FocusThread, FocusVerdict, ProfileSource,
     },
     models::calendar_invitation::{CalendarInvitation, InvitationDateTime, InvitationMethod},
 };
@@ -100,6 +100,15 @@ impl FocusClassifier for FixedClassifier {
     }
 }
 
+/// Puts every owner in the Focus rollout.
+struct EveryoneEnrolled;
+
+impl FocusEnrollment for EveryoneEnrolled {
+    async fn is_enrolled(&self, _owner: &MacroUserIdStr<'static>) -> Result<bool, Report> {
+        Ok(true)
+    }
+}
+
 struct NoReaders;
 
 impl FocusNotifier for NoReaders {
@@ -109,7 +118,14 @@ impl FocusNotifier for NoReaders {
 fn worker(
     repo: &FocusPgRepository,
     answers: Result<Vec<f32>, FocusClassifierError>,
-) -> FocusService<FocusPgRepository, NoProfile, FixedClassifier, NoReaders, FixedDueDates> {
+) -> FocusService<
+    FocusPgRepository,
+    NoProfile,
+    FixedClassifier,
+    NoReaders,
+    FixedDueDates,
+    EveryoneEnrolled,
+> {
     due_date_worker(repo, answers, &FixedDueDates::default())
 }
 
@@ -117,14 +133,21 @@ fn due_date_worker(
     repo: &FocusPgRepository,
     answers: Result<Vec<f32>, FocusClassifierError>,
     due_dates: &FixedDueDates,
-) -> FocusService<FocusPgRepository, NoProfile, FixedClassifier, NoReaders, FixedDueDates> {
+) -> FocusService<
+    FocusPgRepository,
+    NoProfile,
+    FixedClassifier,
+    NoReaders,
+    FixedDueDates,
+    EveryoneEnrolled,
+> {
     FocusService::new(
         repo.clone(),
         NoProfile,
         FixedClassifier { answers },
         NoReaders,
         due_dates.clone(),
-        vec!["acme.example".to_owned()],
+        EveryoneEnrolled,
     )
 }
 
@@ -295,10 +318,9 @@ async fn stale_threads_cover_enabled_inbox_signal_mail_in_the_window(
 ) -> Result<(), Report> {
     let repo = FocusPgRepository(pool);
     let since = Utc::now() - Duration::days(30);
-    let enabled = vec!["acme.example".to_owned()];
     let stale = async |limit| -> Result<Vec<Uuid>, Report> {
         Ok(repo
-            .stale_threads(since, &enabled, None, limit)
+            .stale_threads(OWNER_LINK, since, None, limit)
             .await?
             .into_iter()
             .map(|stale| stale.thread_id)
@@ -307,12 +329,25 @@ async fn stale_threads_cover_enabled_inbox_signal_mail_in_the_window(
 
     assert_eq!(stale(10).await?, vec![INVOICE, BULK]);
     assert_eq!(stale(1).await?, vec![INVOICE]);
-    assert!(repo.stale_threads(since, &[], None, 10).await?.is_empty());
+    // Each inbox has its own: the other inbox holds only its thread.
+    assert_eq!(
+        repo.stale_threads(OTHER_LINK, since, None, 10)
+            .await?
+            .into_iter()
+            .map(|stale| stale.thread_id)
+            .collect::<Vec<_>>(),
+        vec![OTHER_THREAD]
+    );
+    assert!(
+        repo.stale_threads(Uuid::new_v4(), since, None, 10)
+            .await?
+            .is_empty()
+    );
 
     // Each page starts past the last thread of the one before.
-    let first = repo.stale_threads(since, &enabled, None, 1).await?;
+    let first = repo.stale_threads(OWNER_LINK, since, None, 1).await?;
     let second = repo
-        .stale_threads(since, &enabled, first.last().copied(), 1)
+        .stale_threads(OWNER_LINK, since, first.last().copied(), 1)
         .await?;
     assert_eq!(
         second
@@ -322,7 +357,7 @@ async fn stale_threads_cover_enabled_inbox_signal_mail_in_the_window(
         vec![BULK]
     );
     let third = repo
-        .stale_threads(since, &enabled, second.last().copied(), 1)
+        .stale_threads(OWNER_LINK, since, second.last().copied(), 1)
         .await?;
     assert!(third.is_empty());
     // Classified at an older message: still stale. At the latest: done.
@@ -343,12 +378,101 @@ async fn stale_threads_cover_enabled_inbox_signal_mail_in_the_window(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("email_focus"))
 )]
+async fn inboxes_with_focus_are_those_holding_a_focus_thread(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    let repo = FocusPgRepository(pool);
+    let now = Utc::now();
+    assert!(repo.inboxes_with_focus().await?.is_empty());
+
+    // A thread classified out of Focus doesn't count.
+    let mut out = record(BULK, Uuid::new_v4(), now, 10);
+    out.verdict.is_focus = false;
+    repo.save(&out).await?;
+    assert!(repo.inboxes_with_focus().await?.is_empty());
+
+    // Two Focus threads in one inbox list it once, with its owner.
+    repo.save(&record(INVOICE, LATEST_MESSAGE, now, 90)).await?;
+    repo.save(&record(ARCHIVED, Uuid::new_v4(), now, 90))
+        .await?;
+    repo.save(&FocusRecord {
+        link_id: OTHER_LINK,
+        ..record(OTHER_THREAD, Uuid::new_v4(), now, 90)
+    })
+    .await?;
+    let mut inboxes = repo.inboxes_with_focus().await?;
+    inboxes.sort_by_key(|inbox| inbox.link_id);
+    assert_eq!(
+        inboxes,
+        vec![
+            FocusInboxOwner {
+                link_id: OWNER_LINK,
+                owner: owner(),
+                delegates: Vec::new(),
+            },
+            FocusInboxOwner {
+                link_id: OTHER_LINK,
+                owner: MacroUserIdStr::try_from_email("other@elsewhere.example").unwrap(),
+                delegates: Vec::new(),
+            },
+        ]
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("email_focus"))
+)]
+async fn syncing_inboxes_are_every_connected_inbox_still_syncing(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    let repo = FocusPgRepository(pool.clone());
+    let mut inboxes = repo.syncing_inboxes().await?;
+    inboxes.sort_by_key(|inbox| inbox.link_id);
+    assert_eq!(
+        inboxes,
+        vec![
+            FocusInboxOwner {
+                link_id: OWNER_LINK,
+                owner: owner(),
+                delegates: Vec::new(),
+            },
+            FocusInboxOwner {
+                link_id: OTHER_LINK,
+                owner: MacroUserIdStr::try_from_email("other@elsewhere.example").unwrap(),
+                delegates: Vec::new(),
+            },
+        ]
+    );
+
+    // An inbox whose sync stopped is left out.
+    sqlx::query!(
+        "UPDATE email_links SET is_sync_active = false WHERE id = $1",
+        OTHER_LINK
+    )
+    .execute(&pool)
+    .await?;
+    let inboxes = repo.syncing_inboxes().await?;
+    assert_eq!(
+        inboxes
+            .iter()
+            .map(|inbox| inbox.link_id)
+            .collect::<Vec<_>>(),
+        vec![OWNER_LINK]
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("email_focus"))
+)]
 async fn threads_with_the_same_latest_mail_do_not_fall_between_pages(
     pool: Pool<Postgres>,
 ) -> Result<(), Report> {
     let repo = FocusPgRepository(pool.clone());
     let since = Utc::now() - Duration::days(30);
-    let enabled = vec!["acme.example".to_owned()];
     sqlx::query!(
         r#"
         UPDATE email_threads
@@ -360,9 +484,9 @@ async fn threads_with_the_same_latest_mail_do_not_fall_between_pages(
     )
     .execute(&pool)
     .await?;
-    let first = repo.stale_threads(since, &enabled, None, 1).await?;
+    let first = repo.stale_threads(OWNER_LINK, since, None, 1).await?;
     let second = repo
-        .stale_threads(since, &enabled, first.last().copied(), 1)
+        .stale_threads(OWNER_LINK, since, first.last().copied(), 1)
         .await?;
     let mut both = first
         .iter()
@@ -514,6 +638,88 @@ async fn focus_covers_inboxes_linked_to_the_owner(pool: Pool<Postgres>) -> Resul
         repo.focus_for_threads(&owner(), &[OTHER_THREAD], now, now)
             .await?
             .contains_key(&OTHER_THREAD)
+    );
+    Ok(())
+}
+
+/// The inbox in `inboxes` with id `link_id`.
+fn inbox_of(inboxes: &[FocusInboxOwner], link_id: Uuid) -> &FocusInboxOwner {
+    inboxes
+        .iter()
+        .find(|inbox| inbox.link_id == link_id)
+        .expect("inbox listed")
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("email_focus", "email_focus_linked")
+    )
+)]
+async fn every_read_of_a_linked_inbox_names_the_user_it_is_linked_to(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    let repo = FocusPgRepository(pool);
+    repo.save(&FocusRecord {
+        link_id: OTHER_LINK,
+        ..record(OTHER_THREAD, Uuid::new_v4(), Utc::now(), 70)
+    })
+    .await?;
+
+    let linked = repo.thread_inbox(OTHER_THREAD).await?.expect("thread");
+    assert_eq!(
+        linked.owner,
+        MacroUserIdStr::try_from_email("other@elsewhere.example").unwrap()
+    );
+    assert_eq!(linked.delegates, vec![owner()]);
+    let own = repo.thread_inbox(INVOICE).await?.expect("thread");
+    assert!(own.delegates.is_empty());
+
+    let with_focus = repo.inboxes_with_focus().await?;
+    assert_eq!(inbox_of(&with_focus, OTHER_LINK).delegates, vec![owner()]);
+    let syncing = repo.syncing_inboxes().await?;
+    assert_eq!(inbox_of(&syncing, OTHER_LINK).delegates, vec![owner()]);
+    assert!(inbox_of(&syncing, OWNER_LINK).delegates.is_empty());
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("email_focus", "email_focus_linked", "email_focus_linked_shared")
+    )
+)]
+async fn a_mailbox_several_people_read_names_each_of_them_once(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    let repo = FocusPgRepository(pool);
+    repo.save(&FocusRecord {
+        link_id: OTHER_LINK,
+        ..record(OTHER_THREAD, Uuid::new_v4(), Utc::now(), 70)
+    })
+    .await?;
+    // Sorted, each once, and never the inbox's own owner.
+    let readers = vec![
+        MacroUserIdStr::try_from_email("assistant@acme.example").unwrap(),
+        owner(),
+    ];
+
+    assert_eq!(
+        repo.thread_inbox(OTHER_THREAD)
+            .await?
+            .expect("thread")
+            .delegates,
+        readers
+    );
+    assert_eq!(
+        inbox_of(&repo.inboxes_with_focus().await?, OTHER_LINK).delegates,
+        readers
+    );
+    assert_eq!(
+        inbox_of(&repo.syncing_inboxes().await?, OTHER_LINK).delegates,
+        readers
     );
     Ok(())
 }
@@ -685,9 +891,7 @@ async fn a_thread_of_only_sent_mail_stays_out(pool: Pool<Postgres>) -> Result<()
 
     let inbox = repo.thread_inbox(ONLY_SENT).await?.expect("thread");
     assert!(!inbox.inbox_visible);
-    let stale = repo
-        .stale_threads(since, &["acme.example".to_owned()], None, 100)
-        .await?;
+    let stale = repo.stale_threads(OWNER_LINK, since, None, 100).await?;
     assert!(!stale.iter().any(|stale| stale.thread_id == ONLY_SENT));
     // Failing the classifier proves it was never asked.
     let worker = worker(&repo, Err(FocusClassifierError::Rejected));
@@ -787,7 +991,7 @@ async fn a_reschedule_reaches_focus_from_outside_the_signal_inbox(
 
     // The sweep finds only the change; the others have no reason to be read.
     let stale = repo
-        .stale_threads(since, &["acme.example".to_owned()], None, 100)
+        .stale_threads(OWNER_LINK, since, None, 100)
         .await?
         .into_iter()
         .map(|stale| stale.thread_id)
@@ -942,8 +1146,7 @@ async fn read_at(
 
 async fn is_stale(repo: &FocusPgRepository, thread: Uuid) -> Result<bool, Report> {
     let since = Utc::now() - Duration::days(30);
-    let enabled = vec!["acme.example".to_owned()];
-    let stale = repo.stale_threads(since, &enabled, None, 100).await?;
+    let stale = repo.stale_threads(OWNER_LINK, since, None, 100).await?;
     Ok(stale.iter().any(|stale| stale.thread_id == thread))
 }
 
@@ -1541,9 +1744,7 @@ async fn mail_from_a_recent_contact_is_found_and_pinned_outside_the_signal_inbox
     // No event covers mail from before an inbox was enabled: the sweep finds it.
     let thread = load_thread(&repo, RECENT_CONTACT).await?.expect("thread");
     assert!(!thread.is_signal);
-    let stale = repo
-        .stale_threads(since, &["acme.example".to_owned()], None, 100)
-        .await?;
+    let stale = repo.stale_threads(OWNER_LINK, since, None, 100).await?;
     assert!(stale.iter().any(|stale| stale.thread_id == RECENT_CONTACT));
 
     let worker = worker(
@@ -1647,7 +1848,6 @@ async fn rows_from_an_older_rule_read_right_and_are_decided_again_without_the_cl
     let repo = FocusPgRepository(pool.clone());
     let now = Utc::now();
     let since = now - Duration::days(30);
-    let enabled = vec!["acme.example".to_owned()];
 
     // As the previous rule stored it: a follow-up on Casey's message, on answers
     // that Jev also said need a reply.
@@ -1682,7 +1882,7 @@ async fn rows_from_an_older_rule_read_right_and_are_decided_again_without_the_cl
     assert!(stored.needs_reply && !stored.needs_follow_up);
 
     // The sweep finds it even though its latest message was classified.
-    let stale = repo.stale_threads(since, &enabled, None, 10).await?;
+    let stale = repo.stale_threads(OWNER_LINK, since, None, 10).await?;
     assert!(stale.iter().any(|stale| stale.thread_id == INVOICE));
 
     // Failing the classifier proves it was never asked.
@@ -1702,7 +1902,7 @@ async fn rows_from_an_older_rule_read_right_and_are_decided_again_without_the_cl
     let classified = classified.expect("stored");
     assert_eq!(classified.rule_version, FOCUS_RULE_VERSION);
     assert_eq!(classified.model, "jev-earlier");
-    let stale = repo.stale_threads(since, &enabled, None, 10).await?;
+    let stale = repo.stale_threads(OWNER_LINK, since, None, 10).await?;
     assert!(!stale.iter().any(|stale| stale.thread_id == INVOICE));
     assert_eq!(
         worker.classify_thread(INVOICE).await?,
@@ -1723,7 +1923,6 @@ async fn a_row_from_an_older_rule_is_swept_even_outside_the_signal_inbox(
 ) -> Result<(), Report> {
     project_threads(&pool).await?;
     let repo = FocusPgRepository(pool.clone());
-    let enabled = vec!["acme.example".to_owned()];
     let since = Utc::now() - Duration::days(30);
     let thread = load_thread(&repo, NOISE).await?.expect("thread");
     assert!(!thread.is_signal);
@@ -1731,7 +1930,7 @@ async fn a_row_from_an_older_rule_is_swept_even_outside_the_signal_inbox(
     repo.save(&record(NOISE, latest.id, latest.at, 40)).await?;
 
     // Under the current rule there is nothing to do for it.
-    let stale = repo.stale_threads(since, &enabled, None, 100).await?;
+    let stale = repo.stale_threads(OWNER_LINK, since, None, 100).await?;
     assert!(!stale.iter().any(|stale| stale.thread_id == NOISE));
 
     sqlx::query!(
@@ -1740,7 +1939,7 @@ async fn a_row_from_an_older_rule_is_swept_even_outside_the_signal_inbox(
     )
     .execute(&pool)
     .await?;
-    let stale = repo.stale_threads(since, &enabled, None, 100).await?;
+    let stale = repo.stale_threads(OWNER_LINK, since, None, 100).await?;
     assert!(stale.iter().any(|stale| stale.thread_id == NOISE));
     Ok(())
 }

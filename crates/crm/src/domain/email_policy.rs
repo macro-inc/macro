@@ -1,4 +1,4 @@
-//! Incarnation-bound storage for future policy APIs and workers.
+//! Incarnation-bound storage for policy APIs and workers.
 //!
 //! These ports neither authorize a caller nor activate selected contribution.
 //! The caller supplies an authenticated member and enforces CAS after checking
@@ -12,6 +12,7 @@ use super::{
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 /// Identity of one consent lifetime and its database-owned policy version.
@@ -23,7 +24,7 @@ pub struct EmailPolicyGeneration {
     pub policy_version: i64,
 }
 
-/// Whether an owner inspection may initialize identity, or a mutation must find it.
+/// Whether an authorized mutation initializes identity or requires it to exist.
 #[derive(Debug, Clone, Copy)]
 pub enum OpenEmailPolicy {
     /// Initialize a legacy row without changing consent. An absent row also
@@ -86,7 +87,7 @@ pub struct NewEmailPolicyIdempotency {
 }
 
 /// Audit data supplied by the authorized use case, without mail content.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct NewEmailPolicyAudit {
     /// Server-generated UUIDv7, stable for a retried system event.
     pub event_id: Uuid,
@@ -107,7 +108,7 @@ pub struct NewEmailPolicyAudit {
 }
 
 /// An audit record may predate incarnation-aware writers.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct EmailPolicyAudit {
     /// Stored event and provenance.
     pub entry: NewEmailPolicyAudit,
@@ -122,7 +123,7 @@ pub struct EmailPolicyAudit {
 }
 
 /// Preview state is independent of the contribution grant.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum EmailPolicyPreviewStatus {
     /// Waiting for bounded asynchronous work.
@@ -140,7 +141,7 @@ pub enum EmailPolicyPreviewStatus {
 }
 
 /// Count-only preview output; no mailbox contents or target identities.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct EmailPolicyPreviewCounts {
     /// Currently included threads encountered so far.
@@ -218,6 +219,8 @@ pub enum EmailPolicySourceKind {
     Contact,
     /// Company domains or visibility changed.
     Company,
+    /// Bulk deletion raced the first rule reference; reconcile raw team owners.
+    Team,
 }
 
 /// Cursor over raw rule references, including inactive historical revisions.
