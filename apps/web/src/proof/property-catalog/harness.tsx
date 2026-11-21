@@ -21,7 +21,7 @@ import { createAppDealStages } from '@app/features/crm/stage-adapter';
 import { createTagOptions } from '@app/features/next-soup/soup-view/filters-bar/tag-filter-state';
 import { projectDefinitionProperties } from '@app/features/projects/queries/project-properties';
 import { UserContextProvider, useIsAuthenticated } from '@core/context/user';
-import { throwOnErr } from '@core/util/result';
+import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import { useAllProperties } from '@property/editor/hooks/useAllProperties';
 import {
   TagSetsQueryProvider,
@@ -129,6 +129,17 @@ function errorShape(error: unknown) {
             (g as { extensions?: { code?: string } }).extensions?.code ?? null
         )
       : null,
+    // The query client's own retry decision (lib/queries/client.ts), and
+    // the message with ids masked, so two different failures never pass as
+    // one.
+    retry:
+      thrownResultErrorHasCode(error, 'UNAUTHORIZED') ||
+      thrownResultErrorHasCode(error, 'FORBIDDEN')
+        ? 'terminal'
+        : 'retried',
+    message: String((error as Error)?.message ?? error)
+      .replace(/[0-9a-f]{8}-[0-9a-f-]{27}/gi, '<id>')
+      .slice(0, 160),
   };
 }
 
