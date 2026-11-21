@@ -239,8 +239,11 @@ function observeRenameSettlement(
       queryClient.invalidateQueries({ queryKey: historyKeys.list.queryKey }),
       queryClient.invalidateQueries({ queryKey: soupKeys._def }),
     ];
-    if (operations.some(({ entity }) => entity.type === 'channel'))
-      requests.push(refreshChannelDirectory());
+    const channelIds = operations.flatMap(({ entity }) =>
+      entity.type === 'channel' ? [entity.id] : []
+    );
+    if (channelIds.length > 0)
+      requests.push(refreshChannelDirectory(channelIds));
     for (const { entity } of operations) {
       if (entity.type === 'call')
         requests.push(

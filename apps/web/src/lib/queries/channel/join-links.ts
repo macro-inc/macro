@@ -143,10 +143,13 @@ export function joinChannelMutationOptions(
     },
     ...withCallbacks<void, Error, JoinChannelArgs, undefined>(
       {
-        onSuccess(_data, _variables, _result, context) {
+        onSuccess(_data, variables, _result, context) {
           const owner = mutationQueryAccount(context);
           if (!isCurrentQueryAccount(owner)) return;
-          fireAndForget(refreshChannelDirectory(), 'channel-list');
+          fireAndForget(
+            refreshChannelDirectory([variables.channelId]),
+            'channel-list'
+          );
           // Refetch soup so the joined channel's is_participant flips and its
           // Join affordance disappears.
           queryClient.invalidateQueries({

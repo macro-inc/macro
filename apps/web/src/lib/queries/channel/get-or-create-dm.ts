@@ -54,8 +54,11 @@ export function useGetOrCreateDirectMessageMutation(
         onError(error) {
           console.error('failed to get or create direct message', error);
         },
-        onSettled: () =>
-          fireAndForget(refreshChannelDirectory(), 'channel-list'),
+        onSettled: (data) =>
+          fireAndForget(
+            refreshChannelDirectory(data ? [data.channel_id] : []),
+            'channel-list'
+          ),
       },
       callbacks,
       (variables) => variables.parentSpan
@@ -74,7 +77,7 @@ export function getOrCreateDirectMessageChannel(
   return new ResultAsync(
     storageServiceClient.getOrCreateDirectMessage({ recipient_id: recipientId })
   ).map(({ channel_id }) => {
-    fireAndForget(refreshChannelDirectory(), 'channel-list');
+    fireAndForget(refreshChannelDirectory([channel_id]), 'channel-list');
     return channel_id;
   });
 }
@@ -153,8 +156,11 @@ export function useGetOrCreatePrivateChannelMutation(
         onError(error) {
           console.error('failed to get or create private channel', error);
         },
-        onSettled: () =>
-          fireAndForget(refreshChannelDirectory(), 'channel-list'),
+        onSettled: (data) =>
+          fireAndForget(
+            refreshChannelDirectory(data ? [data.channel_id] : []),
+            'channel-list'
+          ),
       },
       callbacks,
       (variables) => variables.parentSpan

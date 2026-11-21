@@ -13,6 +13,12 @@ everyone. The same permission rule applies to the delete hotkey and bulk action.
 If a bulk deletion partly succeeds, confirmed deletions stay removed and only
 failed items remain in the dialog for retry.
 
+A channel you delete, create, rename, join or convert, and a DM or group chat
+you open, changes in your own channel list (the sidebar and every reader of the
+channel directory) as soon as the write is confirmed, before the list rereads it. Check this by renaming
+a channel and watching its row: the new name shows within a second, and a
+reload keeps it.
+
 User mentions sent by integrations may contain only `userId`. For human user
 IDs, messages and editors resolve the current name and fall back to the email
 local part when lookup fails. Verify that these mentions remain intact when

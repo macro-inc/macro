@@ -7,8 +7,10 @@ import type {
   CacheGenerationChange,
 } from '@graphql-cache/host/types';
 import type {
+  ChannelDirectoryEntityQuery,
   ChannelDirectoryFieldsFragment,
   ChannelDirectoryPageQuery,
+  SoupEntityInput,
 } from '@service-storage/graphql/generated/graphql';
 import type {
   GraphqlSoupHydrationPage,
@@ -47,6 +49,7 @@ import {
 } from './directory';
 import type { DirectoryChannel } from './directory-core';
 import { CHANNEL_DIRECTORY_CHECKPOINT_ID } from './directory-lane';
+import { OWN_WRITE_HOLD_MS, ownChannelWrites } from './own-writes';
 import { channelName, channelUuid } from './tests/channel-uuid';
 import { directoryChannel as channelWithId } from './tests/directory-channel';
 import {
@@ -96,7 +99,16 @@ type FakeNetworkOptions = {
   holdPages?: boolean;
   /** Lane page reads to fail before they answer. */
   failingPages?: number;
+  /** The channels a read of one channel from the primary sees; the pages'
+   * own when left out, so a test can have the pages lag it. */
+  primary?: ChannelDirectoryFieldsFragment[];
+  /** Reads of one channel to fail before they answer. */
+  failingEntityReads?: number;
 };
+
+const isEntityInput = (
+  input: GraphqlSoupInput | SoupEntityInput
+): input is SoupEntityInput => 'entityId' in input;
 
 /**
  * The server's channel directory query over `channels`: the lane in pages of
@@ -138,12 +150,41 @@ function fakeNetwork(
     );
   };
 
+  let entityFailures = options.failingEntityReads ?? 0;
+  const entityReads: string[] = [];
+  const answerEntity = async ({ entityId }: SoupEntityInput) => {
+    entityReads.push(String(entityId));
+    if (entityFailures > 0) {
+      entityFailures -= 1;
+      return { error: new Error('offline') };
+    }
+    const record = (options.primary ?? channels).find(
+      ({ id }) => id === entityId
+    );
+    return {
+      data: {
+        __typename: 'Query',
+        user: {
+          __typename: 'GraphqlUser',
+          id: VIEWER,
+          soupEntity: record ? structuredClone(record) : null,
+        },
+      } as unknown as ChannelDirectoryEntityQuery,
+    };
+  };
+
   const query = vi.fn(
-    (_document: unknown, variables: { input: GraphqlSoupInput }) => ({
-      toPromise: () => answer(variables.input),
+    (
+      _document: unknown,
+      variables: { input: GraphqlSoupInput | SoupEntityInput }
+    ) => ({
+      toPromise: () =>
+        isEntityInput(variables.input)
+          ? answerEntity(variables.input)
+          : answer(variables.input),
     })
   );
-  return { client: fakeClient(query), query, inputs, release };
+  return { client: fakeClient(query), query, inputs, entityReads, release };
 }
 
 function page(
@@ -676,6 +717,8 @@ type CachedDirectoryOptions = {
   byIdGate?: Promise<void>;
   /** When the page loaded, for `viewsCurrent`. */
   sessionStartedAt?: number;
+  /** The client whose own writes the directory shows. */
+  queryClient?: QueryClient;
 };
 
 const CACHE_SESSION = 'session-1';
@@ -751,6 +794,7 @@ function mountCachedDirectory(
         written: options.written ?? Promise.resolve(1),
       }),
       stampView,
+      ownWrites: ownChannelWrites(options.queryClient ?? new QueryClient()),
       sessionStartedAt: options.sessionStartedAt,
     });
   });
@@ -2359,7 +2403,7 @@ describe('refreshChannelDirectory', () => {
     const complete = directory.readComplete();
     await vi.waitFor(() => expect(network.walks()).toBe(1));
 
-    const refreshed = refreshChannelDirectory(queryClient);
+    const refreshed = refreshChannelDirectory([], { client: queryClient });
     network.release();
     await refreshed;
 
@@ -2382,7 +2426,7 @@ describe('refreshChannelDirectory', () => {
     const read = fetchCurrentDirectoryPages(queryClient, options);
     await vi.waitFor(() => expect(network.walks()).toBe(1));
 
-    const refreshed = refreshChannelDirectory(queryClient);
+    const refreshed = refreshChannelDirectory([], { client: queryClient });
     network.release();
     await refreshed;
 
@@ -2424,7 +2468,7 @@ describe('refreshChannelDirectory', () => {
     // A write lands during each of the first three reads.
     for (let walk = 1; walk <= 3; walk += 1) {
       await vi.waitFor(() => expect(walks).toBe(walk));
-      const refreshed = refreshChannelDirectory(queryClient);
+      const refreshed = refreshChannelDirectory([], { client: queryClient });
       releases[walk - 1]?.();
       await refreshed;
     }
@@ -2449,7 +2493,7 @@ describe('refreshChannelDirectory', () => {
     disposers.push(observer.subscribe(() => undefined));
     await vi.waitFor(() => expect(network.inputs).toHaveLength(1));
 
-    const refreshed = refreshChannelDirectory(queryClient);
+    const refreshed = refreshChannelDirectory([], { client: queryClient });
     network.release();
     await refreshed;
 
@@ -2458,6 +2502,234 @@ describe('refreshChannelDirectory', () => {
     expect(queryClient.getQueryState(options.queryKey)?.isInvalidated).toBe(
       false
     );
+  });
+});
+
+const ACCOUNT = { userId: VIEWER, session: 1 };
+
+/** The name a lookup shows, or its status when it found nothing. */
+function nameOf(directory: ChannelDirectory, name: string) {
+  const lookup = directory.lookup(channelUuid(name));
+  return lookup.status === 'loaded' ? lookup.channel.name : lookup.status;
+}
+
+/** The viewer's write of the `changed` channels, read back from the
+ * primary that `network` stands for. */
+function writeOf(
+  queryClient: QueryClient,
+  network: Pick<ReturnType<typeof fakeNetwork>, 'client'>,
+  changed: string[],
+  account: () => { userId: string; session: number } = () => ACCOUNT
+) {
+  return refreshChannelDirectory(changed.map(channelUuid), {
+    client: queryClient,
+    soup: () => network.client,
+    account,
+  });
+}
+
+describe("the viewer's own channel writes", () => {
+  const queryClient = () =>
+    new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+  it('shows a rename at once that the pages, read from a lagging replica, missed', async () => {
+    const network = fakeNetwork([channelRecord('a', { name: 'before' })], {
+      primary: [channelRecord('a', { name: 'after', updatedAt: UPDATED_MID })],
+    });
+    const client = queryClient();
+    const directory = mountMemoryDirectory(network, client);
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+
+    await writeOf(client, network, ['a']);
+
+    expect(nameOf(directory, 'a')).toBe('after');
+    expect(directory.channels().map(({ name }) => name)).toEqual(['after']);
+    expect((await directory.readComplete()).map(({ name }) => name)).toEqual([
+      'after',
+    ]);
+    expect(network.entityReads).toEqual([channelUuid('a')]);
+  });
+
+  it('takes out a channel the viewer deleted, and lists one they created', async () => {
+    const network = fakeNetwork(
+      [channelRecord('gone'), channelRecord('kept')],
+      {
+        primary: [
+          channelRecord('kept'),
+          channelRecord('new', { updatedAt: UPDATED_MID }),
+        ],
+      }
+    );
+    const client = queryClient();
+    const directory = mountMemoryDirectory(network, client);
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+
+    await writeOf(client, network, ['gone', 'new']);
+
+    expect(ids(directory.channels())).toEqual(['kept', 'new']);
+    expect(directory.lookup(channelUuid('gone')).status).toBe('missing');
+    expect(ids(await directory.readComplete())).toEqual(['kept', 'new']);
+  });
+
+  it('reads the pages again, backing off, until they show the write', async () => {
+    vi.useFakeTimers();
+    try {
+      const channels = [channelRecord('a', { name: 'before' })];
+      const written = channelRecord('a', {
+        name: 'after',
+        updatedAt: UPDATED_MID,
+      });
+      const network = fakeNetwork(channels, { primary: [written] });
+      const client = queryClient();
+      const directory = mountMemoryDirectory(network, client);
+      await vi.waitFor(() => expect(directory.complete()).toBe(true));
+
+      await writeOf(client, network, ['a']);
+      const read = network.inputs.length;
+      // The replica still lags: a second, then two more.
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(network.inputs.length).toBe(read + 1);
+      await vi.advanceTimersByTimeAsync(1_999);
+      expect(network.inputs.length).toBe(read + 1);
+      channels[0] = written;
+      await vi.advanceTimersByTimeAsync(1);
+      expect(network.inputs.length).toBe(read + 2);
+
+      // The pages show the write: no more reads.
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(network.inputs.length).toBe(read + 2);
+      expect(nameOf(directory, 'a')).toBe('after');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('stops reading again after four tries, and lets the write go when its hold ends', async () => {
+    vi.useFakeTimers();
+    try {
+      const network = fakeNetwork([channelRecord('a', { name: 'before' })], {
+        primary: [
+          channelRecord('a', { name: 'after', updatedAt: UPDATED_MID }),
+        ],
+      });
+      const client = queryClient();
+      const directory = mountMemoryDirectory(network, client);
+      await vi.waitFor(() => expect(directory.complete()).toBe(true));
+
+      await writeOf(client, network, ['a']);
+      const read = network.inputs.length;
+      await vi.advanceTimersByTimeAsync(1_000 + 2_000 + 4_000 + 8_000);
+      expect(network.inputs.length).toBe(read + 4);
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(network.inputs.length).toBe(read + 4);
+      expect(nameOf(directory, 'a')).toBe('after');
+
+      await vi.advanceTimersByTimeAsync(OWN_WRITE_HOLD_MS);
+      expect(nameOf(directory, 'a')).toBe('before');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('shows a later update by someone else over the write', async () => {
+    const channels = [channelRecord('a', { name: 'before' })];
+    const network = fakeNetwork(channels, {
+      primary: [channelRecord('a', { name: 'mine', updatedAt: UPDATED_MID })],
+    });
+    const client = queryClient();
+    const directory = mountMemoryDirectory(network, client);
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    await writeOf(client, network, ['a']);
+    expect(nameOf(directory, 'a')).toBe('mine');
+
+    channels[0] = channelRecord('a', {
+      name: 'theirs',
+      updatedAt: UPDATED_NEW,
+    });
+    directory.retry();
+
+    await vi.waitFor(() => expect(nameOf(directory, 'a')).toBe('theirs'));
+  });
+
+  it('drops reads that land after the account changed', async () => {
+    const network = fakeNetwork([channelRecord('a', { name: 'before' })], {
+      primary: [channelRecord('a', { name: 'after', updatedAt: UPDATED_MID })],
+    });
+    const client = queryClient();
+    const directory = mountMemoryDirectory(network, client);
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+
+    let account = ACCOUNT;
+    const written = writeOf(client, network, ['a'], () => account);
+    account = { userId: VIEWER, session: 2 };
+    await written;
+
+    expect(network.entityReads).toEqual([channelUuid('a')]);
+    expect(ownChannelWrites(client).writes()).toEqual({});
+    expect(nameOf(directory, 'a')).toBe('before');
+  });
+
+  it("holds nothing when the read fails, and shows no other viewer's write", async () => {
+    const network = fakeNetwork([channelRecord('a', { name: 'before' })], {
+      primary: [channelRecord('a', { name: 'after', updatedAt: UPDATED_MID })],
+      failingEntityReads: 1,
+    });
+    const client = queryClient();
+    const directory = mountMemoryDirectory(network, client);
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+
+    await writeOf(client, network, ['a']);
+    expect(ownChannelWrites(client).writes()).toEqual({});
+
+    await writeOf(client, network, ['a'], () => ({
+      userId: 'macro|someone-else@example.com',
+      session: 1,
+    }));
+    expect(Object.keys(ownChannelWrites(client).writes())).toEqual([
+      channelUuid('a'),
+    ]);
+    expect(nameOf(directory, 'a')).toBe('before');
+  });
+
+  it('reads nothing for ids that are not channels', async () => {
+    const network = fakeNetwork([]);
+    await refreshChannelDirectory(['not-a-channel'], {
+      client: queryClient(),
+      soup: () => network.client,
+      account: () => ACCOUNT,
+    });
+    expect(network.entityReads).toEqual([]);
+  });
+
+  it('shows a write over the cached record until the cache has it', async () => {
+    const client = queryClient();
+    const { cache, directory, reopen } = mountCachedDirectory([], {
+      queryClient: client,
+    });
+    cache.put(channelRecord('a', { name: 'before' }));
+    completeLane('g1');
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    const written = channelRecord('a', {
+      name: 'after',
+      updatedAt: UPDATED_MID,
+    });
+
+    await writeOf(client, fakeNetwork([], { primary: [written] }), ['a']);
+    expect(nameOf(directory, 'a')).toBe('after');
+    expect((await directory.readComplete()).map(({ name }) => name)).toEqual([
+      'after',
+    ]);
+
+    // The server's soup update lands, and then someone else's change.
+    cache.put(written, { sourceHash: 'a-written' });
+    reopen();
+    await new Promise((done) => setTimeout(done, 20));
+    expect(nameOf(directory, 'a')).toBe('after');
+    cache.put(channelRecord('a', { name: 'theirs', updatedAt: UPDATED_NEW }), {
+      sourceHash: 'a-theirs',
+    });
+    reopen();
+    await vi.waitFor(() => expect(nameOf(directory, 'a')).toBe('theirs'));
   });
 });
 

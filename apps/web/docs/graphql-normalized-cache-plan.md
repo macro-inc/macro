@@ -1458,7 +1458,18 @@ DMs) call `refreshChannelDirectory`, which rereads the in-memory directory,
 reading again after a first read that was already in flight; a full read
 (`readComplete()`, and the network list behind a filling cache) reads until
 one began after the latest write, since nothing else refetches a query nobody
-observes. The viewer's own views reach no soup update, so the channel view
+observes. Those pages, and the cache's soup update, can lag the write: the
+pages read a replica, and the update arrives a second or more later. So a
+caller that names the channels it wrote (`refreshChannelDirectory([id])`;
+message sends name none) also reads each one from the primary
+(`ChannelDirectoryEntity`, network only), and both directories of that
+QueryClient show the result (`own-writes.ts`) over whatever their source
+still holds, for at most a minute, until the source shows it or a later
+update. A channel the viewer can no longer read leaves the list the same
+way. The in-memory directory reads its pages again while they lag, after
+1, 2, 4 and 8 seconds. A read that fails, or that lands after the account
+changed, holds nothing (`channel_directory.own_writes` span). The viewer's
+own views reach no soup update, so the channel view
 hands each recorded view to its tab's directory (`recordView`). That
 directory lays it over every record it reads for the rest of its life, so in
 that tab a page, a by-id read or a refetch read before the view never shows an

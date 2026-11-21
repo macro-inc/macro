@@ -18,6 +18,7 @@ import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalize
 import type { CacheHost } from '@graphql-cache/host/types';
 import { Telemetry } from '@macro-inc/observability';
 import {
+  ChannelDirectoryEntityDocument,
   ChannelDirectoryPageDocument,
   type ChannelDirectoryPageQuery,
   SoupChannelDirectoryBackfillDocument,
@@ -44,6 +45,7 @@ import type { Client, OperationResult } from '@urql/core';
 import {
   type Accessor,
   batch,
+  createEffect,
   createMemo,
   createSignal,
   onCleanup,
@@ -60,6 +62,7 @@ import {
   take,
   toPromise,
 } from 'wonka';
+import { currentQueryAccount, type QueryAccount } from '../auth/account-scope';
 import { useQueryAccount } from '../auth/use-query-account';
 import { queryClient } from '../client';
 import {
@@ -103,6 +106,11 @@ import {
   returnedChannelIds,
 } from './directory-reconcile';
 import { channelKeys } from './keys';
+import {
+  type OwnChannelWrites,
+  overlayOwnWrites,
+  ownChannelWrites,
+} from './own-writes';
 import { isLaterView, stampCachedChannelView } from './viewed-at';
 
 // The server answers a by-id read of at most this many channels in one page.
@@ -117,6 +125,11 @@ const BY_ID_CONCURRENCY = 2;
 // Records still lacking a field once the lane finished, read per refresh.
 const INCOMPLETE_READS_PER_REFRESH = 500;
 const DIRECTORY_STALE_MS = 5 * 60_000;
+// The in-memory pages read a replica, which can miss a write for a few
+// seconds: while one of the viewer's writes is ahead of them they are read
+// again, after this pause, doubling, at most this many times.
+const OWN_WRITE_REREAD_MS = 1_000;
+const OWN_WRITE_REREADS = 4;
 // The fallback's by-id reads settle a batch at a time; the channels they
 // decide are laid over the network's at most this often.
 const CONFIRM_RENDER_MS = 250;
@@ -273,6 +286,43 @@ export function channelDirectoryState(
   const incomplete: Record<string, true> = {};
   for (const id of incompleteIds) incomplete[id] = true;
   return { records, joined: inDirectoryOrder(joined), incomplete, complete };
+}
+
+/**
+ * The viewer's own channel writes (`own-writes.ts`) laid over what a
+ * directory read, until what it reads shows them.
+ */
+function createOwnWriteOverlay(own: OwnChannelWrites, userId: string) {
+  const overlay = (
+    state: ChannelDirectoryState,
+    writes: ReturnType<OwnChannelWrites['writes']>
+  ) => {
+    const overlaid = overlayOwnWrites(
+      state.records,
+      state.incomplete,
+      writes,
+      userId
+    );
+    if (!overlaid) return state;
+    return channelDirectoryState(
+      overlaid.channels,
+      overlaid.incompleteIds,
+      state.complete
+    );
+  };
+  return {
+    apply: (state: ChannelDirectoryState) => overlay(state, own.writes()),
+    /** The joined channels of a full read with the writes laid over it. */
+    applyList(channels: readonly DirectoryChannel[]) {
+      const state = channelDirectoryState(channels, [], true);
+      const overlaid = overlay(state, untrack(own.writes));
+      return overlaid === state ? channels : overlaid.joined;
+    },
+    /** Whether `state` has yet to show one of the writes. */
+    behind: (state: ChannelDirectoryState) =>
+      overlayOwnWrites(state.records, NO_IDS, own.writes(), userId) !==
+      undefined,
+  };
 }
 
 /**
@@ -597,17 +647,37 @@ export async function fetchCurrentDirectoryPages(
   return channels;
 }
 
+type RefreshChannelDirectoryOptions = {
+  client?: QueryClient;
+  /** The client the changed channels are read through: the app's, whose
+   * cache exchange also keeps what they read. */
+  soup?: () => UrqlQuery;
+  /** The signed-in account now: reads that land after it changed are
+   * dropped. */
+  account?: () => QueryAccount | undefined;
+};
+
 /**
- * Re-reads the in-memory directory after a channel change. The cached
- * directory needs nothing: the server's soup updates keep it current.
+ * Re-reads the in-memory directory after a channel change, and reads the
+ * `changed` channels, the ones the viewer's write named, from the primary
+ * database. Both directories show those reads until what they read catches
+ * up: the in-memory pages read a replica that can lag the write, and the
+ * cache waits for the server's soup update. Without ids (a write whose
+ * channel is not known yet) the cached directory waits for that update.
  *
  * Invalidating a first read still in flight joins it, and its success clears
  * the invalidation, though it may have read the pages before the change. So
  * such a read is awaited and then read again.
  */
 export async function refreshChannelDirectory(
-  client: QueryClient = queryClient
+  changed: readonly string[] = [],
+  {
+    client = queryClient,
+    soup = () => getGraphqlSoupClient(),
+    account = () => currentQueryAccount(),
+  }: RefreshChannelDirectoryOptions = {}
 ) {
+  const ownWrites = readOwnWrites(changed, client, soup, account);
   directoryWrites(client).seen += 1;
   const filters = { queryKey: channelKeys.directory._def };
   const firstReads = client
@@ -621,9 +691,79 @@ export async function refreshChannelDirectory(
         : []
     );
   await client.invalidateQueries(filters);
-  if (firstReads.length === 0) return;
-  await Promise.allSettled(firstReads);
-  await client.invalidateQueries(filters);
+  if (firstReads.length > 0) {
+    await Promise.allSettled(firstReads);
+    await client.invalidateQueries(filters);
+  }
+  await ownWrites;
+}
+
+type PrimaryChannelRead =
+  | { kind: 'read'; channel: DirectoryChannel | null }
+  | { kind: 'failed' };
+
+/** One channel as the primary database shows the viewer it now: null when
+ * they can no longer read it. */
+async function readChannelFromPrimary(
+  client: UrqlQuery,
+  channelId: string
+): Promise<PrimaryChannelRead> {
+  const result = await client
+    .query(
+      ChannelDirectoryEntityDocument,
+      { input: { entityType: 'CHANNEL', entityId: channelId } },
+      { requestPolicy: 'network-only' }
+    )
+    .toPromise();
+  if (result.error || !result.data) return { kind: 'failed' };
+  const entity = result.data.user.soupEntity;
+  return {
+    kind: 'read',
+    channel:
+      entity?.__typename === 'GraphqlSoupChannel'
+        ? toDirectoryChannel(entity)
+        : null,
+  };
+}
+
+/** Reads the channels a write of the viewer's changed and holds what the
+ * primary showed for the directories. A failed read holds nothing: the
+ * directory shows what it reads, as it would without this. */
+async function readOwnWrites(
+  changed: readonly string[],
+  client: QueryClient,
+  soup: () => UrqlQuery,
+  account: () => QueryAccount | undefined
+) {
+  const channelIds = [...new Set(changed)].filter(isChannelId);
+  if (channelIds.length === 0) return;
+  const writer = account();
+  if (!writer) return;
+  await Telemetry.span('channel_directory.own_writes', async (span) => {
+    span.setAttr('channel_directory.requested', channelIds.length);
+    const reads = await Promise.all(
+      channelIds.map((id) => readChannelFromPrimary(soup(), id))
+    );
+    const now = account();
+    if (now?.userId !== writer.userId || now.session !== writer.session) {
+      span.setAttr('channel_directory.scope', 'other_viewer');
+      return;
+    }
+    const own = ownChannelWrites(client);
+    let failed = 0;
+    let unreadable = 0;
+    reads.forEach((read, index) => {
+      const channelId = channelIds[index];
+      if (read.kind === 'failed' || !channelId) {
+        failed += 1;
+        return;
+      }
+      if (!read.channel) unreadable += 1;
+      own.record(channelId, { channel: read.channel, userId: writer.userId });
+    });
+    span.setAttr('channel_directory.failed', failed);
+    span.setAttr('channel_directory.unreadable', unreadable);
+  });
 }
 
 /** What a by-id read found. `returned` is undefined when the answer proves
@@ -891,6 +1031,8 @@ type CachedDirectoryDeps = {
   pageAll: (signal: AbortSignal) => Promise<FallbackWalk>;
   /** Writes a recorded view onto the channel's cached record. */
   stampView: (channelId: string, viewedAt: string) => Promise<boolean>;
+  /** The viewer's own writes, shown until the cache has them. */
+  ownWrites: OwnChannelWrites;
   /** When this page loaded, in epoch milliseconds: records a pass of the
    * lane reread after it show views as current as `ChannelDirectory`
    * promises. `performance.timeOrigin` when left out. */
@@ -1124,7 +1266,8 @@ export function createCachedChannelDirectory(
   });
   const state = createMemo(() => shown().state);
   const views = createViewStamps();
-  const view = createMemo(() => views.apply(state()));
+  const own = createOwnWriteOverlay(deps.ownWrites, userId);
+  const view = createMemo(() => views.apply(own.apply(state())));
   // Cached records older than a recorded view that the view was written
   // over again: a soup page read before the view can overwrite it.
   const restamped = new WeakSet<DirectoryChannel>();
@@ -1695,7 +1838,9 @@ export function createCachedChannelDirectory(
     },
     async readComplete() {
       if (untrack(proven)) return untrack(view).joined;
-      return inDirectoryOrder(views.applyList(await deps.fetchAll()));
+      return inDirectoryOrder(
+        views.applyList(own.applyList(await deps.fetchAll()))
+      );
     },
     failed: () => {
       const { state: current, fallback: status } = shown();
@@ -1753,6 +1898,10 @@ export function createMemoryChannelDirectory(
   });
 
   const views = createViewStamps();
+  const own = createOwnWriteOverlay(
+    ownChannelWrites(deps.queryClient),
+    deps.userId
+  );
   const read = createMemo((): ChannelDirectoryState => {
     // Raw rows: walking them through the store creates a signal per field.
     if (queryReadyGate(pages))
@@ -1760,7 +1909,30 @@ export function createMemoryChannelDirectory(
     // The channels read by id stand in until every page has loaded.
     return channelDirectoryState(Object.values(overlay()), [], false);
   });
-  const state = createMemo(() => views.apply(read()));
+  const state = createMemo(() => views.apply(own.apply(read())));
+
+  // The pages read a replica: the read right after a write can miss it, and
+  // nothing reads them again for minutes. Read again, backing off, while a
+  // write is still ahead of them.
+  const pagesBehind = createMemo(
+    () => queryReadyGate(pages) && own.behind(read())
+  );
+  let rereads = 0;
+  createEffect(() => {
+    if (!pagesBehind()) {
+      rereads = 0;
+      return;
+    }
+    if (pages.isFetching || rereads >= OWN_WRITE_REREADS) return;
+    const timer = setTimeout(
+      () => {
+        rereads += 1;
+        fireAndForget(pages.refetch(), 'channel-directory');
+      },
+      OWN_WRITE_REREAD_MS * 2 ** rereads
+    );
+    onCleanup(() => clearTimeout(timer));
+  });
 
   return {
     channels: () => state().joined,
@@ -1776,7 +1948,9 @@ export function createMemoryChannelDirectory(
         options()
       );
       return inDirectoryOrder(
-        views.applyList(channels.filter(({ isParticipant }) => isParticipant))
+        views.applyList(
+          own.applyList(channels.filter(({ isParticipant }) => isParticipant))
+        )
       );
     },
     failed: () => pages.isError && !pages.isFetching,
@@ -1871,6 +2045,7 @@ export function createAppChannelDirectory(): ChannelDirectory {
       },
       stampView: (channelId, viewedAt) =>
         stampCachedChannelView(cache, channelId, viewedAt),
+      ownWrites: ownChannelWrites(queryClient),
     });
   });
   return {

@@ -15,6 +15,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { deleteAgentSession } from '@queries/agent-session/entity-mutations';
 import { callKeys } from '@queries/call/keys';
+import { refreshChannelDirectory } from '@queries/channel/directory';
 import { channelKeys } from '@queries/channel/keys';
 import { queryClient } from '@queries/client';
 import {
@@ -52,8 +53,14 @@ function invalidateDeletedDssItems(entities: EntityData[]): void {
     queryClient.invalidateQueries({ queryKey: databasesKeys.list.queryKey });
     queryClient.invalidateQueries({ queryKey: formsKeys.list.queryKey });
   }
-  if (entities.some((e) => e.type === 'channel')) {
+  const channelIds = entities.flatMap((e) =>
+    e.type === 'channel' ? [e.id] : []
+  );
+  if (channelIds.length > 0) {
     queryClient.invalidateQueries({ queryKey: channelKeys._def });
+    // The channel directory reads a replica, or waits for the soup update:
+    // the primary's answer takes the deleted channels out at once.
+    fireAndForget(refreshChannelDirectory(channelIds), 'channel-delete');
   }
   if (entities.some((e) => e.type === 'call')) {
     queryClient.invalidateQueries({ queryKey: callKeys._def });

@@ -166,6 +166,6 @@ export function handleChannelAccessRequestChanged(payload: {
 }
 
 /** Once the viewer is let in, their channel directory gains the channel. */
-export function refreshJoinedChannel() {
-  return refreshChannelDirectory();
+export function refreshJoinedChannel(channelId: string) {
+  return refreshChannelDirectory([channelId]);
 }

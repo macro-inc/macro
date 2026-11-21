@@ -183,9 +183,12 @@ export function useCreateChannelMutation(
             entityId: data.id,
           });
         },
-        onSettled: (_data, _error, _variables, _result, context) => {
+        onSettled: (data, _error, _variables, _result, context) => {
           if (isCurrentQueryAccount(mutationQueryAccount(context)))
-            fireAndForget(refreshChannelDirectory(), 'channel-list');
+            fireAndForget(
+              refreshChannelDirectory(data ? [data.id] : []),
+              'channel-list'
+            );
         },
       },
       callbacks
@@ -234,9 +237,12 @@ export function usePatchChannelMutation(callbacks?: PatchChannelCallbacks) {
           console.error('failed to update channel settings', error);
           toast.failure('Failed to update channel settings');
         },
-        onSettled: (_data, _error, _variables, _result, context) => {
+        onSettled: (_data, _error, variables, _result, context) => {
           if (isCurrentQueryAccount(mutationQueryAccount(context)))
-            fireAndForget(refreshChannelDirectory(), 'channel-list');
+            fireAndForget(
+              refreshChannelDirectory([variables.channelId]),
+              'channel-list'
+            );
         },
       },
       callbacks

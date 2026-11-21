@@ -89,3 +89,18 @@ query ViewerChannelViewedAt($channelId: ID!) {
 		channelViewedAt(channelId: $channelId)
 	}
 }
+
+# One channel read from the primary right after the viewer changed it: the
+# in-memory pages read a replica and the cache waits for the server's soup
+# update, so the directory shows this until they catch up. Null when the viewer
+# can no longer read the channel.
+query ChannelDirectoryEntity($input: SoupEntityInput!) {
+	user {
+		id
+		soupEntity(input: $input) {
+			__typename
+			id
+			... on GraphqlSoupChannel { ...ChannelDirectoryFields }
+		}
+	}
+}
