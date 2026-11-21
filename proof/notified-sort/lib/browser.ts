@@ -4,6 +4,7 @@
 // module is imported into the running page, and the Home list is read from
 // the DOM it renders.
 
+import { startModuleCache } from './module-cache.ts';
 import { type ChildProcess, spawn } from 'node:child_process';
 import { copyFileSync, mkdirSync, openSync } from 'node:fs';
 import { join } from 'node:path';
@@ -94,16 +95,20 @@ export async function launchBrowser(): Promise<Browser> {
   const base = Number(process.env.PROOF_PORT_BASE ?? 30110);
   const isolated = process.env.PROOF_NETNS !== '0';
   if (isolated && !process.env.PROOF_SOCAT) throw new Error('set PROOF_SOCAT to a socat binary, or PROOF_NETNS=0');
-  return chromium.launch({
+  // PROOF_MODULE_CACHE=0 sends modules through uncached (socat only).
+  const cache = isolated && process.env.PROOF_MODULE_CACHE !== '0' ? await startModuleCache([base, base + 1]) : undefined;
+  const browser = await chromium.launch({
     headless: true,
     ...(isolated
       ? {
           executablePath: join(import.meta.dirname, 'chromium-netns.sh'),
-          env: { ...process.env, PROOF_CHROMIUM: chromium.executablePath(), PROOF_NETNS_PORTS: `${base},${base + 1}` },
+          env: { ...process.env, PROOF_CHROMIUM: chromium.executablePath(), PROOF_NETNS_PORTS: `${base},${base + 1}`, PROOF_NETNS_HOSTDIR: cache?.dir ?? '' },
         }
       : {}),
     args: ['--disable-renderer-backgrounding', '--disable-background-timer-throttling'],
   });
+  if (cache) browser.on('disconnected', cache.close);
+  return browser;
 }
 
 /** A request the browser gave up on: no response reached the page. */

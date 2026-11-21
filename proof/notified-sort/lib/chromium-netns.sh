@@ -9,18 +9,24 @@
 # inherited pipes, which the namespace does not touch.
 set -euo pipefail
 : "${PROOF_CHROMIUM:?}" "${PROOF_SOCAT:?}" "${PROOF_NETNS_PORTS:?}"
-dir="$(mktemp -d)"
 pids=()
-cleanup() {
-  kill "${pids[@]}" 2>/dev/null || true
-  rm -rf "$dir"
-}
+if [ -n "${PROOF_NETNS_HOSTDIR:-}" ]; then
+  # The host side is already served (lib/module-cache.ts).
+  dir="$PROOF_NETNS_HOSTDIR"
+  cleanup() { :; }
+else
+  dir="$(mktemp -d)"
+  cleanup() {
+    kill "${pids[@]}" 2>/dev/null || true
+    rm -rf "$dir"
+  }
+  for port in ${PROOF_NETNS_PORTS//,/ }; do
+    "$PROOF_SOCAT" "UNIX-LISTEN:$dir/$port.sock,fork" "TCP4:127.0.0.1:$port" &
+    pids+=("$!")
+  done
+fi
 trap cleanup EXIT
 trap 'kill -TERM "$child" 2>/dev/null; wait "$child"; exit 143' TERM INT
-for port in ${PROOF_NETNS_PORTS//,/ }; do
-  "$PROOF_SOCAT" "UNIX-LISTEN:$dir/$port.sock,fork" "TCP4:127.0.0.1:$port" &
-  pids+=("$!")
-done
 for port in ${PROOF_NETNS_PORTS//,/ }; do
   until [ -S "$dir/$port.sock" ]; do sleep 0.05; done
 done
