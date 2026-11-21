@@ -1,0 +1,61 @@
+.agents/rules/config-and-service-urls.md
+  s_86a3b382b10917::t_d8a51bb1901295 60-61
+apps/web/src/features/agent-permissions/AGENTS.md
+  s_86a3b382b10917::t_b16ef4a8cb36fd 48-49
+apps/web/src/features/agent-permissions/components/permissions-notes.tsx
+  s_86a3b382b10917::t_f16e320ffa86cd 12-13
+apps/web/src/features/agent-permissions/use-agent-permissions-flag.test.ts
+  s_86a3b382b10917::t_56c58f1e452680 34
+apps/web/src/features/agent-permissions/views/agent-permissions-page.test.tsx
+  s_86a3b382b10917::t_4c70e036a66472 88
+apps/web/src/features/agent-permissions/views/agent-permissions-page.tsx
+  s_86a3b382b10917::t_1af81c1eda5749 55
+apps/web/src/features/block-agent/browser-test/permissions.browser.e2e.ts
+  s_86a3b382b10917::t_023eeb3f3ca1ac 42,112,116
+apps/web/src/features/block-agent/browser-test/permissions.tsx
+  s_86a3b382b10917::t_e2a07731cf321e 6-8,48,213,229,231-240,267,273,287,326,340
+apps/web/src/features/block-agent/component/PermissionApprovalRequest.test.tsx
+  s_86a3b382b10917::t_15c25030f293df 38-40,111,167
+apps/web/src/features/block-agent/component/parts/ToolCallPart.test.tsx
+  s_86a3b382b10917::t_43edb0d5ac776d 1631-1632
+apps/web/src/lib/i18n/locales/en/agent-permissions.ts
+  s_86a3b382b10917::t_a606d793f77d18 5,13,105
+crates/agent_code_mode/AGENTS.md
+  s_86a3b382b10917::t_9e6953ddc57d96 173
+crates/agent_code_mode/src/inbound/toolset/test/without_js_tools.json
+  s_86a3b382b10917::t_319312846ae461 3-4,9,12,63,66,97,114,117
+crates/agent_egress/src/domain/approval/test.rs
+  s_86a3b382b10917::t_5c9b69e91a8b5e 816,818
+crates/agent_permission_registry/AGENTS.md
+  s_86a3b382b10917::t_2dd097b1ffd98f 6,21,50,52
+crates/agent_permissions/AGENTS.md
+  s_86a3b382b10917::t_e3a4eaa37d4bd0 43,48-49,58,66,68
+crates/code_execution/AGENTS.md
+  s_86a3b382b10917::t_fedb484d0bde6a 147-149
+crates/code_execution/README.md
+  s_86a3b382b10917::t_5e66c1237a68d2 87,128,279
+docs/agent-guide/ai-chat.md
+  s_86a3b382b10917::t_7899a2143fa1ec 1405,1408-1410,1830-1831,1872
+docs/agent-guide/settings.md
+  s_86a3b382b10917::t_1d6adffc1ca0a3 1244
+services/agent_harness_service/AGENTS.md
+  s_86a3b382b10917::t_c1ddc96f9eb4cd 82-85,92
+tooling/xtask/crates/xtask_workflows/src/workflows/scripts/run_tests.sh
+  s_86a3b382b10917::t_a5ad5e2a12e5d6 34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "ffce9bb73defa8dfa43cccae7d0cee267a8980cc",
+  "prompts": {},
+  "sessions": {
+    "s_86a3b382b10917": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a275f075-bf4f-4b81-a101-edd06f6ebfa3",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
