@@ -12,9 +12,11 @@ for (const dir of fs.readdirSync(OUT).sort()) {
   const file = path.join(OUT, dir, 'results.json');
   if (!fs.existsSync(file)) continue;
   const r = JSON.parse(fs.readFileSync(file, 'utf8'));
-  // level families: raw, read-after-write, live, fresh, caller, staleness, mutation-result
+  // level families: raw (by phase), write replay, imperative, mutation results, readers, callers, staleness
   const family = (level) => {
-    if (level === 'raw') return 'raw read cases';
+    if (level.startsWith('raw:')) return `raw read cases (${level.slice(4)})`;
+    if (level === 'write-replay') return 'write replay';
+    if (level === 'imperative') return 'imperative read';
     if (level === 'mutation-result') return 'mutation results';
     if (level.endsWith(':staleness')) return 'live vs fresh staleness';
     if (level.endsWith(':caller')) return `callers (${level.split(':').at(-2)})`;
@@ -56,11 +58,14 @@ for (const dir of fs.readdirSync(OUT).sort()) {
     ops: r.ops,
     rejections: r.rejections,
     coverage: r.coverage,
-    harnessErrors: r.harnessErrors.length,
+    totals: r.totals,
+    moduleChecks: r.moduleChecks,
+    crashes: r.crashes,
+    harnessErrors: r.totals?.harnessErrors ?? r.harnessErrors.length,
   };
 }
 fs.writeFileSync(path.join(OUT, 'summary.json'), JSON.stringify(runs, null, 2));
 for (const [name, s] of Object.entries(runs)) {
   const sigs = Object.entries(s.differenceSignatures);
-  console.log(`${name}: ${s.counts.sequences} seq, ${s.counts.steps} steps, ${s.counts.rawCases} raw, ${s.counts.readerComparisons} reader, ${s.counts.callerComparisons} caller; ${sigs.length} signatures; harness errors ${s.harnessErrors}${s.mutant ? `; mutant applied ${s.mutantResult.applied}, caught ${s.mutantResult.firstCatch ? 'yes' : 'NO'}` : ''}`);
+  console.log(`${name}: ${s.counts.sequences} seq, ${s.counts.steps} steps, ${s.counts.rawCases} raw, ${s.counts.readerComparisons} reader, ${s.counts.callerComparisons} caller; ${sigs.length} signatures; ${s.totals?.differences ?? '?'} differences; harness errors ${s.harnessErrors}; crashes ${s.crashes?.length ?? 0}${s.mutant ? `; mutant applied ${s.mutantResult.applied}, caught ${s.mutantResult.firstCatch ? 'yes' : 'NO'}` : ''}`);
 }
