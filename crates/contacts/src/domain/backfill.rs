@@ -27,6 +27,7 @@ mod test;
 use crate::domain::models::backfill::{InboxOwner, OrphanKind};
 use crate::domain::models::list::InboxSource;
 use crate::domain::ports::{ContactListRepository, LegacyDirectorySource, OrphanedListRows};
+use crate::domain::service::remove_deleted_accounts;
 use audit::{InteractedProjection, LegacyAudit};
 use channels::{ChannelDirectory, ChannelLoader, InteractionWrite};
 use chrono::{DateTime, Utc};
@@ -470,8 +471,8 @@ where
             }
 
             let (users, peers) = channels.resolve(&write);
-            match self.lists.record_interactions(&users, &peers).await {
-                Ok(added) => counts.added_rows += added.len() as u64,
+            match self.record_interactions(&users, &peers).await {
+                Ok(added) => counts.added_rows += added,
                 Err(error) => {
                     tracing::error!(error = ?error, channel_id = %write.channel_id, "interaction write failed");
                     counts.fail(write.channel_id.to_string());
@@ -488,6 +489,22 @@ where
             }
         }
         counts
+    }
+
+    /// Write the pairs, then remove any whose account was deleted while the
+    /// write ran, as the worker does. Returns the rows kept.
+    async fn record_interactions(
+        &self,
+        users: &[MacroUserIdStr<'static>],
+        peers: &[MacroUserIdStr<'static>],
+    ) -> Result<u64, Report> {
+        let added = self.lists.record_interactions(users, peers).await?;
+        let (deleted, _) = remove_deleted_accounts(&self.lists, &added).await?;
+        let kept = added
+            .iter()
+            .filter(|(owner, contact)| !deleted.contains(owner) && !deleted.contains(contact))
+            .count();
+        Ok(kept as u64)
     }
 
     /// Page through inbox owners; for each, page through their legacy
@@ -519,12 +536,24 @@ where
                     inboxes = owner.inboxes.len() as i64,
                     legacy_contacts = tracing::field::Empty,
                 );
+                // One owner's failed read skips that owner, not the pass:
+                // their inboxes are named for a rerun.
                 let read = self
                     .backfill_owner(&owner, &owner_id, dry_run, &mut counts.written)
                     .instrument(span.clone())
-                    .await?;
-                span.record("legacy_contacts", read as i64);
-                counts.legacy_contacts += read;
+                    .await;
+                match read {
+                    Ok(read) => {
+                        span.record("legacy_contacts", read as i64);
+                        counts.legacy_contacts += read;
+                    }
+                    Err(error) => {
+                        tracing::error!(error = ?error, "inbox owner read failed");
+                        for inbox in &owner.inboxes {
+                            counts.written.fail(inbox.link_id.to_string());
+                        }
+                    }
+                }
             }
 
             if !full {

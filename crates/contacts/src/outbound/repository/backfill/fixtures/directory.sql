@@ -87,3 +87,9 @@ INSERT INTO contacts_connections (user1, user2) VALUES
 ('macro|a@example.com', 'macro|x@example.org'),
 ('macro|b@example.com', 'macro|e@example.com'),
 ('macro|new@example.com', 'macro|support@macro.com');
+
+-- A referral invite already wrote r into a's invited list; team_user holds
+-- b under a legacy-cased id.
+INSERT INTO contact_list_members (user_id, contact_user_id, list_key) VALUES
+('macro|a@example.com', 'macro|r@example.com', 'invited');
+UPDATE "User" SET id = 'macro|B@example.com' WHERE id = 'macro|b@example.com';

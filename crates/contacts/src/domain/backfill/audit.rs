@@ -1,6 +1,8 @@
 //! Classifies each direction of a legacy edge (owner sees contact) by why the
 //! owner has that contact, so reviewers can see what the cutover keeps and
-//! what it drops before the new reads ramp.
+//! what it drops before the new reads ramp. Explained directions are the
+//! ones the new lists hold: computed teammates, rows the backfill writes, and
+//! invited rows referral invites already wrote.
 
 use super::channels::{ChannelDirectory, ChannelProjection, ChannelRelation};
 use crate::domain::models::backfill::{ChannelType, LegacyEdge};
@@ -25,6 +27,9 @@ pub enum DirectionClass {
     /// Explained: one of the owner's inboxes knows the contact (`gmail` or
     /// `outlook`).
     Inbox,
+    /// Kept: a referral invite already put the contact in the owner's
+    /// `invited` list.
+    Invited,
     /// Unexplained: only the contact's inbox knows the owner, the reverse
     /// direction of an import.
     ReverseImport,
@@ -50,7 +55,11 @@ impl DirectionClass {
     pub fn explained(self) -> bool {
         matches!(
             self,
-            Self::Teammate | Self::SharedChannel | Self::DmWithMessage | Self::Inbox
+            Self::Teammate
+                | Self::SharedChannel
+                | Self::DmWithMessage
+                | Self::Inbox
+                | Self::Invited
         )
     }
 }
@@ -64,6 +73,8 @@ pub struct DirectionEvidence {
     pub channels: ChannelRelation,
     /// The owner's inbox knows the contact.
     pub owner_inbox: bool,
+    /// The owner's invited list holds the contact.
+    pub owner_invited: bool,
     /// The contact's inbox knows the owner.
     pub contact_inbox: bool,
     /// The owner disconnected an inbox.
@@ -83,6 +94,8 @@ impl DirectionEvidence {
             DirectionClass::DmWithMessage
         } else if self.owner_inbox {
             DirectionClass::Inbox
+        } else if self.owner_invited {
+            DirectionClass::Invited
         } else if self.contact_inbox {
             DirectionClass::ReverseImport
         } else if self.channels.direct_message == Some(false) {
@@ -114,6 +127,8 @@ pub struct EvidenceCounts {
     pub support_channel: u64,
     /// Owner's inbox knows the contact.
     pub owner_inbox: u64,
+    /// Owner's invited list holds the contact.
+    pub owner_invited: u64,
     /// Contact's inbox knows the owner.
     pub contact_inbox: u64,
     /// One referred the other.
@@ -158,12 +173,14 @@ impl LegacyAudit {
             teammates: edge.teammates,
             channels: relation,
             owner_inbox: edge.user1_inbox_has_user2,
+            owner_invited: edge.user1_invited_user2,
             contact_inbox: edge.user2_inbox_has_user1,
             owner_disconnected_inbox: edge.user1_disconnected_inbox,
             referral: edge.referral,
         };
         let backward = DirectionEvidence {
             owner_inbox: edge.user2_inbox_has_user1,
+            owner_invited: edge.user2_invited_user1,
             contact_inbox: edge.user1_inbox_has_user2,
             owner_disconnected_inbox: edge.user2_disconnected_inbox,
             ..forward
@@ -180,6 +197,7 @@ impl LegacyAudit {
         counts.empty_dm += u64::from(evidence.channels.direct_message == Some(false));
         counts.support_channel += u64::from(evidence.channels.support_channel);
         counts.owner_inbox += u64::from(evidence.owner_inbox);
+        counts.owner_invited += u64::from(evidence.owner_invited);
         counts.contact_inbox += u64::from(evidence.contact_inbox);
         counts.referral += u64::from(evidence.referral);
         counts.owner_disconnected_inbox += u64::from(evidence.owner_disconnected_inbox);
@@ -312,7 +330,7 @@ impl InteractedProjection {
             })
             .collect();
         projection.by_channel_size = buckets;
-        projection.dm_rows = channels.channel_counts().3 * 2;
+        projection.dm_rows = channels.direct_message_writes().len() as u64 * 2;
         projection
     }
 }

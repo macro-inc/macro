@@ -4,6 +4,7 @@
 //! order. Writes its report as JSON to `--report`; logs go to stdout.
 
 use std::collections::{BTreeSet, HashSet};
+use std::io::Write;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
@@ -140,6 +141,9 @@ async fn main() -> Result<(), Report> {
         .map(|email| MacroUserIdStr::try_from_email(email.trim()))
         .collect::<Result<HashSet<_>, _>>()?;
 
+    // Opened first, so a bad path fails before anything is written.
+    let mut report_file = std::fs::File::create(&cli.report)?;
+
     let database_url = DatabaseUrl::new()?;
     let options = PgConnectOptions::from_str(&database_url)?
         .application_name("contacts_backfill")
@@ -189,7 +193,7 @@ async fn main() -> Result<(), Report> {
             serde_json::to_string_pretty(&backfill.backfill(&request).await?)?
         }
     };
-    std::fs::write(&cli.report, report)?;
+    report_file.write_all(report.as_bytes())?;
     tracing::info!(report = %cli.report.display(), "contacts backfill report written");
     Ok(())
 }

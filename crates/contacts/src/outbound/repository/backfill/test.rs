@@ -85,17 +85,18 @@ async fn audit_classifies_every_legacy_direction(pool: PgPool) {
             (DirectionClass::SharedChannel, 4),
             (DirectionClass::DmWithMessage, 2),
             (DirectionClass::Inbox, 2),
+            (DirectionClass::Invited, 1),
             (DirectionClass::ReverseImport, 2),
             (DirectionClass::EmptyDm, 2),
             (DirectionClass::SupportChannel, 2),
-            (DirectionClass::Referral, 2),
+            (DirectionClass::Referral, 1),
             (DirectionClass::DisconnectedInbox, 1),
             (DirectionClass::NoSurvivingRecord, 1),
         ])
     );
     assert_eq!(
         (report.legacy.explained, report.legacy.unexplained),
-        (10, 10)
+        (11, 9)
     );
 
     let channels = &report.channels;
@@ -196,7 +197,7 @@ async fn after_rederives_only_recent_joins_and_messages(pool: PgPool) {
     .unwrap();
     sqlx::query!(
         "INSERT INTO comms_channel_participants (channel_id, user_id, role, joined_at)
-         VALUES ('00000000-0000-4000-c000-000000000001', 'macro|b@example.com', 'member', $1)",
+         VALUES ('00000000-0000-4000-c000-000000000001', 'macro|r@example.com', 'member', $1)",
         after
     )
     .execute(&pool)
@@ -214,15 +215,15 @@ async fn after_rederives_only_recent_joins_and_messages(pool: PgPool) {
     request.passes = BTreeSet::from([BackfillPass::Channels, BackfillPass::DirectMessages]);
     let report = backfill(&pool).backfill(&request).await.unwrap();
 
-    // b joined after the bound and pairs with everyone present; the April
+    // r joined after the bound and pairs with everyone present; the April
     // snapshot and the older DM message are not re-read.
     assert_eq!(
         list_rows(&pool).await,
         pairs(&[
-            ("macro|a@example.com", "macro|b@example.com"),
-            ("macro|b@example.com", "macro|a@example.com"),
-            ("macro|b@example.com", "macro|c@example.com"),
-            ("macro|c@example.com", "macro|b@example.com"),
+            ("macro|a@example.com", "macro|r@example.com"),
+            ("macro|c@example.com", "macro|r@example.com"),
+            ("macro|r@example.com", "macro|a@example.com"),
+            ("macro|r@example.com", "macro|c@example.com"),
         ])
     );
     assert_eq!(report.interacted_from_direct_messages.unwrap().writes, 0);

@@ -196,7 +196,8 @@ impl LegacyDirectorySource for DbContactsRepository {
         let rows = sqlx::query_file!(
             "src/outbound/repository/backfill/legacy_edge_page.sql",
             after,
-            limit
+            limit,
+            ContactList::Invited.as_ref()
         )
         .fetch_all(&self.db)
         .await?;
@@ -208,6 +209,8 @@ impl LegacyDirectorySource for DbContactsRepository {
                 user1: row.user1,
                 user2: row.user2,
                 teammates: row.teammates,
+                user1_invited_user2: row.user1_invited_user2,
+                user2_invited_user1: row.user2_invited_user1,
                 user1_inbox_has_user2: row.user1_inbox_has_user2,
                 user2_inbox_has_user1: row.user2_inbox_has_user1,
                 user1_disconnected_inbox: row.user1_disconnected_inbox,

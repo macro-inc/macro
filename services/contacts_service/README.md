@@ -36,7 +36,7 @@ cargo run -p contacts_service --bin contacts_backfill -- --report repair.json ba
   are idempotent, so a run can be repeated; nothing is notified.
 - `--dry-run` reads everything and reports the writes it would make.
 - `--after <RFC 3339>` re-derives only from channel joins and DM messages at
-  or after that time, and skips the April snapshot. The inbox pass has no
+  or after that time, and skips snapshots taken before that time. The inbox pass has no
   time index and always reads every legacy edge.
 - `--support-roster` overrides the signup support roster used to recognise
   support channels (private, named `Macro Support x …`, holding a roster

@@ -106,6 +106,10 @@ pub struct LegacyEdge {
     pub user2: String,
     /// Both are on the same team now.
     pub teammates: bool,
+    /// `user1`'s invited list already holds `user2`.
+    pub user1_invited_user2: bool,
+    /// `user2`'s invited list already holds `user1`.
+    pub user2_invited_user1: bool,
     /// One of `user1`'s inboxes knows `user2`.
     pub user1_inbox_has_user2: bool,
     /// One of `user2`'s inboxes knows `user1`.
