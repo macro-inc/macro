@@ -86,7 +86,8 @@ type ServerQuestion = {
   at: number;
   /** Which check it rode on, counted across every reader. */
   sent: number;
-  answer?: { members: readonly string[] | undefined };
+  /** What it answered, and how many checks had been sent when it did. */
+  answer?: { members: readonly string[] | undefined; arrived: number };
 };
 
 /** How many questions a reader keeps per channel. */
@@ -285,7 +286,9 @@ function withAnswer(
   members: readonly string[] | undefined
 ): readonly ServerQuestion[] {
   return questions.map((q) =>
-    q.seq === seq ? { ...q, answer: { members } } : q
+    q.seq === seq
+      ? { ...q, answer: { members, arrived: SERVER_CHECKS_SENT.count } }
+      : q
   );
 }
 
@@ -321,21 +324,34 @@ function serverSays(
 }
 
 /**
- * Who the newest answer naming members, from checks sent after `after`, says
- * is in the channel, whatever newer checks are still waiting or failed.
+ * Who the server says is in the channel, from checks sent after `after`. An
+ * answer naming members decides once every check already sent when it arrived
+ * has answered too, and then the newest of them that named members decides:
+ * one of those can say otherwise (the record moved again before it arrived),
+ * while checks sent since cannot hold it off, however often the record moves.
+ * Of the answers that can decide, the newest does; failed ones give way.
  */
 function latestMembers(
   questions: readonly ServerQuestion[],
   channelId: string,
   after: number
 ): ReadonlySet<string> | undefined {
-  const [newest] = questions
-    .filter(
-      (q) => q.channelId === channelId && q.sent > after && q.answer?.members
-    )
-    .sort((a, b) => b.seq - a.seq);
-  const members = newest?.answer?.members;
-  return members ? new Set(members) : undefined;
+  const asked = questions.filter(
+    (q) => q.channelId === channelId && q.sent > after
+  );
+  const newestFirst = (a: ServerQuestion, b: ServerQuestion) => b.seq - a.seq;
+  const named = asked.filter((q) => q.answer?.members).sort(newestFirst);
+  for (const question of named) {
+    const arrived = question.answer?.arrived ?? 0;
+    const since = asked.filter(
+      (q) => q.sent >= question.sent && q.sent <= arrived
+    );
+    if (since.some((q) => !q.answer)) continue;
+    const [decides] = since.filter((q) => q.answer?.members).sort(newestFirst);
+    const members = (decides ?? question).answer?.members;
+    if (members) return new Set(members);
+  }
+  return undefined;
 }
 
 /** How long a channel's first by-id read may go unanswered before its reader asks REST too. */
