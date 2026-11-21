@@ -19,7 +19,7 @@ import { StatusPill } from '../../components/status-pill';
 import { ZoomControl } from '../../components/zoom-control';
 import type { TouchMode } from '../../core/gestures';
 import type { AgentScreenModel } from '../shared/agent-screen-model';
-import { driverLabel, screenTitle } from '../shared/labels';
+import { agentWhileDriven, driverLabel, screenTitle } from '../shared/labels';
 import { ScreenNotice } from '../shared/screen-notice';
 import { ScreenPicture } from '../shared/screen-picture';
 
@@ -117,11 +117,17 @@ export function MobileAgentScreen(props: { model: AgentScreenModel }) {
                 </span>
               }
             >
-              <PauseIcon class="size-4 shrink-0" />
+              <Show
+                when={session.store.server?.agentHeld}
+                fallback={<CursorIcon class="size-4 shrink-0" />}
+              >
+                <PauseIcon class="size-4 shrink-0" />
+              </Show>
               <span class="truncate">
-                {t('agentScreen.agentPaused', {
-                  name: props.model.agentName(),
-                })}
+                {agentWhileDriven(
+                  session.store.server?.agentHeld ?? false,
+                  props.model.agentName()
+                )}
               </span>
             </Show>
           </span>

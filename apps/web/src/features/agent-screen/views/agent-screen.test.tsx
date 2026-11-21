@@ -372,3 +372,28 @@ describe('a refused Take over', () => {
     unmount();
   });
 });
+
+describe('what the viewer says the agent does while someone drives', () => {
+  it.each([
+    ['desktop', AgentScreen],
+    ['phone', MobileAgentScreen],
+  ])(
+    '%s: paused only when the server holds the agent',
+    async (_device, View) => {
+      vi.useFakeTimers();
+      const connections: Connection[] = [];
+      const { unmount } = renderView(View, connections);
+      await vi.advanceTimersByTimeAsync(0);
+
+      connections[0].handlers.onState({ ...state(true), agentHeld: false });
+      expect(screen.queryByText(/is paused/)).toBeNull();
+      expect(
+        screen.getByText(/Scout isn’t paused and keeps working/)
+      ).toBeTruthy();
+
+      connections[0].handlers.onState({ ...state(true), agentHeld: true });
+      expect(screen.getByText(/Scout is paused · tools held/)).toBeTruthy();
+      unmount();
+    }
+  );
+});

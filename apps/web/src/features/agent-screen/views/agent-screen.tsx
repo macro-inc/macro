@@ -18,7 +18,7 @@ import { StatusPill } from '../components/status-pill';
 import { ZoomControl } from '../components/zoom-control';
 import { agentScreenContent } from '../core/route';
 import type { AgentScreenModel } from './shared/agent-screen-model';
-import { driverLabel, screenTitle } from './shared/labels';
+import { agentWhileDriven, driverLabel, screenTitle } from './shared/labels';
 import { ScreenNotice } from './shared/screen-notice';
 import { ScreenPicture } from './shared/screen-picture';
 
@@ -101,7 +101,10 @@ export function AgentScreen(props: { model: AgentScreenModel }) {
                 </Match>
               </Switch>
               <span>·</span>
-              {t('agentScreen.agentPaused', { name: props.model.agentName() })}
+              {agentWhileDriven(
+                session.store.server?.agentHeld ?? false,
+                props.model.agentName()
+              )}
               <Show when={session.drivingMe()}>
                 <span
                   class="ml-1 border-l border-current pl-2"

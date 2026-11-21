@@ -16,6 +16,7 @@ export default {
   takeOverHere: 'Take over here',
   someoneIsDriving: '{{name}} is driving',
   agentPaused: '{{name}} is paused · tools held',
+  agentStillWorking: '{{name}} isn’t paused and keeps working',
 
   takeOver: 'Take over',
   takeOverAgain: 'Take over again',
@@ -37,8 +38,7 @@ export default {
   onlyManagersCanTakeOver: 'Only owners and admins can take over',
 
   handBackTitle: 'Hand back to {{name}}',
-  handBackDescription:
-    '{{name}} gets your note and a fresh screenshot, then carries on.',
+  handBackDescription: '{{name}} gets your note, then carries on.',
   handBackNotePlaceholder: 'Optional note',
   cancel: 'Cancel',
 
