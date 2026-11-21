@@ -89,8 +89,11 @@ DMs, and the shared message store other domains discuss things on.
   the Slack importer (`DmRoster::Stored`), which maps a conversation onto the
   channel it reserved by that rule; live get-or-create and the lookup
   (`DmRoster::Listed`) skip its row, so the DM is the pair's again, as
-  channel lists show it. Keep that shape; checking every direct-message
-  channel for both people reads the whole table.
+  channel lists show it. So when a pair's only DM had a bot removed, a Slack
+  import of that pair creates a DM of its own while live messages keep
+  reusing the first, as they did when the web opener picked the DM from the
+  channel list. Keep that shape; checking every direct-message channel for
+  both people reads the whole table.
 
 - The channel list picks its candidates from the filter
   (`ChannelCandidates::for_filter`): joined channels by default, plus the
