@@ -155,20 +155,24 @@ fn convert_assistant(msg: &ChatMessage, limit: Option<&ToolResultLimit>) -> Vec<
                     assistant_parts.push(AssistantContent::text(text));
                 }
             }
-            AssistantMessagePart::ToolCall { name, json, id }
-            | AssistantMessagePart::McpToolCall { name, json, id, .. } => {
+            AssistantMessagePart::ToolCall { name, json, id } => {
                 saw_tool_call = true;
-                // Anthropic requires tool_use.input to be an object; older persisted
-                // messages may carry a non-object value from before this was enforced
-                // at the source (see hook.rs on_tool_call), so coerce here too.
-                let input = if json.is_object() {
-                    json.clone()
-                } else {
-                    serde_json::json!({})
-                };
-                assistant_parts.push(AssistantContent::ToolCall(
-                    ToolCall::new(replay_item_id(id), ToolFunction::new(name.clone(), input))
-                        .with_call_id(replay_call_id(id)),
+                assistant_parts.push(replay_tool_call(name.clone(), json, id));
+            }
+            // The model was offered the tool under its mangled name, and must
+            // read its earlier call under that same name.
+            AssistantMessagePart::McpToolCall {
+                name,
+                service,
+                json,
+                id,
+                ..
+            } => {
+                saw_tool_call = true;
+                assistant_parts.push(replay_tool_call(
+                    mcp_toolset::mangle(service, name),
+                    json,
+                    id,
                 ));
             }
             AssistantMessagePart::ToolCallResponseJson { id, json, .. } => {
@@ -209,6 +213,22 @@ fn convert_assistant(msg: &ChatMessage, limit: Option<&ToolResultLimit>) -> Vec<
 
     flush(&mut out, &mut assistant_parts, &mut tool_results);
     out
+}
+
+/// A persisted tool call as the provider is sent it, under `name`.
+fn replay_tool_call(name: String, json: &serde_json::Value, id: &str) -> AssistantContent {
+    // Anthropic requires tool_use.input to be an object; older persisted
+    // messages may carry a non-object value from before this was enforced
+    // at the source (see hook.rs on_tool_call), so coerce here too.
+    let input = if json.is_object() {
+        json.clone()
+    } else {
+        serde_json::json!({})
+    };
+    AssistantContent::ToolCall(
+        ToolCall::new(replay_item_id(id), ToolFunction::new(name, input))
+            .with_call_id(replay_call_id(id)),
+    )
 }
 
 /// What the model reads of a replayed tool result: `text` itself, unless

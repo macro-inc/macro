@@ -1480,7 +1480,7 @@ fn update_for_part(
 /// `mcp__<server>__<tool>`, the convention Claude Code set).
 fn tool_call_meta(name: &str, mcp: Option<&McpInfo>) -> Meta {
     let tool_name = match mcp {
-        Some(mcp) => format!("mcp__{}__{}", mcp.service, mcp.tool_name),
+        Some(mcp) => mcp_toolset::mangle(&mcp.service, &mcp.tool_name),
         None => name.to_owned(),
     };
     let mut ours = serde_json::Map::new();

@@ -12,7 +12,9 @@ names, and routes calls back to the right server.
 - `src/toolset.rs`: `RemoteMcpToolSet` — the `ToolSet` impl, `ConnectedServer`/`ListedServer`.
 - `src/mangle.rs`: the `mcp__<server>__<tool>` name encoding/decoding;
   `unmangle` is the public split routing uses, also read by `agent_inmem`'s
-  log replay.
+  log replay, and `mangle` the advertised name `agent`'s history conversion
+  replays a stored MCP call under (`mangle` of `unmangle`'s segments is the
+  same name).
 - `src/call_tool_result.rs`: `CallToolResultExt` for converting MCP results.
 
 ## Scope
@@ -26,7 +28,7 @@ names, and routes calls back to the right server.
 
 - Depends on: `ai_toolset`, `rmcp` (client feature), `genai_telemetry`
   (trace context in `_meta`).
-- Used by: `agent_inmem`, `pipedream_mcp`.
+- Used by: `agent`, `agent_inmem`, `pipedream_mcp`.
 
 ## Recipes
 

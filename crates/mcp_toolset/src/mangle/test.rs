@@ -181,3 +181,46 @@ fn sanitizing_can_collide_which_the_duplicate_check_skips() {
 
     assert_eq!(first, second);
 }
+
+#[test]
+fn the_public_mangle_is_the_advertised_name() {
+    for (server, tool) in [
+        ("macro_internal", "ExecuteCode"),
+        ("Google Sheets", "list.worksheets"),
+        ("Zoom & Teams", "join(call)"),
+    ] {
+        assert_eq!(
+            crate::mangle(server, tool),
+            Mangled::new(server, tool).name.as_str()
+        );
+    }
+}
+
+#[test]
+fn mangling_the_unmangled_segments_returns_the_same_name() {
+    // A call is stored by the segments `unmangle` split off its name, and
+    // replayed under `mangle` of them: the model must see the name it was
+    // offered, including after sanitizing and truncation.
+    let long = "x".repeat(200);
+    let doubled = "t_".repeat(70);
+    for (server, tool) in [
+        ("macro_internal", "ExecuteCode"),
+        ("Macro Internal", "ExecuteCode"),
+        ("Google Sheets", "list.worksheets"),
+        ("a__b", "c__d"),
+        ("", "###"),
+        ("日本語", "do_thing"),
+        (long.as_str(), "search"),
+        ("Linear", long.as_str()),
+        (long.as_str(), long.as_str()),
+        ("Very Long Server Name With Spaces", doubled.as_str()),
+    ] {
+        let advertised = crate::mangle(server, tool);
+        let (stored_server, stored_tool) = crate::unmangle(&advertised).expect("mangled");
+        assert_eq!(
+            crate::mangle(stored_server, stored_tool),
+            advertised,
+            "`{server}`/`{tool}`"
+        );
+    }
+}

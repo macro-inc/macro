@@ -214,6 +214,7 @@ dependencies = [
  "macro_env_var",
  "macro_service_urls",
  "macro_user_id",
+ "mcp_toolset",
  "model-entity",
  "non_empty",
  "opentelemetry",

@@ -154,7 +154,9 @@ MCP catalog lacks any `mcp__macro_internal__` code tool fails
   MCP labels, so only use the title for older frames without tool-name metadata.
   An MCP tool's `mcp__<server>__<tool>` name rebuilds as the `McpToolCall` the
   live agent recorded (split by `mcp_toolset::unmangle`, the title as its
-  display name when it differs), and its result keeps the mangled name. A
+  display name when it differs), and its result keeps the mangled name.
+  `agent::to_rig_messages` replays an `McpToolCall` under
+  `mcp_toolset::mangle(service, name)`, the name the tool was advertised by. A
   failed turn's last text chunk is the failure reply the live history never
   held; replay strips it and keeps the turn.
 
