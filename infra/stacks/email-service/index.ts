@@ -167,6 +167,22 @@ const link_manager_queue = new Queue('email-service-refresh', {
 export const linkManagerQueueArn = pulumi.interpolate`${link_manager_queue.queue.arn}`;
 export const linkManagerQueueName = pulumi.interpolate`${link_manager_queue.queue.name}`;
 
+// The link manager's maintenance lane: the refresh handler's periodic refreshes,
+// health polls and removal sweeps, on consumers of their own. The sweep's purges
+// run for minutes each, so on the queue above they held every consumer a
+// person's inbox removal waits for.
+const link_maintenance_queue = new Queue('email-service-link-maintenance', {
+  tags,
+  visibilityTimeoutSeconds: 300,
+  alarm: {
+    // The daily removal sweep backs this queue up for hours on its own.
+    approximateAgeOfOldestMessageThreshold: 21600, // 6 hours
+  },
+});
+
+export const linkMaintenanceQueueArn = pulumi.interpolate`${link_maintenance_queue.queue.arn}`;
+export const linkMaintenanceQueueName = pulumi.interpolate`${link_maintenance_queue.queue.name}`;
+
 const scheduled_queue = new Queue('email-service-scheduled', {
   tags,
 });
@@ -197,6 +213,28 @@ const crm_cleanup_queue = new Queue('email-service-crm-cleanup', {
 
 export const crmCleanupQueueArn = pulumi.interpolate`${crm_cleanup_queue.queue.arn}`;
 export const crmCleanupQueueName = pulumi.interpolate`${crm_cleanup_queue.queue.name}`;
+
+// CRM contact population runs on its own workers, never on backfill or inbox
+// sync. Each message's group is its mailbox, so SQS hands out one population
+// per mailbox at a time. Workers back off by hiding a message, and each back-off
+// costs a receive on the next delivery, so the redrive limit only catches a
+// message that never settles. The delay is a margin for a backfilled thread to
+// commit before its contacts are read; producers also ask again after it.
+const crm_population_queue = new Queue('email-service-crm-population', {
+  tags,
+  fifoQueue: true,
+  fifoHighThroughput: true,
+  maxReceiveCount: 100,
+  visibilityTimeoutSeconds: 60,
+  delaySeconds: 10,
+  messageRetentionSeconds: 1209600, // 14 days, so a rollback doesn't lose work
+  alarm: {
+    approximateAgeOfOldestMessageThreshold: 21600, // 6 hours
+  },
+});
+
+export const crmPopulationQueueArn = pulumi.interpolate`${crm_population_queue.queue.arn}`;
+export const crmPopulationQueueName = pulumi.interpolate`${crm_population_queue.queue.name}`;
 
 // Nightly at 08:00 UTC (midnight PT): EventBridge sends a static StartJob
 // payload straight to the crm cleanup queue; the pubsub worker creates the
@@ -287,10 +325,12 @@ const queueArns = [
   gmailOpsQueueArn,
   gmailOpsRetryQueueArn,
   linkManagerQueueArn,
+  linkMaintenanceQueueArn,
   scheduledQueueArn,
   searchEventQueueArn,
   backfillQueueArn,
   crmCleanupQueueArn,
+  crmPopulationQueueArn,
   sfsUploaderQueueArn,
   sfsDeleteQueueArn,
   contactsQueueArn,
@@ -452,7 +492,9 @@ const INBOX_HEALTH_POLL_INTERVAL_HOURS = config.require(
 );
 
 const emailRefreshHandler = new EmailRefreshHandler('email-refresh-handler', {
-  queueArns: [linkManagerQueueArn],
+  // The handler sends only to the maintenance queue. It keeps the other queue
+  // so a handler released before the split can still send there mid-rollout.
+  queueArns: [linkManagerQueueArn, linkMaintenanceQueueArn],
   vpc: coparse_api_vpc,
   envVars: {
     DATABASE_URL: pulumi.interpolate`${MACRO_DB_URL}`,

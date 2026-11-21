@@ -12,10 +12,10 @@ use attention_feed::domain::{
         FeedPosition, FeedRevision, FeedViewer, Loaded, MailFacts, unseen_among,
     },
     ports::{CandidateSource, FeedMail, FeedNotifications, FeedSignals},
-    reader::FeedReader,
+    reader::{self, FeedReader},
 };
 use chrono::{DateTime, Utc};
-use model_entity::EntityType;
+use model_entity::{Entity, EntityType};
 use notification::domain::bulk_action::{
     ApplyChunk, BulkAction, BulkActionItem, BulkActionLease, BulkActionStatus, BulkActionStore,
     ChunkOutcome, CreatedBulkAction, NewBulkAction, UndoRequested,
@@ -224,7 +224,18 @@ fn candidate_request(viewer: &FeedViewer) -> CandidateRequest {
         limit: 0,
         after: None,
         only: None,
+        assume_attention: false,
     }
+}
+
+/// The entity as the viewer's inbox would list a new notification about it;
+/// `None` when it would not.
+pub async fn new_notification_listing<S: CandidateSource>(
+    source: &S,
+    viewer: &FeedViewer,
+    entity: Entity<'static>,
+) -> Result<Option<S::Entity>, Report> {
+    reader::listed(source, candidate_request(viewer), entity).await
 }
 
 /// A group cut into every one of its rows.

@@ -26,6 +26,14 @@ horizontally and removal remains available without hover. Composer fixture
 screenshots: [desktop](media/share-images/desktop.png) and
 [phone](media/share-images/mobile.png).
 
+If account or CRM access changes while a document or file is still loading,
+its load retries once with fresh permissions and content in both Drive and
+standalone file views. Check a cold file open
+with local storage delayed: the file should finish opening after recovery. A
+revoked file stays unavailable, and a second interruption leaves the existing
+retry control. An already-open editor does not reload merely because the cache
+finishes starting.
+
 Opening a document or file in a Drive, Home, CRM or Tasks detail view (tasks,
 snippets and skills included) records the open once in the user's history,
 which orders Recents and Cmd+K. On dev, expect one `POST /history/document/<id>`
@@ -80,9 +88,11 @@ to request again.
 This workflow also applies to the existing chat, folder, project, database, call,
 and agent-session Share menus, using the access levels that each supports.
 
-Reviewers see a pending count on **Share**. Entering an item with pending requests
+Reviewers see a pending count on **Share**, after its label (after the icon
+where the header hides the label), and its tooltip and accessible name read
+"N pending permission requests". Entering an item with pending requests
 opens Share once for that visit; requests arriving during the visit update the
-badge. On mobile, review requests in the **People** tab. **Permission requests**
+count. On mobile, review requests in the **People** tab. **Permission requests**
 lets a reviewer choose an access level and **Grant access**, or **Deny**. Team
 owners/admins and the human responsible for a bot-owned item review on its behalf.
 Only the first review of a request succeeds. Grants notify the requester; denials
@@ -2633,6 +2643,19 @@ under **Contacts & Companies** in `@` mentions and under **People** in the
 command menu. Values show the record's name and open the company or contact.
 An entity can carry the property without listing it (set at creation or through
 the API); adding that property pins the existing value rather than clearing it.
+A custom entity property can point at a company or contact too. A task set that
+way is listed on the record's Tasks tab and in its References; no other record
+list and no Sales view reads a custom property.
+**Create property** therefore points at them: a property named `Contact`,
+`Contacts`, `Company`, `Companies`, `Customer` or `Customers` shows a note under
+the name that the built-in property exists and what it links, with **Use
+Contacts** (or **Use Companies**), which leaves creation and opens that
+property's value instead. For every type but **Any Entity** the note adds that
+the type can't link to CRM records. **Create** still creates the property.
+A name that is exactly a built-in property's (`Contacts`, `Status`, `Owner`, in
+any case) cannot be used: the note says the name belongs to a built-in
+property, **Create** is disabled, and **Use <name>** appears when that property
+applies to the item being edited.
 Calls are linked automatically
 when they end, from their participants and the invitees of the calendar event
 carrying the meeting link; verify on a finished call's `Properties`.

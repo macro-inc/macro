@@ -116,30 +116,34 @@ export default function DocumentationPage() {
                         />
                       </Suspense>
                     </article>
-                    <nav
-                      class="documentation-pagination"
-                      aria-label="More guides"
-                    >
-                      <Show when={neighbors().previous}>
-                        {(prev) => (
-                          <a href={prev().href}>
-                            <small>Previous</small>← {prev().title}
-                          </a>
-                        )}
+                    <Show when={page().slug !== 'switch-to-macro'}>
+                      <nav
+                        class="documentation-pagination"
+                        aria-label="More guides"
+                      >
+                        <Show when={neighbors().previous}>
+                          {(prev) => (
+                            <a href={prev().href}>
+                              <small>Previous</small>← {prev().title}
+                            </a>
+                          )}
+                        </Show>
+                        <Show when={neighbors().next}>
+                          {(next) => (
+                            <a href={next().href}>
+                              <small>Next</small>
+                              {next().title} →
+                            </a>
+                          )}
+                        </Show>
+                      </nav>
+                      <Show when={page().slug !== 'support'}>
+                        <p class="documentation-help">
+                          Still have a question?{' '}
+                          <a href="/docs/support">Get in touch.</a>
+                        </p>
                       </Show>
-                      <Show when={neighbors().next}>
-                        {(next) => (
-                          <a href={next().href}>
-                            <small>Next</small>
-                            {next().title} →
-                          </a>
-                        )}
-                      </Show>
-                    </nav>
-                    <p class="documentation-help">
-                      Still have a question?{' '}
-                      <a href="/docs/support">Get in touch.</a>
-                    </p>
+                    </Show>
                   </>
                 )}
               </Show>

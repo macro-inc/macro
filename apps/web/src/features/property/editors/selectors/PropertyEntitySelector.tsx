@@ -1,7 +1,14 @@
+import { useCrmCompanySearchSource } from '@app/features/crm/crm-search';
+import { useCrmContactMentionSource } from '@app/features/crm/record-adapter';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { useInfiniteScrollSentinel } from '@app/lib/primitives/infinite-scroll-sentinel';
 import { UserIcon } from '@core/component/UserIcon';
+import { disableCrmContactSearch } from '@core/constant/featureFlags';
 import { isBotPrincipalId } from '@core/constant/macroAgent';
+import type { QuickAccessItem } from '@core/context/quickAccess';
+import { deduplicateContactItems } from '@core/context/quickAccess/crm-contacts';
+import { keepUnchangedRows } from '@core/context/quickAccess/unchanged-rows';
 import { useEmail, useUserId } from '@core/context/user';
 import { emailToId, useAugmentUserWithDmActivity } from '@core/user';
 import {
@@ -9,10 +16,12 @@ import {
   rankAgentsAfterPeople,
 } from '@core/user/people-before-agents';
 import type { IUser } from '@core/user/types';
+import { debouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { createFreshSearch } from '@core/util/freshSort';
 import { preserveOrderedWindow } from '@core/util/ordered-window';
 import { createSelectionAnchor } from '@core/util/selection-anchor';
+import { matchesTokenSubsequences } from '@core/util/string';
 import { useKeyPressed } from '@core/util/useKeyPressed';
 import { useSelectedFirst } from '@core/util/useSelectedFirst';
 import {
@@ -135,6 +144,24 @@ function getEntityName(entity: CombinedEntity): string {
 const MAX_LIST_HEIGHT = 192;
 const MAX_VISIBLE_ENTITIES_NO_SEARCH = 50;
 const MAX_SEARCH_RESULTS = 20;
+const SERVER_SEARCH_DEBOUNCE_MS = 250;
+
+/** Server contact matches join the Quick Access rows, one row per email.
+ * Rows the picker excludes leave first, so they never displace an eligible
+ * record of the same email. */
+function withServerContacts(
+  items: readonly QuickAccessItem[],
+  server: readonly QuickAccessItem[],
+  excluded: (id: string) => boolean
+): readonly QuickAccessItem[] {
+  if (server.length === 0) return items;
+  const listed = new Set(items.map((item) => item.id));
+  return deduplicateContactItems(
+    [...items, ...server.filter((item) => !listed.has(item.id))].filter(
+      (item) => !excluded(item.id)
+    )
+  );
+}
 
 function getMaxLocalResults(
   hasExplicitUserPool: boolean,
@@ -198,8 +225,90 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       !(props.config.specificEntityType === 'USER' && props.config.users),
     () => props.config.excludedIds?.() ?? new Set<string>()
   );
-  const quickAccessItems = quickAccess.items;
   const isQuickAccessLoading = quickAccess.isLoading;
+
+  // Quick Access holds recent and cached contacts only. A typed search also
+  // reads the server's CRM contact search, as Cmd+K and @ mentions do, so any
+  // contact Customers > People finds is found here too.
+  const contactSearchDisabled = useFeatureFlag(disableCrmContactSearch);
+  const typedContactSearch = () =>
+    allowsEntityType(props.config.specificEntityType, 'CONTACT') &&
+    !contactSearchDisabled().enabled
+      ? search().trim()
+      : '';
+  const contactSearch = debouncedDependent(
+    typedContactSearch,
+    SERVER_SEARCH_DEBOUNCE_MS
+  );
+  const contactSearchEnabled = () =>
+    typedContactSearch().length > 0 && contactSearch().length > 0;
+  const serverContacts = useCrmContactMentionSource(
+    contactSearch,
+    contactSearchEnabled,
+    () => false
+  );
+  const contactSearchPending = () =>
+    typedContactSearch().length > 0 &&
+    (typedContactSearch() !== contactSearch() || serverContacts.isLoading());
+  const isExcludedContact = (id: string) =>
+    !!props.config.excludedIds?.().has(id) ||
+    (props.config.selfFilter?.entityType === 'CONTACT' &&
+      props.config.selfFilter.blockId === id);
+  const quickAccessItems = createMemo(() =>
+    contactSearchEnabled()
+      ? withServerContacts(
+          quickAccess.items(),
+          serverContacts.entities(),
+          isExcludedContact
+        )
+      : quickAccess.items()
+  );
+
+  // Quick Access holds the 500 most recent companies. A typed search also
+  // reads the search service's company name and domain match, where Cmd+K's
+  // company results come from, so any company Customers lists is found here.
+  const typedCompanySearch = () =>
+    allowsEntityType(props.config.specificEntityType, 'COMPANY')
+      ? search().trim()
+      : '';
+  const companySearch = debouncedDependent(
+    typedCompanySearch,
+    SERVER_SEARCH_DEBOUNCE_MS
+  );
+  const typedCompanySearchValid = () =>
+    typedCompanySearch().length > 0 &&
+    validateSearchServiceText(typedCompanySearch());
+  const companySearchEnabled = () =>
+    typedCompanySearchValid() && validateSearchServiceText(companySearch());
+  const serverCompanies = useCrmCompanySearchSource(
+    companySearch,
+    companySearchEnabled
+  );
+  const companySearchPending = () =>
+    typedCompanySearchValid() &&
+    (typedCompanySearch() !== companySearch() || serverCompanies.isLoading());
+  // Rows answering an earlier search stay only while they still match. A row
+  // keeps its object while its company is unchanged, so a further page does
+  // not remount the rows already listed.
+  const serverCompanyEntities = createMemo((previous: CombinedEntity[]) => {
+    if (!companySearchEnabled()) return [];
+    const term = typedCompanySearch();
+    const settled = companySearch() === term;
+    const rows = serverCompanies
+      .companies()
+      .map(
+        (company): CombinedEntity => ({
+          kind: 'entity',
+          id: company.id,
+          data: company,
+        })
+      )
+      .filter(
+        (entity) =>
+          settled || matchesTokenSubsequences(getEntitySearchText(entity), term)
+      );
+    return keepUnchangedRows(previous, rows);
+  }, []);
 
   // Fetch emails for browsing whenever threads are allowed: THREAD alone,
   // among several kinds, or any kind.
@@ -241,16 +350,28 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     needsEmailSearch() && validateSearchServiceText(search().trim());
   const hasMore = () =>
     quickAccess.hasMore() ||
+    (contactSearchEnabled() && serverContacts.hasMore()) ||
+    (companySearchEnabled() && serverCompanies.hasMore()) ||
     (needsEmailSearch() &&
       (emailsQuery.hasNextPage ||
         (emailSearchEnabled() && emailSearchQuery.hasNextPage)));
   const isLoadingMore = () =>
     quickAccess.isLoadingMore() ||
+    (contactSearchEnabled() && serverContacts.isLoadingMore()) ||
+    (companySearchEnabled() && serverCompanies.isLoadingMore()) ||
     (needsEmailSearch() &&
       (emailsQuery.isFetchingNextPage || emailSearchQuery.isFetchingNextPage));
   const paginationError = () => {
     const quickAccessError = quickAccess.error();
     if (quickAccessError) return quickAccessError;
+    const contactError = contactSearchEnabled()
+      ? serverContacts.error()
+      : undefined;
+    if (contactError) return contactError;
+    const companyError = companySearchEnabled()
+      ? serverCompanies.error()
+      : undefined;
+    if (companyError) return companyError;
     if (!needsEmailSearch()) return undefined;
     if (emailsQuery.error) return emailsQuery.error;
     return emailSearchEnabled() ? emailSearchQuery.error : undefined;
@@ -259,6 +380,20 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     const requests: Promise<unknown>[] = [];
     if (quickAccess.hasMore() && !quickAccess.isLoadingMore()) {
       requests.push(quickAccess.loadMore());
+    }
+    if (
+      contactSearchEnabled() &&
+      serverContacts.hasMore() &&
+      !serverContacts.isLoadingMore()
+    ) {
+      requests.push(serverContacts.loadMore());
+    }
+    if (
+      companySearchEnabled() &&
+      serverCompanies.hasMore() &&
+      !serverCompanies.isLoadingMore()
+    ) {
+      requests.push(serverCompanies.loadMore());
     }
     if (needsEmailSearch()) {
       if (emailsQuery.hasNextPage && !emailsQuery.isFetchingNextPage) {
@@ -281,10 +416,14 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       return (
         emailsQuery.isLoading ||
         emailsQuery.isPending ||
-        emailSearchQuery.isFetching
+        emailSearchQuery.isFetching ||
+        contactSearchPending() ||
+        companySearchPending()
       );
     }
-    return isQuickAccessLoading();
+    return (
+      isQuickAccessLoading() || contactSearchPending() || companySearchPending()
+    );
   });
 
   // An explicit user pool replaces Quick Access options.
@@ -403,7 +542,9 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     const maxLocalResults = getMaxLocalResults(
       props.config.specificEntityType === 'USER' && !!props.config.users,
       !!term,
-      allEntities.length + serverEmails().length
+      allEntities.length +
+        serverEmails().length +
+        serverCompanyEntities().length
     );
 
     // Filter out the current entity when selecting same entity type
@@ -479,10 +620,16 @@ export function PropertyEntitySelector(props: EntityInputProps) {
         : ordered.slice(0, maxLocalResults);
     }
 
-    // For THREAD or generic entity: merge local + server results
-    if (needsEmailSearch() && term) {
+    // Server matches (email threads, companies) follow the local results.
+    const serverMatches = term
+      ? [
+          ...(needsEmailSearch() ? serverEmails() : []),
+          ...serverCompanyEntities(),
+        ]
+      : [];
+    if (serverMatches.length > 0 || (needsEmailSearch() && term)) {
       const localIds = new Set(localResults.map((e) => e.id));
-      const serverResults = serverEmails()
+      const serverResults = serverMatches
         .filter((entity) => !excludedIds?.has(entity.id))
         .filter((e) => !localIds.has(e.id))
         .filter(excludeFilter);
@@ -601,6 +748,12 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     fireAndForget(
       Promise.all([
         quickAccess.error() ? quickAccess.retry() : undefined,
+        contactSearchEnabled() && serverContacts.error()
+          ? serverContacts.retry()
+          : undefined,
+        companySearchEnabled() && serverCompanies.error()
+          ? serverCompanies.retry()
+          : undefined,
         needsEmailSearch() ? retryEmailPages(emailsQuery) : undefined,
         emailSearchEnabled() ? retryEmailPages(emailSearchQuery) : undefined,
       ]),

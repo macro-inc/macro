@@ -165,3 +165,21 @@ it('shows the event’s description again when its details lock after an edit', 
   expect(description.getAttribute('contenteditable')).toBe('false');
   expect(form.controller().isDirty()).toBe(false);
 });
+
+it('lets an Escape no menu takes leave the description, as it leaves the title', async () => {
+  const user = userEvent.setup();
+  showForm(false);
+  const escapes = vi.fn();
+  const listen = (event: KeyboardEvent) => {
+    if (event.key === 'Escape') escapes();
+  };
+  // Where the dialog around the form listens for Escape.
+  document.addEventListener('keydown', listen);
+  try {
+    await user.click(await screen.findByLabelText('Description'));
+    await user.keyboard('{Escape}');
+    expect(escapes).toHaveBeenCalledTimes(1);
+  } finally {
+    document.removeEventListener('keydown', listen);
+  }
+});

@@ -526,6 +526,11 @@ export default {
       other: '{{count}} elementos eliminados',
     },
     toastDeleteFailed: 'No se pudo eliminar',
+    toastPropertySet: {
+      one: '{{property}}: valor establecido',
+      many: '{{property}}: valor establecido para {{count}} de elementos',
+      other: '{{property}}: valor establecido para {{count}} elementos',
+    },
     toastAddedToFavorites: 'Añadido a favoritos',
     toastAddedCountToFavorites: {
       one: '{{count}} elemento añadido a favoritos',

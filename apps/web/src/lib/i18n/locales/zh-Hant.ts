@@ -498,6 +498,9 @@ export default {
       other: '已刪除 {{count}} 個項目',
     },
     toastDeleteFailed: '無法刪除',
+    toastPropertySet: {
+      other: '已為 {{count}} 個項目設定 {{property}}',
+    },
     toastAddedToFavorites: '已加入我的最愛',
     toastAddedCountToFavorites: {
       other: '已將 {{count}} 個項目加入我的最愛',

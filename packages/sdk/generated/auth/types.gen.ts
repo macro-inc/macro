@@ -420,7 +420,7 @@ export type ComputerStatus = {
 /**
  * The coarse status the team sees.
  */
-export type ComputerStatusKind = 'setting_up' | 'needs_attention' | 'waiting_for_capacity' | 'ready' | 'starting' | 'stopping' | 'stopped' | 'failed' | 'purchasing' | 'released';
+export type ComputerStatusKind = 'setting_up' | 'needs_attention' | 'waiting_for_capacity' | 'ready' | 'unhealthy' | 'starting' | 'stopping' | 'stopped' | 'failed' | 'purchasing' | 'released';
 
 /**
  * A computer's CPU and memory over the last day.
@@ -2192,7 +2192,7 @@ export type SetupStep = 'billing' | 'creating' | 'booting' | 'connecting' | 'rea
  */
 export type SizeOffer = {
     /**
-     * Root disk size in GiB.
+     * Whole disk quota in GiB: root and `/home` together.
      */
     diskGb: number;
     /**
@@ -2496,7 +2496,7 @@ export type TeamAgentErrorBody = {
 /**
  * Where an agent teammate is, from its computer.
  */
-export type TeamAgentStatus = 'provisioning' | 'starting' | 'running' | 'paused' | 'failed' | 'released';
+export type TeamAgentStatus = 'provisioning' | 'starting' | 'running' | 'paused' | 'unhealthy' | 'failed' | 'released';
 
 /**
  * A team's agents.

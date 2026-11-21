@@ -30,6 +30,11 @@ trap 'kill -KILL $namespace 2>/dev/null; kill "${bridges[@]}" 2>/dev/null; rm -r
 
 SOCKETS=$sockets PORTS=$ports unshare --map-root-user --net --pid --fork --mount-proc --kill-child bash -c '
   ip link set lo up
+  # Chromium treats loopback alone as offline. Keep a stable interface without
+  # an external route so real connectivity checks and offline emulation work.
+  ip link add test-online type dummy
+  ip address add 192.0.2.1/24 dev test-online
+  ip link set test-online up
   forwards=()
   for port in $PORTS; do
     (cd "$SOCKETS" && exec socat "TCP-LISTEN:$port,fork,reuseaddr,bind=127.0.0.1" "UNIX-CONNECT:$port.sock") &

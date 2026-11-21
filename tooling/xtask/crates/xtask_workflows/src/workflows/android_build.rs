@@ -3,8 +3,10 @@
 //! [`super::android_apk_on_release`] (the sideloadable APK). Both build the
 //! same production web bundle, so its `VITE_*` environment lives here once.
 
-use gh_workflow::{Expression, Run, Step, Use};
+use gh_workflow::expr::typed::{always, runner};
+use gh_workflow::{Run, Step, Use};
 
+use crate::workflows::actions::ActionsUploadArtifact;
 use crate::workflows::vars;
 
 /// The package format a release build produces.
@@ -72,10 +74,7 @@ pub fn build(artifact: Artifact) -> Step<Run> {
         .run(script)
         .shell("bash")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
-        .add_env((
-            "VITE_SEGMENT_WRITE_KEY",
-            "${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}",
-        ))
+        .add_env(("VITE_SEGMENT_WRITE_KEY", vars::SEGMENT_WRITE_KEY_PRODUCTION))
         .add_env(("VITE_POSTHOG_API_KEY", vars::POSTHOG_API_KEY))
         .add_env((
             "VITE_OTEL_EXPORTER_URL",
@@ -85,17 +84,15 @@ pub fn build(artifact: Artifact) -> Step<Run> {
 }
 
 pub fn preserve_build_log() -> Step<Use> {
-    Step::new("Preserve Android build log")
-        .uses(
-            "actions",
-            "upload-artifact",
-            "ea165f8d65b6e75b540449e92b4886f43607fa02",
-        ) // v4
-        .if_condition(Expression::new("always()"))
-        .add_with(("name", "android-build-log"))
-        .add_with(("path", "${{ runner.temp }}/android-build.log"))
-        .add_with(("if-no-files-found", "ignore"))
-        .add_with(("retention-days", 7))
+    ActionsUploadArtifact::new(
+        "Preserve Android build log",
+        format!("{}/android-build.log", runner().temp()),
+    )
+    .name("android-build-log")
+    .if_no_files_found("ignore")
+    .retention_days(7)
+    .step()
+    .if_condition(always())
 }
 
 pub fn remove_signing_material() -> Step<Run> {
@@ -105,6 +102,6 @@ pub fn remove_signing_material() -> Step<Run> {
               "$RUNNER_TEMP/android-google-services.json" || true
             rm -f apps/web/tauri/src-tauri/gen/android/keystore.properties || true
         "#})
-        .if_condition(Expression::new("always()"))
+        .if_condition(always())
         .shell("bash")
 }

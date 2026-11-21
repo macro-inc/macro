@@ -16,8 +16,13 @@ import { policyClient } from './policy-adapter';
 export * from '@app/lib/analytics/posthog.tsx';
 export * from '@core/context/user.ts';
 export * from '@queries/team/teams.ts';
+export * from '@service-storage/crm-access-authority.ts';
 
 const params = new URLSearchParams(location.search);
+const crmAccess = () => !params.has('no-access');
+export const crmAccessAllowed = crmAccess;
+export const crmAccessState = () => (crmAccess() ? 'allowed' : 'denied');
+export const [excludedListReads, setExcludedListReads] = createSignal(0);
 const pendingPrivacyRead = Promise.withResolvers<void>();
 export const finishPrivacyRead = () => pendingPrivacyRead.resolve();
 let privacyReads = 0;
@@ -90,6 +95,9 @@ const [threads, setThreads] = createSignal([
     : []),
 ]);
 export const useCrmContext = () => ({
+  canAccess: crmAccess,
+  accessState: () => (crmAccess() ? 'allowed' : 'denied'),
+  retryAccess: async () => {},
   EmailThreadMention,
   createEmailPrivacy: () =>
     createEmailPrivacySource(
@@ -174,6 +182,7 @@ export const crmEmailPrivacyClient = {
     _signal?: AbortSignal,
     threadId?: string
   ) => {
+    if (!threadId) setExcludedListReads((count) => count + 1);
     if (threadId && statusUnavailable())
       return err([{ code: 'NETWORK_ERROR' as const, message: 'Unavailable' }]);
     const matching = threads()

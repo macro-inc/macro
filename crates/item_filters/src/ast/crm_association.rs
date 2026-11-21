@@ -4,7 +4,9 @@
 //! the company, its Contacts property names one of the company's contacts,
 //! or it references the company or one of those contacts. An item is
 //! associated with a contact when its Contacts property names the contact
-//! or it references the contact. Activity instead matches properties across
+//! or it references the contact. A task is also associated with a record
+//! that one of its custom entity properties names, a contact of the company
+//! included. Activity instead matches the built-in properties across
 //! visible, CRM-enabled teams and email participants from their domains and
 //! addresses. The Soup domain authorizes the record and
 //! resolves that membership before any source query runs; renderers never

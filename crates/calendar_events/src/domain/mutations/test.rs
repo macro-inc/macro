@@ -3395,3 +3395,21 @@ mod invite;
 mod join;
 mod organizer_copy;
 mod replacement;
+
+#[test]
+fn a_refused_change_shows_its_message_without_the_request_prefix() {
+    let refused = provider_error(CalendarProviderError::refused("Edit it in Outlook."));
+    let failed = provider_error(CalendarProviderError::new(
+        CalendarProviderErrorKind::Permanent,
+        "Outlook refused the change",
+    ));
+
+    assert!(
+        matches!(refused, CalendarMutationError::ProviderRejected(m) if m == "Edit it in Outlook.")
+    );
+    assert!(matches!(
+        failed,
+        CalendarMutationError::ProviderRejected(m)
+            if m == "Calendar provider request failed: Outlook refused the change"
+    ));
+}

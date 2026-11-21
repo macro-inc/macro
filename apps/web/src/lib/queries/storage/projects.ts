@@ -1,5 +1,6 @@
 import { analytics } from '@app/lib/analytics';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { refetchHistory } from '@queries/history/history';
 import { setPreviewOnCreate } from '@queries/preview/preview';
 import { refetchSoupEntity } from '@queries/soup/cache';
@@ -14,6 +15,7 @@ export async function createProject(params: {
   /** UI surface the creation originated from, for analytics. */
   source?: string;
 }): Promise<string | undefined> {
+  const generation = cacheSessionGeneration.capture();
   const result = await storageServiceClient.projects.create({
     name: params.name,
     projectParentId: params.parentId,
@@ -22,6 +24,7 @@ export async function createProject(params: {
 
   if (result.isOk()) {
     const projectId = result.value.id;
+    if (!cacheSessionGeneration.isCurrent(generation)) return projectId;
     analytics.track('create_entity', {
       entityType: 'project',
       entityId: projectId,
@@ -29,6 +32,7 @@ export async function createProject(params: {
       source: params.source,
     });
     setPreviewOnCreate({
+      generation,
       itemId: projectId,
       itemType: 'project',
       name: params.name,

@@ -101,6 +101,8 @@ pub struct MailboxBacklog {
     pub seconds_since_last_import: Option<i64>,
     pub sync_active: bool,
     pub needs_reauth: bool,
+    /// Graph serves no mailbox for the account: only discovery probes it.
+    pub mailbox_unavailable: bool,
     /// Subscription upkeep runs in a row that failed: while above zero the
     /// mailbox may get no change notifications and syncs by polling alone.
     pub watch_failures: i32,
@@ -160,6 +162,7 @@ impl<R: MailboxProgressRepository> MailboxProgressService<R> {
                 seconds_since_last_import = backlog.seconds_since_last_import,
                 sync_active = backlog.sync_active,
                 needs_reauth = backlog.needs_reauth,
+                mailbox_unavailable = backlog.mailbox_unavailable,
                 watch_failures = backlog.watch_failures,
                 "outlook mailbox health"
             );
