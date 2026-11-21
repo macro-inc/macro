@@ -1761,8 +1761,21 @@ fn test_image(program: &str, role: &str, command: &str) -> String {
     use std::io::Write as _;
 
     let tag = format!("macro-teammate-test-{role}:{}", std::process::id());
+    // A machine without /etc/containers has no signature policy, which
+    // `podman build` asks for even for a local base image.
+    let policy = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(
+        policy.path(),
+        r#"{"default":[{"type":"insecureAcceptAnything"}]}"#,
+    )
+    .unwrap();
+    let mut arguments = vec!["build".to_owned(), "--quiet".to_owned()];
+    if program == "podman" {
+        arguments.push(format!("--signature-policy={}", policy.path().display()));
+    }
+    arguments.extend(["--tag".to_owned(), tag.clone(), "-".to_owned()]);
     let mut build = std::process::Command::new(program)
-        .args(["build", "--quiet", "--tag", &tag, "-"])
+        .args(&arguments)
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .spawn()

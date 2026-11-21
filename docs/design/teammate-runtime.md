@@ -260,6 +260,13 @@ container's namespace. A holder that exits counts as a teammate crash, and recov
 guard, then teammate. A stop removes the holder and the network with the
 install.
 
+The agent starts only after the guard has exited and macrod has read the
+rules back and found them as rendered; the holder's networks are attached
+before it starts. So the agent never runs without its network or its rules,
+and macrod doesn't poll for readiness. A slow first connection after a start
+costs the runtime one retry: its streams retry with backoff (an agent that
+starts while Macro or the network is unreachable stays up and retries).
+
 The ruleset filters each connection by its destination, after DNS, for TCP,
 UDP and ICMP alike:
 
