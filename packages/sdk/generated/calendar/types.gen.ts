@@ -1568,6 +1568,16 @@ export type RsvpCalendarEventRequest = {
 export type SchedulingMode = 'individual' | 'collective' | 'roundRobin';
 
 /**
+ * The requester's own color for one of their calendars.
+ */
+export type SetCalendarColorBody = {
+    /**
+     * `#rrggbb`, or `null` to show the provider's color again.
+     */
+    color?: string | null;
+};
+
+/**
  * Available start times.
  */
 export type SlotsResponse = {
@@ -1700,6 +1710,12 @@ export type VisibleCalendar = {
      */
     contributesToAvailability?: boolean;
     /**
+     * The requester's own color for this calendar, as lowercase `#rrggbb`,
+     * shown instead of [`Self::color`]. Each viewer chooses their own, and
+     * provider sync never changes it.
+     */
+    customColor?: string | null;
+    /**
      * Default reminders applied to events that keep `useDefault`.
      */
     defaultReminders: Array<EventReminderOverride>;
@@ -1800,6 +1816,48 @@ export type ListCalendarsResponses = {
 };
 
 export type ListCalendarsResponse2 = ListCalendarsResponses[keyof ListCalendarsResponses];
+
+export type SetCalendarColorData = {
+    body: SetCalendarColorBody;
+    path: {
+        /**
+         * Calendar id
+         */
+        calendar_id: string;
+    };
+    query?: never;
+    url: '/calendars/{calendar_id}/color';
+};
+
+export type SetCalendarColorErrors = {
+    /**
+     * The color is not #rrggbb
+     */
+    400: CalendarMutationApiError;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Calendar not found
+     */
+    404: CalendarMutationApiError;
+    /**
+     * Transient failure
+     */
+    503: CalendarMutationApiError;
+};
+
+export type SetCalendarColorError = SetCalendarColorErrors[keyof SetCalendarColorErrors];
+
+export type SetCalendarColorResponses = {
+    /**
+     * The color was saved
+     */
+    204: void;
+};
+
+export type SetCalendarColorResponse = SetCalendarColorResponses[keyof SetCalendarColorResponses];
 
 export type CreateCalendarEventData = {
     body: CreateCalendarEventRequest;

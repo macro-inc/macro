@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { CalendarEventProviderUrlData, CalendarEventProviderUrlErrors, CalendarEventProviderUrlResponses, CalendarReplacementStatusData, CalendarReplacementStatusErrors, CalendarReplacementStatusResponses, ChangeBookingData, ChangeBookingErrors, ChangeBookingResponses, ConfirmCalendarReplacementData, ConfirmCalendarReplacementErrors, ConfirmCalendarReplacementResponses, CopyCalendarEventData, CopyCalendarEventErrors, CopyCalendarEventResponses, CreateBookingLinkData, CreateBookingLinkErrors, CreateBookingLinkResponses, CreateCalendarEventData, CreateCalendarEventErrors, CreateCalendarEventResponses, DeleteCalendarEventData, DeleteCalendarEventErrors, DeleteCalendarEventResponses, DiscardCalendarReplacementData, DiscardCalendarReplacementErrors, DiscardCalendarReplacementResponses, EditBookingLinkData, EditBookingLinkErrors, EditBookingLinkResponses, GetAvailabilityCalendarsData, GetAvailabilityCalendarsResponses, GetBookingInsightsData, GetBookingInsightsErrors, GetBookingInsightsResponses, GetBookingSettingsData, GetBookingSettingsErrors, GetBookingSettingsResponses, GetManagedBookingData, GetManagedBookingErrors, GetManagedBookingResponses, GetTeamSharingData, GetTeamSharingResponses, HealthHandlerData, HealthHandlerResponses, InviteCalendarEventGuestsData, InviteCalendarEventGuestsErrors, InviteCalendarEventGuestsResponses, ListBookingLinksData, ListBookingLinksErrors, ListBookingLinksResponses, ListBookingRescheduleSlotsData, ListBookingRescheduleSlotsErrors, ListBookingRescheduleSlotsResponses, ListBookingsData, ListBookingsErrors, ListBookingsResponses, ListCalendarsData, ListCalendarsErrors, ListCalendarsResponses, PrepareCalendarReplacementData, PrepareCalendarReplacementErrors, PrepareCalendarReplacementResponses, RespondToJoinRequestData, RespondToJoinRequestErrors, RespondToJoinRequestResponses, RsvpCalendarEventData, RsvpCalendarEventErrors, RsvpCalendarEventResponses, SaveBookingSettingsData, SaveBookingSettingsErrors, SaveBookingSettingsResponses, SetAvailabilityCalendarData, SetAvailabilityCalendarResponses, SetTeamSharingData, SetTeamSharingResponses, UpdateCalendarEventData, UpdateCalendarEventErrors, UpdateCalendarEventResponses } from './types.gen';
+import type { CalendarEventProviderUrlData, CalendarEventProviderUrlErrors, CalendarEventProviderUrlResponses, CalendarReplacementStatusData, CalendarReplacementStatusErrors, CalendarReplacementStatusResponses, ChangeBookingData, ChangeBookingErrors, ChangeBookingResponses, ConfirmCalendarReplacementData, ConfirmCalendarReplacementErrors, ConfirmCalendarReplacementResponses, CopyCalendarEventData, CopyCalendarEventErrors, CopyCalendarEventResponses, CreateBookingLinkData, CreateBookingLinkErrors, CreateBookingLinkResponses, CreateCalendarEventData, CreateCalendarEventErrors, CreateCalendarEventResponses, DeleteCalendarEventData, DeleteCalendarEventErrors, DeleteCalendarEventResponses, DiscardCalendarReplacementData, DiscardCalendarReplacementErrors, DiscardCalendarReplacementResponses, EditBookingLinkData, EditBookingLinkErrors, EditBookingLinkResponses, GetAvailabilityCalendarsData, GetAvailabilityCalendarsResponses, GetBookingInsightsData, GetBookingInsightsErrors, GetBookingInsightsResponses, GetBookingSettingsData, GetBookingSettingsErrors, GetBookingSettingsResponses, GetManagedBookingData, GetManagedBookingErrors, GetManagedBookingResponses, GetTeamSharingData, GetTeamSharingResponses, HealthHandlerData, HealthHandlerResponses, InviteCalendarEventGuestsData, InviteCalendarEventGuestsErrors, InviteCalendarEventGuestsResponses, ListBookingLinksData, ListBookingLinksErrors, ListBookingLinksResponses, ListBookingRescheduleSlotsData, ListBookingRescheduleSlotsErrors, ListBookingRescheduleSlotsResponses, ListBookingsData, ListBookingsErrors, ListBookingsResponses, ListCalendarsData, ListCalendarsErrors, ListCalendarsResponses, PrepareCalendarReplacementData, PrepareCalendarReplacementErrors, PrepareCalendarReplacementResponses, RespondToJoinRequestData, RespondToJoinRequestErrors, RespondToJoinRequestResponses, RsvpCalendarEventData, RsvpCalendarEventErrors, RsvpCalendarEventResponses, SaveBookingSettingsData, SaveBookingSettingsErrors, SaveBookingSettingsResponses, SetAvailabilityCalendarData, SetAvailabilityCalendarResponses, SetCalendarColorData, SetCalendarColorErrors, SetCalendarColorResponses, SetTeamSharingData, SetTeamSharingResponses, UpdateCalendarEventData, UpdateCalendarEventErrors, UpdateCalendarEventResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -83,6 +83,21 @@ export class Sdk extends HeyApiClient {
      */
     public listCalendars<ThrowOnError extends boolean = false>(options?: Options<ListCalendarsData, ThrowOnError>): RequestResult<ListCalendarsResponses, ListCalendarsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<ListCalendarsResponses, ListCalendarsErrors, ThrowOnError>({ url: '/calendars', ...options });
+    }
+
+    /**
+     * Set the requester's own color for one of their calendars, or clear it to
+     * show the provider's color again. Macro keeps it; the provider never sees it.
+     */
+    public setCalendarColor<ThrowOnError extends boolean = false>(options: Options<SetCalendarColorData, ThrowOnError>): RequestResult<SetCalendarColorResponses, SetCalendarColorErrors, ThrowOnError> {
+        return (options.client ?? this.client).put<SetCalendarColorResponses, SetCalendarColorErrors, ThrowOnError>({
+            url: '/calendars/{calendar_id}/color',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
     }
 
     /**

@@ -41,6 +41,7 @@ import type {
   RespondToJoinRequestRequest,
   RsvpCalendarEventRequest,
   SaveBookingSettingsParams,
+  SetCalendarColorBody,
   SlotsResponse,
   TeamCalendarSharingBody,
   UpdateCalendarEventRequest,
@@ -182,6 +183,77 @@ export const listCalendars = async (
     status: res.status,
     headers: res.headers,
   } as listCalendarsResponse;
+};
+
+/**
+ * @summary Set the requester's own color for one of their calendars, or clear it to
+show the provider's color again. Macro keeps it; the provider never sees it.
+ */
+export type setCalendarColorResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type setCalendarColorResponse400 = {
+  data: CalendarMutationApiError;
+  status: 400;
+};
+
+export type setCalendarColorResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type setCalendarColorResponse404 = {
+  data: CalendarMutationApiError;
+  status: 404;
+};
+
+export type setCalendarColorResponse503 = {
+  data: CalendarMutationApiError;
+  status: 503;
+};
+
+export type setCalendarColorResponseSuccess = setCalendarColorResponse204 & {
+  headers: Headers;
+};
+export type setCalendarColorResponseError = (
+  | setCalendarColorResponse400
+  | setCalendarColorResponse401
+  | setCalendarColorResponse404
+  | setCalendarColorResponse503
+) & {
+  headers: Headers;
+};
+
+export type setCalendarColorResponse =
+  | setCalendarColorResponseSuccess
+  | setCalendarColorResponseError;
+
+export const getSetCalendarColorUrl = (calendarId: string) => {
+  return `/calendars/${calendarId}/color`;
+};
+
+export const setCalendarColor = async (
+  calendarId: string,
+  setCalendarColorBody: SetCalendarColorBody,
+  options?: RequestInit
+): Promise<setCalendarColorResponse> => {
+  const res = await fetch(getSetCalendarColorUrl(calendarId), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(setCalendarColorBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: setCalendarColorResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as setCalendarColorResponse;
 };
 
 /**
