@@ -33,24 +33,33 @@ rm -f "$home/bin/$name" "$home/bin/$name.side"
 if [ -d "$tree" ]; then
   git -C "$repo" worktree remove --force "$tree"
 fi
-git -C "$repo" worktree add --quiet --detach "$tree" "$base"
 built=0
-trap '[ "$built" = 1 ] || git -C "$repo" worktree remove --force "$tree" 2> /dev/null || true' EXIT
-fuzzer_commit=$(git -C "$repo" rev-parse HEAD)
 stamp=$(mktemp)
-{
-  echo "base $(git -C "$repo" rev-parse "$base")"
-  for branch in "$@"; do
-    echo "branch $branch $(git -C "$repo" rev-parse "$branch")"
-  done
-} > "$stamp"
+# A failed build leaves no binary, stamp or worktree behind.
+trap '[ "$built" = 1 ] || { rm -f "$stamp" "$home/bin/$name.tmp" "$home/bin/$name.side"; git -C "$repo" worktree remove --force "$tree" 2> /dev/null; } || true' EXIT
+# Each ref is resolved once, so the stamp names exactly the commits that were built.
+base_commit=$(git -C "$repo" rev-parse --verify "$base^{commit}")
+fuzzer_commit=$(git -C "$repo" rev-parse HEAD)
+echo "base $base_commit" > "$stamp"
+commits=()
 for branch in "$@"; do
-  git -C "$tree" merge --quiet --no-edit "$branch"
+  commit=$(git -C "$repo" rev-parse --verify "$branch^{commit}")
+  commits+=("$commit")
+  echo "branch $branch $commit" >> "$stamp"
+done
+git -C "$repo" worktree add --quiet --detach "$tree" "$base_commit"
+for commit in "${commits[@]}"; do
+  git -C "$tree" merge --quiet --no-edit "$commit"
 done
 
 # A deliberate regression, to show a comparison catches it: MUTATE_FILE (relative to the
 # repository) gets the perl substitution MUTATE_PERL, which must change it.
 if [ -n "${MUTATE_FILE:-}" ]; then
+  # The file must resolve inside the side's worktree, through any symlink.
+  case "$(realpath -e "$tree/$MUTATE_FILE")" in
+    "$(realpath -e "$tree")"/*) ;;
+    *) echo "MUTATE_FILE must name a file in the repository" >&2; exit 2 ;;
+  esac
   before=$(sha256sum "$tree/$MUTATE_FILE")
   perl -0pi -e "$MUTATE_PERL" "$tree/$MUTATE_FILE"
   if [ "$(sha256sum "$tree/$MUTATE_FILE")" = "$before" ]; then

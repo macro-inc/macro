@@ -21,73 +21,98 @@ count=$3
 side_a=$4
 side_b=$5
 jobs=${6:-12}
-case "$run$first$count$jobs" in
-  */* | *..*) echo "RUN must be a plain name" >&2; exit 2 ;;
+case "$run" in
+  '' | */* | *..*) echo "RUN must be a plain name" >&2; exit 2 ;;
 esac
+# Plain decimals, small enough that Bash's signed arithmetic and seq agree with the binary.
+for number in "$first" "$count" "$jobs"; do
+  [[ "$number" =~ ^(0|[1-9][0-9]{0,15})$ ]] || { echo "FIRST, COUNT and JOBS must be decimal numbers below 10^16" >&2; exit 2; }
+done
+if [ "$count" -lt 1 ] || [ "$jobs" -lt 1 ]; then
+  echo "COUNT and JOBS must be at least 1" >&2
+  exit 2
+fi
 repo=$(git rev-parse --show-toplevel)
 home=${CACHE_DIFF_FUZZ_HOME:-$HOME/.cache/cache-diff-fuzz}
 out=$home/runs/$run
-fuzzer() {
-  local stamp=$home/bin/$1.side hash
-  [ -x "$home/bin/$1" ] && [ -f "$stamp" ] || { echo "no built side $1" >&2; return 1; }
-  hash=$(awk '$1 == "fuzzer" { print $3 }' "$stamp")
-  [ -n "$hash" ] || { echo "$stamp has no fuzzer hash" >&2; return 1; }
-  echo "$hash"
-}
-hash_a=$(fuzzer "$side_a")
-hash_b=$(fuzzer "$side_b")
-if [ "$hash_a" != "$hash_b" ]; then
-  echo "$side_a and $side_b were built with different fuzzer sources; rebuild one" >&2
+for name in "$side_a" "$side_b"; do
+  [ -x "$home/bin/$name" ] && [ -f "$home/bin/$name.side" ] || { echo "no built side $name" >&2; exit 1; }
+done
+mkdir -p "$home/runs"
+# mkdir is the reservation: two runs with one name cannot both get it.
+mkdir "$out" 2> /dev/null || { echo "$out exists; pick a new RUN name" >&2; exit 1; }
+work=$home/work/$run
+rm -rf "${work:?}"
+trap 'rm -rf "${work:?}"' EXIT
+mkdir -p "$out/a" "$out/b" "$out/stderr" "$work/bin"
+
+# The run uses copies of both binaries, the schema and the assets, so a rebuild or an edit
+# while it goes cannot change one side's inputs.
+for side in a b; do
+  name=$side_a
+  [ "$side" = b ] && name=$side_b
+  cp "$home/bin/$name.side" "$out/$side.side"
+  cp "$home/bin/$name" "$work/bin/$side"
+done
+hash_a=$(awk '$1 == "fuzzer" { print $3 }' "$out/a.side")
+hash_b=$(awk '$1 == "fuzzer" { print $3 }' "$out/b.side")
+if [ -z "$hash_a" ] || [ "$hash_a" != "$hash_b" ]; then
+  echo "$side_a and $side_b were not built from the same fuzzer sources; rebuild one" >&2
   exit 1
 fi
-if [ -e "$out" ]; then
-  echo "$out exists; pick a new RUN name" >&2
-  exit 1
-fi
-mkdir -p "$out/a" "$out/b" "$out/stderr"
-cp "$home/bin/$side_a.side" "$out/a.side"
-cp "$home/bin/$side_b.side" "$out/b.side"
+cp "$repo/static_assets/schema.graphql" "$work/schema.graphql"
+cp -r "$repo/crates/client/cache-diff-fuzz/assets" "$work/assets"
 {
   echo "sides $side_a $side_b"
   echo "seeds $first $count"
-  echo "schema $(sha256sum < "$repo/static_assets/schema.graphql" | cut -c1-16)"
+  echo "schema $(sha256sum < "$work/schema.graphql" | cut -c1-16)"
+  echo "assets $(cd "$work/assets" && find . -type f | LC_ALL=C sort | xargs cat | sha256sum | cut -c1-16)"
   echo "fuzz-args ${FUZZ_ARGS:-}"
 } > "$out/run.txt"
 
-# Each run has its own scratch space, so runs can go at the same time.
-work=$home/work/$run
-export repo home out side_a side_b work
+export out work
+# Returns non-zero only when it cannot record its result; a seed that fails or differs is
+# recorded and returns 0.
 one() {
   seed=$1
-  common=(--seed "$seed" --schema "$repo/static_assets/schema.graphql"
-    --assets "$repo/crates/client/cache-diff-fuzz/assets" ${FUZZ_ARGS:-})
+  # shellcheck disable=SC2206
+  common=(--seed "$seed" --schema "$work/schema.graphql" --assets "$work/assets" ${FUZZ_ARGS:-})
   status=ok
-  "$home/bin/$side_a" "${common[@]}" --out "$out/a" --work "$work/a" \
+  "$work/bin/a" "${common[@]}" --out "$out/a" --work "$work/a" \
     2> "$out/stderr/$seed.a" || status="a-failed"
-  "$home/bin/$side_b" "${common[@]}" --out "$out/b" --work "$work/b" \
+  "$work/bin/b" "${common[@]}" --out "$out/b" --work "$work/b" \
     2> "$out/stderr/$seed.b" || status="$status b-failed"
   for side in a b; do
-    [ -s "$out/$side/$seed.trace" ] || status="$status $side-no-trace"
+    # A finished trace ends with `end`.
+    [ -f "$out/$side/$seed.trace" ] && [ "$(tail -n 1 "$out/$side/$seed.trace")" = end ] \
+      || status="$status $side-no-trace"
   done
   if [ "$status" != ok ]; then
-    echo "$seed $status" >> "$out/failures.txt"
+    echo "$seed $status" >> "$out/failures.txt" || return 1
     return 0
   fi
   rm -f "$out/stderr/$seed.a" "$out/stderr/$seed.b"
-  if ! cmp -s "$out/a/$seed.trace" "$out/b/$seed.trace"; then
-    first_diff=$(diff "$out/a/$seed.trace" "$out/b/$seed.trace" | head -3 | tr '\n' ' ' || true)
-    echo "$seed $first_diff" >> "$out/diffs.txt"
-  else
-    # Matching traces need no keeping; the counters stay for coverage.
-    rm -f "$out/a/$seed.trace" "$out/b/$seed.trace"
-  fi
+  same=0
+  cmp -s "$out/a/$seed.trace" "$out/b/$seed.trace" || same=$?
+  case $same in
+    0) rm -f "$out/a/$seed.trace" "$out/b/$seed.trace" ;; # matching traces need no keeping
+    1)
+      first_diff=$(diff "$out/a/$seed.trace" "$out/b/$seed.trace" | head -3 | tr '\n' ' ' || true)
+      echo "$seed $first_diff" >> "$out/diffs.txt" || return 1
+      ;;
+    *) echo "$seed compare-failed" >> "$out/failures.txt" || return 1 ;;
+  esac
 }
 export -f one
-seq "$first" $((first + count - 1)) | xargs -P "$jobs" -I{} bash -c 'one {}'
-rm -rf "${work:?}"
+recorded=0
+seq "$first" $((first + count - 1)) | xargs -P "$jobs" -I{} bash -c 'one {}' || recorded=$?
 total=$(find "$out/a" -name '*.stats.json' | wc -l)
 lines() { if [ -f "$1" ]; then wc -l < "$1"; else echo 0; fi; }
 diffs=$(lines "$out/diffs.txt")
 failures=$(lines "$out/failures.txt")
 echo "run $run: $total seeds finished, $diffs differ, $failures failed"
+if [ "$recorded" -ne 0 ]; then
+  echo "some seeds could not record their result (xargs exit $recorded)" >&2
+  exit 1
+fi
 [ "$diffs" -eq 0 ] && [ "$failures" -eq 0 ] && [ "$total" -eq "$count" ]
