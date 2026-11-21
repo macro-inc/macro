@@ -183,6 +183,8 @@ impl SubscriptionStore for FakeStore {
 struct FakeSource {
     queued: Mutex<HashMap<Option<Vec<String>>, VecDeque<SourceStream>>>,
     opens: Mutex<Vec<(WebhookFilter, Option<String>)>>,
+    /// A UUIDv7 minted as each open began.
+    open_times: Mutex<Vec<uuid::Uuid>>,
     fail_open: Mutex<bool>,
 }
 
@@ -210,6 +212,7 @@ impl EventSource for FakeSource {
         filter: &WebhookFilter,
         resume_after: Option<&str>,
     ) -> Result<SourceStream, SourceError> {
+        self.open_times.lock().unwrap().push(uuid::Uuid::now_v7());
         self.opens
             .lock()
             .unwrap()
@@ -1057,8 +1060,6 @@ async fn a_lost_source_reports_an_error_and_resumes_after_its_last_event() {
     let posted = event("message.posted", json!({"metadata": {}}));
     let posted_id = posted.event_id.clone();
     let resumed_after = posted_id.clone();
-    let after = event("message.posted", json!({"metadata": {}}));
-    let after_id = after.event_id.clone();
 
     stream_with(
         &fixture.events,
@@ -1079,6 +1080,8 @@ async fn a_lost_source_reports_an_error_and_resumes_after_its_last_event() {
             second
                 .unbounded_send(Ok(SourceItem::Event(posted.clone())))
                 .unwrap();
+            let after = event("message.posted", json!({"metadata": {}}));
+            let after_id = after.event_id.clone();
             second.unbounded_send(Ok(SourceItem::Event(after))).unwrap();
             let (method, occurrence) = next(&mut receiver).await;
             assert_eq!(method, "notifications/events/event");
@@ -1125,6 +1128,40 @@ async fn a_silent_source_is_replaced_and_resumes_from_when_it_opened() {
     let cursor = uuid::Uuid::parse_str(opens[1].1.as_deref().unwrap()).unwrap();
     assert_eq!(cursor.get_version_num(), 7);
     assert!(cursor >= opened_at);
+    // Minted before the source opened, not after setup finished.
+    assert!(cursor < fixture.source.open_times.lock().unwrap()[0]);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_resumed_source_drops_what_it_replays_from_before_the_stream_opened() {
+    let fixture = fixture();
+    let first = fixture.source.queue(None);
+    let second = fixture.source.queue(None);
+    let before = event("message.posted", json!({"metadata": {}}));
+    stream_with(
+        &fixture.events,
+        json!({"name": "message.posted"}),
+        |mut receiver, cancel| async move {
+            next(&mut receiver).await;
+            first
+                .unbounded_send(Err(SourceError(rootcause::report!("reset"))))
+                .unwrap();
+            assert_eq!(next(&mut receiver).await.0, "notifications/events/error");
+            // The resumed source's lookback reaches past the stream's start.
+            second
+                .unbounded_send(Ok(SourceItem::Event(before)))
+                .unwrap();
+            let after = event("message.posted", json!({"metadata": {}}));
+            let after_id = after.event_id.clone();
+            second.unbounded_send(Ok(SourceItem::Event(after))).unwrap();
+            let (method, occurrence) = next(&mut receiver).await;
+            assert_eq!(method, "notifications/events/event");
+            assert_eq!(occurrence["eventId"], after_id);
+            cancel.cancel();
+        },
+    )
+    .await
+    .unwrap();
 }
 
 #[tokio::test]
@@ -1138,7 +1175,7 @@ async fn a_client_that_leaves_during_setup_frees_its_slot() {
         |_, cancel| async move { cancel.cancel() },
     )
     .await;
-    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().message, "request cancelled");
     assert!(fixture.source.opens.lock().unwrap().is_empty());
     let slots: Vec<_> = (0..MAX_STREAMS_PER_USER)
         .map(|_| fixture.events.claim_stream(&me()))

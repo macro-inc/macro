@@ -91,19 +91,37 @@ pub(crate) struct StreamStats {
     pub(crate) source_errors: u64,
 }
 
+/// A stream's sources, opened live.
+pub(crate) struct OpenedSources {
+    /// Minted before the first source opened: where a source lost before
+    /// its first event resumes from, and the oldest event a resumed source
+    /// may give, since resuming replays a few seconds from before the
+    /// cursor.
+    opened_at: uuid::Uuid,
+    groups: Vec<(McpStreamGroup, SourceStream)>,
+}
+
+impl OpenedSources {
+    /// How many sources the stream reads.
+    pub(crate) fn len(&self) -> usize {
+        self.groups.len()
+    }
+}
+
 /// Open every source; an error here fails the request before any
 /// notification, as the spec asks.
 pub(crate) async fn open_sources(
     source: &Arc<dyn EventSource>,
     user: &MacroUserIdStr<'static>,
     filter: &McpEventFilter,
-) -> Result<Vec<(McpStreamGroup, SourceStream)>, SourceError> {
-    let mut opened = Vec::new();
+) -> Result<OpenedSources, SourceError> {
+    let opened_at = uuid::Uuid::now_v7();
+    let mut groups = Vec::new();
     for group in filter.stream_groups() {
         let stream = source.open(user, &group.source, None).await?;
-        opened.push((group, stream));
+        groups.push((group, stream));
     }
-    Ok(opened)
+    Ok(OpenedSources { opened_at, groups })
 }
 
 /// Deliver until the client goes away.
@@ -111,7 +129,7 @@ pub(crate) async fn run(
     sink: &impl NotificationSink,
     source: Arc<dyn EventSource>,
     user: MacroUserIdStr<'static>,
-    sources: Vec<(McpStreamGroup, SourceStream)>,
+    sources: OpenedSources,
     plan: StreamPlan,
     cancel: CancellationToken,
 ) -> (StreamEnd, StreamStats) {
@@ -134,11 +152,10 @@ pub(crate) async fn run(
     {
         return (StreamEnd::ClientGone, stats);
     }
-    let mut merged = stream::select_all(
-        sources
-            .into_iter()
-            .map(|(group, opened)| group_stream(Arc::clone(&source), user.clone(), group, opened)),
-    );
+    let opened_at = sources.opened_at;
+    let mut merged = stream::select_all(sources.groups.into_iter().map(|(group, opened)| {
+        group_stream(Arc::clone(&source), user.clone(), group, opened, opened_at)
+    }));
     let mut recent = RecentIds::default();
     let heartbeat = tokio::time::sleep(plan.heartbeat);
     tokio::pin!(heartbeat);
@@ -220,7 +237,18 @@ struct GroupState {
     group: McpStreamGroup,
     current: Option<SourceStream>,
     last_event_id: Option<String>,
+    opened_at: uuid::Uuid,
+    /// Whether `current` was opened with a resume cursor, so it may replay
+    /// events from before the stream opened.
+    resumed: bool,
     failures: u32,
+}
+
+impl GroupState {
+    /// An event a resumed source replayed from before the stream opened.
+    fn predates_stream(&self, event_id: &str) -> bool {
+        self.resumed && uuid::Uuid::parse_str(event_id).is_ok_and(|id| id < self.opened_at)
+    }
 }
 
 /// One source's matched events, reconnecting after failures.
@@ -229,15 +257,18 @@ fn group_stream(
     user: MacroUserIdStr<'static>,
     group: McpStreamGroup,
     opened: SourceStream,
+    opened_at: uuid::Uuid,
 ) -> BoxStream<'static, GroupItem> {
     let state = GroupState {
         source,
         user,
         group,
         current: Some(opened),
-        // A cursor minted now, so a group that loses its source before its
-        // first event still resumes from when it opened.
-        last_event_id: Some(uuid::Uuid::now_v7().to_string()),
+        // A group that loses its source before its first event resumes from
+        // when the stream opened.
+        last_event_id: Some(opened_at.to_string()),
+        opened_at,
+        resumed: false,
         failures: 0,
     };
     stream::unfold(state, |mut state| async move {
@@ -253,7 +284,10 @@ fn group_stream(
                     )
                     .await
                 {
-                    Ok(opened) => state.current = Some(opened),
+                    Ok(opened) => {
+                        state.current = Some(opened);
+                        state.resumed = true;
+                    }
                     Err(error) => {
                         tracing::warn!(error = ?error.0, "MCP events source reconnect failed");
                         state.failures = state.failures.saturating_add(1);
@@ -273,6 +307,9 @@ fn group_stream(
             match next {
                 Some(Ok(SourceItem::Event(event))) => {
                     state.failures = 0;
+                    if state.predates_stream(&event.event_id) {
+                        continue;
+                    }
                     state.last_event_id = Some(event.event_id.clone());
                     // The source applied the group's ids, so the entity id
                     // is not compared again.
