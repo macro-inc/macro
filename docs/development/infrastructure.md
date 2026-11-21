@@ -169,7 +169,7 @@ local resources.
 | Pull request touching a mapped stack | `pulumi_preview_pr.yml` previews against dev and comments; `code_check_infra.yml` runs Biome and `tsc` |
 | Manual | `deploy-pulumi-stack.yml`, `deploy-service-generic.yml`, `migrate-macro-db.yml` |
 | Manual, observability host only | `deploy-observability.yml`: builds the NixOS image, publishes and smoke-boots the AMI, then replaces the prod observability host (a few minutes of GoAlert downtime). `dry_run`, the default, stops before `pulumi up`. See `infra/stacks/observability/README.md`, "Deploying" |
-| Merge to `main` changing `infra/k8s/observability/cluster/manifests/prod` | Argo CD on the observability EKS cluster syncs it (workloads by hand with `argocd app sync` until `macro.cluster.autoSync` is on; cluster README "Bootstrap"); PRs run `observability_cluster.yml`, which fails on a stale render or invalid manifests |
+| Merge to `main` changing `infra/k8s/observability/cluster/manifests/prod` | Argo CD on the observability EKS cluster syncs it (automatically: `macro.cluster.autoSync` is on; cluster README "Bootstrap"); PRs run `observability_cluster.yml`, which fails on a stale render or invalid manifests |
 
 Build handoffs use Namespace artifact storage at
 `handoff/<run_id>-<run_attempt>/<service>/<file>`, with a 24-hour expiry.

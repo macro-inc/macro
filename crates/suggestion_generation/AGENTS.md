@@ -131,7 +131,7 @@ scheduling runtime.
   win, loss or noise (see its README). Run the section a change touches
   before and after changing a brief, a prompt or a session's tools.
 - `bun test crates/suggestion_generation/bench` after changing the bench's
-  persona loading.
+  persona loading or the order and state it judges attempts in (`judging.ts`).
 
 ## Gotchas
 

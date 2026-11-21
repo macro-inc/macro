@@ -92,7 +92,7 @@ impl ContactFilingRepository for CompaniesRepositoryImpl {
         let contacts = sqlx::query_as!(
             UnfiledContact,
             r#"
-            SELECT id, LOWER(email) AS "email!", manually_created
+            SELECT id, LOWER(email) AS "email!", manually_created, hidden
             FROM crm_contacts
             WHERE team_id = $1
               AND company_id IS NULL
@@ -151,6 +151,9 @@ impl CompaniesRepositoryImpl {
         let (Some(primary), None) = (before.email.clone(), before.company_id) else {
             return Ok(ContactFiling::NotUnfiled);
         };
+        if before.hidden {
+            return Ok(ContactFiling::Archived);
+        }
         let Some((_, company_domain)) = primary.split_once('@') else {
             return Ok(ContactFiling::NotUnfiled);
         };
@@ -195,14 +198,20 @@ impl CompaniesRepositoryImpl {
         if manual != Some(true) {
             return Ok(ContactFiling::NotUnfiled);
         }
-        let current = Self::read_contact(&mut *tx, team_id, contact_id, true).await?;
+        let Some(current) = Self::read_contact(&mut *tx, team_id, contact_id, true).await? else {
+            return Ok(ContactFiling::NotUnfiled);
+        };
+        // Archived since the first read: returning drops the transaction, so
+        // a company it inserted for the domain goes with it.
+        if current.hidden {
+            return Ok(ContactFiling::Archived);
+        }
         // The locks were chosen from the first read; a contact edited since
         // is left for a later run.
-        if !current.is_some_and(|current| {
-            current.company_id.is_none()
-                && current.email == before.email
-                && current.emails == before.emails
-        }) {
+        if current.company_id.is_some()
+            || current.email != before.email
+            || current.emails != before.emails
+        {
             return Ok(ContactFiling::NotUnfiled);
         }
 

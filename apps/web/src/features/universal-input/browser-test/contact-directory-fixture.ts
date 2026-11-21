@@ -125,6 +125,14 @@ export async function fetchContactReferencePage(
     },
   };
 }
+/** The server fallback page; this fixture's contacts are all local. */
+export async function fetchContactDirectoryPage(
+  _variables: unknown,
+  signal: AbortSignal
+) {
+  signal.throwIfAborted();
+  return { user: { id: VIEWER, contacts: { nodes: [], nextCursor: null } } };
+}
 export async function hydrateGraphqlContacts() {
   throw new Error('No backfill in this fixture');
 }

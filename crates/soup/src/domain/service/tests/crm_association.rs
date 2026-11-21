@@ -393,6 +393,14 @@ impl CrmService for FakeCrm {
         unimplemented!("FakeCrm.get_contact_by_email")
     }
 
+    async fn get_company_by_domain(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+        _domain: &str,
+    ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
+        unimplemented!("FakeCrm.get_company_by_domain")
+    }
+
     async fn get_company_for_team(
         &self,
         _access: &CrmCompanyReceipt<ViewAccessLevel>,

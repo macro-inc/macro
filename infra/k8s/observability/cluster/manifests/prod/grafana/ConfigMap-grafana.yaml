@@ -34,7 +34,7 @@ data:
     validate_id_token = true
     [database]
     ca_cert_path = /etc/grafana/rds/ca.pem
-    host = :5432
+    host = observability-grafana.c7laebw90i5d.us-east-2.rds.amazonaws.com:5432
     name = grafana
     password = $__file{/etc/grafana/database/password}
     ssl_mode = verify-full
@@ -59,10 +59,10 @@ data:
     secret_key = $__file{/etc/grafana/secrets/grafana_secret_key}
     strict_transport_security = true
     [server]
-    domain = localhost
+    domain = grafana.macro-internal.com
     enforce_domain = true
     http_addr = 0.0.0.0
-    root_url = http://localhost:3000/
+    root_url = https://grafana.macro-internal.com/
     [unified_alerting]
     enabled = true
     ha_advertise_address = $__env{POD_IP}:9094

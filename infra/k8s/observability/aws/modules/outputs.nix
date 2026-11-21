@@ -13,6 +13,9 @@ in
     );
     cluster_name = out "EKS cluster name." (ref "aws_eks_cluster.observability.name");
     cluster_endpoint = out "EKS API endpoint." (ref "aws_eks_cluster.observability.endpoint");
+    admin_role_arn = out "The cluster admin role (README, \"Cluster access\")." (
+      ref "aws_iam_role.admin.arn"
+    );
     cluster_security_group_id = out "Security group on the nodes and pods." (
       ref "aws_eks_cluster.observability.vpc_config[0].cluster_security_group_id"
     );

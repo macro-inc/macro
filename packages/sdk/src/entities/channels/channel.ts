@@ -59,9 +59,6 @@ export type ChannelParticipant = GetChannelParticipantsResponses[200][number];
 export type ChannelAttachment =
   GetChannelAttachmentsResponses[200]['items'][number];
 
-/**
- * A channel.
- */
 /** A user's own notification settings for one channel. */
 export type ChannelNotificationSettings = {
   /**
@@ -82,6 +79,9 @@ function toNotificationSettings(
   };
 }
 
+/**
+ * A channel.
+ */
 export class Channel extends PropertiedEntity<ChannelDetail> {
   /**
    * Start or join this channel's call, ringing members if a new call starts;

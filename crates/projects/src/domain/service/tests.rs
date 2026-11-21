@@ -880,6 +880,7 @@ async fn a_project_dated_by_contents_starts_never_edited_and_leaves_its_parent_a
                 name: "Imported".to_string(),
                 project_parent_id: Some(parent_id),
             },
+            models_permissions::share_permission::InitialLinkShare::EntityDefault,
         )
         .await
         .unwrap();
@@ -2926,4 +2927,40 @@ async fn edit_repo_conflict_does_not_publish_event() {
 
     assert!(matches!(result, Err(ProjectError::Conflict(_))));
     assert!(published.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn personal_imported_folder_ignores_team_link_default() {
+    use models_permissions::share_permission::{LinkShareState, TeamLinkShareDefault};
+    let mut repo = MockProjectRepo::new();
+    repo.expect_get_team_default_link_share()
+        .return_once(|_| Box::pin(async { Ok(Some(TeamLinkShareDefault(Some(LinkShare::Team)))) }));
+    repo.expect_create_project()
+        .withf(|args| args.share_permission.link_share_state() == LinkShareState::Off)
+        .return_once(|_| {
+            Box::pin(async {
+                Ok(project(
+                    &Uuid::now_v7().to_string(),
+                    "macro|actor@example.com",
+                    None,
+                ))
+            })
+        });
+    let service = mutation_service_with_event_broker(
+        repo,
+        RecordingEam::default(),
+        RecordingIndexer::default(),
+        TestEventBroker::default(),
+    );
+    service
+        .create_project_dated_by_contents(
+            &CreationPrincipal::User(user_id("macro|actor@example.com")),
+            CreateProjectRequest {
+                name: "Imported".into(),
+                project_parent_id: None,
+            },
+            models_permissions::share_permission::InitialLinkShare::Exact(LinkShareState::Off),
+        )
+        .await
+        .unwrap();
 }

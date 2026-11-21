@@ -537,6 +537,7 @@ dependencies = [
  "rand 0.9.4",
  "reqwest 0.13.4",
  "rootcause",
+ "rustix 1.1.6",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -1255,6 +1256,7 @@ dependencies = [
  "anthropic",
  "anyhow",
  "async-trait",
+ "aws-sdk-s3",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
@@ -1360,6 +1362,7 @@ dependencies = [
  "url",
  "uuid",
  "web_search",
+ "wiremock",
  "workspace-hack",
 ]
 
@@ -4863,6 +4866,7 @@ dependencies = [
  "macro_uuid",
  "messages",
  "mimalloc",
+ "nom 8.0.0",
  "openssl-sys",
  "opentelemetry",
  "opentelemetry-otlp",
@@ -5380,17 +5384,23 @@ dependencies = [
  "aws-sdk-sqs",
  "axum",
  "axum-extra",
+ "chrono",
  "connection_gateway_client",
+ "feature_flags",
  "futures",
  "http-body-util",
  "kafka_util",
  "macro_authorization",
  "macro_db_client",
  "macro_db_migrator",
+ "macro_env",
  "macro_event_broker",
+ "macro_tower_layers",
  "macro_user_id",
  "model-entity",
  "non_empty",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "rate_limit",
  "rdkafka",
  "reqwest 0.13.4",
@@ -5399,14 +5409,18 @@ dependencies = [
  "serde_json",
  "sqlx",
  "sqs_worker",
+ "strum 0.27.2",
  "subsequence_match",
  "tokio",
  "tower 0.5.3",
  "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
  "urlencoding",
  "user_events",
  "utoipa",
  "uuid",
+ "wiremock",
  "workspace-hack",
 ]
 
@@ -5419,9 +5433,12 @@ dependencies = [
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
+ "chrono",
+ "clap",
  "contacts",
  "database_env_vars",
  "doppler-config",
+ "feature_flags",
  "http-body-util",
  "macro_auth",
  "macro_authorization",
@@ -5436,6 +5453,7 @@ dependencies = [
  "macro_user_id",
  "rate_limit",
  "redis",
+ "rootcause",
  "secretsmanager_client",
  "serde_json",
  "sqlx",
@@ -6986,6 +7004,7 @@ dependencies = [
  "sync_service_hex",
  "system_properties",
  "task_dedup",
+ "task_templates",
  "teams",
  "thiserror 2.0.18",
  "tokio",
@@ -9287,32 +9306,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "gh-workflow"
+name = "gh_workflow"
 version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "389296a8f9ebed67f6f49f3ee7fb5870d34b1f134d6033727de8caac3a6336a1"
 dependencies = [
- "async-trait",
- "derive_more 2.1.1",
  "derive_setters",
- "gh-workflow-macros",
  "indexmap 2.14.0",
  "merge",
+ "nom 8.0.0",
+ "pretty_assertions",
  "serde",
  "serde_json",
- "serde_yml",
- "strum_macros 0.27.2",
-]
-
-[[package]]
-name = "gh-workflow-macros"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b8281789edecfe1c6dab6312577f5ec0f7f8b860cad70156b8fc70ebedc786d"
-dependencies = [
- "heck 0.5.0",
- "quote",
- "syn 2.0.117",
+ "serde_yaml",
 ]
 
 [[package]]
@@ -12084,6 +12088,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry_sdk",
  "rdkafka",
+ "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -12417,16 +12422,6 @@ checksum = "54cd30df7c7165ce74a456e4ca9732c603e8dc5e60784558c1c6dc047f876733"
 dependencies = [
  "cc",
  "glob",
-]
-
-[[package]]
-name = "libyml"
-version = "0.0.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3302702afa434ffa30847a83305f0a69d6abd74293b6554c18ec85c7ef30c980"
-dependencies = [
- "anyhow",
- "version_check",
 ]
 
 [[package]]
@@ -14632,16 +14627,30 @@ version = "0.1.0"
 dependencies = [
  "agent_correlation",
  "anyhow",
+ "attention_feed",
  "aws-sdk-secretsmanager",
  "aws-sdk-sesv2",
  "aws-sdk-sns",
  "aws-sdk-sqs",
  "axum",
+ "bot_id",
+ "bots",
+ "call",
  "channel_labels",
+ "channels",
  "chrono",
+ "crm",
  "database_env_vars",
  "doppler-config",
+ "email",
  "email_formatting",
+ "entity_access",
+ "entity_access_management",
+ "feature_flags",
+ "foreign_entity",
+ "frecency",
+ "futures",
+ "github_pull_requests",
  "hmac 0.12.1",
  "http-body-util",
  "itertools 0.14.0",
@@ -14651,6 +14660,7 @@ dependencies = [
  "macro_aws_config",
  "macro_config",
  "macro_cors",
+ "macro_db_migrator",
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
@@ -14660,21 +14670,28 @@ dependencies = [
  "macro_service_urls",
  "macro_tower_layers",
  "macro_user_id",
+ "messages",
  "model",
  "model-entity",
  "model-error-response",
  "model_notifications",
  "models_pagination",
+ "models_soup",
  "notification",
  "notification_db_client",
+ "notification_inbox",
  "rate_limit",
+ "readonly_pool",
  "redis",
+ "rootcause",
  "secretsmanager_client",
  "serde",
  "serde_json",
  "sha2 0.10.9",
  "sns_client",
+ "soup",
  "sqlx",
+ "thiserror 2.0.18",
  "tokio",
  "tower 0.5.3",
  "tower-http",
@@ -14682,6 +14699,7 @@ dependencies = [
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
+ "work_feed",
  "workspace-hack",
 ]
 
@@ -15311,6 +15329,7 @@ dependencies = [
  "bytes",
  "http 1.4.0",
  "opentelemetry",
+ "reqwest 0.12.28",
 ]
 
 [[package]]
@@ -15325,6 +15344,7 @@ dependencies = [
  "opentelemetry-proto",
  "opentelemetry_sdk",
  "prost 0.14.3",
+ "reqwest 0.12.28",
  "thiserror 2.0.18",
  "tokio",
  "tonic",
@@ -17621,7 +17641,9 @@ checksum = "eddd3ca559203180a307f12d114c268abf583f59b03cb906fd0b3ff8646c1147"
 dependencies = [
  "base64 0.22.1",
  "bytes",
+ "futures-channel",
  "futures-core",
+ "futures-util",
  "http 1.4.0",
  "http-body 1.0.1",
  "http-body-util",
@@ -17634,6 +17656,7 @@ dependencies = [
  "pin-project-lite",
  "quinn",
  "rustls",
+ "rustls-native-certs",
  "rustls-pki-types",
  "serde",
  "serde_json",
@@ -18706,6 +18729,7 @@ dependencies = [
  "name_search",
  "opensearch_client",
  "properties",
+ "rate_limit",
  "readonly_pool",
  "rootcause",
  "serde",
@@ -19182,21 +19206,6 @@ dependencies = [
  "ryu",
  "serde",
  "unsafe-libyaml",
-]
-
-[[package]]
-name = "serde_yml"
-version = "0.0.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59e2dd588bf1597a252c3b920e0143eb99b0f76e4e082f4c92ce34fbc9e71ddd"
-dependencies = [
- "indexmap 2.14.0",
- "itoa",
- "libyml",
- "memchr",
- "ryu",
- "serde",
- "version_check",
 ]
 
 [[package]]
@@ -21148,6 +21157,24 @@ dependencies = [
  "system_properties",
  "thiserror 2.0.18",
  "tokio",
+ "tracing",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "task_templates"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "macro_uuid",
+ "models_properties",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.18",
  "tracing",
  "utoipa",
  "uuid",
@@ -24291,6 +24318,7 @@ dependencies = [
  "openssl-sys",
  "opentelemetry",
  "opentelemetry-http",
+ "opentelemetry-otlp",
  "opentelemetry_sdk",
  "percent-encoding",
  "petgraph 0.8.3",
@@ -24310,6 +24338,7 @@ dependencies = [
  "regex",
  "regex-automata",
  "regex-syntax",
+ "reqwest 0.12.28",
  "reqwest 0.13.4",
  "rig-agent",
  "rig-core",
@@ -24629,7 +24658,8 @@ name = "xtask_workflows"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "gh-workflow",
+ "gh_workflow",
+ "indexmap 2.14.0",
  "indoc",
  "serde_json",
  "serde_yaml",

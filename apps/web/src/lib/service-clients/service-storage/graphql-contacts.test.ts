@@ -5,10 +5,13 @@ import { INITIAL_CACHE_REVISION } from '@graphql-cache/protocol';
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { beforeEach, expect, it, vi } from 'vitest';
 import {
+  ContactDirectoryByUserIdsDocument,
+  ContactDirectoryByUserIdsWithListsDocument,
   ContactReferencePageDocument,
   type ContactReferencePageQueryVariables,
 } from './graphql/generated/graphql';
 import {
+  fetchContactDirectoryByIds,
   fetchContactReferencePage,
   hydrateGraphqlContacts,
 } from './graphql-contacts';
@@ -154,4 +157,64 @@ it('does not turn a rejected cache admission into a successful checkpoint', asyn
       new AbortController().signal
     )
   ).rejects.toThrow('scope changed');
+});
+
+const selectsLists = (query: string) => /\blists\b/.test(query);
+
+async function hydrateWith(selection?: { lists?: boolean }) {
+  const generation = cacheSessionGeneration.capture();
+  network.query.mockReturnValue({
+    toPromise: async () => ({
+      data,
+      operation: { context: { cacheSessionGeneration: generation } },
+    }),
+  });
+  const hydrateQuery = vi
+    .fn<CacheHost['hydrateQuery']>()
+    .mockResolvedValue(cached);
+  await hydrateGraphqlContacts(
+    { hydrateQuery, people },
+    scope,
+    null,
+    new AbortController().signal,
+    selection
+  );
+  return {
+    sent: network.query.mock.calls[0][0] as string,
+    stored: hydrateQuery.mock.calls[0][0],
+  };
+}
+
+it('selects no lists on a hydration page unless asked', async () => {
+  const { sent, stored } = await hydrateWith();
+  expect(selectsLists(sent)).toBe(false);
+  expect(selectsLists(stored.query)).toBe(false);
+  expect(stored.operationName).toBe('ContactDirectoryBackfill');
+});
+
+it('selects and stores lists on a hydration page when asked', async () => {
+  const { sent, stored } = await hydrateWith({ lists: true });
+  expect(selectsLists(sent)).toBe(true);
+  expect(sent).not.toContain('@cacheOnly');
+  expect(selectsLists(stored.query)).toBe(true);
+  expect(stored.query).toContain('@cacheOnly');
+  expect(stored.operationName).toBe('ContactDirectoryBackfillWithLists');
+});
+
+it('selects lists on an exact lookup only when asked', async () => {
+  const lookup = {
+    user: { id: scope.identity, contactsByUserIds: [] },
+  };
+  network.query.mockReturnValue({ toPromise: async () => ({ data: lookup }) });
+  const signal = new AbortController().signal;
+  await fetchContactDirectoryByIds(['macro|person@example.com'], signal);
+  await fetchContactDirectoryByIds(['macro|person@example.com'], signal, {
+    lists: true,
+  });
+  expect(network.query.mock.calls[0][0]).toBe(
+    ContactDirectoryByUserIdsDocument
+  );
+  expect(network.query.mock.calls[1][0]).toBe(
+    ContactDirectoryByUserIdsWithListsDocument
+  );
 });

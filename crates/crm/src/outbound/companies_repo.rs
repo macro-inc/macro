@@ -3014,6 +3014,32 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn get_company_by_domain_for_team(
+        &self,
+        team_id: &uuid::Uuid,
+        domain: &str,
+        include_hidden: bool,
+    ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
+        // `crm_domains_team_id_lower_domain_unique` holds at most one row.
+        let company_id = sqlx::query_scalar!(
+            "SELECT company_id FROM crm_domains WHERE team_id = $1 AND LOWER(domain) = $2",
+            team_id,
+            domain,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        match company_id {
+            Some(company_id) => {
+                self.get_company_for_team(team_id, &company_id, include_hidden, false)
+                    .await
+            }
+            None => Ok(None),
+        }
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn get_company_for_team(
         &self,
         team_id: &uuid::Uuid,

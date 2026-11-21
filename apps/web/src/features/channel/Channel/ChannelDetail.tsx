@@ -78,6 +78,7 @@ import {
 } from './ChannelSurface';
 import { ChannelTabProvider, useChannelTab } from './ChannelTabContext';
 import { ChannelLiveIndicators } from './ChannelTopBarLiveIndicators';
+import { ChannelAskMacroButton } from './channel-ask-macro';
 import { withChannelTabIcons } from './channel-tab-icons';
 import { type ChannelTabId, DEFAULT_CHANNEL_TAB } from './channel-tabs';
 import {
@@ -219,15 +220,14 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
           <JoinableCallStatus channelId={props.channelId} />
         </DebugSuspense>
       </Show>
-      <HeaderActionGroup label="Conversation actions">
-        <Show
-          when={ENABLE_CALLS && !channel()?.agent_dm && !call.isInThisChannel()}
-        >
-          <DebugSuspense name="ChannelDetail.call-button">
-            <ChannelCallButton grouped channelId={props.channelId} />
-          </DebugSuspense>
-        </Show>
-      </HeaderActionGroup>
+      <Show when={activeTab() !== 'call'}>
+        <DebugSuspense name="ChannelDetail.ask-macro">
+          <ChannelAskMacroButton
+            channelId={props.channelId}
+            fallbackName={props.fallbackName}
+          />
+        </DebugSuspense>
+      </Show>
       <Show when={channelType() === ChannelType.direct_message}>
         <DebugSuspense name="ChannelDetail.account-manager">
           <AccountManagerRequestButton channelId={props.channelId} />
@@ -244,6 +244,15 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
           />
         </DebugSuspense>
       </Show>
+      <HeaderActionGroup label="Conversation actions">
+        <Show
+          when={ENABLE_CALLS && !channel()?.agent_dm && !call.isInThisChannel()}
+        >
+          <DebugSuspense name="ChannelDetail.call-button">
+            <ChannelCallButton grouped channelId={props.channelId} />
+          </DebugSuspense>
+        </Show>
+      </HeaderActionGroup>
     </div>
   );
 }

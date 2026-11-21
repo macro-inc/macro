@@ -125,3 +125,68 @@ async fn a_scoped_code_mode_credential_is_refused() {
         assert_eq!(response.status(), expected, "{scope:?}");
     }
 }
+
+/// A Macro API token leaves the caller's opaque ids for the MCP route's
+/// spans: the root FusionAuth id it was signed for, and no OAuth client.
+#[tokio::test]
+async fn an_api_token_carries_the_callers_opaque_ids() {
+    use crate::{
+        domain::{
+            access_token_clients::AccessTokenClients,
+            ports::{ClientRegistrationStore, RefreshTokenBindingStore},
+        },
+        test_support::FakeClientRegistry,
+    };
+    use std::sync::{Arc, Mutex};
+    use tower::ServiceExt;
+
+    let registry = Arc::new(FakeClientRegistry::default());
+    let auth = super::BearerAuth {
+        jwt_args: macro_auth::middleware::decode_jwt::JwtValidationArgs::testing_macro_token(
+            "fixture", PUBLIC,
+        ),
+        clients: AccessTokenClients::new(
+            Arc::clone(&registry) as Arc<dyn RefreshTokenBindingStore>,
+            registry as Arc<dyn ClientRegistrationStore>,
+        ),
+        user_api_keys: None,
+    };
+    let seen = Arc::new(Mutex::new(None));
+    let recorded = Arc::clone(&seen);
+    let app = axum::Router::new()
+        .route(
+            "/mcp",
+            axum::routing::post(move |request: Request<Body>| async move {
+                *recorded.lock().unwrap() =
+                    request.extensions().get::<super::McpCallerIds>().cloned();
+            }),
+        )
+        .layer(axum::middleware::from_fn_with_state(
+            auth,
+            super::validate_bearer,
+        ));
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/mcp")
+                .header(
+                    axum::http::header::AUTHORIZATION,
+                    format!("Bearer {}", agent_token(None)),
+                )
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), axum::http::StatusCode::OK);
+    assert_eq!(
+        seen.lock().unwrap().take(),
+        Some(super::McpCallerIds {
+            fusionauth_user_id: Some("fixture".to_owned()),
+            oauth_client_id: None,
+        })
+    );
+}

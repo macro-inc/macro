@@ -16,7 +16,7 @@ in
 
     aws_security_group.grafana_db = {
       name = "${db.identifier}-db";
-      description = "Grafana's Postgres; only the EKS cluster's pods and nodes";
+      description = "Grafana Postgres; only the EKS cluster pods and nodes";
       vpc_id = ref "data.aws_vpc.observability.id";
     };
     aws_vpc_security_group_ingress_rule.grafana_db_from_cluster = {

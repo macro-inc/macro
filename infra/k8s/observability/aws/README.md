@@ -15,11 +15,11 @@ approval, with the steps under [First apply](#first-apply).
 | --- | --- |
 | `bootstrap/state.nix` | The state bucket `macro-observability-k8s-tofu-state`: versioned, encrypted, private, TLS only. Holds the state of both configs. |
 | `modules/network.nix` | Private subnets in us-east-2b (`10.88.16.0/20`) and 2c (`10.88.32.0/20`), on the stack's private route table (its single NAT and S3 gateway endpoint). |
-| `modules/eks.nix` | EKS cluster `observability` (API access entries only, public endpoint limited to given CIDRs, control-plane logs 30 days, standard support only), a managed node group of 3 × m7g.large on AL2023 across 2a/2b/2c, add-ons VPC CNI (network policy on), kube-proxy, Pod Identity agent, CoreDNS, EBS CSI, and cluster-admin access entries. |
+| `modules/eks.nix` | EKS cluster `observability` (API access entries only, public endpoint limited to given CIDRs, control-plane logs 30 days, standard support only), a managed node group of 3 × m7g.large on AL2023 across 2a/2b/2c, add-ons VPC CNI (network policy on), kube-proxy, Pod Identity agent, CoreDNS, EBS CSI, and one cluster-admin access entry, for the role `observability-eks-admin` ("Cluster access"). |
 | `modules/pod-identity.nix` | One role per service account (below), bound with Pod Identity. |
 | `modules/buckets.nix` | Buckets `macro-observability-k8s-{loki,tempo,mimir}`, configured as the host's buckets. Loki and Tempo use theirs while the cluster is tested and move to the host's at the switch; Mimir keeps its own. |
 | `modules/rds.nix` | Grafana's Postgres 17, db.t4g.micro, Multi-AZ, 20 GiB gp3, reachable only from the cluster security group; its RDS-managed password rotates once a year (first Sunday of January, 05:00–06:00 UTC) instead of every 7 days. |
-| `modules/edge.nix` | IP target groups `obs-k8s-grafana` and `obs-k8s-otlp` and the security group rules ALB → pods on port 8080. At the switch (`settings.switched`), listener rules for `grafana.` and `otlp.macro-internal.com` (priorities 10 and 11). |
+| `modules/edge.nix` | IP target groups `obs-k8s-grafana`, `obs-k8s-otlp` and `obs-k8s-argocd` and the security group rules ALB → pods on port 8080. At the switch (`settings.switched`), listener rules for `grafana.`, `otlp.` and `argo.macro-internal.com` (priorities 10, 11 and 12). `argo.` is new, not the stack's (`own`), so this layer also makes its alias record and a DNS-validated certificate added to the stack's listener by SNI. |
 | `modules/alarms.nix` | At the switch (`settings.switched`), per target group: no healthy target, and target 5xx, to the stack's alarm topic. |
 | `modules/outputs.nix` | Names and ARNs the cluster layer needs; `nix run .#tofu -- main output`. |
 
@@ -37,7 +37,9 @@ stack's tagged buckets) and, for the Mimir backfill, the host's instance role
 OpenTofu only adds resources next to them: route table associations, one
 egress rule on the ALB's security group, which, like the stack's own
 `observability-alb-to-host` rule, Pulumi does not manage inline, and at the
-switch two listener rules (priorities 10 and 11; Pulumi has 1 and 2), plus,
+switch the listener rules (priorities 10 to 12; Pulumi has 1 and 2) and, for
+`argo.macro-internal.com`, a DNS record, its certificate's validation record
+and a listener certificate, plus,
 while `mimirBackfill.enable` is on, a statement in Mimir's bucket policy for
 the host's role. Before the switch nothing in this layer changes how the
 host is served. The Loki and Tempo roles may read and write the host's
@@ -110,7 +112,7 @@ buckets, IAM `GetInstanceProfile` for the backfill) and the state bucket. `ReadO
 ## Preview
 
 A plan without the state bucket, which writes nothing to AWS: review it before
-the first apply. Read-only credentials are enough. Set the two `TF_VAR_` values
+the first apply. Read-only credentials are enough. Set `TF_VAR_public_access_cidrs`
 from "First apply" step 3 first, then:
 
 ```sh
@@ -137,14 +139,12 @@ Multi-AZ database up to 20.
    cd infra/k8s/observability/aws
    nix run .#bootstrap
    ```
-3. Say who gets cluster admin and which addresses reach the API. The role is
-   the IAM role behind your credentials, with its path (for IAM Identity Center:
-   `aws iam list-roles --path-prefix /aws-reserved/sso.amazonaws.com/ --query 'Roles[].Arn'`):
+3. Say which addresses reach the API: the machines that will run `kubectl`.
+   Cluster admin is not an input; it is the role in "Cluster access".
    ```sh
-   export TF_VAR_admin_principal_arns='["arn:aws:iam::569036502058:role/<path>/<role>"]'
    export TF_VAR_public_access_cidrs='["<your public IP>/32"]'
    ```
-4. Plan and review. Expect only additions (69) and no change or
+4. Plan and review. Expect only additions (71) and no change or
    destroy:
    ```sh
    nix run .#tofu -- main init
@@ -154,9 +154,10 @@ Multi-AZ database up to 20.
    ```sh
    nix run .#tofu -- main apply tfplan
    ```
-6. Check, from `nix develop` (it has `kubectl`):
+6. Check, from `nix develop` (it has `kubectl`), once your IAM user is tagged
+   and set up as "Cluster access" says:
    ```sh
-   aws eks update-kubeconfig --region us-east-2 --name observability
+   # kubeconfig as "Cluster access" says (people: --profile; automation: --role-arn)
    kubectl get nodes -L topology.kubernetes.io/zone   # 3 Ready, one per zone
    kubectl get pods -n kube-system                     # aws-node, kube-proxy, coredns, ebs-csi, pod identity agent Running
    nix run .#tofu -- main output
@@ -168,6 +169,59 @@ Later applies are steps 3 to 5. To upgrade Kubernetes, raise
 `settings.cluster.version` by one minor version: one apply upgrades the
 control plane, then the add-ons to that version's defaults and the nodes, one
 at a time.
+
+## Cluster access
+
+Cluster admin is one IAM role, `observability-eks-admin`. Its only AWS
+permission is reading this cluster; its power is its EKS access entry. Who
+may assume it is an IAM tag on their IAM user, so no person is named in this
+repository (`settings.cluster.adminRole`, `adminTag`):
+
+| Tag `observability-eks` | For | Assuming needs |
+| --- | --- | --- |
+| `admin` | people | an MFA session |
+| `automation` | agents and scripts | nothing more |
+
+Only IAM users qualify, not roles or federated sessions: a role session can
+carry tags set by whoever assumed it, while a user's tags change only through
+`iam:TagUser`. That makes `iam:TagUser` the right to become cluster admin:
+keep it to IAM admins, and never grant it on a user's own ARN. An IAM admin
+grants and revokes access by tagging:
+
+```sh
+aws iam tag-user --user-name <user> --tags Key=observability-eks,Value=admin
+aws iam untag-user --user-name <user> --tag-keys observability-eks
+```
+
+Untagging stops new sessions; one already open keeps working until it
+expires, within the hour. IAM's "Revoke active sessions" doesn't end it: EKS
+checks the caller with `sts:GetCallerIdentity`, which no deny policy blocks.
+To cut every admin off at once, delete the role's access policy association
+(`aws eks disassociate-access-policy`); the next apply restores it.
+
+The user's own IAM policy must also allow `sts:AssumeRole` on the role
+(`AdministratorAccess` does), and its address must be in
+`public_access_cidrs`. Then:
+
+- **Automation**: `aws eks update-kubeconfig --region us-east-2 --name
+  observability --alias observability --role-arn <the role's ARN>` (the user
+  also needs `eks:DescribeCluster`, which `ReadOnlyAccess` has).
+  `kubectl` assumes the role on every call.
+- **People**: a profile in `~/.aws/config` that assumes the role with MFA,
+  and `update-kubeconfig` with that profile instead of `--role-arn`. The CLI
+  asks for the code when its cached session runs out. Unset any exported
+  `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN` first:
+  they override the profile, and `kubectl` then gets your user, not the role.
+  ```ini
+  [profile observability-eks]
+  source_profile = <your profile>
+  role_arn = arn:aws:iam::569036502058:role/observability-eks-admin
+  mfa_serial = arn:aws:iam::569036502058:mfa/<your MFA device>
+  ```
+  ```sh
+  aws eks update-kubeconfig --region us-east-2 --name observability \
+    --alias observability --profile observability-eks
+  ```
 
 ## The switch
 
