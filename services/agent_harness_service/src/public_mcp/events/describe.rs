@@ -65,8 +65,50 @@ fn value(value: &McpFilterValue) -> String {
 
 /// A value as a JSON string in a code span, so edge spaces, line breaks and
 /// other characters a Markdown renderer would fold stay visible and exact.
+/// Characters that render as nothing, or as plain space, are escaped too, so
+/// two values that differ never read the same.
 fn quoted(text: &str) -> String {
-    code(&serde_json::Value::from(text).to_string())
+    let json = serde_json::Value::from(text).to_string();
+    let mut shown = String::with_capacity(json.len());
+    for character in json.chars() {
+        if invisible(character) {
+            let mut units = [0_u16; 2];
+            for unit in character.encode_utf16(&mut units) {
+                shown.push_str(&format!("\\u{unit:04x}"));
+            }
+        } else {
+            shown.push(character);
+        }
+    }
+    code(&shown)
+}
+
+/// Control, format and non-ASCII space characters: the ones a reader cannot
+/// tell apart from nothing or from a plain space.
+fn invisible(character: char) -> bool {
+    character.is_control()
+        || (character.is_whitespace() && character != ' ')
+        || matches!(
+            character,
+            '\u{00AD}'
+                | '\u{034F}'
+                | '\u{061C}'
+                | '\u{115F}'
+                | '\u{1160}'
+                | '\u{17B4}'
+                | '\u{17B5}'
+                | '\u{180B}'..='\u{180F}'
+                | '\u{200B}'..='\u{200F}'
+                | '\u{202A}'..='\u{202E}'
+                | '\u{2060}'..='\u{206F}'
+                | '\u{3164}'
+                | '\u{FE00}'..='\u{FE0F}'
+                | '\u{FEFF}'
+                | '\u{FFA0}'
+                | '\u{FFF0}'..='\u{FFFB}'
+                | '\u{1D173}'..='\u{1D17A}'
+                | '\u{E0000}'..='\u{E0FFF}'
+        )
 }
 
 /// `text` as a code span whose fence is longer than any run of backticks

@@ -1076,6 +1076,11 @@ fn a_value_reads_exactly_as_one_value() {
     assert!(spaced.contains(r#"a `" channel "`."#));
     let broken = super::describe::describe(&in_parent(&["chan\nnel"]));
     assert!(broken.contains(r#"a `"chan\nnel"`."#));
+    // So do characters that render as nothing.
+    let hidden = super::describe::describe(&in_parent(&["chan\u{200B}nel"]));
+    assert!(hidden.contains(r#"a `"chan\u200bnel"`."#));
+    let tagged = super::describe::describe(&in_parent(&["channel\u{E0041}"]));
+    assert!(tagged.contains(r#"a `"channel\udb40\udc41"`."#));
 }
 
 // --- the live source ------------------------------------------------------
