@@ -1503,6 +1503,38 @@ describe('cached channel directory', () => {
     expect(directory.complete()).toBe(true);
   });
 
+  it('waits for a by-id read of a channel first cached without a field after the network walk left it out', async () => {
+    let release!: () => void;
+    const byIdGate = new Promise<void>((done) => {
+      release = done;
+    });
+    const { cache, directory, reopen, hydrate } = mountCachedDirectory(
+      [channelRecord('a'), channelRecord('joined')],
+      { byIdGate, pageAll: async () => [directoryChannel('a')] }
+    );
+    cache.put(channelRecord('a'));
+    await vi.waitFor(() => expect(directory.channels()).toHaveLength(1));
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    expect(hydrate).not.toHaveBeenCalled();
+
+    // Joined after the walk read its page, and cached first by a read that
+    // lacks a directory field.
+    cache.put(channelRecord('joined'), { incomplete: true });
+    reopen();
+    await vi.waitFor(() => expect(hydrate).toHaveBeenCalledTimes(1));
+    expect(directory.complete()).toBe(false);
+    expect(directory.lookup(channelUuid('joined')).status).toBe('pending');
+
+    release();
+    await vi.waitFor(() =>
+      expect(ids(directory.channels()).sort()).toEqual(['a', 'joined'])
+    );
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    expect(directory.lookup(channelUuid('joined')).status).toBe('loaded');
+    expect(ids(await directory.readComplete()).sort()).toEqual(['a', 'joined']);
+  });
+
   it('leaves out a listed channel the cache never held once a by-id read finds it gone', async () => {
     let release!: () => void;
     const byIdGate = new Promise<void>((done) => {

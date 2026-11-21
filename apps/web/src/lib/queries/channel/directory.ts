@@ -984,10 +984,15 @@ export function fallbackChannels(
 }
 
 /** The channels `fallbackChannels` decides by a by-id read: listed ones the
- * cache never held, and changed ones the network did not list. */
+ * cache never held, changed ones the network did not list, and ones the
+ * network did not list that the cache holds without every field
+ * (`incomplete`): a channel joined after the walk read its page can be
+ * cached first by a read without the directory's fields, and only a by-id
+ * read lands it with them. */
 export function fallbackConfirmations(
   network: readonly DirectoryChannel[],
-  evidence: FallbackEvidence
+  evidence: FallbackEvidence,
+  incomplete: readonly string[] = []
 ): string[] {
   const { changes, seen } = evidence;
   const ids: string[] = [];
@@ -996,8 +1001,13 @@ export function fallbackConfirmations(
     listed.add(id);
     if (!seen.has(id) && !changes.has(id)) ids.push(id);
   }
+  const unlisted = new Set<string>();
   for (const [id, change] of changes)
-    if (change && !listed.has(id)) ids.push(id);
+    if (change && !listed.has(id)) unlisted.add(id);
+  // No channel has an id no read can parse.
+  for (const id of incomplete)
+    if (!listed.has(id) && isChannelId(id)) unlisted.add(id);
+  ids.push(...unlisted);
   return ids;
 }
 
@@ -1249,7 +1259,11 @@ export function createCachedChannelDirectory(
       confirmations =
         generation === undefined
           ? []
-          : fallbackConfirmations(network.channels, evidence);
+          : fallbackConfirmations(
+              network.channels,
+              evidence,
+              lastRead?.incompleteIds
+            );
     show(next, undecided(confirmations, confirmed));
     if (settle) return;
     for (const id of confirmations) confirm.request(id);
