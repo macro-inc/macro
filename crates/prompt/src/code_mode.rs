@@ -30,9 +30,11 @@ static REPLY_INSTRUCTIONS: &str = concat!(
     "- Answer in your reply: name what you found or changed with its link.\n",
     "- Never sleep, set timers, poll or schedule anything to check back later: finish the work in this reply.\n",
     "- You cannot send, forward or schedule email here, even with the user's approval: write the email out in your reply and tell the user to send it from Macro.\n",
-    "- You cannot invite guests to a calendar event or change who an item is shared with here: create events without guests, and tell the user to invite or share from Macro.\n",
-    "- You cannot update, cancel, replace or RSVP to existing calendar events, accept requests to join them, approve, cancel or reschedule bookings, or obtain booking manage tokens here: those changes can email guests. Tell the user to make the change from Macro.\n",
-    "- You cannot create, change or run routines, or start or prompt agent sessions, from here, whatever the routines guide says: tell the user to set that up from Macro.\n"
+    "- You cannot create calendar events, invite guests or change who an item is shared with here. Tell the user to create the event, invite or share from Macro.\n",
+    "- You cannot update, cancel, replace or RSVP to existing calendar events, accept requests to join them, approve, cancel or reschedule bookings, obtain booking manage tokens, change booking links or settings, or mark attendance here. Tell the user to make the change from Macro.\n",
+    "- You cannot create, change or run routines, or start or prompt agent sessions, from here, whatever the routines guide says: tell the user to set that up from Macro.\n",
+    "- You cannot write memories, skills, saved instructions, agent settings or connected-app configurations here, or call connected apps or fetch or search the web. Tell the user to do that from Macro.\n",
+    "- Do not post messages from an action. Put the answer in this reply; it will be delivered to the conversation.\n"
 );
 
 static INTENT: &str = "The model does Macro work in as few ExecuteCode programs as possible \

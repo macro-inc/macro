@@ -54,7 +54,8 @@ MacroDB migrations.
 ## Gotchas
 
 - Refuse signed mention programs on host writes and the booking manage-token
-  read (`inbound/router/mention.rs`); keep host reads, insights and public booker
+  read (`inbound/router/mention.rs`), including booking links, settings and
+  attendance; keep host reads, insights and public booker
   capability routes outside that refusal.
 
 - Replacement availability uses the visitor's `timeZone` and local date; omitted zones and host administration keep schedule-date semantics.

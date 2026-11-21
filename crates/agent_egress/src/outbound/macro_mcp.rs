@@ -298,7 +298,8 @@ impl MacroApiTokenSigner {
 
     /// Mint a credential for one program answering a channel mention: the
     /// mentioning user's access, attributed to `agent_id`, signed with the
-    /// mention so email services refuse its sends.
+    /// mention for attribution and NoSend scope so services refuse sends and
+    /// delegation independently of the program.
     #[tracing::instrument(skip_all, err, fields(%agent_id, %channel_mention_id))]
     pub async fn mint_for_channel_mention(
         &self,
@@ -447,7 +448,7 @@ impl SignedClaims {
             agent_via: None,
             agent_session_id: None,
             agent_correlation_id: None,
-            agent_scope: None,
+            agent_scope: Some(agent_correlation::scope::SessionScope::NoSend),
             routine_id: None,
             channel_mention_id: Some(channel_mention_id),
         }

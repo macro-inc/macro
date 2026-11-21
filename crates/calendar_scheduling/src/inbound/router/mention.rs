@@ -20,7 +20,7 @@ pub(super) async fn refuse_host_management(request: Request, next: Next) -> Resp
         tracing::warn!(channel_mention_id = %mention, "refused a channel-mention program's booking management");
         return (
             StatusCode::FORBIDDEN,
-            "Booking management cannot run from a channel or document mention because it can email participants. Make this change from Macro.",
+            "Booking changes, attendance, booking links, settings and management tokens are unavailable from a channel or document mention. Make this change from Macro.",
         ).into_response();
     }
     next.run(request).await

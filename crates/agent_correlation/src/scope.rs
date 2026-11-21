@@ -31,8 +31,12 @@ pub enum SessionScope {
 /// (which resume it), its tool approvals and review decisions, running or
 /// rewriting a chat's tool call (a chat message's tools are refused by its
 /// route), agents, bots and the computers they run on, which act later, and
-/// their credentials. A run that sends nothing makes none of them.
+/// their credentials, persistent memories and skills. A run that sends
+/// nothing makes none of them.
 const SENDS: &[(&str, &str)] = &[
+    ("PATCH", "/memory/explicit"),
+    ("POST", "/documents/create_skill"),
+    ("PUT", "/documents/{id}/skill_description"),
     ("POST", "/email/messages"),
     ("POST", "/email/send-confirmed"),
     ("PUT", "/email/drafts/scheduled/{id}"),

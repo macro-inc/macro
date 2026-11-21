@@ -129,7 +129,7 @@ pub fn current_channel_mention() -> Option<Uuid> {
 /// Why a channel-mention bot's program may not create, change or run a
 /// routine or an agent session: their runs get credentials without the
 /// mention, and with it the program's email refusal.
-pub const DELEGATION_REFUSAL: &str = "Routines and agent sessions cannot be created, changed or run from a channel or document mention. Tell the user to set this up from Macro instead.";
+pub const DELEGATION_REFUSAL: &str = "Routines and agent sessions cannot be created, changed or run from a channel or document mention. Memories, skills and other saved instructions cannot be written here either. Tell the user to set this up from Macro instead.";
 
 /// Whether the current request may not delegate work to a routine or an
 /// agent session: true for a channel-mention bot's program. Routers that

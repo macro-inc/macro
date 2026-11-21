@@ -20,7 +20,11 @@ decides whether to trigger, authorizes, and delivers a reply.
   and Anthropic sandbox tools dropped) plus `agent_code_mode`'s user `ExecuteCode`,
   `DescribeCodeTools` and `ReadCodeDocs`. Programs run on the agent harness
   (`POST /internal/code-mode/user-executions`, internal key) as the mentioning
-  user attributed to Macro AI, the same identity as the direct tools. A call to
+  user attributed to Macro AI, the same identity as the direct tools, with a
+  signed NoSend scope and the original mention claim. Programs cannot post
+  messages, fetch or search the web, call connected apps, change calendar or
+  booking state, or write later-run instructions; DSS delivers the final reply.
+  A call to
   a tool the code-mode reply was not offered is refused, never dispatched.
 - `src/outbound/lexical_comment_marks.rs`: comment-mark delivery for document bots.
 - `src/inbound/bot_trigger_router.rs`: wires channel/document message events in.
@@ -56,13 +60,15 @@ decides whether to trigger, authorizes, and delivers a reply.
 
 - Implicit (non-mention) triggers go through the fast-model classifier, not the
   main agent model — keep that path cheap; it runs on every message.
-- Attributed bot messages trigger like human ones (mention or inferred), never
-  Macro AI's own; `messages::domain::agent_hops::MAX_AGENT_HOPS` is checked
-  first, before any classifier call. Unattributed bot posts trigger nothing.
+- Bot-authored messages cannot explicitly or implicitly start classic Macro
+  programs for their owner. Other bot targets retain the agent hop limit
+  (`messages::domain::agent_hops::MAX_AGENT_HOPS`); unattributed posts trigger
+  nothing. Human mentions and inference remain available.
 - A post a user made through a client (an MCP client) is sent as Macro AI's
   bot with `triggered_via` set. It is the client's, not Macro AI's: a thread
   whose only Macro AI messages are such posts is not a Macro AI thread, so a
-  reply to one infers nothing; only an explicit `@macro` mention invokes Macro.
+  reply to one infers nothing; only a human
+  explicit `@macro` mention invokes classic Macro.
 
 ## Related
 

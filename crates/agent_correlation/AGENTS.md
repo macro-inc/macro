@@ -3,7 +3,8 @@
 ## What it is
 
 Attribution of work to the code-mode invocation (agent session) and/or the
-routine run that caused it. A code-mode correlation is durable and validated
+routine run that caused it. Channel-mention programs sign `no_send` as well
+as their mention claim. A code-mode correlation is durable and validated
 against its session; a routine id is a signed Macro API token claim
 (`routine_id`) that needs no lookup, as is a channel mention
 (`channel_mention_id`, a channel-mention bot's program, which email refuses to
@@ -25,7 +26,8 @@ code, not in its prompt. The harness also signs the scope into the credential
   run that sends nothing): anything but `SENDS`, the requests that reach
   someone else, carry data out (web fetch and search), or start work with
   the person's full access (agent sessions, session control, tool
-  approvals, review decisions, running or rewriting
+  approvals, review decisions, explicit memory writes, skill creation and
+  skill-description writes, running or rewriting
   chat tool calls, and agents, bots, the computers they run on and their
   credentials); `dry_run` (a routine step's dry run, signed with no
   correlation): reads by method and `POST_READS`, nothing else, held to the

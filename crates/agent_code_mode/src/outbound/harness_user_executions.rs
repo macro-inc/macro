@@ -129,7 +129,10 @@ impl MentionCodeMode for HarnessUserExecutions {
             match serde_json::from_slice::<UserExecutionFailure>(&body) {
                 Ok(failure) if failure.status().as_u16() == status.as_u16() => failure.into(),
                 // No route (the harness has no Deno runtime): nothing ran.
-                _ if status == reqwest::StatusCode::NOT_FOUND => CodeModeError::Unavailable,
+                _ if status == reqwest::StatusCode::NOT_FOUND => {
+                    tracing::warn!(status = 404, "harness user-execution route missing");
+                    CodeModeError::Unavailable
+                }
                 _ => {
                     tracing::warn!(status = status.as_u16(), "harness user execution refused");
                     CodeModeError::Unconfirmed

@@ -54,8 +54,8 @@ fn replies_get_the_code_tools_and_only_the_direct_tools_code_mode_keeps() {
             .contains("present them with `execution.views.present`")
     );
     // A routine's token carries no channel mention, so replies are never told
-    // to schedule one to check back later; creating a routine the user asked
-    // for (the routines guide's skill) stays, as the bot's direct tools could.
+    // to schedule one to check back later. The signed scope also prevents
+    // creating routines a later unrestricted run could execute.
     assert!(!tools.system_prompt().contains("To check back later"));
     // The routines guide still teaches creating routines; the reply prompt
     // overrides it, since a routine or session would run without the mention.

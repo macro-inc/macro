@@ -138,10 +138,9 @@ where
         true
     }
 
-    /// Macro AI never infers a reply to its own message.
+    /// Bot-authored posts cannot start a classic Macro program as their owner.
     async fn infer(&self, candidate: &MessagePostedMetadata) -> Option<BotInvocation> {
-        if candidate.sender.as_bot().map(|sender| sender.bot_id()) == Some(bot_id::MACRO_AI_BOT_ID)
-        {
+        if candidate.sender.as_bot().is_some() {
             return None;
         }
         let requesting_user = candidate.invoking_user()?;
@@ -220,7 +219,8 @@ where
         let Ok(access) = self.access.user_write(&user, &candidate.parent).await else {
             return Vec::new();
         };
-        if candidate.sender.as_bot().is_some() && !self.within_hop_limit(candidate, access).await {
+        let bot_sender = candidate.sender.as_bot().map(|sender| sender.bot_id());
+        if bot_sender.is_some() && !self.within_hop_limit(candidate, access).await {
             return Vec::new();
         }
         let mentioned = messages::domain::mentions::bot_mention_ids(&candidate.mentions);
@@ -228,7 +228,8 @@ where
             return mentioned
                 .into_iter()
                 .filter(|bot_id| {
-                    candidate.sender.as_bot().map(|sender| sender.bot_id()) != Some(*bot_id)
+                    bot_sender != Some(*bot_id)
+                        && !(bot_sender.is_some() && *bot_id == bot_id::MACRO_AI_BOT_ID)
                 })
                 .map(|bot_id| BotInvocation {
                     bot_id,

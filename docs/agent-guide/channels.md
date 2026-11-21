@@ -747,13 +747,16 @@ session. Repeat with revoked channel access and confirm no new work starts.
 Classic `@Macro` replies run workspace actions through code mode on the agent
 harness. The channel shows a thinking placeholder followed by the final answer
 and links; execution steps are not rendered. Verify a mention that creates a
-test document and confirm the linked document exists under the mentioning
-account. Classic mentions cannot send or schedule email, invite calendar guests,
-change sharing, update or cancel existing calendar events, RSVP, accept calendar
-join requests, change bookings or obtain their manage tokens, or create routines
-or agent sessions; requests for those actions
-should explain the limitation without performing them. This applies on desktop
-and mobile and requires the real harness executor for an end-to-end check.
+test document and confirm it exists under the mentioning account. Programs use
+a signed NoSend credential: they cannot post messages, send or schedule email,
+create or change calendar events, manage bookings or their links/settings,
+obtain booking manage tokens, change sharing, fetch/search the web, call
+connected apps, or write routines, sessions, memories, skills or agent settings.
+The service still posts the final reply. Bot-authored posts cannot start a
+classic Macro program through explicit or inferred triggers. Human triggers
+remain available. Requests for unavailable actions should explain the limitation
+without performing them. This applies on desktop and mobile and requires the
+real harness executor for an end-to-end check.
 
 When the backend is configured with AI usage enforcement, a rejected classic
 `@Macro` request gets a thread reply explaining the allowance failure (for example,
