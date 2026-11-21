@@ -7,6 +7,7 @@
 mod dump;
 mod exec;
 mod faker;
+mod malformed;
 mod normalize;
 mod probe;
 mod rng;

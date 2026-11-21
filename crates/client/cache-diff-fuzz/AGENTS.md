@@ -15,8 +15,8 @@ disk after a reopen must come out the same.
   is compiled inside that module.
 - `src/sequence.rs` generates a case from a seed: hydrates, writes, reads, Soup
   filters and search, the optimistic mutation queue (enqueue, claim, commit,
-  rollback, defer), deletes, invalidation, people search, idle, reopen, crash and
-  probes. Responses come from `src/faker.rs` over the app schema.
+  rollback, defer), deletes, invalidation, people search, idle, reopen, crash,
+  probes, and written pages again with one value broken (`src/malformed.rs`). Responses come from `src/faker.rs` over the app schema.
 - `src/exec.rs` runs a case. `src/normalize.rs` replaces the ids the engine mints
   (`#1`, `#2`, …) and keeps every id that appears in the case. `src/dump.rs`
   writes the tables after a final reopen, each value tagged with its type.

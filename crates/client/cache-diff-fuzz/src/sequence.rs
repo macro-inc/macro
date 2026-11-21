@@ -550,6 +550,7 @@ impl<'a> Gen<'a> {
             ("crash", 2),
             ("clear", 1),
             ("identity", 1),
+            ("malformed", 2),
         ];
         match weighted(&mut self.rng, KINDS) {
             "hydrate" => {
@@ -571,6 +572,7 @@ impl<'a> Gen<'a> {
                 }
             }
             "refetch-delta" => self.refetch_delta(),
+            "malformed" => self.malformed(),
             "home" => self.home(),
             "thread" => self.thread(),
             "contacts" => {
@@ -696,6 +698,22 @@ impl<'a> Gen<'a> {
                 }
             }
         }
+    }
+
+    /// A written page again with one value broken (see `malformed.rs`). The
+    /// write normalizes it twice where it used to, so both builds must answer
+    /// with the same error, or write the same records.
+    fn malformed(&mut self) {
+        let Some(written) = self.pick_written() else {
+            return;
+        };
+        let mut op = written.op;
+        let (Op::Hydrate { data, .. } | Op::Write { data, .. }) = &mut op else {
+            return;
+        };
+        let choice = self.rng.below(u64::MAX);
+        crate::malformed::break_one(data, choice);
+        self.push(op);
     }
 
     fn pick_written(&mut self) -> Option<Written> {
