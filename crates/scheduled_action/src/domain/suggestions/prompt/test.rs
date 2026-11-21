@@ -196,7 +196,8 @@ fn a_whole_session_picks_and_drafts() {
 fn a_picking_session_reads_nothing_about_writing_routines() {
     let brief = part_brief(BriefPart::Picks);
     assert!(brief.contains("you suggest catalog routines only, and draft none"));
-    assert!(brief.contains("The user sees your picks first, so be quick"));
+    assert!(brief.contains("The user sees your first pick first, so be quick"));
+    assert!(brief.contains("suggest it in a program of its own, before you weigh the rest"));
     assert!(brief.contains("You suggest one kind:\n\nA catalog routine: "));
     assert!(!brief.contains("Prefer these."));
     assert!(!brief.contains("A routine the catalog lacks"));
