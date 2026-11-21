@@ -1,5 +1,8 @@
 import { useViewTabHotkeys } from '@app/components/view-shell';
-import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
+import {
+  splitRootScope,
+  useSplitPanel,
+} from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import { applyDatabaseOps } from '@queries/storage/databases';
 import type { TableDetail } from '@service-storage/generated/schemas/tableDetail';
@@ -29,7 +32,7 @@ export function TableTabs(props: {
   const panel = useSplitPanel();
   if (panel) {
     useViewTabHotkeys({
-      scopeId: panel.splitHotkeyScope,
+      scopeId: splitRootScope(panel),
       enabled: panel.isPanelActive,
       tabs,
       ids: () => props.tables.map((table) => table.table.id),

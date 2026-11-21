@@ -5,7 +5,10 @@ import { isEditableInput } from '@core/util/isEditableInput';
 import { onCleanup } from 'solid-js';
 
 export type UseViewTabHotkeysOptions<TTab extends string> = {
-  /** The split's hotkey scope: the pane the tabs head. */
+  /**
+   * The split's own hotkey scope (`splitRootScope(panel)`), never an inline
+   * preview's: a key pressed on the split itself reaches only that one.
+   */
   scopeId: string;
   /**
    * The tabs in the pane's top bar. The keys act only while this element is

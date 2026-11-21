@@ -1,7 +1,10 @@
 import { EntityDetailTopBar } from '@app/components/entity-detail/EntityDetailTopBar';
 import { useViewTabHotkeys } from '@app/components/view-shell';
 import { t } from '@app/lib/i18n';
-import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
+import {
+  splitRootScope,
+  useSplitPanel,
+} from '@components/app/split-layout/layoutUtils';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { createSignal, Show } from 'solid-js';
 import type { ProjectSection } from '../core/project';
@@ -16,7 +19,7 @@ export function ProjectDetailHeader(props: ProjectDetailHeaderProps) {
   const panel = useSplitPanel();
   if (panel) {
     useViewTabHotkeys<ProjectSection>({
-      scopeId: panel.splitHotkeyScope,
+      scopeId: splitRootScope(panel),
       enabled: panel.isPanelActive,
       tabs,
       ids: () => PROJECT_SECTIONS,

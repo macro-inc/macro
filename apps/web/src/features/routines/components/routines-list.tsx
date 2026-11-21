@@ -10,7 +10,10 @@ import {
 } from '@app/components/view-shell/ListHeader';
 import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
 import { t } from '@app/lib/i18n';
-import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
+import {
+  splitRootScope,
+  useSplitPanel,
+} from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ClockIcon from '@icon/system/regular/clock-clockwise.svg';
 import { Key } from '@solid-primitives/keyed';
@@ -115,7 +118,7 @@ export function RoutinesList(props: {
   const panel = useSplitPanel();
   if (panel) {
     useViewTabHotkeys<ListTab>({
-      scopeId: panel.splitHotkeyScope,
+      scopeId: splitRootScope(panel),
       enabled: panel.isPanelActive,
       tabs: tabsElement,
       ids: tabIds,

@@ -9,7 +9,10 @@ import {
   SplitLabel,
   titleFileMenuMount,
 } from '@components/app/split-layout/components/SplitLabel';
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import {
+  splitRootScope,
+  useSplitPanelOrThrow,
+} from '@components/app/split-layout/layoutUtils';
 import { useBlockId } from '@core/block';
 import { useChannelName } from '@core/context/channels';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -43,7 +46,7 @@ export function ChannelTopLeft(props: ChannelTopLeftProps) {
   const hasTabsMenu = () => !!(props.tabs?.length && props.onTabChange);
   const [tabsElement, setTabsElement] = createSignal<HTMLElement>();
   useViewTabHotkeys<ChannelTabId>({
-    scopeId: panel.splitHotkeyScope,
+    scopeId: splitRootScope(panel),
     enabled: () => panel.isPanelActive() && hasTabsMenu(),
     tabs: tabsElement,
     ids: () => (props.tabs ?? []).map((tab) => tab.value),
