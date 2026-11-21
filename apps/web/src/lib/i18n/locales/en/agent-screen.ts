@@ -76,7 +76,7 @@ export default {
   noticeSourceUnavailable: 'The screen closed. Reconnecting…',
   noticeTunnelFailed: 'Couldn’t reach the computer’s screen. Reconnecting…',
   noticeTooManySockets:
-    'Too many screens are open for this computer. Close one; this view keeps trying.',
+    'Too many screens are open for this computer. Close one, then try again.',
   noticeUnknown: 'That didn’t work. Try again.',
   noticePasteUnsupported:
     'Couldn’t paste: the computer’s clipboard takes only Western European characters. Type it instead.',

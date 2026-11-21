@@ -257,7 +257,8 @@ export function MobileAgentScreen(props: { model: AgentScreenModel }) {
           <ScreenNotice notice={session.store.notice} />
         </div>
 
-        <Show when={live() && !session.drivingMe()}>
+        {/* As on desktop: while driving, it hands back first. */}
+        <Show when={live()}>
           <div class="px-3 py-2">
             <Button
               size="md"

@@ -521,3 +521,18 @@ describe('a revoked drive', () => {
     unmount();
   });
 });
+
+describe('Stop watching', () => {
+  it.each([
+    ['desktop', AgentScreen],
+    ['phone', MobileAgentScreen],
+  ])('%s: is there while driving too', async (_device, View) => {
+    vi.useFakeTimers();
+    const connections: Connection[] = [];
+    const { unmount } = renderView(View, connections);
+    await vi.advanceTimersByTimeAsync(0);
+    connections[0].handlers.onState(state(true));
+    expect(screen.getByRole('button', { name: 'Stop watching' })).toBeTruthy();
+    unmount();
+  });
+});
