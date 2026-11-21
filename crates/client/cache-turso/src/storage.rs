@@ -57,7 +57,7 @@ use turso_opfs::{
 };
 
 /// Frozen storage schema version, independent of cache postcard versions.
-pub const STORAGE_SCHEMA_VERSION: u32 = 12;
+pub const STORAGE_SCHEMA_VERSION: u32 = 13;
 
 const QUICK_ACCESS_PROJECTION_VERSION_KEY: &str = "quick_access_projection_version";
 const SEARCH_REBUILD_BATCH_SIZE: i64 = 256;
@@ -84,7 +84,7 @@ const CREATE_SCHEMA: [&str; 29] = [
     "CREATE INDEX mutation_queue_created_at_ms_idx ON mutation_queue(created_at_ms)",
     "CREATE UNIQUE INDEX mutation_queue_current_uuid_idx ON mutation_queue(uuid) WHERE superseded = 0",
     "CREATE TABLE optimistic_layers (mutation_id INTEGER PRIMARY KEY, optimistic_data_json TEXT NOT NULL, normalized_updates BLOB NOT NULL, FOREIGN KEY (mutation_id) REFERENCES mutation_queue(id) ON DELETE CASCADE)",
-    "CREATE TABLE index_documents (id INTEGER PRIMARY KEY, record_key TEXT NOT NULL, profile TEXT NOT NULL, partition TEXT NOT NULL, state INTEGER NOT NULL)",
+    "CREATE TABLE index_documents (id INTEGER PRIMARY KEY, record_key TEXT NOT NULL, profile TEXT NOT NULL, partition TEXT NOT NULL, state INTEGER NOT NULL, facts BLOB)",
     "CREATE UNIQUE INDEX index_documents_record_key_idx ON index_documents(record_key)",
     "CREATE INDEX index_documents_scope_idx ON index_documents(profile, partition, state, id)",
     "CREATE TABLE exact_facts (document_id INTEGER NOT NULL, attribute TEXT NOT NULL, value BLOB NOT NULL, PRIMARY KEY (document_id, attribute, value), FOREIGN KEY (document_id) REFERENCES index_documents(id) ON DELETE CASCADE)",
@@ -121,7 +121,9 @@ const SEARCH_WRITE_BATCH_SIZE: usize = 100;
 const SEARCH_LOAD: &str = "SELECT __typename, id, bucket, search_text, timestamp_ms, source_hash FROM search_documents INDEXED BY search_documents_browse_idx WHERE profile = ?1 AND bucket = ?2";
 const SEARCH_BROWSE: &str = "SELECT __typename, id, bucket, search_text, timestamp_ms, source_hash FROM search_documents INDEXED BY search_documents_browse_idx WHERE profile = ?1 AND bucket = ?2 ORDER BY timestamp_ms DESC, __typename ASC, id ASC LIMIT ?3";
 const SEARCH_BROWSE_AFTER: &str = "SELECT __typename, id, bucket, search_text, timestamp_ms, source_hash FROM search_documents INDEXED BY search_documents_browse_idx WHERE profile = ?1 AND bucket = ?2 AND (timestamp_ms < ?3 OR (timestamp_ms = ?3 AND (__typename > ?4 OR (__typename = ?4 AND id > ?5)))) ORDER BY timestamp_ms DESC, __typename ASC, id ASC LIMIT ?6";
-const INDEX_DOCUMENT_UPSERT: &str = "INSERT INTO index_documents (record_key, profile, partition, state) VALUES (?1, ?2, ?3, ?4) ON CONFLICT (record_key) DO UPDATE SET profile = excluded.profile, partition = excluded.partition, state = excluded.state RETURNING id";
+const INDEX_DOCUMENT_UPSERT: &str = "INSERT INTO index_documents (record_key, profile, partition, state, facts) VALUES (?1, ?2, ?3, ?4, ?5) ON CONFLICT (record_key) DO UPDATE SET profile = excluded.profile, partition = excluded.partition, state = excluded.state, facts = excluded.facts RETURNING id";
+const INDEX_DOCUMENT_FACTS_UPDATE: &str =
+    "UPDATE index_documents SET facts = ?2 WHERE record_key = ?1 RETURNING id";
 const INDEX_DOCUMENT_ID: &str = "SELECT id FROM index_documents WHERE record_key = ?1";
 const INDEX_DOCUMENT_DELETE: &str = "DELETE FROM index_documents WHERE record_key = ?1";
 const INDEX_FACTS_DELETE: [&str; 3] = [
@@ -2387,6 +2389,7 @@ fn write_projection_state(
                 &document.profile,
                 &document.partition,
                 0,
+                Some(facts_blob::encode(document)),
             )?;
             delete_index_facts(connection, document_id)?;
             for fact in &document.exact_facts {
@@ -2444,6 +2447,7 @@ fn write_projection_state(
                 profile,
                 partition,
                 projection_state_code(*kind),
+                None,
             )?;
             delete_index_facts(connection, document_id)?;
         }
@@ -2478,11 +2482,21 @@ fn write_fact_delta(
     old: &predicate_index::IndexDocument,
     next: &predicate_index::IndexDocument,
 ) -> Result<(), TursoStorageError> {
-    let rows = driver::query(
-        connection,
-        INDEX_DOCUMENT_ID,
-        vec![text(record_key.as_str())],
-    )?;
+    // The blob is canonical, so equal blobs mean only the fact order changed.
+    let blob = facts_blob::encode(next);
+    let rows = if blob == facts_blob::encode(old) {
+        driver::query(
+            connection,
+            INDEX_DOCUMENT_ID,
+            vec![text(record_key.as_str())],
+        )?
+    } else {
+        driver::query(
+            connection,
+            INDEX_DOCUMENT_FACTS_UPDATE,
+            vec![text(record_key.as_str()), Value::from_blob(blob)],
+        )?
+    };
     let document_id = match rows.as_slice() {
         [row] if row.len() == 1 => required_i64(row, 0)?,
         _ => return Err(invariant()),
@@ -2554,6 +2568,7 @@ fn upsert_index_document(
     profile: &Profile,
     partition: &Token,
     state: i64,
+    facts: Option<Vec<u8>>,
 ) -> Result<i64, TursoStorageError> {
     let rows = driver::query(
         connection,
@@ -2563,6 +2578,7 @@ fn upsert_index_document(
             text(profile.token().as_str()),
             text(partition.as_str()),
             Value::from_i64(state),
+            facts.map_or(Value::Null, Value::from_blob),
         ],
     )?;
     match rows.as_slice() {
@@ -2596,29 +2612,27 @@ fn load_projection_states(
     if keys.is_empty() {
         return Ok(Vec::new());
     }
-    // One read of every requested document, complete or not; facts are then
-    // loaded for the complete ones only.
+    // One read of every requested document, complete or not; a complete one
+    // carries its facts.
     let placeholders = sql_placeholders(keys.len());
     let rows = driver::query(
         connection,
         &format!(
-            "SELECT id, record_key, profile, partition, state FROM index_documents WHERE record_key IN ({placeholders})"
+            "SELECT record_key, profile, partition, state, facts FROM index_documents WHERE record_key IN ({placeholders})"
         ),
         keys.iter().map(|key| text(key.as_str())).collect(),
     )?;
-    let mut by_id = HashMap::with_capacity(rows.len());
     let mut documents = HashMap::with_capacity(rows.len());
     let mut incomplete = HashMap::new();
     for row in rows {
         if row.len() != 5 {
             return Err(invariant());
         }
-        let id = required_i64(&row, 0)?;
         let record_key =
-            PredicateRecordKey::new(required_text(&row, 1)?).map_err(|_| invariant())?;
-        let profile = Profile::new(Token::new(required_text(&row, 2)?).map_err(|_| invariant())?);
-        let partition = Token::new(required_text(&row, 3)?).map_err(|_| invariant())?;
-        let state = required_i64(&row, 4)?;
+            PredicateRecordKey::new(required_text(&row, 0)?).map_err(|_| invariant())?;
+        let profile = Profile::new(Token::new(required_text(&row, 1)?).map_err(|_| invariant())?);
+        let partition = Token::new(required_text(&row, 2)?).map_err(|_| invariant())?;
+        let state = required_i64(&row, 3)?;
         if state != 0 {
             incomplete.insert(
                 record_key.clone(),
@@ -2631,20 +2645,13 @@ fn load_projection_states(
             );
             continue;
         }
-        by_id.insert(id, record_key.clone());
-        documents.insert(
-            record_key.clone(),
-            predicate_index::IndexDocument {
-                record_key,
-                profile,
-                partition,
-                exact_facts: Vec::new(),
-                integer_facts: Vec::new(),
-                sort_facts: Vec::new(),
-            },
-        );
+        let blob = required_blob(&row, 4)?;
+        let document = facts_blob::decode(&blob)
+            .and_then(|facts| facts.into_document(record_key.clone(), profile, partition))
+            .ok_or_else(invariant)?;
+        document.validate().map_err(|_| invariant())?;
+        documents.insert(record_key, document);
     }
-    load_index_facts(connection, &by_id, &mut documents)?;
     Ok(keys
         .iter()
         .map(|key| match incomplete.get(key) {
@@ -3429,6 +3436,95 @@ fn migrate_previous_format(
     .map_err(TursoStorageError::initialization)
 }
 
+/// Documents whose facts one upgrade step reads and writes back together.
+const FACTS_UPGRADE_BATCH: i64 = 512;
+
+/// Brings a schema 12 database to this schema in place: schema 12 kept each
+/// document's facts only in the fact tables, so the new facts column is added
+/// and filled from them. Records, queued mutations, optimistic layers and their
+/// projections are all kept. It is one write transaction, so an interrupted
+/// upgrade leaves schema 12 whole and runs again on the next open; a failure
+/// resets the cache, as opening schema 12 did before this upgrade existed.
+fn upgrade_schema(connection: &Db) -> Result<(), TursoStorageError> {
+    let rows = driver::query(
+        connection,
+        "SELECT value FROM meta WHERE key = 'storage_schema_version'",
+        Vec::new(),
+    )
+    .map_err(TursoStorageError::initialization)?;
+    match rows.as_slice() {
+        [row] if required_text(row, 0).ok().as_deref() == Some("12") => {}
+        _ => return Ok(()),
+    }
+    driver::write_transaction(connection, || {
+        driver::execute(
+            connection,
+            "ALTER TABLE index_documents ADD COLUMN facts BLOB",
+            Vec::new(),
+        )?;
+        let mut statement = driver::prepare(
+            connection,
+            "SELECT id, record_key, profile, partition FROM index_documents WHERE id > ?1 AND state = 0 ORDER BY id LIMIT ?2",
+        )?;
+        let mut update = driver::prepare(
+            connection,
+            "UPDATE index_documents SET facts = ?2 WHERE id = ?1",
+        )?;
+        let mut after = i64::MIN;
+        loop {
+            let rows = driver::query_prepared(
+                &mut statement,
+                vec![Value::from_i64(after), Value::from_i64(FACTS_UPGRADE_BATCH)],
+            )?;
+            let Some(last) = rows.last() else {
+                break;
+            };
+            after = required_i64(last, 0)?;
+            let mut by_id = HashMap::with_capacity(rows.len());
+            let mut documents = HashMap::with_capacity(rows.len());
+            for row in &rows {
+                let record_key =
+                    PredicateRecordKey::new(required_text(row, 1)?).map_err(|_| invariant())?;
+                by_id.insert(required_i64(row, 0)?, record_key.clone());
+                documents.insert(
+                    record_key.clone(),
+                    predicate_index::IndexDocument {
+                        record_key,
+                        profile: Profile::new(
+                            Token::new(required_text(row, 2)?).map_err(|_| invariant())?,
+                        ),
+                        partition: Token::new(required_text(row, 3)?).map_err(|_| invariant())?,
+                        exact_facts: Vec::new(),
+                        integer_facts: Vec::new(),
+                        sort_facts: Vec::new(),
+                    },
+                );
+            }
+            load_index_facts(connection, &by_id, &mut documents)?;
+            for (id, record_key) in &by_id {
+                let document = documents.get(record_key).ok_or_else(invariant)?;
+                require_changed(
+                    driver::execute_prepared(
+                        &mut update,
+                        vec![
+                            Value::from_i64(*id),
+                            Value::from_blob(facts_blob::encode(document)),
+                        ],
+                    )?,
+                    1,
+                )?;
+            }
+        }
+        driver::execute(
+            connection,
+            "UPDATE meta SET value = ?1 WHERE key = 'storage_schema_version'",
+            vec![text(&STORAGE_SCHEMA_VERSION.to_string())],
+        )?;
+        Ok(())
+    })
+    .map_err(TursoStorageError::initialization)
+}
+
 /// Validates or initializes a database. Returns whether a previous format was
 /// carried forward, which native owners compact after opening.
 fn initialize(connection: &Db, scope: &str, fresh: bool) -> Result<bool, TursoStorageError> {
@@ -3466,6 +3562,7 @@ fn initialize(connection: &Db, scope: &str, fresh: bool) -> Result<bool, TursoSt
 
     // Ordinary reopen only validates compatibility and pending writes. A changed
     // derived projection performs one bounded rebuild before serving queries.
+    upgrade_schema(connection)?;
     validate_frozen_schema(connection)?;
     let metadata = driver::query(
         connection,
@@ -3900,6 +3997,13 @@ const INDEX_DOCUMENT_COLUMNS: &[ColumnSpec] = &[
         name: "state",
         declared_type: "INTEGER",
         not_null: true,
+        default_zero: false,
+        primary_key_position: 0,
+    },
+    ColumnSpec {
+        name: "facts",
+        declared_type: "BLOB",
+        not_null: false,
         default_zero: false,
         primary_key_position: 0,
     },
@@ -5573,6 +5677,7 @@ mod bounded_selection;
 mod calendar;
 mod conjunction;
 mod contact_search;
+mod facts_blob;
 mod integrity;
 mod mutation_retry;
 mod name_search;
