@@ -31,7 +31,10 @@ import {
   type UnheldRead,
   unheldReadsLeft,
 } from './unheld-reads';
-import { pageHasQueuedReplies } from './unsettled-replies';
+import {
+  pageHasQueuedReplies,
+  withUnsettledThreadReplies,
+} from './unsettled-replies';
 import { watchWaitingWrites } from './waiting-writes';
 
 const SYNC_SURFACE = 'channel-local-sync';
@@ -279,7 +282,9 @@ export async function loadLocalChannelThread(
     if (loaded?.source === 'device') {
       fireAndForget(catchUpAndRefresh(host, channelId), SYNC_SURFACE);
     }
-    return loaded?.thread;
+    if (!loaded) return undefined;
+    // The server's thread cannot carry a reply still waiting to be sent.
+    return await withUnsettledThreadReplies(host, channelId, loaded.thread);
   } catch (error) {
     reportDeviceFault(error);
     return undefined;

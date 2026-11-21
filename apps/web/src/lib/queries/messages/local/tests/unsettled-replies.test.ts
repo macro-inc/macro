@@ -9,6 +9,7 @@ import {
   ownReplyDelivered,
   pageHasQueuedReplies,
   resetUnsettledReplies,
+  withUnsettledThreadReplies,
 } from '../unsettled-replies';
 import {
   CHANNEL_ID,
@@ -293,5 +294,120 @@ describe('pageHasQueuedReplies', () => {
     expect(await pageHasQueuedReplies(fakeHost([]), CHANNEL_ID, page)).toBe(
       false
     );
+  });
+});
+
+/** The thread of one root as a read answered it, with these records held. */
+async function readThread(
+  root: ChannelMessageFieldsFragment,
+  shown: ChannelMessageFieldsFragment[],
+  held: ChannelMessageFieldsFragment[],
+  queued: MutationInspection[] = []
+) {
+  const item = mapChannelRoot(root);
+  if (!item) throw new Error('not a root');
+  const { state, thread: _preview, ...message } = item;
+  const host = {
+    ...fakeHost([], { records: [root, ...shown, ...held] }),
+    inspectMutations: async () => queued,
+  };
+  const thread = await withUnsettledThreadReplies(host, CHANNEL_ID, {
+    root: message,
+    state,
+    replies: shown.map(mapChannelMessage),
+  });
+  return thread.replies.map((reply) => reply.id);
+}
+
+describe('a thread read and the replies it does not hold yet', () => {
+  beforeEach(() => {
+    resetUnsettledReplies();
+  });
+
+  it('adds a reply this window is sending to a thread the server answered without it', async () => {
+    const root = graphqlMessage(1);
+    const reply = graphqlMessage(2, { threadId: root.id });
+    noteOwnReply(CHANNEL_ID, root.id, mapChannelMessage(reply));
+
+    expect(await readThread(root, [], [])).toEqual([reply.id]);
+  });
+
+  it('adds a reply another window left waiting in the device queue', async () => {
+    const root = graphqlMessage(1);
+    const first = graphqlMessage(2, { threadId: root.id });
+    const reply = graphqlMessage(3, { threadId: root.id });
+
+    expect(
+      await readThread(root, [first], [reply], [queuedSend(reply)])
+    ).toEqual([first.id, reply.id]);
+  });
+
+  it('keeps a delivered reply in a thread fetched before the server stored it', async () => {
+    const root = graphqlMessage(1);
+    const earlier = graphqlMessage(2, { threadId: root.id });
+    const reply = graphqlMessage(3, { threadId: root.id });
+    const later = graphqlMessage(4, { threadId: root.id });
+    noteOwnReply(CHANNEL_ID, root.id, mapChannelMessage(reply));
+    ownReplyDelivered(mapChannelMessage(reply));
+
+    expect(await readThread(root, [earlier, later], [reply])).toEqual([
+      earlier.id,
+      reply.id,
+      later.id,
+    ]);
+  });
+
+  it('never lists a reply twice', async () => {
+    const root = graphqlMessage(1);
+    const reply = graphqlMessage(2, { threadId: root.id });
+    noteOwnReply(CHANNEL_ID, root.id, mapChannelMessage(reply));
+
+    expect(await readThread(root, [reply], [], [queuedSend(reply)])).toEqual([
+      reply.id,
+    ]);
+  });
+
+  it('puts waiting replies last, as they were written', async () => {
+    const root = graphqlMessage(1);
+    const placed = graphqlMessage(9, { threadId: root.id });
+    const earlier = graphqlMessage(2, { threadId: root.id });
+    const later = graphqlMessage(3, { threadId: root.id });
+
+    expect(
+      await readThread(
+        root,
+        [placed],
+        [later, earlier],
+        [queuedSend(later), queuedSend(earlier)]
+      )
+    ).toEqual([placed.id, earlier.id, later.id]);
+  });
+
+  it('leaves out replies to other roots, deleted ones and refused ones', async () => {
+    const root = graphqlMessage(1);
+    const elsewhere = graphqlMessage(3, { threadId: graphqlMessage(5).id });
+    const deleted = graphqlMessage(4, {
+      threadId: root.id,
+      deletedAt: '2026-11-01T10:00:09.000000Z',
+    });
+    const refused = graphqlMessage(6, { threadId: root.id });
+    noteOwnReply(CHANNEL_ID, root.id, mapChannelMessage(refused));
+    forgetOwnReply(refused.id);
+
+    expect(
+      await readThread(
+        root,
+        [],
+        [elsewhere, deleted],
+        [queuedSend(elsewhere), queuedSend(deleted)]
+      )
+    ).toEqual([]);
+  });
+
+  it('answers the thread as read when nothing waits', async () => {
+    const root = graphqlMessage(1);
+    const reply = graphqlMessage(2, { threadId: root.id });
+
+    expect(await readThread(root, [reply], [])).toEqual([reply.id]);
   });
 });
