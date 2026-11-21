@@ -251,18 +251,21 @@ export function unescapeMarkdown(text: string): string {
 
 /**
  * `text` with the links a Markdown round trip makes of a bare address,
- * domain or URL undone: `[x](mailto:x)` and `[x](x)` read as `x`, and a
- * link element (`<m-link>{"url":…,"text":"x"}</m-link>`) as its text. A
- * Markdown link whose text isn't its target was written as one and stays. A
- * quote the round trip unescaped leaves the list no longer JSON, which reads
- * as the list's error.
+ * domain or URL undone: `[x](mailto:x)` and `[x](x)` read as `x`, and so
+ * does a link element (`<m-link>{"url":…,"text":"x"}</m-link>`) whose
+ * target is `x` spelled as a link (`x`, `https://x`, `mailto:x`). A link
+ * whose text isn't its target was written as one and stays, an element as
+ * the Markdown link it was written as. A quote the round trip unescaped
+ * leaves the list no longer JSON, which reads as the list's error.
  */
 export function unlinkMarkdown(text: string): string {
   return text
     .replace(/<m-link>(\{[^<>]*?\})<\/m-link>/g, (element, body: string) => {
       try {
-        const link = JSON.parse(body) as { text?: unknown };
-        return typeof link.text === 'string' ? link.text : element;
+        const link = JSON.parse(body) as { url?: unknown; text?: unknown };
+        if (typeof link.text !== 'string' || typeof link.url !== 'string') return element;
+        const spelled = [link.text, `https://${link.text}`, `http://${link.text}`, `mailto:${link.text}`];
+        return spelled.some((target) => link.url === target || link.url === `${target}/`) ? link.text : `[${link.text}](${link.url})`;
       } catch {
         return element;
       }

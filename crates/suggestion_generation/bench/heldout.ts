@@ -5,7 +5,7 @@
 // next confirmation needs a fresh set: `heldout make <name>`.
 
 import { SQL } from 'bun';
-import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { type Stack, call, login } from '../../scheduled_action/bench/stack';
@@ -38,10 +38,19 @@ export function fixKeys(set: string, keys: Record<string, string>, dir = HELDOUT
   withLock(`${path}.lock`, waitMs, () => fixKeysHeld(set, keys, path));
 }
 
-/** A lock older than this was left by a command that died holding it. */
-const STALE_LOCK_MS = 60_000;
+/** The answer key digests of held-out set `set` fixed so far, by person. */
+export function fixedKeys(set: string, dir = HELDOUT_DIR): Record<string, string> {
+  const path = join(dir, set, 'keys.json');
+  return existsSync(path) ? (JSON.parse(readFileSync(path, 'utf8')) as { keys: Record<string, string> }).keys : {};
+}
 
-/** Run `then` holding the lock file `lock`, waiting up to `waitMs` for another holder. */
+/**
+ * Run `then` holding the lock file `lock`, waiting up to `waitMs` for
+ * another holder. A holder removes it when done, a failure too; only a
+ * command killed while holding it leaves it, and taking over a lock that
+ * looks left would race another waiter doing the same, so it is removed by
+ * hand.
+ */
 function withLock(lock: string, waitMs: number, then: () => void) {
   const until = Date.now() + waitMs;
   for (;;) {
@@ -50,18 +59,7 @@ function withLock(lock: string, waitMs: number, then: () => void) {
       break;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
-      const age = (() => {
-        try {
-          return Date.now() - statSync(lock).mtimeMs;
-        } catch {
-          return 0;
-        }
-      })();
-      if (age > STALE_LOCK_MS) {
-        rmSync(lock, { force: true });
-        continue;
-      }
-      if (Date.now() > until) throw new Error(`${lock} is held by another bench command; run this one again when it ends`);
+      if (Date.now() > until) throw new Error(`${lock} is held by another bench command: run this one again when it ends, or remove it if no bench command is running`);
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
     }
   }

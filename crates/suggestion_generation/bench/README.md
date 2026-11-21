@@ -113,12 +113,13 @@ side joins runs that do, and `rejudge` refuses a run whose persona has changed
 since, or one from before the digest was kept, so the judge reads what the
 generation read: run that one again instead. A run records a digest of each
 persona's answer keys too, and `compare` and `noise` refuse two sides scored
-against different keys, or one without the digest: `rescore` the older one,
-which records the keys it scores against. A judge's marks name the key's
-entries by id, so `rescore` keeps them only for the keys they were judged
-against: the keys the run recorded, or, for a run from before keys were
-recorded, keys whose files were last written before the run started. Any
-other run is rejudged. `noise` measures one build against itself, so it
+against different keys, or one without the digest: `rejudge` the older one,
+which records the keys it judges against. A judge's marks name the key's
+entries by id, so `rescore` keeps them only for the keys the run recorded,
+as they are now; a run with other keys, or none recorded, is rejudged. A
+held-out run that recorded no keys, of people whose keys were never fixed
+(below), isn't judged again: whether a key changed after its builds ran is
+unknown. `noise` measures one build against itself, so it
 also refuses two runs of different or unrecorded commits, or with different
 or unrecorded flags, and a side is one build: its runs share a known commit
 and flags.
@@ -197,7 +198,8 @@ drafts by stream job get it too, with two margins more (`--margins
 score,found,bad,goodDrafts,jobDrafts`, as `noise` prints them); given three,
 `compare` reports their change as unmeasured. Each is compared over the
 people both sides have scores for it, and not at all where they share none
-(or, on a held-out set, fewer than two). Measure the margins again after changing the personas, the
+(or, on a held-out set, fewer than two), so `noise` prints four margins
+where the sides share no person judged for stream jobs. Measure the margins again after changing the personas, the
 judge or the default size:
 
 ```sh
@@ -245,13 +247,15 @@ and earlier) can't be read by the `routines` section: write a new one. Don't ope
 set's ledger; after a baseline and one candidate a set is spent and the bench
 says so: make a new one. The first run, rejudge, rescore or `find` of a
 held-out person writes down the answer keys it scored them against
-(`keys.json` in the set, written by one bench command at a time), and every
+(`keys.json` in the set, written by one bench command at a time: a command
+killed while writing leaves `keys.json.lock`, to remove by hand), and every
 later one must score against the same keys, so no key changes after a build
 has run on its person; one that changed stops the bench, saying how many
 people's keys changed but not whose. Nothing the bench prints names a
 held-out person: their slugs, names and domains are left out of its errors and
 progress lines, and a measure (the stream jobs one too) shows only over two
-held-out people or more.
+held-out people or more, each with a generation that built: a failed build
+is a known 0 that says nothing of its person.
 
 ### A month of mail
 

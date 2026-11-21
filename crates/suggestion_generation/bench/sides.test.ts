@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fixKeys, unnamed } from './heldout';
@@ -128,7 +128,7 @@ describe("a held-out set's answer keys", () => {
     }
   });
 
-  test('are written by one command at a time, and a lock left by a dead one is taken over', () => {
+  test('are written by one command at a time, and never past a lock another holds', () => {
     const dir = mkdtempSync(join(tmpdir(), 'keys-'));
     try {
       mkdirSync(join(dir, 'set'));
@@ -136,9 +136,9 @@ describe("a held-out set's answer keys", () => {
       writeFileSync(lock, '');
       expect(() => fixKeys('set', { ana: 'ka' }, dir, 50)).toThrow('held by another bench command');
       expect(existsSync(join(dir, 'set', 'keys.json'))).toBe(false);
-      // A minute old: its holder died.
-      const old = new Date(Date.now() - 120_000);
-      utimesSync(lock, old, old);
+      // However old: only its holder, or a person, removes it.
+      expect(existsSync(lock)).toBe(true);
+      unlinkSync(lock);
       fixKeys('set', { ana: 'ka' }, dir, 50);
       fixKeys('set', { bo: 'kb' }, dir, 50);
       expect(JSON.parse(readFileSync(join(dir, 'set', 'keys.json'), 'utf8')).keys).toEqual({ ana: 'ka', bo: 'kb' });
@@ -151,26 +151,19 @@ describe("a held-out set's answer keys", () => {
 });
 
 describe('a rescore', () => {
-  const persona = (name: string, writtenAt?: number) => ({ name, writtenAt }) as Persona;
-  const started = '2026-11-21T03:45:56.043Z';
-  const before = Date.parse(started) - 60_000;
-  const after = Date.parse(started) + 60_000;
+  const persona = (name: string) => ({ name }) as Persona;
 
   test('keeps marks judged against the keys as they are now', () => {
-    expect(staleKeys(run({ keys: { ana: 'ka', bo: 'kb' } }), [persona('ana', after), persona('bo', after)], { ana: 'ka', bo: 'kb' })).toBe(0);
+    expect(staleKeys(run({ keys: { ana: 'ka', bo: 'kb' } }), [persona('ana'), persona('bo')], { ana: 'ka', bo: 'kb' })).toBe(0);
   });
 
   test('refuses marks judged against other keys than the ones it would score against', () => {
-    expect(staleKeys(run({ keys: { ana: 'ka', bo: 'kb' } }), [persona('ana', before), persona('bo', before)], { ana: 'ka', bo: 'changed' })).toBe(1);
+    expect(staleKeys(run({ keys: { ana: 'ka', bo: 'kb' } }), [persona('ana'), persona('bo')], { ana: 'ka', bo: 'changed' })).toBe(1);
   });
 
-  test('takes a run without recorded keys only where its people were last written before it started', () => {
-    const old = run({ keys: undefined, startedAt: started });
-    expect(staleKeys(old, [persona('ana', before), persona('bo', before)], { ana: 'ka', bo: 'kb' })).toBe(0);
-    expect(staleKeys(old, [persona('ana', before), persona('bo', after)], { ana: 'ka', bo: 'kb' })).toBe(1);
-    // Unknown times, either side's, are never taken on trust.
-    expect(staleKeys(old, [persona('ana'), persona('bo', before)], { ana: 'ka', bo: 'kb' })).toBe(1);
-    expect(staleKeys(run({ keys: undefined, startedAt: '' }), [persona('ana', before)], { ana: 'ka' })).toBe(1);
+  test("refuses a run that can't show which keys its marks were judged against", () => {
+    expect(staleKeys(run({ keys: undefined }), [persona('ana'), persona('bo')], { ana: 'ka', bo: 'kb' })).toBe(2);
+    expect(staleKeys(run({ keys: { ana: 'ka' } }), [persona('ana'), persona('bo')], { ana: 'ka', bo: 'kb' })).toBe(1);
   });
 });
 

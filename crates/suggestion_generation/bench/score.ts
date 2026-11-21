@@ -25,7 +25,17 @@ export const MIN_HELDOUT_PEOPLE = 2;
  */
 export function aggregate(having: Attempt[], run: Attempt[] = having): boolean {
   if (!run.some((attempt) => attempt.heldout)) return true;
-  return new Set(having.filter((attempt) => attempt.heldout).map((attempt) => attempt.persona)).size >= MIN_HELDOUT_PEOPLE;
+  return heldoutPeople(having) >= MIN_HELDOUT_PEOPLE;
+}
+
+/**
+ * How many held-out people `attempts` holds a result of their own for. A
+ * failed build is a known 0 that says nothing of its person, so a person all
+ * of whose builds failed doesn't count: beside one other person, the
+ * aggregate would be that person's result halved.
+ */
+export function heldoutPeople(attempts: Attempt[]): number {
+  return new Set(attempts.filter((attempt) => attempt.heldout && !attempt.generation.buildFailed).map((attempt) => attempt.persona)).size;
 }
 
 export type Score = {
@@ -305,7 +315,7 @@ export function summary(attempts: Attempt[]) {
   const jobs: JobsSummary = !jobbed.length
     ? {}
     : !aggregate(jobbed, attempts)
-      ? { jobWithheld: new Set(jobbed.filter((a) => a.heldout).map((a) => a.persona)).size, jobErrors }
+      ? { jobWithheld: heldoutPeople(jobbed), jobErrors }
       : {
           jobDrafts: avg(jobbed.map((a) => a.score.jobDrafts!)),
           jobPicks: avg(jobbed.map((a) => a.score.jobPicks!)),
@@ -470,7 +480,9 @@ export function shareEnough(a: Attempt[], b: Attempt[]): boolean {
   const common = scored(b).filter((attempt) => inA.has(attempt.persona));
   if (!common.length) return false;
   if (![...a, ...b].some((attempt) => attempt.heldout)) return true;
-  return new Set(common.filter((attempt) => attempt.heldout).map((attempt) => attempt.persona)).size >= MIN_HELDOUT_PEOPLE;
+  // Each side holds a result of its own for every person it counts.
+  const built = new Set(scored(a).filter((attempt) => !attempt.generation.buildFailed).map((attempt) => attempt.persona));
+  return heldoutPeople(common.filter((attempt) => built.has(attempt.persona))) >= MIN_HELDOUT_PEOPLE;
 }
 
 /** The good parts both sides have, each over the attempts scored for it. */
@@ -564,10 +576,10 @@ export function verdict(a: Attempt[], b: Attempt[], margins: Margins): Verdict {
  */
 export function marginsOf(text: string): Margins {
   const margins = text.split(',').map((margin) => (margin.trim() ? Number(margin) : NaN));
-  if ((margins.length !== 3 && margins.length !== 5) || margins.some((margin) => !Number.isFinite(margin) || margin < 0)) {
-    throw new Error(`--margins takes score,found,bad or score,found,bad,goodDrafts,jobDrafts: three or five finite margins of 0 or more, not ${text}`);
+  if (margins.length < 3 || margins.length > 5 || margins.some((margin) => !Number.isFinite(margin) || margin < 0)) {
+    throw new Error(`--margins takes score,found,bad, then goodDrafts and jobDrafts as \`noise\` prints them: three to five finite margins of 0 or more, not ${text}`);
   }
-  return { score: margins[0], found: margins[1], bad: margins[2], ...(margins.length === 5 ? { goodDrafts: margins[3], jobDrafts: margins[4] } : {}) };
+  return { score: margins[0], found: margins[1], bad: margins[2], ...(margins.length > 3 ? { goodDrafts: margins[3] } : {}), ...(margins.length > 4 ? { jobDrafts: margins[4] } : {}) };
 }
 
 /** Most of anything the bench counts out (reps, seats, people, calls at once). */

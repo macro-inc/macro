@@ -3,10 +3,16 @@
 
 import { type Attempt, MIN_HELDOUT_PEOPLE, type RunFile, scored, summary } from './score';
 
-/** Why `sides` can't be shown or set side by side: they hold held-out people, and fewer of them scored in every side than an aggregate needs to show no one's result. */
+/**
+ * Why `sides` can't be shown or set side by side: they hold held-out
+ * people, and fewer of them scored in every side than an aggregate needs to
+ * show no one's result. A person counts where a generation of theirs built:
+ * a failed build is a known 0 that says nothing of them (score.ts
+ * `heldoutPeople`).
+ */
 export function withheldAcross(sides: Attempt[][]): string | undefined {
   if (!sides.some((attempts) => attempts.some((attempt) => attempt.heldout))) return undefined;
-  const people = sides.map((attempts) => new Set(scored(attempts).filter((attempt) => attempt.heldout).map((attempt) => attempt.persona)));
+  const people = sides.map((attempts) => new Set(scored(attempts).filter((attempt) => attempt.heldout && !attempt.generation.buildFailed).map((attempt) => attempt.persona)));
   const common = [...people[0]].filter((name) => people.every((names) => names.has(name))).length;
   const where = sides.length > 1 ? ' in every run' : '';
   return common < MIN_HELDOUT_PEOPLE ? `${common} held-out people scored${where}, fewer than ${MIN_HELDOUT_PEOPLE}: their aggregate would show one person's result, so none is shown` : undefined;

@@ -3,6 +3,7 @@ import type { JobMark, RoutineMark } from './judge';
 import { followedUp, replySubject, sentDelay } from './month';
 import { type Inbox, type Persona, type RoutinesTruth, SENT_MESSAGES, SENT_TEXTS, type SentMessage, type StreamsTruth, hasSent, sentMessages, variantOf, windowMessages } from './personas';
 import type { Generation, RoutineRow } from './run';
+import { withheldAcross } from './report';
 import { type Attempt, failedScore, marginsOf, noiseMargins, scoreRoutines, summary, verdict } from './score';
 import { ANCHOR } from './clock';
 
@@ -115,10 +116,12 @@ describe('good drafts by stream job', () => {
 });
 
 describe('margins for good drafts', () => {
-  test('take five finite margins, or three', () => {
+  test('take three finite margins, four, or five', () => {
     expect(marginsOf('10,0.5,0.2,0.4,0.6')).toEqual({ score: 10, found: 0.5, bad: 0.2, goodDrafts: 0.4, jobDrafts: 0.6 });
+    expect(marginsOf('10,0.5,0.2,0.4')).toEqual({ score: 10, found: 0.5, bad: 0.2, goodDrafts: 0.4 });
+    expect(() => marginsOf('10,0.5,0.2,0.4,0.6,1')).toThrow('--margins takes');
     expect(marginsOf('10,0.5,0.2')).toEqual({ score: 10, found: 0.5, bad: 0.2 });
-    for (const bad of ['1,2,3,4', '1,2,3,4,-1', '1,2,3,4,5,6']) expect(() => marginsOf(bad)).toThrow('--margins takes');
+    for (const bad of ['1,2', '1,2,3,-1', '1,2,3,4,-1', '1,2,3,4,5,6']) expect(() => marginsOf(bad)).toThrow('--margins takes');
   });
 
   const attempts = (persona: string, values: [number, number][]): Attempt[] =>
@@ -185,6 +188,33 @@ describe('the jobs measure over a run', () => {
     expect(s).toMatchObject({ jobWithheld: 1, jobErrors: 2 });
     expect(s.jobDrafts).toBeUndefined();
     expect(summary([held(judged('p', 1, 4)), held(judged('q', 1, 2))])).toMatchObject({ jobDrafts: 3, jobScored: 2 });
+  });
+
+  test('counts toward a held-out aggregate no person all of whose builds failed', () => {
+    const held = (attempt: Attempt): Attempt => ({ ...attempt, heldout: true });
+    const failed = (persona: string, rep: number): Attempt => held({ ...judged(persona, rep, 0), jobMarks: undefined, generation: { ...generation([]), buildFailed: true }, score: failedScore(1, streams) });
+    // Beside one other person, a person whose builds all failed would show that person's result halved.
+    const run = [held(judged('p', 1, 4)), held(judged('p', 2, 4)), failed('q', 1), failed('q', 2)];
+    expect(withheldAcross([run])).toStartWith('1 held-out people scored, fewer than 2');
+    const s = summary(run);
+    expect(s.jobDrafts).toBeUndefined();
+    expect(s.jobWithheld).toBe(1);
+    // A failed build beside one that built is that person's own 0.
+    expect(summary([held(judged('p', 1, 4)), held(judged('q', 1, 2)), failed('q', 2)])).toMatchObject({ jobDrafts: 2, jobScored: 3 });
+    const a = [held(judged('p', 1, 1)), held(judged('p', 2, 1)), failed('q', 1), failed('q', 2)];
+    const b = [held(judged('p', 1, 4)), held(judged('p', 2, 4)), failed('q', 1), failed('q', 2)];
+    expect(verdict(a, b, marginsOf('10,1,1,1,1')).good.jobDrafts).toBeUndefined();
+    expect(noiseMargins(a, b).jobDrafts).toBeUndefined();
+  });
+
+  test('takes the four margins noise prints where the sides share no jobs measure', () => {
+    const a = [judged('p', 1, 1), judged('p', 2, 1), jobless('q', 1), jobless('q', 2)];
+    const b = [jobless('p', 1), jobless('p', 2), judged('q', 1, 4), judged('q', 2, 4)];
+    const printed = noiseMargins(a, b);
+    const text = Object.values(printed).map((part) => part.margin).join(',');
+    expect(Object.keys(printed)).toEqual(['score', 'found', 'bad', 'goodDrafts']);
+    expect(marginsOf(text).goodDrafts).toBe(printed.goodDrafts!.margin);
+    expect(marginsOf(text).jobDrafts).toBeUndefined();
   });
 
   test('leaves out, and never stops on, a jobs measure the sides share no person for', () => {

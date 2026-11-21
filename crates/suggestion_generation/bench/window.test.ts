@@ -239,6 +239,10 @@ describe('workListOf', () => {
     expect(workListOf([row])).toEqual(linked);
     // An element that isn't one stays as it was.
     expect(unlinkMarkdown('<m-link>{not json}</m-link>')).toBe('<m-link>{not json}</m-link>');
+    // One written as a link, its text not its target, stays the Markdown link it was written as.
+    expect(unlinkMarkdown(`Use ${element('https://mill.example/form', 'the form')} daily`)).toBe('Use [the form](https://mill.example/form) daily');
+    expect(unlinkMarkdown(element('mailto:orders@mill.example', 'orders@mill.example'))).toBe('orders@mill.example');
+    expect(unlinkMarkdown(element('https://mill.example/', 'mill.example'))).toBe('mill.example');
   });
 
   test('reads a list in a fenced block as written, escapes and all', () => {

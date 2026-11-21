@@ -86,8 +86,8 @@ export function comparable(a: RunFile, b: RunFile) {
     if (!da || !db) throw new Error(`${(da ? b : a).label} has no digest of ${named([a, b], name)}, so what its generations read is unknown: run it again`);
     if (da !== db) throw new Error(`${a.label} and ${b.label} read ${named([a, b], name)}'s workspace or mail differently`);
     const [ka, kb] = [keyOf(a, name), keyOf(b, name)];
-    if (!ka || !kb) throw new Error(`${(ka ? b : a).label} has no digest of ${named([a, b], name)}'s answer keys: rescore it to record the keys it is scored against`);
-    if (ka !== kb) throw new Error(`${a.label} and ${b.label} were scored against different answer keys for ${named([a, b], name)}: rescore the older one`);
+    if (!ka || !kb) throw new Error(`${(ka ? b : a).label} has no digest of ${named([a, b], name)}'s answer keys: rejudge it to record the keys it is scored against`);
+    if (ka !== kb) throw new Error(`${a.label} and ${b.label} were scored against different answer keys for ${named([a, b], name)}: rejudge the older one`);
   }
 }
 
@@ -104,16 +104,10 @@ export function sameBuild(a: RunFile, b: RunFile) {
 /**
  * How many of `people` a rescore of `run` can't score from the marks it
  * has. Marks name the key's entries by id, so they hold only for the keys
- * their judge read: a run that recorded its keys must be scored against the
- * same keys (`keys`, as they are now), and one from before keys were
- * recorded only where the person's files were last written before it
- * started. Any other is rejudged.
+ * their judge read: the run's recorded keys, which must be the keys as they
+ * are now (`keys`). A run from before keys were recorded can't show which
+ * keys its marks were judged against, so it is rejudged.
  */
 export function staleKeys(run: RunFile, people: Persona[], keys: Record<string, string>): number {
-  const started = Date.parse(run.startedAt);
-  return people.filter((persona) => {
-    const recorded = run.keys?.[persona.name];
-    if (recorded) return recorded !== keys[persona.name];
-    return !(persona.writtenAt !== undefined && Number.isFinite(started) && persona.writtenAt <= started);
-  }).length;
+  return people.filter((persona) => run.keys?.[persona.name] !== keys[persona.name]).length;
 }

@@ -8,7 +8,7 @@ import { parseArgs } from 'node:util';
 
 import { type Stack, call, exclusive, login, sdk, searchIndexer, stack } from '../../scheduled_action/bench/stack';
 import { keyGaps } from './catalog';
-import { fixKeys, makeHeldout, spend, spent } from './heldout';
+import { fixedKeys, fixKeys, makeHeldout, spend, spent } from './heldout';
 import { NO_LIST, judgeList, marksProblem, runFinding, scoreWorkList } from './finding';
 import { JUDGE, asGrader, judgeCost, judgeFeed, judgeJobs, judgeRoutines, seedGraders } from './judge';
 import { seedId } from '../../scheduled_action/bench/setup';
@@ -397,6 +397,13 @@ async function rejudge(path: string, values: Record<string, string | undefined>)
     const gaps = judged.flatMap((persona) => (persona.routinesTruth ? keyGaps(persona.routinesTruth) : ['is missing']).map((gap) => `${who(persona)}'s routines answer key ${gap}`));
     if (gaps.length) throw new Error(gaps.join('\n'));
   }
+  // A held-out person's keys are fixed before any build runs on them: a run that recorded none,
+  // of a person whose keys were never fixed, may have run before a change to them.
+  if (run.set !== 'tune') {
+    const fixed = fixedKeys(run.set);
+    const unknown = judged.filter((persona) => persona.heldout && !run.keys?.[persona.name] && !Object.hasOwn(fixed, persona.name)).length;
+    if (unknown) throw new Error(`${path}: ${unknown} held-out people of this run were scored before their answer keys were recorded or fixed, so whether a key changed after their builds ran is unknown: it isn't judged again`);
+  }
   const keys = keysNow(run, judged);
   const findsWork = !!run.flags?.[FIND_WORK_FLAG];
   // The lists are read again from the sessions' transcripts, so a fix to reading them reaches
@@ -577,11 +584,11 @@ async function main() {
       if (!people.length) throw new Error(`no persona in set ${values.set} is named ${values.personas}`);
       const reps = wholeCount('--reps', values.reps ?? 2);
       const concurrency = wholeCount('--concurrency', values.concurrency ?? 6);
-      // Its lists are judged against the streams key: a held-out set's keys are the ones fixed at its first use.
-      if (values.set !== 'tune') fixKeys(values.set!, keyDigests(people));
       // The step's cost is the author's usage while it runs: nothing else on the instance may write meanwhile.
-      // A held-out use is recorded once the instance is held, so a find stopped while it waits spends none.
+      // A held-out use is recorded, and its keys fixed, once the instance is held, so a find stopped while it waits does neither.
       await exclusive(values.instance!, 'suggestions bench find', () => {
+        // Its lists are judged against the streams key: a held-out set's keys are the ones fixed at its first use.
+        if (values.set !== 'tune') fixKeys(values.set!, keyDigests(people));
         if (people.some((persona) => persona.heldout)) spend(values.set!, 'find', values.label!);
         return runFinding(stack(values.instance!, values.tempo!), people, {
           model: values.model!,
@@ -620,7 +627,7 @@ async function main() {
   noise <a> <b>        the margin two runs of the same build set
                        (a side may be several run.json joined by commas)
   rejudge <run.json…>  judge and score again without generating
-  rescore <run.json…>  score again from the marks it has (a changed key), free
+  rescore <run.json…>  score again from the marks it has (a changed scoring), free
   stub [stop]          start or stop the stand-in
   find                 the finding step alone on a month set: --model, --prompt (default find.md), --reps
   heldout make <name> [count] [month] | heldout list
