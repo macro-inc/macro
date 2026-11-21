@@ -244,6 +244,36 @@ describe('cache telemetry sampling and failure isolation', () => {
     expect(events[3]).not.toHaveProperty('queryFingerprint');
   });
 
+  it('never samples or aggregates slow requests and drops an invalid queue wait', () => {
+    const events: CacheTelemetryObservation[] = [];
+    const recorder = new CacheTelemetryRecorder(
+      { emit: (event) => events.push(event) },
+      100,
+      50
+    );
+    const slowRequest = {
+      name: 'graphql_cache.slow_request',
+      operationCategory: 'read',
+      requestKind: 'read',
+      outcome: 'success',
+      errorCode: 'none',
+      durationMs: 3,
+      queueDepth: 1,
+    } as const;
+    for (const queueWaitMs of [1_500, 1_500, -1, Number.NaN, 7_200_000]) {
+      recorder.record({ ...slowRequest, queueWaitMs });
+    }
+    recorder.flush();
+
+    expect(events).toEqual([
+      { ...slowRequest, queueWaitMs: 1_500 },
+      { ...slowRequest, queueWaitMs: 1_500 },
+      slowRequest,
+      slowRequest,
+      { ...slowRequest, queueWaitMs: 3_600_000 },
+    ]);
+  });
+
   it('uses weighted aggregates, independent event sampling, and unsampled errors', () => {
     const observations: CacheTelemetryObservation[] = [];
     const recorder = new CacheTelemetryRecorder(

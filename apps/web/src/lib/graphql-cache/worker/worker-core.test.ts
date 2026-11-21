@@ -2691,11 +2691,12 @@ describe('CacheWorkerCore', () => {
             });
         })
     );
+    const readQuery = vi.fn(async (opId: string) => {
+      if (opId === 'op-3') monotonicNow += 300;
+      return { kind: 'miss' };
+    });
     loadCacheWasmMock.mockResolvedValue({
-      openCache: vi.fn().mockResolvedValue({
-        writeQuery,
-        readQuery: async () => ({ kind: 'miss' }),
-      }),
+      openCache: vi.fn().mockResolvedValue({ writeQuery, readQuery }),
     });
     const observations: Array<Record<string, unknown>> = [];
     const core = new CacheWorkerCore({
@@ -2716,25 +2717,37 @@ describe('CacheWorkerCore', () => {
       data: { value: true },
     });
     await vi.waitFor(() => expect(writeQuery).toHaveBeenCalledOnce());
+    const readOp = (id: number, opId: string) =>
+      core.handleRequest(port, {
+        id,
+        kind: 'read',
+        opId,
+        query: 'query Read { value }',
+      });
     monotonicNow = 200;
-    const read = core.handleRequest(port, {
-      id: 3,
-      kind: 'read',
-      opId: 'op-1',
-      query: 'query Read { value }',
-    });
+    const read = readOp(3, 'op-1');
+    // Joins the queued op-1 read, so its wait counts from 200.
+    monotonicNow = 400;
+    const duplicate = readOp(4, 'op-1');
+    monotonicNow = 700;
+    const behind = readOp(5, 'op-2');
     monotonicNow = 1_700;
     finishWrite();
-    await Promise.all([write, read]);
-    // Answered 300 ms after it arrived: not reported.
+    await Promise.all([write, read, duplicate, behind]);
+    // Ran 300 ms: not reported.
     monotonicNow = 2_000;
-    await core.handleRequest(port, {
-      id: 4,
-      kind: 'read',
-      opId: 'op-2',
-      query: 'query Read { value }',
-    });
+    await readOp(6, 'op-3');
 
+    expect(readQuery.mock.calls.map(([opId]) => opId)).toEqual([
+      'op-1',
+      'op-2',
+      'op-3',
+    ]);
+    for (const id of [3, 4, 5, 6]) {
+      expect(port.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ id, ok: true })
+      );
+    }
     expect(
       observations.filter(
         (observation) => observation.name === 'graphql_cache.slow_request'
@@ -2757,6 +2770,16 @@ describe('CacheWorkerCore', () => {
         outcome: 'success',
         errorCode: 'none',
         queueWaitMs: 1_500,
+        durationMs: 0,
+        queueDepth: 1,
+      },
+      {
+        name: 'graphql_cache.slow_request',
+        operationCategory: 'read',
+        requestKind: 'read',
+        outcome: 'success',
+        errorCode: 'none',
+        queueWaitMs: 1_000,
         durationMs: 0,
         queueDepth: 0,
       },
