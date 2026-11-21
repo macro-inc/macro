@@ -37,9 +37,10 @@ pub enum TeammateCommand {
     /// Sign a teammate in with your own Claude plan: runs `claude setup-token`
     /// in a separate container that sees only the teammate's provider volume.
     SignIn {
-        /// The install id, from `macrod teammate list`.
+        /// The install id, from `macrod teammate list`; needed only when
+        /// the machine keeps more than one.
         #[arg(value_parser = install_id)]
-        install: TeammateInstallId,
+        install: Option<TeammateInstallId>,
     },
     /// Print the egress ruleset for the JSON on stdin (`{"allow": [...],
     /// "facts": {...}}`), for the image's egress test.
@@ -69,7 +70,7 @@ pub async fn run(command: TeammateCommand) -> rootcause::Result<()> {
             follow,
             tail,
         } => logs(&install, follow, tail).await,
-        TeammateCommand::SignIn { install } => sign_in(&install).await,
+        TeammateCommand::SignIn { install } => sign_in(install.as_ref()).await,
         TeammateCommand::Ruleset => {
             let input: RulesetInput = serde_json::from_reader(std::io::stdin())
                 .context("the input is not {\"allow\": [...], \"facts\": {...}}")?;
@@ -265,13 +266,41 @@ async fn logs(install: &TeammateInstallId, follow: bool, tail: u32) -> rootcause
 /// it back, and a second short-lived container writes it to
 /// `/teammate-provider/claude/credential.json` (0600, uid 1000), where the
 /// agent reads it through its read-only mount.
-async fn sign_in(install: &TeammateInstallId) -> rootcause::Result<()> {
-    let stored = kept_installs()?
-        .into_iter()
-        .find(|stored| &stored.install.install_id == install)
-        .ok_or_else(|| {
-            rootcause::report!("no teammate install {} on this machine", install.as_str())
-        })?;
+/// The install a command acts on: the one asked for, or the machine's
+/// only one; else why not.
+pub fn chosen_install(
+    installs: Vec<StoredInstall>,
+    asked: Option<&TeammateInstallId>,
+) -> Result<StoredInstall, String> {
+    if let Some(asked) = asked {
+        return installs
+            .into_iter()
+            .find(|stored| &stored.install.install_id == asked)
+            .ok_or_else(|| format!("no teammate install {} on this machine", asked.as_str()));
+    }
+    match installs.len() {
+        0 => Err("no teammates on this machine".to_owned()),
+        1 => installs
+            .into_iter()
+            .next()
+            .ok_or_else(|| "no teammates on this machine".to_owned()),
+        count => {
+            let ids: Vec<String> = installs
+                .iter()
+                .map(|stored| format!("  {}", stored.install.install_id.as_str()))
+                .collect();
+            Err(format!(
+                "this machine keeps {count} teammates; name one: macrod teammate sign-in <install>\n{}",
+                ids.join("\n")
+            ))
+        }
+    }
+}
+
+async fn sign_in(asked: Option<&TeammateInstallId>) -> rootcause::Result<()> {
+    let stored =
+        chosen_install(kept_installs()?, asked).map_err(|reason| rootcause::report!("{reason}"))?;
+    let install = &stored.install.install_id;
 
     let engine = CliEngine::new();
     engine.info().await.map_err(|unavailable| {

@@ -3145,3 +3145,39 @@ async fn the_real_engine_allows_only_a_local_stacks_named_services() {
         "another container on the shared network was reachable"
     );
 }
+
+#[test]
+fn sign_in_takes_the_only_install_or_asks_which() {
+    use super::command::chosen_install;
+
+    let one = stored(install(1));
+    let mut other = stored(install(1));
+    other.install.install_id = TeammateInstallId::new("install-2").unwrap();
+
+    assert_eq!(
+        chosen_install(vec![one.clone()], None).unwrap().install,
+        install(1)
+    );
+    assert_eq!(
+        chosen_install(
+            vec![one.clone(), other.clone()],
+            Some(&other.install.install_id)
+        )
+        .unwrap()
+        .install
+        .install_id,
+        other.install.install_id
+    );
+    assert_eq!(
+        chosen_install(vec![one.clone(), other.clone()], None).unwrap_err(),
+        "this machine keeps 2 teammates; name one: macrod teammate sign-in <install>\n  install-1\n  install-2"
+    );
+    assert_eq!(
+        chosen_install(Vec::new(), None).unwrap_err(),
+        "no teammates on this machine"
+    );
+    assert_eq!(
+        chosen_install(vec![one], Some(&other.install.install_id)).unwrap_err(),
+        "no teammate install install-2 on this machine"
+    );
+}
