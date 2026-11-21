@@ -18,6 +18,7 @@ predicate-index = { path = "../../predicate_index" }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
 soup-filter-cache-adapter = { path = "../../soup_filter_cache_adapter" }
 soup-filter-projection = { path = "../../soup_filter_projection", default-features = false }
 tokio = { workspace = true, features = ["sync"] }

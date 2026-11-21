@@ -59,6 +59,9 @@ struct Args {
     /// Keep the cache files after the run.
     #[arg(long)]
     keep: bool,
+    /// Compare stored records by what they decode to, not by their bytes (see `dump::tables`).
+    #[arg(long)]
+    decoded_records: bool,
 }
 
 fn main() -> Result<(), rootcause::Report> {
@@ -150,7 +153,8 @@ fn run(
         writeln!(trace, "abort {}", normalizer.text(error))?;
     }
     normalizer.freeze();
-    let tables = dump::tables(&path).map_err(|error| rootcause::report!("{error}"))?;
+    let tables =
+        dump::tables(&path, args.decoded_records).map_err(|error| rootcause::report!("{error}"))?;
     for (table, rows) in tables {
         let rows: Vec<String> = rows.iter().map(|row| normalizer.text(row)).collect();
         let mut sorted = rows.clone();

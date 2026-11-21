@@ -3928,6 +3928,7 @@ dependencies = [
  "rootcause",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "soup-filter-cache-adapter",
  "soup-filter-projection",
  "tokio",

@@ -30,11 +30,16 @@ disk after a reopen must come out the same.
 - Build a side: `build-side.sh NAME BASE [BRANCH...]`, NAME of letters, digits, `-` and `_` (a detached worktree in
   `~/.cache/cache-diff-fuzz/sides/NAME`, binary in `bin/NAME`). Set
   `IDLE_CHECKPOINT=1` when the side has `TursoStorage::checkpoint_if_due`.
-- Compare: `fuzz.sh RUN FIRST COUNT SIDE_A SIDE_B [JOBS]`. RUN must be a new name.
+- Compare: `fuzz.sh RUN FIRST COUNT SIDE_A SIDE_B [JOBS]`. RUN must be a new name
+  of the same characters as NAME (so must `TARGET`).
   The run works on copies of both binaries, the schema and the assets, so a
   rebuild or an edit meanwhile does not reach it. Differences go to `runs/RUN/diffs.txt`, seeds a side could not finish to
   `runs/RUN/failures.txt`; it exits 0 only when neither has a line.
 - Shrink a difference: `minimize.sh SEED SIDE_A SIDE_B`.
+- When a change alters how records are encoded on purpose, compare with
+  `FUZZ_ARGS=--decoded-records`: `records.value` is compared as the record each
+  side's own codec decodes, and a `search_documents.source_hash` equal to the hash
+  of its record's stored bytes as `h:record`. Every other byte is still compared.
 - Rerun one seed: `bin/SIDE --seed N --schema static_assets/schema.graphql --assets
   crates/client/cache-diff-fuzz/assets --out D --work D/w --full`. Use
   `--emit-case` and `--case FILE` to save a case and rerun it. A seed's case
