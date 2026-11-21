@@ -10,6 +10,10 @@ import type { MacroClient } from '../../utils/client';
 import { Channel } from '../channels/channel';
 import { Task } from '../tasks/task';
 import { ImportEntry, type ImportedItem } from './entry';
+import {
+  NotionWorkspaceImport,
+  TrackerWorkspaceImport,
+} from './workspace-import';
 
 /** An external item to track in the import ledger. */
 export interface ImportCandidate {
@@ -55,14 +59,48 @@ export interface NotionPageImport {
 }
 
 /**
- * The import ledger: the external items (Linear and Jira issues, Notion pages,
- * Slack channels) the caller has proposed for import, imported, or declined,
- * with the team's imports. Check it before copying an item into Macro, so
- * nothing is imported twice.
+ * Bring Notion, Linear and Jira content into Macro, tracked in the import
+ * ledger so nothing is imported twice: the external items (Linear and Jira
+ * issues, Notion pages, Slack channels) the caller has proposed for import,
+ * imported, or declined, with the team's imports. Slack channels are imported
+ * from Settings; the ledger only lists them.
  *
- * @routing Use when tracking one external item being copied into Macro, checking whether it was already imported, or importing one Notion page; not a whole Notion, Linear or Jira workspace, which goes through a reviewed import.
+ * @routing Use when importing a Notion, Linear or Jira workspace, a single Notion page, tracking one external item being copied into Macro, or checking what was already imported; not resolving one linked external item, which is foreign entities.
  *
  * @agent
+ * ## Whole workspaces (Notion, Linear, Jira)
+ *
+ * - Anything bigger than one Notion page goes through a reviewed plan:
+ *   `macro.imports.notion.plan(...)` (or `.linear` / `.jira`). Never recreate
+ *   plan items with document, task or database methods.
+ * - Unless the user already said who should see the import, plan without
+ *   `sharing` first. A 409 `sharing_required` means they are on a team: ask in
+ *   one short question whether to share it with their team, keep it to
+ *   themselves, or let AI decide per page, then plan again with their answer.
+ *   A report with `onTeam: false` means everything is personal; don't offer
+ *   team sharing.
+ * - If the report is `failed` (e.g. the source isn't connected), say why and
+ *   offer to connect it; don't present a review.
+ * - Present the plan in the same program, right after `plan` returns, even
+ *   while it is still `running`: `const review = await
+ *   execution.reviews.create({kind: 'import', title: 'Import from Notion',
+ *   drafts: [{source: 'notion'}]})`, and return `reviews: [await
+ *   review.reference()]`. The card fills in as planning goes; don't wait for
+ *   it or poll `status()`. Tell the user the plan's counts as they are, and
+ *   end by asking "Should I kick it off?".
+ * - Nothing is written until a person approves the review; a program can't.
+ *   If the user says yes, submit it with the `DecideReview` tool (after
+ *   `GetReview` for its revision), not from code. While the plan is still
+ *   being made it is refused, so say it isn't ready yet. The write starts in
+ *   the background, so a `ready` report right after means it is starting.
+ * - To check progress later, call `status()`; never `plan()` again, which
+ *   replaces the plan.
+ * - `cancel()` stops planning or writing; what was imported stays. A plan
+ *   that is `ready` but not started is dropped by dismissing its review (on
+ *   its card, or `DecideReview` with a dismiss decision), not by `cancel()`.
+ *
+ * ## Single items and the ledger
+ *
  * Stage an item with `track` before creating anything for it, and stop when
  * the outcome says it already exists, was declined, or is being imported.
  * After creating the Macro item yourself, record it with `recordImported`.
@@ -70,7 +108,20 @@ export interface NotionPageImport {
  * recreating it.
  */
 export class ImportNamespace {
-  constructor(private readonly client: MacroClient) {}
+  /** The Notion workspace import. */
+  readonly notion: NotionWorkspaceImport;
+
+  /** The Linear workspace import: issues become tasks, their groups projects. */
+  readonly linear: TrackerWorkspaceImport;
+
+  /** The Jira Cloud import: issues become tasks, projects and epics projects. */
+  readonly jira: TrackerWorkspaceImport;
+
+  constructor(private readonly client: MacroClient) {
+    this.notion = new NotionWorkspaceImport(client);
+    this.linear = new TrackerWorkspaceImport(client, 'linear');
+    this.jira = new TrackerWorkspaceImport(client, 'jira');
+  }
 
   /**
    * The caller's ledger entries, newest first: their staged candidates,

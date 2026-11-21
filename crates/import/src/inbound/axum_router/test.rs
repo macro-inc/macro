@@ -9,9 +9,10 @@ use rootcause::Report;
 use std::sync::Mutex;
 use tower::ServiceExt;
 
-use crate::domain::models::{ImportEntity, ImportStatus, Initiator};
+use crate::domain::models::{ImportEntity, ImportStatus, Initiator, NotionSharing};
 use crate::domain::ports::Result;
 use crate::domain::service::{DiscardOutcome, ImportNotionPageOutcome, StageOutcome};
+use import_notion::domain::model::{ImportScope, NotionId};
 
 const TEST_USER: &str = "macro|test@example.com";
 
@@ -59,17 +60,26 @@ struct FakeImportService {
     calls: Mutex<Vec<(MacroUserIdStr<'static>, ImportSource)>>,
     outcome: Mutex<Option<Result<bool>>>,
     cancels: Mutex<Vec<MacroUserIdStr<'static>>>,
+    notion_plans: Mutex<Vec<(ImportScope, Option<NotionSharing>)>>,
 }
 
 impl NotionWorkspaceImporter for FakeImportService {
     async fn prepare_notion_import(
         &self,
-        _user: &MacroUserIdStr<'static>,
-        _scope: import_notion::domain::model::ImportScope,
-        _sharing: Option<crate::domain::models::NotionSharing>,
+        user: &MacroUserIdStr<'static>,
+        scope: ImportScope,
+        sharing: Option<NotionSharing>,
         _wait: std::time::Duration,
     ) -> Result<NotionImportReport> {
-        unimplemented!("routes never plan")
+        assert_eq!(user.as_ref(), TEST_USER);
+        self.notion_plans.lock().unwrap().push((scope, sharing));
+        if sharing.is_none() {
+            return Err(ImportError::SharingRequired);
+        }
+        Ok(NotionImportReport {
+            status: Some(crate::domain::models::RunStatus::Running),
+            ..NotionImportReport::default()
+        })
     }
 
     async fn notion_import_report(
@@ -141,6 +151,7 @@ fn discovery_router(outcome: Result<bool>) -> (Router, Arc<FakeImportService>) {
         calls: Mutex::new(Vec::new()),
         outcome: Mutex::new(Some(outcome)),
         cancels: Mutex::new(Vec::new()),
+        notion_plans: Mutex::new(Vec::new()),
     });
     let router = import_router(ImportRouterState {
         service: service.clone(),
@@ -279,6 +290,31 @@ fn other_errors_remain_internal() {
 }
 
 #[tokio::test]
+async fn errors_the_caller_can_fix_answer_409_with_their_code() {
+    for (error, code) in [
+        (ImportError::SharingRequired, "sharing_required"),
+        (ImportError::NotionNotConnected, "not_connected"),
+        (
+            ImportError::Tracker(import_tracker::domain::model::TrackerError::NotConnected),
+            "not_connected",
+        ),
+        (
+            ImportError::NotReady("This plan has nothing left to import."),
+            "not_ready",
+        ),
+    ] {
+        let message = error.to_string();
+        let response = error_response(error);
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+        let body = axum::body::to_bytes(response.into_body(), 4096)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body, serde_json::json!({ "code": code, "error": message }));
+    }
+}
+
+#[tokio::test]
 async fn cancelling_a_notion_import_cancels_it_for_the_caller_and_reports_where_it_stopped() {
     let (router, service) = discovery_router(Ok(true));
     let response = router
@@ -311,12 +347,20 @@ async fn cancelling_a_notion_import_cancels_it_for_the_caller_and_reports_where_
 impl WorkspaceImporter for FakeImportService {
     async fn prepare_workspace_import(
         &self,
-        _: &MacroUserIdStr<'static>,
-        _: ImportSource,
-        _: Option<crate::domain::models::NotionSharing>,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        sharing: Option<NotionSharing>,
         _: std::time::Duration,
     ) -> Result<NotionImportReport> {
-        unreachable!("routes do not plan")
+        self.calls.lock().unwrap().push((user.clone(), source));
+        if sharing.is_none() {
+            return Err(ImportError::SharingRequired);
+        }
+        Ok(NotionImportReport {
+            status: Some(crate::domain::models::RunStatus::Ready),
+            issues: 4,
+            ..NotionImportReport::default()
+        })
     }
     async fn workspace_import_report(
         &self,
@@ -658,4 +702,182 @@ async fn ledger_recording_reports_an_earlier_mapping() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["outcome"], "already_imported");
     assert_eq!(body["entity"]["entity_id"], "document-1");
+}
+
+async fn send(
+    router: Router,
+    method: &str,
+    uri: &str,
+    body: Option<serde_json::Value>,
+) -> Response {
+    let request = Request::builder()
+        .method(method)
+        .uri(uri)
+        .header("authorization", "Bearer valid")
+        .header("content-type", "application/json");
+    let body = match body {
+        Some(body) => Body::from(body.to_string()),
+        None => Body::empty(),
+    };
+    router.oneshot(request.body(body).unwrap()).await.unwrap()
+}
+
+async fn json_body(response: Response) -> serde_json::Value {
+    let body = axum::body::to_bytes(response.into_body(), 65536)
+        .await
+        .unwrap();
+    serde_json::from_slice(&body).unwrap()
+}
+
+#[tokio::test]
+async fn planning_a_notion_import_forwards_its_roots_and_sharing() {
+    let (router, service) = discovery_router(Ok(true));
+    let response = send(
+        router,
+        "POST",
+        "/import/workspaces/notion/plan",
+        Some(serde_json::json!({
+            "sharing": "team",
+            "roots": ["https://www.notion.so/Q3-plan-3fb607323e2e80629886fc0c028d50a7"],
+        })),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(json_body(response).await["status"], "running");
+    assert_eq!(
+        *service.notion_plans.lock().unwrap(),
+        vec![(
+            ImportScope::Roots {
+                ids: vec![NotionId::parse("3fb607323e2e80629886fc0c028d50a7").unwrap()],
+            },
+            Some(NotionSharing::Team),
+        )]
+    );
+}
+
+#[tokio::test]
+async fn planning_without_a_sharing_choice_tells_the_caller_to_ask() {
+    let (router, service) = discovery_router(Ok(true));
+    let response = send(
+        router,
+        "POST",
+        "/import/workspaces/notion/plan",
+        Some(serde_json::json!({})),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    assert_eq!(json_body(response).await["code"], "sharing_required");
+    assert_eq!(
+        *service.notion_plans.lock().unwrap(),
+        vec![(ImportScope::Everything, None)]
+    );
+}
+
+#[tokio::test]
+async fn planning_rejects_roots_that_are_not_notion_pages() {
+    for (source, root) in [("notion", "not a page"), ("linear", "ENG")] {
+        let (router, service) = discovery_router(Ok(true));
+        let response = send(
+            router,
+            "POST",
+            &format!("/import/workspaces/{source}/plan"),
+            Some(serde_json::json!({"sharing": "personal", "roots": [root]})),
+        )
+        .await;
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST, "{source}");
+        assert!(service.notion_plans.lock().unwrap().is_empty());
+        assert!(service.calls.lock().unwrap().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn a_tracker_plan_without_a_sharing_choice_does_not_name_notion() {
+    let (router, _) = discovery_router(Ok(true));
+    let response = send(
+        router,
+        "POST",
+        "/import/workspaces/linear/plan",
+        Some(serde_json::json!({})),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    let body = json_body(response).await;
+    assert_eq!(body["code"], "sharing_required");
+    let error = body["error"].as_str().unwrap();
+    assert!(!error.contains("Notion"), "{error}");
+}
+
+#[tokio::test]
+async fn planning_a_slack_import_is_a_bad_request() {
+    let (router, service) = discovery_router(Ok(true));
+    let response = send(
+        router,
+        "POST",
+        "/import/workspaces/slack/plan",
+        Some(serde_json::json!({"sharing": "personal"})),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert!(service.calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn planning_a_tracker_import_forwards_the_exact_source() {
+    for source in [ImportSource::Linear, ImportSource::Jira] {
+        let (router, service) = discovery_router(Ok(true));
+        let response = send(
+            router,
+            "POST",
+            &format!("/import/workspaces/{}/plan", source.as_ref()),
+            Some(serde_json::json!({"sharing": "ai"})),
+        )
+        .await;
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(json_body(response).await["issues"], 4);
+        assert_eq!(
+            *service.calls.lock().unwrap(),
+            vec![(MacroUserIdStr::parse_from_str(TEST_USER).unwrap(), source)]
+        );
+    }
+}
+
+#[tokio::test]
+async fn ledger_and_plan_routes_require_authentication() {
+    for (method, uri) in [
+        ("GET", "/import/entities"),
+        ("POST", "/import/entities"),
+        (
+            "DELETE",
+            "/import/entities/00000000-0000-0000-0000-000000000002",
+        ),
+        ("POST", "/import/notion/pages"),
+        ("POST", "/import/workspaces/notion/plan"),
+    ] {
+        let (router, service) = discovery_router(Ok(true));
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method(method)
+                    .uri(uri)
+                    .header("content-type", "application/json")
+                    .body(Body::from("{}"))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            response.status(),
+            StatusCode::UNAUTHORIZED,
+            "{method} {uri}"
+        );
+        assert!(service.calls.lock().unwrap().is_empty());
+        assert!(service.notion_plans.lock().unwrap().is_empty());
+    }
 }

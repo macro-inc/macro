@@ -174,7 +174,7 @@ where
         let sharing = match (sharing, self.repo.user_team_id(user).await?) {
             (Some(sharing), _) => sharing,
             (None, None) => NotionSharing::Personal,
-            (None, Some(_)) => return Err(ImportError::NotionSharingRequired),
+            (None, Some(_)) => return Err(ImportError::SharingRequired),
         };
         self.reap_stale_runs(user).await;
         self.adopt_stalled(Some(user)).await;

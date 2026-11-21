@@ -120,7 +120,7 @@ describe('connector import dialog', () => {
     expect(context.startAgentImport).toHaveBeenCalledWith(
       expect.objectContaining({
         input: 'Import my Notion workspace into Macro.',
-        instructions: expect.stringContaining('ImportFromNotion'),
+        instructions: expect.stringContaining('macro.imports.notion'),
       })
     );
   });

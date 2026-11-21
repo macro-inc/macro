@@ -1785,6 +1785,61 @@
         }
       }
     },
+    "/import/workspaces/{source}/plan": {
+      "post": {
+        "tags": ["import"],
+        "summary": "Plan a reviewed workspace import, replacing any earlier plan for this\nsource. Planning goes on in the background; this answers within seconds\nwith where it got. Nothing is written until the plan's import review is\napproved.",
+        "operationId": "plan_workspace_handler",
+        "parameters": [
+          {
+            "name": "source",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ImportSource"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanWorkspaceImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Where planning stands",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotionImportReport"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a workspace source (Slack), a root that is not a Notion id, or roots on a Linear or Jira import"
+          },
+          "409": {
+            "description": "Sharing must be chosen, or the source is not connected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
     "/mcp/servers": {
       "get": {
         "tags": ["mcp"],
@@ -5589,6 +5644,26 @@
           }
         }
       },
+      "ImportErrorBody": {
+        "type": "object",
+        "description": "Error body for a request the caller can fix.",
+        "required": ["code", "error"],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/ImportErrorCode",
+            "description": "What to do about it."
+          },
+          "error": {
+            "type": "string",
+            "description": "The explanation."
+          }
+        }
+      },
+      "ImportErrorCode": {
+        "type": "string",
+        "description": "Why an import request could not go ahead, for the caller to act on.",
+        "enum": ["sharing_required", "not_connected", "not_ready"]
+      },
       "ImportKind": {
         "type": "string",
         "description": "What an imported item is in its source system. Each source has its own\nkinds; a Notion database and a Notion page, or a Linear project and a\nLinear issue, are tracked and deduplicated separately.",
@@ -6318,6 +6393,11 @@
           }
         }
       },
+      "NotionSharing": {
+        "type": "string",
+        "description": "Who a Notion workspace import shares what it writes with.",
+        "enum": ["team", "personal", "ai"]
+      },
       "NotionTaskFields": {
         "type": "object",
         "description": "Which Notion columns hold a task list's task fields, by property name.",
@@ -6606,6 +6686,30 @@
           "server_name": {
             "type": ["string", "null"],
             "description": "New display name for the connector."
+          }
+        }
+      },
+      "PlanWorkspaceImportRequest": {
+        "type": "object",
+        "description": "Body for planning a workspace import.",
+        "properties": {
+          "roots": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Notion only: page or database URLs (or ids) to import, each with\neverything under it. Empty plans everything the connection can see."
+          },
+          "sharing": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NotionSharing",
+                "description": "Who sees what the import writes, as the user chose. Required of a\nuser on a team (409 `sharing_required` without it); a user without a\nteam always gets a personal import."
+              }
+            ]
           }
         }
       },

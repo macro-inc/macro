@@ -5,13 +5,13 @@ use crate::domain::{
     ports::ImportError,
     service::WorkspaceImporter,
 };
+use crate::inbound::workspace_plan::PLAN_WAIT;
 use ai_toolset::{
     AsyncTool, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations, ToolResult,
 };
 use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
 
 /// Plan, inspect or cancel a read-only Linear workspace import.
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -109,14 +109,14 @@ async fn call<T: WorkspaceImporter>(
     let service = context.require_service()?;
     let user = &request.user_id;
     let report = match action {
-        NotionImportAction::Plan => service.prepare_workspace_import(user, source, sharing, Duration::from_secs(5)).await,
+        NotionImportAction::Plan => service.prepare_workspace_import(user, source, sharing, PLAN_WAIT).await,
         NotionImportAction::Status => service.workspace_import_report(user, source).await,
         NotionImportAction::Cancel => match service.cancel_workspace_import(user, source).await {
             Ok(_) => service.workspace_import_report(user, source).await,
             Err(error) => Err(error),
         },
     }.map_err(|error| match error {
-        ImportError::NotionSharingRequired => tool_error("The user is on a team. Ask whether to share with their team, keep everything personal, or let AI choose per group, then plan with their answer.".into(), error),
+        ImportError::SharingRequired => tool_error("The user is on a team. Ask whether to share with their team, keep everything personal, or let AI choose per group, then plan with their answer.".into(), error),
         other => import_error(&format!("{} import failed", source.label()), other),
     })?;
     let message = message(source, action, &report);

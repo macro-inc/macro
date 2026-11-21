@@ -989,6 +989,25 @@ export type ImportEntity = {
 };
 
 /**
+ * Error body for a request the caller can fix.
+ */
+export type ImportErrorBody = {
+    /**
+     * What to do about it.
+     */
+    code: ImportErrorCode;
+    /**
+     * The explanation.
+     */
+    error: string;
+};
+
+/**
+ * Why an import request could not go ahead, for the caller to act on.
+ */
+export type ImportErrorCode = 'sharing_required' | 'not_connected' | 'not_ready';
+
+/**
  * What an imported item is in its source system. Each source has its own
  * kinds; a Notion database and a Notion page, or a Linear project and a
  * Linear issue, are tracked and deduplicated separately.
@@ -1459,6 +1478,11 @@ export type NotionReportItem = {
 };
 
 /**
+ * Who a Notion workspace import shares what it writes with.
+ */
+export type NotionSharing = 'team' | 'personal' | 'ai';
+
+/**
  * Which Notion columns hold a task list's task fields, by property name.
  */
 export type NotionTaskFields = {
@@ -1728,6 +1752,18 @@ export type PipedreamUpdateRequest = {
      * New display name for the connector.
      */
     server_name?: string | null;
+};
+
+/**
+ * Body for planning a workspace import.
+ */
+export type PlanWorkspaceImportRequest = {
+    /**
+     * Notion only: page or database URLs (or ids) to import, each with
+     * everything under it. Empty plans everything the connection can see.
+     */
+    roots?: Array<string>;
+    sharing?: null | NotionSharing;
 };
 
 /**
@@ -3770,6 +3806,41 @@ export type CancelWorkspaceHandlerResponses = {
 };
 
 export type CancelWorkspaceHandlerResponse = CancelWorkspaceHandlerResponses[keyof CancelWorkspaceHandlerResponses];
+
+export type PlanWorkspaceHandlerData = {
+    body: PlanWorkspaceImportRequest;
+    path: {
+        source: ImportSource;
+    };
+    query?: never;
+    url: '/import/workspaces/{source}/plan';
+};
+
+export type PlanWorkspaceHandlerErrors = {
+    /**
+     * Not a workspace source (Slack), a root that is not a Notion id, or roots on a Linear or Jira import
+     */
+    400: unknown;
+    /**
+     * Sharing must be chosen, or the source is not connected
+     */
+    409: ImportErrorBody;
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type PlanWorkspaceHandlerError = PlanWorkspaceHandlerErrors[keyof PlanWorkspaceHandlerErrors];
+
+export type PlanWorkspaceHandlerResponses = {
+    /**
+     * Where planning stands
+     */
+    200: NotionImportReport;
+};
+
+export type PlanWorkspaceHandlerResponse = PlanWorkspaceHandlerResponses[keyof PlanWorkspaceHandlerResponses];
 
 export type DeleteMcpServerData = {
     body?: never;

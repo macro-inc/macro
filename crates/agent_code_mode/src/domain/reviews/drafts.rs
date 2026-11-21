@@ -35,11 +35,11 @@ pub struct DraftList<Draft>(Vec<Draft>);
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema, specta::Type)]
 #[serde(rename_all = "snake_case")]
 pub enum ImportReviewSource {
-    /// A Notion workspace plan, staged by ImportFromNotion.
+    /// A Notion workspace plan (`macro.imports.notion.plan()`).
     Notion,
-    /// A Linear plan, staged by ImportFromLinear.
+    /// A Linear workspace plan (`macro.imports.linear.plan()`).
     Linear,
-    /// A Jira plan, staged by ImportFromJira.
+    /// A Jira workspace plan (`macro.imports.jira.plan()`).
     Jira,
 }
 

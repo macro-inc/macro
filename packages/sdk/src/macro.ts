@@ -243,7 +243,10 @@ export class Macro<T extends MacroOpts = MacroOpts> {
 
   /** Generate images with AI and attach them to messages. */
   readonly images: ImagesNamespace;
-  /** The import ledger: external items proposed for, or copied into, Macro. */
+  /**
+   * Imports: the ledger of external items proposed for, or copied into,
+   * Macro, and reviewed Notion, Linear and Jira workspace imports.
+   */
   readonly imports: ImportNamespace;
   /** Search the public web and read web pages. */
   readonly web: WebNamespace;
@@ -555,6 +558,17 @@ export type {
   GenerateImageAspectRatio,
   GenerateImageOptions,
 } from './entities/images/namespace';
+export {
+  type ImportSharing,
+  type NotionPlanOptions,
+  NotionWorkspaceImport,
+  type TrackerImportSource,
+  TrackerWorkspaceImport,
+  WorkspaceImport,
+  type WorkspaceImportReport,
+  type WorkspaceImportSource,
+  type WorkspacePlanOptions,
+} from './entities/imports/workspace-import';
 export {
   Initiative,
   type InitiativeActivityEntry,

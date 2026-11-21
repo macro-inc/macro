@@ -459,11 +459,15 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 // Canvas.render(), returned in a result's images.
                 | "RenderCanvas"
                 // macro.imports: list(), track(), recordImported(),
-                // importNotionPage() and ImportEntry.decline().
+                // importNotionPage(), ImportEntry.decline(), and
+                // notion/linear/jira plan(), status() and cancel().
                 | "ListImportEntities"
                 | "CreateImportEntity"
                 | "DeleteImportEntity"
                 | "ImportNotionPage"
+                | "ImportFromNotion"
+                | "ImportFromLinear"
+                | "ImportFromJira"
                 // macro.agentSessions.updates(), whose cards an agentUpdates
                 // view draws.
                 | "ListAgentUpdates"
