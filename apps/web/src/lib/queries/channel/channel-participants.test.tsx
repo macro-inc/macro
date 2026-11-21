@@ -1112,6 +1112,165 @@ describe('useChannelParticipantsQuery', () => {
     expect(ids()).toEqual(['owner']);
   });
 
+  it('keeps showing a write started over against a newer read when the server does not answer at once', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const owner = restRow('owner', '2026-01-01T00:00:00Z', 'owner');
+    storage.getChannelParticipants
+      .mockResolvedValueOnce(ok([owner]))
+      .mockResolvedValueOnce(
+        ok([owner, restRow('new', '2026-01-03T00:00:00Z')])
+      )
+      .mockResolvedValue(err([{ code: 'HTTP_ERROR', message: 'offline' }]));
+    storage.addParticipantsToChannel.mockResolvedValue(ok({}));
+    const { add, ids } = mount();
+
+    // The GraphQL read is slow, so REST answers; the write's REST reread shows it.
+    await vi.advanceTimersByTimeAsync(3_100);
+    await vi.waitFor(() => expect(ids()).toEqual(['owner']));
+    add.mutate({ channelId: 'channel-1', participants: ['new'] });
+    await vi.waitFor(() => expect(add.isSuccess).toBe(true));
+    await vi.waitFor(() => expect(ids()).toEqual(['owner', 'new']));
+
+    // A GraphQL read sent before the add arrives; the server check fails.
+    setDetail([participant('owner', '2026-01-01T00:00:00Z', 'owner')]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(ids()).toEqual(['owner', 'new']);
+    // Its time to show runs out, and the server still does not answer.
+    await vi.advanceTimersByTimeAsync(31_000);
+    expect(ids()).toEqual(['owner']);
+  });
+
+  it('keeps an answer that named members over older ones when newer checks fail', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    setDetail([participant('owner', '2026-01-01T00:00:00Z', 'owner')]);
+    storage.addParticipantsToChannel.mockResolvedValue(ok({}));
+    const owner = restRow('owner', '2026-01-01T00:00:00Z', 'owner');
+    const first = Promise.withResolvers<unknown>();
+    storage.getChannelParticipants
+      .mockReturnValueOnce(first.promise)
+      .mockResolvedValueOnce(
+        ok([
+          owner,
+          restRow('a', '2026-01-03T00:00:00Z'),
+          restRow('b', '2026-01-03T00:00:01Z'),
+        ])
+      )
+      .mockResolvedValue(err([{ code: 'HTTP_ERROR', message: 'offline' }]));
+    const { add, ids } = mount();
+
+    add.mutate({ channelId: 'channel-1', participants: ['a'] });
+    await vi.waitFor(() => expect(add.isSuccess).toBe(true));
+    for (const id of ['b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j']) {
+      await vi.advanceTimersByTimeAsync(500);
+      add.mutate({ channelId: 'channel-1', participants: [id] });
+      await vi.waitFor(() => expect(add.variables?.participants).toEqual([id]));
+      await vi.waitFor(() => expect(add.isSuccess).toBe(true));
+    }
+    // The first check waits; the second says a and b hold; eight more fail.
+    await vi.advanceTimersByTimeAsync(31_000);
+    expect(storage.getChannelParticipants).toHaveBeenCalledTimes(10);
+    expect(ids()).toEqual(['owner', 'a', 'b']);
+
+    // The first check, sent before the second, answers without a.
+    first.resolve(ok([owner]));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(ids()).toEqual(['owner', 'a', 'b']);
+  });
+
+  it('does not take an answer from before the clock was set back for a later write', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    setDetail([participant('owner', '2026-01-01T00:00:00Z', 'owner')]);
+    storage.addParticipantsToChannel.mockResolvedValue(ok({}));
+    const owner = restRow('owner', '2026-01-01T00:00:00Z', 'owner');
+    const x = restRow('x', '2026-01-03T00:00:00Z');
+    storage.getChannelParticipants
+      .mockResolvedValueOnce(ok([owner, x]))
+      .mockResolvedValue(ok([owner, x, restRow('y', '2026-01-04T00:00:00Z')]));
+    const { add, ids } = mount();
+
+    add.mutate({ channelId: 'channel-1', participants: ['x'] });
+    await vi.waitFor(() => expect(add.isSuccess).toBe(true));
+    await vi.advanceTimersByTimeAsync(31_000);
+    expect(ids()).toEqual(['owner', 'x']);
+
+    vi.setSystemTime(Date.now() - 60_000);
+    add.mutate({ channelId: 'channel-1', participants: ['y'] });
+    await vi.waitFor(() => expect(add.variables?.participants).toEqual(['y']));
+    await vi.waitFor(() => expect(add.isSuccess).toBe(true));
+    await vi.advanceTimersByTimeAsync(31_000);
+    expect(storage.getChannelParticipants).toHaveBeenCalledTimes(2);
+    // y carries a join time from the earlier clock, so it sorts first.
+    expect(ids()).toEqual(['owner', 'y', 'x']);
+  });
+
+  it('asks again on each record change while it asks whether a confirmed write holds', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    setDetail([participant('owner', '2026-01-01T00:00:00Z', 'owner')]);
+    storage.addParticipantsToChannel.mockResolvedValue(ok({}));
+    const owner = restRow('owner', '2026-01-01T00:00:00Z', 'owner');
+    const added = restRow('new', '2026-01-03T00:00:00Z');
+    const other = restRow('other', '2026-01-04T00:00:00Z');
+    const second = Promise.withResolvers<unknown>();
+    storage.getChannelParticipants
+      .mockResolvedValueOnce(ok([owner, added]))
+      .mockReturnValueOnce(second.promise)
+      .mockResolvedValue(ok([owner, added, other]));
+    const { add, ids } = mount();
+
+    add.mutate({ channelId: 'channel-1', participants: ['new'] });
+    await vi.waitFor(() => expect(add.isSuccess).toBe(true));
+    await vi.advanceTimersByTimeAsync(31_000);
+    expect(ids()).toEqual(['owner', 'new']);
+
+    // Late records without the add: a role change, then someone else joining.
+    setDetail([participant('owner', '2026-01-01T00:00:00Z', 'admin')]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(ids()).toEqual(['owner', 'new']);
+    setDetail([
+      participant('owner', '2026-01-01T00:00:00Z', 'admin'),
+      participant('other', '2026-01-04T00:00:00Z'),
+    ]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(storage.getChannelParticipants).toHaveBeenCalledTimes(3);
+    expect(ids()).toEqual(['owner', 'other', 'new']);
+    second.resolve(ok([owner, added]));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(ids()).toEqual(['owner', 'other', 'new']);
+  });
+
+  it('asks anew when the record changes in the millisecond another check was sent', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    setDetail([participant('owner', '2026-01-01T00:00:00Z', 'owner')]);
+    storage.addParticipantsToChannel.mockResolvedValue(ok({}));
+    const owner = restRow('owner', '2026-01-01T00:00:00Z', 'owner');
+    const a = restRow('a', '2026-01-03T00:00:00Z');
+    const b = restRow('b', '2026-01-04T00:00:00Z');
+    const second = Promise.withResolvers<unknown>();
+    storage.getChannelParticipants
+      .mockResolvedValueOnce(ok([owner, a]))
+      // b's check goes out; in the same millisecond a record without a arrives.
+      .mockImplementationOnce(() => {
+        setDetail([participant('owner', '2026-01-01T00:00:00Z', 'admin')]);
+        return second.promise;
+      })
+      .mockResolvedValue(ok([owner, b]));
+    const { add, ids } = mount();
+
+    add.mutate({ channelId: 'channel-1', participants: ['a'] });
+    await vi.waitFor(() => expect(add.isSuccess).toBe(true));
+    await vi.advanceTimersByTimeAsync(31_000);
+    expect(ids()).toEqual(['owner', 'a']);
+
+    add.mutate({ channelId: 'channel-1', participants: ['b'] });
+    await vi.waitFor(() => expect(add.variables?.participants).toEqual(['b']));
+    await vi.waitFor(() => expect(add.isSuccess).toBe(true));
+    await vi.advanceTimersByTimeAsync(31_000);
+    second.resolve(ok([owner, a, b]));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(storage.getChannelParticipants).toHaveBeenCalledTimes(3);
+    expect(ids()).not.toContain('a');
+  });
+
   it('lets a remove win over an earlier add whose soup update has not arrived', async () => {
     setDetail([participant('owner', '2026-01-01T00:00:00Z', 'owner')]);
     storage.addParticipantsToChannel.mockResolvedValue(ok({}));
