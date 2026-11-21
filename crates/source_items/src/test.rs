@@ -910,8 +910,9 @@ async fn savepoints_rolled_back_record_nothing(pool: PgPool) -> Result<(), sqlx:
 }
 
 /// The enabling migration turns maintenance on, but reads do not trust the table until a backfill.
-/// With maintenance removed, writes cost what they did and reads do not trust the table. Installing turns maintenance on; reads trust the table only
-/// after a backfill that ran with it on. Removing disables the triggers and withdraws that trust,
+/// With maintenance removed, writes cost what they did and reads do not trust the table.
+/// Installing turns maintenance on; reads trust the table only after a backfill that ran with it
+/// on. Removing disables the triggers and withdraws that trust,
 /// and installing again needs another backfill. Install and remove can each run twice.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn reads_trust_the_table_only_while_maintained_and_backfilled(

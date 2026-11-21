@@ -1,7 +1,7 @@
 -- Turns on source_items maintenance: from this commit on, every write to entity_access, "Document",
 -- "Chat", "Project" or document_sub_type rewrites the source_items rows of the items it touched,
--- at commit. Items not written since stay missing until the backfill; reads stay off
--- (SOUP_SOURCE_ITEMS_ENABLED) until the backfill and the audit pass. docs/runbooks/source-items.md
+-- at commit. Items not written since stay missing until the backfill; no service reads the table
+-- yet, and reads must stay off until the backfill and the audit pass. docs/runbooks/source-items.md
 -- has the order, what to watch and how to undo each step.
 --
 -- source_items_install_triggers() takes SHARE ROW EXCLUSIVE on the five tables in one LOCK TABLE
