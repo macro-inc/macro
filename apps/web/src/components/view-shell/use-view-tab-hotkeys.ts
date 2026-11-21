@@ -1,6 +1,5 @@
 import { t } from '@app/lib/i18n';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
-import { TOKENS } from '@core/hotkey/tokens';
 import { getScopeElement } from '@core/hotkey/utils';
 import { isEditableInput } from '@core/util/isEditableInput';
 import { onCleanup } from 'solid-js';
@@ -75,7 +74,9 @@ function keyboardIsOnPane(
  * Tab, Shift+Tab and 1–9 for the tabs in a pane's top bar. They act only
  * while those tabs are on screen and the keyboard is on the pane; anywhere
  * else (a field, an editor, a button, an open item without tabs) Tab is
- * normal focus order.
+ * normal focus order. A split can hold several panes with tabs (a list
+ * beside a conversation), so each set registers alongside the others and
+ * the first whose pane has the keyboard takes the key.
  */
 export function useViewTabHotkeys<TTab extends string>(
   options: UseViewTabHotkeysOptions<TTab>
@@ -118,8 +119,8 @@ export function useViewTabHotkeys<TTab extends string>(
   numberKeys.forEach((key, index) => {
     registerHotkey({
       hotkey: key,
-      hotkeyToken: TOKENS.soup.tabs[key],
       scopeId: options.scopeId,
+      registrationType: 'add',
       description: () => {
         const id = options.ids()[index];
         return t('tabs.viewTabGoTo', { label: id ? options.label(id) : key });
@@ -157,8 +158,8 @@ export function useViewTabHotkeys<TTab extends string>(
 
   registerHotkey({
     hotkey: 'tab',
-    hotkeyToken: TOKENS.soup.tabs.next,
     scopeId: options.scopeId,
+    registrationType: 'add',
     description: () => t('tabs.viewTabNext'),
     condition: () => isEnabled() && options.ids().length > 1,
     keyDownHandler: (event) => keyboardOnPane(event) && move(1),
@@ -166,8 +167,8 @@ export function useViewTabHotkeys<TTab extends string>(
 
   registerHotkey({
     hotkey: 'shift+tab',
-    hotkeyToken: TOKENS.soup.tabs.prev,
     scopeId: options.scopeId,
+    registrationType: 'add',
     description: () => t('tabs.viewTabPrevious'),
     condition: () => isEnabled() && options.ids().length > 1,
     keyDownHandler: (event) => keyboardOnPane(event) && move(-1),
