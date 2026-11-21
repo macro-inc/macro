@@ -240,31 +240,35 @@ pub enum DmRoster<'a> {
     /// the lowest id. An import maps a conversation onto the channel it
     /// reserved for it, so it keeps the rule that channel was chosen by.
     Stored,
-    /// A removed bot's row does not count, and while both people are still
-    /// in the DM neither does a departed third person's in a legacy DM: the
-    /// DM is then the pair's, as every channel list shows it, so messaging
-    /// the other person reopens it instead of starting a second one. Once
-    /// one of the two has left too, a departed person's row counts, as it
-    /// always did here: that conversation was a group's, which no list
-    /// showed as the pair's, and a first message starts a DM of their own.
-    /// Of several, one both people are still in wins, then one only the
-    /// other person left, then one this member left, then one both left;
-    /// then the oldest, then the lowest id: a legacy duplicate never takes
-    /// over the DM they use, and this member lands where they can still
-    /// write if they can anywhere. Live get-or-create, by its actor.
+    /// As `Stored`, and while both people are still in a DM, the rows of
+    /// third members who left (a removed bot, a person who left a legacy
+    /// group) do not count: the DM is then the pair's, as every channel list
+    /// shows it, so messaging the other person reopens it instead of starting
+    /// a second one. Once one of the two has left too, every row counts, as
+    /// it always did here: reuse rejoins nobody, so taking such a DM would
+    /// put a first message where its sender cannot post or the other person
+    /// never sees it, and a new DM has them both. Of several, one both
+    /// people are still in wins, then one only the other person left, then
+    /// one this member left, then one both left; then the oldest, then the
+    /// lowest id: a legacy duplicate never takes over the DM they use, and
+    /// this member lands where they can still write if they can anywhere.
+    /// Live get-or-create, by its actor.
     Listed(&'a MacroUserIdStr<'a>),
     /// As `Listed`, among the DMs this member is still in, the only ones
     /// open to them: the read-only lookup answers its viewer the DM their
-    /// first message would reuse whenever they can open it, as the joined
-    /// channel list it replaced did, and nothing otherwise.
+    /// first message would reuse whenever they can open it, and nothing
+    /// otherwise. That includes a DM only the other person left, which the
+    /// web opener, reading the channel list, never found, though its
+    /// get-or-create reused it.
     Joined(&'a MacroUserIdStr<'a>),
 }
 
 /// Discover an exact pair without modifying it.
 ///
-/// A DM is any channel both people have a row in, active or left, with no
-/// third row; `roster` says when the row of a third member who left is
-/// one, and which DM wins. A third member still in the channel always is.
+/// A DM is a direct message both people have a row in, active or left,
+/// with no third row; `roster` says when the rows of third members who
+/// left are overlooked, and which DM wins. A third member still in the
+/// channel always makes it a group.
 /// The two people's rows are intersected first, through the partial
 /// `(user_id, channel_id)` indexes on active and on left rows, behind an
 /// `OFFSET 0` fence; only the direct messages among the channels they
@@ -300,9 +304,6 @@ pub async fn find_dm(
         JOIN comms_channels c ON c.id = shared.channel_id
         CROSS JOIN LATERAL (
             SELECT COUNT(*) AS all_rows,
-                   COUNT(*) FILTER (
-                       WHERE p.left_at IS NULL OR p.user_id NOT LIKE 'bot|%'
-                   ) AS without_removed_bots,
                    COUNT(*) FILTER (WHERE p.left_at IS NULL) AS active,
                    COUNT(*) FILTER (
                        WHERE p.left_at IS NULL AND p.user_id IN ($1, $2)
@@ -319,10 +320,8 @@ pub async fn find_dm(
             WHERE p.channel_id = c.id
         ) roster
         WHERE c.channel_type = 'direct_message'
-          AND CASE WHEN $3 THEN roster.all_rows = 2
-              ELSE roster.without_removed_bots = 2
-                OR (roster.active = 2 AND roster.pair_active = 2)
-              END
+          AND (roster.all_rows = 2
+               OR (NOT $3 AND roster.active = 2 AND roster.pair_active = 2))
           AND (NOT $5 OR roster.member_active = 1)
         ORDER BY CASE WHEN $3 THEN 0 ELSE roster.departed END, c.created_at, c.id
         LIMIT 1

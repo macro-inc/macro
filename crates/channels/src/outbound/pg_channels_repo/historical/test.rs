@@ -209,8 +209,8 @@ async fn concurrent_live_and_import_dm_creation_share_one_channel(pool: PgPool) 
 }
 
 /// An import never reuses a DM with a third member's row, even one who left;
-/// live lookups take a DM whose third member left as the pair's, as every
-/// channel list shows it. Of exact duplicates, an import takes the oldest,
+/// live lookups take a DM both people are in whose third member left as the
+/// pair's, as every channel list shows it. Of exact duplicates, an import takes the oldest,
 /// then the lowest id, and live lookups the one both people are still in.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn malformed_and_duplicate_dms_are_chosen_by_their_rule(pool: PgPool) {
@@ -351,9 +351,9 @@ async fn malformed_and_duplicate_dms_are_chosen_by_their_rule(pool: PgPool) {
     );
 }
 
-/// A bot added to a DM and removed again leaves the DM the pair's: every
-/// channel list shows it with the two people only, so get-or-create and the
-/// lookup keep answering it. A bot still in the DM makes it a group. An import
+/// A bot added to a DM and removed again leaves the DM the pair's while both
+/// are in it: every channel list shows it with the two people only, so
+/// get-or-create and the lookup keep answering it. A bot still in the DM makes it a group. An import
 /// keeps the stored roster, so it still maps the pair's conversation onto a
 /// channel of its own, as it did before.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -600,7 +600,7 @@ async fn insert_dm(pool: &PgPool, seconds: i64, rows: &[(&str, bool)]) -> Uuid {
 /// in it, its departed third member gone, as channel lists show it. Once the
 /// other person has left too, it is not: no list showed it as theirs and
 /// get-or-create never reused it, so the lookup answers nothing and a first
-/// message starts a DM of their own. A removed bot's row never counts.
+/// message starts a DM of their own.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_group_the_other_person_left_is_not_their_dm(pool: PgPool) {
     let repo = PgChannelsRepo::new(pool.clone());
@@ -608,7 +608,6 @@ async fn a_group_the_other_person_left_is_not_their_dm(pool: PgPool) {
         pair().lo().as_ref().to_owned(),
         pair().hi().as_ref().to_owned(),
     );
-    let bot = format!("bot|{}", macro_uuid::generate_uuid_v7());
     let group = insert_dm(
         &pool,
         1_000,
@@ -656,35 +655,98 @@ async fn a_group_the_other_person_left_is_not_their_dm(pool: PgPool) {
             Some(created.id)
         );
     }
+}
 
-    // A removed bot's row never counts, so with one instead of a third
-    // person the DM the other person left is still the pair's: the lookup
-    // answers it and get-or-create reuses it. On main neither did, since
-    // get-or-create counted the bot's row and the list left out the other
-    // person.
-    let bot_dm = insert_dm(&pool, 500, &[(&lo, false), (&hi, true), (&bot, true)]).await;
-    sqlx::query!(
-        "UPDATE comms_channel_participants SET left_at = NOW() WHERE channel_id = $1",
-        created.id,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    assert_eq!(
-        repo.maybe_get_dm(pair().lo().clone(), pair().hi().clone())
-            .await
-            .unwrap(),
-        Some(bot_dm)
+/// A removed bot's row counts like a departed person's: overlooked while
+/// both people are in the DM, counted once either has left. Get-or-create
+/// rejoins nobody, so reusing that DM would put a first message where its
+/// sender cannot post, or where the other person never sees it; as before,
+/// it starts a DM they are both in.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_dm_one_person_left_counts_its_removed_bot(pool: PgPool) {
+    let repo = PgChannelsRepo::new(pool.clone());
+    let (lo, hi) = (
+        pair().lo().as_ref().to_owned(),
+        pair().hi().as_ref().to_owned(),
     );
+    let bot = format!("bot|{}", macro_uuid::generate_uuid_v7());
+    let lo_left = insert_dm(&pool, 1_000, &[(&lo, true), (&hi, false), (&bot, true)]).await;
+    let mut connection = pool.acquire().await.unwrap();
+    for actor in [pair().lo(), pair().hi()] {
+        assert_eq!(
+            find_dm(&mut connection, &pair(), DmRoster::Listed(actor))
+                .await
+                .unwrap(),
+            None,
+            "neither the one who left nor the one still in reuses it"
+        );
+    }
+    drop(connection);
+    for (viewer, other) in [
+        (pair().lo().clone(), pair().hi().clone()),
+        (pair().hi().clone(), pair().lo().clone()),
+    ] {
+        assert_eq!(repo.maybe_get_dm(viewer, other).await.unwrap(), None);
+    }
+
+    let created = repo
+        .ensure_dm(pair(), DmCreation::Live(pair().lo().clone()))
+        .await
+        .unwrap();
+    assert!(created.created);
+    assert_ne!(created.id, lo_left);
     assert_eq!(
-        repo.ensure_dm(pair(), DmCreation::Live(pair().lo().clone()))
-            .await
-            .unwrap(),
-        EnsuredChannel {
-            id: bot_dm,
-            created: false
+        sqlx::query_scalar!(
+            "SELECT COUNT(*) FROM comms_channel_participants WHERE channel_id = $1 AND left_at IS NULL",
+            created.id,
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        Some(2),
+        "both people are in the new DM"
+    );
+}
+
+/// A third member still in the channel, a person or a bot, makes it a group
+/// even once one of the pair has left: two people are still in it, but not
+/// these two, so it is nobody's DM with the one who left.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_third_member_still_in_keeps_a_group_after_one_left(pool: PgPool) {
+    let repo = PgChannelsRepo::new(pool.clone());
+    let (lo, hi) = (
+        pair().lo().as_ref().to_owned(),
+        pair().hi().as_ref().to_owned(),
+    );
+    let bot = format!("bot|{}", macro_uuid::generate_uuid_v7());
+    for third in ["macro|third@example.com", bot.as_str()] {
+        let group = insert_dm(&pool, 1_000, &[(&lo, false), (&hi, true), (third, false)]).await;
+        let mut connection = pool.acquire().await.unwrap();
+        for actor in [pair().lo(), pair().hi()] {
+            assert_eq!(
+                find_dm(&mut connection, &pair(), DmRoster::Listed(actor))
+                    .await
+                    .unwrap(),
+                None,
+                "{third} is still in it: a group"
+            );
         }
-    );
+        drop(connection);
+        assert_eq!(
+            repo.maybe_get_dm(pair().lo().clone(), pair().hi().clone())
+                .await
+                .unwrap(),
+            None,
+            "{third} is still in it: a group"
+        );
+        sqlx::query!(
+            "DELETE FROM comms_channel_participants WHERE channel_id = $1",
+            group
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
 }
 
 /// Live get-or-create ranks a DM its actor left before one both people left,

@@ -321,7 +321,9 @@ pub trait ChannelRepo: Send + Sync + 'static {
         channel_ids: &[Uuid],
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Atomically find or create an exact two-member DM under a normalized pair lock.
+    /// Atomically find or create the pair's DM under a normalized pair lock: a
+    /// direct message with rows of exactly the two of them, or, for live
+    /// creation, one both are still in whose other rows are members who left.
     /// Reuse preserves all settings, roles and timestamps, including historical leavers.
     /// Historical callers must authorize reuse before writing history into the target.
     fn ensure_dm(
@@ -330,8 +332,8 @@ pub trait ChannelRepo: Send + Sync + 'static {
         creation: super::historical::DmCreation,
     ) -> impl Future<Output = Result<super::historical::EnsuredChannel, Self::Err>> + Send;
 
-    /// The exact two-member DM `user_id` is still in that their get-or-create
-    /// would reuse: of several, one both are in, then one only `recipient_id`
+    /// The DM `user_id` is still in that their get-or-create would reuse, by
+    /// the rows [`Self::ensure_dm`] counts: of several, one both are in, then one only `recipient_id`
     /// left, then the oldest, then the lowest id. `None` when `user_id` is in
     /// none.
     fn maybe_get_dm<'a>(
