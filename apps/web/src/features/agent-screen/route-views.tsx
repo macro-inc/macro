@@ -99,6 +99,8 @@ function AgentScreenModelProvider(props: {
     sendsInput: session.drivingMe,
     send: (event) => session.sendInput(event),
     onHandBackHold: () => session.handBack(null),
+    onPasteRefused: () =>
+      session.showNotice({ code: 'pasteUnsupported', message: '' }),
   });
   // The view has loaded once the first picture shows (or it can't).
   usePending('computer.screen.first_picture', () => {

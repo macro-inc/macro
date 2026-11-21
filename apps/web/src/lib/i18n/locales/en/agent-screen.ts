@@ -34,6 +34,7 @@ export default {
   holdEscToHandBack: 'Hold Esc to hand back',
   leaveKeyboardHint: 'Ctrl+Alt+Shift leaves the keyboard',
   leaveKeyboardHintMac: 'Control+Option+Shift leaves the keyboard',
+  watchersSeePaste: 'Watchers can see what you paste',
   keyboardFor: 'Keyboard for {{name}}’s desktop',
   stopWatching: 'Stop watching',
   popOut: 'Pop out',
@@ -77,6 +78,8 @@ export default {
   noticeTooManySockets:
     'Too many screens are open for this computer. Close one; this view keeps trying.',
   noticeUnknown: 'That didn’t work. Try again.',
+  noticePasteUnsupported:
+    'Couldn’t paste: the computer’s clipboard takes only Western European characters. Type it instead.',
   noticeAgentNotPausable:
     'Couldn’t pause the agent on this computer, so it can’t be taken over right now.',
 

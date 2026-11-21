@@ -51,9 +51,21 @@ export type ScreenInputOptions = {
   send: (event: ScreenInputEvent) => void;
   /** Esc held for `HAND_BACK_HOLD_MS` while driving. */
   onHandBackHold: () => void;
+  /** A paste the guest's clipboard can't take (see `fitsGuestClipboard`). */
+  onPasteRefused?: () => void;
   /** A Mac's Cmd drives the guest's Ctrl (a Linux guest copies with Ctrl+C). */
   isMac?: boolean;
 };
+
+/**
+ * Whether the guest's clipboard can take `text`: VNC's ClientCutText is
+ * Latin-1, and anything else would arrive as '?'.
+ */
+export function fitsGuestClipboard(text: string): boolean {
+  return Array.from(text).every(
+    (character) => (character.codePointAt(0) ?? 0) <= 0xff
+  );
+}
 
 /** Ctrl+V with nothing local to paste still pastes the guest's own clipboard after this. */
 const PASTE_FALLBACK_MS = 60;
@@ -447,6 +459,11 @@ export function createScreenInput(options: ScreenInputOptions) {
       clearTimeout(pasteFallback);
       pasteFallback = undefined;
       event.preventDefault();
+      // Said, rather than pasted with '?' for every character it can't take.
+      if (!fitsGuestClipboard(text)) {
+        options.onPasteRefused?.();
+        return;
+      }
       // This computer's text goes to the guest's clipboard, then pastes.
       options.send({ kind: 'clipboard', text });
       pasteInGuest();

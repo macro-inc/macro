@@ -89,7 +89,9 @@ export type ScreenErrorCode =
    */
   | 'agentNotPausable'
   /** A code this client doesn't know (a newer harness). */
-  | 'unknown';
+  | 'unknown'
+  /** The viewer's own: a paste the guest's clipboard can't take. */
+  | 'pasteUnsupported';
 
 export type ScreenError = { code: ScreenErrorCode; message: string };
 

@@ -492,6 +492,10 @@ export function createScreenSession(options: ScreenSessionOptions) {
     controlLost,
     holdsKeyboard,
     resumingDrive,
+    /** A notice of the viewer's own, in the line the server's errors use. */
+    showNotice(notice: ScreenError) {
+      setStore('notice', notice);
+    },
     /** The person read the control-lost banner and closed it. */
     dismissControlLost() {
       setStore('controlLost', undefined);

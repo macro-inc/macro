@@ -243,3 +243,47 @@ describe('createScreenInput keyboard', () => {
     });
   });
 });
+
+describe('createScreenInput paste', () => {
+  it("puts a paste on the guest's clipboard and pastes it, and says so instead of sending '?' for what that clipboard can't take", () => {
+    vi.useFakeTimers();
+    const sent: ScreenInputEvent[] = [];
+    const refused = vi.fn();
+    createRoot((dispose) => {
+      const input = createScreenInput({
+        frame: () => ({ width: 1920, height: 1080 }),
+        container: () => ({ width: 960, height: 540 }),
+        rotation: () => 0,
+        sendsInput: () => true,
+        send: (event) => sent.push(event),
+        onHandBackHold: () => {},
+        onPasteRefused: refused,
+        isMac: false,
+      });
+      const paste = (text: string) => {
+        const event = {
+          clipboardData: { getData: () => text },
+          preventDefault: vi.fn(),
+        };
+        input.onPaste(event as unknown as ClipboardEvent);
+        return event;
+      };
+
+      paste('café');
+      expect(sent[0]).toEqual({ kind: 'clipboard', text: 'café' });
+      expect(sent.length).toBeGreaterThan(1);
+      expect(refused).not.toHaveBeenCalled();
+
+      sent.length = 0;
+      const curly = paste('it’s');
+      expect(curly.preventDefault).toHaveBeenCalled();
+      expect(sent).toEqual([]);
+      expect(refused).toHaveBeenCalledTimes(1);
+      // Nor does the guest paste its own clipboard instead.
+      vi.advanceTimersByTime(1000);
+      expect(sent).toEqual([]);
+      dispose();
+    });
+    vi.useRealTimers();
+  });
+});

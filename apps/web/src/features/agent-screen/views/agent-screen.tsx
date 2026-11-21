@@ -119,6 +119,13 @@ export function AgentScreen(props: { model: AgentScreenModel }) {
                     ? t('agentScreen.leaveKeyboardHintMac')
                     : t('agentScreen.leaveKeyboardHint')}
                 </span>
+                {/* Until the harness keeps a paste from watchers: the guest's
+                    clipboard reaches every socket. */}
+                <Show when={(session.store.server?.viewers ?? 0) > 1}>
+                  <span class="border-l border-current pl-2">
+                    {t('agentScreen.watchersSeePaste')}
+                  </span>
+                </Show>
               </Show>
             </div>
           </Show>
