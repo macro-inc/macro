@@ -1,5 +1,7 @@
+import { firstOrAborted } from '@core/util/abort-signal';
 import { sleep } from '@core/util/sleep';
 import { recordExternalDeletion } from '@graphql-cache/exchange/external-writes';
+import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalized-cache-exchange';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { Telemetry, type TraceContext } from '@macro-inc/observability';
@@ -17,6 +19,7 @@ import {
   getGraphqlSoupClient,
   hydrateGraphqlSoup,
 } from '@service-storage/graphql-soup';
+import { filter, pipe } from 'wonka';
 import {
   assertContactCacheScope,
   ContactDirectoryScopeError,
@@ -28,6 +31,11 @@ import {
   CHANNEL_RECORD_PREFIX,
   listCachedChannelDocuments,
 } from './directory-cache';
+import {
+  addChannelRereads,
+  pendingChannelRereads,
+  settleChannelRereads,
+} from './directory-rereads';
 
 // The server answers a by-id read of at most this many channels in one page.
 const BY_ID_BATCH = 100;
@@ -75,21 +83,40 @@ const fetchDirectoryPage: FetchPage = (input, options) =>
   hydrateGraphqlSoup(SoupChannelDirectoryBackfillDocument, { input }, options);
 
 const readChannelOnPrimary: ReadFromPrimary = async (channelId, signal) => {
-  const result = await getGraphqlSoupClient()
-    .query(
-      ChannelDirectoryReconcileEntityDocument,
-      { input: { entityType: 'CHANNEL', entityId: channelId } },
-      {
-        requestPolicy: 'network-only',
-        ...(signal ? { fetchOptions: { signal } } : {}),
-      }
-    )
-    .toPromise();
+  // An abort leaves the query's result source, which is what ends urql's
+  // request: urql replaces a `fetchOptions.signal` with its own.
+  const settled = await firstOrAborted(
+    pipe(
+      getGraphqlSoupClient().query(
+        ChannelDirectoryReconcileEntityDocument,
+        { input: { entityType: 'CHANNEL', entityId: channelId } },
+        { requestPolicy: 'network-only' }
+      ),
+      // The answer, as urql's own toPromise takes it.
+      filter((result) => !result.stale && !result.hasNext)
+    ),
+    signal
+  );
+  if (settled.kind === 'aborted') {
+    signal?.throwIfAborted();
+    throw new Error('primary channel read was cancelled');
+  }
+  if (settled.kind === 'ended')
+    throw new Error('primary channel read ended without an answer');
+  const result = settled.value;
   if (result.error) throw result.error;
   if (!result.data) throw new Error('primary channel read returned no data');
-  return result.data.user.soupEntity?.__typename === 'GraphqlSoupChannel'
-    ? 'readable'
-    : 'unreadable';
+  if (result.data.user.soupEntity?.__typename !== 'GraphqlSoupChannel')
+    return 'unreadable';
+  // Readable means written back: the caller may complete the pass, or drop
+  // the reread it owed, only once the cache holds the channel again.
+  const metadata = normalizedCacheResultMetadata(result);
+  if (
+    metadata?.source === 'live-network' &&
+    (await metadata.persistence) === undefined
+  )
+    throw new Error('primary channel read was not written to the cache');
+  return 'readable';
 };
 
 function chunks<T>(items: readonly T[], size: number): T[][] {
@@ -237,16 +264,48 @@ type ReconcileOutcome =
   | 'deferred'
   | 'complete';
 
-/** What reconciliation carries past a failed attempt. */
+/** What reconciliation carries past a failed attempt. The channels it
+ * deleted and owes a second look are kept in `directory-rereads`, past the
+ * fetcher. */
 type ReconcileProgress = {
-  /** Deleted, and not read on the primary since. The pass's fetcher keeps
-   * them, so the next attempt, or a retry of the last page, reads them
-   * first. */
-  deleted: string[];
   /** Channels confirmed on the primary in this reconciliation, against
    * `PRIMARY_CONFIRM_LIMIT`. */
   confirmed: number;
 };
+
+type RereadInput = Pick<
+  Reconciliation,
+  'userId' | 'generation' | 'readFromPrimary' | 'signal'
+>;
+
+/** Reads on the primary each channel a delete in this storage generation
+ * owes a second look, which writes back the ones the viewer can read again,
+ * then drops them from the store. Returns how many were written back. A
+ * failed read throws and keeps every one owed. */
+async function settleRereads(
+  input: RereadInput,
+  trace: TraceContext
+): Promise<number> {
+  const owed = pendingChannelRereads(input.userId, input.generation);
+  if (owed.length === 0) return 0;
+  const gone = await unreadableOnPrimary(
+    owed,
+    input.readFromPrimary,
+    input.signal,
+    trace
+  );
+  settleChannelRereads(input.userId, input.generation, owed);
+  return owed.filter((id) => !gone.has(id)).length;
+}
+
+/** `settleRereads` in its own span, for a fetcher outside reconciliation. */
+function settleRereadsTraced(input: RereadInput): Promise<number> {
+  return Telemetry.span('channel_directory.reread', async (span) => {
+    const restored = await settleRereads(input, span);
+    span.setAttr('channel_directory.restored', restored);
+    return restored;
+  });
+}
 
 /** The search source hash of each of `ids` the cache holds a record of. */
 async function cachedHashes(
@@ -307,20 +366,9 @@ async function removeUnreadableChannels(
       return outcome;
     };
     for (;;) {
-      // The second look at what the last round (or a failed attempt)
-      // deleted comes first, so no later outcome skips it.
-      const rereading = progress.deleted;
-      if (rereading.length > 0) {
-        // Each step starts after an await, outside the span.
-        const gone = await unreadableOnPrimary(
-          rereading,
-          input.readFromPrimary,
-          input.signal,
-          span
-        );
-        progress.deleted = [];
-        restored += rereading.filter((id) => !gone.has(id)).length;
-      }
+      // The second look at what the last round (or a failed attempt, or an
+      // earlier pass) deleted comes first, so no later outcome skips it.
+      restored += await settleRereads(input, span);
       if (pending.length === 0) break;
       if (round === VERIFY_ROUNDS) return finish('unsettled');
       round += 1;
@@ -366,12 +414,14 @@ async function removeUnreadableChannels(
       for (const batch of chunks(stale, DELETE_BATCH)) {
         input.signal?.throwIfAborted();
         const keys = batch.map((id) => `${CHANNEL_RECORD_PREFIX}${id}`);
+        // Owed before the delete, so a pass that stops after it still reads
+        // them again.
+        addChannelRereads(input.userId, input.generation, batch);
         // A read sent before this deletion must not write the channel back.
         recordExternalDeletion(input.host, keys);
         await span.run(() => input.host.deleteRecords(keys, session));
       }
       removed += stale.length;
-      progress.deleted = stale;
       pending = decided.filter(
         (id) => after.has(id) && after.get(id) !== before.get(id)
       );
@@ -470,8 +520,10 @@ async function reconcile(
  * A page counts once the lane asks for the page after it. The lane saves a
  * page's cursor only after the checks that follow its read, and a retry
  * reads from the cursor it saved, so a page whose checks failed is read
- * again and only that answer counts. A retry of the last page also reads on
- * the primary, first, the channels a failed attempt deleted.
+ * again and only that answer counts. The channels a delete owes a second
+ * look (`directory-rereads`) are read on the primary before the first page
+ * and again before the last one decides anything, whichever fetcher, pass or
+ * tab made the delete, and even when this pass cannot reconcile.
  */
 export async function createChannelDirectoryBackfillFetcher(
   userId: string,
@@ -488,10 +540,23 @@ export async function createChannelDirectoryBackfillFetcher(
   let firstPage = true;
   let completeEvidence = true;
   let staged: StagedPage | undefined;
-  const progress: ReconcileProgress = { deleted: [], confirmed: 0 };
+  const progress: ReconcileProgress = { confirmed: 0 };
+  const rereadOwed = (signal: AbortSignal | undefined) =>
+    scope
+      ? settleRereadsTraced({
+          userId,
+          generation: scope.generation,
+          readFromPrimary,
+          signal,
+        })
+      : Promise.resolve(0);
 
   return async (input, options) => {
     if (firstPage) {
+      // A delete an earlier pass, fetcher or tab made and never read again
+      // is read now: the cache no longer holds it, so this pass cannot
+      // find it. A failed read fails the page, which is read again.
+      await rereadOwed(options?.signal);
       firstPage = false;
       // A resumed pass never saw the pages before its cursor.
       if (input.initial) lane = input.initial;
@@ -514,16 +579,18 @@ export async function createChannelDirectoryBackfillFetcher(
     }
 
     if (!host || host.disabled) return page;
-    if (!completeEvidence || !evidence || !lane)
-      throw new ChannelDirectoryPassUnproven('partial_pass');
     // The viewer's identity may have reached the cache only with this pass.
     scope ??= await readReconcileScope(host, userId);
+    // Owed whether or not this pass can reconcile.
+    await rereadOwed(options?.signal);
+    if (!completeEvidence || !evidence || !lane)
+      throw new ChannelDirectoryPassUnproven('partial_pass');
     if (!scope) throw new ChannelDirectoryPassUnproven('scope');
     const last = new Set(ids);
     const candidates = scope.previous.filter(
       (id) => !seen.has(id) && !last.has(id)
     );
-    if (candidates.length > 0 || progress.deleted.length > 0)
+    if (candidates.length > 0)
       await reconcile(
         {
           host: scope.host,

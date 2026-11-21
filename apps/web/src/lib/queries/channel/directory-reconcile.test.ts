@@ -1,11 +1,17 @@
 import type { CacheHost } from '@graphql-cache/host/types';
 import { INITIAL_CACHE_REVISION } from '@graphql-cache/index';
-import type { GraphqlSoupInput } from '@service-storage/graphql-soup';
+import type { CacheRevision } from '@graphql-cache/protocol';
+import {
+  type GraphqlSoupInput,
+  getGraphqlSoupClient,
+} from '@service-storage/graphql-soup';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { fromValue } from 'wonka';
 import {
   ChannelDirectoryPassUnproven,
   createChannelDirectoryBackfillFetcher,
 } from './directory-reconcile';
+import { pendingChannelRereads } from './directory-rereads';
 import { channelName, channelUuid } from './tests/channel-uuid';
 import {
   fakeChannelCache,
@@ -176,6 +182,7 @@ const deleted = (host: { deleteRecords: ReturnType<typeof vi.fn> }) =>
 describe('channel directory reconciliation', () => {
   beforeEach(() => {
     telemetry.error.mockReset();
+    localStorage.clear();
   });
   afterEach(() => {
     vi.useRealTimers();
@@ -638,6 +645,71 @@ describe('channel directory reconciliation', () => {
     ).toBe(false);
   });
 
+  /** A reconciliation that deletes `removed` and `readded`, the viewer
+   * being added back to `readded` as it is deleted, and whose every look
+   * after the delete fails: it leaves both owed a second look. */
+  async function interruptedAfterDelete() {
+    vi.useFakeTimers();
+    const world = reconcileHost(['removed', 'readded']);
+    const { cache, host } = world;
+    const state = { readable: [] as string[], reachable: true };
+    const lane = { nextCursor: null, entityIds: [] };
+    const fetch = server([lane, lane]);
+    const shows = primary(cache, () => state.readable);
+    const read = vi.fn<ReadFromPrimary>(async (id, signal) => {
+      if (!state.reachable) throw new Error('primary unreachable');
+      return shows(id, signal);
+    });
+    host.deleteRecords.mockImplementationOnce(async (keys) => {
+      state.readable = ['readded'];
+      state.reachable = false;
+      for (const key of keys) cache.records.delete(key);
+      return { revision: INITIAL_CACHE_REVISION, affectedOps: [] };
+    });
+    const fetchPage = await fetcher(host, fetch, undefined, read);
+    const failed = expect(fetchPage(FIRST)).rejects.toThrow(
+      'primary unreachable'
+    );
+    await vi.advanceTimersByTimeAsync(3_000);
+    await failed;
+    vi.useRealTimers();
+    read.mockClear();
+    return { ...world, state, fetch, read };
+  }
+
+  it('looks again at what an interrupted reconciliation deleted from a new fetcher, even on a resumed pass', async () => {
+    const { cache, host, state, fetch, read } = await interruptedAfterDelete();
+    expect(pendingChannelRereads('viewer', 'g1').sort()).toEqual(
+      ['readded', 'removed'].map(channelUuid).sort()
+    );
+    state.reachable = true;
+
+    // Another tab, or a restart, takes the lane over from its saved cursor:
+    // the cache no longer holds either channel, so no candidate names them.
+    const resumed = await fetcher(host, fetch, undefined, read);
+    await expect(resumed(SECOND)).rejects.toEqual(
+      new ChannelDirectoryPassUnproven('partial_pass')
+    );
+
+    expect(askedPrimary(read).sort()).toEqual(['readded', 'removed']);
+    expect(
+      cache.records.has(`GraphqlSoupChannel:${channelUuid('readded')}`)
+    ).toBe(true);
+    expect(pendingChannelRereads('viewer', 'g1')).toEqual([]);
+  });
+
+  it('owes nothing to a cache whose storage was reset since the delete', async () => {
+    const { host, state, fetch, read, setGeneration } =
+      await interruptedAfterDelete();
+    state.reachable = true;
+    setGeneration('g2');
+
+    const next = await fetcher(host, fetch, undefined, read);
+    await next(FIRST);
+
+    expect(read).not.toHaveBeenCalled();
+  });
+
   it('confirms at most five hundred channels on the primary in a pass, failing it so the next pass goes on', async () => {
     const ids = Array.from({ length: 600 }, (_, index) => `c${index}`);
     const { host } = reconcileHost(ids);
@@ -774,3 +846,118 @@ function namedInReads(fetch: ReturnType<typeof server>) {
     ].map(([, id]) => channelName(id))
   );
 }
+
+describe('the primary read after a delete', () => {
+  beforeEach(() => {
+    telemetry.error.mockReset();
+    localStorage.clear();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** The app's GraphQL client, answering each by-id read on the primary as
+   * `answer` says: unreadable, or readable with the cache's acknowledgement
+   * of its write. */
+  function primaryClient(
+    answer: (id: string) => 'unreadable' | Promise<CacheRevision | undefined>
+  ) {
+    const query = vi.fn(
+      (_document: unknown, variables: { input: { entityId: string } }) => {
+        const id = variables.input.entityId;
+        const persistence = answer(id);
+        return fromValue({
+          stale: false,
+          hasNext: false,
+          data: {
+            user: {
+              soupEntity:
+                persistence === 'unreadable'
+                  ? null
+                  : { __typename: 'GraphqlSoupChannel', id },
+            },
+          },
+          extensions:
+            persistence === 'unreadable'
+              ? undefined
+              : {
+                  __macroNormalizedCache: {
+                    source: 'live-network',
+                    persistence,
+                  },
+                },
+        });
+      }
+    );
+    vi.mocked(getGraphqlSoupClient).mockReturnValue({
+      query,
+    } as unknown as ReturnType<typeof getGraphqlSoupClient>);
+    return query;
+  }
+
+  it('does not finish the pass before the cache has written back a channel the primary shows', async () => {
+    const { host } = reconcileHost(['readded']);
+    const fetch = server([{ nextCursor: null, entityIds: [] }]);
+    let acknowledge: (revision: CacheRevision) => void = () => {};
+    const written = new Promise<CacheRevision | undefined>((resolve) => {
+      acknowledge = resolve;
+    });
+    let deletedYet = false;
+    host.deleteRecords.mockImplementationOnce(async () => {
+      deletedYet = true;
+      return { revision: INITIAL_CACHE_REVISION, affectedOps: [] };
+    });
+    // Unreadable when confirmed; added back by the look after the delete.
+    primaryClient(() => (deletedYet ? written : 'unreadable'));
+    const fetchPage = await createChannelDirectoryBackfillFetcher(
+      'viewer',
+      host,
+      fetch
+    );
+
+    let landed = false;
+    const page = fetchPage(FIRST).finally(() => {
+      landed = true;
+    });
+    await vi.waitFor(() => expect(deletedYet).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(landed).toBe(false);
+    expect(pendingChannelRereads('viewer', 'g1')).toEqual([
+      channelUuid('readded'),
+    ]);
+
+    acknowledge(INITIAL_CACHE_REVISION);
+    await expect(page).resolves.toMatchObject({ nextCursor: null });
+    expect(pendingChannelRereads('viewer', 'g1')).toEqual([]);
+  });
+
+  it('keeps the second look owed when the cache refused the write', async () => {
+    vi.useFakeTimers();
+    const { host } = reconcileHost(['readded']);
+    const fetch = server([{ nextCursor: null, entityIds: [] }]);
+    let deletedYet = false;
+    host.deleteRecords.mockImplementationOnce(async () => {
+      deletedYet = true;
+      return { revision: INITIAL_CACHE_REVISION, affectedOps: [] };
+    });
+    // The write was fenced or failed: the cache acknowledges no revision.
+    primaryClient(() =>
+      deletedYet ? Promise.resolve(undefined) : 'unreadable'
+    );
+    const fetchPage = await createChannelDirectoryBackfillFetcher(
+      'viewer',
+      host,
+      fetch
+    );
+
+    const failed = expect(fetchPage(FIRST)).rejects.toThrow(
+      'primary channel read was not written to the cache'
+    );
+    await vi.advanceTimersByTimeAsync(3_000);
+    await failed;
+
+    expect(pendingChannelRereads('viewer', 'g1')).toEqual([
+      channelUuid('readded'),
+    ]);
+  });
+});
