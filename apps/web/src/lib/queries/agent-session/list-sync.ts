@@ -87,9 +87,16 @@ function excludesAgentSessions(ast: unknown): boolean {
   return isRecord(ast.l) && ast.l.id === NIL_UUID;
 }
 
-/** Whether a Soup list's REST-shaped filter body can contain agent sessions. */
+/**
+ * Whether a Soup list's REST-shaped filter body can contain agent sessions.
+ * Sessions are opt-in: the server lists them only for a present `asf`
+ * (`opted_in` in `pg_soup_repo/agent_session.rs`), or for a favorites list,
+ * whose favorite session ids it adds itself (`soup` `favorites.rs`).
+ */
 function listCanIncludeAgentSessions(body: unknown): boolean {
-  return isRecord(body) && !excludesAgentSessions(body.asf);
+  if (!isRecord(body)) return false;
+  if (body.favorites_only === true) return true;
+  return body.asf != null && !excludesAgentSessions(body.asf);
 }
 
 /**

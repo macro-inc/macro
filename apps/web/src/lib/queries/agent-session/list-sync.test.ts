@@ -130,7 +130,9 @@ it('refetches the GraphQL soup lists when the normalized cache is disabled', asy
   const nil = { l: { id: '00000000-0000-0000-0000-000000000000' } };
   expect(where?.({ asf: { '&': [{ l: { owner: 'me' } }, nil] } })).toBe(false);
   expect(where?.({ asf: { l: { owner: 'me' } } })).toBe(true);
-  expect(where?.({ df: nil })).toBe(true);
+  // Sessions are opt-in: only a session filter or a favorites list holds them.
+  expect(where?.({ df: nil })).toBe(false);
+  expect(where?.({ df: nil, favorites_only: true })).toBe(true);
   expect(
     mocks.spans.find(({ name }) => name === 'agent_session.lists_refetch')
       ?.attrs
