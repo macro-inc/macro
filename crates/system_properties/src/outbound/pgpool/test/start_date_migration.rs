@@ -127,16 +127,23 @@ async fn custom_start_dates_move_to_the_built_in_property_and_keep_working(
         [
             (TEAM_START, "Start Date (custom)".to_string()),
             (PERSONAL_START, "start date (custom)".to_string()),
-            // Its owner already has the new name, so it keeps the old one.
-            (TEXT_START, "Start Date".to_string()),
+            // Its owner already has "Start Date (custom)", so it takes the
+            // start of its id instead.
+            (TEXT_START, "Start Date (custom 00000000)".to_string()),
             (TAKEN_NAME, "Start Date (custom)".to_string()),
         ]
     );
 
-    // A renamed property takes edits again.
+    // Every renamed property takes edits again.
     sqlx::query!(
         "UPDATE property_definitions SET display_name = 'Kickoff' WHERE id = $1",
         TEAM_START
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        "UPDATE property_definitions SET updated_at = NOW() WHERE id = $1",
+        TEXT_START
     )
     .execute(&pool)
     .await?;
