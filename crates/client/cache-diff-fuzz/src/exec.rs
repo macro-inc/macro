@@ -5,10 +5,12 @@ use crate::host::engine::{EngineHandle, EntityFilterRequest, WriteRegistration, 
 use crate::normalize::Normalizer;
 use crate::sequence::{Generated, Op};
 use cache_core::engine::HydrationScope;
-use cache_core::people::{ContextAction, ContextUpdate};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
+
+mod around;
+mod people;
 
 const SCOPE: &str = "diff-fuzz";
 const PROBE_CHUNK: usize = 200;
@@ -254,151 +256,6 @@ impl<'a> Exec<'a> {
         Ok(())
     }
 
-    /// Stages the hydrate at `index` before the op ahead of it runs, as the
-    /// browser host's `prepareHydrate` and `stageHydrate` would, so that op
-    /// (a write, a clear, an account switch, an authority change, another
-    /// hydrate) lands between the stage and the commit. The commit must then
-    /// answer as the hydrate would have, issued after that op: the other
-    /// side runs the case as it is.
-    #[cfg(staged_hydrate)]
-    async fn stage_ahead(&mut self, index: usize, op: &Op) {
-        let Op::Hydrate {
-            doc,
-            variables,
-            data,
-            identity,
-            contacts,
-            ..
-        } = op
-        else {
-            return;
-        };
-        let current = std::mem::replace(&mut self.identity, identity.clone());
-        let staged = self.stage(doc, variables, data, *contacts).await;
-        self.identity = current;
-        match staged {
-            Ok(staged) => {
-                self.count(match (staged.failed, staged.staged()) {
-                    (true, _) => "stage.failed",
-                    (false, true) => "stage.staged",
-                    (false, false) => "stage.whole",
-                });
-                self.staged.push((index, staged));
-            }
-            Err(_) => self.count("stage.refused"),
-        }
-    }
-
-    #[cfg(staged_hydrate)]
-    async fn stage(
-        &self,
-        doc: &str,
-        variables: &serde_json::Map<String, Value>,
-        data: &Value,
-        contacts: bool,
-    ) -> Result<crate::host::engine::fuzz_hooks::FuzzStagedHydrate, String> {
-        let handle = self.stamped().await?;
-        let scope = match contacts {
-            true => Some(self.scope(true).await?),
-            false => None,
-        };
-        let query = self.doc(doc)?;
-        handle
-            .fuzz_stage_hydrate(HydrateRequest {
-                query: &query,
-                operation_name: Some(doc),
-                variables,
-                data,
-                identity: Some(&self.identity),
-                scope: scope.as_ref(),
-            })
-            .await
-    }
-
-    /// Whether the hydrate at `index` runs with reads issued while it runs.
-    fn split_due(&self, index: usize) -> bool {
-        self.concurrent_reads > 0.0
-            && ((crate::rng::mix(index as u64, "split") % 1_000) as f64)
-                < self.concurrent_reads * 1_000.0
-    }
-
-    /// What reads around a hydrate compare: the hydrated query itself and a
-    /// people-and-documents search.
-    async fn split_reads(
-        &self,
-        doc: &str,
-        variables: &serde_json::Map<String, Value>,
-    ) -> Result<Vec<Value>, String> {
-        Ok(split_reads(
-            self.handle().clone(),
-            self.doc(doc)?,
-            doc.to_owned(),
-            variables.clone(),
-        )
-        .await)
-    }
-
-    /// The same reads, issued from other threads a few milliseconds apart
-    /// while the hydrate runs on this one.
-    fn spawn_split_reads(
-        &self,
-        doc: &str,
-        variables: &serde_json::Map<String, Value>,
-    ) -> Vec<tokio::task::JoinHandle<Vec<Value>>> {
-        let Ok(query) = self.doc(doc) else {
-            return Vec::new();
-        };
-        [0, 1, 2, 5]
-            .into_iter()
-            .map(|delay| {
-                let (handle, query, doc, variables) = (
-                    self.handle().clone(),
-                    query.clone(),
-                    doc.to_owned(),
-                    variables.clone(),
-                );
-                tokio::spawn(async move {
-                    tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
-                    split_reads(handle, query, doc, variables).await
-                })
-            })
-            .collect()
-    }
-
-    /// Every read issued while a hydrate ran must answer as the state before
-    /// it or after it, never anything between: otherwise the seed fails.
-    async fn check_split(
-        &mut self,
-        index: usize,
-        doc: &str,
-        variables: &serde_json::Map<String, Value>,
-        before: Vec<Value>,
-        during: Vec<tokio::task::JoinHandle<Vec<Value>>>,
-    ) -> Result<(), String> {
-        let mut answers = Vec::new();
-        for read in during {
-            answers.push(read.await.map_err(|error| error.to_string())?);
-        }
-        let after = self.split_reads(doc, variables).await?;
-        self.count("split");
-        for reads in answers {
-            for (at, read) in reads.iter().enumerate() {
-                match (read == &before[at], read == &after[at]) {
-                    (true, false) => self.count("split.read-before"),
-                    (false, true) => self.count("split.read-after"),
-                    (true, true) => self.count("split.read-unchanged"),
-                    (false, false) => {
-                        return Err(format!(
-                            "op {index}: a read during the hydrate answered neither as before nor as after it: {}",
-                            serde_json::to_string(read).unwrap_or_default()
-                        ));
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-
     pub async fn step(&mut self, index: usize, op: &Op) -> Result<(), String> {
         match op {
             Op::Hydrate {
@@ -420,8 +277,9 @@ impl<'a> Exec<'a> {
                     .as_ref()
                     .map(|_| self.spawn_split_reads(doc, variables));
                 let outcome = self.hydrate(index, doc, variables, data, *contacts).await;
+                let returned = std::time::Instant::now();
                 if let (Some(before), Some(during)) = (before, during) {
-                    self.check_split(index, doc, variables, before, during)
+                    self.check_split(index, doc, variables, before, during, returned)
                         .await?;
                 }
                 if let Ok(value) = &outcome {
@@ -820,7 +678,10 @@ impl<'a> Exec<'a> {
         if let Some(staged) = staged {
             match handle.fuzz_commit_staged_hydrate(staged).await {
                 Some(result) => {
-                    self.count("stage.committed");
+                    self.count(match result.is_ok() {
+                        true => "stage.committed",
+                        false => "stage.commit-error",
+                    });
                     let result = result?;
                     return Ok(json!({
                         "unchangedViews": result.unchanged_views,
@@ -1025,107 +886,6 @@ impl<'a> Exec<'a> {
         Ok(Value::Array(out))
     }
 
-    async fn contact_reconcile(&mut self, keep_every: u8) -> Outcome {
-        let scope = self.scope(false).await?;
-        let handle = self.handle();
-        let snapshot = handle
-            .contact_snapshot(
-                serde_json::from_value(json!({
-                    "scope": scope,
-                    "scan": { "after": null, "limit": 200 },
-                }))
-                .map_err(|error| error.to_string())?,
-            )
-            .await?;
-        let snapshot = serde_json::to_value(snapshot).map_err(|error| error.to_string())?;
-        let ids: Vec<Value> = snapshot["ids"].as_array().cloned().unwrap_or_default();
-        let present: Vec<Value> = ids
-            .iter()
-            .enumerate()
-            .filter(|(index, _)| index % usize::from(keep_every.max(1)) == 0)
-            .map(|(_, id)| id.clone())
-            .collect();
-        let reconcile = handle
-            .contact_reconcile(
-                serde_json::from_value(json!({
-                    "scope": scope,
-                    "fence": snapshot["fence"],
-                    "viewer": self.identity,
-                    "requested": ids,
-                    "present": present,
-                }))
-                .map_err(|error| error.to_string())?,
-            )
-            .await;
-        let reconcile = match reconcile {
-            Ok(result) => serde_json::to_value(result).map_err(|error| error.to_string())?,
-            Err(error) => json!({ "error": error }),
-        };
-        Ok(json!({ "snapshot": snapshot, "reconcile": reconcile }))
-    }
-
-    async fn people_context(&mut self, epoch: &str) -> Outcome {
-        let scope = self.scope(false).await?;
-        let handle = self.handle();
-        let state = handle.people_context(scope.clone()).await?;
-        let epoch = epoch
-            .parse()
-            .map_err(|error: uuid::Error| error.to_string())?;
-        let begin = handle
-            .people_update(ContextUpdate {
-                scope: scope.clone(),
-                epoch,
-                action: ContextAction::Begin {
-                    previous_epoch: state.epoch(),
-                },
-            })
-            .await
-            .and_then(|result| serde_json::to_value(result).map_err(|error| error.to_string()));
-        let commit = handle
-            .people_update(ContextUpdate {
-                scope,
-                epoch,
-                action: ContextAction::Commit,
-            })
-            .await
-            .and_then(|result| serde_json::to_value(result).map_err(|error| error.to_string()));
-        let wrap = |result: Result<Value, String>| {
-            result.unwrap_or_else(|error| json!({ "error": error }))
-        };
-        Ok(json!({
-            "before": serde_json::to_value(&state).map_err(|error| error.to_string())?,
-            "begin": wrap(begin),
-            "commit": wrap(commit),
-        }))
-    }
-
-    async fn people_search(&mut self, request: &Value, pages: u8) -> Outcome {
-        let scope = self.scope(false).await?;
-        let mut request = request.clone();
-        request["scope"] = serde_json::to_value(&scope).map_err(|error| error.to_string())?;
-        let mut out = Vec::new();
-        for _ in 0..pages {
-            let parsed: cache_core::people::PeopleSearch = serde_json::from_value(request.clone())
-                .map_err(|error| format!("request: {error}"))?;
-            let value = match self.handle().people_search(parsed).await {
-                Ok(result) => serde_json::to_value(result).map_err(|error| error.to_string())?,
-                Err(error) => {
-                    out.push(json!({ "error": error }));
-                    break;
-                }
-            };
-            let kind = value["kind"].as_str().unwrap_or("?").to_owned();
-            self.count(format!("people-search.{kind}"));
-            let next = value["nextCursor"].clone();
-            out.push(value);
-            if next.is_null() {
-                break;
-            }
-            request["cursor"] = next;
-        }
-        Ok(Value::Array(out))
-    }
-
     /// Reads everything the sequence could have written, in a fixed order.
     async fn probe(&mut self, index: usize) {
         self.count("probe");
@@ -1232,28 +992,4 @@ fn copy_dir(from: &Path, to: &Path) -> Result<(), String> {
         }
     }
     Ok(())
-}
-
-/// The reads [`Exec::split_reads`] describes, each as its answer or its error.
-async fn split_reads(
-    handle: EngineHandle,
-    query: String,
-    doc: String,
-    variables: serde_json::Map<String, Value>,
-) -> Vec<Value> {
-    let read = handle
-        .read(None, query, Some(doc), variables, vec![])
-        .await
-        .and_then(|result| serde_json::to_value(result).map_err(|error| error.to_string()));
-    let search = match serde_json::from_value(crate::probe::searches()[0].clone()) {
-        Ok(request) => handle
-            .search(request)
-            .await
-            .and_then(|page| serde_json::to_value(page).map_err(|error| error.to_string())),
-        Err(error) => Err(error.to_string()),
-    };
-    [read, search]
-        .into_iter()
-        .map(|outcome| outcome.unwrap_or_else(|error| json!({ "error": error })))
-        .collect()
 }

@@ -32,8 +32,9 @@ pub(crate) struct FuzzStagedHydrate {
     projections: Vec<cache_core::predicate::ProjectionMutation>,
     staged: Option<cache_core::engine::StagedHydrate>,
     wal: Option<cache_turso::WalPosition>,
-    /// Whether staging failed (the browser host then runs nothing before the commit).
-    pub failed: bool,
+    /// Why staging failed: the browser host's `prepareHydrate` then rejects,
+    /// so the hydrate answers with this error at its turn.
+    pub error: Option<String>,
 }
 
 #[cfg(staged_hydrate)]
@@ -55,7 +56,7 @@ impl EngineHandle {
     ) -> Result<FuzzStagedHydrate, String> {
         let mut state = self.snapshot_hydration().await?;
         let engine = &mut state.engine;
-        let projections = super::soup::write_projections(
+        let projections = match super::soup::write_projections(
             engine,
             request.query,
             request.operation_name,
@@ -63,7 +64,18 @@ impl EngineHandle {
             request.data,
             request.identity,
         )
-        .await?;
+        .await
+        {
+            Ok(projections) => projections,
+            Err(error) => {
+                return Ok(FuzzStagedHydrate {
+                    projections: Vec::new(),
+                    staged: None,
+                    wal: None,
+                    error: Some(error.to_string()),
+                });
+            }
+        };
         let wal = engine.storage().wal_position().ok();
         let staged = engine
             .stage_hydrate(
@@ -78,18 +90,22 @@ impl EngineHandle {
                 &projections,
             )
             .await;
-        let failed = staged.is_err();
+        let (staged, error) = match staged {
+            Ok(staged) => (staged, None),
+            Err(error) => (None, Some(error.to_string())),
+        };
         Ok(FuzzStagedHydrate {
             projections,
-            staged: staged.ok().flatten(),
+            staged,
             wal,
-            failed,
+            error,
         })
     }
 
     /// Does what the browser host's `commitHydrate` does with a staged write:
     /// commits it while storage is where it was staged and the engine says it
-    /// is current. `None` when it can't, and the hydrate runs whole.
+    /// is current. `None` when it can't, and the hydrate runs whole; a stage
+    /// that failed answers with its error.
     pub(crate) async fn fuzz_commit_staged_hydrate(
         &self,
         staged: FuzzStagedHydrate,
@@ -98,8 +114,11 @@ impl EngineHandle {
             projections,
             staged,
             wal,
-            ..
+            error,
         } = staged;
+        if let Some(error) = error {
+            return Some(Err(error));
+        }
         let staged = staged?;
         let mut state = match self.snapshot_hydration().await {
             Ok(state) => state,
