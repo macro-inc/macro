@@ -71,6 +71,10 @@ environment.
   the same stack. Tests only read it.
 - Every other test makes the channels it needs, with unique names, so tests
   run in parallel in any order.
+- `fuzz/` is a differential fuzzer over the same harness: random sequences
+  of operations by several people, run against the builds with and without
+  `VITE_ENABLE_CHANNEL_LOCAL_SYNC` and compared ([fuzz/README.md](fuzz/README.md)).
+  It is run by hand, not by `just test-channels-e2e` or CI.
 
 ## The ledger
 

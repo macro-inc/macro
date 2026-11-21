@@ -11,6 +11,9 @@ in separate browser profiles. [README.md](README.md) has how to run and extend i
 - `harness/fixtures.ts`: the fixtures every test gets.
 - `harness/channel.ts`: the page object for an open channel.
 - `ledger/inventory.tsv`: what channels do and which tests cover it.
+- `fuzz/README.md`: the differential fuzzer, which runs random sequences of
+  operations against the builds with and without `VITE_ENABLE_CHANNEL_LOCAL_SYNC`
+  and compares them.
 
 ## Scope
 
