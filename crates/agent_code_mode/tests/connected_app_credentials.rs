@@ -110,6 +110,7 @@ impl ConnectedAppTools for Apps {
 /// The JSON is the existing journal representation, including the issued binding.
 struct Fixture {
     service: ConnectedAppService,
+    store: Arc<Records>,
     apps: Arc<Apps>,
     owner: MacroUserIdStr<'static>,
     access: EntityAccessReceipt<EditAccessLevel>,
@@ -144,9 +145,11 @@ impl Fixture {
             EntityType::AgentSession,
         );
         let apps = Arc::new(Apps::default());
+        let store = Arc::new(Records(records));
         Self {
+            store: store.clone(),
             service: ConnectedAppService::new(
-                Arc::new(Records(records)),
+                store,
                 Arc::new(Turns),
                 apps.clone(),
             ),
@@ -356,3 +359,21 @@ mod signed_http;
 
 #[path = "connected_app_credentials/issuance.rs"]
 mod issuance;
+
+#[path = "connected_app_credentials/ui_binding.rs"]
+mod ui_binding;
+
+#[tokio::test]
+async fn the_api_omits_the_binding_while_the_journal_retains_it() {
+    let fixture = Fixture::new(true);
+    let record = fixture.store.get(AgentSessionId::new_from_uuid(Uuid::from_u128(202)), fixture.execution).await.unwrap();
+    let journal = serde_json::to_value(&record).unwrap();
+    assert_eq!(journal["credentialCorrelationId"], json!(Uuid::from_u128(302)));
+    let public = serde_json::to_value(agent_code_mode::inbound::axum_router::ExecutionRecordResponse::from(record)).unwrap();
+    assert!(public.get("credentialCorrelationId").is_none());
+    assert!(public.get("executionId").is_some());
+    let schema = serde_json::to_value(<ExecutionRecord as utoipa::PartialSchema>::schema()).unwrap();
+    let properties = schema["properties"].as_object().unwrap();
+    assert!(properties.contains_key("executionId"));
+    assert!(!properties.contains_key("credentialCorrelationId"));
+}

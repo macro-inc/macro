@@ -1,4 +1,6 @@
 //! Session-authorized reads for code execution's existing tool components.
+mod execution_response;
+pub use execution_response::ExecutionRecordResponse;
 use crate::domain::{
     CodeModeError, ExecutionId, ExecutionRecord, SessionCodeMode,
     connected_apps::*,
@@ -188,7 +190,7 @@ pub async fn get_code_execution<Access: EntityAccessService, Auth: MacroAuthoriz
     access: AgentSessionAccessLevelExtractor<ViewAccessLevel, Access, Auth>,
     State(state): State<CodeExecutionRouterState<Access, Auth>>,
     Path((_session, execution)): Path<(Uuid, Uuid)>,
-) -> Result<Json<ExecutionRecord>, CodeExecutionApiError> {
+) -> Result<Json<ExecutionRecordResponse>, CodeExecutionApiError> {
     state
         .service
         .read(
@@ -196,6 +198,7 @@ pub async fn get_code_execution<Access: EntityAccessService, Auth: MacroAuthoriz
             ExecutionId::from_uuid(execution),
         )
         .await
+        .map(ExecutionRecordResponse::from)
         .map(Json)
         .map_err(CodeExecutionApiError)
 }
