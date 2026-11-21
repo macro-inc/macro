@@ -192,23 +192,6 @@ pub trait ConnectedAppTools: Send + Sync + 'static {
     ) -> Result<ConnectMcpServerResponse, CodeModeError>;
 }
 
-/// The verified attribution of the credential calling: its code-mode
-/// correlation and that correlation's agent session, as the request's
-/// boundary validated them.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct CallerCorrelation {
-    /// The credential's correlation, if it has one.
-    pub id: Option<macro_uuid::Uuid>,
-    /// The session that correlation belongs to.
-    pub session: Option<macro_uuid::Uuid>,
-}
-
-impl From<Option<macro_uuid::Uuid>> for CallerCorrelation {
-    fn from(id: Option<macro_uuid::Uuid>) -> Self {
-        Self { id, session: None }
-    }
-}
-
 /// Admits a running execution's connected-app requests.
 #[derive(Clone)]
 pub struct ConnectedAppService {
@@ -243,7 +226,7 @@ impl ConnectedAppService {
         &self,
         access: &EntityAccessReceipt<EditAccessLevel>,
         caller: &MacroUserIdStr<'static>,
-        correlation: impl Into<CallerCorrelation> + Send,
+        correlation: Option<macro_uuid::Uuid>,
         execution: ExecutionId,
     ) -> Result<ConnectedAppUse, CodeModeError> {
         let session =
@@ -251,16 +234,6 @@ impl ConnectedAppService {
         if access.acting_user_id() != Some(caller) {
             return Err(CodeModeError::Forbidden);
         }
-        // A program's credential spends only its own session's executions,
-        // never one in another session of the same owner.
-        let correlation = correlation.into();
-        if correlation
-            .session
-            .is_some_and(|own| own != session.as_uuid())
-        {
-            return Err(CodeModeError::Forbidden);
-        }
-        let correlation = correlation.id;
         let record = self.store.get(session, execution).await?;
         let (Some(acting_as), Some(turn)) = (record.acting_as, record.turn_id) else {
             return Err(CodeModeError::Forbidden);
@@ -307,7 +280,7 @@ impl ConnectedAppService {
         &self,
         access: &EntityAccessReceipt<EditAccessLevel>,
         caller: &MacroUserIdStr<'static>,
-        correlation: impl Into<CallerCorrelation> + Send,
+        correlation: Option<macro_uuid::Uuid>,
         execution: ExecutionId,
     ) -> Result<Vec<ConnectedApp>, CodeModeError> {
         let usage = self.admit(access, caller, correlation, execution).await?;
@@ -319,7 +292,7 @@ impl ConnectedAppService {
         &self,
         access: &EntityAccessReceipt<EditAccessLevel>,
         caller: &MacroUserIdStr<'static>,
-        correlation: impl Into<CallerCorrelation> + Send,
+        correlation: Option<macro_uuid::Uuid>,
         execution: ExecutionId,
         app: ConnectedAppRef,
     ) -> Result<Vec<ConnectedTool>, CodeModeError> {
@@ -332,7 +305,7 @@ impl ConnectedAppService {
         &self,
         access: &EntityAccessReceipt<EditAccessLevel>,
         caller: &MacroUserIdStr<'static>,
-        correlation: impl Into<CallerCorrelation> + Send,
+        correlation: Option<macro_uuid::Uuid>,
         execution: ExecutionId,
         app: ConnectedAppRef,
         call: CallConnectedTool,
@@ -346,7 +319,7 @@ impl ConnectedAppService {
         &self,
         access: &EntityAccessReceipt<EditAccessLevel>,
         caller: &MacroUserIdStr<'static>,
-        correlation: impl Into<CallerCorrelation> + Send,
+        correlation: Option<macro_uuid::Uuid>,
         execution: ExecutionId,
         request: DiscoveryRequest,
     ) -> Result<DiscoverConnectorsResponse, CodeModeError> {
@@ -360,7 +333,7 @@ impl ConnectedAppService {
         &self,
         access: &EntityAccessReceipt<EditAccessLevel>,
         caller: &MacroUserIdStr<'static>,
-        correlation: impl Into<CallerCorrelation> + Send,
+        correlation: Option<macro_uuid::Uuid>,
         execution: ExecutionId,
         server: ConnectMcpServer,
     ) -> Result<ConnectMcpServerResponse, CodeModeError> {
@@ -377,7 +350,7 @@ impl ConnectedAppService {
         &self,
         access: &EntityAccessReceipt<EditAccessLevel>,
         caller: &MacroUserIdStr<'static>,
-        correlation: impl Into<CallerCorrelation> + Send,
+        correlation: Option<macro_uuid::Uuid>,
         execution: ExecutionId,
         query: &str,
     ) -> Result<ConnectedToolSearch, CodeModeError> {

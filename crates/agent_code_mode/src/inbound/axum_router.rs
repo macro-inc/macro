@@ -376,10 +376,7 @@ pub async fn list_connected_apps<Access: EntityAccessService, Auth: MacroAuthori
         .apps(
             &access.entity_access_receipt,
             &caller.authorization.user.macro_user_id,
-            crate::domain::connected_apps::CallerCorrelation {
-                id: agent_correlation::context::current(),
-                session: agent_correlation::context::current_session(),
-            },
+            agent_correlation::context::current(),
             ExecutionId::from_uuid(execution),
         )
         .await
@@ -405,10 +402,7 @@ pub async fn list_connected_app_tools<
         .tools(
             &access.entity_access_receipt,
             &caller.authorization.user.macro_user_id,
-            crate::domain::connected_apps::CallerCorrelation {
-                id: agent_correlation::context::current(),
-                session: agent_correlation::context::current_session(),
-            },
+            agent_correlation::context::current(),
             ExecutionId::from_uuid(execution),
             ConnectedAppRef { kind, key },
         )
@@ -438,10 +432,7 @@ pub async fn call_connected_app_tool<
         .call(
             &access.entity_access_receipt,
             &caller.authorization.user.macro_user_id,
-            crate::domain::connected_apps::CallerCorrelation {
-                id: agent_correlation::context::current(),
-                session: agent_correlation::context::current_session(),
-            },
+            agent_correlation::context::current(),
             ExecutionId::from_uuid(execution),
             ConnectedAppRef { kind, key },
             call,
@@ -473,10 +464,7 @@ pub async fn discover_connected_apps<
         .discover(
             &access.entity_access_receipt,
             &caller.authorization.user.macro_user_id,
-            crate::domain::connected_apps::CallerCorrelation {
-                id: agent_correlation::context::current(),
-                session: agent_correlation::context::current_session(),
-            },
+            agent_correlation::context::current(),
             ExecutionId::from_uuid(execution),
             request,
         )
@@ -506,10 +494,7 @@ pub async fn add_connected_mcp_server<
         .add_server(
             &access.entity_access_receipt,
             &caller.authorization.user.macro_user_id,
-            crate::domain::connected_apps::CallerCorrelation {
-                id: agent_correlation::context::current(),
-                session: agent_correlation::context::current_session(),
-            },
+            agent_correlation::context::current(),
             ExecutionId::from_uuid(execution),
             server,
         )
@@ -544,10 +529,7 @@ pub async fn search_connected_app_tools<
         .search_tools(
             &access.entity_access_receipt,
             &caller.authorization.user.macro_user_id,
-            crate::domain::connected_apps::CallerCorrelation {
-                id: agent_correlation::context::current(),
-                session: agent_correlation::context::current_session(),
-            },
+            agent_correlation::context::current(),
             ExecutionId::from_uuid(execution),
             &query.query,
         )
