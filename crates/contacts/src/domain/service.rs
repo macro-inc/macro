@@ -118,7 +118,7 @@ impl<R: ContactsRepository + ContactListRepository, N: ContactsNotifier>
             DirectoryChange::Interacted { users, peers } => {
                 span.record("change", "interacted");
                 let added = self.repository.record_interactions(&users, &peers).await?;
-                invalidations_by_owner(added)
+                self.drop_deleted_accounts(added).await?
             }
             DirectoryChange::InboxContacts { inbox, contacts } => {
                 span.record("change", "inbox_contacts");
@@ -151,6 +151,57 @@ impl<R: ContactsRepository + ContactListRepository, N: ContactsNotifier>
         self.notifier
             .invalidate_contacts_for_users(invalidations)
             .await
+    }
+
+    /// Removes rows an interaction added for an account deleted while it was
+    /// being written. The insert skips ids with no profile, but its snapshot
+    /// may predate a profile delete that commits, and whose `UserDeleted` is
+    /// applied, before the insert commits. Checking again once it has
+    /// committed closes that: a profile still present now is deleted later,
+    /// and its `UserDeleted`, which waits for that, removes these rows.
+    async fn drop_deleted_accounts(
+        &self,
+        added: Vec<(MacroUserIdStr<'static>, MacroUserIdStr<'static>)>,
+    ) -> Result<Vec<ContactsInvalidation>, Report> {
+        if added.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let named: HashSet<_> = added
+            .iter()
+            .flat_map(|(owner, contact)| [owner.clone(), contact.clone()])
+            .collect();
+        let named: Vec<_> = named.into_iter().collect();
+        let deleted: HashSet<_> = self
+            .repository
+            .missing_profiles(&named)
+            .await?
+            .into_iter()
+            .collect();
+        if deleted.is_empty() {
+            return Ok(invalidations_by_owner(added));
+        }
+
+        // Owners who lost a deleted account re-read everything, like any
+        // removal; everyone else is told only what they gained.
+        let mut lost_one = HashSet::new();
+        for user in &deleted {
+            lost_one.extend(self.repository.delete_user_lists(user).await?);
+        }
+        let kept = added
+            .into_iter()
+            .filter(|(owner, contact)| {
+                !deleted.contains(owner) && !deleted.contains(contact) && !lost_one.contains(owner)
+            })
+            .collect();
+        let mut invalidations = invalidations_by_owner(kept);
+        invalidations.extend(
+            lost_one
+                .into_iter()
+                .filter(|owner| !deleted.contains(owner))
+                .map(ContactsInvalidation::unknown),
+        );
+        Ok(invalidations)
     }
 
     /// Writes the legacy edge for each contact, so the old read path stays
@@ -235,6 +286,36 @@ impl<R: ContactsRepository + ContactListRepository, N: ContactsNotifier> Contact
 
     async fn add_contact_nodes(&self, nodes: ContactsNodes) -> Result<(), rootcause::Report> {
         self.process_message(ContactsMessage::Nodes(nodes)).await
+    }
+
+    /// Writes the legacy edge, so the old read path stays complete, then the
+    /// directed `invited` row, then tells the inviter to re-read the invitee.
+    /// The notification is sent even when the row already existed, so a retry
+    /// after a failed notification still delivers it; one extra lookup on a
+    /// rate-limited route is cheap.
+    #[tracing::instrument(
+        name = "contacts.invite",
+        skip_all,
+        fields(added = tracing::field::Empty),
+        err
+    )]
+    async fn invite_contact(
+        &self,
+        inviter: MacroUserIdStr<'static>,
+        invitee: MacroUserIdStr<'static>,
+    ) -> Result<(), Report> {
+        self.repository
+            .create_connections(vec![(inviter.copied(), invitee.copied())])
+            .await?;
+
+        if inviter == invitee {
+            return Ok(());
+        }
+        let added = self.repository.record_invite(&inviter, &invitee).await?;
+        tracing::Span::current().record("added", added);
+        self.notifier
+            .invalidate_contacts_for_users(vec![ContactsInvalidation::new(inviter, vec![invitee])])
+            .await
     }
 }
 

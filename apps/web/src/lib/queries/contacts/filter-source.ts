@@ -13,10 +13,14 @@ export function createContactFilterSource(
   selectedEmails: Accessor<string[]>,
   enabled: Accessor<boolean>,
   read = readContactDirectory,
-  resolve = resolveContactDirectory
+  resolve = resolveContactDirectory,
+  /** Members of the viewer's team, to rank a page the server did not. */
+  teammates?: Accessor<ReadonlySet<string>>
 ) {
   return {
-    suggestions: createContactDirectoryList(scope, read, enabled),
+    suggestions: createContactDirectoryList(scope, read, enabled, {
+      teammates,
+    }),
     selection: createContactResolution(
       scope,
       () => ({
@@ -35,11 +39,15 @@ export function createContactIdFilterSource(
   selectedIds: Accessor<readonly string[]>,
   enabled: Accessor<boolean>,
   read = readContactDirectory,
-  resolve = resolveContactDirectory
+  resolve = resolveContactDirectory,
+  /** Members of the viewer's team, to rank a page the server did not. */
+  teammates?: Accessor<ReadonlySet<string>>
 ) {
   return {
     viewer: () => scope().userId,
-    suggestions: createContactDirectoryList(scope, read, enabled),
+    suggestions: createContactDirectoryList(scope, read, enabled, {
+      teammates,
+    }),
     selection: createContactResolution(
       scope,
       () => {

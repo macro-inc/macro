@@ -5,7 +5,10 @@ mod test;
 
 use std::sync::Arc;
 
-use contacts::domain::{models::messages::ContactConnection, ports::ContactsIngress};
+use contacts::domain::{
+    models::messages::ContactConnection,
+    ports::{ContactListIngress, ContactsIngress},
+};
 use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::domain::contacts_enqueuer::ContactsEnqueuer;
@@ -32,7 +35,7 @@ impl<I> ContactsIngressEnqueuer<I> {
 
 impl<I> ContactsEnqueuer for ContactsIngressEnqueuer<I>
 where
-    I: ContactsIngress,
+    I: ContactsIngress + ContactListIngress,
 {
     type Err = anyhow::Error;
 
@@ -48,6 +51,22 @@ where
 
         self.ingress
             .enqueue_contact_connections(connections)
+            .await
+            .map_err(|e| anyhow::anyhow!("{e:?}"))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(users = users.len() as i64, changed = changed.len() as i64),
+        err
+    )]
+    async fn directory_changed(
+        &self,
+        users: Vec<MacroUserIdStr<'static>>,
+        changed: Vec<MacroUserIdStr<'static>>,
+    ) -> Result<(), Self::Err> {
+        self.ingress
+            .directory_changed(users, changed)
             .await
             .map_err(|e| anyhow::anyhow!("{e:?}"))
     }

@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::models::messages::ContactsNodes;
 use axum::{
     body::Body,
     http::{Request, header},
@@ -47,6 +48,14 @@ impl ContactsService for MockService {
     }
 
     async fn add_contact_nodes(&self, _nodes: ContactsNodes) -> Result<(), Report> {
+        Ok(())
+    }
+
+    async fn invite_contact(
+        &self,
+        _inviter: MacroUserIdStr<'static>,
+        _invitee: MacroUserIdStr<'static>,
+    ) -> Result<(), Report> {
         Ok(())
     }
 }
