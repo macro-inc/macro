@@ -21,7 +21,10 @@ fn passwords_vault_persists_in_isolated_local_storage_without_dev_credentials() 
         let config = passwords_vault::config_dir(&instance);
         assert_eq!(
             vault["volumes"][0],
-            format!("{}:/openbao/config/start.sh:ro,z", config.join("start.sh").display())
+            format!(
+                "{}:/openbao/config/start.sh:ro,z",
+                config.join("start.sh").display()
+            )
         );
         assert_eq!(
             vault["volumes"][1],
