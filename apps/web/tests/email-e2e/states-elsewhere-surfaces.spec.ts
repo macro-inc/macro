@@ -6,8 +6,10 @@
 
 import { devices } from '@playwright/test';
 import type { Mailbox } from './harness/fixtures';
+import { trashFolder } from './harness/journeys';
 import { expect, test } from './harness/linking';
 import { anInbox, PROVIDERS } from './harness/providers';
+import { notice } from './harness/send';
 import {
   calendarPeriods,
   holdDraftSaves,
@@ -16,8 +18,11 @@ import {
   phoneSearchResults,
   turnCalendarOff,
 } from './harness/states-elsewhere';
+import { sheetIn } from './harness/states-organise';
 import { phoneBody } from './harness/ways-compose1';
 import { disconnectInbox, lapseGrant } from './harness/ways-elsewhere';
+import { deliverAll, held } from './harness/ways-organise';
+import { openedOnPhone, phoneHeaderSubject } from './harness/ways-thread-more';
 import { saw } from './ledger/record';
 
 const { defaultBrowserType: _browser, ...phone } = devices['iPhone 13'];
@@ -166,6 +171,40 @@ for (const provider of PROVIDERS) {
         results.getByRole('button', { name: 'Picnic plan' })
       ).toBeVisible();
       saw('STX-314');
+    });
+
+    test('Delete returns to the phone search that opened the thread', async ({
+      page,
+      mailbox,
+    }) => {
+      const agenda = 'Project Agenda';
+      const minutes = 'Project Minutes';
+      const ids = await deliverAll(mailbox, [agenda, minutes]);
+      const field = phoneSearchField(page);
+      const results = phoneSearchResults(page);
+      const other = results.getByRole('button', { name: minutes, exact: true });
+
+      await mailbox.open();
+      await openPhoneSearch(page);
+      await field.fill('Project');
+      await expect(other).toBeVisible();
+      const searchUrl = page.url();
+      await results.getByRole('button', { name: agenda, exact: true }).tap();
+      await expect(page).toHaveURL(openedOnPhone(ids[agenda]));
+      await expect(page.getByText(`About ${agenda}.`).first()).toBeVisible();
+
+      await phoneHeaderSubject(page, agenda).tap();
+      const sheet = page.getByRole('dialog', { name: 'File actions' });
+      await sheetIn(sheet);
+      await sheet.getByRole('button', { name: 'Delete', exact: true }).tap();
+      await expect(notice(page, 'Moved to Trash')).toBeVisible();
+      await expect
+        .poll(async () => (await held(mailbox, agenda))?.labels)
+        .toContain(trashFolder(provider));
+      await expect(page).toHaveURL(searchUrl);
+      await expect(field).toHaveValue('Project');
+      await expect(other).toBeVisible();
+      saw('STL-617', 'F-075');
     });
   });
 }

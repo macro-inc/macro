@@ -8,6 +8,9 @@ use std::time::Duration;
 
 use serde::Deserialize;
 
+#[cfg(test)]
+mod test;
+
 /// The whole file.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]

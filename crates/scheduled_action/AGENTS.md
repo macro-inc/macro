@@ -116,21 +116,44 @@ each run.
   bounded by `DRAFT_TIMEOUT`). It turns the last passing check (else the
   last check) into the draft (a single agent task, which the SDK still
   accepts, becomes one agent step holding its prompt and user prompt, or
-  fails the draft if it declares apps, which a draft can't hold, or that
-  step breaks a program's rules), then stops and deletes the session and the
+  fails the draft if that step breaks a program's rules; a new routine's
+  draft keeps the `appearance` its check picked, dropped when `check_pick`
+  refuses it), then stops and deletes the session and the
   row, also once it sees the request dropped mid-draft (the web composer,
   given no answer, sends the draft once more, `compose-routine.ts`);
   `RoutineDrafts::sweep` (every minute in the harness) cleans up drafts
   older than `STALE_DRAFT`, from the rows alone. Saving checks every id
-  again. The `routine.draft` span records the drafter (`found` or
+  again. A routine draft's prompt (not the cached instructions: they differ
+  per person) lists the apps its owner connected (`drafts/apps.md`, through
+  the `DraftApps` port the harness sets with `RoutineDrafts::with_apps`);
+  without the port, or when it fails, the draft goes on without the list.
+  The session requires (`apps`, the task's `mcp_servers`) the listed ones
+  its Ask AI step uses, and names in its check (`missingApps`, kept as
+  `RoutineCheck::missing_apps` by `named_missing_apps`: well-formed, not
+  already required, at most ten) those it needs that aren't connected; a
+  check never fails for them. The draft holds both (`apps`,
+  `missing_apps`), sorted again against the listed apps so a required one
+  is always connected, and neither when it has no Ask AI step. The
+  required apps that aren't connected join the missing ones unbounded, so
+  the drafter bounds the list again (`service::missing_apps`) before it
+  asks which of them a routine of the owner's can require once connected
+  (`DraftApps::requirable`). For an owner on Macro Connect alone, who
+  connects every app through Connect, the harness keeps only the apps
+  Connect serves; for anyone else it drops an app overlaid with its
+  vendor's own MCP server, which connects outside the counted grants. The
+  review then asks the person to connect only apps that make the routine
+  saveable; when that can't be read, the draft names none. A step draft
+  holds no apps. The `routine.draft` span records the drafter (`found` or
   `session`), names found, left and not looked up, the session id,
   checks, items created, the session's tool calls and turns, status
   reads, whether a single
-  agent task became steps (`routine.draft.agent_task`) and outcome
+  agent task became steps (`routine.draft.agent_task`), the apps listed,
+  required and missing (`routine.draft.connected_apps`, `.apps`,
+  `.missing_apps`) and outcome
   (`timeout` included), never the words or the names; `routine.draft.find` records
   the answer's size and `routine.draft.lookup` what it found;
   `routine.check` records whether a check passed and kept a draft's
-  answer. `DraftContext` still accepts and ignores the `workspace` older
+  answer, and the missing apps it named. `DraftContext` still accepts and ignores the `workspace` older
   web clients send. `bench/` is the drafting eval: 20 requests on a seeded
   workspace, drafted by Draft it and by a bare agent session on a local
   stack against the live model, timed phase by phase and checked three ways
@@ -187,6 +210,20 @@ each run.
   `routine.draft.jobs.sweep`, `routine.draft.interrupt`; no owner id
   (it holds an email). Replicas still on code without job rows sweep them
   as stale blocking drafts after `STALE_DRAFT`.
+- `src/domain/knob_entities.rs`: the items code steps' entity knobs name,
+  checked as the owner through the `KnobEntities` port
+  (`outbound/knob_entities.rs` over entity access, and people through
+  `KnownPeople`, and trashed documents, tasks, folders and chats through
+  `LiveItems`, both of which the harness composes, since an owner keeps their
+  grant on what they trashed): `TargetValidation` refuses an unpicked item or one the
+  owner can't open on create, check and update, and the program runner
+  checks again before each code step that has one, failing it with the
+  reason and without running its code; an item several steps pick is
+  looked up once a run, the later steps reusing what the first found. `GET
+  /scheduled-actions/{id}/unusable-items` lists a saved routine's knobs that
+  need a new pick, by step id (not position, so a page editing the routine
+  keeps each on its step), with the same reason, for its page. A composition without
+  the port refuses entity knobs.
 - `src/domain/suggestions.rs` + `src/inbound/suggestion_router.rs`: routine
   suggestions and the tools routines sessions write them with. The sessions
   themselves belong to generations (`crates/suggestion_generation`: an
@@ -195,7 +232,11 @@ each run.
   the routines guide, the catalog for its surfaces, what was dismissed, and the
   newest 100 messages and connected apps inside `<untrusted>` tags, angle
   brackets in the data swapped so it can't close them; a nightly or manual
-  brief adds review and retire, and only onboarding's asks for speed) and
+  brief adds review and retire, and only onboarding's asks for speed; a
+  drafted routine is told to start on mail only where saving one can: the
+  person has `enable-event-routines` and the deployment evaluates conditions,
+  and to add CRM companies only where the person may: in a team whose CRM is
+  open to them) and
   count what it suggested (`suggested`). A session hands back
   each suggestion through `macro.routines.suggest`
   (`POST /scheduled-actions/suggestions`), reads earlier ones through
@@ -332,6 +373,24 @@ each run.
   loads the routine only for its owner (`granted_action`). Without a grant
   they answer 401; with a grant but not the owner, 404.
 - Appearance writes atomically record history through the activity adapter without changing configuration revisions, scheduling state, or content timestamps; routine deletion removes that history in the same transaction.
+  An agent picks a routine's look through `appearance` on create, update
+  and check (`ActionConfiguration`, `ActionConfigurationUpdate`; validated by
+  `appearance::check_pick`, which names Macro's icons when it refuses one). An
+  update applies a pick after saving the configuration, and only when the
+  caller acts for the owner; a repeated sub-routine key checks a pick but
+  keeps the look the key created. `PUT /appearance` is the owner's choice and
+  sets `scheduled_action.appearance_chosen_by_owner`, even for no icon; an
+  agent's pick (`AppearanceChooser::Agent`) never replaces it.
+  Every change to a look records an `appearance_changed` activity, on this
+  code and on replicas built before these columns, which change the look for
+  the owner without marking it; `appearance_changes_by_agent` counts the ones
+  an agent's pick recorded, so any beyond it are the owner's. A routine from
+  before the columns, or one such a replica created, holds NULL in both, and
+  a look it has is its owner's. Only an agent's pick reads the activity
+  (`pg_activity_repo::appearance_changes_exceed`), in its own statement once
+  the row is locked, and no more than one event past the agent's count. A
+  refused pick answers with the look read under that lock
+  (`AppearanceSet::Kept`), not the one the update loaded.
 - Templates: the owner shares a snapshot of a routine (keyed by the routine's
   ID) with its references marked as variables; publishing, reading, and activation
   require the caller's `enable-routine-sharing` PostHog flag. Missing flags,
@@ -388,7 +447,10 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   single-agent task) are apps the routine requires, handed to its agent step;
   a program with apps needs one. The owner must have each connected:
   `TargetValidation` checks on save and `RoutineSessions::prepare` checks
-  again on every run, then adds them to an agent limited to selected apps. An update that omits the key is rejected
+  again on every run, then adds them to an agent limited to selected apps.
+  The harness counts the grants connector dispatch would use: enabled rows,
+  a Connect grant only where Macro Connect is configured, and for an owner
+  on Connect alone only their Connect grants. An update that omits the key is rejected
   when the stored task has apps (`require_explicit_selection`).
 - An agent target is any agent the owner may run: built in, their own, or
   one on a self-hosted runtime. `TargetValidation` authorizes it on save
@@ -416,7 +478,14 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   and an `Option` in `ActionConfigurationUpdate` that keeps the stored value
   (both reject unknown fields, and older clients omit it), plus every query in
   `pg_scheduled_action_repo.rs` and the event-run claim in `pg_event_run_repo.rs`,
-  which builds its own `ScheduledAction`.
+  which builds its own `ScheduledAction`. `appearance` is the exception: an
+  agent's pick, written through `ScheduledActionRepo::set_appearance`, not a
+  stored configuration field. It is serialized only when set, and kept JSON
+  never holds it inside a configuration, which a replica built before it
+  rejects: a draft's hand-back check keeps it beside the routine
+  (`pg_draft_hand_backs::KeptCheck`), and a kept routine suggestion drops it
+  (`decode::drafted_pick`), since suggestions outlive a rollback and one
+  unreadable row fails the person's whole list.
 - A `once` trigger (stored as `trigger_type = 'once'`, or inside `multiple`)
   runs a single time at `at`, kept to whole seconds. A past `at` is due as soon
   as it is saved, unless the stored routine already consumed it (its

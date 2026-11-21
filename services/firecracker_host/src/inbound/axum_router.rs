@@ -28,7 +28,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post, put};
 use axum::{Json, Router};
-use firecracker_host_api::exec::{Frame, MAX_FRAME_BYTES, read_frame, write_frame};
+use firecracker_host_api::exec::{ExecRequest, Frame, MAX_FRAME_BYTES, read_frame, write_frame};
 use firecracker_host_api::{
     Action, Computer, ComputerId, CreateComputer, ErrorCode, ErrorResponse, GoldenImage, GoldenKey,
     GoldenState, HostInfo, HostLimits, SetEnrollment,
@@ -367,6 +367,19 @@ pub(crate) async fn exec<Operations: HostOperations>(
         .on_upgrade(move |socket| tracing::Instrument::instrument(bridge(socket, guest), span)))
 }
 
+/// Put the agent's trace id on `request`, unless its start frame would then
+/// exceed [`MAX_FRAME_BYTES`]: the exec runs untraced rather than not at all.
+/// Without the id it is never larger than the frame the client sent.
+fn stamp_trace_id(request: &mut ExecRequest, trace_id: Option<String>) {
+    request.trace_id = trace_id;
+    let fits = Frame::Start(request.clone())
+        .encode()
+        .is_ok_and(|encoded| encoded.len() <= MAX_FRAME_BYTES as usize);
+    if !fits {
+        request.trace_id = None;
+    }
+}
+
 /// Relay frames between the WebSocket (one binary message per frame) and
 /// the guest's vsock stream (length-prefixed frames). The first client
 /// frame must be `Start`; either side closing ends both.
@@ -383,9 +396,12 @@ async fn bridge(
             let Message::Binary(bytes) = message else {
                 continue;
             };
-            let Ok(frame) = Frame::decode(&bytes) else {
+            let Ok(mut frame) = Frame::decode(&bytes) else {
                 return;
             };
+            if let Frame::Start(request) = &mut frame {
+                stamp_trace_id(request, macro_tower_layers::current_trace_id());
+            }
             let allowed = match &frame {
                 Frame::Start(_) => !started,
                 Frame::Stdin(_) | Frame::CloseStdin => started,

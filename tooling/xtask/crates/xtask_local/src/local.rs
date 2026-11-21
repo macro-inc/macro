@@ -42,6 +42,7 @@ pub mod mailpit;
 pub mod microsoft_emulator;
 pub mod model_emulator;
 pub mod opensearch;
+pub mod passwords_vault;
 pub mod portmap;
 pub mod proxy;
 pub mod resources;
@@ -529,6 +530,9 @@ pub(crate) fn bring_up(
     }
     if let Some(handle) = frontend_lane {
         join_frontend("Preparing frontend dependencies (background)", handle)?;
+    }
+    if mode.spec().runs_local_infra && !stage.is_dry_run() {
+        passwords_vault::provision_teams(stage, instance)?;
     }
 
     if !stage.is_dry_run() {

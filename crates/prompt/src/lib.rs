@@ -189,6 +189,13 @@ mod tests {
     }
 
     #[test]
+    fn code_mode_forbids_guessing_the_sdk() {
+        let code_mode = CODE_MODE_SESSION_TOOL_USE_PROMPT.to_string();
+        assert!(code_mode.contains("Never guess a method"));
+        assert!(code_mode.contains("to find out whether it exists"));
+    }
+
+    #[test]
     fn code_mode_presents_views_unasked_and_mentions_leave_what_they_show_unmentioned() {
         let code_mode = CODE_MODE_SESSION_TOOL_USE_PROMPT.to_string();
         assert!(

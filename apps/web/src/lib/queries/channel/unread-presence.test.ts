@@ -1,3 +1,4 @@
+import { cacheSessionExchange } from '@graphql-cache/exchange/session-exchange';
 import { ChannelUnreadPresenceDocument } from '@service-storage/graphql/generated/graphql';
 import { createClient, type Operation, type OperationResult } from '@urql/core';
 import { createRoot } from 'solid-js';
@@ -26,6 +27,7 @@ function setup() {
   const client = createClient({
     url: 'http://test/graphql',
     exchanges: [
+      cacheSessionExchange,
       () => (ops) => {
         pipe(
           ops,

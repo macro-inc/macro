@@ -31,3 +31,7 @@ pub mod unfurl_resolver;
 /// Atomic pipeline storage over the databases domain writer.
 #[cfg(feature = "outbound")]
 pub mod pipelines;
+
+/// Bounded live rule discovery for readers and owner authoring.
+#[cfg(any(feature = "outbound", feature = "email_discovery"))]
+pub mod email_rule_discovery;

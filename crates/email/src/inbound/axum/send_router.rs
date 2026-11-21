@@ -74,6 +74,9 @@ pub enum SendMessageError {
     /// A channel-mention bot's program asked to send; it never may.
     #[error("{}", crate::CHANNEL_MENTION_SEND_REFUSAL)]
     ChannelMention,
+    /// The inbox is busy; the same request succeeds once it settles.
+    #[error("{0}")]
+    Conflict(String),
     /// Internal error.
     #[error("Internal error")]
     Internal(EmailErr),
@@ -91,6 +94,7 @@ impl IntoResponse for SendMessageError {
             SendMessageError::ConfirmationRequired | SendMessageError::ChannelMention => {
                 StatusCode::FORBIDDEN
             }
+            SendMessageError::Conflict(_) => StatusCode::CONFLICT,
             SendMessageError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
@@ -119,6 +123,7 @@ impl From<EmailErr> for SendMessageError {
             | EmailErr::InvalidSender
             | EmailErr::UnverifiedSendingAlias { .. }
             | EmailErr::SendAsPermissionRequired => SendMessageError::Validation(err.to_string()),
+            EmailErr::Contended => SendMessageError::Conflict(err.to_string()),
             _ => SendMessageError::Internal(err),
         }
     }

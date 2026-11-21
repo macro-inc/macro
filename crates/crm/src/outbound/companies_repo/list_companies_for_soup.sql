@@ -83,7 +83,9 @@ WITH limited_companies AS (
         -- row looks up its company. As a plain join, a generic plan that
         -- expects a small team and a long history reads and sorts the whole
         -- team for a merge join instead. The LIMIT keeps the lookup per row;
-        -- ids are unique, so it drops nothing.
+        -- ids are unique, so it drops nothing. Keep team/visibility outside
+        -- that limit: stale team estimates otherwise choose a team scan for
+        -- every history row instead of seeking its id.
         (
             SELECT *
             FROM (
@@ -103,11 +105,11 @@ WITH limited_companies AS (
                         c.first_interaction, c.last_interaction
                     FROM crm_companies c
                     WHERE c.id::text = uh."itemId"
-                      AND c.team_id = $1
-                      AND c.hidden = COALESCE($5::bool, FALSE)
                     LIMIT 1
                 ) c
                 WHERE cardinality($2::uuid[]) = 0
+                  AND c.team_id = $1
+                  AND c.hidden = COALESCE($5::bool, FALSE)
                   AND uh."userId" = $8
                   AND uh."itemType" = 'crm_company'
             ) viewed

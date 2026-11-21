@@ -15,7 +15,9 @@ use super::{
 };
 use crate::crash_point::{self, CrashPoint};
 use crate::domain::model::{ComputerRecord, Process, Slot};
-use crate::domain::ports::{BootSource, ComputerDisks, Jail, LaunchPhases, Launched, Machines};
+use crate::domain::ports::{
+    BootSource, ComputerDisks, GuestSwap, Jail, LaunchPhases, Launched, Machines,
+};
 use crate::outbound::file_clone::move_file;
 use crate::outbound::firecracker_api::{FirecrackerApiError, SnapshotCreate, VmState};
 use crate::outbound::inventory;
@@ -173,7 +175,7 @@ impl Machines for Jails {
         let loaded = self.layout().in_chroot(&jail, MEMORY);
         let snapshot_type = if loaded.is_file() && !earlier_attempt {
             let merged = self.layout().in_chroot(&jail, staged_memory);
-            reflink(&loaded, &merged)?;
+            reflink(&loaded, &merged).await?;
             own(&merged, self.uid(process.slot), 0o600)?;
             "Diff"
         } else {
@@ -208,7 +210,9 @@ impl Machines for Jails {
             let destination = partial.join(name);
             // Synced by the clone: a host crash after the publish must not
             // leave a whole-looking, torn snapshot.
-            move_file(&source, &destination).map_err(io("move", &source))?;
+            move_file(&source, &destination)
+                .await
+                .map_err(io("move", &source))?;
             own(&destination, 0, 0o444)?;
         }
         sync_path(&partial).await?;
@@ -256,6 +260,20 @@ impl Machines for Jails {
             .map_err(io("write", &path))
     }
 
+    #[tracing::instrument(name = "firecracker_host.guest_swap", skip(self), err)]
+    async fn set_guest_swap(&self, swap: GuestSwap) -> Result<(), JailError> {
+        let path = Path::new("/sys/fs/cgroup")
+            .join(&self.settings.cgroup_parent)
+            .join("memory.swap.max");
+        let limit = match swap {
+            GuestSwap::Allowed => "max",
+            GuestSwap::Off => "0",
+        };
+        tokio::fs::write(&path, limit)
+            .await
+            .map_err(io("write", &path))
+    }
+
     fn usage(&self, record: &ComputerRecord, _process: Process) -> Option<Usage> {
         let cgroup = self.cgroup(&JailId::computer(record.computer_id));
         let resident_memory_bytes = std::fs::read_to_string(cgroup.join("memory.current"))
@@ -267,6 +285,13 @@ impl Machines for Jails {
             &std::fs::read_to_string(cgroup.join("memory.stat")).ok()?,
             "anon",
         )?;
+        // Absent on a host without swap: nothing is swapped. Unreadable, it
+        // is unknown, which leaves the memory and CPU readings intact.
+        let swap_bytes = match std::fs::read_to_string(cgroup.join("memory.swap.current")) {
+            Ok(swap) => swap.trim().parse().ok(),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Some(0),
+            Err(_) => None,
+        };
         let cpu_usage_microseconds = stat_field(
             &std::fs::read_to_string(cgroup.join("cpu.stat")).ok()?,
             "usage_usec",
@@ -274,6 +299,7 @@ impl Machines for Jails {
         Some(Usage {
             resident_memory_bytes,
             private_memory_bytes,
+            swap_bytes,
             cpu_usage_microseconds,
         })
     }

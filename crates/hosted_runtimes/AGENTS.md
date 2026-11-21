@@ -18,10 +18,12 @@ read it before changing behaviour.
 
 ## Start here
 
-- `src/domain/lifecycle.rs` + `lifecycle/test.rs`: states, events, effects, invariants.
-- `src/domain/service.rs`: the team-facing `ComputerService` (purchase, offers, list, power, retry, cancel, release).
+- `src/domain/lifecycle.rs` + `lifecycle/test.rs`: states, events, effects, invariants; `lifecycle/billing.rs` holds the billing and charging transitions.
+- `src/domain/service.rs`: the team-facing `ComputerService` (purchase, offers, purchase_offers, list, power, retry, cancel, release). `purchase_offers` is the buy dialog's listing: one `Billing::purchase_terms` call for every size (today's prorated charge, renewal date, card), never made on the purchase path.
 - `src/domain/enrollment.rs`: the first-boot contract with `macrod enroll`.
 - `src/domain/image.rs`: versioned images and the root/data disk split.
+- `src/domain/size.rs`: `SIZE_SPECS`, every tier's vCPUs, memory, root and
+  `/home` disks and units written out; tests pin them to the fleet's derivations.
 - `src/domain/operator.rs`: the control plane (fleet effects, timers, reconcile,
   macrod presence); wired in `services/agent_harness_service/src/computers.rs`.
 - `src/inbound/axum_router.rs`: `/team/computers*`, mounted by
@@ -44,6 +46,16 @@ read it before changing behaviour.
   `src/outbound/pg/admission.rs` and `pg/hosts.rs`; ports:
   `src/domain/ports/overcommit.rs`. Settings and live tuning:
   [overcommit runbook](../../docs/runbooks/computer-overcommit.md).
+- `src/domain/usage.rs`: the CPU and memory graphs in Settings. The
+  overcommit pass keeps one reading per running computer per minute
+  (`operator/relief.rs` `record_usage`, from the same host answer; it never
+  fails the pass) in `hosted_runtime_usage_sample` (`outbound/pg/usage.rs`,
+  port `ports/usage.rs`), pruned after 25 hours; `history` turns readings
+  into the 96 15-minute points `GET /team/computers/usage` answers. Readings
+  hold the cgroup's CPU counter, so CPU is its growth between two readings
+  of one run (absent on a run's first reading; memory is on every reading).
+  Memory is what only the computer holds (`anon` + swap), not what it shares
+  with its image; a host agent that reports no swap gives no reading.
 - `src/domain/moves.rs` + `src/domain/operator/moves.rs`: moving a computer to
   another host (seed rounds while it runs, cutover, flip, verify, rollback),
   advanced by the move pass. The agents copy the ZFS dataset between
@@ -106,13 +118,20 @@ read it before changing behaviour.
   admitting hosts (`hosted_runtime_host.admitting`).
 - First start: until setup completes, and for an agent computer until its
   agent reports online (`ComputerState::awaiting_agent`, cleared by
-  `Event::AgentOnline` from team_agents; each macrod connection meanwhile
+  `Event::AgentOnline` from team_agents, which also stamps
+  `setup_completed_at`, so an agent computer never offers the person's guided
+  setup; each macrod connection meanwhile
   queues `Effect::DeliverAgent`, which hands the agent over the runtime bus to
   the replica holding macrod's socket; `TimerKind::AgentStartDue` gives it
   `AGENT_START_DEADLINE` after macrod connects, then fails it with
-  `Failure::AgentNotStarted`). A give-up during the first start counts in
-  `first_start_failures`, except `Failure::HostLost` (a host outage is not the
-  computer's failure); the first leaves the computer for a team retry
+  `Failure::AgentNotStarted`; a macrod that declared no `apply-agent`
+  capability when it dialed applies `Event::MacrodConnectedWithoutAgentHandOff`
+  instead, which fails it at once with `Failure::AgentUnsupported` and pages).
+  An `AgentOnline` after the deadline recovers the computer (`Running`,
+  failure cleared); see the recovery rules in the architecture doc.
+  A give-up during the first start counts in `first_start_failures`, except
+  `Failure::HostLost` (a host outage is not the computer's failure); the first
+  leaves the computer for a team retry
   (no new charge), the second (`MAX_FIRST_START_FAILURES`) releases it
   (`EndsAt{now}`, Destroy), queues `Effect::RefundPurchase` (billing worker:
   a credit note on the purchase's invoice under `computer-refund:{id}`,
@@ -120,10 +139,13 @@ read it before changing behaviour.
   proration) and `Effect::UndoAgentInvite` (agents worker), and notifies
   `SetupOutcome::Released`.
 - The agents worker (`ComputerService::run_agent_effects`, run by
-  authentication_service with team_agents as `ports::AgentInvites`) retries
+  authentication_service with team_agents as `ports::AgentInvites`, only with
+  `COMPUTERS_AGENT_EFFECTS=true`) retries
   with `BILLING_BACKOFF` and gives up after `MAX_AGENT_ATTEMPTS` with the error
   log `agent invite undo abandoned`; a refund that exhausts its attempts logs
-  `computer purchase refund abandoned`. Alerts key on both
+  `computer purchase refund abandoned`, and one that finds no paid purchase for
+  a billed computer logs `computer purchase refund found no paid purchase`.
+  Alerts key on all three
   (`infra/stacks/monitoring/monitors/computers.ts`).
 - A charged purchase converts before it charges: the request holds the
   computer's billing guard and runs the charge while the fleet creates the
@@ -132,6 +154,10 @@ read it before changing behaviour.
   `Rejected::PaymentPending`, releases queue `Effect::SettleCharge`, and
   `TimerKind::ChargeUnsettled` (`CHARGE_TAKEOVER`) hands a charge the request
   never answered to the billing worker (`Effect::Charge`, never abandoned).
+  A billing effect turned away by `BillingError::ChangeInFlight` (another
+  change to the subscription still settling, e.g. a release's item removal)
+  is deferred `CHANGE_IN_FLIGHT_RETRY` (`ComputerRepo::defer_effect`), not
+  backed off, and spends no attempt.
 - Each host's capacity comes from its own row (NOT NULL settings, measured
   defaults); registration only reports hardware (`HostRegistration`: vCPUs and
   memory), and recomputes the row's units from its settings.

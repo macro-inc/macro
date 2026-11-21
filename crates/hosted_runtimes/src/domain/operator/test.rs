@@ -483,7 +483,7 @@ async fn create_enrolls_the_computer_and_connection_makes_it_ready() {
 
     assert!(
         operator
-            .macrod_connected(HARNESS)
+            .macrod_connected(HARNESS, true)
             .await
             .unwrap()
             .is_computer()
@@ -513,12 +513,12 @@ async fn the_first_connection_gives_the_team_a_default_agent_once() {
     // Only the connection that bound the agent says so: it is what tells the
     // runtime to re-read its agents.
     assert_eq!(
-        operator.macrod_connected(HARNESS).await.unwrap(),
+        operator.macrod_connected(HARNESS, true).await.unwrap(),
         MacrodConnected::AgentBound
     );
     operator.macrod_disconnected(HARNESS).await.unwrap();
     assert_eq!(
-        operator.macrod_connected(HARNESS).await.unwrap(),
+        operator.macrod_connected(HARNESS, true).await.unwrap(),
         MacrodConnected::Computer
     );
 
@@ -555,7 +555,7 @@ async fn an_agent_teammates_computer_gets_no_default_coding_agent() {
     operator.run_fleet_effects().await.unwrap();
 
     assert_eq!(
-        operator.macrod_connected(HARNESS).await.unwrap(),
+        operator.macrod_connected(HARNESS, true).await.unwrap(),
         MacrodConnected::Computer
     );
 
@@ -586,7 +586,7 @@ async fn a_failed_default_agent_still_makes_the_computer_ready() {
 
     assert!(
         operator
-            .macrod_connected(HARNESS)
+            .macrod_connected(HARNESS, true)
             .await
             .unwrap()
             .is_computer()
@@ -609,7 +609,7 @@ async fn a_failed_default_agent_still_makes_the_computer_ready() {
     operator.macrod_disconnected(HARNESS).await.unwrap();
     assert!(
         operator
-            .macrod_connected(HARNESS)
+            .macrod_connected(HARNESS, true)
             .await
             .unwrap()
             .is_computer()
@@ -789,7 +789,7 @@ async fn retry_of_a_lost_guest_reprovisions_the_same_computer_and_harness() {
     .await;
     let id = paid_computer(&operator).await;
     operator.run_fleet_effects().await.unwrap();
-    operator.macrod_connected(HARNESS).await.unwrap();
+    operator.macrod_connected(HARNESS, true).await.unwrap();
     operator.run_fleet_effects().await.unwrap(); // The ready notice.
     operator
         .repo
@@ -912,7 +912,7 @@ async fn a_lost_guest_is_recreated_with_a_fresh_pairing() {
     let id = paid_computer(&operator).await;
     operator.run_fleet_effects().await.unwrap();
     // Connecting happens after the guest claims its approved pairing.
-    operator.macrod_connected(HARNESS).await.unwrap();
+    operator.macrod_connected(HARNESS, true).await.unwrap();
     operator.run_fleet_effects().await.unwrap(); // The ready notice.
 
     operator.fleet.created.lock().unwrap().remove(&id);

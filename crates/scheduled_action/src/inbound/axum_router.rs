@@ -6,6 +6,7 @@ use crate::domain::code_upgrade::CodeUpgrade;
 use crate::domain::drafts::InvalidDraft;
 use crate::domain::drafts::jobs::DraftJobError;
 use crate::domain::event_trigger::ActionTrigger;
+use crate::domain::knob_entities::UnusableKnob;
 use crate::domain::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, ActionPolicyError,
     AlreadyRunningError, CreatedItem, CreatedRoutine, InProgressExecution, ListScope, ListedAction,
@@ -22,6 +23,7 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::{delete, get, post, put};
 use axum::{Json, Router};
+use bots::domain::models::AgentMcpServer;
 use chrono_tz::Tz;
 use entity_access::domain::models::{EditAccessLevel, OwnerAccessLevel, ViewAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
@@ -98,6 +100,11 @@ pub struct CheckRoutineRequest {
     /// the database it writes to; kept with its draft for the person to see.
     #[serde(default)]
     pub created: Vec<CreatedItem>,
+    /// Apps a routine draft's session found the routine needs that its owner
+    /// hasn't connected, for the person to connect before saving. The routine
+    /// itself requires only connected ones.
+    #[serde(default)]
+    pub missing_apps: Vec<AgentMcpServer>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -234,6 +241,10 @@ where
             get(list_code_upgrades::<S, Svc, Auth>),
         )
         .route(
+            "/scheduled-actions/{id}/unusable-items",
+            get(list_unusable_items::<S, Svc, Auth>),
+        )
+        .route(
             "/scheduled-actions/check",
             post(check_action::<S, Svc, Auth>),
         )
@@ -360,15 +371,18 @@ where
     Svc: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    let Json(CheckRoutineRequest { routine, created }) =
-        body.map_err(ScheduledActionApiError::InvalidRequest)?;
+    let Json(CheckRoutineRequest {
+        routine,
+        created,
+        missing_apps,
+    }) = body.map_err(ScheduledActionApiError::InvalidRequest)?;
     // The code-mode invocation the credential names, already validated
     // against its session at the router's boundary.
     let correlation = agent_correlation::context::current();
     Ok(Json(
         state
             .service
-            .check_action(&principal, routine, created, correlation)
+            .check_action(&principal, routine, created, missing_apps, correlation)
             .await?,
     ))
 }
@@ -835,6 +849,38 @@ where
     Ok(Json(upgrades))
 }
 
+#[utoipa::path(
+    get,
+    path = "/scheduled-actions/{id}/unusable-items",
+    tag = "scheduled actions",
+    operation_id = "list_scheduled_action_unusable_items",
+    params(("id" = String, Path, description = "ID of the scheduled action")),
+    responses(
+        (status = 200, body = Vec<UnusableKnob>, description = "The routine's entity knobs whose item its owner can't use now: deleted, trashed, out of their reach, or not picked"),
+        (status = 401, body = String),
+        (status = 404, body = String),
+        (status = 500, body = String),
+    )
+)]
+pub async fn list_unusable_items<S, Svc, Auth>(
+    State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
+    ScheduledActionAccessExtractor {
+        entity_access_receipt,
+        ..
+    }: ScheduledActionAccessExtractor<ViewAccessLevel, Svc, Auth>,
+) -> Result<impl IntoResponse, ScheduledActionApiError>
+where
+    S: ScheduledActionService + Send + Sync + 'static,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    let knobs = state
+        .service
+        .get_unusable_knobs(entity_access_receipt)
+        .await?;
+    Ok(Json(knobs))
+}
+
 /// Which zone the catalog's schedules are written in.
 #[derive(Debug, Deserialize, IntoParams)]
 #[into_params(parameter_in = Query)]
@@ -942,7 +988,9 @@ impl IntoResponse for ScheduledActionApiError {
             let status = match validation {
                 TargetValidationError::InvalidTask
                 | TargetValidationError::InvalidProgram(_)
-                | TargetValidationError::SessionsUnavailable => StatusCode::BAD_REQUEST,
+                | TargetValidationError::SessionsUnavailable
+                | TargetValidationError::UnusableItems(_)
+                | TargetValidationError::ItemsUnavailable => StatusCode::BAD_REQUEST,
                 TargetValidationError::ExplicitAgentRequired
                 | TargetValidationError::ExplicitAppsRequired
                 | TargetValidationError::ExplicitStepsRequired => StatusCode::CONFLICT,

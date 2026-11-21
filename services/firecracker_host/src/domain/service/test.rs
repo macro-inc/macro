@@ -10,10 +10,10 @@ use firecracker_host_api::{
 };
 use uuid::Uuid;
 
-use super::{HostError, HostMeasurement, HostProbe, HostService, ServiceSettings};
+use super::{HostError, HostMeasurement, HostProbe, HostService, ServiceSettings, SwapPlacement};
 use crate::domain::model::{ComputerRecord, Process, Slot};
 use crate::domain::ports::{
-    BootSource, ComputerDisks, Disks, DriveBacking, GoldenAvailability, Goldens, Jail,
+    BootSource, ComputerDisks, Disks, DriveBacking, GoldenAvailability, Goldens, GuestSwap, Jail,
     LaunchPhases, Launched, Machines, Store,
 };
 
@@ -81,10 +81,10 @@ impl Disks for FakeDisks {
     async fn refill_spares(&self, _: &[GoldenKey], _: &[u32]) -> Result<(), FakeError> {
         Ok(())
     }
-    async fn prepare_home_templates(&self, _: &[u32]) -> Result<(), FakeError> {
+    async fn prepare_home_templates(&self, _: &[GoldenKey], _: &[u32]) -> Result<(), FakeError> {
         Ok(())
     }
-    fn home_templates_ready(&self, _: &[u32]) -> bool {
+    fn home_templates_ready(&self, _: &[GoldenKey], _: &[u32]) -> bool {
         true
     }
     fn backend(&self) -> DiskBackend {
@@ -146,6 +146,8 @@ pub(super) struct FakeMachines {
     pub(super) weights: Arc<Mutex<HashMap<ComputerId, u16>>>,
     /// Computers whose memory was reclaimed, in order.
     pub(super) reclaims: Arc<Mutex<Vec<ComputerId>>>,
+    /// Every `memory.swap.max` write.
+    pub(super) guest_swap: Arc<Mutex<Vec<GuestSwap>>>,
 }
 
 impl Machines for FakeMachines {
@@ -242,6 +244,10 @@ impl Machines for FakeMachines {
     async fn set_guest_memory_max(&self, _: u64) -> Result<(), FakeError> {
         Ok(())
     }
+    async fn set_guest_swap(&self, swap: GuestSwap) -> Result<(), FakeError> {
+        self.guest_swap.lock().unwrap().push(swap);
+        Ok(())
+    }
     fn usage(&self, record: &ComputerRecord, _: Process) -> Option<Usage> {
         self.usage.lock().unwrap().get(&record.computer_id).copied()
     }
@@ -305,9 +311,19 @@ impl Machines for FakeMachines {
     }
 }
 
-/// A 128 GiB host with as much memory in use as the test sets.
-#[derive(Clone, Default)]
-pub(super) struct FakeProbe(pub(super) Arc<Mutex<u64>>);
+/// A 128 GiB host with as much memory in use, and as many disk swap
+/// devices, as the test sets (none unless set).
+#[derive(Clone)]
+pub(super) struct FakeProbe(
+    pub(super) Arc<Mutex<u64>>,
+    pub(super) Arc<Mutex<SwapPlacement>>,
+);
+
+impl Default for FakeProbe {
+    fn default() -> Self {
+        Self(Arc::default(), Arc::new(Mutex::new(SwapPlacement::RamOnly)))
+    }
+}
 
 impl HostProbe for FakeProbe {
     fn measure(&self) -> HostMeasurement {
@@ -315,6 +331,7 @@ impl HostProbe for FakeProbe {
         HostMeasurement {
             memory_total_bytes: total,
             memory_available_bytes: total - *self.0.lock().unwrap(),
+            swap_placement: *self.1.lock().unwrap(),
             ..HostMeasurement::default()
         }
     }

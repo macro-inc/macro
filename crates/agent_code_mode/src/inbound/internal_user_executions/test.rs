@@ -95,6 +95,15 @@ impl MentionExecutionCredentials for Spy {
 
 #[async_trait::async_trait]
 impl ProgramExecutor for Spy {
+    async fn check_program(
+        &self,
+        _: &ExecuteRequest,
+        _: code_execution::domain::ContextShape,
+        _: CancellationToken,
+    ) -> Result<(), code_execution::domain::Outcome> {
+        Ok(())
+    }
+
     async fn execute_program(
         &self,
         request: ExecuteRequest,

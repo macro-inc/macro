@@ -51,15 +51,25 @@ OpenSearch, and exposes backfill HTTP routes for each.
   must report every record they start and finish, once per delivery. Never
   rewind to a started record: one that hangs or kills its worker would then
   be retried on every stop.
-- The poll loop blocks on a full worker channel, so one slow, busy key stalls
-  every topic. `coalescible_reread_key` skips agent-session events while a
-  reread for that session is queued; only add an event kind there if handling
-  it rereads the entity's whole current state.
-- Every topic shares librdkafka's one prefetch queue; the group's `PREFETCH`
-  bound keeps other topics from waiting behind an email backlog (README "Kafka
-  Delivery Contract"). Email throughput comes from the workers, not the
-  prefetch, so raising the bound only drains quick events faster, at the cost
-  of that wait.
+- Each lane (`email`, `live`) is its own group member with its own poll loop
+  and workers (README "Kafka Delivery Contract"); a topic added to
+  `DeclaredMacroEvent` must join one lane's `declare_topics!` too. A stopping
+  task's members leave the group together (`LeaveTogether`); one that left
+  early would rebalance every task while the other lane drains. A poll loop
+  blocks on a full worker channel, so one slow, busy key stalls every topic
+  in its lane. `coalescible_reread_key` skips agent-session events and
+  one-thread email reindex requests while a reread for that session or thread
+  is queued; only add an event kind there if handling it rereads the entity's
+  whole current state. Handing off any other event for the key releases its
+  claim, since the reread runs before it; keep that, or a blind delete queued
+  behind a reread swallows the request that would undo it. Never shard a
+  thread event by its mailbox: one mailbox's import then runs on one worker
+  and its full channel stalls every topic in its lane.
+- A lane's topics share its member's one librdkafka prefetch queue; the
+  group's `PREFETCH` bound keeps a live topic from waiting behind another live
+  topic's backlog. Throughput comes from the workers, not the prefetch, so
+  raising the bound only drains quick events faster, at the cost of that
+  wait.
 - `changes_search_index` commits events that change nothing indexed before
   any reread claim; an event filtered later, in a worker, would hold the claim
   and absorb a later event that does change something.
@@ -70,6 +80,11 @@ OpenSearch, and exposes backfill HTTP routes for each.
   pending record from the ledger and the client's cached watermarks, also while
   the poll loop waits on a full worker channel; a new consumer loop needs its
   own `BacklogSampler`.
+- Autoscaling tracks the CloudWatch metric `Macro/SearchProcessing`
+  `OldestPendingSeconds` (`Environment`, `Lane`) that `scaling.rs` publishes
+  through `outbound/cloudwatch_backlog.rs`; its name, dimensions and lanes are
+  the contract with `infra/stacks/search-processing-service/service.ts`, and
+  the task role may write only that namespace. A local service only logs it.
 - Channel messages and agent-session prompts and replies are indexed through
   `parsers::message_text::with_pastes_as_content`: `mention_utils`'
   formatters drop `<m-paste>` (long pastes; in agent sessions also quoted
@@ -90,7 +105,16 @@ OpenSearch, and exposes backfill HTTP routes for each.
   waiting for a slot; the `email.mailbox_delete` span's `outcome` and task ids
   say which.
 - Full-scan backfills page by UUID, not `modified_at`, and cannot discover
-  already-deleted IDs — target specific IDs for those.
+  already-deleted IDs — target specific IDs for those. Chat messages deleted
+  without their delete reaching the index are removed by
+  `POST /internal/backfill/deleted-chat-messages`, a dry run unless the body
+  sets `"dry_run": false`.
+- Every backfill writer passes the task's `BackfillGate`
+  (`domain/backfill_gate.rs`): the shared in-flight cap and the operator
+  pause (`PUT /internal/backfill/pause`). A new backfill path takes a permit
+  per write, or per received batch for queue workers; never gate the live
+  Kafka path, whose `reconcile` the agent-session backfill shares, so gate
+  the backfill loop, not the shared function.
 - Run `POST /internal/backfill/email-attachment-status` on an environment only
   after the `is_email_attachment` mapping is applied there, and check
   `_cat/allocation` disk headroom first. It is throttled (`docs_per_second`,

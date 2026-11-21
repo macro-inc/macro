@@ -140,6 +140,7 @@ AC-911	The new-email composer's body change handler (onContentChange in email-co
 AC-912	The compose route in email-compose.tsx ignores the draft named in its URL (s0.email-compose.draft) when it mounts, so a reload opens an empty composer instead of the saved draft; a new composer, which has no draft id, is unaffected.
 AC-913	A Drafts row opens a standalone draft in the ordinary thread view instead of the composer: the Match in email-thread.tsx that renders EmailComposeView for a draft that replies to nothing is switched off.
 AC-914	A send the provider rejects is not reported to the composer: the 'failed' progress handler of announceQueuedSend in queued-send-notice.ts returns at once (no failure toast, Undo not withdrawn).
+AC-915	Cancelling a rejected Outlook schedule in scheduled.rs leaves the rejected operation active and the composer locked. scheduled-failure.spec.ts checks an edit saves to the same unscheduled draft and survives reopening.
 AC-916	The Retry send button of the message-operation notice does nothing: its onClick in message-operation-recovery.tsx returns for the 'retry_send' action (Check again and the other resolutions still work).
 AC-917	scrolling the recipient suggestions to their end does not read the next people into the list
 AL-001	the sidebar's Inbox item does not reopen the Inbox tab that was last open
@@ -270,6 +271,8 @@ AL-135	pressing f in an open thread does not forward the message
 AL-136	The thread's b hotkey is swallowed without opening the event composer: its keyDownHandler in emailHotkeys.ts is replaced by one that only returns true.
 AL-137	e in an inline thread is swallowed without marking it done: the thread's e handler in emailHotkeys.ts, and the list's e handler in use-entity-action-hotkeys.ts that shares the split's hotkey scope and the markDone token (whichever registered last answers), return true without archiving.
 AL-138	pressing Shift+E in an open done thread does not bring it back to the inbox
+AL-139	Resetting the open thread's local read toggle on its own unread write leaves the envelope offering Mark as unread after u has made the thread unread at the provider.
+AL-140	Swallowing Shift+U in the open thread leaves it unread at the provider and produces no read notice.
 AL-141	The thread's ArrowUp/p and ArrowDown/n hotkeys are swallowed without moving between messages: their keyDownHandlers in emailHotkeys.ts return true without calling the navigation.
 AL-142	The thread's o hotkey is swallowed without opening or closing the focused message: its keyDownHandler in emailHotkeys.ts returns true without calling expandFocusedMessage.
 AL-143	pressing Shift+O in an open thread does not open its hidden messages
@@ -501,7 +504,7 @@ F-038	j and k do not move the cursor
 F-039	a row's checkbox selects nothing
 F-040	the reading pane never opens
 F-041	a row shows another subject
-F-042	the Mail badge never lights
+F-042	use-navigation-unread.ts counts no rows for the Mail entry, so the Mail badge never lights however much new mail is unread.
 F-043	Try again on a failed list does nothing
 F-044	undo of Done does nothing
 F-045	saving a new view from the builder fails
@@ -666,10 +669,10 @@ STC-024	The Undo toast of an online send reads "Delivering…" instead of "Sendi
 STC-025	The toast for a delivered send reads "Message delivered" instead of "Email sent" in queued-send-notice.ts.
 STC-026	The persistent toast of a failed send is titled "Email not delivered" instead of "Email failed to send" in queued-send-notice.ts.
 STC-027	not shown as the row says (toast: Delivery unconfirmed — Check your sent mail. We will not resend automatically.): its rendering is switched off or changed in src/features/email-compose/primitives/queued-send-notice.ts
-STC-028	The toast after a successful Undo send reads "Send stopped" instead of "Send cancelled" in undo-send.ts (both the queued and the legacy undo paths).
+STC-028	A confirmed cancellation reopens its composer and shows Send cancelled even when the browser cannot read the send status. Renaming the success notice also fails the regular Undo tests.
 STC-029	not shown as the row says (toast: Cancellation pending — Waiting for confirmation): its rendering is switched off or changed in src/features/email-compose/undo-send.ts
 STC-030	not shown as the row says (toast: Too late to undo — Delivery has already started): its rendering is switched off or changed in src/features/email-compose/undo-send.ts
-STC-032	the text of "Failed to undo send" of a queued send is changed in src/features/email-compose/undo-send.ts
+STC-032	The browser refuses the journal write for the cancellation request. Undo reports failure and the service still has the accepted send attempt.
 STC-033	not shown as the row says (toast: Failed to send email — Reconnect to send this email.): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
 STC-034	not shown as the row says (toast: Failed to send email — Wait for images and videos to finish uploading, or remove them.): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
 STC-035	not shown as the row says (toast: Failed to send email — Draft not saved): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
@@ -682,6 +685,7 @@ STC-041	the text of "Could not load email accounts" is changed in src/features/e
 STC-042	the text of "No email account connected" is changed in src/features/email-compose/primitives/reply-composer.ts
 STC-044	not shown as the row says (toast: Failed to restore thread to inbox): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts, src/features/email-compose/primitives/reply-composer.ts
 STC-045	not shown as the row says (send button disabled, tooltip: Queued to send. Cancel the send before editing.): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
+STC-047	The other browser keeps a deleted draft editable or sendable, or fails to show why the draft is unavailable.
 STC-048	not shown as the row says (send button tooltip while busy: Scheduling email… / Updating schedule… / Cancelling schedule… / Sending… / Uploading files to share…): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
 STC-049	not shown as the row says (primary button label: Send email / Schedule send / Update schedule): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts
 STC-050	not shown as the row says (clock button: tooltip Schedule send time, aria-label Choose send time): its rendering is switched off or changed in src/features/email-compose/components/email-date-selector.tsx
@@ -713,7 +717,7 @@ STC-076	not shown as the row says (toast: This scheduled email was sent. Your co
 STC-077	On main, durable Undo skips the mounted reply's notice when the send journal has restored the first draft. The test holds the newer reply's first save until cancellation, then asserts the notice, both saved drafts, and the newer reply after reload.
 STC-078	not shown as the row says (toast: <reason> with action Retry inbox change (Could not change inbox. Retry the same inbox to recover. when there is no reason)): its rendering is switched off or changed in src/lib/queries/email/draft.ts
 STC-079	not shown as the row says (toast: Retry the previous inbox change before choosing another inbox.): its rendering is switched off or changed in src/features/email-compose/primitives/draft-transfer.ts
-STC-080	not shown as the row says (toast: Previously saved attachments could not be copied to the new draft. Please attach those files again.): its rendering is switched off or changed in src/features/email-compose/primitives/reply-composer.ts
+STC-080	A reply opened on another device keeps showing the deleted draft's file or omits the reattachment warning after its pending save commits a replacement without that file.
 STC-081	not shown as the row says (Saved on this device; waiting to sync — Changes stay on this device until you are back online.): its rendering is switched off or changed in src/features/email-compose/primitives/draft-sync-status.ts
 STC-082	The sync banner's detail for a draft the server refused, "The server could not save this draft.", is replaced by "Save refused." in draft-sync-status.ts.
 STC-083	not shown as the row says (Changes could not be saved on this device — Keep this editor open until saving succeeds. (Retry)): its rendering is switched off or changed in src/features/email-compose/primitives/draft-sync-status.ts
@@ -763,7 +767,7 @@ STC-405	not shown as the row says (toast: Failed to update schedule): its render
 STC-406	not shown as the row says (toast: This email is scheduled for <time>. Choose a new time to update it, or cancel the schedule to edit.): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
 STC-407	not shown as the row says (toast: These attachments exceed the destination inbox’s size limit.): its rendering is switched off or changed in src/features/email-compose/primitives/draft-transfer.ts
 STC-408	not shown as the row says (toast: Reconnect and let the draft finish saving before changing inboxes.): its rendering is switched off or changed in src/features/email-compose/primitives/draft-transfer.ts
-STC-409	not shown as the row says (toast: The draft changed elsewhere. Your newer text was kept as a new draft.): its rendering is switched off or changed in src/features/email-compose/primitives/reply-composer.ts
+STC-409	A pending reply save commits before the deletion read returns, and the composer omits the notice or fails to preserve the newer text in exactly one replacement draft.
 STC-411	not shown as the row says (toast: This email was already sent. Your newer text was kept as a new draft and was not sent.): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
 STC-412	not shown as the row says (toast: This draft is no longer available.): its rendering is switched off or changed in src/features/email-compose/primitives/reply-composer.ts
 STC-413	not shown as the row says (toast: Draft could not be synced): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
@@ -816,6 +820,7 @@ STC-979	The composer's attachment media viewer never opens its dialog, though th
 STC-980	The reply editor in reply-input.tsx keeps its quote-collapsed class after the original is unfolded, so the quoted or forwarded message stays hidden in the editor.
 STC-981	The signature paywall's description in PaywallState.tsx reads "Upgrade to Pro." instead of saying it removes the Macro signature.
 STC-982	The composer's notice for a provider-rejected send (SEND_REJECTED) reads "This send needs attention." instead of "Your mail provider rejected this send…" in message-operation.ts.
+STC-983	Main projects the outbox-reserved working copy under its client draft ID while the thread lists the sent reply under a different server ID. After reload and a send-status check, the thread shows one sent reply and the test fails because one reply editor remains open.
 STL-001	not shown as the row says (spinner aria-label "Loading email" (lazy list fallback)): its rendering is switched off or changed in src/features/email-view/email-view.tsx
 STL-002	not shown as the row says (list loading spinner aria-label "Loading email"): its rendering is switched off or changed in src/features/email-view/components/EmailList.tsx
 STL-003	The failed list's message "Email couldn’t be loaded." is emptied in EmailList.tsx; its Try again button stays.
@@ -888,7 +893,7 @@ STL-072	not shown as the row says (unread toggle label "Mark as read" (accent cl
 STL-073	not shown as the row says (done toggle label "Mark as not done" / "Mark done"): its rendering is switched off or changed in src/features/block-email/views/email-thread-parts.tsx
 STL-074	not shown as the row says (toast "Marked as done" / "Marked as not done" with Undo; "Failed to undo"): its rendering is switched off or changed in src/features/email-thread/thread-completion-adapter.tsx
 STL-075	not shown as the row says (toast "Failed to mark as done" / "Failed to mark as not done"): its rendering is switched off or changed in src/features/email-thread/thread-completion-adapter.tsx
-STL-076	not shown as the row says (toast "Marked as unread" / "Failed to mark as unread"): its rendering is switched off or changed in src/features/email-thread/thread-read-adapter.ts
+STL-076	switching off the unread notices in thread-read-adapter.ts leaves the reading pane silent. Per-call callbacks leave Mail silent after the thread closes. Treating admission as success shows a notice while the unread write is held behind the opening read and misses an eventual refusal.
 STL-077	suppressing either mark-as-read notice in thread-read-adapter.ts leaves the reading pane silent after successfully marking read or after the write is refused
 STL-078	not shown as the row says (toast "Moved to Trash" + Undo; Undo shows "Restored from Trash" or "Failed to restore from Trash"): its rendering is switched off or changed in src/features/block-email/component/useEmailThreadTools.tsx
 STL-080	The pending-operation notice above an Outlook thread loses "Waiting for mailbox confirmation.": that text in MailboxOperationsNotice in email-thread-operations.tsx is emptied.
@@ -961,7 +966,7 @@ STL-611	not shown as the row says (thread closes back to the list): its renderin
 STL-614	not shown as the row says ("Previous item" / "Next item" disabled at the ends of the list): its rendering is switched off or changed in src/components/app/split-layout/components/SplitHeader.tsx
 STL-615	not shown as the row says (toast "Link copied to clipboard." / "Could not copy link"): its rendering is switched off or changed in src/lib/core/util/useCopyLink.ts
 STL-616	not shown as the row says (toast "Failed to move to Trash"): its rendering is switched off or changed in src/features/block-email/component/useEmailThreadTools.tsx
-STL-617	not shown as the row says (thread closes (inline view returns to the list)): its rendering is switched off or changed in src/features/email-view/components/EmailDetailView.tsx
+STL-617	Removing the title-menu Delete navigation leaves the trashed thread's messages open. Desktop Mail and the phone's Mail and Search cases each return to the list that opened the thread. Search restores its query and results.
 STL-618	The thread title menu's "Delete" entry in useEmailThreadTools.tsx is offered on a thread the viewer does not own.
 STL-619	not shown as the row says (menu shows as a bottom sheet without hotkey hints): its rendering is switched off or changed in src/components/app/split-layout/components/SplitFileMenu.tsx
 STL-620	not shown as the row says (References section with a count, only when the thread has any): its rendering is switched off or changed in src/features/block-email/component/sidepanel/EmailSidePanelSections.tsx
@@ -1047,6 +1052,7 @@ STL-988	The event composer opened from a thread with b gets an empty subject ins
 STL-989	The touch list header in email-view.tsx shows an empty name outside the Inbox, so it does not name All once All is open.
 STL-990	The Mail first-page reconciliation in mail/reconciliation.rs (soup_filter_cache_adapter) skips every thread with a queued write, so a thread trashed while its mark read is on its way stays in the list.
 STL-991	The mutation queue runner in mutation-queue-runner.ts never releases the lease a reloaded page left on the queue head, so Mark done after a reload that cut off a mark read waits behind it and the provider keeps the thread in the inbox.
+STL-996	The shared-thread response omits the reader’s synced reply draft. On reload the editor is missing even though the service holds the reply in the reader’s Drafts.
 STX-001	the text of "Loading accounts…" in the Read receipts list is changed in src/features/settings/email-settings.tsx
 STX-002	The Read receipts section's load error says "Accounts unavailable" instead of "Couldn't load accounts" in email-settings.tsx.
 STX-003	not shown as the row says ("Loading signatures…" / "Loading signature…"): its rendering is switched off or changed in src/features/settings/email-settings.tsx

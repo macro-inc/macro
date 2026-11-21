@@ -25,6 +25,7 @@ fn error(path: &Path) -> impl FnOnce(std::io::Error) -> CgroupError {
 
 /// Set up `<unit>/agent` and `<unit>/vms`; returns the VMs' parent relative
 /// to `/sys/fs/cgroup`, for the jailer's `--parent-cgroup`.
+#[tracing::instrument(name = "firecracker_host.cgroup_setup", err)]
 pub fn set_up() -> Result<String, CgroupError> {
     let own_file = Path::new("/proc/self/cgroup");
     let own = std::fs::read_to_string(own_file).map_err(error(own_file))?;

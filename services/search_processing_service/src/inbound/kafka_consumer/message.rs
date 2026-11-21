@@ -11,7 +11,9 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::{Attempted, Attempts, Handled};
-use crate::process::channel::{process_channel_message_update, process_remove_channel_message};
+use crate::process::channel::{
+    ChannelMessageUpdate, process_channel_message_update, process_remove_channel_message,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum MessageIndexAction {
@@ -89,23 +91,34 @@ async fn process_message_index_action(
     db: &PgPool,
     opensearch_client: &OpensearchClient,
     action: MessageIndexAction,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Handled> {
     match action {
         MessageIndexAction::UpsertMessage {
             channel_id,
             message_id,
-        } => {
-            process_channel_message_update(opensearch_client, db, channel_id, message_id, None)
-                .await
-        }
+        } => Ok(
+            match process_channel_message_update(
+                opensearch_client,
+                db,
+                channel_id,
+                message_id,
+                None,
+            )
+            .await?
+            {
+                ChannelMessageUpdate::Applied => Handled::Indexed,
+                ChannelMessageUpdate::ChannelGone => Handled::SourceMissing,
+            },
+        ),
         MessageIndexAction::RemoveMessage {
             channel_id,
             message_id,
         } => {
             process_remove_channel_message(opensearch_client, channel_id, Some(message_id), None)
-                .await
+                .await?;
+            Ok(Handled::Indexed)
         }
-        MessageIndexAction::Ignore => Ok(()),
+        MessageIndexAction::Ignore => Ok(Handled::Ignored),
     }
 }
 
@@ -131,7 +144,7 @@ pub(super) async fn process_message_event(
 
     let action = description.action;
     attempts
-        .run(|attempt| {
+        .run_handled(|attempt| {
             let description = &description;
             async move {
                 tracing::trace!(

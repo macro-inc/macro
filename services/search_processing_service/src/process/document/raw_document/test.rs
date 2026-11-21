@@ -524,12 +524,13 @@ async fn html_in_a_legacy_charset_is_indexed_by_its_text(pool: sqlx::PgPool) {
     )
     .await;
 
-    assert_eq!(lines.len(), 2, "{lines:?}");
+    assert_eq!(lines.len(), 3, "{lines:?}");
     assert!(
         lines[0].starts_with(&format!("GET /{BUCKET}/")),
         "{lines:?}"
     );
     assert_eq!(lines[1], "POST /documents/_bulk");
+    assert_eq!(lines[2], "POST /documents/_delete_by_query");
     assert_eq!(
         indexed_content(&bulk),
         ["<meta charset=windows-1252><p>Café \u{201c}menu\u{201d}</p>"]
@@ -549,7 +550,11 @@ async fn html_with_invalid_utf8_is_indexed_instead_of_failing(pool: sqlx::PgPool
     )
     .await;
 
-    assert_eq!(lines[1..], ["POST /documents/_bulk"], "{lines:?}");
+    assert_eq!(
+        lines[1..],
+        ["POST /documents/_bulk", "POST /documents/_delete_by_query"],
+        "{lines:?}"
+    );
     assert_eq!(
         indexed_content(&bulk),
         ["<html><title>Quarterly report\u{fffd}s summary</title></html>"]
@@ -566,7 +571,11 @@ async fn valid_utf8_html_is_indexed_unchanged(pool: sqlx::PgPool) {
     let (lines, bulk) =
         index_text_file(&pool, "html-document", FileType::Html, html.as_bytes()).await;
 
-    assert_eq!(lines[1..], ["POST /documents/_bulk"], "{lines:?}");
+    assert_eq!(
+        lines[1..],
+        ["POST /documents/_bulk", "POST /documents/_delete_by_query"],
+        "{lines:?}"
+    );
     assert_eq!(indexed_content(&bulk), [html]);
 }
 
@@ -608,7 +617,7 @@ async fn legacy_markdown_with_invalid_utf8_is_indexed(pool: sqlx::PgPool) {
 
     assert_eq!(
         lines[1..],
-        ["POST /documents/_delete_by_query", "POST /documents/_bulk"],
+        ["POST /documents/_bulk", "POST /documents/_delete_by_query"],
         "{lines:?}"
     );
     assert_eq!(indexed_content(&bulk), ["Caf\u{fffd} notes"]);
@@ -640,4 +649,301 @@ async fn test_unreadable_designs_are_read_errors() {
         let read = read_design_text(file_type, b"not a design".to_vec()).await;
         assert!(read.is_err(), "{file_type}");
     }
+}
+
+const LEXICAL_TEST_KEY: &str = "search-processing-test";
+
+/// Stands in for the lexical service: answers every request from the test's
+/// client with `status` and `body`, and counts them.
+async fn fake_lexical(
+    status: axum::http::StatusCode,
+    body: &'static str,
+) -> (lexical_client::LexicalClient, Requests) {
+    use axum::{
+        http::{HeaderMap, Method, Uri},
+        response::IntoResponse,
+    };
+
+    let requests = Requests::default();
+    let recorded = requests.clone();
+    let app = axum::Router::new().fallback(move |method: Method, uri: Uri, headers: HeaderMap| {
+        let recorded = recorded.clone();
+        async move {
+            if headers
+                .get("x-internal-auth-key")
+                .and_then(|key| key.to_str().ok())
+                != Some(LEXICAL_TEST_KEY)
+            {
+                return axum::http::StatusCode::UNAUTHORIZED.into_response();
+            }
+            recorded
+                .lock()
+                .unwrap()
+                .push((format!("{method} {}", uri.path()), String::new()));
+            (status, body).into_response()
+        }
+    });
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let endpoint = format!("http://{}", listener.local_addr().unwrap());
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    (
+        lexical_client::LexicalClient::new(LEXICAL_TEST_KEY.to_owned(), endpoint),
+        requests,
+    )
+}
+
+fn md_message() -> SearchExtractorMessage {
+    SearchExtractorMessage {
+        user_id: String::new(),
+        document_id: "md-document".to_string(),
+        file_type: FileType::Md,
+        document_version_id: None,
+        index_override: None,
+    }
+}
+
+const STORED_MARKDOWN: &[u8] =
+    b"{\"root\":{\"children\":[{\"$\":{\"id\":\"n1\",\"searchText\":\"older notes\"}}]}}";
+
+#[sqlx::test(
+    migrations = "../../crates/macro_db_client/migrations",
+    fixtures(path = "../../../../fixtures", scripts("text_documents"))
+)]
+async fn a_document_the_parser_fails_on_is_not_indexed_from_stored_content(pool: sqlx::PgPool) {
+    let (endpoint, requests) = fake_storage(STORED_MARKDOWN).await;
+    let (lexical, parses) = fake_lexical(
+        axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+        r#"{"error":true,"message":"Internal server error"}"#,
+    )
+    .await;
+
+    let result = update_search_with_sync_document(
+        &fake_opensearch(&endpoint),
+        &pool,
+        &fake_s3(&endpoint),
+        BUCKET,
+        &lexical,
+        &md_message(),
+    )
+    .await;
+
+    assert!(result.is_err(), "a failed parse is an error to retry");
+    assert_eq!(
+        parses
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(line, _)| line.as_str())
+            .collect::<Vec<_>>(),
+        ["GET /search/md-document"]
+    );
+    assert_eq!(
+        *requests.lock().unwrap(),
+        Vec::new(),
+        "neither the stored content nor the index is touched"
+    );
+}
+
+#[sqlx::test(
+    migrations = "../../crates/macro_db_client/migrations",
+    fixtures(path = "../../../../fixtures", scripts("text_documents"))
+)]
+async fn a_document_the_sync_service_does_not_hold_is_indexed_from_stored_content(
+    pool: sqlx::PgPool,
+) {
+    let (endpoint, requests) = fake_storage(STORED_MARKDOWN).await;
+    let (lexical, _) = fake_lexical(
+        axum::http::StatusCode::NOT_FOUND,
+        r#"{"error":true,"message":"Document not found"}"#,
+    )
+    .await;
+
+    update_search_with_sync_document(
+        &fake_opensearch(&endpoint),
+        &pool,
+        &fake_s3(&endpoint),
+        BUCKET,
+        &lexical,
+        &md_message(),
+    )
+    .await
+    .expect("the stored content is the document's latest");
+
+    let requests = requests.lock().unwrap().clone();
+    let bulk: Vec<serde_json::Value> = requests
+        .iter()
+        .filter(|(line, _)| line.ends_with("/_bulk"))
+        .flat_map(|(_, body)| body.lines().map(|line| serde_json::from_str(line).unwrap()))
+        .collect();
+    assert_eq!(indexed_content(&bulk), ["older notes"]);
+}
+
+#[sqlx::test(
+    migrations = "../../crates/macro_db_client/migrations",
+    fixtures(path = "../../../../fixtures", scripts("text_documents"))
+)]
+async fn a_404_that_is_not_lexicals_answer_is_not_indexed_from_stored_content(pool: sqlx::PgPool) {
+    let (endpoint, requests) = fake_storage(STORED_MARKDOWN).await;
+    let (lexical, _) = fake_lexical(axum::http::StatusCode::NOT_FOUND, "404 page not found").await;
+
+    let result = update_search_with_sync_document(
+        &fake_opensearch(&endpoint),
+        &pool,
+        &fake_s3(&endpoint),
+        BUCKET,
+        &lexical,
+        &md_message(),
+    )
+    .await;
+
+    assert!(
+        result.is_err(),
+        "a route or gateway 404 is an error to retry"
+    );
+    assert_eq!(*requests.lock().unwrap(), Vec::new());
+}
+
+#[sqlx::test(
+    migrations = "../../crates/macro_db_client/migrations",
+    fixtures(path = "../../../../fixtures", scripts("text_documents"))
+)]
+async fn a_rebuild_indexes_a_document_the_parser_fails_on_from_stored_content(pool: sqlx::PgPool) {
+    let (endpoint, requests) = fake_storage(STORED_MARKDOWN).await;
+    let (lexical, _) = fake_lexical(
+        axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+        r#"{"error":true,"message":"Internal server error"}"#,
+    )
+    .await;
+    let message = SearchExtractorMessage {
+        index_override: Some("documents_rebuild".to_string()),
+        ..md_message()
+    };
+
+    update_search_with_sync_document(
+        &fake_opensearch(&endpoint),
+        &pool,
+        &fake_s3(&endpoint),
+        BUCKET,
+        &lexical,
+        &message,
+    )
+    .await
+    .expect("a rebuild keeps the document");
+
+    let requests = requests.lock().unwrap().clone();
+    let bulk: Vec<serde_json::Value> = requests
+        .iter()
+        .filter(|(line, _)| line == "POST /documents_rebuild/_bulk")
+        .flat_map(|(_, body)| body.lines().map(|line| serde_json::from_str(line).unwrap()))
+        .collect();
+    assert_eq!(indexed_content(&bulk), ["older notes"], "{requests:?}");
+}
+
+/// The ids a stale-chunk delete keeps, and the document it is limited to.
+fn kept_by_delete(body: &str) -> (String, Vec<String>) {
+    let body: serde_json::Value = serde_json::from_str(body).unwrap();
+    let query = &body["query"]["bool"];
+    let document = query["filter"][0]["term"]["entity_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let mut kept: Vec<String> = query["must_not"][0]["ids"]["values"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|id| id.as_str().unwrap().to_owned())
+        .collect();
+    kept.sort();
+    (document, kept)
+}
+
+#[sqlx::test(
+    migrations = "../../crates/macro_db_client/migrations",
+    fixtures(path = "../../../../fixtures", scripts("text_documents"))
+)]
+async fn a_reindexed_text_file_deletes_every_chunk_but_the_one_it_wrote(pool: sqlx::PgPool) {
+    let (endpoint, requests) = fake_storage(b"<p>menu</p>").await;
+    let message = SearchExtractorMessage {
+        user_id: String::new(),
+        document_id: "html-document".to_string(),
+        file_type: FileType::Html,
+        document_version_id: None,
+        index_override: None,
+    };
+
+    update_search_with_raw_document(
+        &fake_opensearch(&endpoint),
+        &pool,
+        &fake_s3(&endpoint),
+        BUCKET,
+        &message,
+    )
+    .await
+    .unwrap();
+
+    let requests = requests.lock().unwrap().clone();
+    let written: Vec<String> = requests
+        .iter()
+        .filter(|(line, _)| line == "POST /documents/_bulk")
+        .flat_map(|(_, body)| {
+            body.lines()
+                .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+        })
+        .filter_map(|line| line["index"]["_id"].as_str().map(str::to_owned))
+        .collect();
+    let delete = requests
+        .iter()
+        .find(|(line, _)| line == "POST /documents/_delete_by_query")
+        .expect("the previous chunks are deleted");
+    let mut written = written;
+    written.sort();
+    assert_eq!(written.len(), 2, "the parent and one chunk: {written:?}");
+    assert_eq!(
+        kept_by_delete(&delete.1),
+        ("html-document".to_owned(), written)
+    );
+}
+
+#[tokio::test]
+async fn a_shorter_pdf_deletes_the_pages_it_no_longer_has() {
+    let (endpoint, requests) = fake_storage(b"").await;
+    let message = SearchExtractorMessage {
+        user_id: String::new(),
+        document_id: "CCC".to_string(),
+        file_type: FileType::Pdf,
+        document_version_id: None,
+        index_override: None,
+    };
+    let pages = ["1", "2"].map(|page| MarkdownParseResult {
+        node_id: page.to_string(),
+        raw_content: format!("page {page}"),
+        content: format!("page {page}"),
+    });
+    let upserts = generate_upserts(
+        parent_only_document_info(Some("pdf")),
+        pages.to_vec(),
+        false,
+    )
+    .unwrap();
+
+    upsert_document(&fake_opensearch(&endpoint), &message, upserts)
+        .await
+        .unwrap();
+
+    let requests = requests.lock().unwrap().clone();
+    assert_eq!(
+        requests
+            .iter()
+            .map(|(line, _)| line.as_str())
+            .collect::<Vec<_>>(),
+        ["POST /documents/_bulk", "POST /documents/_delete_by_query"]
+    );
+    assert_eq!(
+        kept_by_delete(&requests[1].1),
+        (
+            "CCC".to_owned(),
+            vec!["CCC".to_owned(), "CCC:1".to_owned(), "CCC:2".to_owned()]
+        ),
+        "pages past the second, left by a longer version, are deleted"
+    );
 }

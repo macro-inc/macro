@@ -25,8 +25,8 @@ import {
  *
  * Start sessions from ExecuteCode. For coding work, macro.agents.coding() lists the coding personas the user can start right now, built-in ones such as Cursor included; for a chat agent, macro.agents.list() lists the user's configurable agents. Choose by name, description and instructions, preferring an agent the user named, and pass its `agent` handle to macro.agentSessions.createManaged. Never invent an agent or construct one by id. To use Macro's default persona instead, omit `agent`. Read AgentSessionNamespace.createManaged with ReadCodeDocs before the first call.
  *
- * ```javascript
- * export async function main({macro}) {
+ * ```typescript
+ * export async function main({macro}: CodeContext) {
  *   const coding = await macro.agents.coding();
  *   const chosen = coding.find((option) => option.name === 'Cursor');
  *   if (!chosen) return {data: {error: 'Cursor is not connected', available: coding.map((option) => option.name)}};

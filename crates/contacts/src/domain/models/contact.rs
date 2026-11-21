@@ -1,6 +1,6 @@
 //! Viewer-scoped directory records, distinct from public user profiles.
 
-use super::page::ContactCursor;
+use super::{list::ContactList, page::ContactCursor};
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
@@ -56,6 +56,11 @@ pub struct Contact {
     pub user_id: MacroUserIdStr<'static>,
     /// Resolved name. None lets each surface apply its existing email fallback.
     pub name: Option<String>,
+    /// The viewer's lists the person is in, read from the list-aware directory
+    /// whichever store chose the person. Empty for the viewer, for a person
+    /// only the legacy graph knows, and from reads that do not resolve lists
+    /// (people search).
+    pub lists: Vec<ContactList>,
 }
 
 /// A bounded, enriched contact page in contact-ID order.

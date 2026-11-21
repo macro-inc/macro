@@ -622,6 +622,33 @@ impl Mailbox {
         Ok(())
     }
 
+    /// Deletes a folder for good, with its subfolders and their messages, as
+    /// emptying it out of Deleted Items does. Well-known folders can't go.
+    pub(crate) fn remove_folder(&mut self, key: &str) -> Result<(), EmulatorError> {
+        let unknown = || EmulatorError::UnknownFolder(key.to_string());
+        let root = self
+            .folder(key)
+            .filter(|folder| folder.well_known.is_none())
+            .ok_or_else(unknown)?;
+        let mut gone = vec![root.id.clone()];
+        let mut index = 0;
+        while let Some(id) = gone.get(index).cloned() {
+            gone.extend(self.child_folders(&id).iter().map(|child| child.id.clone()));
+            index += 1;
+        }
+        let messages: Vec<String> = self
+            .messages
+            .values()
+            .filter(|message| gone.contains(&message.folder_id))
+            .map(|message| message.id.clone())
+            .collect();
+        for id in messages {
+            self.remove_message(&id).map_err(|_| unknown())?;
+        }
+        self.folders.retain(|folder| !gone.contains(&folder.id));
+        Ok(())
+    }
+
     /// Builds and stores a seeded or delivered message.
     pub(crate) fn add_message(
         &mut self,

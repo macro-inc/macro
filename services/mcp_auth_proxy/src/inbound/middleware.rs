@@ -36,6 +36,19 @@ pub struct BearerAuth {
     pub user_api_keys: Option<std::sync::Arc<dyn crate::domain::user_api_keys::McpUserApiKeys>>,
 }
 
+/// Opaque ids for the caller of an MCP request, for traces: enough to tie a
+/// report to the calls behind it without recording a name or an email.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct McpCallerIds {
+    /// The user's root FusionAuth id from the bearer token. `None` for a user
+    /// API key, which resolves to the Macro user id (an email) only.
+    pub fusionauth_user_id: Option<String>,
+    /// The id the broker minted for the OAuth client the access token was
+    /// issued to; `None` for every other credential, and for a token issued
+    /// before the broker recorded its client.
+    pub oauth_client_id: Option<String>,
+}
+
 /// Which kind of credential authenticated an MCP request.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum McpAuthMethod {
@@ -123,8 +136,8 @@ fn answers_channel_mention(token: &JwtToken) -> bool {
 }
 
 /// Validates an existing user API key or `Authorization: Bearer <token>` and stores the authenticated
-/// [`MacroUserIdStr`], its [`McpAuthMethod`], and its [`ToolCaller`] in the
-/// request extensions. Every authenticated request carries a caller:
+/// [`MacroUserIdStr`], its [`McpAuthMethod`], its [`ToolCaller`] and its
+/// [`McpCallerIds`] in the request extensions. Every authenticated request carries a caller:
 /// - a Macro API token signed for an agent (only key holders such as the
 ///   agent harness's egress sign the claim, so a client cannot name a bot) is
 ///   [`ToolCaller::Agent`];
@@ -148,6 +161,7 @@ pub async fn validate_bearer(
         request.extensions_mut().insert(user_id);
         request.extensions_mut().insert(McpAuthMethod::ApiKey);
         request.extensions_mut().insert(ToolCaller::ApiKey);
+        request.extensions_mut().insert(McpCallerIds::default());
         return next.run(request).await;
     }
     let token = request
@@ -200,10 +214,10 @@ pub async fn validate_bearer(
             .extensions_mut()
             .insert(ManagedAgentSession(session));
     }
-    let (user_id, auth_method, caller) = match jwt_token {
+    let (user_id, auth_method, caller, ids) = match jwt_token {
         JwtToken::MacroAccessToken(access) => {
-            let name = match auth.clients.client_name(&token).await {
-                Ok(name) => name,
+            let client = match auth.clients.issued_client(&token).await {
+                Ok(client) => client,
                 Err(error) => {
                     tracing::error!(error=?error, "could not read the client an access token was issued to");
                     let mut response = Response::new(Body::empty());
@@ -211,10 +225,18 @@ pub async fn validate_bearer(
                     return response;
                 }
             };
+            let (oauth_client_id, name) = match client {
+                Some(client) => (Some(client.id), client.name),
+                None => (None, None),
+            };
             (
                 access.macro_user_id,
                 McpAuthMethod::OAuth,
                 ToolCaller::McpClient { name },
+                McpCallerIds {
+                    fusionauth_user_id: Some(access.root_macro_id.unwrap_or(access.fusion_user_id)),
+                    oauth_client_id,
+                },
             )
         }
         JwtToken::MacroApiToken(api) => (
@@ -223,6 +245,10 @@ pub async fn validate_bearer(
             match api.agent_id {
                 Some(agent) => ToolCaller::Agent(BotId::new_from_uuid(agent)),
                 None => ToolCaller::ApiKey,
+            },
+            McpCallerIds {
+                fusionauth_user_id: Some(api.fusion_user_id),
+                oauth_client_id: None,
             },
         ),
     };
@@ -239,6 +265,7 @@ pub async fn validate_bearer(
     request.extensions_mut().insert(user_id);
     request.extensions_mut().insert(auth_method);
     request.extensions_mut().insert(caller);
+    request.extensions_mut().insert(ids);
     request.extensions_mut().insert(JwtAccessToken(token));
 
     next.run(request).await

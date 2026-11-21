@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE import_run\n            SET personal_folder_ids = jsonb_set(\n                COALESCE(personal_folder_ids, '{}'::jsonb), ARRAY[$3], to_jsonb($4::text)\n            )\n            WHERE user_id = $1 AND source = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4b3a215f3157f76828cf12a840291533f3e90a90415beb30ffbb9a91efd722c7"
+}

@@ -1,9 +1,136 @@
 use super::*;
 use cache_core::engine::{Engine, NetworkWrite, ReadResult};
+use cache_core::value::CacheValue;
 use serde_json::{Value as Json, json};
 
 const FULL: &str = "query Full { user { id soup(input: {limit: 50}) { items { __typename id ... on GraphqlSoupDocument { value: name extra: ownerId } } nextCursor } } }";
 const PARTIAL: &str = "query Partial { user { id soup(input: {limit: 50}) { items { __typename id ... on GraphqlSoupDocument { value: name } } nextCursor } } }";
+
+#[test]
+fn account_reset_commits_its_authority_without_postcommit_io() {
+    block_on(async {
+        let mut engine =
+            Engine::new(TursoStorage::open_in_memory("authority-reset-atomicity").unwrap());
+        engine.current_authority("profile").await.unwrap();
+        let variables = serde_json::Map::new();
+        let query = "{ user { id } }";
+        engine
+            .write_query(
+                None,
+                query,
+                None,
+                &variables,
+                &json!({"user":{"id":"before"}}),
+                Some("before"),
+            )
+            .await
+            .unwrap();
+        let before = engine.authority_snapshot().unwrap().clone();
+        assert_eq!(before.account.as_deref(), Some("before"));
+        engine.storage().arm_fault(TestFault::After {
+            site: TestFaultSite::Put,
+            index: 0,
+        });
+        assert!(
+            engine
+                .write_query(
+                    None,
+                    query,
+                    None,
+                    &variables,
+                    &json!({"user":{"id":"after"}}),
+                    Some("after")
+                )
+                .await
+                .is_err()
+        );
+        assert_eq!(engine.authority_snapshot(), Some(&before));
+        assert_eq!(
+            engine.current_identity().await.unwrap().as_deref(),
+            Some("before")
+        );
+        engine
+            .write_query(
+                None,
+                query,
+                None,
+                &variables,
+                &json!({"user":{"id":"after"}}),
+                Some("after"),
+            )
+            .await
+            .unwrap();
+        let committed = engine.authority_snapshot().unwrap().clone();
+        assert_eq!(committed.account.as_deref(), Some("after"));
+        assert_ne!(committed.generation, before.generation);
+        let changes = engine.storage().connection().total_changes();
+        assert_eq!(
+            engine.current_authority("profile").await.unwrap(),
+            committed
+        );
+        assert_eq!(engine.storage().connection().total_changes(), changes);
+        let mut reopened = Engine::new(engine.into_storage());
+        assert_eq!(
+            reopened.current_authority("profile").await.unwrap(),
+            committed
+        );
+    });
+}
+
+#[test]
+fn derived_response_records_commit_in_the_response_transaction() {
+    block_on(async {
+        let mut engine =
+            Engine::new(TursoStorage::open_in_memory("response-record-atomicity").unwrap())
+                .with_response_records(|_, _, _, _, _| {
+                    Ok([(
+                        key("ResponseOwner:one"),
+                        Record {
+                            fields: [("owner".into(), CacheValue::Ref(key("GraphqlUser:viewer")))]
+                                .into(),
+                        },
+                    )]
+                    .into())
+                });
+        let query = "{ user { id } }";
+        let variables = serde_json::Map::new();
+        let data = json!({"user":{"id":"viewer"}});
+        let keys = [key("ResponseOwner:one"), key("GraphqlUser:viewer")];
+        engine.storage().arm_fault(TestFault::After {
+            site: TestFaultSite::Put,
+            index: 1,
+        });
+        assert!(
+            engine
+                .write_query(None, query, None, &variables, &data, None)
+                .await
+                .is_err()
+        );
+        assert!(
+            engine
+                .storage()
+                .get_batch(&keys)
+                .await
+                .unwrap()
+                .iter()
+                .all(Option::is_none)
+        );
+        let result = engine
+            .write_query(None, query, None, &variables, &data, None)
+            .await
+            .unwrap();
+        assert_eq!(result.revision.to_string(), "1");
+        assert!(
+            engine
+                .storage()
+                .get_batch(&keys)
+                .await
+                .unwrap()
+                .iter()
+                .all(Option::is_some)
+        );
+    });
+}
 
 fn page(count: usize) -> Json {
     json!({"user": {"id": "viewer", "soup": {"items": (0..count).map(|id| json!({

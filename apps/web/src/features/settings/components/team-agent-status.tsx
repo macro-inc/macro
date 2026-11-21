@@ -12,6 +12,7 @@ function statusLabel(status: TeamAgentStatus): string {
       .with('starting', () => t('teamAgents.statusStarting'))
       .with('running', () => t('teamAgents.statusRunning'))
       .with('paused', () => t('teamAgents.statusPaused'))
+      .with('unhealthy', () => t('teamAgents.statusUnhealthy'))
       .with('failed', () => t('teamAgents.statusFailed'))
       .with('released', () => t('teamAgents.statusReleased'))
       // A status a newer server sends reads as not running, never a crash.
@@ -24,7 +25,7 @@ function dotState(
 ): 'connected' | 'attention' | 'disconnected' {
   return match(status)
     .with('running', () => 'connected' as const)
-    .with('failed', () => 'attention' as const)
+    .with('failed', 'unhealthy', () => 'attention' as const)
     .with(
       'provisioning',
       'starting',

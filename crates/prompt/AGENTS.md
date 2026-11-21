@@ -39,6 +39,8 @@ AI system prompts: one module per prompt section, each exporting a
   `ai_tools` inlines it from the generated catalog, and routed turns load it
   per entity. Only cross-cutting rules live in this crate. `code_mode.rs` is
   only the general code-mode section.
+  Its `REPLY_PROMPT` shares the general rules while keeping classic channel-bot
+  results in the reply and documenting their send, sharing and delegation limits.
 
 ## Tool contracts
 

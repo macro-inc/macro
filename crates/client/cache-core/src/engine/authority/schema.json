@@ -1,0 +1,120 @@
+{
+  "schemas": {
+    "AuthorityTransition": {
+      "$defs": {
+        "CacheAuthority": {
+          "additionalProperties": false,
+          "description": "The permission scope attached to cached response content, independently of\nstorage lifetime and the durable mutation queue.",
+          "properties": {
+            "account": {
+              "description": "Account witness bound inside that profile when this generation began.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "generation": {
+              "description": "Capture before acquiring source data; never relabel an older response.",
+              "format": "uuid",
+              "type": "string"
+            },
+            "identity": {
+              "description": "Anonymous physical cache profile, independent of the signed-in account.",
+              "type": "string"
+            },
+            "policy": {
+              "description": "Server-defined policy value; absent before the first permission proof.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "ready": {
+              "description": "False until all protected snapshots have been retired durably.",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "identity",
+            "generation",
+            "ready"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "Shared browser/native transport for a completed permission transition.",
+      "properties": {
+        "affectedOps": {
+          "description": "Host operation names whose previous results must be discarded.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "authority": {
+          "$ref": "#/$defs/CacheAuthority",
+          "description": "Current durable permission scope."
+        },
+        "changed": {
+          "description": "Whether the authority changed or incomplete retirement resumed.",
+          "type": "boolean"
+        },
+        "revision": {
+          "description": "Effective cache revision after retirement.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "authority",
+        "revision",
+        "affectedOps",
+        "changed"
+      ],
+      "title": "AuthorityTransitionWire",
+      "type": "object"
+    },
+    "CacheAuthority": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "The permission scope attached to cached response content, independently of\nstorage lifetime and the durable mutation queue.",
+      "properties": {
+        "account": {
+          "description": "Account witness bound inside that profile when this generation began.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "generation": {
+          "description": "Capture before acquiring source data; never relabel an older response.",
+          "format": "uuid",
+          "type": "string"
+        },
+        "identity": {
+          "description": "Anonymous physical cache profile, independent of the signed-in account.",
+          "type": "string"
+        },
+        "policy": {
+          "description": "Server-defined policy value; absent before the first permission proof.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ready": {
+          "description": "False until all protected snapshots have been retired durably.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "identity",
+        "generation",
+        "ready"
+      ],
+      "title": "CacheAuthority",
+      "type": "object"
+    }
+  }
+}

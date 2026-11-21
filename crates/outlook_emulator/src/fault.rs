@@ -237,6 +237,10 @@ pub enum FaultError {
     Unauthorized,
     /// 403 `ErrorAccessDenied`.
     Forbidden,
+    /// 403 `ExtensionError`, as Graph refuses a subscription it will not
+    /// create for a mailbox whose mail it still serves. The code and status
+    /// are Graph's; the message is the emulator's.
+    ExtensionForbidden,
     /// 404 `ErrorItemNotFound`.
     NotFound,
     /// 404 `MailboxNotEnabledForRESTAPI`: the mailbox is not in Exchange Online.
@@ -270,6 +274,11 @@ impl FaultError {
                 GraphError::unauthenticated("Lifetime validation failed, the token is expired.")
             }
             Self::Forbidden => GraphError::access_denied(),
+            Self::ExtensionForbidden => GraphError::server(
+                403,
+                "ExtensionError",
+                "Operation: Create; Exception: [Status Code: Forbidden; Reason: Forbidden]",
+            ),
             Self::NotFound => GraphError::item_not_found(),
             Self::MailboxNotEnabled => GraphError::server(
                 404,

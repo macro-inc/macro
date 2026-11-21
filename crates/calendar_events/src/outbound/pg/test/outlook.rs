@@ -7,6 +7,8 @@ use crate::domain::models::{
 use crate::domain::outlook::*;
 use crate::domain::ports::{CalendarProviderErrorKind, CalendarSyncHealthReader};
 
+mod certification;
+
 async fn mailbox(pool: &PgPool) -> (PgCalendarRepository, Uuid, String) {
     let owner = "macro|outlook-owner@example.com".to_owned();
     insert_user(pool, &owner).await;
@@ -316,7 +318,7 @@ async fn outlook_discovery_preserves_coverage_without_google_snapshot_certificat
 
     let mut tx = pool.begin().await.unwrap();
     let mut log = ChangeLogBatch::default();
-    let (stored, _) = upsert_calendar_tx(
+    let stored = upsert_calendar_tx(
         &mut tx,
         &mut log,
         link,
@@ -335,7 +337,8 @@ async fn outlook_discovery_preserves_coverage_without_google_snapshot_certificat
         Some(CalendarProvider::Outlook),
     )
     .await
-    .unwrap();
+    .unwrap()
+    .row;
     assert!(stored.synced_at.is_some());
     assert_eq!(stored.materialized_starts_at, Some(target.range.starts_at));
     assert_eq!(stored.materialized_ends_at, Some(target.range.ends_at));

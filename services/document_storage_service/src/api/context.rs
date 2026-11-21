@@ -1,5 +1,7 @@
+use contacts::domain::list_writes::ListWritesGate;
 use contacts::domain::service::SqsContactsIngress;
 use contacts::outbound::ingress::SqsContactsQueue;
+use feature_flags::outbound::posthog::PostHogFeatureFlags;
 
 use crate::{config::Config, service::s3::S3};
 use account_manager::{
@@ -344,7 +346,7 @@ pub(crate) type DssCalendarJoinRequestService =
         calendar_events::outbound::notification_notifier::NotificationCalendarJoinRequestNotifier<
             NotificationIngressType,
         >,
-        crate::outbound::calendar_refresh::ConnectionGatewayCalendarRefresh,
+        calendar_events::outbound::gateway_refresh::GatewayCalendarRefresh,
     >;
 
 /// Calendar join-request router state.
@@ -534,7 +536,9 @@ pub(crate) type DssChannelService = ChannelServiceImpl<
                     notification::outbound::withdrawal::PgNotificationWithdrawal,
                 >,
             >,
-            ContactsChannelDispatcher<SqsContactsIngress<SqsContactsQueue>>,
+            ContactsChannelDispatcher<
+                ListWritesGate<SqsContactsIngress<SqsContactsQueue>, PostHogFeatureFlags>,
+            >,
             DssEventBroker,
         >,
     >,
@@ -707,11 +711,19 @@ pub(crate) type DssSqlState = databases_sql::inbound::axum_router::SqlRouterStat
     DatabasesServiceType,
     EntityAccessService,
     DssSoupService,
+    DssContactReads,
+    AuthorizationService,
+>;
+
+/// Contact reads that follow each viewer's `contacts-list-reads` flag between
+/// the legacy graph and the list-aware tables.
+pub(crate) type DssContactReads = contacts::domain::list_reads::FlaggedContactReads<
     contacts::domain::service::ContactsDomainService<
         contacts::outbound::repository::DbContactsRepository,
         Option<contacts::outbound::gateway::ConnectionGatewayNotifier>,
     >,
-    AuthorizationService,
+    contacts::outbound::repository::DbContactsRepository,
+    feature_flags::outbound::posthog::PostHogFeatureFlags,
 >;
 
 /// Type alias for the databases router state.
@@ -951,9 +963,7 @@ pub(crate) type DssWebhookState =
 pub(crate) type DssSseStreamService = WebhookEventStreamServiceImpl<
     EntityAccessService,
     PgWebhookRepo,
-    crate::outbound::stream_contacts::ContactsStreamChecker<
-        contacts::outbound::repository::DbContactsRepository,
-    >,
+    crate::outbound::stream_contacts::ContactsStreamChecker<DssContactReads>,
 >;
 
 /// Type alias for the webhook-event SSE router state.
@@ -973,6 +983,10 @@ pub(crate) type DssDictationState = dictation::inbound::axum_router::DictationRo
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
     pub search_term_matching: Arc<dyn search_service::TermMatchingRollout>,
+    /// Each caller's unified search lane, shared by both search mounts.
+    pub search_lanes: Arc<search_service::SearchLanes>,
+    /// The search allowance each account's user API keys share, in Redis.
+    pub api_key_search_buckets: Arc<dyn search_service::SearchTokenBuckets>,
     pub passwords_state: passwords::inbound::router::PasswordRouterState<AuthorizationService>,
     pub passwords_agent_state:
         passwords::inbound::agent_router::AgentRouterState<AuthorizationService>,
@@ -1131,6 +1145,8 @@ impl From<&ApiContext> for SearchHandlerState {
                 ctx.readonly_db.0.clone(),
             ))) as Arc<dyn CalendarEventLabelReader>,
             term_matching_rollout: ctx.search_term_matching.clone(),
+            search_lanes: ctx.search_lanes.clone(),
+            api_key_search_buckets: ctx.api_key_search_buckets.clone(),
         }
     }
 }

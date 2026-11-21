@@ -1035,9 +1035,10 @@ export const organise = {
       id: 'STL-617',
       surface: 'SL-31',
       fn: ['F-075', 'F-177'],
-      state: 'thread closes (inline view returns to the list)',
+      state: 'thread closes and the list that opened it reappears',
       trigger: 'Delete from title menu',
       source: [
+        'src/features/block-email/EmailBlockAdapter.tsx',
         'src/features/block-email/component/useEmailThreadTools.tsx',
         'src/features/email-view/components/EmailDetailView.tsx',
       ],

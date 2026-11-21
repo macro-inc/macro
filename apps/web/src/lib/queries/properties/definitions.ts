@@ -1,9 +1,12 @@
 import { toast } from '@core/component/Toast/Toast';
 import { useIsAuthenticated } from '@core/context/user';
-import { throwOnErr } from '@core/util/result';
+import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
-import { propertiesServiceClient } from '../../service-clients/service-properties/client';
+import {
+  PROPERTY_NAME_RESERVED_CODE,
+  propertiesServiceClient,
+} from '../../service-clients/service-properties/client';
 import type { CreatePropertyDefinitionRequest } from '../../service-clients/service-properties/generated/schemas/createPropertyDefinitionRequest';
 import type { EntityType } from '../../service-clients/service-properties/generated/schemas/entityType';
 import type { PropertyDefinition } from '../../service-clients/service-properties/generated/schemas/propertyDefinition';
@@ -121,6 +124,11 @@ export function useDeletePropertyDefinitionMutation(
   }));
 }
 
+/** Whether a failed create was the server refusing a built-in property's name. */
+export function isPropertyNameReserved(error: unknown): boolean {
+  return thrownResultErrorHasCode(error, PROPERTY_NAME_RESERVED_CODE);
+}
+
 export function useCreatePropertyDefinitionMutation(
   callbacks?: MutationCallbacks<
     PropertyDefinition,
@@ -142,6 +150,8 @@ export function useCreatePropertyDefinitionMutation(
       {
         onError(error) {
           console.error('Failed to create property definition', error);
+          // The caller says why a built-in name was refused.
+          if (isPropertyNameReserved(error)) return;
           toast.failure('Failed to create property');
         },
         onSuccess: () => {

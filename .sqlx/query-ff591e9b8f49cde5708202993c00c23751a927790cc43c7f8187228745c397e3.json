@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_links SET mailbox_unavailable_at = NULL,updated_at = now() WHERE id = $1 AND mailbox_unavailable_at IS NOT NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ff591e9b8f49cde5708202993c00c23751a927790cc43c7f8187228745c397e3"
+}

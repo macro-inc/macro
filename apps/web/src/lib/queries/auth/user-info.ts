@@ -171,11 +171,12 @@ export async function prefetchUserInfo() {
 }
 
 /** Fetch user info and return the data. Use when you need the result. */
-export async function fetchUserInfo() {
+export async function fetchUserInfo(options?: { fresh?: boolean }) {
   return queryClient.fetchQuery({
     queryKey: authKeys.userInfo.queryKey,
     queryFn: fetchLegacyUserPermissions,
     networkMode: 'always',
+    ...(options?.fresh ? { staleTime: 0 } : {}),
   });
 }
 

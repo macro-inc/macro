@@ -221,7 +221,8 @@ export function createInitiativeClient(
           })
           .toPromise();
         const disposition = optimisticMutationDispositionOf(result);
-        if (disposition?.kind === 'queued') return;
+        if (disposition?.kind === 'queued' || disposition?.kind === 'committed')
+          return;
         if (disposition?.kind === 'permanently-failed')
           operationData({ ...result, error: disposition.error });
         // Detail consumers subscribe to the normalized record. A queued partial

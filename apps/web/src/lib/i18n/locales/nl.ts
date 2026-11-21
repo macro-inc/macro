@@ -104,7 +104,6 @@ export default {
     close: 'Sluiten',
     delete: 'Verwijderen',
     rename: 'Naam wijzigen',
-    more: 'Meer',
     search: 'Zoeken',
     settings: 'Instellingen',
   },
@@ -520,6 +519,10 @@ export default {
       other: '{{count}} items verwijderd',
     },
     toastDeleteFailed: 'Verwijderen mislukt',
+    toastPropertySet: {
+      one: '{{property}} ingesteld',
+      other: '{{property}} ingesteld voor {{count}} items',
+    },
     toastAddedToFavorites: 'Toegevoegd aan favorieten',
     toastAddedCountToFavorites: {
       one: '{{count}} item toegevoegd aan favorieten',

@@ -156,6 +156,25 @@ fn received_thread_backfilled_event(thread_id: Uuid, offset: i64) -> ReceivedEve
     .expect("attached event")
 }
 
+fn received_thread_reindex_event(thread_ids: Vec<Uuid>, offset: i64) -> ReceivedEvent {
+    let event = DeclaredMacroEvent::EmailMacroEvent(EmailMacroEvent::new(
+        EMAIL_LINK_ID.to_string(),
+        EmailTopicEvent::ThreadsReindexRequested(ThreadsReindexRequestedMetadata {
+            link_id: EMAIL_LINK_ID,
+            owner: user_id(),
+            thread_ids,
+            reason: ThreadsReindexReason::ProviderChanged,
+        }),
+    ));
+    attach_event_coordinates(
+        Ok::<_, EventBrokerError>(event),
+        0,
+        offset,
+        tracing::Span::none(),
+    )
+    .expect("attached event")
+}
+
 fn received_agent_session_event(session: Uuid, offset: i64) -> ReceivedEvent {
     use ::agent_session::domain::events::{AgentSessionLifecycleEvent, SessionRenamedMetadata};
 
@@ -171,6 +190,21 @@ fn received_lifecycle_event(
         ::agent_session::domain::events::SessionIdentity,
     ) -> ::agent_session::domain::events::AgentSessionLifecycleEvent,
 ) -> ReceivedEvent {
+    attach_event_coordinates(
+        DeclaredMacroEvent::decode(&lifecycle_message(session, event)),
+        0,
+        offset,
+        tracing::Span::none(),
+    )
+    .expect("decodable agent-session event")
+}
+
+fn lifecycle_message(
+    session: Uuid,
+    event: impl FnOnce(
+        ::agent_session::domain::events::SessionIdentity,
+    ) -> ::agent_session::domain::events::AgentSessionLifecycleEvent,
+) -> TestMessage {
     use ::agent_session::domain::{
         events::SessionIdentity,
         model::{AgentSessionId, SessionSource},
@@ -188,18 +222,11 @@ fn received_lifecycle_event(
         audience: vec![],
         source: SessionSource::User,
     });
-    let message = encoded_message(
+    encoded_message(
         MacroAgentSessionLifecycleTopic::TOPIC_STR,
         id,
         Event::new(event),
-    );
-    attach_event_coordinates(
-        DeclaredMacroEvent::decode(&message),
-        0,
-        offset,
-        tracing::Span::none(),
     )
-    .expect("decodable agent-session event")
 }
 
 const AGENT_SESSION_ID: Uuid = Uuid::from_u128(10);
@@ -1440,6 +1467,105 @@ fn subscribes_to_declared_search_processing_topics_with_durable_group() {
 }
 
 #[test]
+fn email_has_a_lane_of_its_own_and_the_live_lane_reads_every_other_topic() {
+    assert_eq!(EmailLaneEvent::topics(), [MacroEmailTopic::TOPIC_STR]);
+    let mut lanes: Vec<_> = EmailLaneEvent::topics()
+        .iter()
+        .chain(LiveLaneEvent::topics())
+        .copied()
+        .collect();
+    let mut declared = DeclaredMacroEvent::topics().to_vec();
+    lanes.sort_unstable();
+    declared.sort_unstable();
+    assert_eq!(lanes, declared);
+}
+
+#[test]
+fn backlog_metrics_split_lanes_as_the_consumers_do() {
+    use super::entity_type::EntityType as IndexedType;
+
+    for topic in EmailLaneEvent::topics() {
+        assert_eq!(IndexedType::from_topic(topic), Some(IndexedType::Email));
+    }
+    for topic in LiveLaneEvent::topics() {
+        assert_ne!(
+            IndexedType::from_topic(topic),
+            Some(IndexedType::Email),
+            "{topic}"
+        );
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_lane_leaves_the_group_once_every_lane_has_rewound() {
+    let leave = LeaveTogether::new(2);
+    let deadline = tokio::time::Instant::now() + LEAVE_TOGETHER_DEADLINE;
+    let first = tokio::spawn({
+        let leave = leave.clone();
+        async move { leave.rewound(deadline).await }
+    });
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    assert!(
+        !first.is_finished(),
+        "a lane must wait for the other lane's rewind"
+    );
+
+    leave.rewound(deadline).await;
+    first.await.expect("first lane");
+    assert!(tokio::time::Instant::now() < deadline);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_lane_waits_no_longer_than_the_deadline_for_a_lane_that_is_not_running() {
+    let leave = LeaveTogether::new(2);
+    let deadline = tokio::time::Instant::now() + LEAVE_TOGETHER_DEADLINE;
+
+    leave.rewound(deadline).await;
+
+    assert_eq!(tokio::time::Instant::now(), deadline);
+}
+
+#[test]
+fn a_lane_decodes_its_records_as_the_declared_topics_do() {
+    use ::agent_session::domain::events::{AgentSessionLifecycleEvent, SessionRenamedMetadata};
+
+    let email = encoded_message(
+        MacroEmailTopic::TOPIC_STR,
+        EMAIL_LINK_ID,
+        Event::new(received_email_event(false)),
+    );
+    let session = lifecycle_message(AGENT_SESSION_ID, |identity| {
+        AgentSessionLifecycleEvent::Renamed(SessionRenamedMetadata { identity })
+    });
+    let decoded = [
+        (
+            EmailLaneEvent::decode(&email).map(DeclaredMacroEvent::from),
+            DeclaredMacroEvent::decode(&email),
+        ),
+        (
+            LiveLaneEvent::decode(&session).map(DeclaredMacroEvent::from),
+            DeclaredMacroEvent::decode(&session),
+        ),
+    ];
+    for (lane, declared) in decoded {
+        let (lane, declared) = (lane.expect("lane event"), declared.expect("declared event"));
+        assert_eq!(event_topic(&lane), event_topic(&declared));
+        assert_eq!(event_type(&lane), event_type(&declared));
+        assert_eq!(event_id(&lane), event_id(&declared));
+        assert_eq!(ordering_key(&lane), ordering_key(&declared));
+    }
+
+    assert!(matches!(
+        LiveLaneEvent::decode(&email),
+        Err(EventBrokerError::UnknownTopic(_))
+    ));
+    assert!(matches!(
+        EmailLaneEvent::decode(&session),
+        Err(EventBrokerError::UnknownTopic(_))
+    ));
+}
+
+#[test]
 fn maps_all_call_lifecycle_events_to_index_actions() {
     assert_eq!(
         describe_call_event(&started_event()),
@@ -2423,6 +2549,182 @@ async fn queued_agent_session_reread_absorbs_later_hints_without_blocking() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn one_mailbox_reindex_burst_spreads_across_workers() {
+    let (pool, mut receivers) = test_pool(WORKER_COUNT, WORKER_CHANNEL_CAPACITY);
+    let threads: Vec<Uuid> = (0..60)
+        .map(|index| Uuid::from_u128(60_000 + index))
+        .collect();
+
+    for (offset, thread) in (0..).zip(&threads) {
+        let outcome = tokio::time::timeout(
+            BLOCKED_HANDOFF_TIMEOUT,
+            pool.handoff(Ok::<_, EventBrokerError>(received_thread_reindex_event(
+                vec![*thread],
+                offset,
+            ))),
+        )
+        .await
+        .expect("one mailbox's reindex requests must not all wait on one worker");
+        assert!(matches!(outcome, HandoffOutcome::HandedOff));
+    }
+
+    let busy_workers = receivers
+        .iter_mut()
+        .map(|receiver| receiver.try_recv().is_ok())
+        .filter(|received| *received)
+        .count();
+    assert!(
+        busy_workers > WORKER_COUNT / 2,
+        "a mailbox's threads must spread across workers, got {busy_workers}"
+    );
+}
+
+#[tokio::test]
+async fn thread_reindex_queues_behind_the_threads_earlier_events() {
+    let (pool, mut receivers) = test_pool(WORKER_COUNT, WORKER_CHANNEL_CAPACITY);
+    let thread_worker = pool.shard_index(&EMAIL_THREAD_ID.to_string());
+
+    assert!(matches!(
+        pool.handoff(Ok::<_, EventBrokerError>(received_thread_backfilled_event(
+            EMAIL_THREAD_ID,
+            1
+        )))
+        .await,
+        HandoffOutcome::HandedOff
+    ));
+    assert!(matches!(
+        pool.handoff(Ok::<_, EventBrokerError>(received_thread_reindex_event(
+            vec![EMAIL_THREAD_ID],
+            2
+        )))
+        .await,
+        HandoffOutcome::HandedOff
+    ));
+
+    let receiver = &mut receivers[thread_worker];
+    assert_eq!(receiver.try_recv().expect("backfilled event").offset, 1);
+    assert_eq!(
+        receiver
+            .try_recv()
+            .expect("reindex request on the thread's worker")
+            .offset,
+        2
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn queued_thread_reindex_absorbs_later_requests_for_the_thread() {
+    let (pool, mut receivers) = test_pool(1, 1);
+
+    assert!(matches!(
+        pool.handoff(Ok::<_, EventBrokerError>(received_thread_reindex_event(
+            vec![EMAIL_THREAD_ID],
+            1
+        )))
+        .await,
+        HandoffOutcome::HandedOff
+    ));
+    for offset in 2..40 {
+        let outcome = tokio::time::timeout(
+            BLOCKED_HANDOFF_TIMEOUT,
+            pool.handoff(Ok::<_, EventBrokerError>(received_thread_reindex_event(
+                vec![EMAIL_THREAD_ID],
+                offset,
+            ))),
+        )
+        .await
+        .expect("a reindex request for a thread with a queued reread must not wait");
+        assert!(matches!(outcome, HandoffOutcome::Coalesced));
+    }
+
+    assert_eq!(receivers[0].recv().await.expect("queued reread").offset, 1);
+    assert!(matches!(
+        receivers[0].try_recv(),
+        Err(mpsc::error::TryRecvError::Empty)
+    ));
+}
+
+#[tokio::test]
+async fn thread_reindex_behind_another_thread_event_is_not_absorbed() {
+    let (pool, mut receivers) = test_pool(1, 3);
+
+    assert!(matches!(
+        pool.handoff(Ok::<_, EventBrokerError>(received_thread_reindex_event(
+            vec![EMAIL_THREAD_ID],
+            1
+        )))
+        .await,
+        HandoffOutcome::HandedOff
+    ));
+    assert!(matches!(
+        pool.handoff(Ok::<_, EventBrokerError>(received_thread_backfilled_event(
+            EMAIL_THREAD_ID,
+            2
+        )))
+        .await,
+        HandoffOutcome::HandedOff
+    ));
+    // The queued reread runs before the event between them, so it cannot
+    // cover a request published after that event.
+    assert!(matches!(
+        pool.handoff(Ok::<_, EventBrokerError>(received_thread_reindex_event(
+            vec![EMAIL_THREAD_ID],
+            3
+        )))
+        .await,
+        HandoffOutcome::HandedOff
+    ));
+
+    for offset in 1..=3 {
+        assert_eq!(
+            receivers[0].try_recv().expect("queued event").offset,
+            offset
+        );
+    }
+}
+
+#[tokio::test]
+async fn reindex_request_for_several_threads_is_never_coalesced() {
+    let (pool, mut receivers) = test_pool(1, 3);
+
+    assert!(matches!(
+        pool.handoff(Ok::<_, EventBrokerError>(received_thread_reindex_event(
+            vec![EMAIL_THREAD_ID],
+            1
+        )))
+        .await,
+        HandoffOutcome::HandedOff
+    ));
+    // A reread of its first thread does not cover the second.
+    assert!(matches!(
+        pool.handoff(Ok::<_, EventBrokerError>(received_thread_reindex_event(
+            vec![EMAIL_THREAD_ID, SECOND_EMAIL_THREAD_ID],
+            2
+        )))
+        .await,
+        HandoffOutcome::HandedOff
+    ));
+
+    // Handing it off released the first request's claim on its thread, so a
+    // later request queues behind it.
+    assert!(matches!(
+        pool.handoff(Ok::<_, EventBrokerError>(received_thread_reindex_event(
+            vec![EMAIL_THREAD_ID],
+            3
+        )))
+        .await,
+        HandoffOutcome::HandedOff
+    ));
+
+    for offset in 1..=3 {
+        assert_eq!(
+            receivers[0].try_recv().expect("queued event").offset,
+            offset
+        );
+    }
+}
+
+#[tokio::test(start_paused = true)]
 async fn agent_session_flood_does_not_delay_email_events_on_other_partitions() {
     const AGENT_PARTITION: i32 = 1;
     const EMAIL_PARTITION: i32 = 4;
@@ -2748,7 +3050,7 @@ fn email_events_shard_by_thread_and_link_scoped_events_by_producer_key() {
             reason: ThreadsReindexReason::ContactsChanged,
         }),
     ));
-    assert_eq!(ordering_key(&multi_thread), EMAIL_LINK_ID.to_string());
+    assert_eq!(ordering_key(&multi_thread), EMAIL_THREAD_ID.to_string());
 }
 
 #[test]
@@ -3429,7 +3731,49 @@ async fn processing_records_its_lag_and_counts_a_drop() {
             .iter()
             .map(|point| (point.tags.clone(), point.value))
             .collect::<Vec<_>>(),
-        [(tags(&[("entity_type", "email"), ("outcome", "dropped")]), 1)]
+        [(
+            tags(&[
+                ("entity_type", "email"),
+                ("outcome", "dropped"),
+                ("failure", "bulk_items"),
+            ]),
+            1
+        )]
+    );
+}
+
+#[tokio::test]
+async fn failed_items_count_by_the_last_attempts_failure() {
+    use super::metrics::{
+        FAILED_BULK_ITEMS,
+        test::{Recorded, tags},
+    };
+
+    let recorded = Recorded::new();
+    let received = received_thread_backfilled_event(EMAIL_THREAD_ID, 7);
+    let replays = RecordedReplays(Mutex::default());
+
+    process_received(&recorded.metrics, &received, &replays, |_| async {
+        Err(exhausted(Failure::Overloaded))
+    })
+    .await;
+
+    // A refusal while OpenSearch protects itself, such as a drain's 429s,
+    // counts apart from items it failed.
+    assert_eq!(
+        recorded
+            .points(FAILED_BULK_ITEMS)
+            .iter()
+            .map(|point| (point.tags.clone(), point.value))
+            .collect::<Vec<_>>(),
+        [(
+            tags(&[
+                ("entity_type", "email"),
+                ("outcome", "retry_queued"),
+                ("failure", "overloaded"),
+            ]),
+            1
+        )]
     );
 }
 
@@ -3458,6 +3802,126 @@ async fn an_indexed_event_is_not_counted_as_dropped() {
         ["indexed"]
     );
     assert!(recorded.points(DROPPED).is_empty());
+}
+
+/// Stands in for OpenSearch's answers to property writes, with bodies as
+/// OpenSearch 3.5 returns them: [`PROJECT_ID`] is the only indexed project,
+/// and no email thread is indexed.
+async fn property_write_opensearch() -> opensearch_client::OpensearchClient {
+    use axum::{
+        http::{StatusCode, Uri},
+        response::IntoResponse,
+    };
+
+    let app = axum::Router::new().fallback(|uri: Uri| async move {
+        let path = uri.path();
+        let (status, body) = if path == format!("/projects/_update/{PROJECT_ID}") {
+            (
+                StatusCode::OK,
+                serde_json::json!({"_index": "projects", "_id": PROJECT_ID, "result": "updated"}),
+            )
+        } else if path.starts_with("/projects/_update/") {
+            let error = serde_json::json!({
+                "type": "document_missing_exception",
+                "reason": "document missing",
+                "index": "projects",
+            });
+            (
+                StatusCode::NOT_FOUND,
+                serde_json::json!({"error": {"root_cause": [error.clone()], "type": error["type"], "reason": error["reason"]}, "status": 404}),
+            )
+        } else if path == "/emails/_update_by_query" {
+            (
+                StatusCode::OK,
+                serde_json::json!({"total": 0, "updated": 0, "version_conflicts": 0, "noops": 0, "failures": []}),
+            )
+        } else {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                serde_json::json!({"error": format!("unexpected request {path}")}),
+            )
+        };
+        (status, axum::Json(body)).into_response()
+    });
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let endpoint = format!("http://{}", listener.local_addr().unwrap());
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    opensearch_client::OpensearchClient::new(endpoint, String::new(), String::new()).unwrap()
+}
+
+/// Freshness reads `outcome:indexed`, so a property write that changes nothing
+/// in the index, because the entity's type has no search index or the entity
+/// is not indexed yet, must not count as one.
+#[sqlx::test(migrations = "../../crates/macro_db_client/migrations")]
+async fn property_writes_that_change_nothing_indexed_are_not_counted_as_indexed(
+    pool: sqlx::PgPool,
+) {
+    use super::metrics::{LAG, test::Recorded};
+    use properties::domain::events::PropertyMacroEvent;
+
+    let opensearch = property_write_opensearch().await;
+    let (pool, opensearch) = (&pool, &opensearch);
+    let thread_id = EMAIL_THREAD_ID.to_string();
+    let cases = [
+        (PROJECT_ID, EntityType::Project, "indexed"),
+        (
+            "project-not-indexed",
+            EntityType::Project,
+            "no_index_change",
+        ),
+        (thread_id.as_str(), EntityType::Thread, "no_index_change"),
+        ("company-id", EntityType::Company, "ignored"),
+    ];
+    for (offset, (entity_id, entity_type, outcome)) in (0..).zip(cases) {
+        let recorded = Recorded::new();
+        let event =
+            PropertyMacroEvent::entity_properties_cleared(EntityPropertiesClearedMetadata {
+                entity_id: entity_id.to_string(),
+                entity_type,
+                actor_user_id: None,
+                actor: None,
+                on_behalf_of: None,
+            });
+        let mut received = attach_event_coordinates(
+            Ok::<_, EventBrokerError>(DeclaredMacroEvent::PropertyMacroEvent(event)),
+            0,
+            offset,
+            tracing::Span::none(),
+        )
+        .expect("attached event");
+        received.produced_at_ms = Some(Utc::now().timestamp_millis());
+
+        process_received(
+            &recorded.metrics,
+            &received,
+            &UnreachableReplays,
+            |received| async move {
+                let DeclaredMacroEvent::PropertyMacroEvent(event) = &received.event else {
+                    unreachable!("a property event");
+                };
+                property::process_property_event(
+                    pool,
+                    opensearch,
+                    event,
+                    received.partition,
+                    received.offset,
+                    &Attempts::Once,
+                )
+                .await
+            },
+        )
+        .await;
+
+        assert_eq!(
+            recorded
+                .points(LAG)
+                .iter()
+                .map(|point| point.tags["outcome"].as_str())
+                .collect::<Vec<_>>(),
+            [outcome],
+            "{entity_type:?} {entity_id}"
+        );
+    }
 }
 
 #[tokio::test]
@@ -3610,4 +4074,17 @@ fn a_stop_without_a_rewind_loses_every_queued_record_but_the_uncommitted_one() {
         ],
         "1@8 met the closed worker channel and stays uncommitted"
     );
+}
+
+#[tokio::test]
+async fn an_event_whose_source_is_gone_ends_without_a_replay() {
+    let received = received_thread_backfilled_event(EMAIL_THREAD_ID, 4);
+    let replays = RecordedReplays::default();
+
+    let record =
+        conclude_kafka_attempts(&received, Ok((Handled::SourceMissing, 1)), &replays).await;
+
+    assert_eq!(record.outcome, EventOutcome::SourceMissing);
+    assert_eq!(record.failure, None);
+    assert!(replays.0.lock().unwrap().is_empty());
 }

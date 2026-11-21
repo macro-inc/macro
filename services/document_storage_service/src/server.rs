@@ -385,8 +385,9 @@ async fn run_server() -> anyhow::Result<()> {
         event_broker_tracker.clone(),
     );
     let bots_repo = PgBotsRepo::new(db.clone());
-    // The agent API checks a newly selected MCP app against Pipedream's
-    // directory, the same check the ConfigureAgent tool makes.
+    // The agent API checks a newly selected MCP app against the connector
+    // catalog (native overlays, then Pipedream's directory), the same check
+    // the ConfigureAgent tool makes.
     let bots_service = BotServiceImpl::new(
         bots_repo,
         macro_event_broker.clone(),
@@ -395,9 +396,7 @@ async fn run_server() -> anyhow::Result<()> {
             hosted_runtimes::outbound::pg::PgComputerAgents::new(db.clone()),
         ),
     )
-    .with_mcp_apps(ai_tools::PipedreamMcpAppCatalog::new(
-        ai_tools::pipedream_client_from_env()?,
-    ));
+    .with_mcp_apps(ai_tools::PipedreamMcpAppCatalog::from_env(db.clone())?);
 
     let authorization_service: AuthorizationService = MacroAuthorizationServiceImpl::new(
         MacroAuthJwtValidator::new(jwt_validation_args.clone()),
@@ -468,7 +467,9 @@ async fn run_server() -> anyhow::Result<()> {
         macro_service_urls::AuthServiceUrl::new()?.to_string(),
     ));
     let email_service = EmailServiceImpl::new(
-        EmailPgRepo::new(db.clone()),
+        EmailPgRepo::new(db.clone()).with_rule_discovery(Arc::new(
+            crm::outbound::email_rule_discovery::PgEmailRuleDiscovery,
+        )),
         frecency_service.clone(),
         sqs_client.clone(),
         crm_service.clone(),
@@ -491,7 +492,9 @@ async fn run_server() -> anyhow::Result<()> {
     .with_macro_event_broker(macro_event_broker.clone());
     let readonly_email_service = ReadonlyEmailPreviewAdapter(
         EmailServiceImpl::new(
-            EmailPgRepo::new(readonly_db.clone()),
+            EmailPgRepo::new(readonly_db.clone()).with_rule_discovery(Arc::new(
+                crm::outbound::email_rule_discovery::PgEmailRuleDiscovery,
+            )),
             frecency_service.clone(),
             sqs_client.clone(),
             crm_service.clone(),
@@ -1030,7 +1033,7 @@ async fn run_server() -> anyhow::Result<()> {
             _ => Arc::new(search_service::FlaggedTermMatching::new(flags.clone())),
         };
     let call_service_builder = call_service_builder.with_programmatic_call_gate(
-        call::outbound::programmatic_calls::FlaggedProgrammaticCalls(flags),
+        call::outbound::programmatic_calls::FlaggedProgrammaticCalls(flags.clone()),
     );
     let call_public_rate_limiter = RateLimitServiceImpl {
         repo: RedisRateLimitAdapter {
@@ -1090,6 +1093,21 @@ async fn run_server() -> anyhow::Result<()> {
         authorization_state.clone(),
     );
 
+    let contacts_service = Arc::new(contacts::domain::service::ContactsDomainService {
+        repository: contacts::outbound::repository::DbContactsRepository::new(db.clone()),
+        notifier: None::<contacts::outbound::gateway::ConnectionGatewayNotifier>,
+    });
+    let contact_lists = Arc::new(contacts::outbound::repository::DbContactsRepository::new(
+        db.clone(),
+    ));
+    // Each viewer's `people` rows, GraphQL directory and SSE contact audience
+    // come from the legacy graph or the list-aware tables, by the per-viewer
+    // `contacts-list-reads` flag; a failed flag read means the legacy graph.
+    let contact_reads = Arc::new(contacts::domain::list_reads::FlaggedContactReads::new(
+        contacts_service,
+        contact_lists.clone(),
+        contacts::domain::list_reads::ContactListReads::new(flags.clone()),
+    ));
     let webhook_stream_feed = webhook::domain::stream::StreamFeed::new(
         webhook::domain::stream::WEBHOOK_STREAM_CHANNEL_CAPACITY,
         webhook::domain::stream::WEBHOOK_STREAM_REPLAY_CAPACITY,
@@ -1098,9 +1116,7 @@ async fn run_server() -> anyhow::Result<()> {
         webhook_stream_feed.clone(),
         entity_access_service.clone(),
         webhook_repository.clone(),
-        crate::outbound::stream_contacts::ContactsStreamChecker::new(Arc::new(
-            contacts::outbound::repository::DbContactsRepository::new(db.clone()),
-        )),
+        crate::outbound::stream_contacts::ContactsStreamChecker::new(contact_reads.clone()),
     );
     let sse_stream_state = webhook::inbound::stream_router::WebhookStreamRouterState::new(
         sse_stream_service,
@@ -1442,7 +1458,15 @@ async fn run_server() -> anyhow::Result<()> {
                 Arc::new(notification::outbound::withdrawal::PgNotificationWithdrawal(db.clone())),
             ),
         ),
-        ContactsChannelDispatcher::new(contacts_ingress.clone()),
+        ContactsChannelDispatcher::new(Arc::new(contacts::domain::list_writes::ListWritesGate {
+            inner: contacts::domain::service::SqsContactsIngress {
+                queue: contacts_ingress.queue.clone(),
+            },
+            writes: contacts::domain::list_writes::ContactListWrites::new(
+                config.environment,
+                Some(flags.clone()),
+            ),
+        })),
     )
     .with_macro_event_broker(macro_event_broker.clone());
 
@@ -2005,24 +2029,23 @@ async fn run_server() -> anyhow::Result<()> {
         )),
     );
 
-    let contacts_service = Arc::new(contacts::domain::service::ContactsDomainService {
-        repository: contacts::outbound::repository::DbContactsRepository::new(db.clone()),
-        notifier: None::<contacts::outbound::gateway::ConnectionGatewayNotifier>,
-    });
     // SQL predicates and follow-up reads use the primary, matching the catalog
     // versions and writes; replica lag must not select stale rows for an edit.
     let sql_service = databases_sql::DatabasesSql::new(
         databases_service.clone(),
         entity_access_service.clone(),
         primary_entity_soup.clone(),
-        contacts_service.clone(),
+        contact_reads.clone(),
     );
 
     // Directory refreshes follow contacts_invalidation immediately after writes.
-    // Keep membership and names on the primary, matching the legacy contacts read.
+    // Keep membership, lists and names on the primary, matching the legacy
+    // contacts read. Lists come from the list-aware tables whichever store
+    // chose the contacts.
     let graphql_contacts_context = graphql_contacts::ContactsGraphqlContext::new(Arc::new(
         contacts::domain::service::directory::ContactsDirectoryService::new(
-            contacts_service,
+            contact_reads,
+            contact_lists,
             contacts::outbound::names::DbContactNames::new(db.clone()),
         ),
     ));
@@ -2357,11 +2380,12 @@ async fn run_server() -> anyhow::Result<()> {
                     calendar_events::outbound::notification_notifier::NotificationCalendarJoinRequestNotifier::new(
                         (*notification_ingress_service).clone(),
                     ),
-                    crate::outbound::calendar_refresh::ConnectionGatewayCalendarRefresh::new(
+                    calendar_events::outbound::gateway_refresh::GatewayCalendarRefresh::new(
                         (*conn_gateway_client).clone(),
                         db.clone(),
                         event_broker_tracker.clone(),
-                    ),
+                    )
+                    .with_sends(cfg!(feature = "connection_gateway")),
                 ),
             ),
             authorization_state.clone(),
@@ -2450,6 +2474,12 @@ async fn run_server() -> anyhow::Result<()> {
         }
     });
 
+    let api_key_search_buckets: Arc<dyn search_service::SearchTokenBuckets> =
+        Arc::new(RedisRateLimitAdapter {
+            redis: redis_client
+                .get_connection_manager_lazy(redis::aio::ConnectionManagerConfig::new())
+                .context("failed to configure the search allowance's redis connection")?,
+        });
     let redis_sha_client = Arc::new(Redis::new(redis_client));
 
     let document_purger = Arc::new(documents_hex::domain::purge::DocumentPurger::new(
@@ -2598,6 +2628,10 @@ async fn run_server() -> anyhow::Result<()> {
     ));
     let api_context = ApiContext {
         search_term_matching,
+        search_lanes: Arc::new(search_service::SearchLanes::new(
+            search_service::LanePolicy::DEFAULT,
+        )),
+        api_key_search_buckets,
         saved_views,
         sync_sessions,
         dictation_state,

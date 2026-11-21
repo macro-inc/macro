@@ -66,3 +66,17 @@ async fn a_channel_mention_program_never_sends_even_when_confirmed() {
         refuse_program_send(CredentialAttribution::Agent, &program, Some("yes, send it")).is_ok()
     );
 }
+
+#[test]
+fn a_busy_inbox_answers_conflict_on_draft_send_and_thread_routes() {
+    use crate::inbound::axum::{
+        draft_router::CreateDraftError, thread_labels_router::UpdateThreadLabelError,
+    };
+    for response in [
+        CreateDraftError::from(EmailErr::Contended).into_response(),
+        SendMessageError::from(EmailErr::Contended).into_response(),
+        UpdateThreadLabelError::from(EmailErr::Contended).into_response(),
+    ] {
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+    }
+}

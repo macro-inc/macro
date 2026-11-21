@@ -82,6 +82,11 @@ export function asideCollapsedPreferenceKey(app: string) {
   return `macro:pref:view-sidebar:collapsed:${app}`;
 }
 
+/** Where a shell with `asidePreferenceKey` saves the width its navigation was dragged to. */
+export function asideWidthPreferenceKey(app: string) {
+  return `macro:pref:view-sidebar:width:${app}`;
+}
+
 export { useViewShell, type ViewShellLayout } from './view-shell-context';
 
 export type ViewShellRootProps = Omit<
@@ -113,7 +118,7 @@ export type ViewShellRootProps = Omit<
   /**
    * Sticky navigation visibility and width, scoped to this app type rather
    * than an entry. Only the first split follows the saved visibility; other
-   * splits start collapsed. Every split opens at the last saved width; a drag
+   * splits start open. Every split opens at the last saved width; a drag
    * in one split leaves the others' current widths alone.
    */
   asidePreferenceKey?: string;
@@ -173,15 +178,16 @@ function Root(props: ViewShellRootProps) {
   ]);
 
   const panel = useContext(SplitPanelContext);
-  // A view opened beside another split starts without navigation, then keeps
-  // that split's choice as the split moves between views; only the primary
-  // split follows, and writes, the saved preference.
+  // A view opened beside another split starts with navigation, as any split
+  // above the layout breakpoint does, then keeps that split's choice as the
+  // split moves between views; only the primary split follows, and writes,
+  // the saved preference.
   const secondarySplit =
     local.asidePreferenceKey !== undefined &&
     panel !== undefined &&
     !untrack(panel.handle.isFirst);
   const [wideAsideCollapsed, setWideAsideCollapsed] = secondarySplit
-    ? (panel?.navigationCollapsed ?? createSignal(true))
+    ? (panel?.navigationCollapsed ?? createSignal(false))
     : local.asidePreferenceKey
       ? usePreference(asideCollapsedPreferenceKey(local.asidePreferenceKey), {
           default: false,
@@ -190,7 +196,7 @@ function Root(props: ViewShellRootProps) {
   // A width the user dragged to wins over the configured default.
   const [chosenAsideWidth, setChosenAsideWidth] = local.asidePreferenceKey
     ? usePreference<number | undefined>(
-        `macro:pref:view-sidebar:width:${local.asidePreferenceKey}`,
+        asideWidthPreferenceKey(local.asidePreferenceKey),
         { default: undefined }
       )
     : createSignal<number>();
@@ -465,6 +471,7 @@ function Root(props: ViewShellRootProps) {
         !narrowList(),
       isOverlay: asideOverlay,
       isSheet: navigationSheet,
+      fillsShell: () => narrowList() === 'list',
       collapse: () => setAsideOpen(false),
       expand: () => setAsideOpen(true),
       toggle: () => {
@@ -844,13 +851,18 @@ function Main(props: ViewShellMainProps) {
 }
 
 function TopBar(
-  props: JSX.HTMLAttributes<HTMLDivElement> & { floating?: boolean }
+  props: JSX.HTMLAttributes<HTMLDivElement> & {
+    floating?: boolean;
+    /** Replaces automatic navigation when the host owns the leading action. */
+    navigation?: JSX.Element;
+  }
 ) {
   const [local, rest] = splitProps(props, [
     'children',
     'class',
     'ref',
     'floating',
+    'navigation',
   ]);
   const [bar, setBar] = createSignal<HTMLDivElement>();
   // On touch the bar floats over its pane as islands, like a standalone
@@ -875,7 +887,7 @@ function TopBar(
         }
         data-view-shell-top-bar=""
       >
-        <ViewNavigationControls />
+        {local.navigation ?? <ViewNavigationControls />}
         {local.children}
       </div>
     </SplitHeaderContextMenu>

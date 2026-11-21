@@ -23,21 +23,39 @@ common=(
   --all-features --no-tests=pass
 )
 
-# The Deno tests (code execution, authenticated SDK runs and routine code checks)
+# The Deno tests (code execution, authenticated SDK runs, routine code checks and
+# the shipped code-mode programs)
 # are ignored by default because they need the pinned runtime. They
 # run from this same script so cargo sees identical flags and selection and reuses
 # what the first run compiled. Only tests in packages this PR selected can match.
 if [ "${NEXTEST_RUN_DENO_TESTS:-}" = "true" ]; then
   common+=(
     --run-ignored only --test-threads 2
-    -E 'package(code_execution) or (package(agent_harness_service) and (test(authenticated_mcp_runs_javascript_and_persists_source_and_result) or test(routine_code::)))'
+    -E 'package(code_execution) or (package(agent_code_mode) and test(every_documented_example_type_checks)) or (package(agent_harness_service) and (test(authenticated_mcp_runs_javascript_and_persists_source_and_result) or test(routine_code::) or test(suggestions_brief_programs_type_check)))'
+  )
+# The content search tests need an OpenSearch with the search indices, which the
+# job starts only when their package is selected, so their target is left out of
+# a plain build (`test = false`) and named here. Same script for the same reason
+# as the Deno tests.
+elif [ "${NEXTEST_RUN_OPENSEARCH_TESTS:-}" = "true" ]; then
+  common+=(
+    --test content_search
+    -E 'package(opensearch_client) & binary(content_search)'
   )
 else
   common+=(--test-threads "$NEXTEST_TEST_THREADS")
 fi
 
+# A full run builds every test target with `test = true`. `--tests` drops a
+# `test = false` target even when `--test` names it, so the content search run
+# names only its own.
+workspace_targets=(--tests)
+if [ "${NEXTEST_RUN_OPENSEARCH_TESTS:-}" = "true" ]; then
+  workspace_targets=()
+fi
+
 if [ "$RUST_PACKAGES" = "all" ]; then
-  cargo nextest run --workspace --exclude sync_service --tests "${common[@]}"
+  cargo nextest run --workspace --exclude sync_service "${workspace_targets[@]}" "${common[@]}"
   exit 0
 fi
 

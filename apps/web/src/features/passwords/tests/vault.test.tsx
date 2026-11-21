@@ -841,3 +841,55 @@ it("selects a notification's item once a failed item load is retried", async () 
 
   await waitFor(() => expect(vault.selected()?.id).toBe(saved.value.id));
 });
+
+it('keeps a viewer star optimistic across an older refresh and rolls back a failed request', async () => {
+  let finish: ((value: Awaited<PasswordResult<void>>) => void) | undefined;
+  const pending = new Promise<Awaited<PasswordResult<void>>>((resolve) => {
+    finish = resolve;
+  });
+  const source = {
+    ...createFakePasswordSource(),
+    setFavorite: vi.fn(() => pending),
+  };
+  const saved = await source.save(
+    undefined,
+    undefined,
+    LOGIN,
+    '019a0000-0000-7000-8000-000000000099'
+  );
+  if (saved.isErr()) throw new Error('Fixture save failed');
+  let refresh: Promise<PasswordItem[]> | undefined;
+  let startRefresh: (() => void) | undefined;
+  source.list = async () => {
+    startRefresh?.();
+    return refresh ?? [{ ...saved.value, canEdit: false, canManage: false }];
+  };
+  const move = vi.spyOn(source, 'move');
+  const vault = mountVault(source);
+  await waitFor(() => expect(vault.loadedItems()).toHaveLength(1));
+  let finishRefresh: ((items: PasswordItem[]) => void) | undefined;
+  const refreshStarted = new Promise<void>((resolve) => {
+    startRefresh = resolve;
+  });
+  refresh = new Promise((resolve) => {
+    finishRefresh = resolve;
+  });
+  const refreshing = vault.items.refetch();
+  await refreshStarted;
+  const changing = vault.toggleFavorite(vault.loadedItems()[0]);
+  await waitFor(() =>
+    expect(source.setFavorite).toHaveBeenCalledWith(saved.value.id, true)
+  );
+  await waitFor(() => expect(vault.loadedItems()[0].favorite).toBe(true));
+  await vault.toggleFavorite(vault.loadedItems()[0]);
+  expect(source.setFavorite).toHaveBeenCalledTimes(1);
+  finishRefresh?.([{ ...saved.value, canEdit: false, canManage: false }]);
+  await refreshing;
+  await waitFor(() => expect(vault.items.isFetching).toBe(false));
+  expect(vault.loadedItems()[0].favorite).toBe(true);
+  expect(move).not.toHaveBeenCalled();
+  finish?.(err('failed'));
+  await changing;
+  await waitFor(() => expect(vault.loadedItems()[0].favorite).toBe(false));
+  expect(vault.failure()).toBe('failed');
+});
