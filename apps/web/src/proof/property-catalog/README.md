@@ -87,9 +87,8 @@ not run the base commit's modules, or a mutant was not applied or not caught.
   order, the altered field with its old and new value, or each open reader a
   restored cache entry or a swallowed invalidation left behind with the data
   it left there. The catch must observe that account after the mark and show
-  exactly that: the dropped row on OLD only, the two rows and every row
-  between them in the injected order on NEW and the server's on OLD in the
-  same list (same path), the field holding the
+  exactly that: the dropped row on OLD only, one list (same path) that on NEW
+  is exactly OLD's with the two rows transposed, the field holding the
   injected value on NEW and the server's on OLD, or a live NEW reader still
   holding exactly (unnormalized) the data the fault left while a successful cold mount of
   it on the same page reads otherwise, and exactly what OLD reads live, so a refresh that replaced that data
