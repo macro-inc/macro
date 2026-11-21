@@ -90,6 +90,12 @@ struct Args {
     /// `commitHydrate` (a side built with STAGED_HYDRATE=1).
     #[arg(long)]
     stage_hydrates: bool,
+    /// The share of hydrates (0 to 1) run with reads issued from other
+    /// threads while they run; each must answer as the state before the
+    /// hydrate or after it, or the seed fails. Not compared: give it to both
+    /// sides, so both read the same before and after.
+    #[arg(long, default_value_t = 0.0)]
+    concurrent_reads: f64,
 }
 
 fn main() -> Result<(), rootcause::Report> {
@@ -185,6 +191,7 @@ fn run(
     exec.pause_ms = args.real_pause;
     exec.idle_hook = !args.no_idle_hook;
     exec.stage_hydrates = args.stage_hydrates;
+    exec.concurrent_reads = args.concurrent_reads;
     let outcome = pollster::block_on(exec.run());
     let (lines, mut counters, path, mut normalizer) =
         exec.finish().map_err(|error| match &outcome {
