@@ -53,6 +53,24 @@ impl agent_code_mode::domain::ExecutionCredentials for Credentials {
             correlation: None,
         })
     }
+    async fn approve_job(
+        &self,
+        _: &agent_code_mode::domain::ExecutionIdentity,
+        _: &str,
+        _: tokio_util::sync::CancellationToken,
+    ) -> Result<
+        macro_user_id::user_id::MacroUserIdStr<'static>,
+        agent_code_mode::domain::CodeModeError,
+    > {
+        Err(agent_code_mode::domain::CodeModeError::Forbidden)
+    }
+    async fn mint_job(
+        &self,
+        _: &agent_code_mode::domain::ExecutionIdentity,
+        _: &macro_user_id::user_id::MacroUserIdStr<'static>,
+    ) -> Result<agent_code_mode::domain::IssuedRun, agent_code_mode::domain::CodeModeError> {
+        Err(agent_code_mode::domain::CodeModeError::Unavailable)
+    }
 }
 
 #[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]

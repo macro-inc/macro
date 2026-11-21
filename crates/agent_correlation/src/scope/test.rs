@@ -253,6 +253,8 @@ fn a_run_that_sends_nothing_reaches_nobody() {
         // A bearer token for a document, valid an hour after the run.
         ("POST", "/dss/documents/permissions_token/01a1"),
         ("POST", "/v1/documents/permissions_token/01a1"),
+        ("POST", "/dss/collab_surfaces/01a1/token"),
+        ("POST", "/v1/collab_surfaces/01a1/token"),
         ("POST", "/notification/v1/user_notifications/send"),
         ("POST", "/notification/user_notifications/send"),
         ("POST", "/user_notifications/send"),

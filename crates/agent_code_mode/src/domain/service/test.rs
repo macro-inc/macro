@@ -89,6 +89,21 @@ impl ExecutionCredentials for Credentials {
             correlation: None,
         })
     }
+    async fn approve_job(
+        &self,
+        _: &ExecutionIdentity,
+        _: &str,
+        _: CancellationToken,
+    ) -> Result<macro_user_id::user_id::MacroUserIdStr<'static>, CodeModeError> {
+        Err(CodeModeError::Forbidden)
+    }
+    async fn mint_job(
+        &self,
+        _: &ExecutionIdentity,
+        _: &macro_user_id::user_id::MacroUserIdStr<'static>,
+    ) -> Result<IssuedRun, CodeModeError> {
+        Err(CodeModeError::Unavailable)
+    }
 }
 /// PNG pixels named after their file, owned by the session owner; the file
 /// `missing` cannot be read.

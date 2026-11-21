@@ -65,9 +65,11 @@ stacks. Process isolation belongs to
   person with edit access, never a program) set `job_cancel_requested_at`.
   Any turn may cancel a job, deliberately: cancelling spends no one's
   access. A settle write is retried twice before the sweep is left to it.
-  A job's connected-app calls keep its launching turn's authority and never
-  wait for approval, and only the job's own credential spends it: admission
-  requires the caller's verified correlation to be the job's. Discovery,
+  A job's connected-app use keeps its launching turn's authority and never
+  waits for approval, and only the job's own credential spends it: admission
+  requires the caller's verified correlation to be the job's. While jobs are
+  no-send, their scope refuses connected-app calls, so this guards listing,
+  tools and search. Discovery,
   adding servers and `macro.ui.open` are refused in a job. Spans: `agent.job.start`, `agent.job.run` (root, linked;
   `agent.job.queue`, `agent.job.execute`), `agent.job.settle`,
   `agent.job.sweep`, `agent.job.cancel`.

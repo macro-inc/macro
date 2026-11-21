@@ -41,10 +41,7 @@ pub trait ExecutionCredentials: Send + Sync + 'static {
         identity: &ExecutionIdentity,
         source: &str,
         cancel: CancellationToken,
-    ) -> Result<MacroUserIdStr<'static>, CodeModeError> {
-        let _ = (identity, source, cancel);
-        Err(CodeModeError::Forbidden)
-    }
+    ) -> Result<MacroUserIdStr<'static>, CodeModeError>;
     /// Mint the credential of a job [`Self::approve_job`] approved for
     /// `acting_user`, when it starts running. It is limited to the no-send
     /// scope and lasts until the job's deadline.
@@ -52,10 +49,7 @@ pub trait ExecutionCredentials: Send + Sync + 'static {
         &self,
         identity: &ExecutionIdentity,
         acting_user: &MacroUserIdStr<'static>,
-    ) -> Result<IssuedRun, CodeModeError> {
-        let _ = (identity, acting_user);
-        Err(CodeModeError::Unavailable)
-    }
+    ) -> Result<IssuedRun, CodeModeError>;
     /// Whether this execution may run past its turn as a background job.
     /// A job never asks for an approval after its turn, so implementations
     /// allow it only where launching needs none.

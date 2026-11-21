@@ -446,13 +446,13 @@ struct JobRun {
 }
 
 /// How far a job got.
-enum Ran {
+enum Progress {
     /// Its program never started; nothing ran.
     NotStarted,
     /// It got a slot but could not start, for this reason; nothing ran.
     Refused(&'static str),
     /// Its program ran to this outcome.
-    Ran(Outcome),
+    Finished(Outcome),
 }
 
 const CANCELLED: &str = "Background job cancelled. Unfinished calls may have taken effect; check current state before retrying writes.";
@@ -478,7 +478,7 @@ impl JobRun {
         let stopped = self.wait_for_slot(deadline).await;
         span.record("slot_wait_ms", started.elapsed().as_millis() as u64);
         let (stop, ran) = match stopped {
-            Err(stop) => (stop, Ran::NotStarted),
+            Err(stop) => (stop, Progress::NotStarted),
             Ok(permit) => {
                 // The credential is minted in this span, so the program's
                 // SDK calls are traced under it.
@@ -496,44 +496,44 @@ impl JobRun {
         }
         super::activity::finish(&mut self.record.activity);
         let (status, result, error) = match (stop, ran) {
-            (_, Ran::Refused(reason)) => (ExecutionStatus::Failed, None, Some(reason.into())),
+            (_, Progress::Refused(reason)) => (ExecutionStatus::Failed, None, Some(reason.into())),
             // A job that never started says so: nothing it would have
             // written can have taken effect.
-            (Stop::Interrupted, Ran::NotStarted) => (
+            (Stop::Interrupted, Progress::NotStarted) => (
                 ExecutionStatus::Interrupted,
                 None,
                 Some(INTERRUPTED_BEFORE_START.into()),
             ),
-            (Stop::Cancelled, Ran::NotStarted) => (
+            (Stop::Cancelled, Progress::NotStarted) => (
                 ExecutionStatus::Cancelled,
                 None,
                 Some(CANCELLED_BEFORE_START.into()),
             ),
-            (Stop::Archived, Ran::NotStarted) => (
+            (Stop::Archived, Progress::NotStarted) => (
                 ExecutionStatus::Cancelled,
                 None,
                 Some(ARCHIVED_BEFORE_START.into()),
             ),
-            (Stop::Ended | Stop::Gone, Ran::NotStarted) => {
+            (Stop::Ended | Stop::Gone, Progress::NotStarted) => {
                 (ExecutionStatus::TimedOut, None, Some(NEVER_STARTED.into()))
             }
-            (Stop::Interrupted, Ran::Ran(_)) => {
+            (Stop::Interrupted, Progress::Finished(_)) => {
                 (ExecutionStatus::Interrupted, None, Some(INTERRUPTED.into()))
             }
-            (Stop::Cancelled, Ran::Ran(_)) => {
+            (Stop::Cancelled, Progress::Finished(_)) => {
                 (ExecutionStatus::Cancelled, None, Some(CANCELLED.into()))
             }
-            (Stop::Archived, Ran::Ran(_)) => {
+            (Stop::Archived, Progress::Finished(_)) => {
                 (ExecutionStatus::Cancelled, None, Some(ARCHIVED.into()))
             }
-            (_, Ran::Ran(Outcome::TimedOut)) => {
+            (_, Progress::Finished(Outcome::TimedOut)) => {
                 (ExecutionStatus::TimedOut, None, Some(TIMED_OUT.into()))
             }
             // Cancelled with no stop of ours: the executor shut down under it.
-            (_, Ran::Ran(Outcome::Cancelled)) => {
+            (_, Progress::Finished(Outcome::Cancelled)) => {
                 (ExecutionStatus::Interrupted, None, Some(INTERRUPTED.into()))
             }
-            (_, Ran::Ran(outcome)) => settle(outcome, Reviews::Allowed),
+            (_, Progress::Finished(outcome)) => settle(outcome, Reviews::Allowed),
         };
         self.record.status = status;
         self.record.result = result;
@@ -603,7 +603,7 @@ impl JobRun {
     }
 
     /// Mint the job's credential, bind the job to it and run the program.
-    async fn start(&mut self, deadline: tokio::time::Instant) -> (Stop, Ran) {
+    async fn start(&mut self, deadline: tokio::time::Instant) -> (Stop, Progress) {
         let issued = match self
             .credentials
             .mint_job(&self.identity, &self.acting_user)
@@ -612,7 +612,7 @@ impl JobRun {
             Ok(issued) => issued,
             Err(error) => {
                 tracing::warn!(?error, "could not mint a background job's credential");
-                return (Stop::Ended, Ran::Refused(NO_CREDENTIAL));
+                return (Stop::Ended, Progress::Refused(NO_CREDENTIAL));
             }
         };
         // Only this credential may spend the job's connected-app authority;
@@ -622,14 +622,14 @@ impl JobRun {
         }
         match self.store_activity().await {
             Ok(()) => {}
-            Err(CodeModeError::NotFound) => return (Stop::Gone, Ran::NotStarted),
+            Err(CodeModeError::NotFound) => return (Stop::Gone, Progress::NotStarted),
             Err(error) => {
                 tracing::warn!(?error, "could not bind a background job to its credential");
-                return (Stop::Ended, Ran::Refused(NO_CREDENTIAL));
+                return (Stop::Ended, Progress::Refused(NO_CREDENTIAL));
             }
         }
         let (stop, outcome) = self.execute(deadline, issued.environment).await;
-        (stop, Ran::Ran(outcome))
+        (stop, Progress::Finished(outcome))
     }
 
     /// Run the program, watching its row, its session and this replica.
