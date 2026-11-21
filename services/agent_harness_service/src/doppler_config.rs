@@ -64,12 +64,14 @@ async fn validate_config(loader: &doppler_config::DopplerConfig) -> anyhow::Resu
     let config = loader.load::<config::Config>().await?;
     config.validate_fleet_selection()?;
     match config.computers_fleet {
-        Some(config::ComputerFleetKind::Incus) => {
+        Some(config::ComputerFleetKind::Firecracker) => {
             loader
-                .load::<config::IncusFleetSettings>()
+                .load::<config::FirecrackerFleetSettings>()
                 .await?
                 .validate()?;
         }
+        // Retired: attaches no fleet, so nothing to validate.
+        Some(config::ComputerFleetKind::Incus) => {}
         Some(config::ComputerFleetKind::Docker) => {
             loader
                 .load::<config::DockerFleetSettings>()

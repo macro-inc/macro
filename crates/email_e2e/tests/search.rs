@@ -283,7 +283,8 @@ async fn an_odd_message_does_not_keep_its_thread_out_of_search(
     wait_for_found(&ada, "persimmon", &["After linking"]).await?;
     deliver_odd_thread(&stack, provider, ada.email(), "After linking", after, 1..4)?;
 
-    // The message with the broken table has no text to be found by.
+    // The message with the broken table is indexed from its HTML, which does
+    // not hold its word.
     let sender_optional = provider == Provider::Gmail;
     for word in ["marmalade", "mulberry", "muscadine"] {
         if word != "muscadine" || sender_optional {

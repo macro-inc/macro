@@ -38,6 +38,16 @@ Before this marker existed, removed links could be saved as plain URL text or as
 ordinary link payloads. Their original intent cannot be recovered; legacy bare
 URLs follow the automatic-linking policy.
 
+Saved content can name any URL, so a link keeps a URL only when
+`isAllowedLinkUrl` (`utils/link-url.ts`) accepts it: http, https, mailto, sms or
+tel (the schemes Lexical's `LinkNode` opens), or a relative URL. It parses the
+URL as a browser resolves an `href`, after Markdown unescaping. An `<m-link>` or
+Markdown link to any other URL imports as its text alone; use
+`STANDARD_TRANSFORMERS` from `transformers/customTransformers.ts`, never
+Lexical's `TRANSFORMERS`, whose `LINK` does not check. PR and booking mentions
+drop such a URL from saved JSON, and the web renderers check again before
+rendering an anchor or opening a URL.
+
 ## Canvas text
 
 `canvas-text.ts` shares bounded Lexical JSON validation, plain-text seeds and

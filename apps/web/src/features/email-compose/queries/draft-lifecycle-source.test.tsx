@@ -1,7 +1,9 @@
+import { ThrownResultError } from '@core/util/result';
 import { emailKeys } from '@queries/email/keys';
 import type { ApiThread } from '@service-email/generated/schemas';
 import { cleanup, render, waitFor } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import { err, ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type {
@@ -12,6 +14,19 @@ import type {
 const fetchThread = vi.hoisted(() => vi.fn());
 vi.mock('@queries/email/thread', () => ({
   fetchFreshEmailThread: fetchThread,
+}));
+const refreshSession = vi.hoisted(() => vi.fn());
+const recentSession = vi.hoisted(() => vi.fn());
+const auth = vi.hoisted(() => ({ bearer: false }));
+vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
+  get ENABLE_BEARER_TOKEN_AUTH() {
+    return auth.bearer;
+  },
+}));
+vi.mock('@core/auth/session-refresh', () => ({
+  ensureFreshSession: recentSession,
+  fetchToken: refreshSession,
 }));
 const readSentWorkingCopy = vi.hoisted(() => vi.fn());
 vi.mock('@queries/email/send-queue', () => ({ readSentWorkingCopy }));
@@ -90,7 +105,10 @@ function observe(client = createClient()) {
 }
 
 beforeEach(() => {
+  auth.bearer = false;
   fetchThread.mockReset();
+  refreshSession.mockReset();
+  recentSession.mockReset();
   readSentWorkingCopy.mockReset();
   readSentWorkingCopy.mockResolvedValue(undefined);
 });
@@ -125,6 +143,97 @@ it('still reports a sent draft when the send journal cannot be read', async () =
 
   await waitFor(() => expect(lifecycle.state()?.type).toBe('sent'));
   expect(lifecycle.state()).not.toHaveProperty('sentCopy');
+});
+
+it('marks the draft unavailable when a valid session cannot read it on retry', async () => {
+  const refused = new ThrownResultError([
+    { code: 'UNAUTHORIZED', message: 'Unauthorized' },
+  ]);
+  fetchThread
+    .mockResolvedValueOnce(thread(false))
+    .mockRejectedValueOnce(refused)
+    .mockRejectedValueOnce(refused);
+  refreshSession.mockResolvedValue(ok(undefined));
+  const { lifecycle } = observe();
+  await waitFor(() => expect(lifecycle.state()?.type).toBe('editing'));
+
+  await expect(lifecycle.refresh()).resolves.toMatchObject({
+    type: 'missing',
+    ...identity,
+  });
+  expect(fetchThread).toHaveBeenCalledTimes(3);
+  await waitFor(() => expect(lifecycle.state()?.type).toBe('missing'));
+});
+
+it('uses the fresh draft when the read succeeds after session confirmation', async () => {
+  fetchThread
+    .mockResolvedValueOnce(thread(false))
+    .mockRejectedValueOnce(
+      new ThrownResultError([{ code: 'UNAUTHORIZED', message: 'Unauthorized' }])
+    )
+    .mockResolvedValueOnce(thread(true));
+  refreshSession.mockResolvedValue(ok(undefined));
+  const { lifecycle } = observe();
+  await waitFor(() => expect(lifecycle.state()?.type).toBe('editing'));
+
+  await expect(lifecycle.refresh()).resolves.toMatchObject({
+    type: 'scheduled',
+    ...identity,
+  });
+  expect(fetchThread).toHaveBeenCalledTimes(3);
+});
+
+it('keeps the draft retryable when a recent session can no longer refresh', async () => {
+  const rejected = new ThrownResultError([
+    { code: 'UNAUTHORIZED', message: 'Unauthorized' },
+  ]);
+  fetchThread
+    .mockResolvedValueOnce(thread(false))
+    .mockRejectedValueOnce(rejected)
+    .mockRejectedValueOnce(rejected);
+  recentSession.mockResolvedValue(ok(undefined));
+  refreshSession.mockResolvedValue(err([{ code: 'UNAUTHORIZED' }]));
+  const { lifecycle } = observe();
+  await waitFor(() => expect(lifecycle.state()?.type).toBe('editing'));
+
+  await expect(lifecycle.refresh()).rejects.toBe(rejected);
+  expect(lifecycle.state()).toBeUndefined();
+  expect(fetchThread).toHaveBeenCalledTimes(2);
+});
+
+it('keeps a bearer refusal retryable even when the cookie session is valid', async () => {
+  auth.bearer = true;
+  const refused = new ThrownResultError([
+    { code: 'UNAUTHORIZED', message: 'Unauthorized' },
+  ]);
+  fetchThread
+    .mockResolvedValueOnce(thread(false))
+    .mockRejectedValueOnce(refused)
+    .mockRejectedValueOnce(refused);
+  refreshSession.mockResolvedValue(ok(undefined));
+  const { lifecycle } = observe();
+  await waitFor(() => expect(lifecycle.state()?.type).toBe('editing'));
+
+  await expect(lifecycle.refresh()).rejects.toBe(refused);
+  expect(lifecycle.state()).toBeUndefined();
+  expect(fetchThread).toHaveBeenCalledTimes(2);
+  expect(refreshSession).not.toHaveBeenCalled();
+});
+
+it('still marks a missing thread unavailable with bearer authentication', async () => {
+  auth.bearer = true;
+  fetchThread
+    .mockResolvedValueOnce(thread(false))
+    .mockRejectedValueOnce(
+      new ThrownResultError([{ code: 'NOT_FOUND', message: 'Not found' }])
+    );
+  const { lifecycle } = observe();
+  await waitFor(() => expect(lifecycle.state()?.type).toBe('editing'));
+
+  await expect(lifecycle.refresh()).resolves.toMatchObject({
+    type: 'missing',
+    ...identity,
+  });
 });
 
 it('does not republish cached state when a strict refresh rejects', async () => {

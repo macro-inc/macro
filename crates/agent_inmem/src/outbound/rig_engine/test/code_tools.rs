@@ -48,6 +48,7 @@ async fn remote_named(
             name: server_name.into(),
             client: Arc::new(client.unwrap()),
             tools,
+            trace_context: mcp_toolset::TraceContext::Withhold,
         }],
         None,
     );

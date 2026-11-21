@@ -12,8 +12,9 @@ use crate::domain::{
     crm_enqueuer::CrmEnqueuer,
     customer_repo::CustomerRepository,
     model::{
-        ItemChangeSettlement, ItemChangeStatus, ItemProration, ItemQuantityChange, ItemRemoval,
-        PriceInfo, SubscriptionItemView, SubscriptionTerms,
+        ComputerPurchaseCredit, ItemChangeSettlement, ItemChangeStatus, ItemProration,
+        ItemQuantityChange, ItemRemoval, PaymentTerms, PriceInfo, ProratedCharge,
+        SubscriptionItemView, SubscriptionTerms,
     },
     open_seat_release::OpenSeatRelease,
     owned_entity_cleanup::OwnedEntityCleanup,
@@ -151,6 +152,21 @@ where
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn refund_computer_purchase(
+        &self,
+        team_id: &uuid::Uuid,
+        computer_id: computer_id::ComputerId,
+        idempotency_key: &str,
+    ) -> Result<Option<ComputerPurchaseCredit>, TeamSubscriptionItemsError> {
+        let _billing = self.customer_repository.lock_team_billing(team_id).await?;
+        let subscription = self.team_subscription(team_id).await?;
+        Ok(self
+            .customer_repository
+            .refund_computer_purchase(&subscription, computer_id, idempotency_key)
+            .await?)
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn team_subscription_items(
         &self,
         team_id: &uuid::Uuid,
@@ -199,6 +215,31 @@ where
         Ok(self
             .customer_repository
             .subscription_terms(&subscription)
+            .await?)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn team_payment_terms(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> Result<PaymentTerms, TeamSubscriptionItemsError> {
+        let subscription = self.team_subscription(team_id).await?;
+        Ok(self
+            .customer_repository
+            .payment_terms(&subscription)
+            .await?)
+    }
+
+    #[tracing::instrument(skip(self, prices), fields(prices = prices.len()), err)]
+    async fn preview_item_prorations(
+        &self,
+        team_id: &uuid::Uuid,
+        prices: &[stripe::PriceId],
+    ) -> Result<Vec<ProratedCharge>, TeamSubscriptionItemsError> {
+        let subscription = self.team_subscription(team_id).await?;
+        Ok(self
+            .customer_repository
+            .preview_prorations(&subscription, prices)
             .await?)
     }
 

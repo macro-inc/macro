@@ -132,21 +132,18 @@ function AddDropdown(props: {
                     disabled={item.disabled}
                     disabledReason={item.disabledReason}
                     onSelect={() => select(item)}
-                    class={
-                      item.description
-                        ? 'min-h-10 h-auto py-2 gap-3'
-                        : undefined
-                    }
                   >
                     <span class="flex size-5 shrink-0 items-center justify-center text-ink-muted">
                       {item.icon}
                     </span>
-                    <span class="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-3">
-                      <span class="block truncate">{item.label}</span>
-                      <Show when={item.description}>
-                        <span class="block truncate text-sm text-ink-muted font-normal">
+                    <span class="min-w-0 flex-1">
+                      <Dropdown.ItemLabel class="block truncate">
+                        {item.label}
+                      </Dropdown.ItemLabel>
+                      <Show when={item.description && !item.disabledReason}>
+                        <Dropdown.ItemDescription class="block truncate text-sm text-ink-muted">
                           {item.description}
-                        </span>
+                        </Dropdown.ItemDescription>
                       </Show>
                     </span>
                     <Show when={item.hint}>

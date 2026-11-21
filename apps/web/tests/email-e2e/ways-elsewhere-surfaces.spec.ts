@@ -6,17 +6,14 @@ import type { Page } from '@playwright/test';
 import type { Mailbox } from './harness/fixtures';
 import { expect, test } from './harness/linking';
 import { anInbox, PROVIDERS } from './harness/providers';
-import { disconnectInbox, outlookStarts } from './harness/ways-elsewhere';
+import {
+  disconnectInbox,
+  lapseGrant,
+  outlookStarts,
+} from './harness/ways-elsewhere';
 import { did } from './ledger/record';
 
 const from = 'Grace <grace@example.com>';
-
-/** Marks the inbox as needing its provider grant renewed. */
-async function lapseGrant(mailbox: Mailbox) {
-  await mailbox.stack.sql(
-    `UPDATE email_links SET needs_reauth = true WHERE id = '${mailbox.inbox.linkId}' RETURNING id`
-  );
-}
 
 /** Leaves the inbox's calendar turned off by its owner. */
 async function turnCalendarOff(mailbox: Mailbox) {

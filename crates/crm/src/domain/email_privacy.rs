@@ -1,11 +1,17 @@
 //! CRM access is independent of permission to contribute a mailbox.
 
+#[cfg(any(test, feature = "outbound"))]
+pub(crate) mod mailbox_domains;
+
 use entity_access::domain::models::MemberTeamRole;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use super::{auth::CrmTeamReceipt, model::CrmError};
+use super::{
+    auth::CrmTeamReceipt,
+    model::{CrmError, MailboxDomainConflict},
+};
 
 /// Rollout availability for thread-exclusion writes, independent of authorization.
 /// `async_trait` allows the service to inject this port through `Arc<dyn ThreadExclusionGate>`.
@@ -38,6 +44,10 @@ pub struct EmailPrivacySettings {
     pub team_domains: Vec<String>,
     /// Domains excluded only for the caller's contributions.
     pub personal_domains: Vec<String>,
+    /// Existing team exclusions that cover a connected member's whole mailbox.
+    pub team_domain_warnings: std::collections::BTreeMap<String, MailboxDomainConflict>,
+    /// Existing personal exclusions that cover the caller's whole mailbox.
+    pub personal_domain_warnings: std::collections::BTreeMap<String, MailboxDomainConflict>,
     /// Whether the caller can remove a team exclusion.
     pub can_remove_team_domains: bool,
 }
@@ -151,6 +161,8 @@ pub trait EmailPrivacyRepository: Clone + Send + Sync + 'static {
 
     /// Persist a change atomically with its backfill request. Thread changes
     /// must verify mailbox ownership by this member within that transaction.
+    /// Domain additions must apply the domain mailbox guard to current primary
+    /// connected mailboxes in the affected scope before writing.
     fn change_email_privacy(
         &self,
         team: Uuid,
@@ -158,7 +170,10 @@ pub trait EmailPrivacyRepository: Clone + Send + Sync + 'static {
         change: EmailPrivacyChange,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
 
-    /// Admission check before metadata enrichment or contact ingestion.
+    /// Admission check before metadata enrichment or contact ingestion:
+    /// mailbox, membership, consent and the contact's domain. It reads no
+    /// message history; population checks eligible history in its own
+    /// transaction.
     fn may_contribute_contact(
         &self,
         team: Uuid,

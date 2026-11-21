@@ -86,9 +86,12 @@ vi.mock('@queries/soup/search', () => ({
 }));
 vi.mock('@app/features/soup/search', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  useSearchContext: () => ({ entityPool: () => [], routinePool: () => [] }),
+  useSearchContext: () => ({
+    entityPool: () => () => [],
+    routinePool: () => [],
+  }),
   useOptionalSearchContext: () => ({
-    entityPool: () => [],
+    entityPool: () => () => [],
     routinePool: () => [],
   }),
 }));

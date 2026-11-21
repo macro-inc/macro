@@ -37,5 +37,33 @@ test('keeps every pitch to two lines at the default sidebar width', async ({
         )
       )
     );
-  expect(lines).toEqual([2, 2, 2]);
+  expect(lines).toEqual([2, 2, 2, 2]);
 });
+
+for (const width of [256, 200]) {
+  test(`keeps every action label inside its button at ${width}px`, async ({
+    page,
+  }) => {
+    await page.goto(`${fixture}?width=${width}`, {
+      waitUntil: 'domcontentloaded',
+    });
+    const buttons = page.locator('[role=region] button:not([aria-label])');
+    await expect(buttons.first()).toBeVisible();
+    const overflowing = await buttons.evaluateAll((all) =>
+      all
+        .filter((button) => {
+          const region = button.closest('[role=region]');
+          if (!region) return true;
+          const box = button.getBoundingClientRect();
+          const card = region.getBoundingClientRect();
+          return (
+            button.scrollWidth > button.clientWidth ||
+            box.left < card.left ||
+            box.right > card.right
+          );
+        })
+        .map((button) => button.textContent)
+    );
+    expect(overflowing).toEqual([]);
+  });
+}

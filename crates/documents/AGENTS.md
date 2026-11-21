@@ -12,6 +12,9 @@ word docs, Illustrator/Photoshop files).
   Cargo features gate each module.
 - `src/domain/service.rs` + `src/domain/ports.rs`: orchestration and the ports
   adapters implement.
+- `src/domain/service/lifecycle.rs`: `DocumentLifecycleReads` supplies physical
+  existence/trash facts to trusted imports through the owning repository port.
+  Missing rows are false; read failures propagate. No viewer or content access.
 - `src/domain/content.rs`: document content storage model (markdown vs legacy
   Office formats, S3 locations).
 - `src/domain/docx_export.rs`: DOCX export readiness policy; empty parts mean
@@ -35,7 +38,10 @@ word docs, Illustrator/Photoshop files).
   `edit_document`, `word_document`, `spreadsheet`, `presentation`, ...).
 - `src/inbound/axum_router.rs`: the HTTP surface; `axum_router/get_text.rs`
   serves `/text-content` through `src/domain/text.rs`. Native Markdown comes
-  from live collaborative storage, not the legacy S3 export.
+  from live collaborative storage, not the legacy S3 export, in the same
+  internal format as `/{id}/markdown`. A write-back still takes its text and
+  revision from one `/{id}/markdown` read (`contentWithRevision`), so it can't
+  overwrite a change made after the text was read.
 - `axum_router/appearance.rs` edits ordinary Markdown/snippet appearance through
   Edit receipts with atomic attributed history; copies and metadata reads retain
   overrides without changing content dates.
@@ -116,10 +122,16 @@ word docs, Illustrator/Photoshop files).
 - Add a document route: `src/domain/service.rs` (new domain method) →
   `src/inbound/axum_router.rs` → `src/domain/ports.rs` if it needs a new
   outbound capability.
+- Create tasks with explicit title pins by passing property definition IDs through `MarkdownSubtype::Task`; `MarkdownInitializationOptions` carries optional pins across the domain ports, leaving omitted pins implicit and preserving explicit empty lists.
+- Persist explicitly pinned empty fields as task-owned null assignments so every authorized task viewer can resolve them.
 - Create a document from a Notion page: `DocumentCreator::create_notion_markdown`
   (`src/domain/create.rs`) with a `NotionMarkdown` (`src/domain/notion_markdown.rs`);
   lexical-service converts it through `MarkdownInitializationPort::initialize_existing_notion`
   and returns the Macro markdown that mention tracking reads.
+- Set creation-time link access with the canonical
+  `models_permissions::share_permission::InitialLinkShare` (re-exported from
+  `domain::models`); `NewDocumentMetadata::builder(..).initial_link_share(Off)`
+  selects `Exact(Off)` before the document row is inserted.
 - Create a document with its source's dates (an import): set
   `NewDocumentMetadata::builder(..).created_at(..).updated_at(..)`. Its folder
   and every folder above it then widen to those dates (`extend_project_dates`)
@@ -159,13 +171,18 @@ realtime appearance events do not re-ingest history.
   500, at most 20 batches per round. Its repository
   (`outbound/pg_released_attachments.rs`) restates
   `PgDocumentRepo::soft_delete_document`'s writes set-based; change the two
-  together, and keep its adoption checks (folder, grant or sharing change,
-  second version, PDF annotation, comment thread) in step with any new way to
-  file, share or edit a document. A document with no link left is trashed,
-  or kept as it is when adopted or already in the Trash. Each batch publishes
-  one `document.email_attachments_released` event naming its trashed and kept
-  documents; Soup realtime removes the trashed ones from open lists, as for
-  the documents of a trashed folder, and nothing else reacts per document.
+  together, and keep its adoption checks (folder, grant or sharing change, an
+  `edited` activity from `edit_document`, a second version without PDF
+  modification data, a placeable added, changed or removed in the PDF
+  viewer, PDF annotation, comment thread) in step with any new way to file,
+  share or edit a document. Opening is not adopting: the PDF viewer saves a
+  version holding only its modification data on the first open by anyone who
+  can edit, so a version alone proves nothing. A document with no link left
+  is trashed, or kept as it is when adopted or already in the Trash. Each
+  batch publishes one `document.email_attachments_released` event naming its
+  trashed and kept documents; Soup realtime removes the trashed ones from open
+  lists, as for the documents of a trashed folder, and nothing else reacts
+  per document.
   Link an existing document to an attachment with
   `create::link_live_document_email`: its key-share lock orders the link with
   the drain's `FOR UPDATE`, so a document the drain trashed after a reuse

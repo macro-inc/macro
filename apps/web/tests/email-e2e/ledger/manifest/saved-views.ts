@@ -9,20 +9,15 @@ export const savedViews = {
       id: 'SL-16',
       name: 'Saved view (open)',
       opened:
-        'Sidebar Saved views row / mobile saved-view pill; URL mail.savedView=<id>',
+        'Sidebar Saved views row (on touch in the sidebar sheet); URL mail.savedView=<id>',
       viewports: BOTH_VIEWPORTS,
     },
     {
       id: 'SL-46',
       name: 'Saved views sidebar section',
-      opened: 'Sidebar below Library; flag',
-      viewports: ['desktop'],
-    },
-    {
-      id: 'SL-47',
-      name: 'Saved views mobile picker (pill + drawer)',
-      opened: 'Pill after Filters on touch',
-      viewports: ['phone'],
+      opened:
+        'Sidebar below Library; on touch the sidebar sheet (AL-911), below the tabs',
+      viewports: BOTH_VIEWPORTS,
     },
     {
       id: 'SL-48',
@@ -50,11 +45,13 @@ export const savedViews = {
       surface: 'SL-46',
       fn: ['F-046'],
       action: 'open saved view',
-      trigger: 'click sidebar saved-view row',
+      trigger:
+        'click sidebar saved-view row; on touch tap it in the sheet, which closes',
       source: [
         'src/features/email-view/views/email-saved-views.tsx',
         'src/features/saved-views/components/saved-view-list.tsx',
       ],
+      note: "on touch it replaced the removed phone picker's rows (AL-702)",
     },
     {
       id: 'AL-106',
@@ -62,11 +59,12 @@ export const savedViews = {
       fn: ['F-045'],
       action: 'create saved view (empty builder)',
       trigger:
-        'sidebar Saved views "New saved view" + / empty-state "Create view"',
+        'sidebar Saved views "New saved view" + / empty-state "Create view"; on touch the same in the sheet',
       source: [
         'src/features/email-view/views/email-saved-views.tsx',
         'src/features/saved-views/components/saved-view-list.tsx',
       ],
+      note: "on touch it replaced the removed phone picker's Create view (AL-703)",
     },
     {
       id: 'AL-114',
@@ -75,6 +73,8 @@ export const savedViews = {
       action: 'reorder saved views',
       trigger: 'drag a row past another (4px threshold, two or more views)',
       source: ['src/features/email-view/views/email-saved-views.tsx'],
+      viewports: ['desktop'],
+      note: 'touch reorders with Move up / Move down instead (AL-115)',
     },
     {
       id: 'AL-120',
@@ -103,52 +103,18 @@ export const savedViews = {
         'src/features/saved-views/components/saved-view-list.tsx',
       ],
     },
-
-    // SL-47 mobile picker
-    {
-      id: 'AL-121',
-      surface: 'SL-47',
-      fn: ['F-046'],
-      action: 'open mobile saved-view picker',
-      trigger:
-        'tap the pill "Saved views" (the open view’s name when one is open)',
-      source: [
-        'src/features/email-view/views/email-saved-views.tsx',
-        'src/features/saved-views/components/saved-view-picker.tsx',
-      ],
-    },
-    {
-      id: 'AL-702',
-      surface: 'SL-47',
-      fn: ['F-046'],
-      action: 'open saved view from the picker (drawer closes first)',
-      trigger: 'tap a row in the Saved views drawer',
-      source: [
-        'src/features/email-view/views/email-saved-views.tsx',
-        'src/features/saved-views/components/saved-view-picker.tsx',
-      ],
-    },
-    {
-      id: 'AL-703',
-      surface: 'SL-47',
-      fn: ['F-045'],
-      action: 'create saved view from the picker',
-      trigger: 'drawer empty-state "Create view"',
-      source: [
-        'src/features/email-view/views/email-saved-views.tsx',
-        'src/features/saved-views/components/saved-view-picker.tsx',
-      ],
-    },
     {
       id: 'AL-115',
-      surface: 'SL-47',
+      surface: 'SL-46',
       fn: ['F-049'],
       action: 'move saved view up/down',
-      trigger: 'picker row ⋯ menu "Move up" / "Move down"',
+      trigger: 'touch: the sheet\'s row ⋯ menu "Move up" / "Move down"',
       source: [
         'src/features/email-view/views/email-saved-views.tsx',
         'src/features/saved-views/components/saved-view-menu.tsx',
       ],
+      viewports: ['phone'],
+      note: 'the reorder test also exercises the sheet at tablet width',
     },
 
     // SL-48 builder dialog
@@ -375,20 +341,6 @@ export const savedViews = {
       source: ['src/features/email-view/views/email-saved-views.tsx'],
     },
 
-    // SL-47 mobile picker
-    {
-      id: 'STL-704',
-      surface: 'SL-47',
-      fn: ['F-046'],
-      state:
-        'pill reads "Saved views"; active and named after the view while one is open',
-      trigger: 'open / leave a saved view on touch',
-      source: [
-        'src/features/email-view/views/email-saved-views.tsx',
-        'src/features/saved-views/components/saved-view-picker.tsx',
-      ],
-    },
-
     // SL-48 builder dialog
     {
       id: 'STL-705',
@@ -485,7 +437,7 @@ export const savedViews = {
       surface: 'SL-49',
       fn: ['F-049'],
       state:
-        'desktop row menus have no Move items; picker row menus have Move up / Move down (absent at either end)',
+        "desktop row menus have no Move items; on touch the sheet's row menus have Move up / Move down (absent at either end)",
       trigger: 'open a row menu',
       source: [
         'src/features/email-view/views/email-saved-views.tsx',
@@ -502,6 +454,19 @@ export const savedViews = {
         'list placeholder while the view loads, then its mail; unavailable state instead when it cannot be opened',
       trigger: 'open saved view',
       source: ['src/features/email-view/email-view.tsx'],
+    },
+    {
+      id: 'STL-704',
+      surface: 'SL-16',
+      fn: ['F-046'],
+      state:
+        'the touch list header names the open view, as the desktop header does',
+      trigger: 'open / leave a saved view on touch',
+      source: [
+        'src/features/email-view/email-view.tsx',
+        'src/features/email-view/views/email-saved-views.tsx',
+      ],
+      viewports: ['phone'],
     },
     {
       id: 'STL-712',

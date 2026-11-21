@@ -561,12 +561,21 @@ async fn token_served(stack: &Stack, mark: u64, what: &str) -> Result<(), Report
 /// reconnect in the meantime.
 #[tokio::test(flavor = "multi_thread")]
 async fn gmail_hourly_maintenance_finds_a_revoked_grant() -> Result<(), Report> {
-    const LINK_MANAGER: &str = "link-manager";
+    // The maintenance runs on its own queue; the reconnect notice it causes
+    // goes to the interactive one.
+    const LINK_MANAGER_QUEUES: [&str; 2] = ["link-maintenance", "link-manager"];
     let handled = async |stack: &Stack| {
         eventually(
             "the maintenance jobs to be handled and deleted",
             DEFAULT_TIMEOUT,
-            async || Ok((stack.queue_depth(LINK_MANAGER).await? == 0).then_some(())),
+            async || {
+                for queue in LINK_MANAGER_QUEUES {
+                    if stack.queue_depth(queue).await? != 0 {
+                        return Ok(None);
+                    }
+                }
+                Ok(Some(()))
+            },
         )
         .await
     };
@@ -599,11 +608,13 @@ async fn gmail_hourly_maintenance_finds_a_revoked_grant() -> Result<(), Report> 
     handled(&stack).await?;
     let other = side.link().await?;
     assert_eq!(other["needs_reauth"], false, "{other}");
-    assert_eq!(
-        stack.dead_letters(LINK_MANAGER).await?,
-        0,
-        "a maintenance job was given up on"
-    );
+    for queue in LINK_MANAGER_QUEUES {
+        assert_eq!(
+            stack.dead_letters(queue).await?,
+            0,
+            "a maintenance job on {queue} was given up on"
+        );
+    }
 
     stack.finish().await
 }

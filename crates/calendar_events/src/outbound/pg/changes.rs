@@ -223,13 +223,13 @@ impl CalendarChangeRepository for PgCalendarRepository {
                 ON override.event_id = occurrence.event_id
                AND override.recurrence_id = occurrence.recurrence_id
             WHERE occurrence.event_id = ANY($2::uuid[])
-              AND occurrence.owner_id IN (
+              AND occurrence.owner_id = ANY(ARRAY(
                     SELECT $1::text
                     UNION
                     SELECT link.child_macro_id
                     FROM macro_user_links link
                     WHERE link.primary_macro_id = $1
-              )
+              ))
               AND event.status <> 'cancelled'
               AND NOT occurrence.is_cancelled
               AND (

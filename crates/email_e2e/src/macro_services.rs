@@ -9,6 +9,8 @@
 //! answers `200 {}` and records the request, so a scenario can assert on what
 //! the email services told them. On a stack that runs the real
 //! `document_storage_service`, its requests are recorded and passed on to it.
+//! It also answers PostHog's flag evaluation (`/flags/`), for a stack whose
+//! email services are pointed here with the Outlook import live pass on.
 
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, PoisonError};
@@ -19,7 +21,7 @@ use axum::extract::{Request, State};
 use axum::http::{HeaderMap, Method, StatusCode};
 use axum::response::{IntoResponse, Response};
 use rootcause::prelude::*;
-use tokio::net::TcpListener;
+use serde_json::Value;
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
@@ -35,6 +37,9 @@ const EMULATOR_AUTHENTICATION_PATH: &str = "/_emulator/authentication-service";
 const FORWARD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 /// The largest request body the stand-ins read.
 const BODY_LIMIT: usize = 32 * 1024 * 1024;
+/// The PostHog flag that turns the Outlook import live pass on, as
+/// `email_service::outlook_flags::LIVE_IMPORT_PASS_FLAG` names it.
+const LIVE_IMPORT_PASS_FLAG: &str = "enable-outlook-import-live-pass";
 
 /// A request one of the email services made to another Macro service.
 #[derive(Clone, Debug)]
@@ -48,6 +53,68 @@ pub struct ServiceRequest {
     pub path: String,
     /// The body, when it was JSON.
     pub body: Option<serde_json::Value>,
+}
+
+/// One message a service asked the connection gateway to deliver.
+#[derive(Clone, Debug)]
+pub struct GatewayMessage {
+    /// Whom it is for: the user id, for a user entity.
+    pub entity_id: String,
+    /// What kind of message it is, such as `refresh_calendar`.
+    pub message_type: String,
+    /// What it says, decoded when it travelled as JSON text.
+    pub message: serde_json::Value,
+}
+
+impl ServiceRequest {
+    /// The messages this request asked the connection gateway to deliver, one
+    /// per recipient, whether it named one recipient or a batch of them.
+    pub fn gateway_messages(&self) -> Vec<GatewayMessage> {
+        let (CONNECTION_GATEWAY, Some(body)) = (self.service.as_str(), &self.body) else {
+            return vec![];
+        };
+        let path = self.path.split('?').next().unwrap_or_default();
+        let message = |entity_id: String, message_type: &Value, content: &Value| GatewayMessage {
+            entity_id,
+            message_type: message_type.as_str().unwrap_or_default().to_owned(),
+            message: match content {
+                Value::String(text) => serde_json::from_str(text).unwrap_or(Value::Null),
+                content => content.clone(),
+            },
+        };
+        let entity_id =
+            |entity: &Value| entity["entity_id"].as_str().unwrap_or_default().to_owned();
+        if let Some((_, entity)) = path.split_once("/message/send/") {
+            let id = entity.split_once('/').map(|(_, id)| id).unwrap_or_default();
+            let id = urlencoding::decode(id)
+                .map(|id| id.into_owned())
+                .unwrap_or_default();
+            return vec![message(id, &body["message_type"], &body["message"])];
+        }
+        if path.ends_with("/message/batch_send") {
+            return body["entities"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|entity| message(entity_id(entity), &body["message_type"], &body["message"]))
+                .collect();
+        }
+        if path.ends_with("/message/batch_send_unique") {
+            return body["messages"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|sent| {
+                    message(
+                        entity_id(&sent["entity"]),
+                        &sent["message_type"],
+                        &sent["message_content"],
+                    )
+                })
+                .collect();
+        }
+        vec![]
+    }
 }
 
 #[derive(Clone)]
@@ -167,11 +234,14 @@ impl MacroServices {
             document_storage: document_storage.clone(),
         };
 
-        let listener = TcpListener::bind("127.0.0.1:0")
+        let listener = crate::host::local_listener()
             .await
             .context("could not bind the Macro services stand-in")?;
         let address = listener.local_addr()?;
-        let app = Router::new().fallback(answer).with_state(routes);
+        let app = Router::new()
+            .route("/flags/", axum::routing::post(flags))
+            .fallback(answer)
+            .with_state(routes);
 
         let tracker = TaskTracker::new();
         let stopped = cancel.clone();
@@ -204,6 +274,12 @@ impl MacroServices {
     /// The authentication service stand-in's base URL.
     pub(crate) fn authentication_url(&self) -> String {
         self.url(AUTHENTICATION)
+    }
+
+    /// The PostHog host the stand-in answers flag evaluations as: an origin,
+    /// as PostHog's is.
+    pub(crate) fn posthog_url(&self) -> String {
+        format!("http://{}", self.address)
     }
 
     /// Every request the other stand-ins received, oldest first.
@@ -502,4 +578,15 @@ fn stand_in_answer(
         (CONNECTION_GATEWAY, _) => serde_json::json!({ "receipts": [] }),
         _ => serde_json::json!({}),
     }
+}
+
+/// PostHog's flag evaluation, in the shape `feature_flags::outbound::posthog`
+/// reads: the Outlook import live pass is on.
+async fn flags() -> axum::Json<Value> {
+    let mut flags = serde_json::Map::new();
+    flags.insert(
+        LIVE_IMPORT_PASS_FLAG.to_owned(),
+        serde_json::json!({ "key": LIVE_IMPORT_PASS_FLAG, "enabled": true }),
+    );
+    axum::Json(serde_json::json!({ "flags": flags, "errorsWhileComputingFlags": false }))
 }

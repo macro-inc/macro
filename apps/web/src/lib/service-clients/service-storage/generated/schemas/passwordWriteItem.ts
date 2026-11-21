@@ -17,7 +17,7 @@ import type { PasswordWriteItemUrl } from './passwordWriteItemUrl';
 export interface PasswordWriteItem {
   /** Version observed by the editor; absent only for creation. */
   expectedVersion?: PasswordWriteItemExpectedVersion;
-  /** Whether the item is marked as a favorite. */
+  /** Initial creator preference on create; ignored on update. Use the favorite endpoint afterward. */
   favorite: boolean;
   /** Optional folder belonging to this same team. */
   folderId?: PasswordWriteItemFolderId;

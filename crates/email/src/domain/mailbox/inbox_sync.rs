@@ -73,13 +73,14 @@ pub enum InboxSyncFailureLog {
 
 impl InboxSyncFailureLog {
     /// Preserve the original event's Display error and Debug payload.
+    /// The error lists its whole chain, so a database failure keeps its cause.
     pub fn record(self, data: &InboxSyncPubsubMessage, e: &DetailedError) {
         match self {
             Self::Deferred => {
-                tracing::debug!(error = %e, payload = format!("{:?}", data.operation), "Rate-limited inbox sync message deferred. The message will be deleted.");
+                tracing::debug!(error = %format_args!("{}: {:#}", e.reason, e.source), payload = format!("{:?}", data.operation), "Rate-limited inbox sync message deferred. The message will be deleted.");
             }
             Self::Permanent => {
-                tracing::error!(error = %e, payload = format!("{:?}", data.operation), "Non-retryable error processing inbox sync message. The message will be deleted.");
+                tracing::error!(error = %format_args!("{}: {:#}", e.reason, e.source), payload = format!("{:?}", data.operation), "Non-retryable error processing inbox sync message. The message will be deleted.");
             }
         }
     }
@@ -229,18 +230,18 @@ fn should_process(link: &Link, operation: &InboxSyncOperation) -> bool {
 }
 
 /// Adds an operation name prefix to a ProcessingError's source field
-fn prefix_error_source(error: ProcessingError, operation_name: &str) -> ProcessingError {
+fn prefix_error_source(error: ProcessingError, operation_name: &'static str) -> ProcessingError {
     match error {
         ProcessingError::Retryable(DetailedError { reason, source }) => {
             ProcessingError::Retryable(DetailedError {
                 reason,
-                source: anyhow::anyhow!("{}: {}", operation_name, source),
+                source: source.context(operation_name),
             })
         }
         ProcessingError::NonRetryable(DetailedError { reason, source }) => {
             ProcessingError::NonRetryable(DetailedError {
                 reason,
-                source: anyhow::anyhow!("{}: {}", operation_name, source),
+                source: source.context(operation_name),
             })
         }
     }
@@ -248,7 +249,7 @@ fn prefix_error_source(error: ProcessingError, operation_name: &str) -> Processi
 
 /// Emit the retry event under the listener's existing handler span.
 pub fn record_retryable_error(data: &InboxSyncPubsubMessage, e: &DetailedError) {
-    tracing::debug!(error = %e, payload = format!("{:?}", data.operation), "Retryable error processing inbox sync message.");
+    tracing::debug!(error = %format_args!("{}: {:#}", e.reason, e.source), payload = format!("{:?}", data.operation), "Retryable error processing inbox sync message.");
 }
 
 fn publish_email_event<B: MacroEventBroker>(broker: &B, event: &EmailMacroEvent) {

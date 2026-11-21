@@ -4,6 +4,10 @@ import {
 } from '@app/features/agent-conversations/agent-conversation-message';
 import { AgentConversationsProvider } from '@app/features/agent-conversations/agent-conversations-provider';
 import { AgentDmComposer } from '@app/features/agent-dms/agent-dm-composer';
+import {
+  ChannelNotificationList,
+  createChannelNotificationGutter,
+} from '@app/features/channel-notification-stacks/channel-notification-gutter';
 import { openChatWithInput } from '@app/features/chat/ChatWithAgentButton';
 import { TeamAgentDmBanner } from '@app/features/settings/views/team-agent-dm-status';
 import { taskSourceComposerContext } from '@app/features/task-composer/source-context';
@@ -323,6 +327,18 @@ export function Channel(props: ChannelProps) {
     container: threadListContainerEl,
     insets: threadListScrollInsets,
     onDestinationsChanged: () => threadListNavigation()?.requestLayoutUpdate(),
+  });
+  // Desktop only: the gutter it fills is beside a wide pane, and its controls
+  // appear on hover. Its reads wait until the channel's rows are on screen.
+  const notificationGutter = createChannelNotificationGutter({
+    channelId: props.channelId,
+    ready: () =>
+      !callPanel && !isTouchDevice() && threadListNavigation() !== undefined,
+    unread: unread.notifications,
+    unreadStatus: unread.notificationsStatus,
+    retryUnread: unread.retryNotifications,
+    pane: threadListContainerEl,
+    goToMessage: (threadId, replyId) => goToMessage(threadId, replyId),
   });
   const participants = useChannelParticipants(() => props.channelId);
   const channelBotMentionUsers = useMessageBotMentionUsers(() => ({
@@ -934,7 +950,12 @@ export function Channel(props: ChannelProps) {
                       <div
                         class={cn(
                           'relative flex-1 min-h-0',
-                          callPanel && '[container-type:size]'
+                          callPanel && '[container-type:size]',
+                          // Contains layout, so only while its checks may show.
+                          !callPanel &&
+                            !isTouchDevice() &&
+                            notificationGutter.flagOn() &&
+                            '@container/channel-pane'
                         )}
                         ref={setThreadListContainerEl}
                       >
@@ -1069,6 +1090,9 @@ export function Channel(props: ChannelProps) {
                                               hideTriggeredBy={
                                                 !!channel()?.agent_dm
                                               }
+                                              gutter={notificationGutter.threadGutter(
+                                                item.id
+                                              )}
                                               data={m}
                                               parent={() => ({
                                                 type: 'channel',
@@ -1215,6 +1239,9 @@ export function Channel(props: ChannelProps) {
                               />
                             </Show>
                           </Show>
+                          <ChannelNotificationList
+                            gutter={notificationGutter}
+                          />
                           <Show when={!callPanel && !findBar.isOpen()}>
                             <Show when={unread.chip()}>
                               {(chip) => (

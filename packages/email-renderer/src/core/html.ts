@@ -8,6 +8,7 @@ import {
 } from 'parse5';
 import { prepareCss } from './css';
 import { type ImagePolicy, imageUrl, linkUrl } from './resource-policy';
+import { SIGNATURE_CLASSES } from './signature';
 
 type Node = DefaultTreeAdapterMap['node'];
 type Element = DefaultTreeAdapterMap['element'];
@@ -20,7 +21,6 @@ const ACTIVE = new Set(
 const IMAGES_ALLOWED: ImagePolicy = { remote: 'allow' };
 
 interface ScrubOptions {
-  stripColorScheme?: boolean;
   preserveDataAttributes?: boolean;
 }
 
@@ -102,7 +102,7 @@ function scrub(root: Parent, images: ImagePolicy, options: ScrubOptions = {}) {
         return value ? [{ ...attr, value }] : [];
       }
       if (name === 'style') {
-        const value = prepareCss(attr.value, true, images, options);
+        const value = prepareCss(attr.value, true, images);
         return value ? [{ ...attr, value }] : [];
       }
       return [attr];
@@ -118,10 +118,7 @@ function scrub(root: Parent, images: ImagePolicy, options: ScrubOptions = {}) {
       node.childNodes = [
         {
           nodeName: '#text',
-          value: prepareCss(css, false, images, {
-            stripColorScheme:
-              options.stripColorScheme && node.parentNode?.nodeName === 'head',
-          }),
+          value: prepareCss(css, false, images),
           parentNode: node,
         },
       ];
@@ -217,15 +214,19 @@ function parseEmailContent(
   images: ImagePolicy,
   showQuotedContent = false
 ) {
-  const { body, styles } = documentParts(html, images, {
-    stripColorScheme: true,
-  });
+  const { body, styles } = documentParts(html, images);
   const nodes = elements(body);
-  const hasTable = nodes.some((node) => node.tagName === 'table');
-  const signatureNode = nodes.find(
-    (node) =>
-      hasClass(node, 'gmail_signature') ||
-      hasClass(node, 'macro-email-signature')
+  const signatures = nodes.filter((node) =>
+    SIGNATURE_CLASSES.some((name) => hasClass(node, name))
+  );
+  const signatureNode = signatures[0];
+  // A signature laid out as a table doesn't make the message a designed
+  // email, whether or not the signature is shown.
+  const signatureNodes = new Set(
+    signatures.flatMap((node) => [node, ...elements(node)])
+  );
+  const hasTable = nodes.some(
+    (node) => node.tagName === 'table' && !signatureNodes.has(node)
   );
   if (!showQuotedContent) {
     if (signatureNode) {

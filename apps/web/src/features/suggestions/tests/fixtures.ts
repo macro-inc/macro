@@ -91,6 +91,16 @@ export const draftedReplySuggestion: Suggestion = {
   },
 };
 
+export const reviewSuggestion: Suggestion = {
+  ...BASE,
+  id: 'suggestion-review',
+  kind: 'entity',
+  action: 'review',
+  title: 'Review the vendor contract',
+  summary: 'The redlined contract came back and needs a read before signing.',
+  about: [{ entityType: 'document', entityId: 'document-2' }],
+};
+
 export const routineSuggestion: Suggestion = {
   ...BASE,
   id: 'suggestion-routine',

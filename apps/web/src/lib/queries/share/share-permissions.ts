@@ -2,7 +2,8 @@ import { fetchPipelineSharePermissions } from '@app/features/crm/sharing-adapter
 import type { ShareItemType } from '@core/component/TopBar/linkShare';
 import { ThrownResultError, throwOnErr } from '@core/util/result';
 import { cognitionApiServiceClient } from '@service-cognition/client';
-import { storageServiceClient } from '@service-storage/client';
+import { dssFetch, storageServiceClient } from '@service-storage/client';
+import type { ThreadChannelShare } from '@service-storage/generated/schemas/threadChannelShare';
 import { queryOptions } from '@tanstack/solid-query';
 import { fetchAgentSessionSharePermissions } from '../agent-session/share-permissions';
 import { queryClient } from '../client';
@@ -21,6 +22,18 @@ export async function fetchSharePermissions(
   id: string,
   itemType: ShareItemType
 ) {
+  if (itemType === 'email') {
+    const shares = await dssFetch<ThreadChannelShare[]>(
+      `/threads/${encodeURIComponent(id)}/channel-shares`
+    );
+    return shares.map((threadChannelShares) => ({
+      threadChannelShares,
+      channelSharePermissions: threadChannelShares,
+      linkShare: null,
+      linkShareAccessLevel: null,
+      teamShareAccessLevel: null,
+    }));
+  }
   if (itemType === 'external_chat') return fetchExternalChatPermissions(id);
   if (itemType === 'crm_pipeline') return fetchPipelineSharePermissions(id);
   if (itemType === 'agent_session') {
@@ -62,7 +75,7 @@ export function sharePermissionsQueryOptions(
     queryKey: sharePermissionKeys.entity(itemType, id).queryKey,
     queryFn: () => loadSharePermissions(id, itemType),
     enabled: !!id,
-    staleTime: SHARE_PERMISSIONS_STALE_TIME,
+    staleTime: itemType === 'email' ? 0 : SHARE_PERMISSIONS_STALE_TIME,
   });
 }
 

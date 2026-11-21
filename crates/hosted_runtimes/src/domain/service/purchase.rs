@@ -1,19 +1,24 @@
-//! Purchases: a reservation holds capacity while the charge is confirmed;
-//! a definite success converts it into a computer, a definite refusal
-//! deletes it, and an unknown outcome leaves it to the confirm worker.
+//! Purchases: a reservation holds capacity under the purchase key and is
+//! converted into a computer at once. A charged one is
+//! [`ComputerBilling::Charging`] while the request charges it beside the
+//! guest's creation: success bills it, a definite refusal releases it, and
+//! an unknown outcome hands the charge to the billing worker. A reservation
+//! the request never converted is left to the confirm worker.
 
 use chrono::Duration;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
+use tracing::Instrument;
+
 use super::{Clock, ComputerError, ComputerService, computer_name, internal};
 use crate::domain::ids::ComputerId;
-use crate::domain::lifecycle::Billing as ComputerBilling;
+use crate::domain::lifecycle::{Billing as ComputerBilling, Charger, DeclineSeen, Event};
 use crate::domain::models::{
     Funding, NewReservation, Purchase, PurchaseBilling, PurchaseRequest, Reservation, Reserved,
 };
 use crate::domain::ports::{
-    Billing, BillingError, CompPolicy, ComputerRepo, FleetAttachmentSource, ItemCharge,
+    Applied, Billing, BillingError, CompPolicy, ComputerRepo, FleetAttachmentSource, ItemCharge,
     ReserveError,
 };
 
@@ -62,12 +67,14 @@ impl<
         self.purchase_linked(request, Some(agent)).await
     }
 
-    /// Reserve units, then confirm a comp or charge the computer's own item
-    /// (plus `extra_items`) in one subscription update. A retry with the same
-    /// purchase key returns what the first attempt led to, so it never
-    /// charges twice or buys a second computer. An error always means
-    /// nothing was charged; an unknown charge outcome, or a charge whose
-    /// conversion failed, is [`Purchase::Confirming`].
+    /// Reserve units and convert them into a provisioning computer at once;
+    /// a charged one is charged beside its creation (its own item plus
+    /// `extra_items`, in one subscription update keyed by the computer id)
+    /// and answered once the charge has a definite outcome. A retry with
+    /// the same purchase key returns what the first attempt led to, so it
+    /// never charges twice or buys a second computer. An error always means
+    /// nothing was charged; an unknown charge outcome is
+    /// [`Purchase::Confirming`] and settles in the billing worker.
     pub async fn purchase(&self, request: PurchaseRequest) -> Result<Purchase, ComputerError> {
         self.purchase_linked(request, None).await
     }
@@ -96,17 +103,13 @@ impl<
         let name = computer_name(request.name.as_deref())?;
         let entry = self.size_spec(request.size)?;
         let funding = match &request.billing {
-            PurchaseBilling::Stripe => {
-                // Computers are for paying teams: refused before anything is reserved.
-                self.billing.require_paid_plan(request.team_id).await?;
-                Funding::Stripe {
-                    price_id: self
-                        .billing
-                        .quote(request.team_id, request.size)
-                        .await?
-                        .price_id,
-                }
-            }
+            // Computers are for paying teams: refused before anything is reserved.
+            PurchaseBilling::Stripe => Funding::Stripe {
+                price_id: self
+                    .billing
+                    .purchase_price(request.team_id, request.size)
+                    .await?,
+            },
             PurchaseBilling::Comped { reason } => Funding::Comped {
                 reason: reason.clone(),
             },
@@ -150,6 +153,15 @@ impl<
                 {
                     return Err(ComputerError::PurchaseKeyConflict);
                 }
+                let state = record.healthy().map(|computer| &computer.state);
+                if state.is_some_and(|state| state.billing.is_charging()) {
+                    span.record("outcome", "confirming");
+                    return Ok(Purchase::Confirming(record.id()));
+                }
+                if state.is_some_and(|state| state.declined()) {
+                    span.record("outcome", "refused");
+                    return Err(BillingError::PaymentFailed.into());
+                }
                 span.record("outcome", "purchased");
                 return Ok(Purchase::Ready(record.id()));
             }
@@ -158,51 +170,125 @@ impl<
         };
         span.record("computer_id", tracing::field::display(reservation.id));
 
-        let outcome = match &reservation.funding {
-            Funding::Comped { reason } => Ok(ComputerBilling::Comped {
-                reason: reason.clone(),
-            }),
-            Funding::Stripe { price_id } => self
-                .billing
-                .add_computer(
-                    reservation.team_id,
-                    reservation.id,
-                    price_id,
-                    &reservation.extra_items,
-                    ItemCharge::Prorated,
-                    &reservation.charge_key(),
-                )
-                .await
-                .map(|subscription_item| ComputerBilling::Active { subscription_item }),
-        };
-        match outcome {
-            Ok(billing) => match self.convert(&reservation, billing).await {
-                Ok(()) => {
-                    span.record("outcome", "ready");
-                    Ok(Purchase::Ready(reservation.id))
-                }
-                // Charged: never an error, or a new attempt would buy again.
-                // The confirm worker replays the charge (a no-op) and converts.
-                Err(error) => {
-                    tracing::error!(computer_id = %reservation.id, error = ?error,
-                        "computer charged but not converted; confirming later");
-                    span.record("outcome", "confirming");
-                    Ok(Purchase::Confirming(reservation.id))
-                }
-            },
-            Err(error) if error.is_definite() => {
-                self.repo
-                    .delete_reservation(reservation.id)
-                    .await
-                    .map_err(internal)?;
-                span.record("outcome", "refused");
-                Err(error.into())
+        let price_id = match &reservation.funding {
+            Funding::Comped { reason } => {
+                let billing = ComputerBilling::Comped {
+                    reason: reason.clone(),
+                };
+                return match self.convert(&reservation, billing).await {
+                    Ok(()) => {
+                        span.record("outcome", "ready");
+                        Ok(Purchase::Ready(reservation.id))
+                    }
+                    Err(error) => {
+                        tracing::error!(computer_id = %reservation.id, error = ?error,
+                            "computer reserved but not converted; confirming later");
+                        span.record("outcome", "confirming");
+                        Ok(Purchase::Confirming(reservation.id))
+                    }
+                };
             }
+            Funding::Stripe { price_id } => price_id.clone(),
+        };
+        let outcome = self
+            .charge_while_provisioning(&reservation, &price_id)
+            .await;
+        span.record(
+            "outcome",
+            outcome.as_ref().map_or("refused", Purchase::outcome),
+        );
+        outcome
+    }
+
+    /// Convert a charged purchase into a computer that provisions at once,
+    /// then charge it while the fleet creates the guest. The computer's
+    /// billing guard is held throughout, so a release fencing the charge
+    /// waits for its outcome. Every failure past the conversion leaves the
+    /// computer charging, for the billing worker to take over at
+    /// [`crate::domain::lifecycle::CHARGE_TAKEOVER`].
+    async fn charge_while_provisioning(
+        &self,
+        reservation: &Reservation,
+        price_id: &stripe::PriceId,
+    ) -> Result<Purchase, ComputerError> {
+        let confirming = Purchase::Confirming(reservation.id);
+        let _billing = match self.repo.lock_billing(reservation.id).await {
+            Ok(guard) => guard,
             Err(error) => {
-                tracing::warn!(computer_id = %reservation.id, error = ?error,
-                    "computer charge outcome unknown; confirming later");
-                span.record("outcome", "confirming");
-                Ok(Purchase::Confirming(reservation.id))
+                tracing::error!(computer_id = %reservation.id, error = ?error,
+                    "computer reserved but not converted; confirming later");
+                return Ok(confirming);
+            }
+        };
+        let billing = ComputerBilling::Charging {
+            extra_items: reservation.extra_items.clone(),
+            charger: Charger::Request,
+        };
+        if let Err(error) = self.convert(reservation, billing).await {
+            // A conversion that committed before failing still charges here;
+            // one that didn't is left to the confirm worker.
+            let converted = matches!(self.repo.get(reservation.id).await, Ok(Some(_)));
+            tracing::error!(computer_id = %reservation.id, error = ?error, converted,
+                "computer conversion failed");
+            if !converted {
+                return Ok(confirming);
+            }
+        }
+
+        let charge_span = tracing::info_span!(
+            "computer.purchase.charge",
+            computer_id = %reservation.id,
+            outcome = tracing::field::Empty,
+            otel.status_code = tracing::field::Empty,
+        );
+        let charged = self
+            .billing
+            .add_computer(
+                reservation.team_id,
+                reservation.id,
+                price_id,
+                &reservation.extra_items,
+                ItemCharge::Prorated,
+                &reservation.charge_key(),
+            )
+            .instrument(charge_span.clone())
+            .await;
+        let (event, answer, outcome) = match charged {
+            Ok(subscription_item) => (
+                Event::ChargeSucceeded { subscription_item },
+                Ok(Purchase::Ready(reservation.id)),
+                "charged",
+            ),
+            Err(error) if error.is_definite() => (
+                Event::ChargeFailed {
+                    seen: DeclineSeen::ByBuyer,
+                },
+                Err(error.into()),
+                "refused",
+            ),
+            Err(error) => {
+                tracing::warn!(parent: &charge_span, computer_id = %reservation.id, error = ?error,
+                    "computer charge outcome unknown; the billing worker settles it");
+                (Event::ChargeUnsettled, Ok(confirming), "unknown")
+            }
+        };
+        charge_span.record("outcome", outcome);
+        if outcome != "charged" {
+            charge_span.record("otel.status_code", "ERROR");
+        }
+        match self
+            .repo
+            .apply(reservation.id, event, self.clock.now())
+            .await
+        {
+            Ok(Some(Applied::Changed(_))) => answer,
+            // Released, quarantined or gone meanwhile: the release fences the
+            // charge, so the outcome stands.
+            Ok(Some(Applied::Rejected(_)) | None) => answer,
+            Err(error) => {
+                tracing::error!(computer_id = %reservation.id, error = ?error,
+                    "computer charge outcome not recorded; the billing worker settles it");
+                Ok(confirming)
             }
         }
     }

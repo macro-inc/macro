@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Button } from '@ui';
 import { createSignal } from 'solid-js';
 import { EventReplacementDialog } from '../../calendar/components/EventReplacementDialog';
@@ -22,9 +23,9 @@ export function CalendarReplacementFixture() {
     providerUrl: 'https://outlook.office.com/calendar/item/original',
   };
   const source: EventReplacementSource = {
-    async prepare() {
-      setActions((v) => [...v, 'preview']);
-      return preview;
+    async prepare(request) {
+      setActions((v) => [...v, `preview:${request.changes.title}`]);
+      return { ...preview, title: request.changes.title ?? preview.title };
     },
     async confirm(id) {
       setActions((v) => [...v, `confirm:${id}`]);
@@ -40,20 +41,25 @@ export function CalendarReplacementFixture() {
       setActions((v) => [...v, `discard:${id}`]);
     },
   };
-  const controller = createEventReplacement(source, () => ({
-    eventId: 'event',
-    recurrenceId: '2026-11-02T17:00:00Z',
-  }));
+  const controller = createEventReplacement(source);
+  // Stands in for the editor's Teams removal notice, which starts the
+  // replacement with the form's unsaved edits.
+  const replace = () =>
+    fireAndForget(
+      controller.start({
+        target: { eventId: 'event' },
+        changes: { title: 'Weekly review, moved' },
+      }),
+      'calendar-replacement'
+    );
   return (
     <main class="min-h-screen bg-surface p-4 text-ink">
-      <Button onClick={() => controller.setOpen(true)}>Replace event…</Button>
+      <Button onClick={replace}>Replace event…</Button>
       <EventReplacementDialog
         controller={controller}
-        hasConference
-        hasOccurrence
-        recurring
+        timeFormat="12-hour"
         onOpenUrl={() => {}}
-        onDone={() => controller.setOpen(false)}
+        onDone={() => controller.close()}
       />
       <output data-testid="replacement-actions">{actions().join(',')}</output>
     </main>

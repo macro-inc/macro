@@ -1,3 +1,4 @@
+import { FAILING_CHECK_CONCLUSIONS } from '@block-pr/data/checks';
 import {
   type PullRequestCheck,
   pullRequestReadyToMerge,
@@ -53,15 +54,6 @@ export const REVIEWS_BOARD_STAGES: readonly {
   },
 ];
 
-/** Finished conclusions that fail the head commit. */
-const FAILING_CONCLUSIONS = new Set([
-  'failure',
-  'timed_out',
-  'cancelled',
-  'action_required',
-  'startup_failure',
-]);
-
 /**
  * The column a pull request belongs in. A draft stays a draft whatever its
  * checks say; otherwise conflicts outrank failing checks, which outrank a
@@ -81,7 +73,7 @@ export function reviewsBoardStage(input: {
     (check) =>
       check.status === 'completed' &&
       check.conclusion != null &&
-      FAILING_CONCLUSIONS.has(check.conclusion)
+      FAILING_CHECK_CONCLUSIONS.has(check.conclusion)
   );
   if (failing) return 'failing';
   if (pullRequestReadyToMerge(input)) return 'ready';

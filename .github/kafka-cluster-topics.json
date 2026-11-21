@@ -25,6 +25,7 @@
   "macro.properties",
   "macro.soup",
   "macro.teams",
+  "macro.time_entries",
   "macro.users",
   "macro.webhooks"
 ]

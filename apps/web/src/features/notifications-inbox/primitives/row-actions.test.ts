@@ -56,6 +56,7 @@ const row = (
 ): NotificationInboxRow => ({
   id: 'document:doc-a#access_requested:req-1',
   type: 'access_requested',
+  alsoListedAs: [],
   revision: 'rev',
   latestAt: 1,
   actions,

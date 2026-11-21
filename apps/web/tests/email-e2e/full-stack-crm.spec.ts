@@ -92,14 +92,13 @@ for (const provider of PROVIDERS) {
     test.use({ provider });
     test.beforeEach(({ page }) => loadAppSteadily(page));
 
-    // When this fails, New email on a contact's record does not start a
-    // message to the contact, the message never reaches the provider, or the
-    // record does not show the mail exchanged with the contact.
-    test('New email on a contact writes to them, and the record shows the mail', async ({
+    // New email sends to the contact and lists the sent message on its
+    // record. Mail sync must also preserve that contact's identity.
+    test('New email reuses the manual contact and shows the sent mail', async ({
       page,
       mailbox,
     }) => {
-      const { grace, contact } = await teamWithContact(mailbox);
+      const { team, grace, contact } = await teamWithContact(mailbox);
       const emails = await openEmails(page, mailbox, contact.id);
       await expect(
         emails.getByText('No emails with this contact yet.')
@@ -130,20 +129,27 @@ for (const provider of PROVIDERS) {
         .toBe(1);
       expect((await sent())[0].to).toEqual([grace]);
 
-      // Mail a member sends is what feeds the CRM: the email service files
-      // the address under its company, with the inbox as where it was seen.
+      // Wait for the persisted source independently of which contact was
+      // chosen, so the next assertion detects a duplicate as soon as it exists.
+      const sources = () =>
+        mailbox.stack.sql<{ contact_id: string }>(
+          `SELECT s.contact_id FROM crm_contact_sources s
+           JOIN crm_contact_emails e ON e.contact_id = s.contact_id
+           WHERE s.link_id = '${mailbox.inbox.linkId}' AND e.email = '${grace}'`
+        );
       await expect
-        .poll(
-          () =>
-            mailbox.stack.sql(
-              `SELECT e.email FROM crm_contact_sources s JOIN crm_contact_emails e ON e.contact_id = s.contact_id WHERE s.link_id = '${mailbox.inbox.linkId}'`
-            ),
-          {
-            message: 'the sent mail never reached the CRM',
-            timeout: 60_000,
-          }
-        )
-        .toEqual([{ email: grace }]);
+        .poll(sources, {
+          message: 'the sent mail never reached the CRM',
+          timeout: 60_000,
+        })
+        .not.toHaveLength(0);
+      const records = await mailbox.stack.sql(
+        `SELECT c.id, c.company_id FROM crm_contacts c
+         JOIN crm_contact_emails e ON e.contact_id = c.id
+         WHERE c.team_id = '${team.id}' AND e.email = '${grace}'`
+      );
+      expect(records).toEqual([{ id: contact.id, company_id: null }]);
+      expect(await sources()).toEqual([{ contact_id: contact.id }]);
 
       // The sent message is mail with the contact: the record lists it, for
       // the team and for the member whose inbox holds it.

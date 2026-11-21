@@ -1,11 +1,18 @@
 import type { Link, ListLinksResponse } from '@service-email/generated/schemas';
-import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { ok } from 'neverthrow';
-import { createSignal, Suspense } from 'solid-js';
+import { createSignal, For, Suspense } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { authKeys } from '../auth/keys';
 import {
+  useEmailLinksQuery,
   useEmailSignature,
   useNonPrimaryEmailLinkIdHeader,
   usePrimaryEmailLinkId,
@@ -57,6 +64,45 @@ afterEach(() => {
 });
 
 describe('non-suspending inbox metadata', () => {
+  it('preserves an open inbox editor across a background links refetch', async () => {
+    mocks.getLinks.mockImplementation(async () =>
+      ok({ links: [link('self-primary', 'macro|self', true)] })
+    );
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    activeClient = client;
+    clients.push(client);
+    client.setQueryData(authKeys.userInfo.queryKey, {
+      id: 'macro|self',
+      authenticated: true,
+    });
+    function Editor() {
+      const [editing, setEditing] = createSignal(false);
+      return (
+        <button onClick={() => setEditing(true)}>
+          {editing() ? 'Editing' : 'Preview'}
+        </button>
+      );
+    }
+    function View() {
+      const links = useEmailLinksQuery();
+      return <For each={links.data?.links}>{() => <Editor />}</For>;
+    }
+    render(() => (
+      <QueryClientProvider client={client}>
+        <Suspense fallback="Loading">
+          <View />
+        </Suspense>
+      </QueryClientProvider>
+    ));
+    const editor = await screen.findByRole('button', { name: 'Preview' });
+    fireEvent.click(editor);
+    await client.refetchQueries({ type: 'active' });
+    await waitFor(() => expect(mocks.getLinks).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole('button', { name: 'Editing' })).toBe(editor);
+  });
+
   it('does not hold a cached body for inbox metadata or silently default an explicit target inbox', async () => {
     const response = Promise.withResolvers<ListLinksResponse>();
     mocks.getLinks.mockImplementation(async () => ok(await response.promise));

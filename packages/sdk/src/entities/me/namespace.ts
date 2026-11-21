@@ -28,7 +28,7 @@ export interface UpdateMeOptions {
 /**
  * The authenticated user's own profile.
  *
- * @routing Use when changing the user's own name or profile picture; not looking up other people (`macro.users`).
+ * @routing Use when reading who the user is or changing their own name or profile picture; not looking up other people (`macro.users`).
  */
 export class MeNamespace {
   constructor(private readonly client: MacroClient) {}

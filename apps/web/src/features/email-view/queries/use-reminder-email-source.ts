@@ -29,7 +29,10 @@ import {
   untrack,
 } from 'solid-js';
 import { EMAIL_FACETS } from '../filters/email-facets';
-import { advanceEmptyAliasPages } from './advance-empty-alias-pages';
+import {
+  advanceEmptyPages,
+  EMPTY_PAGES_LOAD_MORE_LABEL,
+} from './advance-empty-pages';
 import { buildEmailQuery } from './email-query';
 import type {
   EmailDataSource,
@@ -218,7 +221,7 @@ export function useReminderEmailSource(
     return inFlight;
   };
 
-  const aliasAdvance = advanceEmptyAliasPages({
+  const aliasAdvance = advanceEmptyPages({
     scope,
     enabled: () => active() && !!state.aliasFilter,
     ready: () =>
@@ -230,7 +233,7 @@ export function useReminderEmailSource(
       !failed().length &&
       !loadError() &&
       !collection.error,
-    hasItems: () => entities().length > 0,
+    rows: () => entities().map((email) => email.id),
     hasNextPage: () => !!collection.hasNextPage,
     loadMore,
   });
@@ -243,13 +246,18 @@ export function useReminderEmailSource(
     Boolean(
       collection.hasNextPage || loadingMore() || pending() || failed().length
     );
+  const loadMoreLabel = () => {
+    if (error()) return 'Couldn’t load more email. Try again';
+    if (aliasAdvance.stoppedShort()) return EMPTY_PAGES_LOAD_MORE_LABEL;
+    return 'Load More';
+  };
   const built = createMemo((): EmailDataSourceItem[] => {
     const rows: EmailDataSourceItem[] = buildFlatSoupRows(entities());
     if (hasMore())
       rows.push(
         createSoupLoadMoreRow({
           scopeId: 'email:reminders',
-          label: error() ? 'Couldn’t load more email. Try again' : 'Load More',
+          label: loadMoreLabel(),
           isLoading:
             loadingMore() || collection.isFetchingNextPage || pending(),
         })
@@ -314,10 +322,7 @@ export function useReminderEmailSource(
     hasMore,
     isLoadingMore: () =>
       loadingMore() || collection.isFetchingNextPage || pending(),
-    loadMore: () => {
-      aliasAdvance.resetError();
-      return loadMore();
-    },
+    loadMore: aliasAdvance.loadMore,
     refresh: async () => {
       aliasAdvance.resetError();
       setLoadError(undefined);

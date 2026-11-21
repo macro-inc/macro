@@ -5,6 +5,9 @@ pub use macro_env::Environment;
 use macro_env_var::env_vars;
 use secretsmanager_client::LocalOrRemoteSecret;
 
+#[cfg(test)]
+mod test;
+
 /// Push notification channels are opened only when both optional watch
 /// variables are configured; without them the periodic poll is the sole
 /// freshness mechanism.
@@ -97,5 +100,37 @@ pub struct Config {
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
         macro_config::ConfigLoader::load::<Config>().context("failed to load config")
+    }
+
+    /// The Outlook background loops this task runs.
+    pub fn outlook_loops(&self) -> OutlookLoops {
+        OutlookLoops::new(
+            self.calendar_sync_enabled,
+            self.outlook_sync_enabled,
+            self.outlook_writes_enabled,
+        )
+    }
+}
+
+/// The Outlook background loops a calendar task runs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct OutlookLoops {
+    /// Discovery and delta sync against Microsoft Graph.
+    pub sync: bool,
+    /// The projection relay, the only path an Outlook event's changes take to
+    /// the calendar topic and to its viewers, whether a sync or a Macro write
+    /// made them.
+    pub relay: bool,
+}
+
+impl OutlookLoops {
+    /// The calendar sync switch, which also mounts the mutation routes, gates
+    /// both. Within it the relay runs whenever an Outlook event can change: a
+    /// write queues an outbox row even while sync is paused.
+    pub fn new(calendar_sync: bool, outlook_sync: bool, outlook_writes: bool) -> Self {
+        Self {
+            sync: calendar_sync && outlook_sync,
+            relay: calendar_sync && (outlook_sync || outlook_writes),
+        }
     }
 }

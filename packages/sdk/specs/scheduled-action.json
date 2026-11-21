@@ -1884,6 +1884,68 @@
         }
       }
     },
+    "/scheduled-actions/{id}/unusable-items": {
+      "get": {
+        "tags": ["scheduled actions"],
+        "operationId": "list_scheduled_action_unusable_items",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the scheduled action",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The routine's entity knobs whose item its owner can't use now: deleted, trashed, out of their reach, or not picked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UnusableKnob"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/suggestions": {
       "get": {
         "tags": ["suggestions"],
@@ -2478,7 +2540,7 @@
     "/suggestions/{id}/accept": {
       "post": {
         "tags": ["suggestions"],
-        "summary": "The caller, or someone acting for them, acts on a suggestion: a background\nprompt suggestion starts its run when the person accepts it in the app (anyone\nelse only takes it on); a note or prompt is done once they act on it (open its\nitem or the composer), and shows in the feed's `done`. A routine suggestion is\nrefused: the person saves its routine in the app, which makes it done.",
+        "summary": "The caller, or someone acting for them, acts on a suggestion: a background\nprompt suggestion starts its run when the person accepts it in the app (anyone\nelse only takes it on); a reply suggestion is only taken on, and is done once\nthe person replies on its item; any other note or prompt is done once they act\non it (open its item or the composer), and shows in the feed's `done`. A\nroutine suggestion is refused: the person saves its routine in the app, which\nmakes it done.",
         "operationId": "accept_suggestion",
         "parameters": [
           {
@@ -2503,7 +2565,7 @@
         },
         "responses": {
           "204": {
-            "description": "Accepted: a background prompt suggestion starts its run when the person accepts it in the app (anyone acting for them only takes it on), any other suggestion is done; accepting a done suggestion again changes nothing"
+            "description": "Accepted: a background prompt suggestion starts its run when the person accepts it in the app (anyone acting for them only takes it on), a reply suggestion is taken on and stays open until the person replies on its item, any other suggestion is done; accepting a done suggestion again changes nothing"
           },
           "400": {
             "description": "A routine suggestion: the person saves its routine in the app instead",
@@ -2904,6 +2966,10 @@
         "description": "Client configuration, the create body. Ownership and execution state are\nserver-owned.",
         "required": ["name", "trigger", "kind", "task", "enabled"],
         "properties": {
+          "appearance": {
+            "$ref": "#/components/schemas/EntityAppearance",
+            "description": "An icon and colour an agent picked for what the routine does. Saved\nunless the owner chose the routine's appearance, which only the\nappearance endpoint does; absent leaves the stored one."
+          },
           "description": {
             "type": "string",
             "description": "What the routine is for, in the owner's words; empty when unset."
@@ -2935,6 +3001,10 @@
         "description": "Configuration replacement, the update body. Activation has its own endpoint, so\nomitting `enabled` keeps the stored value; omitting `run_visibility` or\n`description` keeps them too, so clients that predate them do not reset them.",
         "required": ["name", "trigger", "kind", "task"],
         "properties": {
+          "appearance": {
+            "$ref": "#/components/schemas/EntityAppearance",
+            "description": "An icon and colour an agent picked, as on create. Saved only when the\nupdate is made for the routine's owner; skipped for anyone else."
+          },
           "description": {
             "type": ["string", "null"],
             "description": "An empty string clears it."
@@ -3371,6 +3441,13 @@
               "$ref": "#/components/schemas/CreatedItem"
             },
             "description": "What a routine draft's session created for the routine to use, such as\nthe database it writes to; kept with its draft for the person to see."
+          },
+          "missingApps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentMcpServer"
+            },
+            "description": "Apps a routine draft's session found the routine needs that its owner\nhasn't connected, for the person to connect before saving. The routine\nitself requires only connected ones."
           },
           "routine": {
             "$ref": "#/components/schemas/ActionConfiguration"
@@ -4029,12 +4106,30 @@
         "description": "A drafted routine.",
         "required": ["name", "steps", "problems", "created"],
         "properties": {
+          "appearance": {
+            "$ref": "#/components/schemas/EntityAppearance",
+            "description": "The icon and colour AI picked for it from Macro's icons; absent when\nit picked none, or one Macro doesn't have."
+          },
+          "apps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentMcpServer"
+            },
+            "description": "Apps outside Macro its Ask AI step uses that its owner connected,\nwhich the routine requires (its task's `mcp_servers`)."
+          },
           "created": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/DraftCreated"
             },
             "description": "What AI created while drafting, such as the database the routine\nwrites to. These exist whether or not the routine is saved."
+          },
+          "missingApps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentMcpServer"
+            },
+            "description": "Apps its Ask AI step needs that its owner hasn't connected: the owner\nconnects each one, or removes it, before saving."
           },
           "name": {
             "type": "string"
@@ -4923,6 +5018,13 @@
         "description": "What saving a routine would find wrong, without saving it: the answer to\n`POST /scheduled-actions/check`.",
         "required": ["ok", "problems", "steps", "routine"],
         "properties": {
+          "missingApps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentMcpServer"
+            },
+            "description": "Apps the routine needs that its owner hasn't connected, as a routine\ndraft's session named them (`missingApps`): the person connects each\none before saving. Never ones the routine already requires."
+          },
           "ok": {
             "type": "boolean",
             "description": "Whether saving it would succeed: no problems and no failing steps."
@@ -5081,9 +5183,83 @@
                 "description": "The question AI is asked, e.g. \"Is this email about money:\ninvestors, fundraising or finance?\"."
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "One of the owner's items the code uses, such as the channel it posts\nin, which the owner swaps by picking another. The code gets an SDK\nhandle for it, never its id.",
+            "required": ["name", "label", "entity_types", "type"],
+            "properties": {
+              "entity_types": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/RoutineKnobEntityType"
+                },
+                "description": "The kinds of item the owner may pick, at least one, each once."
+              },
+              "label": {
+                "type": "string",
+                "description": "What it is, for the owner, e.g. \"Channel to post in\"."
+              },
+              "name": {
+                "$ref": "#/components/schemas/KnobName",
+                "description": "How the code reads it: `knobs.<name>`."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["entity"]
+              },
+              "value": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/RoutineKnobEntity",
+                    "description": "The item picked; none yet in a starter, which its owner picks\nbefore saving."
+                  }
+                ]
+              }
+            }
           }
         ],
         "description": "A value a code step reads as `knobs.<name>`, which its owner can change\nwithout the step being rewritten: the label it adds, a priority, a\nnumber of days, a question it asks AI. Its type is part of the step's\ntype-checked contract; its value is not, so changing it needs no check."
+      },
+      "RoutineKnobEntity": {
+        "type": "object",
+        "description": "The item an entity knob names: its kind and id.",
+        "required": ["type", "id"],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/RoutineKnobEntityId",
+            "description": "Its id."
+          },
+          "type": {
+            "$ref": "#/components/schemas/RoutineKnobEntityType",
+            "description": "Its kind."
+          }
+        },
+        "additionalProperties": false
+      },
+      "RoutineKnobEntityId": {
+        "type": "string",
+        "description": "An item's id: not blank, without spaces, at most 256 characters."
+      },
+      "RoutineKnobEntityType": {
+        "type": "string",
+        "description": "A kind of item an entity knob names: each kind the app's entity picker\noffers, which Macro's SDK has a handle for, and whole databases. Its\nname is the SDK's for the kind (`EntityReference`'s `type`, which the\nhandle's `entityType` repeats), except `task`, a document that is a\ntask.",
+        "enum": [
+          "channel",
+          "document",
+          "project",
+          "database",
+          "user",
+          "task",
+          "email_thread",
+          "chat",
+          "crm_company",
+          "crm_contact",
+          "initiative"
+        ]
       },
       "RoutineModelId": {
         "type": "string",
@@ -6562,6 +6738,43 @@
           }
         ],
         "description": "A user-specific part of a shared routine."
+      },
+      "UnusableKnob": {
+        "type": "object",
+        "description": "An entity knob of a saved routine whose item needs a new pick: it was\ndeleted, its owner lost access, or none is picked.",
+        "required": ["knob", "reason"],
+        "properties": {
+          "item": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RoutineKnobEntity",
+                "description": "The item picked, which needs another; none when nothing is picked."
+              }
+            ]
+          },
+          "knob": {
+            "type": "string",
+            "description": "The knob's name."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why it can't be used, for the routine's owner."
+          },
+          "step": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/StepId",
+                "description": "Its step's id. A step saved before steps had ids has none until it is\nsaved again; a client can't place that one, but its run still fails."
+              }
+            ]
+          }
+        }
       },
       "UpgradeOutcome": {
         "type": "string",

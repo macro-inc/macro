@@ -54,6 +54,7 @@ impl MailboxProgressRepository for PgMailboxSync {
                 l.sync_generation AS "sync_generation!",
                 l.is_sync_active AS "sync_active!",
                 l.needs_reauth AS "needs_reauth!",
+                l.mailbox_unavailable_at IS NOT NULL AS "mailbox_unavailable!",
                 q.queued AS "queued!",
                 q.parked AS "parked!",
                 q.abandoned AS "abandoned!",
@@ -62,8 +63,10 @@ impl MailboxProgressRepository for PgMailboxSync {
                 COALESCE(ceil(EXTRACT(EPOCH FROM q.parked_until - now())), 0)::bigint AS "parked_until_max_seconds!",
                 s.incomplete AS "streams_incomplete!",
                 COALESCE(recent.imported_5m, 0)::bigint AS "imported_5m!",
-                floor(EXTRACT(EPOCH FROM now() - latest.last_imported_at))::bigint AS seconds_since_last_import
+                floor(EXTRACT(EPOCH FROM now() - latest.last_imported_at))::bigint AS seconds_since_last_import,
+                COALESCE(w.failures, 0) AS "watch_failures!"
             FROM email_links l
+            LEFT JOIN email_mailbox_watch_work w ON w.link_id = l.id
             CROSS JOIN LATERAL (
                 -- Abandoned rows wait at `available_at = 'infinity'`.
                 SELECT count(*) FILTER (WHERE available_at <> 'infinity') AS queued,
@@ -119,6 +122,8 @@ impl MailboxProgressRepository for PgMailboxSync {
                 seconds_since_last_import: row.seconds_since_last_import,
                 sync_active: row.sync_active,
                 needs_reauth: row.needs_reauth,
+                mailbox_unavailable: row.mailbox_unavailable,
+                watch_failures: row.watch_failures,
             })
             .collect())
     }

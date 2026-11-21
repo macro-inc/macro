@@ -937,6 +937,9 @@ const AGENT_SESSIONS_V1_BODY = {
       // Unified search sorts/collapses by entity_id; preserve existing projections.
       entity_id: { type: 'alias', path: 'agent_session_id' },
       projection_generation: { type: 'keyword' },
+      // Parent-only record of each child's content hash, read back by the
+      // indexer. Its keys are child ids, so it must never be mapped.
+      indexed_messages: { type: 'object', enabled: false },
       // Parent-only metadata.
       name: {
         type: 'text',

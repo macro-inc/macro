@@ -7,6 +7,10 @@ import {
 import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
 import { calendarPath } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
+import { DEFAULT_EMAIL_TAB } from '@app/features/email-view/constants';
+import { emailTabSearchUpdate } from '@app/features/email-view/email-route';
+import type { NewHomeMode } from '@app/features/new-home/core/new-home-mode';
+import { useNewHomeMode } from '@app/features/new-home/use-new-home-mode';
 import { requestSearchFocus } from '@app/features/next-soup/soup-view/search-controllers';
 import { useRecentViewFlag } from '@app/features/next-soup/use-recent-view-flag';
 import { useUnifiedNotificationsFlag } from '@app/features/notifications-inbox/use-unified-notifications-flag';
@@ -21,6 +25,7 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { useGoToLeader } from '@components/app/app-sidebar/go-to-leader';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type {
+  OpenWithSplitOptions,
   ReferredFrom,
   SplitContent,
   SplitHandle,
@@ -48,9 +53,11 @@ import BellIcon from '@icon/system/regular/bell.svg';
 import SplitIcon from '@icon/system/regular/columns.svg';
 import HomeIcon from '@icon/system/regular/house.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
+import PaperPlaneTiltIcon from '@icon/system/regular/paper-plane-tilt.svg';
 import PlugIcon from '@icon/system/regular/plug.svg';
 import ActivityIcon from '@icon/system/regular/pulse.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
+import { crmAccessAllowed } from '@service-storage/crm-access-authority';
 import { cn } from '@ui';
 import {
   type Component,
@@ -67,6 +74,8 @@ export interface SidebarItem {
   label: string;
   href: string;
   params?: Record<string, unknown>;
+  /** Route search that picks a place inside the view, such as an Email tab. */
+  search?: OpenWithSplitOptions['search'];
   icon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
   hotkey?: ValidHotkey | ValidHotkey[];
   hotkeyToken: HotkeyToken;
@@ -119,9 +128,21 @@ const SIDEBAR_LINKS = [
       return t('nav.email');
     },
     href: LIST_VIEW_PATHS.mail,
+    search: emailTabSearchUpdate(DEFAULT_EMAIL_TAB),
     icon: getIconConfig('email').icon,
     hotkey: 'e',
     hotkeyToken: TOKENS.sidebar.goTo.mail,
+  },
+  {
+    id: 'mail',
+    get label() {
+      return t('viewMenus.sent');
+    },
+    href: LIST_VIEW_PATHS.mail,
+    search: emailTabSearchUpdate('sent'),
+    icon: PaperPlaneTiltIcon,
+    hotkey: 's',
+    hotkeyToken: TOKENS.sidebar.goTo.sent,
   },
   {
     id: 'documents',
@@ -199,17 +220,28 @@ export function sidebarContent(
 export function navigateToSidebarView(args: {
   viewId: SidebarItem['id'];
   params?: SidebarItem['params'];
+  search?: SidebarItem['search'];
   shiftKey: boolean;
   openWithSplit: OpenWithSplitFn;
   referredFrom?: ReferredFrom;
   onApplied?: () => void;
 }): SplitHandle | undefined {
-  const { viewId, params, shiftKey, openWithSplit, referredFrom, onApplied } =
-    args;
+  const {
+    viewId,
+    params,
+    search,
+    shiftKey,
+    openWithSplit,
+    referredFrom,
+    onApplied,
+  } = args;
 
   return openWithSplit(sidebarContent(viewId, params), {
     preferNewSplit: shiftKey,
-    resume: !shiftKey,
+    // A link that names its place (Email's Signal or Sent) lands there, not
+    // wherever the view was left.
+    resume: !shiftKey && !search,
+    search,
     mergeHistory: false,
     allowDuplicate: viewId !== 'calendar',
     referredFrom,
@@ -242,6 +274,7 @@ export const GoToHotkeys = () => {
   const recentViewEnabled = useRecentViewFlag();
   const reviews = useFeatureFlag(enableTasksReviews);
   const notificationsEnabled = useUnifiedNotificationsFlag();
+  const homeMode = useNewHomeMode();
   const external = useFeatureFlag(enableWhatsappLinked);
   const links = createMemo((): SidebarItem[] =>
     buildSidebarLinks(
@@ -249,7 +282,9 @@ export const GoToHotkeys = () => {
       recentViewEnabled(),
       reviews().enabled,
       notificationsEnabled(),
-      external().enabled
+      external().enabled,
+      crmAccessAllowed(),
+      homeMode()
     )
   );
 
@@ -285,6 +320,7 @@ export const GoToHotkeys = () => {
         const handle = navigateToSidebarView({
           viewId: link.id,
           params: link.params,
+          search: link.search,
           shiftKey: !!e?.shiftKey,
           openWithSplit,
           onApplied:
@@ -309,8 +345,8 @@ export const GoToHotkeys = () => {
         description: () => t('nav.goTo', { label: link.label }),
         keyDownHandler: openSidebarView,
         icon: link.icon,
-        // Views can claim a letter while focused (Email's g then i). Re-running
-        // this effect when flags load must not eclipse those.
+        // Views add letters the app doesn't use (a list's g then g).
+        // Re-running this effect when flags load must not eclipse those.
         registrationType: 'add',
       });
     });
@@ -357,6 +393,18 @@ const NOTIFICATIONS_LINK: SidebarItem = {
   hotkey: 'i',
   hotkeyToken: TOKENS.sidebar.goTo.notifications,
 };
+
+/** `g h` with New Home on: New Home, on the tab it was left on. */
+const newHomeLink = (label: () => string): SidebarItem => ({
+  id: 'new-home',
+  get label() {
+    return label();
+  },
+  href: '/new-home',
+  icon: HomeIcon,
+  hotkey: 'h',
+  hotkeyToken: TOKENS.sidebar.goTo.home,
+});
 
 const ACTIVITY_LINK: SidebarItem = {
   id: 'activity',
@@ -410,14 +458,17 @@ const EXTERNAL_LINK: SidebarItem = {
  * flag-gated Notifications, Recent, Activity, Calls, Reviews,
  * and External entries in their correct positions. Callers subscribe to the
  * flags and pass them in, so a flag that resolves after mount still rebuilds
- * the list.
+ * the list. With New Home on, `g h` is New Home's alone and Notifications
+ * has no letter: it is a New Home tab.
  */
 export const buildSidebarLinks = (
   showActivity: boolean,
   showRecent: boolean,
   showReviews: boolean,
   showNotifications: boolean,
-  showExternal: boolean
+  showExternal: boolean,
+  canAccessCrm: boolean,
+  homeMode: NewHomeMode | undefined
 ): SidebarItem[] => {
   let links: SidebarItem[] = SIDEBAR_LINKS;
 
@@ -428,7 +479,13 @@ export const buildSidebarLinks = (
 
   // Home leads; Notifications, Recent and Activity follow it in that order.
   let anchorId = 'home';
-  if (showNotifications) {
+  if (homeMode === 'both' || homeMode === 'new-only') {
+    const newHome = newHomeLink(() =>
+      homeMode === 'both' ? t('home.newHome') : t('nav.home')
+    );
+    links = links.map((link) => (link.id === 'home' ? newHome : link));
+    anchorId = 'new-home';
+  } else if (showNotifications) {
     links = links.map((link) => (link.id === 'home' ? homeLink('h') : link));
     insertAfter(anchorId, NOTIFICATIONS_LINK);
     anchorId = 'notifications';
@@ -444,14 +501,16 @@ export const buildSidebarLinks = (
     links = [...links.slice(0, idx + 1), CALLS_LINK, ...links.slice(idx + 1)];
   }
 
-  // Customers sits just after Channels (and Calls when present).
-  const customersAnchorId = ENABLE_CALLS ? 'calls' : 'channels';
-  const customersIdx = links.findIndex((l) => l.id === customersAnchorId);
-  links = [
-    ...links.slice(0, customersIdx + 1),
-    COMPANIES_LINK,
-    ...links.slice(customersIdx + 1),
-  ];
+  if (canAccessCrm) {
+    // Customers sits just after Channels (and Calls when present).
+    const customersAnchorId = ENABLE_CALLS ? 'calls' : 'channels';
+    const customersIdx = links.findIndex((l) => l.id === customersAnchorId);
+    links = [
+      ...links.slice(0, customersIdx + 1),
+      COMPANIES_LINK,
+      ...links.slice(customersIdx + 1),
+    ];
+  }
 
   if (showReviews) {
     // Reviews sits at the end (accessed via More menu but has a hotkey).

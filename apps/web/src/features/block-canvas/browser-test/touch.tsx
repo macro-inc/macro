@@ -30,13 +30,24 @@ import { createCanvasTextMeasurer } from '../views/text-content';
 
 declare global {
   interface Window {
-    canvasTouchFixture: { editor: GraphicsEditor; state: CanvasState };
+    canvasTouchFixture: {
+      editor: GraphicsEditor;
+      state: CanvasState;
+      /** Names of the files handed to the upload source, in order. */
+      uploads: string[];
+    };
   }
 }
 
-// Uploads and workspace media are not under test here.
+const uploads: string[] = [];
+
+// Nothing is stored here: an upload is only recorded, so a test can see which
+// files the Attach menu handed over.
 const NO_ASSETS: CanvasAssetSource = {
-  upload: () => Promise.reject(new Error('No uploads in this fixture')),
+  upload: (file) => {
+    uploads.push(file.name);
+    return Promise.reject(new Error('No uploads in this fixture'));
+  },
   media: () => Promise.reject(new Error('No media in this fixture')),
 };
 
@@ -92,7 +103,7 @@ function Fixture() {
     { canvasId: 'touch-fixture', center }
   );
   const [attachScope, scopeId] = useHotkeyDOMScope('canvas-next');
-  window.canvasTouchFixture = { editor, state };
+  window.canvasTouchFixture = { editor, state, uploads };
 
   return (
     <div class="relative h-dvh w-full overflow-hidden bg-panel">

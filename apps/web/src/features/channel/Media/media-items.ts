@@ -18,6 +18,8 @@ export type MediaItem = {
   fullSrc: string;
   /** Local preview for optimistic media we just uploaded/sent. */
   previewSrc?: string;
+  /** Loads the bytes for copy and download when `fullSrc` can expire. */
+  getBlob?: () => Promise<Blob | undefined>;
   kind: 'image' | 'video';
   width?: number | null;
   height?: number | null;
