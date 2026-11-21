@@ -412,8 +412,12 @@ export const base = (
     macro ??=
       given === undefined
         ? Promise.all([addresses(), credentials.get(macroKey)]).then(
-            ([{ hosts }, apiKey]) =>
-              new Macro({ auth: { type: 'user', apiKey }, hosts })
+            ([{ hosts, webApp }, apiKey]) =>
+              new Macro({
+                auth: { type: 'user', apiKey },
+                hosts,
+                ...(webApp === undefined ? {} : { webAppUrl: webApp }),
+              })
           )
         : Promise.resolve(
             new Macro({

@@ -310,6 +310,21 @@ describe('addresses', () => {
     ).toMatchObject({ kind: 'invalid' });
   });
 
+  test("the CAPTCHA brain and owner links go where enrollment says", () => {
+    const configured = addresses({
+      MACRO_GATEWAY: 'http://proxy:30734',
+      OVERRIDE_AGENT_HARNESS_EGRESS_URL: 'http://agent-harness-service:8102/',
+      OVERRIDE_APP_SERVICE_URL: 'http://localhost:3005/',
+    });
+    expect(configured).toMatchObject({
+      kind: 'configured',
+      value: {
+        brain: 'http://agent-harness-service:8102/brain',
+        webApp: 'http://localhost:3005',
+      },
+    });
+  });
+
   test('needs the gateway, and URLs that parse, naming the key and never a value', () => {
     expect(addresses({ MACRO_API_KEY: 'mak_secret' })).toEqual({
       kind: 'invalid',
