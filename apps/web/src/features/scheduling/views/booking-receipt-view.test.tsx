@@ -100,5 +100,10 @@ it('keeps the visitor’s own clock whatever the calendar is set to', () => {
   setPreferences('timeFormat', '24-hour');
   onTestFinished(() => setPreferences('timeFormat', '12-hour'));
   renderReceipt(receipt());
-  expect(screen.getByText(/5:00\s?PM/)).toBeTruthy();
+  const visitorClock = new Date('2026-09-18T17:00:00Z').toLocaleString([], {
+    dateStyle: 'full',
+    timeStyle: 'short',
+    timeZone: 'UTC',
+  });
+  expect(screen.getByText(visitorClock)).toBeTruthy();
 });

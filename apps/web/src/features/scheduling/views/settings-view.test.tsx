@@ -831,11 +831,19 @@ it('shows the owner’s bookings on the calendar’s 24-hour clock', async () =>
   const card = await screen.findByRole('button', {
     name: /^Team planning with Guest,/,
   });
-  expect(screen.getAllByText(/^\d{2}:\d{2}$/).length).toBeGreaterThan(0);
-  expect(screen.queryAllByText(/\d:\d{2}\s?[AP]M/)).toHaveLength(0);
+  const clock = (hour12: boolean) =>
+    new Intl.DateTimeFormat(undefined, {
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12,
+    }).format(new Date(teammateBooking.startsAt));
+  expect(clock(false)).not.toBe(clock(true));
+  expect(screen.getAllByText(clock(false)).length).toBeGreaterThan(0);
+  expect(screen.queryAllByText(clock(true))).toHaveLength(0);
 
   fireEvent.click(card);
   const dialog = await screen.findByRole('dialog', { name: 'Booking details' });
-  expect(dialog.textContent).toMatch(/\d{2}:\d{2}/);
-  expect(dialog.textContent).not.toMatch(/\d:\d{2}\s?[AP]M/);
+  expect(dialog.textContent).toContain(clock(false));
+  expect(dialog.textContent).not.toContain(clock(true));
 });

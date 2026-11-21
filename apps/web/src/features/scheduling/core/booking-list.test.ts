@@ -110,24 +110,25 @@ describe('booking management', () => {
       startsAt: '2026-09-18T17:00:00Z',
       endsAt: '2026-09-18T18:00:00Z',
     });
-    expect(bookingTimeRangeDisplay(source, 'UTC', false).start.time).toBe(
-      '17:00'
-    );
-    expect(bookingTimeRange(source, 'UTC', false)).not.toMatch(/[AP]M/);
-    expect(bookingTimeRange(source, 'UTC', false)).toMatch(/17:00/);
-    expect(bookingTimeRangeDisplay(source, 'UTC', true).start.time).toBe(
-      '5:00 PM'
-    );
-    expect(bookingTimeRange(source, 'UTC')).toBe(
-      bookingTimeRange(source, 'UTC', undefined)
-    );
-    expect(bookingTimeRangeDisplay(source, 'UTC').start.time).toBe(
+    const clock = (hour12?: boolean) =>
       new Intl.DateTimeFormat(undefined, {
         timeZone: 'UTC',
         hour: 'numeric',
         minute: '2-digit',
-      }).format(new Date(source.startsAt))
+        ...(hour12 === undefined ? {} : { hour12 }),
+      }).format(new Date(source.startsAt));
+    expect(bookingTimeRangeDisplay(source, 'UTC', false).start.time).toBe(
+      clock(false)
     );
+    expect(bookingTimeRange(source, 'UTC', false)).toContain(clock(false));
+    expect(bookingTimeRangeDisplay(source, 'UTC', true).start.time).toBe(
+      clock(true)
+    );
+    expect(clock(false)).not.toBe(clock(true));
+    expect(bookingTimeRange(source, 'UTC')).toBe(
+      bookingTimeRange(source, 'UTC', undefined)
+    );
+    expect(bookingTimeRangeDisplay(source, 'UTC').start.time).toBe(clock());
   });
 
   it('keeps the end date visible for overnight bookings', () => {
