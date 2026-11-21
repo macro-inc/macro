@@ -47,7 +47,13 @@ as exact; bounded personal-contact windows use their separate policy below.
 Ordinary entity relevance keeps its fixed per-item score. Personal contacts use
 exact normalized names, then every query word prefixing a name word in any order,
 then literal contains, then address terms (`gmail.com`, or a local part unlike
-the name). Each tier is recent-first with stable identity ties: `jo sm`
+the name). Among the names, direct-message partners come first, then teammates
+the viewer never messaged, then everyone else, each group exact before
+word-start, so a teammate leads a stranger whose whole name is the query; a tab
+with the cache and one without list the same people alike. With
+`enable-contact-lists`, @mention windows rank those groups by contact list
+instead: interacted or invited, then teammates, then Gmail or Outlook contacts.
+Each tier is recent-first with stable identity ties: `jo sm`
 and `sm jo` can find John Smith; `jhn` cannot, while `ohn` can. Complete email
 addresses and Macro IDs are exact identities, never display-name aliases.
 Incomplete typed addresses use email-prefix matching.
