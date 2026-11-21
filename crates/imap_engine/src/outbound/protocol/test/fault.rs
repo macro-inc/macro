@@ -55,34 +55,85 @@ impl Proxy {
         let counted = connections.clone();
         let accepted = Arc::new(AtomicU32::new(0));
         let recorded = accepted.clone();
-        tasks.spawn(async move{
-            loop{
-                let (socket,_)=tokio::select!{_=done.cancelled()=>return,incoming=listener.accept()=>incoming.unwrap()};
-                counted.fetch_add(1,Ordering::AcqRel);
-                let acceptor=TlsAcceptor::from(Arc::new(config.clone()));let stopped=done.clone();let recorded=recorded.clone();
-                children.spawn(async move{
-                    let work=async{
-                        let mut client=acceptor.accept(socket).await.unwrap();
-                        let ca=std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docker/imap-lab/generated/ca.pem")).unwrap();
-                        let connector=Connector::new(LocalEndpoints{addresses:BTreeMap::from([("maillab.example.net:465".into(),"127.0.0.1:35465".into())]),trust_root_pem:Some(ca)}).unwrap();
-                        let endpoint=Endpoint{host:"maillab.example.net".into(),port:465,tls:TlsMode::Implicit,username:"unused".into()};
-                        let socket=connector.tcp(&endpoint).await.unwrap();let mut upstream=connector.tls(&endpoint,socket).await.unwrap();
-                        let (_,greeting)=response(&mut upstream).await.unwrap();client.write_all(&greeting).await.unwrap();
-                        loop{
-                            let Ok(command)=line(&mut client).await else{return;};
-                            if command.eq_ignore_ascii_case(b"DATA\r\n"){
-                                if let Fault::RejectData(code)=fault{client.write_all(format!("{code} injected refusal\r\n").as_bytes()).await.unwrap();return;}
+        tasks.spawn(async move {
+            loop {
+                let (socket, _) = tokio::select! {
+                    _ = done.cancelled() => return,
+                    incoming = listener.accept() => incoming.unwrap(),
+                };
+                counted.fetch_add(1, Ordering::AcqRel);
+                let acceptor = TlsAcceptor::from(Arc::new(config.clone()));
+                let stopped = done.clone();
+                let recorded = recorded.clone();
+
+                children.spawn(async move {
+                    let work = async {
+                        let mut client = acceptor.accept(socket).await.unwrap();
+                        let ca = std::fs::read_to_string(
+                            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                                .join("../../docker/imap-lab/generated/ca.pem"),
+                        )
+                        .unwrap();
+                        let connector = Connector::new(LocalEndpoints {
+                            addresses: BTreeMap::from([(
+                                "maillab.example.net:465".into(),
+                                "127.0.0.1:35465".into(),
+                            )]),
+                            trust_root_pem: Some(ca),
+                        })
+                        .unwrap();
+                        let endpoint = Endpoint {
+                            host: "maillab.example.net".into(),
+                            port: 465,
+                            tls: TlsMode::Implicit,
+                            username: "unused".into(),
+                        };
+                        let socket = connector.tcp(&endpoint).await.unwrap();
+                        let mut upstream = connector.tls(&endpoint, socket).await.unwrap();
+                        let (_, greeting) = response(&mut upstream).await.unwrap();
+                        client.write_all(&greeting).await.unwrap();
+
+                        loop {
+                            let Ok(command) = line(&mut client).await else {
+                                return;
+                            };
+                            if command.eq_ignore_ascii_case(b"DATA\r\n") {
+                                if let Fault::RejectData(code) = fault {
+                                    client
+                                        .write_all(
+                                            format!("{code} injected refusal\r\n").as_bytes(),
+                                        )
+                                        .await
+                                        .unwrap();
+                                    return;
+                                }
                             }
-                            upstream.write_all(&command).await.unwrap();let (code,reply)=response(&mut upstream).await.unwrap();client.write_all(&reply).await.unwrap();
-                            if code==354{
-                                loop{let data=line(&mut client).await.unwrap();upstream.write_all(&data).await.unwrap();if data==b".\r\n"{break;}}
-                                let (code,reply)=response(&mut upstream).await.unwrap();
-                                if code==250{recorded.fetch_add(1,Ordering::AcqRel);}
-                                match fault{Fault::LoseFinal=>return,Fault::RejectData(_)=>client.write_all(&reply).await.unwrap()}
+                            upstream.write_all(&command).await.unwrap();
+                            let (code, reply) = response(&mut upstream).await.unwrap();
+                            client.write_all(&reply).await.unwrap();
+                            if code == 354 {
+                                loop {
+                                    let data = line(&mut client).await.unwrap();
+                                    upstream.write_all(&data).await.unwrap();
+                                    if data == b".\r\n" {
+                                        break;
+                                    }
+                                }
+                                let (code, reply) = response(&mut upstream).await.unwrap();
+                                if code == 250 {
+                                    recorded.fetch_add(1, Ordering::AcqRel);
+                                }
+                                match fault {
+                                    Fault::LoseFinal => return,
+                                    Fault::RejectData(_) => client.write_all(&reply).await.unwrap(),
+                                }
                             }
                         }
                     };
-                    tokio::select!{_=stopped.cancelled()=>{},_=work=>{}}
+                    tokio::select! {
+                        _ = stopped.cancelled() => {},
+                        _ = work => {},
+                    }
                 });
             }
         });

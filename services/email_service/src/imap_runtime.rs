@@ -22,8 +22,16 @@ async fn refresh_inner(
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
-        tokio::select! {biased; _=cancellation.cancelled()=>return,_=interval.tick()=>{}}
-        let snapshot = tokio::select! {biased; _=cancellation.cancelled()=>return,snapshot=flags.load_service(ServiceContext::new("imap-mailbox-sync"))=>snapshot};
+        tokio::select! {
+            biased;
+            _ = cancellation.cancelled() => return,
+            _ = interval.tick() => {},
+        }
+        let snapshot = tokio::select! {
+            biased;
+            _ = cancellation.cancelled() => return,
+            snapshot = flags.load_service(ServiceContext::new("imap-mailbox-sync")) => snapshot,
+        };
         match snapshot {
             Ok(snapshot) => runtime.set(
                 snapshot.is_enabled("enable-imap-sync"),
@@ -49,7 +57,19 @@ pub async fn recover<R, G, F>(
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
-        tokio::select! {biased;_=cancellation.cancelled()=>return,_=interval.tick()=>{}}
-        tokio::select! {biased;_=cancellation.cancelled()=>return,result=service.recover_once()=>{if let Err(error)=result {tracing::warn!(error=%error,"IMAP connection recovery deferred");}}}
+        tokio::select! {
+            biased;
+            _ = cancellation.cancelled() => return,
+            _ = interval.tick() => {},
+        }
+        tokio::select! {
+            biased;
+            _ = cancellation.cancelled() => return,
+            result = service.recover_once() => {
+                if let Err(error) = result {
+                    tracing::warn!(error = %error, "IMAP connection recovery deferred");
+                }
+            },
+        }
     }
 }

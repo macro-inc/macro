@@ -24,8 +24,34 @@ async fn second_draft(
     .await
     .unwrap()
     .unwrap();
-    sqlx::query!("UPDATE email_mailbox_drafts SET available_at=now()-interval '2 minutes' WHERE message_id=$1",input.db_id).execute(db).await.unwrap();
-    sqlx::query!("UPDATE email_mailbox_drafts SET available_at=now()-interval '1 minute' WHERE message_id=$1",second.db_id).execute(db).await.unwrap();
+    sqlx::query!(
+        r#"
+        UPDATE
+            email_mailbox_drafts
+        SET
+            available_at = now() - interval '2 minutes'
+        WHERE
+            message_id = $1
+        "#,
+        input.db_id,
+    )
+    .execute(db)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        UPDATE
+            email_mailbox_drafts
+        SET
+            available_at = now() - interval '1 minute'
+        WHERE
+            message_id = $1
+        "#,
+        second.db_id,
+    )
+    .execute(db)
+    .await
+    .unwrap();
     second.db_id
 }
 
@@ -35,8 +61,16 @@ async fn a_locked_head_does_not_hide_its_same_mailbox_successor(db: PgPool) {
     let second = second_draft(&db, &repo, &input, link).await;
     let mut editor = db.begin().await.unwrap();
     sqlx::query!(
-        "SELECT message_id FROM email_mailbox_drafts WHERE message_id=$1 FOR UPDATE",
-        input.db_id
+        r#"
+        SELECT
+            message_id
+        FROM
+            email_mailbox_drafts
+        WHERE
+            message_id = $1
+        FOR UPDATE
+        "#,
+        input.db_id,
     )
     .fetch_one(&mut *editor)
     .await
@@ -70,8 +104,16 @@ async fn a_contended_queue_yields_after_its_candidate_budget(db: PgPool) {
     let mut editor = db.begin().await.unwrap();
     for id in &locked {
         sqlx::query!(
-            "SELECT message_id FROM email_mailbox_drafts WHERE message_id=$1 FOR UPDATE",
-            id
+            r#"
+            SELECT
+                message_id
+            FROM
+                email_mailbox_drafts
+            WHERE
+                message_id = $1
+            FOR UPDATE
+            "#,
+            id,
         )
         .fetch_one(&mut *editor)
         .await

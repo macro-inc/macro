@@ -104,7 +104,18 @@ impl IntoResponse for ApiError {
             Error::SendRejected => StatusCode::UNPROCESSABLE_ENTITY,
             Error::Throttled => StatusCode::TOO_MANY_REQUESTS,
         };
-        let mut response=(status,Json(serde_json::json!({"code":self.0,"retryAfterSeconds":if self.0==Error::Throttled{Some(5)}else{None}}))).into_response();
+        let mut response = (
+            status,
+            Json(serde_json::json!({
+                "code": self.0,
+                "retryAfterSeconds": if self.0 == Error::Throttled {
+                    Some(5)
+                } else {
+                    None
+                },
+            })),
+        )
+            .into_response();
         if self.0 == Error::Throttled {
             response
                 .headers_mut()

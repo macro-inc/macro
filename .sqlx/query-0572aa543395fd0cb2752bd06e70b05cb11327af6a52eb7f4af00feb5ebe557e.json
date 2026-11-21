@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO imap_idle_hosts (host_hash, state)\n                VALUES ($1, $2)\n            ON CONFLICT (host_hash)\n                DO UPDATE SET\n                    state = EXCLUDED.state,\n                    updated_at = now()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0572aa543395fd0cb2752bd06e70b05cb11327af6a52eb7f4af00feb5ebe557e"
+}

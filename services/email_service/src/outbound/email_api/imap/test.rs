@@ -48,7 +48,13 @@ async fn an_imap_catalog_not_found_is_an_error_not_a_graph_mailbox_absence() {
 async fn an_empty_imap_catalog_is_success_without_graph_mailbox_classification(db: PgPool) {
     let server = MockServer::start().await;
     let link = Uuid::now_v7();
-    sqlx::query!("INSERT INTO email_links(id,macro_id,fusionauth_user_id,email_address,provider,grant_generation) VALUES($1,'macro|imap@example.com','imap-owner','imap@example.com','IMAP',1)",link).execute(&db).await.unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider, grant_generation)
+            VALUES ($1, 'macro|imap@example.com', 'imap-owner', 'imap@example.com', 'IMAP', 1)
+        "#,
+        link,
+    ).execute(&db).await.unwrap();
     Mock::given(method("POST"))
         .and(path(format!("/internal/v1/accounts/{link}/operations")))
         .and(header("x-mailbox-binding", "1.1"))

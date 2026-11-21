@@ -395,7 +395,16 @@ impl EmailPgRepo {
                 // Outlook workers lock mailbox, message, then schedule. Match
                 // that order while revoking their pending draft revision.
                 sqlx::query!(
-                    "SELECT id FROM email_links WHERE id = $1 AND provider IN ('OUTLOOK','IMAP') FOR SHARE",
+                    r#"
+                    SELECT
+                        id
+                    FROM
+                        email_links
+                    WHERE
+                        id = $1
+                        AND provider IN ('OUTLOOK', 'IMAP')
+                        FOR SHARE
+                    "#,
                     link,
                 )
                 .fetch_optional(&mut *tx)

@@ -123,61 +123,212 @@ impl DraftRepository for PgMailboxSync {
             if skipped.len() == MAX_DRAFT_CLAIM_CANDIDATES {
                 break None;
             }
-            let head=sqlx::query_scalar!(r#"
-                SELECT head.message_id AS "message_id!" FROM email_links l
-                CROSS JOIN LATERAL (
-                    SELECT scoped.message_id,scoped.available_at FROM (
-                        (SELECT d.message_id,d.available_at FROM email_mailbox_drafts d
-                        WHERE $1 AND d.link_id=l.id AND d.generation=l.sync_generation
-                            AND d.state IN ('pending','running','synced')
-                            AND NOT(d.message_id=ANY($3))
-                            AND (d.state IN ('pending','running') OR (d.state='synced' AND EXISTS(
-                                SELECT 1 FROM email_scheduled_messages schedule WHERE schedule.message_id=d.message_id
-                                    AND schedule.link_id=d.link_id AND NOT schedule.sent AND NOT schedule.processing AND schedule.send_time<=now())))
-                            AND NOT EXISTS(SELECT 1 FROM email_mailbox_command_targets target JOIN email_mailbox_commands command ON command.id=target.command_id
-                                WHERE target.message_id=d.message_id AND command.lease_id IS NOT NULL AND command.lease_until>now() OFFSET 0)
-                            AND d.available_at<=now() AND (d.lease_until IS NULL OR d.lease_until<now())
-                        ORDER BY d.available_at,d.message_id LIMIT 1)
-                        UNION ALL
-                        (SELECT d.message_id,d.available_at FROM email_mailbox_drafts d
-                        WHERE NOT $1 AND d.checkpoint->>'stage' IN ('creating','submitting','confirming') AND d.link_id=l.id AND d.generation=l.sync_generation
-                            AND d.state IN ('pending','running','synced')
-                            AND NOT(d.message_id=ANY($3))
-                            AND (d.state IN ('pending','running') OR (d.state='synced' AND EXISTS(
-                                SELECT 1 FROM email_scheduled_messages schedule WHERE schedule.message_id=d.message_id
-                                    AND schedule.link_id=d.link_id AND NOT schedule.sent AND NOT schedule.processing AND schedule.send_time<=now())))
-                            AND NOT EXISTS(SELECT 1 FROM email_mailbox_command_targets target JOIN email_mailbox_commands command ON command.id=target.command_id
-                                WHERE target.message_id=d.message_id AND command.lease_id IS NOT NULL AND command.lease_until>now() OFFSET 0)
-                            AND d.available_at<=now() AND (d.lease_until IS NULL OR d.lease_until<now())
-                        ORDER BY d.available_at,d.message_id LIMIT 1)
-                    ) scoped ORDER BY scoped.available_at,scoped.message_id LIMIT 1
-                ) head
-                WHERE l.is_sync_active AND l.mailbox_unavailable_at IS NULL AND l.provider=$2::text::email_user_provider_enum
-                ORDER BY head.available_at,head.message_id LIMIT 1
-            "#,mode==DraftClaimMode::All,self.provider.as_str(),&skipped).fetch_optional(&mut *tx).await.map_err(db_error)?;
+            let head=sqlx::query_scalar!(
+                r#"
+                SELECT
+                    head.message_id AS "message_id!"
+                FROM
+                    email_links l
+                    CROSS JOIN LATERAL (
+                        SELECT
+                            scoped.message_id,
+                            scoped.available_at
+                        FROM ((
+                                SELECT
+                                    d.message_id,
+                                    d.available_at
+                                FROM
+                                    email_mailbox_drafts d
+                                WHERE
+                                    $1
+                                    AND d.link_id = l.id
+                                    AND d.generation = l.sync_generation
+                                    AND d.state IN ('pending', 'running', 'synced')
+                                    AND NOT (d.message_id = ANY ($3))
+                                    AND (d.state IN ('pending', 'running')
+                                        OR (d.state = 'synced'
+                                            AND EXISTS (
+                                                SELECT
+                                                    1
+                                                FROM
+                                                    email_scheduled_messages schedule
+                                                WHERE
+                                                    schedule.message_id = d.message_id
+                                                    AND schedule.link_id = d.link_id
+                                                    AND NOT schedule.sent
+                                                    AND NOT schedule.processing
+                                                    AND schedule.send_time <= now())))
+                                    AND NOT EXISTS (
+                                        SELECT
+                                            1
+                                        FROM
+                                            email_mailbox_command_targets target
+                                            JOIN email_mailbox_commands command ON command.id = target.command_id
+                                        WHERE
+                                            target.message_id = d.message_id
+                                            AND command.lease_id IS NOT NULL
+                                            AND command.lease_until > now()
+                                            OFFSET 0)
+                                    AND d.available_at <= now()
+                                    AND (d.lease_until IS NULL
+                                        OR d.lease_until < now())
+                                ORDER BY
+                                    d.available_at,
+                                    d.message_id
+                                LIMIT 1)
+                        UNION ALL (
+                            SELECT
+                                d.message_id,
+                                d.available_at
+                            FROM
+                                email_mailbox_drafts d
+                            WHERE
+                                NOT $1
+                                AND d.checkpoint ->> 'stage' IN ('creating', 'submitting', 'confirming')
+                                AND d.link_id = l.id
+                                AND d.generation = l.sync_generation
+                                AND d.state IN ('pending', 'running', 'synced')
+                                AND NOT (d.message_id = ANY ($3))
+                                AND (d.state IN ('pending', 'running')
+                                    OR (d.state = 'synced'
+                                        AND EXISTS (
+                                            SELECT
+                                                1
+                                            FROM
+                                                email_scheduled_messages schedule
+                                            WHERE
+                                                schedule.message_id = d.message_id
+                                                AND schedule.link_id = d.link_id
+                                                AND NOT schedule.sent
+                                                AND NOT schedule.processing
+                                                AND schedule.send_time <= now())))
+                                AND NOT EXISTS (
+                                    SELECT
+                                        1
+                                    FROM
+                                        email_mailbox_command_targets target
+                                        JOIN email_mailbox_commands command ON command.id = target.command_id
+                                    WHERE
+                                        target.message_id = d.message_id
+                                        AND command.lease_id IS NOT NULL
+                                        AND command.lease_until > now()
+                                        OFFSET 0)
+                                AND d.available_at <= now()
+                                AND (d.lease_until IS NULL
+                                    OR d.lease_until < now())
+                            ORDER BY
+                                d.available_at,
+                                d.message_id
+                            LIMIT 1)) scoped
+                ORDER BY
+                    scoped.available_at,
+                    scoped.message_id
+                LIMIT 1) head
+                WHERE
+                    l.is_sync_active
+                    AND l.mailbox_unavailable_at IS NULL
+                    AND l.provider = $2::text::email_user_provider_enum
+                ORDER BY
+                    head.available_at,
+                    head.message_id
+                LIMIT 1
+                "#,
+                mode==DraftClaimMode::All,
+                self.provider.as_str(),
+                &skipped,
+            ).fetch_optional(&mut *tx).await.map_err(db_error)?;
             let Some(head) = head else {
                 break None;
             };
-            let leased = sqlx::query!(r#"
-            WITH candidate AS (
-                SELECT d.message_id FROM email_mailbox_drafts d
-                WHERE d.message_id=$4 AND d.state IN ('pending','running','synced')
-                    AND EXISTS(SELECT 1 FROM email_links l WHERE l.id=d.link_id AND l.is_sync_active AND l.mailbox_unavailable_at IS NULL
-                        AND l.provider=$3::text::email_user_provider_enum AND l.sync_generation=d.generation OFFSET 0)
-                    AND (d.state IN ('pending','running') OR (d.state = 'synced' AND EXISTS (
-                        SELECT 1 FROM email_scheduled_messages s WHERE s.message_id = d.message_id AND s.link_id = d.link_id
-                            AND NOT s.sent AND NOT s.processing AND s.send_time <= now())))
-                    AND ($2 OR d.checkpoint->>'stage' IN ('creating','submitting','confirming'))
-                    AND NOT EXISTS(SELECT 1 FROM email_mailbox_command_targets target JOIN email_mailbox_commands command ON command.id=target.command_id
-                        WHERE target.message_id=d.message_id AND command.lease_id IS NOT NULL AND command.lease_until>now() OFFSET 0)
-                    AND d.available_at <= now() AND (d.lease_until IS NULL OR d.lease_until < now())
-                ORDER BY d.available_at,d.message_id LIMIT 1 FOR UPDATE OF d SKIP LOCKED
-            )
-            UPDATE email_mailbox_drafts d SET claimed_content = d.desired_content,state = 'running', lease_id = $1,lease_until = now() + interval '3 minutes',updated_at = now()
-            FROM candidate c,email_links l WHERE c.message_id = d.message_id AND l.id = d.link_id
-            RETURNING d.message_id,d.link_id,d.generation,l.grant_generation,d.revision,d.actor_id,d.desired_content,
-                d.provider_id,d.base_version,d.delete_requested,d.checkpoint
-        "#,lease_id,mode==DraftClaimMode::All, self.provider.as_str(),head).fetch_optional(&mut *tx).await.map_err(db_error)?;
+            let leased = sqlx::query!(
+                r#"
+                WITH candidate AS (
+                    SELECT
+                        d.message_id
+                    FROM
+                        email_mailbox_drafts d
+                    WHERE
+                        d.message_id = $4
+                        AND d.state IN ('pending', 'running', 'synced')
+                        AND EXISTS (
+                            SELECT
+                                1
+                            FROM
+                                email_links l
+                            WHERE
+                                l.id = d.link_id
+                                AND l.is_sync_active
+                                AND l.mailbox_unavailable_at IS NULL
+                                AND l.provider = $3::text::email_user_provider_enum
+                                AND l.sync_generation = d.generation OFFSET 0)
+                        AND (d.state IN ('pending', 'running')
+                            OR (d.state = 'synced'
+                                AND EXISTS (
+                                    SELECT
+                                        1
+                                    FROM
+                                        email_scheduled_messages s
+                                    WHERE
+                                        s.message_id = d.message_id
+                                        AND s.link_id = d.link_id
+                                        AND NOT s.sent
+                                        AND NOT s.processing
+                                        AND s.send_time <= now())))
+                        AND ($2
+                            OR d.checkpoint ->> 'stage' IN ('creating', 'submitting', 'confirming'))
+                        AND NOT EXISTS (
+                            SELECT
+                                1
+                            FROM
+                                email_mailbox_command_targets target
+                                JOIN email_mailbox_commands command ON command.id = target.command_id
+                            WHERE
+                                target.message_id = d.message_id
+                                AND command.lease_id IS NOT NULL
+                                AND command.lease_until > now()
+                                OFFSET 0)
+                        AND d.available_at <= now()
+                        AND (d.lease_until IS NULL
+                            OR d.lease_until < now())
+                    ORDER BY
+                        d.available_at,
+                        d.message_id
+                    LIMIT 1
+                    FOR UPDATE
+                        OF d SKIP LOCKED
+                )
+                UPDATE
+                    email_mailbox_drafts d
+                SET
+                    claimed_content = d.desired_content,
+                    state = 'running',
+                    lease_id = $1,
+                    lease_until = now() + interval '3 minutes',
+                    updated_at = now()
+                FROM
+                    candidate c,
+                    email_links l
+                WHERE
+                    c.message_id = d.message_id
+                    AND l.id = d.link_id
+                RETURNING
+                    d.message_id,
+                    d.link_id,
+                    d.generation,
+                    l.grant_generation,
+                    d.revision,
+                    d.actor_id,
+                    d.desired_content,
+                    d.provider_id,
+                    d.base_version,
+                    d.delete_requested,
+                    d.checkpoint
+                "#,
+                lease_id,
+                mode==DraftClaimMode::All,
+                self.provider.as_str(),
+                head,
+            ).fetch_optional(&mut *tx).await.map_err(db_error)?;
             if leased.is_some() {
                 break leased;
             }

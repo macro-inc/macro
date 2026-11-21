@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            (macro_id = $2\n                OR EXISTS (\n                    SELECT\n                        1\n                    FROM\n                        macro_user_links u\n                    WHERE\n                        u.link_id = email_links.id\n                        AND u.primary_macro_id = $2)) AS \"authorized!\"\n        FROM\n            email_links\n        WHERE\n            id = $1\n            AND provider IN ('OUTLOOK', 'IMAP')\n            FOR SHARE\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "authorized!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "400c158d7ccd01188f8cb8ba3b4b69506c9c48f7063e6579ff49d67a11d618eb"
+}

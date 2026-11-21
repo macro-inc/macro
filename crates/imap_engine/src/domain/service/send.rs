@@ -226,7 +226,10 @@ impl Engine {
         let mut heartbeat = tokio::time::interval(std::time::Duration::from_secs(60));
         heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         let transport_result = loop {
-            tokio::select! {result=&mut submission=>break result,_=heartbeat.tick()=>self.repository.renew(a).await?,}
+            tokio::select! {
+                result = &mut submission => break result,
+                _ = heartbeat.tick() => self.repository.renew(a).await?,
+            }
         };
         let outcome = match transport_result {
             Ok(result) => {

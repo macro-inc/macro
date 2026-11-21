@@ -9,19 +9,85 @@ impl ImapNotificationRepository for PgMailboxSync {
         credentials_rejected: bool,
     ) -> Result<(), MailboxError> {
         let mut tx = self.begin().await.map_err(db_error)?;
-        let current=sqlx::query!("SELECT needs_reauth FROM email_links WHERE id=$1 AND provider='IMAP' AND is_sync_active AND sync_generation=$2 AND grant_generation=$3 FOR UPDATE",mailbox.link_id,mailbox.sync_generation,mailbox.grant_generation).fetch_optional(&mut *tx).await.map_err(db_error)?;
+        let current = sqlx::query!(
+            r#"
+            SELECT
+                needs_reauth
+            FROM
+                email_links
+            WHERE
+                id = $1
+                AND provider = 'IMAP'
+                AND is_sync_active
+                AND sync_generation = $2
+                AND grant_generation = $3
+            FOR UPDATE
+            "#,
+            mailbox.link_id,
+            mailbox.sync_generation,
+            mailbox.grant_generation,
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(db_error)?;
         // Delayed notifications after reconnect or disconnect are intentionally ignored.
         let Some(current) = current else {
             return Ok(());
         };
         if credentials_rejected && !current.needs_reauth {
-            sqlx::query!("UPDATE email_links SET needs_reauth=true,last_sync_error_at=now(),updated_at=now() WHERE id=$1",mailbox.link_id).execute(&mut *tx).await.map_err(db_error)?;
+            sqlx::query!(
+                r#"
+                UPDATE
+                    email_links
+                SET
+                    needs_reauth = true,
+                    last_sync_error_at = now(),
+                    updated_at = now()
+                WHERE
+                    id = $1
+                "#,
+                mailbox.link_id,
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(db_error)?;
             let event = serde_json::to_value(ProjectionEvent::ReauthorizationRequired)
                 .map_err(|_| MailboxError::Persistence)?;
-            sqlx::query!("INSERT INTO email_projection_outbox(id,link_id,generation,payload) VALUES($1,$2,$3,$4)",macro_uuid::generate_uuid_v7(),mailbox.link_id,mailbox.sync_generation,event).execute(&mut *tx).await.map_err(db_error)?;
+            sqlx::query!(
+                r#"
+                INSERT INTO email_projection_outbox (id, link_id, generation, payload)
+                    VALUES ($1, $2, $3, $4)
+                "#,
+                macro_uuid::generate_uuid_v7(),
+                mailbox.link_id,
+                mailbox.sync_generation,
+                event,
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(db_error)?;
         }
         if !credentials_rejected {
-            sqlx::query!("UPDATE email_sync_streams SET notified_at=clock_timestamp(),notified_traceparent=$3,next_run_at=now() WHERE link_id=$1 AND generation=$2 AND kind IN ('folder_catalog','mail_folder')",mailbox.link_id,mailbox.sync_generation,crate::trace_context::current()).execute(&mut *tx).await.map_err(db_error)?;
+            sqlx::query!(
+                r#"
+                UPDATE
+                    email_sync_streams
+                SET
+                    notified_at = clock_timestamp(),
+                    notified_traceparent = $3,
+                    next_run_at = now()
+                WHERE
+                    link_id = $1
+                    AND generation = $2
+                    AND kind IN ('folder_catalog', 'mail_folder')
+                "#,
+                mailbox.link_id,
+                mailbox.sync_generation,
+                crate::trace_context::current(),
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(db_error)?;
         }
         tx.commit().await.map_err(db_error)
     }

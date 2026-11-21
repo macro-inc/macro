@@ -1,0 +1,66 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                                SELECT\n                                    kind,\n                                    key,\n                                    folder_id,\n                                    message_id,\n                                    sequence,\n                                    received_at,\n                                    document,\n                                    body\n                                FROM\n                                    imap_state_entries\n                                WHERE\n                                    link_id = $1\n                                    AND kind = 'message'\n                                    AND folder_id = ANY ($2)\n                                ORDER BY\n                                    received_at DESC,\n                                    key\n                                LIMIT $3\n                                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "folder_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "message_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "sequence",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "received_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "document",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 7,
+        "name": "body",
+        "type_info": "Bytea"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "d707b1d9d44c217342c4bda84dfe06e6aa399c4f88d1cafd75cd242cddc4e6d1"
+}

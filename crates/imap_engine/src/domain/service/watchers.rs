@@ -87,14 +87,22 @@ impl Engine {
                 match result {
                     Ok(()) => {
                         failures = 0;
-                        tokio::select! { biased; _ = done.cancelled() => return, _ = tokio::time::sleep(Duration::from_millis(450)) => {} }
+                        tokio::select! {
+                            biased;
+                            _ = done.cancelled() => return,
+                            _ = tokio::time::sleep(Duration::from_millis(450)) => {},
+                        }
                         changed.notify_one();
                     }
                     Err(Error::CredentialsRejected | Error::Forbidden | Error::NotFound | Error::Conflict) => return,
                     Err(_) => {
                         failures = failures.saturating_add(1);
                         let retry = 2u64.pow(failures.min(8)).min(300);
-                        tokio::select! { biased; _ = done.cancelled() => return, _ = tokio::time::sleep(Duration::from_secs(retry)) => {} }
+                        tokio::select! {
+                            biased;
+                            _ = done.cancelled() => return,
+                            _ = tokio::time::sleep(Duration::from_secs(retry)) => {},
+                        }
                     }
                 }
             }

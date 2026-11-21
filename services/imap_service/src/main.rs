@@ -57,9 +57,13 @@ async fn main() -> Result<(), rootcause::Report> {
         .max_connections(10)
         .after_connect(|connection, _| {
             Box::pin(async move {
-                sqlx::query!("SET statement_timeout = '30s'")
-                    .execute(connection)
-                    .await?;
+                sqlx::query!(
+                    r#"
+                    SET statement_timeout = '30s'
+                    "#,
+                )
+                .execute(connection)
+                .await?;
                 Ok(())
             })
         })

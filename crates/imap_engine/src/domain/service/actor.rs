@@ -116,7 +116,12 @@ impl Engine {
                     policy.restart_seconds(&host)
                 };
                 let started = tokio::time::Instant::now();
-                let result = tokio::select! {biased;_=cancellation.cancelled()=>return Ok(()),_=wake.notified()=>Ok(()),result=self.transport.wait_change(&credentials,interval)=>result};
+                let result = tokio::select! {
+                    biased;
+                    _ = cancellation.cancelled() => return Ok(()),
+                    _ = wake.notified() => Ok(()),
+                    result = self.transport.wait_change(&credentials, interval) => result,
+                };
                 drop(credentials);
                 let elapsed =
                     u64::try_from(started.elapsed().as_millis()).map_err(|_| Error::Invalid)?;
@@ -153,7 +158,11 @@ impl Engine {
                 }
                 result
             }.instrument(tracing::info_span!(parent: None, "imap.account_round", link_id = %binding.link_id, retry_count = failures));
-            let outcome = tokio::select! {biased;_=cancellation.cancelled()=>return Ok(()),result=work=>result};
+            let outcome = tokio::select! {
+                biased;
+                _ = cancellation.cancelled() => return Ok(()),
+                result = work => result,
+            };
             match outcome {
                 Ok(()) => {
                     credential_refusals = 0;
@@ -200,7 +209,12 @@ impl Engine {
                 let seconds = 2u64.pow(failures.min(9)).min(900);
                 let jitter = u64::try_from(Uuid::now_v7().as_u128() % u128::from(seconds * 1000))
                     .map_err(|_| Error::Invalid)?;
-                tokio::select! {biased;_=cancellation.cancelled()=>return Ok(()),_=wake.notified()=>{},_=tokio::time::sleep(Duration::from_millis(1000+jitter))=>{}}
+                tokio::select! {
+                    biased;
+                    _ = cancellation.cancelled() => return Ok(()),
+                    _ = wake.notified() => {},
+                    _ = tokio::time::sleep(Duration::from_millis(1000 + jitter)) => {},
+                }
             }
         }
     }

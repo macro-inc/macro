@@ -1,0 +1,66 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                l.provider = $3::text::email_user_provider_enum AS \"outlook!\",\n                l.is_sync_active\n                AND NOT l.needs_reauth AS \"active!\",\n                l.sync_generation,\n                l.grant_generation,\n                EXISTS (\n                    SELECT\n                        1\n                    FROM\n                        email_sync_streams s\n                    WHERE\n                        s.link_id = l.id\n                        AND s.generation = l.sync_generation\n                        AND s.kind IN ('folder_catalog', 'mail_folder')\n                        AND NOT s.initial_complete)\n                OR EXISTS (\n                    SELECT\n                        1\n                    FROM\n                        email_message_reconciliation q\n                    WHERE\n                        q.link_id = l.id\n                        AND q.generation = l.sync_generation\n                        AND q.is_import\n                        AND q.available_at <> 'infinity') AS \"importing!\",\n                due.inbox_and_sent AS \"inbox_and_sent!\",\n                due.other_folders AS \"other_folders!\",\n                (\n                    SELECT\n                        sum(f.total_item_count)\n                    FROM\n                        email_mailbox_folders f\n                    WHERE\n                        f.link_id = l.id\n                        AND f.deleted_at IS NULL)::bigint AS provider_items\n            FROM\n                email_links l\n                CROSS JOIN LATERAL (\n                    SELECT\n                        count(*) FILTER (WHERE f.role IN ('inbox', 'sent')) AS inbox_and_sent,\n                        count(*) FILTER (WHERE f.role NOT IN ('inbox', 'sent')) AS other_folders\n                    FROM\n                        email_sync_streams s\n                        JOIN email_mailbox_folders f ON f.link_id = s.link_id\n                            AND f.provider_id = s.scope_id\n                    WHERE\n                        s.link_id = l.id\n                        AND s.generation = l.sync_generation\n                        AND s.kind = 'mail_folder'\n                        AND f.deleted_at IS NULL\n                        AND (s.reader_revision IS NULL\n                            OR s.reader_revision < $2)) due\n            WHERE\n                l.id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "outlook!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "active!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "sync_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "grant_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "importing!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "inbox_and_sent!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "other_folders!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "provider_items",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int2",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      false,
+      false,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "b51cb713c49c413d7499cae734599d3dbee7914a571fa25eb357eb6095be9318"
+}

@@ -11,11 +11,25 @@ impl ImapSettingsAccessRepository for PgImapConnections {
         link: Uuid,
     ) -> Result<Option<ImapSettingsAccess>, ImapConnectionError> {
         let row = sqlx::query!(
-            r#"SELECT macro_id, provider='IMAP' AS "uses_imap!",
-                      is_sync_active AND disconnect_requested_at IS NULL AND deleting_at IS NULL AS "active!",
-                      sync_generation,grant_generation FROM email_links WHERE id=$1"#,
+            r#"
+            SELECT
+                macro_id,
+                provider = 'IMAP' AS "uses_imap!",
+                is_sync_active
+                AND disconnect_requested_at IS NULL
+                AND deleting_at IS NULL AS "active!",
+                sync_generation,
+                grant_generation
+            FROM
+                email_links
+            WHERE
+                id = $1
+            "#,
             link,
-        ).fetch_optional(&self.0).await.map_err(super::imap_connection::failure)?;
+        )
+        .fetch_optional(&self.0)
+        .await
+        .map_err(super::imap_connection::failure)?;
         row.map(|row| {
             Ok(ImapSettingsAccess {
                 owner: MacroUserIdStr::try_from(row.macro_id)

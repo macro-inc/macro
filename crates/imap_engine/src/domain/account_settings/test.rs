@@ -140,7 +140,17 @@ fn deleting_a_manual_destination_restores_the_detected_role() {
 
 #[test]
 fn legacy_folder_settings_default_to_monitored() {
-    let old = serde_json::json!({"id":"folder","name":"Folder","detectedRole":"other","effectiveRole":"other","roleOverride":null,"excluded":false,"watched":false});
+    let old = serde_json::json!(
+    {
+        "id": "folder",
+        "name": "Folder",
+        "detectedRole": "other",
+        "effectiveRole": "other",
+        "roleOverride": null,
+        "excluded": false,
+        "watched": false
+    }
+    );
     assert!(
         serde_json::from_value::<FolderSetting>(old)
             .unwrap()

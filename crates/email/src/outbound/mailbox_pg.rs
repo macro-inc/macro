@@ -81,10 +81,14 @@ impl PgMailboxSync {
     /// even when many due rows are temporarily ineligible.
     async fn begin_claim(&self) -> Result<sqlx::Transaction<'_, sqlx::Postgres>, MailboxError> {
         let mut tx = self.begin().await.map_err(db_error)?;
-        sqlx::query!("SET LOCAL statement_timeout = '15s'")
-            .execute(&mut *tx)
-            .await
-            .map_err(db_error)?;
+        sqlx::query!(
+            r#"
+            SET LOCAL statement_timeout = '15s'
+            "#,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(db_error)?;
         Ok(tx)
     }
 
@@ -95,10 +99,14 @@ impl PgMailboxSync {
         &self,
     ) -> Result<sqlx::Transaction<'_, sqlx::Postgres>, MailboxError> {
         let mut tx = self.begin().await.map_err(db_error)?;
-        sqlx::query!("SET LOCAL statement_timeout = '15s'")
-            .execute(&mut *tx)
-            .await
-            .map_err(db_error)?;
+        sqlx::query!(
+            r#"
+            SET LOCAL statement_timeout = '15s'
+            "#,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(db_error)?;
         sqlx::query!("SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended('email.outlook.mutation-claims',0))")
             .fetch_one(&mut *tx).await.map_err(db_error)?;
         Ok(tx)
@@ -395,11 +403,30 @@ impl MailboxSyncRepository for PgMailboxSync {
     }
 
     async fn folders(&self, mailbox: MailboxKey) -> Result<Vec<MailFolder>, MailboxError> {
-        let rows = sqlx::query!(r#"
-            SELECT f.provider_id,f.parent_id,f.display_name,f.role,f.total_item_count,f.sync_enabled FROM email_mailbox_folders f
-            JOIN email_links l ON l.id = f.link_id
-            WHERE f.link_id = $1 AND l.sync_generation = $2 AND l.is_sync_active AND f.deleted_at IS NULL
-        "#,mailbox.link_id,mailbox.sync_generation).fetch_all(&self.db).await.map_err(db_error)?;
+        let rows = sqlx::query!(
+            r#"
+            SELECT
+                f.provider_id,
+                f.parent_id,
+                f.display_name,
+                f.role,
+                f.total_item_count,
+                f.sync_enabled
+            FROM
+                email_mailbox_folders f
+                JOIN email_links l ON l.id = f.link_id
+            WHERE
+                f.link_id = $1
+                AND l.sync_generation = $2
+                AND l.is_sync_active
+                AND f.deleted_at IS NULL
+            "#,
+            mailbox.link_id,
+            mailbox.sync_generation,
+        )
+        .fetch_all(&self.db)
+        .await
+        .map_err(db_error)?;
         rows.into_iter()
             .map(|row| {
                 Ok(MailFolder {
@@ -591,11 +618,10 @@ impl PgMailboxSync {
         .map_err(|_| MailboxError::Persistence)?;
         sqlx::query!(
             r#"
-            INSERT INTO email_projection_outbox (
-                id, link_id, generation, payload, dedupe_key
-            )
-            VALUES ($1, $2, $3, $4, $5)
-            ON CONFLICT (dedupe_key) DO NOTHING
+            INSERT INTO email_projection_outbox (id, link_id, generation, payload, dedupe_key)
+                VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (dedupe_key)
+                DO NOTHING
             "#,
             macro_uuid::generate_uuid_v7(),
             mailbox.link_id,

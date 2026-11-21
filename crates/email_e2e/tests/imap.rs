@@ -137,7 +137,19 @@ async fn imap_connect_receive_isolate_and_send() -> Result<(), Report> {
     );
     let other_settings = bob.get(&settings_path).await?;
     assert!(matches!(other_settings.status, 403 | 404));
-    let update = json!({"expectedRevision":settings["revision"],"roleOverrides":{},"excludedFolderIds":[],"watchedFolderIds":[]});
+    let update = json!(
+    {
+        "expectedRevision": settings[
+            "revision"
+        ],
+        "roleOverrides": {
+        },
+        "excludedFolderIds": [
+        ],
+        "watchedFolderIds": [
+        ]
+    }
+    );
     alice
         .request(Method::PATCH, &settings_path, None, Some(&update))
         .await?
@@ -252,7 +264,32 @@ async fn imap_connect_receive_isolate_and_send() -> Result<(), Report> {
     .await?;
 
     let sent_subject = format!("Real SMTP {}", Uuid::now_v7());
-    alice.request(Method::POST, "/email/messages", Some(alice_link), Some(&json!({"message":{"subject":sent_subject,"to":[{"email":"recipient@example.net"}],"bcc":[{"email":"blind@example.net"}],"body_text":"Sent through the account's own SMTP submission."}}))).await?.ok()?;
+    alice
+        .request(
+            Method::POST,
+            "/email/messages",
+            Some(alice_link),
+            Some(&json!(
+            {
+                "message": {
+                    "subject": sent_subject,
+                    "to": [
+                        {
+                            "email": "recipient@example.net"
+                        }
+                    ],
+                    "bcc": [
+                        {
+                            "email": "blind@example.net"
+                        }
+                    ],
+                    "body_text": "Sent through the account's own SMTP submission."
+                }
+            }
+            )),
+        )
+        .await?
+        .ok()?;
     eventually(
         "one real SMTP delivery in Mailpit",
         DEFAULT_TIMEOUT,

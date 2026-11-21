@@ -25,8 +25,8 @@ pub(crate) async fn run(
     loop {
         tokio::select! {
             biased;
-            _=cancellation.cancelled()=>break,
-            _=interval.tick()=>{},
+            _ = cancellation.cancelled() => break,
+            _ = interval.tick() => {},
         }
         schedule_round(&engine, flags.as_ref(), &cancellation, &tasks, &mut owners).await;
     }
@@ -46,8 +46,8 @@ async fn schedule_round(
     if let Some(flags) = flags {
         let snapshot = tokio::select! {
             biased;
-            _=cancellation.cancelled()=>return,
-            result=flags.load_service(ServiceContext::new("imap-mailbox-sync"))=>result,
+            _ = cancellation.cancelled() => return,
+            result = flags.load_service(ServiceContext::new("imap-mailbox-sync")) => result,
         };
         match snapshot {
             Ok(snapshot) => engine.set_runtime(
@@ -116,7 +116,11 @@ pub(crate) async fn configuration_notifications(
     cancellation: CancellationToken,
 ) {
     loop {
-        let notification = tokio::select! {biased;_=cancellation.cancelled()=>return,result=listener.recv()=>result};
+        let notification = tokio::select! {
+            biased;
+            _ = cancellation.cancelled() => return,
+            result = listener.recv() => result,
+        };
         match notification {
             Ok(notification) => {
                 if let Ok(link) = notification.payload().parse::<Uuid>() {
@@ -126,7 +130,11 @@ pub(crate) async fn configuration_notifications(
             Err(error) => {
                 tracing::warn!(?error, "IMAP configuration notification connection lost");
                 // PgListener reconnects on the next receive; pace failed reconnects while DB is unavailable.
-                tokio::select! {biased;_=cancellation.cancelled()=>return,_=tokio::time::sleep(Duration::from_secs(1))=>{}}
+                tokio::select! {
+                    biased;
+                    _ = cancellation.cancelled() => return,
+                    _ = tokio::time::sleep(Duration::from_secs(1)) => {},
+                }
             }
         }
     }

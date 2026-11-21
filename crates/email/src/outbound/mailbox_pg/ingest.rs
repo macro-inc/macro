@@ -317,14 +317,73 @@ impl PgMailboxSync {
             };
             let action = serde_json::to_value(action).map_err(|_| MailboxError::Persistence)?;
             let pending = serde_json::to_value(pending).map_err(|_| MailboxError::Persistence)?;
-            let command=sqlx::query_scalar!(r#"INSERT INTO email_mailbox_commands(id,link_id,generation,actor_id,intent,status)
-                SELECT $1,l.id,l.sync_generation,l.macro_id,$4,'pending' FROM email_links l WHERE l.id=$2 AND l.sync_generation=$3
-                AND NOT EXISTS(SELECT 1 FROM email_mailbox_commands c JOIN email_mailbox_command_targets t ON t.command_id=c.id
-                    WHERE c.link_id=l.id AND c.generation=l.sync_generation AND t.message_id=$5 AND c.intent=$4 AND c.status IN ('pending','running','confirming')) RETURNING id"#,macro_uuid::generate_uuid_v7(),lease.mailbox.link_id,lease.mailbox.sync_generation,action,message_id).fetch_optional(&mut *tx).await.map_err(db_error)?;
+            let command=sqlx::query_scalar!(
+                r#"
+                INSERT INTO email_mailbox_commands (id, link_id, generation, actor_id, intent, status)
+                SELECT
+                    $1,
+                    l.id,
+                    l.sync_generation,
+                    l.macro_id,
+                    $4,
+                    'pending'
+                FROM
+                    email_links l
+                WHERE
+                    l.id = $2
+                    AND l.sync_generation = $3
+                    AND NOT EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            email_mailbox_commands c
+                            JOIN email_mailbox_command_targets t ON t.command_id = c.id
+                        WHERE
+                            c.link_id = l.id
+                            AND c.generation = l.sync_generation
+                            AND t.message_id = $5
+                            AND c.intent = $4
+                            AND c.status IN ('pending', 'running', 'confirming'))
+                RETURNING
+                    id
+                "#,
+                macro_uuid::generate_uuid_v7(),
+                lease.mailbox.link_id,
+                lease.mailbox.sync_generation,
+                action,
+                message_id,
+            ).fetch_optional(&mut *tx).await.map_err(db_error)?;
             if let Some(command) = command {
-                sqlx::query!("INSERT INTO email_mailbox_command_targets(command_id,message_id,provider_id,pending) VALUES($1,$2,$3,$4)",command,message_id,lease.provider_id.as_str(),pending).execute(&mut *tx).await.map_err(db_error)?;
-                sqlx::query!(r#"INSERT INTO email_pending_mailbox_state(message_id,attribute,command_id,desired) SELECT $1,key,$2,value FROM jsonb_each($3)
-                    ON CONFLICT(message_id,attribute) DO UPDATE SET command_id=EXCLUDED.command_id,desired=EXCLUDED.desired"#,message_id,command,pending).execute(&mut *tx).await.map_err(db_error)?;
+                sqlx::query!(
+                    r#"
+                    INSERT INTO email_mailbox_command_targets (command_id, message_id, provider_id, pending)
+                        VALUES ($1, $2, $3, $4)
+                    "#,
+                    command,
+                    message_id,
+                    lease.provider_id.as_str(),
+                    pending,
+                ).execute(&mut *tx).await.map_err(db_error)?;
+                sqlx::query!(
+                    r#"
+                    INSERT INTO email_pending_mailbox_state (message_id, attribute, command_id, desired)
+                    SELECT
+                        $1,
+                        key,
+                        $2,
+                        value
+                    FROM
+                        jsonb_each($3)
+                    ON CONFLICT (message_id,
+                        attribute)
+                        DO UPDATE SET
+                            command_id = EXCLUDED.command_id,
+                            desired = EXCLUDED.desired
+                    "#,
+                    message_id,
+                    command,
+                    pending,
+                ).execute(&mut *tx).await.map_err(db_error)?;
                 email_db_client::threads::update::recompute_thread_metadata(
                     &mut tx,
                     thread_id,
@@ -344,7 +403,33 @@ impl MailboxIngest for PgMailboxSync {
         mailbox: MailboxKey,
         sender: &str,
     ) -> Result<bool, MailboxError> {
-        sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM email_links l JOIN email_mailbox_settings_work w ON w.link_id=l.id WHERE l.id=$1 AND l.provider='IMAP' AND l.is_sync_active AND l.sync_generation=$2 AND l.grant_generation=$3 AND w.kind='sender_block' AND lower(w.resource_key)=lower($4) AND w.desired) AS "blocked!""#,mailbox.link_id,mailbox.sync_generation,mailbox.grant_generation,sender).fetch_one(&self.db).await.map_err(db_error)
+        sqlx::query_scalar!(
+            r#"
+            SELECT
+                EXISTS (
+                    SELECT
+                        1
+                    FROM
+                        email_links l
+                        JOIN email_mailbox_settings_work w ON w.link_id = l.id
+                    WHERE
+                        l.id = $1
+                        AND l.provider = 'IMAP'
+                        AND l.is_sync_active
+                        AND l.sync_generation = $2
+                        AND l.grant_generation = $3
+                        AND w.kind = 'sender_block'
+                        AND lower(w.resource_key) = lower($4)
+                        AND w.desired) AS "blocked!"
+            "#,
+            mailbox.link_id,
+            mailbox.sync_generation,
+            mailbox.grant_generation,
+            sender,
+        )
+        .fetch_one(&self.db)
+        .await
+        .map_err(db_error)
     }
     async fn ingest(
         &self,

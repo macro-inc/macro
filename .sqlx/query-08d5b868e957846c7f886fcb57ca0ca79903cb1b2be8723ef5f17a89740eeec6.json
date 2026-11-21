@@ -1,0 +1,106 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                l.id AS \"link_id!\",\n                l.sync_generation AS \"sync_generation!\",\n                l.is_sync_active AS \"sync_active!\",\n                l.needs_reauth AS \"needs_reauth!\",\n                l.mailbox_unavailable_at IS NOT NULL AS \"mailbox_unavailable!\",\n                q.queued AS \"queued!\",\n                q.parked AS \"parked!\",\n                q.abandoned AS \"abandoned!\",\n                q.leased AS \"leased!\",\n                COALESCE(floor(EXTRACT(EPOCH FROM now() - q.oldest_due)), 0)::bigint AS \"oldest_waiting_seconds!\",\n                COALESCE(ceil(EXTRACT(EPOCH FROM q.parked_until - now())), 0)::bigint AS \"parked_until_max_seconds!\",\n                s.incomplete AS \"streams_incomplete!\",\n                COALESCE(recent.imported_5m, 0)::bigint AS \"imported_5m!\",\n                floor(EXTRACT(EPOCH FROM now() - latest.last_imported_at))::bigint AS seconds_since_last_import,\n                COALESCE(w.failures, 0) AS \"watch_failures!\"\n            FROM\n                email_links l\n                LEFT JOIN email_mailbox_watch_work w ON w.link_id = l.id\n                CROSS JOIN LATERAL (\n                    -- Abandoned rows wait at `available_at = 'infinity'`.\n                    SELECT\n                        count(*) FILTER (WHERE available_at <> 'infinity') AS queued,\n                        count(*) FILTER (WHERE available_at > now()\n                                AND available_at <> 'infinity') AS parked,\n                            count(*) FILTER (WHERE available_at = 'infinity') AS abandoned,\n                            count(*) FILTER (WHERE lease_until > now()) AS leased,\n                            min(available_at) FILTER (WHERE available_at <= now()\n                                AND (lease_until IS NULL\n                                OR lease_until <= now())) AS oldest_due,\n                        max(available_at) FILTER (WHERE available_at > now()\n                            AND available_at <> 'infinity') AS parked_until\n                    FROM\n                        email_message_reconciliation\n                WHERE\n                    link_id = l.id\n                    AND generation = l.sync_generation) q\n                CROSS JOIN LATERAL (\n                    SELECT\n                        count(*) AS incomplete\n                    FROM\n                        email_sync_streams\n                    WHERE\n                        link_id = l.id\n                        AND generation = l.sync_generation\n                        AND kind IN ('folder_catalog', 'mail_folder')\n                        AND NOT initial_complete) s\n                CROSS JOIN LATERAL (\n                    SELECT\n                        sum(imported) AS imported_5m\n                    FROM\n                        email_mailbox_import_minutes\n                    WHERE\n                        link_id = l.id\n                        AND minute > now() - interval '5 minutes') recent\n                -- A flush carries imports from at most the minute before it, so\n                -- the latest import is in one of the two newest minutes.\n                CROSS JOIN LATERAL (\n                    SELECT\n                        max(last_imported_at) AS last_imported_at\n                    FROM (\n                        SELECT\n                            last_imported_at\n                        FROM\n                            email_mailbox_import_minutes\n                        WHERE\n                            link_id = l.id\n                        ORDER BY\n                            minute DESC\n                        LIMIT 2) newest) latest\n            WHERE\n                l.provider = $1::text::email_user_provider_enum\n                AND (l.is_sync_active\n                    OR q.queued > 0\n                    OR q.abandoned > 0)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "sync_generation!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "sync_active!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "needs_reauth!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "mailbox_unavailable!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "queued!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "parked!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "abandoned!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 8,
+        "name": "leased!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 9,
+        "name": "oldest_waiting_seconds!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 10,
+        "name": "parked_until_max_seconds!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 11,
+        "name": "streams_incomplete!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 12,
+        "name": "imported_5m!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 13,
+        "name": "seconds_since_last_import",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 14,
+        "name": "watch_failures!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "08d5b868e957846c7f886fcb57ca0ca79903cb1b2be8723ef5f17a89740eeec6"
+}

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE\n                imap_accounts\n            SET\n                lease_id = NULL,\n                lease_until = NULL\n            WHERE\n                link_id = $1\n                AND lease_id = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a1854af55d27d38d47eb9d1498400891f71ca0c1c172f8860430abdeb6e613f4"
+}

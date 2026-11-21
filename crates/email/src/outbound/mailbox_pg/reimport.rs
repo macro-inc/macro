@@ -9,8 +9,18 @@ mod test;
 impl FolderReimportRepository for PgMailboxSync {
     async fn outlook_links(&self) -> Result<Vec<Uuid>, MailboxError> {
         sqlx::query_scalar!(
-            "SELECT id FROM email_links WHERE provider = $1::text::email_user_provider_enum ORDER BY created_at, id",
-            self.provider.as_str()
+            r#"
+            SELECT
+                id
+            FROM
+                email_links
+            WHERE
+                provider = $1::text::email_user_provider_enum
+            ORDER BY
+                created_at,
+                id
+            "#,
+            self.provider.as_str(),
         )
         .fetch_all(&self.db)
         .await
@@ -24,25 +34,72 @@ impl FolderReimportRepository for PgMailboxSync {
     ) -> Result<LinkReimport, MailboxError> {
         // A stream is due when its round started before `revision`; rounds
         // started before revisions were recorded have none.
-        let Some(row) = sqlx::query!(r#"
-            SELECT l.provider = $3::text::email_user_provider_enum AS "outlook!", l.is_sync_active AND NOT l.needs_reauth AS "active!",
-                l.sync_generation, l.grant_generation,
-                EXISTS(SELECT 1 FROM email_sync_streams s WHERE s.link_id = l.id AND s.generation = l.sync_generation
-                        AND s.kind IN ('folder_catalog','mail_folder') AND NOT s.initial_complete)
-                    OR EXISTS(SELECT 1 FROM email_message_reconciliation q WHERE q.link_id = l.id AND q.generation = l.sync_generation
-                        AND q.is_import AND q.available_at <> 'infinity') AS "importing!",
-                due.inbox_and_sent AS "inbox_and_sent!", due.other_folders AS "other_folders!",
-                (SELECT sum(f.total_item_count) FROM email_mailbox_folders f WHERE f.link_id = l.id AND f.deleted_at IS NULL)::bigint AS provider_items
-            FROM email_links l
-            CROSS JOIN LATERAL (
-                SELECT count(*) FILTER (WHERE f.role IN ('inbox','sent')) AS inbox_and_sent,
-                    count(*) FILTER (WHERE f.role NOT IN ('inbox','sent')) AS other_folders
-                FROM email_sync_streams s JOIN email_mailbox_folders f ON f.link_id = s.link_id AND f.provider_id = s.scope_id
-                WHERE s.link_id = l.id AND s.generation = l.sync_generation AND s.kind = 'mail_folder' AND f.deleted_at IS NULL
-                    AND (s.reader_revision IS NULL OR s.reader_revision < $2)
-            ) due
-            WHERE l.id = $1
-        "#,link_id,revision, self.provider.as_str()).fetch_optional(&self.db).await.map_err(db_error)? else {
+        let Some(row) = sqlx::query!(
+            r#"
+            SELECT
+                l.provider = $3::text::email_user_provider_enum AS "outlook!",
+                l.is_sync_active
+                AND NOT l.needs_reauth AS "active!",
+                l.sync_generation,
+                l.grant_generation,
+                EXISTS (
+                    SELECT
+                        1
+                    FROM
+                        email_sync_streams s
+                    WHERE
+                        s.link_id = l.id
+                        AND s.generation = l.sync_generation
+                        AND s.kind IN ('folder_catalog', 'mail_folder')
+                        AND NOT s.initial_complete)
+                OR EXISTS (
+                    SELECT
+                        1
+                    FROM
+                        email_message_reconciliation q
+                    WHERE
+                        q.link_id = l.id
+                        AND q.generation = l.sync_generation
+                        AND q.is_import
+                        AND q.available_at <> 'infinity') AS "importing!",
+                due.inbox_and_sent AS "inbox_and_sent!",
+                due.other_folders AS "other_folders!",
+                (
+                    SELECT
+                        sum(f.total_item_count)
+                    FROM
+                        email_mailbox_folders f
+                    WHERE
+                        f.link_id = l.id
+                        AND f.deleted_at IS NULL)::bigint AS provider_items
+            FROM
+                email_links l
+                CROSS JOIN LATERAL (
+                    SELECT
+                        count(*) FILTER (WHERE f.role IN ('inbox', 'sent')) AS inbox_and_sent,
+                        count(*) FILTER (WHERE f.role NOT IN ('inbox', 'sent')) AS other_folders
+                    FROM
+                        email_sync_streams s
+                        JOIN email_mailbox_folders f ON f.link_id = s.link_id
+                            AND f.provider_id = s.scope_id
+                    WHERE
+                        s.link_id = l.id
+                        AND s.generation = l.sync_generation
+                        AND s.kind = 'mail_folder'
+                        AND f.deleted_at IS NULL
+                        AND (s.reader_revision IS NULL
+                            OR s.reader_revision < $2)) due
+            WHERE
+                l.id = $1
+            "#,
+            link_id,
+            revision,
+            self.provider.as_str(),
+        )
+        .fetch_optional(&self.db)
+        .await
+        .map_err(db_error)?
+        else {
             return Ok(LinkReimport::NotOutlook);
         };
         Ok(if !row.outlook {
@@ -77,10 +134,29 @@ impl FolderReimportRepository for PgMailboxSync {
         let mut tx = self.begin().await.map_err(db_error)?;
         // The link lock orders this after catalog commits and page commits, as
         // resync is.
-        let current = sqlx::query_scalar!(r#"
-            SELECT id FROM email_links WHERE id = $1 AND provider = $4::text::email_user_provider_enum AND sync_generation = $2
-                AND grant_generation = $3 AND is_sync_active AND NOT needs_reauth FOR UPDATE
-        "#,mailbox.link_id,mailbox.sync_generation,mailbox.grant_generation, self.provider.as_str()).fetch_optional(&mut *tx).await.map_err(db_error)?;
+        let current = sqlx::query_scalar!(
+            r#"
+            SELECT
+                id
+            FROM
+                email_links
+            WHERE
+                id = $1
+                AND provider = $4::text::email_user_provider_enum
+                AND sync_generation = $2
+                AND grant_generation = $3
+                AND is_sync_active
+                AND NOT needs_reauth
+            FOR UPDATE
+            "#,
+            mailbox.link_id,
+            mailbox.sync_generation,
+            mailbox.grant_generation,
+            self.provider.as_str(),
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(db_error)?;
         if current.is_none() {
             return Ok(None);
         }

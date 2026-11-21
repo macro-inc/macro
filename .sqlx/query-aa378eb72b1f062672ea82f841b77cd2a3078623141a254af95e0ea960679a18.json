@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                DELETE FROM imap_state_entries\n                WHERE link_id = $1\n                    AND kind IN ('attachment', 'upload')\n                    AND message_id = ANY ($2)\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "aa378eb72b1f062672ea82f841b77cd2a3078623141a254af95e0ea960679a18"
+}

@@ -37,14 +37,67 @@ impl ImapLab {
 
     /// Synthetic account credentials; each address receives its own mail home.
     pub fn connect_request(&self, email: &str) -> Value {
-        json!({"requestId":uuid::Uuid::now_v7(),"email":email,"imap":{"endpoint":{"host":"maillab.example.net","port":993,"tls":"implicit","username":email},"password":"pass"},"smtp":{"endpoint":{"host":"maillab.example.net","port":465,"tls":"implicit","username":email},"password":"pass"},"confirmedHosts":["maillab.example.net"]})
+        json!(
+        {
+            "requestId": uuid::Uuid::now_v7(),
+            "email": email,
+            "imap": {
+                "endpoint": {
+                    "host": "maillab.example.net",
+                    "port": 993,
+                    "tls": "implicit",
+                    "username": email
+                },
+                "password": "pass"
+            },
+            "smtp": {
+                "endpoint": {
+                    "host": "maillab.example.net",
+                    "port": 465,
+                    "tls": "implicit",
+                    "username": email
+                },
+                "password": "pass"
+            },
+            "confirmedHosts": [
+                "maillab.example.net"
+            ]
+        }
+        )
     }
 
     /// Inject MIME directly using an independent IMAP client.
     pub async fn deliver(&self, email: &str, mail: &Mail) -> Result<Value, Report> {
         use base64::Engine;
-        let attachments: Vec<_> = mail.attachments.iter().map(|part| json!({"filename":part.filename,"mimeType":part.mime_type,"base64":base64::engine::general_purpose::STANDARD.encode(&part.bytes)})).collect();
-        self.control(&json!({"operation":"deliver","email":email,"from":mail.from,"to":mail.to,"cc":mail.cc,"subject":mail.subject,"text":mail.text,"html":mail.html,"messageId":mail.message_id,"inReplyTo":mail.in_reply_to,"attachments":attachments})).await
+        let attachments: Vec<_> = mail
+            .attachments
+            .iter()
+            .map(|part| {
+                json!(
+                {
+                    "filename": part.filename,
+                    "mimeType": part.mime_type,
+                    "base64": base64::engine::general_purpose::STANDARD.encode(&part.bytes)
+                }
+                )
+            })
+            .collect();
+        self.control(&json!(
+        {
+            "operation": "deliver",
+            "email": email,
+            "from": mail.from,
+            "to": mail.to,
+            "cc": mail.cc,
+            "subject": mail.subject,
+            "text": mail.text,
+            "html": mail.html,
+            "messageId": mail.message_id,
+            "inReplyTo": mail.in_reply_to,
+            "attachments": attachments
+        }
+        ))
+        .await
     }
 
     /// Actual mail and flags at the server, independent from Macro's index.
@@ -157,7 +210,18 @@ impl ImapLaunch {
             "IMAP_CREDENTIAL_KMS_KEY_ID".into(),
             "alias/macro-local-imap-credentials".into(),
         );
-        env.insert("IMAP_TEST_ENDPOINT_MAP".into(), json!({"maillab.example.net:993":"127.0.0.1:35993","maillab.example.net:143":"127.0.0.1:35143","maillab.example.net:465":"127.0.0.1:35465","maillab.example.net:587":"127.0.0.1:35587"}).to_string());
+        env.insert(
+            "IMAP_TEST_ENDPOINT_MAP".into(),
+            json!(
+            {
+                "maillab.example.net:993": "127.0.0.1:35993",
+                "maillab.example.net:143": "127.0.0.1:35143",
+                "maillab.example.net:465": "127.0.0.1:35465",
+                "maillab.example.net:587": "127.0.0.1:35587"
+            }
+            )
+            .to_string(),
+        );
         env.insert(
             "IMAP_TEST_TRUST_ROOT_PEM".into(),
             std::fs::read_to_string(self.lab.root.join("generated/ca.pem"))?,

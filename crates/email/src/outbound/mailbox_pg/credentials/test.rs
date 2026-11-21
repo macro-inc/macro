@@ -7,8 +7,15 @@ async fn imap_health_without_microsoft_scopes_does_not_lock_and_rejects_retired_
 ) {
     let (_, link) = super::super::test::fixture(&db).await;
     sqlx::query!(
-        "UPDATE email_links SET provider = 'IMAP' WHERE id = $1",
-        link
+        r#"
+        UPDATE
+            email_links
+        SET
+            provider = 'IMAP'
+        WHERE
+            id = $1
+        "#,
+        link,
     )
     .execute(&db)
     .await
@@ -21,10 +28,20 @@ async fn imap_health_without_microsoft_scopes_does_not_lock_and_rejects_retired_
         grant_generation: 1,
     };
     let mut population = db.begin().await.unwrap();
-    sqlx::query!("SELECT id FROM email_links WHERE id=$1 FOR SHARE", link)
-        .fetch_one(&mut *population)
-        .await
-        .unwrap();
+    sqlx::query!(
+        r#"
+        SELECT
+            id
+        FROM
+            email_links
+        WHERE
+            id = $1 FOR SHARE
+        "#,
+        link,
+    )
+    .fetch_one(&mut *population)
+    .await
+    .unwrap();
     tokio::time::timeout(
         std::time::Duration::from_secs(10),
         repo.record(mailbox, CredentialHealth::Available(vec![])),
@@ -34,8 +51,15 @@ async fn imap_health_without_microsoft_scopes_does_not_lock_and_rejects_retired_
     .unwrap();
     population.rollback().await.unwrap();
     sqlx::query!(
-        "UPDATE email_links SET sync_generation = sync_generation + 1 WHERE id = $1",
-        link
+        r#"
+        UPDATE
+            email_links
+        SET
+            sync_generation = sync_generation + 1
+        WHERE
+            id = $1
+        "#,
+        link,
     )
     .execute(&db)
     .await

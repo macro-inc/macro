@@ -50,7 +50,19 @@ async fn two_replicas_serialize_commands_and_reject_stale_or_other_provider_bind
     schema(&pool).await;
     let link = Uuid::now_v7();
     let second_link = Uuid::now_v7();
-    sqlx::query!("INSERT INTO email_links(id,macro_id,provider) VALUES($1,'macro|owner@example.net','IMAP'),($2,'macro|other@example.net','GMAIL')",link,second_link).execute(&pool).await.unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO email_links (id, macro_id, provider)
+        VALUES
+            ($1, 'macro|owner@example.net', 'IMAP'),
+            ($2, 'macro|other@example.net', 'GMAIL')
+        "#,
+        link,
+        second_link,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     let binding = Binding {
         link_id: link,
         sync_generation: 1,
@@ -103,8 +115,16 @@ async fn two_replicas_serialize_commands_and_reject_stale_or_other_provider_bind
         Err(Error::Conflict)
     ));
     sqlx::query!(
-        "UPDATE email_links SET sync_generation=2,grant_generation=2 WHERE id=$1",
-        link
+        r#"
+        UPDATE
+            email_links
+        SET
+            sync_generation = 2,
+            grant_generation = 2
+        WHERE
+            id = $1
+        "#,
+        link,
     )
     .execute(&pool)
     .await
@@ -154,8 +174,11 @@ async fn connection_owner_takeover_is_fenced_and_old_owner_cannot_release_succes
     let b = Uuid::now_v7();
     let verification = Uuid::now_v7();
     sqlx::query!(
-        "INSERT INTO email_links(id,macro_id,provider) VALUES($1,'owner','IMAP')",
-        link
+        r#"
+        INSERT INTO email_links (id, macro_id, provider)
+            VALUES ($1, 'owner', 'IMAP')
+        "#,
+        link,
     )
     .execute(&pool)
     .await
@@ -184,8 +207,15 @@ async fn connection_owner_takeover_is_fenced_and_old_owner_cannot_release_succes
     assert!(!repo.claim_owner(binding, b).await.unwrap());
     assert!(repo.claim_owner(binding, a).await.unwrap());
     sqlx::query!(
-        "UPDATE imap_account_owners SET lease_until=now()-interval '1 second' WHERE link_id=$1",
-        link
+        r#"
+        UPDATE
+            imap_account_owners
+        SET
+            lease_until = now() - interval '1 second'
+        WHERE
+            link_id = $1
+        "#,
+        link,
     )
     .execute(&pool)
     .await
@@ -204,8 +234,11 @@ async fn consumed_verification_is_scrubbed_and_same_binding_can_replay_after_exp
     let link = Uuid::now_v7();
     let verification = Uuid::now_v7();
     sqlx::query!(
-        "INSERT INTO email_links(id,macro_id,provider) VALUES($1,'owner','IMAP')",
-        link
+        r#"
+        INSERT INTO email_links (id, macro_id, provider)
+            VALUES ($1, 'owner', 'IMAP')
+        "#,
+        link,
     )
     .execute(&pool)
     .await
@@ -231,8 +264,15 @@ async fn consumed_verification_is_scrubbed_and_same_binding_can_replay_after_exp
         .await
         .unwrap();
     sqlx::query!(
-        "UPDATE imap_verifications SET expires_at=now()-interval '1 minute' WHERE id=$1",
-        verification
+        r#"
+        UPDATE
+            imap_verifications
+        SET
+            expires_at = now() - interval '1 minute'
+        WHERE
+            id = $1
+        "#,
+        verification,
     )
     .execute(&pool)
     .await
@@ -265,14 +305,24 @@ async fn large_mailbox_point_reads_and_writes_preserve_unloaded_rows(pool: PgPoo
     schema(&pool).await;
     let link = Uuid::now_v7();
     sqlx::query!(
-        "INSERT INTO email_links(id,macro_id,provider) VALUES($1,'macro|owner@example.net','IMAP')",
-        link
+        r#"
+        INSERT INTO email_links (id, macro_id, provider)
+            VALUES ($1, 'macro|owner@example.net', 'IMAP')
+        "#,
+        link,
     )
     .execute(&pool)
     .await
     .unwrap();
     let health = serde_json::to_value(AccountState::default()).unwrap();
-    sqlx::query!("INSERT INTO imap_accounts(link_id,user_id,sync_generation,grant_generation,credential_ciphertext,state) VALUES($1,'macro|owner@example.net',1,1,decode('01','hex'),$2)",link,health).execute(&pool).await.unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO imap_accounts (link_id, user_id, sync_generation, grant_generation, credential_ciphertext, state)
+            VALUES ($1, 'macro|owner@example.net', 1, 1, decode('01', 'hex'), $2)
+        "#,
+        link,
+        health,
+    ).execute(&pool).await.unwrap();
     let folder = FolderState {
         monitored: true,
         virtual_label: None,
@@ -297,9 +347,12 @@ async fn large_mailbox_point_reads_and_writes_preserve_unloaded_rows(pool: PgPoo
     };
     let folder = serde_json::to_value(folder).unwrap();
     sqlx::query!(
-        "INSERT INTO imap_state_entries(link_id,kind,key,document) VALUES($1,'folder','inbox',$2)",
+        r#"
+        INSERT INTO imap_state_entries (link_id, kind, key, document)
+            VALUES ($1, 'folder', 'inbox', $2)
+        "#,
         link,
-        folder
+        folder,
     )
     .execute(&pool)
     .await
@@ -320,8 +373,49 @@ async fn large_mailbox_point_reads_and_writes_preserve_unloaded_rows(pool: PgPoo
         draft_correlation: None,
     })
     .unwrap();
-    sqlx::query!("INSERT INTO imap_state_entries(link_id,kind,key,folder_id,received_at,document) SELECT $1,'message','m:'||lpad(n::text,6,'0'),'inbox',now(),jsonb_set($2,'{id}',to_jsonb('m:'||lpad(n::text,6,'0'))) FROM generate_series(1,100000) n",link,message).execute(&pool).await.unwrap();
-    sqlx::query!("INSERT INTO imap_state_entries(link_id,kind,key,folder_id,message_id,document) SELECT $1,'location','inbox:1:'||n,'inbox','m:'||lpad(n::text,6,'0'),jsonb_build_object('folder_id','inbox','uid_validity',1,'uid',n,'message_id','m:'||lpad(n::text,6,'0'),'fingerprint','fp:'||n) FROM generate_series(1,100000) n",link).execute(&pool).await.unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO imap_state_entries (link_id, kind, key, folder_id, received_at, document)
+        SELECT
+            $1,
+            'message',
+            'm:' || lpad(n::text, 6, '0'),
+            'inbox',
+            now(),
+            jsonb_set($2, '{id}', to_jsonb ('m:' || lpad(n::text, 6, '0')))
+        FROM
+            generate_series(1, 100000) n
+        "#,
+        link,
+        message,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO imap_state_entries (link_id, kind, key, folder_id, message_id, document)
+        SELECT
+            $1,
+            'location',
+            'inbox:1:' || n,
+            'inbox',
+            'm:' || lpad(n::text, 6, '0'),
+            jsonb_build_object(
+                'folder_id', 'inbox',
+                'uid_validity', 1,
+                'uid', n,
+                'message_id', 'm:' || lpad(n::text, 6, '0'),
+                'fingerprint', 'fp:' || n
+            )
+        FROM
+            generate_series(1, 100000) n
+        "#,
+        link,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     sqlx::query!("ANALYZE imap_state_entries")
         .execute(&pool)
         .await
@@ -332,7 +426,22 @@ async fn large_mailbox_point_reads_and_writes_preserve_unloaded_rows(pool: PgPoo
         sync_generation: 1,
         grant_generation: 1,
     };
-    let untouched=sqlx::query_scalar!("SELECT xmin::text FROM imap_state_entries WHERE link_id=$1 AND kind='message' AND key='m:000002'",link).fetch_one(&pool).await.unwrap();
+    let untouched = sqlx::query_scalar!(
+        r#"
+        SELECT
+            xmin::text
+        FROM
+            imap_state_entries
+        WHERE
+            link_id = $1
+            AND kind = 'message'
+            AND key = 'm:000002'
+        "#,
+        link,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
     let started = std::time::Instant::now();
     let mut account = repo
         .acquire_scoped(binding, StateSelection::Message("m:000001".into()))
@@ -377,20 +486,53 @@ async fn large_mailbox_point_reads_and_writes_preserve_unloaded_rows(pool: PgPoo
     assert!(observed.state.notification_pending);
     assert_eq!(observed.state.messages["m:000001"].flags, vec!["\\Seen"]);
     repo.release(&observed).await.unwrap();
-    let still_untouched=sqlx::query_scalar!("SELECT xmin::text FROM imap_state_entries WHERE link_id=$1 AND kind='message' AND key='m:000002'",link).fetch_one(&pool).await.unwrap();
+    let still_untouched = sqlx::query_scalar!(
+        r#"
+        SELECT
+            xmin::text
+        FROM
+            imap_state_entries
+        WHERE
+            link_id = $1
+            AND kind = 'message'
+            AND key = 'm:000002'
+        "#,
+        link,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
     assert_eq!(untouched, still_untouched);
     let count = sqlx::query_scalar!(
-        "SELECT count(*) FROM imap_state_entries WHERE link_id=$1 AND kind='message'",
-        link
+        r#"
+        SELECT
+            count(*)
+        FROM
+            imap_state_entries
+        WHERE
+            link_id = $1
+            AND kind = 'message'
+        "#,
+        link,
     )
     .fetch_one(&pool)
     .await
     .unwrap();
     assert_eq!(count, Some(100_000));
-    let scalar = sqlx::query_scalar!("SELECT state FROM imap_accounts WHERE link_id=$1", link)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let scalar = sqlx::query_scalar!(
+        r#"
+        SELECT
+            state
+        FROM
+            imap_accounts
+        WHERE
+            link_id = $1
+        "#,
+        link,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
     assert_eq!(scalar["messages"], serde_json::json!({}));
     let started = std::time::Instant::now();
     let page = repo
@@ -432,8 +574,11 @@ async fn owner_settings_survive_refusal_and_reconnect_fences_stale_edit(pool: Pg
         grant_generation: 1,
     };
     sqlx::query!(
-        "INSERT INTO email_links(id,macro_id,provider) VALUES($1,'settings-owner','IMAP')",
-        link
+        r#"
+        INSERT INTO email_links (id, macro_id, provider)
+            VALUES ($1, 'settings-owner', 'IMAP')
+        "#,
+        link,
     )
     .execute(&pool)
     .await
@@ -455,12 +600,29 @@ async fn owner_settings_survive_refusal_and_reconnect_fences_stale_edit(pool: Pg
     }
     promote(&repo, binding).await;
     sqlx::query!(
-        "INSERT INTO imap_state_entries(link_id,kind,key,document)
-         SELECT $1, 'folder', n::text, jsonb_build_object(
-           'folder', jsonb_build_object('id',n::text,'name',n::text,'role','other','hasChildren',false),
-           'monitored', n <= 200) FROM generate_series(1,240) n",
-        link
-    ).execute(&pool).await.unwrap();
+        r#"
+        INSERT INTO imap_state_entries (link_id, kind, key, document)
+        SELECT
+            $1,
+            'folder',
+            n::text,
+            jsonb_build_object(
+                'folder', jsonb_build_object(
+                    'id', n::text,
+                    'name', n::text,
+                    'role', 'other',
+                    'hasChildren', false
+                ),
+                'monitored', n <= 200
+            )
+        FROM
+            generate_series(1, 240) n
+        "#,
+        link,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     let catalog = repo.folders(binding).await.unwrap();
     assert_eq!(catalog.len(), 240);
     assert_eq!(catalog.iter().filter(|entry| entry.monitored).count(), 200);
@@ -475,10 +637,20 @@ async fn owner_settings_survive_refusal_and_reconnect_fences_stale_edit(pool: Pg
         repo.update(binding, &prefs).await,
         Err(Error::Conflict)
     ));
-    sqlx::query!("UPDATE email_links SET needs_reauth=true WHERE id=$1", link)
-        .execute(&pool)
-        .await
-        .unwrap();
+    sqlx::query!(
+        r#"
+        UPDATE
+            email_links
+        SET
+            needs_reauth = true
+        WHERE
+            id = $1
+        "#,
+        link,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     assert!(repo.credentials(binding).await.is_err());
     assert_eq!(
         repo.credentials_for_settings(binding).await.unwrap().0,
@@ -487,7 +659,22 @@ async fn owner_settings_survive_refusal_and_reconnect_fences_stale_edit(pool: Pg
     binding.sync_generation = 2;
     binding.grant_generation = 2;
     promote(&repo, binding).await;
-    sqlx::query!("UPDATE email_links SET sync_generation=2,grant_generation=2,needs_reauth=false WHERE id=$1",link).execute(&pool).await.unwrap();
+    sqlx::query!(
+        r#"
+        UPDATE
+            email_links
+        SET
+            sync_generation = 2,
+            grant_generation = 2,
+            needs_reauth = false
+        WHERE
+            id = $1
+        "#,
+        link,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     assert_eq!(repo.preferences(binding).await.unwrap().revision, 2);
     assert!(matches!(
         repo.update(
@@ -505,18 +692,68 @@ async fn owner_settings_survive_refusal_and_reconnect_fences_stale_edit(pool: Pg
 #[sqlx::test(migrations = false)]
 async fn replicas_preserve_full_owned_capacity_and_only_fill_unowned_slots(pool: PgPool) {
     schema(&pool).await;
-    sqlx::query!("INSERT INTO email_links(id,macro_id,provider) SELECT md5('capacity-'||n)::uuid,'macro|owner@example.net','IMAP' FROM generate_series(1,2101)n").execute(&pool).await.unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO email_links (id, macro_id, provider)
+        SELECT
+            md5('capacity-' || n)::uuid,
+            'macro|owner@example.net',
+            'IMAP'
+        FROM
+            generate_series(1, 2101) n
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     let state = serde_json::to_value(AccountState::default()).unwrap();
-    sqlx::query!("INSERT INTO imap_accounts(link_id,user_id,sync_generation,grant_generation,credential_ciphertext,state) SELECT id,macro_id,1,1,decode('01','hex'),$1 FROM email_links",state).execute(&pool).await.unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO imap_accounts (link_id, user_id, sync_generation, grant_generation, credential_ciphertext, state)
+        SELECT
+            id,
+            macro_id,
+            1,
+            1,
+            decode('01', 'hex'),
+            $1
+        FROM
+            email_links
+        "#,
+        state,
+    ).execute(&pool).await.unwrap();
     let repo = PgRepository::new(pool.clone());
     let first = repo.bindings(2000, &[]).await.unwrap();
     assert_eq!(first.len(), 2000);
     let first_ids = first.iter().map(|b| b.link_id).collect::<Vec<_>>();
     let owner = Uuid::now_v7();
-    sqlx::query!("INSERT INTO imap_account_owners(link_id,owner_id,sync_generation,grant_generation,lease_until) SELECT link_id,$2,sync_generation,grant_generation,now()+interval '5 minutes' FROM imap_accounts WHERE link_id=ANY($1)",&first_ids,owner).execute(&pool).await.unwrap();
     sqlx::query!(
-        "UPDATE imap_accounts SET updated_at=now()+interval '1 hour' WHERE link_id=ANY($1)",
-        &first_ids
+        r#"
+        INSERT INTO imap_account_owners (link_id, owner_id, sync_generation, grant_generation, lease_until)
+        SELECT
+            link_id,
+            $2,
+            sync_generation,
+            grant_generation,
+            now() + interval '5 minutes'
+        FROM
+            imap_accounts
+        WHERE
+            link_id = ANY ($1)
+        "#,
+        &first_ids,
+        owner,
+    ).execute(&pool).await.unwrap();
+    sqlx::query!(
+        r#"
+        UPDATE
+            imap_accounts
+        SET
+            updated_at = now() + interval '1 hour'
+        WHERE
+            link_id = ANY ($1)
+        "#,
+        &first_ids,
     )
     .execute(&pool)
     .await
@@ -535,19 +772,51 @@ async fn replicas_preserve_full_owned_capacity_and_only_fill_unowned_slots(pool:
     assert!(second.iter().all(|b| !first_ids.contains(&b.link_id)));
     let second_ids = second.iter().map(|b| b.link_id).collect::<Vec<_>>();
     let second_owner = Uuid::now_v7();
-    sqlx::query!("INSERT INTO imap_account_owners(link_id,owner_id,sync_generation,grant_generation,lease_until) SELECT link_id,$2,sync_generation,grant_generation,now()+interval '5 minutes' FROM imap_accounts WHERE link_id=ANY($1)",&second_ids,second_owner).execute(&pool).await.unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO imap_account_owners (link_id, owner_id, sync_generation, grant_generation, lease_until)
+        SELECT
+            link_id,
+            $2,
+            sync_generation,
+            grant_generation,
+            now() + interval '5 minutes'
+        FROM
+            imap_accounts
+        WHERE
+            link_id = ANY ($1)
+        "#,
+        &second_ids,
+        second_owner,
+    ).execute(&pool).await.unwrap();
     assert!(repo.bindings(2000, &[]).await.unwrap().is_empty());
     let changed = first[0].link_id;
     sqlx::query!(
-        "UPDATE email_links SET sync_generation=2,grant_generation=2 WHERE id=$1",
-        changed
+        r#"
+        UPDATE
+            email_links
+        SET
+            sync_generation = 2,
+            grant_generation = 2
+        WHERE
+            id = $1
+        "#,
+        changed,
     )
     .execute(&pool)
     .await
     .unwrap();
     sqlx::query!(
-        "UPDATE imap_accounts SET sync_generation=2,grant_generation=2 WHERE link_id=$1",
-        changed
+        r#"
+        UPDATE
+            imap_accounts
+        SET
+            sync_generation = 2,
+            grant_generation = 2
+        WHERE
+            link_id = $1
+        "#,
+        changed,
     )
     .execute(&pool)
     .await
@@ -561,8 +830,15 @@ async fn replicas_preserve_full_owned_capacity_and_only_fill_unowned_slots(pool:
     );
     let expired = first[1];
     sqlx::query!(
-        "UPDATE imap_account_owners SET lease_until=now()-interval '1 second' WHERE link_id=$1",
-        expired.link_id
+        r#"
+        UPDATE
+            imap_account_owners
+        SET
+            lease_until = now() - interval '1 second'
+        WHERE
+            link_id = $1
+        "#,
+        expired.link_id,
     )
     .execute(&pool)
     .await

@@ -223,15 +223,26 @@ async fn smtp_pool_reuses_one_connection_but_never_another_binding() {
     let stopped = cancellation.clone();
     let tasks = tokio_util::task::TaskTracker::new();
     let forwards = tasks.clone();
-    tasks.spawn(async move{
-        loop{
-            let (mut inbound,_)=tokio::select!{_=stopped.cancelled()=>break,accepted=listener.accept()=>accepted.unwrap()};
-            let number=counted.fetch_add(1,std::sync::atomic::Ordering::AcqRel);
-            if number>0{drop(inbound);continue;}
-            let done=stopped.clone();
-            forwards.spawn(async move{
-                let mut upstream=tokio::net::TcpStream::connect("127.0.0.1:35465").await.unwrap();
-                tokio::select!{_=done.cancelled()=>{},_=tokio::io::copy_bidirectional(&mut inbound,&mut upstream)=>{}}
+    tasks.spawn(async move {
+        loop {
+            let (mut inbound, _) = tokio::select! {
+                _ = stopped.cancelled() => break,
+                accepted = listener.accept() => accepted.unwrap(),
+            };
+            let number = counted.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+            if number > 0 {
+                drop(inbound);
+                continue;
+            }
+            let done = stopped.clone();
+            forwards.spawn(async move {
+                let mut upstream = tokio::net::TcpStream::connect("127.0.0.1:35465")
+                    .await
+                    .unwrap();
+                tokio::select! {
+                    _ = done.cancelled() => {},
+                    _ = tokio::io::copy_bidirectional(&mut inbound, &mut upstream) => {},
+                }
             });
         }
     });
@@ -454,7 +465,30 @@ async fn lost_real_smtp_final_reply_is_unknown_and_a_restarted_engine_never_retr
         correlation,
         revision: 1,
         reply_to: None,
-        content: serde_json::json!({"message_id":format!("{correlation}@example.net"),"message":{"link_id":binding.link_id,"subject":format!("lost-final-{correlation}"),"to":[{"email":"recipient@example.net","name":null,"photo_url":null}],"body_text":"only once"},"from":{"email":owner,"name":null,"photo_url":null},"parent_message_id":null,"references":null}),
+        content: serde_json::json!(
+        {
+            "message_id": format!("{correlation}@example.net"),
+            "message": {
+                "link_id": binding.link_id,
+                "subject": format!("lost-final-{correlation}"),
+                "to": [
+                    {
+                        "email": "recipient@example.net",
+                        "name": null,
+                        "photo_url": null
+                    }
+                ],
+                "body_text": "only once"
+            },
+            "from": {
+                "email": owner,
+                "name": null,
+                "photo_url": null
+            },
+            "parent_message_id": null,
+            "references": null
+        }
+        ),
     };
     let draft: Draft = serde_json::from_value(
         engine
@@ -676,7 +710,25 @@ async fn imap_spare_connection_reuses_only_the_same_binding_and_disconnect_evict
     let stopped = stop.clone();
     let tasks = tokio_util::task::TaskTracker::new();
     let children = tasks.clone();
-    tasks.spawn(async move{loop{let (mut client,_)=tokio::select!{_=stopped.cancelled()=>return,s=listener.accept()=>s.unwrap()};recorded.fetch_add(1,Ordering::AcqRel);let done=stopped.clone();children.spawn(async move{let mut upstream=tokio::net::TcpStream::connect("127.0.0.1:35993").await.unwrap();tokio::select!{_=done.cancelled()=>{},_=tokio::io::copy_bidirectional(&mut client,&mut upstream)=>{}}});}});
+    tasks.spawn(async move {
+        loop {
+            let (mut client, _) = tokio::select! {
+                _ = stopped.cancelled() => return,
+                s = listener.accept() => s.unwrap(),
+            };
+            recorded.fetch_add(1, Ordering::AcqRel);
+            let done = stopped.clone();
+            children.spawn(async move {
+                let mut upstream = tokio::net::TcpStream::connect("127.0.0.1:35993")
+                    .await
+                    .unwrap();
+                tokio::select! {
+                    _ = done.cancelled() => {},
+                    _ = tokio::io::copy_bidirectional(&mut client, &mut upstream) => {},
+                }
+            });
+        }
+    });
     let ca = std::fs::read_to_string(
         std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../docker/imap-lab/generated/ca.pem"),

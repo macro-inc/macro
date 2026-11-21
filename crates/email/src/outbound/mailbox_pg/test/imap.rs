@@ -8,8 +8,24 @@ async fn imap_and_outlook_workers_claim_only_their_own_provider_and_observe_inde
 
     let (outlook, outlook_link) = fixture(&db).await;
     let imap_link = Uuid::from_u128(42);
-    sqlx::query!("INSERT INTO email_links(id,macro_id,fusionauth_user_id,email_address,provider,grant_generation) VALUES($1,'macro|imap@example.com','imap-owner','imap@example.com','IMAP',1)",imap_link).execute(&db).await.unwrap();
-    sqlx::query!("INSERT INTO email_sync_streams(id,link_id,generation,kind,scope_id) VALUES($1,$2,1,'mail_folder','folder')",Uuid::from_u128(43),imap_link).execute(&db).await.unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider, grant_generation)
+            VALUES ($1, 'macro|imap@example.com', 'imap-owner', 'imap@example.com', 'IMAP', 1)
+        "#,
+        imap_link,
+    ).execute(&db).await.unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO email_sync_streams (id, link_id, generation, kind, scope_id)
+            VALUES ($1, $2, 1, 'mail_folder', 'folder')
+        "#,
+        Uuid::from_u128(43),
+        imap_link,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
     let runtime = runtime::MailboxRuntime::default();
     let imap = PgMailboxSync::new(db.clone())
         .with_provider(crate::domain::models::UserProvider::Imap)
@@ -35,8 +51,15 @@ async fn imap_and_outlook_workers_claim_only_their_own_provider_and_observe_inde
     );
     // Graph's missing-mailbox diagnosis must not pause the IMAP inbox.
     sqlx::query!(
-        "UPDATE email_links SET mailbox_unavailable_at = now() WHERE id = $1",
-        outlook_link
+        r#"
+        UPDATE
+            email_links
+        SET
+            mailbox_unavailable_at = now()
+        WHERE
+            id = $1
+        "#,
+        outlook_link,
     )
     .execute(&db)
     .await
@@ -58,10 +81,20 @@ async fn imap_and_outlook_workers_claim_only_their_own_provider_and_observe_inde
 async fn blocked_imap_ingestion_records_one_recoverable_move_with_the_message(db: PgPool) {
     use email_api_client::domain::models::MailboxState;
     let (_, link) = fixture(&db).await;
-    sqlx::query!("UPDATE email_links SET provider='IMAP' WHERE id=$1", link)
-        .execute(&db)
-        .await
-        .unwrap();
+    sqlx::query!(
+        r#"
+        UPDATE
+            email_links
+        SET
+            provider = 'IMAP'
+        WHERE
+            id = $1
+        "#,
+        link,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
     let repo =
         PgMailboxSync::new(db.clone()).with_provider(crate::domain::models::UserProvider::Imap);
     let stream = repo
@@ -75,7 +108,17 @@ async fn blocked_imap_ingestion_records_one_recoverable_move_with_the_message(db
         .await
         .unwrap()
         .unwrap();
-    sqlx::query!("INSERT INTO email_mailbox_settings_work(id,link_id,kind,resource_key,desired) VALUES($1,$2,'sender_block','blocked@example.com',true)",Uuid::from_u128(102),link).execute(&db).await.unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO email_mailbox_settings_work (id, link_id, kind, resource_key, desired)
+            VALUES ($1, $2, 'sender_block', 'blocked@example.com', true)
+        "#,
+        Uuid::from_u128(102),
+        link,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
     assert!(
         repo.sender_blocked(work.mailbox, "BLOCKED@example.com")
             .await
@@ -102,11 +145,36 @@ async fn blocked_imap_ingestion_records_one_recoverable_move_with_the_message(db
     repo.ingest_blocked(&work, message, BlockedSenderDestination::Junk)
         .await
         .unwrap();
-    let row=sqlx::query!(r#"SELECT count(*) AS "commands!" FROM email_mailbox_commands c JOIN email_mailbox_command_targets t ON t.command_id=c.id JOIN email_messages m ON m.id=t.message_id WHERE c.link_id=$1 AND m.provider_id=$2 AND c.intent='{"kind":"junk","value":true}'::jsonb"#,link,work.provider_id.as_str()).fetch_one(&db).await.unwrap();
+    let row = sqlx::query!(
+        r#"
+        SELECT
+            count(*) AS "commands!"
+        FROM
+            email_mailbox_commands c
+            JOIN email_mailbox_command_targets t ON t.command_id = c.id
+            JOIN email_messages m ON m.id = t.message_id
+        WHERE
+            c.link_id = $1
+            AND m.provider_id = $2
+            AND c.intent = '{"kind":"junk","value":true}'::jsonb
+        "#,
+        link,
+        work.provider_id.as_str(),
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
     assert_eq!(row.commands, 1);
     let visible = sqlx::query_scalar!(
-        "SELECT inbox_visible FROM email_threads WHERE link_id=$1",
-        link
+        r#"
+        SELECT
+            inbox_visible
+        FROM
+            email_threads
+        WHERE
+            link_id = $1
+        "#,
+        link,
     )
     .fetch_one(&db)
     .await
@@ -120,13 +188,35 @@ async fn imap_notifications_cannot_wake_or_revoke_a_reconnected_binding(db: PgPo
     use imap_engine::domain::models::{Binding, Notification};
     let (_, link) = fixture(&db).await;
     sqlx::query!(
-        "UPDATE email_links SET provider='IMAP',sync_generation=2 WHERE id=$1",
-        link
+        r#"
+        UPDATE
+            email_links
+        SET
+            provider = 'IMAP',
+            sync_generation = 2
+        WHERE
+            id = $1
+        "#,
+        link,
     )
     .execute(&db)
     .await
     .unwrap();
-    sqlx::query!("UPDATE email_sync_streams SET generation=2,next_run_at=now()+interval '1 day' WHERE link_id=$1",link).execute(&db).await.unwrap();
+    sqlx::query!(
+        r#"
+        UPDATE
+            email_sync_streams
+        SET
+            generation = 2,
+            next_run_at = now() + interval '1 day'
+        WHERE
+            link_id = $1
+        "#,
+        link,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
     let service = ImapNotificationService(
         PgMailboxSync::new(db.clone()).with_provider(crate::domain::models::UserProvider::Imap),
     );
@@ -141,10 +231,20 @@ async fn imap_notifications_cannot_wake_or_revoke_a_reconnected_binding(db: PgPo
         })
         .await
         .unwrap();
-    let reauth = sqlx::query_scalar!("SELECT needs_reauth FROM email_links WHERE id=$1", link)
-        .fetch_one(&db)
-        .await
-        .unwrap();
+    let reauth = sqlx::query_scalar!(
+        r#"
+        SELECT
+            needs_reauth
+        FROM
+            email_links
+        WHERE
+            id = $1
+        "#,
+        link,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
     assert!(!reauth);
     service
         .receive(Notification {
@@ -158,8 +258,15 @@ async fn imap_notifications_cannot_wake_or_revoke_a_reconnected_binding(db: PgPo
         .await
         .unwrap();
     let due = sqlx::query_scalar!(
-        r#"SELECT next_run_at<=now() AS "due!" FROM email_sync_streams WHERE link_id=$1"#,
-        link
+        r#"
+        SELECT
+            next_run_at <= now() AS "due!"
+        FROM
+            email_sync_streams
+        WHERE
+            link_id = $1
+        "#,
+        link,
     )
     .fetch_one(&db)
     .await
@@ -179,8 +286,15 @@ async fn imap_notifications_cannot_wake_or_revoke_a_reconnected_binding(db: PgPo
             .unwrap();
     }
     let notifications = sqlx::query_scalar!(
-        r#"SELECT count(*) AS "count!" FROM email_projection_outbox WHERE link_id=$1"#,
-        link
+        r#"
+        SELECT
+            count(*) AS "count!"
+        FROM
+            email_projection_outbox
+        WHERE
+            link_id = $1
+        "#,
+        link,
     )
     .fetch_one(&db)
     .await
@@ -240,11 +354,32 @@ impl MailboxGateway for MalformedThenValid {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn malformed_imap_mail_does_not_hold_later_messages_behind_it(db: PgPool) {
     let (_, link) = fixture(&db).await;
-    sqlx::query!("UPDATE email_links SET provider='IMAP' WHERE id=$1", link)
-        .execute(&db)
-        .await
-        .unwrap();
-    sqlx::query!("INSERT INTO email_message_reconciliation(link_id,generation,provider_id,is_import) VALUES($1,1,'a-malformed',true),($1,1,'b-good',true)",link).execute(&db).await.unwrap();
+    sqlx::query!(
+        r#"
+        UPDATE
+            email_links
+        SET
+            provider = 'IMAP'
+        WHERE
+            id = $1
+        "#,
+        link,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO email_message_reconciliation (link_id, generation, provider_id, is_import)
+        VALUES
+            ($1, 1, 'a-malformed', true),
+            ($1, 1, 'b-good', true)
+        "#,
+        link,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
     let repo =
         PgMailboxSync::new(db.clone()).with_provider(crate::domain::models::UserProvider::Imap);
     let service =
@@ -257,8 +392,15 @@ async fn malformed_imap_mail_does_not_hold_later_messages_behind_it(db: PgPool) 
     ));
     assert!(service.reconcile_once().await.unwrap());
     let stored = sqlx::query_scalar!(
-        "SELECT provider_id FROM email_messages WHERE link_id=$1",
-        link
+        r#"
+        SELECT
+            provider_id
+        FROM
+            email_messages
+        WHERE
+            link_id = $1
+        "#,
+        link,
     )
     .fetch_all(&db)
     .await
@@ -272,13 +414,33 @@ async fn imap_excluded_trash_and_ancestors_preserve_roles_without_scheduling_bod
 ) {
     use email_api_client::domain::models::{FolderRole, MailboxState};
     let (_, link) = fixture(&db).await;
-    sqlx::query!("UPDATE email_links SET provider='IMAP' WHERE id=$1", link)
-        .execute(&db)
-        .await
-        .unwrap();
+    sqlx::query!(
+        r#"
+        UPDATE
+            email_links
+        SET
+            provider = 'IMAP'
+        WHERE
+            id = $1
+        "#,
+        link,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
     let repo =
         PgMailboxSync::new(db.clone()).with_provider(crate::domain::models::UserProvider::Imap);
-    sqlx::query!("INSERT INTO email_sync_streams(id,link_id,generation,kind,scope_id) VALUES($1,$2,1,'folder_catalog','mail')",Uuid::now_v7(),link).execute(&db).await.unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO email_sync_streams (id, link_id, generation, kind, scope_id)
+            VALUES ($1, $2, 1, 'folder_catalog', 'mail')
+        "#,
+        Uuid::now_v7(),
+        link,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
     let mut folders = vec![
         MailFolder {
             sync_enabled: true,
@@ -301,7 +463,16 @@ async fn imap_excluded_trash_and_ancestors_preserve_roles_without_scheduling_bod
     ];
     let catalog = repo.claim_catalog(Uuid::now_v7()).await.unwrap().unwrap();
     repo.commit_catalog(&catalog, &folders).await.unwrap();
-    sqlx::query!("INSERT INTO email_message_reconciliation(link_id,generation,provider_id,is_import) VALUES($1,1,'same-message',true)",link).execute(&db).await.unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO email_message_reconciliation (link_id, generation, provider_id, is_import)
+            VALUES ($1, 1, 'same-message', true)
+        "#,
+        link,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
     let work = repo.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
     repo.ingest(
         &work,
@@ -322,7 +493,21 @@ async fn imap_excluded_trash_and_ancestors_preserve_roles_without_scheduling_bod
         for (index, folder) in folders.iter_mut().enumerate() {
             folder.sync_enabled = index != excluded;
         }
-        sqlx::query!("UPDATE email_sync_streams SET next_run_at=now() WHERE link_id=$1 AND kind='folder_catalog'",link).execute(&db).await.unwrap();
+        sqlx::query!(
+            r#"
+            UPDATE
+                email_sync_streams
+            SET
+                next_run_at = now()
+            WHERE
+                link_id = $1
+                AND kind = 'folder_catalog'
+            "#,
+            link,
+        )
+        .execute(&db)
+        .await
+        .unwrap();
         let catalog = repo.claim_catalog(Uuid::now_v7()).await.unwrap().unwrap();
         repo.commit_catalog(&catalog, &folders).await.unwrap();
         let retained = repo.folders(catalog.mailbox).await.unwrap();
@@ -342,13 +527,43 @@ async fn imap_excluded_trash_and_ancestors_preserve_roles_without_scheduling_bod
                 .unwrap()
                 .sync_enabled
         );
-        let active=sqlx::query_scalar!("SELECT count(*) FROM email_sync_streams WHERE link_id=$1 AND kind='mail_folder' AND scope_id=$2",link,folders[excluded].id.as_str()).fetch_one(&db).await.unwrap();
+        let active = sqlx::query_scalar!(
+            r#"
+            SELECT
+                count(*)
+            FROM
+                email_sync_streams
+            WHERE
+                link_id = $1
+                AND kind = 'mail_folder'
+                AND scope_id = $2
+            "#,
+            link,
+            folders[excluded].id.as_str(),
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
         assert_eq!(active, Some(0));
         assert!(
             repo.claim_message(Uuid::now_v7()).await.unwrap().is_none(),
             "pausing a folder must not schedule downloads of retained message bodies"
         );
-        let state=sqlx::query_scalar!("SELECT (mailbox_state->>'in_trash')::boolean FROM email_messages WHERE link_id=$1 AND provider_id='same-message'",link).fetch_one(&db).await.unwrap();
+        let state = sqlx::query_scalar!(
+            r#"
+            SELECT
+                (mailbox_state ->> 'in_trash')::boolean
+            FROM
+                email_messages
+            WHERE
+                link_id = $1
+                AND provider_id = 'same-message'
+            "#,
+            link,
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
         assert_eq!(state, Some(true));
     }
 }

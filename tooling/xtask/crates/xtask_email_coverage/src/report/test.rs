@@ -1193,7 +1193,25 @@ fn imap_claims_require_imap_evidence_and_mutation_proof() {
     };
     let mut ledger=Ledger {functions:functions("id\tarea\tfunction\tgmail\toutlook\tui\tresult_checked_at\nF-198\taccounts\tConnect IMAP\tno\tno\tyes\tservice\n").unwrap(),map:map("[F-198]\nimap = ['http POST /email/links/imap']\n").unwrap(),checks:checks("function\tscenario\nF-198\timap connect\n").unwrap(),proofs:Vec::new(),waivers:Waivers::default()};
     let record = |provider| {
-        serde_json::from_value(json!({"version":1,"binary":"imap","test":"connect","providers":[provider],"http":[{"service":"email_service","method":"POST","path":"/email/links/imap","status":200}]})).unwrap()
+        serde_json::from_value(json!(
+        {
+            "version": 1,
+            "binary": "imap",
+            "test": "connect",
+            "providers": [
+                provider
+            ],
+            "http": [
+                {
+                    "service": "email_service",
+                    "method": "POST",
+                    "path": "/email/links/imap",
+                    "status": 200
+                }
+            ]
+        }
+        ))
+        .unwrap()
     };
     let wrong = build(&reader, &ledger, vec![record("gmail")], &Results::default());
     assert_eq!(

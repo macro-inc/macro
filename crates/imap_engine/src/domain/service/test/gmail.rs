@@ -28,7 +28,20 @@ fn remote(id: &str, label: &str, role: FolderRole, messages: Vec<RemoteMessage>)
     }
 }
 fn message(labels: &[&str]) -> RemoteMessage {
-    RemoteMessage{gmail_labels:Some(labels.iter().map(|s|(*s).to_owned()).collect()),uid:2,flags:vec![],mime:b"From: sender@example.net\r\nMessage-ID: <native@example.net>\r\nSubject: native\r\n\r\n".as_slice().into(),size:80,received_at:Utc.timestamp_opt(1_700_000_000,0).unwrap(),modseq:None,gmail_message_id:Some(42),native_message_id:Some("g:2a".into()),native_thread_id:Some("g:30".into())}
+    RemoteMessage {
+        gmail_labels: Some(labels.iter().map(|s| (*s).to_owned()).collect()),
+        uid: 2,
+        flags: vec![],
+        mime: b"From: sender@example.net\r\nMessage-ID: <native@example.net>\r\nSubject: native\r\n\r\n"
+            .as_slice()
+            .into(),
+        size: 80,
+        received_at: Utc.timestamp_opt(1_700_000_000, 0).unwrap(),
+        modseq: None,
+        gmail_message_id: Some(42),
+        native_message_id: Some("g:2a".into()),
+        native_thread_id: Some("g:30".into()),
+    }
 }
 #[test]
 fn native_label_feeds_share_identity_and_inbox_removal_has_a_real_delta() {

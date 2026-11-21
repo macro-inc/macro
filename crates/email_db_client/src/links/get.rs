@@ -268,64 +268,140 @@ pub async fn fetch_inbox_details_for_macro_id(
     let rows = sqlx::query_as!(
         DbInboxDetailsRow,
         r#"
-        SELECT l.id as "id!", l.macro_id as "macro_id!",
-               l.fusionauth_user_id as "fusionauth_user_id!",
-               l.email_address as "email_address!",
-               l.provider as "provider!: _",
-               l.is_sync_active as "is_sync_active!",
-               l.is_primary as "is_primary!",
-               l.needs_reauth as "needs_reauth!",
-               l.mailbox_unavailable_at IS NOT NULL as "mailbox_unavailable!",
-               l.last_sync_error_at,
-               l.created_at as "created_at!",
-               l.updated_at as "updated_at!",
-               s.signature_on_replies_forwards as "signature_on_replies_forwards?",
-               s.signature,
-               s.read_receipts_enabled as "read_receipts_enabled?",
-               CASE WHEN l.provider IN ('OUTLOOK','IMAP') THEN
-                   CASE WHEN NOT EXISTS (SELECT 1 FROM email_sync_streams ss WHERE ss.link_id = l.id AND ss.generation = l.sync_generation AND ss.kind IN ('folder_catalog','mail_folder'))
-                       THEN 'Init'::email_backfill_job_status
-                   WHEN EXISTS (SELECT 1 FROM email_sync_streams ss WHERE ss.link_id = l.id AND ss.generation = l.sync_generation AND ss.kind IN ('folder_catalog','mail_folder') AND NOT ss.initial_complete)
-                       OR EXISTS (SELECT 1 FROM email_message_reconciliation mr WHERE mr.link_id = l.id AND mr.generation = l.sync_generation AND mr.is_import AND mr.available_at <> 'infinity')
-                       THEN 'InProgress'::email_backfill_job_status
-                   ELSE 'Complete'::email_backfill_job_status END
-               ELSE bj.status END as "latest_backfill_status?: _",
-               c.sfs_photo_url as "photo_url?",
-               CASE WHEN l.provider IN ('OUTLOOK','IMAP') THEN COALESCE(ms.granted_scopes, '{}') ELSE COALESCE(g.granted_scopes, '{}') END AS "provider_granted_scopes!",
-               (CASE WHEN l.provider IN ('OUTLOOK','IMAP') THEN ms.calendar_disabled_at ELSE g.calendar_disabled_at END IS NOT NULL) AS "calendar_disabled!",
-               EXISTS (
-                   SELECT 1 FROM calendar_accounts ca WHERE ca.email_link_id = l.id
-               ) AS "has_calendar_data!"
+        SELECT
+            l.id as "id!",
+            l.macro_id as "macro_id!",
+            l.fusionauth_user_id as "fusionauth_user_id!",
+            l.email_address as "email_address!",
+            l.provider as "provider!: _",
+            l.is_sync_active as "is_sync_active!",
+            l.is_primary as "is_primary!",
+            l.needs_reauth as "needs_reauth!",
+            l.mailbox_unavailable_at IS NOT NULL as "mailbox_unavailable!",
+            l.last_sync_error_at,
+            l.created_at as "created_at!",
+            l.updated_at as "updated_at!",
+            s.signature_on_replies_forwards as "signature_on_replies_forwards?",
+            s.signature,
+            s.read_receipts_enabled as "read_receipts_enabled?",
+            CASE WHEN l.provider IN ('OUTLOOK', 'IMAP') THEN
+                CASE WHEN NOT EXISTS (
+                    SELECT
+                        1
+                    FROM
+                        email_sync_streams ss
+                    WHERE
+                        ss.link_id = l.id
+                        AND ss.generation = l.sync_generation
+                        AND ss.kind IN ('folder_catalog', 'mail_folder')) THEN
+                    'Init'::email_backfill_job_status
+                WHEN EXISTS (
+                    SELECT
+                        1
+                    FROM
+                        email_sync_streams ss
+                    WHERE
+                        ss.link_id = l.id
+                        AND ss.generation = l.sync_generation
+                        AND ss.kind IN ('folder_catalog', 'mail_folder')
+                        AND NOT ss.initial_complete)
+                    OR EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            email_message_reconciliation mr
+                        WHERE
+                            mr.link_id = l.id
+                            AND mr.generation = l.sync_generation
+                            AND mr.is_import
+                            AND mr.available_at <> 'infinity') THEN
+                    'InProgress'::email_backfill_job_status
+                ELSE
+                    'Complete'::email_backfill_job_status
+                END
+            ELSE
+                bj.status
+            END as "latest_backfill_status?: _",
+            c.sfs_photo_url as "photo_url?",
+            CASE WHEN l.provider IN ('OUTLOOK', 'IMAP') THEN
+                COALESCE(ms.granted_scopes, '{}')
+            ELSE
+                COALESCE(g.granted_scopes, '{}')
+            END AS "provider_granted_scopes!",
+            (
+                CASE WHEN l.provider IN ('OUTLOOK', 'IMAP') THEN
+                    ms.calendar_disabled_at
+                ELSE
+                    g.calendar_disabled_at
+                END IS NOT NULL) AS "calendar_disabled!",
+            EXISTS (
+                SELECT
+                    1
+                FROM
+                    calendar_accounts ca
+                WHERE
+                    ca.email_link_id = l.id) AS "has_calendar_data!"
         FROM (
-            SELECT el.id, el.macro_id, el.fusionauth_user_id, el.email_address,
-                   el.provider, el.is_sync_active, el.is_primary, el.needs_reauth,
-                   el.last_sync_error_at, el.created_at, el.updated_at,el.sync_generation,el.grant_generation,
-                   el.mailbox_unavailable_at
-            FROM email_links el
-            WHERE el.macro_id = $1
+            SELECT
+                el.id,
+                el.macro_id,
+                el.fusionauth_user_id,
+                el.email_address,
+                el.provider,
+                el.is_sync_active,
+                el.is_primary,
+                el.needs_reauth,
+                el.last_sync_error_at,
+                el.created_at,
+                el.updated_at,
+                el.sync_generation,
+                el.grant_generation,
+                el.mailbox_unavailable_at
+            FROM
+                email_links el
+            WHERE
+                el.macro_id = $1
             UNION
-            SELECT el.id, el.macro_id, el.fusionauth_user_id, el.email_address,
-                   el.provider, el.is_sync_active, el.is_primary, el.needs_reauth,
-                   el.last_sync_error_at, el.created_at, el.updated_at,el.sync_generation,el.grant_generation,
-                   el.mailbox_unavailable_at
-            FROM email_links el
-            JOIN macro_user_links mul ON el.id = mul.link_id
-            WHERE mul.primary_macro_id = $1
-        ) l
-        LEFT JOIN email_link_google_scopes g ON g.link_id = l.id
-        LEFT JOIN email_link_microsoft_scopes ms ON ms.link_id = l.id AND ms.grant_generation = l.grant_generation
-        LEFT JOIN email_settings s ON s.link_id = l.id
-        LEFT JOIN LATERAL (
-            SELECT status FROM email_backfill_jobs
-            WHERE link_id = l.id
-            ORDER BY created_at DESC
-            LIMIT 1
-        ) bj ON true
-        LEFT JOIN email_contacts c
-            ON c.link_id = l.id AND LOWER(c.email_address) = LOWER(l.email_address)
-        ORDER BY l.created_at DESC
+            SELECT
+                el.id,
+                el.macro_id,
+                el.fusionauth_user_id,
+                el.email_address,
+                el.provider,
+                el.is_sync_active,
+                el.is_primary,
+                el.needs_reauth,
+                el.last_sync_error_at,
+                el.created_at,
+                el.updated_at,
+                el.sync_generation,
+                el.grant_generation,
+                el.mailbox_unavailable_at
+            FROM
+                email_links el
+                JOIN macro_user_links mul ON el.id = mul.link_id
+            WHERE
+                mul.primary_macro_id = $1) l
+            LEFT JOIN email_link_google_scopes g ON g.link_id = l.id
+            LEFT JOIN email_link_microsoft_scopes ms ON ms.link_id = l.id
+                AND ms.grant_generation = l.grant_generation
+            LEFT JOIN email_settings s ON s.link_id = l.id
+            LEFT JOIN LATERAL (
+                SELECT
+                    status
+                FROM
+                    email_backfill_jobs
+                WHERE
+                    link_id = l.id
+                ORDER BY
+                    created_at DESC
+                LIMIT 1) bj ON true
+            LEFT JOIN email_contacts c ON c.link_id = l.id
+                AND LOWER(c.email_address) = LOWER(l.email_address)
+            ORDER BY
+                l.created_at DESC
         "#,
-        macro_id
+        macro_id,
     )
     .fetch_all(pool)
     .await?;

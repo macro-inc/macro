@@ -501,7 +501,30 @@ async fn uncertain_send_is_persisted_before_io_and_is_not_sent_again_after_resta
         correlation,
         revision: 1,
         reply_to: None,
-        content: serde_json::json!({"message_id":"send-once@example.net","message":{"link_id":binding.link_id,"subject":"test","to":[{"email":"recipient@example.net","name":null,"photo_url":null}],"body_text":"payload"},"from":{"email":"owner@example.net","name":null,"photo_url":null},"parent_message_id":null,"references":null}),
+        content: serde_json::json!(
+        {
+            "message_id": "send-once@example.net",
+            "message": {
+                "link_id": binding.link_id,
+                "subject": "test",
+                "to": [
+                    {
+                        "email": "recipient@example.net",
+                        "name": null,
+                        "photo_url": null
+                    }
+                ],
+                "body_text": "payload"
+            },
+            "from": {
+                "email": "owner@example.net",
+                "name": null,
+                "photo_url": null
+            },
+            "parent_message_id": null,
+            "references": null
+        }
+        ),
     };
     let created: Draft = serde_json::from_value(
         engine
@@ -621,7 +644,30 @@ async fn a_send_deadline_pauses_other_attempts_but_never_replays_the_unknown_one
             correlation,
             revision: 1,
             reply_to: None,
-            content: serde_json::json!({"message_id":format!("{correlation}@example.net"),"message":{"link_id":binding.link_id,"subject":"deadline","to":[{"email":"recipient@example.net","name":null,"photo_url":null}],"body_text":"payload"},"from":{"email":"owner@example.net","name":null,"photo_url":null},"parent_message_id":null,"references":null}),
+            content: serde_json::json!(
+            {
+                "message_id": format!("{correlation}@example.net"),
+                "message": {
+                    "link_id": binding.link_id,
+                    "subject": "deadline",
+                    "to": [
+                        {
+                            "email": "recipient@example.net",
+                            "name": null,
+                            "photo_url": null
+                        }
+                    ],
+                    "body_text": "payload"
+                },
+                "from": {
+                    "email": "owner@example.net",
+                    "name": null,
+                    "photo_url": null
+                },
+                "parent_message_id": null,
+                "references": null
+            }
+            ),
         };
         engine
             .execute(binding, Operation::CreateDraft { input })
@@ -793,7 +839,30 @@ async fn ambiguous_sent_append_is_fenced_across_restart_even_with_blind_search_a
         correlation,
         revision: 1,
         reply_to: None,
-        content: serde_json::json!({"message_id":"sent-once@example.net","message":{"link_id":binding.link_id,"subject":"test","to":[{"email":"recipient@example.net","name":null,"photo_url":null}],"body_text":"readable fallback"},"from":{"email":"owner@example.net","name":null,"photo_url":null},"parent_message_id":null,"references":null}),
+        content: serde_json::json!(
+        {
+            "message_id": "sent-once@example.net",
+            "message": {
+                "link_id": binding.link_id,
+                "subject": "test",
+                "to": [
+                    {
+                        "email": "recipient@example.net",
+                        "name": null,
+                        "photo_url": null
+                    }
+                ],
+                "body_text": "readable fallback"
+            },
+            "from": {
+                "email": "owner@example.net",
+                "name": null,
+                "photo_url": null
+            },
+            "parent_message_id": null,
+            "references": null
+        }
+        ),
     };
     let mut draft = new_draft(&AccountState::default(), id.clone(), input).unwrap();
     draft.submission = Some(SubmissionOutcome::Accepted);

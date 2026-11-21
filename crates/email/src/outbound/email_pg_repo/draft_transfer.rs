@@ -93,25 +93,114 @@ async fn source_facts(
     .await
     .map_err(db)?
     .ok_or(EmailErr::MessageNotFound(request.source_id))?;
-    let row=sqlx::query!(r#"SELECT m.updated_at,m.provider_id,m.thread_id,
-        CASE WHEN l.provider IN ('OUTLOOK','IMAP') THEN COALESCE(d.checkpoint->'draft'->>'version',m.provider_version,d.base_version) ELSE m.provider_history_id END AS version,
-        m.is_draft,m.is_sent,
-        (COALESCE(d.delete_requested,false) OR EXISTS(SELECT 1 FROM email_draft_transfers t WHERE t.source_id=m.id AND t.state<>'preparing')) AS "retired!",
-        (m.draft_generation <> $3 OR EXISTS(SELECT 1 FROM email_send_attempts a WHERE a.message_id=m.id AND NOT a.cancelled AND NOT a.sent)
-            OR EXISTS(SELECT 1 FROM email_scheduled_messages s WHERE s.message_id=m.id)
-            OR EXISTS(SELECT 1 FROM email_attachments_drafts a WHERE a.draft_id=m.id AND a.upload_pending)
-            OR COALESCE(d.lease_until>now(),false) OR COALESCE(d.state IN ('conflict','unknown'),false)
-            OR COALESCE(d.checkpoint->>'stage' NOT IN ('inspect','ready'),false)) AS "busy!",
-        EXISTS(SELECT 1 FROM email_draft_transfers t WHERE t.destination_id=m.id AND t.state NOT IN ('ready','retained')) AS "predecessor!",
-        jsonb_build_object('db_id',m.id,'thread_db_id',m.thread_id,'subject',COALESCE(m.subject,''),'replying_to_id',m.replying_to_id,
-            'body_text',m.body_text,'body_html',m.body_html_sanitized,'body_macro',m.body_macro,'headers_json',m.headers_jsonb,
-            'to',COALESCE(recipients.to_addresses,'[]'::jsonb),'cc',COALESCE(recipients.cc_addresses,'[]'::jsonb),'bcc',COALESCE(recipients.bcc_addresses,'[]'::jsonb)) AS "content!"
-        FROM email_messages m JOIN email_links l ON l.id=m.link_id LEFT JOIN email_mailbox_drafts d ON d.message_id=m.id
-        CROSS JOIN LATERAL (SELECT jsonb_agg(jsonb_build_object('email',c.email_address,'name',COALESCE(r.name,c.name))) FILTER(WHERE r.recipient_type='TO') AS to_addresses,
-            jsonb_agg(jsonb_build_object('email',c.email_address,'name',COALESCE(r.name,c.name))) FILTER(WHERE r.recipient_type='CC') AS cc_addresses,
-            jsonb_agg(jsonb_build_object('email',c.email_address,'name',COALESCE(r.name,c.name))) FILTER(WHERE r.recipient_type='BCC') AS bcc_addresses
-            FROM email_message_recipients r JOIN email_contacts c ON c.id=r.contact_id WHERE r.message_id=m.id) recipients
-        WHERE m.id=$1 AND m.link_id=$2"#,request.source_id,request.source_link_id,request.draft_generation).fetch_optional(tx).await.map_err(db)?.ok_or(EmailErr::MessageNotFound(request.source_id))?;
+    let row=sqlx::query!(
+        r#"
+        SELECT
+            m.updated_at,
+            m.provider_id,
+            m.thread_id,
+            CASE WHEN l.provider IN ('OUTLOOK', 'IMAP') THEN
+                COALESCE(d.checkpoint -> 'draft' ->> 'version', m.provider_version, d.base_version)
+            ELSE
+                m.provider_history_id
+            END AS version,
+            m.is_draft,
+            m.is_sent,
+            (COALESCE(d.delete_requested, false)
+                OR EXISTS (
+                    SELECT
+                        1
+                    FROM
+                        email_draft_transfers t
+                    WHERE
+                        t.source_id = m.id
+                        AND t.state <> 'preparing')) AS "retired!",
+            (m.draft_generation <> $3
+                OR EXISTS (
+                    SELECT
+                        1
+                    FROM
+                        email_send_attempts a
+                    WHERE
+                        a.message_id = m.id
+                        AND NOT a.cancelled
+                        AND NOT a.sent)
+                OR EXISTS (
+                    SELECT
+                        1
+                    FROM
+                        email_scheduled_messages s
+                    WHERE
+                        s.message_id = m.id)
+                OR EXISTS (
+                    SELECT
+                        1
+                    FROM
+                        email_attachments_drafts a
+                    WHERE
+                        a.draft_id = m.id
+                        AND a.upload_pending)
+                OR COALESCE(d.lease_until > now(), false)
+                OR COALESCE(d.state IN ('conflict', 'unknown'), false)
+                OR COALESCE(d.checkpoint ->> 'stage' NOT IN ('inspect', 'ready'), false)) AS "busy!",
+            EXISTS (
+                SELECT
+                    1
+                FROM
+                    email_draft_transfers t
+                WHERE
+                    t.destination_id = m.id
+                    AND t.state NOT IN ('ready', 'retained')) AS "predecessor!",
+            jsonb_build_object(
+                'db_id', m.id,
+                'thread_db_id', m.thread_id,
+                'subject', COALESCE(m.subject, ''),
+                'replying_to_id', m.replying_to_id,
+                'body_text', m.body_text,
+                'body_html', m.body_html_sanitized,
+                'body_macro', m.body_macro,
+                'headers_json', m.headers_jsonb,
+                'to', COALESCE(recipients.to_addresses, '[]'::jsonb),
+                'cc', COALESCE(recipients.cc_addresses, '[]'::jsonb),
+                'bcc', COALESCE(recipients.bcc_addresses, '[]'::jsonb)
+            ) AS "content!"
+        FROM
+            email_messages m
+            JOIN email_links l ON l.id = m.link_id
+            LEFT JOIN email_mailbox_drafts d ON d.message_id = m.id
+            CROSS JOIN LATERAL (
+                SELECT
+                    jsonb_agg(
+                        jsonb_build_object(
+                            'email', c.email_address,
+                            'name', COALESCE(r.name, c.name)
+                        )
+                    ) FILTER (WHERE r.recipient_type = 'TO') AS to_addresses,
+                    jsonb_agg(
+                        jsonb_build_object(
+                            'email', c.email_address,
+                            'name', COALESCE(r.name, c.name)
+                        )
+                    ) FILTER (WHERE r.recipient_type = 'CC') AS cc_addresses,
+                    jsonb_agg(
+                        jsonb_build_object(
+                            'email', c.email_address,
+                            'name', COALESCE(r.name, c.name)
+                        )
+                    ) FILTER (WHERE r.recipient_type = 'BCC') AS bcc_addresses
+                FROM
+                    email_message_recipients r
+                    JOIN email_contacts c ON c.id = r.contact_id
+                WHERE
+                    r.message_id = m.id) recipients
+        WHERE
+            m.id = $1
+            AND m.link_id = $2
+        "#,
+        request.source_id,
+        request.source_link_id,
+        request.draft_generation,
+    ).fetch_optional(tx).await.map_err(db)?.ok_or(EmailErr::MessageNotFound(request.source_id))?;
     validate_transfer(TransferEligibility {
         authorized: true,
         draft: row.is_draft && !row.is_sent,

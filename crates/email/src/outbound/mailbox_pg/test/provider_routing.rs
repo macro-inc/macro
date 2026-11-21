@@ -4,8 +4,11 @@ use super::*;
 async fn legacy_writers_derive_the_provider_and_parent_changes_move_existing_work(db: PgPool) {
     let (_, link) = fixture(&db).await;
     sqlx::query!(
-        "INSERT INTO email_message_reconciliation (link_id, generation, provider_id, is_import) VALUES ($1, 1, 'queued', false)",
-        link
+        r#"
+        INSERT INTO email_message_reconciliation (link_id, generation, provider_id, is_import)
+            VALUES ($1, 1, 'queued', false)
+        "#,
+        link,
     )
     .execute(&db)
     .await
@@ -14,15 +17,29 @@ async fn legacy_writers_derive_the_provider_and_parent_changes_move_existing_wor
     // Older writers omit provider; a caller-supplied routing hint must not
     // override the parent either. Work identities and generation stay intact.
     sqlx::query!(
-        "UPDATE email_links SET provider = 'IMAP' WHERE id = $1",
-        link
+        r#"
+        UPDATE
+            email_links
+        SET
+            provider = 'IMAP'
+        WHERE
+            id = $1
+        "#,
+        link,
     )
     .execute(&db)
     .await
     .unwrap();
     sqlx::query!(
-        "UPDATE email_message_reconciliation SET provider = 'GMAIL' WHERE link_id = $1",
-        link
+        r#"
+        UPDATE
+            email_message_reconciliation
+        SET
+            provider = 'GMAIL'
+        WHERE
+            link_id = $1
+        "#,
+        link,
     )
     .execute(&db)
     .await
@@ -44,20 +61,40 @@ async fn legacy_writers_derive_the_provider_and_parent_changes_move_existing_wor
     assert_eq!(message.mailbox, stream.mailbox);
     assert_eq!(message.provider_id.as_str(), "queued");
 
-    sqlx::query!("DELETE FROM email_links WHERE id = $1", link)
-        .execute(&db)
-        .await
-        .unwrap();
+    sqlx::query!(
+        r#"
+        DELETE FROM email_links
+        WHERE id = $1
+        "#,
+        link,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
     let streams = sqlx::query_scalar!(
-        "SELECT count(*) AS \"count!\" FROM email_sync_streams WHERE link_id = $1",
-        link
+        r#"
+        SELECT
+            count(*) AS "count!"
+        FROM
+            email_sync_streams
+        WHERE
+            link_id = $1
+        "#,
+        link,
     )
     .fetch_one(&db)
     .await
     .unwrap();
     let messages = sqlx::query_scalar!(
-        "SELECT count(*) AS \"count!\" FROM email_message_reconciliation WHERE link_id = $1",
-        link
+        r#"
+        SELECT
+            count(*) AS "count!"
+        FROM
+            email_message_reconciliation
+        WHERE
+            link_id = $1
+        "#,
+        link,
     )
     .fetch_one(&db)
     .await
@@ -70,25 +107,49 @@ async fn legacy_writers_derive_the_provider_and_parent_changes_move_existing_wor
 async fn a_repeatable_read_provider_change_cannot_strand_a_newly_committed_child(db: PgPool) {
     let (_, link) = fixture(&db).await;
     let mut parent = db.begin().await.unwrap();
-    sqlx::query!("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
-        .execute(&mut *parent)
-        .await
-        .unwrap();
-    // Establish the old snapshot before the separate writer inserts its row.
-    sqlx::query!("SELECT id FROM email_links WHERE id = $1", link)
-        .fetch_one(&mut *parent)
-        .await
-        .unwrap();
     sqlx::query!(
-        "INSERT INTO email_message_reconciliation (link_id, generation, provider_id, is_import) VALUES ($1, 1, 'new-child', false)",
-        link
+        r#"
+        SET TRANSACTION ISOLATION LEVEL REPEATABLE READ
+        "#,
+    )
+    .execute(&mut *parent)
+    .await
+    .unwrap();
+    // Establish the old snapshot before the separate writer inserts its row.
+    sqlx::query!(
+        r#"
+        SELECT
+            id
+        FROM
+            email_links
+        WHERE
+            id = $1
+        "#,
+        link,
+    )
+    .fetch_one(&mut *parent)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO email_message_reconciliation (link_id, generation, provider_id, is_import)
+            VALUES ($1, 1, 'new-child', false)
+        "#,
+        link,
     )
     .execute(&db)
     .await
     .unwrap();
     let error = sqlx::query!(
-        "UPDATE email_links SET provider = 'IMAP' WHERE id = $1",
-        link
+        r#"
+        UPDATE
+            email_links
+        SET
+            provider = 'IMAP'
+        WHERE
+            id = $1
+        "#,
+        link,
     )
     .execute(&mut *parent)
     .await
@@ -100,8 +161,15 @@ async fn a_repeatable_read_provider_change_cannot_strand_a_newly_committed_child
     parent.rollback().await.unwrap();
     // Retrying with a fresh snapshot propagates both tables atomically.
     sqlx::query!(
-        "UPDATE email_links SET provider = 'IMAP' WHERE id = $1",
-        link
+        r#"
+        UPDATE
+            email_links
+        SET
+            provider = 'IMAP'
+        WHERE
+            id = $1
+        "#,
+        link,
     )
     .execute(&db)
     .await

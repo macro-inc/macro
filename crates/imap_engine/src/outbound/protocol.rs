@@ -141,7 +141,13 @@ impl ProtocolTransport {
         let mut priorities = Vec::new();
         for n in names {
             let attrs = format!("{:?}", n.attributes()).to_ascii_lowercase();
-            if n.attributes().iter().any(|attribute|matches!(attribute,imap_proto::NameAttribute::NoSelect)||matches!(attribute,imap_proto::NameAttribute::Extension(value) if value.eq_ignore_ascii_case("\\NonExistent"))){continue;}
+            if n.attributes().iter().any(|attribute| {
+                matches!(attribute, imap_proto::NameAttribute::NoSelect)
+                    || matches!(attribute, imap_proto::NameAttribute::Extension(value)
+                        if value.eq_ignore_ascii_case("\\NonExistent"))
+            }) {
+                continue;
+            }
             let path = n.name().to_owned();
             let (role, priority) = folder_roles::detect(&path, n.delimiter(), n.attributes());
             priorities.push(priority);

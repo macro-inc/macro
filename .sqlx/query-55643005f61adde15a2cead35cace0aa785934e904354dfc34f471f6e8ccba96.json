@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                folder_preferences_revision,\n                folder_role_overrides,\n                excluded_folder_ids,\n                watched_folder_ids\n            FROM\n                imap_accounts\n            WHERE\n                link_id = $1\n                AND sync_generation = $2\n                AND grant_generation = $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "folder_preferences_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "folder_role_overrides",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 2,
+        "name": "excluded_folder_ids",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "watched_folder_ids",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "55643005f61adde15a2cead35cace0aa785934e904354dfc34f471f6e8ccba96"
+}

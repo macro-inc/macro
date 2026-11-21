@@ -36,6 +36,8 @@ on a production-size local database before the commit.
   the non-macro form is only for queries that genuinely cannot be statically
   known. Enforced by clippy `disallowed-methods`; see the [database
   guide](../../../docs/development/database.md).
+- Format handwritten SQL as readable multiline clauses and put each SQLx bound
+  argument on its own line; Rust formatting does not format SQL inside macros.
 - **CS-09** The `.sqlx` cache lives at the workspace root — run `nix develop
   --command just prepare_db` from the repository root; never commit a `.sqlx`
   directory inside an individual crate. See the [database

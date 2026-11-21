@@ -60,13 +60,34 @@ pub async fn lock_gmail_connection(
     .await
     .map_err(unavailable)?;
     sqlx::query!(
-        "SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended($1,0))",
-        address.to_ascii_lowercase()
+        r#"
+        SELECT
+            1 AS locked
+        FROM
+            pg_advisory_xact_lock(hashtextextended($1, 0))
+        "#,
+        address.to_ascii_lowercase(),
     )
     .fetch_one(&mut *conn)
     .await
     .map_err(unavailable)?;
-    let conflicting = sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM email_links WHERE lower(email_address)=lower($1) AND provider<>'GMAIL') AS "conflict!""#,address).fetch_one(&mut *conn).await.map_err(unavailable)?;
+    let conflicting = sqlx::query_scalar!(
+        r#"
+        SELECT
+            EXISTS (
+                SELECT
+                    1
+                FROM
+                    email_links
+                WHERE
+                    lower(email_address) = lower($1)
+                    AND provider <> 'GMAIL') AS "conflict!"
+        "#,
+        address,
+    )
+    .fetch_one(&mut *conn)
+    .await
+    .map_err(unavailable)?;
     if conflicting {
         return Err(InitializationError::IdentityConflict);
     }
@@ -104,7 +125,23 @@ async fn snapshot(
     request: &InitializeMailbox,
     grant: &VerifiedMailboxGrant,
 ) -> Result<InitializationSnapshot, InitializationError> {
-    let conflicting=sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM email_links WHERE lower(email_address)=lower($1) AND provider<>'OUTLOOK') AS "conflict!""#,grant.email).fetch_one(&mut *conn).await.map_err(unavailable)?;
+    let conflicting = sqlx::query_scalar!(
+        r#"
+        SELECT
+            EXISTS (
+                SELECT
+                    1
+                FROM
+                    email_links
+                WHERE
+                    lower(email_address) = lower($1)
+                    AND provider <> 'OUTLOOK') AS "conflict!"
+        "#,
+        grant.email,
+    )
+    .fetch_one(&mut *conn)
+    .await
+    .map_err(unavailable)?;
     if conflicting {
         return Err(InitializationError::IdentityConflict);
     }
@@ -238,8 +275,13 @@ impl MailboxInitializationRepository for PgMailboxInitialization {
         .await
         .map_err(unavailable)?;
         sqlx::query!(
-            "SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended($1,0))",
-            grant.email.to_ascii_lowercase()
+            r#"
+            SELECT
+                1 AS locked
+            FROM
+                pg_advisory_xact_lock(hashtextextended($1, 0))
+            "#,
+            grant.email.to_ascii_lowercase(),
         )
         .fetch_one(&mut *tx)
         .await
@@ -253,13 +295,16 @@ impl MailboxInitializationRepository for PgMailboxInitialization {
         }
         let consumed = sqlx::query!(
             r#"
-            DELETE FROM in_progress_user_link WHERE id = $1 AND macro_user_id = $2
-                AND email_provider = 'OUTLOOK' AND linked_email = $3
+            DELETE FROM in_progress_user_link
+            WHERE id = $1
+                AND macro_user_id = $2
+                AND email_provider = 'OUTLOOK'
+                AND linked_email = $3
                 AND created_at > now() - interval '24 hours'
-        "#,
+            "#,
             request.attempt,
             request.actor_fusion_id,
-            grant.email.to_ascii_lowercase()
+            grant.email.to_ascii_lowercase(),
         )
         .execute(&mut *tx)
         .await

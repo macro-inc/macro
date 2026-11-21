@@ -5,8 +5,26 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 async fn owner(db: &PgPool) -> MacroUserIdStr<'static> {
     let macro_id = MacroUserIdStr::try_from("macro|owner@example.com").unwrap();
     let id = Uuid::from_u128(1);
-    sqlx::query!("INSERT INTO macro_user(id,username,email,stripe_customer_id) VALUES($1,'macro|owner@example.com','owner@example.com','cus_imap')",id).execute(db).await.unwrap();
-    sqlx::query!(r#"INSERT INTO "User"(id,email,macro_user_id) VALUES('macro|owner@example.com','owner@example.com',$1)"#,id).execute(db).await.unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO macro_user (id, username, email, stripe_customer_id)
+            VALUES ($1, 'macro|owner@example.com', 'owner@example.com', 'cus_imap')
+        "#,
+        id,
+    )
+    .execute(db)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO "User" (id, email, macro_user_id)
+            VALUES ('macro|owner@example.com', 'owner@example.com', $1)
+        "#,
+        id,
+    )
+    .execute(db)
+    .await
+    .unwrap();
     macro_id
 }
 fn input(id: u128) -> ImapConnectRequest {
@@ -45,8 +63,15 @@ async fn promotion_is_inactive_until_activated_replayable_and_cannot_resurrect_d
         .await
         .unwrap();
     let active = sqlx::query_scalar!(
-        "SELECT is_sync_active FROM email_links WHERE id=$1",
-        attempt.binding.link_id
+        r#"
+        SELECT
+            is_sync_active
+        FROM
+            email_links
+        WHERE
+            id = $1
+        "#,
+        attempt.binding.link_id,
     )
     .fetch_one(&db)
     .await
@@ -69,9 +94,38 @@ async fn promotion_is_inactive_until_activated_replayable_and_cannot_resurrect_d
         repo.activate(&attempt).await.unwrap(),
         attempt.binding.link_id
     );
-    let streams=sqlx::query_scalar!(r#"SELECT count(*) AS "count!" FROM email_sync_streams WHERE link_id=$1 AND kind='folder_catalog'"#,attempt.binding.link_id).fetch_one(&db).await.unwrap();
+    let streams = sqlx::query_scalar!(
+        r#"
+        SELECT
+            count(*) AS "count!"
+        FROM
+            email_sync_streams
+        WHERE
+            link_id = $1
+            AND kind = 'folder_catalog'
+        "#,
+        attempt.binding.link_id,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
     assert_eq!(streams, 1);
-    sqlx::query!("UPDATE email_links SET is_sync_active=false,sync_generation=sync_generation+1,disconnect_requested_at=now() WHERE id=$1",attempt.binding.link_id).execute(&db).await.unwrap();
+    sqlx::query!(
+        r#"
+        UPDATE
+            email_links
+        SET
+            is_sync_active = false,
+            sync_generation = sync_generation + 1,
+            disconnect_requested_at = now()
+        WHERE
+            id = $1
+        "#,
+        attempt.binding.link_id,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
     assert!(matches!(
         repo.attempt(&actor, request.request_id).await,
         Err(ImapConnectionError::Changed)
@@ -103,14 +157,32 @@ async fn reservation_serializes_provider_collisions_and_abandons_only_inactive_p
     ));
     repo.abandon(&attempt).await.unwrap();
     let exists = sqlx::query_scalar!(
-        r#"SELECT EXISTS(SELECT 1 FROM email_links WHERE id=$1) AS "exists!""#,
-        attempt.binding.link_id
+        r#"
+        SELECT
+            EXISTS (
+                SELECT
+                    1
+                FROM
+                    email_links
+                WHERE
+                    id = $1) AS "exists!"
+        "#,
+        attempt.binding.link_id,
     )
     .fetch_one(&db)
     .await
     .unwrap();
     assert!(!exists);
-    sqlx::query!("INSERT INTO email_links(id,macro_id,fusionauth_user_id,email_address,provider) VALUES($1,'macro|owner@example.com','owner','owner@example.com','GMAIL')",Uuid::from_u128(4)).execute(&db).await.unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider)
+            VALUES ($1, 'macro|owner@example.com', 'owner', 'owner@example.com', 'GMAIL')
+        "#,
+        Uuid::from_u128(4),
+    )
+    .execute(&db)
+    .await
+    .unwrap();
     assert!(matches!(
         repo.reserve(&actor, "owner", &input(5), &verification)
             .await,

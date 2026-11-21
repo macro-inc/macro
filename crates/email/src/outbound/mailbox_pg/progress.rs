@@ -39,10 +39,14 @@ impl MailboxProgressRepository for PgMailboxSync {
 
     async fn backlogs(&self) -> Result<Vec<MailboxBacklog>, MailboxError> {
         let mut tx = self.begin().await.map_err(db_error)?;
-        sqlx::query!("SET LOCAL statement_timeout = '15s'")
-            .execute(&mut *tx)
-            .await
-            .map_err(db_error)?;
+        sqlx::query!(
+            r#"
+            SET LOCAL statement_timeout = '15s'
+            "#,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(db_error)?;
         sqlx::query!(
             "DELETE FROM email_mailbox_import_minutes WHERE minute < now() - interval '1 day'"
         )
@@ -55,7 +59,8 @@ impl MailboxProgressRepository for PgMailboxSync {
         // generations and the message table are never read.
         let rows = sqlx::query!(
             r#"
-            SELECT l.id AS "link_id!",
+            SELECT
+                l.id AS "link_id!",
                 l.sync_generation AS "sync_generation!",
                 l.is_sync_active AS "sync_active!",
                 l.needs_reauth AS "needs_reauth!",
@@ -70,43 +75,68 @@ impl MailboxProgressRepository for PgMailboxSync {
                 COALESCE(recent.imported_5m, 0)::bigint AS "imported_5m!",
                 floor(EXTRACT(EPOCH FROM now() - latest.last_imported_at))::bigint AS seconds_since_last_import,
                 COALESCE(w.failures, 0) AS "watch_failures!"
-            FROM email_links l
-            LEFT JOIN email_mailbox_watch_work w ON w.link_id = l.id
-            CROSS JOIN LATERAL (
-                -- Abandoned rows wait at `available_at = 'infinity'`.
-                SELECT count(*) FILTER (WHERE available_at <> 'infinity') AS queued,
-                    count(*) FILTER (WHERE available_at > now() AND available_at <> 'infinity') AS parked,
-                    count(*) FILTER (WHERE available_at = 'infinity') AS abandoned,
-                    count(*) FILTER (WHERE lease_until > now()) AS leased,
-                    min(available_at) FILTER (
-                        WHERE available_at <= now() AND (lease_until IS NULL OR lease_until <= now())
-                    ) AS oldest_due,
-                    max(available_at) FILTER (WHERE available_at > now() AND available_at <> 'infinity') AS parked_until
-                FROM email_message_reconciliation
-                WHERE link_id = l.id AND generation = l.sync_generation
-            ) q
-            CROSS JOIN LATERAL (
-                SELECT count(*) AS incomplete
-                FROM email_sync_streams
-                WHERE link_id = l.id AND generation = l.sync_generation
-                    AND kind IN ('folder_catalog', 'mail_folder') AND NOT initial_complete
-            ) s
-            CROSS JOIN LATERAL (
-                SELECT sum(imported) AS imported_5m
-                FROM email_mailbox_import_minutes
-                WHERE link_id = l.id AND minute > now() - interval '5 minutes'
-            ) recent
-            -- A flush carries imports from at most the minute before it, so
-            -- the latest import is in one of the two newest minutes.
-            CROSS JOIN LATERAL (
-                SELECT max(last_imported_at) AS last_imported_at
-                FROM (
-                    SELECT last_imported_at FROM email_mailbox_import_minutes
-                    WHERE link_id = l.id ORDER BY minute DESC LIMIT 2
-                ) newest
-            ) latest
-            WHERE l.provider = $1::text::email_user_provider_enum AND (l.is_sync_active OR q.queued > 0 OR q.abandoned > 0)
-        "#, self.provider.as_str())
+            FROM
+                email_links l
+                LEFT JOIN email_mailbox_watch_work w ON w.link_id = l.id
+                CROSS JOIN LATERAL (
+                    -- Abandoned rows wait at `available_at = 'infinity'`.
+                    SELECT
+                        count(*) FILTER (WHERE available_at <> 'infinity') AS queued,
+                        count(*) FILTER (WHERE available_at > now()
+                                AND available_at <> 'infinity') AS parked,
+                            count(*) FILTER (WHERE available_at = 'infinity') AS abandoned,
+                            count(*) FILTER (WHERE lease_until > now()) AS leased,
+                            min(available_at) FILTER (WHERE available_at <= now()
+                                AND (lease_until IS NULL
+                                OR lease_until <= now())) AS oldest_due,
+                        max(available_at) FILTER (WHERE available_at > now()
+                            AND available_at <> 'infinity') AS parked_until
+                    FROM
+                        email_message_reconciliation
+                WHERE
+                    link_id = l.id
+                    AND generation = l.sync_generation) q
+                CROSS JOIN LATERAL (
+                    SELECT
+                        count(*) AS incomplete
+                    FROM
+                        email_sync_streams
+                    WHERE
+                        link_id = l.id
+                        AND generation = l.sync_generation
+                        AND kind IN ('folder_catalog', 'mail_folder')
+                        AND NOT initial_complete) s
+                CROSS JOIN LATERAL (
+                    SELECT
+                        sum(imported) AS imported_5m
+                    FROM
+                        email_mailbox_import_minutes
+                    WHERE
+                        link_id = l.id
+                        AND minute > now() - interval '5 minutes') recent
+                -- A flush carries imports from at most the minute before it, so
+                -- the latest import is in one of the two newest minutes.
+                CROSS JOIN LATERAL (
+                    SELECT
+                        max(last_imported_at) AS last_imported_at
+                    FROM (
+                        SELECT
+                            last_imported_at
+                        FROM
+                            email_mailbox_import_minutes
+                        WHERE
+                            link_id = l.id
+                        ORDER BY
+                            minute DESC
+                        LIMIT 2) newest) latest
+            WHERE
+                l.provider = $1::text::email_user_provider_enum
+                AND (l.is_sync_active
+                    OR q.queued > 0
+                    OR q.abandoned > 0)
+            "#,
+            self.provider.as_str(),
+        )
         .fetch_all(&mut *tx)
         .await
         .map_err(db_error)?;

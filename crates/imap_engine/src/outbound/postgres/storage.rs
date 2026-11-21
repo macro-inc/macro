@@ -197,10 +197,25 @@ impl PgRepository {
                     self,
                     rows,
                     sqlx::query!(
-                        "SELECT kind,key,folder_id,message_id,sequence,received_at,document,body FROM imap_state_entries WHERE link_id=$1 AND kind=ANY($2)",
+                        r#"
+                        SELECT
+                            kind,
+                            key,
+                            folder_id,
+                            message_id,
+                            sequence,
+                            received_at,
+                            document,
+                            body
+                        FROM
+                            imap_state_entries
+                        WHERE
+                            link_id = $1
+                            AND kind = ANY ($2)
+                        "#,
                         link,
                         &["folder", "message", "location", "change", "thread", "draft"]
-                            .map(str::to_owned)[..]
+                            .map(str::to_owned)[..],
                     )
                 );
             }
@@ -209,8 +224,26 @@ impl PgRepository {
                     self,
                     rows,
                     sqlx::query!(
-                        "SELECT kind,key,folder_id,message_id,sequence,received_at,document,body FROM imap_state_entries WHERE link_id=$1 AND kind='folder' ORDER BY key LIMIT 2000",
-                        link
+                        r#"
+                        SELECT
+                            kind,
+                            key,
+                            folder_id,
+                            message_id,
+                            sequence,
+                            received_at,
+                            document,
+                            body
+                        FROM
+                            imap_state_entries
+                        WHERE
+                            link_id = $1
+                            AND kind = 'folder'
+                        ORDER BY
+                            key
+                        LIMIT 2000
+                        "#,
+                        link,
                     )
                 );
                 match selection {
@@ -231,10 +264,30 @@ impl PgRepository {
                             self,
                             rows,
                             sqlx::query!(
-                                "SELECT kind,key,folder_id,message_id,sequence,received_at,document,body FROM imap_state_entries WHERE link_id=$1 AND kind='message' AND folder_id=ANY($2) ORDER BY received_at DESC,key LIMIT $3",
+                                r#"
+                                SELECT
+                                    kind,
+                                    key,
+                                    folder_id,
+                                    message_id,
+                                    sequence,
+                                    received_at,
+                                    document,
+                                    body
+                                FROM
+                                    imap_state_entries
+                                WHERE
+                                    link_id = $1
+                                    AND kind = 'message'
+                                    AND folder_id = ANY ($2)
+                                ORDER BY
+                                    received_at DESC,
+                                    key
+                                LIMIT $3
+                                "#,
                                 link,
                                 &folders,
-                                i64::from(limit.min(100))
+                                i64::from(limit.min(100)),
                             )
                         );
                         let ids = rows
@@ -246,9 +299,25 @@ impl PgRepository {
                             self,
                             rows,
                             sqlx::query!(
-                                "SELECT kind,key,folder_id,message_id,sequence,received_at,document,body FROM imap_state_entries WHERE link_id=$1 AND kind='location' AND message_id=ANY($2)",
+                                r#"
+                                SELECT
+                                    kind,
+                                    key,
+                                    folder_id,
+                                    message_id,
+                                    sequence,
+                                    received_at,
+                                    document,
+                                    body
+                                FROM
+                                    imap_state_entries
+                                WHERE
+                                    link_id = $1
+                                    AND kind = 'location'
+                                    AND message_id = ANY ($2)
+                                "#,
                                 link,
-                                &ids
+                                &ids,
                             )
                         );
                     }
@@ -264,9 +333,25 @@ impl PgRepository {
                             self,
                             rows,
                             sqlx::query!(
-                                "SELECT kind,key,folder_id,message_id,sequence,received_at,document,body FROM imap_state_entries WHERE link_id=$1 AND kind='upload' AND key=$2",
+                                r#"
+                                SELECT
+                                    kind,
+                                    key,
+                                    folder_id,
+                                    message_id,
+                                    sequence,
+                                    received_at,
+                                    document,
+                                    body
+                                FROM
+                                    imap_state_entries
+                                WHERE
+                                    link_id = $1
+                                    AND kind = 'upload'
+                                    AND key = $2
+                                "#,
                                 link,
-                                id
+                                id,
                             )
                         );
                         if let Some(id) = rows
@@ -287,10 +372,31 @@ impl PgRepository {
                                 self,
                                 rows,
                                 sqlx::query!(
-                                    "SELECT DISTINCT ON(message_id) kind,key,folder_id,message_id,sequence,received_at,document,body FROM imap_state_entries WHERE link_id=$1 AND kind='location' AND folder_id=$2 AND message_id>$3 ORDER BY message_id,key LIMIT 501",
+                                    r#"
+                                    SELECT DISTINCT ON (message_id)
+                                        kind,
+                                        key,
+                                        folder_id,
+                                        message_id,
+                                        sequence,
+                                        received_at,
+                                        document,
+                                        body
+                                    FROM
+                                        imap_state_entries
+                                    WHERE
+                                        link_id = $1
+                                        AND kind = 'location'
+                                        AND folder_id = $2
+                                        AND message_id > $3
+                                    ORDER BY
+                                        message_id,
+                                        key
+                                    LIMIT 501
+                                    "#,
                                     link,
                                     folder,
-                                    after
+                                    after,
                                 )
                             );
                         } else {
@@ -301,10 +407,41 @@ impl PgRepository {
                                 self,
                                 rows,
                                 sqlx::query!(
-                                    "SELECT kind,key,folder_id,message_id,sequence,received_at,document,body FROM imap_state_entries WHERE link_id=$1 AND kind='change' AND folder_id=$2 AND (sequence>$3 OR sequence=(SELECT min(sequence) FROM imap_state_entries WHERE link_id=$1 AND kind='change' AND folder_id=$2)) ORDER BY sequence LIMIT 502",
+                                    r#"
+                                    SELECT
+                                        kind,
+                                        key,
+                                        folder_id,
+                                        message_id,
+                                        sequence,
+                                        received_at,
+                                        document,
+                                        body
+                                    FROM
+                                        imap_state_entries
+                                    WHERE
+                                        link_id = $1
+                                        AND kind = 'change'
+                                        AND folder_id = $2
+                                        AND (sequence >
+                                                $3
+                                                OR sequence =
+                                                    (
+                                                        SELECT
+                                                            min(sequence)
+                                                        FROM
+                                                            imap_state_entries
+                                                        WHERE
+                                                            link_id = $1
+                                                            AND kind = 'change'
+                                                            AND folder_id = $2))
+                                            ORDER BY
+                                                sequence
+                                            LIMIT 502
+                                    "#,
                                     link,
                                     folder,
-                                    sequence
+                                    sequence,
                                 )
                             );
                         }
@@ -330,9 +467,27 @@ impl PgRepository {
             self,
             rows,
             sqlx::query!(
-                "SELECT kind,key,folder_id,message_id,sequence,received_at,document,body FROM imap_state_entries WHERE link_id=$1 AND ((kind='message' AND key=$2) OR (kind='location' AND message_id=$2))",
+                r#"
+                SELECT
+                    kind,
+                    key,
+                    folder_id,
+                    message_id,
+                    sequence,
+                    received_at,
+                    document,
+                    body
+                FROM
+                    imap_state_entries
+                WHERE
+                    link_id = $1
+                    AND ((kind = 'message'
+                            AND key = $2)
+                        OR (kind = 'location'
+                            AND message_id = $2))
+                "#,
                 link,
-                id
+                id,
             )
         );
         Ok(())
@@ -342,9 +497,29 @@ impl PgRepository {
             self,
             rows,
             sqlx::query!(
-                "SELECT kind,key,folder_id,message_id,sequence,received_at,document,body FROM imap_state_entries WHERE link_id=$1 AND ((kind='draft' AND key=$2) OR (kind='attachment' AND message_id=$2) OR (kind='message' AND key=$2))",
+                r#"
+                SELECT
+                    kind,
+                    key,
+                    folder_id,
+                    message_id,
+                    sequence,
+                    received_at,
+                    document,
+                    body
+                FROM
+                    imap_state_entries
+                WHERE
+                    link_id = $1
+                    AND ((kind = 'draft'
+                            AND key = $2)
+                        OR (kind = 'attachment'
+                            AND message_id = $2)
+                        OR (kind = 'message'
+                            AND key = $2))
+                "#,
                 link,
-                id
+                id,
             )
         );
         let reply = rows
@@ -380,10 +555,14 @@ impl PgRepository {
             .begin()
             .await
             .map_err(|_| Error::ConnectionUnavailable)?;
-        sqlx::query!("SET LOCAL statement_timeout='30s'")
-            .execute(&mut *tx)
-            .await
-            .map_err(|_| Error::ConnectionUnavailable)?;
+        sqlx::query!(
+            r#"
+            SET LOCAL statement_timeout = '30s'
+            "#,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(|_| Error::ConnectionUnavailable)?;
         let revision = Self::write_health(&mut tx, a).await?;
         let removed_drafts = deleted
             .iter()
@@ -391,15 +570,81 @@ impl PgRepository {
             .filter_map(|v| v["key"].as_str().map(str::to_owned))
             .collect::<Vec<_>>();
         if !removed_drafts.is_empty() {
-            sqlx::query!("DELETE FROM imap_state_entries WHERE link_id=$1 AND kind IN('attachment','upload') AND message_id=ANY($2)",a.binding.link_id,&removed_drafts).execute(&mut *tx).await.map_err(|_|Error::ConnectionUnavailable)?;
+            sqlx::query!(
+                r#"
+                DELETE FROM imap_state_entries
+                WHERE link_id = $1
+                    AND kind IN ('attachment', 'upload')
+                    AND message_id = ANY ($2)
+                "#,
+                a.binding.link_id,
+                &removed_drafts,
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(|_| Error::ConnectionUnavailable)?;
         }
         for chunk in deleted.chunks(500) {
             let data = serde_json::to_value(chunk).map_err(|_| Error::Invalid)?;
-            sqlx::query!("DELETE FROM imap_state_entries e USING jsonb_to_recordset($2::jsonb) AS d(kind text,key text) WHERE e.link_id=$1 AND e.kind=d.kind AND e.key=d.key",a.binding.link_id,data).execute(&mut *tx).await.map_err(|_|Error::ConnectionUnavailable)?;
+            sqlx::query!(
+                r#"
+                DELETE FROM imap_state_entries e USING jsonb_to_recordset($2::jsonb) AS d (kind text,
+                        key text)
+                    WHERE e.link_id = $1
+                        AND e.kind = d.kind
+                        AND e.key = d.key
+                "#,
+                a.binding.link_id,
+                data,
+            ).execute(&mut *tx).await.map_err(|_|Error::ConnectionUnavailable)?;
         }
         for chunk in changed.chunks(500) {
             let data = serde_json::to_value(chunk).map_err(|_| Error::Invalid)?;
-            sqlx::query!("INSERT INTO imap_state_entries(link_id,kind,key,folder_id,message_id,sequence,received_at,document,body) SELECT $1,d.kind,d.key,d.folder_id,d.message_id,d.sequence,d.received_at,d.document,decode(d.body,'base64') FROM jsonb_to_recordset($2::jsonb) AS d(kind text,key text,folder_id text,message_id text,sequence bigint,received_at timestamptz,document jsonb,body text) ON CONFLICT(link_id,kind,key) DO UPDATE SET folder_id=EXCLUDED.folder_id,message_id=EXCLUDED.message_id,sequence=EXCLUDED.sequence,received_at=EXCLUDED.received_at,document=EXCLUDED.document,body=EXCLUDED.body",a.binding.link_id,data).execute(&mut *tx).await.map_err(|_|Error::ConnectionUnavailable)?;
+            sqlx::query!(
+                r#"
+                INSERT INTO imap_state_entries (link_id, kind, key, folder_id, message_id, sequence,
+                    received_at,
+                    document,
+                    body
+                )
+                SELECT
+                    $1,
+                    d.kind,
+                    d.key,
+                    d.folder_id,
+                    d.message_id,
+                    d.sequence,
+                    d.received_at,
+                    d.document,
+                    decode(d.body, 'base64')
+                FROM
+                    jsonb_to_recordset($2::jsonb) AS d (kind text,
+                        key text,
+                        folder_id text,
+                        message_id text,
+                        sequence bigint
+                ,
+                            received_at timestamptz,
+                            document jsonb,
+                            body text)
+                    ON CONFLICT (link_id,
+                        kind,
+                        key)
+                        DO UPDATE SET
+                            folder_id = EXCLUDED.folder_id,
+                            message_id = EXCLUDED.message_id,
+                            sequence =
+                                EXCLUDED.sequence,
+                                received_at = EXCLUDED.received_at,
+                                document = EXCLUDED.document,
+                                body = EXCLUDED.body
+                "#,
+                a.binding.link_id,
+                data,
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(|_| Error::ConnectionUnavailable)?;
         }
         tx.commit()
             .await
@@ -413,7 +658,49 @@ impl PgRepository {
         a: &Account,
     ) -> Result<i64, Error> {
         let health = serde_json::to_value(a.state.small_state()).map_err(|_| Error::Invalid)?;
-        let r=sqlx::query!("UPDATE imap_accounts SET state=$6,revision=revision+1,lease_until=now()+interval '5 minutes',updated_at=now() WHERE link_id=$1 AND sync_generation=$2 AND grant_generation=$3 AND lease_id=$4 AND revision=$5 AND lease_until>now() AND EXISTS(SELECT 1 FROM email_links l WHERE l.id=imap_accounts.link_id AND l.macro_id=imap_accounts.user_id AND l.provider='IMAP' AND l.is_sync_active AND NOT l.needs_reauth AND l.sync_generation=imap_accounts.sync_generation AND l.grant_generation=imap_accounts.grant_generation) RETURNING revision",a.binding.link_id,a.binding.sync_generation,a.binding.grant_generation,a.lease_id,a.revision,health).fetch_optional(&mut **tx).await.map_err(|_|Error::ConnectionUnavailable)?.ok_or(Error::Conflict)?;
+        let r = sqlx::query!(
+            r#"
+            UPDATE
+                imap_accounts
+            SET
+                state = $6,
+                revision = revision + 1,
+                lease_until = now() + interval '5 minutes',
+                updated_at = now()
+            WHERE
+                link_id = $1
+                AND sync_generation = $2
+                AND grant_generation = $3
+                AND lease_id = $4
+                AND revision = $5
+                AND lease_until > now()
+                AND EXISTS (
+                    SELECT
+                        1
+                    FROM
+                        email_links l
+                    WHERE
+                        l.id = imap_accounts.link_id
+                        AND l.macro_id = imap_accounts.user_id
+                        AND l.provider = 'IMAP'
+                        AND l.is_sync_active
+                        AND NOT l.needs_reauth
+                        AND l.sync_generation = imap_accounts.sync_generation
+                        AND l.grant_generation = imap_accounts.grant_generation)
+            RETURNING
+                revision
+            "#,
+            a.binding.link_id,
+            a.binding.sync_generation,
+            a.binding.grant_generation,
+            a.lease_id,
+            a.revision,
+            health,
+        )
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(|_| Error::ConnectionUnavailable)?
+        .ok_or(Error::Conflict)?;
         Ok(r.revision)
     }
     pub(super) async fn save_small_state(&self, a: &mut Account) -> Result<(), Error> {
