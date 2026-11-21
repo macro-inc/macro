@@ -59,6 +59,7 @@ vi.mock('@queries/client', () => ({
 }));
 vi.mock('@service-cognition/client', () => ({
   PIPEDREAM_DISABLED: 'PIPEDREAM_DISABLED',
+  SIGN_IN_PAGE_REFUSED: 'SIGN_IN_PAGE_REFUSED',
   cognitionApiServiceClient: {
     createPipedreamToken: mocks.token,
     completePipedreamConnection: mocks.complete,
@@ -68,7 +69,11 @@ vi.mock('@service-cognition/client', () => ({
   },
 }));
 
-import { connectPipedreamApp, overlaidAppSlug } from './pipedream-connectors';
+import {
+  connectPipedreamApp,
+  overlaidAppSlug,
+  UnsafeSignInPageError,
+} from './pipedream-connectors';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -84,6 +89,7 @@ beforeEach(() => {
   mocks.recover.mockResolvedValue(
     err([{ code: 'NOT_FOUND', message: 'Resource not found' }])
   );
+  mocks.assignUrl.mockReturnValue(true);
 });
 
 async function connect(native = false) {
@@ -259,6 +265,113 @@ describe('overlaid apps connect through their own MCP server', () => {
     expect(await connectPipedreamApp({ appSlug: 'sentry' })).toBe('closed');
   });
 
+  it('keeps waiting for the grant when one read of the server list fails', async () => {
+    vi.useFakeTimers();
+    try {
+      const popup = { closed: false, close: vi.fn() };
+      mocks.reservePopup.mockReturnValue(popup);
+      mocks.fetchServers
+        .mockRejectedValueOnce(new Error('503'))
+        .mockResolvedValue([authorized]);
+
+      const pending = connectPipedreamApp({ appSlug: 'sentry' });
+      await vi.advanceTimersByTimeAsync(2000);
+
+      expect(await pending).toBe('connected');
+      expect(mocks.fetchServers).toHaveBeenCalledTimes(2);
+      expect(popup.close).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('gives up after three reads of the server list fail in a row', async () => {
+    vi.useFakeTimers();
+    try {
+      const popup = { closed: false, close: vi.fn() };
+      mocks.reservePopup.mockReturnValue(popup);
+      mocks.fetchServers.mockRejectedValue(new Error('401'));
+
+      const pending = connectPipedreamApp({ appSlug: 'sentry' });
+      const outcome = pending.then(
+        () => 'resolved',
+        () => 'rejected'
+      );
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      expect(await outcome).toBe('rejected');
+      expect(mocks.fetchServers).toHaveBeenCalledTimes(3);
+      expect(popup.close).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('gives up after three failed reads without a tab to watch, as in the desktop app', async () => {
+    vi.useFakeTimers();
+    try {
+      mocks.reservePopup.mockReturnValue(null);
+      mocks.fetchServers.mockRejectedValue(new Error('401'));
+
+      const outcome = connectPipedreamApp({ appSlug: 'sentry' }).then(
+        () => 'resolved',
+        () => 'rejected'
+      );
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      expect(await outcome).toBe('rejected');
+      expect(mocks.fetchServers).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('counts only failed reads in a row', async () => {
+    vi.useFakeTimers();
+    try {
+      mocks.reservePopup.mockReturnValue({ closed: false, close: vi.fn() });
+      mocks.fetchServers
+        .mockRejectedValueOnce(new Error('503'))
+        .mockRejectedValueOnce(new Error('503'))
+        .mockResolvedValueOnce([{ ...authorized, authenticated: false }])
+        .mockRejectedValueOnce(new Error('503'))
+        .mockRejectedValueOnce(new Error('503'))
+        .mockResolvedValue([authorized]);
+
+      const pending = connectPipedreamApp({ appSlug: 'sentry' });
+      await vi.advanceTimersByTimeAsync(12_000);
+
+      expect(await pending).toBe('connected');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('refuses a sign-in page the tab must not open', async () => {
+    const popup = { closed: false, close: vi.fn() };
+    mocks.reservePopup.mockReturnValue(popup);
+    mocks.startAuth.mockResolvedValue(
+      ok({ authorization_url: 'javascript:alert(document.cookie)//' })
+    );
+    mocks.assignUrl.mockReturnValue(false);
+
+    await expect(
+      connectPipedreamApp({ appSlug: 'sentry' })
+    ).rejects.toBeInstanceOf(UnsafeSignInPageError);
+    expect(mocks.fetchServers).not.toHaveBeenCalled();
+  });
+
+  it('reports a sign-in page the backend refused as unsafe', async () => {
+    mocks.reservePopup.mockReturnValue({ closed: false, close: vi.fn() });
+    mocks.startAuth.mockResolvedValue(
+      err([{ code: 'SIGN_IN_PAGE_REFUSED', message: 'not https' }])
+    );
+
+    await expect(
+      connectPipedreamApp({ appSlug: 'sentry' })
+    ).rejects.toBeInstanceOf(UnsafeSignInPageError);
+  });
+
   it('looks the overlay up when it is not cached yet', async () => {
     mocks.cachedOverlays = undefined;
     mocks.overlays = [sentry];
@@ -363,6 +476,20 @@ describe('apps Macro Connect serves', () => {
     expect(mocks.completeConnect).toHaveBeenCalledTimes(2);
     expect(mocks.open).not.toHaveBeenCalled();
     expect(mocks.setData).toHaveBeenCalled();
+  });
+
+  it('fails at once when Connect hands back a page the tab must not open', async () => {
+    mocks.assignUrl.mockReturnValue(false);
+
+    const pending = connectPipedreamApp({ appSlug: 'linear' });
+    const outcome = pending.then(
+      () => 'resolved',
+      () => 'rejected'
+    );
+    await vi.runAllTimersAsync();
+
+    expect(await outcome).toBe('rejected');
+    expect(mocks.completeConnect).not.toHaveBeenCalled();
   });
 
   it('reports closed when the tab closes before Connect has the app', async () => {

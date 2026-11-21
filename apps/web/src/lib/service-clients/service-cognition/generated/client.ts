@@ -2611,6 +2611,11 @@ export type startMcpAuthResponse200 = {
   status: 200;
 };
 
+export type startMcpAuthResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
 export type startMcpAuthResponse401 = {
   data: string;
   status: 401;
@@ -2625,6 +2630,7 @@ export type startMcpAuthResponseSuccess = startMcpAuthResponse200 & {
   headers: Headers;
 };
 export type startMcpAuthResponseError = (
+  | startMcpAuthResponse400
   | startMcpAuthResponse401
   | startMcpAuthResponse500
 ) & {

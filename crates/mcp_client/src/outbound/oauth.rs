@@ -1,7 +1,7 @@
 //! RMCP-backed OAuth adapter for remote MCP servers.
 
 use crate::domain::models::{
-    MCP_CLIENT_NAME, MacroUserIdStr, McpServerRecord, OAuthClientMetadata,
+    MCP_CLIENT_NAME, MacroUserIdStr, McpServerRecord, OAuthClientMetadata, vet_authorization_url,
 };
 use crate::domain::ports::{
     McpServerHttp, McpServerStore, OAuthClient, OAuthStateStore, PendingAuth,
@@ -215,6 +215,9 @@ where
 
         let scope_refs: Vec<&str> = resolved.scopes.iter().map(String::as_str).collect();
         let auth_url = auth_manager.get_authorization_url(&scope_refs).await?;
+        // The server picks this page and the web app opens it in a tab of its
+        // own origin: refuse it before anything is saved unless it is https.
+        vet_authorization_url(&auth_url, self.http.policy())?;
         let csrf_token = extract_state_param(&auth_url)?;
 
         let pkce_state = in_memory_state

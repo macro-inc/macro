@@ -26,8 +26,12 @@ export function useNativeMcpActions() {
         { server_url: url, server_name: name },
         {
           onSuccess: (result) => {
-            assignOauthUrl(popup, result.authorization_url);
             writeMcpAuthAttempted(url, true);
+            if (!assignOauthUrl(popup, result.authorization_url)) {
+              extras?.onFailed?.();
+              toast.failure('Failed to start authorization');
+              return;
+            }
             extras?.onStarted?.();
           },
           onError: () => {

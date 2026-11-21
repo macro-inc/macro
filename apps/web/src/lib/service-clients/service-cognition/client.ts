@@ -103,6 +103,9 @@ export type { PipedreamOverlayResponse } from './generated/schemas/pipedreamOver
 /** Error code for deployments where Pipedream MCP connect is not configured. */
 export const PIPEDREAM_DISABLED = 'PIPEDREAM_DISABLED' as const;
 
+/** `startMcpAuth`'s error code when Macro refuses the server's sign-in page. */
+export const SIGN_IN_PAGE_REFUSED = 'SIGN_IN_PAGE_REFUSED' as const;
+
 export const cognitionApiServiceClient = {
   /** Creates a mapping from source_id to target_id */
   async createIdMapping(args: { source_id: string; target_id: string }) {
@@ -218,12 +221,29 @@ export const cognitionApiServiceClient = {
     });
   },
 
+  /**
+   * Answers with the {@link SIGN_IN_PAGE_REFUSED} error code when the
+   * server's sign-in page is not https (HTTP 400).
+   */
   async startMcpAuth(args: StartAuthRequest) {
     return (
-      await dcsFetch<StartAuthResponse>(`/mcp/servers/auth/start`, {
-        method: 'POST',
-        body: JSON.stringify(args),
-      })
+      await fetchWithToken<StartAuthResponse, typeof SIGN_IN_PAGE_REFUSED>(
+        `${dcsHost}/mcp/servers/auth/start`,
+        {
+          method: 'POST',
+          body: JSON.stringify(args),
+          errorResponseHandler: async (response) =>
+            response.status === 400
+              ? {
+                  code: SIGN_IN_PAGE_REFUSED,
+                  message: "The server's sign-in page is not https",
+                }
+              : {
+                  code: 'HTTP_ERROR',
+                  message: `HTTP error! status: ${response.status}`,
+                },
+        }
+      )
     ).map((result) => result);
   },
 

@@ -1,5 +1,11 @@
 import { isTauri } from '@core/util/platform';
 import { openExternalUrl } from '@core/util/url';
+import { Result } from 'neverthrow';
+
+const parseUrl = Result.fromThrowable(
+  (url: string) => new URL(url),
+  () => 'unparseable' as const
+);
 
 /** Open a blank tab during the click so later OAuth assign is not blocked. */
 export function reserveOauthPopup(): Window | null {
@@ -9,10 +15,38 @@ export function reserveOauthPopup(): Window | null {
   return popup;
 }
 
-export function assignOauthUrl(popup: Window | null, url: string) {
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+/**
+ * Whether `url` is a sign-in page this app may open: https, or http on a
+ * loopback host for a local server. A remote server picks this URL, and the
+ * reserved tab has this app's origin, so a `javascript:` or `data:` URL would
+ * run as Macro.
+ */
+export function isSafeOauthUrl(url: string): boolean {
+  const result = parseUrl(url);
+  if (result.isErr()) return false;
+  const parsed = result.value;
+  return (
+    parsed.protocol === 'https:' ||
+    (parsed.protocol === 'http:' && LOOPBACK_HOSTS.has(parsed.hostname))
+  );
+}
+
+/**
+ * Open `url` in the reserved tab, or the system browser without one. A URL
+ * that is not a safe sign-in page is refused and the tab closed; returns
+ * whether it opened.
+ */
+export function assignOauthUrl(popup: Window | null, url: string): boolean {
+  if (!isSafeOauthUrl(url)) {
+    popup?.close();
+    return false;
+  }
   if (popup && !popup.closed) {
     popup.location.href = url;
-    return;
+    return true;
   }
   openExternalUrl(url);
+  return true;
 }

@@ -482,3 +482,19 @@ fn a_custom_server_key_is_a_fixed_width_digest_of_the_url() {
     );
     assert_eq!(CustomMcpServerKey::parse(""), None);
 }
+
+/// The not-connected answer hands the model the chip markup and, for a
+/// code-mode session, the connect widget to present instead.
+#[test]
+fn a_not_connected_answer_names_the_chip_and_the_code_mode_widget() {
+    let slug = McpServerSlug::parse("linear").expect("slug");
+    let text = not_connected_text(&slug, "Linear");
+
+    assert!(
+        text.contains(r#"<m-connect-app>{"appSlug":"linear","name":"Linear"}</m-connect-app>"#)
+    );
+    assert!(text.contains(
+        "In an agent session's code mode, present a connect widget with an app target for this appSlug and end your turn without asking in text to connect"
+    ));
+    assert!(text.contains("Otherwise tell them so in your reply, and include this exact markup"));
+}

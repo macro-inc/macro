@@ -3921,6 +3921,10 @@ export type StartMcpAuthData = {
 };
 
 export type StartMcpAuthErrors = {
+    /**
+     * The server's sign-in page is not https
+     */
+    400: ErrorResponse;
     401: string;
     500: ErrorResponse;
 };

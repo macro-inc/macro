@@ -418,8 +418,14 @@ pub fn not_connected_text(slug: &McpServerSlug, name: &str) -> String {
         "name": name,
     });
     format!(
-        "{name} is not connected for the selected acting_as account, or they have it          turned off, so this tool cannot run yet. Tell them so in your reply, and include          this exact markup so they get a button that connects it:          <{tag}>{payload}</{tag}>          Close your reply by asking them to let you know once they have connected {name} so \
-         you can try again - when they do, call this tool again; nothing else needs to change.",
+        "{name} is not connected for the selected acting_as account, or they have it \
+         turned off, so this tool cannot run yet. In an agent session's code mode, present a \
+         connect widget with an app target for this appSlug and end your turn without asking \
+         in text to connect: the card asks, and the session continues once they connect, so \
+         call this tool again then. Otherwise tell them so in your reply, and include this \
+         exact markup so they get a button that connects it: <{tag}>{payload}</{tag}> Close \
+         your reply by asking them to let you know once they have connected {name} so you can \
+         try again - when they do, call this tool again; nothing else needs to change.",
         name = name,
         tag = CONNECT_APP_TAG,
     )

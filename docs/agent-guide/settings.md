@@ -868,6 +868,8 @@ In chat and agent sessions, the agent can add one for the user with the
 unauthenticated, and the user still clicks Connect to sign in. Re-adding a URL
 the user already has leaves that row and its sign-in unchanged.
 The Add MCP Server dialog uses the same 24px padding above its title as on its sides.
+An agent's connect card opens it with the server's name and URL filled in when
+the server's own sign-in cannot start.
 Enabled custom servers are offered to the owner's agent sessions (Cursor, Claude,
 Codex, macrod, in-memory) alongside connected apps, through the same session
 egress path: the sandbox sees the server under its name and a URL key, never the

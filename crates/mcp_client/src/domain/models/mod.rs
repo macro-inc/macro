@@ -1,5 +1,6 @@
 mod address_policy;
 mod aes_key;
+mod authorization_url;
 mod call_tool_result;
 mod consts;
 mod oauth_client_metadata;
@@ -9,6 +10,7 @@ mod server;
 pub(crate) use address_policy::is_public;
 pub use address_policy::{AddressPolicy, RefusedAddress};
 pub use aes_key::{AesKey, AesKeyError};
+pub use authorization_url::{UnsafeAuthorizationUrl, vet_authorization_url};
 pub use call_tool_result::CallToolResultExt;
 pub use consts::*;
 pub use macro_user_id::user_id::MacroUserIdStr;

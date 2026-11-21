@@ -7,14 +7,19 @@ export function AddCustomMcpDialog(props: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAdded?: () => void;
+  /** Filled in when the dialog opens, e.g. from an agent's connect card. */
+  initialName?: string;
+  initialUrl?: string;
+  /** Replaces "Add MCP Server" from the URL as typed, e.g. naming its host. */
+  title?: (url: string) => string;
 }) {
-  const [name, setName] = createSignal('');
-  const [url, setUrl] = createSignal('');
+  const [name, setName] = createSignal(props.initialName ?? '');
+  const [url, setUrl] = createSignal(props.initialUrl ?? '');
   const addMutation = useAddMcpServerMutation();
 
   const reset = () => {
-    setName('');
-    setUrl('');
+    setName(props.initialName ?? '');
+    setUrl(props.initialUrl ?? '');
   };
 
   const close = () => {
@@ -54,7 +59,9 @@ export function AddCustomMcpDialog(props: {
     >
       <Panel depth={2} class="rounded-xl">
         <Panel.Header class="p-6">
-          <span class="text-ink text-sm font-semibold">Add MCP Server</span>
+          <span class="text-ink text-sm font-semibold">
+            {props.title?.(url()) ?? 'Add MCP Server'}
+          </span>
         </Panel.Header>
         <Panel.Body class="p-6 flex flex-col gap-5">
           <div class="flex flex-col gap-4">

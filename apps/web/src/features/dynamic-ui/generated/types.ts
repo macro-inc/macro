@@ -72,6 +72,16 @@ export type CardItemType =
   | 'form'
   | 'initiative';
 
+/**  What a connect card connects. */
+export type ConnectTarget =
+  /**
+   *  An app by the app_slug DiscoverConnectors or a not-connected tool
+   *  result returned.
+   */
+  | { kind: 'app'; appSlug: string }
+  /**  A remote MCP server by its https URL. */
+  | { kind: 'server'; url: string };
+
 /**  Bounds on a timestamp, as ISO 8601 strings. */
 export type DateRangeFilter =
   | DateRangeFilter_Serialize
@@ -618,8 +628,10 @@ export type Widget_Deserialize =
       label?: never;
       limit?: never;
       messageId?: never;
+      name?: never;
       source?: never;
       tags?: never;
+      target?: never;
       title?: never;
       wrap?: never;
     })
@@ -643,8 +655,10 @@ export type Widget_Deserialize =
       limit?: never;
       markdown?: never;
       messageId?: never;
+      name?: never;
       source?: never;
       tags?: never;
+      target?: never;
       wrap?: never;
     })
   /**
@@ -673,7 +687,9 @@ export type Widget_Deserialize =
       label?: never;
       markdown?: never;
       messageId?: never;
+      name?: never;
       tags?: never;
+      target?: never;
       wrap?: never;
     })
   /**  A single channel message with surrounding context. */
@@ -697,8 +713,10 @@ export type Widget_Deserialize =
       label?: never;
       limit?: never;
       markdown?: never;
+      name?: never;
       source?: never;
       tags?: never;
+      target?: never;
       title?: never;
       wrap?: never;
     })
@@ -722,8 +740,10 @@ export type Widget_Deserialize =
       limit?: never;
       markdown?: never;
       messageId?: never;
+      name?: never;
       source?: never;
       tags?: never;
+      target?: never;
       wrap?: never;
     })
   /**
@@ -748,8 +768,10 @@ export type Widget_Deserialize =
       limit?: never;
       markdown?: never;
       messageId?: never;
+      name?: never;
       source?: never;
       tags?: never;
+      target?: never;
       wrap?: never;
     })
   /**
@@ -774,7 +796,45 @@ export type Widget_Deserialize =
       limit?: never;
       markdown?: never;
       messageId?: never;
+      name?: never;
       source?: never;
+      target?: never;
+      wrap?: never;
+    })
+  /**
+   *  A card with one Connect button, for an app or remote MCP server the
+   *  user must connect before you can continue, and only one that is not
+   *  connected yet. Present it instead of telling them to open settings,
+   *  then end your turn without asking them in text to connect: the card
+   *  asks, and shows Connected once they have. Once they connect an app,
+   *  an agent session continues by itself; for a server they reply to
+   *  continue, so say only to reply once they have used Connect (a server
+   *  that needs no sign-in works without one and never shows Connected).
+   */
+  | ({
+      type: 'connect';
+      /**  The app's or server's display name, e.g. "Linear". */
+      name: string;
+      target: ConnectTarget;
+    } & {
+      align?: never;
+      botId?: never;
+      channelId?: never;
+      children?: never;
+      direction?: never;
+      events?: never;
+      expiresAt?: never;
+      gap?: never;
+      groupBy?: never;
+      items?: never;
+      justify?: never;
+      label?: never;
+      limit?: never;
+      markdown?: never;
+      messageId?: never;
+      source?: never;
+      tags?: never;
+      title?: never;
       wrap?: never;
     })
   /**
@@ -798,8 +858,10 @@ export type Widget_Deserialize =
       limit?: never;
       markdown?: never;
       messageId?: never;
+      name?: never;
       source?: never;
       tags?: never;
+      target?: never;
       title?: never;
       wrap?: never;
     })
@@ -829,8 +891,10 @@ export type Widget_Deserialize =
       limit?: never;
       markdown?: never;
       messageId?: never;
+      name?: never;
       source?: never;
       tags?: never;
+      target?: never;
       title?: never;
       wrap?: never;
     })
@@ -856,8 +920,10 @@ export type Widget_Deserialize =
       limit?: never;
       markdown?: never;
       messageId?: never;
+      name?: never;
       source?: never;
       tags?: never;
+      target?: never;
     });
 
 /**
@@ -884,8 +950,10 @@ export type Widget_Serialize =
       label?: never;
       limit?: never;
       messageId?: never;
+      name?: never;
       source?: never;
       tags?: never;
+      target?: never;
       title?: never;
       wrap?: never;
     })
@@ -905,8 +973,10 @@ export type Widget_Serialize =
       limit?: never;
       markdown?: never;
       messageId?: never;
+      name?: never;
       source?: never;
       tags?: never;
+      target?: never;
       wrap?: never;
     })
   /**
@@ -935,7 +1005,9 @@ export type Widget_Serialize =
       label?: never;
       markdown?: never;
       messageId?: never;
+      name?: never;
       tags?: never;
+      target?: never;
       wrap?: never;
     })
   /**  A single channel message with surrounding context. */
@@ -959,8 +1031,10 @@ export type Widget_Serialize =
       label?: never;
       limit?: never;
       markdown?: never;
+      name?: never;
       source?: never;
       tags?: never;
+      target?: never;
       title?: never;
       wrap?: never;
     })
@@ -984,8 +1058,10 @@ export type Widget_Serialize =
       limit?: never;
       markdown?: never;
       messageId?: never;
+      name?: never;
       source?: never;
       tags?: never;
+      target?: never;
       wrap?: never;
     })
   /**
@@ -1010,8 +1086,10 @@ export type Widget_Serialize =
       limit?: never;
       markdown?: never;
       messageId?: never;
+      name?: never;
       source?: never;
       tags?: never;
+      target?: never;
       wrap?: never;
     })
   /**
@@ -1036,7 +1114,45 @@ export type Widget_Serialize =
       limit?: never;
       markdown?: never;
       messageId?: never;
+      name?: never;
       source?: never;
+      target?: never;
+      wrap?: never;
+    })
+  /**
+   *  A card with one Connect button, for an app or remote MCP server the
+   *  user must connect before you can continue, and only one that is not
+   *  connected yet. Present it instead of telling them to open settings,
+   *  then end your turn without asking them in text to connect: the card
+   *  asks, and shows Connected once they have. Once they connect an app,
+   *  an agent session continues by itself; for a server they reply to
+   *  continue, so say only to reply once they have used Connect (a server
+   *  that needs no sign-in works without one and never shows Connected).
+   */
+  | ({
+      type: 'connect';
+      /**  The app's or server's display name, e.g. "Linear". */
+      name: string;
+      target: ConnectTarget;
+    } & {
+      align?: never;
+      botId?: never;
+      channelId?: never;
+      children?: never;
+      direction?: never;
+      events?: never;
+      expiresAt?: never;
+      gap?: never;
+      groupBy?: never;
+      items?: never;
+      justify?: never;
+      label?: never;
+      limit?: never;
+      markdown?: never;
+      messageId?: never;
+      source?: never;
+      tags?: never;
+      title?: never;
       wrap?: never;
     })
   /**
@@ -1060,8 +1176,10 @@ export type Widget_Serialize =
       limit?: never;
       markdown?: never;
       messageId?: never;
+      name?: never;
       source?: never;
       tags?: never;
+      target?: never;
       title?: never;
       wrap?: never;
     })
@@ -1091,8 +1209,10 @@ export type Widget_Serialize =
       limit?: never;
       markdown?: never;
       messageId?: never;
+      name?: never;
       source?: never;
       tags?: never;
+      target?: never;
       title?: never;
       wrap?: never;
     })
@@ -1118,6 +1238,8 @@ export type Widget_Serialize =
       limit?: never;
       markdown?: never;
       messageId?: never;
+      name?: never;
       source?: never;
       tags?: never;
+      target?: never;
     });

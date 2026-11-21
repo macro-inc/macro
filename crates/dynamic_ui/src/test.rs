@@ -49,6 +49,8 @@ fn a_view_of_every_widget_decodes() {
                     "children": [{ "label": "bug", "color": "red", "tagId": "tag-1" }]
                 }]
             },
+            { "type": "connect", "name": "Linear", "target": { "kind": "app", "appSlug": "linear" } },
+            { "type": "connect", "name": "Acme", "target": { "kind": "server", "url": "https://mcp.acme.example/mcp" } },
             {
                 "type": "agentUpdates",
                 "items": [{
@@ -169,7 +171,7 @@ fn fields_the_types_do_not_name_are_dropped() {
 /// where the problem is.
 #[test]
 fn what_the_renderer_cannot_draw_is_named_by_its_place() {
-    let widget_types = "`md`, `timeline`, `list`, `channelMessage`, `events`, `cards`, `tags`, `agentUpdates`, `botCredential`, `container`";
+    let widget_types = "`md`, `timeline`, `list`, `channelMessage`, `events`, `cards`, `tags`, `connect`, `agentUpdates`, `botCredential`, `container`";
     let cases = [
         (
             json!({ "widgets": [{ "type": "markdown", "markdown": "### Routines" }] }),

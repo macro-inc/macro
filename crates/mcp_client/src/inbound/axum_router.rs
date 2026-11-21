@@ -1,5 +1,5 @@
 use crate::domain::{
-    models::{MacroUserIdStr, McpServerRecord, OAuthClientMetadata},
+    models::{MacroUserIdStr, McpServerRecord, OAuthClientMetadata, UnsafeAuthorizationUrl},
     ports::{McpServerStore, OAuthClient},
     service::{AddServerError, AddedBy, ServerDirectory},
 };
@@ -485,6 +485,14 @@ where
     Ok(())
 }
 
+/// A refused sign-in page is the provider's fault (400); anything else is ours.
+fn start_auth_error(error: anyhow::Error) -> McpHandlerErr {
+    match error.downcast::<UnsafeAuthorizationUrl>() {
+        Ok(unsafe_url) => McpHandlerErr::OAuthRejected(unsafe_url.to_string()),
+        Err(error) => McpHandlerErr::Internal(error),
+    }
+}
+
 #[utoipa::path(
     post,
     path = "/mcp/servers/auth/start",
@@ -493,6 +501,7 @@ where
     request_body = StartAuthRequest,
     responses(
         (status = 200, body = StartAuthResponse),
+        (status = 400, description = "The server's sign-in page is not https", body = ErrorResponse),
         (status = 401, body = String),
         (status = 500, body = ErrorResponse),
     )
@@ -513,7 +522,8 @@ where
     let authorization_url = state
         .oauth
         .start_authorization(&user.macro_user_id, &body.server_url, &body.server_name)
-        .await?;
+        .await
+        .map_err(start_auth_error)?;
 
     Ok(Json(StartAuthResponse { authorization_url }))
 }

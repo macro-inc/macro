@@ -10,8 +10,11 @@ import {
   useContext,
 } from 'solid-js';
 
-/** How wide a card may grow: one item, an ask or list, or content to read. */
-export type CardWidth = 'compact' | 'standard' | 'wide';
+/**
+ * How wide a card may grow: one item, an ask or list, content to read, or
+ * the whole transcript column, as asks the user acts on do.
+ */
+export type CardWidth = 'compact' | 'standard' | 'wide' | 'column';
 
 /**
  * How tall a card is. `auto` grows with its content; a fixed height is both a
@@ -24,6 +27,7 @@ const WIDTHS: Record<CardWidth, string> = {
   compact: 'max-w-md',
   standard: 'max-w-xl',
   wide: 'max-w-2xl',
+  column: 'max-w-none',
 };
 
 type CardState = {

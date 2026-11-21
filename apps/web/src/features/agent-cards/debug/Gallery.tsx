@@ -5,10 +5,13 @@
  */
 
 import { EntityIcon } from '@core/component/EntityIcon';
+import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
+import Plug from '@icon/system/regular/plug.svg';
 import { Item, Card as UiCard } from '@ui';
 import { createSignal, For, type JSX, type ParentProps } from 'solid-js';
 import { AgendaView } from '../components/agenda';
 import { CollectionCard, CollectionGroup } from '../components/collection';
+import { ConnectCardView } from '../components/connect-card';
 import { EventCardView } from '../components/event-card';
 import {
   Card,
@@ -340,6 +343,45 @@ export default function AgentCardsGallery() {
               onOpen={noop}
               onToggle={noop}
               onRunNow={noop}
+            />
+          </Example>
+        </Section>
+
+        <Section
+          title="Connect"
+          note="An app or MCP server the agent needs, one button"
+        >
+          <Example label="An app: not connected, connecting, connected">
+            <ConnectCardView
+              name="Linear"
+              kind="App"
+              icon={<PipedreamConnectorIcon appSlug="linear" class="size-5" />}
+              connected={false}
+              onConnect={noop}
+            />
+            <ConnectCardView
+              name="Linear"
+              kind="App"
+              icon={<PipedreamConnectorIcon appSlug="linear" class="size-5" />}
+              connected={false}
+              busy
+              onConnect={noop}
+            />
+            <ConnectCardView
+              name="Linear"
+              kind="App"
+              icon={<PipedreamConnectorIcon appSlug="linear" class="size-5" />}
+              connected
+              onConnect={noop}
+            />
+          </Example>
+          <Example label="An MCP server by URL, with a long name">
+            <ConnectCardView
+              name="Acme Internal Analytics Warehouse"
+              kind="MCP server"
+              icon={<Plug class="size-[18px]" />}
+              connected={false}
+              onConnect={noop}
             />
           </Example>
         </Section>

