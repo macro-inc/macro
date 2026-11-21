@@ -458,6 +458,76 @@ fn network_write_registers_matching_synthetic_dependencies_without_a_read() {
 }
 
 #[test]
+fn a_write_normalized_beforehand_registers_what_a_normalizing_write_does() {
+    block_on(async {
+        let variables = direct_variables(json!("thread-1"));
+        let resolvers = [resolver()];
+        let registration = Some(QueryRegistration {
+            op_id: 41,
+            entity_resolvers: &resolvers,
+        });
+        let data = json!({
+            "viewer": {
+                "id": "user-1",
+                "thread": {
+                    "__typename": "GraphqlSoupEmailThread",
+                    "id": "thread-1",
+                    "emailName": "Before",
+                    "ownerId": "user-1"
+                }
+            }
+        });
+        let input = NetworkWrite {
+            query: DIRECT_EMAIL_QUERY,
+            operation_name: Some("EmailThread"),
+            variables: &variables,
+            data: &data,
+            identity: None,
+        };
+        let update_variables = object(json!({ "input": { "threadId": "thread-1" } }));
+        let update = json!({
+            "markEmailThreadSeen": {
+                "__typename": "GraphqlSoupEmailThread",
+                "id": "thread-1",
+                "name": "After",
+                "ownerId": "user-1"
+            }
+        });
+
+        let mut writes = Vec::new();
+        for normalize_first in [false, true] {
+            let mut engine = Engine::new(InMemoryStorage::new());
+            let first = if normalize_first {
+                let normalized = engine.normalize_network(registration, input).unwrap();
+                assert!(!normalized.updates().is_empty());
+                engine
+                    .write_normalized_query(Some(41), input, normalized, Vec::new())
+                    .await
+            } else {
+                engine
+                    .write_query_with_registration(Some(41), registration, input)
+                    .await
+            }
+            .unwrap();
+            let second = engine
+                .write_query(
+                    Some(2),
+                    UPDATE_EMAIL_MUTATION,
+                    Some("UpdateEmail"),
+                    &update_variables,
+                    &update,
+                    None,
+                )
+                .await
+                .unwrap();
+            assert_eq!(second.affected_ops, [41].into());
+            writes.push(format!("{first:?}\n{second:?}"));
+        }
+        assert_eq!(writes[0], writes[1]);
+    });
+}
+
+#[test]
 fn synthetic_target_dependencies_are_registered_on_hits_and_misses() {
     block_on(async {
         let mut engine = Engine::new(InMemoryStorage::new());
