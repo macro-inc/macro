@@ -59,27 +59,28 @@ describe('useChannelParticipants', () => {
   });
 
   it('lists the participants once they load, without suspending', async () => {
-    const response = Promise.withResolvers<unknown>();
-    network.query.mockReturnValue({ toPromise: () => response.promise });
+    let answer: (result: unknown) => void = () => {};
+    network.query.mockReturnValue({
+      subscribe: (onResult: (result: unknown) => void) => {
+        answer = onResult;
+        return { unsubscribe: () => {} };
+      },
+    });
     mount('channel-1');
     expectContent('|');
-    response.resolve({
+    answer({
       data: {
         user: {
           id: 'macro|a@macro.com',
-          soup: {
-            items: [
+          soupEntity: {
+            id: 'channel-1',
+            participants: [
               {
-                id: 'channel-1',
-                participants: [
-                  {
-                    channelId: 'channel-1',
-                    joinedAt: '2026-09-24T12:00:00+00:00',
-                    leftAt: null,
-                    role: 'member',
-                    userId: 'macro|a@macro.com',
-                  },
-                ],
+                channelId: 'channel-1',
+                joinedAt: '2026-09-24T12:00:00+00:00',
+                leftAt: null,
+                role: 'member',
+                userId: 'macro|a@macro.com',
               },
             ],
           },

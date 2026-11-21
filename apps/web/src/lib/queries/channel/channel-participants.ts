@@ -11,24 +11,35 @@ import {
 } from '@service-storage/graphql/generated/graphql';
 import { getGraphqlSoupNetworkClient } from '@service-storage/graphql-soup';
 import { useQuery } from '@tanstack/solid-query';
-import type { CombinedError } from '@urql/core';
+import type {
+  CombinedError,
+  OperationResult,
+  OperationResultSource,
+} from '@urql/core';
 import type { Accessor } from 'solid-js';
 import { match } from 'ts-pattern';
 import { queryClient } from '../client';
-import { buildGraphqlEntitySoupInput } from '../soup/graphql/entity-input';
 import { channelKeys } from './keys';
 
 type GraphqlParticipant = Extract<
-  ChannelParticipantsSoupQuery['user']['soup']['items'][number],
+  ChannelParticipantsSoupQuery['user']['soupEntity'],
   { participants: unknown }
 >['participants'][number];
 
 export function channelParticipantsQueryOptions(channelId: string) {
   return {
     queryKey: channelKeys.participants(channelId).queryKey,
-    queryFn: async (): Promise<ApiChannelParticipant[]> =>
-      (await readParticipantsFromGraphql(channelId)) ??
-      (await readParticipantsFromRest(channelId)),
+    queryFn: async ({
+      signal,
+    }: {
+      signal: AbortSignal;
+    }): Promise<ApiChannelParticipant[]> => {
+      const parent = Telemetry.captureContext();
+      return (
+        (await readParticipantsFromGraphql(channelId, signal)) ??
+        (await parent.run(() => readParticipantsFromRest(channelId)))
+      );
+    },
     staleTime: Infinity,
   };
 }
@@ -55,30 +66,62 @@ export function softInvalidateChannelParticipants(channelId: string) {
 
 /**
  * The channel's participants as `GET /channels/:id/participants` lists them,
- * read by id from the GraphQL soup, past the normalized cache. Undefined when
- * the soup does not return the channel: it leaves out public channels the
- * viewer has not joined.
+ * read by id from the GraphQL soup's primary, past the normalized cache.
+ * Undefined when the soup does not return the channel: it leaves out public
+ * channels the viewer has not joined.
  */
 async function readParticipantsFromGraphql(
-  channelId: string
+  channelId: string,
+  signal: AbortSignal
 ): Promise<ApiChannelParticipant[] | undefined> {
-  const input = buildGraphqlEntitySoupInput('CHANNEL', channelId);
-  if (!input) return undefined;
-  const result = await getGraphqlSoupNetworkClient()
-    .query(
+  const result = await firstSettledResult(
+    getGraphqlSoupNetworkClient().query(
       ChannelParticipantsSoupDocument,
-      { input },
+      { input: { entityType: 'CHANNEL', entityId: channelId } },
       { requestPolicy: 'network-only' }
-    )
-    .toPromise();
-  if (result.error) throw toQueryError(result.error);
-  const channel = result.data?.user.soup.items.find(
-    (item) =>
-      'participants' in item &&
-      item.id.toLowerCase() === channelId.toLowerCase()
+    ),
+    signal
   );
+  if (result.error) throw toQueryError(result.error);
+  const channel = result.data?.user.soupEntity;
   if (!channel || !('participants' in channel)) return undefined;
   return toRestParticipants(channel.participants);
+}
+
+/**
+ * The read's first settled result, like `toPromise()`, but torn down as soon
+ * as the query cancels it. urql answers a request still in flight to every
+ * later identical request, so a read cancelled by a write's invalidation would
+ * otherwise hand its pre-write roster to the read that replaces it.
+ */
+function firstSettledResult<T extends OperationResult>(
+  source: OperationResultSource<T>,
+  signal: AbortSignal
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    let subscription: ReturnType<typeof source.subscribe> | undefined;
+    let settled = false;
+    const finish = () => {
+      settled = true;
+      signal.removeEventListener('abort', onAbort);
+      subscription?.unsubscribe();
+    };
+    function onAbort() {
+      finish();
+      reject(signal.reason);
+    }
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+    signal.addEventListener('abort', onAbort, { once: true });
+    subscription = source.subscribe((result) => {
+      if (settled || result.stale || result.hasNext) return;
+      finish();
+      resolve(result);
+    });
+    if (settled) subscription.unsubscribe();
+  });
 }
 
 /** Active participants, earliest joined first, in the REST read's shape. */
@@ -94,7 +137,28 @@ function toRestParticipants(
       // RFC 3339 with an offset; REST writes the same instant with `Z`.
       joined_at: participant.joinedAt.replace(/\+00:00$/, 'Z'),
     }))
-    .sort((a, b) => Date.parse(a.joined_at) - Date.parse(b.joined_at));
+    .sort((a, b) => compareInstants(a.joined_at, b.joined_at));
+}
+
+/**
+ * Orders two UTC RFC 3339 instants to the microsecond, as the database
+ * orders them; `Date.parse` keeps only milliseconds.
+ */
+function compareInstants(a: string, b: string): number {
+  const [aSeconds, aFraction] = splitInstant(a);
+  const [bSeconds, bFraction] = splitInstant(b);
+  return (
+    Date.parse(aSeconds) - Date.parse(bSeconds) ||
+    aFraction.localeCompare(bFraction)
+  );
+}
+
+/** The instant in whole seconds, and its fraction padded to nanoseconds. */
+function splitInstant(instant: string): [string, string] {
+  const parts = /^([^.]*?)(?:\.(\d+))?(Z|[+-]\d\d:\d\d)$/.exec(instant);
+  if (!parts) return [instant, ''];
+  const [, seconds, fraction = '', zone] = parts;
+  return [`${seconds}${zone}`, fraction.padEnd(9, '0')];
 }
 
 function toRole(role: string): ApiParticipantRole {
