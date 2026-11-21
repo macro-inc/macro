@@ -1661,6 +1661,12 @@ export type BasicDocumentSubType = {
 };
 
 /**
+ * A top-level block's durable id, or `start` / `end` where an edit takes a
+ * position.
+ */
+export type BlockId = string;
+
+/**
  * Text box (body) changes.
  */
 export type BodyPatch = {
@@ -6860,6 +6866,16 @@ export type DateRange = {
 export type DateRangeOperator = 'contains' | 'doesNotContain' | 'endsBefore' | 'endsOnOrAfter' | 'startsAfter' | 'startsOnOrBefore';
 
 /**
+ * Delete a block.
+ */
+export type DeleteEdit = {
+    /**
+     * The block to delete.
+     */
+    delete: BlockId;
+};
+
+/**
  * Response body for `DELETE /channels/mentions/{mention_id}`.
  */
 export type DeleteEntityMentionResponse = {
@@ -7222,6 +7238,20 @@ export type DocumentMarkdown = {
     /**
      * The document's version, as sync-service encodes it. Pass it back to
      * write the body only if nobody has changed the document since.
+     */
+    revision: string;
+};
+
+/**
+ * A markdown document's blocks with the revision they were read at.
+ */
+export type DocumentMarkdownBlocks = {
+    /**
+     * Top-level blocks in document order.
+     */
+    blocks: Array<MarkdownBlock>;
+    /**
+     * The document's version; pass it as `baseRevision` with edits.
      */
     revision: string;
 };
@@ -14080,6 +14110,34 @@ export type InputReceivedMetadata = {
 };
 
 /**
+ * Insert new blocks after a block, or after `start` / at `end`.
+ */
+export type InsertAfterEdit = {
+    /**
+     * A block id, `start` or `end`.
+     */
+    insert_after: BlockId;
+    /**
+     * Internal markdown of the new blocks.
+     */
+    markdown: string;
+};
+
+/**
+ * Insert new blocks before a block, or at `start` / before `end`.
+ */
+export type InsertBeforeEdit = {
+    /**
+     * A block id, `start` or `end`.
+     */
+    insert_before: BlockId;
+    /**
+     * Internal markdown of the new blocks.
+     */
+    markdown: string;
+};
+
+/**
  * Why a document interaction was reported.
  */
 export type InteractionReason = 'edited' | 'first_join' | 'last_leave';
@@ -14611,6 +14669,207 @@ export type MarkRead = {
      * Message in the addressed group.
      */
     messageId: string;
+};
+
+/**
+ * One top-level block as edits address it.
+ */
+export type MarkdownBlock = {
+    /**
+     * The block's durable id.
+     */
+    id: BlockId;
+    /**
+     * Its internal markdown; an opaque block shows `<!-- keep:ID -->`.
+     */
+    markdown: string;
+    /**
+     * Markdown cannot show this block: it can be moved or deleted, not edited.
+     */
+    opaque?: boolean;
+    /**
+     * The editor node type: paragraph, heading, table…
+     */
+    type: string;
+};
+
+/**
+ * What a batch did to one block.
+ */
+export type MarkdownBlockChange = {
+    /**
+     * Its markdown after.
+     */
+    after: string;
+    /**
+     * Its markdown before.
+     */
+    before: string;
+    /**
+     * The block.
+     */
+    blockId: BlockId;
+    kind: 'edited';
+} | {
+    afterBlockId?: null | BlockId;
+    /**
+     * The new block's id.
+     */
+    blockId: BlockId;
+    kind: 'inserted';
+    /**
+     * Its markdown.
+     */
+    markdown: string;
+} | {
+    /**
+     * The block.
+     */
+    blockId: BlockId;
+    kind: 'deleted';
+    /**
+     * Its markdown before the delete.
+     */
+    markdown: string;
+} | {
+    afterBlockId?: null | BlockId;
+    /**
+     * The block.
+     */
+    blockId: BlockId;
+    kind: 'moved';
+};
+
+/**
+ * One edit of a batch. The shapes mirror `str_replace`-style editing tools,
+ * told apart by their fields, so the input is untagged.
+ */
+export type MarkdownEdit = ReplaceEdit | InsertAfterEdit | InsertBeforeEdit | DeleteEdit | MoveAfterEdit | MoveBeforeEdit;
+
+/**
+ * Why a batch conflicts with the document as it is now.
+ */
+export type MarkdownEditConflictReason = 'changed' | 'busy';
+
+/**
+ * Why a direct-edit request did not complete.
+ */
+export type MarkdownEditFailure = {
+    conflict?: null | MarkdownEditConflictReason;
+    /**
+     * What went wrong.
+     */
+    error: MarkdownEditFailureCode;
+    /**
+     * What to do next.
+     */
+    message: string;
+    refusal?: null | MarkdownEditRefusal;
+};
+
+/**
+ * Error code of a direct-edit request that did not complete.
+ */
+export type MarkdownEditFailureCode = 'edit_refused' | 'revision_conflict' | 'read_failed' | 'edit_failed';
+
+/**
+ * A block a missing or ambiguous `old` was found in, or is nearest to.
+ */
+export type MarkdownEditMatchingBlock = {
+    /**
+     * The block.
+     */
+    blockId: BlockId;
+    /**
+     * Its markdown as the batch saw it.
+     */
+    markdown: string;
+    /**
+     * How often `old` occurs in it (0 for a no-match suggestion).
+     */
+    occurrences: number;
+};
+
+/**
+ * How the batch was placed on the document as it is now.
+ */
+export type MarkdownEditMerge = 'current' | 'base' | 'rebased';
+
+/**
+ * Whether the batch was written.
+ */
+export type MarkdownEditOutcomeKind = 'committed' | 'unchanged' | 'dry_run' | 'already_applied';
+
+/**
+ * A refused batch: what was wrong and where.
+ */
+export type MarkdownEditRefusal = {
+    /**
+     * For `no_match` and `ambiguous_match`, the blocks `old` was found in or
+     * is nearest to.
+     */
+    blocks?: Array<MarkdownEditMatchingBlock>;
+    /**
+     * What was wrong.
+     */
+    code: MarkdownEditRefusalCode;
+    /**
+     * The 1-based edit it concerns, when one.
+     */
+    edit?: number | null;
+    /**
+     * What to change; may quote the document.
+     */
+    message: string;
+};
+
+/**
+ * Why a batch was refused; the document is untouched.
+ */
+export type MarkdownEditRefusalCode = 'no_match' | 'ambiguous_match' | 'unknown_block' | 'empty_edit' | 'unparseable' | 'opaque_edit' | 'comment_loss' | 'mass_delete' | 'markup_leak' | 'frozen_media' | 'too_large' | 'verify_failed';
+
+/**
+ * A batch of direct edits, applied whole or not at all.
+ */
+export type MarkdownEditRequest = {
+    /**
+     * The batch means to delete blocks holding comments or content
+     * markdown cannot show, or most of the document.
+     */
+    allowDeletingContent?: boolean;
+    /**
+     * The `revision` the edits were written against. Changes made since
+     * merge with the batch; absent means the current revision.
+     */
+    baseRevision?: string | null;
+    /**
+     * Compute and verify the batch, return its changes, write nothing.
+     */
+    dryRun?: boolean;
+    /**
+     * The edits, applied in order: 1 to 200.
+     */
+    edits: Array<MarkdownEdit>;
+};
+
+/**
+ * A batch that applied, or a dry run that would.
+ */
+export type MarkdownEdited = {
+    /**
+     * What changed, block by block; empty for `unchanged` and
+     * `already_applied` (read the blocks again for inserted ids then).
+     */
+    changes: Array<MarkdownBlockChange>;
+    merge?: null | MarkdownEditMerge;
+    /**
+     * Written, unchanged, or a dry run.
+     */
+    outcome: MarkdownEditOutcomeKind;
+    /**
+     * The document's revision after the write (the current one otherwise).
+     */
+    revision: string;
 };
 
 /**
@@ -15439,6 +15698,34 @@ export type MoneyColumn = {
      * The select column containing the currency code.
      */
     currency: string;
+};
+
+/**
+ * Move a block after another (or after `start`), keeping its ids.
+ */
+export type MoveAfterEdit = {
+    /**
+     * A block id, `start` or `end`.
+     */
+    after: BlockId;
+    /**
+     * The block to move.
+     */
+    move: BlockId;
+};
+
+/**
+ * Move a block before another (or before `end`), keeping its ids.
+ */
+export type MoveBeforeEdit = {
+    /**
+     * A block id, `start` or `end`.
+     */
+    before: BlockId;
+    /**
+     * The block to move.
+     */
+    move: BlockId;
 };
 
 /**
@@ -18607,6 +18894,28 @@ export type ReplaceCrmStagesRequest = {
      * Stages first to last.
      */
     stages: Array<CrmStageInput>;
+};
+
+/**
+ * Replace exact text: `old` must occur once (in `block_id` when given, else
+ * anywhere) unless `replace_all` is set.
+ */
+export type ReplaceEdit = {
+    block_id?: null | BlockId;
+    /**
+     * Its replacement. Empty deletes it.
+     */
+    new: string;
+    /**
+     * Exact internal markdown to find, copied from the block's content.
+     */
+    old: string;
+    /**
+     * Replace every occurrence within blocks instead of requiring exactly
+     * one. An `old` spanning blocks must still occur once: `replace_all`
+     * does not apply to matches across blocks.
+     */
+    replace_all?: boolean;
 };
 
 /**
@@ -32574,6 +32883,100 @@ export type WriteDocumentMarkdownResponses = {
 };
 
 export type WriteDocumentMarkdownResponse = WriteDocumentMarkdownResponses[keyof WriteDocumentMarkdownResponses];
+
+export type GetDocumentMarkdownBlocksData = {
+    body?: never;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/markdown/blocks';
+};
+
+export type GetDocumentMarkdownBlocksErrors = {
+    /**
+     * Not a markdown document
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The blocks could not be read
+     */
+    502: MarkdownEditFailure;
+};
+
+export type GetDocumentMarkdownBlocksError = GetDocumentMarkdownBlocksErrors[keyof GetDocumentMarkdownBlocksErrors];
+
+export type GetDocumentMarkdownBlocksResponses = {
+    200: DocumentMarkdownBlocks;
+};
+
+export type GetDocumentMarkdownBlocksResponse = GetDocumentMarkdownBlocksResponses[keyof GetDocumentMarkdownBlocksResponses];
+
+export type EditDocumentMarkdownData = {
+    body: MarkdownEditRequest;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/markdown/edits';
+};
+
+export type EditDocumentMarkdownErrors = {
+    /**
+     * Not a markdown document, or an invalid batch
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document edit access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * Nothing was written. `conflict: changed`: an edit no longer applies to the document as it is now; read the blocks again and redo it. `conflict: busy`: others kept editing while it committed; retry the same batch as is
+     */
+    409: MarkdownEditFailure;
+    /**
+     * The batch was refused; nothing was written
+     */
+    422: MarkdownEditFailure;
+    /**
+     * The edit failed and may have applied. A batch with `baseRevision` is safe to resend (it answers `already_applied` if it committed); one without it is not: read the blocks first, or its inserts may land twice
+     */
+    502: MarkdownEditFailure;
+};
+
+export type EditDocumentMarkdownError = EditDocumentMarkdownErrors[keyof EditDocumentMarkdownErrors];
+
+export type EditDocumentMarkdownResponses = {
+    200: MarkdownEdited;
+};
+
+export type EditDocumentMarkdownResponse = EditDocumentMarkdownResponses[keyof EditDocumentMarkdownResponses];
 
 export type PermanentlyDeleteDocumentData = {
     body?: never;

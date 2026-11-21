@@ -1252,6 +1252,66 @@ export type DiscoveryResult =
  */
 export type DuplicableEntityType = 'document' | 'database' | 'chat';
 /**
+ * One edit of a batch. The shapes mirror `str_replace`-style editing tools,
+ * told apart by their fields, so the input is untagged.
+ */
+export type MarkdownEdit =
+  | ReplaceEdit
+  | InsertAfterEdit
+  | InsertBeforeEdit
+  | DeleteEdit
+  | MoveAfterEdit
+  | MoveBeforeEdit;
+/**
+ * A top-level block's durable id, or `start` / `end` where an edit takes a
+ * position.
+ */
+export type BlockId = string;
+/**
+ * What a batch did to one block.
+ */
+export type MarkdownBlockChange =
+  | {
+      blockId: BlockId;
+      /**
+       * Its markdown before.
+       */
+      before: string;
+      /**
+       * Its markdown after.
+       */
+      after: string;
+      kind: 'edited';
+    }
+  | {
+      blockId: BlockId;
+      /**
+       * The block now before it; none at the start.
+       */
+      afterBlockId?: BlockId | null;
+      /**
+       * Its markdown.
+       */
+      markdown: string;
+      kind: 'inserted';
+    }
+  | {
+      blockId: BlockId;
+      /**
+       * Its markdown before the delete.
+       */
+      markdown: string;
+      kind: 'deleted';
+    }
+  | {
+      blockId: BlockId;
+      /**
+       * The block now before it; none at the start.
+       */
+      afterBlockId?: BlockId | null;
+      kind: 'moved';
+    };
+/**
  * Targeted layout operations. Removing placements always retains response columns.
  */
 export type Change =
@@ -9249,7 +9309,7 @@ export interface EditCommentResponse {
   commentId: string;
 }
 /**
- * Apply AI-driven edits to a Macro markdown document in place -- rewriting, inserting, formatting, or restructuring. Use EditSpreadsheet for native Macro spreadsheets. Markdown documents only: these are authored in Macro's collaborative editor, and are the only documents whose content this tool can rewrite. Edit uploaded Word (.docx) files with ReadWordDocument and EditWordDocument instead. Other uploaded files -- PDFs, images, source files such as .py or .ts -- are readable but not editable, and are rejected. If the response contains a `clarification` field, invoke again with the requested info appended to `instructions`. To insert @-mention chips, include each referenced item's ids and details in `instructions`: userId/email for people; documentId/documentName/blockName (and blockParams when needed) for documents, channels, chats, projects, tasks, emails, calendar events, skills, calls, and routines; session id (and optional expanded card) for agent sessions; ISO datetime plus displayFormat for time chips; profileId/slug/url for booking links. To insert document-card(s), include each document's documentId and documentName; to embed a database, its databaseId, name, and tableId/viewId. To insert a live database answer or chart, quote the `<m-db-query>` block from SaveDatabaseQuery verbatim in `instructions`.
+ * Edit a Macro markdown document in place. Two ways: `edits` applies exact changes you already know, with no second model, much faster; `instructions` asks an AI editor to work the change out, which takes several seconds to a minute. Prefer `edits` whenever you can say the exact text: copy `old` from the block content ReadContent returned (each block's internal markdown, with its nodeId as the block id), and give `new`. A block ReadContent lists without a nodeId (a top-level image, say) can only be reached by matching text around it; when an exact `old` comes back as no_match, the refusal lists the blocks as the editor reads them. Use `instructions` for open-ended rewrites, restructuring you can't spell out, or formatting you don't know the markup for. Use EditSpreadsheet for native Macro spreadsheets. Markdown documents only: these are authored in Macro's collaborative editor, and are the only documents whose content this tool can rewrite. Edit uploaded Word (.docx) files with ReadWordDocument and EditWordDocument instead. Other uploaded files -- PDFs, images, source files such as .py or .ts -- are readable but not editable, and are rejected. If the response contains a `clarification` field, invoke again with the requested info appended to `instructions`. To insert @-mention chips with `instructions`, include each referenced item's ids and details: userId/email for people; documentId/documentName/blockName (and blockParams when needed) for documents, channels, chats, projects, tasks, emails, calendar events, skills, calls, and routines; session id (and optional expanded card) for agent sessions; ISO datetime plus displayFormat for time chips; profileId/slug/url for booking links. To insert document-card(s), include each document's documentId and documentName; to embed a database, its databaseId, name, and tableId/viewId. To insert a live database answer or chart, quote the `<m-db-query>` block from SaveDatabaseQuery verbatim in `instructions`. With `edits`, write chips and cards as the same `<m-...>` tags ReadContent shows.
  */
 export interface EditDocument {
   /**
@@ -9257,13 +9317,89 @@ export interface EditDocument {
    */
   document_id: string;
   /**
-   * Natural language instructions. For @-mention chips, include each item's ids and details: userId/email for people; documentId/documentName/blockName for documents and similar items; session id for agent sessions; ISO datetime and displayFormat for time chips; profileId/slug/url for booking links. For document-card(s), include documentId and documentName per document. You may need to look these up.
+   * Natural language instructions for the AI editor. Leave empty when you pass `edits`. For @-mention chips, include each item's ids and details: userId/email for people; documentId/documentName/blockName for documents and similar items; session id for agent sessions; ISO datetime and displayFormat for time chips; profileId/slug/url for booking links. For document-card(s), include documentId and documentName per document. You may need to look these up.
    */
-  instructions: string;
+  instructions?: string;
+  /**
+   * Exact edits, applied in order as one batch with no second model; all apply or none do. Each edit is one of: `{old, new, block_id?, replace_all?}` replaces exact internal markdown (`old` must occur exactly once in the document, or in `block_id`, unless `replace_all`; copy it from ReadContent's block content, including any `**`, `<m-...>` tags and list markers; `old` may span adjacent blocks, joined by one blank line); `{insert_after: ID|'start'|'end', markdown}` or `{insert_before: ...}` inserts new blocks; `{delete: ID}` deletes a block; `{move: ID, after: ID}` or `{move: ID, before: ID}` moves one. IDs are ReadContent nodeIds. Edited blocks keep their ids and comments. A refusal says what to fix (no_match and ambiguous_match list the blocks); nothing is written then. Leave `instructions` empty when you pass edits.
+   */
+  edits?: MarkdownEdit[];
+  /**
+   * With `edits`: check the batch and return the changes it would make, without writing anything.
+   */
+  dry_run?: boolean;
+  /**
+   * With `edits`: allow deleting blocks that hold comments or content markdown cannot show, or most of the document. Set only when the user asked for that deletion.
+   */
+  allow_deleting_content?: boolean;
   /**
    * Set true for one quick, contained edit -- rewrite this paragraph, translate the selected list, fix a heading, bold a phrase. A single model applies it directly in a few seconds. Leave false (the default) for anything with several parts or that restructures the document; the default pipeline plans, dispatches, and reviews its own work, which takes longer but is what multi-step edits need.
    */
   fast?: boolean;
+}
+/**
+ * Replace exact text: `old` must occur once (in `block_id` when given, else
+ * anywhere) unless `replace_all` is set.
+ */
+export interface ReplaceEdit {
+  /**
+   * Limit the match to this block.
+   */
+  block_id?: BlockId | null;
+  /**
+   * Exact internal markdown to find, copied from the block's content.
+   */
+  old: string;
+  /**
+   * Its replacement. Empty deletes it.
+   */
+  new: string;
+  /**
+   * Replace every occurrence within blocks instead of requiring exactly
+   * one. An `old` spanning blocks must still occur once: `replace_all`
+   * does not apply to matches across blocks.
+   */
+  replace_all?: boolean;
+}
+/**
+ * Insert new blocks after a block, or after `start` / at `end`.
+ */
+export interface InsertAfterEdit {
+  insert_after: BlockId;
+  /**
+   * Internal markdown of the new blocks.
+   */
+  markdown: string;
+}
+/**
+ * Insert new blocks before a block, or at `start` / before `end`.
+ */
+export interface InsertBeforeEdit {
+  insert_before: BlockId;
+  /**
+   * Internal markdown of the new blocks.
+   */
+  markdown: string;
+}
+/**
+ * Delete a block.
+ */
+export interface DeleteEdit {
+  delete: BlockId;
+}
+/**
+ * Move a block after another (or after `start`), keeping its ids.
+ */
+export interface MoveAfterEdit {
+  move: BlockId;
+  after: BlockId;
+}
+/**
+ * Move a block before another (or before `end`), keeping its ids.
+ */
+export interface MoveBeforeEdit {
+  move: BlockId;
+  before: BlockId;
 }
 export interface EditDocumentResponse {
   /**
@@ -9275,6 +9411,10 @@ export interface EditDocumentResponse {
    * If present, invoke this tool again with this information appended to `instructions`.
    */
   clarification?: string | null;
+  /**
+   * With `edits`: what changed, block by block, with the ids of new blocks.
+   */
+  changes?: MarkdownBlockChange[] | null;
 }
 /**
  * Edit the live form using typed targeted operations. ReadForm provides stable question/section IDs. Edits produce granular CRDT updates; concurrent changes merge using the same rules as the builder. Omitted fields stay unchanged. Invalid merged layouts are refused. Changes can add or move questions/sections, edit requiredness/help/gates, set or clear a questions section's showWhen (setShowWhen; skipped sections' questions are not required or saved) and attach an existing booking target. New columns use explicit stable IDs. Question labels follow backing column names; rename them through database tools. Removing a question keeps its column and answers. Schema retyping and conditional column cleanup are unsupported. Keep gates and showWhen rules after the questions they test and booking last. Read the current form after a timeout or partial result before proceeding. Opening and sharing require SetFormAccess.
@@ -16561,7 +16701,7 @@ export interface CodeGuide {
  *
  * For editable email/calendar drafts, persist them with execution.reviews.create({kind, title, drafts}), then return reviews: [await review.reference()]. This does not send emails or create calendar events. Creation immediately presents a completed PresentReview ACP tool call, even while main continues. "Presented to the user" means saved in the conversation, not approved or sent. The saved cards remain usable after this execution and chat continues. User decisions arrive as typed system events referring to the same review ID. Use GetReview to read final drafts and confirmed outcomes; notifications never authorize repeating an action. To show the user what the program made, changed or found, present a view with await execution.views.present(view). It is checked and drawn at once, while main continues; nothing is saved and nothing comes back. When to present a view, and its format, are in the PresentView schema at the end of this description. Direct human-interactive tools and unsupported SDK operations remain available. Never sleep, call setTimeout or poll inside ExecuteCode to wait for something. To check back later, create a routine with a once trigger due shortly, macro.routines.create({trigger: {type: "once", at}, ...}), whose prompt says what to check and where to report, then finish; it runs within about a second of at.
  *
- * Change the text of existing markdown documents and task bodies in place with the SDK document edit(instructions) method; pass {fast: true} for small edits, because a full edit can take tens of seconds of the execution deadline. Read and edit canvases with document.canvas(). Read, calculate and edit native spreadsheets with macro.documents.spreadsheet(document).
+ * Change the text of existing markdown documents and task bodies in place: when you know the exact change, read document.markdownBlocks() and call document.applyMarkdownEdits(edits, {base}), which applies replace, insert, remove and move edits with no AI model; use document.edit(instructions) only to describe a change in words, passing {fast: true} for small ones, because a full AI edit can take tens of seconds. Read and edit canvases with document.canvas(). Read, calculate and edit native spreadsheets with macro.documents.spreadsheet(document).
  *
  * Start every program with a brief comment saying what it does. Do the whole job in as few executions as possible, ideally one: every execution costs a model turn. Put control flow in the program instead of checking in one execution and acting in the next, e.g. if macro.tasks.findSimilar finds no likely duplicate, create the task and return it, else return the matches without creating. Use nested SDK entities, e.g. macro.documents.search(query) is an async iterator and document.content() is a promise. Use for await...of, break, conditions and ordinary TypeScript freely. Batch useful independent work with Promise.all or Promise.allSettled; inspect partial failures and await every started operation. Use bounded concurrency for large inputs. Macro searches (macro.search and every entity's search) are heavy and often take seconds each; the SDK runs at most four at once and queues the rest in call order. Search less rather than one at a time: search several kinds with one macro.search.all(query), passing types only for kinds the user named, don't split one question into near-duplicate queries, and run the independent searches that remain together with Promise.all or Promise.allSettled. Preserve user source scope on every search and retry: macro.documents.search searches documents; macro.email.search searches emails. Read names in batches: macro.initiatives.summaries() and macro.tasks.summaries(tasks) each take one request, while name() on every handle loads each entity separately. Create a task with its initiative, assignees and dueDate in one macro.tasks.create call. Return compact evidence with source IDs, URLs, explicit failures and coverage limits, enough to answer without a follow-up execution; for each item you create or point the user to, return its webUrl() as the URL rather than building one; do not return SDK objects, raw large batches, or claim a stopped iterator is exhaustive.
  *

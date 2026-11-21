@@ -29533,6 +29533,297 @@ export const writeDocumentMarkdownResponse = zod
   );
 
 /**
+ * @summary Read a markdown document's or task's top-level blocks, each with its id and
+internal markdown, and the revision they were read at: what direct edits
+match against.
+ */
+export const getDocumentMarkdownBlocksParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const getDocumentMarkdownBlocksResponse = zod
+  .object({
+    blocks: zod
+      .array(
+        zod
+          .object({
+            id: zod
+              .string()
+              .describe(
+                "A top-level block's durable id, or `start` \/ `end` where an edit takes a\nposition."
+              ),
+            markdown: zod
+              .string()
+              .describe(
+                'Its internal markdown; an opaque block shows `<!-- keep:ID -->`.'
+              ),
+            opaque: zod
+              .boolean()
+              .optional()
+              .describe(
+                'Markdown cannot show this block: it can be moved or deleted, not edited.'
+              ),
+            type: zod
+              .string()
+              .describe('The editor node type: paragraph, heading, table…'),
+          })
+          .describe('One top-level block as edits address it.')
+      )
+      .describe('Top-level blocks in document order.'),
+    revision: zod
+      .string()
+      .describe(
+        "The document's version; pass it as `baseRevision` with edits."
+      ),
+  })
+  .describe(
+    "A markdown document's blocks with the revision they were read at."
+  );
+
+/**
+ * @summary Apply a batch of direct edits to a markdown document's or task's body, with
+no model: exact `old`/`new` replacements and insert, delete and move by
+block id. Edited blocks keep their ids and comments; the batch merges with
+edits made since `baseRevision`. Applied whole or not at all.
+ */
+export const editDocumentMarkdownParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const editDocumentMarkdownBodyEditsMax = 200;
+
+export const editDocumentMarkdownBody = zod
+  .object({
+    allowDeletingContent: zod
+      .boolean()
+      .optional()
+      .describe(
+        'The batch means to delete blocks holding comments or content\nmarkdown cannot show, or most of the document.'
+      ),
+    baseRevision: zod
+      .string()
+      .nullish()
+      .describe(
+        'The `revision` the edits were written against. Changes made since\nmerge with the batch; absent means the current revision.'
+      ),
+    dryRun: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Compute and verify the batch, return its changes, write nothing.'
+      ),
+    edits: zod
+      .array(
+        zod
+          .union([
+            zod
+              .object({
+                block_id: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .string()
+                      .describe(
+                        "A top-level block's durable id, or `start` \/ `end` where an edit takes a\nposition."
+                      ),
+                  ])
+                  .optional(),
+                'new': zod
+                  .string()
+                  .describe('Its replacement. Empty deletes it.'),
+                old: zod
+                  .string()
+                  .describe(
+                    "Exact internal markdown to find, copied from the block's content."
+                  ),
+                replace_all: zod
+                  .boolean()
+                  .optional()
+                  .describe(
+                    'Replace every occurrence within blocks instead of requiring exactly\none. An `old` spanning blocks must still occur once: `replace_all`\ndoes not apply to matches across blocks.'
+                  ),
+              })
+              .describe(
+                'Replace exact text: `old` must occur once (in `block_id` when given, else\nanywhere) unless `replace_all` is set.'
+              ),
+            zod
+              .object({
+                insert_after: zod
+                  .string()
+                  .describe(
+                    "A top-level block's durable id, or `start` \/ `end` where an edit takes a\nposition."
+                  ),
+                markdown: zod
+                  .string()
+                  .describe('Internal markdown of the new blocks.'),
+              })
+              .describe(
+                'Insert new blocks after a block, or after `start` \/ at `end`.'
+              ),
+            zod
+              .object({
+                insert_before: zod
+                  .string()
+                  .describe(
+                    "A top-level block's durable id, or `start` \/ `end` where an edit takes a\nposition."
+                  ),
+                markdown: zod
+                  .string()
+                  .describe('Internal markdown of the new blocks.'),
+              })
+              .describe(
+                'Insert new blocks before a block, or at `start` \/ before `end`.'
+              ),
+            zod
+              .object({
+                delete: zod
+                  .string()
+                  .describe(
+                    "A top-level block's durable id, or `start` \/ `end` where an edit takes a\nposition."
+                  ),
+              })
+              .describe('Delete a block.'),
+            zod
+              .object({
+                after: zod
+                  .string()
+                  .describe(
+                    "A top-level block's durable id, or `start` \/ `end` where an edit takes a\nposition."
+                  ),
+                move: zod
+                  .string()
+                  .describe(
+                    "A top-level block's durable id, or `start` \/ `end` where an edit takes a\nposition."
+                  ),
+              })
+              .describe(
+                'Move a block after another (or after `start`), keeping its ids.'
+              ),
+            zod
+              .object({
+                before: zod
+                  .string()
+                  .describe(
+                    "A top-level block's durable id, or `start` \/ `end` where an edit takes a\nposition."
+                  ),
+                move: zod
+                  .string()
+                  .describe(
+                    "A top-level block's durable id, or `start` \/ `end` where an edit takes a\nposition."
+                  ),
+              })
+              .describe(
+                'Move a block before another (or before `end`), keeping its ids.'
+              ),
+          ])
+          .describe(
+            'One edit of a batch. The shapes mirror `str_replace`-style editing tools,\ntold apart by their fields, so the input is untagged.'
+          )
+      )
+      .min(1)
+      .max(editDocumentMarkdownBodyEditsMax)
+      .describe('The edits, applied in order: 1 to 200.'),
+  })
+  .describe('A batch of direct edits, applied whole or not at all.');
+
+export const editDocumentMarkdownResponse = zod
+  .object({
+    changes: zod
+      .array(
+        zod
+          .union([
+            zod
+              .object({
+                after: zod.string().describe('Its markdown after.'),
+                before: zod.string().describe('Its markdown before.'),
+                blockId: zod
+                  .string()
+                  .describe(
+                    "A top-level block's durable id, or `start` \/ `end` where an edit takes a\nposition."
+                  ),
+                kind: zod.enum(['edited']),
+              })
+              .describe("The block's markdown changed; its id stayed."),
+            zod
+              .object({
+                afterBlockId: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .string()
+                      .describe(
+                        "A top-level block's durable id, or `start` \/ `end` where an edit takes a\nposition."
+                      ),
+                  ])
+                  .optional(),
+                blockId: zod
+                  .string()
+                  .describe(
+                    "A top-level block's durable id, or `start` \/ `end` where an edit takes a\nposition."
+                  ),
+                kind: zod.enum(['inserted']),
+                markdown: zod.string().describe('Its markdown.'),
+              })
+              .describe('A new block.'),
+            zod
+              .object({
+                blockId: zod
+                  .string()
+                  .describe(
+                    "A top-level block's durable id, or `start` \/ `end` where an edit takes a\nposition."
+                  ),
+                kind: zod.enum(['deleted']),
+                markdown: zod
+                  .string()
+                  .describe('Its markdown before the delete.'),
+              })
+              .describe('A deleted block.'),
+            zod
+              .object({
+                afterBlockId: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .string()
+                      .describe(
+                        "A top-level block's durable id, or `start` \/ `end` where an edit takes a\nposition."
+                      ),
+                  ])
+                  .optional(),
+                blockId: zod
+                  .string()
+                  .describe(
+                    "A top-level block's durable id, or `start` \/ `end` where an edit takes a\nposition."
+                  ),
+                kind: zod.enum(['moved']),
+              })
+              .describe('A block moved, keeping its id.'),
+          ])
+          .describe('What a batch did to one block.')
+      )
+      .describe(
+        'What changed, block by block; empty for `unchanged` and\n`already_applied` (read the blocks again for inserted ids then).'
+      ),
+    merge: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['current', 'base', 'rebased'])
+          .describe('How the batch was placed on the document as it is now.'),
+      ])
+      .optional(),
+    outcome: zod
+      .enum(['committed', 'unchanged', 'dry_run', 'already_applied'])
+      .describe('Whether the batch was written.'),
+    revision: zod
+      .string()
+      .describe(
+        "The document's revision after the write (the current one otherwise)."
+      ),
+  })
+  .describe('A batch that applied, or a dry run that would.');
+
+/**
  * @summary Permanently deletes a document.
  */
 export const permanentlyDeleteDocumentParams = zod.object({
