@@ -95,6 +95,7 @@ import {
 import {
   type DirectoryChannel,
   inDirectoryOrder,
+  insertInDirectoryOrder,
   toDirectoryChannel,
 } from './directory-core';
 import {
@@ -107,6 +108,8 @@ import {
 } from './directory-reconcile';
 import { channelKeys } from './keys';
 import {
+  createOwnWriteTracker,
+  type OwnChannelWrite,
   type OwnChannelWrites,
   overlayOwnWrites,
   ownChannelWrites,
@@ -130,6 +133,11 @@ const DIRECTORY_STALE_MS = 5 * 60_000;
 // again, after this pause, doubling, at most this many times.
 const OWN_WRITE_REREAD_MS = 1_000;
 const OWN_WRITE_REREADS = 4;
+// A write is read back from the primary for at most this many channels, a
+// few at a time; one of more (a bulk change) waits for the directory's own
+// source, as it would without the reads.
+const OWN_WRITE_READ_LIMIT = 20;
+const OWN_WRITE_READ_CONCURRENCY = 4;
 // The fallback's by-id reads settle a batch at a time; the channels they
 // decide are laid over the network's at most this often.
 const CONFIRM_RENDER_MS = 250;
@@ -288,40 +296,52 @@ export function channelDirectoryState(
   return { records, joined: inDirectoryOrder(joined), incomplete, complete };
 }
 
+/** `state` with the writes it is behind laid over it. Its joined channels
+ * stay in order without sorting them again: the account's directory can
+ * hold thousands, and this runs on every publish while a write is held. */
+function overlaidDirectoryState(
+  state: ChannelDirectoryState,
+  pending: readonly (readonly [string, OwnChannelWrite])[]
+): ChannelDirectoryState {
+  const { records, incompleteIds } = overlayOwnWrites(
+    state.records,
+    state.incomplete,
+    pending
+  );
+  const written = new Set(pending.map(([id]) => id));
+  const joined = state.joined.filter(({ id }) => !written.has(id));
+  for (const [, { channel }] of pending)
+    if (channel?.isParticipant) insertInDirectoryOrder(joined, channel);
+  const incomplete: Record<string, true> = {};
+  for (const id of incompleteIds) incomplete[id] = true;
+  return { records, joined, incomplete, complete: state.complete };
+}
+
 /**
  * The viewer's own channel writes (`own-writes.ts`) laid over what a
  * directory read, until what it reads shows them.
  */
-function createOwnWriteOverlay(own: OwnChannelWrites, userId: string) {
-  const overlay = (
-    state: ChannelDirectoryState,
-    writes: ReturnType<OwnChannelWrites['writes']>
-  ) => {
-    const overlaid = overlayOwnWrites(
-      state.records,
-      state.incomplete,
-      writes,
-      userId
-    );
-    if (!overlaid) return state;
-    return channelDirectoryState(
-      overlaid.channels,
-      overlaid.incompleteIds,
-      state.complete
-    );
-  };
+function createOwnWriteOverlay(own: OwnChannelWrites, account: QueryAccount) {
+  const tracker = createOwnWriteTracker(own, account);
   return {
-    apply: (state: ChannelDirectoryState) => overlay(state, own.writes()),
+    apply(state: ChannelDirectoryState) {
+      const pending = tracker.pending(state.records, own.writes());
+      return pending.length === 0
+        ? state
+        : overlaidDirectoryState(state, pending);
+    },
     /** The joined channels of a full read with the writes laid over it. */
     applyList(channels: readonly DirectoryChannel[]) {
       const state = channelDirectoryState(channels, [], true);
-      const overlaid = overlay(state, untrack(own.writes));
-      return overlaid === state ? channels : overlaid.joined;
+      const pending = tracker.pendingFor(state.records, untrack(own.writes));
+      return pending.length === 0
+        ? channels
+        : overlaidDirectoryState(state, pending).joined;
     },
-    /** Whether `state` has yet to show one of the writes. */
+    /** Whether `state`, the directory's own source, has yet to show one of
+     * the writes. */
     behind: (state: ChannelDirectoryState) =>
-      overlayOwnWrites(state.records, NO_IDS, own.writes(), userId) !==
-      undefined,
+      tracker.pending(state.records, own.writes()).length > 0,
   };
 }
 
@@ -655,6 +675,9 @@ type RefreshChannelDirectoryOptions = {
   /** The signed-in account now: reads that land after it changed are
    * dropped. */
   account?: () => QueryAccount | undefined;
+  /** Channels the write took away from everyone (deleted): held as ones
+   * the viewer can no longer read, with no read. */
+  removed?: readonly string[];
 };
 
 /**
@@ -675,9 +698,10 @@ export async function refreshChannelDirectory(
     client = queryClient,
     soup = () => getGraphqlSoupClient(),
     account = () => currentQueryAccount(),
+    removed = [],
   }: RefreshChannelDirectoryOptions = {}
 ) {
-  const ownWrites = readOwnWrites(changed, client, soup, account);
+  const ownWrites = readOwnWrites(changed, removed, client, soup, account);
   directoryWrites(client).seen += 1;
   const filters = { queryKey: channelKeys.directory._def };
   const firstReads = client
@@ -727,40 +751,62 @@ async function readChannelFromPrimary(
 }
 
 /** Reads the channels a write of the viewer's changed and holds what the
- * primary showed for the directories. A failed read holds nothing: the
- * directory shows what it reads, as it would without this. */
+ * primary showed for the directories, all at once, and holds the channels
+ * it removed as unreadable without reading them. A failed read holds
+ * nothing, and neither does a write of more than `OWN_WRITE_READ_LIMIT`
+ * channels: the directory shows what it reads, as it would without this. */
 async function readOwnWrites(
   changed: readonly string[],
+  removed: readonly string[],
   client: QueryClient,
   soup: () => UrqlQuery,
   account: () => QueryAccount | undefined
 ) {
-  const channelIds = [...new Set(changed)].filter(isChannelId);
-  if (channelIds.length === 0) return;
+  const gone = [...new Set(removed)].filter(isChannelId);
+  const channelIds = [...new Set(changed)]
+    .filter(isChannelId)
+    .filter((id) => !gone.includes(id));
+  if (channelIds.length === 0 && gone.length === 0) return;
   const writer = account();
   if (!writer) return;
+  const own = ownChannelWrites(client);
   await Telemetry.span('channel_directory.own_writes', async (span) => {
     span.setAttr('channel_directory.requested', channelIds.length);
-    const reads = await Promise.all(
-      channelIds.map((id) => readChannelFromPrimary(soup(), id))
-    );
+    span.setAttr('channel_directory.removed', gone.length);
+    const reading = channelIds.length <= OWN_WRITE_READ_LIMIT ? channelIds : [];
+    span.setAttr('channel_directory.over_limit', reading !== channelIds);
+    // Taken as the reads are sent: a read of the channel sent after this
+    // one replaces it, whichever lands first.
+    const sequence = own.nextSequence();
+    const reads: PrimaryChannelRead[] = [];
+    for (let at = 0; at < reading.length; at += OWN_WRITE_READ_CONCURRENCY)
+      reads.push(
+        ...(await Promise.all(
+          reading
+            .slice(at, at + OWN_WRITE_READ_CONCURRENCY)
+            .map((id) => readChannelFromPrimary(soup(), id))
+        ))
+      );
     const now = account();
     if (now?.userId !== writer.userId || now.session !== writer.session) {
       span.setAttr('channel_directory.scope', 'other_viewer');
       return;
     }
-    const own = ownChannelWrites(client);
+    const writes: Record<string, OwnChannelWrite> = {};
+    for (const id of gone)
+      writes[id] = { channel: null, account: writer, sequence };
     let failed = 0;
     let unreadable = 0;
     reads.forEach((read, index) => {
-      const channelId = channelIds[index];
+      const channelId = reading[index];
       if (read.kind === 'failed' || !channelId) {
         failed += 1;
         return;
       }
       if (!read.channel) unreadable += 1;
-      own.record(channelId, { channel: read.channel, userId: writer.userId });
+      writes[channelId] = { channel: read.channel, account: writer, sequence };
     });
+    own.record(writes);
     span.setAttr('channel_directory.failed', failed);
     span.setAttr('channel_directory.unreadable', unreadable);
   });
@@ -1019,6 +1065,9 @@ type CachedDirectoryDeps = {
     | 'onCacheGenerationChanged'
   >;
   userId: string;
+  /** The sign-in the directory reads for: the viewer's writes of an
+   * earlier one are not shown. */
+  session: number;
   hydrate: (
     input: GraphqlSoupInput,
     options: Pick<FetchGraphqlSoupOptions, 'signal'>
@@ -1266,7 +1315,10 @@ export function createCachedChannelDirectory(
   });
   const state = createMemo(() => shown().state);
   const views = createViewStamps();
-  const own = createOwnWriteOverlay(deps.ownWrites, userId);
+  const own = createOwnWriteOverlay(deps.ownWrites, {
+    userId,
+    session: deps.session,
+  });
   const view = createMemo(() => views.apply(own.apply(state())));
   // Cached records older than a recorded view that the view was written
   // over again: a soup page read before the view can overwrite it.
@@ -1777,6 +1829,10 @@ export function createCachedChannelDirectory(
           // What a by-id read wrote into the old one is gone, and the
           // fallback saw the old one.
           reader.reset();
+          // The viewer's writes go too: a reset retires what the session
+          // showed (an access change can cause it), and the new storage
+          // fills from the server.
+          deps.ownWrites.clear();
           restartFallback();
           render();
         });
@@ -1860,6 +1916,7 @@ export function createCachedChannelDirectory(
 
 type MemoryDirectoryDeps = {
   userId: string;
+  session: number;
   client: () => UrqlQuery;
   queryClient: QueryClient;
 };
@@ -1898,10 +1955,10 @@ export function createMemoryChannelDirectory(
   });
 
   const views = createViewStamps();
-  const own = createOwnWriteOverlay(
-    ownChannelWrites(deps.queryClient),
-    deps.userId
-  );
+  const own = createOwnWriteOverlay(ownChannelWrites(deps.queryClient), {
+    userId: deps.userId,
+    session: deps.session,
+  });
   const read = createMemo((): ChannelDirectoryState => {
     // Raw rows: walking them through the store creates a signal per field.
     if (queryReadyGate(pages))
@@ -2011,18 +2068,21 @@ export function createAppChannelDirectory(): ChannelDirectory {
   });
   const directory = createMemo((): ChannelDirectory => {
     if (!accountKey()) return EMPTY_CHANNEL_DIRECTORY;
-    const userId = untrack(account)?.userId;
-    if (!userId) return EMPTY_CHANNEL_DIRECTORY;
+    const current = untrack(account);
+    if (!current?.userId) return EMPTY_CHANNEL_DIRECTORY;
+    const { userId, session } = current;
     const cache = host();
     if (!cache)
       return createMemoryChannelDirectory({
         userId,
+        session,
         client: getGraphqlSoupClient,
         queryClient,
       });
     return createCachedChannelDirectory({
       host: cache,
       userId,
+      session,
       hydrate: (input, options) =>
         hydrateGraphqlSoup(
           SoupChannelDirectoryBackfillDocument,

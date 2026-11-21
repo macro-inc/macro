@@ -203,6 +203,30 @@ export function inDirectoryOrder(
     .map(({ channel }) => channel);
 }
 
+/** Puts `channel` into `channels`, which are in directory order, where that
+ * order places it. */
+export function insertInDirectoryOrder(
+  channels: DirectoryChannel[],
+  channel: DirectoryChannel
+) {
+  const at = instantMicros(channel.updatedAt);
+  // Whether `other` comes before `channel`.
+  const before = (other: DirectoryChannel) => {
+    const otherAt = instantMicros(other.updatedAt);
+    if (otherAt !== at) return otherAt > at;
+    return other.id > channel.id;
+  };
+  let low = 0;
+  let high = channels.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    const other = channels[middle];
+    if (other && before(other)) low = middle + 1;
+    else high = middle;
+  }
+  channels.splice(low, 0, channel);
+}
+
 function sameInstant(
   left: string | null | undefined,
   right: string | null | undefined

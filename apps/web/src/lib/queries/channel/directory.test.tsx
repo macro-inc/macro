@@ -23,7 +23,12 @@ import {
   QueryObserver,
 } from '@tanstack/solid-query';
 import type { Client } from '@urql/core';
-import { createRenderEffect, createRoot, createSignal } from 'solid-js';
+import {
+  createComputed,
+  createRenderEffect,
+  createRoot,
+  createSignal,
+} from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fromPromise, make, pipe, type Source, toPromise } from 'wonka';
 import {
@@ -574,6 +579,7 @@ function mountMemoryDirectory(
       {(() => {
         directory = createMemoryChannelDirectory({
           userId: VIEWER,
+          session: ACCOUNT.session,
           client: () => network.client,
           queryClient,
         });
@@ -786,6 +792,7 @@ function mountCachedDirectory(
     return createCachedChannelDirectory({
       host,
       userId: VIEWER,
+      session: ACCOUNT.session,
       hydrate,
       fetchAll,
       pageAll: async (signal) => ({
@@ -2730,6 +2737,222 @@ describe("the viewer's own channel writes", () => {
     });
     reopen();
     await vi.waitFor(() => expect(nameOf(directory, 'a')).toBe('theirs'));
+  });
+
+  it('lets the write go once the cache showed it, so a later removal stays removed', async () => {
+    const client = queryClient();
+    const { cache, directory, reopen } = mountCachedDirectory([], {
+      queryClient: client,
+    });
+    cache.put(channelRecord('a', { name: 'before' }));
+    completeLane('g1');
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    const written = channelRecord('a', {
+      name: 'after',
+      updatedAt: UPDATED_MID,
+    });
+    await writeOf(client, fakeNetwork([], { primary: [written] }), ['a']);
+
+    cache.put(written, { sourceHash: 'a-written' });
+    reopen();
+    await vi.waitFor(() =>
+      expect(ownChannelWrites(client).writes()).toEqual({})
+    );
+    // The viewer loses access: the live patch takes the record out.
+    cache.records.delete(`GraphqlSoupChannel:${channelUuid('a')}`);
+    reopen();
+
+    await vi.waitFor(() => expect(nameOf(directory, 'a')).toBe('missing'));
+    expect(ids(directory.channels())).toEqual([]);
+  });
+
+  it('does not bring back a channel the cache lost before it showed the write', async () => {
+    const client = queryClient();
+    const { cache, directory, reopen } = mountCachedDirectory([], {
+      queryClient: client,
+    });
+    cache.put(channelRecord('a', { name: 'before' }));
+    completeLane('g1');
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    const network = fakeNetwork([], {
+      primary: [channelRecord('a', { name: 'after', updatedAt: UPDATED_MID })],
+    });
+    await writeOf(client, network, ['a']);
+    expect(nameOf(directory, 'a')).toBe('after');
+
+    // Removed right after the rename, before the rename's update arrived.
+    cache.records.delete(`GraphqlSoupChannel:${channelUuid('a')}`);
+    reopen();
+
+    await vi.waitFor(() => expect(nameOf(directory, 'a')).toBe('missing'));
+    expect(ids(directory.channels())).toEqual([]);
+  });
+
+  it('shows a channel the viewer left again once they are added back', async () => {
+    const client = queryClient();
+    const { cache, directory, reopen } = mountCachedDirectory([], {
+      queryClient: client,
+    });
+    const member = (joinedAt: string) =>
+      channelRecord('a', {
+        updatedAt: joinedAt,
+        participants: [
+          {
+            channelId: channelUuid('a'),
+            userId: VIEWER,
+            role: 'MEMBER',
+            joinedAt,
+            leftAt: null,
+          },
+        ],
+      });
+    cache.put(member(UPDATED_OLD));
+    completeLane('g1');
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+
+    // They leave: the primary no longer lets them read it.
+    await writeOf(client, fakeNetwork([], { primary: [] }), ['a']);
+    expect(nameOf(directory, 'a')).toBe('missing');
+    // A message moves the cached record on; they are still out.
+    cache.put(
+      { ...member(UPDATED_OLD), updatedAt: UPDATED_MID },
+      { sourceHash: 'a-message' }
+    );
+    reopen();
+    await new Promise((done) => setTimeout(done, 20));
+    expect(nameOf(directory, 'a')).toBe('missing');
+
+    // Someone adds them back before the hold ends.
+    cache.put(member(UPDATED_NEW), { sourceHash: 'a-rejoined' });
+    reopen();
+    await vi.waitFor(() => expect(nameOf(directory, 'a')).toBe('channel a'));
+  });
+
+  it('keeps the later of two reads of a channel, whichever lands last', async () => {
+    const network = fakeNetwork([
+      channelRecord('a', { name: 'before', updatedAt: UPDATED_OLD }),
+    ]);
+    const client = queryClient();
+    const directory = mountMemoryDirectory(network, client);
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+
+    let land!: () => void;
+    const landed = new Promise<void>((done) => {
+      land = done;
+    });
+    const older = fakeNetwork([], {
+      primary: [channelRecord('a', { name: 'first', updatedAt: UPDATED_MID })],
+    });
+    const slow = {
+      client: {
+        query: (...args: Parameters<typeof older.client.query>) => ({
+          toPromise: async () => {
+            await landed;
+            return older.client.query(...args).toPromise();
+          },
+        }),
+      } as typeof older.client,
+    };
+    const first = writeOf(client, slow, ['a']);
+    await writeOf(
+      client,
+      fakeNetwork([], {
+        primary: [
+          channelRecord('a', { name: 'second', updatedAt: UPDATED_NEW }),
+        ],
+      }),
+      ['a']
+    );
+    land();
+    await first;
+
+    expect(nameOf(directory, 'a')).toBe('second');
+  });
+
+  it('lets every write go when the storage is reset', async () => {
+    const client = queryClient();
+    const { cache, directory, resetStorage } = mountCachedDirectory([], {
+      queryClient: client,
+    });
+    cache.put(channelRecord('a', { name: 'before' }));
+    completeLane('g1');
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    await writeOf(
+      client,
+      fakeNetwork([], {
+        primary: [
+          channelRecord('a', { name: 'after', updatedAt: UPDATED_MID }),
+        ],
+      }),
+      ['a']
+    );
+    expect(nameOf(directory, 'a')).toBe('after');
+
+    resetStorage('g2');
+
+    expect(ownChannelWrites(client).writes()).toEqual({});
+    expect(nameOf(directory, 'a')).not.toBe('after');
+  });
+
+  it("shows none of the viewer's writes from an earlier sign-in", async () => {
+    const network = fakeNetwork([channelRecord('a', { name: 'before' })], {
+      primary: [channelRecord('a', { name: 'after', updatedAt: UPDATED_MID })],
+    });
+    const client = queryClient();
+    const directory = mountMemoryDirectory(network, client);
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+
+    await writeOf(client, network, ['a'], () => ({
+      userId: VIEWER,
+      session: ACCOUNT.session - 1,
+    }));
+
+    expect(Object.keys(ownChannelWrites(client).writes())).toEqual([
+      channelUuid('a'),
+    ]);
+    expect(nameOf(directory, 'a')).toBe('before');
+  });
+
+  it('holds a bulk change in one update, and reads back at most twenty channels', async () => {
+    const names = ['a', 'b', 'c'];
+    const network = fakeNetwork(names.map((name) => channelRecord(name)));
+    const client = queryClient();
+    const own = ownChannelWrites(client);
+    let updates = 0;
+    createRoot((dispose) => {
+      disposers.push(dispose);
+      createComputed(() => {
+        own.writes();
+        updates += 1;
+      });
+    });
+
+    await writeOf(client, network, names);
+    expect(network.entityReads).toHaveLength(3);
+    expect(Object.keys(own.writes())).toHaveLength(3);
+    expect(updates).toBe(2);
+
+    const many = Array.from({ length: 21 }, (_, index) => `bulk-${index}`);
+    const bulk = fakeNetwork(many.map((name) => channelRecord(name)));
+    await writeOf(client, bulk, many);
+    expect(bulk.entityReads).toEqual([]);
+  });
+
+  it('takes out the channels the viewer deleted without reading them', async () => {
+    const network = fakeNetwork([channelRecord('gone'), channelRecord('kept')]);
+    const client = queryClient();
+    const directory = mountMemoryDirectory(network, client);
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+
+    await refreshChannelDirectory([], {
+      client,
+      soup: () => network.client,
+      account: () => ACCOUNT,
+      removed: [channelUuid('gone')],
+    });
+
+    expect(network.entityReads).toEqual([]);
+    expect(ids(directory.channels())).toEqual(['kept']);
   });
 });
 
