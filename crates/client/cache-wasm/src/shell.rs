@@ -27,11 +27,11 @@ use cache_turso::{
 use predicate_index::RecordKey;
 use serde::{Deserialize, Serialize};
 use soup_filter_cache_adapter::{
-    SoupFilterCompileOutcome, WriteResponse, authoritative_projection_mutations,
+    SoupFilterCompileOutcome, WritePassError, WriteResponse, authoritative_projection_mutations,
     compile_current_filter_request as compile_filter_request, dirty_projection_mutations,
     mail::ProjectionError as MailProjectionError, notification_deletion_updates,
-    notification_projection_updates, notification_projection_updates_for,
-    optimistic_notification_updates, optimistic_projection_mutations,
+    notification_projection_updates, optimistic_notification_updates,
+    optimistic_projection_mutations, write_passes,
 };
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -613,7 +613,7 @@ impl CacheState {
         {
             self.projection_reads += 1;
         }
-        let mut projections = authoritative_projection_mutations(
+        let projections = authoritative_projection_mutations(
             &self.engine_mut()?.schema_snapshot(),
             &request.query,
             request.operation_name.as_deref(),
@@ -632,30 +632,14 @@ impl CacheState {
             &request.variables,
             &request.data,
         );
-        if reuse_stored_identity {
-            projections.extend(
-                notification_projection_updates_for(self.engine_mut()?.storage(), &response)
-                    .await
-                    .map_err(err_js)?,
-            );
-        }
-        projections.extend(
-            soup_filter_cache_adapter::mail::projection_updates_for_response(
-                self.engine_mut()?.storage(),
-                &response,
-                reuse_stored_identity,
-            )
-            .await
-            .map_err(|error| self.mail_projection_error(error))?,
-        );
-        soup_filter_cache_adapter::properties::augment_authoritative_response(
-            self.engine_mut()?.storage(),
+        let projections = write_passes(
+            self.engine_mut()?,
             &response,
             reuse_stored_identity,
             projections,
         )
-        .await
-        .map_err(|error| self.mail_projection_error(error))
+        .await;
+        self.write_passes_result(projections)
     }
 
     async fn prepare_hydrate(
@@ -818,6 +802,19 @@ impl CacheState {
             MailProjectionError::Storage(error) => self.engine_error(EngineError::Storage(error)),
             MailProjectionError::Adapter(error) => err_js(error),
         }
+    }
+
+    fn write_passes_result(
+        &mut self,
+        result: Result<
+            Vec<cache_core::predicate::ProjectionMutation>,
+            WritePassError<TursoStorageError>,
+        >,
+    ) -> Result<Vec<cache_core::predicate::ProjectionMutation>, JsValue> {
+        result.map_err(|error| match error {
+            WritePassError::Notification(error) => err_js(error),
+            WritePassError::Projection(error) => self.mail_projection_error(error),
+        })
     }
 
     fn engine_error(&mut self, error: EngineError<TursoStorageError>) -> JsValue {
@@ -1972,7 +1969,7 @@ impl CacheEngine {
                 let op_id = ops.borrow_mut().intern(&registration.op_id);
                 (op_id, registration.entity_resolvers)
             });
-            let mut projections = authoritative_projection_mutations(
+            let projections = authoritative_projection_mutations(
                 &state.engine_mut()?.schema_snapshot(),
                 &query,
                 operation_name.as_deref(),
@@ -1981,60 +1978,72 @@ impl CacheEngine {
             .map_err(err_js)?;
             let reuse_stored_identity =
                 state.can_reuse_stored_identity(identity.as_deref()).await?;
-            // The passes below share one normalization of the response.
-            let response_schema = state.engine_mut()?.schema_snapshot();
-            let response = WriteResponse::new(
-                &response_schema,
-                &query,
-                operation_name.as_deref(),
-                &vars,
-                &data,
-            );
-            if reuse_stored_identity {
-                projections.extend(
-                    notification_projection_updates_for(state.engine_mut()?.storage(), &response)
-                        .await
-                        .map_err(err_js)?,
-                );
-            }
-            projections.extend(
-                soup_filter_cache_adapter::mail::projection_updates_for_response(
-                    state.engine_mut()?.storage(),
-                    &response,
-                    reuse_stored_identity,
-                )
-                .await
-                .map_err(|error| state.mail_projection_error(error))?,
-            );
-            let projections =
-                soup_filter_cache_adapter::properties::augment_authoritative_response(
-                    state.engine_mut()?.storage(),
-                    &response,
-                    reuse_stored_identity,
-                    projections,
-                )
-                .await
-                .map_err(|error| state.mail_projection_error(error))?;
-            let result = state
+            let input = NetworkWrite {
+                query: &query,
+                operation_name: operation_name.as_deref(),
+                variables: &vars,
+                data: &data,
+                identity: identity.as_deref(),
+            };
+            let registration =
+                registration
+                    .as_ref()
+                    .map(|(op_id, entity_resolvers)| QueryRegistration {
+                        op_id: *op_id,
+                        entity_resolvers,
+                    });
+            // One normalization serves the passes below and the write. A
+            // response that fails it takes the path that normalizes twice,
+            // which reports its error where it always has.
+            let normalized = state
                 .engine_mut()?
-                .write_query_with_registration_and_projections(
-                    origin,
-                    registration
-                        .as_ref()
-                        .map(|(op_id, entity_resolvers)| QueryRegistration {
-                            op_id: *op_id,
-                            entity_resolvers,
-                        }),
-                    NetworkWrite {
-                        query: &query,
-                        operation_name: operation_name.as_deref(),
-                        variables: &vars,
-                        data: &data,
-                        identity: identity.as_deref(),
-                    },
-                    projections,
-                )
-                .await;
+                .normalize_network(registration, input)
+                .ok();
+            let response_schema = state.engine_mut()?.schema_snapshot();
+            let response = match &normalized {
+                Some(normalized) => WriteResponse::with_updates(
+                    &response_schema,
+                    &query,
+                    operation_name.as_deref(),
+                    &vars,
+                    &data,
+                    normalized.updates(),
+                ),
+                None => WriteResponse::new(
+                    &response_schema,
+                    &query,
+                    operation_name.as_deref(),
+                    &vars,
+                    &data,
+                ),
+            };
+            let projections = write_passes(
+                state.engine_mut()?,
+                &response,
+                reuse_stored_identity,
+                projections,
+            )
+            .await;
+            let projections = state.write_passes_result(projections)?;
+            drop(response);
+            let engine = state.engine_mut()?;
+            let result = match normalized {
+                Some(normalized) => {
+                    engine
+                        .write_normalized_query(origin, input, normalized, projections)
+                        .await
+                }
+                None => {
+                    engine
+                        .write_query_with_registration_and_projections(
+                            origin,
+                            registration,
+                            input,
+                            projections,
+                        )
+                        .await
+                }
+            };
             let result = state.engine_result(result)?;
 
             to_js(&js_write_result(result, &ops.borrow()))
@@ -2488,7 +2497,7 @@ impl CacheEngine {
                 serde_json::json!({})
             };
 
-            let mut projections = authoritative_projection_mutations(
+            let projections = authoritative_projection_mutations(
                 &state.engine_mut()?.schema_snapshot(),
                 &query,
                 operation_name.as_deref(),
@@ -2504,29 +2513,8 @@ impl CacheEngine {
                 &vars,
                 &projection_data,
             );
-            projections.extend(
-                notification_projection_updates_for(state.engine_mut()?.storage(), &response)
-                    .await
-                    .map_err(err_js)?,
-            );
-            projections.extend(
-                soup_filter_cache_adapter::mail::projection_updates_for_response(
-                    state.engine_mut()?.storage(),
-                    &response,
-                    true,
-                )
-                .await
-                .map_err(|error| state.mail_projection_error(error))?,
-            );
-            let projections =
-                soup_filter_cache_adapter::properties::augment_authoritative_response(
-                    state.engine_mut()?.storage(),
-                    &response,
-                    true,
-                    projections,
-                )
-                .await
-                .map_err(|error| state.mail_projection_error(error))?;
+            let projections = write_passes(state.engine_mut()?, &response, true, projections).await;
+            let projections = state.write_passes_result(projections)?;
             let result = state
                 .engine_mut()?
                 .commit_optimistic_write_in_generation(

@@ -259,8 +259,9 @@ pub(super) async fn write_projections(
     variables: &Variables,
     data: &Value,
     identity: Option<&str>,
+    normalized: Option<&cache_core::normalize::RecordUpdates>,
 ) -> Result<Vec<ProjectionMutation>, String> {
-    let mut projections =
+    let projections =
         authoritative_projection_mutations(engine.schema(), query, operation, data)
             .map_err(|error| error.to_string())?;
     // Do not compose the new viewer's partial writes with the old viewer's
@@ -274,37 +275,29 @@ pub(super) async fn write_projections(
             .is_none_or(|bound| bound == observed),
         None => true,
     };
-    // The passes below share one normalization of the response.
-    let response = soup_filter_cache_adapter::WriteResponse::new(
-        engine.schema(),
-        query,
-        operation,
-        variables,
-        data,
-    );
-    if reuse_stored_identity {
-        projections.extend(
-            soup_filter_cache_adapter::notification_projection_updates_for(
-                engine.storage(),
-                &response,
-            )
-            .await
-            .map_err(|error| error.to_string())?,
-        );
-    }
-    projections.extend(
-        mail::projection_updates_for_response(engine.storage(), &response, reuse_stored_identity)
-            .await
-            .map_err(|error| error.to_string())?,
-    );
-    soup_filter_cache_adapter::properties::augment_authoritative_response(
-        engine.storage(),
-        &response,
-        reuse_stored_identity,
-        projections,
-    )
-    .await
-    .map_err(|error| error.to_string())
+    // The passes below share one normalization of the response: the engine's,
+    // when the caller normalized it for the write.
+    let schema = engine.schema_snapshot();
+    let response = match normalized {
+        Some(updates) => soup_filter_cache_adapter::WriteResponse::with_updates(
+            &schema,
+            query,
+            operation,
+            variables,
+            data,
+            updates,
+        ),
+        None => soup_filter_cache_adapter::WriteResponse::new(
+            &schema,
+            query,
+            operation,
+            variables,
+            data,
+        ),
+    };
+    soup_filter_cache_adapter::write_passes(engine, &response, reuse_stored_identity, projections)
+        .await
+        .map_err(|error| error.to_string())
 }
 
 pub(super) async fn optimistic_projections(

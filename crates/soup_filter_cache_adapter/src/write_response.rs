@@ -1,4 +1,5 @@
-//! One authoritative response, normalized at most once for every projection pass.
+//! One authoritative response, normalized at most once for every projection pass,
+//! or not at all when the engine already normalized it for the write.
 //!
 //! A write runs the notification, Mail and property passes over the same
 //! response, and each used to normalize it again. Normalizing a Soup page
@@ -17,6 +18,8 @@ pub struct WriteResponse<'a> {
     operation: Option<&'a str>,
     variables: &'a Map<String, Value>,
     data: &'a Value,
+    /// Records the engine already normalized, when the host has them.
+    normalized: Option<&'a RecordUpdates>,
     updates: OnceLock<RecordUpdates>,
 }
 
@@ -35,7 +38,25 @@ impl<'a> WriteResponse<'a> {
             operation,
             variables,
             data,
+            normalized: None,
             updates: OnceLock::new(),
+        }
+    }
+
+    /// Wraps a response the engine already normalized
+    /// ([`cache_core::engine::NormalizedResponse::updates`]), so no pass
+    /// normalizes it again.
+    pub fn with_updates(
+        schema: &'a cache_core::meta::Schema,
+        query: &'a str,
+        operation: Option<&'a str>,
+        variables: &'a Map<String, Value>,
+        data: &'a Value,
+        updates: &'a RecordUpdates,
+    ) -> Self {
+        Self {
+            normalized: Some(updates),
+            ..Self::new(schema, query, operation, variables, data)
         }
     }
 
@@ -67,7 +88,7 @@ impl<'a> WriteResponse<'a> {
     /// The normalized records of the response, computed on first use. A
     /// failure is not kept, so every pass reports it as before.
     pub(crate) fn updates(&self) -> Result<&RecordUpdates, SoupFilterCacheAdapterError> {
-        if let Some(updates) = self.updates.get() {
+        if let Some(updates) = self.normalized.or_else(|| self.updates.get()) {
             return Ok(updates);
         }
         let document = parsed_document(self.query)

@@ -4,7 +4,9 @@ use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
-use turso_core::{CheckpointMode, Connection, LimboError, Row, Statement, StepResult, Value};
+use turso_core::{
+    CheckpointMode, Connection, IOExt, LimboError, Row, Statement, StepResult, Value,
+};
 
 pub(crate) type Values = Vec<Value>;
 pub(crate) type Rows = Vec<Values>;
@@ -92,6 +94,20 @@ impl Db {
             .map_or(0, |statements| statements.lock().unwrap().copies(sql))
     }
 
+    /// Kept statement texts that contain `needle`.
+    #[cfg(test)]
+    pub(crate) fn cached_texts_containing(&self, needle: &str) -> usize {
+        self.statements.as_ref().map_or(0, |statements| {
+            statements
+                .lock()
+                .unwrap()
+                .texts
+                .keys()
+                .filter(|sql| sql.contains(needle))
+                .count()
+        })
+    }
+
     #[cfg(test)]
     pub(crate) fn cached_texts(&self) -> usize {
         self.statements
@@ -105,10 +121,9 @@ impl Db {
     /// This is the passive checkpoint Turso itself runs inside COMMIT, run
     /// earlier; Turso keeps restarting the log at the next write and
     /// checkpointing on close. A failure is Turso's own too: the WAL stays
-    /// whole and the next checkpoint copies it again. Once a copy is complete
-    /// the WAL stays due until the next write starts it over, so calls in
-    /// between skip it: Turso's explicit checkpoint drops the page cache even
-    /// when it has nothing to copy.
+    /// whole and the next checkpoint copies it again. The page cache is kept,
+    /// as in COMMIT. Once a copy is complete the WAL stays due until the next
+    /// write starts it over, so calls in between skip it.
     pub(crate) fn checkpoint_over(&self, frames: u64) -> Result<WalCheckpoint, TursoStorageError> {
         let wal = self
             .connection
@@ -128,9 +143,24 @@ impl Db {
         if wal_frames < frames.max(1) || *copied_wal == position {
             return Ok(outcome);
         }
-        match self.connection.checkpoint(CheckpointMode::Passive {
-            upper_bound_inclusive: None,
-        }) {
+        // The pager's checkpoint with the page cache kept, as Turso's own
+        // COMMIT runs it. `Connection::checkpoint` clears the whole cache
+        // afterwards, so the next requests read back every page they touch.
+        // The pages it copies are the ones the cache already holds.
+        let pager = self.connection.get_pager();
+        let checkpoint = pager.io.block(|| {
+            pager.checkpoint(
+                CheckpointMode::Passive {
+                    upper_bound_inclusive: None,
+                },
+                self.connection.get_sync_mode(),
+                false,
+            )
+        });
+        if checkpoint.is_err() {
+            pager.cleanup_after_checkpoint_failure();
+        }
+        match checkpoint {
             Ok(copied) => {
                 // The frame count is this connection's own view and can be
                 // stale; the copy reports the log it actually copied. A log
@@ -728,6 +758,15 @@ pub(crate) fn take_control_trace() -> Vec<TestControlPhase> {
 #[cfg(all(test, not(target_arch = "wasm32")))]
 pub(crate) fn take_control_io_trace() -> Vec<TestControlPhase> {
     CONTROL_IO_TRACE.with(|trace| std::mem::take(&mut *trace.borrow_mut()))
+}
+
+impl From<WalPosition> for cache_core::store::WritePosition {
+    fn from(position: WalPosition) -> Self {
+        Self {
+            epoch: u64::from(position.checkpoint_seq_no),
+            offset: position.max_frame,
+        }
+    }
 }
 
 #[cfg(all(test, not(target_arch = "wasm32")))]

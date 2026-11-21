@@ -475,3 +475,31 @@ fn a_reader_on_the_database_file_makes_the_copy_busy_until_it_ends() {
         "{rest:?}"
     );
 }
+
+#[test]
+fn an_idle_checkpoint_keeps_the_page_cache() {
+    let (writer, _reader) = connection_pair("checkpoint-cache.db");
+    write_pages(&writer, 0, 40);
+    let rows = read_transaction(&writer, || {
+        query(&writer, "SELECT sum(length(label)) FROM t", vec![])
+    })
+    .unwrap();
+    assert_eq!(rows[0][0], Value::from_i64(40 * 3_000));
+    let pager = writer.connection.get_pager();
+    let cached = || {
+        (1..=40)
+            .filter(|page| pager.cache_get(*page).unwrap().is_some())
+            .count()
+    };
+    let before = cached();
+    assert!(before >= 30, "{before} pages cached");
+
+    let copied = writer.checkpoint_over(1).unwrap();
+    assert_eq!(copied.backfilled_frames, copied.wal_frames, "{copied:?}");
+    assert_eq!(cached(), before, "the copy leaves cached pages in place");
+    let rows = read_transaction(&writer, || {
+        query(&writer, "SELECT sum(length(label)) FROM t", vec![])
+    })
+    .unwrap();
+    assert_eq!(rows[0][0], Value::from_i64(40 * 3_000));
+}
