@@ -1,4 +1,6 @@
-//! Speculative sort-index windows for single-partition filters. A window that
+//! Speculative sort-index windows for partition filters. Every partition of a
+//! profile shares the sort index, so one window tests each candidate against
+//! the predicate of its own partition. A window that
 //! cannot prove a full page reads on from its last candidate, never returning
 //! the ones before again, by an amount sized from the hit rate it saw, up to
 //! `MAX_CANDIDATES` per fact source. Filters sparser than that fall back to the
@@ -10,7 +12,7 @@
 //! cost each.
 
 use super::*;
-use predicate_index::{IndexQuery, ReferenceHit};
+use predicate_index::{IndexQuery, PartitionPredicate, ReferenceHit};
 
 const MIN_CANDIDATES: usize = 64;
 const CANDIDATES_PER_RESULT: usize = 2;
@@ -99,6 +101,43 @@ fn cursor_bound(expr: &PredicateExpr, query: &IndexQuery) -> Option<i64> {
     }
 }
 
+/// The partitions a query can match: one whose predicate matches nothing
+/// adds no candidates.
+fn searched_partitions(query: &IndexQuery) -> impl Iterator<Item = &PartitionPredicate> {
+    query
+        .partitions
+        .iter()
+        .filter(|partition| !matches!(partition.predicate, PredicateExpr::None))
+}
+
+/// The cursor bound every searched partition shares: the loosest of theirs,
+/// or none when any partition has none. Each candidate still meets its own
+/// partition's full predicate.
+fn window_bound(query: &IndexQuery) -> Option<i64> {
+    let mut bound: Option<i64> = None;
+    for partition in searched_partitions(query) {
+        let value = cursor_bound(&partition.predicate, query)?;
+        bound = Some(bound.map_or(value, |bound| match query.sort_direction {
+            SortDirection::Asc => bound.min(value),
+            SortDirection::Desc => bound.max(value),
+        }));
+    }
+    bound
+}
+
+/// `terms` joined by `OR` as a balanced tree, so the SQL nests by the
+/// logarithm of the partition count instead of the count.
+fn balanced_or(terms: &[String]) -> String {
+    match terms {
+        [] => "0".to_owned(),
+        [term] => term.clone(),
+        _ => {
+            let (left, right) = terms.split_at(terms.len() / 2);
+            format!("({} OR {})", balanced_or(left), balanced_or(right))
+        }
+    }
+}
+
 /// A window's last candidate in index order: its sort value and document id.
 #[derive(Clone, Copy)]
 struct Position {
@@ -143,7 +182,7 @@ fn candidate_sql(
             SortDirection::Asc => " AND value >= ? AND (value > ? OR document_id > ?)",
             SortDirection::Desc => " AND value <= ? AND (value < ? OR document_id < ?)",
         }
-    } else if let Some(value) = cursor_bound(&query.partitions[0].predicate, query) {
+    } else if let Some(value) = window_bound(query) {
         parameters.push(Value::from_i64(value));
         match query.sort_direction {
             SortDirection::Asc => " AND value >= ?",
@@ -155,7 +194,6 @@ fn candidate_sql(
     parameters.extend([
         Value::from_i64(i64::try_from(budget).unwrap_or(i64::MAX)),
         text(query.profile.token().as_str()),
-        text(query.partitions[0].partition.as_str()),
     ]);
     let shadow = match source {
         // Any shadow suppresses authority, even a deleted, uncertain, or moved one.
@@ -166,13 +204,20 @@ fn candidate_sql(
         }
         conjunction::FactSource::Optimistic => String::new(),
     };
-    let predicate = conjunction::condition(&query.partitions[0].predicate, source, &mut parameters);
+    let partitions = searched_partitions(query)
+        .map(|partition| {
+            parameters.push(text(partition.partition.as_str()));
+            let predicate = conjunction::condition(&partition.predicate, source, &mut parameters);
+            format!("(d.partition = ? AND ({predicate}))")
+        })
+        .collect::<Vec<_>>();
+    let partitions = balanced_or(&partitions);
     // Bound BEFORE scope/predicate probes. A sparse query cannot turn this
     // speculation into a full-index walk. Ordering document_id with value lets
     // Turso walk the existing index without sorting the corpus. Record-key
     // ordering is resolved only after proving the entire cutoff tie is present.
     let sql = format!(
-        "WITH candidates AS MATERIALIZED (SELECT document_id, value FROM {facts} INDEXED BY {index} WHERE attribute = ?{boundary} ORDER BY value {direction}, document_id {direction} LIMIT ?) SELECT d.record_key, s.value, s.document_id, CASE WHEN d.profile = ? AND d.partition = ? AND d.state = 0{shadow} AND ({predicate}) THEN 1 ELSE 0 END FROM candidates AS s CROSS JOIN {documents} AS d ON d.id = s.document_id"
+        "WITH candidates AS MATERIALIZED (SELECT document_id, value FROM {facts} INDEXED BY {index} WHERE attribute = ?{boundary} ORDER BY value {direction}, document_id {direction} LIMIT ?) SELECT d.record_key, s.value, s.document_id, CASE WHEN d.profile = ? AND d.state = 0{shadow} AND ({partitions}) THEN 1 ELSE 0 END FROM candidates AS s CROSS JOIN {documents} AS d ON d.id = s.document_id"
     );
     (sql, parameters)
 }
@@ -199,17 +244,23 @@ impl Window {
         }
     }
 
-    /// Reads the next `count` candidates after the last one read.
+    /// Reads the next `count` candidates after the last one read. Returns
+    /// false, reading nothing, when Turso refuses the SQL: it joins every
+    /// partition's predicate into one expression, which can nest deeper than
+    /// Turso parses.
     fn extend(
         &mut self,
         connection: &Db,
         query: &IndexQuery,
         excluded_optimistic: &[i64],
         count: usize,
-    ) -> Result<(), TursoStorageError> {
+    ) -> Result<bool, TursoStorageError> {
         let (sql, parameters) =
             candidate_sql(query, self.source, excluded_optimistic, self.last, count);
-        let rows = driver::query(connection, &sql, parameters)?;
+        let Some(mut statement) = driver::prepare_unless_refused(connection, &sql)? else {
+            return Ok(false);
+        };
+        let rows = driver::query_prepared(&mut statement, parameters)?;
         self.read += rows.len();
         self.exhausted = rows.len() < count;
         for row in rows {
@@ -238,7 +289,7 @@ impl Window {
                 });
             }
         }
-        Ok(())
+        Ok(true)
     }
 
     /// Every candidate up to `cutoff` is read: the window ran out, or its last
@@ -263,7 +314,7 @@ fn try_select(
     excluded_optimistic: &[i64],
 ) -> Result<Option<Vec<ReferenceHit>>, TursoStorageError> {
     let query = query.as_query();
-    if query.partitions.len() != 1 || matches!(query.partitions[0].predicate, PredicateExpr::None) {
+    if searched_partitions(query).next().is_none() {
         return Ok(None);
     }
     let limit = usize::from(query.limit);
@@ -272,8 +323,12 @@ fn try_select(
         Window::new(conjunction::FactSource::Authority),
         Window::new(conjunction::FactSource::Optimistic),
     ];
+    // SQL Turso refuses takes the set-based plan, which compiles each
+    // partition on its own.
     for window in &mut windows {
-        window.extend(connection, query, excluded_optimistic, budget)?;
+        if !window.extend(connection, query, excluded_optimistic, budget)? {
+            return Ok(None);
+        }
     }
     loop {
         let mut hits = windows
@@ -312,7 +367,9 @@ fn try_select(
         for window in &mut windows {
             if !window.proves(cutoff, &query.sort_direction) {
                 let count = budget.saturating_sub(window.read);
-                window.extend(connection, query, excluded_optimistic, count)?;
+                if !window.extend(connection, query, excluded_optimistic, count)? {
+                    return Ok(None);
+                }
             }
         }
     }

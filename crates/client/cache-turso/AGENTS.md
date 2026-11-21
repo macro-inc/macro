@@ -51,6 +51,7 @@ GraphQL cache — native for tests/Tauri, OPFS-backed on wasm32.
 
 ## Gotchas
 
+- Turso refuses SQL expressions nested past its parser's limits (recursion and tree height, 100 each). The sort-index window (`storage/bounded_selection.rs`) joins every partition's predicate into one expression, so it prepares through `driver::prepare_unless_refused` and takes the set-based plan when Turso's parser refuses the SQL; only the parser can say what fits, so do not estimate depth. `many_partitions_with_deep_predicates_stay_within_the_expression_limit` covers both sides of the limit. The set-based plan, which has no fallback, can still exceed it: a match-all tag filter over about 128 tags passes the request and predicate bounds, and when the window gives up on it (no match within its candidate budget) the residual compiles into one AND chain too deep for the parser. The completeness probes refuse past 100 partitions; the app's filter compilers emit at most five.
 - Email send persistence and cancellation belong to the frontend email journal, not the normalized cache or its mutation queue.
 - Permission retirement pages raw and projection-only keys through covering keys, retaining the distinction between an initial cursor and an empty ID. Whole-projection deletion skips old fact reconstruction but still rebases ordered pending contributions; preserve queue rows, retry metadata, and identity bindings.
 

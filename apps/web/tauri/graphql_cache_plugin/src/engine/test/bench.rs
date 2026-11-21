@@ -297,7 +297,11 @@ fn mail_json(limit: u16, view: &str, cursor: Option<&serde_json::Value>) -> serd
 }
 
 fn core_args(limit: u16) -> EntityFilterRequest {
-    serde_json::from_value(serde_json::json!({
+    serde_json::from_value(core_request(limit)).unwrap()
+}
+
+fn core_request(limit: u16) -> serde_json::Value {
+    serde_json::json!({
         "filters": {
             "emailFilter": { "tree": { "literal": { "threadId": NIL } } },
             "calendarEventFilter": { "literal": { "id": NIL } },
@@ -309,8 +313,7 @@ fn core_args(limit: u16) -> EntityFilterRequest {
         "sortMethod": "UPDATED_AT",
         "sortDirection": "DESC",
         "limit": limit,
-    }))
-    .unwrap()
+    })
 }
 
 fn search(query: &str) -> SearchRequest {
@@ -653,9 +656,47 @@ fn native_cache_parity_dump() {
                 }
             }
         }
-        let core =
-            serde_json::to_value(handle.entity_filter(core_args(100)).await.unwrap()).unwrap();
-        dump.insert("soup.core limit=100".into(), serde_json::json!(keys(&core)));
+        // Soup lists have no local continuation: each limit reads a first page.
+        // Dropping exclusions changes which partitions the list reads.
+        for (name, dropped) in [
+            ("core", &[][..]),
+            ("core+channel-threads", &["channelThreadFilter"][..]),
+            ("core+email", &["emailFilter"][..]),
+            ("unfiltered", &["*"][..]),
+        ] {
+            for sort in ["UPDATED_AT", "CREATED_AT"] {
+                for direction in ["DESC", "ASC"] {
+                    for limit in [1u16, 7, 50, 100, 500] {
+                        let mut request = core_request(limit);
+                        let filters = request["filters"].as_object_mut().unwrap();
+                        if dropped == ["*"] {
+                            filters.clear();
+                        }
+                        for filter in dropped {
+                            filters.remove(*filter);
+                        }
+                        request["sortMethod"] = sort.into();
+                        request["sortDirection"] = direction.into();
+                        let result = handle
+                            .entity_filter(serde_json::from_value(request).unwrap())
+                            .await
+                            .map(|result| serde_json::to_value(result).unwrap())
+                            .unwrap_or_else(
+                                |error| serde_json::json!({ "error": error.to_string() }),
+                            );
+                        let page = if result.get("keys").is_some() {
+                            serde_json::json!(keys(&result))
+                        } else {
+                            result
+                        };
+                        dump.insert(
+                            format!("soup.{name} {sort} {direction} limit={limit}"),
+                            serde_json::json!([page]),
+                        );
+                    }
+                }
+            }
+        }
         handle.shutdown().unwrap();
         std::fs::write(&out, serde_json::to_vec_pretty(&dump).unwrap()).unwrap();
         for (name, pages) in &dump {
