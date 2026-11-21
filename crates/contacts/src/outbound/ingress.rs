@@ -1,6 +1,11 @@
+#[cfg(test)]
+mod test;
+
 use crate::domain::models::messages::{ContactConnections, ContactsNodes, DirectoryChange};
 use crate::domain::ports::ContactsIngressQueue;
+use crate::trace_context::ATTRIBUTE;
 use rootcause::Report;
+use std::collections::HashMap;
 
 /// SQS-backed implementation of [`ContactsIngressQueue`].
 #[derive(Clone)]
@@ -23,6 +28,10 @@ impl SqsContactsQueue {
             .send_message()
             .queue_url(&self.queue_url)
             .message_body(body)
+            .set_message_attributes(
+                crate::trace_context::attribute()
+                    .map(|context| HashMap::from([(ATTRIBUTE.to_owned(), context)])),
+            )
             .send()
             .await?;
         Ok(())

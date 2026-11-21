@@ -152,3 +152,28 @@ async fn invalidation_names_changed_contacts_only_when_known() {
         ]
     );
 }
+
+/// An error names the request, whose URL holds the user's email; neither
+/// the span's error nor the log may carry it.
+#[tokio::test]
+async fn a_failed_invalidation_records_no_email() {
+    use tracing::Instrument as _;
+
+    let capture = crate::trace_context::capture::Capture::start();
+    let (notifier, _) = spawn_gateway(StatusCode::INTERNAL_SERVER_ERROR).await;
+    let owner = user("macro|owner@example.com");
+    let contact = user("macro|contact@example.com");
+
+    notifier
+        .invalidate_contacts_for_users(vec![ContactsInvalidation::new(owner, vec![contact])])
+        .instrument(tracing::info_span!(parent: None, "contacts.test"))
+        .await
+        .unwrap();
+
+    let spans = capture.finished();
+    assert!(
+        spans.iter().any(|span| span.name == "contacts.invalidate"),
+        "the failed call must be traced"
+    );
+    capture.assert_no_email("example.com");
+}
