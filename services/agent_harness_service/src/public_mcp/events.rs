@@ -179,6 +179,10 @@ pub(crate) struct Subscribed {
     pub(crate) compiled: Compiled,
 }
 
+/// Compiled filters by (user, wording), each behind a cell its first caller
+/// fills.
+type CompiledCache = LruCache<(String, String), Arc<tokio::sync::OnceCell<McpEventFilter>>>;
+
 /// Events for the public MCP server: compiling selections, webhook
 /// subscriptions through the document storage service, and the source
 /// streams read.
@@ -189,7 +193,7 @@ pub(crate) struct McpEvents {
     sealer: Arc<dyn SecretSealer>,
     /// One cell per user and wording, so concurrent first requests share one
     /// model call; a failed call leaves the cell empty for the next.
-    compiled: Mutex<LruCache<(String, String), Arc<tokio::sync::OnceCell<McpEventFilter>>>>,
+    compiled: Mutex<CompiledCache>,
     open_streams: Arc<Mutex<HashMap<String, u8>>>,
 }
 
