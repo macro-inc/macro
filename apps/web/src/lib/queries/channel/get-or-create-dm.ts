@@ -1,4 +1,5 @@
 import { isBotPrincipalId } from '@core/constant/macroAgent';
+import { firstOrAborted } from '@core/util/abort-signal';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { type ResultError, throwOnErr } from '@core/util/result';
 import { Telemetry, type TraceContext } from '@macro-inc/observability';
@@ -14,6 +15,7 @@ import {
   useMutation,
 } from '@tanstack/solid-query';
 import { okAsync, ResultAsync } from 'neverthrow';
+import { filter, pipe } from 'wonka';
 import {
   assertQueryAccount,
   currentQueryAccount,
@@ -145,7 +147,8 @@ export function getOrCreateDirectMessageChannel(
  * each time, since the DM may be one the viewer's directory has not loaded
  * yet. The server looks up people only; agents are opened through their own
  * DM flow (`openTeamAgentDirectMessage`), so a bot answers none without
- * asking.
+ * asking. Fails with `DirectMessageLookupTimedOut` once the server has
+ * not answered within `DM_LOOKUP_DEADLINE_MS`.
  */
 export function existingDirectMessage(
   viewerId: string,
@@ -159,8 +162,21 @@ export function existingDirectMessage(
   );
 }
 
+/** How long opening a person's DM waits for the server to say whether one
+ * exists. Past it the opener shows the DM as not yet made, whose first
+ * message still reaches an existing one. */
+export const DM_LOOKUP_DEADLINE_MS = 5_000;
+
+/** Why a DM lookup gave up: `DM_LOOKUP_DEADLINE_MS` passed. */
+export class DirectMessageLookupTimedOut extends Error {
+  constructor() {
+    super('direct message lookup timed out');
+  }
+}
+
 // Looked up as `viewerId` only: a lookup for a viewer who is no longer
-// signed in rejects with `QueryAccountChangedError`.
+// signed in rejects with `QueryAccountChangedError`. Giving up at the
+// deadline leaves the query's result source, which ends urql's request.
 async function lookupDirectMessage(
   viewerId: string,
   recipientId: string
@@ -168,14 +184,23 @@ async function lookupDirectMessage(
   const account = currentQueryAccount();
   assertQueryAccount(account);
   if (account.userId !== viewerId) throw new QueryAccountChangedError();
-  const result = await getGraphqlSoupClient()
-    .query(
-      DirectMessageChannelIdDocument,
-      { userId: recipientId },
-      { requestPolicy: 'network-only' }
-    )
-    .toPromise();
+  const settled = await firstOrAborted(
+    pipe(
+      getGraphqlSoupClient().query(
+        DirectMessageChannelIdDocument,
+        { userId: recipientId },
+        { requestPolicy: 'network-only' }
+      ),
+      // The answer, as urql's own toPromise takes it.
+      filter((result) => !result.stale && !result.hasNext)
+    ),
+    AbortSignal.timeout(DM_LOOKUP_DEADLINE_MS)
+  );
   assertQueryAccount(account);
+  if (settled.kind === 'aborted') throw new DirectMessageLookupTimedOut();
+  if (settled.kind === 'ended')
+    throw new Error('direct message lookup ended without an answer');
+  const result = settled.value;
   if (result.error) throw result.error;
   return result.data?.user.directMessageChannelId ?? undefined;
 }
