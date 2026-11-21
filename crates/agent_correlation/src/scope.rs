@@ -447,11 +447,15 @@ impl SessionScope {
         if listed(ANY_WRITE, method, path) {
             return false;
         }
-        // A job reads only what its list names, like any other request; a
-        // preflight carries nothing.
+        // A job reads only what its list names, like any other request. An
+        // OPTIONS request is never on them: a browser's CORS preflight carries
+        // no credential, so one carrying a job's token is not a preflight and
+        // could reach a handler mounted for any method.
         if self == Self::Job {
             let method = if method == "HEAD" { "GET" } else { method };
-            return method == "OPTIONS" || listed(&JOB_REQUESTS, method, path);
+            return JOB_REQUESTS
+                .iter()
+                .any(|(listed, template)| *listed == method && job_matches(path, template));
         }
         if reads_by_method(method) {
             return true;
@@ -551,6 +555,37 @@ const SERVICE_PREFIXES: &[&str] = &[
 /// percent-decoded, as routers decode the parameters they match, so
 /// `/%76%31` is a version too.
 pub fn matches(path: &str, template: &str) -> bool {
+    matches_with(path, template, |_, segment| !segment.is_empty())
+}
+
+/// Placeholders of a job's lists that name a kind, a view or a key, whose
+/// values are words; every other placeholder names an id.
+const WORD_PLACEHOLDERS: &[&str] = &[
+    "{entity_type}",
+    "{parent_type}",
+    "{kind}",
+    "{view}",
+    "{source}",
+    "{key}",
+    "{slug}",
+];
+
+/// [`matches`] for a job's lists, with typed placeholders: an id
+/// placeholder matches only a segment that looks like an id (a digit, or a
+/// user id's `|` or `@`), so a template never admits a route that differs
+/// from it by a literal word, such as an unannotated
+/// `/documents/{id}/duplicates` under `/documents/{id}/{version}`.
+fn job_matches(path: &str, template: &str) -> bool {
+    matches_with(path, template, |placeholder, segment| {
+        if WORD_PLACEHOLDERS.contains(&placeholder) {
+            lazy_regex::regex_is_match!(r"^[A-Za-z0-9_-]+$", segment)
+        } else {
+            lazy_regex::regex_is_match!(r"^[^/]*[0-9|@][^/]*$", segment)
+        }
+    })
+}
+
+fn matches_with(path: &str, template: &str, placeholder: impl Fn(&str, &str) -> bool) -> bool {
     let segments: Vec<std::borrow::Cow<'_, str>> = path
         .trim_end_matches('/')
         .split('/')
@@ -568,7 +603,7 @@ pub fn matches(path: &str, template: &str) -> bool {
     let exact = |path: &[std::borrow::Cow<'_, str>]| {
         path.len() == template.len()
             && path.iter().zip(template).all(|(segment, wanted)| {
-                (wanted.starts_with('{') && wanted.ends_with('}') && !segment.is_empty())
+                (wanted.starts_with('{') && wanted.ends_with('}') && placeholder(wanted, segment))
                     || segment == wanted
             })
     };

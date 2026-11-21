@@ -33,7 +33,6 @@ GET /agent-work-registrations
 GET /coding-agents
 GET /harnesses/{harness_id}/claude-mode
 GET /voices
-GET /voices/{model}/sample
 POST /agent-sessions/preview
 
 [auth]
@@ -127,7 +126,6 @@ GET /contacts/search
 
 [email]
 GET /email/attachments/{id}
-GET /email/attachments/{id}/document_id
 GET /email/backfill/gmail
 GET /email/backfill/gmail/active
 GET /email/backfill/gmail/{id}

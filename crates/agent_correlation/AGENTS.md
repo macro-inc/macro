@@ -28,7 +28,14 @@ code, not in its prompt. The harness also signs the scope into the credential
   `job_refused_reads.txt` (server-side fetches of caller-chosen URLs,
   credentials, sign-in flows, invite and join tokens, vault secrets), and
   every list line names a spec operation
-  (`a_job_classifies_every_read_and_allows_only_its_lists`). Under `job`,
+  (`a_job_classifies_every_read_and_allows_only_its_lists`). Its writes are
+  only its own session's reviews and views, its owner's notification inbox
+  and a tool-free completion (`a_job_writes_only_its_session_and_its_owners_inbox`),
+  so nothing it writes lands where someone else reads. A job's placeholders
+  are typed (`job_matches`): an id placeholder takes only an id-like
+  segment, so an unannotated route that differs by a literal word isn't
+  admitted. OPTIONS is refused to a job (a preflight carries no
+  credential). Under `job`,
   `entity_access`'s `EntityPermission::satisfies` makes a change need owner
   access, and no scope shares. Signed-scope services
   (`enforce_signed_scope`) hold a job to the same lists. `generation`:

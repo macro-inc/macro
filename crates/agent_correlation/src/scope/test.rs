@@ -437,6 +437,19 @@ fn concrete(path: &str) -> String {
         .join("/")
 }
 
+/// A spec path as a request sends it, with each id placeholder filled with
+/// an id and each word placeholder (`WORD_PLACEHOLDERS`) with a word.
+fn concrete_typed(path: &str) -> String {
+    path.split('/')
+        .map(|segment| match segment {
+            word if WORD_PLACEHOLDERS.contains(&word) => "document",
+            id if id.starts_with('{') => "01a1",
+            literal => literal,
+        })
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
 /// Every write a service's OpenAPI spec declares is classified for a run
 /// that sends nothing: refused, one of the scope's POST reads, or reviewed
 /// as a change to the person's own or shared items in `no_send_writes.txt`.
@@ -535,7 +548,7 @@ fn a_job_classifies_every_read_and_allows_only_its_lists() {
                 }
                 let key = (*name, method.as_str(), path.as_str());
                 let on_list = listed.contains(&key);
-                if scope.allows(&method, &concrete(path)) != on_list {
+                if scope.allows(&method, &concrete_typed(path)) != on_list {
                     mismatched.push(format!("{name} {method} {path} (listed: {on_list})"));
                 }
                 if method == "GET" && on_list == refused_reads.contains(&key) {
@@ -608,19 +621,35 @@ fn a_job_is_refused_whatever_its_lists_do_not_name() {
         ("GET", "/dss/call/01a1"),
         ("POST", "/dss/chats/01a1/tool/call"),
         ("POST", "/items/soup/graphql"),
+        // Changes to existing items, the owner's own included: an item's
+        // audience would read what a job writes there.
+        ("PUT", "/dss/documents/01a1/markdown"),
+        ("PUT", "/properties/entities/document/01a1/02b2"),
+        ("PATCH", "/email/threads/01a1/archived"),
+        ("POST", "/dss/databases/01a1/ops"),
+        ("DELETE", "/dss/projects/01a1"),
+        ("PUT", "/agent-harness/agent-sessions/01a1/task"),
+        ("PUT", "/agent-harness/agent-sessions/01a1/pull-requests"),
+        // An OPTIONS request with a job's token is not a browser preflight.
+        ("OPTIONS", "/notification/device/register"),
+        ("OPTIONS", "/dss/documents/01a1"),
+        ("OPTIONS", "/agent-harness/preview/01a1/x"),
+        // Typed placeholders: a word is no id, so an unannotated route that
+        // differs from a listed one by a literal is refused.
+        ("GET", "/dss/documents/01a1/duplicates"),
+        ("GET", "/dss/documents/01a1/cached_snapshot_url"),
+        ("GET", "/agent-harness/agent-sessions/unlisted"),
     ] {
         assert!(!scope.allows(method, path), "{method} {path}");
     }
     for (method, path) in [
         ("GET", "/dss/documents/01a1"),
         ("HEAD", "/dss/documents/01a1"),
-        ("OPTIONS", "/notification/device/register"),
-        ("PUT", "/dss/documents/01a1/markdown"),
-        ("PUT", "/properties/entities/document/01a1/02b2"),
+        ("GET", "/properties/entities/document/01a1"),
         ("POST", "/search"),
         ("POST", "/scheduled-actions/check"),
-        ("PATCH", "/email/threads/01a1/archived"),
         ("POST", "/agent-harness/agent-sessions/01a1/reviews"),
+        ("PATCH", "/notification/v1/user_notifications/bulk/done"),
     ] {
         assert!(scope.allows(method, path), "{method} {path}");
     }
@@ -643,4 +672,45 @@ async fn a_job_shares_nothing_out() {
         assert!(crate::context::refuse_sharing(false).is_ok());
     })
     .await;
+}
+
+/// A job reaches no one but its owner: it writes only into its own session
+/// (a review it drafts, a view it presents: items the session creates and
+/// its owner decides on), its owner's notification inbox, and a tool-free AI
+/// completion. It changes no existing item, shared or not, so nothing it
+/// writes lands where someone else reads.
+#[test]
+fn a_job_writes_only_its_session_and_its_owners_inbox() {
+    let writes: Vec<(&str, &str, &str)> = job_list(include_str!("job_writes.txt")).collect();
+    assert_eq!(
+        writes,
+        [
+            (
+                "agent-harness",
+                "POST",
+                "/agent-sessions/{session_id}/reviews"
+            ),
+            (
+                "agent-harness",
+                "POST",
+                "/agent-sessions/{session_id}/views"
+            ),
+            ("cognition", "POST", "/structured-completion"),
+            ("notification", "PATCH", "/v1/user_notifications/bulk/done"),
+            ("notification", "PATCH", "/v1/user_notifications/bulk/seen"),
+            (
+                "notification",
+                "PATCH",
+                "/v1/user_notifications/bulk/undone"
+            ),
+        ]
+    );
+    // Its reads write nothing either: no POST read on its list changes an
+    // item.
+    for (_, method, path) in job_list(include_str!("job_reads.txt")) {
+        assert!(
+            method == "GET" || listed(POST_READS, method, path),
+            "{method} {path} is on a job's reads but is no read"
+        );
+    }
 }

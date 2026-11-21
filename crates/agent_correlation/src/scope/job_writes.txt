@@ -1,100 +1,20 @@
 # Writes a background job's credential (SessionScope::Job) may make, as
 # "METHOD /path" the service's OpenAPI spec in packages/sdk/specs names it,
-# under the spec's [name]. Only changes to the owner's own items: under a job
-# credential an edit requires owner access to the item
-# (`entity_access::domain::models::EntityPermission::satisfies`), and no
-# scope may share (`allows_sharing`), so none of these can share an item
-# out. Everything not listed here or in job_reads.txt is refused.
+# under the spec's [name]. A job writes only what reaches no one but its
+# owner: into its own session (drafting a review or presenting a view, both
+# items the session creates and its owner decides on), the owner's own
+# notification inbox, and a tool-free AI completion. It changes no existing
+# item, shared or not: `a_job_writes_only_its_session_and_its_owners_inbox`.
+# Everything not listed here or in job_reads.txt is refused.
 
 [agent-harness]
-DELETE /agent-sessions/{session_id}/pull-requests
 POST /agent-sessions/{session_id}/reviews
 POST /agent-sessions/{session_id}/views
-PUT /agent-sessions/{session_id}/name
-PUT /agent-sessions/{session_id}/pull-requests
-PUT /agent-sessions/{session_id}/task
 
 [cognition]
 POST /structured-completion
-
-[email]
-PATCH /email/threads/archived
-PATCH /email/threads/{id}/archived
-PATCH /email/threads/{id}/labels
-PATCH /email/threads/{id}/state
-PATCH /email/threads/{thread_id}/project
-POST /email/threads/{id}/seen
 
 [notification]
 PATCH /v1/user_notifications/bulk/done
 PATCH /v1/user_notifications/bulk/seen
 PATCH /v1/user_notifications/bulk/undone
-
-[properties]
-DELETE /properties/entities/{entity_type}/{entity_id}/{property_id}/options/{option_id}
-DELETE /properties/entity_properties/{entity_property_id}
-POST /properties/entities/{entity_type}/{entity_id}/options/bulk
-POST /properties/entities/{entity_type}/{entity_id}/{property_id}/options/{option_id}
-POST /properties/options/bulk
-PUT /properties/entities/{entity_type}/{entity_id}/{property_id}
-
-[storage]
-DELETE /documents/{document_id}
-DELETE /favorites/{entity_type}/{entity_id}
-DELETE /initiatives/{initiative_id}
-DELETE /pins/{pinned_item_id}
-DELETE /projects/{id}
-DELETE /saved_views/definitions/{saved_view_id}
-PATCH /crm/pipelines/{id}/entries
-PATCH /documents/{document_id}
-PATCH /favorites/reorder
-PATCH /initiatives/{initiative_id}
-PATCH /pins
-PATCH /saved_views/definitions/{saved_view_id}
-PATCH /v2/projects/{id}
-POST /crm/pipelines/record-entries
-POST /crm/pipelines/{id}/entries
-POST /crm/pipelines/{id}/entries/find
-POST /crm/pipelines/{id}/entries/remove
-POST /crm/pipelines/{id}/ops
-POST /databases
-POST /databases/queries
-POST /databases/query
-POST /databases/{id}/ops
-POST /databases/{id}/tables/{table_id}/columns/{column_id}/conversion
-POST /databases/{id}/tables/{table_id}/columns/{column_id}/infer-type
-POST /documents
-POST /documents/create_canvas
-POST /documents/create_markdown
-POST /documents/create_snippet
-POST /documents/create_spreadsheet
-POST /documents/create_task
-POST /documents/upload
-POST /documents/{document_id}/ai-edit
-POST /documents/{document_id}/canvas/ai-edit
-POST /documents/{document_id}/canvas/edits
-POST /documents/{document_id}/canvas/render
-POST /documents/{document_id}/canvas/scene
-POST /documents/{document_id}/copy
-POST /documents/{document_id}/presentation/copy
-POST /documents/{document_id}/presentation/edits
-POST /documents/{document_id}/spreadsheet/ai-edit
-POST /documents/{document_id}/spreadsheet/calculate
-POST /documents/{document_id}/spreadsheet/edits
-POST /documents/{document_id}/spreadsheet/read
-POST /documents/{document_id}/word/edits
-POST /favorites
-POST /initiatives
-POST /pins/{pinned_item_id}
-POST /projects
-POST /saved_views/definitions
-PUT /documents/presave/{document_id}
-PUT /documents/{document_id}
-PUT /documents/{document_id}/appearance
-PUT /documents/{document_id}/markdown
-PUT /documents/{document_id}/revert_delete
-PUT /documents/{document_id}/simple_save
-PUT /initiatives/{initiative_id}/appearance
-PUT /projects/{id}/revert_delete
-PUT /saved_views/definitions/order
-PUT /saved_views/definitions/{saved_view_id}/appearance

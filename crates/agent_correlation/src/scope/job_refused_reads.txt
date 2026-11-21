@@ -4,6 +4,7 @@
 
 
 [agent-harness]
+GET /voices/{model}/sample  # plays a voice sample billed to the team
 GET /agent-repositories/branches  # fetches a caller-chosen git remote from Macro's servers
 
 [auth]
@@ -27,6 +28,7 @@ GET /team/invite-link  # an invite link others redeem
 GET /mcp/servers/auth/callback  # sign-in and OAuth flows
 
 [email]
+GET /email/attachments/{id}/document_id  # uploads the attachment as a document when it has none
 GET /opens/{token}  # an open-tracking pixel: records an open
 
 [storage]
