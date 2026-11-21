@@ -44,6 +44,14 @@ function pane() {
       <p>Here is the plan.</p>
     </div>`;
   document.body.append(split);
+  for (const region of split.querySelectorAll(
+    '[data-view-shell-main], [data-view-shell-detail]'
+  )) {
+    Object.defineProperty(region, 'getClientRects', {
+      configurable: true,
+      value: () => [region.getBoundingClientRect()],
+    });
+  }
   const tabs = split.querySelector<HTMLElement>('[role="radiogroup"]')!;
   let onScreen = true;
   Object.defineProperty(tabs, 'getClientRects', {
@@ -179,9 +187,13 @@ it('leaves the split itself to the pane the user last put the keyboard in', () =
     // The detail replacing what was pressed keeps the keyboard there.
     view.detailText.remove();
     expect(handler('tab')(keydown(view.split))).toBe(false);
+    // A pane no longer on screen (a list the open item now covers) does not.
+    const detail = view.split.querySelector('[data-view-shell-detail]')!;
+    Object.defineProperty(detail, 'getClientRects', { value: () => [] });
+    expect(handler('tab')(keydown(view.split))).toBe(true);
     focus(view.grid);
     expect(handler('tab')(keydown(view.split))).toBe(true);
-    expect(move).toHaveBeenCalledTimes(2);
+    expect(move).toHaveBeenCalledTimes(3);
     dispose();
   });
 });
