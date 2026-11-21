@@ -40,6 +40,9 @@ let retained: CompiledEngine | undefined;
 // A compile the page started before any engine worker existed, so that the
 // first one finds the engine compiled. Never rejects.
 let prefetched: Promise<CompiledEngine | undefined> | undefined;
+// Counts drops. A compile still pending when its page drops it is only
+// memory once it finishes, so it is not kept for a later worker.
+let dropped = 0;
 
 /**
  * How long an engine worker waits for the page's compile ahead before it
@@ -57,7 +60,11 @@ export function prefetchCompiledEngine(
   compile: () => Promise<CompiledEngine>
 ): void {
   if (retained || prefetched) return;
-  prefetched = compile().catch(() => undefined);
+  try {
+    prefetched = compile().catch(() => undefined);
+  } catch {
+    // A compile that cannot start leaves it to the worker, like one that fails.
+  }
 }
 
 /**
@@ -67,6 +74,7 @@ export function prefetchCompiledEngine(
  */
 export function dropPrefetchedCompiledEngine(): void {
   prefetched = undefined;
+  dropped++;
 }
 
 function post(port: ExchangePort, engine: CompiledEngine | undefined): void {
@@ -103,6 +111,7 @@ export function offerCompiledEngine(
     post(port, retained);
     return;
   }
+  const generation = dropped;
   let offered = false;
   const offer = (engine: CompiledEngine | undefined): void => {
     if (offered) return;
@@ -118,7 +127,7 @@ export function offerCompiledEngine(
       // Kept like a compile the worker reports, for the worker that starts
       // when the tab returns; a worker that cannot receive it answers `null`.
       // One that finished after the worker stopped waiting is kept the same.
-      retained ??= engine;
+      if (generation === dropped) retained ??= engine;
       offer(engine);
     })
     .catch(() => undefined);
@@ -171,4 +180,5 @@ export function compiledEngineFromPage(
 export function forgetCompiledEngine(): void {
   retained = undefined;
   prefetched = undefined;
+  dropped++;
 }

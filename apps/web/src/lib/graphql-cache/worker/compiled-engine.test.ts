@@ -215,3 +215,31 @@ it('does not answer an offer that arrives after the deadline, so its report stay
   expect(received).toHaveLength(1);
   expect(received[0]).not.toBeNull();
 });
+
+it('does not keep a compile ahead that finishes after the page dropped it', async () => {
+  let finish: (engine: CompiledEngine) => void = () => undefined;
+  prefetchCompiledEngine(
+    () =>
+      new Promise<CompiledEngine>((resolve) => {
+        finish = resolve;
+      })
+  );
+  // The worker took the pending compile, then the page left the coordinator.
+  const first = engineStart();
+  dropPrefetchedCompiledEngine();
+  finish({
+    assetUrl: 'https://app.test/engine-a.wasm',
+    module: await WebAssembly.compile(EMPTY_WASM),
+  });
+  await expect(first.offered).resolves.toBeDefined();
+  await expect(engineStart().offered).resolves.toBeUndefined();
+});
+
+it('leaves the compile to the worker when the compile ahead cannot start', async () => {
+  expect(() =>
+    prefetchCompiledEngine(() => {
+      throw new Error('no compile');
+    })
+  ).not.toThrow();
+  await expect(engineStart().offered).resolves.toBeUndefined();
+});
