@@ -122,7 +122,6 @@ vi.mock('@app/features/home/home-view', () => ({
   HomeCalendarRouteView: () => null,
   HomePendingView: () => null,
 }));
-vi.mock('@app/features/next-soup/filters/filter-store', () => ({}));
 vi.mock('@app/features/next-soup/filters/filter-store/query-store', () => ({}));
 vi.mock('@app/features/next-soup/sidebar/soup-filter-presets', () => ({}));
 vi.mock('@app/features/next-soup/soup-view/soup-view', () => ({}));

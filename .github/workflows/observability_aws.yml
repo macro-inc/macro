@@ -1,7 +1,7 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/observability_aws.rs
 name: Observability AWS layer
-'on':
+on:
   workflow_call: {}
 permissions:
   contents: read
@@ -11,25 +11,25 @@ jobs:
     runs-on: namespace-profile-linux-small
     timeout-minutes: 15
     steps:
-    - name: Checkout
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-      with:
-        clean: 'false'
-        persist-credentials: 'false'
-      env:
-        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
-        GIT_HTTP_LOW_SPEED_TIME: '60'
-    - name: Mount /nix cache volume
-      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
-      with:
-        cache: nix
-      continue-on-error: true
-    - name: Setup Nix
-      uses: './.github/actions/setup-nix'
-    - name: Render and validate the OpenTofu configs
-      run: nix flake check --print-build-logs
-      shell: bash
-      working-directory: infra/k8s/observability/aws
-    - name: Teardown Nix
-      if: always()
-      uses: './.github/actions/teardown-nix'
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          clean: 'false'
+          persist-credentials: 'false'
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
+      - name: Mount /nix cache volume
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+        with:
+          cache: nix
+        continue-on-error: true
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+      - name: Render and validate the OpenTofu configs
+        run: nix flake check --print-build-logs
+        shell: bash
+        working-directory: infra/k8s/observability/aws
+      - name: Teardown Nix
+        if: always()
+        uses: ./.github/actions/teardown-nix

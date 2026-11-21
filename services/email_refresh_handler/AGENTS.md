@@ -6,7 +6,9 @@ Email feature: Lambda, triggered hourly by EventBridge, that re-subscribes a
 slice of Gmail inboxes to push notifications, queues grant health probes,
 and schedules deletion of unused/inactive links and of links whose owner's
 account is gone. It enqueues
-`LinkManagerMessage`s for `email_service` to process.
+`LinkManagerMessage`s for `email_service` to process, all as
+`LinkManagerSender::Sweep`, so they go to the link manager's maintenance
+queue (`LinkMaintenanceQueue`) and never delay a person's removal.
 
 ## Start here
 
@@ -20,7 +22,7 @@ account is gone. It enqueues
 - Owns: selecting due Gmail refreshes, health probes and link deletions, and
   publishing their SQS messages.
 - Not here: actually calling the Gmail `users.watch` endpoint → the
-  `LinkManagerQueue` consumer in `email_service` (`src/pubsub/link_manager`).
+  link-manager consumers in `email_service` (`src/pubsub/link_manager`).
 
 ## Checks
 

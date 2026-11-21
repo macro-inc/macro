@@ -819,7 +819,9 @@ grouping, email view and targets, never ids or values. A request made with
 `transport: 'rest'` is a choice, not a fallback, and is not recorded.
 
 Without the cache, writes read mounted Soup lists again
-(`refreshActiveGraphqlSoupQueries`). A list that never shows, filters or sorts
+(`refreshActiveGraphqlSoupQueries`), and so do agent-session metadata events
+(`agent-session/list-sync.ts`), which otherwise only read the session's row
+into the cache. A list that never shows, filters or sorts
 by unread state (the Quick Access and menu feeds) passes
 `ignoresNotifications: true`, and notification and email read-state writes
 refresh with `notificationsOnly: true`, which skips it. Such a list also reads
@@ -1408,7 +1410,7 @@ Invalidations coalesce on a 15-minute cadence without interrupting active scans;
 hourly passes refresh names. Scan omissions never delete records. The same lane
 then scans at most 500 raw cached contact records per keyset window and verifies
 scoped IDs through the existing exact lookup. Only validated requested-ID omissions
-permit removal. Checkpoint v2 tracks hydration/verification and completes only
+permit removal. Checkpoint v2 (v3 while `enable-contact-lists` selects contact lists) tracks hydration/verification and completes only
 after the verification pass; failures/interruption resume at the last committed
 cursor. No directory-sized seen set or extra synchronization endpoint is used.
 

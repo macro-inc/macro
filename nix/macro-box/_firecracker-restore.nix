@@ -331,6 +331,27 @@ in
           echo "macro-agent-apply: macro cannot read its inbox's agent.env" >&2
           exit 1
         fi
+        # The setup trace macrod staged beside it (not a secret): installed
+        # root-owned and read-only for start-agent, capped like a traceparent,
+        # and only the first, so a redelivery's fresh one changes nothing.
+        # Nothing here fails the environment's install: the trace is only
+        # telemetry. One that can't be installed stays in the inbox for the
+        # next delivery.
+        trace_inbox=/run/macro-agent-inbox/setup-traceparent
+        trace=/run/macrod/agent-traceparent
+        if as_macro test -s "$trace_inbox"; then
+          if [ -e "$trace" ] || {
+            install -d -m 0755 /run/macrod &&
+              as_macro head --bytes=128 "$trace_inbox" > "$trace.new" &&
+              chmod 0644 "$trace.new" &&
+              mv "$trace.new" "$trace"
+          }; then
+            as_macro truncate --size=0 "$trace_inbox" || true
+          else
+            rm -f "$trace.new" || true
+            echo "macro-agent-apply: could not install the setup trace" >&2
+          fi
+        fi
         chown macro:macro /var/lib/macrod/agent.env.new
         mv /var/lib/macrod/agent.env.new /var/lib/macrod/agent.env
         as_macro truncate --size=0 "$inbox"

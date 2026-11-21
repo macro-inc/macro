@@ -504,6 +504,14 @@ async fn reconnect_deletes_the_superseded_generations_sync_work(db: PgPool) {
     .execute(&db)
     .await
     .unwrap();
+    // And discovery had found no mailbox for the account.
+    sqlx::query!(
+        "UPDATE email_links SET mailbox_unavailable_at = now() WHERE id = $1",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
 
     MailboxInitializationService::new(PgMailboxInitialization(db.clone()), Grants(grant(owner.0)))
         .initialize(attempt(&db, owner.clone()).await)
@@ -522,6 +530,14 @@ async fn reconnect_deletes_the_superseded_generations_sync_work(db: PgPool) {
         (0, true),
         "a reconnect retries the subscription at once, with its failures forgotten"
     );
+    let marked = sqlx::query_scalar!(
+        r#"SELECT mailbox_unavailable_at IS NOT NULL AS "marked!" FROM email_links WHERE id = $1"#,
+        link
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert!(!marked, "a reconnect syncs the account's mailbox again");
 
     let streams = sqlx::query!(
         "SELECT generation,kind FROM email_sync_streams WHERE link_id = $1 ORDER BY kind",
@@ -724,6 +740,72 @@ async fn an_inbox_being_removed_asks_to_wait_for_its_removal(db: PgPool) {
         service.initialize(attempt(&db, owner.clone()).await).await,
         Err(InitializationError::InboxBeingRemoved)
     ));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_reconnect_with_the_same_grant_makes_the_work_a_missing_mailbox_held_due(db: PgPool) {
+    let owner = actor(&db, "unlicensed@example.com").await;
+    let same = grant(owner.0);
+    let link = MailboxInitializationService::new(
+        PgMailboxInitialization(db.clone()),
+        Grants(same.clone()),
+    )
+    .initialize(attempt(&db, owner.clone()).await)
+    .await
+    .unwrap();
+    // Discovery found no mailbox: the link is marked, its next probe is
+    // hours away, and the work the mark held was backed off before it.
+    sqlx::query!(
+        "UPDATE email_links SET mailbox_unavailable_at = now() - interval '1 day' WHERE id = $1",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE email_sync_streams SET next_run_at = now() + interval '12 hours' WHERE link_id = $1",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE email_mailbox_watch_work SET next_run_at = now() + interval '12 hours', failures = 4 WHERE link_id = $1",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+
+    MailboxInitializationService::new(PgMailboxInitialization(db.clone()), Grants(same))
+        .initialize(attempt(&db, owner.clone()).await)
+        .await
+        .unwrap();
+
+    let state = sqlx::query!(
+        r#"SELECT l.sync_generation, l.mailbox_unavailable_at IS NULL AS "cleared!",
+            bool_and(s.next_run_at <= now()) AS "streams_due!"
+        FROM email_links l JOIN email_sync_streams s ON s.link_id = l.id
+        WHERE l.id = $1 GROUP BY l.id"#,
+        link
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(
+        state.sync_generation, 1,
+        "the same grant starts no new generation"
+    );
+    assert!(state.cleared);
+    assert!(state.streams_due, "discovery and the rest run at once");
+    let upkeep = sqlx::query!(
+        r#"SELECT failures, next_run_at <= now() AS "due!" FROM email_mailbox_watch_work WHERE link_id = $1"#,
+        link
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!((upkeep.failures, upkeep.due), (0, true));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

@@ -112,6 +112,9 @@ pub enum Event {
     /// The agent teammate the computer was bought for reported itself
     /// online.
     AgentOnline,
+    /// macrod took the agent teammate handed to it: the
+    /// [`Effect::DeliverAgent`] hand-off finished.
+    AgentDelivered,
     /// Timer: [`AGENT_START_DEADLINE`] after macrod connected; an agent that
     /// still hasn't reported online failed its start.
     AgentStartDue,

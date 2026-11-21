@@ -96,8 +96,9 @@ fn connection_error_status(error: &ConnectionError) -> StatusCode {
             InitializationError::IdentityConflict
             | InitializationError::Changed
             | InitializationError::SharingConfirmation { .. } => StatusCode::CONFLICT,
-            // Clients read a 409 here as a sharing conflict to confirm, so a
-            // busy inbox answers 503 like any other passing failure.
+            // Clients released before the coded 409s read any 409 here as a
+            // sharing conflict to confirm, so a busy inbox answers 503 like any
+            // other passing failure.
             InitializationError::Unavailable | InitializationError::Contended => {
                 StatusCode::SERVICE_UNAVAILABLE
             }
@@ -160,10 +161,26 @@ impl IntoResponse for InitError {
                 existing_link_id,
             } => (
                 status_code,
-                Json(SharedInboxConflictResponse {
+                Json(InitConflictResponse::SharedInboxConflict {
                     email_address,
                     existing_owner_email,
                     existing_link_id,
+                }),
+            )
+                .into_response(),
+            InitErrorKind::MailboxInitialization(error @ InitializationError::IdentityConflict) => {
+                (
+                    status_code,
+                    Json(InitConflictResponse::InboxIdentityConflict {
+                        message: error.to_string(),
+                    }),
+                )
+                    .into_response()
+            }
+            InitErrorKind::MailboxInitialization(error @ InitializationError::Changed) => (
+                status_code,
+                Json(InitConflictResponse::InboxChanged {
+                    message: error.to_string(),
                 }),
             )
                 .into_response(),
@@ -196,17 +213,34 @@ impl IntoResponse for InitError {
     }
 }
 
-/// Returned with a `409 Conflict` when a connect targets an external mailbox another
-/// macro user has already connected. The client surfaces a confirmation; on confirm it
-/// retries `/email/init` with `force_share=true` to promote the mailbox to a shared inbox.
+/// Body of every `409 Conflict` from `/email/init`; `code` says which conflict it
+/// is. Clients offer to share the inbox only for a `SHARED_INBOX_CONFLICT`.
 #[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
-pub struct SharedInboxConflictResponse {
-    /// The mailbox address that is already connected.
-    pub email_address: String,
-    /// The email of the macro user who first connected the mailbox.
-    pub existing_owner_email: String,
-    /// The existing link that would be shared if the caller confirms.
-    pub existing_link_id: Uuid,
+#[serde(tag = "code", rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum InitConflictResponse {
+    /// Returned when a connect targets an external mailbox another macro user has
+    /// already connected. The client surfaces a confirmation; on confirm it retries
+    /// `/email/init` with `force_share=true` to promote the mailbox to a shared inbox.
+    SharedInboxConflict {
+        /// The mailbox address that is already connected.
+        email_address: String,
+        /// The email of the macro user who first connected the mailbox.
+        existing_owner_email: String,
+        /// The existing link that would be shared if the caller confirms.
+        existing_link_id: Uuid,
+    },
+    /// The mailbox signed in at consent is not the one the inbox at its address
+    /// syncs ([`InitializationError::IdentityConflict`]).
+    InboxIdentityConflict {
+        /// Human-readable explanation.
+        message: String,
+    },
+    /// The inbox changed while it was being connected; connecting again works
+    /// ([`InitializationError::Changed`]).
+    InboxChanged {
+        /// Human-readable explanation.
+        message: String,
+    },
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
@@ -248,7 +282,7 @@ pub struct InitParams {
             (status = 400, body=InitErrorCodeResponse),
             (status = 401, body=ErrorResponse),
             (status = 402, body=ErrorResponse),
-            (status = 409, body=SharedInboxConflictResponse),
+            (status = 409, body=InitConflictResponse),
             (status = 429, body=ErrorResponse),
             (status = 500, body=ErrorResponse),
     )

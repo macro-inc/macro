@@ -529,6 +529,14 @@ impl CrmService for FakeCrmService {
         panic!("unexpected get_contact_by_email call")
     }
 
+    async fn get_company_by_domain(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+        _domain: &str,
+    ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
+        panic!("unexpected get_company_by_domain call")
+    }
+
     async fn get_company_for_team(
         &self,
         _access: &CrmCompanyReceipt<ViewAccessLevel>,

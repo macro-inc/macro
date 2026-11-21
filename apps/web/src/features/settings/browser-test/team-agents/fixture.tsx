@@ -25,7 +25,9 @@ import { render } from 'solid-js/web';
 import { macroDarkTheme } from '../../../theme/themes/macro-dark';
 import { macroLightTheme } from '../../../theme/themes/macro-light';
 import { themeCssVars } from '../../../theme/utils/themeCssVars';
+import { SettingsPage } from '../../primitives';
 import { TeamMembers } from '../../TeamMembers';
+import { CrmMemberAccessSection } from '../../views/crm-member-access';
 import {
   TeamAgentStatusBanner,
   TeamAgentStatusChip,
@@ -90,11 +92,17 @@ declare global {
       notify: (content: ComputerSetupMetadata) => Promise<void>;
       /** Shows the DM with `userId`: its header chip and composer banner. */
       openDm: (userId: string) => void;
+      /** Switches between Members and CRM settings' Who can use CRM, keeping the cache. */
+      showPage: (page: 'members' | 'crm') => void;
     };
   }
 }
 
 const [dmWith, setDmWith] = createSignal<string>();
+// `?crm` opens on CRM settings' Who can use CRM, which shares Members' team reads.
+const [shownPage, setShownPage] = createSignal<'members' | 'crm'>(
+  new URLSearchParams(window.location.search).has('crm') ? 'crm' : 'members'
+);
 
 // Navigation is recorded, not performed: this page is Members alone.
 window.teamAgentsFixture = {
@@ -116,8 +124,10 @@ window.teamAgentsFixture = {
     });
   },
   openDm: setDmWith,
+  showPage: setShownPage,
 };
 setGlobalSplitManager({
+  activeSplitId: () => undefined,
   openWithSplit(content: SplitContent) {
     window.teamAgentsFixture.opened.push(content);
     return { status: 'unavailable' };
@@ -162,7 +172,14 @@ if (root)
                     when={dmWith()}
                     fallback={
                       <div class="mx-auto max-w-3xl">
-                        <TeamMembers team={team} />
+                        <Show
+                          when={shownPage() === 'crm'}
+                          fallback={<TeamMembers team={team} />}
+                        >
+                          <SettingsPage title="CRM">
+                            <CrmMemberAccessSection />
+                          </SettingsPage>
+                        </Show>
                       </div>
                     }
                   >

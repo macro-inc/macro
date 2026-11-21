@@ -71,6 +71,8 @@ pub struct FileUnfiledContactsResponse {
 pub struct SkippedContacts {
     /// Email sync filed the contact without a company.
     pub not_manual: u32,
+    /// The contact is archived.
+    pub archived: u32,
     /// The address is at a personal or generic provider.
     pub provider_domain: u32,
     /// The team keeps the domain out of email sync.
@@ -92,6 +94,7 @@ impl FileUnfiledContactsResponse {
             companies_created: batch.companies_created,
             skipped: SkippedContacts {
                 not_manual: batch.skipped_not_manual,
+                archived: batch.skipped_archived,
                 provider_domain: batch.skipped_provider_domain,
                 blocked_domain: batch.skipped_blocked_domain,
                 hidden_company: batch.skipped_hidden_company,

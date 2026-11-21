@@ -26,3 +26,39 @@ fn connection_prompt_matches_the_lexical_service_request() {
         })
     );
 }
+
+#[test]
+fn markdown_snapshot_options_preserve_omitted_and_empty_pins() {
+    let omitted = serde_json::to_value(MarkdownSnapshotRequest {
+        markdown: "",
+        initial_pins: MarkdownSnapshotOptions::default().initial_pins.as_deref(),
+    })
+    .unwrap();
+    assert_eq!(omitted, serde_json::json!({ "markdown": "" }));
+
+    let explicit = MarkdownSnapshotOptions {
+        initial_pins: Some(vec![]),
+    };
+    let empty = serde_json::to_value(MarkdownSnapshotRequest {
+        markdown: "",
+        initial_pins: explicit.initial_pins.as_deref(),
+    })
+    .unwrap();
+    assert_eq!(
+        empty,
+        serde_json::json!({ "markdown": "", "initialPins": [] })
+    );
+
+    let populated = MarkdownSnapshotOptions {
+        initial_pins: Some(vec!["field".into()]),
+    };
+    let pinned = serde_json::to_value(MarkdownSnapshotRequest {
+        markdown: "# Task body",
+        initial_pins: populated.initial_pins.as_deref(),
+    })
+    .unwrap();
+    assert_eq!(
+        pinned,
+        serde_json::json!({ "markdown": "# Task body", "initialPins": ["field"] })
+    );
+}

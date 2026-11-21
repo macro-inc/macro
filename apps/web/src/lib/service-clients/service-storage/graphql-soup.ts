@@ -1723,6 +1723,30 @@ function mapGraphqlNotificationMetadata(
         }) satisfies NotifEventMember<'computer_setup'>
     )
     .with(
+      { __typename: 'GraphqlPingMetadata' },
+      (metadata) =>
+        ({
+          tag: 'ping',
+          content: {
+            body: metadata.pingBody,
+            entityName: metadata.pingEntityName,
+            agent: metadata.pingAgentId
+              ? {
+                  id: metadata.pingAgentId,
+                  name: metadata.pingAgentName ?? '',
+                  avatarUrl: metadata.pingAgentAvatarUrl,
+                }
+              : undefined,
+            message: metadata.pingMessageId
+              ? {
+                  messageId: metadata.pingMessageId,
+                  threadId: metadata.pingThreadId,
+                }
+              : undefined,
+          },
+        }) satisfies NotifEventMember<'ping'>
+    )
+    .with(
       { __typename: 'GraphqlInviteToTeamMetadata' },
       (metadata) =>
         ({

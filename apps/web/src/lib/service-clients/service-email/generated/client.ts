@@ -43,6 +43,7 @@ import type {
   GetThreadMessagesHandlerParams,
   GetThreadParams,
   GetThreadResponse,
+  InitConflictResponse,
   InitErrorCodeResponse,
   InitResponse,
   InitUserParams,
@@ -65,7 +66,6 @@ import type {
   ResyncResponse,
   SendMessageRequest,
   SendMessageResponse,
-  SharedInboxConflictResponse,
   ThreadReadReceipts,
   TransferDraftRequest,
   TransferDraftResponse,
@@ -2128,7 +2128,7 @@ export type initUserResponse402 = {
 };
 
 export type initUserResponse409 = {
-  data: SharedInboxConflictResponse;
+  data: InitConflictResponse;
   status: 409;
 };
 

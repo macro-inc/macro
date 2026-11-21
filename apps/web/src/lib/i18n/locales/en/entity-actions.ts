@@ -308,6 +308,7 @@ export default {
   chatAboutProject: 'Chat',
   presentationActions: 'Presentation actions',
   documentActions: 'Document actions',
+  agentActions: 'Agent actions',
   copyGithubLink: 'Copy GitHub Link',
   prMerge: 'Merge',
   prMerging: 'Merging…',

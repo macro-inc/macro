@@ -60,11 +60,12 @@ pub trait MailboxContentReader: Send + Sync + 'static {
     ) -> impl Future<
         Output = Result<Option<crate::domain::models::MailboxOrganization>, EmailApiError>,
     > + Send;
-    /// Enumerate the physical folder hierarchy with resolved semantic roles.
+    /// Enumerate the physical folder hierarchy with resolved semantic roles,
+    /// or report that the account has no mailbox the provider will serve.
     fn folders(
         &self,
         token: &AccessToken,
-    ) -> impl Future<Output = Result<Vec<MailFolder>, EmailApiError>> + Send;
+    ) -> impl Future<Output = Result<crate::domain::models::MailFolderCatalog, EmailApiError>> + Send;
 
     /// Fetch a current message snapshot. Missing means absent now, not permanently deleted.
     fn message(

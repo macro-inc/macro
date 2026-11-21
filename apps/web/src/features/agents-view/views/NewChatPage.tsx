@@ -716,7 +716,7 @@ export function NewChatPage(props: {
           >
             <div
               data-agent-new-composer={props.workspaceId}
-              class="agents-view-portal touch:px-(--mobile-chrome-gutter) pointer-events-auto min-w-0"
+              class="agents-view-portal agents-scope touch:px-(--mobile-chrome-gutter) pointer-events-auto min-w-0"
             >
               <LocalRuntimePrompt />
               {composer()}

@@ -68,6 +68,13 @@ rec {
     };
     # Control-plane log groups are kept this long.
     logRetentionDays = 30;
+    # The one cluster admin: an IAM role whose only AWS permission is reading
+    # the cluster, mapped to cluster admin. Who may assume it is an IAM tag on their IAM
+    # user, `<adminTag> = admin` (people, MFA required) or `automation`
+    # (agents and scripts, no MFA). Tagging an identity is the grant, so no
+    # person is named here.
+    adminRole = "observability-eks-admin";
+    adminTag = "observability-eks";
   };
 
   # Pod Identity: namespace -> service account -> what its role may do.
@@ -146,9 +153,10 @@ rec {
     healthPath = "/healthz";
   };
 
-  # The hostnames the cluster takes over at the switch. Their DNS records and
-  # certificate are the Pulumi stack's and don't change. Until then only the
-  # target groups exist; the cluster is tested through `kubectl port-forward`.
+  # The hostnames the cluster serves through the ALB. Grafana and OTLP came
+  # over at the switch; their DNS records and certificate are the Pulumi
+  # stack's and don't change. A host with `own = true` is new here: this layer
+  # makes its DNS record and its certificate on the listener (modules/edge.nix).
   hosts = {
     grafana = {
       hostname = "grafana.macro-internal.com";
@@ -160,12 +168,20 @@ rec {
       targetGroup = "obs-k8s-otlp";
       priority = 11;
     };
+    # Argo CD's UI and API, behind Google sign-in (../cluster/README.md
+    # "Argo CD").
+    argocd = {
+      hostname = "argo.macro-internal.com";
+      targetGroup = "obs-k8s-argocd";
+      priority = 12;
+      own = true;
+    };
   };
 
   # The switch (README "The switch"). True adds a listener rule per host and
   # the target-group alarms. The Pulumi stack's rule (priority 1) still wins
   # until it drops these hostnames, so applying this alone moves no traffic.
-  switched = false;
+  switched = true;
 
   # The host copies its Prometheus blocks straight into Mimir's bucket: once
   # with one old block while the cluster is tested, then everything at the

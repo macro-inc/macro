@@ -5,7 +5,7 @@ use email_api_client::domain::models::{
 use email_api_client::domain::ports::{FolderChangeReader, MailboxContentReader};
 use uuid::Uuid;
 
-use super::{ADA, id, message_id, start, token};
+use super::{ADA, folders, id, message_id, start, token};
 use crate::{MessageChange, NewMessage, OutlookEmulator};
 
 fn seed_with_inbox(count: usize) -> String {
@@ -222,7 +222,7 @@ async fn folders_carry_their_roles_and_nested_children() {
     let (emulator, api) = start(&seed).await;
     let token = token(&emulator, ADA);
 
-    let folders = api.folders(&token).await.unwrap();
+    let folders = folders(&api, &token).await;
 
     let role = |name: &str| folders.iter().find(|f| f.name == name).unwrap().role;
     assert_eq!(role("Inbox"), FolderRole::Inbox);
@@ -267,7 +267,7 @@ mailboxes:
     );
     let (emulator, api) = start(&seed).await;
     let token = token(&emulator, ADA);
-    let folders = api.folders(&token).await.unwrap();
+    let folders = folders(&api, &token).await;
     let link_id = Uuid::now_v7();
 
     let numbers = message_id(&emulator, ADA, "Quarterly numbers");
@@ -350,7 +350,7 @@ mailboxes:
     );
     let (emulator, api) = start(&seed).await;
     let token = token(&emulator, ADA);
-    let folders = api.folders(&token).await.unwrap();
+    let folders = folders(&api, &token).await;
 
     let recent = api
         .recent_inbox_messages(&token, Uuid::now_v7(), 2, &folders)

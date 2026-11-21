@@ -73,10 +73,9 @@ tools/HTTP/GraphQL surfaces over them.
   using the same isolated database as the tests.
 - For member-access changes, also run `cargo test -p crm --all-features member_access`;
   the HTTP, search and tool revocation test requires the `search` feature.
-- After tool input or description changes, regenerate frontend tool types and
-  public MCP reference pages using the
-  [entity creation guide](../../docs/guides/add-entity.md#13-ai-and-mcp-tools);
-  CI checks both outputs.
+- After tool input or description changes, regenerate frontend tool types using
+  the [entity creation guide](../../docs/guides/add-entity.md#13-ai-and-mcp-tools);
+  CI checks the output.
 
 ## Gotchas
 
@@ -206,11 +205,17 @@ tools/HTTP/GraphQL surfaces over them.
   `POST /internal/crm/teams/{team_id}/file-unfiled-contacts`
   (`domain/contact_filing.rs`, internal credentials, mounted by storage) files
   one batch of a team's `manually_created` contacts without a company (a
-  contact sync left without one is counted and skipped) by the
+  contact sync left without one, or an archived one, is counted and skipped;
+  sync never creates a company for an archived contact) by the
   same rule, under a contact edit's locks, paging by address along
   `crm_contacts_unfiled_email_idx`, and returns counts per outcome.
   It defaults to a dry run and is safe to repeat. Never call it from a worker
   or a migration: one import can hold thousands of domains.
+- `GET /crm/companies/by-domain` (SDK `crm.companyByDomain`) resolves the
+  team's company for one domain through `crm_domains_team_id_lower_domain_unique`
+  and reads it as `GET /crm/companies/{id}` does, without contacts; a member
+  gets nothing for a hidden company. It is exact and current, unlike the
+  indexed company search, so agents use it after a duplicate-domain 409.
 - Contact setters add or remove an address, choose the primary, link a first
   company for any contact without one, switch company for a personal-provider
   primary, or unlink a company; the rules live

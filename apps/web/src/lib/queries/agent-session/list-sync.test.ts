@@ -4,9 +4,12 @@ const mocks = vi.hoisted(() => ({
   rest: vi.fn<
     (ids?: string[], options?: { throwOnError?: boolean }) => Promise<void>
   >(async () => {}),
-  graphql: vi.fn<(options?: { throwOnError?: boolean }) => Promise<void>>(
-    async () => {}
-  ),
+  graphql: vi.fn<
+    (options?: {
+      throwOnError?: boolean;
+      where?: (body: unknown) => boolean;
+    }) => Promise<void>
+  >(async () => {}),
   row: vi.fn<
     (
       document: unknown,
@@ -18,6 +21,8 @@ const mocks = vi.hoisted(() => ({
     }>
   >(async () => ({})),
   cached: vi.fn((_id: string): unknown => undefined),
+  /** The normalized cache host; `undefined` when the cache is disabled. */
+  host: vi.fn((): unknown => ({})),
   hydrate: vi.fn(),
   spans: [] as {
     name: string;
@@ -66,6 +71,7 @@ vi.mock('@queries/soup/normalized-cache', () => ({
   hydrateSoupEntity: mocks.hydrate,
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
+  getGraphqlCacheHost: () => mocks.host(),
   mapGraphqlAgentSessionRow: (session: { id: string; turnState: string }) => ({
     id: session.id,
     turnState: session.turnState,
@@ -89,6 +95,7 @@ import { invalidateAgentSessionMetadata } from './session-metadata-sync';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.host.mockReturnValue({});
   mocks.spans.length = 0;
 });
 afterEach(() => vi.restoreAllMocks());
@@ -107,6 +114,40 @@ it('coalesces a metadata burst into one REST list refresh', async () => {
 it('never network-refreshes the GraphQL soup queries', async () => {
   await refreshAgentSessionLists('first');
   expect(mocks.graphql).not.toHaveBeenCalled();
+});
+
+it('refetches the GraphQL soup lists when the normalized cache is disabled', async () => {
+  // No cache record for the row read to update: Quick Access's GraphQL
+  // sessions list would keep the old name until a reload.
+  mocks.host.mockReturnValue(undefined);
+  await refreshAgentSessionLists('first');
+  expect(mocks.graphql.mock.calls).toEqual([
+    [{ throwOnError: true, where: expect.any(Function) }],
+  ]);
+  expect(mocks.rest.mock.calls).toEqual([[['first'], { throwOnError: true }]]);
+  // Lists whose session filter compiles to the nil id hold no sessions.
+  const where = mocks.graphql.mock.calls[0][0]?.where;
+  const nil = { l: { id: '00000000-0000-0000-0000-000000000000' } };
+  expect(where?.({ asf: { '&': [{ l: { owner: 'me' } }, nil] } })).toBe(false);
+  expect(where?.({ asf: { l: { owner: 'me' } } })).toBe(true);
+  // Sessions are opt-in: only a session filter or a favorites list holds them.
+  expect(where?.({ df: nil })).toBe(false);
+  expect(where?.({ df: nil, favorites_only: true })).toBe(true);
+  expect(
+    mocks.spans.find(({ name }) => name === 'agent_session.lists_refetch')
+      ?.attrs
+  ).toEqual({ 'agent_session.lists_refetch.graphql': true });
+  expect(mocks.graphql.mock.invocationCallOrder[0]).toBeLessThan(
+    mocks.row.mock.invocationCallOrder[0]
+  );
+});
+
+it('retries the batch when the GraphQL refetch fails without the cache', async () => {
+  mocks.host.mockReturnValue(undefined);
+  mocks.graphql.mockRejectedValueOnce(new Error('network'));
+  await refreshAgentSessionLists('first');
+  expect(mocks.graphql).toHaveBeenCalledTimes(2);
+  expect(mocks.rest).toHaveBeenCalledTimes(2);
 });
 
 it('reads each changed session row from the primary', async () => {

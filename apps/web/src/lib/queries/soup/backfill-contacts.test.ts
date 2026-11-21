@@ -8,6 +8,7 @@ import {
 } from './backfill';
 
 vi.mock('../contacts/backfill', () => ({ useContactBackfill: () => {} }));
+vi.mock('../contacts/top-up', () => ({ useContactTopUp: () => {} }));
 vi.mock('../contacts/use-context-publisher', () => ({
   useContactContextPublisher: () => {},
 }));

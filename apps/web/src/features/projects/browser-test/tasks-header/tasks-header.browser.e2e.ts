@@ -108,6 +108,19 @@ test('Add existing tasks adds the picked tasks, from a sheet on touch', async ({
   ).toBeHidden();
 });
 
+test('keeps every header control on screen while filters show a two-digit count', async ({
+  page,
+}, info) => {
+  await open(page, '/?filters=12');
+  const trigger = filters(page, info.project.name);
+  if (info.project.name !== 'desktop') await expect(trigger).toHaveText('12');
+  await expectOnScreen(page, [
+    page.getByRole('button', { name: 'Search in Launch' }),
+    trigger,
+    taskAction(page, info.project.name),
+  ]);
+});
+
 test('header icon buttons share one size on phones', async ({ page }, info) => {
   test.skip(!info.project.name.startsWith('phone'), 'Phones show icons');
   await open(page);

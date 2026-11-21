@@ -657,7 +657,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
   return (
     <DataModeProvider value={dataMode}>
       <div
-        class="agents-view"
+        class="agents-view agents-scope"
         data-agents-workspace={panel.handle.id}
         data-mode={dataMode()}
         data-session={selected() ? '1' : undefined}
