@@ -238,14 +238,15 @@ pub trait AgentInboxRepository: Send + Sync + 'static {
     /// Storage failure.
     type Err: std::error::Error + Send + Sync + 'static;
 
-    /// The agent's record, created `provisioning` with `request_id` if it
-    /// has none; an existing record is returned unchanged, so its request id
+    /// The agent's record, created in `state` with `request_id` if it has
+    /// none; an existing record is returned unchanged, so its request id
     /// wins.
     fn reserve(
         &self,
         agent: &MacroUserIdStr<'_>,
         team_id: Uuid,
         request_id: Uuid,
+        state: AgentInboxState,
     ) -> impl Future<Output = Result<InboxRecord, Self::Err>> + Send;
 
     /// The agent's record.
@@ -266,6 +267,16 @@ pub trait AgentInboxRepository: Send + Sync + 'static {
         agent: &MacroUserIdStr<'_>,
         update: &InboxUpdate,
     ) -> impl Future<Output = Result<InboxRecord, Self::Err>> + Send;
+
+    /// [`Self::update`], unless the inbox is being wound down (paused,
+    /// releasing or released) or its record is gone: then `None`, and
+    /// nothing changes. Provisioning writes through this, so a removal that
+    /// marked the record first always wins over a provision in flight.
+    fn update_live(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        update: &InboxUpdate,
+    ) -> impl Future<Output = Result<Option<InboxRecord>, Self::Err>> + Send;
 }
 
 /// Why an inbox request failed.
@@ -332,6 +343,7 @@ pub trait AgentInboxes: Send + Sync + 'static {
     /// none configured, is success.
     fn pause(
         &self,
+        team_id: Uuid,
         agent: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<(), InboxError>> + Send;
 
@@ -339,6 +351,7 @@ pub trait AgentInboxes: Send + Sync + 'static {
     /// none configured, is success.
     fn release(
         &self,
+        team_id: Uuid,
         agent: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<(), InboxError>> + Send;
 }
@@ -366,11 +379,11 @@ impl AgentInboxes for NoInboxes {
         Ok(HashMap::new())
     }
 
-    async fn pause(&self, _agent: &MacroUserIdStr<'_>) -> Result<(), InboxError> {
+    async fn pause(&self, _team_id: Uuid, _agent: &MacroUserIdStr<'_>) -> Result<(), InboxError> {
         Ok(())
     }
 
-    async fn release(&self, _agent: &MacroUserIdStr<'_>) -> Result<(), InboxError> {
+    async fn release(&self, _team_id: Uuid, _agent: &MacroUserIdStr<'_>) -> Result<(), InboxError> {
         Ok(())
     }
 }
@@ -412,6 +425,39 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes>
             .map_err(InboxError::internal)
     }
 
+    /// Store a provisioning outcome unless a removal wound the inbox down
+    /// meanwhile; then pause what email_service just made and answer with
+    /// the wound-down inbox.
+    async fn store_live(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        update: InboxUpdate,
+    ) -> Result<AgentInbox, InboxError> {
+        if let Some(stored) = self
+            .repository
+            .update_live(agent, &update)
+            .await
+            .map_err(InboxError::internal)?
+        {
+            return Ok(stored.view());
+        }
+        tracing::warn!("the agent was removed while its inbox was being made; pausing it");
+        match self.mailboxes.pause(agent).await {
+            Ok(()) | Err(MailboxError::NotConfigured) => {}
+            Err(error) => return Err(InboxError::from(error)),
+        }
+        Ok(self
+            .record(agent)
+            .await?
+            .map(|record| record.view())
+            .unwrap_or(AgentInbox {
+                address: update.address,
+                state: AgentInboxState::Paused,
+                failure: None,
+                fake_provider: update.fake_provider,
+            }))
+    }
+
     /// The agent's mailbox id: the stored one, else email_service's answer,
     /// since a mailbox it finished creating in the background may not be
     /// stored yet.
@@ -430,55 +476,53 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes>
             .map(|view| view.mailbox_id))
     }
 
-    /// Pause or release the agent's mailbox and store the outcome; nothing
-    /// to do without a record, a mailbox or a configured provider.
+    /// Pause or release the agent's mailbox. The record is marked first
+    /// (created if the agent has none), so a provision in flight sees it and
+    /// pauses what it made; then email_service is told, then the outcome is
+    /// stored. Nothing at the provider, or no provider, is done.
     async fn wind_down(
         &self,
+        team_id: Uuid,
         agent: &MacroUserIdStr<'_>,
         step: WindDown,
     ) -> Result<(), InboxError> {
-        let Some(record) = self.record(agent).await? else {
-            return Ok(());
+        let (marked, after) = match step {
+            WindDown::Pause => (AgentInboxState::Paused, AgentInboxState::Paused),
+            WindDown::Release => (AgentInboxState::Releasing, AgentInboxState::Released),
         };
-        let done_already = match step {
-            WindDown::Pause => matches!(
-                record.state,
-                AgentInboxState::Paused | AgentInboxState::Releasing | AgentInboxState::Released
-            ),
-            WindDown::Release => record.state == AgentInboxState::Released,
-        };
-        if done_already {
+        let record = self
+            .repository
+            .reserve(agent, team_id, Uuid::now_v7(), marked)
+            .await
+            .map_err(InboxError::internal)?;
+        if record.state == AgentInboxState::Released {
             return Ok(());
+        }
+        let keep = |state| InboxUpdate {
+            mailbox_id: record.mailbox_id,
+            address: record.address.clone(),
+            state,
+            last_error: record.last_error,
+            fake_provider: record.fake_provider,
+        };
+        if record.state != marked {
+            self.store(agent, keep(marked)).await?;
         }
         let mailbox_id = match self.mailbox_id(agent, &record).await {
             Ok(Some(mailbox_id)) => mailbox_id,
-            // Nothing was created at the provider: nothing to pause, and a
-            // release has nothing left to delete.
-            Ok(None) | Err(MailboxError::NotConfigured) if matches!(step, WindDown::Pause) => {
-                return Ok(());
-            }
+            // Nothing was created at the provider: the mark stands; a release
+            // has nothing left to delete.
             Ok(None) | Err(MailboxError::NotConfigured) => {
-                self.store(
-                    agent,
-                    InboxUpdate {
-                        mailbox_id: None,
-                        address: record.address,
-                        state: AgentInboxState::Released,
-                        last_error: record.last_error,
-                        fake_provider: record.fake_provider,
-                    },
-                )
-                .await?;
+                if matches!(step, WindDown::Release) {
+                    self.store(agent, keep(AgentInboxState::Released)).await?;
+                }
                 return Ok(());
             }
             Err(error) => return Err(InboxError::from(error)),
         };
-        let (done, after) = match step {
-            WindDown::Pause => (self.mailboxes.pause(agent).await, AgentInboxState::Paused),
-            WindDown::Release => (
-                self.mailboxes.release(agent).await,
-                AgentInboxState::Released,
-            ),
+        let done = match step {
+            WindDown::Pause => self.mailboxes.pause(agent).await,
+            WindDown::Release => self.mailboxes.release(agent).await,
         };
         match done {
             Ok(()) | Err(MailboxError::NotConfigured) => {}
@@ -488,10 +532,8 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes>
             agent,
             InboxUpdate {
                 mailbox_id: Some(mailbox_id),
-                address: record.address,
-                state: after,
                 last_error: None,
-                fake_provider: record.fake_provider,
+                ..keep(after)
             },
         )
         .await?;
@@ -536,14 +578,23 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes> AgentInboxes
     ) -> Result<AgentInbox, InboxError> {
         let record = self
             .repository
-            .reserve(agent, team_id, Uuid::now_v7())
+            .reserve(
+                agent,
+                team_id,
+                Uuid::now_v7(),
+                AgentInboxState::Provisioning,
+            )
             .await
             .map_err(InboxError::internal)?;
         // A live inbox stays as it is; anything else asks again, with the
         // same request id, so a retry never makes a second mailbox.
+        // A removed agent's inbox is never made again.
         if matches!(
             record.state,
-            AgentInboxState::Active | AgentInboxState::Paused | AgentInboxState::Releasing
+            AgentInboxState::Active
+                | AgentInboxState::Paused
+                | AgentInboxState::Releasing
+                | AgentInboxState::Released
         ) {
             return Ok(record.view());
         }
@@ -556,7 +607,7 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes> AgentInboxes
         let update = match self.mailboxes.provision(&request).await {
             Ok(view) => InboxUpdate::from(view),
             Err(MailboxError::NotConfigured) => {
-                self.store(agent, failed(AgentInboxFailure::NotConfigured, &record))
+                self.store_live(agent, failed(AgentInboxFailure::NotConfigured, &record))
                     .await?;
                 return Err(InboxError::NotConfigured);
             }
@@ -566,13 +617,13 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes> AgentInboxes
                 failed(AgentInboxFailure::Unavailable, &record)
             }
         };
-        let stored = self.store(agent, update).await?;
+        let stored = self.store_live(agent, update).await?;
         let span = tracing::Span::current();
         span.record("state", tracing::field::debug(stored.state));
-        if let Some(failure) = stored.last_error {
+        if let Some(failure) = stored.failure {
             span.record("failure", tracing::field::debug(failure));
         }
-        Ok(stored.view())
+        Ok(stored)
     }
 
     #[tracing::instrument(
@@ -592,13 +643,13 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes> AgentInboxes
             return Ok(record.view());
         }
         match self.mailboxes.status(agent).await {
-            Ok(Some(view)) => Ok(self.store(agent, view.into()).await?.view()),
+            Ok(Some(view)) => self.store_live(agent, view.into()).await,
             // Not made, or not answered yet; keep what we know.
             Ok(None) => Ok(record.view()),
-            Err(MailboxError::NotConfigured) => Ok(self
-                .store(agent, failed(AgentInboxFailure::NotConfigured, &record))
-                .await?
-                .view()),
+            Err(MailboxError::NotConfigured) => {
+                self.store_live(agent, failed(AgentInboxFailure::NotConfigured, &record))
+                    .await
+            }
             Err(MailboxError::Unavailable(error)) => {
                 tracing::warn!(error = ?error, "email service didn't answer an inbox status");
                 Ok(record.view())
@@ -624,20 +675,20 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes> AgentInboxes
     #[tracing::instrument(
         name = "team_agents.inbox.pause",
         skip_all,
-        fields(agent_user_id = %agent_credentials::telemetry_id(agent.as_ref())),
+        fields(team_id = %team_id, agent_user_id = %agent_credentials::telemetry_id(agent.as_ref())),
         err
     )]
-    async fn pause(&self, agent: &MacroUserIdStr<'_>) -> Result<(), InboxError> {
-        self.wind_down(agent, WindDown::Pause).await
+    async fn pause(&self, team_id: Uuid, agent: &MacroUserIdStr<'_>) -> Result<(), InboxError> {
+        self.wind_down(team_id, agent, WindDown::Pause).await
     }
 
     #[tracing::instrument(
         name = "team_agents.inbox.release",
         skip_all,
-        fields(agent_user_id = %agent_credentials::telemetry_id(agent.as_ref())),
+        fields(team_id = %team_id, agent_user_id = %agent_credentials::telemetry_id(agent.as_ref())),
         err
     )]
-    async fn release(&self, agent: &MacroUserIdStr<'_>) -> Result<(), InboxError> {
-        self.wind_down(agent, WindDown::Release).await
+    async fn release(&self, team_id: Uuid, agent: &MacroUserIdStr<'_>) -> Result<(), InboxError> {
+        self.wind_down(team_id, agent, WindDown::Release).await
     }
 }

@@ -91,11 +91,15 @@ An agent may have its own email inbox (`domain::inbox`, behind
 `request_id` every retry reuses, calls email_service's agent mailboxes
 (`AgentMailboxes` port), and mirrors the answer (`provisioning`, `active`,
 `failed` with a reason), so listing agents makes no email call except to
-refresh one still `provisioning`. The mailbox's owner is the agent's account;
-its address lives only on the inbox. Removing the agent pauses the mailbox
-before its seat goes (email_service releases it after 30 days); `undo_invite`
-releases it. A pause or release email_service misses fails the step, so the
-removal is retried; without an inbox or a provider it is a no-op.
+ask about inboxes still `provisioning` (all at once, and only for an admin in
+the inbox rollout). The mailbox's owner is the agent's account; its address
+lives only on the inbox. Removing the agent pauses the mailbox before its seat
+goes (email_service releases it after 30 days); `undo_invite` releases it.
+Winding down marks the record first (`paused`/`releasing`, creating one if the
+agent has none) and provisioning writes only through `update_live`, which
+refuses a marked record: a provision that finishes after a removal pauses what
+it made, and a removed agent never gets an inbox again. A pause or release
+email_service misses fails the step, so the removal is retried.
 
 ## Start here
 

@@ -1,6 +1,8 @@
 //! The agent teammates service.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
+
+use futures::future::join_all;
 
 use entity_access::domain::models::{
     AdminTeamRole, EntityAccessReceipt, MemberTeamRole, RequiredPermission,
@@ -314,6 +316,53 @@ where
         }
     }
 
+    /// The team's agents' inboxes, for an admin in the inbox rollout; none
+    /// otherwise. Inboxes still being made are asked about again, all at
+    /// once: each ask is bounded by the email_service adapter, so a slow
+    /// email_service delays the list by one ask, not one per agent. A failed
+    /// read or ask shows what is stored.
+    async fn team_inboxes(
+        &self,
+        receipt: &EntityAccessReceipt<MemberTeamRole>,
+    ) -> Result<HashMap<String, AgentInbox>, TeamAgentError> {
+        if self
+            .ensure_inboxes_enabled(&acting_user(receipt)?)
+            .await
+            .is_err()
+        {
+            return Ok(HashMap::new());
+        }
+        let inboxes = self
+            .inboxes
+            .for_team(team_id(receipt)?)
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(error = ?error, "could not read the agents' inboxes");
+            })
+            .unwrap_or_default();
+        let refreshed = join_all(inboxes.into_iter().map(|(agent, inbox)| async move {
+            let unsettled = inbox.state == AgentInboxState::Provisioning
+                || inbox.failure == Some(AgentInboxFailure::Unavailable);
+            if !unsettled {
+                return (agent, inbox);
+            }
+            let Ok(agent_id) = MacroUserIdStr::parse_from_str(&agent) else {
+                return (agent, inbox);
+            };
+            let inbox = self
+                .inboxes
+                .refresh(&agent_id)
+                .await
+                .inspect_err(|error| {
+                    tracing::warn!(error = ?error, "could not refresh an agent's inbox");
+                })
+                .unwrap_or(inbox);
+            (agent, inbox)
+        }))
+        .await;
+        Ok(refreshed.into_iter().collect())
+    }
+
     /// Create or retry the agent's inbox, named after it.
     async fn provision_inbox(
         &self,
@@ -398,7 +447,7 @@ where
         };
         self.api_keys.revoke_all(&record.user_id).await?;
         // Nothing to keep from an agent that never started.
-        self.inboxes.release(&record.user_id).await?;
+        self.inboxes.release(team_id, &record.user_id).await?;
         self.repos.delete(&record.user_id).await?;
         let removed_by = record
             .created_by
@@ -639,36 +688,10 @@ where
             .list_for_team(team_id(&receipt)?)
             .await
             .map_err(TeamAgentError::internal)?;
-        // Inboxes are extra: a failed read shows the agents without them.
-        let mut inboxes = self
-            .inboxes
-            .for_team(team_id(&receipt)?)
-            .await
-            .inspect_err(|error| {
-                tracing::warn!(error = ?error, "could not read the agents' inboxes");
-            })
-            .unwrap_or_default();
+        let mut inboxes = self.team_inboxes(&receipt).await?;
         let mut agents = Vec::with_capacity(records.len());
         for record in records {
-            let inbox = match inboxes.remove(record.user_id.as_ref()) {
-                // Still being made: ask email_service, so the polling list
-                // sees it become active.
-                Some(inbox)
-                    if inbox.state == AgentInboxState::Provisioning
-                        || inbox.failure == Some(AgentInboxFailure::Unavailable) =>
-                {
-                    Some(
-                    self.inboxes
-                        .refresh(&record.user_id)
-                        .await
-                        .inspect_err(|error| {
-                            tracing::warn!(error = ?error, "could not refresh an agent's inbox");
-                        })
-                        .unwrap_or(inbox),
-                    )
-                }
-                inbox => inbox,
-            };
+            let inbox = inboxes.remove(record.user_id.as_ref());
             let mut agent = self.team_agent(record).await?;
             agent.inbox = inbox;
             agents.push(agent);
@@ -704,7 +727,7 @@ where
         self.api_keys.revoke_all(&record.user_id).await?;
         // Its inbox stops syncing and sending; its mail is kept until
         // email_service releases it.
-        self.inboxes.pause(&record.user_id).await?;
+        self.inboxes.pause(team_id, &record.user_id).await?;
         // Issuing a fresh token voids the one a lost guest might hold; the
         // repository itself stays.
         self.repos

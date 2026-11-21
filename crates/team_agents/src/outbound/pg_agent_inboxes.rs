@@ -88,6 +88,7 @@ impl AgentInboxRepository for PgAgentInboxes {
         agent: &MacroUserIdStr<'_>,
         team_id: Uuid,
         request_id: Uuid,
+        state: AgentInboxState,
     ) -> Result<InboxRecord, Self::Err> {
         // The no-op update makes the conflicting row come back, so a racing
         // second reserve reads the first one's request id.
@@ -103,7 +104,7 @@ impl AgentInboxRepository for PgAgentInboxes {
             agent.as_ref(),
             team_id,
             request_id,
-            AgentInboxState::Provisioning.as_ref(),
+            state.as_ref(),
         )
         .fetch_one(&self.pool)
         .await?;
@@ -179,5 +180,39 @@ impl AgentInboxRepository for PgAgentInboxes {
         .ok_or(PgAgentInboxesError::Missing)?;
 
         row.try_into()
+    }
+
+    #[tracing::instrument(skip_all, err)]
+    async fn update_live(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        update: &InboxUpdate,
+    ) -> Result<Option<InboxRecord>, Self::Err> {
+        let row = sqlx::query_as!(
+            InboxRow,
+            r#"
+            UPDATE team_agent_inboxes
+            SET mailbox_id = COALESCE($2, mailbox_id),
+                address = COALESCE($3, address),
+                state = $4,
+                last_error = $5,
+                fake_provider = $6,
+                updated_at = now()
+            WHERE agent_user_id = $1
+              AND state NOT IN ('paused', 'releasing', 'released')
+            RETURNING agent_user_id, team_id, request_id, mailbox_id, address, state,
+                      last_error, fake_provider, updated_at
+            "#,
+            agent.as_ref(),
+            update.mailbox_id,
+            update.address,
+            update.state.as_ref(),
+            update.last_error.map(|error| error.as_ref().to_owned()),
+            update.fake_provider,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        row.map(InboxRecord::try_from).transpose()
     }
 }
