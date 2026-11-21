@@ -149,10 +149,12 @@ impl WritePasses {
         // position: it may have failed on what it read before the commit.
         // Storage that stops reporting one after a failure has failed itself,
         // so its error stands (a reset request must reach the host as is).
-        let now = engine.storage().write_position();
-        if stepping && now != self.position && (result.is_ok() || now.is_some()) {
-            self.restart();
-            return Ok(WritePassStep::Pending);
+        if stepping {
+            let now = engine.storage().write_position();
+            if now != self.position && (result.is_ok() || now.is_some()) {
+                self.restart();
+                return Ok(WritePassStep::Pending);
+            }
         }
         result?;
         if self.next.is_some() {
