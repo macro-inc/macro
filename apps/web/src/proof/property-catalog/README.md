@@ -81,13 +81,18 @@ not run the base commit's modules, or a mutant was not applied or not caught.
   in data both sides read successfully (a reader that succeeded on both, not with placeholder data, a
   caller that rendered on both over a source list that read without error and was not placeholder data),
   at a level the fault can reach (`MUTANT_REACH`: any read for the response
-  mutants, only live readers and staleness for the cache mutants), and it
-  must show the change the fault made: each application leaves a mark (the
-  account, when, and the dropped row, the two swapped rows, the altered row,
-  or the open readers a restored cache or a swallowed invalidation left
-  stale), and the catch must observe that account after the mark, with the
-  dropped row on OLD only, the swapped rows in opposite order, the altered
-  row different, or a marked reader differing live or stale on NEW only. A
+  mutants, only live readers for the cache mutants), and it must show the
+  change the fault made. Each application leaves a mark once delivered: the
+  account, when, and the dropped row, the two swapped rows in their injected
+  order, the altered field with its old and new value, or each open reader a
+  restored cache entry or a swallowed invalidation left behind with the data
+  it left there. The catch must observe that account after the mark and show
+  exactly that: the dropped row on OLD only, the two rows in the injected
+  order on NEW and the server's on OLD within one list, the field holding the
+  injected value on NEW and the server's on OLD, or a live NEW reader still
+  holding the data the fault left. A real bug that made the same change to
+  the same row would also be credited; it would show up as a difference in
+  the runs without a mutant. A
   cache restore that changes nothing is not applied. A settle timeout, a write-replay difference or an uncaught page
   error never counts, and a catch in a sequence that had one is discarded (each sequence
   ends with a reload, so its fallout stays inside it). `CONTROL=1` runs OLD

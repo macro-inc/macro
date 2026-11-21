@@ -426,11 +426,10 @@ const sig = (level, cls, kind, d, extra) =>
 const NOT_A_CATCH = new Set(['settle', 'write-replay', 'page-errors']);
 // Where each planted fault can show. The response mutants rewrite NEW's
 // GraphQL read responses, so any read of them; the cache mutants change what
-// NEW's live query cache holds, so only live readers (and the live-vs-fresh
-// staleness built from them), never a direct read or a fresh
-// mount.
+// NEW's live query cache holds, so only live readers, never a direct read,
+// a fresh mount, or the callers and staleness derived from them.
 const anyRead = () => true;
-const liveCache = (level) => /:live$|:staleness$/.test(level);
+const liveCache = (level) => /:live$/.test(level);
 const MUTANT_REACH = {
   'drop-row': anyRead,
   'swap-order': anyRead,
@@ -466,7 +465,7 @@ function record(level, kind, cls, a, b, extra = {}, canon = (x) => x) {
     bump(R.diffSignatures, s);
     R.totals.differences++;
     if (R.diffs.length < 400) R.diffs.push({ level, kind, class: cls, ...at, ...extra, diff: d });
-    if (R.mutant && cls === 'diff' && extra.clean && MUTANT_REACH[R.mutant.name](level) && R.mutant.running[laneOf(at)] && (shown = marked(level, kind, norm(a), norm(b), extra))) {
+    if (R.mutant && cls === 'diff' && extra.clean && MUTANT_REACH[R.mutant.name](level) && R.mutant.running[laneOf(at)] && (shown = marked(level, kind, norm(a), norm(b), extra, norm))) {
       // A catch is a difference in data both sides read successfully, at a
       // level the planted fault can reach, that the clean run does not have,
       // after the fault was applied at least once.
@@ -507,33 +506,35 @@ const rowsWith = (x, id) => {
   walkRows(x, (r) => r.id === id && out.push(r));
   return out;
 };
-const position = (x, id) => {
-  let i = 0;
-  let at = -1;
-  walkRows(x, (r) => {
-    if (r.id === id && at < 0) at = i;
-    i++;
-  });
-  return at;
-};
-function shows(m, level, kind, a, b) {
+// Whether some list in x holds both rows, p before q.
+function listsBefore(x, p, q) {
+  if (Array.isArray(x)) {
+    const ids = x.map((r) => (r && typeof r === 'object' ? r.id : undefined));
+    const i = ids.indexOf(p);
+    const j = ids.indexOf(q);
+    if (i >= 0 && j >= 0 && i < j) return true;
+    return x.some((v) => listsBefore(v, p, q));
+  }
+  return !!x && typeof x === 'object' && Object.values(x).some((v) => listsBefore(v, p, q));
+}
+// A GraphQL field and the reader's spelling of it (displayOrder, display_order).
+const sameField = (a, b) => a.replace(/_/g, '').toLowerCase() === b.replace(/_/g, '').toLowerCase();
+const fieldOf = (row, field) => Object.entries(row).filter(([k]) => sameField(k, field)).map(([, v]) => J(v));
+function shows(m, level, kind, a, b, norm) {
   if (m.kind === 'drop-row') return rowsWith(a, m.id).length > 0 && rowsWith(b, m.id).length === 0;
-  if (m.kind === 'swap-order') {
-    const [pa, qa, pb, qb] = [position(a, m.ids[0]), position(a, m.ids[1]), position(b, m.ids[0]), position(b, m.ids[1])];
-    return [pa, qa, pb, qb].every((p) => p >= 0) && Math.sign(pa - qa) !== Math.sign(pb - qb);
-  }
-  if (m.kind === 'alter-field') {
-    const ra = rowsWith(a, m.id);
-    const rb = rowsWith(b, m.id);
-    return ra.length > 0 && rb.length > 0 && J(ra) !== J(rb);
-  }
-  // cache faults: a marked reader's data live, or its staleness on NEW only
-  if (/:live$/.test(level)) return m.readers.some((id) => kind === `reader${id}.data`);
-  if (/:staleness$/.test(level)) return m.readers.some((id) => Array.isArray(b) && b.includes(id) && !(Array.isArray(a) && a.includes(id)));
+  // the two rows in the injected order on NEW and the server's on OLD
+  if (m.kind === 'swap-order') return listsBefore(b, m.ids[0], m.ids[1]) && listsBefore(a, m.ids[1], m.ids[0]);
+  // the altered field holding the injected value on NEW and the server's on OLD
+  if (m.kind === 'alter-field')
+    return rowsWith(b, m.id).some((r) => fieldOf(r, m.field).includes(J(m.to))) && rowsWith(a, m.id).some((r) => fieldOf(r, m.field).includes(J(m.from)));
+  // cache faults: a marked live reader still holding exactly the data the
+  // fault left in the cache (the restored copy, or what a swallowed
+  // invalidation would have refreshed)
+  if (/:live$/.test(level)) return m.readers.some((r) => kind === `reader${r.id}.data` && J(norm(r.data)) === J(b));
   return false;
 }
-function marked(level, kind, a, b, extra) {
-  return R.mutant.marks.find((m) => m.account === extra.account && m.clock <= (extra.asOf ?? -1) && shows(m, level, kind, a, b)) ?? null;
+function marked(level, kind, a, b, extra, norm) {
+  return R.mutant.marks.find((m) => m.account === extra.account && m.clock <= (extra.asOf ?? -1) && shows(m, level, kind, a, b, norm)) ?? null;
 }
 // A sequence's first catch stands only if the sequence had no harness-level
 // difference: a replay failure, a timeout or a page error can leave the two
@@ -747,14 +748,15 @@ async function openSide(storageState, side, label) {
       if (!resp) return r.abort('failed');
       const json = await resp.json();
       const m = mutateResponse(json, CONFIG.mutant, g);
+      const headers = { ...resp.headers() };
+      delete headers['content-encoding'];
+      delete headers['content-length'];
+      await r.fulfill({ status: resp.status(), headers, body: JSON.stringify(json) });
+      // marked once delivered, so no observation taken before it can match
       if (m) {
         R.mutant.applied++;
         mark(label, m);
       }
-      const headers = { ...resp.headers() };
-      delete headers['content-encoding'];
-      delete headers['content-length'];
-      return r.fulfill({ status: resp.status(), headers, body: JSON.stringify(json) });
     });
   }
   // Which transport each page reads through. Raw read cases and the generator
@@ -878,7 +880,8 @@ function mutateResponse(json, kind, g) {
       for (let j = list.length - 1; j > i; j--)
         if (sig(list[i]) !== sig(list[j])) {
           [list[i], list[j]] = [list[j], list[i]];
-          return { kind, ids: [list[j].id, list[i].id] };
+          // NEW now lists ids[0] before ids[1]; the server listed them the other way
+          return { kind, ids: [list[i].id, list[j].id] };
         }
     return null;
   }
@@ -888,7 +891,7 @@ function mutateResponse(json, kind, g) {
     if (!fields.length) return null;
     const [k, v] = g.pick(fields);
     row[k] = typeof v === 'number' ? v + 1 : typeof v === 'string' && !ISO_TS.test(v) ? `${v}·` : v === null ? '#010203' : v;
-    return row[k] !== v ? { kind, id: row.id } : null;
+    return row[k] !== v ? { kind, id: row.id, field: k, from: v, to: row[k] } : null;
   }
   return null;
 }
@@ -1151,7 +1154,7 @@ async function compareStep(pair, level, op) {
   // Only a fault applied before a snapshot was taken can show in it.
   const liveAsOf = clockNow();
   const [liveAo, liveAn, liveBo, liveBn] = await Promise.all(sides(pair).map((s) => ev(s, 'snapshot')));
-  const fresh = await Promise.all(sides(pair).map((s) => ev(s, 'fresh', keys, CONFIG.settleMs)));
+  const fresh = await Promise.all(sides(pair).map(async (s) => ({ ...(await ev(s, 'fresh', keys, CONFIG.settleMs)), asOf: clockNow() })));
   R.counts.freshMounts += 4;
   for (const f of fresh) {
     R.settle.fresh.samples++;
@@ -1163,7 +1166,6 @@ async function compareStep(pair, level, op) {
   });
   const freshOut = fresh.map((f) => f.timing.timedOut);
   const [frAo, frAn, frBo, frBn] = fresh.map((f) => f.snap);
-  const freshAsOf = clockNow();
   const c = here();
   for (const [who, lo, ln, fo, fn] of [['A', liveAo, liveAn, frAo, frAn], ['B', liveBo, liveBn, frBo, frBn]]) {
     c.account = who;
@@ -1172,7 +1174,7 @@ async function compareStep(pair, level, op) {
     const freshOutHere = freshOut[at] || freshOut[at + 1];
     const account = `L${pair.lane}${who}`;
     if (!liveOut) compareSnapshots(`${level}:live`, lo, ln, expected, { account, asOf: liveAsOf });
-    if (!freshOutHere) compareSnapshots(`${level}:fresh`, fo, fn, expected, { account, asOf: freshAsOf });
+    if (!freshOutHere) compareSnapshots(`${level}:fresh`, fo, fn, expected, { account, asOf: fresh[at + 1].asOf });
     if (liveOut || freshOutHere) continue;
     // staleness: which readers differ live vs fresh, per side. Each side is
     // compared with itself, so only tie order is removed.

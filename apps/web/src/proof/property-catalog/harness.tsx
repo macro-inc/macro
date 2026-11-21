@@ -557,7 +557,8 @@ async function fresh(keys: Key[], boundMs: number) {
 
 let staleCache: [readonly unknown[], unknown][] = [];
 let skippedInvalidations = 0;
-let skippedHashes = new Set<string>();
+// The data each query held when the mutant swallowed its invalidation.
+let skippedData = new Map<string, unknown>();
 
 // The query an open reader reads, by its registry id (the reader's key).
 function readerHash(id: string) {
@@ -577,10 +578,11 @@ function readerHash(id: string) {
   return hashKey(propertiesKeys.tags.queryKey);
 }
 // The open readers whose query is one of these.
-function readersOf(hashes: Set<string>) {
-  return [...registry.keys()].filter(
-    (id) => id !== 'callers' && hashes.has(readerHash(id))
-  );
+// The open readers of these queries, with the data the fault left in each.
+function readersOf(data: Map<string, unknown>) {
+  return [...registry.keys()]
+    .filter((id) => id !== 'callers' && data.has(readerHash(id)))
+    .map((id) => ({ id, data: data.get(readerHash(id)) }));
 }
 
 declare global {
@@ -631,7 +633,7 @@ window.__h = {
       queryClient.invalidateQueries = ((filters?: InvalidateQueryFilters) => {
         skippedInvalidations++;
         for (const q of queryClient.getQueryCache().findAll(filters))
-          skippedHashes.add(q.queryHash);
+          skippedData.set(q.queryHash, plain(q.state.data));
         return Promise.resolve();
       }) as typeof queryClient.invalidateQueries;
     },
@@ -640,10 +642,10 @@ window.__h = {
     takeSkipped() {
       const out = {
         count: skippedInvalidations,
-        readers: readersOf(skippedHashes),
+        readers: readersOf(skippedData),
       };
       skippedInvalidations = 0;
-      skippedHashes = new Set();
+      skippedData = new Map();
       return out;
     },
     // Stale cache: remember every property query's data before a write and
@@ -657,7 +659,7 @@ window.__h = {
     // already holds changes nothing and is not a fault applied.
     restoreCache() {
       let restored = 0;
-      const hashes = new Set<string>();
+      const restoredData = new Map<string, unknown>();
       for (const [key, data] of staleCache) {
         if (data === undefined) continue;
         if (
@@ -665,11 +667,11 @@ window.__h = {
         )
           continue;
         queryClient.setQueryData(key, data);
-        hashes.add(hashKey(key));
+        restoredData.set(hashKey(key), plain(data));
         restored++;
       }
       staleCache = [];
-      return { restored, readers: readersOf(hashes) };
+      return { restored, readers: readersOf(restoredData) };
     },
   },
   raw: {
