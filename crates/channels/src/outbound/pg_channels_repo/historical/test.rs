@@ -749,6 +749,48 @@ async fn a_third_member_still_in_keeps_a_group_after_one_left(pool: PgPool) {
     }
 }
 
+/// Of two DMs both people are in, created within one second, the lookup and
+/// get-or-create take the one created first, by instant: one made on the
+/// second comes before one made half a second later, though its time
+/// serialized as RFC 3339 (`…:40Z`) sorts after the other's (`…:40.500Z`)
+/// as text. The younger has the lower id, so no tie-break picks the older.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_older_of_two_dms_within_a_second_wins_by_instant(pool: PgPool) {
+    let repo = PgChannelsRepo::new(pool.clone());
+    let (lo, hi) = (
+        pair().lo().as_ref().to_owned(),
+        pair().hi().as_ref().to_owned(),
+    );
+    let younger = insert_dm(&pool, 1_000, &[(&lo, false), (&hi, false)]).await;
+    sqlx::query!(
+        "UPDATE comms_channels SET created_at = created_at + interval '500 milliseconds' WHERE id = $1",
+        younger
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let older = insert_dm(&pool, 1_000, &[(&lo, false), (&hi, false)]).await;
+    assert!(younger < older, "the younger DM has the lower id");
+    for (viewer, other) in [
+        (pair().lo().clone(), pair().hi().clone()),
+        (pair().hi().clone(), pair().lo().clone()),
+    ] {
+        assert_eq!(
+            repo.maybe_get_dm(viewer.clone(), other).await.unwrap(),
+            Some(older)
+        );
+        assert_eq!(
+            repo.ensure_dm(pair(), DmCreation::Live(viewer))
+                .await
+                .unwrap(),
+            EnsuredChannel {
+                id: older,
+                created: false
+            }
+        );
+    }
+}
+
 /// Live get-or-create ranks a DM its actor left before one both people left,
 /// however much older that one is, and DMs of the same rank created at the
 /// same instant by id; an import keeps taking the oldest of every row.
