@@ -1,5 +1,5 @@
 use super::catalog::{EVENT_TYPES, MAX_QUERY_CHARS, QUERY_EVENT, selection};
-use super::compiler::{CompileError, FilterCompiler, parse_check, parse_outcome};
+use super::compiler::{CompileError, FilterCompiler, parse_outcome};
 use super::dss::{
     EventSource, SourceError, SourceEvent, SourceItem, SourceStream, StoreError, SubscriptionStore,
     source_item,
@@ -45,6 +45,19 @@ fn literal(value: &str) -> McpFilterValue {
 }
 
 /// "@ mentions of me in channels", as the compiler should give it.
+/// `macro.events` arguments confirming `channel_mentions` for `MENTIONS`.
+fn confirmed() -> Value {
+    json!({"query": MENTIONS, "filter": channel_mentions()})
+}
+
+/// What a request in words was compiled to, from the confirmation it asks.
+fn shown(result: Result<Compiled, super::EventsError>) -> Compiled {
+    match result {
+        Err(super::EventsError::ConfirmFilter { compiled, .. }) => compiled,
+        other => panic!("expected a confirmation, got {other:?}"),
+    }
+}
+
 fn channel_mentions() -> McpEventFilter {
     McpEventFilter {
         any_of: vec![McpFilterClause {
@@ -337,8 +350,19 @@ fn subscribe_params(name: &str, arguments: Value) -> Value {
 fn a_query_is_trimmed_and_bounded() {
     assert_eq!(
         selection(QUERY_EVENT, &json!({"query": "  my mentions  "})).unwrap(),
-        Selection::Query("my mentions".to_owned())
+        Selection::Query {
+            query: "my mentions".to_owned(),
+            filter: None,
+        }
     );
+    assert_eq!(
+        selection(QUERY_EVENT, &confirmed()).unwrap(),
+        Selection::Query {
+            query: MENTIONS.to_owned(),
+            filter: Some(channel_mentions()),
+        }
+    );
+    assert!(selection(QUERY_EVENT, &json!({"query": "x", "filter": {"anyOf": 1}})).is_err());
     assert!(selection(QUERY_EVENT, &json!({"query": "   "})).is_err());
     let long = "a".repeat(MAX_QUERY_CHARS + 1);
     assert!(selection(QUERY_EVENT, &json!({"query": long})).is_err());
@@ -421,12 +445,43 @@ async fn unknown_methods_and_poll_are_refused() {
 // --- events/subscribe -----------------------------------------------------
 
 #[tokio::test]
-async fn a_new_query_subscription_compiles_once_and_returns_the_filter() {
+async fn words_alone_are_compiled_and_shown_back_without_subscribing() {
     let fixture = fixture();
-    let CustomResult(result) = call(
+    let error = call(
         &fixture.events,
         "events/subscribe",
         subscribe_params(QUERY_EVENT, json!({"query": MENTIONS})),
+        &no_extensions(),
+    )
+    .await
+    .unwrap_err();
+
+    let reading =
+        "`message.mentioned` events where the message is in a `channel` and the mentioned item is you.";
+    assert_eq!(error.code.0, -32602);
+    assert!(error.message.starts_with("Nothing is subscribed yet."));
+    assert!(error.message.contains(reading));
+    let data = error.data.unwrap();
+    assert_eq!(data["arguments"], confirmed());
+    assert_eq!(
+        data[FILTER_META],
+        serde_json::to_value(channel_mentions()).unwrap()
+    );
+    assert_eq!(data[INTERPRETATION_META], reading);
+    assert_eq!(*fixture.compiler.queries.lock().unwrap(), vec![MENTIONS]);
+    // Nothing is sealed or stored until the filter is confirmed.
+    assert_eq!(*fixture.sealer.sealed.lock().unwrap(), 0);
+    assert!(fixture.store.subscribes.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_confirmed_filter_subscribes_without_a_model_call() {
+    let fixture = fixture();
+    let params = subscribe_params(QUERY_EVENT, confirmed());
+    let CustomResult(result) = call(
+        &fixture.events,
+        "events/subscribe",
+        params.clone(),
         &no_extensions(),
     )
     .await
@@ -444,35 +499,19 @@ async fn a_new_query_subscription_compiles_once_and_returns_the_filter() {
         result["_meta"][INTERPRETATION_META],
         "`message.mentioned` events where the message is in a `channel` and the mentioned item is you."
     );
-    assert_eq!(*fixture.compiler.queries.lock().unwrap(), vec![MENTIONS]);
     assert_eq!(*fixture.sealer.sealed.lock().unwrap(), 1);
-    // The service is asked without a filter first, so a refresh costs no
-    // model call; it asks for one only for a new subscription.
-    let subscribes = fixture.store.subscribes.lock().unwrap();
-    assert_eq!(subscribes.len(), 2);
-    assert_eq!(subscribes[0].filter, None);
-    assert_eq!(subscribes[1].filter, Some(channel_mentions()));
-    assert_eq!(subscribes[1].secret_ciphertext, ciphertext());
-    assert_eq!(subscribes[1].ttl, McpTtlRequest::Default);
-    assert_eq!(subscribes[1].endpoint_url, "https://agent.example/hook");
-}
+    {
+        let subscribes = fixture.store.subscribes.lock().unwrap();
+        assert_eq!(subscribes.len(), 1);
+        assert_eq!(subscribes[0].filter, Some(channel_mentions()));
+        assert_eq!(subscribes[0].arguments, confirmed());
+        assert_eq!(subscribes[0].secret_ciphertext, ciphertext());
+        assert_eq!(subscribes[0].ttl, McpTtlRequest::Default);
+        assert_eq!(subscribes[0].endpoint_url, "https://agent.example/hook");
+    }
 
-#[tokio::test]
-async fn a_refresh_keeps_the_stored_filter_without_a_model_call() {
-    let fixture = fixture();
-    let params = subscribe_params(QUERY_EVENT, json!({"query": MENTIONS}));
+    // A refresh is the same request again: still no model call.
     call(
-        &fixture.events,
-        "events/subscribe",
-        params.clone(),
-        &no_extensions(),
-    )
-    .await
-    .unwrap();
-    // A changed compiler must not change an existing subscription.
-    *fixture.compiler.answer.lock().unwrap() = Some(CompileError::Refused("changed".to_owned()));
-
-    let CustomResult(refreshed) = call(
         &fixture.events,
         "events/subscribe",
         params,
@@ -480,13 +519,28 @@ async fn a_refresh_keeps_the_stored_filter_without_a_model_call() {
     )
     .await
     .unwrap();
+    assert!(fixture.compiler.queries.lock().unwrap().is_empty());
+    assert_eq!(fixture.store.subscribes.lock().unwrap().len(), 2);
+}
 
-    assert_eq!(
-        refreshed["_meta"][FILTER_META],
-        serde_json::to_value(channel_mentions()).unwrap()
-    );
-    assert_eq!(fixture.compiler.queries.lock().unwrap().len(), 1);
-    assert_eq!(fixture.store.subscribes.lock().unwrap().len(), 3);
+#[tokio::test]
+async fn a_confirmed_filter_delivery_cannot_evaluate_is_refused() {
+    let fixture = fixture();
+    let error = call(
+        &fixture.events,
+        "events/subscribe",
+        subscribe_params(
+            QUERY_EVENT,
+            json!({"query": MENTIONS, "filter": {"anyOf": [{"events": ["message.teleported"]}]}}),
+        ),
+        &no_extensions(),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(error.code.0, -32602);
+    assert!(error.message.starts_with("arguments.filter"));
+    assert!(fixture.compiler.queries.lock().unwrap().is_empty());
+    assert!(fixture.store.subscribes.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -764,15 +818,18 @@ async fn unsubscribe_removes_by_name_arguments_and_url() {
 #[tokio::test]
 async fn the_same_words_compile_once_per_user() {
     let fixture = fixture();
-    let query = Selection::Query(MENTIONS.to_owned());
-    let first = fixture.events.compile(&me(), &query).await.unwrap();
-    let second = fixture.events.compile(&me(), &query).await.unwrap();
+    let query = Selection::Query {
+        query: MENTIONS.to_owned(),
+        filter: None,
+    };
+    let first = shown(fixture.events.compile(&me(), &query).await);
+    let second = shown(fixture.events.compile(&me(), &query).await);
     assert_eq!(first, second);
     assert_eq!(first, Compiled::new(channel_mentions()));
     assert_eq!(fixture.compiler.queries.lock().unwrap().len(), 1);
 
     let other = MacroUserIdStr::parse_from_str(OTHER).unwrap();
-    fixture.events.compile(&other, &query).await.unwrap();
+    shown(fixture.events.compile(&other, &query).await);
     assert_eq!(fixture.compiler.queries.lock().unwrap().len(), 2);
 }
 
@@ -781,7 +838,10 @@ async fn concurrent_first_requests_share_one_model_call() {
     let fixture = fixture();
     let hold = Arc::new(tokio::sync::Notify::new());
     *fixture.compiler.hold.lock().unwrap() = Some(Arc::clone(&hold));
-    let query = Selection::Query(MENTIONS.to_owned());
+    let query = Selection::Query {
+        query: MENTIONS.to_owned(),
+        filter: None,
+    };
     // Polled in order: the first waits on the model, the second on the
     // first, then the model answers.
     let user = me();
@@ -790,7 +850,7 @@ async fn concurrent_first_requests_share_one_model_call() {
         fixture.events.compile(&user, &query),
         async { hold.notify_waiters() },
     );
-    assert_eq!(first.unwrap(), second.unwrap());
+    assert_eq!(shown(first), shown(second));
     assert_eq!(fixture.compiler.queries.lock().unwrap().len(), 1);
 }
 
@@ -799,9 +859,15 @@ async fn a_failed_compile_is_not_cached() {
     let fixture = fixture();
     *fixture.compiler.answer.lock().unwrap() =
         Some(CompileError::Refused("not an event".to_owned()));
-    let query = Selection::Query(MENTIONS.to_owned());
-    assert!(fixture.events.compile(&me(), &query).await.is_err());
-    assert!(fixture.events.compile(&me(), &query).await.is_ok());
+    let query = Selection::Query {
+        query: MENTIONS.to_owned(),
+        filter: None,
+    };
+    assert!(matches!(
+        fixture.events.compile(&me(), &query).await,
+        Err(super::EventsError::InvalidParams(_))
+    ));
+    shown(fixture.events.compile(&me(), &query).await);
     assert_eq!(fixture.compiler.queries.lock().unwrap().len(), 2);
 }
 
@@ -867,22 +933,6 @@ fn the_model_answer_is_validated() {
 }
 
 #[test]
-fn a_filter_whose_reading_differs_from_the_request_is_refused() {
-    assert!(parse_check(json!({"outcome": "matches"})).is_ok());
-    assert!(matches!(
-        parse_check(json!({
-            "outcome": "differs",
-            "difference": "It would also deliver mentions in documents.",
-        })),
-        Err(CompileError::Refused(reason)) if reason.contains("also deliver mentions in documents")
-    ));
-    assert!(matches!(
-        parse_check(json!({"outcome": "close enough"})),
-        Err(CompileError::Internal(_))
-    ));
-}
-
-#[test]
 fn the_reading_names_every_alternative() {
     let filter = McpEventFilter {
         any_of: vec![
@@ -905,8 +955,32 @@ fn the_reading_names_every_alternative() {
         super::describe::describe(&filter),
         format!(
             "Any of: `message.posted` or `message.edited` events for `{CHANNEL}` or \
-             `{OTHER_CHANNEL}` where the author is `{OTHER}` or you; or `document.created` events."
+             `{OTHER_CHANNEL}` where whoever acted (sent it, or for an edit, deletion or \
+             attachment change, whoever made that change, not necessarily its author) is \
+             `{OTHER}` or you; or `document.created` events."
         )
+    );
+}
+
+#[test]
+fn the_reading_names_the_sender_only_where_the_actor_is_the_sender() {
+    let by_me = |events: &[&str]| McpEventFilter {
+        any_of: vec![McpFilterClause {
+            events: events.iter().map(|event| (*event).to_owned()).collect(),
+            ids: None,
+            all_of: vec![McpFieldCondition {
+                field: McpFilterField::Actor,
+                one_of: vec![McpFilterValue::Me],
+            }],
+        }],
+    };
+    assert_eq!(
+        super::describe::describe(&by_me(&["message.posted", "message.mentioned"])),
+        "`message.posted` or `message.mentioned` events where the sender is you."
+    );
+    // A deletion's actor is whoever deleted the message, not its author.
+    assert!(
+        !super::describe::describe(&by_me(&["message.deleted"])).contains("the sender is")
     );
 }
 
@@ -981,7 +1055,7 @@ async fn a_stream_delivers_only_what_its_filter_matches() {
 
     let result = stream_with(
         &fixture.events,
-        json!({"name": QUERY_EVENT, "arguments": {"query": MENTIONS}, "heartbeatMs": 10_000}),
+        json!({"name": QUERY_EVENT, "arguments": confirmed(), "heartbeatMs": 10_000}),
         |mut receiver, cancel| async move {
             let (method, active) = next(&mut receiver).await;
             assert_eq!(method, "notifications/events/active");
@@ -1292,6 +1366,27 @@ async fn a_stream_that_cannot_open_its_source_fails_before_any_notification() {
     )
     .await;
     assert_eq!(result.unwrap_err().code.0, -32603);
+}
+
+#[tokio::test]
+async fn a_stream_of_words_alone_shows_its_filter_and_opens_nothing() {
+    let fixture = fixture();
+    let result = stream_with(
+        &fixture.events,
+        json!({"name": QUERY_EVENT, "arguments": {"query": MENTIONS}}),
+        |mut receiver, _| async move {
+            assert!(receiver.try_recv().is_err(), "nothing was sent");
+        },
+    )
+    .await;
+    let error = result.unwrap_err();
+    assert_eq!(error.code.0, -32602);
+    assert_eq!(error.data.unwrap()["arguments"], confirmed());
+    assert!(fixture.source.opens.lock().unwrap().is_empty());
+    let slots: Vec<_> = (0..MAX_STREAMS_PER_USER)
+        .map(|_| fixture.events.claim_stream(&me()))
+        .collect();
+    assert!(slots.iter().all(Result::is_ok));
 }
 
 #[tokio::test]

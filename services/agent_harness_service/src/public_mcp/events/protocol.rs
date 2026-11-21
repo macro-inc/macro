@@ -72,6 +72,19 @@ impl From<EventsError> for McpError {
                 message,
                 Some(json!({"reason": reason})),
             ),
+            EventsError::ConfirmFilter { query, compiled } => McpError::invalid_params(
+                format!(
+                    "Nothing is subscribed yet. Your query reads as: {} If that is what you \
+                     want, repeat this request with `arguments` set to this error's \
+                     `data.arguments`; otherwise rephrase the query.",
+                    compiled.interpretation
+                ),
+                Some(json!({
+                    "arguments": {"query": query, "filter": &compiled.filter},
+                    FILTER_META: compiled.filter,
+                    INTERPRETATION_META: compiled.interpretation,
+                })),
+            ),
             EventsError::NotAdmitted(_) => McpError::new(
                 ErrorCode(RESOURCE_EXHAUSTED),
                 message,
@@ -227,11 +240,20 @@ pub(crate) async fn handle<Sink: NotificationSink>(
             Ok(_) => "success",
             Err(error) => match error.code.0 {
                 -32603 => "internal_error",
+                _ if is_confirmation(error) => "awaiting_confirmation",
                 _ => "refused",
             },
         },
     );
     result
+}
+
+/// Whether an error asks the caller to confirm a compiled filter.
+fn is_confirmation(error: &McpError) -> bool {
+    error
+        .data
+        .as_ref()
+        .is_some_and(|data| data.get(INTERPRETATION_META).is_some())
 }
 
 async fn subscribe<Sink>(

@@ -6,10 +6,12 @@
 //! registers a callback URL that the document storage service verifies and
 //! delivers to (`crates/webhook`, README's "MCP Events subscriptions").
 //!
-//! The `macro.events` type takes a request in plain words. It is compiled once,
-//! when the subscription is made, into the exact filter language of
-//! `webhook::domain::mcp::filter`; the result names the filter and a
-//! deterministic reading of it, and delivery evaluates only the filter. Each
+//! The `macro.events` type takes a request in plain words, in two steps. The
+//! words alone are compiled into the exact filter language of
+//! `webhook::domain::mcp::filter` and shown back, with a deterministic reading
+//! of the filter, without subscribing; the caller confirms by sending that
+//! filter with the words, and delivery evaluates only the filter it sent. So
+//! nothing a model chose is delivered before the caller has read it. Each
 //! webhook event name is also a type of its own, taking optional parent ids.
 
 mod catalog;
@@ -101,6 +103,11 @@ pub(crate) enum EventsError {
     CallbackEndpoint(McpEndpointFailure),
     #[error("AI usage is not available: {0}")]
     NotAdmitted(String),
+    /// A request in words was compiled; the caller confirms the filter
+    /// before anything is subscribed. The display leaves out the filter and
+    /// the words, which may name people.
+    #[error("the compiled filter awaits the caller's confirmation")]
+    ConfirmFilter { query: String, compiled: Compiled },
     #[error("internal error")]
     Internal(rootcause::Report),
 }
@@ -214,8 +221,10 @@ impl McpEvents {
         }
     }
 
-    /// Compile a selection: a named type into its event and ids, a request in
-    /// words through the model, once per user and wording on this process.
+    /// The filter a selection delivers by: a named type's event and ids, or
+    /// the filter a request in words was confirmed with. Words without one
+    /// are compiled through the model, once per user and wording on this
+    /// process, and come back as `ConfirmFilter`.
     async fn compile(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -225,7 +234,14 @@ impl McpEvents {
             Selection::Event { name, ids } => {
                 McpEventFilter::for_events(vec![(*name).to_owned()], ids.clone())
             }
-            Selection::Query(query) => {
+            Selection::Query {
+                filter: Some(filter),
+                ..
+            } => filter.clone(),
+            Selection::Query {
+                query,
+                filter: None,
+            } => {
                 let key = (user.as_ref().to_owned(), query.clone());
                 let cell = self
                     .compiled
@@ -235,50 +251,50 @@ impl McpEvents {
                     })?
                     .get_or_insert(key, Arc::default)
                     .clone();
-                cell.get_or_try_init(|| self.compiler.compile(user, query))
+                let filter = cell
+                    .get_or_try_init(|| self.compiler.compile(user, query))
                     .await?
-                    .clone()
+                    .clone();
+                filter
+                    .validate()
+                    .map_err(|error| EventsError::InvalidParams(error.to_string()))?;
+                return Err(EventsError::ConfirmFilter {
+                    query: query.clone(),
+                    compiled: Compiled::new(filter),
+                });
             }
         };
         filter
             .validate()
-            .map_err(|error| EventsError::InvalidParams(error.to_string()))?;
+            .map_err(|error| EventsError::InvalidParams(format!("arguments.filter: {error}")))?;
         Ok(Compiled::new(filter))
     }
 
-    /// Create or refresh a webhook subscription. A refresh keeps the filter
-    /// stored when it was made, so only a new subscription to `macro.events`
-    /// costs a model call.
+    /// Create or refresh a webhook subscription. Its filter is part of its
+    /// arguments, so subscribing costs no model call; words without a filter
+    /// are compiled and shown back before anything is sealed or stored.
     pub(crate) async fn subscribe(
         &self,
         user: &MacroUserIdStr<'static>,
         request: Subscribe,
     ) -> Result<Subscribed, EventsError> {
         let selection = catalog::selection(&request.name, &request.arguments)?;
+        let compiled = self.compile(user, &selection).await?;
         let secret_ciphertext = self
             .sealer
             .seal(user, &request.secret)
             .await
             .map_err(EventsError::Internal)?;
-        let mut body = McpSubscribeRequest {
+        let body = McpSubscribeRequest {
             event_type: request.name,
             arguments: request.arguments,
             endpoint_url: request.url,
-            filter: None,
+            filter: Some(compiled.filter),
             secret: request.secret,
             secret_ciphertext,
             ttl: request.ttl,
         };
-        if let Selection::Event { .. } = selection {
-            body.filter = Some(self.compile(user, &selection).await?.filter);
-        }
-        let result = match self.store.subscribe(user, &body).await {
-            Err(StoreError::Refused(McpSubscriptionErrorBody::FilterRequired)) => {
-                body.filter = Some(self.compile(user, &selection).await?.filter);
-                self.store.subscribe(user, &body).await?
-            }
-            other => other?,
-        };
+        let result = self.store.subscribe(user, &body).await?;
         let compiled = Compiled::new(result.filter.clone());
         Ok(Subscribed { result, compiled })
     }

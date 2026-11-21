@@ -6,7 +6,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use std::sync::LazyLock;
 use webhook::domain::mcp::catalog::event_description;
-use webhook::domain::mcp::filter::{MAX_VALUE_LEN, MAX_VALUES};
+use webhook::domain::mcp::filter::{MAX_VALUE_LEN, MAX_VALUES, McpEventFilter};
 use webhook::domain::models::WEBHOOK_EVENT_NAMES;
 
 /// The type that takes a request in words.
@@ -19,8 +19,13 @@ const DELIVERY: [&str; 2] = ["push", "webhook"];
 /// What a subscription selects.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Selection {
-    /// `macro.events`: a request in words, compiled into a filter.
-    Query(String),
+    /// `macro.events`: a request in words, and the filter its caller
+    /// confirmed for it. Without one, the words are compiled and shown back
+    /// for confirmation; nothing is delivered until a filter is sent.
+    Query {
+        query: String,
+        filter: Option<McpEventFilter>,
+    },
     /// One webhook event name, optionally only for these parent ids.
     Event {
         name: &'static str,
@@ -32,6 +37,8 @@ pub(crate) enum Selection {
 #[serde(deny_unknown_fields)]
 struct QueryArguments {
     query: String,
+    #[serde(default)]
+    filter: Option<McpEventFilter>,
 }
 
 #[derive(Deserialize)]
@@ -45,7 +52,7 @@ struct EventArguments {
 /// `NotFound`, arguments outside the type's `inputSchema` `InvalidParams`.
 pub(crate) fn selection(name: &str, arguments: &Value) -> Result<Selection, EventsError> {
     if name == QUERY_EVENT {
-        let QueryArguments { query } = serde_json::from_value(arguments.clone())
+        let QueryArguments { query, filter } = serde_json::from_value(arguments.clone())
             .map_err(|error| EventsError::InvalidParams(format!("arguments: {error}")))?;
         let query = query.trim();
         if query.is_empty() || query.chars().count() > MAX_QUERY_CHARS {
@@ -53,7 +60,10 @@ pub(crate) fn selection(name: &str, arguments: &Value) -> Result<Selection, Even
                 "arguments.query must be 1 to {MAX_QUERY_CHARS} characters"
             )));
         }
-        return Ok(Selection::Query(query.to_owned()));
+        return Ok(Selection::Query {
+            query: query.to_owned(),
+            filter,
+        });
     }
     let Some(name) = WEBHOOK_EVENT_NAMES
         .iter()
@@ -84,14 +94,15 @@ pub(crate) static EVENT_TYPES: LazyLock<Vec<Value>> = LazyLock::new(|| {
         "name": QUERY_EVENT,
         "title": "Macro events you describe",
         "description": "Macro events chosen by a request in plain words, such as \"all @ mentions \
-            of me in channels\" or \"new messages in channel 0193…\". The request is compiled \
-            once, when you subscribe or open the stream, into an exact filter over event names, \
-            parent ids and a few message fields (parent type and id, actor, mentioned type and \
-            id). The confirmation's _meta carries it as \"com.macro/filter\" with a reading in \
-            words as \"com.macro/interpretation\": check it says what you meant. A request the \
-            filter cannot express exactly is refused, never approximated. You receive only \
-            events you can see, as Macro webhooks deliver them; data.event_type names each \
-            event.",
+            of me in channels\" or \"new messages in channel 0193…\". Two steps: first send \
+            only the query. Nothing is subscribed then: the answer is an InvalidParams error \
+            whose data holds the exact filter the words compile to (over event names, parent \
+            ids and a few message fields) as \"com.macro/filter\", a reading of it in words as \
+            \"com.macro/interpretation\", and the arguments to confirm it with. If the reading \
+            says what you meant, repeat the request with those arguments; delivery then \
+            evaluates exactly that filter. Otherwise rephrase. A request the filter cannot \
+            express exactly is refused, never approximated. You receive only events you can \
+            see, as Macro webhooks deliver them; data.event_type names each event.",
         "delivery": DELIVERY,
         "inputSchema": {
             "type": "object",
@@ -102,6 +113,11 @@ pub(crate) static EVENT_TYPES: LazyLock<Vec<Value>> = LazyLock::new(|| {
                     "maxLength": MAX_QUERY_CHARS,
                     "description": "Which events you want, in plain words. Mentions mean \
                         mentions of you unless you name someone else."
+                },
+                "filter": {
+                    "type": "object",
+                    "description": "The filter you confirm for the query, exactly as the \
+                        first step returned it. Leave it out to see what the query compiles to."
                 }
             },
             "required": ["query"],

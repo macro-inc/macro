@@ -27,8 +27,9 @@ other than the ChatGPT server's, gets the FusionAuth token as before.
 
 It also serves the MCP Events extension (`io.modelcontextprotocol/events`):
 an agent subscribes to the events Macro webhooks deliver, by event name or in
-plain words compiled once into an exact filter, by webhook or by a held
-`events/stream` request. Subscriptions, matching and webhook delivery live
+plain words compiled into an exact filter that the agent reads and confirms
+before anything is delivered, by webhook or by a held `events/stream`
+request. Subscriptions, matching and webhook delivery live
 in `crates/webhook` (README's "MCP Events subscriptions"); the harness
 compiles filters, seals signing secrets and runs streams
 (`public_mcp/events/`). ChatGPT is not offered it.

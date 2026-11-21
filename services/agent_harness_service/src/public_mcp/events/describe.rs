@@ -19,7 +19,11 @@ fn clause(clause: &McpFilterClause) -> String {
     if let Some(ids) = &clause.ids {
         text.push_str(&format!(" for {}", list(ids, "or", |id| code(id))));
     }
-    let conditions: Vec<String> = clause.all_of.iter().map(condition).collect();
+    let conditions: Vec<String> = clause
+        .all_of
+        .iter()
+        .map(|each| condition(each, &clause.events))
+        .collect();
     if !conditions.is_empty() {
         text.push_str(" where ");
         text.push_str(&conditions.join(" and "));
@@ -27,11 +31,25 @@ fn clause(clause: &McpFilterClause) -> String {
     text
 }
 
-fn condition(condition: &McpFieldCondition) -> String {
+/// Events whose `actor` is the message's sender; every other message event
+/// names whoever acted on it, who need not be its author.
+const SENT_EVENTS: [&str; 2] = ["message.posted", "message.mentioned"];
+
+fn condition(condition: &McpFieldCondition, events: &[String]) -> String {
     let field = match condition.field {
         McpFilterField::ParentType => "the message is in a",
         McpFilterField::ParentId => "the message is in",
-        McpFilterField::Actor => "the author is",
+        McpFilterField::Actor
+            if events
+                .iter()
+                .all(|event| SENT_EVENTS.contains(&event.as_str())) =>
+        {
+            "the sender is"
+        }
+        McpFilterField::Actor => {
+            "whoever acted (sent it, or for an edit, deletion or attachment change, \
+             whoever made that change, not necessarily its author) is"
+        }
         McpFilterField::MentionedType => "the mentioned item is a",
         McpFilterField::MentionedId => "the mentioned item is",
     };
