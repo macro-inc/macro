@@ -102,6 +102,8 @@ describe('createCodeLinkOpener', () => {
       // Repository paths of the same look still open on GitHub.
       expect(open('package.json#L5')).toBe(true);
       expect(open('package.json:5')).toBe(true);
+      // A #L line marks a file even when its name reads as a host.
+      expect(open('main.tf#L3')).toBe(true);
       expect(open('.github/ci.yml')).toBe(true);
       expect(open('src/b.ts#L2')).toBe(true);
       // A bare docs or source file, and a version folder, are paths too.
@@ -113,6 +115,7 @@ describe('createCodeLinkOpener', () => {
       expect(context.opened).toEqual([
         'https://github.com/macro-inc/macro/blob/abc123/package.json#L5',
         'https://github.com/macro-inc/macro/blob/abc123/package.json#L5',
+        'https://github.com/macro-inc/macro/blob/abc123/main.tf#L3',
         'https://github.com/macro-inc/macro/blob/abc123/.github/ci.yml',
         'https://github.com/macro-inc/macro/blob/abc123/src/b.ts#L2',
         'https://github.com/macro-inc/macro/blob/abc123/README.md',

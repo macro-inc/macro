@@ -60,7 +60,7 @@ export function createCodeLinkOpener(
 
     // Past here only a path that reads as a file in the repository is ours to
     // answer; anything else, such as `example.com`, keeps the default handling.
-    if (!readsAsRepositoryPath(reference)) return false;
+    if (!readsAsRepositoryPath(reference, url)) return false;
     const blob = headBlobUrl(changeset, reference);
     if (blob) {
       changes.context.host.openExternal(blob);
@@ -90,7 +90,7 @@ export function createCodeLinkDescriber(
     if (!reference) return undefined;
     if (
       !findChangedFile(reference.path, changeset.files) &&
-      !readsAsRepositoryPath(reference)
+      !readsAsRepositoryPath(reference, url)
     )
       return undefined;
     return describeReference(reference);

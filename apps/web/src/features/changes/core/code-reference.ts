@@ -125,17 +125,22 @@ const IPV4 = /^\d{1,3}(?:\.\d{1,3}){3}$/;
  * repository rather than a web address written without its scheme. An IPv4
  * address is a web address, with or without a port. A first segment that
  * reads as a host is a web address (`example.com`, `example.com/spec.html`,
- * `example.com:8080`, where the port parses as a line), unless it is the
- * whole reference and ends in a source or docs extension (`README.md`,
- * `package.json:5`). Anything else that names a file is a path.
+ * `example.com:8080`, where `target`'s port parses as a line), unless it is
+ * the whole reference and ends in a source or docs extension (`README.md`,
+ * `package.json:5`). A `#L` line marks a file (`main.tf#L3`). Anything else
+ * that names a file is a path.
  */
-export function readsAsRepositoryPath(reference: CodeReference): boolean {
+export function readsAsRepositoryPath(
+  reference: CodeReference,
+  target: string
+): boolean {
   const segments = reference.path.split('/');
   const first = segments[0] ?? '';
   if (IPV4.test(first)) return false;
   if (!namesFile(reference)) return false;
   if (!HOST.test(first)) return true;
   if (segments.length > 1) return reference.lines !== undefined;
+  if (reference.lines && !/:\d+$/.test(target.trim())) return true;
   const extension = first.split('.').at(-1)?.toLowerCase() ?? '';
   return SOURCE_EXTENSIONS.has(extension);
 }
