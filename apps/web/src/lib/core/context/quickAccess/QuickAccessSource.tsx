@@ -1162,6 +1162,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
               ? viewer?.split('@')[1]
               : undefined,
           excluded: personExclusions.native(),
+          listPriority: options?.peopleListPriority?.(),
         };
       },
       activity: dmActivityByUserId,

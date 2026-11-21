@@ -84,8 +84,8 @@ pub trait ContactListRepository: Send + Sync + 'static {
 /// Bounded reads of the directed, list-aware directory: a person is in a
 /// viewer's directory when they are in one of the viewer's stored lists or
 /// inboxes, on the viewer's current team, or the viewer. Ids are canonical, so
-/// pages are in plain byte order. Not read by any caller yet; it replaces
-/// [`ContactsPageRepository`] behind a flag.
+/// pages are in plain byte order. It replaces [`ContactsPageRepository`] and
+/// [`PeopleSearchRepository`] behind the `contacts-list-reads` flag.
 pub trait ContactListReader: Send + Sync + 'static {
     /// One page of the viewer's directory, including the viewer, in contact-id
     /// order after the cursor.
@@ -119,6 +119,25 @@ pub trait ContactListReader: Send + Sync + 'static {
         after: Option<&ContactCursor>,
         limit: ContactPageSize,
     ) -> impl Future<Output = Result<ContactIdPage, Report>> + Send;
+
+    /// Match `needle` (lowercase, at least two characters) against the email
+    /// and Macro profile name of everyone in the viewer's directory. Rank
+    /// teammates first, then `interacted` and `invited`, then inbox contacts,
+    /// then anyone else (the viewer without a team); within a group, prefix
+    /// matches first. Each match carries its lists. Return at most `limit`.
+    fn search_listed_people(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        needle: &str,
+        limit: PeopleSearchLimit,
+    ) -> impl Future<Output = Result<Vec<PersonMatch>, Report>> + Send;
+
+    /// Everyone the viewer knows through a connected inbox (the `gmail` and
+    /// `outlook` lists), each once, in no particular order.
+    fn inbox_contacts(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Report>> + Send;
 }
 
 /// Bounded directory reads, separate from the deployed full-list API.
@@ -184,6 +203,17 @@ pub trait PeopleSearchService: Send + Sync + 'static {
         query: &PeopleSearchQuery,
         limit: PeopleSearchLimit,
     ) -> impl Future<Output = Result<Vec<PersonMatch>, Report>> + Send;
+}
+
+/// The people a user has corresponded with by email.
+pub trait CorrespondentsService: Send + Sync + 'static {
+    /// The user's email correspondents, the user excluded, in no particular
+    /// order. The legacy graph records no provenance, so there it is the
+    /// user's whole directory.
+    fn correspondents(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Report>> + Send;
 }
 
 /// Resolves names only for the authorized, bounded IDs selected by the directory.

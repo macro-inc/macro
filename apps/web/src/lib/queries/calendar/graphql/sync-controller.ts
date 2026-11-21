@@ -4,6 +4,7 @@ import type {
   CacheHost,
   CalendarLinkWatermarkWire,
 } from '@graphql-cache/index';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import {
   CalendarChangesDocument,
   type CalendarChangesQuery,
@@ -35,6 +36,8 @@ export interface CalendarSyncControllerOptions {
   fetchChanges?: FetchCalendarChanges;
   /** Refetches the calendar list after calendars or links change. */
   refetchCalendars?: () => Promise<unknown>;
+  /** Called once a delta has dropped the cached calendar. */
+  onReset?: () => void;
   debounceMs?: number;
 }
 
@@ -58,6 +61,15 @@ export const MAX_DELTA_RETRIES = 3;
  */
 export type CalendarCatchUp = 'current' | 'held' | 'retried' | 'behind';
 
+/**
+ * Why a delta dropped the cached calendar: the watermark fell behind the
+ * server's retention, the server lists a link the cache never tracked, or
+ * the cache tracked no link and now one is visible.
+ */
+type CalendarResetReason = 'retention' | 'new_link' | 'first_link';
+
+type DeltaSpan = Pick<Span, 'setAttr' | 'error'>;
+
 const eventKey = (id: string) => `GraphqlCalendarEvent:${id}`;
 const occurrenceKey = (id: string) => `GraphqlCalendarOccurrence:${id}`;
 const calendarKey = (id: string) => `GraphqlCalendar:${id}`;
@@ -77,7 +89,10 @@ export const refetchCalendarList = () =>
  * page's records are written, then one commit replaces the changed events'
  * occurrence sets, deletes what the server deleted, and advances the
  * watermark. Without a stored watermark there is nothing to bring forward;
- * page fetches establish it.
+ * page fetches establish it. An empty one means rows were cached while no
+ * inbox was visible: the server is asked for its watermark, and the cache
+ * resets once it lists a link. A link the stored watermark lacks is never
+ * adopted from a page, so the delta leaves it out and the server resets.
  *
  * A covered week is only as current as the last run, while a viewport REST
  * answered shows the server as it is. Reads therefore ask `catchUp` before
@@ -100,6 +115,7 @@ export class CalendarSyncController {
   private retrying = false;
   private readonly fetchChanges: FetchCalendarChanges;
   private readonly refetchCalendars: () => Promise<unknown>;
+  private readonly onReset: () => void;
   private readonly debounceMs: number;
 
   constructor(
@@ -108,6 +124,7 @@ export class CalendarSyncController {
   ) {
     this.fetchChanges = options.fetchChanges ?? fetchCalendarChanges;
     this.refetchCalendars = options.refetchCalendars ?? refetchCalendarList;
+    this.onReset = options.onReset ?? (() => {});
     this.debounceMs = options.debounceMs ?? DEFAULT_DEBOUNCE_MS;
   }
 
@@ -267,32 +284,57 @@ export class CalendarSyncController {
    * Returns the REST answers counted before this pass read the server, or
    * `undefined` when it stopped before the end of the change log.
    */
-  private async applyChanges(): Promise<number | undefined> {
+  private applyChanges(): Promise<number | undefined> {
+    return Telemetry.span('calendar.delta_sync', async (span) => {
+      const pass = await ResultAsync.fromPromise(
+        this.applyChangesIn(span),
+        (error) => error
+      );
+      if (pass.isErr()) {
+        span.error(pass.error);
+        throw pass.error;
+      }
+      return pass.value;
+    });
+  }
+
+  private async applyChangesIn(span: DeltaSpan): Promise<number | undefined> {
     const generation = cacheSessionGeneration.capture();
     const state = await this.host.calendarRange(SYNC_STATE_RANGE);
     const restAnswers = calendarRestAnswers();
     this.passRestAnswers = restAnswers;
-    if (state.kind === 'unsupported' || !state.watermark?.length)
+    if (state.kind === 'unsupported' || !state.watermark) return restAnswers;
+    span.setAttr('calendar.delta.links', state.watermark.length);
+    if (state.watermark.length === 0) {
+      // Rows cached while no inbox was visible: no change log reaches them,
+      // and the server answers an empty `since` with its watermark alone.
+      const current = await this.fetchChanges([]);
+      span.setAttr('calendar.delta.pages', 1);
+      const to = current.newWatermark.map(({ linkId, seq }) => ({
+        linkId,
+        seq,
+      }));
+      if (to.length > 0) await this.reset(to, generation, span, 'first_link');
       return restAnswers;
+    }
     let since = state.watermark;
     let calendarsChanged = false;
     let hasMore = false;
+    let pages = 0;
     for (let page = 0; page < MAX_DELTA_PAGES && !this.disposed; page += 1) {
       const changes = await this.fetchChanges(since);
+      pages += 1;
+      span.setAttr('calendar.delta.pages', pages);
       const to = changes.newWatermark.map(({ linkId, seq }) => ({
         linkId,
         seq,
       }));
       if (changes.resetRequired) {
-        // Visible ranges observe the cleared coverage and refetch.
-        await this.host.calendarCommit(
-          {
-            reset: true,
-            watermark: { kind: 'merge', links: to },
-          },
-          generation
-        );
-        await this.refetchCalendars();
+        const tracked = new Set(since.map((link) => link.linkId));
+        const reason = to.some((link) => !tracked.has(link.linkId))
+          ? 'new_link'
+          : 'retention';
+        await this.reset(to, generation, span, reason);
         return restAnswers;
       }
       const visible = new Set(to.map((link) => link.linkId));
@@ -323,9 +365,30 @@ export class CalendarSyncController {
       if (!hasMore) break;
       since = to;
     }
+    span.setAttr('calendar.delta.has_more', hasMore);
     if (calendarsChanged) await this.refetchCalendars();
     if (hasMore) this.markStale('continue');
     return hasMore || this.disposed ? undefined : restAnswers;
+  }
+
+  /**
+   * Drops every cached occurrence, event and covered span and starts over
+   * from the server's watermark. Visible ranges observe the cleared coverage
+   * and refetch.
+   */
+  private async reset(
+    to: CalendarLinkWatermarkWire[],
+    generation: string,
+    span: DeltaSpan,
+    reason: CalendarResetReason
+  ): Promise<void> {
+    span.setAttr('calendar.delta.reset', reason);
+    await this.host.calendarCommit(
+      { reset: true, watermark: { kind: 'merge', links: to } },
+      generation
+    );
+    this.onReset();
+    await this.refetchCalendars();
   }
 }
 
