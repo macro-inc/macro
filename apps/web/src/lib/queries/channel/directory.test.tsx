@@ -1536,19 +1536,42 @@ describe('cached channel directory', () => {
   });
 
   it.each([
-    { shape: 'the walk left out', listed: false },
-    { shape: 'the walk listed', listed: true },
+    {
+      shape: 'the walk left out',
+      listed: false,
+      loss: 'its record was removed',
+      kept: false,
+    },
+    {
+      shape: 'the walk listed',
+      listed: true,
+      loss: 'its record was removed',
+      kept: false,
+    },
+    {
+      shape: 'the walk left out',
+      listed: false,
+      loss: 'the cache kept it as a nonmember',
+      kept: true,
+    },
+    {
+      shape: 'the walk listed',
+      listed: true,
+      loss: 'the cache kept it as a nonmember',
+      kept: true,
+    },
   ])(
-    'reads a channel $shape again when it is rejoined without a field after its record was removed',
-    async ({ listed }) => {
+    'reads a channel $shape again when it is rejoined without a field after $loss',
+    async ({ listed, kept }) => {
       const options: CachedDirectoryOptions = {
         pageAll: async () =>
           listed
             ? [directoryChannel('a'), directoryChannel('x')]
             : [directoryChannel('a')],
       };
+      const server = [channelRecord('a'), channelRecord('x')];
       const { cache, directory, reopen, hydrate } = mountCachedDirectory(
-        [channelRecord('a'), channelRecord('x')],
+        server,
         options
       );
       const names = () =>
@@ -1570,8 +1593,11 @@ describe('cached channel directory', () => {
       await vi.waitFor(() => expect(directory.complete()).toBe(true));
       const readsBefore = hydrate.mock.calls.length;
 
-      // The viewer loses it: its record is removed.
-      cache.records.delete(`GraphqlSoupChannel:${channelUuid('x')}`);
+      // The viewer loses it. A private channel's record is removed; a public
+      // or team channel's is updated, and the cache keeps it.
+      server[1] = channelRecord('x', { isParticipant: false });
+      if (kept) cache.put(server[1], { sourceHash: 'x-left' });
+      else cache.records.delete(`GraphqlSoupChannel:${channelUuid('x')}`);
       cache.put(channelRecord('a', { name: 'renamed' }), { sourceHash: 'a-2' });
       reopen();
       await vi.waitFor(() => expect(names()).toEqual(['a']));
@@ -1582,7 +1608,8 @@ describe('cached channel directory', () => {
       options.byIdGate = new Promise<void>((done) => {
         release = done;
       });
-      cache.put(channelRecord('x'), { incomplete: true, sourceHash: 'x-2' });
+      server[1] = channelRecord('x');
+      cache.put(server[1], { incomplete: true, sourceHash: 'x-2' });
       reopen();
       await vi.waitFor(() =>
         expect(hydrate.mock.calls.length).toBeGreaterThan(readsBefore)
@@ -1601,6 +1628,31 @@ describe('cached channel directory', () => {
       ).toEqual(['a', 'x']);
     }
   );
+
+  it('leaves out a listed channel once a by-id read finds it gone after the cache held it whole and then without a field', async () => {
+    const server = [channelRecord('a'), channelRecord('x')];
+    const { cache, directory, reopen, hydrate } = mountCachedDirectory(server, {
+      pageAll: async () => [directoryChannel('a'), directoryChannel('x')],
+    });
+    cache.put(channelRecord('a'));
+    cache.put(channelRecord('x'));
+    await vi.waitFor(() => expect(directory.channels()).toHaveLength(2));
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    expect(hydrate).not.toHaveBeenCalled();
+
+    // Rewritten without a field, then gone from the server: what the walk
+    // listed of it no longer holds.
+    server.splice(1, 1);
+    cache.put(channelRecord('x'), { incomplete: true, sourceHash: 'x-2' });
+    reopen();
+    await vi.waitFor(() => expect(hydrate).toHaveBeenCalled());
+    await vi.waitFor(() => expect(ids(directory.channels())).toEqual(['a']));
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    await vi.waitFor(() =>
+      expect(directory.lookup(channelUuid('x')).status).toBe('missing')
+    );
+  });
 
   it('leaves out a listed channel the cache never held once a by-id read finds it gone', async () => {
     let release!: () => void;

@@ -200,8 +200,11 @@ export function lookupChannel(
   unconfirmed: Readonly<Record<string, true>> = NO_IDS
 ): ChannelLookup {
   const channel = state.records[channelId];
-  if (channel)
-    return channel.isParticipant ? { status: 'loaded', channel } : MISSING;
+  if (channel) {
+    if (channel.isParticipant) return { status: 'loaded', channel };
+    // A by-id read is deciding it: the viewer may have joined it again.
+    return unconfirmed[channelId] ? PENDING : MISSING;
+  }
   // No channel has it, and no read could say so.
   if (!isChannelId(channelId)) return MISSING;
   if (unconfirmed[channelId]) return PENDING;
@@ -952,7 +955,7 @@ export type FallbackEvidence = {
  * - A change the cache saw since is at least as new as the page that listed
  *   the channel.
  * - A listed record the cache held unchanged is as of before that read, so
- *   the network's row wins.
+ *   the network's row wins, until a by-id read finds the channel absent.
  * - A listed channel the cache never held may have gone since with nothing
  *   left in the cache for its removal to reach: the network's row stands
  *   until a by-id read finds the channel absent.
@@ -965,7 +968,7 @@ export function fallbackChannels(
   network: readonly DirectoryChannel[],
   evidence: FallbackEvidence
 ): DirectoryChannel[] {
-  const { changes, seen, confirmed } = evidence;
+  const { changes, confirmed } = evidence;
   const channels: DirectoryChannel[] = [];
   const listed = new Set<string>();
   for (const channel of network) {
@@ -973,7 +976,7 @@ export function fallbackChannels(
     const change = changes.get(channel.id);
     if (change !== undefined) {
       if (change) channels.push(change);
-    } else if (seen.has(channel.id) || confirmed[channel.id] !== 'absent') {
+    } else if (confirmed[channel.id] !== 'absent') {
       channels.push(channel);
     }
   }
@@ -984,33 +987,29 @@ export function fallbackChannels(
 }
 
 /** The channels `fallbackChannels` decides by a by-id read: listed ones the
- * cache never held, changed ones the network did not list, and ones the
- * cache holds without every field (`incomplete`) that the rows leave out
- * (the network did not list them, or the cache removed their record since):
- * a channel joined after the walk read its page, or rejoined after its
- * record was removed, can be cached first by a read without the directory's
- * fields, and only a by-id read lands it with them. */
+ * cache never held, changed ones the network did not list, and every one the
+ * cache holds without every field (`incomplete`). What the walk or the cache
+ * last showed of such a channel no longer holds: one joined after the walk
+ * read its page, or rejoined after the viewer lost it (its record removed,
+ * or kept as a nonmember's), can be cached first by a read without the
+ * directory's fields, and only a by-id read lands it with them. */
 export function fallbackConfirmations(
   network: readonly DirectoryChannel[],
   evidence: FallbackEvidence,
   incomplete: readonly string[] = []
 ): string[] {
   const { changes, seen } = evidence;
-  const ids: string[] = [];
+  const ids = new Set<string>();
   const listed = new Set<string>();
   for (const { id } of network) {
     listed.add(id);
-    if (!seen.has(id) && !changes.has(id)) ids.push(id);
+    if (!seen.has(id) && !changes.has(id)) ids.add(id);
   }
-  const unlisted = new Set<string>();
   for (const [id, change] of changes)
-    if (change && !listed.has(id)) unlisted.add(id);
+    if (change && !listed.has(id)) ids.add(id);
   // No channel has an id no read can parse.
-  for (const id of incomplete)
-    if ((!listed.has(id) || changes.get(id) === null) && isChannelId(id))
-      unlisted.add(id);
-  ids.push(...unlisted);
-  return ids;
+  for (const id of incomplete) if (isChannelId(id)) ids.add(id);
+  return [...ids];
 }
 
 /** Whether the fallback's rows hold a channel a by-id read decides, by what
@@ -1348,9 +1347,9 @@ export function createCachedChannelDirectory(
    * viewer may have joined it), proves nothing of the record now cached:
    * forget it, so the channel is read again. A channel a confirming read
    * returned is shown as the cache holds it, so a later write needs no read;
-   * once the cache removes its record (`removed`), that read proves nothing
-   * of the channel's next record, which a rejoin may first write without a
-   * field. */
+   * once the cache removes its record (`removed`) or holds it without a
+   * field, that read proves nothing of the channel's record now, which a
+   * rejoin may first write without a field. */
   const renewStaleReads = (
     read: ChannelDirectoryRead,
     removed: readonly string[]
@@ -1360,7 +1359,11 @@ export function createCachedChannelDirectory(
       read.incompleteIds.filter((id) => outcomes[id] === 'returned')
     );
     reader.renewChanged();
-    confirm.renew(removed);
+    const confirmed = untrack(confirm.outcomes);
+    confirm.renew([
+      ...removed,
+      ...read.incompleteIds.filter((id) => confirmed[id] === 'returned'),
+    ]);
     confirm.renewChanged();
   };
 
