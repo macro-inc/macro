@@ -28,9 +28,10 @@ STACK=${STACK:-https://localhost:23209}
 NEW_CHECKOUT=${NEW_CHECKOUT:-$repo}
 OLD_CHECKOUT=${OLD_CHECKOUT:-$repo-main}
 AA_CHECKOUT=${AA_CHECKOUT:-$repo-main2}
-NEW_REF=${NEW_REF:-21bd07dc3f6}
-# The PR head merges main in; its second parent is the main it was tested on.
-OLD_REF=${OLD_REF:-$(git -C "$NEW_CHECKOUT" rev-parse "$NEW_REF^2")}
+NEW_REF=${NEW_REF:-3e87f109140}
+# The main the PR head was tested on: the second parent of a merge of main,
+# else where the head left main.
+OLD_REF=${OLD_REF:-$(git -C "$NEW_CHECKOUT" rev-parse -q --verify "$NEW_REF^2" || git -C "$NEW_CHECKOUT" merge-base "$NEW_REF" origin/main)}
 NEW_PORT=${NEW_PORT:-23250}
 OLD_PORT=${OLD_PORT:-23251}
 SEEDS=(${SEEDS:-A1 B1 C1 M1 D1})
