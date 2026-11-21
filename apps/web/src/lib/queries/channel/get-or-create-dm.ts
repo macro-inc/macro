@@ -137,11 +137,14 @@ export function getOrCreateDirectMessageChannel(
 }
 
 /**
- * The viewer's existing DM with a person, without creating one: the one the
- * server's get-or-create would reuse. Asked of the server each time, since
- * the DM may be one the viewer's directory has not loaded yet. The server
- * looks up people only; agents are opened through their own DM flow
- * (`openTeamAgentDirectMessage`), so a bot answers none without asking.
+ * The viewer's existing DM with a person, without creating one: among the
+ * DMs the viewer is still in, the one the server's get-or-create would reuse,
+ * as the joined channel list it replaces showed it. A DM the viewer left is
+ * not answered, though get-or-create may still reuse it. Asked of the server
+ * each time, since the DM may be one the viewer's directory has not loaded
+ * yet. The server looks up people only; agents are opened through their own
+ * DM flow (`openTeamAgentDirectMessage`), so a bot answers none without
+ * asking.
  */
 export function existingDirectMessage(
   viewerId: string,
