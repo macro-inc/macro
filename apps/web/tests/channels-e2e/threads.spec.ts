@@ -1,4 +1,4 @@
-import { expect, failsSometimes, knownDefect, test } from './harness/fixtures';
+import { expect, failsSometimes, test } from './harness/fixtures';
 import { Conversation } from './harness/messages';
 
 // If this fails, a reply is lost, lands in the channel instead of under the
@@ -443,10 +443,6 @@ test('THR-10 “Reply” on a message puts the keyboard in the reply box, so typ
   ben,
   people,
 }) => {
-  // Product defect: the reply box opens, but the keyboard stays on the
-  // “Reply” button, so what is typed next does not go into the box until
-  // the person clicks it.
-  knownDefect('both');
   const channel = await ada.createChannel({ members: [people.ben] });
   const root = await ben.post(channel.id, 'a question');
   const view = new Conversation(page, channel.id);

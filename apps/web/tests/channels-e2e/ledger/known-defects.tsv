@@ -1,11 +1,8 @@
 test	builds	defect
 NAV-05	both	Reading forward from an old message jumps over part of the history (from message 150 to about 217 of 230)
-THR-10	both	The hover Reply button opens the reply box without putting the keyboard in it, so the first typed characters are lost
-KEY-06	both	Enter on a selected message opens the reply box but leaves the keyboard in the message list
 CHN-04	both	A rename does not reach the header and composer of another member who has the channel open, until reload
 CHN-14	both	A new channel with no messages shows neither its created line nor an empty state
 UNR-05	both	A mention of me shows only the plain unread mark on the channel's row, never a count of mentions
 UNR-09	both	The first message in a new channel leaves the other member's row unmarked; the second marks it
-UNR-10	both	A row shown while the list is being searched is not marked unread when a message arrives, until the search is closed
 REC-04	both	A connection lost in the first seconds after the app opened makes it say that a new version is out and offer a reload, which without a connection loses the app: the code it fetches then fails to load (5 of 5 runs on each build)
 CHN-16	both	A rename saved while the page is still reading its list of channels never shows in the header until a reload: the list answered before the rename puts the old name back and is not read again. A person with thousands of channels reads the list for seconds after every load

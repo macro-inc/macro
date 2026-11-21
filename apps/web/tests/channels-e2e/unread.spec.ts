@@ -389,9 +389,8 @@ test('UNR-10 a row found with “Search conversations” is marked unread at onc
   ben,
   people,
 }) => {
-  // Known defect: rows shown while the list is being searched are not marked
-  // until the search is closed.
-  knownDefect('both');
+  // Was a defect in every run; since the base of 2026-11-21 the row is marked
+  // in most runs (4 of 5 on each build).
   const made = await channelsNamed(ada, [people.ben], 'open', 'found');
   await ada.post(made.found, 'read before');
   await new ChannelView(page, made.open).open();
@@ -402,5 +401,5 @@ test('UNR-10 a row found with “Search conversations” is marked unread at onc
 
   await ben.post(made.found, 'while you were searching');
 
-  await expect(unreadDot(found)).toBeVisible();
+  await failsSometimes(() => expect(unreadDot(found)).toBeVisible());
 });
