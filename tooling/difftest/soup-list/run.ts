@@ -11,14 +11,14 @@
  *     [--instance gqlsoup]
  */
 import { parseArgs } from 'node:util';
-import { type Browser, launch, closeBrowser, openUser, type UserSession } from './lib/browser';
+import { type Browser, launch, closeBrowser, loadProbe, openUser, type UserSession } from './lib/browser';
 import { MUTANTS, plantMutant, type Mutant } from './lib/mutants';
 import { startLoad } from './lib/load';
 import { pool } from './lib/pool';
 import { Coverage, Rng } from './lib/rng';
 import { emptyCallerResult, runCallerLane, runOneShots } from './lib/suite-callers';
 import { emptyFuzzResult, runFuzzLane } from './lib/suite-fuzz';
-import { emptySeqResult, openTruthPage, runSequenceLane, type SeqResult } from './lib/suite-seq';
+import { emptySeqResult, openTruthPage, runSequenceLane, setAaControl, type SeqResult } from './lib/suite-seq';
 import { buildWorld, linkPullRequests, type UserKey, USER_KEYS, type World } from './lib/world';
 
 const { values: a } = parseArgs({
@@ -45,12 +45,15 @@ const { values: a } = parseArgs({
     stack: { type: 'string', default: 'https://localhost:23209' },
     instance: { type: 'string', default: 'gqlsoup' },
     scale: { type: 'string', default: 'full' },
+    /** A/A control: main's app and probe on both sides (run.sh's aa pass). */
+    aa: { type: 'boolean', default: false },
   },
 });
 if (!a.seed || !a.label || !a.out) throw new Error('--seed, --label and --out are required');
 const seed = a.seed;
 const origins = { old: a.old as string, new: a.new as string };
-const probePaths = { new: '/src/difftest-probe/new.tsx', old: '/src/difftest-probe/old.tsx' };
+const probePaths = { new: a.aa ? '/src/difftest-probe/old.tsx' : '/src/difftest-probe/new.tsx', old: '/src/difftest-probe/old.tsx' };
+if (a.aa) setAaControl();
 const started = Date.now();
 const log = (line: string) => console.log(`[${((Date.now() - started) / 1000).toFixed(0).padStart(5)}s] ${a.label}: ${line}`);
 
@@ -183,7 +186,7 @@ try {
 
   // Each lane is started by the lane pool below (thunks), so that at most
   // --lanes app pages sets load from the dev servers at once.
-  const fuzzLanes = fuzzUsers.map((user) => () =>
+  const fuzzLanes = (fuzzPer > 0 ? fuzzUsers : []).map((user) => () =>
     lane(`fuzz:${user}`, errors, async () => {
       const s = await session(b, main, user);
       const bases = Object.entries((await s.pages.new.evaluate(() => (window as any).__probe.bases())) as Record<string, any>).map(
@@ -243,10 +246,8 @@ try {
       const planted = m === 'control' ? undefined : await plantMutant(s.pages.new, m);
       if (planted) {
         await s.pages.new.reload({ waitUntil: 'domcontentloaded' });
-        await s.pages.new.waitForFunction(() => document.readyState === 'complete');
-        await s.pages.new.evaluate(async (p) => {
-          await import(/* @vite-ignore */ p);
-        }, probePaths.new);
+        // The probe import retries while Vite serves the reloaded module graph.
+        await loadProbe(s, 'new', probePaths.new);
       }
       const truth = await serialOpen(() => openTruthPage(b, w.users.owner.email, origins.old, probePaths.old, w.users.owner.browserCookies()));
       const result = emptySeqResult();

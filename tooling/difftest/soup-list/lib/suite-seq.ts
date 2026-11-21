@@ -583,6 +583,12 @@ function tally(map: Record<string, LiveTally>, reader: string): LiveTally {
   return (map[reader] ??= { both: 0, neither: 0, oldOnly: 0, newOnly: 0, unaffected: 0, latencyOld: [], latencyNew: [] });
 }
 
+let aaControl = false;
+/** Main's app on both sides: every reader mounts the same caller on each. */
+export function setAaControl() {
+  aaControl = true;
+}
+
 function readersFor(ctx: SeqContext, focus: Ent[], seq: number): Reader[] {
   const { world, rng, coverage, viewer } = ctx;
   const k = (name: string) => `s${seq}${name.replace(/\W/g, '')}${Math.random().toString(36).slice(2, 6)}`;
@@ -592,7 +598,7 @@ function readersFor(ctx: SeqContext, focus: Ent[], seq: number): Reader[] {
     { key: k('chats'), caller: 'home.recentChats', params: { limit: 12 } },
     { key: k('email'), caller: 'email.recent', params: { term: '' } },
     { key: k('fig'), caller: 'fig.libraries', params: { documentId: figDoc?.id } },
-    { key: k('slash'), caller: 'slash.prs', oldCaller: 'slash.prsOracle', params: {} },
+    aaControl ? { key: k('slash'), caller: 'slash.prs', params: {} } : { key: k('slash'), caller: 'slash.prs', oldCaller: 'slash.prsOracle', params: {} },
   ];
   const docs = focus.filter((e) => ['md', 'task', 'snippet', 'skill'].includes(e.kind) && e.id);
   for (const d of rng.sample(docs, 2)) readers.push({ key: k('hover'), caller: 'hover', params: { documentId: d.id } });
