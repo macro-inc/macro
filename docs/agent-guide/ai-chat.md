@@ -2031,7 +2031,8 @@ a separate group. Its dashboard supports markdown, timelines, entity lists,
 channel messages, item cards, calendar agendas, tags and bot token cards
 (minted in the viewer's browser, so the secret never reaches the agent), using
 the same full-width view as AI chat. A channel message shows its thread in a
-card headed by the channel's name and icon (a group chat's name shortened as in
+full-width card headed by the channel's name and icon (or by the view's title,
+when the agent gave one, so it shows once) (a group chat's name shortened as in
 the channel list; `Channel` when the viewer can't see it) over `Thread`, with
 `Open in channel`, which opens the channel at that message. Clicking a message
 opens it there, and a reply opens inside its thread. An item card (one to four items: a document or

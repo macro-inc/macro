@@ -7,6 +7,7 @@ const TITLED_TYPES: ReadonlySet<WidgetType> = new Set<WidgetType>([
   'cards',
   'timeline',
   'tags',
+  'channelMessage',
 ]);
 
 /**

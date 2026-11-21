@@ -124,4 +124,19 @@ describe('ChannelMessage', () => {
     view.getByText('Ada, Grace and 3 others');
     expect(view.getByTestId('icon').dataset.icon).toBe('private');
   });
+
+  it('shows a view title it was handed once, instead of the channel and "Thread"', () => {
+    channelNames = { 'channel-1': 'launch-planning' };
+    const view = render(() => (
+      <ChannelMessage
+        channelId="channel-1"
+        messageId="message-1"
+        title="Thread in #launch-planning"
+      />
+    ));
+    view.getByText('Thread in #launch-planning');
+    expect(view.queryByText('launch-planning')).toBeNull();
+    expect(view.queryByText('Thread')).toBeNull();
+    view.getByRole('button', { name: 'Open in channel' });
+  });
 });
