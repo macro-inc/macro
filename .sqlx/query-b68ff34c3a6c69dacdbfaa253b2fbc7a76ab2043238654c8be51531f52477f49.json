@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT agent_user_id, team_id, request_id, mailbox_id, address, state,\n                   last_error, fake_provider, updated_at\n            FROM team_agent_inboxes\n            WHERE state IN ('pausing', 'releasing')\n              AND updated_at < $1\n              AND ($2::timestamptz IS NULL OR (updated_at, agent_user_id) > ($2, $3))\n            ORDER BY updated_at, agent_user_id\n            LIMIT $4\n            ",
+  "query": "\n            SELECT i.agent_user_id, i.team_id, i.request_id, i.mailbox_id, i.address, i.state,\n                   i.last_error, i.fake_provider, i.updated_at\n            FROM team_agent_inboxes i\n            WHERE i.state IN ('provisioning', 'active', 'failed')\n              AND i.updated_at > $1\n              AND i.updated_at < $2\n              AND NOT EXISTS (SELECT 1 FROM team_agents ta WHERE ta.user_id = i.agent_user_id)\n            ORDER BY i.updated_at\n            LIMIT $3\n            ",
   "describe": {
     "columns": [
       {
@@ -53,7 +53,6 @@
       "Left": [
         "Timestamptz",
         "Timestamptz",
-        "Text",
         "Int8"
       ]
     },
@@ -69,5 +68,5 @@
       false
     ]
   },
-  "hash": "65f95fd2f9c52659622f4d267b455685e49731d3c66fa039b6d9b5528db1eee7"
+  "hash": "b68ff34c3a6c69dacdbfaa253b2fbc7a76ab2043238654c8be51531f52477f49"
 }

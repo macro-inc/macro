@@ -1,15 +1,14 @@
 //! The agent inbox sweep: finishes wind-downs email_service hasn't
 //! confirmed (an agent removed, a team deleted, a provision that lost the
-//! race to a removal). Every call it makes is idempotent, so every replica
-//! may run it.
+//! race to a removal). Each round claims its marks, moving their next
+//! attempt out by a backoff, so replicas split the work and a mark that
+//! keeps failing is retried less often.
 
 use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::domain::inbox::{
-    AgentInboxRepository, AgentMailboxes, InboxService, SWEEP_BATCH, SweepRound,
-};
+use crate::domain::inbox::{AgentInboxRepository, AgentMailboxes, InboxService, SWEEP_BATCH};
 
 /// How long after start the first round runs.
 pub const INBOX_SWEEP_INITIAL_DELAY: Duration = Duration::from_secs(30);
@@ -17,8 +16,9 @@ pub const INBOX_SWEEP_INITIAL_DELAY: Duration = Duration::from_secs(30);
 /// How long between rounds.
 pub const INBOX_SWEEP_INTERVAL: Duration = Duration::from_secs(60);
 
-/// Run sweep rounds until `shutdown` resolves; a full page runs the next
-/// page at once. Each round is its own trace (`team_agents.inbox.sweep`).
+/// Run sweep rounds until `shutdown` resolves; a round that claimed a full
+/// batch runs the next at once. Each round is its own trace
+/// (`team_agents.inbox.sweep`).
 pub async fn run_inbox_sweep<Repository, Mailboxes>(
     inboxes: Arc<InboxService<Repository, Mailboxes>>,
     initial_delay: Duration,
@@ -30,27 +30,23 @@ pub async fn run_inbox_sweep<Repository, Mailboxes>(
 {
     tokio::pin!(shutdown);
     let mut wait = initial_delay;
-    let mut after = None;
     loop {
         tokio::select! {
             () = &mut shutdown => return,
             () = tokio::time::sleep(wait) => {}
         }
-        // A full page goes on to the next one at once; the end of the list
-        // (or a failed read) starts over after `interval`. Marks that can't
-        // be finished stay behind the cursor, so they are never re-read
-        // until the next pass.
-        (wait, after) = match inboxes
-            .sweep_once(chrono::Utc::now(), after.as_ref(), SWEEP_BATCH)
-            .await
-        {
-            Ok(SweepRound {
-                next: Some(next), ..
-            }) => (Duration::ZERO, Some(next)),
-            Ok(SweepRound { next: None, .. }) => (interval, None),
+        // A round in flight is dropped at shutdown: every call it makes is
+        // idempotent and its marks stay for the next start.
+        let round = tokio::select! {
+            () = &mut shutdown => return,
+            round = inboxes.sweep_once(chrono::Utc::now(), SWEEP_BATCH) => round,
+        };
+        wait = match round {
+            Ok(round) if round.claimed >= SWEEP_BATCH as usize => Duration::ZERO,
+            Ok(_) => interval,
             Err(error) => {
                 tracing::warn!(error = ?error, "agent inbox sweep failed");
-                (interval, None)
+                interval
             }
         };
     }

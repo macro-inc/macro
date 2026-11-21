@@ -420,6 +420,7 @@ impl From<super::inbox::InboxError> for TeamAgentError {
         match error {
             InboxError::NotConfigured => Self::InboxesNotConfigured,
             InboxError::NoInbox => Self::NoInbox,
+            InboxError::NotSeated => Self::NotFound,
             InboxError::Unavailable(report) => Self::InboxUnavailable(report),
             InboxError::Internal(report) => Self::Internal(report),
         }

@@ -160,30 +160,23 @@ async fn the_inbox_record_outlives_the_agents_seat_and_its_team(pool: PgPool) {
         .await
         .unwrap();
 
-    // Still there for the sweep, which finds it once it is old enough.
+    // Still there for the sweep, which claims it once its first attempt
+    // is due, and not again until its backoff has passed.
     let record = inboxes.get(&user(AGENT)).await.unwrap().unwrap();
     assert_eq!(record.state, AgentInboxState::Pausing);
-    let later = record.updated_at + chrono::Duration::minutes(5);
+    let due = record.updated_at + chrono::Duration::minutes(2);
     assert_eq!(
         inboxes
-            .unsettled(record.updated_at, None, 10)
+            .claim_unsettled(record.updated_at, 10)
             .await
             .unwrap(),
         vec![]
     );
     assert_eq!(
-        inboxes.unsettled(later, None, 10).await.unwrap(),
-        vec![record.clone()]
+        inboxes.claim_unsettled(due, 10).await.unwrap(),
+        vec![record]
     );
-    // Past the cursor, nothing is left.
-    let cursor = SweepCursor {
-        updated_at: record.updated_at,
-        agent: AGENT.to_owned(),
-    };
-    assert_eq!(
-        inboxes.unsettled(later, Some(&cursor), 10).await.unwrap(),
-        vec![]
-    );
+    assert_eq!(inboxes.claim_unsettled(due, 10).await.unwrap(), vec![]);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -227,4 +220,43 @@ async fn a_live_update_never_overwrites_an_inbox_being_wound_down(pool: PgPool) 
             wound_down
         );
     }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_seated_reserve_needs_the_agent_on_the_team(pool: PgPool) {
+    team_with_agent(&pool).await;
+    let inboxes = PgAgentInboxes::new(pool.clone());
+    let other_team = Uuid::from_u128(0x0193_a1b2_0000_7000_8000_0000_0000_00bb);
+
+    assert_eq!(
+        inboxes
+            .reserve_seated(&user(AGENT), other_team, Uuid::from_u128(1))
+            .await
+            .unwrap(),
+        None
+    );
+    let reserved = inboxes
+        .reserve_seated(&user(AGENT), TEAM, Uuid::from_u128(1))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(reserved.state, AgentInboxState::Provisioning);
+    assert_eq!(
+        inboxes.seated_agents(TEAM).await.unwrap(),
+        vec![user(AGENT)]
+    );
+
+    PgTeamAgentsRepo::new(pool.clone())
+        .remove_seat(&user(AGENT))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        inboxes
+            .reserve_seated(&user(AGENT), TEAM, Uuid::from_u128(2))
+            .await
+            .unwrap(),
+        None
+    );
+    assert_eq!(inboxes.seated_agents(TEAM).await.unwrap(), vec![]);
 }

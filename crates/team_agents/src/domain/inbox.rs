@@ -289,34 +289,62 @@ pub trait AgentInboxRepository: Send + Sync + 'static {
         update: &InboxUpdate,
     ) -> impl Future<Output = Result<Option<InboxRecord>, Self::Err>> + Send;
 
-    /// Records marked `pausing` or `releasing` that last changed before
-    /// `changed_before`, in (`updated_at`, agent) order after `after`, at
-    /// most `limit`.
-    fn unsettled(
+    /// [`Self::update`] only while the record is still in `from`; `None`
+    /// otherwise, and nothing changes. Settling a wind-down goes through
+    /// this, so a pause finishing late never overwrites a release.
+    fn settle(
         &self,
+        agent: &MacroUserIdStr<'_>,
+        from: AgentInboxState,
+        update: &InboxUpdate,
+    ) -> impl Future<Output = Result<Option<InboxRecord>, Self::Err>> + Send;
+
+    /// Live records (`provisioning`, `active`, `failed`) that changed between
+    /// `changed_after` and `changed_before` and whose agent no longer holds a
+    /// team seat, at most `limit`: an inbox a provision made while its team
+    /// was being deleted.
+    fn seatless_live(
+        &self,
+        changed_after: DateTime<Utc>,
         changed_before: DateTime<Utc>,
-        after: Option<&SweepCursor>,
         limit: u32,
     ) -> impl Future<Output = Result<Vec<InboxRecord>, Self::Err>> + Send;
-}
 
-/// Where a sweep page ended: the next one starts after it.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SweepCursor {
-    /// The last record's `updated_at`.
-    pub updated_at: DateTime<Utc>,
-    /// The last record's agent.
-    pub agent: String,
+    /// Claim at most `limit` records marked `pausing` or `releasing` whose
+    /// next attempt is due at `now` and that have had fewer than
+    /// [`MAX_SWEEP_ATTEMPTS`]: each claimed record's next attempt moves out
+    /// by its backoff, so replicas split the work and a mark that keeps
+    /// failing is tried less and less often.
+    fn claim_unsettled(
+        &self,
+        now: DateTime<Utc>,
+        limit: u32,
+    ) -> impl Future<Output = Result<Vec<InboxRecord>, Self::Err>> + Send;
+
+    /// Like [`Self::reserve`] (created `provisioning`), but only while the
+    /// agent holds a seat on `team_id`, checked in the same statement;
+    /// `None` when it doesn't.
+    fn reserve_seated(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        team_id: Uuid,
+        request_id: Uuid,
+    ) -> impl Future<Output = Result<Option<InboxRecord>, Self::Err>> + Send;
+
+    /// Every agent holding a seat on `team_id`.
+    fn seated_agents(
+        &self,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Self::Err>> + Send;
 }
 
 /// What one sweep round did.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SweepRound {
-    /// How many unsettled marks it found.
-    pub found: usize,
-    /// Where the next page starts, when this one was full; `None` when the
-    /// sweep reached the end.
-    pub next: Option<SweepCursor>,
+    /// How many marks it claimed.
+    pub claimed: usize,
+    /// How many marks and seatless inboxes it couldn't finish.
+    pub failed: usize,
 }
 
 /// Why an inbox request failed.
@@ -328,6 +356,9 @@ pub enum InboxError {
     /// The agent has no inbox.
     #[error("the agent has no inbox")]
     NoInbox,
+    /// The agent no longer holds a seat on its team.
+    #[error("the agent is no longer on its team")]
+    NotSeated,
     /// email_service didn't answer.
     #[error("email inboxes are unavailable right now")]
     Unavailable(rootcause::Report),
@@ -510,24 +541,6 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes>
             .map_or(record.view(), |record| record.view()))
     }
 
-    /// The agent's mailbox id: the stored one, else email_service's answer,
-    /// since a mailbox it finished creating in the background may not be
-    /// stored yet.
-    async fn mailbox_id(
-        &self,
-        agent: &MacroUserIdStr<'_>,
-        record: &InboxRecord,
-    ) -> Result<Option<Uuid>, MailboxError> {
-        if let Some(mailbox_id) = record.mailbox_id {
-            return Ok(Some(mailbox_id));
-        }
-        Ok(self
-            .mailboxes
-            .status(agent)
-            .await?
-            .map(|view| view.mailbox_id))
-    }
-
     /// Pause or release the agent's mailbox. The record is marked first
     /// (`pausing` or `releasing`, created if the agent has none), so a
     /// provision in flight sees it and finishes it; then email_service is
@@ -543,30 +556,37 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes>
         step: WindDown,
         now: DateTime<Utc>,
     ) -> Result<(), InboxError> {
-        let (marked, settled) = match step {
-            WindDown::Pause => (AgentInboxState::Pausing, AgentInboxState::Paused),
-            WindDown::Release => (AgentInboxState::Releasing, AgentInboxState::Released),
-        };
+        match self.mark(team_id, agent, step, now).await? {
+            Marked::Done => Ok(()),
+            Marked::Pending { record, marked_at } => {
+                self.finish(agent, step, &record, marked_at, now).await
+            }
+        }
+    }
+
+    /// The first half of a wind-down: mark the record (creating it if the
+    /// agent has none). Settles at once a record this call made, since no
+    /// provision ever reserved one.
+    async fn mark(
+        &self,
+        team_id: Uuid,
+        agent: &MacroUserIdStr<'_>,
+        step: WindDown,
+        now: DateTime<Utc>,
+    ) -> Result<Marked, InboxError> {
+        let (marked, settled) = step.states();
         let mark = Uuid::now_v7();
         let record = self
             .repository
             .reserve(agent, team_id, mark, marked)
             .await
             .map_err(InboxError::internal)?;
-        let keep = |state| InboxUpdate {
-            mailbox_id: record.mailbox_id,
-            address: record.address.clone(),
-            state,
-            last_error: record.last_error,
-            fake_provider: record.fake_provider,
-        };
-        // This call made the record: no provision ever reserved one, so
-        // nothing exists at the provider and email_service isn't asked. A
-        // removal never depends on email_service for an agent without an
-        // inbox.
+        // This call made the record: nothing exists at the provider and
+        // email_service isn't asked. A removal never depends on
+        // email_service for an agent without an inbox.
         if record.request_id == mark {
-            self.store(agent, keep(settled)).await?;
-            return Ok(());
+            self.settle(agent, marked, keep(&record, settled)).await?;
+            return Ok(Marked::Done);
         }
         let done_already = match step {
             // Already further down: a pause never undoes a release.
@@ -577,70 +597,110 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes>
             WindDown::Release => record.state == AgentInboxState::Released,
         };
         if done_already {
-            return Ok(());
+            return Ok(Marked::Done);
         }
-        let marked_at = if record.state == marked {
-            record.updated_at
-        } else {
-            self.store(agent, keep(marked)).await?;
-            now
-        };
-        let mailbox_id = match self.mailbox_id(agent, &record).await {
-            Ok(Some(mailbox_id)) => mailbox_id,
-            Ok(None) | Err(MailboxError::NotConfigured) => {
-                if now - marked_at >= SETTLE_WITHOUT_MAILBOX {
-                    self.store(agent, keep(settled)).await?;
-                }
-                return Ok(());
-            }
+        if record.state == marked {
+            let marked_at = record.updated_at;
+            return Ok(Marked::Pending { record, marked_at });
+        }
+        let record = self.store(agent, keep(&record, marked)).await?;
+        Ok(Marked::Pending {
+            record,
+            marked_at: now,
+        })
+    }
+
+    /// The second half: tell email_service, and settle the mark only on its
+    /// confirmation, and only while the record still carries this mark.
+    async fn finish(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        step: WindDown,
+        record: &InboxRecord,
+        marked_at: DateTime<Utc>,
+        now: DateTime<Utc>,
+    ) -> Result<(), InboxError> {
+        let (marked, settled) = step.states();
+        // Ask first: a mailbox email_service already paused, released or is
+        // releasing on its own needs no second call.
+        let view = match self.mailboxes.status(agent).await {
+            Ok(view) => view,
+            Err(MailboxError::NotConfigured) => None,
             Err(error) => return Err(InboxError::from(error)),
         };
-        let after = match step {
-            WindDown::Pause => match self.mailboxes.pause(agent).await {
+        let Some(view) = view else {
+            // Gone after we knew it, or never made: done once nothing can
+            // still make one.
+            if record.mailbox_id.is_some() || now - marked_at >= SETTLE_WITHOUT_MAILBOX {
+                self.settle(agent, marked, keep(record, settled)).await?;
+            }
+            return Ok(());
+        };
+        let after = match (step, view.state) {
+            (WindDown::Pause, AgentInboxState::Paused)
+            | (WindDown::Release, AgentInboxState::Released) => settled,
+            // email_service is deleting it on its own retries.
+            (_, AgentInboxState::Releasing) => return Ok(()),
+            (WindDown::Pause, _) => match self.mailboxes.pause(agent).await {
                 Ok(()) | Err(MailboxError::NotConfigured) => AgentInboxState::Paused,
                 Err(error) => return Err(InboxError::from(error)),
             },
-            WindDown::Release => match self.mailboxes.release(agent).await {
+            (WindDown::Release, _) => match self.mailboxes.release(agent).await {
                 Ok(ReleaseOutcome::Released) | Err(MailboxError::NotConfigured) => {
                     AgentInboxState::Released
                 }
                 // Still deleting: the mark stays for the sweep to confirm.
-                Ok(ReleaseOutcome::Releasing) => AgentInboxState::Releasing,
+                Ok(ReleaseOutcome::Releasing) => return Ok(()),
                 Err(error) => return Err(InboxError::from(error)),
             },
         };
-        self.store(
+        self.settle(
             agent,
+            marked,
             InboxUpdate {
-                mailbox_id: Some(mailbox_id),
+                mailbox_id: Some(view.mailbox_id),
                 last_error: None,
-                ..keep(after)
+                ..keep(record, after)
             },
         )
         .await?;
         Ok(())
     }
 
-    /// Finish wind-downs email_service hasn't confirmed: one page of at
-    /// most `limit` records marked `pausing` or `releasing` for longer than
-    /// [`SWEEP_AFTER`], after `after`. Marks it can't finish keep their place,
-    /// so the caller pages on with [`SweepRound::next`] instead of meeting
-    /// the same page again.
+    async fn settle(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        from: AgentInboxState,
+        update: InboxUpdate,
+    ) -> Result<(), InboxError> {
+        self.repository
+            .settle(agent, from, &update)
+            .await
+            .map(|_| ())
+            .map_err(InboxError::internal)
+    }
+
+    /// Finish wind-downs email_service hasn't confirmed: claim at most
+    /// `limit` marks that are due, and retry each. Also releases live inboxes
+    /// whose agent lost its seat without a mark ([`SEATLESS_WINDOW`]).
     #[tracing::instrument(
         name = "team_agents.inbox.sweep",
         skip_all,
-        fields(found = tracing::field::Empty, failed = tracing::field::Empty),
+        fields(
+            claimed = tracing::field::Empty,
+            failed = tracing::field::Empty,
+            oldest_mark_age_s = tracing::field::Empty,
+        ),
         err
     )]
     pub async fn sweep_once(
         &self,
         now: DateTime<Utc>,
-        after: Option<&SweepCursor>,
         limit: u32,
     ) -> Result<SweepRound, InboxError> {
         let records = self
             .repository
-            .unsettled(now - SWEEP_AFTER, after, limit)
+            .claim_unsettled(now, limit)
             .await
             .map_err(InboxError::internal)?;
         let mut failed = 0_usize;
@@ -658,27 +718,44 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes>
                 tracing::warn!(
                     error = ?error,
                     agent_user_id = %agent_credentials::telemetry_id(record.agent.as_ref()),
-                    "could not finish an inbox wind-down; a later round retries"
+                    "could not finish an inbox wind-down; it is retried after its backoff"
                 );
             }
         }
+        let seatless = self
+            .repository
+            .seatless_live(now - SEATLESS_WINDOW, now - SWEEP_AFTER, limit)
+            .await
+            .map_err(InboxError::internal)?;
+        for record in &seatless {
+            tracing::warn!(
+                agent_user_id = %agent_credentials::telemetry_id(record.agent.as_ref()),
+                "an agent inbox outlived its seat; releasing it"
+            );
+            if let Err(error) = self
+                .wind_down(record.team_id, &record.agent, WindDown::Release, now)
+                .await
+            {
+                failed += 1;
+                tracing::warn!(error = ?error, "could not release a seatless inbox; the sweep retries its mark");
+            }
+        }
         let span = tracing::Span::current();
-        span.record("found", records.len());
+        span.record("claimed", records.len());
         span.record("failed", failed);
-        let full = u32::try_from(records.len()).is_ok_and(|found| found >= limit);
+        if let Some(oldest) = records.iter().map(|record| record.updated_at).min() {
+            span.record("oldest_mark_age_s", (now - oldest).num_seconds());
+        }
         Ok(SweepRound {
-            found: records.len(),
-            next: records.last().filter(|_| full).map(|last| SweepCursor {
-                updated_at: last.updated_at,
-                agent: last.agent.as_ref().to_owned(),
-            }),
+            claimed: records.len(),
+            failed,
         })
     }
 
-    /// The team is being deleted: release every agent's inbox. Each one is
-    /// marked first, so whatever email_service doesn't confirm now the sweep
-    /// finishes; an error means some weren't even marked, and deleting the
-    /// team again retries them.
+    /// The team is being deleted: release every agent's inbox. Every one is
+    /// marked first; an error means a mark couldn't be stored, and deleting
+    /// the team again retries. Whatever email_service doesn't confirm now
+    /// the sweep finishes.
     #[tracing::instrument(
         name = "team_agents.inbox.release_team",
         skip_all,
@@ -686,23 +763,55 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes>
         err
     )]
     pub async fn release_team(&self, team_id: Uuid) -> Result<(), InboxError> {
-        let records = self
+        // Every seated agent too, inbox or not: marking one without an inbox
+        // records it released, so a provision that starts after this never
+        // makes one.
+        let mut agents = self
+            .repository
+            .seated_agents(team_id)
+            .await
+            .map_err(InboxError::internal)?;
+        for record in self
             .repository
             .list_for_team(team_id)
             .await
-            .map_err(InboxError::internal)?;
-        tracing::Span::current().record("inboxes", records.len());
-        let mut first_error = None;
-        for record in records {
-            if let Err(error) = self
-                .wind_down(team_id, &record.agent, WindDown::Release, Utc::now())
-                .await
+            .map_err(InboxError::internal)?
+        {
+            if !agents
+                .iter()
+                .any(|agent| agent.as_ref() == record.agent.as_ref())
             {
-                tracing::warn!(error = ?error, "could not release an agent's inbox");
-                first_error.get_or_insert(error);
+                agents.push(record.agent);
             }
         }
-        first_error.map_or(Ok(()), Err)
+        tracing::Span::current().record("inboxes", agents.len());
+        // Mark every inbox first: a failed mark fails the deletion, which
+        // retries it. Telling email_service may fail without that: the marks
+        // stay and the sweep finishes them.
+        let mut pending = Vec::new();
+        for agent in &agents {
+            let now = Utc::now();
+            if let Marked::Pending { record, marked_at } =
+                self.mark(team_id, agent, WindDown::Release, now).await?
+            {
+                pending.push((record, marked_at));
+            }
+        }
+        for (record, marked_at) in pending {
+            let _ = self
+                .finish(
+                    &record.agent,
+                    WindDown::Release,
+                    &record,
+                    marked_at,
+                    Utc::now(),
+                )
+                .await
+                .inspect_err(|error| {
+                    tracing::warn!(error = ?error, "could not release an agent's inbox now; the sweep retries");
+                });
+        }
+        Ok(())
     }
 }
 
@@ -714,8 +823,39 @@ pub const SETTLE_WITHOUT_MAILBOX: chrono::Duration = chrono::Duration::minutes(1
 /// doesn't race the request that is still making it.
 pub const SWEEP_AFTER: chrono::Duration = chrono::Duration::minutes(1);
 
+/// How far back the sweep looks for live inboxes whose agent lost its seat
+/// without a mark. Only a provision racing its team's deletion leaves one,
+/// and it is written moments before the team row goes.
+pub const SEATLESS_WINDOW: chrono::Duration = chrono::Duration::hours(1);
+
+/// A mark is retried with backoff (a minute, doubling, at most an hour) up
+/// to this many times; then it is left for an operator, with an error log.
+pub const MAX_SWEEP_ATTEMPTS: i16 = 30;
+
 /// The most wind-downs one sweep round retries.
 pub const SWEEP_BATCH: u32 = 100;
+
+/// What [`InboxService::mark`] left to do.
+enum Marked {
+    /// Nothing: settled, or already further down.
+    Done,
+    /// Tell email_service; the record carries the mark since `marked_at`.
+    Pending {
+        record: InboxRecord,
+        marked_at: DateTime<Utc>,
+    },
+}
+
+/// `record` as it is, in `state`.
+fn keep(record: &InboxRecord, state: AgentInboxState) -> InboxUpdate {
+    InboxUpdate {
+        mailbox_id: record.mailbox_id,
+        address: record.address.clone(),
+        state,
+        last_error: record.last_error,
+        fake_provider: record.fake_provider,
+    }
+}
 
 /// What winding an inbox down does.
 #[derive(Debug, Clone, Copy)]
@@ -727,6 +867,14 @@ enum WindDown {
 }
 
 impl WindDown {
+    /// The mark this wind-down stores and the state that settles it.
+    fn states(self) -> (AgentInboxState, AgentInboxState) {
+        match self {
+            Self::Pause => (AgentInboxState::Pausing, AgentInboxState::Paused),
+            Self::Release => (AgentInboxState::Releasing, AgentInboxState::Released),
+        }
+    }
+
     /// The wind-down a record's mark asks for.
     fn for_mark(state: AgentInboxState) -> Self {
         match state {
@@ -766,16 +914,15 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes> AgentInboxes
         name: &str,
         local_part: &str,
     ) -> Result<AgentInbox, InboxError> {
+        // Only for an agent still on its team, checked as the record is made:
+        // a team deletion that already listed the team's agents has marked
+        // them, and one that finished took the seat.
         let record = self
             .repository
-            .reserve(
-                agent,
-                team_id,
-                Uuid::now_v7(),
-                AgentInboxState::Provisioning,
-            )
+            .reserve_seated(agent, team_id, Uuid::now_v7())
             .await
-            .map_err(InboxError::internal)?;
+            .map_err(InboxError::internal)?
+            .ok_or(InboxError::NotSeated)?;
         // A live inbox stays as it is; anything else asks again, with the
         // same request id, so a retry never makes a second mailbox.
         // A removed agent's inbox is never made again.

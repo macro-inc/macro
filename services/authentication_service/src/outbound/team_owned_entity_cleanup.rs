@@ -36,7 +36,7 @@ pub struct TeamOwnedEntityCleanupAdapter<B, R> {
     harness_url: String,
     scheduled_action_url: String,
     computers: Arc<dyn crate::domain::computer_billing::TeamComputers>,
-    agent_inboxes: Arc<dyn crate::domain::computer_billing::TeamAgentInboxes>,
+    agent_inboxes: Arc<dyn crate::domain::agent_inbox_cleanup::TeamAgentInboxes>,
 }
 
 impl<B, R> TeamOwnedEntityCleanupAdapter<B, R> {
@@ -52,7 +52,7 @@ impl<B, R> TeamOwnedEntityCleanupAdapter<B, R> {
         documents: Arc<DocumentStorageServiceClient>,
         config: TeamOwnedEntityCleanupConfig,
         computers: Arc<dyn crate::domain::computer_billing::TeamComputers>,
-        agent_inboxes: Arc<dyn crate::domain::computer_billing::TeamAgentInboxes>,
+        agent_inboxes: Arc<dyn crate::domain::agent_inbox_cleanup::TeamAgentInboxes>,
     ) -> Result<Self, Report> {
         Ok(Self {
             vault_metadata,

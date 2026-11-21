@@ -8,7 +8,7 @@ use super::*;
 struct NoAgentInboxes;
 
 #[async_trait::async_trait]
-impl crate::domain::computer_billing::TeamAgentInboxes for NoAgentInboxes {
+impl crate::domain::agent_inbox_cleanup::TeamAgentInboxes for NoAgentInboxes {
     async fn release_team(&self, _team_id: Uuid) -> Result<(), rootcause::Report> {
         Ok(())
     }

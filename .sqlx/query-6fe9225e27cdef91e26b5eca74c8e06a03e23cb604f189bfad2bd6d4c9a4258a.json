@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE team_agent_inboxes\n            SET mailbox_id = COALESCE($2, mailbox_id),\n                address = COALESCE($3, address),\n                state = $4,\n                last_error = $5,\n                fake_provider = $6,\n                updated_at = now()\n            WHERE agent_user_id = $1\n            RETURNING agent_user_id, team_id, request_id, mailbox_id, address, state,\n                      last_error, fake_provider, updated_at\n            ",
+  "query": "\n            UPDATE team_agent_inboxes\n            SET mailbox_id = COALESCE($2, mailbox_id),\n                address = COALESCE($3, address),\n                -- Entering a mark starts its backoff over.\n                sweep_attempts = CASE WHEN state <> $4 THEN 0 ELSE sweep_attempts END,\n                next_sweep_at = CASE\n                    WHEN state <> $4 THEN now() + interval '1 minute'\n                    ELSE next_sweep_at\n                END,\n                state = $4,\n                last_error = $5,\n                fake_provider = $6,\n                updated_at = now()\n            WHERE agent_user_id = $1\n            RETURNING agent_user_id, team_id, request_id, mailbox_id, address, state,\n                      last_error, fake_provider, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -71,5 +71,5 @@
       false
     ]
   },
-  "hash": "d70075adf1d8905e0e607ff940ffa1d5236d9ce629ba1d9dc091c6ab4a46e4cc"
+  "hash": "6fe9225e27cdef91e26b5eca74c8e06a03e23cb604f189bfad2bd6d4c9a4258a"
 }

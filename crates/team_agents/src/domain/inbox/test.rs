@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use super::*;
@@ -15,9 +16,17 @@ fn agent() -> MacroUserIdStr<'static> {
 #[error("fake storage failure")]
 struct FakeError;
 
-/// `team_agent_inboxes` in memory.
+/// `team_agent_inboxes` in memory, the agents holding a seat, and each
+/// mark's sweep backoff (attempts, next attempt).
 #[derive(Clone, Default)]
-struct FakeRecords(Arc<Mutex<Vec<InboxRecord>>>);
+struct FakeRecords(
+    Arc<Mutex<Vec<InboxRecord>>>,
+    Arc<Mutex<Vec<String>>>,
+    Arc<Mutex<HashMap<String, Backoff>>>,
+);
+
+/// A mark's sweep backoff: attempts so far and the next attempt.
+type Backoff = (i16, DateTime<Utc>);
 
 impl FakeRecords {
     fn only(&self) -> InboxRecord {
@@ -87,6 +96,9 @@ impl AgentInboxRepository for FakeRecords {
             .iter_mut()
             .find(|r| r.agent.as_ref() == agent.as_ref())
             .ok_or(FakeError)?;
+        if record.state != update.state {
+            self.2.lock().unwrap().remove(agent.as_ref());
+        }
         record.mailbox_id = update.mailbox_id.or(record.mailbox_id);
         record.address = update.address.clone().or(record.address.take());
         record.state = update.state;
@@ -96,13 +108,33 @@ impl AgentInboxRepository for FakeRecords {
         Ok(record.clone())
     }
 
-    async fn unsettled(
+    async fn settle(
         &self,
+        agent: &MacroUserIdStr<'_>,
+        from: AgentInboxState,
+        update: &InboxUpdate,
+    ) -> Result<Option<InboxRecord>, FakeError> {
+        let current = self
+            .0
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|r| r.agent.as_ref() == agent.as_ref())
+            .map(|r| r.state);
+        if current != Some(from) {
+            return Ok(None);
+        }
+        self.update(agent, update).await.map(Some)
+    }
+
+    async fn seatless_live(
+        &self,
+        changed_after: DateTime<Utc>,
         changed_before: DateTime<Utc>,
-        after: Option<&SweepCursor>,
         limit: u32,
     ) -> Result<Vec<InboxRecord>, FakeError> {
-        let mut found: Vec<InboxRecord> = self
+        let seated = self.1.lock().unwrap().clone();
+        Ok(self
             .0
             .lock()
             .unwrap()
@@ -110,18 +142,77 @@ impl AgentInboxRepository for FakeRecords {
             .filter(|r| {
                 matches!(
                     r.state,
-                    AgentInboxState::Pausing | AgentInboxState::Releasing
-                ) && r.updated_at < changed_before
-                    && after.is_none_or(|after| {
-                        (r.updated_at, r.agent.as_ref().to_owned())
-                            > (after.updated_at, after.agent.clone())
-                    })
+                    AgentInboxState::Provisioning
+                        | AgentInboxState::Active
+                        | AgentInboxState::Failed
+                ) && r.updated_at > changed_after
+                    && r.updated_at < changed_before
+                    && !seated.contains(&r.agent.as_ref().to_owned())
             })
+            .take(limit as usize)
             .cloned()
-            .collect();
-        found.sort_by_key(|r| (r.updated_at, r.agent.as_ref().to_owned()));
-        found.truncate(limit as usize);
-        Ok(found)
+            .collect())
+    }
+
+    async fn claim_unsettled(
+        &self,
+        now: DateTime<Utc>,
+        limit: u32,
+    ) -> Result<Vec<InboxRecord>, FakeError> {
+        let records = self.0.lock().unwrap().clone();
+        let mut backoff = self.2.lock().unwrap();
+        let mut claimed = Vec::new();
+        for record in records {
+            if claimed.len() >= limit as usize
+                || !matches!(
+                    record.state,
+                    AgentInboxState::Pausing | AgentInboxState::Releasing
+                )
+            {
+                continue;
+            }
+            let (attempts, next) = *backoff
+                .entry(record.agent.as_ref().to_owned())
+                .or_insert((0, record.updated_at + chrono::Duration::minutes(1)));
+            if next > now || attempts >= MAX_SWEEP_ATTEMPTS {
+                continue;
+            }
+            let delay =
+                chrono::Duration::minutes(1 << attempts.min(6)).min(chrono::Duration::hours(1));
+            backoff.insert(
+                record.agent.as_ref().to_owned(),
+                (attempts + 1, now + delay),
+            );
+            claimed.push(record);
+        }
+        Ok(claimed)
+    }
+
+    async fn reserve_seated(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        team_id: Uuid,
+        request_id: Uuid,
+    ) -> Result<Option<InboxRecord>, FakeError> {
+        if !self.1.lock().unwrap().contains(&agent.as_ref().to_owned()) {
+            return Ok(None);
+        }
+        self.reserve(agent, team_id, request_id, AgentInboxState::Provisioning)
+            .await
+            .map(Some)
+    }
+
+    async fn seated_agents(
+        &self,
+        _team_id: Uuid,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, FakeError> {
+        Ok(self
+            .1
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|agent| MacroUserIdStr::parse_from_str(agent).unwrap().into_owned())
+            .collect())
     }
 
     async fn update_live(
@@ -281,6 +372,7 @@ fn service(
     FakeMailboxes,
 ) {
     let records = FakeRecords::default();
+    records.1.lock().unwrap().push(AGENT.to_owned());
     let mailboxes = FakeMailboxes::answering(answer);
     (
         InboxService::new(records.clone(), mailboxes.clone()),
@@ -468,7 +560,9 @@ async fn a_pause_email_service_misses_fails_so_the_removal_is_retried() {
         .into_iter()
         .filter(|call| call == "pause")
         .count();
-    assert_eq!(pauses, 2);
+    // The first attempt failed asking email_service; the retry pauses.
+    assert_eq!(pauses, 1);
+    assert_eq!(records.only().state, AgentInboxState::Paused);
 }
 
 #[tokio::test]
@@ -502,7 +596,6 @@ async fn releasing_an_inbox_email_service_never_made_releases_nothing() {
     service
         .sweep_once(
             Utc::now() + SETTLE_WITHOUT_MAILBOX + chrono::Duration::minutes(1),
-            None,
             SWEEP_BATCH,
         )
         .await
@@ -551,7 +644,6 @@ async fn pausing_an_inbox_email_service_never_made_only_marks_it_until_it_settle
     service
         .sweep_once(
             Utc::now() + SETTLE_WITHOUT_MAILBOX + chrono::Duration::minutes(1),
-            None,
             SWEEP_BATCH,
         )
         .await
@@ -660,13 +752,12 @@ async fn a_removal_racing_a_provision_whose_pause_fails_is_finished_by_the_sweep
     let found = service
         .sweep_once(
             Utc::now() + SWEEP_AFTER + chrono::Duration::seconds(1),
-            None,
             SWEEP_BATCH,
         )
         .await
         .unwrap();
 
-    assert_eq!(found.found, 1);
+    assert_eq!(found.claimed, 1);
     assert_eq!(records.only().state, AgentInboxState::Paused);
 }
 
@@ -704,7 +795,6 @@ async fn a_release_email_service_is_still_finishing_stays_releasing_until_it_con
     service
         .sweep_once(
             Utc::now() + SWEEP_AFTER + chrono::Duration::seconds(1),
-            None,
             SWEEP_BATCH,
         )
         .await
@@ -728,38 +818,114 @@ async fn deleting_a_team_releases_every_agents_inbox() {
 }
 
 #[tokio::test]
-async fn the_sweep_pages_past_marks_it_cannot_finish_instead_of_spinning_on_them() {
+async fn a_mark_the_sweep_cannot_finish_backs_off_instead_of_spinning() {
     let (service, records, mailboxes) = service(Answer::Active);
-    let later = Utc::now() + SWEEP_AFTER + chrono::Duration::seconds(1);
-    for (slug, request) in [("ada", 1_u128), ("ben", 2)] {
-        records.0.lock().unwrap().push(InboxRecord {
-            agent: MacroUserIdStr::parse_from_str(&format!("macro|{slug}@agents.macro.invalid"))
-                .unwrap()
-                .into_owned(),
-            team_id: TEAM,
-            request_id: Uuid::from_u128(request),
-            mailbox_id: Some(MAILBOX),
-            address: None,
-            state: AgentInboxState::Pausing,
-            last_error: None,
-            fake_provider: false,
-            updated_at: Utc::now(),
-        });
-    }
-    // email_service is down: neither mark can be finished.
+    service
+        .provision(TEAM, &agent(), "Sam Rivera", "sam-rivera")
+        .await
+        .unwrap();
+    mailboxes.answer(Answer::Down);
+    assert!(service.pause(TEAM, &agent()).await.is_err());
+    let marked_at = records.only().updated_at;
+
+    let first = marked_at + chrono::Duration::minutes(1) + chrono::Duration::seconds(1);
+    let at_first = service.sweep_once(first, SWEEP_BATCH).await.unwrap();
+    let again_at_once = service.sweep_once(first, SWEEP_BATCH).await.unwrap();
+    let after_backoff = service
+        .sweep_once(first + chrono::Duration::minutes(1), SWEEP_BATCH)
+        .await
+        .unwrap();
+
+    assert_eq!((at_first.claimed, at_first.failed), (1, 1));
+    assert_eq!(again_at_once.claimed, 0);
+    assert_eq!(after_backoff.claimed, 1);
+    assert_eq!(records.only().state, AgentInboxState::Pausing);
+}
+
+#[tokio::test]
+async fn a_provision_that_starts_after_a_team_deletion_marked_the_agent_makes_nothing() {
+    let (service, records, mailboxes) = service(Answer::Active);
+
+    // The deletion marks every seated agent, inbox or not.
+    service.release_team(TEAM).await.unwrap();
+    let late = service
+        .provision(TEAM, &agent(), "Sam Rivera", "sam-rivera")
+        .await
+        .unwrap();
+
+    assert_eq!(late.state, AgentInboxState::Released);
+    assert_eq!(records.only().state, AgentInboxState::Released);
+    assert!(
+        !mailboxes
+            .calls()
+            .iter()
+            .any(|call| call.starts_with("provision"))
+    );
+}
+
+#[tokio::test]
+async fn an_agent_without_a_seat_gets_no_inbox() {
+    let (service, records, mailboxes) = service(Answer::Active);
+    records.1.lock().unwrap().clear();
+
+    let refused = service
+        .provision(TEAM, &agent(), "Sam Rivera", "sam-rivera")
+        .await;
+
+    assert!(matches!(refused, Err(InboxError::NotSeated)));
+    assert!(mailboxes.calls().is_empty());
+}
+
+#[tokio::test]
+async fn a_release_email_service_is_already_doing_is_not_asked_again() {
+    let (service, records, mailboxes) = service(Answer::Active);
+    service
+        .provision(TEAM, &agent(), "Sam Rivera", "sam-rivera")
+        .await
+        .unwrap();
+    // email_service took the release and is finishing it on its own.
+    mailboxes.made.lock().unwrap().as_mut().unwrap().state = AgentInboxState::Releasing;
+
+    service.release(TEAM, &agent()).await.unwrap();
+
+    assert_eq!(records.only().state, AgentInboxState::Releasing);
+    assert!(!mailboxes.calls().contains(&"release".to_owned()));
+}
+
+#[tokio::test]
+async fn an_inbox_made_while_its_team_was_deleted_is_released_by_the_sweep() {
+    let (service, records, mailboxes) = service(Answer::Active);
+    // The team's deletion listed its inboxes before this provision reserved
+    // one, then the team row (and the seat) went.
+    service
+        .provision(TEAM, &agent(), "Sam Rivera", "sam-rivera")
+        .await
+        .unwrap();
+    records.1.lock().unwrap().clear();
+
+    service
+        .sweep_once(
+            Utc::now() + SWEEP_AFTER + chrono::Duration::seconds(1),
+            SWEEP_BATCH,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(records.only().state, AgentInboxState::Released);
+    assert!(mailboxes.calls().contains(&"release".to_owned()));
+}
+
+#[tokio::test]
+async fn deleting_a_team_while_email_service_is_down_marks_its_inboxes_and_succeeds() {
+    let (service, records, mailboxes) = service(Answer::Active);
+    service
+        .provision(TEAM, &agent(), "Sam Rivera", "sam-rivera")
+        .await
+        .unwrap();
     mailboxes.answer(Answer::Down);
 
-    let first = service.sweep_once(later, None, 1).await.unwrap();
-    let second = service
-        .sweep_once(later, first.next.as_ref(), 1)
-        .await
-        .unwrap();
-    let third = service
-        .sweep_once(later, second.next.as_ref(), 1)
-        .await
-        .unwrap();
+    service.release_team(TEAM).await.unwrap();
 
-    assert_eq!((first.found, second.found, third.found), (1, 1, 0));
-    assert_ne!(first.next, second.next);
-    assert_eq!(third.next, None);
+    // Marked: the sweep finishes it once email_service is back.
+    assert_eq!(records.only().state, AgentInboxState::Releasing);
 }
