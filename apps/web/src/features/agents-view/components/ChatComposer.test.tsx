@@ -60,6 +60,10 @@ const editor = vi.hoisted(() => ({
   connect: undefined as ((markdown: string) => void) | undefined,
   /** The fallback the composer configures with withRestoreFocus. */
   restoreFocus: undefined as RestoreFocusDefault | undefined,
+  /** What the composer does when a mention picks people or agents. */
+  onUserMention: undefined as
+    | ((mention: { mentions: string[] }) => void)
+    | undefined,
 }));
 
 vi.mock(
@@ -71,7 +75,12 @@ vi.mock(
         buildHandle: () => ({ lexical: editor.lexical }),
         namespace: () => builder,
         withAppLinkResolver: () => builder,
-        withMentions: () => builder,
+        withMentions: (options: {
+          onUserMention?: (mention: { mentions: string[] }) => void;
+        }) => {
+          editor.onUserMention = options.onUserMention;
+          return builder;
+        },
         withEmojis: () => builder,
         withLinks: () => builder,
         withHistory: () => builder,
@@ -273,6 +282,21 @@ describe('Chat session input', () => {
       }
     }
   );
+
+  it('reports each person or agent a mention picks', () => {
+    const mentioned = vi.fn();
+    render(() => (
+      <ChatComposer
+        draft=""
+        onDraftChange={vi.fn()}
+        onSend={vi.fn()}
+        onMentionUser={mentioned}
+        selector={null}
+      />
+    ));
+    editor.onUserMention?.({ mentions: ['bot|cursor', 'macro|ada'] });
+    expect(mentioned.mock.calls).toEqual([['bot|cursor'], ['macro|ada']]);
+  });
 
   it('does not write a sent prompt back into the editor', () => {
     const [draft, setDraft] = createSignal('');

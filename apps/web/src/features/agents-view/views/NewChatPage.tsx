@@ -490,14 +490,37 @@ export function NewChatPage(props: {
   // mentioning it in a channel starts it; the mention stays in the prompt.
   // An unavailable one is selected too, so the send is blocked with its
   // reason instead of going to another agent. The last agent picked wins.
-  const selectMentionedAgent = (mentionedId: string) => {
-    const agent = rosterAgentForMention(props.roster, mentionedId);
-    if (!agent) return;
-
+  // Mentioning the agent already active changes nothing, so a model picked
+  // for it stays.
+  const activateMentioned = (agent: RosterAgent) => {
     const agentMode = modeForKind(agent.kind);
+    if (agent.id === selected()?.id && mode() === agentMode) return;
     if (mode() !== agentMode) setMode(agentMode);
     selectAgent(agent);
   };
+  // A mention made before the roster has loaded is applied once it has.
+  const [pendingMention, setPendingMention] = createSignal<string>();
+  const selectMentionedAgent = (mentionedId: string) => {
+    const agent = rosterAgentForMention(props.roster, mentionedId);
+    setPendingMention(
+      !agent && (props.rosterLoading || props.availabilityLoading)
+        ? mentionedId
+        : undefined
+    );
+    if (agent) activateMentioned(agent);
+  };
+  createEffect(
+    on(
+      () => [props.roster, props.rosterLoading] as const,
+      ([roster, loading]) => {
+        const mentionedId = pendingMention();
+        if (!mentionedId) return;
+        const agent = rosterAgentForMention(roster, mentionedId);
+        if (agent || !loading) setPendingMention(undefined);
+        if (agent) activateMentioned(agent);
+      }
+    )
+  );
 
   let focusInput: (() => void) | undefined;
   const chatAboutUpdate = (sessionId: string, sessionName: string) => {

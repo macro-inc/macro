@@ -716,6 +716,59 @@ describe('agent-led new conversation', () => {
       expect.objectContaining({ prompt: 'Prompt', botId: undefined })
     );
   });
+  it('keeps a model picked for the agent an @mention names again', async () => {
+    mocks.touch = true;
+    const send = page(true, [], false, [], 'code');
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Choose an agent or model' })
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Model' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'GPT-5' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    fireEvent.change(screen.getByRole('textbox', { name: 'Mention' }), {
+      target: { value: `bot|${CURSOR_BOT_ID}` },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith(
+      expect.objectContaining({ botId: CURSOR_BOT_ID, modelOverride: 'gpt-5' })
+    );
+  });
+  it('applies an @mention made while the roster loads once it arrives', () => {
+    const [loading, setLoading] = createSignal(true);
+    const [connected, setConnected] = createSignal(false);
+    const send = vi.fn();
+    render(() => (
+      <NewChatPage
+        roster={
+          connected()
+            ? buildAgentRoster({
+                agents: [],
+                runtimes: [],
+                cursorConnected: true,
+                cursorNeedsConnection: false,
+                macroDefaultModel: 'chat-default',
+                cursorDefaultModel: 'cursor-default',
+              })
+            : []
+        }
+        rosterLoading={loading()}
+        onStart={send}
+        onOpenRoster={vi.fn()}
+      />
+    ));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Mention' }), {
+      target: { value: `bot|${CURSOR_BOT_ID}` },
+    });
+    setConnected(true);
+    setLoading(false);
+    expect(
+      (screen.getByRole('radio', { name: 'Code' }) as HTMLInputElement).checked
+    ).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith(
+      expect.objectContaining({ botId: CURSOR_BOT_ID })
+    );
+  });
   it('selects an @mentioned agent from Auto, showing its selector', () => {
     startInChat = false;
     const send = page();
