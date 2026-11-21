@@ -183,9 +183,9 @@ async fn unavailable_history_cannot_be_replaced_by_an_unverified_event_transcrip
 }
 
 #[tokio::test]
-async fn attributed_bots_require_an_explicit_other_bot_mention_and_current_access() {
+async fn audit_attributed_bots_cannot_trigger_classic_macro() {
     for (source, mention, revoked, expected) in [
-        (bot_id::CURSOR_BOT_ID, true, false, true),
+        (bot_id::CURSOR_BOT_ID, true, false, false),
         (bot_id::MACRO_AI_BOT_ID, true, false, false),
         (bot_id::CURSOR_BOT_ID, false, false, false),
         (bot_id::CURSOR_BOT_ID, true, true, false),

@@ -307,15 +307,7 @@ impl MacroApiTokenSigner {
         agent_id: macro_uuid::Uuid,
         channel_mention_id: uuid::Uuid,
     ) -> Result<String, EgressError> {
-        let claims = SignedClaims {
-            agent_id: Some(agent_id),
-            agent_via: None,
-            agent_session_id: None,
-            agent_correlation_id: None,
-            agent_scope: None,
-            routine_id: None,
-            channel_mention_id: Some(channel_mention_id),
-        };
+        let claims = SignedClaims::channel_mention(agent_id, channel_mention_id);
         self.sign(user, lifetime_seconds, claims).await
     }
 
@@ -430,6 +422,18 @@ struct SignedClaims {
 }
 
 impl SignedClaims {
+    fn channel_mention(agent_id: macro_uuid::Uuid, channel_mention_id: uuid::Uuid) -> Self {
+        Self {
+            agent_id: Some(agent_id),
+            agent_via: None,
+            agent_session_id: None,
+            agent_correlation_id: None,
+            agent_scope: None,
+            routine_id: None,
+            channel_mention_id: Some(channel_mention_id),
+        }
+    }
+
     /// What a routine run's token signs: its routine, its agent if any, and
     /// its scope if narrower.
     fn routine(

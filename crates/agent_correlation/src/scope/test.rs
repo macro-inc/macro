@@ -347,3 +347,16 @@ fn a_dry_run_reads_and_writes_nothing() {
     }
     assert!(!scope.allows_sharing());
 }
+
+#[test]
+fn audit_no_send_refuses_persistence_that_later_runs_can_execute() {
+    for (method, path) in [
+        ("PATCH", "/memory/explicit"),
+        ("POST", "/scheduled-actions"),
+        ("POST", "/agent-sessions"),
+        ("PATCH", "/agents/fixture"),
+        ("POST", "/mcp/servers"),
+    ] {
+        assert!(!SessionScope::NoSend.allows(method, path), "{method} {path}");
+    }
+}

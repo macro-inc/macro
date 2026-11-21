@@ -5,6 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
+agent_correlation = { path = "../agent_correlation" }
 agent_runtime_protocol = { path = "../agent_runtime_protocol", features = ["utoipa"] }
 chrono = { workspace = true }
 cognition = { path = "../cognition" }
