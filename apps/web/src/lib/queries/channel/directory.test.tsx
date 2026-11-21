@@ -73,6 +73,7 @@ import {
 import {
   type ByIdOutcome,
   type ChannelDirectory,
+  ChannelDirectoryReadUnsettled,
   channelDirectoryPagesQueryOptions,
   channelDirectoryState,
   createByIdReader,
@@ -1005,9 +1006,14 @@ type CachedDirectoryOptions = {
   viewer?: string;
   generation?: string;
   fetchAll?: (signal?: AbortSignal) => Promise<readonly DirectoryChannel[]>;
-  /** One channel as the primary shows it; a failed read when left out, so
-   * the walk's answer stands. */
-  readFromPrimary?: (channelId: string) => Promise<PrimaryChannelRead>;
+  /** One channel as the primary shows it; as the last walk listed it when
+   * left out, so the primary agrees with the walk. */
+  readFromPrimary?: (
+    channelId: string,
+    signal?: AbortSignal
+  ) => Promise<PrimaryChannelRead>;
+  /** How many channel writes of the viewer the directory has seen. */
+  writesSeen?: () => number;
   /** The network's joined channels, paged once the lane gave up. */
   pageAll?: (signal: AbortSignal) => Promise<readonly DirectoryChannel[]>;
   /** How many pages the cache wrote of those `pageAll` read, once it
@@ -1076,12 +1082,23 @@ function mountCachedDirectory(
       return { nextCursor: null, entityIds: found.map(({ id }) => id) };
     }
   );
+  let lastWalked: readonly DirectoryChannel[] = [];
+  const walk = options.fetchAll ?? (async () => []);
   const fetchAll = vi.fn<
     (signal?: AbortSignal) => Promise<readonly DirectoryChannel[]>
-  >(options.fetchAll ?? (async () => []));
+  >(async (signal) => {
+    lastWalked = await walk(signal);
+    return lastWalked;
+  });
   const readFromPrimary = vi.fn<
-    (channelId: string) => Promise<PrimaryChannelRead>
-  >(options.readFromPrimary ?? (async () => ({ kind: 'failed' })));
+    (channelId: string, signal?: AbortSignal) => Promise<PrimaryChannelRead>
+  >(
+    options.readFromPrimary ??
+      (async (channelId) => ({
+        kind: 'read',
+        channel: lastWalked.find(({ id }) => id === channelId) ?? null,
+      }))
+  );
   const pageAll = vi.fn<
     (signal: AbortSignal) => Promise<readonly DirectoryChannel[]>
   >(options.pageAll ?? (async () => []));
@@ -1097,6 +1114,7 @@ function mountCachedDirectory(
       hydrate,
       fetchAll,
       readFromPrimary,
+      writesSeen: options.writesSeen,
       pageAll: async (signal) => ({
         channels: await pageAll(signal),
         pages: 1,
@@ -1699,10 +1717,11 @@ describe('cached channel directory', () => {
     ).toEqual(['left', 'removed']);
   });
 
-  it('reads nothing on the primary when the walk and the cache agree, and keeps the walk where a read fails', async () => {
+  it('reads nothing on the primary when the walk and the cache agree, and fails when a read of a disagreement fails', async () => {
     let walked = [directoryChannel('a'), directoryChannel('b')];
     const { cache, directory, readFromPrimary } = mountCachedDirectory([], {
       fetchAll: async () => walked,
+      readFromPrimary: async () => ({ kind: 'failed' }),
     });
     cache.put(channelRecord('a'));
     cache.put(channelRecord('b'));
@@ -1713,27 +1732,132 @@ describe('cached channel directory', () => {
     expect(readFromPrimary).not.toHaveBeenCalled();
 
     walked = [directoryChannel('a')];
-    // The primary read of 'b' fails: the walk's answer stands.
-    expect(ids(await directory.readComplete())).toEqual(['a']);
+    // The primary read of 'b' fails: neither the walk nor the cache is
+    // known to be current, so the read fails rather than act on either.
+    await expect(directory.readComplete()).rejects.toMatchObject({
+      reason: 'primary_failed',
+    });
     expect(readFromPrimary).toHaveBeenCalledOnce();
   });
 
-  it('reads at most 200 disagreements on the primary and keeps the walk for the rest', async () => {
+  it('fails without reading the primary when there are more than 200 disagreements', async () => {
     const walked = Array.from({ length: 205 }, (_, index) =>
       directoryChannel(`walked${index}`)
     );
     const { cache, directory, readFromPrimary } = mountCachedDirectory([], {
       fetchAll: async () => [directoryChannel('a'), ...walked],
-      // None of them is the viewer's on the primary.
-      readFromPrimary: async () => ({ kind: 'read', channel: null }),
     });
     cache.put(channelRecord('a'));
     completeLane('g1');
     await vi.waitFor(() => expect(directory.complete()).toBe(true));
 
-    const channels = await directory.readComplete();
-    expect(readFromPrimary).toHaveBeenCalledTimes(200);
-    expect(channels).toHaveLength(6);
+    const read = directory.readComplete();
+    await expect(read).rejects.toBeInstanceOf(ChannelDirectoryReadUnsettled);
+    await expect(read).rejects.toMatchObject({ reason: 'too_many_disputes' });
+    expect(readFromPrimary).not.toHaveBeenCalled();
+  });
+
+  it('settles a channel the walk wrote over the cache, comparing the cache as it was before the walk', async () => {
+    // The cache shows 'b' left; the replica walk still lists it joined and
+    // writes that stale page into the cache as it goes, which the directory
+    // shows before the walk ends.
+    const { cache, directory, readFromPrimary, reopen } = mountCachedDirectory(
+      [],
+      {
+        fetchAll: async () => {
+          cache.put(channelRecord('b'), { sourceHash: 'b-walked' });
+          reopen();
+          await vi.waitFor(() =>
+            expect(ids(directory.channels())).toContain('b')
+          );
+          return [directoryChannel('a'), directoryChannel('b')];
+        },
+        readFromPrimary: async () => ({ kind: 'read', channel: null }),
+      }
+    );
+    cache.put(channelRecord('a'));
+    cache.put(channelRecord('b', { isParticipant: false }));
+    completeLane('g1');
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+
+    expect(ids(await directory.readComplete())).toEqual(['a']);
+    expect(readFromPrimary.mock.calls.map(([id]) => channelName(id))).toEqual([
+      'b',
+    ]);
+  });
+
+  it('walks again when the viewer wrote a channel while the primary was being read', async () => {
+    let writes = 0;
+    let walks = 0;
+    const { cache, directory, fetchAll } = mountCachedDirectory([], {
+      writesSeen: () => writes,
+      fetchAll: async () => {
+        walks += 1;
+        // The second walk sees the channel the viewer joined meanwhile.
+        return walks === 1
+          ? [directoryChannel('a')]
+          : [directoryChannel('a'), directoryChannel('joined')];
+      },
+      readFromPrimary: async (id) => {
+        // The viewer joins a channel while 'b' is read.
+        if (walks === 1) writes += 1;
+        return {
+          kind: 'read',
+          channel: id === channelUuid('b') ? null : directoryChannel('joined'),
+        };
+      },
+    });
+    cache.put(channelRecord('a'));
+    cache.put(channelRecord('b'));
+    completeLane('g1');
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+
+    expect(ids(await directory.readComplete())).toEqual(['a', 'joined']);
+    expect(fetchAll).toHaveBeenCalledTimes(2);
+  });
+
+  it('reads every batch of disagreements on the primary inside the settle span', async () => {
+    const active: string[] = [];
+    const within = <T,>(name: string, work: () => T): T => {
+      active.push(name);
+      try {
+        return work();
+      } finally {
+        active.pop();
+      }
+    };
+    const span = vi.spyOn(Telemetry, 'span').mockImplementation(((
+      name: string,
+      operation: (span: unknown) => Promise<unknown>
+    ) =>
+      within(name, () =>
+        operation({
+          setAttr: () => {},
+          run: <T,>(work: () => T) => within(name, work),
+        })
+      )) as never);
+    onTestFinished(() => span.mockRestore());
+    const sentIn: (string | undefined)[] = [];
+    const { cache, directory } = mountCachedDirectory([], {
+      fetchAll: async () =>
+        Array.from({ length: 8 }, (_, index) =>
+          directoryChannel(`walked${index}`)
+        ),
+      readFromPrimary: async () => {
+        sentIn.push(active.at(-1));
+        return { kind: 'read', channel: null };
+      },
+    });
+    cache.put(channelRecord('a'));
+    completeLane('g1');
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+
+    await expect(directory.readComplete()).resolves.toEqual([]);
+    // Eight the walk lists and 'a' it misses: batches of four, four and
+    // one, each after the first past an await.
+    expect(sentIn).toEqual(
+      Array.from({ length: 9 }, () => 'channel_directory.full_read_settle')
+    );
   });
 
   it('passes its signal to the walk and reads nothing more on the primary once it aborts', async () => {
@@ -3100,14 +3224,12 @@ function heldNetwork(network: Pick<ReturnType<typeof fakeNetwork>, 'client'>) {
   });
   return {
     land,
-    client: {
-      query: (...args: Parameters<typeof network.client.query>) => ({
-        toPromise: async () => {
-          await landed;
-          return network.client.query(...args).toPromise();
-        },
-      }),
-    } as typeof network.client,
+    client: fakeClient((...args: Parameters<typeof network.client.query>) => ({
+      toPromise: async () => {
+        await landed;
+        return network.client.query(...args).toPromise();
+      },
+    })) as typeof network.client,
   };
 }
 
@@ -3750,14 +3872,12 @@ describe("the viewer's own channel writes", () => {
       primary: [channelRecord('a', { name: 'first', updatedAt: UPDATED_MID })],
     });
     const slow = {
-      client: {
-        query: (...args: Parameters<typeof older.client.query>) => ({
-          toPromise: async () => {
-            await landed;
-            return older.client.query(...args).toPromise();
-          },
-        }),
-      } as typeof older.client,
+      client: fakeClient((...args: Parameters<typeof older.client.query>) => ({
+        toPromise: async () => {
+          await landed;
+          return older.client.query(...args).toPromise();
+        },
+      })) as typeof older.client,
     };
     const first = writeOf(client, slow, ['a']);
     await writeOf(

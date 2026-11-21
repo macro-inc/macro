@@ -141,7 +141,7 @@ const OWN_WRITE_READ_LIMIT = 20;
 const OWN_WRITE_READ_CONCURRENCY = 4;
 // A full read of the cached directory settles the channels its walk of a
 // replica and the cache disagree on by reading each from the primary, a few
-// at a time, for at most this many; past them the walk's answer stands.
+// at a time; more than this many fail the read.
 const FULL_READ_PRIMARY_LIMIT = 200;
 const FULL_READ_PRIMARY_CONCURRENCY = 4;
 // The fallback's by-id reads settle a batch at a time; the channels they
@@ -198,7 +198,11 @@ export type ChannelDirectory = {
   /** Every joined channel, read from the network now, for an action on all
    * of them: what the directory shows can trail a change made on another
    * device. The network's pages read a replica; the cached directory settles
-   * each channel they and the cache disagree on with a read of the primary.
+   * each channel they and the cache disagree on with a read of the primary,
+   * and walks again when the viewer wrote a channel meanwhile. It rejects
+   * with `ChannelDirectoryReadUnsettled` when a read of the primary fails or
+   * the disagreements are too many to read: an action on every joined
+   * channel fails then, as it did when the whole list failed to read.
    * `signal` ends the read, for a caller that no longer needs it. */
   readComplete: (signal?: AbortSignal) => Promise<readonly DirectoryChannel[]>;
   /** Whether filling the directory failed, until `retry` or the directory's
@@ -796,18 +800,31 @@ export type PrimaryChannelRead =
   | { kind: 'failed' };
 
 /** One channel as the primary database shows the viewer it now: null when
- * they can no longer read it. */
+ * they can no longer read it. An abort leaves the query's result source,
+ * which ends urql's request, and rejects with the signal's reason. */
 async function readChannelFromPrimary(
   client: UrqlQuery,
-  channelId: string
+  channelId: string,
+  signal?: AbortSignal
 ): Promise<PrimaryChannelRead> {
-  const result = await client
-    .query(
-      ChannelDirectoryEntityDocument,
-      { input: { entityType: 'CHANNEL', entityId: channelId } },
-      { requestPolicy: 'network-only' }
-    )
-    .toPromise();
+  const settled = await firstOrAborted(
+    pipe(
+      client.query(
+        ChannelDirectoryEntityDocument,
+        { input: { entityType: 'CHANNEL', entityId: channelId } },
+        { requestPolicy: 'network-only' }
+      ),
+      // The answer, as urql's own toPromise takes it.
+      filter((result) => !result.stale && !result.hasNext)
+    ),
+    signal
+  );
+  if (settled.kind === 'aborted') {
+    signal?.throwIfAborted();
+    throw new Error('Primary channel read was cancelled');
+  }
+  if (settled.kind === 'ended') return { kind: 'failed' };
+  const result = settled.value;
   if (result.error || !result.data) return { kind: 'failed' };
   const entity = result.data.user.soupEntity;
   return {
@@ -819,56 +836,86 @@ async function readChannelFromPrimary(
   };
 }
 
+/** A full read that could not settle every channel its walk and the cache
+ * disagree on: an action on every joined channel would act on membership
+ * the replica may have trailed, so it fails instead, as a failed read of
+ * the whole list did. */
+export class ChannelDirectoryReadUnsettled extends Error {
+  constructor(readonly reason: 'primary_failed' | 'too_many_disputes') {
+    super(`channel directory read could not settle on the primary: ${reason}`);
+  }
+}
+
 /**
  * The joined channels of a full read, `walked`, with each channel it and
  * the cache disagree on settled on the primary database. The walk reads a
  * replica, which can lag a join or a removal that already reached the cache
  * from the primary, and the cache can lag the replica in turn; neither tells
- * which is behind. The disagreements: a channel the cache shows joined and
- * the walk left out, one the walk shows joined and the cache holds as left,
- * and one the walk shows that a complete cache does not hold at all. The
- * primary's read decides each: joined, its record is listed; not, or no
- * longer readable, it is left out. Past `FULL_READ_PRIMARY_LIMIT` of them,
- * and for a read that failed, the walk's answer stands.
+ * which is behind. The walk also writes what it read into that same cache,
+ * so the directory is compared as it was before the walk as well as after:
+ * a stale page the walk wrote makes the two agree only afterwards. The
+ * disagreements: a channel the cache shows joined and the walk left out,
+ * one the walk shows joined and the cache holds as left, and one the walk
+ * shows that a complete cache does not hold at all. The primary's read
+ * decides each: joined, its record is listed; not, or no longer readable, it
+ * is left out. More than `FULL_READ_PRIMARY_LIMIT` of them, or a read that
+ * failed, fails the whole read.
  */
 async function settleFullReadOnPrimary(
   walked: readonly DirectoryChannel[],
-  cached: ChannelDirectoryState,
-  readFromPrimary: (channelId: string) => Promise<PrimaryChannelRead>,
+  cached: readonly ChannelDirectoryState[],
+  readFromPrimary: (
+    channelId: string,
+    signal?: AbortSignal
+  ) => Promise<PrimaryChannelRead>,
   signal?: AbortSignal
 ): Promise<readonly DirectoryChannel[]> {
   const settled = new Map(walked.map((channel) => [channel.id, channel]));
-  const disputed: string[] = [];
-  for (const { id } of cached.joined) if (!settled.has(id)) disputed.push(id);
-  for (const { id } of walked) {
-    const record = cached.records[id];
-    if (record ? !record.isParticipant : cached.complete) disputed.push(id);
-  }
-  if (disputed.length === 0) return walked;
-  return Telemetry.span('channel_directory.full_read_settle', async (span) => {
-    const reading = disputed.slice(0, FULL_READ_PRIMARY_LIMIT);
-    span.setAttr('channel_directory.disputed', disputed.length);
-    span.setAttr('channel_directory.primary_reads', reading.length);
-    let failed = 0;
-    let changed = 0;
-    for (let at = 0; at < reading.length; at += FULL_READ_PRIMARY_CONCURRENCY) {
-      signal?.throwIfAborted();
-      const batch = reading.slice(at, at + FULL_READ_PRIMARY_CONCURRENCY);
-      const reads = await Promise.all(batch.map(readFromPrimary));
-      for (const [index, id] of batch.entries()) {
-        const read = reads[index];
-        if (!read || read.kind === 'failed') {
-          failed += 1;
-          continue;
-        }
-        const joined = read.channel?.isParticipant ? read.channel : undefined;
-        if (settled.has(id) !== Boolean(joined)) changed += 1;
-        if (joined) settled.set(id, joined);
-        else settled.delete(id);
-      }
+  const disputed = new Set<string>();
+  for (const state of cached) {
+    for (const { id } of state.joined) if (!settled.has(id)) disputed.add(id);
+    for (const { id } of walked) {
+      const record = state.records[id];
+      if (record ? !record.isParticipant : state.complete) disputed.add(id);
     }
-    span.setAttr('channel_directory.primary_failed', failed);
-    span.setAttr('channel_directory.primary_changed', changed);
+  }
+  if (disputed.size === 0) return walked;
+  return Telemetry.span('channel_directory.full_read_settle', async (span) => {
+    span.setAttr('channel_directory.disputed', disputed.size);
+    if (disputed.size > FULL_READ_PRIMARY_LIMIT) {
+      span.setAttr('channel_directory.primary_reads', 0);
+      throw new ChannelDirectoryReadUnsettled('too_many_disputes');
+    }
+    const reading = [...disputed];
+    let sent = 0;
+    let changed = 0;
+    try {
+      for (
+        let at = 0;
+        at < reading.length;
+        at += FULL_READ_PRIMARY_CONCURRENCY
+      ) {
+        signal?.throwIfAborted();
+        const batch = reading.slice(at, at + FULL_READ_PRIMARY_CONCURRENCY);
+        sent += batch.length;
+        // Each batch starts past an await: run it in the span.
+        const reads = await span.run(() =>
+          Promise.all(batch.map((id) => readFromPrimary(id, signal)))
+        );
+        for (const [index, id] of batch.entries()) {
+          const read = reads[index];
+          if (!read || read.kind === 'failed')
+            throw new ChannelDirectoryReadUnsettled('primary_failed');
+          const joined = read.channel?.isParticipant ? read.channel : undefined;
+          if (settled.has(id) !== Boolean(joined)) changed += 1;
+          if (joined) settled.set(id, joined);
+          else settled.delete(id);
+        }
+      }
+    } finally {
+      span.setAttr('channel_directory.primary_reads', sent);
+      span.setAttr('channel_directory.primary_changed', changed);
+    }
     return [...settled.values()];
   });
 }
@@ -1271,7 +1318,14 @@ type CachedDirectoryDeps = {
   fetchAll: (signal?: AbortSignal) => Promise<readonly DirectoryChannel[]>;
   /** One channel as the primary shows it, for `readComplete` to settle a
    * channel the network's pages and the cache disagree on. */
-  readFromPrimary: (channelId: string) => Promise<PrimaryChannelRead>;
+  readFromPrimary: (
+    channelId: string,
+    signal?: AbortSignal
+  ) => Promise<PrimaryChannelRead>;
+  /** How many channel writes of the viewer's this page has made: a full
+   * read that a write landed during, settlement included, is read again.
+   * None when left out. */
+  writesSeen?: () => number;
   /** Every joined channel, paged from the network now, for the fallback,
    * and the cache's writes of its pages. */
   pageAll: (signal: AbortSignal) => Promise<FallbackWalk>;
@@ -2154,16 +2208,22 @@ export function createCachedChannelDirectory(
       // device, by as long as its update takes or until a pass of the lane;
       // the walk can trail one the cache already shows.
       const context = Telemetry.captureContext();
-      const walked = await deps.fetchAll(signal);
-      const settled = await context.run(() =>
-        settleFullReadOnPrimary(
-          walked,
-          untrack(view),
-          deps.readFromPrimary,
-          signal
-        )
-      );
-      return inDirectoryOrder(views.applyList(own.applyList(settled)));
+      const writesSeen = deps.writesSeen ?? (() => 0);
+      for (;;) {
+        const seen = writesSeen();
+        const before = untrack(view);
+        const walked = await deps.fetchAll(signal);
+        const settled = await context.run(() =>
+          settleFullReadOnPrimary(
+            walked,
+            [before, untrack(view)],
+            deps.readFromPrimary,
+            signal
+          )
+        );
+        if (writesSeen() === seen)
+          return inDirectoryOrder(views.applyList(own.applyList(settled)));
+      }
     },
     failed: () => {
       const { state: current, fallback: status } = shown();
@@ -2368,6 +2428,7 @@ export function createAppChannelDirectory(): ChannelDirectory {
         walkCurrentJoinedChannels(queryClient, getGraphqlSoupClient(), signal),
       readFromPrimary: (channelId) =>
         readChannelFromPrimary(getGraphqlSoupClient(), channelId),
+      writesSeen: () => directoryWrites(queryClient).seen,
       pageAll: async (signal) => {
         const walk = await pageJoinedChannels(getGraphqlSoupClient(), signal);
         return {
