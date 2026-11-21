@@ -17,7 +17,7 @@ use super::ports::{
 use crate::domain::delivery::{MAX_HTTP_ATTEMPTS, retry_delay};
 use crate::domain::models::{NormalizedWebhookEvent, WebhookWorkerDisposition};
 use chrono::Utc;
-use futures::{StreamExt as _, TryStreamExt as _};
+use futures::StreamExt as _;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::time::Duration;
 use uuid::Uuid;
@@ -281,16 +281,23 @@ where
         span.record("candidate_count", candidate_count);
         span.record("match_count", matched.len());
         // A few sends at a time; each message's copy of the event is made
-        // only when its send starts.
-        futures::stream::iter(matched.iter().copied())
+        // only when its send starts. Every send runs to the end even after
+        // one fails, so a failing send never cancels a healthy one.
+        let mut sends = futures::stream::iter(matched.iter().copied())
             .map(|id| {
                 self.queue
                     .enqueue_mcp(McpEventQueueMessage::new(id, event.clone()))
             })
-            .buffer_unordered(MAX_CONCURRENT_ENQUEUES)
-            .try_collect::<()>()
-            .await
-            .map_err(McpSubscriptionError::internal)?;
+            .buffer_unordered(MAX_CONCURRENT_ENQUEUES);
+        let mut first_error = None;
+        while let Some(sent) = sends.next().await {
+            if let Err(error) = sent {
+                first_error.get_or_insert(error);
+            }
+        }
+        if let Some(error) = first_error {
+            return Err(McpSubscriptionError::internal(error));
+        }
         Ok(matched.len())
     }
 }

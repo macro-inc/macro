@@ -810,3 +810,44 @@ async fn a_receipt_past_the_attempt_limit_is_acknowledged_without_a_post() {
     assert_eq!(disposition, WebhookWorkerDisposition::Acknowledge);
     assert!(endpoint.delivered.lock().expect("lock").is_empty());
 }
+
+/// A queue whose first send fails; it records every send it is given.
+#[derive(Clone, Default)]
+struct FirstSendFails {
+    attempted: Arc<Mutex<usize>>,
+}
+
+impl McpEventEnqueuer for FirstSendFails {
+    type Err = FakeError;
+
+    async fn enqueue_mcp(&self, _message: McpEventQueueMessage) -> Result<(), FakeError> {
+        let mut attempted = self.attempted.lock().expect("lock");
+        *attempted += 1;
+        if *attempted == 1 {
+            return Err(FakeError);
+        }
+        Ok(())
+    }
+}
+
+#[tokio::test]
+async fn a_failed_send_does_not_cancel_the_other_sends() {
+    let repo = FakeRepo::default();
+    let endpoint = FakeEndpoint::accepting();
+    let subscriptions = service(&repo, &endpoint);
+    for query in ["mentions", "mentions again"] {
+        subscriptions
+            .subscribe(user(ME), request(query, mentions_of_me_in_channels()))
+            .await
+            .expect("subscribed");
+    }
+    let queue = FirstSendFails::default();
+    let fanout = McpEventFanoutImpl::new(repo.clone(), queue.clone());
+
+    let result = fanout
+        .fan_out(&mentioned_event("channel", ME), &[ME.to_owned()])
+        .await;
+
+    assert!(result.is_err(), "the failure is reported");
+    assert_eq!(*queue.attempted.lock().expect("lock"), 2, "both were sent");
+}
