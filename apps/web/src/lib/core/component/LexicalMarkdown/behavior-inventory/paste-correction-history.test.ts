@@ -13,7 +13,15 @@ import {
   type SerializedParagraphNode,
   UNDO_COMMAND,
 } from 'lexical';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import {
   documentMetadataPlugin,
   LOAD_STATE_TAG,
@@ -252,23 +260,55 @@ describe('actual OFF paste correction history', () => {
     expect(rootMutations).toEqual(['updated', 'updated']);
   });
 
-  // Known Source snapshot-history failure (mac-wasm-rust.22):
-  // https://github.com/macro-inc/macro/pull/11792. Keep the real
-  // redo assertion until the separate producer fix lands and is integrated.
-  it.fails('restores the first legacy-root paste through redo (Source #11792)', () => {
-    const { editor } = pasteEditor(false);
-    const before = editor.getEditorState().toJSON();
-    expect(before.root).not.toHaveProperty('$');
-    paste(editor);
-    const atEnd = selection(editor);
-    expect(editor.getEditorState().toJSON()).toEqual(pastedState);
-    expect(editor.dispatchCommand(UNDO_COMMAND, undefined)).toBe(true);
-    editor.read(() => {});
-    expect(editor.getEditorState().toJSON()).toEqual(before);
+  describe('known Source legacy-root redo (#11792)', () => {
+    let editor: LexicalEditor;
+    let atEnd: ReturnType<typeof selection>;
+    let redoFailure: { error: unknown } | undefined;
 
-    expect(editor.dispatchCommand(REDO_COMMAND, undefined)).toBe(true);
-    editor.read(() => {});
-    expect(editor.getEditorState().toJSON()).toEqual(pastedState);
-    expect(selection(editor)).toEqual(atEnd);
+    // Vitest also inverts beforeEach failures for it.fails. Suite setup and
+    // error validation must stay outside that inversion so unrelated failures
+    // cannot pass as the known Source bug.
+    beforeAll(() => {
+      vi.stubGlobal('ClipboardEvent', FixtureClipboardEvent);
+      vi.stubGlobal('DragEvent', FixtureDragEvent);
+      editor = pasteEditor(false).editor;
+      const before = editor.getEditorState().toJSON();
+      expect(before.root).not.toHaveProperty('$');
+      paste(editor);
+      atEnd = selection(editor);
+      expect(editor.getEditorState().toJSON()).toEqual(pastedState);
+      expect(editor.dispatchCommand(UNDO_COMMAND, undefined)).toBe(true);
+      editor.read(() => {});
+      expect(editor.getEditorState().toJSON()).toEqual(before);
+
+      try {
+        expect(editor.dispatchCommand(REDO_COMMAND, undefined)).toBe(true);
+        editor.read(() => {});
+      } catch (error) {
+        redoFailure = { error };
+      }
+      if (redoFailure !== undefined) {
+        const error = redoFailure.error;
+        if (!(error instanceof TypeError))
+          throw new Error('Unexpected Source legacy redo failure', {
+            cause: error,
+          });
+        expect(error.message).toBe(
+          "Cannot assign to read only property '_cachedNodes' of object '#<RangeSelection>'"
+        );
+      } else {
+        expect(editor.getEditorState().toJSON()).toEqual(pastedState);
+        expect(selection(editor)).toEqual(atEnd);
+      }
+    });
+
+    // https://github.com/macro-inc/macro/pull/11792 (mac-wasm-rust.22).
+    // Keep the actual future-success assertions until the fix merges and
+    // this branch integrates main. A healthy replay must then fail it.fails.
+    it.fails('restores the first legacy-root paste through redo (Source #11792)', () => {
+      expect(redoFailure).toBeUndefined();
+      expect(editor.getEditorState().toJSON()).toEqual(pastedState);
+      expect(selection(editor)).toEqual(atEnd);
+    });
   });
 });
