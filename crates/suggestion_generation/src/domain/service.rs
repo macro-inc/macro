@@ -184,6 +184,10 @@ struct Opened {
     attempt: u8,
     /// [`BriefPart::name`], or `whole` for a suggestions session.
     part: &'static str,
+    /// Its brief carries the list of work found in the month's mail
+    /// ([`BriefPart::carries_work_list`]): its turn's content stays off
+    /// traces.
+    withhold_content: bool,
 }
 
 /// One routines session group's end, and whether it took a second try.
@@ -956,6 +960,7 @@ where
                 session: AgentSessionId::new(),
                 attempt: 1,
                 part: "whole",
+                withhold_content: false,
             },
             stop,
         )
@@ -1138,6 +1143,7 @@ where
                 session,
                 attempt,
                 part: part.name(),
+                withhold_content: part.carries_work_list(),
             },
             stop,
         )
@@ -1160,6 +1166,7 @@ where
             session,
             attempt,
             part,
+            withhold_content,
         } = opened;
         let span = tracing::info_span!(
             "suggestion.session",
@@ -1211,7 +1218,7 @@ where
                 biased;
                 () = stop.shutdown.cancelled() => (SessionEnding::Cancelled, None),
                 () = stop.lost.cancelled() => (SessionEnding::Interrupted, Some("heartbeat_lost")),
-                turn = tokio::time::timeout(timeout(run.trigger, kind), self.turn(&action, brief, &reads)) => match turn {
+                turn = tokio::time::timeout(timeout(run.trigger, kind), self.turn(&action, brief, withhold_content, &reads)) => match turn {
                     Ok(Ok(ended)) => ended,
                     Ok(Err(RoutineSessionError::PromptDeliveryUnknown)) => (SessionEnding::DeliveryUnknown, None),
                     Ok(Err(error)) => {
@@ -1289,11 +1296,13 @@ where
     }
 
     /// Open the hidden session, prompt it once and wait for its turn to end:
-    /// how, with the failure's name.
+    /// how, with the failure's name. A brief that carries the list of work
+    /// found in the month's mail withholds the turn's content from traces.
     async fn turn(
         &self,
         action: &RoutineSessionAction,
         brief: String,
+        withhold_content: bool,
         reads: &AtomicU32,
     ) -> Result<(SessionEnding, Option<&'static str>), RoutineSessionError> {
         self.sessions
@@ -1322,6 +1331,7 @@ where
                 action: action.clone(),
                 prompt: brief,
                 context: None,
+                withhold_content,
             })
             .await?;
         // The session has no completion signal to wait on: read its status,

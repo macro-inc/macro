@@ -101,6 +101,8 @@ struct FakeSessions {
     script: Script,
     prepared: Mutex<Vec<PrepareRoutineSession>>,
     prompts: Mutex<Vec<String>>,
+    /// The prompts sent withholding their turn's content from traces.
+    withheld: Mutex<Vec<String>>,
     turns: Mutex<HashMap<Uuid, (Turn, u32)>>,
     cancelled: Mutex<Vec<Uuid>>,
     /// Each delete, with its generation's status when it ran.
@@ -140,6 +142,9 @@ impl RoutineSessions for FakeSessions {
         &self,
         command: PromptRoutineSession,
     ) -> Result<RoutinePromptAccepted, RoutineSessionError> {
+        if command.withhold_content {
+            self.withheld.lock().unwrap().push(command.prompt.clone());
+        }
         let attempt = {
             let mut prompts = self.prompts.lock().unwrap();
             prompts.push(command.prompt.clone());
@@ -1076,6 +1081,7 @@ fn build_finding(
         script,
         prepared: Mutex::new(Vec::new()),
         prompts: Mutex::new(Vec::new()),
+        withheld: Mutex::new(Vec::new()),
         turns: Mutex::new(HashMap::new()),
         cancelled: Mutex::new(Vec::new()),
         deleted: Mutex::new(Vec::new()),
@@ -1427,6 +1433,95 @@ async fn an_onboarding_stopped_while_drafting_is_cancelled_not_partial() {
     h.service.wait().await;
     assert_eq!(h.repo.only().status, GenerationStatus::Cancelled);
     assert_eq!(h.reports()[0].outcome, "cancelled");
+}
+
+fn drafts_fail(prompt: &str, _: usize) -> Turn {
+    if prompt.contains(" drafts ") {
+        ends(
+            RoutineActionStatus::Failed(RoutineFailureReason::RuntimeError),
+            0,
+        )
+    } else {
+        ends(RoutineActionStatus::Succeeded, 1)
+    }
+}
+
+fn all_fail(_: &str, _: usize) -> Turn {
+    ends(
+        RoutineActionStatus::Failed(RoutineFailureReason::MaxTokens),
+        0,
+    )
+}
+
+/// The work found and the month's mail are held only by the generation's
+/// sessions: however the generation ends, every session it opened is
+/// deleted by the time it has, and only the drafting sessions given the
+/// list withhold their turns' content from traces.
+#[tokio::test(start_paused = true)]
+async fn every_session_is_deleted_however_a_generation_that_found_the_work_ends() {
+    enum Ending {
+        Runs,
+        Stopped,
+        LosesHeartbeat,
+    }
+    for (script, ending, status) in [
+        (finishes as Script, Ending::Runs, GenerationStatus::Ready),
+        (drafts_fail, Ending::Runs, GenerationStatus::Partial),
+        (all_fail, Ending::Runs, GenerationStatus::Failed),
+        (drafts_hang, Ending::Stopped, GenerationStatus::Cancelled),
+        (
+            drafts_hang,
+            Ending::LosesHeartbeat,
+            GenerationStatus::Interrupted,
+        ),
+    ] {
+        let h = build_finding(true, true, script, Some(true), Some(Finding::Found(6)));
+        match ending {
+            Ending::Runs => {
+                h.onboard().await.unwrap();
+            }
+            Ending::Stopped => {
+                h.service
+                    .start(&user(), GenerationTrigger::Onboarding, chrono_tz::UTC)
+                    .await
+                    .unwrap();
+                tokio::time::sleep(Duration::from_secs(60)).await;
+                h.shutdown.cancel();
+                h.service.wait().await;
+            }
+            Ending::LosesHeartbeat => {
+                h.repo.lose_heartbeat.store(true, Ordering::SeqCst);
+                h.onboard().await.unwrap();
+            }
+        }
+        assert_eq!(h.repo.only().status, status);
+        let mut opened: Vec<Uuid> = h
+            .sessions
+            .prepared
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|prepared| prepared.session_id.as_uuid())
+            .collect();
+        let mut deleted = h.sessions.deleted();
+        opened.sort();
+        deleted.sort();
+        assert!(opened.len() > 1 + MAX_DRAFT_SESSIONS, "{status:?}");
+        assert_eq!(deleted, opened, "{status:?}: every session is deleted");
+        let mut listed: Vec<String> = h
+            .prompts()
+            .into_iter()
+            .filter(|prompt| prompt.contains(" drafts ") && !prompt.contains(" drafts none "))
+            .collect();
+        let mut withheld = h.sessions.withheld.lock().unwrap().clone();
+        listed.sort();
+        withheld.sort();
+        assert!(!listed.is_empty(), "{status:?}");
+        assert_eq!(
+            withheld, listed,
+            "{status:?}: only the list's sessions withhold"
+        );
+    }
 }
 
 /// Without the finding step, a stop after a session finished keeps what

@@ -251,7 +251,14 @@ each run.
   and passed inside `<untrusted>` tags in a fenced `json` block, which the
   harness's Markdown round trip leaves as written: `WorkList::to_brief`
   writes `&` and backticks as JSON escapes), and drafts one routine per stream
-  the catalog lacks, at most `MAX_DRAFTS`. The list is stored nowhere; its
+  the catalog lacks, at most `MAX_DRAFTS`. The list and the month's mail are
+  stored nowhere: the finding call runs inside
+  `genai_telemetry::withhold_content`, so its spans carry none of what it
+  reads or answers, and the drafting sessions that carry the list are
+  prompted with `PromptRoutineSession::withhold_content`
+  (`BriefPart::carries_work_list`), so their turns record no content on
+  traces either. The list lives in those sessions' prompts (their control
+  queue and log) until the generation deletes them as it ends. Its
   fields (senders, cadence, what each asks, what the person does with it and
   to whom, who already handles it) are
   meant to serve other setup suggestions later. A session hands back

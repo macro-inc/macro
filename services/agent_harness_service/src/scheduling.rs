@@ -302,6 +302,7 @@ where
                 action: action.clone(),
                 prompt: prompt.to_owned(),
                 context: None,
+                withhold_content: false,
             })
             .await
         {

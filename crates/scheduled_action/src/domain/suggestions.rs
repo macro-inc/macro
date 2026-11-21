@@ -552,14 +552,21 @@ where
         let mut tries = 0;
         let list = loop {
             tries += 1;
-            let answer = model
-                .complete(user, session, WORK_MODEL, prompt.clone(), work::schema())
-                .instrument(tracing::info_span!(
-                    "routine.suggestions.list_work",
-                    routine.suggestions.try = tries
-                ))
-                .await
-                .and_then(|answer| Ok(WorkList::from_answer(answer)?));
+            // The mail and the list are held nowhere outside the generation:
+            // the call records none of what it is told or answers on traces.
+            let answer = genai_telemetry::withhold_content(model.complete(
+                user,
+                session,
+                WORK_MODEL,
+                prompt.clone(),
+                work::schema(),
+            ))
+            .instrument(tracing::info_span!(
+                "routine.suggestions.list_work",
+                routine.suggestions.try = tries
+            ))
+            .await
+            .and_then(|answer| Ok(WorkList::from_answer(answer)?));
             match answer {
                 Ok(list) => break list,
                 Err(error) if tries < WORK_TRIES => tracing::warn!(

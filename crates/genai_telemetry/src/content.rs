@@ -16,13 +16,50 @@
 //!   oldest entries first so the most recent turn survives. Unbounded content
 //!   would blow the OTLP batch past the agent's receive limit (dropping the
 //!   whole batch) and pay for the same conversation once per model call.
+//!
+//! Work whose content must stay off traces whatever the switch says, such as
+//! a call that reads a person's mail, runs inside [`withhold_content`]; every
+//! recorder reads [`ContentPolicy::current`], which is the disabled policy
+//! there.
 
 #[cfg(test)]
 mod test;
 
 use macro_env_var::maybe_env_vars;
 use std::borrow::Cow;
+use std::future::Future;
 use std::sync::OnceLock;
+
+tokio::task_local! {
+    /// Set while [`withhold_content`] runs its work.
+    static WITHHELD: ();
+}
+
+/// Run `work` so that what it records on GenAI spans carries no content: no
+/// prompt, model output, tool arguments or results, whatever the process's
+/// switch says. Structure (names, model, usage, timing, ids) is still
+/// recorded. The scope is `work`'s own task: a task it spawns takes the
+/// process's policy again unless its future is wrapped too, with
+/// [`withhold_content_if`] and [`content_withheld`].
+pub async fn withhold_content<F: Future>(work: F) -> F::Output {
+    WITHHELD.scope((), work).await
+}
+
+/// Whether the current task runs inside [`withhold_content`].
+pub fn content_withheld() -> bool {
+    WITHHELD.try_with(|()| ()).is_ok()
+}
+
+/// Run `work` inside [`withhold_content`] when `withheld`, else as it is: how
+/// a task spawned from withheld work stays withheld,
+/// `tokio::spawn(withhold_content_if(content_withheld(), work))`.
+pub async fn withhold_content_if<F: Future>(withheld: bool, work: F) -> F::Output {
+    if withheld {
+        withhold_content(work).await
+    } else {
+        work.await
+    }
+}
 
 maybe_env_vars! {
     pub struct OtelInstrumentationGenaiCaptureMessageContent;
@@ -93,6 +130,16 @@ impl ContentPolicy {
         *POLICY.get_or_init(|| {
             Self::parse(OtelInstrumentationGenaiCaptureMessageContent::new().as_deref())
         })
+    }
+
+    /// The policy for content recorded now: [`Self::disabled`] inside
+    /// [`withhold_content`], else [`Self::from_env`].
+    pub fn current() -> Self {
+        if content_withheld() {
+            Self::disabled()
+        } else {
+            Self::from_env()
+        }
     }
 
     /// Interpret the capture switch: `false`, `0`, `no` and `off`

@@ -39,10 +39,11 @@ pub struct ToolCallSpan {
 }
 
 impl ToolCallSpan {
-    /// Begin telemetry for a call of `tool_name` with `arguments`, under the
-    /// process-wide [`ContentPolicy`].
+    /// Begin telemetry for a call of `tool_name` with `arguments`, under
+    /// [`ContentPolicy::current`] (the process-wide policy, or none inside
+    /// [`genai_telemetry::withhold_content`]).
     pub fn begin(tool_name: &str, arguments: &serde_json::Value) -> Self {
-        Self::begin_with_policy(tool_name, arguments, ContentPolicy::from_env())
+        Self::begin_with_policy(tool_name, arguments, ContentPolicy::current())
     }
 
     /// [`Self::begin`] with an explicit content policy.

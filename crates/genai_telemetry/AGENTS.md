@@ -17,6 +17,10 @@ agent loop.
   re-sending itself on every span. Explicit `modelMedia` envelopes replace PNG
   data with byte-count/source metadata before capture, including nested tool
   results; inline pixels stay excluded even when content capture is enabled.
+  `withhold_content(work)` runs work under the disabled policy whatever the
+  switch says (a task-local; `ContentPolicy::current` is what every recorder
+  reads). A task spawned from withheld work carries it with
+  `withhold_content_if(content_withheld(), fut)`.
 - `src/span.rs`: `GenAiSpanExt`, the attribute setters that write to an
   already-open span.
 - `src/messages.rs`: builders for the semconv JSON message/tool-definition shapes.
@@ -33,7 +37,7 @@ agent loop.
 
 ## Boundaries
 
-- Depends on: `strum`, `macro_env_var` (reads `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT`).
+- Depends on: `strum`, `macro_env_var` (reads `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT`), `tokio` (the task-local behind `withhold_content`).
 - Used by: `agent`, `agent_inmem`, `agent_session`, `ai_toolset`; for
   `provider_account`, also every crate with its own provider client
   (`anthropic`, `dictation`, `embedding`, `image_generation`, `task_dedup`,

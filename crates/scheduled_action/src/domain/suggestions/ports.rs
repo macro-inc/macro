@@ -42,6 +42,12 @@ impl BriefPart<'_> {
             Self::Drafts(_) => "drafts",
         }
     }
+
+    /// Whether its brief carries the list of work found in the month's mail,
+    /// which the session holds and its traces record none of.
+    pub fn carries_work_list(self) -> bool {
+        matches!(self, Self::Drafts(Some(_)))
+    }
 }
 
 /// The model call that finds a person's work in their mail, recorded with a

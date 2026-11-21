@@ -1,6 +1,6 @@
 //! The one-shot paths trace their single model call like the agent loop does.
 use super::*;
-use genai_telemetry::attr;
+use genai_telemetry::{ContentPolicy, attr};
 use opentelemetry::trace::{Status, TracerProvider as _};
 use opentelemetry_sdk::trace::{InMemorySpanExporter, SdkTracerProvider, SpanData};
 use rig_core::test_utils::{MockCompletionModel, MockTurn};
@@ -66,6 +66,44 @@ async fn a_one_shot_completion_traces_its_model_call() {
         string_attribute(chat, attr::OUTPUT_MESSAGES)
             .is_some_and(|output| output.contains("a summary"))
     );
+}
+
+/// The one-shot paths take the current content policy (`telemetry_for`), so
+/// a structured call made inside `withhold_content` keeps its span's
+/// structure and none of what it was told or answered.
+#[tokio::test]
+async fn a_structured_one_shot_inside_withhold_content_records_no_content() {
+    let (exporter, provider, _guard) = otel_test_pipeline();
+    let response = genai_telemetry::withhold_content(async {
+        let telemetry = GenAiContext::new(None, "find".to_owned(), ContentPolicy::current(), true);
+        let model = TracedModel::new(
+            MockCompletionModel::new([MockTurn::text(r#"{"private":"answer"}"#)]),
+            telemetry.clone(),
+        );
+        prompt_with_history(
+            model,
+            "private instructions",
+            vec![Message::user("a private prompt")],
+            telemetry,
+            Some(serde_json::json!({"response_format": {"type": "json_object"}})),
+        )
+        .await
+    })
+    .await
+    .expect("the completion succeeds");
+    assert_eq!(response.output, r#"{"private":"answer"}"#);
+
+    let spans = finished(&exporter, &provider);
+    let chats = chat_spans(&spans);
+    assert_eq!(chats.len(), 1, "{spans:#?}");
+    assert_eq!(string_attribute(chats[0], attr::INPUT_MESSAGES), None);
+    assert_eq!(string_attribute(chats[0], attr::OUTPUT_MESSAGES), None);
+    for span in &spans {
+        for kv in &span.attributes {
+            let value = kv.value.to_string();
+            assert!(!value.contains("private"), "{} carries {value}", kv.key);
+        }
+    }
 }
 
 /// A provider that refuses the call leaves no turn for the hook to record, so

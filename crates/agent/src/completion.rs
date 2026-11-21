@@ -217,7 +217,7 @@ fn telemetry_for(ctx: &UsageContext, routed: &RoutedModel<'_>) -> GenAiContext {
     let telemetry = GenAiContext::new(
         None,
         ctx.feature.to_string(),
-        ContentPolicy::from_env(),
+        ContentPolicy::current(),
         true,
     );
     telemetry.set_model(routed.provider(), routed.model_name());

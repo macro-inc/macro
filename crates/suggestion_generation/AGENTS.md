@@ -78,6 +78,13 @@ scheduling runtime.
   it): every service refuses their requests other than reads, their own tools
   and email drafts, and the native tool gate their non-code tools. A new
   session tool route goes on the scope's list.
+- A routines session whose brief carries the list of work found
+  (`BriefPart::carries_work_list`) is prompted with
+  `PromptRoutineSession::withhold_content`: its turns record no content on
+  traces (the harness's session projector drops to the disabled policy for
+  the connection, and the in-process runtime runs the turn inside
+  `genai_telemetry::withhold_content`). The list lives only in those
+  sessions, until they are deleted.
 - Traces: an onboarding or manual generation is a child of the request that
   started it; a nightly one is its own root span linked to the tick. Its trace
   id is kept on `suggestion_generation.trace_id` and recorded as

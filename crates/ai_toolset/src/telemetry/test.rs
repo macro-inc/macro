@@ -283,6 +283,33 @@ async fn user_tool_calls_are_traced_too() {
     );
 }
 
+/// A dispatch inside `withhold_content` records the call, not what went in or
+/// came out.
+#[tokio::test]
+async fn a_tool_call_inside_withhold_content_records_no_content() {
+    let (exporter, provider, _guard) = otel_test_pipeline();
+    let toolset = toolset();
+
+    genai_telemetry::withhold_content(toolset.try_tool_call(
+        (),
+        request_context(),
+        "echo_tool",
+        &json!({ "value": "private" }),
+    ))
+    .await
+    .expect("dispatch")
+    .expect("tool success");
+
+    let spans = finished(&exporter, &provider);
+    let span = tool_spans(&spans)[0];
+    assert_eq!(
+        string_attribute(span, attr::TOOL_NAME).as_deref(),
+        Some("echo_tool")
+    );
+    assert_eq!(string_attribute(span, attr::TOOL_CALL_ARGUMENTS), None);
+    assert_eq!(string_attribute(span, attr::TOOL_CALL_RESULT), None);
+}
+
 #[tokio::test]
 async fn content_capture_off_records_structure_only() {
     let (exporter, provider, _guard) = otel_test_pipeline();
