@@ -1,5 +1,11 @@
 import { thrownResultErrorHasCode } from '@core/util/result';
-import { CombinedError } from '@urql/core';
+import { QueryClient } from '@tanstack/query-core';
+import {
+  type Client,
+  CombinedError,
+  createClient,
+  fetchExchange,
+} from '@urql/core';
 import { beforeEach, expect, it, vi } from 'vitest';
 import {
   type PropertyCatalogDefinitionFieldsFragment,
@@ -15,9 +21,11 @@ import {
   listTagSets,
 } from './property-catalog';
 
-const network = vi.hoisted(() => ({ query: vi.fn() }));
+const network = vi.hoisted(() => ({ executeQuery: vi.fn() }));
+// A test that needs urql's own client behaviour sets a real one here.
+const transport = vi.hoisted(() => ({ client: undefined as unknown }));
 vi.mock('./graphql-soup', () => ({
-  getGraphqlSoupNetworkClient: () => network,
+  getGraphqlSoupNetworkClient: () => transport.client ?? network,
 }));
 
 const VIEWER = 'macro|viewer@example.com';
@@ -26,9 +34,17 @@ const CREATED = '2026-01-02T03:04:05Z';
 const UPDATED = '2026-02-03T04:05:06Z';
 
 function respond(data: unknown) {
-  network.query.mockReturnValueOnce({
+  network.executeQuery.mockReturnValueOnce({
     toPromise: async () => ({ data, error: undefined }),
   });
+}
+
+// Each read is its own request for the document and variables given.
+function expectRead(document: unknown, variables: unknown) {
+  expect(network.executeQuery).toHaveBeenCalledWith(
+    expect.objectContaining({ query: document, variables }),
+    { requestPolicy: 'network-only' }
+  );
 }
 
 function definition(
@@ -69,6 +85,7 @@ function option(
 
 beforeEach(() => {
   vi.clearAllMocks();
+  transport.client = undefined;
 });
 
 it('lists definitions in the REST shape, naming every owner', async () => {
@@ -97,11 +114,10 @@ it('lists definitions in the REST shape, naming every owner', async () => {
     forEntityType: 'TASK',
   });
 
-  expect(network.query).toHaveBeenCalledWith(
-    PropertyCatalogDefinitionsDocument,
-    { scope: 'ALL', forEntityType: 'TASK' },
-    { requestPolicy: 'network-only' }
-  );
+  expectRead(PropertyCatalogDefinitionsDocument, {
+    scope: 'ALL',
+    forEntityType: 'TASK',
+  });
   expect(listed).toEqual([
     {
       id: 'definition-1',
@@ -154,11 +170,10 @@ it('lists definitions with their options when asked, keeping number values', asy
     includeOptions: true,
   });
 
-  expect(network.query).toHaveBeenCalledWith(
-    PropertyCatalogDefinitionsWithOptionsDocument,
-    { scope: 'TEAM', forEntityType: null },
-    { requestPolicy: 'network-only' }
-  );
+  expectRead(PropertyCatalogDefinitionsWithOptionsDocument, {
+    scope: 'TEAM',
+    forEntityType: null,
+  });
   expect(listed).toEqual([
     {
       definition: expect.objectContaining({
@@ -200,11 +215,9 @@ it("lists one definition's options in the REST shape", async () => {
 
   const listed = await listPropertyOptions('definition-1');
 
-  expect(network.query).toHaveBeenCalledWith(
-    PropertyCatalogOptionsDocument,
-    { propertyDefinitionId: 'definition-1' },
-    { requestPolicy: 'network-only' }
-  );
+  expectRead(PropertyCatalogOptionsDocument, {
+    propertyDefinitionId: 'definition-1',
+  });
   expect(listed).toEqual([
     {
       id: 'option-1',
@@ -239,11 +252,7 @@ it('lists tag sets, leaving out the definition of an unprovisioned team set', as
 
   const sets = await listTagSets();
 
-  expect(network.query).toHaveBeenCalledWith(
-    PropertyCatalogTagSetsDocument,
-    {},
-    { requestPolicy: 'network-only' }
-  );
+  expectRead(PropertyCatalogTagSetsDocument, {});
   expect(sets).toEqual([
     {
       scope: 'user',
@@ -279,7 +288,7 @@ it('rejects with the GraphQL error instead of an empty list', async () => {
   const error = new CombinedError({
     graphQLErrors: ['definition is not visible'],
   });
-  network.query.mockReturnValueOnce({
+  network.executeQuery.mockReturnValueOnce({
     toPromise: async () => ({ data: undefined, error }),
   });
 
@@ -287,7 +296,7 @@ it('rejects with the GraphQL error instead of an empty list', async () => {
 });
 
 it('rejects an auth failure with the code the retry policy reads', async () => {
-  network.query.mockReturnValueOnce({
+  network.executeQuery.mockReturnValueOnce({
     toPromise: async () => ({
       data: undefined,
       error: new CombinedError({
@@ -299,4 +308,92 @@ it('rejects an auth failure with the code the retry policy reads', async () => {
 
   const rejection = listTagSets().catch((error: unknown) => error);
   expect(thrownResultErrorHasCode(await rejection, 'UNAUTHORIZED')).toBe(true);
+});
+
+// A server whose catalog reads answer with the definitions there when the
+// request arrives, held until `release`, through a real urql client.
+function heldCatalogServer() {
+  let names = ['Status'];
+  let holding = true;
+  const waiting: Array<() => void> = [];
+  const fetch = vi.fn(async () => {
+    const seen = names.map((displayName) =>
+      definition({ id: displayName, displayName })
+    );
+    if (holding) await new Promise<void>((resolve) => waiting.push(resolve));
+    return new Response(
+      JSON.stringify({
+        data: { user: { id: VIEWER, propertyDefinitions: seen } },
+      }),
+      { headers: { 'content-type': 'application/json' } }
+    );
+  });
+  const client: Client = createClient({
+    url: 'https://dss.test/items/soup/graphql',
+    exchanges: [fetchExchange],
+    fetch,
+    preferGetMethod: false,
+  });
+  return {
+    client,
+    fetch,
+    write: (name: string) => {
+      names = [...names, name];
+    },
+    hold: () => {
+      holding = true;
+    },
+    release: () => {
+      holding = false;
+      for (const resolve of waiting.splice(0)) resolve();
+    },
+  };
+}
+
+const ALL = { scope: 'all', includeOptions: false } as const;
+const namesOf = (listed: Awaited<ReturnType<typeof listPropertyDefinitions>>) =>
+  listed.map(
+    (item) => ('definition' in item ? item.definition : item).display_name
+  );
+
+it('sends a read made after a write as its own request while an earlier read of the same list is in flight', async () => {
+  const server = heldCatalogServer();
+  transport.client = server.client;
+
+  const before = listPropertyDefinitions(ALL);
+  await vi.waitFor(() => expect(server.fetch).toHaveBeenCalledTimes(1));
+  server.write('Stage');
+  const after = listPropertyDefinitions(ALL);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  server.release();
+
+  expect(namesOf(await before)).toEqual(['Status']);
+  expect(namesOf(await after)).toEqual(['Status', 'Stage']);
+  expect(server.fetch).toHaveBeenCalledTimes(2);
+});
+
+it('keeps a write in the list its invalidation refetches while an earlier refetch is in flight', async () => {
+  const server = heldCatalogServer();
+  transport.client = server.client;
+  const queries = new QueryClient();
+  const queryKey = ['properties', 'definitions', ALL];
+  const queryFn = () => listPropertyDefinitions(ALL);
+  server.release();
+  await queries.fetchQuery({ queryKey, queryFn });
+
+  // A refetch is pending (a first write's invalidation) when a second write
+  // lands and invalidates the list again, which cancels and refetches.
+  server.hold();
+  const pending = queries.refetchQueries({ queryKey });
+  await vi.waitFor(() => expect(server.fetch).toHaveBeenCalledTimes(2));
+  server.write('Stage');
+  const refetched = queries.refetchQueries({ queryKey });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  server.release();
+  await Promise.all([pending, refetched]);
+
+  expect(namesOf(queries.getQueryData(queryKey) ?? [])).toEqual([
+    'Status',
+    'Stage',
+  ]);
 });
