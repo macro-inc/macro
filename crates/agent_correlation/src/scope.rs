@@ -19,6 +19,37 @@ pub enum SessionScope {
     /// reads and changes nothing, so code written to get past the dry run
     /// inside its process still can't write.
     DryRun,
+    /// A background job: it runs unwatched for minutes, so it makes only the
+    /// requests on its lists (`scope/job_reads.txt`, `scope/job_writes.txt`)
+    /// and is refused everything else, routes without a spec and new routes
+    /// included.
+    Job,
+}
+
+/// A background job's requests, read once from its lists.
+static JOB_REQUESTS: std::sync::LazyLock<Vec<(&'static str, &'static str)>> =
+    std::sync::LazyLock::new(|| {
+        job_list(include_str!("scope/job_reads.txt"))
+            .chain(job_list(include_str!("scope/job_writes.txt")))
+            .map(|(_, method, path)| (method, path))
+            .collect()
+    });
+
+/// The `(spec, method, path)` lines of a job list: `[spec]` headers, then
+/// `METHOD /path` lines; `#` starts a comment.
+fn job_list(
+    text: &'static str,
+) -> impl Iterator<Item = (&'static str, &'static str, &'static str)> {
+    let mut spec = "";
+    text.lines().filter_map(move |line| {
+        let line = line.split('#').next().unwrap_or_default().trim();
+        if let Some((_, name)) = lazy_regex::regex_captures!(r"^\[([a-z-]+)\]$", line) {
+            spec = name;
+            return None;
+        }
+        let (_, method, path) = lazy_regex::regex_captures!(r"^([A-Z]+) (/\S*)$", line)?;
+        Some((spec, method, path))
+    })
 }
 
 /// Requests that reach someone else: sending or scheduling mail, invites
@@ -167,6 +198,9 @@ const SENDS: &[(&str, &str)] = &[
     ("POST", "/databases/{id}/webhooks"),
     ("POST", "/webhook/webhooks"),
     ("POST", "/webhook/webhooks/{id}/validate"),
+    // Link previews fetch what they're given from Macro's servers (the run
+    // bootstrap also refuses unfurl's host to every scoped run).
+    ("POST", "/unfurl/bulk"),
     ("POST", "/web/fetch"),
     ("POST", "/web/search"),
     ("POST", "/team/invite"),
@@ -357,7 +391,6 @@ pub const POST_READS: &[(&str, &str)] = &[
     ("POST", "/search"),
     ("POST", "/search/simple"),
     ("POST", "/scheduled-actions/check"),
-    ("POST", "/unfurl/bulk"),
     ("POST", "/calendar-events/preview"),
     ("POST", "/call/record/preview"),
     ("POST", "/channel-labels/preview"),
@@ -380,6 +413,7 @@ impl SessionScope {
             Self::Generation => "generation",
             Self::NoSend => "no_send",
             Self::DryRun => "dry_run",
+            Self::Job => "job",
         }
     }
 
@@ -389,6 +423,7 @@ impl SessionScope {
             "generation" => Some(Self::Generation),
             "no_send" => Some(Self::NoSend),
             "dry_run" => Some(Self::DryRun),
+            "job" => Some(Self::Job),
             _ => None,
         }
     }
@@ -412,6 +447,12 @@ impl SessionScope {
         if listed(ANY_WRITE, method, path) {
             return false;
         }
+        // A job reads only what its list names, like any other request; a
+        // preflight carries nothing.
+        if self == Self::Job {
+            let method = if method == "HEAD" { "GET" } else { method };
+            return method == "OPTIONS" || listed(&JOB_REQUESTS, method, path);
+        }
         if reads_by_method(method) {
             return true;
         }
@@ -421,6 +462,7 @@ impl SessionScope {
             }
             Self::NoSend => !listed(SENDS, method, path),
             Self::DryRun => listed(POST_READS, method, path),
+            Self::Job => false,
         }
     }
 
@@ -430,7 +472,7 @@ impl SessionScope {
     /// [`crate::context::refuse_sharing`], since a path can't tell.
     pub fn allows_sharing(self) -> bool {
         match self {
-            Self::Generation | Self::NoSend | Self::DryRun => false,
+            Self::Generation | Self::NoSend | Self::DryRun | Self::Job => false,
         }
     }
 }

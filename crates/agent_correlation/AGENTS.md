@@ -20,7 +20,18 @@ code, not in its prompt. The harness also signs the scope into the credential
   the harness revokes a background job's when its program stops normally):
   `validate` then refuses it (`Revoked`, 401) while `find` still attributes
   past work.
-- `src/scope.rs`: session scopes and the requests each allows. `generation`:
+- `src/scope.rs`: session scopes and the requests each allows. `job` (a
+  background job's credential): default deny, reads included; only the
+  requests on `src/scope/job_reads.txt` and `src/scope/job_writes.txt`
+  (spec routes, by spec), so routes without a spec and new routes are
+  refused. Every spec GET is on the job's read list or on
+  `job_refused_reads.txt` (server-side fetches of caller-chosen URLs,
+  credentials, sign-in flows, invite and join tokens, vault secrets), and
+  every list line names a spec operation
+  (`a_job_classifies_every_read_and_allows_only_its_lists`). Under `job`,
+  `entity_access`'s `EntityPermission::satisfies` makes a change need owner
+  access, and no scope shares. Signed-scope services
+  (`enforce_signed_scope`) hold a job to the same lists. `generation`:
   reads by method, its own writes, and `POST_READS`; `no_send` (a background
   run that sends nothing): anything but `SENDS`, the requests that reach
   someone else, carry data out (web fetch and search), or start work with

@@ -1,0 +1,49 @@
+# Spec GETs a background job's credential may not make, by spec, each with
+# its reason. A job is refused everything outside its lists anyway; this
+# file keeps every spec GET classified, so a new one must be placed.
+
+
+[agent-harness]
+GET /agent-repositories/branches  # fetches a caller-chosen git remote from Macro's servers
+
+[auth]
+GET /codex/login/{attempt_id}  # credential sign-in flow
+GET /gtm-invite/links  # invite links others redeem
+GET /gtm-invite/public/{token}  # invite tokens
+GET /jwt/macro_api_token  # mints a credential
+GET /link/email/providers  # account linking flow
+GET /login/sso  # sign-in and OAuth flows
+GET /oauth/passwordless/{code}  # sign-in and OAuth flows
+GET /oauth/redirect  # sign-in and OAuth flows
+GET /oauth2/{provider}/callback  # sign-in and OAuth flows
+GET /session/login/{session_code}  # sign-in and OAuth flows
+GET /team/invite-link  # an invite link others redeem
+
+[cognition]
+GET /mcp/servers/auth/callback  # sign-in and OAuth flows
+
+[email]
+GET /opens/{token}  # an open-tracking pixel: records an open
+
+[storage]
+GET /bots/{bot_id}/tokens  # bot credentials
+GET /call/join/{token}  # joins a call
+GET /call/join/{token}/participants  # call join tokens
+GET /call/meetings/invite/{token}  # meeting invite tokens
+GET /call/meetings/join/{token}/participants  # meeting join tokens
+GET /channels/{channel_id}/join-link  # a join link others redeem
+GET /passwords/agent/teams/{team}/items  # password-vault secrets
+GET /passwords/agent/teams/{team}/items/{item}/access-requests/mine  # password-vault secrets
+GET /passwords/teams  # password-vault secrets
+GET /passwords/teams/{team}/agent-access-requests  # password-vault secrets
+GET /passwords/teams/{team}/folders  # password-vault secrets
+GET /passwords/teams/{team}/items  # password-vault secrets
+GET /passwords/teams/{team}/items/{item}  # password-vault secrets
+GET /passwords/teams/{team}/items/{item}/activity  # password-vault secrets
+GET /passwords/teams/{team}/items/{item}/history  # password-vault secrets
+GET /passwords/teams/{team}/items/{item}/share  # password-vault secrets
+GET /passwords/teams/{team}/items/{item}/username  # password-vault secrets
+
+[unfurl]
+GET /proxy  # fetches a caller-chosen URL from Macro's servers
+GET /unfurl  # fetches a caller-chosen URL from Macro's servers

@@ -363,6 +363,80 @@ fn a_dry_run_reads_and_writes_nothing() {
     assert!(!scope.allows_sharing());
 }
 
+/// The services' OpenAPI specs, by the name their lists use.
+const SPECS: &[(&str, &str)] = &[
+    (
+        "agent-harness",
+        include_str!("../../../../packages/sdk/specs/agent-harness.json"),
+    ),
+    (
+        "auth",
+        include_str!("../../../../packages/sdk/specs/auth.json"),
+    ),
+    (
+        "calendar",
+        include_str!("../../../../packages/sdk/specs/calendar.json"),
+    ),
+    (
+        "cognition",
+        include_str!("../../../../packages/sdk/specs/cognition.json"),
+    ),
+    (
+        "connection",
+        include_str!("../../../../packages/sdk/specs/connection.json"),
+    ),
+    (
+        "contacts",
+        include_str!("../../../../packages/sdk/specs/contacts.json"),
+    ),
+    (
+        "email",
+        include_str!("../../../../packages/sdk/specs/email.json"),
+    ),
+    (
+        "notification",
+        include_str!("../../../../packages/sdk/specs/notification.json"),
+    ),
+    (
+        "properties",
+        include_str!("../../../../packages/sdk/specs/properties.json"),
+    ),
+    (
+        "scheduled-action",
+        include_str!("../../../../packages/sdk/specs/scheduled-action.json"),
+    ),
+    (
+        "search",
+        include_str!("../../../../packages/sdk/specs/search.json"),
+    ),
+    (
+        "static-files",
+        include_str!("../../../../packages/sdk/specs/static-files.json"),
+    ),
+    (
+        "storage",
+        include_str!("../../../../packages/sdk/specs/storage.json"),
+    ),
+    (
+        "unfurl",
+        include_str!("../../../../packages/sdk/specs/unfurl.json"),
+    ),
+];
+
+/// A spec path with each `{…}` segment filled in, as a request sends it.
+fn concrete(path: &str) -> String {
+    path.split('/')
+        .map(|segment| {
+            if segment.starts_with('{') {
+                "x"
+            } else {
+                segment
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
 /// Every write a service's OpenAPI spec declares is classified for a run
 /// that sends nothing: refused, one of the scope's POST reads, or reviewed
 /// as a change to the person's own or shared items in `no_send_writes.txt`.
@@ -371,64 +445,6 @@ fn a_dry_run_reads_and_writes_nothing() {
 /// an allowed write fails too, so the list stays true.
 #[test]
 fn the_no_send_scope_classifies_every_write_in_the_specs() {
-    const SPECS: &[(&str, &str)] = &[
-        (
-            "agent-harness",
-            include_str!("../../../../packages/sdk/specs/agent-harness.json"),
-        ),
-        (
-            "auth",
-            include_str!("../../../../packages/sdk/specs/auth.json"),
-        ),
-        (
-            "calendar",
-            include_str!("../../../../packages/sdk/specs/calendar.json"),
-        ),
-        (
-            "cognition",
-            include_str!("../../../../packages/sdk/specs/cognition.json"),
-        ),
-        (
-            "connection",
-            include_str!("../../../../packages/sdk/specs/connection.json"),
-        ),
-        (
-            "contacts",
-            include_str!("../../../../packages/sdk/specs/contacts.json"),
-        ),
-        (
-            "email",
-            include_str!("../../../../packages/sdk/specs/email.json"),
-        ),
-        (
-            "notification",
-            include_str!("../../../../packages/sdk/specs/notification.json"),
-        ),
-        (
-            "properties",
-            include_str!("../../../../packages/sdk/specs/properties.json"),
-        ),
-        (
-            "scheduled-action",
-            include_str!("../../../../packages/sdk/specs/scheduled-action.json"),
-        ),
-        (
-            "search",
-            include_str!("../../../../packages/sdk/specs/search.json"),
-        ),
-        (
-            "static-files",
-            include_str!("../../../../packages/sdk/specs/static-files.json"),
-        ),
-        (
-            "storage",
-            include_str!("../../../../packages/sdk/specs/storage.json"),
-        ),
-        (
-            "unfurl",
-            include_str!("../../../../packages/sdk/specs/unfurl.json"),
-        ),
-    ];
     let mut reviewed = std::collections::BTreeSet::new();
     let mut service = "";
     for line in include_str!("no_send_writes.txt").lines() {
@@ -490,4 +506,134 @@ fn the_no_send_scope_classifies_every_write_in_the_specs() {
         stale.is_empty(),
         "no_send_writes.txt names writes the scope refuses or the specs no longer have: {stale:#?}"
     );
+}
+
+/// A background job makes exactly the requests on its lists: every spec
+/// operation is allowed to a job if and only if one of its lists names it,
+/// so no template reaches a route it doesn't name. Every list line names a
+/// spec operation, and every spec read is placed: on the job's list or on
+/// its refused list.
+#[test]
+fn a_job_classifies_every_read_and_allows_only_its_lists() {
+    let scope = SessionScope::Job;
+    let listed: std::collections::BTreeSet<(&str, &str, &str)> =
+        job_list(include_str!("job_reads.txt"))
+            .chain(job_list(include_str!("job_writes.txt")))
+            .collect();
+    let refused_reads: std::collections::BTreeSet<(&str, &str, &str)> =
+        job_list(include_str!("job_refused_reads.txt")).collect();
+    let mut operations = std::collections::BTreeSet::new();
+    let mut mismatched = Vec::new();
+    let mut unplaced = Vec::new();
+    for (name, text) in SPECS {
+        let spec: serde_json::Value = serde_json::from_str(text).unwrap();
+        for (path, methods) in spec["paths"].as_object().unwrap() {
+            for method in methods.as_object().unwrap().keys() {
+                let method = method.to_uppercase();
+                if !matches!(method.as_str(), "GET" | "POST" | "PUT" | "PATCH" | "DELETE") {
+                    continue;
+                }
+                let key = (*name, method.as_str(), path.as_str());
+                let on_list = listed.contains(&key);
+                if scope.allows(&method, &concrete(path)) != on_list {
+                    mismatched.push(format!("{name} {method} {path} (listed: {on_list})"));
+                }
+                if method == "GET" && on_list == refused_reads.contains(&key) {
+                    unplaced.push(format!("{name} GET {path}"));
+                }
+                operations.insert(format!("{name} {method} {path}"));
+            }
+        }
+    }
+    let unknown: Vec<_> = listed
+        .iter()
+        .chain(&refused_reads)
+        .map(|(name, method, path)| format!("{name} {method} {path}"))
+        .filter(|key| !operations.contains(key))
+        .collect();
+    assert!(
+        mismatched.is_empty(),
+        "a job's lists and scope disagree: {mismatched:#?}"
+    );
+    assert!(
+        unplaced.is_empty(),
+        "place each read in job_reads.txt or job_refused_reads.txt, once: {unplaced:#?}"
+    );
+    assert!(
+        unknown.is_empty(),
+        "list lines that name no spec operation: {unknown:#?}"
+    );
+}
+
+/// A job is refused what its lists don't name: routes no spec declares,
+/// fetches of caller-chosen URLs, credentials and sign-in flows, under any
+/// service prefix or version.
+#[test]
+fn a_job_is_refused_whatever_its_lists_do_not_name() {
+    let scope = SessionScope::Job;
+    for (method, path) in [
+        // Routes without a spec: registering a push token would send the
+        // owner's notifications to another device, past the job.
+        ("POST", "/notification/device/register"),
+        ("POST", "/notification/v1/device/register"),
+        ("POST", "/device/register"),
+        ("DELETE", "/notification/device/unregister"),
+        ("POST", "/agent-harness/preview/agent-sessions/01a1/open"),
+        (
+            "POST",
+            "/agent-harness/agent-git/01a1/repo.git/git-upload-pack",
+        ),
+        // Fetches a caller-chosen URL from Macro's servers.
+        ("GET", "/unfurl/proxy"),
+        ("GET", "/unfurl/unfurl"),
+        ("POST", "/unfurl/unfurl/bulk"),
+        ("GET", "/agent-harness/agent-repositories/branches"),
+        // Credentials and sign-in.
+        ("GET", "/auth/jwt/macro_api_token"),
+        ("GET", "/dss/bots/01a1/tokens"),
+        ("GET", "/dss/passwords/teams/01a1/items"),
+        // Writes a job doesn't make, sends included.
+        ("POST", "/email/messages"),
+        ("POST", "/scheduled-actions"),
+        ("PATCH", "/email/settings"),
+        ("PATCH", "/dss/forms/01a1"),
+        ("PATCH", "/dss/webhook/webhooks/01a1"),
+        ("DELETE", "/dss/documents/01a1/permanent"),
+        ("POST", "/dss/chats/01a1/tool/call"),
+        ("POST", "/items/soup/graphql"),
+    ] {
+        assert!(!scope.allows(method, path), "{method} {path}");
+    }
+    for (method, path) in [
+        ("GET", "/dss/documents/01a1"),
+        ("HEAD", "/dss/documents/01a1"),
+        ("OPTIONS", "/notification/device/register"),
+        ("PUT", "/dss/documents/01a1/markdown"),
+        ("PUT", "/properties/entities/document/01a1/02b2"),
+        ("POST", "/search"),
+        ("POST", "/scheduled-actions/check"),
+        ("POST", "/email/drafts"),
+        ("POST", "/agent-harness/agent-sessions/01a1/reviews"),
+    ] {
+        assert!(scope.allows(method, path), "{method} {path}");
+    }
+    assert!(!scope.allows_sharing());
+    assert_eq!(SessionScope::parse(scope.as_str()), Some(scope));
+}
+
+/// A job's allowed writes can't share an item out: under its scope every
+/// route that changes sharing refuses (`refuse_sharing`), and the grant
+/// writer never adds a grant (`may_share`).
+#[tokio::test]
+async fn a_job_shares_nothing_out() {
+    let job = crate::context::Attribution {
+        scope: Some(SessionScope::Job),
+        ..Default::default()
+    };
+    crate::context::scope_attribution(job, async {
+        assert!(!crate::context::may_share());
+        assert!(crate::context::refuse_sharing(true).is_err());
+        assert!(crate::context::refuse_sharing(false).is_ok());
+    })
+    .await;
 }
