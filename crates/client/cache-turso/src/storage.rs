@@ -1,4 +1,4 @@
-use crate::driver::{self, Db, WalCheckpoint};
+use crate::driver::{self, Db, WalCheckpoint, WalPosition};
 use crate::key::RecordKey;
 use crate::{PhysicalResetReason, TursoStorageError};
 use cache_core::codec::{
@@ -942,6 +942,15 @@ impl TursoStorage {
             .checkpoint_over(driver::CHECKPOINT_DUE_FRAMES)
     }
 
+    /// The end of the WAL as this storage's connection sees it. A caller
+    /// that computed something from storage compares two positions to learn
+    /// whether this storage committed a write in between. A write through
+    /// another connection may not show until this one next reads.
+    pub fn wal_position(&self) -> Result<WalPosition, TursoStorageError> {
+        self.require_healthy()?;
+        self.connection.wal_position()
+    }
+
     fn latched_reason(&self) -> Option<PhysicalResetReason> {
         let code = self.health.load(Ordering::Acquire);
         PhysicalResetReason::from_latch_code(code)
@@ -974,6 +983,12 @@ impl TursoStorage {
 
 impl Storage for TursoStorage {
     type Error = TursoStorageError;
+
+    /// This connection's end of the WAL. The cache keeps one connection per
+    /// file, so every commit to the file moves it.
+    fn write_position(&self) -> Option<cache_core::store::WritePosition> {
+        self.wal_position().ok().map(Into::into)
+    }
 
     async fn projection_keys(
         &self,

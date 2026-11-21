@@ -59,10 +59,27 @@ pub struct QueueDiagnostics {
     pub oldest_created_at_ms: Option<i64>,
 }
 
+/// Where a storage stands in its history of commits. Two equal positions
+/// from one storage mean it committed nothing in between.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WritePosition {
+    /// Changes whenever the storage starts its history over, such as a new log.
+    pub epoch: u64,
+    /// Advances with every commit within an epoch.
+    pub offset: u64,
+}
+
 /// Async KV over normalized records. Batch-oriented by design: the engine
 /// issues one `get_batch` per denormalization round, never per record.
 pub trait Storage: MaybeSend {
     type Error: std::error::Error + MaybeSend + 'static;
+
+    /// The current [`WritePosition`], or `None` when this storage does not
+    /// track one. Engines skip a refetch they already hydrated only while it
+    /// holds still, so `None` turns that off.
+    fn write_position(&self) -> Option<WritePosition> {
+        None
+    }
 
     /// Atomically replace copied layers and recomposed shadows for affected keys.
     /// Preserve all other shadows and authored command metadata.
