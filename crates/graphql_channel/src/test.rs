@@ -123,9 +123,10 @@ async fn record_channel_activity_authorizes_and_delegates_only_channel_activity(
 #[derive(Default)]
 struct FakeFinder {
     calls: Mutex<Vec<(String, String)>>,
+    views: Mutex<Vec<(String, Uuid)>>,
 }
 
-impl DirectMessageFinder for FakeFinder {
+impl ChannelUserReads for FakeFinder {
     async fn find_direct_message(
         &self,
         user_id: MacroUserIdStr<'static>,
@@ -138,6 +139,26 @@ impl DirectMessageFinder for FakeFinder {
             .push((user_id.to_string(), recipient_id.to_string()));
         Ok(found)
     }
+
+    async fn channel_viewed_at(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+    ) -> Result<Option<DateTime<Utc>>, ChannelMessagesErr> {
+        self.views
+            .lock()
+            .unwrap()
+            .push((user_id.to_string(), channel_id));
+        Ok((channel_id == VIEWED_ID).then(viewed_at))
+    }
+}
+
+const VIEWED_ID: Uuid = Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_00e0);
+
+fn viewed_at() -> DateTime<Utc> {
+    DateTime::parse_from_rfc3339("2026-11-20T10:00:00.123456Z")
+        .unwrap()
+        .with_timezone(&Utc)
 }
 
 const DM_ID: Uuid = Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_00d0);
@@ -163,7 +184,7 @@ impl ViewerRoot {
 /// A finder whose read fails.
 struct FailingFinder;
 
-impl DirectMessageFinder for FailingFinder {
+impl ChannelUserReads for FailingFinder {
     async fn find_direct_message(
         &self,
         _user_id: MacroUserIdStr<'static>,
@@ -171,12 +192,28 @@ impl DirectMessageFinder for FailingFinder {
     ) -> Result<Option<Uuid>, ChannelMessagesErr> {
         Err(ChannelMessagesErr::MessageNotFound(DM_ID))
     }
+
+    async fn channel_viewed_at(
+        &self,
+        _user_id: MacroUserIdStr<'static>,
+        _channel_id: Uuid,
+    ) -> Result<Option<DateTime<Utc>>, ChannelMessagesErr> {
+        Err(ChannelMessagesErr::MessageNotFound(VIEWED_ID))
+    }
 }
 
-async fn ask_direct_message<F: DirectMessageFinder>(
+async fn ask_direct_message<F: ChannelUserReads>(
     finder: Arc<F>,
     user_id: &str,
 ) -> async_graphql::Response {
+    ask_viewer(
+        finder,
+        format!(r#"{{ directMessageChannelId(userId: "{user_id}") }}"#),
+    )
+    .await
+}
+
+async fn ask_viewer<F: ChannelUserReads>(finder: Arc<F>, query: String) -> async_graphql::Response {
     let viewer = MacroUserIdStr::try_from_email("viewer@example.com").unwrap();
     Schema::build(
         ViewerRoot { user_id: viewer },
@@ -185,9 +222,18 @@ async fn ask_direct_message<F: DirectMessageFinder>(
     )
     .data(ChannelQueryContext::new(finder))
     .finish()
-    .execute(format!(
-        r#"{{ directMessageChannelId(userId: "{user_id}") }}"#
-    ))
+    .execute(query)
+    .await
+}
+
+async fn ask_viewed_at<F: ChannelUserReads>(
+    finder: Arc<F>,
+    channel_id: &str,
+) -> async_graphql::Response {
+    ask_viewer(
+        finder,
+        format!(r#"{{ channelViewedAt(channelId: "{channel_id}") }}"#),
+    )
     .await
 }
 
@@ -243,6 +289,57 @@ async fn direct_message_channel_id_hides_a_repository_failure_behind_a_code() {
     assert_eq!(response.errors.len(), 1, "{:?}", response.errors);
     let error = &response.errors[0];
     assert_eq!(error.message, "direct message lookup failed");
+    assert_eq!(
+        error
+            .extensions
+            .as_ref()
+            .and_then(|extensions| extensions.get("code"))
+            .cloned(),
+        Some(async_graphql::Value::from("INTERNAL_SERVER_ERROR"))
+    );
+}
+
+#[tokio::test]
+async fn channel_viewed_at_answers_for_the_viewer_and_the_named_channel() {
+    let finder = Arc::new(FakeFinder::default());
+
+    let viewed = ask_viewed_at(finder.clone(), &VIEWED_ID.to_string()).await;
+    assert!(viewed.errors.is_empty(), "{:?}", viewed.errors);
+    assert_eq!(
+        viewed.data.into_json().unwrap()["channelViewedAt"],
+        viewed_at().to_rfc3339()
+    );
+
+    let never = ask_viewed_at(finder.clone(), &DM_ID.to_string()).await;
+    assert!(never.errors.is_empty(), "{:?}", never.errors);
+    assert!(never.data.into_json().unwrap()["channelViewedAt"].is_null());
+
+    assert_eq!(
+        finder.views.lock().unwrap().as_slice(),
+        [
+            ("macro|viewer@example.com".to_string(), VIEWED_ID),
+            ("macro|viewer@example.com".to_string(), DM_ID),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn channel_viewed_at_rejects_a_malformed_channel_id_without_reading() {
+    let finder = Arc::new(FakeFinder::default());
+
+    let response = ask_viewed_at(finder.clone(), "not-a-uuid").await;
+
+    assert_eq!(response.errors.len(), 1, "{:?}", response.errors);
+    assert!(finder.views.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn channel_viewed_at_hides_a_repository_failure_behind_a_code() {
+    let response = ask_viewed_at(Arc::new(FailingFinder), &VIEWED_ID.to_string()).await;
+
+    assert_eq!(response.errors.len(), 1, "{:?}", response.errors);
+    let error = &response.errors[0];
+    assert_eq!(error.message, "channel view lookup failed");
     assert_eq!(
         error
             .extensions

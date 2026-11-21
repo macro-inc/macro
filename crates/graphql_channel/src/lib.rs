@@ -12,6 +12,7 @@ use channels::domain::{
     models::{Activity, ActivityType},
     ports::{ChannelMessagesErr, ChannelMutationErr, ChannelService},
 };
+use chrono::{DateTime, Utc};
 use entity_access::domain::{
     models::{AccessError, EntityAccessReceipt, EntityType, MemberParticipantRole},
     ports::EntityAccessService,
@@ -204,8 +205,8 @@ where
     }
 }
 
-/// Domain-facing capability behind the viewer's direct-message lookup.
-pub trait DirectMessageFinder: Send + Sync + 'static {
+/// Domain-facing capability behind the viewer's channel reads.
+pub trait ChannelUserReads: Send + Sync + 'static {
     /// The direct message between `user_id` and `recipient_id` that
     /// get-or-create would reuse, without creating one.
     fn find_direct_message(
@@ -213,9 +214,16 @@ pub trait DirectMessageFinder: Send + Sync + 'static {
         user_id: MacroUserIdStr<'static>,
         recipient_id: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<Option<Uuid>, ChannelMessagesErr>> + Send;
+
+    /// When `user_id` last viewed `channel_id`, member or not.
+    fn channel_viewed_at(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+    ) -> impl Future<Output = Result<Option<DateTime<Utc>>, ChannelMessagesErr>> + Send;
 }
 
-impl<S> DirectMessageFinder for S
+impl<S> ChannelUserReads for S
 where
     S: ChannelService,
 {
@@ -226,31 +234,54 @@ where
     ) -> impl Future<Output = Result<Option<Uuid>, ChannelMessagesErr>> + Send {
         ChannelService::find_direct_message(self, user_id, recipient_id)
     }
+
+    fn channel_viewed_at(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+    ) -> impl Future<Output = Result<Option<DateTime<Utc>>, ChannelMessagesErr>> + Send {
+        ChannelService::channel_viewed_at(self, user_id, channel_id)
+    }
 }
 
 /// A boxed read, so the context needs no schema type parameter.
 type ReadFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, ChannelMessagesErr>> + Send + 'a>>;
 
-/// Object-safe form of [`DirectMessageFinder`].
+/// Object-safe form of [`ChannelUserReads`].
 trait ChannelQueryReads: Send + Sync {
-    /// See [`DirectMessageFinder::find_direct_message`].
+    /// See [`ChannelUserReads::find_direct_message`].
     fn find_direct_message(
         &self,
         user_id: MacroUserIdStr<'static>,
         recipient_id: MacroUserIdStr<'static>,
     ) -> ReadFuture<'_, Option<Uuid>>;
+
+    /// See [`ChannelUserReads::channel_viewed_at`].
+    fn channel_viewed_at(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+    ) -> ReadFuture<'_, Option<DateTime<Utc>>>;
 }
 
-/// Erases a [`DirectMessageFinder`].
+/// Erases a [`ChannelUserReads`].
 struct ServiceReads<S>(Arc<S>);
 
-impl<S: DirectMessageFinder> ChannelQueryReads for ServiceReads<S> {
+impl<S: ChannelUserReads> ChannelQueryReads for ServiceReads<S> {
     fn find_direct_message(
         &self,
         user_id: MacroUserIdStr<'static>,
         recipient_id: MacroUserIdStr<'static>,
     ) -> ReadFuture<'_, Option<Uuid>> {
         Box::pin(self.0.find_direct_message(user_id, recipient_id))
+    }
+
+    fn channel_viewed_at(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+    ) -> ReadFuture<'_, Option<DateTime<Utc>>> {
+        Box::pin(self.0.channel_viewed_at(user_id, channel_id))
     }
 }
 
@@ -264,7 +295,7 @@ pub struct ChannelQueryContext {
 
 impl ChannelQueryContext {
     /// Compose the channel reads from the domain service.
-    pub fn new<S: DirectMessageFinder>(service: Arc<S>) -> Self {
+    pub fn new<S: ChannelUserReads>(service: Arc<S>) -> Self {
         Self {
             reads: Arc::new(ServiceReads(service)),
         }
@@ -301,15 +332,33 @@ impl GraphqlChannelUserQuery {
             .reads
             .find_direct_message(self.user_id.clone(), recipient_id)
             .await
-            .map_err(direct_message_lookup_failed)?;
+            .map_err(|error| channel_read_failed(error, "direct message lookup failed"))?;
         Ok(channel_id.map(|id| ID(id.to_string())))
+    }
+
+    /// When the authenticated user last viewed the channel, in RFC 3339
+    /// format, whether or not they are still in it. Null when they never
+    /// viewed it. Their own activity row needs no access to the channel.
+    async fn channel_viewed_at(
+        &self,
+        ctx: &Context<'_>,
+        channel_id: ID,
+    ) -> async_graphql::Result<Option<String>> {
+        let channel_id = parse_id(channel_id, "channelId")?;
+        let context = ctx.data::<ChannelQueryContext>()?;
+        let viewed_at = context
+            .reads
+            .channel_viewed_at(self.user_id.clone(), channel_id)
+            .await
+            .map_err(|error| channel_read_failed(error, "channel view lookup failed"))?;
+        Ok(viewed_at.map(|value| value.to_rfc3339()))
     }
 }
 
-/// Logs a failed DM lookup and answers with a stable code, never the
+/// Logs a failed read and answers with a stable message and code, never the
 /// repository's error text.
-fn direct_message_lookup_failed(error: ChannelMessagesErr) -> async_graphql::Error {
-    tracing::error!(error = ?error, "direct message lookup failed");
-    async_graphql::Error::new("direct message lookup failed")
+fn channel_read_failed(error: ChannelMessagesErr, message: &'static str) -> async_graphql::Error {
+    tracing::error!(error = ?error, message, "channel read failed");
+    async_graphql::Error::new(message)
         .extend_with(|_, extensions| extensions.set("code", "INTERNAL_SERVER_ERROR"))
 }
