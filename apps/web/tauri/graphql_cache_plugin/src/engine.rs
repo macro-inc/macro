@@ -581,7 +581,7 @@ impl EngineHandle {
         variables: Variables,
         entity_resolvers: Vec<EntityResolver>,
     ) -> Result<ReadResultWire, String> {
-        let mut state = self.ready_read().await?;
+        let mut state = self.ready_op_read(op_id.as_deref()).await?;
         let EngineState { engine, ops, .. } = &mut *state;
         let op = op_id.map(|name| ops.intern(&name));
         engine
@@ -615,7 +615,7 @@ impl EngineHandle {
             .map(|value| value.parse::<CacheRevision>())
             .transpose()
             .map_err(|error| error.to_string())?;
-        let mut state = self.ready_read().await?;
+        let mut state = self.ready_op_read(Some(&op_id)).await?;
         let EngineState { engine, ops, .. } = &mut *state;
         let op = ops.intern(&op_id);
         engine

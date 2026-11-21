@@ -934,45 +934,106 @@ fn a_failed_staging_read_fails_the_native_hydrate_instead_of_retrying_it_whole()
     };
 }
 
+fn poll_once<F: std::future::Future>(
+    future: std::pin::Pin<&mut F>,
+    waker: &std::task::Waker,
+) -> std::task::Poll<F::Output> {
+    future.poll(&mut std::task::Context::from_waker(waker))
+}
+
+struct Woken(std::sync::atomic::AtomicBool);
+impl std::task::Wake for Woken {
+    fn wake(self: Arc<Self>) {
+        self.0.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+/// An abandoned read leaves the engine's queue at once, whether it waits for
+/// the engine or, behind a command, for a turn, and the reads queued after
+/// it are still woken and run.
 #[test]
-fn an_abandoned_read_stops_waiting_for_the_engine() {
-    tauri::async_runtime::block_on(async {
+fn an_abandoned_read_leaves_the_queue_and_the_rest_still_run() {
+    block_on(async {
         let handle = spawn_handle();
-        let read = |id: &str| {
-            let reader = handle.clone().abandonable(Some(id.to_owned()));
-            tauri::async_runtime::spawn(async move {
-                reader.current_authority("scope-1").await.map(drop)
-            })
-        };
-        let held = handle.inner.write().await;
-        let abandoned: Vec<_> = (0..3).map(|n| read(&format!("gone-{n}"))).collect();
-        let waited_for = read("kept");
-        let unnamed = {
-            let reader = handle.clone();
-            tauri::async_runtime::spawn(async move {
-                reader.current_authority("scope-1").await.map(drop)
-            })
-        };
-        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
-        assert_eq!(handle.abandons.running(), 4);
-        for n in 0..3 {
-            handle.abandon(&format!("gone-{n}"));
+        let noop = std::task::Waker::noop();
+        for behind_a_command in [false, true] {
+            let gone = handle.clone().abandonable(Some("gone".to_owned()));
+            let kept = handle.clone().abandonable(Some("kept".to_owned()));
+            let unnamed = handle.clone();
+            let reused = handle.clone().abandonable(Some("kept".to_owned()));
+            assert!(reused.abandon.is_none(), "a running id registers once");
+            assert_eq!(handle.abandons.running(), 2);
+
+            let held = handle.inner.write().await;
+            let mut command = Box::pin(handle.inner.lock());
+            if behind_a_command {
+                assert!(poll_once(command.as_mut(), noop).is_pending());
+            }
+            let mut gone_read = Box::pin(gone.current_authority("scope-1"));
+            assert!(poll_once(gone_read.as_mut(), noop).is_pending());
+            let woken = Arc::new(Woken(std::sync::atomic::AtomicBool::new(false)));
+            let waker = std::task::Waker::from(Arc::clone(&woken));
+            let mut kept_read = Box::pin(kept.current_authority("scope-1"));
+            assert!(poll_once(kept_read.as_mut(), &waker).is_pending());
+            let mut unnamed_read = Box::pin(unnamed.current_authority("scope-1"));
+            assert!(poll_once(unnamed_read.as_mut(), noop).is_pending());
+
+            handle.abandon("gone");
+            handle.abandon("never-sent");
+            match poll_once(gone_read.as_mut(), noop) {
+                std::task::Poll::Ready(Err(error)) => assert_eq!(error, abandon::ABANDONED),
+                _ => panic!("an abandoned read stops waiting while the engine is held"),
+            }
+            drop(gone_read);
+            drop(held);
+            if behind_a_command {
+                drop(command.await);
+            } else {
+                drop(command);
+            }
+            assert!(
+                woken.0.load(std::sync::atomic::Ordering::SeqCst),
+                "the read queued after it was woken"
+            );
+            assert!(kept_read.await.is_ok());
+            assert!(unnamed_read.await.is_ok());
+            drop((gone, kept, unnamed, reused));
+            assert_eq!(handle.abandons.running(), 0);
         }
-        handle.abandon("never-sent");
-        // They give up while the engine is still held.
-        for task in abandoned {
-            let outcome = tokio::time::timeout(std::time::Duration::from_secs(5), task)
-                .await
-                .expect("an abandoned read stops waiting")
-                .unwrap();
-            assert_eq!(outcome, Err(abandon::ABANDONED.to_owned()));
-        }
-        drop(held);
-        assert_eq!(waited_for.await.unwrap(), Ok(()));
-        assert_eq!(unnamed.await.unwrap(), Ok(()));
-        assert_eq!(handle.abandons.running(), 0);
         // An abandon after the read finished changes nothing for the next one.
         handle.abandon("kept");
-        assert_eq!(read("kept").await.unwrap(), Ok(()));
+        let again = handle.clone().abandonable(Some("kept".to_owned()));
+        assert!(again.current_authority("scope-1").await.is_ok());
     });
+}
+
+/// A read of an operation registers the records it depends on, so later
+/// writes report the operation. One abandoned before it ran registers the
+/// operation against every change instead, so the next write still reports
+/// it and the webview reads it again.
+#[test]
+fn an_abandoned_read_of_an_operation_is_still_reported_by_the_next_write() {
+    let handle = spawn_handle();
+    write(&handle, None, soup_data(false), None);
+    let reader = handle.clone().abandonable(Some("read-1".to_owned()));
+    block_on(async {
+        let noop = std::task::Waker::noop();
+        let held = handle.inner.write().await;
+        let mut queued = Box::pin(reader.read(
+            Some("client:1".to_owned()),
+            QUERY.to_owned(),
+            Some("Soup".to_owned()),
+            variables(),
+            Vec::new(),
+        ));
+        assert!(poll_once(queued.as_mut(), noop).is_pending());
+        handle.abandon("read-1");
+        assert!(matches!(
+            poll_once(queued.as_mut(), noop),
+            std::task::Poll::Ready(Err(error)) if error == abandon::ABANDONED
+        ));
+        drop(held);
+    });
+    let result = write(&handle, Some("client:2"), soup_data(true), None);
+    assert_eq!(result.affected_ops, vec!["client:1".to_string()]);
 }

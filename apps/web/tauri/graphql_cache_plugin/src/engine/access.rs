@@ -25,7 +25,13 @@ pub(super) struct EngineAccess<T> {
     /// mutex queue, so idle work checks this instead.
     hydrates_waiting: AtomicUsize,
     quiet: Quiet,
+    /// Work for whoever takes the engine next ([`Self::defer`]).
+    deferred: std::sync::Mutex<Vec<Deferred<T>>>,
+    has_deferred: AtomicBool,
 }
+
+/// State a command that gave up its wait would have set.
+type Deferred<T> = Box<dyn FnOnce(&mut T) + Send>;
 
 impl<T> EngineAccess<T> {
     pub(super) fn new(value: T) -> Self {
@@ -37,6 +43,8 @@ impl<T> EngineAccess<T> {
             write_epoch: AtomicU64::new(0),
             hydrates_waiting: AtomicUsize::new(0),
             quiet: Quiet::default(),
+            deferred: std::sync::Mutex::default(),
+            has_deferred: AtomicBool::new(false),
         }
     }
 
@@ -68,7 +76,7 @@ impl<T> EngineAccess<T> {
         // release. Idle work never waits for that wake, so it cannot spin on it.
         let turn = self.held(self.turn.try_lock().ok()?);
         let guard = AccessGuard {
-            value: self.value.try_lock().ok()?,
+            value: self.taken(self.value.try_lock().ok()?),
             _turn: Some(turn),
             _release: ReleaseNotice {
                 available: &self.available,
@@ -113,13 +121,43 @@ impl<T> EngineAccess<T> {
         self.value.into_inner()
     }
 
+    /// Runs `work` on the engine when a command next takes it, before that
+    /// command uses it: for state a command that gave up its wait would have
+    /// set. Takes no engine lock.
+    pub(super) fn defer(&self, work: impl FnOnce(&mut T) + Send + 'static) {
+        if let Ok(mut deferred) = self.deferred.lock() {
+            deferred.push(Box::new(work));
+            // Set under the lock, after the push: a taker that cleared the
+            // flag before this either drains this work or leaves it flagged.
+            self.has_deferred.store(true, Ordering::SeqCst);
+        }
+    }
+
+    /// The engine as a command takes it, with deferred work applied.
+    fn taken<'a>(&self, mut value: MutexGuard<'a, T>) -> MutexGuard<'a, T> {
+        if self.has_deferred.swap(false, Ordering::SeqCst) {
+            let deferred = self
+                .deferred
+                .lock()
+                .map(|mut deferred| std::mem::take(&mut *deferred))
+                .unwrap_or_default();
+            for work in deferred {
+                work(&mut value);
+            }
+        }
+        value
+    }
+
     #[tracing::instrument(name = "graphql_cache.native.lock", skip_all, fields(graphql_cache.lock.kind = "foreground", graphql_cache.lock.wait_ms = tracing::field::Empty))]
     pub(super) async fn lock(&self) -> AccessGuard<'_, T> {
+        let mut gave_up = Rearm(Some(&self.quiet));
         let _wait = AcquisitionWait::new();
         let _waiting = Counted::new(&self.turn_waiting);
         let turn = self.held(wake_if_dropped(&self.available, self.turn.lock()).await);
+        let value = self.taken(self.value.lock().await);
+        gave_up.0 = None;
         AccessGuard {
-            value: self.value.lock().await,
+            value,
             _turn: Some(turn),
             _release: self.release_notice(),
         }
@@ -133,9 +171,12 @@ impl<T> EngineAccess<T> {
         if self.turn_waiting.load(Ordering::SeqCst) > 0 {
             return self.lock().await;
         }
+        let mut gave_up = Rearm(Some(&self.quiet));
         let _wait = AcquisitionWait::new();
+        let value = self.taken(wake_if_dropped(&self.available, self.value.lock()).await);
+        gave_up.0 = None;
         AccessGuard {
-            value: wake_if_dropped(&self.available, self.value.lock()).await,
+            value,
             _turn: None,
             _release: self.release_notice(),
         }
@@ -172,7 +213,7 @@ impl<T> EngineAccess<T> {
                 // release wakes it.
                 if let Ok(value) = self.value.try_lock() {
                     let guard = AccessGuard {
-                        value,
+                        value: self.taken(value),
                         _turn: Some(self.held(turn)),
                         _release: self.release_notice(),
                     };
@@ -280,7 +321,7 @@ impl<'a, T> HeldTurn<'a, T> {
             _release,
         } = self;
         AccessGuard {
-            value: access.value.lock().await,
+            value: access.taken(access.value.lock().await),
             _turn: Some(turn),
             _release,
         }
@@ -305,6 +346,18 @@ struct Turn<'a> {
     _turn: MutexGuard<'a, ()>,
     _wake: Wake<'a>,
 }
+/// Starts idle work on drop, unless disarmed: a command that gives up its
+/// wait may be the one idle work found queued and stood down for, counting
+/// on that command's release to start the next attempt.
+struct Rearm<'a>(Option<&'a Quiet>);
+impl Drop for Rearm<'_> {
+    fn drop(&mut self) {
+        if let Some(quiet) = self.0 {
+            quiet.released();
+        }
+    }
+}
+
 /// Wakes waiters on drop, unless disarmed.
 struct Wake<'a>(Option<&'a Notify>);
 impl Drop for Wake<'_> {
@@ -672,7 +725,7 @@ mod test {
         }
     }
 
-    fn pending<F: Future>(future: std::pin::Pin<&mut F>) -> bool {
+    fn pending<F: Future + ?Sized>(future: std::pin::Pin<&mut F>) -> bool {
         let waker = std::task::Waker::noop();
         future
             .poll(&mut std::task::Context::from_waker(waker))
@@ -867,6 +920,68 @@ mod test {
             let access = EngineAccess::new(0);
             let read = access.read().await;
             assert!(read.yield_to_reads(&access).is_err());
+        });
+    }
+
+    /// Idle work that finds a waiter queued stands down, counting on its
+    /// release. A waiter that gives up instead starts idle work itself.
+    #[test]
+    fn a_waiter_that_gives_up_restarts_idle_work() {
+        pollster::block_on(async {
+            let access = EngineAccess::new(0);
+            let starts = Arc::new(AtomicU64::new(0));
+            let counted = Arc::clone(&starts);
+            access.on_quiet(move |_, _| {
+                counted.fetch_add(1, Ordering::SeqCst);
+            });
+            for queue in ["read", "command"] {
+                let held = access.lock().await;
+                let mut waiter: std::pin::Pin<Box<dyn Future<Output = AccessGuard<'_, i32>>>> =
+                    if queue == "read" {
+                        Box::pin(access.read())
+                    } else {
+                        Box::pin(access.lock())
+                    };
+                assert!(pending(waiter.as_mut()));
+                drop(held);
+                let armed = starts.load(Ordering::SeqCst);
+                assert!(access.try_idle().is_none(), "the {queue} is next");
+                drop(waiter);
+                assert_eq!(
+                    starts.load(Ordering::SeqCst),
+                    armed + 1,
+                    "the {queue} gave up and started idle work"
+                );
+                assert!(access.try_idle().is_some(), "the engine is free");
+            }
+        });
+    }
+
+    /// Deferred work runs on the engine before the next command uses it,
+    /// whichever way that command takes it.
+    #[test]
+    fn deferred_work_runs_before_the_next_command_uses_the_engine() {
+        pollster::block_on(async {
+            let access = EngineAccess::new(Vec::new());
+            let mut held = access.lock().await;
+            access.defer(|log: &mut Vec<&str>| log.push("deferred"));
+            held.push("held");
+            drop(held);
+            access.read().await.push("read");
+            assert_eq!(*access.lock().await, ["held", "deferred", "read"]);
+
+            let staging = access.hydrate().await.expect("current");
+            let turn = staging
+                .yield_to_reads(&access)
+                .unwrap_or_else(|_| panic!("a hydrate holds a turn"));
+            access.defer(|log: &mut Vec<&str>| log.push("resumed"));
+            turn.resume().await.push("hydrate");
+            access.defer(|log: &mut Vec<&str>| log.push("idle"));
+            drop(access.try_idle().expect("quiet engine"));
+            assert_eq!(
+                *access.lock().await,
+                ["held", "deferred", "read", "resumed", "hydrate", "idle"]
+            );
         });
     }
 }

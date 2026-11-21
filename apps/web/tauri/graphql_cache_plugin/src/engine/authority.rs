@@ -89,6 +89,17 @@ impl EngineHandle {
     }
 
     pub(super) async fn ready_read(&self) -> Result<AccessGuard<'_, EngineState>, String> {
+        self.ready_op_read(None).await
+    }
+
+    /// [`Self::ready_read`] for a read that registers operation `op_id`'s
+    /// dependencies. Abandoned, it leaves the operation for the next command
+    /// that takes the engine to register against every change, so later
+    /// writes still report it, as they would have once the read ran.
+    pub(super) async fn ready_op_read(
+        &self,
+        op_id: Option<&str>,
+    ) -> Result<AccessGuard<'_, EngineState>, String> {
         let mut state = match &self.abandon {
             None => self.inner.read().await,
             // Giving up the wait is safe: `read` leaves the queue on drop and
@@ -102,7 +113,19 @@ impl EngineHandle {
                 };
                 match state {
                     Some(state) if !abandon.is_abandoned() => state,
-                    _ => return Err(super::abandon::ABANDONED.into()),
+                    state => {
+                        match (state, op_id) {
+                            (Some(mut state), Some(op_id)) => register_broadly(&mut state, op_id),
+                            (None, Some(op_id)) => {
+                                let op_id = op_id.to_owned();
+                                self.inner.defer(move |state: &mut EngineState| {
+                                    register_broadly(state, &op_id)
+                                });
+                            }
+                            (_, None) => {}
+                        }
+                        return Err(super::abandon::ABANDONED.into());
+                    }
                 }
             }
         };
@@ -171,4 +194,10 @@ impl EngineHandle {
             changed: result.changed,
         })
     }
+}
+
+/// Registers an operation whose read was abandoned against every change.
+fn register_broadly(state: &mut EngineState, op_id: &str) {
+    let op = state.ops.intern(op_id);
+    state.engine.register_operation_broadly(op);
 }

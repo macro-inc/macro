@@ -80,7 +80,15 @@ pub async fn graphql_cache_abandon(
     state: State<'_, CacheState>,
     request_id: String,
 ) -> Result<(), String> {
-    engine_handle(&state)?.abandon(&request_id);
+    // Not through a cloned handle: shutdown fails while another handle lives.
+    state
+        .0
+        .lock()
+        .map_err(|_| "graphql cache state poisoned".to_string())?
+        .as_ref()
+        .ok_or_else(|| "graphql cache not initialized (call graphql_cache_init first)".to_string())?
+        .handle
+        .abandon(&request_id);
     Ok(())
 }
 
@@ -455,7 +463,9 @@ pub async fn graphql_cache_entity_filter(
     traceparent: Option<String>,
     request_id: Option<String>,
 ) -> Result<EntityFilterResult, String> {
-    reading_handle(&state, request_id)?
+    // Releasing a live view frees its slot, so it is never abandoned.
+    let releases = request.live_query.as_ref().is_some_and(|live| live.release);
+    reading_handle(&state, request_id.filter(|_| !releases))?
         .entity_filter(request)
         .await
 }
