@@ -496,3 +496,44 @@ fn quiet_dependencies_keep_info_and_drop_debug() {
         .build();
     assert_eq!(entrypoint.quiet_targets, &["rmcp"]);
 }
+
+#[test]
+fn dropped_dependency_events_match_target_message_and_error() {
+    const DROPPED: &[DroppedDependencyEvent] = &[DroppedDependencyEvent {
+        target: "rmcp::service",
+        message: "failed to send pending response during drain",
+        error_contains: "channel closed",
+    }];
+    let output = SharedWriter::default();
+    let subscriber = Registry::default()
+        .with(DependencyLogFilter {
+            suppressed: &[],
+            quiet: &[],
+            dropped: DROPPED,
+        })
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .with_writer(output.clone())
+                .with_filter(EnvFilter::new("info")),
+        );
+    tracing::subscriber::with_default(subscriber, || {
+        let closed = "channel closed";
+        tracing::error!(target: "rmcp::service", error = %closed, "failed to send pending response during drain");
+        tracing::error!(target: "rmcp::service", error = %"broken pipe", "failed to send pending response during drain");
+        tracing::error!(target: "rmcp::service", error = %closed, "fail to response message");
+        tracing::error!(target: "rmcp::service::server", error = %closed, "failed to send pending response during drain");
+        tracing::error!(target: "rmcp::service", "failed to send pending response during drain");
+    });
+    let text = output.contents();
+    let kept = text.lines().count();
+    assert_eq!(kept, 4, "{text}");
+    assert!(text.contains("broken pipe"), "{text}");
+    assert!(text.contains("fail to response message"), "{text}");
+    assert!(text.contains("rmcp::service::server"), "{text}");
+    let entrypoint = MacroEntrypoint::default()
+        .drop_dependency_events(DROPPED)
+        .local()
+        .build();
+    assert_eq!(entrypoint.dropped_events.len(), 1);
+}

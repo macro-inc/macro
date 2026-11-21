@@ -105,6 +105,23 @@ pub struct MacroEntrypoint {
     /// Dependency targets whose debug and trace events can include credentials; only their
     /// info and higher events reach any sink.
     quiet_targets: &'static [&'static str],
+    /// Single dependency events dropped from every sink.
+    dropped_events: &'static [DroppedDependencyEvent],
+}
+
+/// One event of a dependency that is dropped from every sink: an event at
+/// exactly `target` whose message is `message` and whose `error` field
+/// contains `error_contains`. For an event the dependency logs at a level
+/// that misstates it (an error for how a request normally ends) or with
+/// content in it, when the dependency offers no way to change that.
+#[derive(Debug, Clone, Copy)]
+pub struct DroppedDependencyEvent {
+    /// The event's target, matched exactly.
+    pub target: &'static str,
+    /// The event's message, matched exactly.
+    pub message: &'static str,
+    /// Text the event's `error` field contains.
+    pub error_contains: &'static str,
 }
 
 impl Default for MacroEntrypoint {
@@ -116,6 +133,7 @@ impl Default for MacroEntrypoint {
             local: Default::default(),
             suppressed_targets: &[],
             quiet_targets: &[],
+            dropped_events: &[],
         }
     }
 }
@@ -204,6 +222,12 @@ impl MacroEntrypoint {
         self
     }
 
+    /// Drop single dependency events from every sink; see [DroppedDependencyEvent].
+    pub fn drop_dependency_events(mut self, events: &'static [DroppedDependencyEvent]) -> Self {
+        self.dropped_events = events;
+        self
+    }
+
     /// create a new instance of [Self] from an input [Environment]
     pub fn new(env: Environment) -> Self {
         Self {
@@ -217,6 +241,11 @@ impl MacroEntrypoint {
         let _ = dotenvy::dotenv();
         std::panic::set_hook(Box::new(tracing_panic::panic_hook));
         install_rootcause_hooks();
+        let dependency_filter = DependencyLogFilter {
+            suppressed: self.suppressed_targets,
+            quiet: self.quiet_targets,
+            dropped: self.dropped_events,
+        };
 
         match (self.env, self.local) {
             (Environment::Local, LocalOptions { tree_tracing: None }) => {
@@ -242,13 +271,7 @@ impl MacroEntrypoint {
                     });
 
                     Registry::default()
-                        .with(tracing_subscriber::filter::filter_fn(move |metadata| {
-                            dependency_logs_allowed(
-                                self.suppressed_targets,
-                                self.quiet_targets,
-                                metadata,
-                            )
-                        }))
+                        .with(dependency_filter)
                         .with(RootcauseLayer.with_filter(rootcause_filter))
                         .with(
                             tracing_subscriber::fmt::layer()
@@ -263,13 +286,7 @@ impl MacroEntrypoint {
                         .init();
                 } else {
                     Registry::default()
-                        .with(tracing_subscriber::filter::filter_fn(move |metadata| {
-                            dependency_logs_allowed(
-                                self.suppressed_targets,
-                                self.quiet_targets,
-                                metadata,
-                            )
-                        }))
+                        .with(dependency_filter)
                         .with(RootcauseLayer.with_filter(rust_log_filter.clone()))
                         .with(
                             tracing_subscriber::fmt::layer()
@@ -296,13 +313,7 @@ impl MacroEntrypoint {
             ) => {
                 let rust_log_filter = rust_log_env_filter();
                 let subscriber = Registry::default()
-                    .with(tracing_subscriber::filter::filter_fn(move |metadata| {
-                        dependency_logs_allowed(
-                            self.suppressed_targets,
-                            self.quiet_targets,
-                            metadata,
-                        )
-                    }))
+                    .with(dependency_filter)
                     .with(RootcauseLayer.with_filter(rust_log_filter.clone()))
                     .with(HierarchicalLayer::new(level).with_filter(rust_log_filter));
                 tracing::subscriber::set_global_default(subscriber).unwrap();
@@ -347,13 +358,7 @@ impl MacroEntrypoint {
                     .with_filter(rust_log_filter);
 
                 Registry::default()
-                    .with(tracing_subscriber::filter::filter_fn(move |metadata| {
-                        dependency_logs_allowed(
-                            self.suppressed_targets,
-                            self.quiet_targets,
-                            metadata,
-                        )
-                    }))
+                    .with(dependency_filter)
                     .with(RootcauseLayer.with_filter(rootcause_filter))
                     .with(fmt_layer)
                     .with(otel_layer)
@@ -566,6 +571,7 @@ impl LocalOptionsBuilder {
             local: self.next,
             suppressed_targets: self.prev.suppressed_targets,
             quiet_targets: self.prev.quiet_targets,
+            dropped_events: self.prev.dropped_events,
         }
     }
 }
@@ -573,6 +579,76 @@ impl LocalOptionsBuilder {
 #[derive(Debug, Default)]
 struct LocalOptions {
     tree_tracing: Option<usize>,
+}
+
+/// The global filter for dependency diagnostics: drops suppressed targets,
+/// quiet targets below info, and the single events in `dropped`.
+#[derive(Debug, Clone, Copy)]
+struct DependencyLogFilter {
+    suppressed: &'static [&'static str],
+    quiet: &'static [&'static str],
+    dropped: &'static [DroppedDependencyEvent],
+}
+
+impl<S: tracing::Subscriber> Layer<S> for DependencyLogFilter {
+    fn enabled(
+        &self,
+        metadata: &tracing::Metadata<'_>,
+        _: tracing_subscriber::layer::Context<'_, S>,
+    ) -> bool {
+        dependency_logs_allowed(self.suppressed, self.quiet, metadata)
+    }
+
+    fn event_enabled(
+        &self,
+        event: &tracing::Event<'_>,
+        _: tracing_subscriber::layer::Context<'_, S>,
+    ) -> bool {
+        !is_dropped_event(self.dropped, event)
+    }
+}
+
+fn is_dropped_event(dropped: &[DroppedDependencyEvent], event: &tracing::Event<'_>) -> bool {
+    let target = event.metadata().target();
+    // Only a dropped event's own target pays for reading its fields.
+    if !dropped.iter().any(|rule| rule.target == target) {
+        return false;
+    }
+    let mut fields = MessageAndError::default();
+    event.record(&mut fields);
+    dropped.iter().any(|rule| {
+        rule.target == target
+            && fields.message.as_deref() == Some(rule.message)
+            && fields
+                .error
+                .as_deref()
+                .is_some_and(|error| error.contains(rule.error_contains))
+    })
+}
+
+/// The `message` and `error` fields of an event, as its sinks would print them.
+#[derive(Default)]
+struct MessageAndError {
+    message: Option<String>,
+    error: Option<String>,
+}
+
+impl tracing::field::Visit for MessageAndError {
+    fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+        match field.name() {
+            "message" => self.message = Some(value.to_owned()),
+            "error" => self.error = Some(value.to_owned()),
+            _ => {}
+        }
+    }
+
+    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+        match field.name() {
+            "message" => self.message = Some(format!("{value:?}")),
+            "error" => self.error = Some(format!("{value:?}")),
+            _ => {}
+        }
+    }
 }
 
 fn dependency_logs_allowed(

@@ -60,6 +60,11 @@ nearly every Rust service's `main.rs` calls.
   definitions set `service.version` there from the image digest
   (`imageVersion` in `infra/packages/resources`); Datadog reads it as the
   `version` tag that marks deploys. Keep that builder (not `builder_empty`).
+- Dependency diagnostics are filtered once, globally, before every sink:
+  `suppress_dependency_logs` drops a target, `quiet_dependency_debug_logs`
+  drops its debug and trace events, and `drop_dependency_events` drops single
+  events by target, message and `error` text (a dependency's error for how a
+  request normally ends, or an event carrying content).
 
 ## Related
 
