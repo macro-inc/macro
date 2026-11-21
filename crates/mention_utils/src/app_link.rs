@@ -55,6 +55,10 @@ const ROUTE_BLOCKS: &[(&str, &str)] = &[
 /// Query parameters that only track how a link was shared.
 const IGNORED_PARAMS: &[&str] = &["referral_code"];
 
+/// How much deeper than its opening fence a closing fence may be indented;
+/// a fence indented further is code inside the block.
+const MAX_CLOSING_INDENT: usize = 3;
+
 /// Characters that end a sentence after a bare URL rather than belong to it.
 const TRAILING_PUNCTUATION: &[char] = &['.', ',', ';', ':', '!', '?', '\'', '"'];
 
@@ -102,6 +106,7 @@ impl AppLinkChips {
                 }
                 (Some(opening), Some(closing))
                     if closing.quotes == opening.quotes
+                        && closing.indent <= opening.indent + MAX_CLOSING_INDENT
                         && closing.run.starts_with(opening.run)
                         && closing.info.trim().is_empty() =>
                 {
@@ -225,6 +230,8 @@ struct Fence<'a> {
     /// How many `>` quote markers come before it: a fence closes only at the
     /// quote depth it opened at.
     quotes: usize,
+    /// Its column inside its quote, list marker included.
+    indent: usize,
     /// Its run of backticks or tildes.
     run: &'a str,
     /// The rest of the line after the run.
@@ -232,39 +239,59 @@ struct Fence<'a> {
 }
 
 /// The fence `line` opens or closes a fenced code block with. Fences in list
-/// items are indented and fences in quotes follow `>`, so both count.
+/// items are indented or follow the item's marker, and fences in quotes follow
+/// `>`, so all of those count. A backtick run followed by another backtick is
+/// a code span, not a fence.
 fn fence(line: &str) -> Option<Fence<'_>> {
-    let trimmed = line.trim_start_matches(|c: char| c == '>' || c.is_whitespace());
-    let quotes = line[..line.len() - trimmed.len()].matches('>').count();
-    let marker = trimmed.chars().next().filter(|c| matches!(c, '`' | '~'))?;
-    let info = trimmed.trim_start_matches(marker);
-    let run = &trimmed[..trimmed.len() - info.len()];
-    (run.len() >= 3).then_some(Fence { quotes, run, info })
+    let captures = lazy_regex::regex!(
+        r"^(?P<prefix>[ \t>]*)(?P<item>(?:[-*+]|[0-9]{1,9}[.)])[ \t]+)?(?P<run>`{3,}|~{3,})(?P<info>[^\n]*)"
+    )
+    .captures(line)?;
+    let prefix = captures.name("prefix")?.as_str();
+    let item = captures.name("item").map_or("", |item| item.as_str());
+    let run = captures.name("run")?.as_str();
+    let info = captures.name("info")?.as_str();
+    if run.starts_with('`') && info.contains('`') {
+        return None;
+    }
+    let quoted = prefix.rfind('>').map_or(0, |at| at + 1);
+    Some(Fence {
+        quotes: prefix.matches('>').count(),
+        indent: prefix.len() - quoted + item.len(),
+        run,
+        info,
+    })
 }
 
 /// The byte ranges of `line` to leave as written: mention tags, and code
 /// spans, which close only on a backtick run as long as the one they open
-/// with. A run with no match is a literal backtick, not a span.
+/// with. A run with no match is a literal backtick, not a span. Linear in the
+/// line: each run's closing run is found in one pass from the right.
 fn protected_spans(line: &str) -> Vec<std::ops::Range<usize>> {
+    let tokens: Vec<_> = lazy_regex::regex!(r"<m-[a-z-]+>.*?</m-[a-z-]+>|`+")
+        .find_iter(line)
+        .collect();
+    let mut closing_run = vec![None; tokens.len()];
+    let mut next_run_of_length = std::collections::HashMap::new();
+    for (at, token) in tokens.iter().enumerate().rev() {
+        if token.as_str().starts_with('`') {
+            closing_run[at] = next_run_of_length.insert(token.len(), at);
+        }
+    }
     let mut spans = Vec::new();
-    let mut from = 0;
-    while let Some(found) = lazy_regex::regex!(r"<m-[a-z-]+>.*?</m-[a-z-]+>|`+").find_at(line, from)
-    {
-        if !found.as_str().starts_with('`') {
-            spans.push(found.range());
-            from = found.end();
+    let mut at = 0;
+    while let Some(token) = tokens.get(at) {
+        if !token.as_str().starts_with('`') {
+            spans.push(token.range());
+            at += 1;
             continue;
         }
-        let closing = lazy_regex::regex!(r"`+")
-            .find_iter(&line[found.end()..])
-            .find(|run| run.len() == found.len());
-        match closing {
-            Some(closing) => {
-                let end = found.end() + closing.end();
-                spans.push(found.start()..end);
-                from = end;
+        match closing_run[at].and_then(|closing| Some((closing, tokens.get(closing)?))) {
+            Some((closing, closing_token)) => {
+                spans.push(token.start()..closing_token.end());
+                at = closing + 1;
             }
-            None => from = found.end(),
+            None => at += 1,
         }
     }
     spans

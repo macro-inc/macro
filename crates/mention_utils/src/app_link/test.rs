@@ -190,3 +190,36 @@ fn the_rewrite_counts_its_chips() {
     assert_eq!(prod().rewrite(&markdown).chips, 2);
     assert_eq!(prod().rewrite("no links").chips, 0);
 }
+
+#[test]
+fn a_fence_indented_past_its_opening_is_code() {
+    let markdown = format!("```\n    ```\n{TASK_URL}\n```\n{TASK_URL}\n");
+    assert_eq!(
+        prod().rewrite(&markdown).markdown,
+        format!("```\n    ```\n{TASK_URL}\n```\n{TASK_CHIP}\n")
+    );
+}
+
+#[test]
+fn a_fence_that_opens_a_list_item_is_code() {
+    let bullet = format!("- ```\n  {TASK_URL}\n  ```\n{TASK_URL}\n");
+    assert_eq!(
+        prod().rewrite(&bullet).markdown,
+        format!("- ```\n  {TASK_URL}\n  ```\n{TASK_CHIP}\n")
+    );
+    let numbered = format!("1. ~~~\n   {TASK_URL}\n   ~~~\n{TASK_URL}\n");
+    assert_eq!(
+        prod().rewrite(&numbered).markdown,
+        format!("1. ~~~\n   {TASK_URL}\n   ~~~\n{TASK_CHIP}\n")
+    );
+}
+
+#[test]
+fn a_line_of_unmatched_backtick_runs_is_rewritten_in_one_pass() {
+    let runs: String = (1..=2000).map(|length| "`".repeat(length) + " ").collect();
+    let markdown = format!("{runs}{TASK_URL}");
+    assert_eq!(
+        prod().rewrite(&markdown).markdown,
+        format!("{runs}{TASK_CHIP}")
+    );
+}
