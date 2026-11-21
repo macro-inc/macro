@@ -59,7 +59,7 @@ WHERE id IN (SELECT id FROM adopted);
 
 -- Every such property keeps working under a name of its own, with whatever
 -- it still holds: "<name> (custom)", or, where its owner already has that
--- name, one ending in the start of its id, so none keeps the reserved name.
+-- name, one ending in its own id, so none keeps the reserved name.
 UPDATE property_definitions AS custom
 SET display_name = custom.display_name || ' (custom)',
     updated_at = NOW()
@@ -79,7 +79,7 @@ WHERE custom.is_system = FALSE
   );
 
 UPDATE property_definitions AS custom
-SET display_name = custom.display_name || ' (custom ' || left(custom.id::text, 8) || ')',
+SET display_name = custom.display_name || ' (custom ' || custom.id::text || ')',
     updated_at = NOW()
 WHERE custom.is_system = FALSE
   AND custom.database_id IS NULL

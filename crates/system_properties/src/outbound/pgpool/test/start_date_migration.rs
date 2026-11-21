@@ -127,9 +127,12 @@ async fn custom_start_dates_move_to_the_built_in_property_and_keep_working(
         [
             (TEAM_START, "Start Date (custom)".to_string()),
             (PERSONAL_START, "start date (custom)".to_string()),
-            // Its owner already has "Start Date (custom)", so it takes the
-            // start of its id instead.
-            (TEXT_START, "Start Date (custom 00000000)".to_string()),
+            // Its owner already has "Start Date (custom)", so it takes its id
+            // instead.
+            (
+                TEXT_START,
+                "Start Date (custom 00000000-0000-0000-0000-000000005d03)".to_string()
+            ),
             (TAKEN_NAME, "Start Date (custom)".to_string()),
         ]
     );
