@@ -1489,7 +1489,10 @@ message sends name none) also reads each one from the primary
 QueryClient show the result (`own-writes.ts`) over whatever their source
 still holds, for at most a minute, until the source shows it or a later
 update. A channel the viewer can no longer read leaves the list the same
-way, and channels the write deleted (`removed`) leave it without a read. Once
+way, and channels the write deleted (`removed`) leave it without a read. A
+read's writes share one hold, and those its source caught up with go in one
+change, so a bulk deletion of thousands of channels publishes the directory
+once as it lands and once as it goes. Once
 the source shows a write, it is let go for every directory, so a later
 removal or update is the source's to show. Each directory watches a channel
 from the moment its read is sent (`send`, then `settle` with what it found),

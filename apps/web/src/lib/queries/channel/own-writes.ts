@@ -60,9 +60,10 @@ export type OwnChannelWrites = {
     account: QueryAccount,
     channelIds: readonly string[]
   ) => SentOwnWriteRead;
-  /** Lets `write` go before its hold ends, unless a later write of the
-   * channel replaced it. */
-  release: (channelId: string, write: OwnChannelWrite) => void;
+  /** Lets each write go before its hold ends, unless a later write of its
+   * channel replaced it, all in one change: a bulk deletion lets thousands
+   * go at once. */
+  release: (released: readonly (readonly [string, OwnChannelWrite])[]) => void;
   /** Lets every write go, and drops the reads still in flight: the storage
    * the directories read was replaced. */
   clear: () => void;
@@ -80,38 +81,52 @@ export function ownChannelWrites(client: QueryClient): OwnChannelWrites {
   const [writes, setWrites] = createSignal<
     Readonly<Record<string, OwnChannelWrite>>
   >({});
-  const expiries = new Map<string, ReturnType<typeof setTimeout>>();
+  // One hold per read that took writes, however many channels it named.
+  const holds = new Set<ReturnType<typeof setTimeout>>();
   // The latest read taken for each channel, kept after its write goes, so a
   // read sent before it can never land later.
   const latest = new Map<string, number>();
   const inFlight = new Map<number, OwnWriteRead>();
   let sequence = 0;
   let clearedAt = 0;
-  const release = (channelId: string, write: OwnChannelWrite) => {
-    if (untrack(writes)[channelId] !== write) return;
-    clearTimeout(expiries.get(channelId));
-    expiries.delete(channelId);
+  const release = (
+    released: readonly (readonly [string, OwnChannelWrite])[]
+  ) => {
+    const held = untrack(writes);
+    const gone = released.filter(
+      ([channelId, write]) => held[channelId] === write
+    );
+    if (gone.length === 0) return;
     setWrites((previous) => {
-      const { [channelId]: _released, ...rest } = previous;
+      const rest = { ...previous };
+      for (const [channelId] of gone) delete rest[channelId];
       return rest;
     });
   };
   const record = (read: OwnWriteRead, found: SettledChannels) => {
     if (read.sequence <= clearedAt) return;
-    const taken: Record<string, OwnChannelWrite> = {};
+    const taken: [string, OwnChannelWrite][] = [];
     for (const [channelId, channel] of Object.entries(found)) {
       if ((latest.get(channelId) ?? 0) > read.sequence) continue;
       latest.set(channelId, read.sequence);
-      const write = { channel, account: read.account, sequence: read.sequence };
-      taken[channelId] = write;
-      clearTimeout(expiries.get(channelId));
-      expiries.set(
+      taken.push([
         channelId,
-        setTimeout(() => release(channelId, write), OWN_WRITE_HOLD_MS)
-      );
+        { channel, account: read.account, sequence: read.sequence },
+      ]);
     }
-    if (Object.keys(taken).length === 0) return;
-    setWrites((previous) => ({ ...previous, ...taken }));
+    if (taken.length === 0) return;
+    // A write a later read replaced is no longer held when this ends, so
+    // the release passes over it.
+    const hold = setTimeout(() => {
+      holds.delete(hold);
+      release(taken);
+    }, OWN_WRITE_HOLD_MS);
+    holds.add(hold);
+    setWrites((previous) => {
+      const next = { ...previous };
+      for (const [channelId, write] of taken) next[channelId] = write;
+      return next;
+    });
   };
   const created: OwnChannelWrites = {
     writes,
@@ -132,8 +147,8 @@ export function ownChannelWrites(client: QueryClient): OwnChannelWrites {
     clear() {
       clearedAt = sequence;
       inFlight.clear();
-      for (const timer of expiries.values()) clearTimeout(timer);
-      expiries.clear();
+      for (const hold of holds) clearTimeout(hold);
+      holds.clear();
       if (Object.keys(untrack(writes)).length > 0) setWrites({});
     },
   };
@@ -295,6 +310,7 @@ export function createOwnWriteTracker(
         }
       }
     const pending: [string, OwnChannelWrite][] = [];
+    const caughtUp: [string, OwnChannelWrite][] = [];
     for (const [id, write] of Object.entries(writes)) {
       if (!mine(write) || past.has(write)) continue;
       const key = sightingKey(write.sequence, id);
@@ -308,10 +324,13 @@ export function createOwnWriteTracker(
         pending.push([id, write]);
       } else if (observe) {
         past.add(write);
-        // Not from inside the computation reading the writes.
-        queueMicrotask(() => own.release(id, write));
+        caughtUp.push([id, write]);
       }
     }
+    // Not from inside the computation reading the writes, and in one
+    // change: a release per channel would republish every directory once
+    // for each of a bulk deletion's channels.
+    if (caughtUp.length > 0) queueMicrotask(() => own.release(caughtUp));
     if (observe) {
       for (const key of sightings.keys())
         if (!watched.has(key)) sightings.delete(key);

@@ -166,6 +166,50 @@ describe('nextChannelDirectoryState', () => {
     }
   );
 
+  it('moves a changed channel into place without ordering the others again', () => {
+    let reads = 0;
+    // Each read of a channel's update time, which ordering compares.
+    const counted = (channel: DirectoryChannel): DirectoryChannel => {
+      const { updatedAt, ...rest } = channel;
+      return Object.defineProperty(rest, 'updatedAt', {
+        enumerable: true,
+        get: () => {
+          reads += 1;
+          return updatedAt;
+        },
+      }) as DirectoryChannel;
+    };
+    const channels = Array.from({ length: 10_000 }, (_, n) =>
+      counted(
+        directoryChannel(channelUuid(`many-${n}`), {
+          updatedAt: new Date(Date.UTC(2026, 0, 1) + n * 60_000).toISOString(),
+        })
+      )
+    );
+    const first = channelDirectoryState(channels, [], true);
+    const changed = counted(
+      directoryChannel(channelUuid('many-5000'), {
+        updatedAt: '2027-01-01T00:00:00Z',
+      })
+    );
+    reads = 0;
+
+    const next = nextChannelDirectoryState(
+      first,
+      channels.map((channel) =>
+        channel.id === changed.id ? changed : channel
+      ),
+      [],
+      true
+    );
+
+    expect(next.joined[0]).toBe(changed);
+    expect(next.joined).toHaveLength(10_000);
+    // A binary search reads about log2(10,000) of them; ordering all of
+    // them again would read each one at least once.
+    expect(reads).toBeLessThan(100);
+  });
+
   it('returns the previous state for a read that changed nothing', () => {
     const channels = IDS.slice(0, 50).map((id) => directoryChannel(id));
     const first = nextChannelDirectoryState(

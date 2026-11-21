@@ -320,7 +320,7 @@ describe('ownChannelWrites', () => {
     expect(held?.channel).toBe(newer);
     second.settle({ [A]: written });
     expect(own.writes()[A]).toBe(held);
-    if (held) own.release(A, held);
+    if (held) own.release([[A, held]]);
     first.settle({ [A]: written });
     expect(own.writes()).toEqual({});
   });
@@ -365,4 +365,58 @@ describe('ownChannelWrites', () => {
     dispose();
     expect(runs).toBe(2);
   });
+
+  it('holds a bulk deletion under one hold, and lets it go in one change', () => {
+    vi.useFakeTimers();
+    const own = ownChannelWrites(new QueryClient());
+    const gone = Array.from({ length: BULK }, (_, n) =>
+      channelUuid(`gone-${n}`)
+    );
+    const runs = countChanges(own);
+    settle(own, Object.fromEntries(gone.map((id) => [id, null])));
+    expect(Object.keys(own.writes())).toHaveLength(BULK);
+    expect(vi.getTimerCount()).toBe(1);
+
+    vi.advanceTimersByTime(OWN_WRITE_HOLD_MS);
+    expect(own.writes()).toEqual({});
+    expect(runs()).toBe(3);
+  });
+
+  it('lets go in one change every write its source caught up with', async () => {
+    const own = ownChannelWrites(new QueryClient());
+    const gone = Array.from({ length: BULK }, (_, n) =>
+      channelUuid(`gone-${n}`)
+    );
+    settle(own, Object.fromEntries(gone.map((id) => [id, null])));
+    const runs = countChanges(own);
+    // The source no longer lists any of them: each deletion is past.
+    expect(
+      createOwnWriteTracker(own, ACCOUNT).pending({}, own.writes())
+    ).toEqual([]);
+
+    await Promise.resolve();
+    expect(own.writes()).toEqual({});
+    expect(runs()).toBe(2);
+  });
+});
+
+// A bulk deletion of this many channels.
+const BULK = 2_000;
+
+/** How many times `own`'s writes have published, counting the first read. */
+function countChanges(own: ReturnType<typeof ownChannelWrites>) {
+  let runs = 0;
+  createRoot((dispose) => {
+    disposers.push(dispose);
+    createComputed(() => {
+      own.writes();
+      runs += 1;
+    });
+  });
+  return () => runs;
+}
+
+const disposers: (() => void)[] = [];
+afterEach(() => {
+  for (const dispose of disposers.splice(0)) dispose();
 });

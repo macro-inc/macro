@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   rollbackSoup: vi.fn(),
   rollbackSearch: vi.fn(),
   refresh: vi.fn(),
+  refreshDirectory: vi.fn(),
   failure: vi.fn(),
 }));
 vi.mock('@block-database/queries/trash-database', () => ({
@@ -41,6 +42,10 @@ vi.mock('@queries/client', () => ({
   get queryClient() {
     return client;
   },
+}));
+vi.mock('@queries/channel/directory', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  refreshChannelDirectory: mocks.refreshDirectory,
 }));
 vi.mock('@queries/agent-session/entity-mutations', () => ({
   deleteAgentSession: vi.fn(),
@@ -135,6 +140,7 @@ beforeEach(() => {
   mocks.removeSoup.mockReturnValue({ rollback: mocks.rollbackSoup });
   mocks.removeSearch.mockReturnValue({ rollback: mocks.rollbackSearch });
   mocks.refresh.mockResolvedValue(undefined);
+  mocks.refreshDirectory.mockResolvedValue(undefined);
   mocks.deleteItem.mockResolvedValue(true);
   mocks.trashDatabase.mockReturnValue(okAsync(undefined));
   mocks.moveToFolder.mockResolvedValue(true);
@@ -783,7 +789,9 @@ describe('channel deletion', () => {
 
     expect(soup()).toEqual(['failed', 'other']);
     expect(search()).toEqual(['failed', 'other']);
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: channelKeys._def });
+    expect(invalidate).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: channelKeys._def })
+    );
     expect(mocks.failure).toHaveBeenCalledWith(
       'Deleted 1 of 2 items; 1 failed'
     );
@@ -801,6 +809,38 @@ describe('channel deletion', () => {
       type: 'CHANNEL',
       id: 'channel-id',
     });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: channelKeys._def });
+    expect(invalidate).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: channelKeys._def })
+    );
+  });
+
+  it('takes only the confirmed deletions out of the directory, in one refresh that rereads it', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    mocks.deleteCallGraphql.mockImplementation(async ({ id }) => {
+      if (id === 'refused') throw new Error('refused');
+    });
+    const open = channelKeys.withID('open').queryKey;
+    const directory = channelKeys.directory(
+      'macro|viewer@example.com'
+    ).queryKey;
+    client.setQueryData(open, {});
+    client.setQueryData(directory, {});
+    const { mutation } = mount();
+
+    await expect(
+      mutation.mutateAsync([
+        entity('first', 'channel'),
+        entity('refused', 'channel'),
+        entity('second', 'channel'),
+      ])
+    ).rejects.toBeInstanceOf(BulkDeleteFailure);
+
+    expect(mocks.refreshDirectory).toHaveBeenCalledOnce();
+    expect(mocks.refreshDirectory).toHaveBeenCalledWith([], {
+      removed: ['first', 'second'],
+    });
+    expect(client.getQueryState(open)?.isInvalidated).toBe(true);
+    // Left to the directory's own refresh, which reads it once.
+    expect(client.getQueryState(directory)?.isInvalidated).toBe(false);
   });
 });

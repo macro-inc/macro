@@ -42,7 +42,7 @@ import { scheduledActionClient } from '@service-scheduled-action/client';
 import type { ListedDatabase } from '@service-storage/generated/schemas/listedDatabase';
 import type { ListedForm } from '@service-storage/generated/schemas/listedForm';
 import { getEntityGraphqlClient } from '@service-storage/graphql-soup';
-import { useMutation } from '@tanstack/solid-query';
+import { partialMatchKey, useMutation } from '@tanstack/solid-query';
 import { batch } from 'solid-js';
 import { type EntityData, getEntityProjectId } from '../types/entity';
 import { BulkDeleteFailure } from './bulk-delete-result';
@@ -57,7 +57,12 @@ function invalidateDeletedDssItems(entities: EntityData[]): void {
     e.type === 'channel' ? [e.id] : []
   );
   if (channelIds.length > 0) {
-    queryClient.invalidateQueries({ queryKey: channelKeys._def });
+    queryClient.invalidateQueries({
+      queryKey: channelKeys._def,
+      // The directory refresh below reads the directory again itself.
+      predicate: ({ queryKey }) =>
+        !partialMatchKey(queryKey, channelKeys.directory._def),
+    });
     // The channel directory reads a replica, or waits for the soup update:
     // the deleted channels come out at once, with no read of each.
     fireAndForget(

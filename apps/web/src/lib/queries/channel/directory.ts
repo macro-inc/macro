@@ -908,10 +908,11 @@ async function readOwnWrites(
   soup: () => UrqlQuery,
   account: () => QueryAccount | undefined
 ) {
-  const gone = [...new Set(removed)].filter(isChannelId);
+  const removedIds = new Set(removed);
+  const gone = [...removedIds].filter(isChannelId);
   const channelIds = [...new Set(changed)]
     .filter(isChannelId)
-    .filter((id) => !gone.includes(id));
+    .filter((id) => !removedIds.has(id));
   if (channelIds.length === 0 && gone.length === 0) return;
   const writer = account();
   if (!writer) return;
