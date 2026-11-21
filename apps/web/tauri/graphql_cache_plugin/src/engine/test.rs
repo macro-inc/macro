@@ -898,3 +898,33 @@ fn a_staged_native_hydrate_writes_and_reports_what_a_whole_one_does() {
     assert_eq!(staged_commits, 5);
     assert_eq!(staged, whole);
 }
+
+#[test]
+fn a_failed_staging_read_fails_the_native_hydrate_instead_of_retrying_it_whole() {
+    let handle = spawn_handle();
+    super::test_hooks::STAGED_COMMITS.with(|commits| commits.set(0));
+    super::test_hooks::FAIL_STAGE.with(|fail| fail.set(true));
+    let result = block_on(handle.hydrate_query(
+        HYDRATION_QUERY.to_string(),
+        Some("Soup".to_string()),
+        variables(),
+        soup_data(true),
+        None,
+        None,
+    ));
+    assert_eq!(result.err().as_deref(), Some("injected staging failure"));
+    assert_eq!(
+        super::test_hooks::STAGED_COMMITS.with(std::cell::Cell::get),
+        0
+    );
+    let ReadResultWire::Miss = block_on(handle.read(
+        None,
+        "query Viewer { user { id } }".to_string(),
+        Some("Viewer".to_string()),
+        Variables::new(),
+        Vec::new(),
+    ))
+    .unwrap() else {
+        panic!("a failed hydrate writes nothing");
+    };
+}

@@ -423,6 +423,8 @@ mod test_hooks {
         /// Off, hydrates run whole, for tests to compare with.
         pub(super) static STAGING: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
         pub(super) static STAGED_COMMITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+        /// Set, the next staging read fails once.
+        pub(super) static FAIL_STAGE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     }
 }
 
@@ -813,7 +815,9 @@ impl EngineHandle {
         if staging()
             && let Ok(wal) = state.engine.storage().wal_position()
         {
-            let computed = soup::write_projections(
+            // A failed read is the hydrate's error, as it is for a whole
+            // one: retrying it whole could succeed where that failed.
+            let projections = soup::write_projections(
                 &mut state.engine,
                 &query,
                 operation_name.as_deref(),
@@ -821,36 +825,43 @@ impl EngineHandle {
                 &data,
                 identity.as_deref(),
             )
-            .await;
-            if let Ok(projections) = computed {
-                state = self.let_reads_run(state).await;
-                let unmoved = |engine: &Engine<TursoStorage>| {
-                    engine.storage().wal_position().ok() == Some(wal)
+            .await?;
+            state = self.let_reads_run(state).await;
+            let unmoved =
+                |engine: &Engine<TursoStorage>| engine.storage().wal_position().ok() == Some(wal);
+            if unmoved(&state.engine) {
+                let staged = state
+                    .engine
+                    .stage_hydrate(write, hydration_scope.as_ref(), &projections)
+                    .await
+                    .map_err(|error| error.to_string());
+                #[cfg(test)]
+                let staged = match test_hooks::FAIL_STAGE.with(|fail| fail.replace(false)) {
+                    true => Err("injected staging failure".to_string()),
+                    false => staged,
                 };
-                if unmoved(&state.engine)
-                    && let Ok(Some(staged)) = state
-                        .engine
-                        .stage_hydrate(write, hydration_scope.as_ref(), &projections)
-                        .await
-                {
-                    state = self.let_reads_run(state).await;
-                    let EngineState { engine, ops, .. } = &mut *state;
-                    if unmoved(engine) && engine.staged_hydrate_current(&staged) {
-                        let result = engine
-                            .commit_staged_hydrate(staged, projections)
-                            .await
-                            .map_err(|error| error.to_string())?;
-                        #[cfg(test)]
-                        test_hooks::STAGED_COMMITS.with(|commits| commits.set(commits.get() + 1));
-                        return Ok(self.hydration_wire(engine, ops, result).await);
+                let staged = staged?;
+                match staged {
+                    Some(staged) => {
+                        state = self.let_reads_run(state).await;
+                        let EngineState { engine, ops, .. } = &mut *state;
+                        if unmoved(engine) && engine.staged_hydrate_current(&staged) {
+                            let result = engine
+                                .commit_staged_hydrate(staged, projections)
+                                .await
+                                .map_err(|error| error.to_string())?;
+                            #[cfg(test)]
+                            test_hooks::STAGED_COMMITS
+                                .with(|commits| commits.set(commits.get() + 1));
+                            return Ok(self.hydration_wire(engine, ops, result).await);
+                        }
                     }
-                } else if unmoved(&state.engine) {
                     // Not staged (it binds the account, meets optimistic
                     // layers, or fails admission): the projections still hold.
-                    reuse = Some(projections);
+                    None => reuse = Some(projections),
                 }
-                self.recheck_hydration(&mut state).await?;
             }
+            self.recheck_hydration(&mut state).await?;
         }
         let EngineState { engine, ops, .. } = &mut *state;
         let projections = match reuse {
