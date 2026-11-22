@@ -224,3 +224,56 @@ async fn audit_sustained_racing_reviews_preserve_attempts_and_other_facts(pool: 
         1
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn audit_sustained_success_reset_serializes_with_outage_cas(pool: PgPool) {
+    let owner = user("outage-reset-race");
+    let repo = PgImportRepo::new(pool.clone());
+    let mut source = planned_page('d', "Work", false);
+    source.kind = ImportKind::DataSource;
+    let (review, ids) = approved(&pool, &owner, &[source]).await;
+    let id = ids[0];
+    repo.claim_importing(&owner, &ids, &[], None).await.unwrap();
+    let initial = snapshot(id, review, &[]);
+    repo.record_written(&owner, std::slice::from_ref(&initial))
+        .await
+        .unwrap();
+    let mut blocker = pool.begin().await.unwrap();
+    sqlx::query_scalar!(
+        r#"SELECT entity.id
+               FROM import_entity AS entity
+               WHERE entity.id = $2
+                 AND (SELECT entity.user_id = $1 AND entity.review_id = $3
+                      AND entity.source = 'notion' AND entity.kind = 'data_source'
+                      AND entity.status = 'importing' OFFSET 0)
+               FOR UPDATE OF entity"#,
+        owner.as_ref(),
+        id,
+        review,
+    )
+    .fetch_one(&mut *blocker)
+    .await
+    .unwrap();
+    let next = snapshot(id, review, &[Uuid::now_v7()]);
+    let facts = vec![next];
+    let mut clear = Box::pin(repo.clear_database_reservation_failures(&owner, id));
+    let mut update =
+        Box::pin(repo.replace_database_outage(&owner, id, review, Some(&initial.object), &facts));
+    let (clear_wait, update_wait) = tokio::join!(
+        tokio::time::timeout(std::time::Duration::from_millis(100), clear.as_mut()),
+        tokio::time::timeout(std::time::Duration::from_millis(100), update.as_mut()),
+    );
+    blocker.rollback().await.unwrap();
+    assert!(
+        clear_wait.is_err(),
+        "success reset must wait for the parent lock"
+    );
+    assert!(
+        update_wait.is_err(),
+        "outage CAS must wait for the parent lock"
+    );
+    let (cleared, _updated) = tokio::join!(clear, update);
+    cleared.unwrap();
+    let stored = repo.written(&owner, &ids).await.unwrap();
+    assert!(!stored.iter().any(|fact| fact.kind == crate::domain::models::WrittenKind::DatabaseReservationFailure));
+}

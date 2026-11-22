@@ -521,7 +521,7 @@ impl NotionRunRepo for PgImportRepo {
 }
 
 impl WrittenObjects for PgImportRepo {
-    #[tracing::instrument(skip(self, user), err)]
+    #[tracing::instrument(skip_all, fields(import_id = %import_id, review_id = %review_id, facts = facts.len()), err)]
     async fn replace_database_outage(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -534,11 +534,30 @@ impl WrittenObjects for PgImportRepo {
             .await
     }
 
+    #[tracing::instrument(skip_all, fields(import_id = %import_id), err)]
     async fn clear_database_reservation_failures(
         &self,
         user: &MacroUserIdStr<'static>,
         import_id: Uuid,
     ) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query!("SET LOCAL statement_timeout = '15s'")
+            .execute(&mut *tx)
+            .await?;
+        // Share the outage CAS lock, then obtain a fresh snapshot for deletion.
+        sqlx::query_scalar!(
+            r#"SELECT entity.id
+               FROM import_entity AS entity
+               WHERE entity.id = $2
+                 AND (SELECT entity.user_id = $1 AND entity.source = 'notion'
+                      AND entity.kind = 'data_source' OFFSET 0)
+               FOR UPDATE OF entity"#,
+            user.as_ref(),
+            import_id,
+        )
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("import item is missing or not owned by the caller"))?;
         let owned = sqlx::query_scalar!(
             r#"
 WITH owned AS MATERIALIZED (
@@ -555,13 +574,14 @@ SELECT EXISTS (SELECT 1 FROM owned) AS "owned!"
             user.as_ref(),
             import_id
         )
-        .fetch_one(&self.pool)
+        .fetch_one(&mut *tx)
         .await?;
         if !owned {
             return Err(
                 anyhow::anyhow!("import item is missing or not owned by the caller").into(),
             );
         }
+        tx.commit().await?;
         Ok(())
     }
 

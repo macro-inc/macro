@@ -428,6 +428,8 @@ The inline writer adds `view`, `view_name`, `loss`, `schema_plan`,
 `dependency_included` and `database_reservation_failure` written kinds.
 The failure kind also stores validated typed outage/terminal payloads. Its at
 most five facts retain their generation; clear them atomically on success.
+Serialize success reset with outage replacement under the same owned parent-row
+lock, then delete using a fresh transaction statement snapshot.
 A terminal outcome stays a link until a new generation replaces it. Retrying a
 degraded source has no card action/API yet; report the link outcome without
 promising a retry control. Partial-run summaries direct users to the report,
