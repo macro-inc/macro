@@ -111,6 +111,7 @@ export function createSnapPager(
   let attached: HTMLDivElement | undefined;
   let touchHeld = false;
   let pointerHeld = false;
+  let nativeScroll = false;
   let queuedJump: number | undefined;
   let queuedAtScrollLeft: number | undefined;
   let lastCommandAt: number | undefined;
@@ -141,6 +142,7 @@ export function createSnapPager(
   // a fallback timer from recycling pages beneath a finger that stopped moving.
   const touchStart = () => {
     touchHeld = true;
+    nativeScroll = true;
     cancelNavigation();
     clearTimer();
   };
@@ -152,6 +154,7 @@ export function createSnapPager(
   const pointerStart = (event: PointerEvent) => {
     if (event.pointerType === 'touch') return;
     pointerHeld = true;
+    nativeScroll = true;
     cancelNavigation();
     clearTimer();
   };
@@ -160,8 +163,18 @@ export function createSnapPager(
     pointerHeld = false;
     scheduleSettle();
   };
+  const onWheel = (event: WheelEvent) => {
+    if (locked() || (event.deltaX === 0 && !event.shiftKey)) return;
+    // Trackpads have no held pointer lifecycle. New horizontal input takes
+    // ownership away from a button burst without interrupting native momentum.
+    if (!nativeScroll) cancelNavigation();
+    nativeScroll = true;
+    setPhase('scrolling');
+    scheduleSettle();
+  };
   const performJump = (target: number, deferReport = false) => {
     const moved = target - position();
+    nativeScroll = false;
     pending = 0;
     queuedJump = undefined;
     queuedAtScrollLeft = undefined;
@@ -268,6 +281,7 @@ export function createSnapPager(
       }
     }
     rapidNavigation = false;
+    nativeScroll = false;
     const hadMovement = phase() !== 'idle' || pending !== 0;
     const moved = Math.max(
       -middle,
@@ -301,6 +315,7 @@ export function createSnapPager(
       attached.scrollLeft === middle * attached.clientWidth
     )
       return;
+    if (phase() === 'idle' && pending === 0) nativeScroll = true;
     if (
       gestureHeld() &&
       queuedJump !== undefined &&
@@ -322,12 +337,10 @@ export function createSnapPager(
     const target = (queuedJump ?? position() + pending) + offset;
     // Never re-centre a native gesture under the user's finger or momentum.
     // Programmatic slides, in contrast, can be retargeted immediately.
-    if (
-      gestureHeld() ||
-      (phase() === 'scrolling' && pending === 0 && !rapidNavigation)
-    ) {
+    if (gestureHeld() || nativeScroll) {
       queuedJump = target;
       queuedAtScrollLeft = attached?.scrollLeft;
+      rapidNavigation = rapid;
       return;
     }
     pending = target - position();
@@ -343,6 +356,7 @@ export function createSnapPager(
     element.removeEventListener('scroll', onScroll);
     element.removeEventListener('scrollend', onScrollEnd);
     element.removeEventListener('touchstart', touchStart);
+    element.removeEventListener('wheel', onWheel);
     element.removeEventListener('pointerdown', pointerStart);
     if (attached !== element) return;
     window.removeEventListener('touchend', touchEnd);
@@ -351,6 +365,7 @@ export function createSnapPager(
     window.removeEventListener('pointercancel', pointerEnd);
     touchHeld = false;
     pointerHeld = false;
+    nativeScroll = false;
     element.style.scrollSnapType = '';
     clearTimer();
     clearFrame();
@@ -375,6 +390,7 @@ export function createSnapPager(
       if (attached) detach(attached);
       attached = element;
       setViewport(element);
+      element.addEventListener('wheel', onWheel, { passive: true });
       element.addEventListener('scroll', onScroll);
       element.addEventListener('scrollend', onScrollEnd);
       element.addEventListener('touchstart', touchStart, { passive: true });
@@ -395,6 +411,7 @@ export function createSnapPager(
       queuedJump = undefined;
       lastCommandAt = undefined;
       rapidNavigation = false;
+      nativeScroll = false;
       unreportedMovement = 0;
       batch(() => {
         slots.forEach(([, setSlot], index) => setSlot(index));
@@ -408,6 +425,7 @@ export function createSnapPager(
     setLocked(value) {
       if (value === locked()) return;
       if (value) cancelNavigation();
+      nativeScroll = false;
       pending = 0;
       queuedJump = undefined;
       clearTimer();

@@ -330,6 +330,247 @@ describe('agenda paging', () => {
     expect(paging.indices()).toEqual([-2, -1, 0, 1, 2]);
     dispose();
   });
+  it.each([0, 60])(
+    'preserves a fling to %i through a prepend and late results',
+    (latestScrollTop) => {
+      let resize: (() => void) | undefined;
+      vi.stubGlobal(
+        'ResizeObserver',
+        class {
+          constructor(callback: () => void) {
+            resize = callback;
+          }
+          observe() {}
+          disconnect() {}
+        }
+      );
+      const frames: FrameRequestCallback[] = [];
+      vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
+        frames.push(callback)
+      );
+      vi.stubGlobal('cancelAnimationFrame', vi.fn());
+      const viewport = document.createElement('div');
+      viewport.getBoundingClientRect = () => ({ top: 0 }) as DOMRect;
+      Object.defineProperty(viewport, 'scrollHeight', { value: 7000 });
+      Object.defineProperty(viewport, 'clientHeight', { value: 400 });
+      const date = new Date(2026, 2, 7);
+      let first = -2;
+      let lateGrowth = 0;
+      const render = () => {
+        viewport.replaceChildren();
+        for (let index = first; index < first + 5; index++) {
+          const section = document.createElement('section');
+          section.dataset.agendaWindow = String(index);
+          for (let day = 0; day < 14; day++) {
+            const row = document.createElement('section');
+            row.dataset.agendaDay = agendaShift(
+              date,
+              index * 14 + day
+            ).toDateString();
+            const position = (index - first) * 1400 + day * 100;
+            row.getBoundingClientRect = () => {
+              const y = position + (index > first ? lateGrowth : 0);
+              return {
+                top: y - viewport.scrollTop,
+                bottom: y + 100 - viewport.scrollTop,
+              } as DOMRect;
+            };
+            section.append(row);
+          }
+          viewport.append(section);
+        }
+      };
+      render();
+      const { paging, dispose } = createRoot((dispose) => ({
+        paging: createAgendaPaging(() => viewport, date),
+        dispose,
+      }));
+      viewport.scrollTop = 100;
+      paging.move(-1);
+      first--;
+      render();
+      viewport.scrollTop = latestScrollTop;
+      paging.onScroll();
+      frames.shift()?.(0);
+      expect(viewport.scrollTop).toBe(1400 + latestScrollTop);
+      lateGrowth = 300;
+      resize?.();
+      expect(viewport.scrollTop).toBe(1700 + latestScrollTop);
+      viewport.scrollTop = 20;
+      paging.onScroll();
+      expect(paging.indices()[0]).toBe(-4);
+      dispose();
+    }
+  );
+
+  it('anchors a prepended empty range to its visible heading instead of a hidden marker', () => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      }
+    );
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
+      frames.push(callback)
+    );
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    const viewport = document.createElement('div');
+    viewport.getBoundingClientRect = () => ({ top: 0 }) as DOMRect;
+    const date = new Date(2026, 2, 7);
+    const oldDay = agendaShift(date, -28);
+    const row = document.createElement('section');
+    row.dataset.agendaDay = oldDay.toDateString();
+    row.getBoundingClientRect = () =>
+      ({
+        top: -viewport.scrollTop,
+        bottom: 96 - viewport.scrollTop,
+      }) as DOMRect;
+    viewport.append(row);
+    const { paging, dispose } = createRoot((dispose) => ({
+      paging: createAgendaPaging(() => viewport, date),
+      dispose,
+    }));
+    paging.move(-1);
+    const group = document.createElement('section');
+    group.dataset.agendaDay = agendaShift(date, -42).toDateString();
+    group.dataset.agendaGroupEnd = oldDay.toDateString();
+    group.getBoundingClientRect = () =>
+      ({
+        top: -viewport.scrollTop,
+        bottom: 96 - viewport.scrollTop,
+      }) as DOMRect;
+    row.getBoundingClientRect = () =>
+      ({
+        top: 96 - viewport.scrollTop,
+        bottom: 96 - viewport.scrollTop,
+      }) as DOMRect;
+    viewport.replaceChildren(group, row);
+    frames.shift()?.(0);
+    expect(viewport.scrollTop).toBe(0);
+    dispose();
+  });
+  it('keeps loading upward at a collapsed edge and stops at the supported boundary', () => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      }
+    );
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
+      frames.push(callback)
+    );
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    const viewport = document.createElement('div');
+    viewport.getBoundingClientRect = () => ({ top: 0 }) as DOMRect;
+    const date = new Date(2026, 2, 7);
+    const row = document.createElement('section');
+    row.dataset.agendaDay = date.toDateString();
+    row.getBoundingClientRect = () => ({ top: 0, bottom: 96 }) as DOMRect;
+    viewport.append(row);
+    const { paging, dispose } = createRoot((dispose) => ({
+      paging: createAgendaPaging(() => viewport, date, {
+        canLoadWindow: (index) => index >= -4,
+      }),
+      dispose,
+    }));
+    viewport.dispatchEvent(new WheelEvent('wheel', { deltaY: -100 }));
+    expect(paging.indices()[0]).toBe(-3);
+    // A second fling event arrives before the prepend finishes, at scrollTop 0.
+    viewport.dispatchEvent(new WheelEvent('wheel', { deltaY: -100 }));
+    frames.shift()?.(0);
+    expect(paging.indices()[0]).toBe(-4);
+    frames.shift()?.(0);
+    viewport.dispatchEvent(new WheelEvent('wheel', { deltaY: -100 }));
+    expect(paging.indices()).toEqual([-4, -3, -2, -1, 0]);
+    expect(frames).toHaveLength(0);
+    dispose();
+  });
+  it('does not interpret a shorter rotated list clamping scrollTop as reader movement', () => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      }
+    );
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
+      frames.push(callback)
+    );
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    const viewport = document.createElement('div');
+    viewport.getBoundingClientRect = () => ({ top: 0 }) as DOMRect;
+    let height = 900;
+    Object.defineProperty(viewport, 'scrollHeight', { get: () => height });
+    Object.defineProperty(viewport, 'clientHeight', { value: 500 });
+    let rowTop = 400;
+    const date = new Date(2026, 2, 7);
+    const row = document.createElement('section');
+    row.dataset.agendaDay = date.toDateString();
+    row.getBoundingClientRect = () =>
+      ({
+        top: rowTop - viewport.scrollTop,
+        bottom: rowTop + 500 - viewport.scrollTop,
+      }) as DOMRect;
+    viewport.append(row);
+    const { paging, dispose } = createRoot((dispose) => ({
+      paging: createAgendaPaging(() => viewport, date),
+      dispose,
+    }));
+    viewport.scrollTop = 400;
+    paging.move(1);
+    height = 800;
+    rowTop = 300;
+    viewport.scrollTop = 300;
+    paging.onScroll();
+    frames.shift()?.(0);
+    expect(viewport.scrollTop).toBe(300);
+    expect(frames).toHaveLength(0);
+    dispose();
+  });
+  it('restores a history window and visible day offset through late results', () => {
+    let resize: (() => void) | undefined;
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: () => void) {
+          resize = callback;
+        }
+        observe() {}
+        disconnect() {}
+      }
+    );
+    const viewport = document.createElement('div');
+    viewport.getBoundingClientRect = () => ({ top: 0 }) as DOMRect;
+    const date = new Date(2026, 2, 7);
+    let y = 1200;
+    const row = document.createElement('section');
+    row.dataset.agendaDay = date.toDateString();
+    row.getBoundingClientRect = () =>
+      ({
+        top: y - viewport.scrollTop,
+        bottom: y + 200 - viewport.scrollTop,
+      }) as DOMRect;
+    viewport.append(row);
+    const initialPosition = { first: -5, date: date.getTime(), top: -40 };
+    const { paging, dispose } = createRoot((dispose) => ({
+      paging: createAgendaPaging(() => viewport, date, { initialPosition }),
+      dispose,
+    }));
+    paging.positionInitial();
+    expect(viewport.scrollTop).toBe(1240);
+    expect(paging.indices()).toEqual([-5, -4, -3, -2, -1]);
+    expect(paging.capturePosition()).toEqual(initialPosition);
+    y = 1500;
+    resize?.();
+    expect(viewport.scrollTop).toBe(1540);
+    expect(paging.capturePosition()).toEqual(initialPosition);
+    dispose();
+  });
 });
 
 it('anchors a date inside a collapsed empty range to the visible group', () => {

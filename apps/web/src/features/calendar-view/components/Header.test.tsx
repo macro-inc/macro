@@ -14,6 +14,17 @@ const state = vi.hoisted(() => ({
   today: vi.fn(),
   changeView: vi.fn(),
   width: (): number => 1200,
+  navigate: vi.fn(() => Promise.resolve()),
+}));
+vi.mock('@app/lib/split-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@app/lib/split-router')>()),
+  useNavigate: () => state.navigate,
+}));
+vi.mock('@app/routes/routes', () => ({
+  calendarSearchRoute: { id: 'view-calendar-search', path: 'calendar/search' },
+}));
+vi.mock('@app/features/calendar/hooks/use-calendar-ui-flag', () => ({
+  useCalendarSearchUiFlag: () => () => true,
 }));
 
 vi.mock('@ui', async () => ({
@@ -200,6 +211,10 @@ describe('calendar headers', () => {
     ).toBeNull();
     expect(screen.queryByRole('heading', { name: 'October 2026' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Search events' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Search events' }));
+    expect(state.navigate).toHaveBeenCalledWith({
+      route: expect.objectContaining({ id: 'view-calendar-search' }),
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Go to today' }));
     expect(state.today).toHaveBeenCalledOnce();
     expect(

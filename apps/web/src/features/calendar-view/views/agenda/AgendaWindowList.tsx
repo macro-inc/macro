@@ -1,8 +1,15 @@
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
+import { useCalendarNavigation } from '@app/features/calendar/context/calendar-navigation-context';
+import {
+  agendaWindow,
+  clipAgendaWindow,
+} from '@app/features/calendar/primitives/agenda-window';
 import { createAgendaPaging } from '@app/features/calendar/primitives/create-agenda-paging';
+import { getCalendarSupportedRange } from '@app/features/calendar/utils/calendar-supported-range';
 import { t } from '@app/lib/i18n';
-import { createSignal, For, onMount, Show } from 'solid-js';
+import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
 import { AgendaGroupingContext } from '../../context/agenda-grouping-context';
+import { useCalendarViewport } from '../../context/calendar-viewport-context';
 import { createAgendaGrouping } from '../../primitives/create-agenda-grouping';
 import { SelectedCalendarEvent } from '../selection/SelectedCalendarEvent';
 import { AgendaWindow } from './AgendaWindow';
@@ -10,7 +17,23 @@ import { AgendaWindow } from './AgendaWindow';
 export function AgendaWindowList(props: { date: Date }) {
   const view = useCalendarView();
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
-  const paging = createAgendaPaging(viewport, props.date);
+  const supportedRange = getCalendarSupportedRange();
+  const viewportState = useCalendarViewport();
+  const navigation = useCalendarNavigation();
+  const paging = createAgendaPaging(viewport, props.date, {
+    initialPosition: viewportState?.initial?.agenda,
+    canLoadWindow: (index) =>
+      clipAgendaWindow(agendaWindow(props.date, index), supportedRange) !==
+      undefined,
+  });
+  if (viewportState) {
+    onCleanup(
+      viewportState.register(() => ({
+        date: (navigation.navigationDate() ?? props.date).getTime(),
+        agenda: paging.capturePosition(),
+      }))
+    );
+  }
   const grouping = createAgendaGrouping();
   onMount(paging.positionInitial);
 

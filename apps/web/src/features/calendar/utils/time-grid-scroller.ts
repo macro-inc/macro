@@ -67,11 +67,16 @@ export const TIME_GRID_OPENING_SCROLL_TIME = '07:00:00';
 export function applyTimeGridOpeningScroll(
   root: HTMLElement | undefined,
   calendar: Calendar | undefined,
-  scrollTime: string
+  scrollTime: string,
+  restoredScrollTop?: number
 ): boolean {
   const scroller = timeGridScroller(root);
   // Month views have no hour scroller and no opening hour to restore.
   if (!calendar || !scroller || scroller.clientHeight === 0) return false;
+  if (restoredScrollTop !== undefined) {
+    scroller.scrollTop = restoredScrollTop;
+    return true;
+  }
   if (scroller.scrollTop === 0) {
     calendar.updateSize();
     calendar.scrollToTime(scrollTime);

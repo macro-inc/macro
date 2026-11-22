@@ -6,12 +6,20 @@ import { createSignal, onCleanup, onMount } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CalendarGridPeriodView } from '../types';
 import {
+  applyTimeGridOpeningScroll,
+  TIME_GRID_OPENING_SCROLL_TIME,
+} from '../utils/time-grid-scroller';
+import {
   CalendarPagerContextProvider,
   useCalendarPager,
 } from './CalendarPagerContext';
 
-function mountCalendar(view: CalendarGridPeriodView = 'timeGridDay') {
+function mountCalendar(
+  view: CalendarGridPeriodView = 'timeGridDay',
+  restored?: { date: Date; scrollTop: number; laidOut?: boolean }
+) {
   const element = document.createElement('div');
+  let laidOut = restored?.laidOut !== false;
   let pagerContext: ReturnType<typeof useCalendarPager>;
   const pages = new Map<
     number,
@@ -45,6 +53,24 @@ function mountCalendar(view: CalendarGridPeriodView = 'timeGridDay') {
           datesSet: setDateInfo,
         });
         calendar.render();
+        const scroller = child.querySelector<HTMLElement>(
+          '.fc-timegrid .fc-scroller-harness-liquid > .fc-scroller'
+        );
+        if (scroller) {
+          Object.defineProperty(scroller, 'clientHeight', {
+            get: () => (laidOut ? 600 : 0),
+          });
+          Object.defineProperty(scroller, 'scrollHeight', {
+            get: () => (laidOut ? 2000 : 0),
+          });
+          let scrollTop = 0;
+          Object.defineProperty(scroller, 'scrollTop', {
+            get: () => scrollTop,
+            set: (value: number) => {
+              scrollTop = laidOut ? value : 0;
+            },
+          });
+        }
         vi.spyOn(calendar, 'scrollToTime').mockImplementation(scrollToTime);
         pages.set(id, { calendar, element: child });
         const unregister = pager.registerPage({
@@ -88,6 +114,8 @@ function mountCalendar(view: CalendarGridPeriodView = 'timeGridDay') {
   render(() => (
     <CalendarPagerContextProvider
       initialView={view}
+      initialDate={restored?.date}
+      initialScrollTop={restored?.scrollTop}
       showWeekends={() => true}
       weekStartsOn={() => 0}
       onNavigate={() => {}}
@@ -106,6 +134,9 @@ function mountCalendar(view: CalendarGridPeriodView = 'timeGridDay') {
     pages,
     viewport,
     scrollToTime,
+    revealGrids: () => {
+      laidOut = true;
+    },
   };
 }
 
@@ -404,4 +435,70 @@ describe('calendar native paging', () => {
       );
     }
   );
+  it.each(['timeGridDay', 'timeGridThreeDay'] as const)(
+    'lets explicit adjacent date selection supersede a pending period command in %s',
+    async (view) => {
+      const { pager, calendar, viewport } = mountCalendar(view);
+      pager().nextPeriod();
+      const target = new Date(2026, 10, view === 'timeGridDay' ? 2 : 5);
+      pager().navigateToDate(target);
+      viewport.dispatchEvent(new Event('scrollend'));
+      await vi.advanceTimersByTimeAsync(300);
+      expect(pager().navigationDate().toDateString()).toBe(
+        target.toDateString()
+      );
+      expect(pager().activeDate().toDateString()).toBe(target.toDateString());
+      expect(calendar().getDate().toDateString()).toBe(target.toDateString());
+    }
+  );
+  it('anchors an explicit date against an outstanding controller target', async () => {
+    const { pager, calendar, viewport } = mountCalendar();
+    pager().pager.next();
+    pager().navigateToDate(new Date(2026, 10, 2));
+    viewport.dispatchEvent(new Event('scrollend'));
+    await vi.advanceTimersByTimeAsync(300);
+    expect(pager().activeDate().getDate()).toBe(2);
+    expect(calendar().getDate().getDate()).toBe(2);
+  });
+  it('restores the history date and hour position into every mounted grid', async () => {
+    const target = new Date(2026, 10, 20);
+    const { pager, pages, calendar } = mountCalendar('timeGridDay', {
+      date: target,
+      scrollTop: 540,
+    });
+    await vi.advanceTimersByTimeAsync(300);
+    expect(pager().navigationDate().toDateString()).toBe(target.toDateString());
+    expect(calendar().getDate().toDateString()).toBe(target.toDateString());
+    for (const { element } of pages.values()) {
+      expect(
+        element.querySelector(
+          '.fc-timegrid .fc-scroller-harness-liquid > .fc-scroller'
+        )?.scrollTop
+      ).toBe(540);
+    }
+  });
+  it('retains a restored hour offset until the active grid has layout', async () => {
+    const { pager, revealGrids } = mountCalendar('timeGridDay', {
+      date: new Date(2026, 10, 20),
+      scrollTop: 540,
+      laidOut: false,
+    });
+    await vi.advanceTimersByTimeAsync(300);
+    expect(pager().scrollTop()).toBe(540);
+    revealGrids();
+    const root = pager().activePage()?.element();
+    const api = pager().activePage()?.api();
+    expect(
+      applyTimeGridOpeningScroll(
+        root,
+        api,
+        TIME_GRID_OPENING_SCROLL_TIME,
+        pager().scrollTop()
+      )
+    ).toBe(true);
+    expect(
+      root?.querySelector('.fc-scroller-harness-liquid > .fc-scroller')
+        ?.scrollTop
+    ).toBe(540);
+  });
 });

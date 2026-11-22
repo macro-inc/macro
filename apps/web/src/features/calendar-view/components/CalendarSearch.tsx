@@ -3,10 +3,7 @@ import { useCalendarView } from '@app/features/calendar/components/CalendarViewC
 import { useCalendarNavigation } from '@app/features/calendar/context/calendar-navigation-context';
 import { useCalendarOccurrenceData } from '@app/features/calendar/hooks/use-calendar-occurrence-data';
 import { useCalendarSearchUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
-import {
-  type CalendarTimeFormat,
-  DEFAULT_CALENDAR_SOURCE,
-} from '@app/features/calendar/types';
+import { DEFAULT_CALENDAR_SOURCE } from '@app/features/calendar/types';
 import { isCalendarRangeSupported } from '@app/features/calendar/utils/calendar-supported-range';
 import {
   conferenceJoinUrl,
@@ -16,29 +13,23 @@ import {
   calendarMacroCallUrl,
   macroCallUrl,
 } from '@app/features/calendar/utils/macro-call-link';
-import { formatCalendarTime } from '@app/features/calendar/utils/time-format';
 import { t } from '@app/lib/i18n';
+import { usePending } from '@app/observability/flow';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { IS_MAC } from '@core/constant/isMac';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { debouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { parseLocalDate } from '@core/util/local-date';
 import { openExternalUrl } from '@core/util/url';
 import EmptyStateCalendarSearchGraphic from '@design/empty-state-calendar-search.svg';
 import type { EntityData, WithSearch } from '@entity';
-import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import QuotesIcon from '@icon/system/regular/quotes.svg';
-import RepeatIcon from '@icon/system/regular/repeat.svg';
 import VideoCameraIcon from '@icon/system/regular/video-camera.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { Popover } from '@kobalte/core/popover';
-import {
-  useCalendarMentionPreviewQuery,
-  useCalendarSearchPreviewsQuery,
-} from '@queries/calendar/mention-preview';
+import { useCalendarSearchPreviewsQuery } from '@queries/calendar/mention-preview';
 import { createCalendarOccurrenceQueryRange } from '@queries/calendar/occurrences';
 import { useSearchSoupQuery } from '@queries/soup/search';
 import { Button, cn, EmptyStatePanel, Layer } from '@ui';
@@ -52,6 +43,7 @@ import {
   onMount,
   Show,
 } from 'solid-js';
+import { Portal } from 'solid-js/web';
 import { CALENDAR_ONLY_SEARCH_FILTERS } from '../calendar-only-search-filters';
 import { createCalendarRange } from '../calendar-range';
 import {
@@ -62,11 +54,15 @@ import {
   CalendarSearchFilters,
   DEFAULT_CALENDAR_SEARCH_FILTERS,
 } from './CalendarSearchFilters';
+import {
+  CalendarEventPreviewContent,
+  CalendarSearchLoadingRows,
+  formatEventWhen,
+} from './search/calendar-search-preview';
 
 type CalendarSearchResult = WithSearch<
   Extract<EntityData, { type: 'calendar_event' }>
 >;
-type EventTime = NonNullable<CalendarSearchResult['time']>;
 
 const searchEventKey = (eventId: string, occurrenceKey?: string) =>
   JSON.stringify([eventId, occurrenceKey ?? null]);
@@ -131,165 +127,6 @@ function meetingLinkForEvent(
 
 const MIN_QUERY_LENGTH = 3;
 
-const dateWithYear = new Intl.DateTimeFormat(undefined, {
-  weekday: 'short',
-  month: 'short',
-  day: 'numeric',
-  year: 'numeric',
-});
-const dateNoYear = new Intl.DateTimeFormat(undefined, {
-  weekday: 'short',
-  month: 'short',
-  day: 'numeric',
-});
-
-function formatDateLabel(date: Date): string {
-  const formatter =
-    date.getFullYear() === new Date().getFullYear() ? dateNoYear : dateWithYear;
-  return formatter.format(date);
-}
-
-/** The date/time an event row resolved to, matching the calendar's clock. */
-function formatEventWhen(
-  time: EventTime | undefined,
-  timeFormat: CalendarTimeFormat
-): string {
-  if (!time) return '';
-  if (time.kind === 'allDay') {
-    const date = parseLocalDate(time.startDate);
-    return date ? `${formatDateLabel(date)} · All day` : '';
-  }
-  const start = new Date(time.startsAt);
-  if (Number.isNaN(start.getTime())) return '';
-  return `${formatDateLabel(start)} · ${formatCalendarTime(start, timeFormat)}`;
-}
-
-/**
- * Read-only card for a result the calendar cannot navigate to: occurrences
- * older than the backend's rolling materialized window aren't fetchable, so
- * there is nothing to focus and no editable event to open. The card's identity
- * comes from the selected row; the mention preview supplements the guest count.
- * A location only appears when the same occurrence resolves.
- */
-function CalendarEventPreviewContent(props: {
-  event: CalendarSearchResult;
-  color: string;
-  location?: string;
-  timeFormat: CalendarTimeFormat;
-  onBack: () => void;
-}) {
-  let backRef: HTMLButtonElement | undefined;
-  // Pull focus into the card as it replaces the search body. A non-modal
-  // Kobalte popover dismisses on focus-outside, and the vacated input would
-  // otherwise drop focus to <body> and close the popover before it shows.
-  onMount(() => backRef?.focus());
-
-  // Supplemental meeting-level detail only. The preview's own `time` is
-  // deliberately unused: for an out-of-range hit the requested occurrence
-  // isn't materialized, so the endpoint resolves a DIFFERENT instance — the
-  // row already carries the occurrence the user selected.
-  const previewQuery = useCalendarMentionPreviewQuery(() => ({
-    eventId: props.event.id,
-    occurrenceKey: props.event.occurrenceKey,
-  }));
-
-  const when = () =>
-    [
-      formatEventWhen(props.event.time, props.timeFormat),
-      props.location?.trim(),
-    ]
-      .filter(Boolean)
-      .join(' · ');
-  const organizer = () =>
-    props.event.organizer?.name || props.event.organizer?.email || '';
-  const detail = () => {
-    if (previewQuery.isPending) return '';
-    const preview = previewQuery.data;
-    if (!preview) return '';
-    return preview.attendeeCount > 0
-      ? `${preview.attendeeCount} guest${preview.attendeeCount === 1 ? '' : 's'}`
-      : '';
-  };
-
-  return (
-    <div class="p-1">
-      <button
-        ref={backRef}
-        type="button"
-        onClick={props.onBack}
-        class="flex items-center gap-0.5 rounded-md px-2 py-1 text-xs text-ink-muted outline-none hover:text-ink"
-      >
-        <CaretLeftIcon class="size-3" />
-        Back to search
-      </button>
-      <div class="flex flex-col gap-1 px-2 pb-2">
-        <div class="flex min-w-0 items-center gap-1.5">
-          <span
-            aria-hidden="true"
-            class="size-2.5 shrink-0 rounded-sm"
-            style={{ 'background-color': props.color }}
-          />
-          <span class="min-w-0 flex-1 truncate text-sm font-medium text-ink">
-            {props.event.name || 'Untitled event'}
-          </span>
-          <Show when={props.event.isRecurring}>
-            <RepeatIcon
-              aria-hidden={false}
-              class="size-3 shrink-0 text-ink-muted"
-              aria-label="Repeats"
-            />
-          </Show>
-        </div>
-        <Show when={when()}>
-          {(label) => (
-            <span class="truncate text-xs text-ink-muted">{label()}</span>
-          )}
-        </Show>
-        <Show when={organizer()}>
-          {(name) => (
-            <span class="truncate text-xs text-ink-muted">{name()}</span>
-          )}
-        </Show>
-        <Show when={detail()}>
-          {(text) => (
-            <span class="truncate text-xs text-ink-muted">{text()}</span>
-          )}
-        </Show>
-        <span class="mt-1 border-t border-edge-muted pt-1.5 text-xs text-ink-extra-muted">
-          Outside the calendar's navigable range
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function CalendarSearchLoadingRows() {
-  return (
-    <div role="status">
-      <span class="sr-only">Searching events…</span>
-      <For each={[0, 1, 2, 3]}>
-        {(_, index) => (
-          <div
-            aria-hidden="true"
-            class="flex items-center gap-2 rounded-lg p-1.5 px-2"
-          >
-            <span class="skeleton-shimmer size-4 shrink-0 rounded bg-skeleton" />
-            <span class="flex min-w-0 flex-1 flex-col gap-1.5">
-              <span
-                class={cn(
-                  'skeleton-shimmer h-3.5 rounded bg-skeleton',
-                  index() % 2 === 0 ? 'w-3/5' : 'w-2/5'
-                )}
-              />
-              <span class="skeleton-shimmer h-2.5 w-2/5 rounded bg-skeleton" />
-            </span>
-          </div>
-        )}
-      </For>
-    </div>
-  );
-}
-
 /**
  * Keyword search over the caller's calendar events, opened from the calendar
  * header. Selecting a result re-aims the singleton Calendar view at that
@@ -297,6 +134,8 @@ function CalendarSearchLoadingRows() {
  */
 export function CalendarSearch(
   props: {
+    page?: boolean;
+    headerMount?: HTMLElement;
     inline?: boolean;
     compact?: boolean;
     expanded?: boolean;
@@ -310,6 +149,8 @@ export function CalendarSearch(
   return (
     <Show when={searchEnabled()}>
       <CalendarSearchControl
+        page={props.page}
+        headerMount={props.headerMount}
         inline={props.inline}
         compact={props.compact}
         expanded={props.expanded}
@@ -323,6 +164,8 @@ export function CalendarSearch(
 }
 
 function CalendarSearchControl(props: {
+  page?: boolean;
+  headerMount?: HTMLElement;
   inline?: boolean;
   compact?: boolean;
   expanded?: boolean;
@@ -332,9 +175,10 @@ function CalendarSearchControl(props: {
   onOpenChange?: (open: boolean) => void;
 }) {
   const calendarView = useCalendarView();
-  const navigation = useCalendarNavigation();
+  // The standalone page has no visible grid; preview requests supply metadata.
+  const navigation = props.page ? undefined : useCalendarNavigation();
   const panel = useSplitPanelOrThrow();
-  const [open, setOpenInternal] = createSignal(false);
+  const [open, setOpenInternal] = createSignal(!!props.page);
   const setOpen = (next: boolean) => {
     setOpenInternal(next);
     props.onOpenChange?.(next);
@@ -361,6 +205,9 @@ function CalendarSearchControl(props: {
     createSignal<CalendarSearchResult | null>(null);
 
   const query = createMemo(() => rawQuery().trim());
+  onMount(() => {
+    if (props.page) inputRef?.focus();
+  });
   const popupVisible = () =>
     props.popupReady !== false && (!props.inline || query().length > 0);
   const debouncedQuery = debouncedDependent(query, 250);
@@ -419,6 +266,10 @@ function CalendarSearchControl(props: {
   });
 
   const isLoading = () => query().length >= MIN_QUERY_LENGTH && !isCurrent();
+  usePending(
+    'calendar.search.results',
+    () => open() && isLoading() && !searchQuery.isError
+  );
 
   const searchPreviews = useCalendarSearchPreviewsQuery(() =>
     open()
@@ -453,7 +304,7 @@ function CalendarSearchControl(props: {
 
   const visibleOccurrences = useCalendarOccurrenceData({
     range: () => {
-      const range = navigation.visibleRange();
+      const range = navigation?.visibleRange();
       return range
         ? createCalendarOccurrenceQueryRange(range.start, range.end)
         : undefined;
@@ -589,8 +440,8 @@ function CalendarSearchControl(props: {
       <div class="flex shrink-0 items-center gap-1">
         <Show when={rawQuery().trim()}>
           <Button
-            aria-label="Exact match"
-            tooltip="Exact match"
+            aria-label={t('calendar.searchExact')}
+            tooltip={t('calendar.searchExact')}
             type="button"
             variant="ghost"
             size="icon-sm"
@@ -635,7 +486,7 @@ function CalendarSearchControl(props: {
     hotkey: 'cmd+f',
     scopeId: panel.splitHotkeyScope,
     hotkeyToken: TOKENS.calendar.search,
-    description: 'Search events',
+    description: () => t('calendar.searchEvents'),
     runWithInputFocused: true,
     keyDownHandler: () => {
       if (props.inline) {
@@ -666,6 +517,240 @@ function CalendarSearchControl(props: {
     }
   };
 
+  const resultsBody = () => (
+    <>
+      <Show
+        when={previewTarget()}
+        fallback={
+          <>
+            <Show when={!props.inline && !props.page}>
+              <div class="flex items-center gap-2 px-3 py-2">
+                <SearchIcon class="size-4 shrink-0 text-ink-muted" />
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={rawQuery()}
+                  onInput={(event) => changeQuery(event.currentTarget.value)}
+                  onKeyDown={handleSearchKeyDown}
+                  placeholder={t('calendar.searchEvents')}
+                  class="min-w-0 flex-1 bg-transparent text-sm caret-accent outline-none placeholder:text-ink-placeholder"
+                />
+                {filterActions()}
+                <Show when={rawQuery()}>
+                  <Button
+                    aria-label={t('calendar.searchClear')}
+                    tooltip={t('calendar.searchClear')}
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => {
+                      changeQuery('');
+                      inputRef?.focus();
+                    }}
+                  >
+                    <XIcon class="size-4" />
+                  </Button>
+                </Show>
+              </div>
+            </Show>
+            <Show when={query().length < MIN_QUERY_LENGTH}>
+              <EmptyStatePanel
+                centered
+                graphic={EmptyStateCalendarSearchGraphic}
+                graphicClass="size-28 -mb-3"
+                title={t('calendar.searchFind')}
+                titleClass="text-sm"
+                description={t('calendar.searchHint')}
+                descriptionClass="mt-0.5 text-xs leading-5"
+                topSpacerClass="basis-0"
+                class="h-auto min-h-44 px-4 pb-4 pt-3 touch:pt-3 @4xl:px-4"
+              />
+            </Show>
+            <Show when={query().length >= MIN_QUERY_LENGTH}>
+              <div
+                ref={listRef}
+                class={cn(
+                  props.page
+                    ? 'min-h-0 flex-1 overflow-y-auto p-2'
+                    : 'max-h-80 overflow-y-auto p-1',
+                  !props.page && !props.inline && 'border-t border-edge-muted'
+                )}
+              >
+                <Show
+                  when={!searchQuery.isError}
+                  fallback={
+                    <p role="alert" class="p-4">
+                      {t('calendar.searchFailed')}{' '}
+                      <Button
+                        variant="ghost"
+                        onClick={() =>
+                          fireAndForget(
+                            searchQuery.refetch(),
+                            'calendar-search'
+                          )
+                        }
+                      >
+                        {t('calendar.retry')}
+                      </Button>
+                    </p>
+                  }
+                >
+                  <Show
+                    when={!isLoading()}
+                    fallback={<CalendarSearchLoadingRows />}
+                  >
+                    <Show
+                      when={results().length > 0}
+                      fallback={
+                        <EmptyStatePanel
+                          centered
+                          graphic={EmptyStateCalendarSearchGraphic}
+                          graphicClass="size-28 -mb-3"
+                          title={t('calendar.searchEmpty')}
+                          titleClass="text-sm"
+                          description={t('calendar.searchNoResults', {
+                            query: query(),
+                          })}
+                          descriptionClass="mt-0.5 text-xs leading-5"
+                          topSpacerClass="basis-0"
+                          class="h-auto min-h-44 px-4 pb-4 pt-3 touch:pt-3 @4xl:px-4"
+                        />
+                      }
+                    >
+                      <For each={results()}>
+                        {(event, index) => (
+                          <div
+                            data-result-index={index()}
+                            class={cn(
+                              'flex w-full items-center gap-1.5 rounded-lg',
+                              props.page
+                                ? 'min-h-16 border-b border-edge-muted px-4 py-2'
+                                : 'p-1.5 px-2',
+                              !props.page &&
+                                index() === activeIndex() &&
+                                'bg-ink/5'
+                            )}
+                            onMouseMove={() => setActiveRow(index())}
+                          >
+                            <button
+                              type="button"
+                              class="min-w-0 flex-1 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-edge-focus"
+                              classList={{ 'min-h-11': props.page }}
+                              onClick={() => openResult(event)}
+                            >
+                              <span class="flex min-w-0 items-center gap-1.5">
+                                <span
+                                  aria-hidden="true"
+                                  class="size-2.5 shrink-0 rounded-sm"
+                                  style={{
+                                    'background-color': colorForEvent(event.id),
+                                  }}
+                                />
+                                <span class="min-w-0 truncate text-sm text-ink">
+                                  {event.name || t('calendar.searchUntitled')}
+                                </span>
+                              </span>
+                              <Show when={subtitleForEvent(event)}>
+                                {(label) => (
+                                  <span class="block truncate pl-4 text-xs text-ink-muted">
+                                    {label()}
+                                  </span>
+                                )}
+                              </Show>
+                            </button>
+                            <Show
+                              when={meetingLinkForEvent(
+                                event,
+                                detailsForEvent(event)
+                              )}
+                            >
+                              {(link) => (
+                                <Button
+                                  aria-label={t('calendar.searchJoin', {
+                                    name: link().label,
+                                  })}
+                                  tooltip={t('calendar.searchJoin', {
+                                    name: link().label,
+                                  })}
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  class={cn(
+                                    'px-2',
+                                    link().kind === 'google'
+                                      ? 'bg-blue text-[white] light-mode:not-touch:not-disabled:hover:text-[white] dark-mode:bg-blue-bg dark-mode:text-blue-ink dark-mode:not-touch:not-disabled:hover:bg-blue-hover dark-mode:not-touch:not-disabled:hover:text-blue-ink'
+                                      : 'bg-hover text-ink not-touch:not-disabled:hover:bg-active not-touch:not-disabled:hover:text-ink'
+                                  )}
+                                  onClick={() =>
+                                    openExternalUrl(
+                                      conferenceJoinUrl(
+                                        link().url,
+                                        detailsForEvent(event)?.accountEmail
+                                      )
+                                    )
+                                  }
+                                >
+                                  <VideoCameraIcon class="size-3.5" />
+                                  {link().kind === 'macro'
+                                    ? 'Macro'
+                                    : link().kind === 'google'
+                                      ? 'Meet'
+                                      : t('calendar.searchJoinAction')}
+                                </Button>
+                              )}
+                            </Show>
+                          </div>
+                        )}
+                      </For>
+                    </Show>
+                  </Show>
+                </Show>
+              </div>
+            </Show>
+          </>
+        }
+      >
+        {(event) => (
+          <CalendarEventPreviewContent
+            event={event()}
+            color={colorForEvent(event().id)}
+            location={locationForEvent(event())}
+            timeFormat={calendarView.displaySettings.timeFormat}
+            onBack={closePreview}
+          />
+        )}
+      </Show>
+    </>
+  );
+
+  const pageField = () => (
+    <Show when={!previewTarget()}>
+      <div class="flex min-w-0 flex-1 items-center gap-2 rounded-full bg-surface px-3 py-2">
+        <SearchIcon class="size-5 shrink-0 text-ink-muted" />
+        <input
+          ref={inputRef}
+          aria-label={t('calendar.searchEvents')}
+          type="search"
+          value={rawQuery()}
+          onInput={(event) => changeQuery(event.currentTarget.value)}
+          onKeyDown={handleSearchKeyDown}
+          placeholder={t('calendar.searchEvents')}
+          class="min-w-0 flex-1 rounded-sm bg-transparent text-base caret-accent outline-none focus-visible:inset-ring-2 focus-visible:inset-ring-accent placeholder:text-ink-placeholder"
+        />
+        {filterActions()}
+      </div>
+    </Show>
+  );
+  if (props.page)
+    return (
+      <div class="flex min-h-0 flex-1 flex-col bg-page">
+        <Show when={props.headerMount} fallback={pageField()}>
+          {(mount) => <Portal mount={mount()}>{pageField()}</Portal>}
+        </Show>
+        {resultsBody()}
+      </div>
+    );
+
   return (
     <Popover
       open={open()}
@@ -682,7 +767,7 @@ function CalendarSearchControl(props: {
             variant="ghost"
             size="icon-lg"
             class="rounded-full"
-            aria-label="Search events"
+            aria-label={t('calendar.searchEvents')}
           >
             <SearchIcon class="size-5 mobile:size-6" />
           </Popover.Trigger>
@@ -695,9 +780,9 @@ function CalendarSearchControl(props: {
           >
             <Show when={props.expanded === false}>
               <Button
-                aria-label="Search events"
+                aria-label={t('calendar.searchEvents')}
                 tooltip={{
-                  content: 'Search events',
+                  content: t('calendar.searchEvents'),
                   hotkey: TOKENS.calendar.search,
                 }}
                 ref={searchButton}
@@ -722,7 +807,7 @@ function CalendarSearchControl(props: {
             >
               <SearchBar
                 ref={(element) => (inputRef = element)}
-                label="Search events"
+                label={t('calendar.searchEvents')}
                 class="has-[input:focus-visible]:ring-inset"
                 onClose={props.onDismiss ? dismissSearch : undefined}
                 value={rawQuery()}
@@ -798,178 +883,7 @@ function CalendarSearchControl(props: {
                 '-translate-y-1': !popupVisible(),
               }}
             >
-              <Show
-                when={previewTarget()}
-                fallback={
-                  <>
-                    <Show when={!props.inline}>
-                      <div class="flex items-center gap-2 px-3 py-2">
-                        <SearchIcon class="size-4 shrink-0 text-ink-muted" />
-                        <input
-                          ref={inputRef}
-                          type="text"
-                          value={rawQuery()}
-                          onInput={(event) =>
-                            changeQuery(event.currentTarget.value)
-                          }
-                          onKeyDown={handleSearchKeyDown}
-                          placeholder="Search events"
-                          class="min-w-0 flex-1 bg-transparent text-sm caret-accent outline-none placeholder:text-ink-placeholder"
-                        />
-                        {filterActions()}
-                        <Show when={rawQuery()}>
-                          <Button
-                            aria-label="Clear search"
-                            tooltip="Clear search"
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            onClick={() => {
-                              changeQuery('');
-                              inputRef?.focus();
-                            }}
-                          >
-                            <XIcon class="size-4" />
-                          </Button>
-                        </Show>
-                      </div>
-                    </Show>
-                    <Show when={query().length < MIN_QUERY_LENGTH}>
-                      <EmptyStatePanel
-                        centered
-                        graphic={EmptyStateCalendarSearchGraphic}
-                        graphicClass="size-28 -mb-3"
-                        title="Find an event"
-                        titleClass="text-sm"
-                        description="Type at least 3 characters to search events."
-                        descriptionClass="mt-0.5 text-xs leading-5"
-                        topSpacerClass="basis-0"
-                        class="h-auto min-h-44 px-4 pb-4 pt-3 touch:pt-3 @4xl:px-4"
-                      />
-                    </Show>
-                    <Show when={query().length >= MIN_QUERY_LENGTH}>
-                      <div
-                        ref={listRef}
-                        class={cn(
-                          'max-h-80 overflow-y-auto p-1',
-                          !props.inline && 'border-t border-edge-muted'
-                        )}
-                      >
-                        <Show
-                          when={!isLoading()}
-                          fallback={<CalendarSearchLoadingRows />}
-                        >
-                          <Show
-                            when={results().length > 0}
-                            fallback={
-                              <EmptyStatePanel
-                                centered
-                                graphic={EmptyStateCalendarSearchGraphic}
-                                graphicClass="size-28 -mb-3"
-                                title="No matching events"
-                                titleClass="text-sm"
-                                description={`No calendar events found for “${query()}”.`}
-                                descriptionClass="mt-0.5 text-xs leading-5"
-                                topSpacerClass="basis-0"
-                                class="h-auto min-h-44 px-4 pb-4 pt-3 touch:pt-3 @4xl:px-4"
-                              />
-                            }
-                          >
-                            <For each={results()}>
-                              {(event, index) => (
-                                <div
-                                  data-result-index={index()}
-                                  class={cn(
-                                    'flex w-full items-center gap-1.5 rounded-lg p-1.5 px-2',
-                                    index() === activeIndex() && 'bg-ink/5'
-                                  )}
-                                  onMouseMove={() => setActiveRow(index())}
-                                >
-                                  <button
-                                    type="button"
-                                    class="min-w-0 flex-1 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-edge-focus"
-                                    onClick={() => openResult(event)}
-                                  >
-                                    <span class="flex min-w-0 items-center gap-1.5">
-                                      <span
-                                        aria-hidden="true"
-                                        class="size-2.5 shrink-0 rounded-sm"
-                                        style={{
-                                          'background-color': colorForEvent(
-                                            event.id
-                                          ),
-                                        }}
-                                      />
-                                      <span class="min-w-0 truncate text-sm text-ink">
-                                        {event.name || 'Untitled event'}
-                                      </span>
-                                    </span>
-                                    <Show when={subtitleForEvent(event)}>
-                                      {(label) => (
-                                        <span class="block truncate pl-4 text-xs text-ink-muted">
-                                          {label()}
-                                        </span>
-                                      )}
-                                    </Show>
-                                  </button>
-                                  <Show
-                                    when={meetingLinkForEvent(
-                                      event,
-                                      detailsForEvent(event)
-                                    )}
-                                  >
-                                    {(link) => (
-                                      <Button
-                                        aria-label={`Join ${link().label}`}
-                                        tooltip={`Join ${link().label}`}
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        class={cn(
-                                          'px-2',
-                                          link().kind === 'google'
-                                            ? 'bg-blue text-[white] light-mode:not-touch:not-disabled:hover:text-[white] dark-mode:bg-blue-bg dark-mode:text-blue-ink dark-mode:not-touch:not-disabled:hover:bg-blue-hover dark-mode:not-touch:not-disabled:hover:text-blue-ink'
-                                            : 'bg-hover text-ink not-touch:not-disabled:hover:bg-active not-touch:not-disabled:hover:text-ink'
-                                        )}
-                                        onClick={() =>
-                                          openExternalUrl(
-                                            conferenceJoinUrl(
-                                              link().url,
-                                              detailsForEvent(event)
-                                                ?.accountEmail
-                                            )
-                                          )
-                                        }
-                                      >
-                                        <VideoCameraIcon class="size-3.5" />
-                                        {link().kind === 'macro'
-                                          ? 'Macro'
-                                          : link().kind === 'google'
-                                            ? 'Meet'
-                                            : 'Join'}
-                                      </Button>
-                                    )}
-                                  </Show>
-                                </div>
-                              )}
-                            </For>
-                          </Show>
-                        </Show>
-                      </div>
-                    </Show>
-                  </>
-                }
-              >
-                {(event) => (
-                  <CalendarEventPreviewContent
-                    event={event()}
-                    color={colorForEvent(event().id)}
-                    location={locationForEvent(event())}
-                    timeFormat={calendarView.displaySettings.timeFormat}
-                    onBack={closePreview}
-                  />
-                )}
-              </Show>
+              {resultsBody()}
             </div>
           </Popover.Content>
         </Layer>

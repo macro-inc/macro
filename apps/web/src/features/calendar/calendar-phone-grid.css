@@ -54,32 +54,6 @@
     font-size: 16px;
   }
 
-  /* Let native all-day stacking size the row; retain the existing two-lane ceiling. */
-  html[data-touch-device="true"] .calendar-view .fc .fc-timegrid .fc-daygrid-day-frame,
-  html[data-touch-device="true"] .calendar-view .fc .fc-timegrid .fc-daygrid-day-events {
-    min-height: var(--calendar-all-day-lane-height);
-  }
-
-  html[data-touch-device="true"] .calendar-view .fc .fc-timegrid .fc-daygrid-event {
-    height: var(--calendar-all-day-event-height);
-    min-height: var(--calendar-all-day-event-height);
-  }
-
-  html[data-touch-device="true"] .calendar-view .fc .fc-timegrid .fc-daygrid-day-bottom {
-    min-height: 0;
-  }
-
-  html[data-touch-device="true"] .calendar-view .fc .fc-timegrid .fc-scrollgrid-section-body:not(.fc-scrollgrid-section-liquid):has(.fc-daygrid-body) > td {
-    height: auto;
-    max-height: var(--calendar-all-day-max-height);
-  }
-
-  html[data-touch-device="true"] .calendar-view .fc .fc-timegrid .fc-scrollgrid-section-body:not(.fc-scrollgrid-section-liquid):has(.fc-daygrid-body) .fc-scroller-harness {
-    position: relative;
-    min-height: var(--calendar-all-day-lane-height);
-    max-height: var(--calendar-all-day-max-height);
-  }
-
   html[data-touch-device="true"] .calendar-view .fc-timeGridDay-view .fc-col-header-cell {
     text-align: left;
   }

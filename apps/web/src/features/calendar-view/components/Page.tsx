@@ -423,6 +423,7 @@ export function Page(props: {
     >
       <CalendarGrid
         initialDate={props.initialDate}
+        initialScrollTop={pager.scrollTop()}
         dayDraft={dayDraft()}
         events={visibleEvents()}
         eventsById={eventsById()}

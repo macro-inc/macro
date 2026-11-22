@@ -34,6 +34,13 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
+import {
+  CALENDAR_VIEWPORT_KEY,
+  type CalendarViewportContext,
+  CalendarViewportProvider,
+  type CalendarViewportSnapshot,
+  CalendarViewportSnapshotSchema,
+} from '../context/calendar-viewport-context';
 import { CALENDAR_TOUR, calendarTour } from '../tour';
 import { AgendaContent } from '../views/agenda/AgendaContent';
 import { AgendaNavigation } from '../views/agenda/AgendaNavigation';
@@ -281,8 +288,37 @@ function WorkspaceContent(props: {
 
 export function Workspace(props: { headerLeading?: JSX.Element }) {
   const calendarView = useCalendarView();
+  const panel = useSplitPanelOrThrow();
+  const stored = CalendarViewportSnapshotSchema.safeParse(
+    panel.handle.currentEntryState()?.[CALENDAR_VIEWPORT_KEY]
+  );
+  const initial =
+    !panel.isInlinePreview && stored.success ? stored.data : undefined;
+  let capture = (): CalendarViewportSnapshot => ({ date: date().getTime() });
+  let restoring = true;
+  const viewport: CalendarViewportContext = {
+    get initial() {
+      return restoring ? initial : undefined;
+    },
+    register(read) {
+      restoring = false;
+      capture = read;
+      return () => {
+        if (capture === read) capture = () => ({ date: date().getTime() });
+      };
+    },
+  };
+  if (!panel.isInlinePreview) {
+    onCleanup(
+      panel.handle.registerEntryStateCaptor(CALENDAR_VIEWPORT_KEY, () =>
+        capture()
+      )
+    );
+  }
   // Transfer a snapshot only when changing hosts; the active host owns navigation.
-  const [date, setDate] = createSignal(new Date());
+  const [date, setDate] = createSignal(
+    initial ? new Date(initial.date) : new Date()
+  );
   const gridView = createMemo(() => {
     const period = calendarView.displaySettings.periodView;
     return period === 'agenda' ? undefined : period;
@@ -294,33 +330,36 @@ export function Workspace(props: { headerLeading?: JSX.Element }) {
   };
 
   return (
-    <CalendarComposerHost>
-      <Show
-        when={gridView()}
-        fallback={
-          <AgendaNavigation date={date()} onDateChange={setDate}>
-            <WorkspaceContent headerLeading={props.headerLeading} agenda />
-          </AgendaNavigation>
-        }
-      >
-        {(period) => (
-          <CalendarPagerContextProvider
-            initialView={period()}
-            initialDate={date()}
-            showWeekends={() => calendarView.displaySettings.showWeekends}
-            weekStartsOn={() => calendarView.displaySettings.weekStartsOn}
-            onNavigate={calendarView.closeEventDetails}
-            onViewChange={calendarView.setPeriodView}
-          >
-            <CalendarGridNavigation onAgendaSelect={openAgenda}>
-              <WorkspaceContent
-                headerLeading={props.headerLeading}
-                agenda={false}
-              />
-            </CalendarGridNavigation>
-          </CalendarPagerContextProvider>
-        )}
-      </Show>
-    </CalendarComposerHost>
+    <CalendarViewportProvider value={viewport}>
+      <CalendarComposerHost>
+        <Show
+          when={gridView()}
+          fallback={
+            <AgendaNavigation date={date()} onDateChange={setDate}>
+              <WorkspaceContent headerLeading={props.headerLeading} agenda />
+            </AgendaNavigation>
+          }
+        >
+          {(period) => (
+            <CalendarPagerContextProvider
+              initialView={period()}
+              initialDate={date()}
+              initialScrollTop={viewport.initial?.gridScrollTop}
+              showWeekends={() => calendarView.displaySettings.showWeekends}
+              weekStartsOn={() => calendarView.displaySettings.weekStartsOn}
+              onNavigate={calendarView.closeEventDetails}
+              onViewChange={calendarView.setPeriodView}
+            >
+              <CalendarGridNavigation onAgendaSelect={openAgenda}>
+                <WorkspaceContent
+                  headerLeading={props.headerLeading}
+                  agenda={false}
+                />
+              </CalendarGridNavigation>
+            </CalendarPagerContextProvider>
+          )}
+        </Show>
+      </CalendarComposerHost>
+    </CalendarViewportProvider>
   );
 }

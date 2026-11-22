@@ -13,6 +13,7 @@ import { createTestPolicy } from '@app/lib/split-router/tests/fixtures';
 import {
   appRoute,
   baseRoute,
+  calendarSearchRoute,
   calendarSettingsRoute,
   calendarSplitRoute,
   driveFolderDocumentRoute,
@@ -58,6 +59,7 @@ const definitions = {
       children: [
         { ...homeSplitRoute, children: [homeCalendarRoute] },
         calendarSplitRoute,
+        calendarSearchRoute,
         calendarSettingsRoute,
         {
           ...driveSplitRoute,
@@ -194,50 +196,60 @@ describe('legacy link mentions', () => {
 });
 
 describe('opening an app URL', () => {
-  it('keeps Calendar Settings as a native view and returns to the calendar on Back', async () => {
-    vi.useFakeTimers();
-    const { solid, router } = openApp('/app/calendar/month', true);
-    await router.settled();
-    const pane = router.panes()[0]!;
+  it.each([calendarSettingsRoute, calendarSearchRoute])(
+    'keeps $id as a native view and returns to the calendar on Back',
+    async (destination) => {
+      vi.useFakeTimers();
+      const { solid, router } = openApp('/app/calendar/month', true);
+      await router.settled();
+      const pane = router.panes()[0]!;
 
-    await router.navigatePane(pane, { route: calendarSettingsRoute });
-    vi.runAllTimers();
-    const settings = router.entry(pane)!;
-    // The split panel resolves every committed route through this adapter.
-    // An unrecognized settings route throws and makes the panel restore Calendar.
-    expect(splitContentFromLocation(settings.location)).toEqual({
-      type: 'component',
-      id: 'calendar-settings',
-    });
-    expect(solid.landed()).toBe('/app/calendar/settings');
-    expect(
-      resolveContentLocation(
-        routes,
-        splitContentFromLocation(settings.location)
-      )
-    ).toEqual(settings.location);
+      await router.navigatePane(pane, { route: destination });
+      vi.runAllTimers();
+      const settings = router.entry(pane)!;
+      // The split panel resolves every committed route through this adapter.
+      // An unrecognized settings route throws and makes the panel restore Calendar.
+      expect(splitContentFromLocation(settings.location)).toEqual({
+        type: 'component',
+        id:
+          destination === calendarSearchRoute
+            ? 'calendar-search'
+            : 'calendar-settings',
+      });
+      expect(solid.landed()).toBe(`/app/${destination.path}`);
+      expect(
+        resolveContentLocation(
+          routes,
+          splitContentFromLocation(settings.location)
+        )
+      ).toEqual(settings.location);
 
-    await router.navigatePane(pane, -1);
-    vi.runAllTimers();
-    expect(solid.landed()).toBe('/app/calendar/month');
-    expect(router.entry(pane)?.location.route.matches.at(-1)?.id).toBe(
-      calendarSplitRoute.id
-    );
-  });
+      await router.navigatePane(pane, -1);
+      vi.runAllTimers();
+      expect(solid.landed()).toBe('/app/calendar/month');
+      expect(router.entry(pane)?.location.route.matches.at(-1)?.id).toBe(
+        calendarSplitRoute.id
+      );
+    }
+  );
 
-  it('opens the Calendar Settings deep link without treating settings as a period', async () => {
-    const { solid, router } = openApp('/app/calendar/settings', true);
-    await router.settled();
-    const entry = router.entry(router.panes()[0]!)!;
-    expect(entry.location.route.matches.at(-1)?.id).toBe(
-      calendarSettingsRoute.id
-    );
-    expect(splitContentFromLocation(entry.location)).toEqual({
-      type: 'component',
-      id: 'calendar-settings',
-    });
-    expect(solid.landed()).toBe('/app/calendar/settings');
-  });
+  it.each([calendarSettingsRoute, calendarSearchRoute])(
+    'opens the $id deep link without treating it as a period',
+    async (destination) => {
+      const { solid, router } = openApp(`/app/${destination.path}`, true);
+      await router.settled();
+      const entry = router.entry(router.panes()[0]!)!;
+      expect(entry.location.route.matches.at(-1)?.id).toBe(destination.id);
+      expect(splitContentFromLocation(entry.location)).toEqual({
+        type: 'component',
+        id:
+          destination === calendarSearchRoute
+            ? 'calendar-search'
+            : 'calendar-settings',
+      });
+      expect(solid.landed()).toBe(`/app/${destination.path}`);
+    }
+  );
   it.each([
     '/drive/md/document',
     '/drive/recent/pdf/document',

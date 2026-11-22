@@ -10,9 +10,12 @@ import { CalendarViewTabs } from '@app/features/calendar/components/view-tabs/Ca
 import { useCalendarComposerHost } from '@app/features/calendar/context/calendar-composer-host-context';
 import { useCalendarNavigation } from '@app/features/calendar/context/calendar-navigation-context';
 import { useCalendarHotkeys } from '@app/features/calendar/hooks/use-calendar-hotkeys';
+import { useCalendarSearchUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { calendarPeriodLabel } from '@app/features/calendar/utils/calendar-label';
 import { CalendarSchedulingActions } from '@app/features/scheduling/calendar-actions';
+import { useNavigate } from '@app/lib/split-router';
 import { beginInteraction } from '@app/observability/flow';
+import { calendarSearchRoute } from '@app/routes/routes';
 import { createSizeBreakpoints } from '@app/util/create-size-breakpoints';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
@@ -24,9 +27,11 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
 import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, ButtonGroup, cn } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
@@ -84,6 +89,8 @@ export function Header(props: {
   leading?: JSX.Element;
 }) {
   const panel = useSplitPanelOrThrow();
+  const navigate = useNavigate();
+  const searchEnabled = useCalendarSearchUiFlag();
   const composerHost = useCalendarComposerHost();
   // Inline previews use the host's shell, not Calendar's sidebar state.
   const shell = props.presentation === 'workspace' ? useViewShell() : undefined;
@@ -316,7 +323,22 @@ export function Header(props: {
               {todayButton(true)}
             </ViewShell.TopBarIsland>
             <ViewShell.TopBarIsland class="size-10 justify-center p-0">
-              <CalendarSearch />
+              <Show when={searchEnabled()}>
+                <Button
+                  variant="ghost"
+                  size="icon-lg"
+                  class="rounded-full"
+                  aria-label="Search events"
+                  onClick={() =>
+                    fireAndForget(
+                      navigate({ route: calendarSearchRoute }),
+                      'calendar-search'
+                    )
+                  }
+                >
+                  <SearchIcon class="size-5 mobile:size-6" />
+                </Button>
+              </Show>
             </ViewShell.TopBarIsland>
           </TouchHeaderRight>
         </TouchHeader>

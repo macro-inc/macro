@@ -126,7 +126,11 @@ host lives in `../block-calendar/`.
   paging during FullCalendar drag/resize. Explicit date selections prepare only the
   hidden destination before sliding, then update the date anchor at settlement.
   Accumulate rapid period commands in SnapPager and prepare only the quiet final
-  range; headers follow the requested date immediately.
+  range; headers follow the requested date immediately. Calendar history captures
+  the visible date plus grid scroll or Agenda window/day offset; restore that
+  entry state before opening-hour defaults, including a saved midnight position.
+  Phone `/calendar/search` uses the shared search control without a grid navigation
+  provider; its header owns the input mount. Keep desktop search in the popover.
 - Compose the desktop date-navigation/tabs/search row above the 22px month title
   and creation actions; the touch header uses separate shell menu, month,
   Today, and circular Search islands. Keep its loading skeleton aligned. The desktop month
@@ -145,7 +149,7 @@ host lives in `../block-calendar/`.
 - Host phone navigation through the shell's `NavigationSheet`, as Email does;
   `views/mobile/calendar-sidebar.tsx` keeps one fixed Calendar title header above views,
   account calendars, booking links, and a fixed `MobileDrawer.Section` Settings footer.
-  Agenda is a text-only view row, not another menu toggle. Keep desktop sidebar sections unchanged.
+  Keep all five drawer view rows text-only, with the selected state intact. Keep desktop sidebar sections unchanged.
   `/calendar/settings` is an authenticated native view over existing setting owners;
   give its content `Layer depth={2}` with `bg-surface` cards above `bg-page`. Retain
   its `view-` route id and component registry entry for the split-content bridge and shell metadata.
@@ -157,16 +161,18 @@ host lives in `../block-calendar/`.
   Keep timed-card grid lines below the all-day row and do not shade weekends in any view.
   Keep midnight and the current-time gutter label aligned with the card lines.
   `timeGridThreeDay` advances by three days.
-- Phone all-day rows use a 24px minimum and the existing 48px cap from
-  `core/all-day-row.ts`; let FullCalendar allocate the lanes and expose excess
-  events through its native more link. Do not reserve a second empty creation lane.
+- Desktop and phone all-day rows share the base-lane count and 48px cap from
+  `core/all-day-row.ts`; let FullCalendar allocate lanes and expose overflow
+  through its native more link. Do not reserve a second empty creation lane.
 - Keep Agenda on the navigation context, with five fourteen-day windows clipped
   to supported occurrence bounds; never pass Agenda to a FullCalendar API.
 - Keep Agenda rows open-only; RSVP controls belong in event details and Needs Reply, not Agenda rows.
 - Keep the visible Agenda day anchored through late data and window rotation;
   resolve its logical date again when query projection replaces or merges rows.
   `create-agenda-paging.ts` owns resize observation, and each explicit date request
-  starts a fresh list even when its calendar day is unchanged. `create-agenda-grouping.ts`
+  starts a fresh list even when its calendar day is unchanged. Preserve user movement
+  during prepend frames and resolve merged headings instead of zero-height markers;
+  queue edge input through the frame and stop at supported date bounds. `create-agenda-grouping.ts`
   merges confirmed empty ranges across window boundaries without merging today;
   group-end metadata lets paging anchor requested dates inside collapsed ranges.
 - Reuse `../../lib/queries/calendar/` for account-scoped reads, optimistic writes,

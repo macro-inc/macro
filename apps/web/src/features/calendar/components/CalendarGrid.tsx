@@ -25,9 +25,9 @@ import {
 } from 'solid-js';
 import {
   ALL_DAY_ROW_EVENT_HEIGHT,
-  ALL_DAY_ROW_LANE_HEIGHT,
   ALL_DAY_ROW_MAX_HEIGHT,
   ALL_DAY_ROW_MAX_LANES,
+  ALL_DAY_ROW_MIN_HEIGHT,
 } from '../core/all-day-row';
 import { DAY_DRAFT_ID, type DayDraftRangeBinding } from '../core/day-draft';
 import { useTimeGridOpeningScroll } from '../hooks/use-time-grid-opening-scroll';
@@ -106,7 +106,7 @@ export interface CalendarGridSettings {
   dayCount?: number;
   showDayHeaders?: boolean;
   showAllDaySlot?: boolean;
-  /** Fit phone all-day content into one or two lanes, with native overflow. */
+  /** Hide the all-day axis label for the phone's external hour gutter. */
   compactAllDaySlot?: boolean;
   showWeekends: boolean;
   weekStartsOn: CalendarWeekStart;
@@ -127,6 +127,7 @@ export interface CalendarGridSelection {
 
 export interface CalendarGridProps {
   initialDate: Date;
+  initialScrollTop?: number;
   events: CalendarEvent[];
   eventsById: Map<string, CalendarEvent>;
   settings: CalendarGridSettings;
@@ -147,6 +148,7 @@ export interface CalendarGridProps {
 
 function CalendarGridHost(props: {
   selectionColor: string;
+  initialScrollTop?: number;
   eventElements: Map<string, HTMLElement>;
   chipMounts: Accessor<undefined>;
   children?: CalendarGridProps['children'];
@@ -154,7 +156,7 @@ function CalendarGridHost(props: {
   const calendar = useFullCalendar();
   const [element, setElement] = createSignal<HTMLDivElement>();
 
-  useTimeGridOpeningScroll(element, calendar.api);
+  useTimeGridOpeningScroll(element, calendar.api, () => props.initialScrollTop);
 
   const handle: CalendarGridHandle = {
     api: calendar.api,
@@ -172,7 +174,7 @@ function CalendarGridHost(props: {
           ref={setElement}
           style={{
             '--calendar-selection-color': props.selectionColor,
-            '--calendar-all-day-lane-height': `${ALL_DAY_ROW_LANE_HEIGHT}px`,
+            '--calendar-all-day-min-height': `${ALL_DAY_ROW_MIN_HEIGHT}px`,
             '--calendar-all-day-max-height': `${ALL_DAY_ROW_MAX_HEIGHT}px`,
             '--calendar-all-day-event-height': `${ALL_DAY_ROW_EVENT_HEIGHT}px`,
           }}
@@ -294,6 +296,7 @@ export function CalendarGrid(props: CalendarGridProps) {
       fixedWeekCount={false}
       views={{
         dayGridMonth: { dayMaxEvents: true },
+        timeGrid: { dayMaxEventRows: ALL_DAY_ROW_MAX_LANES },
         timeGridThreeDay: {
           type: 'timeGrid',
           duration: { days: 3 },
@@ -306,9 +309,6 @@ export function CalendarGrid(props: CalendarGridProps) {
       moreLinkClick="popover"
       handleWindowResize={false}
       allDayText={props.settings.compactAllDaySlot ? '' : 'All day'}
-      dayMaxEventRows={
-        props.settings.compactAllDaySlot ? ALL_DAY_ROW_MAX_LANES : undefined
-      }
       nowIndicator
       headerToolbar={false}
       scrollTime={TIME_GRID_OPENING_SCROLL_TIME}
@@ -531,6 +531,7 @@ export function CalendarGrid(props: CalendarGridProps) {
 
       <CalendarGridHost
         selectionColor={props.selection.color}
+        initialScrollTop={props.initialScrollTop}
         eventElements={eventElements}
         chipMounts={chipMounts}
         children={props.children}

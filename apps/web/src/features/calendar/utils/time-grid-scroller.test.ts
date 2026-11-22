@@ -101,6 +101,23 @@ describe('applyTimeGridOpeningScroll', () => {
     }
   );
 
+  it.each([0, 540])(
+    'restores the saved position %i instead of applying the opening hour',
+    (saved) => {
+      const calendar = calendarStub();
+      const root = gridRoot({ clientHeight: 600, scrollTop: 0 });
+      expect(
+        applyTimeGridOpeningScroll(
+          root,
+          calendar,
+          TIME_GRID_OPENING_SCROLL_TIME,
+          saved
+        )
+      ).toBe(true);
+      expect(root.querySelector('.fc-scroller')?.scrollTop).toBe(saved);
+      expect(calendar.scrollToTime).not.toHaveBeenCalled();
+    }
+  );
   it('waits for a grid that has not laid out yet', () => {
     const calendar = calendarStub();
 

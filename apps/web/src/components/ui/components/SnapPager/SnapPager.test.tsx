@@ -67,6 +67,41 @@ describe('SnapPager', () => {
     expect(moved).toHaveBeenCalledTimes(1);
   });
 
+  it('waits through short momentum pauses before fallback settlement', () => {
+    const moved = vi.fn();
+    const pager = createSnapPager({ onSettle: moved });
+    const element = viewport();
+    pager.attachViewport(element);
+    element.scrollLeft = 280;
+    element.dispatchEvent(new Event('scroll'));
+    vi.advanceTimersByTime(120);
+    expect(moved).not.toHaveBeenCalled();
+    element.scrollLeft = 300;
+    element.dispatchEvent(new Event('scroll'));
+    vi.advanceTimersByTime(179);
+    expect(moved).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(moved).toHaveBeenCalledExactlyOnceWith(1);
+  });
+
+  it('keeps unhurried presses smooth and counts a rapid reverse burst', () => {
+    const pager = createSnapPager();
+    const element = viewport();
+    pager.attachViewport(element);
+    pager.next();
+    element.dispatchEvent(new Event('scrollend'));
+    vi.advanceTimersByTime(250);
+    pager.next();
+    expect(element.scrollTo).toHaveBeenLastCalledWith({
+      left: 300,
+      behavior: 'smooth',
+    });
+    element.dispatchEvent(new Event('scrollend'));
+    vi.advanceTimersByTime(250);
+    for (let index = 0; index < 5; index++) pager.previous();
+    vi.advanceTimersByTime(250);
+    expect(pager.position()).toBe(-3);
+  });
   it('clamps the settled page and jumps instantly beyond the ring', () => {
     const moved = vi.fn();
     const pager = createSnapPager({ pageCount: 3, onSettle: moved });
@@ -352,5 +387,44 @@ describe('SnapPager', () => {
     current.scrollLeft = 300;
     current.dispatchEvent(new Event('scrollend'));
     expect(pager.position()).toBe(1);
+  });
+  it('does not re-centre a trackpad fling after a rapid button burst', () => {
+    const pager = createSnapPager();
+    const element = viewport();
+    pager.attachViewport(element);
+    pager.next();
+    pager.next();
+    expect(pager.position()).toBe(2);
+    element.dispatchEvent(new WheelEvent('wheel', { deltaX: 80 }));
+    element.scrollLeft = 250;
+    element.dispatchEvent(new Event('scroll'));
+    pager.next();
+    expect(element.scrollLeft).toBe(250);
+    expect(pager.position()).toBe(2);
+    element.scrollLeft = 300;
+    element.dispatchEvent(new Event('scrollend'));
+    vi.advanceTimersByTime(250);
+    expect(pager.position()).toBe(3);
+  });
+
+  it('reports one quiet target for repeated commands during a native fling', () => {
+    const moved = vi.fn();
+    const pager = createSnapPager({ onSettle: moved });
+    const element = viewport();
+    pager.attachViewport(element);
+    element.scrollLeft = 250;
+    element.dispatchEvent(new Event('scroll'));
+    pager.next();
+    pager.next();
+    element.dispatchEvent(new WheelEvent('wheel', { deltaX: 80 }));
+    vi.advanceTimersByTime(60);
+    element.scrollLeft = 300;
+    element.dispatchEvent(new Event('scrollend'));
+    expect(moved).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(40);
+    pager.next();
+    vi.advanceTimersByTime(250);
+    expect(moved).toHaveBeenCalledExactlyOnceWith(3);
+    expect(pager.position()).toBe(3);
   });
 });

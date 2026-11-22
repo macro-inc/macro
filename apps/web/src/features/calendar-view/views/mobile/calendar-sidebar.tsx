@@ -25,23 +25,19 @@ import { useAddInboxFlow } from '@core/email-link';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { getWebOrigin } from '@core/util/webOrigin';
-import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
 import BackIcon from '@icon/system/regular/caret-left.svg';
-import ColumnsIcon from '@icon/system/regular/columns.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import GearIcon from '@icon/system/regular/gear.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
-import GridIcon from '@icon/system/regular/squares-four.svg';
 import { Button, Checkbox } from '@ui';
 import { batch, createSignal, For, Show } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
 
 const VIEWS = [
-  { value: 'agenda', label: 'Agenda', icon: undefined },
-  { value: 'timeGridDay', label: 'Day', icon: CalendarIcon },
-  { value: 'timeGridThreeDay', label: '3 days', icon: ColumnsIcon },
-  { value: 'timeGridWeek', label: 'Week', icon: ColumnsIcon },
-  { value: 'dayGridMonth', label: 'Month', icon: GridIcon },
+  { value: 'agenda', label: 'Agenda' },
+  { value: 'timeGridDay', label: 'Day' },
+  { value: 'timeGridThreeDay', label: '3 days' },
+  { value: 'timeGridWeek', label: 'Week' },
+  { value: 'dayGridMonth', label: 'Month' },
 ] as const;
 
 function MobileBookingLinks() {
@@ -183,13 +179,6 @@ export function MobileCalendarSidebar() {
                         active={navigation.periodView() === item.value}
                         onClick={() => navigation.changeView(item.value)}
                       >
-                        <Show when={item.icon}>
-                          {(icon) => (
-                            <ViewSidebar.Icon>
-                              <Dynamic component={icon()} class="size-5" />
-                            </ViewSidebar.Icon>
-                          )}
-                        </Show>
                         {item.label}
                       </ViewSidebar.Item>
                     )}

@@ -21,3 +21,9 @@ it('registers the native Calendar Settings destination with its own shell', () =
     splitPanelLayout: 'composable',
   });
 });
+
+it('registers the native Calendar Search destination with its own shell', () => {
+  expect(resolveComponent('calendar-search').initialMeta).toMatchObject({
+    splitPanelLayout: 'composable',
+  });
+});

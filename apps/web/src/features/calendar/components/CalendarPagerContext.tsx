@@ -61,6 +61,7 @@ interface CalendarPagerContextProps extends ParentProps {
   [key: string]: unknown;
   initialView: CalendarGridPeriodView;
   initialDate?: Date;
+  initialScrollTop?: number;
   showWeekends: Accessor<boolean>;
   weekStartsOn: Accessor<number>;
   onNavigate: () => void;
@@ -100,7 +101,7 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
   const rendered = new Map<CalendarPageId, string>();
   const renderQueue = createRenderQueue();
   const periodView = () => props.initialView;
-  let sharedScrollTop: number | undefined;
+  let sharedScrollTop = props.initialScrollTop;
 
   const pager = createSnapPager({
     pageCount: CALENDAR_PAGE_IDS.length,
@@ -156,7 +157,10 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
 
   const copyScrollPosition = () => {
     const source = timeGridScroller(activePage()?.element());
-    if (source) sharedScrollTop = source.scrollTop;
+    // A hidden/remounting grid clamps scrollTop to zero before it has geometry.
+    // Keep the history offset until the opening-scroll hook can apply it.
+    if (source && source.clientHeight > 0 && source.scrollHeight > 0)
+      sharedScrollTop = source.scrollTop;
     if (sharedScrollTop === undefined) return;
     for (const handle of handles.values()) {
       if (handle.id === activePageId()) continue;
@@ -304,7 +308,7 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
     }
     renderQueue.clear();
     props.onNavigate();
-    setPendingAnchor({ date, position: pager.position() + offset });
+    setPendingAnchor({ date, position: pager.targetPosition() + offset });
     setRequestedDate(date);
     // Prepare only the hidden destination for an explicit adjacent date.
     // Never re-date the visible page while it is still under the user's finger.
@@ -355,6 +359,7 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
     activeTeamEvents: () => activePage()?.teamEvents?.() ?? [],
     visibleRange: () => activeData()?.range(),
     initialDateFor,
+    scrollTop: () => sharedScrollTop,
     registerPage,
     isActive: (id: CalendarPageId) => activePageId() === id,
     updateSize: () => {

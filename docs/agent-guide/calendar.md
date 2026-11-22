@@ -44,9 +44,10 @@ flings. Far date jumps wait for a running gesture to settle; reduced motion skip
 smooth scrolling. Buffer rendering never refuses a second swipe. Each page keeps its own
 vertical scroller, synchronized to the active one. Event drag/resize temporarily
 locks horizontal paging. The external hour gutter does not move horizontally.
-The phone all-day row starts at one 24px lane, grows for overlapping events, and
-keeps its 48px ceiling with FullCalendar's more link for overflow; no extra empty
-creation lane is reserved. Desktop lane sizing is unchanged.
+Desktop and phone all-day rows start at one 24px lane, grow for overlapping events,
+and keep a 48px ceiling with FullCalendar's more link for overflow; no extra empty
+creation lane is reserved. The drawer's Agenda, Day, 3 days, Week, and Month rows
+are text-only and retain their selected state.
 Phone Month uses a Sunday-start five/six-week Bars grid. Weekday letters sit above
 the card; today has an accent circle, other-month dates are tertiary, and their
 bars are half-opacity. Shared week lanes keep multi-day bars continuous, and +N
@@ -231,9 +232,13 @@ supported days in a partially covered window. Loading, failed, unsupported, and
 empty days remain distinct. Choosing an occurrence opens the same event details
 as the grid; event links retain occurrence identity and focus their list row.
 Today and date selection return to the requested day even when it is already
-selected. Changes that resize an Agenda window restore the visible logical day's
+selected. Back from a calendar subpage restores its date and viewport; a saved
+midnight position is not replaced by the default opening hour. Changes that resize an Agenda window restore the visible logical day's
 offset, including when query results replace its row or merge it into an empty
-range. Initial positioning waits through late window loads until the reader
+range. Fast upward scrolling keeps movement received during a prepend frame;
+collapsed ranges anchor their visible heading rather than a hidden day marker.
+Repeated upward input at the top keeps loading until the supported date bound.
+Initial positioning waits through late window loads until the reader
 scrolls or interacts; browser find and assistive navigation also take control.
 Equal-height event moves between days can still shift it.
 
@@ -663,8 +668,15 @@ and search expands over the first row. The title and New remain available below
 it. Resizing preserves the mounted search field and query. Today keeps its label
 while room allows, then becomes an icon. The loading skeleton uses the same
 two-row desktop geometry.
-Touch devices keep the month selector and header controls without separate
-create or call buttons in the right island. Mobile header islands omit Search.
+Touch devices use separate shell menu, month selector, Today, and Search islands.
+Search opens `/app/calendar/search` as a full page, with Back and an initially
+focused search field in its header. It reuses the same filters, debounced query,
+loading/empty/error states, result actions, and read-only out-of-range preview as
+the desktop popover. Results are full-width rows. Back restores the previous
+calendar view, date, and grid scroll or Agenda day offset. Direct phone links
+fall back to the preferred Calendar view; desktop links return to Calendar,
+whose header retains its popover search. The right island has no separate
+create or call buttons.
 The desktop sidebar has no search of its own; event search is the header's
 `Search events`. Its mini calendar shows one calendar-colored dot per event up
 to three, then a short multicolor bar. Markers use visible, non-cancelled

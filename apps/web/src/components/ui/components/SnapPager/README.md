@@ -3,8 +3,9 @@
 A generic, endless, native horizontal scroll-snap ring. Import `SnapPager` and
 `createSnapPager` from `./SnapPager`. The browser owns drag, momentum, and snap:
 there are no touchmove handlers, transforms, preventDefault calls, or custom inertia.
-Passive start/end/cancel listeners only defer the settlement fallback during a held
-gesture; they do not move the track.
+Passive start/end/cancel listeners defer settlement during a held gesture.
+Horizontal wheel input identifies trackpad ownership without driving the track;
+vertical wheel input leaves the pager alone.
 
 ```tsx
 const pager = createSnapPager({
