@@ -826,8 +826,8 @@ async fn inbox_view_sort<S: PredicateIndexStorage>(storage: S) {
     shown.sort_by(|a, b| b.cmp(a));
     assert_eq!(all_keys(&mut engine, filters(), "INBOX").await, shown);
 
-    // Archiving by patch leaves the old sort fact, which a patch cannot remove;
-    // the view's exact facts still reject the thread.
+    // Archiving by patch removes the derived fact: composition derives it
+    // again from the patched facts.
     let archived = format!("{TYPE}:{}", id(4));
     let partial = |inbox: bool| {
         json!({"user":{"id":VIEWER,"soup":{"items":[{
@@ -844,7 +844,7 @@ async fn inbox_view_sort<S: PredicateIndexStorage>(storage: S) {
     let [Some(ProjectionState::Complete(document))] = states.as_slice() else {
         panic!("archived thread stays complete")
     };
-    assert!(inbox_view_fact(document).is_some());
+    assert_eq!(inbox_view_fact(document), None);
     let inbox = all_keys(&mut engine, filters(), "INBOX").await;
     assert!(!inbox.contains(&archived));
     assert_eq!(inbox.len(), shown.len() - 1);
@@ -877,10 +877,11 @@ fn turso_inbox_sorts_by_its_own_view_key() {
 #[test]
 fn optimistic_replace_without_inbox_timestamp_makes_the_view_key_uncertain() {
     pollster::block_on(async {
-        let engine = Engine::new(InMemoryStorage::new());
+        let mut engine = Engine::new(InMemoryStorage::new());
         let mut data = seed();
         // Thread 2 is inbox-visible with a message but no inbound timestamp.
         data["user"]["soup"]["items"] = json!([row(2), row(4)]);
+        write(&mut engine, QUERY, &data).await;
         let updates = projection_updates(
             cache_core::meta::bundled_schema_ref(),
             engine.storage(),
@@ -891,26 +892,32 @@ fn optimistic_replace_without_inbox_timestamp_makes_the_view_key_uncertain() {
         )
         .await
         .unwrap();
-        let uncertain = optimistic_updates(updates)
-            .into_iter()
-            .filter_map(|update| match update {
-                OptimisticProjectionMutation::Unknown {
-                    record_key,
-                    affected_attributes,
-                    ..
-                } => Some((record_key, affected_attributes)),
-                _ => None,
-            })
-            .collect::<Vec<_>>();
-        let attributes = |n: u128| {
-            uncertain
-                .iter()
-                .find(|(key, _)| key.as_str() == format!("{TYPE}:{}", id(n)))
-                .map(|(_, attributes)| attributes.clone())
-                .unwrap_or_default()
+        let optimistic = optimistic_updates(updates);
+        // Composition over the stored thread makes the view key exactly as
+        // uncertain as the inbox timestamp it copies.
+        let uncertain = |n: u128, attribute: &str| {
+            let key = RecordKey::new(format!("{TYPE}:{}", id(n))).unwrap();
+            let authority = pollster::block_on(
+                engine
+                    .storage()
+                    .load_projection_states(std::slice::from_ref(&key)),
+            )
+            .unwrap()
+            .pop()
+            .flatten();
+            cache_core::predicate::compose_pending_optimistic_projection(
+                &key,
+                authority.as_ref(),
+                None,
+                &optimistic,
+            )
+            .unwrap()
+            .unwrap()
+            .uncertainty
+            .affects(&vocabulary::token(attribute))
         };
-        assert!(attributes(2).contains(&vocabulary::token("mail-inbox-ts")));
-        assert!(attributes(2).contains(&vocabulary::token(vocabulary::INBOX_VIEW_SORT)));
-        assert!(!attributes(4).contains(&vocabulary::token(vocabulary::INBOX_VIEW_SORT)));
+        assert!(uncertain(2, "mail-inbox-ts"));
+        assert!(uncertain(2, vocabulary::INBOX_VIEW_SORT));
+        assert!(!uncertain(4, vocabulary::INBOX_VIEW_SORT));
     });
 }

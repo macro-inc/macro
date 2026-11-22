@@ -244,6 +244,7 @@ pub fn compose_effective_optimistic_projection(
     let Some(owner) = owner else {
         return Ok(None);
     };
+    derive_uncertainty(state.as_ref(), &mut uncertainty);
     let projection = EffectiveOptimisticProjection {
         owner,
         state: state.expect("an applied mutation always produces effective state"),
@@ -276,12 +277,36 @@ pub fn compose_pending_optimistic_projection(
     if !touched {
         return Ok(None);
     }
+    derive_uncertainty(state.as_ref(), &mut uncertainty);
     let projection = PendingOptimisticProjection {
         state: state.expect("an applied mutation always produces effective state"),
         uncertainty,
     };
     projection.validate()?;
     Ok(Some(projection))
+}
+
+/// Recompute every derived sort fact (`SORT_FACT_DERIVATIONS`) from the
+/// document's other facts. A stored mutation written by an older build, or
+/// a patch whose copy was taken before its source changed, never decides a
+/// derived value.
+fn derive_sort_facts(document: &mut IndexDocument) {
+    for derivation in item_filter_index::SORT_FACT_DERIVATIONS {
+        derivation.apply(document);
+    }
+}
+
+/// Derived facts are exactly as uncertain as the facts they come from.
+fn derive_uncertainty(
+    state: Option<&OptimisticProjectionState>,
+    uncertainty: &mut OptimisticUncertainty,
+) {
+    let Some(state) = state else {
+        return;
+    };
+    for derivation in item_filter_index::SORT_FACT_DERIVATIONS {
+        derivation.apply_uncertainty(state.profile(), uncertainty);
+    }
 }
 
 fn initial_composition(
@@ -306,6 +331,7 @@ fn initial_composition(
     let state = match authoritative {
         ProjectionState::Complete(document) => {
             let mut document = document.clone();
+            derive_sort_facts(&mut document);
             document.canonicalize();
             document.validate()?;
             OptimisticProjectionState::Complete(document)
@@ -333,6 +359,7 @@ fn apply_projection_mutation(
     match mutation {
         OptimisticProjectionMutation::Replace(document) => {
             let mut document = document.clone();
+            derive_sort_facts(&mut document);
             document.canonicalize();
             document.validate()?;
             *state = Some(OptimisticProjectionState::Complete(document));
@@ -500,6 +527,7 @@ fn patch_complete_document(
             .retain(|existing| existing.attribute != fact.attribute);
         document.sort_facts.push(fact.clone());
     }
+    derive_sort_facts(document);
     document.canonicalize();
     document.validate()
 }
@@ -573,6 +601,7 @@ fn patch_exact_members(
     let remove = remove.iter().collect::<HashSet<_>>();
     document.exact_facts.retain(|fact| !remove.contains(fact));
     document.exact_facts.extend_from_slice(insert);
+    derive_sort_facts(document);
     document.canonicalize();
     document.validate()
 }
@@ -683,6 +712,7 @@ pub fn apply_authoritative_projection_mutations(
         let state = match mutation {
             ProjectionMutation::Replace(document) => {
                 let mut document = document.clone();
+                derive_sort_facts(&mut document);
                 document.canonicalize();
                 Some(ProjectionState::Complete(document))
             }

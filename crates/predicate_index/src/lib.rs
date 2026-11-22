@@ -304,6 +304,39 @@ impl SortFactDerivation {
         })
     }
 
+    /// Replace `document`'s target fact with the one its other facts derive.
+    /// Documents of other profiles keep what they have.
+    pub fn apply(&self, document: &mut IndexDocument) {
+        if !self.profiles.contains(&document.profile.token().as_str()) {
+            return;
+        }
+        let derived = self.derive(document);
+        document
+            .sort_facts
+            .retain(|fact| fact.attribute.as_str() != self.target);
+        document.sort_facts.extend(derived);
+        document.sort_facts.sort();
+    }
+
+    /// Make the target exactly as uncertain as the facts it is derived from.
+    pub fn apply_uncertainty(&self, profile: &Profile, uncertainty: &mut OptimisticUncertainty) {
+        if !self.profiles.contains(&profile.token().as_str()) {
+            return;
+        }
+        let Ok(target) = Token::new(self.target) else {
+            return;
+        };
+        let uncertain_input = std::iter::once(self.source)
+            .chain(self.required.iter().map(|(attribute, _)| *attribute))
+            .filter_map(|attribute| Token::new(attribute).ok())
+            .any(|attribute| uncertainty.affects(&attribute));
+        if uncertain_input {
+            uncertainty.mark(std::slice::from_ref(&target));
+        } else {
+            uncertainty.clear([target]);
+        }
+    }
+
     /// A stable description of the rule, which storage records to know
     /// whether its documents already carry the derived facts.
     pub fn fingerprint(&self) -> String {

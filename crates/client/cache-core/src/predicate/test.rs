@@ -144,3 +144,183 @@ fn attribute_growth_beyond_budget_is_incomplete_not_an_enqueue_failure() {
         }
     ));
 }
+
+mod derived_sort_facts {
+    use super::*;
+    use item_filter_index::mail::INBOX_VIEW_DERIVATION as VIEW;
+
+    fn flag(attribute: &str, on: bool) -> ExactFact {
+        ExactFact {
+            attribute: token(attribute),
+            value: ExactValue::new([u8::from(on)]).unwrap(),
+        }
+    }
+    fn sort(attribute: &str, value: i64) -> IntegerFact {
+        IntegerFact {
+            attribute: token(attribute),
+            value,
+        }
+    }
+    /// A stored Mail thread; `view` is the derived copy it carries.
+    fn thread(inbox: bool, inbox_ts: i64, view: Option<i64>) -> IndexDocument {
+        let mut document = IndexDocument {
+            record_key: RecordKey::new("GraphqlSoupEmailThread:1").unwrap(),
+            profile: Profile::new(token(VIEW.profiles[1])),
+            partition: token("email"),
+            exact_facts: vec![flag("mail-inbox", inbox), flag("mail-has-message", true)],
+            integer_facts: vec![],
+            sort_facts: std::iter::once(sort(VIEW.source, inbox_ts))
+                .chain(view.map(|value| sort(VIEW.target, value)))
+                .collect(),
+        };
+        document.canonicalize();
+        document
+    }
+    fn patch(
+        document: &IndexDocument,
+        exact: Vec<ExactFact>,
+        sorts: Vec<IntegerFact>,
+    ) -> OptimisticProjectionMutation {
+        OptimisticProjectionMutation::Patch {
+            record_key: document.record_key.clone(),
+            profile: document.profile.clone(),
+            partition: document.partition.clone(),
+            exact: exact
+                .into_iter()
+                .map(|fact| ExactAttributePatch {
+                    attribute: fact.attribute,
+                    values: vec![fact.value],
+                })
+                .collect(),
+            integers: vec![],
+            sorts,
+        }
+    }
+    fn unknown(document: &IndexDocument, attributes: &[&str]) -> OptimisticProjectionMutation {
+        OptimisticProjectionMutation::Unknown {
+            record_key: document.record_key.clone(),
+            profile: document.profile.clone(),
+            partition: document.partition.clone(),
+            affected_attributes: attributes
+                .iter()
+                .map(|attribute| token(attribute))
+                .collect(),
+        }
+    }
+    fn compose(
+        base: &IndexDocument,
+        mutations: &[OptimisticProjectionMutation],
+    ) -> EffectiveOptimisticProjection {
+        compose_effective_optimistic_projection(
+            &base.record_key,
+            Some(&ProjectionState::Complete(base.clone())),
+            &[ProjectionMutationLayer {
+                owner: 1,
+                mutations,
+            }],
+        )
+        .unwrap()
+        .unwrap()
+    }
+    fn view_of(projection: &EffectiveOptimisticProjection) -> Option<i64> {
+        let OptimisticProjectionState::Complete(document) = &projection.state else {
+            panic!("complete shadow")
+        };
+        document
+            .sort_facts
+            .iter()
+            .find(|fact| fact.attribute.as_str() == VIEW.target)
+            .map(|fact| fact.value)
+    }
+
+    /// A queued unarchive stored by a build without the derived fact, rebased
+    /// over an archived thread, still shows in the Inbox view.
+    #[test]
+    fn an_old_patch_rebased_over_an_archived_thread_gets_the_view_fact() {
+        let base = thread(false, 30, None);
+        let shadow = compose(
+            &base,
+            &[patch(&base, vec![flag("mail-inbox", true)], vec![])],
+        );
+        assert_eq!(view_of(&shadow), Some(30));
+        assert!(!shadow.uncertainty.affects(&token(VIEW.target)));
+    }
+
+    /// A patch's copy of the view fact, taken before the source moved, never
+    /// outlives the source: the shadow follows the authority's newer value.
+    #[test]
+    fn a_captured_view_value_follows_the_newer_source() {
+        let base = thread(true, 30, Some(30));
+        let stale = patch(
+            &base,
+            vec![flag("mail-inbox", true)],
+            vec![sort(VIEW.target, 10)],
+        );
+        assert_eq!(
+            view_of(&compose(&base, std::slice::from_ref(&stale))),
+            Some(30)
+        );
+        // The same holds for the authoritative patch path.
+        let OptimisticProjectionMutation::Patch {
+            record_key,
+            profile,
+            partition,
+            exact,
+            integers,
+            sorts,
+        } = &stale
+        else {
+            unreachable!()
+        };
+        let ProjectionState::Complete(authoritative) = apply_authoritative_projection_patch(
+            Some(&ProjectionState::Complete(base.clone())),
+            record_key,
+            profile,
+            partition,
+            exact,
+            integers,
+            sorts,
+        ) else {
+            panic!("complete authority")
+        };
+        assert!(authoritative.sort_facts.contains(&sort(VIEW.target, 30)));
+        // Leaving the Inbox removes the copy instead of leaving it stale.
+        let archived = compose(
+            &base,
+            &[patch(&base, vec![flag("mail-inbox", false)], vec![])],
+        );
+        assert_eq!(view_of(&archived), None);
+    }
+
+    /// The copy is uncertain while its source is, even after a patch that
+    /// names the copy itself, and certain once every input is.
+    #[test]
+    fn the_view_fact_is_as_uncertain_as_its_inputs() {
+        let base = thread(true, 30, Some(30));
+        let shadow = compose(
+            &base,
+            &[
+                unknown(&base, &[VIEW.source]),
+                patch(&base, vec![], vec![sort(VIEW.target, 10)]),
+            ],
+        );
+        assert!(shadow.uncertainty.affects(&token(VIEW.target)));
+
+        // Everything uncertain, then the source and required facts patched:
+        // the copy is certain and the rest stays uncertain.
+        let shadow = compose(
+            &base,
+            &[
+                unknown(&base, &[]),
+                patch(
+                    &base,
+                    vec![flag("mail-inbox", true), flag("mail-has-message", true)],
+                    vec![sort(VIEW.source, 40)],
+                ),
+            ],
+        );
+        assert_eq!(view_of(&shadow), Some(40));
+        assert!(!shadow.uncertainty.affects(&token(VIEW.target)));
+        assert!(shadow.uncertainty.affects(&token("mail-read")));
+    }
+}
