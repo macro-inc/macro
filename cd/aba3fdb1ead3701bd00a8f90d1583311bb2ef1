@@ -1,0 +1,21 @@
+.sqlx/query-658a60c93151c6444d6cab519c1f31635e1363d44eb55a142224827cabdcfb4b.json
+  s_e4dab6ab069ba5::t_d6253898ee6a8f 3,156
+.sqlx/query-910ce0ab33624ad896f6b0581d8d6c1f1a7b8dba85e2cab2f503ac13de91c162.json
+  s_e4dab6ab069ba5::t_2cb17871e2fb6f 3,9-10,15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "cdaba3fdb1ead3701bd00a8f90d1583311bb2ef1",
+  "prompts": {},
+  "sessions": {
+    "s_e4dab6ab069ba5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cd9cc4b6-e475-4672-bb0c-d61b5198aec2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
