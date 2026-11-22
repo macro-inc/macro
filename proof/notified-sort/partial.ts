@@ -3,7 +3,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { closureOf } from './lib/closed.ts';
-import { heldApartFromShared, onlyStaleTimeLabels } from './lib/dom-held.ts';
+import { homeCheckClosure } from './lib/dom-held.ts';
 
 const run = process.argv[2] ?? 'quiet';
 const dir = join(import.meta.dirname, 'out', run);
@@ -22,13 +22,12 @@ const dom = lines('dom.jsonl');
 for (const r of dom) for (const c of r.classes ?? []) add(c);
 const steps = lines('steps.jsonl');
 // As report.ts: an open Home check whose recorded rows show main held (B1)
-// or the sides apart only in stale time labels (L1) counts under it.
+// or the sides apart only in stale time labels (L1, E1) counts under it.
 const moved = (s: any, cls: string) => {
   const c = s.checks;
   if (closureOf(cls) || !c.domRows || !c.domReload || c.domReload.newHeld || !c.domReload.sides.every((x: string) => closureOf(x))) return cls;
-  if (heldApartFromShared(c.domRows).newHeld) return cls.replace(/ dom:.*$/, ' dom:old-behind-reload');
-  if (cls.endsWith(' dom:text') && onlyStaleTimeLabels(c.domRows)) return cls.replace(/ dom:.*$/, ' dom:stale-time-label');
-  return cls;
+  const judged = homeCheckClosure(c.domRows, [cls]);
+  return judged ? cls.replace(/ dom:.*$/, ` ${judged.suffix}`) : cls;
 };
 for (const s of steps)
   for (const [k, v] of Object.entries<any>(s.checks ?? {})) {

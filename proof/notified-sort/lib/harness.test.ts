@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { classify, sameInstant } from './classify.ts';
 import { closureOf } from './closed.ts';
 import { compareSnapshots, refCheck, type Snapshot } from './compare.ts';
-import { heldApartFromShared, onlyStaleTimeLabels } from './dom-held.ts';
+import { heldApartFromShared, homeCheckClosure, onlyStaleTimeLabels } from './dom-held.ts';
 import { parseRowId } from './dom.ts';
 import { generateReads } from './gen.ts';
 import { MUTANTS } from './mutants.ts';
@@ -248,5 +248,37 @@ describe('onlyStaleTimeLabels', () => {
   it('refuses sides that agree outright', () => {
     const base = ['# Today', row('a', '5m')];
     expect(onlyStaleTimeLabels({ oldMounted: base, newMounted: base, oldReload: reload, newReload: reload })).toBe(false);
+  });
+});
+
+describe('homeCheckClosure', () => {
+  const row = (type: string, id: string, label: string) => `${type}/${id}/today/u Name ${id}${label}`;
+  const reload = ['# Today', row('email', 'a', '5h'), row('document', 'd', '5h')];
+  it('moves older labels on mail rows only to E1', () => {
+    const e = { oldMounted: ['# Today', row('email', 'a', '5h'), row('document', 'd', '5h')], newMounted: ['# Today', row('email', 'a', '3d'), row('document', 'd', '5h')], oldReload: reload, newReload: reload };
+    expect(homeCheckClosure(e, ['seq home touch signal dom:text'])?.suffix).toBe('dom:stale-mail-label');
+  });
+  it('keeps an older label on any other row open', () => {
+    const e = { oldMounted: ['# Today', row('email', 'a', '5h'), row('document', 'd', '5h')], newMounted: ['# Today', row('email', 'a', '5h'), row('document', 'd', '3d')], oldReload: reload, newReload: reload };
+    expect(homeCheckClosure(e, ['seq home touch signal dom:text'])).toBeNull();
+  });
+  it('keeps a Home check with a row apart open', () => {
+    const e = { oldMounted: ['# Today', row('email', 'a', '5h'), row('document', 'd', '5h')], newMounted: ['# Today', row('email', 'a', '3d')], oldReload: reload, newReload: reload };
+    expect(homeCheckClosure(e, ['seq home touch signal dom:row-id'])).toBeNull();
+    expect(homeCheckClosure(e, ['seq home touch signal dom:text'])).toBeNull();
+  });
+});
+
+describe('homeCheckClosure with branch-only initiatives', () => {
+  const row = (type: string, id: string, label: string) => `${type}/${id}/today/u Name ${id}${label}`;
+  it('sets them aside before judging labels', () => {
+    const reload = ['# Today', row('email', 'a', '5h'), row('document', 'd', '5h')];
+    const e = {
+      oldMounted: reload,
+      newMounted: ['# Today', row('initiative', 'i', '2h'), row('email', 'a', '3d'), row('document', 'd', '5h')],
+      oldReload: reload,
+      newReload: ['# Today', row('initiative', 'i', '2h'), ...reload.slice(1)],
+    };
+    expect(homeCheckClosure(e, ['seq home touch signal dom:text'])?.suffix).toBe('dom:stale-mail-label');
   });
 });

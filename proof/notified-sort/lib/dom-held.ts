@@ -91,3 +91,67 @@ export function onlyStaleTimeLabels(e: CompactDom): boolean {
   }
   return true;
 }
+
+/**
+ * Whether the two mounted Homes show the same rows, order and text but for
+ * relative-time labels, where every label older than the same row's label
+ * after that side's reload is on a mail row. Lists those rows. A mail row
+ * with no open notification is labelled by the thread's updatedAt, which a
+ * GraphQL list reads from the thread's one cached record (closure E1).
+ */
+export function staleMailLabels(e: CompactDom): { ok: boolean; rows: { key: string; side: 'old' | 'new'; mounted: string; reload: string }[] } {
+  const om = e.oldMounted.map(splitLabel), nm = e.newMounted.map(splitLabel);
+  const rows: { key: string; side: 'old' | 'new'; mounted: string; reload: string }[] = [];
+  if (om.length !== nm.length || om.some((r, i) => r.base !== nm[i].base) || om.every((r, i) => r.age === nm[i].age)) return { ok: false, rows };
+  for (const [side, mounted, reload] of [['old', e.oldMounted, e.oldReload], ['new', e.newMounted, e.newReload]] as const) {
+    const reloadRow = new Map<string, string>();
+    for (const row of reload) {
+      const k = keyOf(row);
+      if (k) reloadRow.set(k, row);
+    }
+    for (const row of mounted) {
+      const k = keyOf(row);
+      const other = k ? reloadRow.get(k) : undefined;
+      if (!k || !other) continue;
+      const a = splitLabel(row).age, b = splitLabel(other).age;
+      if (a === null || b === null || a <= b) continue;
+      if (!k.startsWith('email/')) return { ok: false, rows: [] };
+      rows.push({ key: k, side, mounted: LABEL.exec(row)?.[1] ?? '', reload: LABEL.exec(other)?.[1] ?? '' });
+    }
+  }
+  return { ok: rows.length > 0, rows };
+}
+
+/**
+ * The closed class an open Home check moves to, judged from its recorded rows
+ * (`checks.domRows`) and its open classes, or null when it stays open: main
+ * held apart from shared staleness (B1), labels younger than the reload only
+ * (L1), or older labels on mail rows only (E1). Used by report.ts and
+ * partial.ts; the reloads must already agree.
+ */
+export function homeCheckClosure(recorded: CompactDom, open: string[]): { suffix: string; held: ReturnType<typeof heldApartFromShared>; mail: ReturnType<typeof staleMailLabels>['rows'] } | null {
+  const e = withoutBranchOnlyInitiatives(recorded);
+  const held = heldApartFromShared(e);
+  if (held.newHeld) return { suffix: 'dom:old-behind-reload', held, mail: [] };
+  if (!open.every((cls) => cls.endsWith(' dom:text'))) return null;
+  if (onlyStaleTimeLabels(e)) return { suffix: 'dom:stale-time-label', held, mail: [] };
+  const mail = staleMailLabels(e);
+  return mail.ok ? { suffix: 'dom:stale-mail-label', held, mail: mail.rows } : null;
+}
+
+/**
+ * The rows with initiative rows only the branch shows set aside, as lib/dom.ts
+ * does live: they are D1, checked against the database when the step ran and
+ * tallied apart. A heading left with no rows goes too.
+ */
+function withoutBranchOnlyInitiatives(e: CompactDom): CompactDom {
+  const drop = (rows: string[], other: string[]) => {
+    const keep = new Set(other.map(keyOf).filter(Boolean));
+    const kept = rows.filter((row) => {
+      const k = keyOf(row);
+      return !k || !k.startsWith('initiative/') || keep.has(k);
+    });
+    return kept.filter((row, i) => !row.startsWith('# ') || (kept[i + 1] !== undefined && !kept[i + 1].startsWith('# ')));
+  };
+  return { ...e, newMounted: drop(e.newMounted, e.oldMounted), newReload: drop(e.newReload, e.oldReload) };
+}

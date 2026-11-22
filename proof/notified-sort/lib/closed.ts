@@ -172,6 +172,15 @@ export const CLOSURES: Closure[] = [
     outcome:
       "Visible, not a data difference: both sides show the same rows, order, buckets and unread state, and the same labels after a reload; only how stale a label can be differs. Main's labels are stale too (5m for an 11-minute-old notification) and refresh only when some notification makes its list refetch; the branch's refresh when that row changes. A ticking label is a fix for the card, not for this PR.",
   },
+  {
+    id: 'E1',
+    match: /(^|\s)dom:stale-mail-label$/,
+    title: "A Home mail row with no open notification takes its time label from the thread's one cached updatedAt (T8, seen on screen)",
+    cause:
+      "The card labels a row by its first attached notification, else entity.updatedAt (features/next-soup/soup-view/views/inbox/inbox-card-layouts.tsx:141-155). GraphQL items attach only active notifications (crates/notification/src/domain/models/entity_query.rs:25-28, the edge's default states), so a thread whose notifications are all done is labelled by its updatedAt, and the GraphQL cache keeps one updatedAt per thread, written by whichever read or source wrote the record last (T8: Home's notified read gives email_threads.updated_at, an All-style read gives the latest eligible message time, crates/email/src/outbound/email_pg_repo/dynamic/query.rs:486-495). Main's REST Home list keeps its own copy of its read. The harness moves a Home check here only when the mounted Homes show the same rows, order and text but for labels, every label older than its reload's is on a mail row, and the reloads agree (report.ts, lib/dom-held.ts staleMailLabels). Instance: quiet seed 3401, lane v7, sequence 4 step 4: two mail threads whose notifications were all done read 3d and 1d on the branch's mounted Home and 5h on main and on both reloads; email_threads gives them updated_at 12:58 that day (5h) and latest_non_spam_message_ts 3 and 1 days before (3d, 1d).",
+    outcome:
+      "Visible, not fixed: on the branch a done mail row on Home can show the thread's latest message age instead of its updated time until the page reloads, under the same date bucket, rows and order. The value is the thread's real latest message time, the one main's own GraphQL mail lists show for it, not another entity's. The PR moves Home onto GraphQL Soup's existing one-record-per-thread cache; keeping a per-list updatedAt, or labelling notified rows by their notification time, is a change to that cache or to the card, for the user to decide.",
+  },
 ];
 
 export function closureOf(cls: string): Closure | undefined {

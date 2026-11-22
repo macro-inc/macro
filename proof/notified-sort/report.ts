@@ -5,7 +5,7 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CLOSURES, closureOf } from './lib/closed.ts';
-import { heldApartFromShared, type CompactDom, onlyStaleTimeLabels } from './lib/dom-held.ts';
+import { homeCheckClosure, type CompactDom } from './lib/dom-held.ts';
 
 type ClassEntry = { n: number; example: unknown };
 type RefEntry = { 'ref-agrees': number; 'ref-disagrees': number; 'ref-absent': number; example: unknown };
@@ -21,33 +21,32 @@ type StepRecord = { lane: string; step: number; checks?: { dom?: { classes: stri
  *
  * It also moves a Home check whose mounted sides differ only in relative-time
  * labels, each no older than its reload's (lib/dom-held.ts onlyStaleTimeLabels),
- * to `dom:stale-time-label` (closure L1).
+ * to `dom:stale-time-label` (closure L1), and one whose older labels are all
+ * on mail rows to `dom:stale-mail-label` (closure E1); lib/dom-held.ts
+ * homeCheckClosure judges all three.
  */
-function reclassifyHeldDom(run: string, classes: Record<string, ClassEntry>): { lane: string; step: number; from: string[]; to: string; shared: string[] }[] {
+function reclassifyHeldDom(run: string, classes: Record<string, ClassEntry>): { lane: string; step: number; from: string[]; to: string; shared: string[]; mail: unknown[] }[] {
   const path = join(outDir, run, 'steps.jsonl');
   if (!existsSync(path)) return [];
-  const moved: { lane: string; step: number; from: string[]; to: string; shared: string[] }[] = [];
+  const moved: { lane: string; step: number; from: string[]; to: string; shared: string[]; mail: unknown[] }[] = [];
   for (const line of readFileSync(path, 'utf8').split('\n').filter(Boolean)) {
     const step = JSON.parse(line) as StepRecord;
     const c = step.checks;
     if (!c?.dom || !c.domRows || !c.domReload || c.domReload.newHeld) continue;
     const open = c.dom.classes.filter((cls) => !closureOf(cls));
     if (!open.length || !c.domReload.sides.every((cls) => closureOf(cls))) continue;
-    const held = heldApartFromShared(c.domRows);
-    // The mounted sides differ only in when each last rendered a row's
-    // relative-time label (closure L1): no row, order or text apart.
-    const labels = !held.newHeld && open.every((cls) => cls.endsWith(' dom:text')) && onlyStaleTimeLabels(c.domRows);
-    if (!held.newHeld && !labels) continue;
+    const judged = homeCheckClosure(c.domRows, open);
+    if (!judged) continue;
     for (const cls of open) {
       const entry = classes[cls];
       if (!entry) continue;
       entry.n -= 1;
       if (entry.n <= 0) delete classes[cls];
     }
-    const to = open[0].replace(/ dom:.*$/, labels ? ' dom:stale-time-label' : ' dom:old-behind-reload');
+    const to = open[0].replace(/ dom:.*$/, ` ${judged.suffix}`);
     classes[to] ??= { n: 0, example: { lane: step.lane, step: step.step, from: open } };
     classes[to].n += 1;
-    moved.push({ lane: step.lane, step: step.step, from: open, to, shared: held.shared });
+    moved.push({ lane: step.lane, step: step.step, from: open, to, shared: judged.held.shared, mail: judged.mail });
   }
   return moved;
 }
