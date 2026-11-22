@@ -164,9 +164,10 @@ function RoutineByline(props: {
                 aria-hidden="true"
                 class="size-1.5 shrink-0 rounded-full bg-failure"
               />
+              {/* Above the name's hit area, so hovering it shows the reason. */}
               <Tooltip
                 label={run().reason ?? run().summary}
-                class="min-w-0 max-w-full"
+                class="relative z-[1] min-w-0 max-w-full"
               >
                 <span class="block min-w-0 truncate text-failure">
                   {t('routinesList.failedAt', { at: run().at })}
