@@ -1350,10 +1350,15 @@ async fn recover_read_adoption(
     let old = counted.is_none() && adoption_is_old(adoption.adopted_at_ms);
     match decide_adoption(owner, adoption, from_version).await {
         Decided::Done(owner, carry_forward) => Ok((owner, carry_forward)),
-        Decided::Kept(owner, _) | Decided::Unprobed(owner, _) if old => Ok((owner, discarded)),
+        Decided::Kept(owner, _)
+        | Decided::Unprobed {
+            owner, busy: false, ..
+        } if old => Ok((owner, discarded)),
         Decided::Kept(owner, reason) => Err(keep_for_recovery(owner, reason).await),
         // The probe's own error, so one that met a busy file still says so.
-        Decided::Unprobed(owner, error) => match owner.release().await {
+        // A busy file is not discarded for age: the wipe would meet the same
+        // open handle, spend the busy wait again and poison the worker.
+        Decided::Unprobed { owner, error, .. } => match owner.release().await {
             Ok(()) => Err(recovery_deferred(error)),
             Err(failure) => Err(recovery_deferred(err_js(failure))),
         },
@@ -1371,7 +1376,12 @@ enum Decided {
     Kept(OpfsOwner, String),
     /// The version probe failed before opening anything, with this error,
     /// and gave the owner back; every file and the marker are as they were.
-    Unprobed(OpfsOwner, JsValue),
+    Unprobed {
+        owner: OpfsOwner,
+        error: JsValue,
+        /// Another context held a file open through the busy wait.
+        busy: bool,
+    },
     /// The version probe failed after opening the files and gave the owner
     /// up before any file changed.
     Lost(JsValue),
@@ -1405,10 +1415,10 @@ async fn decide_adoption(mut owner: OpfsOwner, adoption: Adoption, from_version:
     }
     let (mut owner, stored) = match read_storage_version(owner).await {
         Ok(read) => read,
-        Err(ProbeFailure { error, owner }) => {
+        Err(ProbeFailure { error, owner, busy }) => {
             release_previous(Some(previous)).await;
             return match owner {
-                Some(owner) => Decided::Unprobed(owner, error),
+                Some(owner) => Decided::Unprobed { owner, error, busy },
                 None => Decided::Lost(error),
             };
         }
@@ -1514,6 +1524,8 @@ struct ProbeFailure {
     /// The owner, when the probe failed before opening anything and gave it
     /// back; `None` once it opened the files, or its cleanup was uncertain.
     owner: Option<OpfsOwner>,
+    /// Another context held a file open through the busy wait.
+    busy: bool,
 }
 
 impl ProbeFailure {
@@ -1521,6 +1533,7 @@ impl ProbeFailure {
         Self {
             error: storage_err_js(error),
             owner: None,
+            busy: error.kind() == OpfsErrorKind::Busy,
         }
     }
 }
@@ -1537,6 +1550,7 @@ async fn read_storage_version(
         return Err(ProbeFailure {
             error: err_js("injected version probe open failure"),
             owner: Some(owner),
+            busy: false,
         });
     }
     let opened = match owner.open().await {
@@ -1544,6 +1558,7 @@ async fn read_storage_version(
         Err(failure) => {
             return Err(ProbeFailure {
                 error: storage_err_js(failure.error()),
+                busy: failure.error().kind() == OpfsErrorKind::Busy,
                 owner: failure.into_owner(),
             });
         }

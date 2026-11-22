@@ -3862,6 +3862,91 @@ async fn an_uncounted_recovery_whose_version_probe_fails_discards_once_old() {
     destroy_cache(SCOPE.into()).await.expect("destroy cache");
 }
 
+#[wasm_bindgen_test(async)]
+async fn an_old_uncounted_recovery_keeps_files_another_context_holds_open() {
+    const SCOPE: &str = "cache-wasm-recovery-uncounted-busy";
+    let own = database_identity(SCOPE);
+    let older = cache_database_name(SCOPE, 11);
+    let attempts = format!("{own}-adopting-attempts");
+    let held = format!("{own}-held");
+    older_database_with_a_queued_write(SCOPE, Flaw::None).await;
+    move_without_opening(SCOPE).await;
+    rename_opfs_file(&attempts, &held).await;
+
+    // The version probe meets the main file held open past the age bound. A
+    // wipe would meet the same handle, so the files stay and the open says
+    // storage-busy.
+    hold_sync_handle(&own).await;
+    CLOCK_AHEAD_MS.with(|ahead| ahead.set(UNCOUNTED_RECOVERY_MS));
+    let result = recovery_open(SCOPE).await;
+    CLOCK_AHEAD_MS.with(|ahead| ahead.set(0));
+    release_sync_handle().await;
+    let error = result
+        .err()
+        .expect("a recovery whose probe met a busy file");
+    assert!(kept_for_recovery(&error));
+    assert_eq!(
+        js_sys::Reflect::get(&error, &JsValue::from_str(STORAGE_BUSY_MARKER))
+            .ok()
+            .and_then(|value| value.as_bool()),
+        Some(true)
+    );
+    assert!(opfs_file_exists(&own).await);
+    assert!(opfs_file_exists(&format!("{own}-wal")).await);
+    assert!(opfs_entry_exists(&format!("{own}-adopting")).await);
+
+    // Once nothing holds it, the same recovery reads the version and hands
+    // the files back, queued write included, rather than discarding them.
+    CLOCK_AHEAD_MS.with(|ahead| ahead.set(UNCOUNTED_RECOVERY_MS));
+    let result = recovery_open(SCOPE).await;
+    CLOCK_AHEAD_MS.with(|ahead| ahead.set(0));
+    let (engine, report) = result.expect("old uncounted recovery");
+    assert_eq!(
+        report.carry_forward,
+        Some(CarryForward::new(CarryForwardKind::Returned, 11))
+    );
+    resolved(engine.close()).await;
+    assert!(opfs_file_exists(&older).await);
+    remove_opfs_pair(&own).await;
+    remove_opfs_file(&held).await;
+    let (engine, report) = open_cache_inner(SCOPE.into(), None, false, None, false)
+        .await
+        .expect("carry the returned database forward");
+    assert_eq!(
+        report.carry_forward,
+        Some(CarryForward::new(CarryForwardKind::Moved, 11))
+    );
+    assert_eq!(queue_depth(&engine).await, "1");
+    resolved(engine.close()).await;
+    destroy_cache(SCOPE.into()).await.expect("destroy cache");
+}
+
+/// Opens a sync access handle on the OPFS file `path` and keeps it, as
+/// another context with the file open would, until
+/// [`release_sync_handle`].
+async fn hold_sync_handle(path: &str) {
+    run_js(
+        "return (async () => {
+          const root = await navigator.storage.getDirectory();
+          const file = await root.getFileHandle(name);
+          globalThis.cacheWasmTestHeldHandle = await file.createSyncAccessHandle();
+        })()",
+        path,
+    )
+    .await;
+}
+
+async fn release_sync_handle() {
+    run_js(
+        "return (async () => {
+          globalThis.cacheWasmTestHeldHandle?.close();
+          globalThis.cacheWasmTestHeldHandle = undefined;
+        })()",
+        "",
+    )
+    .await;
+}
+
 /// Whether `error` says its open kept files an upgrade moved here for a
 /// later recovery to decide.
 fn kept_for_recovery(error: &JsValue) -> bool {
