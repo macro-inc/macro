@@ -102,7 +102,13 @@ cache. It gets no picked documentation (`routes_documentation`), opener,
 skills or `<agent_session>` block, runs at low effort where its model takes
 one (`unseen_effort`), and has only code mode's three tools plus
 `ReadToolResult` (`unseen::CodeModeOnly`), `ExecuteCode` without its reviews
-and views.
+and views in a TypeScript turn.
+
+Each turn reads its code-mode kind once at its start
+(`TurnRequest::code_mode_kind`, from `AgentState::code_mode_kinds`, the
+harness's code mode) and shows its model the internal server's code tools as
+that kind defines them (`outbound/rig_engine/turn_code_tools.rs`), whatever the
+session listed when it connected.
 
 Every conversation turn of a user's session runs code mode
 (`tools_for_agent_code_mode`); there is no direct-tools fallback. A turn whose

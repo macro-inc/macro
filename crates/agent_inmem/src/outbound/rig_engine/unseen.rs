@@ -5,9 +5,9 @@
 //!
 //! [`ReplyDelivery::Unseen`]: crate::domain::engine::ReplyDelivery::Unseen
 
+use super::turn_code_tools::TurnCodeTools;
 use agent_code_mode::domain::CodeModeKind;
 use ai_toolset::{RequestContext, SearchableTool, ToolCallFuture, ToolInfo, ToolSet, ToolSetError};
-use mcp_toolset::RemoteMcpToolSet;
 
 use crate::domain::mcp::CODE_MODE_MCP_TOOLS;
 
@@ -22,12 +22,12 @@ const EXECUTE_CODE: &str = "mcp__macro_internal__ExecuteCode";
 /// the PresentView schema: nobody would see what they present. A dialect
 /// turn's goes out as listed.
 pub(super) struct CodeModeOnly {
-    tools: RemoteMcpToolSet,
+    tools: TurnCodeTools,
     execute_code: Option<String>,
 }
 
 impl CodeModeOnly {
-    pub(super) fn new(tools: RemoteMcpToolSet, kind: CodeModeKind) -> Self {
+    pub(super) fn new(tools: TurnCodeTools, kind: CodeModeKind) -> Self {
         Self {
             tools,
             execute_code: match kind {

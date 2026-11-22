@@ -54,6 +54,8 @@ mod opener;
 #[cfg(test)]
 #[path = "outbound/rig_engine/test.rs"]
 mod test;
+#[path = "outbound/rig_engine/turn_code_tools.rs"]
+mod turn_code_tools;
 #[path = "outbound/rig_engine/unseen.rs"]
 mod unseen;
 
@@ -915,16 +917,24 @@ async fn drive_turn(
     let mcp_tools = mcp_tools.filter(|_| !summarizing);
     let remote = mcp_tools.clone();
     let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = match mcp_tools {
+        // The code tools as this turn's kind defines them, whatever the
+        // session listed when it connected.
         Some(mcp) if unseen => Arc::new(
             mcp_select::CombinedToolSet::new(
                 toolset,
-                unseen::CodeModeOnly::new(mcp, code_mode_kind),
+                unseen::CodeModeOnly::new(
+                    turn_code_tools::TurnCodeTools::new(mcp, code_mode_kind),
+                    code_mode_kind,
+                ),
             )
             .with_eager_mcp_tools(crate::domain::mcp::CODE_MODE_MCP_TOOLS),
         ),
         Some(mcp) => Arc::new(
-            mcp_select::CombinedToolSet::new(toolset, mcp)
-                .with_eager_mcp_tools(EAGER_INTERNAL_MCP_TOOLS),
+            mcp_select::CombinedToolSet::new(
+                toolset,
+                turn_code_tools::TurnCodeTools::new(mcp, code_mode_kind),
+            )
+            .with_eager_mcp_tools(EAGER_INTERNAL_MCP_TOOLS),
         ),
         None => toolset,
     };
