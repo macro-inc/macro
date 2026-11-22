@@ -7,8 +7,9 @@
 //! must not have), every other read as it answered.
 //!
 //! A read of an operation registers what it depends on; an abandoned one
-//! registers the operation against every change instead, until a read of it
-//! registers again. While an operation is in that state ([`Exec::broad`]),
+//! registers the operation against every change instead, until a read or a
+//! registering write of it answers, or a clear, reopen, crash or teardown
+//! drops it. While an operation is in that state ([`Exec::broad`]),
 //! it is taken out of every `affectedOps` before the line is compared, and
 //! where it was is written to `<seed>.broad`: what a side without abandons
 //! reported there, the other must report too (`fuzz.sh` checks).
@@ -99,8 +100,9 @@ impl Exec<'_> {
             self.record(index, "read", first);
         }
         if let Some(second) = second {
-            // Over-masks when the second read registered before the abandoned
-            // one gave up: the order the two reach the engine in is a race.
+            // Over-masks when the abandoned read got the engine first: the
+            // second's registration then replaced its broad one. Which of the
+            // two gets the engine first is up to the scheduler.
             self.record(index, "read", second);
         }
         if let (true, Some(op)) = (plan.masks(), register) {

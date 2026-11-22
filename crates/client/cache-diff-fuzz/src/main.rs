@@ -109,7 +109,7 @@ struct Args {
     /// abandon reads runs them all. Abandoned answers are masked, and
     /// operations an abandon left registered broadly are masked out of
     /// `affectedOps`; `<seed>.broad` lists where, for `fuzz.sh` to check
-    /// that the other side reported each of them too.
+    /// that the other side reported each of them too (not in `CHAIN_*` runs).
     #[arg(long, default_value_t = 0.0, value_parser = share)]
     abandon_reads: f64,
 }
