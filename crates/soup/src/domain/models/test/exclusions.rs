@@ -287,3 +287,44 @@ fn nil_channel_pins_skip_channel_threads() {
         assert!(builds_request(Leg::ChannelThread, &included));
     }
 }
+
+#[test]
+fn channel_directory_pages_are_sorted_bounded_and_leave_channel_threads_out() {
+    let no_threads = filter_for(Leg::ChannelThread, &Expr::val(Uuid::nil()));
+    for follow_up in [false, true] {
+        let page = request(no_threads.clone(), follow_up);
+        assert!(page.is_channel_directory_page(), "follow_up={follow_up}");
+
+        let mut largest = request(no_threads.clone(), follow_up);
+        largest.limit = CHANNEL_DIRECTORY_PAGE_LIMIT;
+        assert!(largest.is_channel_directory_page(), "follow_up={follow_up}");
+
+        let mut too_large = request(no_threads.clone(), follow_up);
+        too_large.limit = CHANNEL_DIRECTORY_PAGE_LIMIT + 1;
+        assert!(
+            !too_large.is_channel_directory_page(),
+            "follow_up={follow_up}"
+        );
+
+        for threads in [
+            EntityFilterAst::default(),
+            filter_for(Leg::ChannelThread, &Expr::val(id(1))),
+            filter_for(Leg::Channel, &Expr::val(id(1))),
+        ] {
+            assert!(
+                !request(threads.clone(), follow_up).is_channel_directory_page(),
+                "{threads:?} (follow_up={follow_up})"
+            );
+        }
+    }
+
+    for cursor in [
+        SoupQuery::new_sort_notified(no_threads.clone()),
+        SoupQuery::new_sort_touched(no_threads.clone()),
+        SoupQuery::new_sort_frecency(Frecency, no_threads.clone()),
+    ] {
+        let mut page = request(no_threads.clone(), false);
+        page.cursor = cursor;
+        assert!(!page.is_channel_directory_page());
+    }
+}

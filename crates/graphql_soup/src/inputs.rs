@@ -71,11 +71,12 @@ pub enum SoupChannelReads {
     /// The read replica, like every other Soup list.
     #[default]
     Replica,
-    /// The primary, where the REST channel list reads them, so the page
-    /// reflects every committed membership change: a channel the viewer just
-    /// left or joined is never listed the other way. Only the channels move;
-    /// every other entity type in the page still reads the replica. Meant for
-    /// complete passes over the viewer's channel directory, not ordinary lists.
+    /// The primary, where the REST channel list reads them, so the page's
+    /// channels reflect every committed membership change. Only the channels
+    /// move; every other entity type in the page still reads the replica.
+    /// Served only for channel directory pages: a timestamp sort (not NAME,
+    /// PROPERTY or NOTIFIED_AT), at most 100 items, with channel
+    /// threads excluded by a nil-id filter. Any other page is refused.
     Primary,
 }
 

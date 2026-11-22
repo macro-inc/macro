@@ -28,8 +28,12 @@ viewer pattern), which apply to every type defined here.
   record says which. Joined-only lists must still filter on it.
 - `resolve_soup` runs a page with `channelReads: PRIMARY` on the
   `PrimaryChannelSoup` in the request data and errors when it is missing,
-  never falling back to the replica service. The cursor does not carry the
-  choice; continuations send it again.
+  never falling back to the replica service. It admits only channel directory
+  pages (`SoupRequest::is_channel_directory_page`: a timestamp sort, at most
+  100 items, channel threads excluded) and refuses the rest. Type the data by
+  the schema's service, `PrimaryChannelSoup<<Schema as SoupSchemaService>::Service>`
+  (`Arc<_>` in a shared schema), or the lookup misses. The cursor does not
+  carry the choice; continuations send it again.
 - Build `AgentSessionEntityLoader` and `PrimarySoupItemLoader` with `::new`,
   which rechecks the viewer's team. PRs are stored for the team; without it,
   a session row reads `pullRequestState: null` and overwrites the list's

@@ -1452,28 +1452,31 @@ impl graphql_soup::SoupEmailThreadReader for RecordingThreadReader {
     }
 }
 
+/// The schema the harness runs, over the counting Soup service.
+type TestSchema = SoupSchema<
+    CountingSoupService,
+    NoOpSoupRealtimeSubscriptionService,
+    NoopWebSocketNotificationSubscriptionService,
+    graphql_activity::NoOpActivitySubscriptionService,
+    CountingEmailService,
+    CountingEntityAccessService,
+    FakeAuthorizationService,
+    TestState,
+    NoOpEntityPropertyWriter,
+    UnavailableEntityMutationService,
+    graphql_favorite::NoOpFavoriteMutationService,
+    NoOpChannelActivityMutationService,
+    NoOpNotificationMutationService,
+    NoOpSoupNotificationEdgeReader,
+    NoOpEntityPropertyReader,
+    RecordingEmailContentReader,
+    graphql_favorite::NoOpEntityFavoriteEdgeReader,
+    graphql_permission::NoOpEntityPermissionEdgeReader,
+    RecordingActivityReader,
+>;
+
 struct TestHarness {
-    schema: SoupSchema<
-        CountingSoupService,
-        NoOpSoupRealtimeSubscriptionService,
-        NoopWebSocketNotificationSubscriptionService,
-        graphql_activity::NoOpActivitySubscriptionService,
-        CountingEmailService,
-        CountingEntityAccessService,
-        FakeAuthorizationService,
-        TestState,
-        NoOpEntityPropertyWriter,
-        UnavailableEntityMutationService,
-        graphql_favorite::NoOpFavoriteMutationService,
-        NoOpChannelActivityMutationService,
-        NoOpNotificationMutationService,
-        NoOpSoupNotificationEdgeReader,
-        NoOpEntityPropertyReader,
-        RecordingEmailContentReader,
-        graphql_favorite::NoOpEntityFavoriteEdgeReader,
-        graphql_permission::NoOpEntityPermissionEdgeReader,
-        RecordingActivityReader,
-    >,
+    schema: TestSchema,
     state: TestState,
     soup_service: CountingSoupService,
     /// Answers single agent-session lookups, as the primary does in DSS.
@@ -2407,54 +2410,213 @@ async fn soup_passes_team_receipt_to_raw_path() {
     );
 }
 
-/// Runs one Soup page with `PrimaryChannelSoup` in the request data and
-/// returns the response with the primary service's call count.
+/// The filters of a channel directory page: channel threads left out.
+const DIRECTORY_FILTERS: &str =
+    r#"{channelThreadFilter: {literal: {threadId: "00000000-0000-0000-0000-000000000000"}}}"#;
+
+/// An initial channel directory page with the given extra input fields.
+fn directory_page_query(extra: &str, selection: &str) -> String {
+    format!(
+        "{{ user {{ soup(input: {{initial: {{limit: 100, sortMethod: CREATED_AT, filters: {DIRECTORY_FILTERS}{extra}}}}}) {{ {selection} }} }} }}"
+    )
+}
+
+/// A continuation cursor of a timestamp-sorted page over `filter`.
+fn simple_cursor(limit: usize, filter: item_filters::ast::EntityFilterAst) -> String {
+    models_pagination::Base64Str::encode_json(models_pagination::CursorWithValAndFilter {
+        id: Uuid::from_u128(1),
+        limit,
+        val: models_pagination::CursorVal {
+            sort_type: SimpleSortMethod::CreatedAt,
+            last_val: chrono::DateTime::default(),
+        },
+        filter,
+    })
+    .to_string()
+}
+
+/// The directory's filter as the Soup domain holds it.
+fn directory_filter_ast() -> item_filters::ast::EntityFilterAst {
+    item_filters::ast::EntityFilterAst {
+        channel_thread_filter: Some(Arc::new(filter_ast::Expr::val(
+            item_filters::ast::channel::ChannelThreadLiteral::ThreadId(Uuid::nil()),
+        ))),
+        ..Default::default()
+    }
+}
+
+/// The primary channel Soup's call counts after one page.
+#[derive(Debug, PartialEq, Eq)]
+struct PrimaryCalls {
+    raw: usize,
+    frecency: usize,
+}
+
+/// Runs one Soup page with `PrimaryChannelSoup` in the request data, typed
+/// as DSS types it: by the schema's own Soup service.
 async fn soup_page_with_primary_channel_soup(
     harness: &TestHarness,
     query: &str,
-) -> (async_graphql::Response, usize) {
+) -> (async_graphql::Response, PrimaryCalls) {
     let primary = CountingSoupService::default();
     primary.set_raw_response(Vec::new());
     let response = harness
         .schema
-        .execute(
-            harness
-                .request(query, authenticated_parts())
-                .data(graphql_soup::PrimaryChannelSoup(Arc::new(primary.clone()))),
-        )
+        .execute(harness.request(query, authenticated_parts()).data(
+            graphql_soup::PrimaryChannelSoup::<<TestSchema as crate::SoupSchemaService>::Service>(
+                primary.clone(),
+            ),
+        ))
         .await;
-    (response, primary.raw_calls.load(Ordering::SeqCst))
+    let calls = PrimaryCalls {
+        raw: primary.raw_calls.load(Ordering::SeqCst),
+        frecency: primary.frecency_calls.load(Ordering::SeqCst),
+    };
+    (response, calls)
 }
 
 #[tokio::test]
-async fn soup_channel_reads_primary_runs_on_the_primary_channel_soup() {
+async fn soup_channel_reads_primary_runs_directory_pages_on_the_primary_channel_soup() {
     let harness = harness();
 
     let (response, primary_calls) = soup_page_with_primary_channel_soup(
         &harness,
-        "{ user { soup(input: {initial: {channelReads: PRIMARY}}) { nextCursor } } }",
+        &directory_page_query(", channelReads: PRIMARY", "nextCursor"),
     )
     .await;
 
     assert!(response.errors.is_empty(), "{:?}", response.errors);
-    assert_eq!(primary_calls, 1);
+    assert_eq!(
+        primary_calls,
+        PrimaryCalls {
+            raw: 1,
+            frecency: 0
+        }
+    );
     assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0);
     assert_eq!(harness.team_calls.load(Ordering::SeqCst), 1);
 }
 
 #[tokio::test]
-async fn soup_channel_reads_default_and_replica_run_on_the_list_soup() {
-    for input in ["{}", "{channelReads: REPLICA}"] {
-        let harness = harness();
+async fn soup_channel_reads_primary_runs_the_frecency_path_on_the_primary_channel_soup() {
+    let harness = harness();
 
-        let (_response, primary_calls) = soup_page_with_primary_channel_soup(
+    let (_response, primary_calls) = soup_page_with_primary_channel_soup(
+        &harness,
+        &directory_page_query(", channelReads: PRIMARY", "items { frecencyScore }"),
+    )
+    .await;
+
+    assert_eq!(
+        primary_calls,
+        PrimaryCalls {
+            raw: 0,
+            frecency: 1
+        }
+    );
+    assert_eq!(harness.frecency_soup_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn soup_channel_reads_default_and_replica_run_on_the_list_soup() {
+    for extra in ["", ", channelReads: REPLICA"] {
+        let harness = harness();
+        harness.soup_service.set_raw_response(Vec::new());
+
+        let (response, primary_calls) = soup_page_with_primary_channel_soup(
             &harness,
-            &format!("{{ user {{ soup(input: {{initial: {input}}}) {{ nextCursor }} }} }}"),
+            &directory_page_query(extra, "nextCursor"),
         )
         .await;
 
-        assert_eq!(primary_calls, 0, "{input}");
-        assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 1, "{input}");
+        assert!(response.errors.is_empty(), "{extra}: {:?}", response.errors);
+        assert_eq!(
+            primary_calls,
+            PrimaryCalls {
+                raw: 0,
+                frecency: 0
+            },
+            "{extra}"
+        );
+        assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 1, "{extra}");
+    }
+}
+
+#[tokio::test]
+async fn soup_channel_reads_follow_each_continuation() {
+    let cursor = simple_cursor(100, directory_filter_ast());
+    for (channel_reads, expected_primary, expected_replica) in [
+        (", channelReads: PRIMARY", 1, 0),
+        (", channelReads: REPLICA", 0, 1),
+        ("", 0, 1),
+    ] {
+        let harness = harness();
+        harness.soup_service.set_raw_response(Vec::new());
+
+        let (response, primary_calls) = soup_page_with_primary_channel_soup(
+            &harness,
+            &format!(
+                r#"{{ user {{ soup(input: {{continuation: {{cursor: "{cursor}"{channel_reads}}}}}) {{ nextCursor }} }} }}"#
+            ),
+        )
+        .await;
+
+        assert!(
+            response.errors.is_empty(),
+            "{channel_reads}: {:?}",
+            response.errors
+        );
+        assert_eq!(primary_calls.raw, expected_primary, "{channel_reads}");
+        assert_eq!(
+            harness.raw_soup_calls.load(Ordering::SeqCst),
+            expected_replica,
+            "{channel_reads}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn soup_channel_reads_primary_refuses_pages_that_are_not_directory_pages() {
+    let unfiltered_cursor = simple_cursor(100, item_filters::ast::EntityFilterAst::default());
+    let large_cursor = simple_cursor(101, directory_filter_ast());
+    let pages = [
+        // Channel threads included.
+        "{ user { soup(input: {initial: {limit: 100, sortMethod: CREATED_AT, channelReads: PRIMARY}}) { nextCursor } } }".to_string(),
+        // Larger than a directory page.
+        directory_page_query(", limit: 101, channelReads: PRIMARY", "nextCursor"),
+        // Not a timestamp sort.
+        directory_page_query(", sortMethod: NOTIFIED_AT, channelReads: PRIMARY", "nextCursor"),
+        directory_page_query(", sortMethod: NAME, channelReads: PRIMARY", "nextCursor"),
+        // Continuations of such pages.
+        format!(
+            r#"{{ user {{ soup(input: {{continuation: {{cursor: "{unfiltered_cursor}", channelReads: PRIMARY}}}}) {{ nextCursor }} }} }}"#
+        ),
+        format!(
+            r#"{{ user {{ soup(input: {{continuation: {{cursor: "{large_cursor}", channelReads: PRIMARY}}}}) {{ nextCursor }} }} }}"#
+        ),
+    ];
+    for page in pages {
+        let harness = harness();
+
+        let (response, primary_calls) = soup_page_with_primary_channel_soup(&harness, &page).await;
+
+        let messages: Vec<_> = response.errors.iter().map(|e| e.message.as_str()).collect();
+        assert_eq!(
+            messages,
+            [graphql_soup::PRIMARY_CHANNEL_READS_REFUSED],
+            "{page}"
+        );
+        assert_eq!(
+            primary_calls,
+            PrimaryCalls {
+                raw: 0,
+                frecency: 0
+            },
+            "{page}"
+        );
+        assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0, "{page}");
+        assert_eq!(harness.team_calls.load(Ordering::SeqCst), 0, "{page}");
     }
 }
 
@@ -2463,12 +2625,66 @@ async fn soup_channel_reads_primary_errors_where_the_primary_channel_soup_is_mis
     let harness = harness();
 
     let response = harness
-        .execute("{ user { soup(input: {initial: {channelReads: PRIMARY}}) { nextCursor } } }")
+        .execute(&directory_page_query(
+            ", channelReads: PRIMARY",
+            "nextCursor",
+        ))
         .await;
 
-    assert_eq!(response.errors.len(), 1, "{:?}", response.errors);
+    let messages: Vec<_> = response.errors.iter().map(|e| e.message.as_str()).collect();
+    assert_eq!(messages, [graphql_soup::PRIMARY_CHANNEL_SOUP_MISSING]);
     assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0);
     assert_eq!(harness.inbox_calls.load(Ordering::SeqCst), 0);
+}
+
+/// A schema over an `Arc`-shared Soup service, as DSS builds it.
+type SharedTestSchema = SoupSchema<
+    Arc<CountingSoupService>,
+    NoOpSoupRealtimeSubscriptionService,
+    NoopWebSocketNotificationSubscriptionService,
+    graphql_activity::NoOpActivitySubscriptionService,
+    CountingEmailService,
+    CountingEntityAccessService,
+    FakeAuthorizationService,
+    TestState,
+    NoOpEntityPropertyWriter,
+    UnavailableEntityMutationService,
+    graphql_favorite::NoOpFavoriteMutationService,
+    NoOpChannelActivityMutationService,
+    NoOpNotificationMutationService,
+    NoOpSoupNotificationEdgeReader,
+    NoOpEntityPropertyReader,
+    RecordingEmailContentReader,
+    graphql_favorite::NoOpEntityFavoriteEdgeReader,
+    graphql_permission::NoOpEntityPermissionEdgeReader,
+    RecordingActivityReader,
+>;
+
+#[tokio::test]
+async fn soup_channel_reads_primary_finds_the_primary_channel_soup_in_a_shared_schema() {
+    let harness = harness();
+    let replica = CountingSoupService::default();
+    replica.set_raw_response(Vec::new());
+    let primary = CountingSoupService::default();
+    primary.set_raw_response(Vec::new());
+    let schema: SharedTestSchema = build_schema_from_arc(Arc::new(replica.clone()));
+
+    let response = schema
+        .execute(
+            harness
+                .request(
+                    &directory_page_query(", channelReads: PRIMARY", "nextCursor"),
+                    authenticated_parts(),
+                )
+                .data(graphql_soup::PrimaryChannelSoup::<
+                    <SharedTestSchema as crate::SoupSchemaService>::Service,
+                >(Arc::new(primary.clone()))),
+        )
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(primary.raw_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(replica.raw_calls.load(Ordering::SeqCst), 0);
 }
 
 #[tokio::test]

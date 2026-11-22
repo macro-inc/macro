@@ -88,6 +88,6 @@ pub use realtime::{
 };
 pub use schema::{
     EmailThreadInput, SchemaOnlySoupSchema, SchemaOnlyState, SharedSoupSchema, SoupQueryRoot,
-    SoupSchema, SoupSubscriptionRoot, build_schema, build_schema_from_arc, build_schema_from_arcs,
-    build_schema_with_service, build_schema_with_services,
+    SoupSchema, SoupSchemaService, SoupSubscriptionRoot, build_schema, build_schema_from_arc,
+    build_schema_from_arcs, build_schema_with_service, build_schema_with_services,
 };

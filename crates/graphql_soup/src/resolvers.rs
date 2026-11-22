@@ -278,25 +278,31 @@ where
 
 /// The Soup service a page with `channelReads: PRIMARY` runs against: the
 /// same service as the ordinary one, except that its channel list reads the
-/// primary. The schema's context data carries it; a schema without it rejects
+/// primary. The schema's context data carries it, typed by the schema's own
+/// Soup service (`Arc<_>` in a shared schema); a schema without it rejects
 /// such a page instead of quietly reading the replica.
-pub struct PrimaryChannelSoup<S>(pub Arc<S>);
+#[derive(Clone)]
+pub struct PrimaryChannelSoup<S>(pub S);
 
-impl<S> Clone for PrimaryChannelSoup<S> {
-    fn clone(&self) -> Self {
-        Self(self.0.clone())
-    }
-}
+/// The error for a `channelReads: PRIMARY` page on a schema without
+/// [`PrimaryChannelSoup`].
+pub const PRIMARY_CHANNEL_SOUP_MISSING: &str = "channelReads PRIMARY is not served here";
+
+/// The error for a `channelReads: PRIMARY` page that is not a channel
+/// directory page (`SoupRequest::is_channel_directory_page`).
+pub const PRIMARY_CHANNEL_READS_REFUSED: &str =
+    "channelReads PRIMARY serves only channel directory pages";
 
 /// Resolve a page of Soup items for the authenticated user: runs the lazy
 /// axum extractors against the request context, converts the GraphQL input
 /// into a Soup request, and executes it against the Soup service, or against
 /// [`PrimaryChannelSoup`] when the input asks for its channels from the
-/// primary.
+/// primary and the page is a channel directory page.
 #[tracing::instrument(
     name = "soup.page",
     skip_all,
-    fields(channel_reads = tracing::field::Empty)
+    fields(channel_reads = tracing::field::Empty, limit = tracing::field::Empty),
+    err(Debug)
 )]
 pub async fn resolve_soup<S, E, EAS, Auth, St, Edges>(
     service: &S,
@@ -314,8 +320,9 @@ where
     MacroAuthorizationState<Auth>: FromRef<St>,
     Edges: SoupEntityEdges,
 {
+    let span = tracing::Span::current();
     let channel_reads = input.channel_reads();
-    tracing::Span::current().record(
+    span.record(
         "channel_reads",
         match channel_reads {
             SoupChannelReads::Replica => "replica",
@@ -326,7 +333,7 @@ where
         SoupChannelReads::Replica => service,
         SoupChannelReads::Primary => {
             &ctx.data::<PrimaryChannelSoup<S>>()
-                .map_err(|_| async_graphql::Error::new("channelReads PRIMARY is not served here"))?
+                .map_err(|_| async_graphql::Error::new(PRIMARY_CHANNEL_SOUP_MISSING))?
                 .0
         }
     };
@@ -335,6 +342,10 @@ where
         extract_part::<Cached<MultiEmailLinkExtractor<E, Auth>>, St>(ctx).await?;
     let link_ids: Vec<_> = links.into_iter().map(|link| link.id).collect();
     let request = input.into_request(macro_user_id.clone(), link_ids.clone())?;
+    span.record("limit", request.limit);
+    if channel_reads == SoupChannelReads::Primary && !request.is_channel_directory_page() {
+        return Err(async_graphql::Error::new(PRIMARY_CHANNEL_READS_REFUSED));
+    }
 
     // Always forward the optional team receipt: Soup uses it for all
     // team-scoped foreign entities, not only CRM-scoped filters.

@@ -462,6 +462,23 @@ impl<T> SoupRequest<T> {
     }
 }
 
+/// The largest page a channel directory read may ask for.
+pub const CHANNEL_DIRECTORY_PAGE_LIMIT: u16 = 100;
+
+#[cfg(feature = "ports")]
+impl SoupRequest<EntityFilterAst> {
+    /// Whether this is a channel directory page: an initial page or a
+    /// continuation of a timestamp-sorted Soup, at most
+    /// [`CHANNEL_DIRECTORY_PAGE_LIMIT`] items, with channel threads left out.
+    /// Only such a page may read its channels from the primary database: it
+    /// costs what one page of the REST channel list costs there.
+    pub fn is_channel_directory_page(&self) -> bool {
+        self.limit <= CHANNEL_DIRECTORY_PAGE_LIMIT
+            && matches!(self.cursor, SoupQuery::Simple(_))
+            && exclusions::channel_thread(Some(self.cursor.filter()))
+    }
+}
+
 #[cfg(feature = "ports")]
 impl SoupRequest<Option<EntityFilterAst>> {
     /// take the parts of the [SoupRequest] that are only relevant to email
