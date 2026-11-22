@@ -694,7 +694,6 @@ impl SignedScope {
     }
 }
 
-/// Requests whose method says they only read.
 /// Whether a write to `path` stays in the credential's `own` session: under
 /// any scope, a write to `/agent-sessions/{session}/…` (a review card, a
 /// view, a command to the app, renaming, archiving, linking a task, deleting)
@@ -730,6 +729,7 @@ fn in_own_session(own: OwnSession, path: &str) -> bool {
     }
 }
 
+/// Requests whose method says they only read.
 fn reads_by_method(method: &str) -> bool {
     matches!(method, "GET" | "HEAD" | "OPTIONS")
 }
