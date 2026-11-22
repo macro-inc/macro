@@ -228,7 +228,7 @@ harness_id = { path = "../../crates/harness_id", features = ["test-utils"] }
 harnesses = { path = "../../crates/harnesses", default-features = false, features = ["test-utils"] }
 macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
 macro_db_migrator = { path = "../../crates/macro_db_migrator" }
-connectors = { path = "../../crates/connectors" }
+connectors = { path = "../../crates/connectors", features = ["test-fakes"] }
 opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
 schemars = { workspace = true }
 tokio = { workspace = true, features = ["io-util", "net", "test-util"] }

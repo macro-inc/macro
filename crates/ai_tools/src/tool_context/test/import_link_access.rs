@@ -211,25 +211,9 @@ async fn team_folder_link_does_not_open_an_owner_only_child(pool: PgPool) -> any
     Ok(())
 }
 
-struct NoConnector;
-impl connectors::ConnectorSelect for NoConnector {
-    async fn user_toolset(&self, _: &MacroUserIdStr<'static>) -> connectors::UserMcpTools {
-        unreachable!()
-    }
-    async fn connector_toolset(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        _: connectors::ConnectorRef<'_>,
-    ) -> anyhow::Result<Option<connectors::UserMcpTools>> {
-        unreachable!()
-    }
-    async fn connector_connected(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        _: connectors::ConnectorRef<'_>,
-    ) -> anyhow::Result<bool> {
-        unreachable!()
-    }
+/// No user holds any connection.
+fn no_connections() -> Arc<connectors::domain::service::Connectors> {
+    Arc::new(connectors::fake::FakeConnectors::new().build())
 }
 
 #[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
@@ -242,7 +226,7 @@ async fn a_new_personal_child_of_a_previously_shared_folder_stays_owner_only(
     let repo = import::outbound::pg_import_repo::PgImportRepo::new(pool.clone());
     let service = import::domain::service::ImportServiceImpl::new(
         repo.clone(),
-        Arc::new(NoConnector),
+        no_connections(),
         creator.clone(),
         Arc::new(ai_usage::NoOpUsageRecorder),
     );
@@ -362,7 +346,7 @@ async fn the_personal_mirror_root_and_paths_survive_two_runs(pool: PgPool) -> an
     let repo = import::outbound::pg_import_repo::PgImportRepo::new(pool);
     let service = import::domain::service::ImportServiceImpl::new(
         repo.clone(),
-        Arc::new(NoConnector),
+        no_connections(),
         creator.clone(),
         Arc::new(ai_usage::NoOpUsageRecorder),
     );
@@ -606,7 +590,7 @@ async fn omitted_personal_assignees_are_counted_once_in_the_import_report(
     }
     let service = import::domain::service::ImportServiceImpl::new(
         repo,
-        Arc::new(NoConnector),
+        no_connections(),
         creator,
         Arc::new(ai_usage::NoOpUsageRecorder),
     );

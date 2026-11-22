@@ -95,34 +95,25 @@ pub type DcsMemoryService =
 pub type DcsUsageService =
     ai_usage::domain::service::UsageServiceImpl<ai_usage::outbound::PgUsageRepo>;
 
-/// Concrete MCP router state for DCS.
-pub type DcsMcpRouterState = connectors::outbound::native::inbound::McpRouterState<
-    connectors::outbound::native::outbound::NativeServerStore,
-    connectors::outbound::native::outbound::oauth::OAuthService<
-        connectors::outbound::native::outbound::NativeServerStore,
-        connectors::outbound::native::outbound::redis_state_store::RedisOAuthStateStore,
-    >,
+/// The `/connectors` routes' state over the process's connectors.
+pub type DcsConnectorsRouterState = connectors::inbound::axum_router::ConnectorsRouterState<
+    connectors::domain::service::Connectors,
+    connectors::composition::ConnectorCatalog,
     DcsAuthorizationService,
 >;
+
+/// The public callback routes' state over the process's server sign-ins.
+pub type DcsCallbacksState =
+    connectors::inbound::callbacks::CallbacksState<connectors::domain::sign_in::ServerSignIns>;
 
 /// The import pipeline service, shared between the import router and the
 /// chat toolset.
 pub type DcsImportService = ai_tools::ToolImportService;
 
-/// The onboarding orchestrator wired to the Postgres repo and the MCP server
-/// store.
+/// The onboarding orchestrator wired to the Postgres repo and the connectors.
 pub type DcsOnboardingService = onboarding::domain::service::OnboardingServiceImpl<
     onboarding::outbound::pg_onboarding_repo::PgOnboardingRepo,
-    connectors::outbound::native::outbound::NativeServerStore,
->;
-
-/// Concrete Pipedream MCP router state for DCS: the Postgres connection
-/// store plus the connector backends (None when not configured — endpoints
-/// answer 501).
-pub type DcsPipedreamRouterState = connectors::outbound::pipedream::inbound::PipedreamRouterState<
-    connectors::outbound::pipedream::outbound::pg_connection_repo::PgConnectionRepo,
-    connectors::outbound::pipedream::outbound::dispatch::ConnectorBackends,
-    DcsAuthorizationService,
+    connectors::domain::service::Connectors,
 >;
 
 /// Redis-backed rate limiting for the web routes.
@@ -171,11 +162,12 @@ pub struct ApiContext {
     pub ai_stream_registry: AiStreamRegistry,
     /// Per-user limit on `/web/search` and `/web/fetch`.
     pub web_rate_limiter: WebRateLimiter,
-    pub mcp_state: DcsMcpRouterState,
-    pub pipedream_state: DcsPipedreamRouterState,
+    pub connectors_state: DcsConnectorsRouterState,
+    pub callbacks_state: DcsCallbacksState,
+    /// The process's connections, already decided by the rules: chat loads
+    /// a user's MCP tools through them.
+    pub connectors: connectors::domain::service::Connectors,
     pub granola_sync: Option<Arc<dyn granola_sync::domain::service::SyncService>>,
-    /// Selects which MCP stack (Pipedream vs native) serves a user's tools.
-    pub mcp_selector: Arc<ai_tools::ToolMcpSelector>,
     pub import_service: Arc<DcsImportService>,
     pub onboarding_service: Arc<DcsOnboardingService>,
     /// Kafka-backed macro event broker for publishing domain events.

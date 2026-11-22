@@ -79,7 +79,6 @@ maybe_env_var! {
         EnableEmailScheduledQueue,
         EnableGmailOpsQueue,
         EnableNotificationQueue,
-        McpCredentialsKeySecretName,
         PosthogApiKey,
         PosthogHost,
     }
@@ -160,8 +159,8 @@ pub fn build_cognition_tool_context() -> anyhow::Result<crate::ToolCognitionTool
 /// `INTERNAL_API_KEY` (presented to the lexical service and to the
 /// connection gateway for realtime channel side effects), `KAFKA_BROKERS`.
 ///
-/// `MCP_CREDENTIALS_KEY_SECRET_NAME` enables import tools on hosts with access
-/// to the shared connector encryption key; hosts without it remain unwired.
+/// Import and connector tools run on `connectors`; a host without them
+/// leaves those tools unwired.
 ///
 /// `TYPESAFE_API_KEY` enables the memory privacy judge; without it every memory
 /// save is refused.
@@ -198,9 +197,9 @@ pub fn build_cognition_tool_context() -> anyhow::Result<crate::ToolCognitionTool
 /// [`crate::ImportJobs::hand_over`] on shutdown so they move to another
 /// process instead of waiting for their leases to lapse.
 ///
-/// `linked_github` reads GitHub account-link tokens so GitHub's MCP server
-/// reads as connected for a linked user; `None` where the host cannot reach
-/// the authentication service.
+/// `connectors` is the host's one connectors composition: the connector
+/// tools, imports and agent app pins run on it. `None` on a host without
+/// connectors.
 ///
 /// `sender_provider` lists an inbox's verified send-as aliases, so the email
 /// tools' `from` can name one; hosts without Gmail access pass
@@ -211,7 +210,7 @@ pub fn build_cognition_tool_context() -> anyhow::Result<crate::ToolCognitionTool
         event_task_tracker,
         import_jobs,
         recorder,
-        linked_github,
+        connectors,
         sender_provider
     ),
     err
@@ -227,7 +226,7 @@ pub async fn build_tool_service_context_from_env(
     enforcement: ai_usage::AiUsageEnforcement,
     pricing: ai_billing::AiPricing,
     recorder: Arc<dyn ai_usage::UsageRecorder>,
-    linked_github: Option<Arc<dyn connectors::outbound::native::domain::ports::LinkedGithubTokens>>,
+    connectors: Option<&connectors::composition::Composed>,
     sender_provider: impl email::domain::senders::EmailSenderProvider,
 ) -> anyhow::Result<ToolServiceContext> {
     let env = ToolContextEnvVars::new()?;
@@ -633,52 +632,12 @@ pub async fn build_tool_service_context_from_env(
 
     let admission =
         ai_billing::composition::pg_admission_service(pool.clone(), enforcement, pricing);
-    let pipedream_client = crate::mcp_app_catalog::connector_backends_from_env(environment)?;
-    let native_servers = match maybe_env
-        .mcp_credentials_key_secret_name
-        .as_ref()
-        .and_then(|key| key.value())
-    {
-        Some(secret_name) => {
-            let mcp_credentials_key = secretsmanager_client
-                .get_maybe_secret_value(environment, secret_name)
-                .await
-                .context("failed to load MCP credentials encryption key")?;
-            let mcp_encryption_key =
-                connectors::outbound::native::domain::models::AesKey::try_from(
-                    mcp_credentials_key.as_ref(),
-                )
-                .context("invalid MCP credentials encryption key")?;
-            Some(Arc::new(
-                connectors::outbound::native::outbound::NativeServerStore::new(
-                    connectors::outbound::native::outbound::pg_server_repo::PgServerRepo::new(
-                        pool.clone(),
-                        mcp_encryption_key,
-                    ),
-                    linked_github,
-                ),
-            ))
-        }
-        None => None,
-    };
-    let import_tool_context = if let Some(native_servers) = &native_servers {
-        let pipedream_connections = Arc::new(
-            connectors::outbound::pipedream::outbound::pg_connection_repo::PgConnectionRepo::new(
-                pool.clone(),
-            ),
-        );
-        let mcp_selector = Arc::new(connectors::McpToolSelector::new(
-            native_servers.clone(),
-            connectors::outbound::native::outbound::guarded_http::McpHttp::new(
-                connectors::outbound::native::outbound::guarded_http::AddressPolicy::for_environment(environment),
-            )?,
-            pipedream_connections.clone(),
-            Arc::new(pipedream_client.clone()),
-        ));
+    let import_tool_context = if let Some(composed) = connectors {
+        let connections = Arc::new(composed.connectors.clone());
         let import_service = Arc::new(
             import::domain::service::ImportServiceImpl::new(
                 crate::tool_context::build_import_repo(pool.clone()),
-                mcp_selector.clone(),
+                Arc::clone(&connections),
                 Arc::new(crate::ToolEntityCreator {
                     document_creator: document_tool_context.creator.clone(),
                     entity_access_service: entity_access_service.clone(),
@@ -700,27 +659,18 @@ pub async fn build_tool_service_context_from_env(
                 recorder.clone(),
             )
             .with_slack_source(Arc::new(
-                import::outbound::mcp_slack_source::McpSlackSource::new(mcp_selector),
+                import::outbound::mcp_slack_source::McpSlackSource::new(Arc::clone(&connections)),
             ))
             .with_tracker_connections(
-                Arc::new(
-                    import_linear::outbound::client::PipedreamLinearConnections::new(
-                        pipedream_connections.clone(),
-                        pipedream_client.clone(),
-                    ),
-                ),
-                Arc::new(
-                    import_jira::outbound::client::PipedreamJiraConnections::new(
-                        pipedream_connections.clone(),
-                        pipedream_client.clone(),
-                    ),
-                ),
+                Arc::new(import_linear::outbound::client::LinearConnections::new(
+                    Arc::clone(&connections),
+                )),
+                Arc::new(import_jira::outbound::client::JiraConnections::new(
+                    Arc::clone(&connections),
+                )),
             )
             .with_notion_connections(Arc::new(
-                import_notion::outbound::pipedream::PipedreamNotionConnections::new(
-                    pipedream_connections.clone(),
-                    pipedream_client.clone(),
-                ),
+                import_notion::outbound::connected::ConnectedNotion::new(connections),
             ))
             .with_admission(admission.clone())
             .with_notifier(import::outbound::gateway_notifier::gateway_import_notify(
@@ -732,25 +682,12 @@ pub async fn build_tool_service_context_from_env(
     } else {
         ToolImportToolContext::unwired()
     };
-    let mcp_server_tool_context = match &native_servers {
-        Some(native_servers) => crate::tool_context::ToolMcpServerToolContext::wired(
-            connectors::outbound::native::domain::service::ServerDirectory::new(
-                native_servers.clone(),
-            ),
-        ),
-        None => crate::tool_context::ToolMcpServerToolContext::unwired(),
-    };
-
     Ok(ToolServiceContext {
         memory_tool_context: crate::memory::build_memory_tool_context(
             pool.clone(),
             recorder.clone(),
         ),
-        connector_tool_context: crate::tool_context::build_connector_tool_context(
-            pool.clone(),
-            pipedream_client.clone(),
-            native_servers,
-        ),
+        connector_tool_context: crate::tool_context::build_connector_tool_context(connectors),
         search_service_client: search_client.clone(),
         email_service_client: email_ext_client,
         soup_service,
@@ -796,7 +733,6 @@ pub async fn build_tool_service_context_from_env(
         forms_tool_context,
         databases_sql_tool_context,
         import_tool_context,
-        mcp_server_tool_context,
         chat_tool_context,
         channel_tool_context,
         channel_media_upload_tool_context: crate::build_channel_media_upload_tool_context()?,
@@ -805,9 +741,7 @@ pub async fn build_tool_service_context_from_env(
             crate::tool_context::MaybeToolEventBroker::Real(macro_event_broker.clone()),
             entity_access_service.clone(),
             document_storage_service_url,
-            pipedream_client
-                .as_ref()
-                .map(|backends| backends.pipedream().clone()),
+            connectors.map(|composed| composed.connectors.clone()),
         ),
         read_agent_session_context: crate::build_read_agent_session_context(
             pool.clone(),

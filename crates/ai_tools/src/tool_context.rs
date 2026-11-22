@@ -175,20 +175,21 @@ pub type ToolBotService = BotServiceImpl<
         harnesses::outbound::pg_harness_repo::PgHarnessRepo,
         hosted_runtimes::outbound::pg::PgComputerAgents,
     >,
-    crate::mcp_app_catalog::PipedreamMcpAppCatalog,
+    crate::mcp_app_catalog::ConnectorsAppCatalog<connectors::domain::service::Connectors>,
 >;
 
 /// Bot-management AI tool context.
 pub type ToolBotToolContext = BotToolContext<ToolBotService, ToolEntityAccessService>;
 
 /// Build bot-management tools over the canonical Postgres repository and
-/// entity-access service.
+/// entity-access service. `connectors` confirms the apps an agent pins;
+/// without them every pin is refused.
 pub fn build_bot_tool_context(
     pool: sqlx::PgPool,
     event_broker: MaybeToolEventBroker,
     entity_access_service: Arc<ToolEntityAccessService>,
     document_storage_service_url: String,
-    pipedream: Option<Arc<connectors::outbound::pipedream::outbound::api::PipedreamClient>>,
+    connectors: Option<connectors::domain::service::Connectors>,
 ) -> ToolBotToolContext {
     BotToolContext {
         service: Arc::new(
@@ -200,9 +201,8 @@ pub fn build_bot_tool_context(
                     hosted_runtimes::outbound::pg::PgComputerAgents::new(pool.clone()),
                 ),
             )
-            .with_mcp_apps(crate::mcp_app_catalog::PipedreamMcpAppCatalog::new(
-                pipedream,
-                connectors::outbound::pipedream::outbound::pg_connection_repo::PgConnectionRepo::new(pool),
+            .with_mcp_apps(crate::mcp_app_catalog::ConnectorsAppCatalog::new(
+                connectors,
             )),
         ),
         entity_access_service,
@@ -2164,39 +2164,14 @@ impl import::domain::ports::EntityCreator for ToolEntityCreator {
     }
 }
 
-/// The connector backends (Pipedream, plus Macro Connect when configured):
-/// `None` on deployments where Pipedream isn't configured (its toolsets then
-/// come up empty).
-pub type ToolPipedreamConnection =
-    Option<std::sync::Arc<connectors::outbound::pipedream::outbound::dispatch::ConnectorBackends>>;
-
-/// The MCP stack selector wired to the concrete DCS stores: the native
-/// server store and the Pipedream connection store. Picks which stack
-/// serves a user's tools (Pipedream connectors win; see `connectors`).
-pub type ToolMcpSelector = connectors::McpToolSelector<
-    connectors::outbound::native::outbound::NativeServerStore,
-    connectors::outbound::pipedream::outbound::pg_connection_repo::PgConnectionRepo,
-    ToolPipedreamConnection,
->;
-
 /// Type alias for the import service implementation used by AI tools.
 pub type ToolImportService = import::domain::service::ImportServiceImpl<
     import::outbound::pg_import_repo::PgImportRepo,
-    ToolMcpSelector,
+    connectors::domain::service::Connectors,
     ToolEntityCreator,
-    import::outbound::mcp_slack_source::McpSlackSource<ToolMcpSelector>,
-    import_notion::outbound::pipedream::PipedreamNotionConnections<
-        connectors::outbound::pipedream::outbound::pg_connection_repo::PgConnectionRepo,
-        connectors::outbound::pipedream::outbound::dispatch::ConnectorBackends,
-    >,
+    import::outbound::mcp_slack_source::McpSlackSource<connectors::domain::service::Connectors>,
+    import_notion::outbound::connected::ConnectedNotion<connectors::domain::service::Connectors>,
 >;
-
-/// The custom MCP server tools, wired by hosts holding the MCP credentials
-/// key.
-pub type ToolMcpServerToolContext =
-    connectors::outbound::native::inbound::toolset::McpServerToolContext<
-        connectors::outbound::native::outbound::NativeServerStore,
-    >;
 
 /// Type alias for the import tool context, wired by hosts with connector access.
 pub type ToolImportToolContext = import::inbound::toolset::ImportToolContext<ToolImportService>;
@@ -2286,9 +2261,6 @@ pub struct ToolServiceContext {
     /// Import staging/tracking tools. `unwired` in hosts that can't build
     /// the import service — calls there fail with a clear error.
     pub import_tool_context: ToolImportToolContext,
-    /// Custom MCP server tools. `unwired` in hosts without the MCP
-    /// credentials key — calls there fail with a clear error.
-    pub mcp_server_tool_context: ToolMcpServerToolContext,
     /// Built per-request via a manual `FromRef` below so it can carry the
     /// running chat's id — the derive's field-clone would freeze it at
     /// startup with no chat id set.
@@ -2333,33 +2305,23 @@ pub struct ToolServiceContext {
     pub usage_context: ai_usage::UsageContext,
 }
 
-/// Pipedream discovery dependencies shared by chat tools.
-pub type ToolConnectorToolContext =
-    connectors::outbound::pipedream::inbound::toolset::ConnectorToolContext<
-        connectors::outbound::pipedream::outbound::dispatch::ConnectorBackends,
-        connectors::outbound::pipedream::outbound::pg_connection_repo::PgConnectionRepo,
-        connectors::NativeOverlayConnections<
-            connectors::outbound::native::outbound::NativeServerStore,
-        >,
-    >;
+/// The connector tools (`DiscoverConnectors`, `ConnectMcpServer`) over the
+/// host's one connectors composition.
+pub type ToolConnectorToolContext = connectors::inbound::toolset::ConnectorToolContext<
+    connectors::domain::service::Connectors,
+    connectors::composition::ConnectorCatalog,
+>;
 
-/// Wire connector discovery at the composition boundary.
-///
-/// `native_servers` answers for overlaid apps, which connect through the
-/// native MCP stack; `None` where that stack has no encryption key.
+/// The connector tools over `composed`, or unwired (every call fails with a
+/// clear error) on a host without connectors.
 pub fn build_connector_tool_context(
-    pool: sqlx::PgPool,
-    client: Option<Arc<connectors::outbound::pipedream::outbound::dispatch::ConnectorBackends>>,
-    native_servers: Option<Arc<connectors::outbound::native::outbound::NativeServerStore>>,
+    composed: Option<&connectors::composition::Composed>,
 ) -> ToolConnectorToolContext {
-    connectors::outbound::pipedream::inbound::toolset::ConnectorToolContext {
-        service: Arc::new(
-            connectors::outbound::pipedream::domain::service::discovery::ConnectorDiscovery::new(
-                client,
-                Arc::new(connectors::outbound::pipedream::outbound::pg_connection_repo::PgConnectionRepo::new(pool)),
-                Arc::new(connectors::NativeOverlayConnections::new(native_servers)),
-            ),
-        ),
+    match composed {
+        Some(composed) => {
+            ToolConnectorToolContext::wired(composed.connectors.clone(), composed.catalog.clone())
+        }
+        None => ToolConnectorToolContext::unwired(),
     }
 }
 

@@ -10,6 +10,7 @@ use ai_toolset::schema::{FrontendSchemas, ToolSchemaGenerator, frontend_schemas_
 mod test;
 
 mod build_context;
+pub mod connectors_config;
 pub mod crm_csv_files;
 mod deferred;
 mod display_results;
@@ -39,7 +40,6 @@ use calendar_scheduling::inbound::toolset::{
 use call::inbound::toolset::call_toolset;
 use channels::inbound::toolset::channel_toolset;
 use cognition::inbound::toolset::cognition_toolset;
-use connectors::outbound::native::inbound::toolset::mcp_server_toolset;
 use crm::inbound::toolset::{crm_toolset, pipelines::pipeline_toolset};
 use databases::inbound::toolset::{databases_read_only_toolset, databases_toolset};
 use databases_sql::toolset::{QueryDatabase, databases_sql_toolset};
@@ -69,10 +69,7 @@ pub use build_context::{
 };
 pub use deferred::{DeferredToolSet, deferred_tools};
 pub use import_jobs::{IMPORT_JOBS_HANDOVER_TIMEOUT, ImportJobs};
-pub use mcp_app_catalog::{
-    PipedreamMcpAppCatalog, connect_adapter, connector_backends_from_env, macro_connect_rollout,
-    pipedream_client_from_env,
-};
+pub use mcp_app_catalog::ConnectorsAppCatalog;
 pub use search::search_toolset;
 pub use tool_context::{
     ChannelSideEffectClients, FormsToolConfig, MaybeToolEventBroker, NoOpCallRtcClient,
@@ -92,9 +89,8 @@ pub use tool_context::{
     ToolFavoritesService, ToolFavoritesToolContext, ToolForeignEntityService, ToolFormsToolContext,
     ToolFrecencyService, ToolGithubPullRequestService, ToolImageGenerationToolContext,
     ToolImportService, ToolImportToolContext, ToolInitiativeToolContext,
-    ToolItemNotificationPreferenceToolContext, ToolMcpSelector, ToolMcpServerToolContext,
-    ToolMessageToolContext, ToolNotificationQueue, ToolNotificationService,
-    ToolNotificationToolContext, ToolPipedreamConnection, ToolPipelineService,
+    ToolItemNotificationPreferenceToolContext, ToolMessageToolContext, ToolNotificationQueue,
+    ToolNotificationService, ToolNotificationToolContext, ToolPipelineService,
     ToolPipelineToolContext, ToolPipelineWorkflows, ToolProjectService, ToolProjectToolContext,
     ToolPropertiesService, ToolPropertiesToolContext, ToolReadAgentSessionContext,
     ToolServiceContext, ToolSkillService, ToolSkillToolContext, ToolSoupService,
@@ -314,11 +310,9 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
         .add_subtoolset::<ToolCodingAgentToolContext>(coding_agent_toolset());
     // Only Macro's own agents connect servers for the user.
     let toolset = match host {
-        AiHost::Chat | AiHost::AgentSession => {
-            toolset.add_subtoolset::<ToolMcpServerToolContext>(mcp_server_toolset::<
-                connectors::outbound::native::outbound::NativeServerStore,
-            >())
-        }
+        AiHost::Chat | AiHost::AgentSession => toolset
+            .add_tool::<connectors::inbound::toolset::ConnectMcpServer, ToolConnectorToolContext>(
+        ),
         AiHost::ChannelBot | AiHost::Mcp => toolset,
     };
     let toolset = match host {
@@ -345,10 +339,9 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
     // Connector discovery belongs to agent sessions. Their runtime refreshes
     // the permitted connector list before the next turn after authorization.
     let toolset = match host {
-        AiHost::AgentSession => toolset.add_tool::<
-            connectors::outbound::pipedream::inbound::toolset::DiscoverConnectors,
-            ToolConnectorToolContext,
-        >(),
+        AiHost::AgentSession => toolset
+            .add_tool::<connectors::inbound::toolset::DiscoverConnectors, ToolConnectorToolContext>(
+            ),
         AiHost::Chat | AiHost::ChannelBot | AiHost::Mcp => toolset,
     };
     let mut toolset = toolset;

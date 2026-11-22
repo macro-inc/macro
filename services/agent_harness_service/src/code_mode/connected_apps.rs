@@ -21,13 +21,13 @@ use agent_harness::outbound::egress::EgressProvisioner;
 use agent_inmem::domain::tool_gate::{NativeToolGate, NativeToolVerdict};
 use agent_session::domain::model::{AgentSessionId, TurnPrompter};
 use agent_session::domain::ports::AgentSessionRepo;
+use ai_toolset::{AsyncTool, RequestContext, ServiceContext};
 use async_trait::async_trait;
-use connectors::outbound::native::domain::ports::McpServerStore;
-use connectors::outbound::native::domain::service::{AddServerError, AddedBy};
-use connectors::outbound::native::inbound::toolset::{ConnectMcpServer, ConnectMcpServerResponse};
-use connectors::outbound::pipedream::domain::ports::{ConnectionStore, ConnectorOverlays};
-use connectors::outbound::pipedream::domain::service::discovery::DiscoveryRequest;
-use connectors::outbound::pipedream::inbound::toolset::DiscoverConnectorsResponse;
+use connectors::domain::service::McpConnectionsService;
+use connectors::inbound::toolset::{
+    ConnectMcpServer, ConnectMcpServerResponse, DiscoverConnectors, DiscoverConnectorsResponse,
+    DiscoveryRequest,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use serde_json::{Value, json};
 use std::sync::Arc;
@@ -35,15 +35,18 @@ use std::sync::Arc;
 /// Most `tools/list` pages read for one app.
 const MAX_TOOL_PAGES: usize = 20;
 
-pub struct SessionConnectedApps<Egress, Connections, Servers, Sessions> {
+pub struct SessionConnectedApps<Egress, S, Sessions> {
     pub egress: Arc<Egress>,
-    pub provisioner: EgressProvisioner<Connections, Servers>,
+    /// The apps a session's agent was given, over the owner's connections as
+    /// the rules decide them: the listing the session's runtime gets.
+    pub provisioner: EgressProvisioner<S>,
     pub sessions: Sessions,
     /// The gate native tools pass, so discovery and adding a server wait for
     /// the owner exactly as `DiscoverConnectors` and `ConnectMcpServer` do.
     pub gate: Arc<dyn NativeToolGate>,
-    pub connectors: ai_tools::ToolConnectorToolContext,
-    pub mcp_servers: ai_tools::ToolMcpServerToolContext,
+    /// The `DiscoverConnectors` and `ConnectMcpServer` tools a program's
+    /// `discover` and `addServer` run.
+    pub connector_tools: ai_tools::ToolConnectorToolContext,
 }
 
 /// A use settled against the session: its grant, the account it spends and
@@ -54,12 +57,10 @@ struct Settled {
     apps: Vec<ConnectedApp>,
 }
 
-impl<Egress, Connections, Servers, Sessions>
-    SessionConnectedApps<Egress, Connections, Servers, Sessions>
+impl<Egress, S, Sessions> SessionConnectedApps<Egress, S, Sessions>
 where
     Egress: SessionMcpExchange + 'static,
-    Connections: ConnectionStore + ConnectorOverlays,
-    Servers: McpServerStore,
+    S: McpConnectionsService,
     Sessions: AgentSessionRepo,
 {
     async fn settle(&self, usage: &ConnectedAppUse) -> Result<Settled, CodeModeError> {
@@ -142,12 +143,10 @@ where
 }
 
 #[async_trait]
-impl<Egress, Connections, Servers, Sessions> ConnectedAppTools
-    for SessionConnectedApps<Egress, Connections, Servers, Sessions>
+impl<Egress, S, Sessions> ConnectedAppTools for SessionConnectedApps<Egress, S, Sessions>
 where
     Egress: SessionMcpExchange + 'static,
-    Connections: ConnectionStore + ConnectorOverlays + 'static,
-    Servers: McpServerStore + 'static,
+    S: McpConnectionsService,
     Sessions: AgentSessionRepo + 'static,
 {
     async fn accounts(&self, session: AgentSessionId) -> Result<SessionAccounts, CodeModeError> {
@@ -243,13 +242,13 @@ where
     ) -> Result<DiscoverConnectorsResponse, CodeModeError> {
         let arguments = json!({ "request": &request });
         self.gate(usage, "DiscoverConnectors", arguments).await?;
-        let result = self
-            .connectors
-            .service
-            .discover(&usage.user, &request)
+        DiscoverConnectors { request }
+            .call(
+                ServiceContext(self.connector_tools.clone()),
+                RequestContext::new(usage.user.clone()),
+            )
             .await
-            .map_err(|error| CodeModeError::Invalid(error.to_string()))?;
-        Ok(DiscoverConnectorsResponse::from(result))
+            .map_err(|error| CodeModeError::Invalid(error.description))
     }
 
     async fn add_server(
@@ -259,29 +258,13 @@ where
     ) -> Result<ConnectMcpServerResponse, CodeModeError> {
         let arguments = json!({ "url": &server.url, "serverName": &server.server_name });
         self.gate(usage, "ConnectMcpServer", arguments).await?;
-        let directory = self
-            .mcp_servers
-            .servers
-            .as_ref()
-            .ok_or(CodeModeError::Unavailable)?;
-        let added = directory
-            .add(
-                usage.user.clone(),
-                &server.url,
-                &server.server_name,
-                AddedBy::Agent,
+        server
+            .call(
+                ServiceContext(self.connector_tools.clone()),
+                RequestContext::new(usage.user.clone()),
             )
             .await
-            .map_err(|error| match error {
-                AddServerError::InvalidUrl(_)
-                | AddServerError::NonPublicDestination(_)
-                | AddServerError::EmptyName => CodeModeError::Invalid(error.to_string()),
-                AddServerError::Store(error) => {
-                    tracing::error!(?error, "could not save an MCP server");
-                    CodeModeError::Unavailable
-                }
-            })?;
-        Ok(ConnectMcpServerResponse::from(added))
+            .map_err(|error| CodeModeError::Invalid(error.description))
     }
 }
 

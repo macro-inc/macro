@@ -9,27 +9,26 @@ use entity_access::domain::ports::AccessRepository;
 use macro_user_id::user_id::MacroUserIdStr;
 use scheduled_action::domain::suggestions::ports::{InboxMessage, SuggestionSources};
 
-use crate::routine_sessions::PipedreamConnectedApps;
+use crate::routine_sessions::RoutineConnectedApps;
+use connectors::domain::service::{ConnectionManagementService, McpConnectionsService};
 
 /// Snippet length suggestions read: past the provider's preview, from the
 /// body.
 const SNIPPET_CHARS: u16 = 500;
 
 /// The newest mail through email_service, which reads it from Gmail and
-/// Outlook, the apps the person connected through Pipedream, and their
+/// Outlook, the apps the person has connected, and their
 /// team and its CRM access through their crates' ports.
-pub struct HarnessSuggestionSources<Connections, Connect, Teams, Crm> {
+pub struct HarnessSuggestionSources<S, Teams, Crm> {
     pub email: Arc<EmailServiceClient>,
-    pub apps: PipedreamConnectedApps<Connections, Connect>,
+    pub apps: RoutineConnectedApps<S>,
     pub teams: Teams,
     pub crm: Crm,
 }
 
-impl<Connections, Connect, Teams, Crm> SuggestionSources
-    for HarnessSuggestionSources<Connections, Connect, Teams, Crm>
+impl<S, Teams, Crm> SuggestionSources for HarnessSuggestionSources<S, Teams, Crm>
 where
-    Connections: connectors::outbound::pipedream::domain::ports::ConnectionStore,
-    Connect: connectors::outbound::pipedream::domain::ports::MacroConnect,
+    S: McpConnectionsService + ConnectionManagementService,
     Teams: AccessRepository,
     Crm: CrmMemberAccess + 'static,
 {
