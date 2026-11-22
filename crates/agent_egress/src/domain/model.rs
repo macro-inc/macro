@@ -26,6 +26,8 @@ use std::fmt;
 use url::Url;
 
 use crate::domain::error::EgressError;
+use agent_session::domain::model::AgentMcpServers;
+use connectors::{ConnectorId, Selection};
 
 pub use agent_fold::domain::log::AgentSessionId;
 pub use agent_session::domain::model::TurnPrompter;
@@ -226,11 +228,12 @@ pub fn is_macro_staff(user: &MacroUserIdStr<'_>) -> bool {
 
 /// What a verified session token entitles its holder to.
 ///
-/// The owner is the whole authorization story: a session spends the
-/// credentials of the person who opened it, and nobody else's. The listed
-/// servers are not a permission - any slug resolves against the owner's own
-/// connections - only the names the agent's author gave the apps it was
-/// handed, so a refusal can call an app what the person knows it as.
+/// A session spends the credentials of the person who opened it, and nobody
+/// else's, and only on what its agent was given: [`Self::selection`] is a
+/// permission the proxy enforces, so a sandbox whose agent lists apps
+/// reaches only those, whatever else the owner has connected. The listings
+/// carry the names the agent's author gave those apps, so a refusal can call
+/// an app what the person knows it as.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SessionGrant {
     /// The session the sandbox is running.
@@ -242,8 +245,11 @@ pub struct SessionGrant {
     pub agent: bot_id::BotId,
     /// The repository git egress is pinned to, if this session chose one.
     pub repo: Option<RepoSlug>,
-    /// The apps the agent listed for this session, for naming only.
+    /// The apps the agent listed for this session, for naming.
     pub mcp_servers: Vec<McpServerListing>,
+    /// What the session's agent may reach: the apps its author selected, or
+    /// everything the owner has connected.
+    pub selection: Selection,
     /// Who prompted the turn the session is running; `None` before its
     /// first dispatch.
     pub prompter: Option<TurnPrompter>,
@@ -303,6 +309,22 @@ fn readable_slug(slug: &McpServerSlug) -> String {
         .join(" ")
 }
 
+/// What an agent configured with `servers` may reach through the proxy.
+///
+/// A selected app whose slug is not an app slug could never be reached, so
+/// it is dropped: that narrows the permission, never widens it.
+pub fn agent_selection(servers: &AgentMcpServers) -> Selection {
+    match servers {
+        AgentMcpServers::OwnerConnections => Selection::All,
+        AgentMcpServers::Selected { servers } => Selection::Apps(
+            servers
+                .iter()
+                .filter_map(|server| ConnectorId::parse(&server.app_slug).ok())
+                .collect(),
+        ),
+    }
+}
+
 /// One app an agent listed for its sessions: the slug the proxy routes on and
 /// the name anything human-facing calls it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -323,29 +345,33 @@ pub struct CustomMcpServerListing {
     pub name: String,
 }
 
-/// How a destination resolved: to a call the owner's grant backs, to one
-/// that can be addressed for the owner without any grant behind it, or to
-/// one whose grant has died.
+/// How a destination the session may reach resolved: to a call the owner's
+/// grant backs, or to an app or server they cannot use yet.
 ///
-/// The second exists because Pipedream scopes a call by user id and app slug
-/// alone, so an app the owner never connected is still *addressable* - and
-/// listing its tools works, only calling them does not. The third is a custom
-/// server's: the owner connected it once, and the stored grant no longer
-/// yields a token - expired with no refresh token, or refused on refresh. The
-/// service decides what to do with either; the resolver only reports it.
+/// An unusable app whose upstream can still address the owner (Pipedream
+/// scopes a call by user id and app slug alone) is [`Self::Unconnected`]:
+/// its handshake and listing are forwarded, so the session sees the app's
+/// real tools from the start, and only a tool call is answered here. The
+/// other unusable cases have no upstream to forward to: the proxy answers
+/// the session's MCP client itself, so the model sees how to connect. A
+/// destination the session's agent was not given is not a resolution at
+/// all but [`EgressError::OutOfScope`].
 #[derive(Clone, Debug)]
 pub enum McpResolution {
-    /// The owner holds an enabled connection for this destination.
+    /// The owner holds a usable connection for this destination.
     Connected(UpstreamCall),
-    /// The owner holds no enabled connection, but the upstream can be
-    /// addressed for them anyway.
+    /// The owner cannot use this app yet, but its upstream addresses them
+    /// anyway: everything but a tool call is forwarded, and a tool call is
+    /// answered with the connect prompt until they connect it.
     Unconnected(UpstreamCall),
-    /// The owner's connection exists but its grant is dead, so nothing can
-    /// be stamped. The call is bare; the name is what the owner calls the
-    /// server, carried here because nothing else on the path knows it.
+    /// The owner has no usable connection to this app: never connected,
+    /// turned off, or its grant needs authorizing again. The answer is a
+    /// connect prompt.
+    NotConnected,
+    /// A custom server whose grant died while the proxy reached for it. The
+    /// name is what the owner calls the server, carried here because nothing
+    /// else on the path knows it.
     Disconnected {
-        /// The upstream, with no credential.
-        call: UpstreamCall,
         /// The owner's display name for the server.
         name: String,
     },
@@ -353,8 +379,8 @@ pub enum McpResolution {
 
 /// The most a JSON-RPC request body may be for the proxy to read it.
 ///
-/// Only read on the unconnected path, where the proxy has to know the method
-/// to answer `tools/call` itself. MCP requests are small
+/// Only read on the paths that look inside an MCP request, such as an
+/// unusable destination's, which the proxy answers itself. MCP requests are small
 /// JSON; the streaming rationale on [`ProxyBody`] is about responses and
 /// packfiles, neither of which is a request body on the MCP route.
 pub const MAX_MCP_REQUEST_BYTES: usize = 1 << 20;
@@ -393,25 +419,15 @@ pub fn peek_json_rpc(body: &[u8]) -> Option<JsonRpcCall> {
 /// payload shape is `{"appSlug": ..., "name": ...}`.
 pub const CONNECT_APP_TAG: &str = "m-connect-app";
 
-/// The tool result the proxy answers a `tools/call` with when the session
-/// owner has not connected the app.
+/// What the model is told when it calls a tool on an app the owner has not
+/// connected, or has turned off, or must authorize again.
 ///
-/// A `result` with `isError: true`, not a JSON-RPC `error`: the former is
-/// what MCP clients hand the model as the tool's own answer, the latter is
-/// rendered as a transport failure the model never sees. The wording is our
-/// own fixed text plus the app's slug and display name - the slug already
-/// validated by [`McpServerSlug::parse`], the name from the agent's own
-/// configuration or derived from that slug.
-pub fn not_connected_tool_result(
-    slug: &McpServerSlug,
-    name: &str,
-    id: serde_json::Value,
-) -> ProxyResponse {
-    tool_result_response(id, not_connected_text(slug, name))
-}
-
-/// What [`not_connected_tool_result`] tells the model, for callers that
-/// answer outside JSON-RPC.
+/// Answered as a tool `result` with `isError: true`, not a JSON-RPC `error`:
+/// the former is what MCP clients hand the model as the tool's own answer,
+/// the latter is rendered as a transport failure the model never sees. The
+/// wording is our own fixed text plus the app's slug and display name - the
+/// slug already validated by [`McpServerSlug::parse`], the name from the
+/// agent's own configuration or derived from that slug.
 pub fn not_connected_text(slug: &McpServerSlug, name: &str) -> String {
     let payload = serde_json::json!({
         "appSlug": slug.as_str(),
@@ -425,21 +441,12 @@ pub fn not_connected_text(slug: &McpServerSlug, name: &str) -> String {
     )
 }
 
-/// The tool result the proxy answers a `tools/call` with when the session
-/// owner's grant for a custom MCP server has died.
+/// What the model is told when it calls a tool on a custom MCP server whose
+/// grant has died.
 ///
-/// No connect-button markup: that chip opens the Pipedream catalog, and a
-/// custom server is reconnected from its own row under Agents → Connections.
-/// Same shape as [`not_connected_tool_result`] otherwise, for the same
-/// reason - a `result` the model reads, not a transport error it never sees.
-/// The name is the owner's own, off their row, never anything the request
-/// carried.
-pub fn disconnected_tool_result(name: &str, id: serde_json::Value) -> ProxyResponse {
-    tool_result_response(id, disconnected_text(name))
-}
-
-/// What [`disconnected_tool_result`] tells the model, for callers that answer
-/// outside JSON-RPC.
+/// No connect-button markup: that chip opens the app catalog, and a custom
+/// server is reconnected from its own row under Agents → Connections. The
+/// name is the owner's own, never anything the request carried.
 pub fn disconnected_text(name: &str) -> String {
     format!(
         "{name} is a custom MCP server the selected acting_as account added, but its \
@@ -448,6 +455,73 @@ pub fn disconnected_text(name: &str) -> String {
          Reconnect. Close your reply by asking them to let you know once they have done so \
          - when they do, call this tool again; nothing else needs to change.",
     )
+}
+
+/// What the model is told when it calls a tool on an app or server its
+/// agent was not given.
+pub fn out_of_scope_text(name: &str) -> String {
+    format!(
+        "This agent was not given {name}, so it cannot use its tools. If the person wants it \
+         to, ask them to add {name} to this agent's apps; do not try another way to reach it."
+    )
+}
+
+/// The one tool the proxy lists for an app or server the owner cannot use
+/// yet. Calling it answers with how to connect. The proxy answers it
+/// itself even once the owner has connected, so it is named apart from any
+/// tool an app's own server is likely to list.
+pub const CONNECT_TOOL_NAME: &str = "how_to_connect";
+
+/// Whether `request` is a JSON-RPC `tools/call` of [`CONNECT_TOOL_NAME`].
+pub fn calls_connect_tool(request: &serde_json::Value) -> bool {
+    request["method"] == TOOLS_CALL_METHOD && request["params"]["name"] == CONNECT_TOOL_NAME
+}
+
+/// What the model is told when it calls [`CONNECT_TOOL_NAME`] on an app or
+/// server the owner has connected since the session listed its tools. The
+/// client listed the connect tool in place of the real ones and keeps that
+/// listing for the session, so the real tools arrive with the next one.
+pub fn connected_since_listing_text(name: &str) -> String {
+    format!(
+        "{name} is connected now, but this session listed its tools before it was, so they \
+         are not available here. They will be in the next session. Tell the person {name} \
+         is connected and that a new session will have its tools; do not try another way \
+         to reach it."
+    )
+}
+
+/// The `tools/list` result the proxy answers for an app or server the owner
+/// cannot use yet: no upstream can be reached to list its real tools, so the
+/// listing is one tool whose answer is the connect prompt, and the model
+/// learns the app is there and how to get it connected.
+pub fn connect_prompt_listing(name: &str) -> serde_json::Value {
+    serde_json::json!({
+        "tools": [{
+            "name": CONNECT_TOOL_NAME,
+            "description": format!(
+                "{name} is not connected yet, so its tools are not available. Call this to \
+                 learn how the person can connect it."
+            ),
+            "inputSchema": { "type": "object", "properties": {} },
+        }],
+    })
+}
+
+/// The protocol version the proxy answers `initialize` with for an app or
+/// server it answers itself, when the client did not name one.
+const ANSWERED_PROTOCOL_VERSION: &str = "2025-06-18";
+
+/// The `initialize` result the proxy answers for an app or server the owner
+/// cannot use yet, echoing the client's protocol version.
+pub fn answered_initialize(request: &serde_json::Value, name: &str) -> serde_json::Value {
+    let version = request["params"]["protocolVersion"]
+        .as_str()
+        .unwrap_or(ANSWERED_PROTOCOL_VERSION);
+    serde_json::json!({
+        "protocolVersion": version,
+        "capabilities": { "tools": {} },
+        "serverInfo": { "name": name, "version": "0" },
+    })
 }
 
 /// An MCP tool result carrying `text` as its `isError` answer.
@@ -460,12 +534,32 @@ pub fn tool_error_result(text: String) -> serde_json::Value {
 
 /// A JSON-RPC response carrying `text` as an `isError` tool result for `id`.
 pub(crate) fn tool_result_response(id: serde_json::Value, text: String) -> ProxyResponse {
-    let body = serde_json::json!({
+    json_rpc_response(&serde_json::json!({
         "jsonrpc": "2.0",
         "id": id,
         "result": tool_error_result(text),
-    });
-    let bytes = Bytes::from(serde_json::to_vec(&body).expect("a JSON value serializes"));
+    }))
+}
+
+/// A JSON-RPC response carrying `result` for `id`.
+pub(crate) fn json_rpc_result(id: serde_json::Value, result: serde_json::Value) -> ProxyResponse {
+    json_rpc_response(&serde_json::json!({ "jsonrpc": "2.0", "id": id, "result": result }))
+}
+
+/// A JSON-RPC "method not found" error for `id`.
+pub(crate) fn json_rpc_method_not_found(id: serde_json::Value) -> ProxyResponse {
+    json_rpc_response(&serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "error": { "code": JSON_RPC_METHOD_NOT_FOUND, "message": "Method not found" },
+    }))
+}
+
+/// JSON-RPC's code for a method the server does not have.
+const JSON_RPC_METHOD_NOT_FOUND: i32 = -32601;
+
+fn json_rpc_response(body: &serde_json::Value) -> ProxyResponse {
+    let bytes = Bytes::from(serde_json::to_vec(body).expect("a JSON value serializes"));
     let mut response = http::Response::new(
         Full::new(bytes)
             .map_err(|never| match never {})
@@ -801,7 +895,7 @@ pub enum McpDestination {
     Preview,
     /// Macro's own MCP server, available to every session.
     Macro,
-    /// One of the owner's Pipedream-connected apps.
+    /// A catalog app, by its app slug.
     Connected(McpServerSlug),
     /// One of the owner's custom MCP servers - added by URL, with Macro's
     /// own OAuth client holding the grant.

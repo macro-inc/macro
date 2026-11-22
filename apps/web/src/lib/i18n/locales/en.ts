@@ -24,6 +24,7 @@ import emailThread from './en/email-thread';
 import emailViews from './en/email-views';
 import entityActions from './en/entity-actions';
 import entityIcons from './en/entity-icons';
+import githubConnect from './en/github-connect';
 import home from './en/home';
 import importJobs from './en/import-jobs';
 import localRuntime from './en/local-runtime';
@@ -63,6 +64,7 @@ export default {
   agentPermissionsChat,
   accountManager,
   agentSetup,
+  githubConnect,
   agentWork,
   calendarPrompt,
   calls,

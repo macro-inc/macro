@@ -4033,6 +4033,12 @@ type GraphqlContact {
 	Macro profile name, then this viewer's address-book name; null means use email fallback.
 	"""
 	name: String
+	"""
+	Keys of the viewer's lists this person is in (`teammates`, `interacted`,
+	`invited`, `gmail`, `outlook`; more may be added), each once. Empty for
+	the viewer, and for a person in no list.
+	"""
+	lists: [String!]!
 }
 
 """
@@ -5082,9 +5088,9 @@ type GraphqlEmailThreadFocus {
 	"""
 	needsReply: Boolean!
 	"""
-	The owner sent the latest message and should come back to the thread: it
-	has an open loop or has waited for an answer. Never true together with
-	`needs_reply`.
+	The owner sent the latest message and the thread is back to follow up:
+	no answer came in the wait, or its due day has come. Never true together
+	with `needs_reply`.
 	"""
 	needsFollowUp: Boolean!
 	"""

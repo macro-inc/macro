@@ -43,11 +43,7 @@ pub(crate) struct ApiDependencies {
     pub config: crate::config::Config,
     pub db: sqlx::PgPool,
     pub sqs_client: sqs_client::SQS,
-    pub contacts_ingress: Arc<
-        contacts::domain::service::SqsContactsIngress<
-            contacts::outbound::ingress::SqsContactsQueue,
-        >,
-    >,
+    pub contacts_ingress: Arc<crate::composition::ContactsProducer>,
     pub s3_client: s3_client::S3,
     pub gmail_client: gmail_client::GmailClient,
     pub redis_client: crate::util::redis::RedisClient,

@@ -26,8 +26,26 @@ MCP app, a custom server, or a GitHub installation token) on each request.
   grant → credential).
 - `src/domain/ports.rs`: `SessionAuthority`, `McpCredentials`, `GithubTokens`,
   `Forwarder`.
-- `src/outbound/mcp_credentials.rs` / `macro_mcp.rs` / `custom_mcp.rs` /
-  `github_tokens.rs`: the credential resolvers.
+- `src/outbound/mcp_credentials.rs` / `macro_mcp.rs` / `github_tokens.rs`:
+  the credential resolvers. Connected apps and custom servers resolve only
+  through `connectors::McpConnectionsService` (`connections(owner)
+  .scoped(selection).permit(key)` then `upstream`); never read a connection
+  store, the flag or the overlay table here.
+- The agent's selected app list (`SessionGrant::selection`, from the
+  session's `AgentMcpServers`) is a permission: a destination outside it is
+  `EgressError::OutOfScope` (403; a tool result on the actor path). An app
+  in scope the owner cannot use is first offered to
+  `permit_unconnected`: where its counted source addresses any user
+  (Pipedream), it resolves `McpResolution::Unconnected` and everything but
+  `tools/call` is forwarded under the owner's scoping headers, so the
+  session lists the real tools from its first turn and calls flow once the
+  owner connects (runtimes such as `agent_inmem` keep their first listing
+  for the session). Otherwise it has no upstream: the proxy answers its MCP
+  client itself (`answer_unusable`): `initialize`/`ping` succeed,
+  `tools/list` offers one `how_to_connect` tool, and every `tools/call`
+  answers the connect prompt. A `how_to_connect` call that reaches a
+  connected app or server is answered locally too (the upstream has no
+  such tool), saying its tools arrive with the next session.
 - `src/inbound/axum_router.rs`: the HTTP entry point the sandbox calls.
 - `SessionMcpExchange` (`src/domain/service/actor.rs`): in-process
   `tools/list`/`tools/call` on a connected app or custom server for a caller
@@ -117,8 +135,8 @@ scope, `dry_run` for a routine's dry run).
 - Never let the sandbox see an upstream credential directly; every egress
   path must go through a port here, not a bypass in the harness.
 - `ReqwestForwarder` and `HttpActorMcpTransport` build their clients from
-  `mcp_client::outbound::guarded_http::client_builder` and check IP-literal
-  URLs before sending: a custom server's URL is whatever its owner typed.
+  `connectors::guarded_http::client_builder` and check IP-literal URLs
+  before sending: a custom server's URL is whatever its owner typed.
   Their `AddressPolicy` comes from the environment, so only a local stack
   reaches private addresses.
 

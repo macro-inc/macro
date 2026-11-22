@@ -257,9 +257,12 @@ the gateway `/email` prefix.
   so a stalled write can't lose its slot to another writer. Live inbox
   sync writes take no slot. Keep new bulk backfill writes behind the same slots.
 - Each CRM contact population holds one of four per-team Redis slots
-  (`acquire_crm_population_slot`), so one team's consent backfill can't hold a
-  database connection per worker. A refused slot, or a population that timed
-  out on a CRM lock (`CrmError::Contended`), is deferred like a busy write.
+  (`try_acquire_crm_population_slot`), so one team's consent backfill can't
+  hold a database connection per worker. It never waits for one: a refused
+  population (all four taken, as when the team is paused by filling its slot
+  set) is deferred 10 to 15 minutes (`admit_crm_slot`), so a paused team holds
+  no backfill worker. A population that timed out on a CRM lock
+  (`CrmError::Contended`) is deferred like a busy write.
 - `gmail_ops` workers decode both label write forms: single-message
   `ModifyMessageLabels` and `ModifyMessageLabelsBatch` (up to 1,000 messages).
   From ten messages up a batch is one `batchModify`, which a permanent failure
@@ -312,10 +315,29 @@ the gateway `/email` prefix.
   (`pubsub::util::sqlstate`).
 - gmail_ops moves transient Gmail failures to the retry queue like rate limits;
   the primary queue dead-letters after three receives.
+- Every contacts producer (address-book sync, inbox sync, the backfill's sent
+  seed and contacts step, the Outlook projection, `bin/backfill_contacts`)
+  publishes through `composition::ContactsProducer`: the legacy
+  owner-to-contact connections always, then `record_inbox_contacts` with the
+  inbox (`outbound/inbox_source.rs`: owner, link id, provider), which the
+  contacts crate's `ListWritesGate` sends only while the PostHog flag
+  `contacts-list-writes` is on (read with `POSTHOG_API_KEY`; on in a local
+  stack). A disconnect sends `directory_changed` for the owner after the purge,
+  through the same gate. Keep both sends until the legacy graph is retired.
 - Header addresses that Gmail accepts can fail `MacroUserIdStr::try_from_email`.
   Skip the bad address with a WARN that omits it (the parse error echoes it)
   instead of failing the step; see
   `email::domain::mailbox::inbox_sync::build_contact_connections`.
+- Link-manager messages go to one of two queues by
+  `models_email`'s `LinkManagerMessage::lane(sender)`: the interactive
+  `LinkManagerQueue` (a person's removal, account deletion, reauth notices,
+  health checks a person asked for) or `LinkMaintenanceQueue` (the refresh handler's
+  refreshes, health polls and removal sweeps). Each producer names its
+  `LinkManagerSender`. A sweep removal's purge is re-sent by the lifecycle's
+  effect publisher, so unused and inactive removals keep the maintenance lane
+  by their reason; a new message kind or reason decides its lane there. Each
+  task runs one consumer per lane; `email.link_manager.message` records `lane`,
+  `kind` and `queue_wait_ms` (since SQS accepted the message).
 - The `link_manager` worker receives one message at a time and renews its
   visibility while processing. Don't raise its receive batch: messages queued
   behind a long mailbox purge would be redelivered and purged twice. A

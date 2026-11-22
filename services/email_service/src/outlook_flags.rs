@@ -1,7 +1,7 @@
 //! PostHog flags that switch Outlook sync behavior for the whole service,
 //! each read about once a minute into a switch the domain reads.
 
-use crate::config::Config;
+use crate::config::{Config, Environment};
 use feature_flags::outbound::posthog::PostHogFeatureFlags;
 use feature_flags::{ServiceContext, ServiceFeatureFlags};
 use std::time::Duration;
@@ -27,17 +27,31 @@ const REFRESH: Duration = Duration::from_secs(60);
 /// PostHog's US ingestion origin, used when `POSTHOG_HOST` is unset.
 const DEFAULT_POSTHOG_HOST: &str = "https://us.i.posthog.com";
 
-/// The PostHog client the flags are read with, or `None` without a project
-/// key, which leaves every flag off.
+/// The PostHog client this service's flags (the Outlook sync's and
+/// `contacts-list-writes`) are read with, or `None` without a project key,
+/// which leaves every flag off.
 pub fn posthog(config: &Config) -> anyhow::Result<Option<PostHogFeatureFlags>> {
-    config
-        .posthog_api_key()
+    posthog_client(
+        config.environment,
+        config.posthog_api_key(),
+        config.posthog_host.value(),
+    )
+}
+
+/// The PostHog client for `key`, or `None` without one. A blank key counts as
+/// none.
+pub fn posthog_client(
+    environment: Environment,
+    key: Option<&str>,
+    host: Option<&str>,
+) -> anyhow::Result<Option<PostHogFeatureFlags>> {
+    key.filter(|key| !key.trim().is_empty())
         .map(|key| {
             PostHogFeatureFlags::new(
-                config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
+                host.unwrap_or(DEFAULT_POSTHOG_HOST),
                 key.to_owned(),
                 Duration::from_secs(3),
-                config.environment,
+                environment,
             )
         })
         .transpose()

@@ -304,6 +304,14 @@ impl ContactsService for NoContacts {
     async fn add_contact_nodes(&self, _: ContactsNodes) -> Result<(), rootcause::Report> {
         unimplemented!("no transcript adds contacts")
     }
+
+    async fn invite_contact(
+        &self,
+        _: MacroUserIdStr<'static>,
+        _: MacroUserIdStr<'static>,
+    ) -> Result<(), rootcause::Report> {
+        unimplemented!("no transcript adds contacts")
+    }
 }
 
 /// Takes the transcript's ops and answers its results.
