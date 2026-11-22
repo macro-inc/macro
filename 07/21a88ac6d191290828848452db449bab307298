@@ -1,0 +1,95 @@
+apps/web/src/lib/queries/connectors/wire.test.ts
+  s_03b21ec112ad69::t_02f002a669f6b3 1-62,67-72,75-83,87-88,90-105
+  s_a37ce135bddc8b::t_395ecb016f2af0 63-66
+  s_03b21ec112ad69::t_94ce08334dbeeb 73-74,84-86,89
+packages/sdk/specs/cognition.json
+  s_03b21ec112ad69::t_676900d84c66b2 4111,4113,4136,4141,4145,4149,6239
+packages/sdk/generated/cognition/types.gen.ts
+  s_03b21ec112ad69::t_676900d84c66b2 517,530-531,535-536,540,544,1648
+apps/web/src/lib/service-clients/service-cognition/client.ts
+  s_03b21ec112ad69::t_a6eadce1aee0c8 20,32
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/connectStepOneOfThree.ts
+  s_03b21ec112ad69::t_c3aaf44c653779 15
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/connectedServer.ts
+  s_03b21ec112ad69::t_d382ab7999ba2e 9-10,13-14,16,18
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/onboardingState.ts
+  s_03b21ec112ad69::t_801d357d33122e 16
+apps/web/src/lib/service-clients/service-cognition/openapi.json
+  s_03b21ec112ad69::t_1ad0d9c38e0a79 4111,4113,4136,4141,4145,4149,6239
+apps/web/src/lib/queries/connectors/connectors.test.tsx
+  s_03b21ec112ad69::t_94ce08334dbeeb 114-116
+apps/web/src/lib/queries/connectors/catalog.ts
+  s_03b21ec112ad69::t_94ce08334dbeeb 65-66
+  s_03b21ec112ad69::t_b90f57779568f2 59
+apps/web/src/features/connector-import/connector-import-dialog.tsx
+  s_03b21ec112ad69::t_94ce08334dbeeb 23-31
+apps/web/src/lib/queries/slash-menu-mcps.ts
+  s_03b21ec112ad69::t_94ce08334dbeeb 27
+apps/web/src/features/block-agent/ui/AgentComposerAddMenu.test.tsx
+  s_03b21ec112ad69::t_94ce08334dbeeb 164-169,201-206
+apps/web/src/features/settings/ConnectorAppPicker.tsx
+  s_03b21ec112ad69::t_94ce08334dbeeb 185
+apps/web/src/features/connector-import/tests/fake-context.ts
+  s_03b21ec112ad69::t_94ce08334dbeeb 21
+apps/web/src/features/routines/routine-apps.tsx
+  s_03b21ec112ad69::t_94ce08334dbeeb 10
+apps/web/src/features/block-agent/ui/AgentComposerAddMenu.tsx
+  s_03b21ec112ad69::t_94ce08334dbeeb 6,47-51
+apps/web/src/features/onboarding/create-app-onboarding-context.ts
+  s_03b21ec112ad69::t_94ce08334dbeeb 23
+apps/web/src/lib/queries/slash-menu-mcps.test.ts
+  s_03b21ec112ad69::t_94ce08334dbeeb 73-80
+apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/ConnectApp.tsx
+  s_03b21ec112ad69::t_94ce08334dbeeb 7,12
+apps/web/src/features/settings/Agents.test.tsx
+  s_03b21ec112ad69::t_94ce08334dbeeb 301-335,368-374
+apps/web/src/features/slack-import/slack-import.tsx
+  s_03b21ec112ad69::t_94ce08334dbeeb 6
+apps/web/src/lib/core/connectors/ConnectedAppIcon.tsx
+  s_03b21ec112ad69::t_94ce08334dbeeb 2
+apps/web/src/features/onboarding/queries/connected-tools.test.ts
+  s_03b21ec112ad69::t_94ce08334dbeeb 38-40,42-45
+apps/web/src/lib/core/component/AI/component/tool/McpToolCall.tsx
+  s_03b21ec112ad69::t_94ce08334dbeeb 2
+apps/web/src/features/settings/connections/integrations-view.test.tsx
+  s_03b21ec112ad69::t_94ce08334dbeeb 67-74,329-339
+apps/web/src/features/tours/ViewTour.tsx
+  s_03b21ec112ad69::t_94ce08334dbeeb 8
+apps/web/src/features/settings/connections/integrations-view.tsx
+  s_03b21ec112ad69::t_94ce08334dbeeb 32,184
+apps/web/src/features/settings/connections/integration-items.tsx
+  s_03b21ec112ad69::t_94ce08334dbeeb 2
+apps/web/src/lib/queries/connectors/index.ts
+  s_03b21ec112ad69::t_94ce08334dbeeb 2-4,5
+  s_03b21ec112ad69::t_7c1baca6931371 1
+apps/web/src/features/settings/Agents.tsx
+  s_03b21ec112ad69::t_94ce08334dbeeb 58,89
+apps/web/src/features/settings/connections/model.ts
+  s_03b21ec112ad69::t_b90f57779568f2 87
+apps/web/src/lib/queries/connectors/connectors.ts
+  s_03b21ec112ad69::t_b90f57779568f2 38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "0721a88ac6d191290828848452db449bab307298",
+  "prompts": {},
+  "sessions": {
+    "s_03b21ec112ad69": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d4313240-0b8c-4454-9ac4-f2c59a5300e6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_a37ce135bddc8b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "93833ac7-7fb8-4d30-be2e-a077fdc24000",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
