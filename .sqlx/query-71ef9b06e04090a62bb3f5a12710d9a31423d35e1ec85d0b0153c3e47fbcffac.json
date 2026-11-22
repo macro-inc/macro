@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            m.draft_generation, m.id, m.provider_id, m.global_id, m.link_id, m.thread_id, m.provider_thread_id, m.provider_history_id,\n            m.replying_to_id, m.internal_date_ts, m.snippet, m.size_estimate, m.subject, m.from_name,\n            m.from_contact_id, m.sent_at, m.has_attachments, m.is_read, m.is_starred, m.is_sent, m.is_draft,\n            NULL::TEXT as body_text,\n            NULL::TEXT as body_html_sanitized,\n            NULL::TEXT as body_macro,\n            m.headers_jsonb, m.created_at, m.updated_at\n        FROM email_messages m\n        JOIN email_links l ON m.link_id = l.id\n        WHERE m.id = $1\n        ",
+  "query": "\n        SELECT\n            m.draft_generation, m.id, m.provider_id, m.global_id, m.link_id, m.thread_id, m.provider_thread_id, m.provider_history_id,\n            m.replying_to_id, m.internal_date_ts, m.snippet, m.size_estimate, m.subject, m.from_name,\n            m.from_contact_id, m.sent_at, m.has_attachments, m.is_read, m.is_starred, m.is_sent, m.is_draft,\n            m.body_text,\n            m.body_html_sanitized,\n            NULL::TEXT as body_macro,\n            m.headers_jsonb, m.created_at, m.updated_at\n        FROM email_messages m\n        JOIN email_links l ON m.link_id = l.id\n        WHERE m.id = $1\n        ",
   "describe": {
     "columns": [
       {
@@ -166,13 +166,13 @@
       false,
       false,
       false,
-      null,
-      null,
+      true,
+      true,
       null,
       true,
       false,
       false
     ]
   },
-  "hash": "8071a5aaef3c699b2fa2d557b5a8878471431a479c374c036a9e198cebf0b42a"
+  "hash": "71ef9b06e04090a62bb3f5a12710d9a31423d35e1ec85d0b0153c3e47fbcffac"
 }
