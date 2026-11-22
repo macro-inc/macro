@@ -121,8 +121,9 @@ marker could not be removed after it did; its build decides those files first,
 and its next open removes such a marker: `older-in-use`), a browser without
 OPFS moves, a pair whose headers Turso would not open, or a failed move that put
 everything back leaves the old file where it is and starts empty, as every
-version change did before; a failed move that left a split completes it at once,
-and one whose result does not read fails the open and keeps the files.
+version change did before; after a failed move that left a split, the same open
+tries to complete the split, as it would when resuming an adoption (below), and
+one whose result does not read fails the open and keeps the files.
 A marker beside no whole pair is an adoption into that name stopped before its
 moves finished, or a wipe of it stopped after removing its pair, and the open
 looks further back: any whole pair such an adoption named is still at its own
