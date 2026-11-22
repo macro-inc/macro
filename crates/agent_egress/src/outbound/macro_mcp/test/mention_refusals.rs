@@ -77,22 +77,41 @@ async fn refuses_signed_request_before_dispatch(claims: SignedClaims, method: &s
             },
             propagate,
         ));
-    let response = app
-        .oneshot(
-            Request::builder()
-                .method(method)
-                .uri(path)
-                .header("authorization", format!("Bearer {bearer}"))
-                .body(Body::empty())
-                .unwrap(),
+    let unscoped = signer
+        .encode(
+            60,
+            SignedClaims::routine(None, uuid::Uuid::from_u128(905), None),
+            "fixture".into(),
+            owner().to_string(),
+            None,
         )
-        .await
         .unwrap();
-    assert_eq!(
-        (response.status(), dispatched.load(Ordering::SeqCst)),
-        (StatusCode::FORBIDDEN, 0),
-        "{method} {path}: a mention must start no downstream work"
-    );
+    for secondary in [false, true] {
+        let mut request = Request::builder().method(method).uri(path);
+        request = if secondary {
+            request
+                .header("authorization", format!("Bearer {unscoped}"))
+                .header(
+                    "cookie",
+                    format!(
+                        "{}={bearer}",
+                        macro_auth::credential::access_token_cookie_name()
+                    ),
+                )
+        } else {
+            request.header("authorization", format!("Bearer {bearer}"))
+        };
+        let response = app
+            .clone()
+            .oneshot(request.body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(
+            (response.status(), dispatched.load(Ordering::SeqCst)),
+            (StatusCode::FORBIDDEN, 0),
+            "{method} {path}, secondary={secondary}: a restricted credential must start no downstream work"
+        );
+    }
 }
 
 #[tokio::test]
@@ -188,4 +207,55 @@ async fn no_send_refuses_exporting_a_document_permission_token() {
         "/documents/permissions_token/00000000-0000-0000-0000-000000000001",
     )
     .await;
+}
+
+#[tokio::test]
+async fn a_legacy_mention_without_a_scope_still_cannot_launch_work() {
+    let mut claims = SignedClaims::channel_mention(
+        bot_id::MACRO_AI_BOT_ID.as_uuid(),
+        uuid::Uuid::from_u128(906),
+    );
+    claims.agent_scope = None;
+    refuses_signed_request_before_dispatch(claims, "POST", "/documents/create_task").await;
+}
+
+#[tokio::test]
+async fn a_legacy_mention_with_no_send_still_cannot_launch_work() {
+    let mut claims = SignedClaims::channel_mention(
+        bot_id::MACRO_AI_BOT_ID.as_uuid(),
+        uuid::Uuid::from_u128(906),
+    );
+    claims.agent_scope = Some(agent_correlation::scope::SessionScope::NoSend);
+    refuses_signed_request_before_dispatch(claims, "POST", "/documents/create_task").await;
+}
+
+#[tokio::test]
+async fn no_send_refuses_configuration_that_background_suggestions_never_need() {
+    for (method, path) in [
+        ("PUT", "/pipedream/mcp/connections"),
+        ("DELETE", "/pipedream/mcp/connections"),
+        ("POST", "/pipedream/mcp/token"),
+        ("POST", "/pipedream/mcp/complete"),
+        ("POST", "/pipedream/mcp/recover"),
+        ("POST", "/pipedream/mcp/connect/complete"),
+        (
+            "PATCH",
+            "/webhook/webhooks/00000000-0000-0000-0000-000000000001",
+        ),
+        (
+            "DELETE",
+            "/webhook/webhooks/00000000-0000-0000-0000-000000000001",
+        ),
+    ] {
+        refuses_signed_request_before_dispatch(
+            SignedClaims::routine(
+                None,
+                uuid::Uuid::from_u128(904),
+                Some(agent_correlation::scope::SessionScope::NoSend),
+            ),
+            method,
+            path,
+        )
+        .await;
+    }
 }
