@@ -46,7 +46,9 @@ Pipedream, Macro Connect) or tell which one holds a connection.
 ## Boundaries
 
 - Depends on: `connect_client` (the only Connect crate; a pinned copy, never
-  edit it), `mcp_toolset`, `ai_toolset`, `feature_flags`,
+  edit it, not even its `AGENTS.md`, which still names `pipedream_mcp`; its
+  one user is `connectors`, in `src/outbound/macro_connect/`),
+  `mcp_toolset`, `ai_toolset`, `feature_flags`,
   `authentication_service_client`, `rmcp`.
 - Used by: `agent_egress`, `agent_harness`, `agent_code_mode`, `ai_tools`,
   `import*`, `granola_sync`, `onboarding`, `services/agent_harness_service`,
