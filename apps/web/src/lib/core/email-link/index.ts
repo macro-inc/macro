@@ -35,8 +35,9 @@ import type {
   ResyncResponse,
 } from '@service-email/generated/schemas';
 import type { UseQueryResult } from '@tanstack/solid-query';
+import type { DialogHandle } from '@ui';
 import { err, okAsync, ResultAsync } from 'neverthrow';
-import { createMemo, createSignal, getOwner } from 'solid-js';
+import { batch, createMemo, createSignal, getOwner } from 'solid-js';
 import { inboxAuthorizationUrl } from './consent';
 import {
   announceAlreadyConnected,
@@ -420,40 +421,65 @@ export function useAddInboxFlow() {
 
   const connectImap = async (
     viewer: QueryAccount | undefined,
-    options?: AddInboxOptions
+    options?: AddInboxOptions,
+    chooser?: DialogHandle
   ): Promise<void> => {
-    const { openImapConnection } = await import('./ImapConnectDialog');
-    if (!isCurrentQueryAccount(viewer)) return;
-    const result = await openImapConnection(
-      owner,
-      options?.emailAddress,
-      options?.reconnectLinkId
-    );
-    if (!isCurrentQueryAccount(viewer)) return;
-    if (result === 'payment_required') showPaywall(PaywallKey.MULTI_INBOX);
-    if (typeof result === 'object' && result.type === 'connected') {
-      invalidateEmailLinks();
-      await invalidateUserInfo();
-      toast.success(
-        options?.reconnectLinkId ? 'Inbox reconnected' : 'Inbox connected'
-      );
-    }
-    if (result === 'GMAIL' || result === 'OUTLOOK') {
-      return connectInbox({
-        provider: result,
-        emailAddress: options?.emailAddress,
+    try {
+      const { openImapConnection } = await import('./ImapConnectDialog');
+      if (!isCurrentQueryAccount(viewer) || (chooser && !chooser.isOpen()))
+        return;
+      // Keep the chooser's scrim until the lazy form is ready, then change both
+      // entries in one commit so the background never becomes undimmed.
+      const connection = batch(() => {
+        const pending = openImapConnection(
+          owner,
+          options?.emailAddress,
+          options?.reconnectLinkId
+        );
+        chooser?.close();
+        return pending;
       });
+      const result = await connection;
+      if (!isCurrentQueryAccount(viewer)) return;
+      if (result === 'payment_required') showPaywall(PaywallKey.MULTI_INBOX);
+      if (typeof result === 'object' && result.type === 'connected') {
+        invalidateEmailLinks();
+        await invalidateUserInfo();
+        toast.success(
+          options?.reconnectLinkId ? 'Inbox reconnected' : 'Inbox connected'
+        );
+      }
+      if (result === 'GMAIL' || result === 'OUTLOOK') {
+        return connectInbox({
+          provider: result,
+          emailAddress: options?.emailAddress,
+        });
+      }
+    } finally {
+      chooser?.close();
     }
   };
 
   const connectInbox = async (options?: AddInboxOptions): Promise<void> => {
     const viewer = currentQueryAccount();
     const scopes = options?.scopes ?? 'gmail';
+    let connectingImap: Promise<void> | undefined;
     const provider =
       options?.provider ??
-      (await selectEmailProvider(owner, scopes === 'gmail'));
+      (await selectEmailProvider(
+        owner,
+        scopes === 'gmail',
+        (provider, chooser) => {
+          if (provider === 'IMAP') {
+            connectingImap = connectImap(viewer, options, chooser);
+          } else {
+            chooser.close();
+          }
+        }
+      ));
     if (!provider) return;
-    if (provider === 'IMAP') return connectImap(viewer, options);
+    if (provider === 'IMAP')
+      return connectingImap ?? connectImap(viewer, options);
     const addition = await plainAddition(provider, scopes, options);
     if (isNativeMobilePlatform()) {
       await startNativeFlow(

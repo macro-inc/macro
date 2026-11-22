@@ -4,6 +4,7 @@ import { fetchEmailConnectionProviders } from '@queries/auth/outlook-link';
 import {
   Button,
   Dialog,
+  type DialogHandle,
   type ManagedDialogProps,
   openDialog,
   Panel,
@@ -181,10 +182,14 @@ export function EmailProviderSelectionDialog(
   );
 }
 
-/** Cancellation and owner disposal resolve without starting an OAuth attempt. */
+/**
+ * Cancellation and owner disposal resolve without starting an OAuth attempt.
+ * A selection callback owns closing the chooser after its next dialog is ready.
+ */
 export async function selectEmailProvider(
   owner: Owner | null,
-  mailOnly = true
+  mailOnly = true,
+  onSelection?: (provider: EmailProvider, dialog: DialogHandle) => void
 ): Promise<EmailProvider | undefined> {
   const lifecycle = Telemetry.span('email.providers.choose');
   let selected: EmailProvider | undefined;
@@ -195,8 +200,10 @@ export async function selectEmailProvider(
         {
           mailOnly,
           onSelect: (provider) => {
+            if (selected !== undefined) return;
             selected = provider;
-            handle.close();
+            if (onSelection) onSelection(provider, handle);
+            else handle.close();
           },
         },
         { owner }
@@ -205,7 +212,9 @@ export async function selectEmailProvider(
     const closed = await handle.closed;
     lifecycle.setAttr(
       'dialog.close_reason',
-      selected === undefined ? closed.reason : 'completed'
+      selected !== undefined && closed.reason === 'programmatic'
+        ? 'completed'
+        : closed.reason
     );
     return selected;
   } finally {

@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 import { HomeEmptyState } from '@app/features/home/components/HomeEmptyState';
 import { useAddInboxFlow } from '@core/email-link';
+import { Telemetry } from '@macro-inc/observability';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { ImperativeDialogHost } from '@ui';
 import { ok } from 'neverthrow';
@@ -117,6 +118,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -170,6 +172,71 @@ describe.each([
       expect(providers).toHaveBeenCalledTimes(1);
       view.unmount();
       expect(screen.queryByRole('dialog')).toBeNull();
+    }
+  );
+
+  it('keeps a backdrop throughout the provider-to-IMAP handoff', async () => {
+    providers.mockResolvedValue({ gmail: true, outlook: true, imap: true });
+    render(() => {
+      const connectInbox = useAddInboxFlow();
+      return (
+        <>
+          <EmptyState onConnect={connectInbox} />
+          <ImperativeDialogHost />
+        </>
+      );
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Connect email' }));
+    const other = await screen.findByRole('button', {
+      name: 'Other email (IMAP / SMTP)',
+    });
+    expect(document.querySelectorAll('.scrim-glass')).toHaveLength(1);
+    const backdrops: number[] = [];
+    const observer = new MutationObserver(() => {
+      backdrops.push(document.querySelectorAll('.scrim-glass').length);
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    try {
+      fireEvent.click(other);
+      await screen.findByLabelText('Email address');
+      expect(backdrops.length).toBeGreaterThan(0);
+      expect(backdrops).not.toContain(0);
+      expect(document.querySelectorAll('.scrim-glass')).toHaveLength(1);
+    } finally {
+      observer.disconnect();
+    }
+  });
+
+  it.each([
+    { action: 'view closes', reason: 'owner-disposed' },
+    { action: 'Escape', reason: 'dismissed' },
+  ])(
+    'does not open a late IMAP form after $action during handoff',
+    async ({ action, reason }) => {
+      providers.mockResolvedValue({ gmail: true, outlook: true, imap: true });
+      const span = Telemetry.span('test.handoff');
+      const attribute = vi.spyOn(span, 'setAttr');
+      vi.spyOn(Telemetry, 'span').mockReturnValue(span);
+      render(() => <ImperativeDialogHost />);
+      let pending: Promise<void> | undefined;
+      const view = render(() => {
+        const connectInbox = useAddInboxFlow();
+        const connect: ReturnType<typeof useAddInboxFlow> = (options) => {
+          pending = connectInbox(options);
+          return pending;
+        };
+        return <EmptyState onConnect={connect} />;
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Connect email' }));
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Other email (IMAP / SMTP)' })
+      );
+      if (action === 'view closes') view.unmount();
+      else fireEvent.keyDown(document.body, { key: 'Escape' });
+      await pending;
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(mail.connect).not.toHaveBeenCalled();
+      expect(attribute).toHaveBeenCalledWith('dialog.close_reason', reason);
     }
   );
 

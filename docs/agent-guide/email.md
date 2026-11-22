@@ -33,7 +33,8 @@ detail view. See [Email reminders](reminders.md#delivery-and-undo).
 
 After **Connect email** in Email or Home, the provider chooser and the IMAP
 credential form stay open while the list reloads, including when its capabilities are still loading. Choose a provider or
-Cancel; closing the owning view ends the dialog. Check this on desktop and phone.
+Cancel; closing the owning view ends the dialog. The provider chooser remains
+visible until the IMAP form is ready. Check this on desktop and phone.
 
 ## Account changes
 
