@@ -40,7 +40,10 @@ vi.mock('../components/project-task-search', () => ({
   ProjectTaskSearch: () => null,
 }));
 vi.mock('../context/projects-context', () => ({
-  useProjectsContext: () => ({ createProjectSource: () => ({}) }),
+  useProjectsContext: () => ({
+    createProjectSource: () => ({}),
+    pendingTasks: () => [],
+  }),
 }));
 vi.mock('../queries/project-tasks', () => ({
   createProjectTasksDataSource: () => ({}),

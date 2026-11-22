@@ -66,6 +66,8 @@ function launch(source: {
   };
   const context: ProjectsContext = {
     userId: () => 'owner',
+    pendingTasks: () => [],
+    releasePendingTasks: () => {},
     createCollectionSource: unused,
     createPropertyDefinitionsSource: unused,
     createProjectSource: (id) => {

@@ -35,6 +35,8 @@ function Fixture() {
   const [assignments, setAssignments] = createSignal(0);
   const context: ProjectsContext = {
     userId: () => 'owner',
+    pendingTasks: () => [],
+    releasePendingTasks: () => {},
     createCollectionSource: unavailable,
     createProjectSource: unavailable,
     createProjectIdentitySource: unavailable,

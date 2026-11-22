@@ -36,6 +36,7 @@ export function ProjectTasksProvider(props: ProjectTasksProviderProps) {
             createProjectTasksDataSource(
               projectId,
               props.source ?? context.createProjectSource(() => projectId),
+              context,
               state,
               options
             )

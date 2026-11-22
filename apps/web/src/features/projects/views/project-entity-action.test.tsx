@@ -39,6 +39,8 @@ function open(
   };
   const context: ProjectsContext = {
     userId: () => 'owner',
+    pendingTasks: () => [],
+    releasePendingTasks: () => {},
     createCollectionSource: unused,
     createPropertyDefinitionsSource: unused,
     createProjectSource: unused,

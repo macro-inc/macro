@@ -1,3 +1,4 @@
+import type { OptimisticTask } from '@app/features/tasks-view/core/optimistic-task';
 import type { createTaskWithProperties } from '@block-md/util/taskComposerProperties';
 import type { Property, PropertyApiValues } from '@property/types';
 import type { Accessor, ParentProps } from 'solid-js';
@@ -54,6 +55,13 @@ export type ProjectCreationInput = {
 /** Capabilities supplied by the production entry point or by a test. */
 export type ProjectsContext = {
   userId: Accessor<string | undefined>;
+  /**
+   * Tasks created in the project that its list has not shown yet: pending
+   * until the server answers, then confirmed under their real id.
+   */
+  pendingTasks(projectId: string): readonly OptimisticTask[];
+  /** The project's list shows these tasks itself now. */
+  releasePendingTasks(taskIds: readonly string[]): void;
   createCollectionSource(
     filters?: Accessor<ProjectFilters>,
     enabled?: Accessor<boolean>
@@ -66,7 +74,10 @@ export type ProjectsContext = {
     error: Accessor<Error | undefined>;
   };
   createCommands(): {
-    /** One request creates the task with its Project property set. */
+    /**
+     * One request creates the task with its Project property set. The task
+     * shows in the project's list from submit (`pendingTasks`).
+     */
     createTask(
       projectId: string,
       ...args: Parameters<typeof createTaskWithProperties>

@@ -1,7 +1,10 @@
+import { buildOptimisticTask } from '@app/features/tasks-view/core/optimistic-task';
 import { createTaskWithProperties } from '@block-md/util/taskComposerProperties';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
+import { revalidateActivityQueries } from '@queries/activity/push-registry';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
 import {
   createGraphqlBulkSaveEntityPropertiesMutation,
@@ -16,6 +19,10 @@ import { type Client, CombinedError } from '@urql/core';
 import type { Accessor } from 'solid-js';
 import type { ProjectsContext } from '../context/projects-context';
 import { assignProjectTasks } from '../core/assignment';
+import {
+  createPendingProjectTasks,
+  type PendingProjectTaskHandle,
+} from '../primitives/pending-project-tasks';
 import { createProjectMutation } from './create-project';
 import {
   createProjectDetailQuery,
@@ -56,8 +63,11 @@ export function createProjectSources(
       cache,
       soup.cacheHost ?? (() => undefined)
     );
+  const pendingTasks = createPendingProjectTasks();
   const context: ProjectsContext = {
     userId,
+    pendingTasks: (projectId) => pendingTasks.tasks(projectId),
+    releasePendingTasks: (taskIds) => pendingTasks.release(taskIds),
     createPropertyDefinitionsSource() {
       const definitions = useListPropertiesQuery(() => ({
         scope: 'system',
@@ -123,24 +133,71 @@ export function createProjectSources(
     createCommands() {
       // A task joins a project through its Project property, set at creation.
       // The composer starts in the project, so keep a changed or cleared value.
-      const createTask: ProjectCommands['createTask'] = (
+      const createTask: ProjectCommands['createTask'] = async (
         projectId,
         title,
         content,
         properties,
-        ...rest
-      ) =>
-        createTaskWithProperties(
-          title,
-          content,
-          properties.some(([id]) => id === SYSTEM_PROPERTY_IDS.PROJECT)
-            ? properties
-            : [
-                ...properties,
-                [SYSTEM_PROPERTY_IDS.PROJECT, taskProjectValue(projectId)],
-              ],
-          ...rest
-        );
+        definitions,
+        upsertToHistory,
+        options
+      ) => {
+        const values: typeof properties = properties.some(
+          ([id]) => id === SYSTEM_PROPERTY_IDS.PROJECT
+        )
+          ? properties
+          : [
+              ...properties,
+              [SYSTEM_PROPERTY_IDS.PROJECT, taskProjectValue(projectId)],
+            ];
+        let pending: PendingProjectTaskHandle | undefined;
+        let created: Awaited<ReturnType<typeof createTaskWithProperties>> =
+          null;
+        try {
+          created = await createTaskWithProperties(
+            title,
+            content,
+            values,
+            definitions,
+            upsertToHistory,
+            {
+              ...options,
+              // Show the task in the project's list as the request starts.
+              onMutate: () => {
+                pending = pendingTasks.begin(
+                  projectId,
+                  buildOptimisticTask({
+                    id: crypto.randomUUID(),
+                    title,
+                    ownerId: userId() ?? '',
+                    properties: values,
+                    definitions,
+                    now: new Date(),
+                  })
+                );
+                options?.onMutate?.();
+              },
+              onCreated: (task) => {
+                pending?.confirm(task.documentId);
+                options?.onCreated?.(task);
+                // The project's task ids and counts come from its own read,
+                // which the task list's cache does not maintain.
+                fireAndForget(
+                  revalidateActivityQueries(
+                    soup.client(),
+                    new Set([projectId])
+                  ),
+                  'projects'
+                );
+              },
+            }
+          );
+        } finally {
+          // The composer tells the user the create was not confirmed.
+          if (!created) pending?.fail();
+        }
+        return created;
+      };
       const create = createProjectMutation(
         client,
         cache,

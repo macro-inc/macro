@@ -50,6 +50,7 @@ it('scopes tasks to the Project property and disables the shared source immediat
           error: () => undefined,
           refresh,
         },
+        { pendingTasks: () => [], releasePendingTasks: () => {} },
         {
           tab: 'team-tasks',
           groupBy: 'none',

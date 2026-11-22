@@ -245,6 +245,8 @@ function setup(
   };
   const context: ProjectsContext = {
     userId: () => 'viewer',
+    pendingTasks: () => [],
+    releasePendingTasks: () => {},
     createCollectionSource: () => ({
       rows: () => rows,
       loading: () => false,

@@ -130,6 +130,8 @@ function setup(
   };
   const context: ProjectsContext = {
     userId: () => 'owner',
+    pendingTasks: () => [],
+    releasePendingTasks: () => {},
     createCollectionSource: unused,
     createProjectSource: unused,
     createProjectIdentitySource: unused,

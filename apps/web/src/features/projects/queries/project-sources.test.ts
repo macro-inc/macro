@@ -48,7 +48,7 @@ function commands() {
       cache,
       () => 'viewer'
     );
-    return { commands: sources.createCommands(), dispose };
+    return { sources, commands: sources.createCommands(), dispose };
   });
 }
 
@@ -80,7 +80,8 @@ it("keeps the composer's Project and adds the project only when it's missing", a
     '',
     [status, other],
     new Map(),
-    history
+    history,
+    expect.any(Object)
   );
 
   await project.createTask(
@@ -105,8 +106,90 @@ it("keeps the composer's Project and adds the project only when it's missing", a
       ],
     ],
     new Map(),
-    history
+    history,
+    expect.any(Object)
   );
+  dispose();
+});
+
+it('shows a created task in its project from submit, then under its real id', async () => {
+  const { revalidateActivityQueries } = await import(
+    '@queries/activity/push-registry'
+  );
+  let answer: (task: { documentId: string } | null) => void = () => {};
+  mock.createTask.mockImplementation(
+    (_title, _content, _properties, _definitions, _history, options) => {
+      options.onMutate();
+      return new Promise((resolve) => {
+        answer = (task) => {
+          if (task) options.onCreated(task);
+          resolve(task);
+        };
+      });
+    }
+  );
+  const { sources, commands: project, dispose } = commands();
+  const onMutate = vi.fn();
+  const onCreated = vi.fn();
+  const created = project.createTask(
+    'project',
+    'Ship it',
+    '',
+    [],
+    new Map(),
+    vi.fn(),
+    {
+      onMutate,
+      onCreated,
+    }
+  );
+
+  const [pending] = sources.pendingTasks('project');
+  expect(pending?.pending).toBe(true);
+  expect(pending?.entity.name).toBe('Ship it');
+  expect(pending?.entity.ownerId).toBe('viewer');
+  expect(sources.pendingTasks('other')).toEqual([]);
+  expect(onMutate).toHaveBeenCalledOnce();
+
+  answer({ documentId: 'task' });
+  await created;
+  expect(sources.pendingTasks('project')).toMatchObject([
+    { pending: false, entity: { id: 'task', name: 'Ship it' } },
+  ]);
+  expect(onCreated).toHaveBeenCalledWith({ documentId: 'task' });
+  expect(revalidateActivityQueries).toHaveBeenCalledWith(
+    expect.anything(),
+    new Set(['project'])
+  );
+
+  sources.releasePendingTasks(['task']);
+  expect(sources.pendingTasks('project')).toEqual([]);
+  dispose();
+});
+
+it('removes a created task from its project when the create fails', async () => {
+  mock.createTask.mockImplementation(
+    async (_title, _content, _properties, _definitions, _history, options) => {
+      options.onMutate();
+      return null;
+    }
+  );
+  const { sources, commands: project, dispose } = commands();
+  expect(
+    await project.createTask('project', 'Ship it', '', [], new Map(), vi.fn())
+  ).toBeNull();
+  expect(sources.pendingTasks('project')).toEqual([]);
+
+  mock.createTask.mockImplementation(
+    async (_title, _content, _properties, _definitions, _history, options) => {
+      options.onMutate();
+      throw new Error('offline');
+    }
+  );
+  await expect(
+    project.createTask('project', 'Ship it', '', [], new Map(), vi.fn())
+  ).rejects.toThrow('offline');
+  expect(sources.pendingTasks('project')).toEqual([]);
   dispose();
 });
 

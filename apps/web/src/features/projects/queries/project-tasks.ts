@@ -5,15 +5,20 @@ import {
   useTasksDataSource,
 } from '@app/features/tasks-view/queries/use-tasks-query';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
-import type { ProjectSource } from '../context/projects-context';
+import type {
+  ProjectSource,
+  ProjectsContext,
+} from '../context/projects-context';
 
 /**
  * The standard Tasks source scoped to tasks whose Project property names the
- * project, enabled only while the project itself is readable.
+ * project, enabled only while the project itself is readable. Tasks created
+ * here show at once, before the list's query lists them.
  */
 export function createProjectTasksDataSource(
   projectId: string,
   project: ProjectSource,
+  pending: Pick<ProjectsContext, 'pendingTasks' | 'releasePendingTasks'>,
   state: TasksDataSourceInput,
   options: UseTasksDataSourceOptions
 ): TasksDataSource {
@@ -24,6 +29,8 @@ export function createProjectTasksDataSource(
       entityId: projectId,
     }),
     enabled: () => Boolean(project.project()),
+    optimisticTasks: () => pending.pendingTasks(projectId),
+    onOptimisticTasksListed: pending.releasePendingTasks,
   });
   return {
     ...source,

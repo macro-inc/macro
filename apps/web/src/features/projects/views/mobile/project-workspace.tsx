@@ -7,6 +7,7 @@ import { createSignal, Show } from 'solid-js';
 import { AddProjectTasks } from '../../add-project-tasks';
 import { ProjectProgress } from '../../components/project-progress';
 import type { ProjectWorkspaceProps } from '../../context/project-workspace';
+import { useProjectsContext } from '../../context/projects-context';
 import { canEditProject } from '../../core/project';
 import { ProjectTasksProvider } from '../../project-tasks-provider';
 import { ProjectSummary } from '../shared/project-summary';
@@ -15,6 +16,7 @@ import { ProjectWorkspaceLayout } from '../shared/project-workspace-layout';
 import { MobileProjectDescription } from './project-description';
 
 export function MobileProjectWorkspace(props: ProjectWorkspaceProps) {
+  const projects = useProjectsContext();
   const [scroller, setScroller] = createSignal<HTMLDivElement>();
   const [summary, setSummary] = createSignal<HTMLDivElement>();
   const [heading, setHeading] = createSignal<HTMLDivElement>();
@@ -85,7 +87,10 @@ export function MobileProjectWorkspace(props: ProjectWorkspaceProps) {
               </div>
             </div>
             <Show
-              when={props.project.taskIds.length > 0}
+              when={
+                props.project.taskIds.length > 0 ||
+                projects.pendingTasks(props.project.id).length > 0
+              }
               fallback={<ProjectTasksEmptyState project={props.project} />}
             >
               <TasksContent
