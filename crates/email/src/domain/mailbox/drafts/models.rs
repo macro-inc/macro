@@ -66,9 +66,15 @@ pub struct DraftCheckpoint {
     /// True only after Macro atomically claims a requested delivery.
     #[serde(default)]
     pub submission_started: bool,
+    /// Consecutive local admission failures; old checkpoints start at zero.
+    #[serde(default)]
+    pub local_contention_retries: u8,
     /// Persisted proof of non-submission; absent in old checkpoints and uncertain sends.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub send_rejection_reason: Option<SendRejectionReason>,
+    /// Optional sanitized command refusal; absent on older checkpoints.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub send_refusal: Option<models_email::service::message::SubmissionRefusal>,
     pub draft: Option<ProviderDraft>,
     pub completed_files: usize,
     pub completed_removals: usize,

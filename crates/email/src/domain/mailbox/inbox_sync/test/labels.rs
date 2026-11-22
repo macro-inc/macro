@@ -150,6 +150,7 @@ async fn each_provider_error_preserves_primary_retry_routing_and_reason() {
         (
             EmailApiError::SendRejected {
                 reason: email_api_client::domain::models::SendRejectionReason::ProviderRejected,
+                refusal: None,
                 message: "rejected".into(),
             },
             false,

@@ -89,7 +89,7 @@ pub(super) async fn recipients_by_message_ids(
         JOIN email_message_recipients mr ON m.id = mr.message_id
         JOIN email_contacts c ON mr.contact_id = c.id
         WHERE m.id = ANY($1)
-        ORDER BY mr.message_id, mr.recipient_type
+        ORDER BY mr.message_id, mr.recipient_type, mr.contact_id
         "#,
         message_ids,
     )

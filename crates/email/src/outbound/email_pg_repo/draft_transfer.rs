@@ -93,7 +93,7 @@ async fn source_facts(
     .await
     .map_err(db)?
     .ok_or(EmailErr::MessageNotFound(request.source_id))?;
-    let row=sqlx::query!(
+    let row = sqlx::query!(
         r#"
         SELECT
             m.updated_at,
@@ -175,18 +175,21 @@ async fn source_facts(
                             'email', c.email_address,
                             'name', COALESCE(r.name, c.name)
                         )
+                        ORDER BY r.contact_id
                     ) FILTER (WHERE r.recipient_type = 'TO') AS to_addresses,
                     jsonb_agg(
                         jsonb_build_object(
                             'email', c.email_address,
                             'name', COALESCE(r.name, c.name)
                         )
+                        ORDER BY r.contact_id
                     ) FILTER (WHERE r.recipient_type = 'CC') AS cc_addresses,
                     jsonb_agg(
                         jsonb_build_object(
                             'email', c.email_address,
                             'name', COALESCE(r.name, c.name)
                         )
+                        ORDER BY r.contact_id
                     ) FILTER (WHERE r.recipient_type = 'BCC') AS bcc_addresses
                 FROM
                     email_message_recipients r
@@ -200,7 +203,11 @@ async fn source_facts(
         request.source_id,
         request.source_link_id,
         request.draft_generation,
-    ).fetch_optional(tx).await.map_err(db)?.ok_or(EmailErr::MessageNotFound(request.source_id))?;
+    )
+    .fetch_optional(tx)
+    .await
+    .map_err(db)?
+    .ok_or(EmailErr::MessageNotFound(request.source_id))?;
     validate_transfer(TransferEligibility {
         authorized: true,
         draft: row.is_draft && !row.is_sent,

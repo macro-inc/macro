@@ -25,6 +25,7 @@ fn email_api_error_identifies_transient_failures() {
     assert!(
         !EmailApiError::SendRejected {
             reason: crate::domain::models::SendRejectionReason::ProviderRejected,
+            refusal: None,
             message: "invalid message".to_string(),
         }
         .is_transient()

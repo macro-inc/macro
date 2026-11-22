@@ -1,4 +1,7 @@
-import type { ApiSendRejectionReason } from '@service-email/generated/schemas';
+import type {
+  ApiSendRejectionReason,
+  SubmissionRefusal,
+} from '@service-email/generated/schemas';
 import { match } from 'ts-pattern';
 
 /** Opaque versions of a provider-independent mailbox write. */
@@ -17,6 +20,7 @@ export interface MessageOperation {
   revision: string;
   remoteVersion?: string | null;
   sendRejectionReason?: ApiSendRejectionReason | null;
+  sendRefusal?: SubmissionRefusal | null;
   issue?:
     | 'ACCEPTING_REMOTE'
     | 'DRAFT_CONFLICT'
@@ -106,7 +110,8 @@ export function operationActions(
 
 /** Routine progress and confirmed outcomes stay silent, matching Gmail. */
 export function operationDescription(
-  operation: MessageOperation
+  operation: MessageOperation,
+  recipientEmails?: readonly string[]
 ): string | undefined {
   if (operation.issue === 'MOVE_PENDING')
     return 'Finishing the inbox change. You can edit this copy; sending waits until the original draft is resolved.';
@@ -121,6 +126,30 @@ export function operationDescription(
   if (operation.issue === 'ACCEPTING_REMOTE')
     return 'Loading the mailbox version. Wait for synchronization before reopening the draft.';
   if (operation.issue === 'SEND_REJECTED') {
+    const detail = operation.sendRefusal;
+    const description = match(detail?.phase)
+      .with(
+        'sender',
+        () =>
+          'The server refused the sender address. Check the sending address in Mail settings before trying again.'
+      )
+      .with('recipient', () => {
+        const recipient =
+          detail?.recipient_index == null
+            ? undefined
+            : recipientEmails?.[detail.recipient_index];
+        return recipient
+          ? `The server refused mail for ${recipient}. Check the recipient address before trying again.`
+          : 'The server refused a recipient address. Check the recipients before trying again.';
+      })
+      .with(
+        'message',
+        () =>
+          'The server refused this message before delivery. Check its size and content before trying again.'
+      )
+      .with(undefined, () => undefined)
+      .exhaustive(() => undefined);
+    if (description) return description;
     return match(operation.sendRejectionReason)
       .with(
         'CONNECTION_UNAVAILABLE',
@@ -130,7 +159,7 @@ export function operationDescription(
       .with(
         'PROVIDER_REJECTED',
         () =>
-          'Your mail provider rejected this send. Correct the problem in your mailbox before trying again.'
+          'The mail server refused this message. Check the recipient address and sender settings before trying again.'
       )
       .otherwise(
         () =>

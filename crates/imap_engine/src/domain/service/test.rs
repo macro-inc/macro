@@ -297,6 +297,7 @@ async fn uncertain_send_is_persisted_before_io_and_is_not_sent_again_after_resta
         deadline: AtomicBool::new(false),
         sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
         submission_deadline: std::sync::Mutex::new(None),
+        refusal: None,
         provider_work: None,
     });
     let binding = Binding {
@@ -431,6 +432,7 @@ async fn a_send_deadline_pauses_other_attempts_but_never_replays_the_unknown_one
         deadline: AtomicBool::new(true),
         sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
         submission_deadline: std::sync::Mutex::new(None),
+        refusal: None,
         provider_work: None,
     });
     let binding = Binding {
@@ -635,6 +637,7 @@ async fn ambiguous_sent_append_is_fenced_across_restart_even_with_blind_search_a
         deadline: AtomicBool::new(false),
         sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
         submission_deadline: std::sync::Mutex::new(None),
+        refusal: None,
         provider_work: None,
     });
     let binding = Binding {
@@ -757,6 +760,7 @@ async fn an_actor_that_loses_its_first_owner_claim_exits_instead_of_holding_capa
         deadline: AtomicBool::new(false),
         sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
         submission_deadline: std::sync::Mutex::new(None),
+        refusal: None,
         provider_work: None,
     });
     let engine = Engine::new(repository, Arc::new(TestCipher), transport.clone());
@@ -773,4 +777,104 @@ async fn an_actor_that_loses_its_first_owner_claim_exits_instead_of_holding_capa
     .expect("a replica loser must release its local slot immediately");
     assert!(result.is_ok());
     assert_eq!(transport.submissions.load(Ordering::Acquire), 0);
+}
+
+#[tokio::test]
+async fn a_definite_refusal_clears_the_unknown_fence_without_persisting_new_outcome_vocabulary() {
+    let repository = Arc::new(MemoryRepository {
+        state: std::sync::Mutex::new(AccountState::default()),
+        saved_unknown: AtomicBool::new(false),
+        owner_available: AtomicBool::new(true),
+        owner_claims: std::sync::atomic::AtomicU32::new(0),
+        owner_gate: std::sync::Mutex::new(None),
+        owner_errors: std::sync::atomic::AtomicU32::new(0),
+        releases: std::sync::atomic::AtomicU32::new(0),
+        acquire_gate: None,
+    });
+    let transport = Arc::new(UncertainTransport {
+        repository: repository.clone(),
+        submissions: std::sync::atomic::AtomicU32::new(0),
+        deadline: AtomicBool::new(false),
+        sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
+        submission_deadline: std::sync::Mutex::new(None),
+        refusal: Some(SubmissionRefusal {
+            phase: SubmissionRefusalPhase::Recipient,
+            recipient_index: Some(0),
+            reply_class: Some(SubmissionRefusalClass::Permanent),
+        }),
+        provider_work: None,
+    });
+    let binding = Binding {
+        link_id: Uuid::now_v7(),
+        sync_generation: 1,
+        grant_generation: 1,
+    };
+    let engine = Engine::new(repository.clone(), Arc::new(TestCipher), transport.clone());
+    let correlation = Uuid::now_v7();
+    let input = DraftInput {
+        correlation,
+        revision: 1,
+        reply_to: None,
+        content: serde_json::json!(
+        {
+            "message_id": "send-once@example.net",
+            "message": {
+                "link_id": binding.link_id,
+                "subject": "test",
+                "to": [
+                    {
+                        "email": "recipient@example.net",
+                        "name": null,
+                        "photo_url": null
+                    }
+                ],
+                "body_text": "payload"
+            },
+            "from": {
+                "email": "owner@example.net",
+                "name": null,
+                "photo_url": null
+            },
+            "parent_message_id": null,
+            "references": null
+        }
+        ),
+    };
+    let created: Draft = serde_json::from_value(
+        engine
+            .execute(binding, Operation::CreateDraft { input })
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+
+    let outcome: SubmissionOutcome = serde_json::from_value(
+        engine
+            .execute(
+                binding,
+                Operation::Submit {
+                    id: created.id.clone(),
+                },
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert!(matches!(
+        outcome,
+        SubmissionOutcome::Rejected {
+            refusal: SubmissionRefusal {
+                phase: SubmissionRefusalPhase::Recipient,
+                recipient_index: Some(0),
+                ..
+            }
+        }
+    ));
+    let state = repository.state.lock().unwrap();
+    assert_eq!(state.drafts[&created.id].submission, None);
+    assert!(state.drafts[&created.id].frozen_content.is_some());
+    // The fixture flag remembers that the Unknown fence was saved before IO;
+    // the persisted current state above proves it was subsequently cleared.
+    assert!(repository.saved_unknown.load(Ordering::Acquire));
+    assert_eq!(transport.submissions.load(Ordering::Acquire), 1);
 }

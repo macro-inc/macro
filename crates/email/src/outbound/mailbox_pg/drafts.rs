@@ -524,6 +524,47 @@ impl DraftRepository for PgMailboxSync {
         Ok(DeliveryStart::Started)
     }
 
+    async fn defer_unsubmitted_delivery(
+        &self,
+        lease: &DraftLease,
+        checkpoint: &DraftCheckpoint,
+    ) -> Result<(), MailboxError> {
+        let mut tx = self.begin().await.map_err(db_error)?;
+        Self::lock_draft(&mut tx, lease).await?;
+        let reset = sqlx::query!(
+            r#"
+            UPDATE
+                email_scheduled_messages
+            SET
+                processing = false,
+                delivery_claim_id = NULL,
+                delivery_lease_expires_at = NULL,
+                delivery_started_at = NULL,
+                delivery_status = 'ready',
+                updated_at = now()
+            WHERE
+                message_id = $1
+                AND link_id = $2
+                AND NOT sent
+                AND processing
+                AND delivery_status = 'ready'
+                AND delivery_started_at IS NULL
+            "#,
+            lease.message_id,
+            lease.mailbox.link_id,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(db_error)?
+        .rows_affected();
+        if reset != 1 {
+            return Err(MailboxError::Stale);
+        }
+        let value = serde_json::to_value(checkpoint).map_err(|_| MailboxError::Persistence)?;
+        sqlx::query!("UPDATE email_mailbox_drafts SET checkpoint = $2,updated_at = now() WHERE message_id = $1",lease.message_id,value).execute(&mut *tx).await.map_err(db_error)?;
+        tx.commit().await.map_err(db_error)
+    }
+
     async fn confirm_sent(
         &self,
         lease: &DraftLease,

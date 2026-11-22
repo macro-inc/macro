@@ -19,6 +19,7 @@ const labels: Record<MessageResolutionAction, string> = {
 
 export function MessageOperationRecovery(props: {
   source: MessageOperationSource;
+  recipientEmails?: readonly string[];
   onReloadDraft?: () => void;
 }) {
   const [pending, setPending] = createSignal(false);
@@ -53,7 +54,7 @@ export function MessageOperationRecovery(props: {
     const operation = props.source.operation();
     if (!operation) return undefined;
     const visible =
-      !!operationDescription(operation) ||
+      !!operationDescription(operation, props.recipientEmails) ||
       reloadReady(operation) ||
       !!decision() ||
       !!error();
@@ -64,10 +65,11 @@ export function MessageOperationRecovery(props: {
       {(operation) => (
         <div
           class="border-b border-edge-muted p-3 text-sm"
+          classList={{ 'text-failure': operation().issue === 'SEND_REJECTED' }}
           role="status"
           aria-live="polite"
         >
-          <Show when={operationDescription(operation())}>
+          <Show when={operationDescription(operation(), props.recipientEmails)}>
             {(description) => <p>{description()}</p>}
           </Show>
           <Show when={reloadReady(operation())}>

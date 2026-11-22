@@ -113,7 +113,16 @@ async fn pooled_session_is_checked_before_mail_and_a_real_rcpt_refusal_stays_def
             tokio::time::Instant::now() + SUBMISSION_PRE_BODY_BUDGET,
         )
         .await;
-    assert_eq!(result, Err(Error::SendRejected));
+    assert_eq!(
+        result,
+        Ok(SubmissionOutcome::Rejected {
+            refusal: SubmissionRefusal {
+                phase: SubmissionRefusalPhase::Recipient,
+                recipient_index: Some(0),
+                reply_class: Some(SubmissionRefusalClass::Permanent)
+            }
+        })
+    );
     assert_eq!(
         peer.await.unwrap(),
         [
@@ -128,15 +137,20 @@ async fn pooled_session_is_checked_before_mail_and_a_real_rcpt_refusal_stays_def
 #[tokio::test]
 async fn closed_pooled_session_is_discarded_before_a_fresh_connection_is_attempted() {
     let (transport, credentials, mut peer, listener) = pooled_connection().await;
-    drop(listener);
     peer.shutdown().await.unwrap();
     drop(peer);
-    // The fixture listener is gone: a fresh connection must fail, rather than
-    // returning the closed socket as if it were ready to carry a submission.
-    assert!(matches!(
-        transport.take_smtp(&credentials).await,
-        Err(Error::TcpUnavailable)
-    ));
+    // Keep the ephemeral port reserved: another parallel fixture could reuse
+    // it after a dropped listener. Accepting proves a fresh dial occurred;
+    // closing that socket makes its TLS handshake fail deterministically.
+    let fresh = tokio::spawn(async move {
+        let (socket, _) = listener.accept().await.unwrap();
+        drop(socket);
+    });
+    assert_eq!(
+        transport.take_smtp(&credentials).await.err(),
+        Some(Error::TlsUnavailable)
+    );
+    fresh.await.unwrap();
     assert!(transport.smtp_pool.lock().await.is_empty());
 }
 

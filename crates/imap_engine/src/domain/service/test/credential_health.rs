@@ -78,6 +78,7 @@ fn fixture(failure: Error) -> Fixture {
         deadline: AtomicBool::new(false),
         sent_found: Default::default(),
         submission_deadline: Default::default(),
+        refusal: None,
         provider_work: Some(Arc::new(ProviderWorkControl {
             failures: BTreeMap::new(),
             organization: None,

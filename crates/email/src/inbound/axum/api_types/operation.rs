@@ -105,6 +105,8 @@ pub struct ApiMessageOperation {
     pub issue: Option<ApiMessageOperationIssue>,
     /// Optional failure detail; older clients can continue using the issue and state.
     pub send_rejection_reason: Option<ApiSendRejectionReason>,
+    /// Sanitized pre-body SMTP refusal; recipient index uses To, Cc, then Bcc order.
+    pub send_refusal: Option<models_email::service::message::SubmissionRefusal>,
 }
 impl From<MessageOperationStatus> for ApiMessageOperation {
     fn from(status: MessageOperationStatus) -> Self {
@@ -114,6 +116,7 @@ impl From<MessageOperationStatus> for ApiMessageOperation {
             remote_version: status.remote_version,
             issue: status.issue.map(Into::into),
             send_rejection_reason: status.send_rejection_reason.map(Into::into),
+            send_refusal: status.send_refusal,
         }
     }
 }

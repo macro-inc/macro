@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            d.message_id,\n            d.state,\n            d.revision,\n            m.provider_version,\n            d.error_code,\n            d.checkpoint->>'stage' AS stage,\n            d.checkpoint->>'send_rejection_reason' AS send_rejection_reason\n        FROM\n            email_mailbox_drafts d\n        JOIN\n            email_messages m ON m.id = d.message_id\n        WHERE\n            d.message_id = ANY($1)\n        ",
+  "query": "\n        SELECT\n            d.message_id,\n            d.state,\n            d.revision,\n            m.provider_version,\n            d.error_code,\n            d.checkpoint->>'stage' AS stage,\n            d.checkpoint->>'send_rejection_reason' AS send_rejection_reason,\n            CASE\n                WHEN d.checkpoint->'revision' = to_jsonb(d.revision)\n                THEN d.checkpoint->'send_refusal'\n            END AS send_refusal\n        FROM\n            email_mailbox_drafts d\n        JOIN\n            email_messages m ON m.id = d.message_id\n        WHERE\n            d.message_id = ANY($1)\n        ",
   "describe": {
     "columns": [
       {
@@ -37,6 +37,11 @@
         "ordinal": 6,
         "name": "send_rejection_reason",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "send_refusal",
+        "type_info": "Jsonb"
       }
     ],
     "parameters": {
@@ -51,8 +56,9 @@
       true,
       true,
       null,
+      null,
       null
     ]
   },
-  "hash": "17f39e99f1a699804e451a319167c44a42088890c10f3842ce461d4160364ed9"
+  "hash": "c1ace9bcc7d660bffbb6aa25e0d8ba700fd7506cfb824fda592f10bca870bc5d"
 }

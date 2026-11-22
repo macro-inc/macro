@@ -214,6 +214,13 @@ impl DraftGateway for ImapMailboxGateway {
         Ok(match self.record(mailbox, result).await? {
             models::SubmissionOutcome::Accepted => SubmissionOutcome::Accepted,
             models::SubmissionOutcome::Unknown => SubmissionOutcome::Unknown,
+            models::SubmissionOutcome::Rejected { refusal } => {
+                return Err(EmailApiError::SendRejected {
+                    reason: SendRejectionReason::ProviderRejected,
+                    refusal: Some(refusal),
+                    message: "SMTP server refused submission before the message body".into(),
+                });
+            }
         })
     }
 }

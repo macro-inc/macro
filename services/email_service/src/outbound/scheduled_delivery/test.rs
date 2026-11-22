@@ -45,6 +45,7 @@ fn explicit_provider_refusal_is_safe_to_restore() {
         EmailApiError::Conflict,
         EmailApiError::SendRejected {
             reason: email_api_client::domain::models::SendRejectionReason::ProviderRejected,
+            refusal: None,
             message: "message exceeded the provider size limit".into(),
         },
         EmailApiError::RateLimited {

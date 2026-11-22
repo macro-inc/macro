@@ -427,6 +427,7 @@ export type ApiMessageOperation = {
     issue?: null | ApiMessageOperationIssue;
     remote_version?: string | null;
     revision: string;
+    send_refusal?: null | SubmissionRefusal;
     send_rejection_reason?: null | ApiSendRejectionReason;
     state: ApiMessageOperationState;
 };
@@ -2151,6 +2152,31 @@ export type Settings = {
     signature?: string | null;
     signature_on_replies_forwards?: boolean | null;
 };
+
+/**
+ * Non-submission evidence without provider text or recipient addresses.
+ */
+export type SubmissionRefusal = {
+    /**
+     * Which command was refused.
+     */
+    phase: SubmissionRefusalPhase;
+    /**
+     * Zero-based position in the frozen To, Cc, then Bcc envelope; recipient refusals only.
+     */
+    recipient_index?: number | null;
+    reply_class?: null | SubmissionRefusalClass;
+};
+
+/**
+ * Closed SMTP refusal class; neither variant authorizes automatic resubmission.
+ */
+export type SubmissionRefusalClass = 'temporary' | 'permanent';
+
+/**
+ * The SMTP command refused before any message body byte was sent.
+ */
+export type SubmissionRefusalPhase = 'sender' | 'recipient' | 'message';
 
 /**
  * Coarse sync state for an inbox, used to render a one-line hint in the

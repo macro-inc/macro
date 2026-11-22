@@ -108,3 +108,39 @@ async fn background_client_clones_preserve_bindings_without_reclassifying_user_r
     assert!(import.folders(binding).await.unwrap().is_empty());
     assert!(user.folders(binding).await.unwrap().is_empty());
 }
+
+#[tokio::test]
+async fn provider_retry_delay_uses_the_response_header_or_body_instead_of_a_fixed_minute() {
+    for (header, body_delay, expected) in [
+        (Some("9"), None, 9),
+        (None, Some(7), 7),
+        (Some("5"), Some(7), 5),
+    ] {
+        let server = MockServer::start().await;
+        let link = Uuid::now_v7();
+        let mut response = ResponseTemplate::new(429)
+            .set_body_json(serde_json::json!({"code":"throttled", "retryAfterSeconds":body_delay}));
+        if let Some(header) = header {
+            response = response.insert_header("Retry-After", header);
+        }
+        Mock::given(method("POST"))
+            .and(path(format!("/internal/v1/accounts/{link}/operations")))
+            .respond_with(response)
+            .expect(1)
+            .mount(&server)
+            .await;
+        let client = ImapServiceClient::new(server.uri(), "synthetic-internal-key".into()).unwrap();
+        let error = client
+            .folders(Binding {
+                link_id: link,
+                sync_generation: 1,
+                grant_generation: 1,
+            })
+            .await
+            .unwrap_err();
+        assert_eq!(
+            serde_json::to_value(error).unwrap(),
+            serde_json::json!({"rate_limited":{"retry_after_seconds":expected}})
+        );
+    }
+}

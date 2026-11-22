@@ -1316,6 +1316,10 @@ type EmailMessageOperation {
 	Optional definite failure detail; old rows retain an unknown reason.
 	"""
 	sendRejectionReason: EmailSendRejectionReason
+	"""
+	Optional pre-body SMTP command refusal, with a recipient position rather than an address.
+	"""
+	sendRefusal: EmailSubmissionRefusal
 }
 
 """
@@ -1526,6 +1530,56 @@ enum EmailSendStatus {
 	This attempt cannot deliver.
 	"""
 	CANCELLED
+}
+
+"""
+Optional command detail that older clients can ignore.
+"""
+type EmailSubmissionRefusal {
+	"""
+	Command whose reply refused submission.
+	"""
+	phase: EmailSubmissionRefusalPhase!
+	"""
+	Zero-based position in the message's To, Cc, then Bcc envelope.
+	"""
+	recipientIndex: Int
+	"""
+	SMTP reply class, absent for a local capability failure.
+	"""
+	replyClass: EmailSubmissionRefusalClass
+}
+
+"""
+Sanitized refusal class; automatic resubmission remains forbidden.
+"""
+enum EmailSubmissionRefusalClass {
+	"""
+	Temporary refusal.
+	"""
+	TEMPORARY
+	"""
+	Permanent refusal.
+	"""
+	PERMANENT
+}
+
+"""
+SMTP command that refused the envelope before message data.
+"""
+enum EmailSubmissionRefusalPhase {
+	"""
+	MAIL FROM was refused.
+	"""
+	SENDER
+	"""
+	A RCPT TO was refused; the entire envelope was abandoned.
+	"""
+	RECIPIENT
+	"""
+	DATA or the advertised message capabilities refused the body.
+	"""
+	MESSAGE
 }
 
 """

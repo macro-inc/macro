@@ -16,7 +16,7 @@ fn actor() -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str(ACTOR).unwrap()
 }
 
-async fn submitted_send(db: &PgPool) -> (PgMailboxSync, EmailPgRepo, DraftLease, Uuid) {
+pub(super) async fn submitted_send(db: &PgPool) -> (PgMailboxSync, EmailPgRepo, DraftLease, Uuid) {
     let (sync, repo, input, link) = setup(db, true).await;
     sqlx::query!("INSERT INTO email_scheduled_messages (link_id,message_id,send_time,actor_id,processing) VALUES ($1,$2,now(),$3,true)",link,input.db_id,ACTOR).execute(db).await.unwrap();
     sqlx::query!("INSERT INTO email_send_attempts (user_id,link_id,attempt_id,message_id,thread_id,send_time) VALUES ($1,$2,$3,$4,$5,now())",ACTOR,link,Uuid::now_v7(),input.db_id,input.thread_db_id).execute(db).await.unwrap();
@@ -92,7 +92,12 @@ async fn deliberate_retry_does_not_project_the_previous_send_rejection_reason(db
 
     let (sync, repo, lease, _) = submitted_send(&db).await;
     let mut checkpoint = checkpoint(&lease, DraftStage::Submitting);
-    checkpoint.send_rejection_reason = Some(SendRejectionReason::ConnectionUnavailable);
+    checkpoint.send_rejection_reason = Some(SendRejectionReason::ProviderRejected);
+    checkpoint.send_refusal = Some(SubmissionRefusal {
+        phase: SubmissionRefusalPhase::Recipient,
+        recipient_index: Some(0),
+        reply_class: Some(SubmissionRefusalClass::Permanent),
+    });
     sync.checkpoint_draft(&lease, &checkpoint).await.unwrap();
     sync.fail_draft(&lease, DraftFailure::SendRejected)
         .await
@@ -105,7 +110,11 @@ async fn deliberate_retry_does_not_project_the_previous_send_rejection_reason(db
         .unwrap();
     assert_eq!(
         MessageOperationStatus::from(facts.clone()).send_rejection_reason,
-        Some(SendRejectionReason::ConnectionUnavailable)
+        Some(SendRejectionReason::ProviderRejected)
+    );
+    assert_eq!(
+        MessageOperationStatus::from(facts.clone()).send_refusal,
+        checkpoint.send_refusal
     );
     let retry = plan_resolution(
         facts.clone(),
@@ -131,6 +140,7 @@ async fn deliberate_retry_does_not_project_the_previous_send_rejection_reason(db
     assert_eq!(status.state, MessageOperationState::Pending);
     assert_eq!(status.issue, None);
     assert_eq!(status.send_rejection_reason, None);
+    assert_eq!(status.send_refusal, None);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

@@ -106,25 +106,31 @@ impl IntoResponse for ApiError {
             | Error::SendUnavailable
             | Error::ConnectionTimedOut => StatusCode::SERVICE_UNAVAILABLE,
             Error::SendRejected => StatusCode::UNPROCESSABLE_ENTITY,
-            Error::Throttled | Error::AccountBusy => StatusCode::TOO_MANY_REQUESTS,
+            Error::Throttled | Error::RateLimited { .. } | Error::AccountBusy => {
+                StatusCode::TOO_MANY_REQUESTS
+            }
             Error::MessageTooLarge | Error::SnapshotTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
+        };
+        let (code, retry_after_seconds) = match self.0 {
+            Error::RateLimited {
+                retry_after_seconds,
+            } => (Error::Throttled, Some(retry_after_seconds.clamp(1, 86_400))),
+            Error::Throttled => (self.0, Some(60)),
+            Error::AccountBusy => (self.0, Some(5)),
+            _ => (self.0, None),
         };
         let mut response = (
             status,
             Json(serde_json::json!({
-                "code": self.0,
-                "retryAfterSeconds": if matches!(self.0, Error::Throttled | Error::AccountBusy) {
-                    Some(5)
-                } else {
-                    None
-                },
+                "code": code,
+                "retryAfterSeconds": retry_after_seconds,
             })),
         )
             .into_response();
-        if matches!(self.0, Error::Throttled | Error::AccountBusy) {
-            response
-                .headers_mut()
-                .insert("retry-after", axum::http::HeaderValue::from_static("5"));
+        if let Some(seconds) = retry_after_seconds
+            && let Ok(value) = axum::http::HeaderValue::from_str(&seconds.to_string())
+        {
+            response.headers_mut().insert("retry-after", value);
         }
         response
     }

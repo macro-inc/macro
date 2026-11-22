@@ -1017,29 +1017,166 @@
         }
       },
       "Error": {
-        "type": "string",
-        "description": "Only closed, non-sensitive failure classes cross the HTTP boundary.",
-        "enum": [
-          "invalid",
-          "forbidden",
-          "not_found",
-          "conflict",
-          "cursor_outdated",
-          "credentials_rejected",
-          "credentials_unavailable",
-          "credentials_unreadable",
-          "connection_unavailable",
-          "dns_unavailable",
-          "tcp_unavailable",
-          "tls_unavailable",
-          "connection_timed_out",
-          "send_rejected",
-          "send_unavailable",
-          "throttled",
-          "account_busy",
-          "snapshot_too_large",
-          "message_too_large"
-        ]
+        "oneOf": [
+          {
+            "type": "string",
+            "description": "Invalid request or unsafe endpoint.",
+            "enum": [
+              "invalid"
+            ]
+          },
+          {
+            "type": "string",
+            "description": "Owner or host confirmation missing.",
+            "enum": [
+              "forbidden"
+            ]
+          },
+          {
+            "type": "string",
+            "description": "Persisted object absent.",
+            "enum": [
+              "not_found"
+            ]
+          },
+          {
+            "type": "string",
+            "description": "Conditional edit or binding changed.",
+            "enum": [
+              "conflict"
+            ]
+          },
+          {
+            "type": "string",
+            "description": "Cursor is not valid for this folder epoch.",
+            "enum": [
+              "cursor_outdated"
+            ]
+          },
+          {
+            "type": "string",
+            "description": "Provider permanently refused credentials.",
+            "enum": [
+              "credentials_rejected"
+            ]
+          },
+          {
+            "type": "string",
+            "description": "Password decryption temporarily unavailable.",
+            "enum": [
+              "credentials_unavailable"
+            ]
+          },
+          {
+            "type": "string",
+            "description": "The saved credential document cannot be decrypted with the configured key.",
+            "enum": [
+              "credentials_unreadable"
+            ]
+          },
+          {
+            "type": "string",
+            "description": "Transient provider or database failure.",
+            "enum": [
+              "connection_unavailable"
+            ]
+          },
+          {
+            "type": "string",
+            "description": "The public mail-server hostname could not be resolved.",
+            "enum": [
+              "dns_unavailable"
+            ]
+          },
+          {
+            "type": "string",
+            "description": "The resolved mail server did not accept a TCP connection.",
+            "enum": [
+              "tcp_unavailable"
+            ]
+          },
+          {
+            "type": "string",
+            "description": "The server's authenticated TLS handshake failed.",
+            "enum": [
+              "tls_unavailable"
+            ]
+          },
+          {
+            "type": "string",
+            "description": "A bounded connection or verification operation timed out.",
+            "enum": [
+              "connection_timed_out"
+            ]
+          },
+          {
+            "type": "string",
+            "description": "Send rejected before acceptance.",
+            "enum": [
+              "send_rejected"
+            ]
+          },
+          {
+            "type": "string",
+            "description": "No DATA bytes were submitted after a bounded fresh-connection retry.",
+            "enum": [
+              "send_unavailable"
+            ]
+          },
+          {
+            "type": "string",
+            "description": "Resource or attempt limit reached.",
+            "enum": [
+              "throttled"
+            ]
+          },
+          {
+            "type": "object",
+            "description": "Provider throttling with the sanitized retry hint carried by an internal client.",
+            "required": [
+              "rate_limited"
+            ],
+            "properties": {
+              "rate_limited": {
+                "type": "object",
+                "description": "Provider throttling with the sanitized retry hint carried by an internal client.",
+                "required": [
+                  "retry_after_seconds"
+                ],
+                "properties": {
+                  "retry_after_seconds": {
+                    "type": "integer",
+                    "format": "int32",
+                    "description": "Minimum retry delay in seconds, bounded by the internal client.",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "string",
+            "description": "The account command quota refused admission before this provider call.",
+            "enum": [
+              "account_busy"
+            ]
+          },
+          {
+            "type": "string",
+            "description": "A full synchronization snapshot exceeds its bounded safe working set.",
+            "enum": [
+              "snapshot_too_large"
+            ]
+          },
+          {
+            "type": "string",
+            "description": "The full message source exceeds the supported content limit.",
+            "enum": [
+              "message_too_large"
+            ]
+          }
+        ],
+        "description": "Only closed, non-sensitive failure classes cross the HTTP boundary."
       },
       "ErrorBody": {
         "type": "object",
@@ -1831,11 +1968,94 @@
         }
       },
       "SubmissionOutcome": {
+        "oneOf": [
+          {
+            "type": "string",
+            "description": "Provider accepted the transaction.",
+            "enum": [
+              "accepted"
+            ]
+          },
+          {
+            "type": "string",
+            "description": "Provider may have accepted it.",
+            "enum": [
+              "unknown"
+            ]
+          },
+          {
+            "type": "object",
+            "description": "A typed refusal before any body byte; the whole envelope was abandoned.",
+            "required": [
+              "rejected"
+            ],
+            "properties": {
+              "rejected": {
+                "type": "object",
+                "description": "A typed refusal before any body byte; the whole envelope was abandoned.",
+                "required": [
+                  "refusal"
+                ],
+                "properties": {
+                  "refusal": {
+                    "$ref": "#/components/schemas/SubmissionRefusal",
+                    "description": "Closed non-submission evidence with no address or provider text."
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "description": "Submission acknowledgment. Unknown must never be retried automatically."
+      },
+      "SubmissionRefusal": {
+        "type": "object",
+        "description": "Non-submission evidence without provider text or recipient addresses.",
+        "required": [
+          "phase"
+        ],
+        "properties": {
+          "phase": {
+            "$ref": "#/components/schemas/SubmissionRefusalPhase",
+            "description": "Which command was refused."
+          },
+          "recipient_index": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Zero-based position in the frozen To, Cc, then Bcc envelope; recipient refusals only.",
+            "minimum": 0
+          },
+          "reply_class": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SubmissionRefusalClass",
+                "description": "Sanitized SMTP reply class; absent for a local capability/size rejection."
+              }
+            ]
+          }
+        }
+      },
+      "SubmissionRefusalClass": {
         "type": "string",
-        "description": "Submission acknowledgment. Unknown must never be retried automatically.",
+        "description": "Closed SMTP refusal class; neither variant authorizes automatic resubmission.",
         "enum": [
-          "accepted",
-          "unknown"
+          "temporary",
+          "permanent"
+        ]
+      },
+      "SubmissionRefusalPhase": {
+        "type": "string",
+        "description": "The SMTP command refused before any message body byte was sent.",
+        "enum": [
+          "sender",
+          "recipient",
+          "message"
         ]
       },
       "TlsMode": {

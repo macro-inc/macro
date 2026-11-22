@@ -2,7 +2,9 @@
 
 use serde::{Deserialize, Serialize};
 
-pub use models_email::service::message::SendRejectionReason;
+pub use models_email::service::message::{
+    SendRejectionReason, SubmissionRefusal, SubmissionRefusalClass, SubmissionRefusalPhase,
+};
 
 #[cfg(test)]
 mod test;
@@ -21,8 +23,9 @@ pub enum StoredOperationState {
     Failed,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::AsRefStr)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum DraftStage {
     Inspect,
     Creating,
@@ -77,6 +80,7 @@ pub struct MessageOperationFacts {
     pub issue: Option<MessageOperationIssue>,
     /// Optional definite non-submission reason; legacy rows retain no inferred reason.
     pub send_rejection_reason: Option<SendRejectionReason>,
+    pub send_refusal: Option<models_email::service::message::SubmissionRefusal>,
 }
 
 #[derive(Debug, Clone)]
@@ -87,6 +91,7 @@ pub struct MessageOperationStatus {
     pub issue: Option<MessageOperationIssue>,
     /// Optional definite non-submission reason, independent of the compatible issue code.
     pub send_rejection_reason: Option<SendRejectionReason>,
+    pub send_refusal: Option<models_email::service::message::SubmissionRefusal>,
 }
 
 impl From<MessageOperationFacts> for MessageOperationStatus {
@@ -119,6 +124,11 @@ impl From<MessageOperationFacts> for MessageOperationStatus {
             issue: facts.issue,
             // A deliberate retry or a later failure can retain an old checkpoint.
             // Only the current rejection issue makes that reason actionable.
+            send_refusal: if facts.issue == Some(MessageOperationIssue::SendRejected) {
+                facts.send_refusal
+            } else {
+                None
+            },
             send_rejection_reason: if facts.issue == Some(MessageOperationIssue::SendRejected) {
                 facts.send_rejection_reason
             } else {

@@ -80,7 +80,16 @@ async fn exchange(
     (outcome, transcript)
 }
 fn rejected_before_envelope(outcome: Result<SubmissionOutcome, Error>, transcript: &Transcript) {
-    assert!(matches!(outcome, Err(Error::SendRejected)));
+    assert!(matches!(
+        outcome,
+        Ok(SubmissionOutcome::Rejected {
+            refusal: SubmissionRefusal {
+                phase: SubmissionRefusalPhase::Message,
+                recipient_index: None,
+                reply_class: None
+            }
+        })
+    ));
     assert_eq!(
         transcript.commands.len(),
         1,
@@ -95,12 +104,72 @@ const ASCII: &str =
 #[tokio::test]
 async fn refusal_before_data_is_definite_and_any_negative_final_reply_is_unknown() {
     for (phase, refusal, expected) in [
-        ("mail", 451, Err(Error::SendRejected)),
-        ("mail", 550, Err(Error::SendRejected)),
-        ("recipient", 450, Err(Error::SendRejected)),
-        ("recipient", 550, Err(Error::SendRejected)),
-        ("data", 451, Err(Error::SendRejected)),
-        ("data", 554, Err(Error::SendRejected)),
+        (
+            "mail",
+            451,
+            Ok(SubmissionOutcome::Rejected {
+                refusal: SubmissionRefusal {
+                    phase: SubmissionRefusalPhase::Sender,
+                    recipient_index: None,
+                    reply_class: Some(SubmissionRefusalClass::Temporary),
+                },
+            }),
+        ),
+        (
+            "mail",
+            550,
+            Ok(SubmissionOutcome::Rejected {
+                refusal: SubmissionRefusal {
+                    phase: SubmissionRefusalPhase::Sender,
+                    recipient_index: None,
+                    reply_class: Some(SubmissionRefusalClass::Permanent),
+                },
+            }),
+        ),
+        (
+            "recipient",
+            450,
+            Ok(SubmissionOutcome::Rejected {
+                refusal: SubmissionRefusal {
+                    phase: SubmissionRefusalPhase::Recipient,
+                    recipient_index: Some(0),
+                    reply_class: Some(SubmissionRefusalClass::Temporary),
+                },
+            }),
+        ),
+        (
+            "recipient",
+            550,
+            Ok(SubmissionOutcome::Rejected {
+                refusal: SubmissionRefusal {
+                    phase: SubmissionRefusalPhase::Recipient,
+                    recipient_index: Some(0),
+                    reply_class: Some(SubmissionRefusalClass::Permanent),
+                },
+            }),
+        ),
+        (
+            "data",
+            451,
+            Ok(SubmissionOutcome::Rejected {
+                refusal: SubmissionRefusal {
+                    phase: SubmissionRefusalPhase::Message,
+                    recipient_index: None,
+                    reply_class: Some(SubmissionRefusalClass::Temporary),
+                },
+            }),
+        ),
+        (
+            "data",
+            554,
+            Ok(SubmissionOutcome::Rejected {
+                refusal: SubmissionRefusal {
+                    phase: SubmissionRefusalPhase::Message,
+                    recipient_index: None,
+                    reply_class: Some(SubmissionRefusalClass::Permanent),
+                },
+            }),
+        ),
         ("final", 451, Ok(SubmissionOutcome::Unknown)),
         ("final", 554, Ok(SubmissionOutcome::Unknown)),
         ("final", 250, Ok(SubmissionOutcome::Accepted)),
@@ -345,8 +414,73 @@ async fn recipient_refusal_returns_without_waiting_for_connection_cleanup() {
         )
         .await
         .expect("a definitive refusal must not wait for cleanup");
-        assert_eq!(result, Err(Error::SendRejected));
+        assert_eq!(
+            result,
+            Ok(SubmissionOutcome::Rejected {
+                refusal: SubmissionRefusal {
+                    phase: SubmissionRefusalPhase::Recipient,
+                    recipient_index: Some(0),
+                    reply_class: Some(if code < 500 {
+                        SubmissionRefusalClass::Temporary
+                    } else {
+                        SubmissionRefusalClass::Permanent
+                    })
+                }
+            })
+        );
         drop(client);
         peer.await.unwrap();
     }
+}
+
+#[tokio::test]
+async fn recipient_refusal_preserves_its_position_and_never_submits_to_accepted_recipients() {
+    let (mut client, server) = tokio::io::duplex(4096);
+    let peer = tokio::spawn(async move {
+        let mut server = BufReader::new(server);
+        let mut commands = Vec::new();
+        loop {
+            let mut line = String::new();
+            if server.read_line(&mut line).await.unwrap() == 0 {
+                break;
+            }
+            let refused = line == "RCPT TO:<refused@example.net>\r\n";
+            commands.push(line);
+            server
+                .get_mut()
+                .write_all(if refused {
+                    b"550 recipient refused\r\n"
+                } else {
+                    b"250 accepted\r\n"
+                })
+                .await
+                .unwrap();
+        }
+        commands
+    });
+    let result = deliver(
+        &mut client,
+        &Extensions::default(),
+        "owner@example.net",
+        &[
+            "accepted@example.net".into(),
+            "refused@example.net".into(),
+            "later@example.net".into(),
+        ],
+        ASCII,
+        tokio::time::Instant::now() + SUBMISSION_PRE_BODY_BUDGET,
+    )
+    .await;
+    drop(client);
+    let commands = peer.await.unwrap();
+    assert_eq!(commands.len(), 3);
+    assert!(!commands.iter().any(|line| line == "DATA\r\n"));
+    assert_eq!(
+        serde_json::to_value(result).unwrap(),
+        serde_json::json!({
+            "Ok": {"rejected": {"refusal": {
+                "phase": "recipient", "recipient_index": 1, "reply_class": "permanent"
+            }}}
+        })
+    );
 }

@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SET LOCAL enable_bitmapscan = off",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "2278f2acd6303ee7a3870568098dcc062f46646fe95f8286ebd6d5614c690a9a"
+}

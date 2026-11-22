@@ -193,6 +193,7 @@ pub(crate) struct UncertainTransport {
     pub(crate) submissions: std::sync::atomic::AtomicU32,
     pub(crate) deadline: AtomicBool,
     pub(crate) submission_deadline: std::sync::Mutex<Option<tokio::time::Instant>>,
+    pub(crate) refusal: Option<SubmissionRefusal>,
     pub(crate) sent_found: std::sync::Mutex<std::collections::BTreeSet<String>>,
     pub(crate) provider_work: Option<Arc<ProviderWorkControl>>,
 }
@@ -310,7 +311,9 @@ impl MailTransport for UncertainTransport {
         *self.submission_deadline.lock().unwrap() = Some(pre_body_deadline);
         self.submissions.fetch_add(1, Ordering::AcqRel);
         Ok(TransportSubmission {
-            outcome: SubmissionOutcome::Unknown,
+            outcome: self.refusal.map_or(SubmissionOutcome::Unknown, |refusal| {
+                SubmissionOutcome::Rejected { refusal }
+            }),
             deadline_exceeded: self.deadline.load(Ordering::Acquire),
         })
     }

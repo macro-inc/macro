@@ -1992,3 +1992,12 @@ mobile, and email inbox checks.
 IMAP size limits: an oversized monitored folder pauses the whole account snapshot, including new Inbox mail. The inbox list and selected empty-inbox view show "Mailbox too large to sync yet" while previously indexed mail stays readable; the empty view must not claim Inbox zero while sync is blocked. Automatic retries grow from one hour to twenty-four hours; a successful round or manual reconnect resets that delay. Changing folder settings allows one immediate attempt; the warning suggests unselecting large folders and shows the next retry time when available. This is separate from sign-in rejection; do not reconnect automatically or promise older mail has imported.
 
 Saved IMAP password recovery: verified per-account ciphertext corruption that qualifies under the fleet guard shows "Reconnect your inbox" and "Macro can't read this mailbox's saved password. Reconnect to continue." This is distinct from a rejected provider sign-in. In Mail settings, Change login details stays reachable even when reading the existing server settings fails. A verified reconnect repairs the same link and clears the warning; temporary credential-service outages, unproven key/context failures, and small replicas with fewer than twenty observed accounts continue retrying without this warning; Change login details remains available. Test with synthetic credentials only.
+
+IMAP send refusals identify sender, recipient or message refusal when the server
+provides that evidence. A recipient refusal names the address from the already
+loaded message; no accepted recipient receives the body after another RCPT is
+refused. The send is marked failed, with details in the conversation or Drafts,
+and requires a deliberate recovery. A local queued-send timer must never say
+Delivery unconfirmed before a provider outcome. Reconnect uses the Reconnect
+action; server fields stack at full dialog width and port choices name SSL/TLS
+or STARTTLS in both the selected value and menu.

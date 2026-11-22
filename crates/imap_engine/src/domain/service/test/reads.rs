@@ -76,6 +76,7 @@ fn read_fixture(
         deadline: AtomicBool::new(false),
         sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
         submission_deadline: std::sync::Mutex::new(None),
+        refusal: None,
         provider_work: Some(control.clone()),
     });
     let engine = Engine::new(repository.clone(), Arc::new(TestCipher), transport);

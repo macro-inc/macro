@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            mr.message_id,\n            c.id,\n            c.link_id,\n            c.email_address,\n            COALESCE(mr.name, c.name) as \"name\", -- name from message overrides contact name\n            c.original_photo_url,\n            c.sfs_photo_url,\n            c.created_at,\n            c.updated_at,\n            mr.recipient_type as \"recipient_type!: db::address::EmailRecipientType\"\n        FROM email_message_recipients mr\n        JOIN email_contacts c ON mr.contact_id = c.id\n        WHERE mr.message_id = $1\n        ORDER BY mr.recipient_type\n        ",
+  "query": "\n        SELECT\n            mr.message_id,\n            c.id,\n            c.link_id,\n            c.email_address,\n            COALESCE(mr.name, c.name) as \"name\", -- name from message overrides contact name\n            c.original_photo_url,\n            c.sfs_photo_url,\n            c.created_at,\n            c.updated_at,\n            mr.recipient_type as \"recipient_type!: db::address::EmailRecipientType\"\n        FROM email_message_recipients mr\n        JOIN email_contacts c ON mr.contact_id = c.id\n        WHERE mr.message_id = $1\n        ORDER BY mr.recipient_type, mr.contact_id\n        ",
   "describe": {
     "columns": [
       {
@@ -83,5 +83,5 @@
       false
     ]
   },
-  "hash": "aec91142f83fc2f19972a0ae096e3b21c571b2c5a97baa04d68a2f6da500bd79"
+  "hash": "be46cd89ddd17d5351404e6f9adc886cc3b75ad441ef9ce5bed746b1ce7eb60f"
 }

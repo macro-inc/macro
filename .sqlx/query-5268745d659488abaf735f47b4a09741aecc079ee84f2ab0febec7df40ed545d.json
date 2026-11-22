@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_contacts (id, link_id, email_address)\n        VALUES\n            ($2, $3, 'second@example.com'),\n            ($1, $3, 'first@example.com')\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5268745d659488abaf735f47b4a09741aecc079ee84f2ab0febec7df40ed545d"
+}

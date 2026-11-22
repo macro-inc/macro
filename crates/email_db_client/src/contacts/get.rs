@@ -245,7 +245,7 @@ where
         FROM email_message_recipients mr
         JOIN email_contacts c ON mr.contact_id = c.id
         WHERE mr.message_id = $1
-        ORDER BY mr.recipient_type
+        ORDER BY mr.recipient_type, mr.contact_id
         "#,
         message_db_id
     )
@@ -301,7 +301,7 @@ where
         JOIN email_contacts c ON mr.contact_id = c.id
         WHERE
             m.id = ANY($1)
-        ORDER BY mr.message_id, mr.recipient_type
+        ORDER BY mr.message_id, mr.recipient_type, mr.contact_id
         "#,
         message_ids
     )

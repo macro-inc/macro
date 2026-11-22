@@ -131,7 +131,7 @@ async fn two_replicas_serialize_commands_and_reject_stale_or_other_provider_bind
     let mut command = first.acquire(binding).await.unwrap();
     assert!(matches!(
         second.acquire(binding).await,
-        Err(Error::Throttled)
+        Err(Error::AccountBusy)
     ));
     let reader = crate::domain::service::Engine::new(
         std::sync::Arc::new(PgRepository::new(pool.clone())),
@@ -308,7 +308,10 @@ async fn connection_owner_takeover_is_fenced_and_old_owner_cannot_release_succes
     // Cancellation during hydration drops the still-uncommitted claim. A peer
     // fails fast on its row lock and can acquire immediately after rollback.
     let (tx, staged) = repo.begin_acquisition(binding).await.unwrap();
-    assert!(matches!(repo.acquire(binding).await, Err(Error::Throttled)));
+    assert!(matches!(
+        repo.acquire(binding).await,
+        Err(Error::AccountBusy)
+    ));
     let first_owner = tokio::time::timeout(
         std::time::Duration::from_secs(2),
         repo.claim_owner(binding, a),

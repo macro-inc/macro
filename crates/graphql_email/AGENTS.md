@@ -47,3 +47,7 @@ types, the `EmailThread` edge resolvers, and draft mutations.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`
+
+Optional send_refusal exposes typed phase/class and a recipient position, never
+an additional address. Regenerate SDL after extending these fields and keep
+older operation queries valid; legacy checkpoints project no refusal detail.

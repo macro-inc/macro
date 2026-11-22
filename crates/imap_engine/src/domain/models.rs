@@ -313,6 +313,10 @@ pub struct UploadSession {
     pub attachment: Option<DraftAttachment>,
 }
 
+pub use models_email::service::message::{
+    SubmissionRefusal, SubmissionRefusalClass, SubmissionRefusalPhase,
+};
+
 /// Submission acknowledgment. Unknown must never be retried automatically.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -321,6 +325,11 @@ pub enum SubmissionOutcome {
     Accepted,
     /// Provider may have accepted it.
     Unknown,
+    /// A typed refusal before any body byte; the whole envelope was abandoned.
+    Rejected {
+        /// Closed non-submission evidence with no address or provider text.
+        refusal: SubmissionRefusal,
+    },
 }
 
 /// Only closed, non-sensitive failure classes cross the HTTP boundary.
@@ -375,6 +384,12 @@ pub enum Error {
     /// Resource or attempt limit reached.
     #[error("throttled")]
     Throttled,
+    /// Provider throttling with the sanitized retry hint carried by an internal client.
+    #[error("rate limited")]
+    RateLimited {
+        /// Minimum retry delay in seconds, bounded by the internal client.
+        retry_after_seconds: u32,
+    },
     /// The account command quota refused admission before this provider call.
     #[error("account busy")]
     AccountBusy,

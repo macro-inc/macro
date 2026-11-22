@@ -177,7 +177,7 @@ function ServerSendStatus(props: { row: ServerEmailSend }) {
           {status() === 'ACCEPTED'
             ? 'Scheduled'
             : status() === 'FAILED'
-              ? 'Send failed before delivery. Cancel to recover this draft.'
+              ? 'Message not sent. See its conversation or Drafts for details.'
               : status() === 'DELIVERY_UNCONFIRMED'
                 ? 'Delivery unconfirmed. Check sent mail; we will not resend automatically.'
                 : 'Sending'}
@@ -215,7 +215,7 @@ function SendStatus(props: {
     if (status() === 'DELIVERY_UNCONFIRMED')
       return 'Delivery unconfirmed. Your email may already have been sent. Check your sent mail. We will not resend automatically.';
     if (status() === 'FAILED')
-      return 'Send failed before delivery. Cancel to recover this draft.';
+      return 'Message not sent. See its conversation or Drafts for details.';
     if (props.intent.dispatch?.paused) return props.intent.dispatch.error;
     if (props.intent.phase === 'failed')
       return 'Send needs attention. Cancel to recover this draft.';

@@ -9,6 +9,7 @@ fn uncertain() -> MessageOperationFacts {
         remote_version: Some("opaque-version".into()),
         issue: Some(MessageOperationIssue::SendUnknown),
         send_rejection_reason: None,
+        send_refusal: None,
     }
 }
 

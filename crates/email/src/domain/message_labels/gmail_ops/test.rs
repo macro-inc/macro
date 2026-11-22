@@ -193,6 +193,7 @@ async fn provider_errors_keep_the_queue_route_and_original_reason_for_every_vari
         (
             EmailApiError::SendRejected {
                 reason: email_api_client::domain::models::SendRejectionReason::ProviderRejected,
+                refusal: None,
                 message: "send".into(),
             },
             false,

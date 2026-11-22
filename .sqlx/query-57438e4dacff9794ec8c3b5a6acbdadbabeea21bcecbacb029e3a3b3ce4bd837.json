@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE\n            email_links\n        SET\n            provider = 'OUTLOOK'\n        WHERE\n            id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "57438e4dacff9794ec8c3b5a6acbdadbabeea21bcecbacb029e3a3b3ce4bd837"
+}

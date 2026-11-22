@@ -58,3 +58,7 @@ rolling upgrades; decoding old payloads must never attach a current generation.
 - `sign_in_email` recognises Macro's own sign-in emails by sender: the addresses FusionAuth and the auth service send sign-in mail from, which send nothing else. Its tests read the FusionAuth stack's per-environment config and the local kickstart, so a changed sender fails them; update `SIGN_IN_SENDERS` with it.
 
 Optional MailboxIssue is sync health independent of authentication; retain a generic unknown fallback at deployed boundaries. API links expose it without widening the service Link database row.
+
+SubmissionRefusal carries a closed command phase, reply class and optional
+recipient position. Preserve the frozen To/Cc/Bcc ordering across adapters;
+never put recipient addresses or provider prose in the refusal detail.

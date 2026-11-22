@@ -39,6 +39,7 @@ export function announceQueuedSend(options: {
   let offeringUndo = false;
   let undoRequested = false;
   let accepted = false;
+  let finished = false;
   let lastProgress: string | undefined;
   let lastUndoUntil: string | undefined;
   let undoDeadline: ReturnType<typeof setTimeout> | undefined;
@@ -113,16 +114,12 @@ export function announceQueuedSend(options: {
     clearTimeout(stall);
     if (!inMotion) return;
     stall = setTimeout(() => {
+      // Server acceptance only means the durable queue accepted the intent,
+      // not that SMTP has begun or accepted anything. A local timer cannot
+      // infer delivery uncertainty; only the server's typed outcome can.
       inMotion = false;
-      if (notice != null) {
-        if (accepted && !offeringUndo) {
-          show('alert', 'Delivery unconfirmed', {
-            subtext: 'Check your sent mail. We will not resend automatically.',
-          });
-        } else {
-          sending(sendingMessage, offeringUndo);
-        }
-      }
+      if (notice != null)
+        sending(accepted ? 'Still sending…' : sendingMessage, offeringUndo);
     }, STALLED_SEND_MS);
   };
   // Delivery has begun: Undo goes, and the notice waits for the outcome.
@@ -137,6 +134,7 @@ export function announceQueuedSend(options: {
   if (!options.sendAttemptId) return;
   watchForStall();
   options.delivery.watchSend?.(options.sendAttemptId, (progress) => {
+    if (finished) return;
     const changed = progress.state !== lastProgress;
     lastProgress = progress.state;
     match(progress)
@@ -166,16 +164,21 @@ export function announceQueuedSend(options: {
         clearTimeout(undoDeadline);
         undoDeadline = setTimeout(closeUndo, remaining);
       })
-      .with({ state: 'sent' }, () => finish('success', 'Email sent'))
+      .with({ state: 'sent' }, () => {
+        finished = true;
+        finish('success', 'Email sent');
+      })
       .with({ state: 'failed' }, () => {
+        finished = true;
         finish('failure', 'Email failed to send', {
           subtext:
-            'Open its conversation or Drafts and choose Cancel to recover the draft.',
+            'See the conversation or Drafts for the reason and recovery options.',
           persistent: true,
         });
         options.onUndelivered?.();
       })
       .with({ state: 'cancelled' }, () => {
+        finished = true;
         withdraw();
         options.onUndelivered?.();
       })

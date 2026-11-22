@@ -73,6 +73,7 @@ fn map_send_error(error: gmail_client::GmailApiHttpError) -> EmailApiError {
     match map_gmail_error(error) {
         EmailApiError::Permanent { message } if rejected => EmailApiError::SendRejected {
             reason: SendRejectionReason::ProviderRejected,
+            refusal: None,
             message,
         },
         error => error,

@@ -27,6 +27,7 @@ async fn failure_detail_is_optional_and_does_not_change_existing_client_queries(
                     remote_version: None,
                     issue: Some(MessageOperationIssue::SendRejected),
                     send_rejection_reason: reason,
+                    send_refusal: None,
                 }
                 .into(),
             },
@@ -49,4 +50,39 @@ async fn failure_detail_is_optional_and_does_not_change_existing_client_queries(
             serde_json::json!({"operation":{"state":"FAILED","issue":"SEND_REJECTED","sendRejectionReason":wire}})
         );
     }
+}
+
+#[tokio::test]
+async fn smtp_refusal_detail_uses_closed_types_without_transporting_recipient_addresses() {
+    use email::domain::models::mailbox_operation::{
+        SubmissionRefusal, SubmissionRefusalClass, SubmissionRefusalPhase,
+    };
+    let schema = Schema::build(
+        Query {
+            operation: MessageOperationStatus {
+                state: MessageOperationState::Failed,
+                revision: 7,
+                remote_version: None,
+                issue: Some(MessageOperationIssue::SendRejected),
+                send_rejection_reason: Some(SendRejectionReason::ProviderRejected),
+                send_refusal: Some(SubmissionRefusal {
+                    phase: SubmissionRefusalPhase::Recipient,
+                    recipient_index: Some(1),
+                    reply_class: Some(SubmissionRefusalClass::Permanent),
+                }),
+            }
+            .into(),
+        },
+        EmptyMutation,
+        EmptySubscription,
+    )
+    .finish();
+    let result = schema
+        .execute("{ operation { sendRefusal { phase recipientIndex replyClass } } }")
+        .await;
+    assert!(result.errors.is_empty());
+    assert_eq!(
+        result.data.into_json().unwrap(),
+        serde_json::json!({"operation":{"sendRefusal":{"phase":"RECIPIENT","recipientIndex":1,"replyClass":"PERMANENT"}}})
+    );
 }

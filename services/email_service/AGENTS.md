@@ -465,3 +465,8 @@ IMAP category deletion lists Organization metadata (flags and keywords), never
 full MIME bodies. An oversized message must not prevent removing its keyword.
 
 Follow the [validation cap and recovery contract](../../docs/runbooks/email-provider-repair.md#validation-failures-and-the-constraint-cap).
+
+IMAP submission refuses an entire envelope before DATA when any RCPT is refused.
+Forward its optional typed phase/class/recipient position unchanged into the
+durable send_rejected detail; never infer the phase from sanitized prose or put
+an address in logs. Keep AccountBusy local and preserve provider retry hints.

@@ -15,6 +15,7 @@ mod owned_address_read;
 mod preview;
 mod project;
 mod project_scope_dynamic_query;
+mod recipient_order;
 mod reminder_collection;
 mod scheduled;
 mod scheduled_trash;

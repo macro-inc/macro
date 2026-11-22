@@ -65,6 +65,38 @@ settlement. Recovery of that fact fails the attempt without reading or submittin
 again. HTTP/GraphQL status adds an optional reason without changing existing issue
 enum values. Only the current send-rejection issue projects that reason; a
 deliberate retry or another failure does not expose an old checkpoint reason.
+The optional `send_refusal` detail adds a closed sender/recipient/message phase,
+reply class, and the refused recipient's zero-based position in the frozen To,
+Cc, then Bcc envelope. It contains no address or provider text. A recipient refusal
+abandons the entire envelope before DATA, including any earlier accepted RCPTs.
+The owner UI resolves the position against its existing message recipients.
+Frozen aggregates and every recipient read sort each type by contact_id; the
+(message_id, contact_id, recipient_type) primary key makes that order total.
+There is no stored typed-entry order: recipients now display in deterministic
+contact-id order instead of an arbitrary physical order. A checkpoint whose
+revision differs from the current draft projects no recipient refusal detail.
+The engine returns a typed rejection but clears the Unknown fence before saving;
+it never persists a new submission-outcome value that an older binary cannot read.
+Only a current `send_rejected` issue projects the detail. Old checkpoints have none.
+
+A queued send's server acceptance is distinct from SMTP acceptance. A client-side
+stall timer never infers delivery uncertainty; only the server's actual unconfirmed
+outcome may display that warning. Local account row-lock or command-lease contention
+returns `AccountBusy`, not provider `Throttled`; the internal client preserves a
+provider Retry-After header or body hint. Local draft retries start at five
+seconds and double to a sixty-second ceiling across claims; a defaulted checkpoint
+count survives worker restarts and clears on progress. Provider pacing remains
+unchanged (generic provider/host limits keep a sixty-second floor). A local admission failure at Submit atomically resets
+the Ready checkpoint and schedule processing/start markers under the command
+lease before releasing for that short retry; only proven pre-IO failures may
+clear those markers. The `email.mailbox.draft` span
+records the stage, due-time lag, retry seconds and closed error kind.
+
+The [refusal and retry query plans](../design/imap-submission-refusal-query-plans.json)
+cover the changed projections, recipient ordering, fenced reset and reused claim
+locks with synthetic local data. The fixture is below production size; unchanged
+attachment-side joins are not scale-seeded, so no production latency is claimed.
+
 Legacy rows have an unknown reason. A permit wait that expires before inspecting
 the prior durable submission remains a generic connectivity failure. SMTP attempt
 and outcome span fields are written once at completion; stale-probe errors log at WARN. The current UI reads this detail

@@ -292,6 +292,7 @@ impl ProtocolTransport {
         let outcome = match &result {
             Ok(SubmissionOutcome::Accepted) => "accepted",
             Ok(SubmissionOutcome::Unknown) => "unknown",
+            Ok(SubmissionOutcome::Rejected { .. }) => "not_submitted",
             Err(_) => "not_submitted",
         };
         // Some exporters retain the first write. Publish final fields once,
@@ -369,13 +370,25 @@ async fn deliver<S: ResponseReader + AsyncWrite>(
     let eight_bit = !wire.is_ascii();
     // Fail before MAIL/RCPT/DATA. These are definite non-deliveries, never Unknown sends.
     if (utf8 && !extensions.utf8) || (eight_bit && !extensions.eight_bit) {
-        return Err(Error::SendRejected);
+        return Ok(SubmissionOutcome::Rejected {
+            refusal: SubmissionRefusal {
+                phase: SubmissionRefusalPhase::Message,
+                recipient_index: None,
+                reply_class: None,
+            },
+        });
     }
     let (data, size) = data_block(wire)?;
     let mut mail_from = format!("MAIL FROM:<{from}>");
     if let Some(limit) = extensions.size {
         if size > limit {
-            return Err(Error::SendRejected);
+            return Ok(SubmissionOutcome::Rejected {
+                refusal: SubmissionRefusal {
+                    phase: SubmissionRefusalPhase::Message,
+                    recipient_index: None,
+                    reply_class: None,
+                },
+            });
         }
         mail_from.push_str(&format!(" SIZE={size}"));
     }
@@ -389,24 +402,51 @@ async fn deliver<S: ResponseReader + AsyncWrite>(
     // Connection setup and every envelope command share one absolute deadline.
     // Stop this timer before writing the body: cancellation after a body byte
     // cannot establish non-submission and must retain the Unknown outcome.
-    tokio::time::timeout_at(deadline, async {
-        submission_command(stream, mail_from.as_bytes(), 250, "mail-from").await?;
-        for recipient in recipients {
-            // Refused sockets are discarded, so cleanup must not delay a known
-            // pre-DATA rejection or turn it into an uncertain RPC timeout.
-            submission_command(
+    let refusal = tokio::time::timeout_at(deadline, async {
+        if let Some(reply_class) =
+            submission_command(stream, mail_from.as_bytes(), 250, "mail-from").await?
+        {
+            return Ok(Some(SubmissionRefusal {
+                phase: SubmissionRefusalPhase::Sender,
+                recipient_index: None,
+                reply_class: Some(reply_class),
+            }));
+        }
+        for (index, recipient) in recipients.iter().enumerate() {
+            // Abort the entire envelope at the first refused recipient. Even
+            // accepted earlier recipients receive no DATA, so no partial send
+            // can be replayed as a whole-message retry.
+            if let Some(reply_class) = submission_command(
                 stream,
                 format!("RCPT TO:<{recipient}>\r\n").as_bytes(),
                 250,
                 "rcpt-to",
             )
-            .await?;
+            .await?
+            {
+                return Ok(Some(SubmissionRefusal {
+                    phase: SubmissionRefusalPhase::Recipient,
+                    recipient_index: Some(u16::try_from(index).map_err(|_| Error::Invalid)?),
+                    reply_class: Some(reply_class),
+                }));
+            }
         }
-        submission_command(stream, b"DATA\r\n", 354, "data-command").await?;
-        Ok::<(), Error>(())
+        if let Some(reply_class) =
+            submission_command(stream, b"DATA\r\n", 354, "data-command").await?
+        {
+            return Ok(Some(SubmissionRefusal {
+                phase: SubmissionRefusalPhase::Message,
+                recipient_index: None,
+                reply_class: Some(reply_class),
+            }));
+        }
+        Ok::<_, Error>(None)
     })
     .await
     .map_err(|_| Error::SendUnavailable)??;
+    if let Some(refusal) = refusal {
+        return Ok(SubmissionOutcome::Rejected { refusal });
+    }
     if tokio::time::Instant::now() >= deadline {
         return Err(Error::SendUnavailable);
     }
@@ -453,24 +493,24 @@ async fn submission_command<S: ResponseReader + AsyncWrite>(
     bytes: &[u8],
     expected: u16,
     phase: &'static str,
-) -> Result<(), Error> {
+) -> Result<Option<SubmissionRefusalClass>, Error> {
     stream
         .write_all(bytes)
         .await
         .map_err(|_| Error::ConnectionUnavailable)?;
     let code = response(stream).await?.0;
     if code == expected || (phase == "rcpt-to" && matches!(code, 251 | 252)) {
-        return Ok(());
+        return Ok(None);
     }
     tracing::warn!(
         smtp.phase = phase,
         smtp.reply_class = i64::from(code / 100),
         "SMTP submission refused"
     );
-    if (400..600).contains(&code) {
-        Err(Error::SendRejected)
-    } else {
-        Err(Error::ConnectionUnavailable)
+    match code {
+        400..=499 => Ok(Some(SubmissionRefusalClass::Temporary)),
+        500..=599 => Ok(Some(SubmissionRefusalClass::Permanent)),
+        _ => Err(Error::ConnectionUnavailable),
     }
 }
 

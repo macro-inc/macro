@@ -45,7 +45,7 @@ impl PgRepository {
                 .is_some_and(|error| error.code().as_deref() == Some("55P03"))
             {
                 record_outcome(AcquireOutcome::LockBusy);
-                Error::Throttled
+                Error::AccountBusy
             } else {
                 load_error(error)
             }
@@ -123,7 +123,7 @@ impl PgRepository {
                 .map_err(load_error)?;
                 return Err(if current {
                     record_outcome(AcquireOutcome::LeaseHeld);
-                    Error::Throttled
+                    Error::AccountBusy
                 } else {
                     record_outcome(AcquireOutcome::Conflict);
                     Error::Conflict

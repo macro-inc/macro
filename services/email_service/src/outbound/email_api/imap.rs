@@ -321,10 +321,12 @@ pub(crate) fn error(error: models::Error) -> EmailApiError {
         },
         models::Error::SendRejected => EmailApiError::SendRejected {
             reason: SendRejectionReason::ProviderRejected,
+            refusal: None,
             message: "SMTP server refused submission".into(),
         },
         models::Error::SendUnavailable => EmailApiError::SendRejected {
             reason: SendRejectionReason::ConnectionUnavailable,
+            refusal: None,
             message: "SMTP connection unavailable; no message was submitted".into(),
         },
         models::Error::AccountBusy => EmailApiError::RateLimited {
@@ -334,6 +336,14 @@ pub(crate) fn error(error: models::Error) -> EmailApiError {
         models::Error::MessageTooLarge => EmailApiError::ContentTooLarge,
         models::Error::SnapshotTooLarge => EmailApiError::Permanent {
             message: "Mailbox sync exceeds the current size limit".into(),
+        },
+        models::Error::RateLimited {
+            retry_after_seconds,
+        } => EmailApiError::RateLimited {
+            retry_after: Some(std::time::Duration::from_secs(u64::from(
+                retry_after_seconds,
+            ))),
+            origin: RateLimitOrigin::Provider { concurrency: false },
         },
         models::Error::Throttled => EmailApiError::RateLimited {
             retry_after: Some(std::time::Duration::from_secs(60)),

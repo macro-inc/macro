@@ -13,7 +13,7 @@ it.each([
   ],
   [
     'PROVIDER_REJECTED',
-    'Your mail provider rejected this send. Correct the problem in your mailbox before trying again.',
+    'The mail server refused this message. Check the recipient address and sender settings before trying again.',
   ],
   [
     undefined,
@@ -111,4 +111,27 @@ it('can recheck without ever invoking resend', async () => {
   ));
   await fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
   expect(resolve).toHaveBeenCalledExactlyOnceWith(operation, 'recheck', false);
+});
+
+it('identifies the refused recipient from the authorized message without transporting its address', () => {
+  const operation: MessageOperation = {
+    state: 'FAILED',
+    revision: '7',
+    issue: 'SEND_REJECTED',
+    sendRejectionReason: 'PROVIDER_REJECTED',
+    sendRefusal: {
+      phase: 'recipient',
+      recipient_index: 1,
+      reply_class: 'permanent',
+    },
+  };
+  render(() => (
+    <MessageOperationRecovery
+      source={{ operation: () => operation, resolve: vi.fn() }}
+      recipientEmails={['accepted@example.com', 'refused@example.com']}
+    />
+  ));
+  expect(
+    screen.getByText(/The server refused mail for refused@example.com/)
+  ).toBeTruthy();
 });

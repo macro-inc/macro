@@ -86,9 +86,9 @@ impl IntoResponse for ConnectionError {
             ImapConnectionError::Provider(Error::CredentialsUnavailable) => {
                 (StatusCode::SERVICE_UNAVAILABLE, "credentials_unavailable")
             }
-            ImapConnectionError::Provider(Error::Throttled | Error::AccountBusy) => {
-                (StatusCode::TOO_MANY_REQUESTS, "throttled")
-            }
+            ImapConnectionError::Provider(
+                Error::Throttled | Error::RateLimited { .. } | Error::AccountBusy,
+            ) => (StatusCode::TOO_MANY_REQUESTS, "throttled"),
             ImapConnectionError::Provider(
                 Error::CursorOutdated
                 | Error::ConnectionUnavailable

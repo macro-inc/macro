@@ -18,6 +18,7 @@ async fn submission_admission_wait_is_bounded_without_marking_or_sending() {
         deadline: AtomicBool::new(false),
         sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
         submission_deadline: std::sync::Mutex::new(None),
+        refusal: None,
         provider_work: None,
     });
     let engine = Engine::new(repository.clone(), Arc::new(TestCipher), transport.clone());
@@ -65,6 +66,7 @@ async fn smtp_receives_the_original_deadline_after_waiting_for_admission() {
         deadline: AtomicBool::new(false),
         sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
         submission_deadline: std::sync::Mutex::new(None),
+        refusal: None,
         provider_work: None,
     });
     let engine = Engine::new(repository, Arc::new(TestCipher), transport.clone());
@@ -126,6 +128,7 @@ async fn interactive_message_lookup_is_not_queued_behind_sync_admission() {
         deadline: AtomicBool::new(false),
         sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
         submission_deadline: std::sync::Mutex::new(None),
+        refusal: None,
         provider_work: None,
     });
     let engine = Engine::new(repository, Arc::new(TestCipher), transport);
@@ -230,6 +233,7 @@ async fn ingestion_burst_does_not_queue_a_user_message_read() {
             deadline: AtomicBool::new(false),
             sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
             submission_deadline: std::sync::Mutex::new(None),
+            refusal: None,
             provider_work: Some(control),
         });
         let engine = Engine::new(repository, Arc::new(TestCipher), transport);
@@ -304,6 +308,7 @@ async fn queued_accounts_rotate_after_stalled_and_cancelled_sync_rounds() {
         deadline: AtomicBool::new(false),
         sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
         submission_deadline: std::sync::Mutex::new(None),
+        refusal: None,
         provider_work: Some(Arc::new(ProviderWorkControl {
             failures: std::collections::BTreeMap::new(),
             organization: None,
@@ -385,6 +390,7 @@ async fn configured_sync_capacity_bounds_started_rounds_without_limiting_binding
         deadline: AtomicBool::new(false),
         sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
         submission_deadline: std::sync::Mutex::new(None),
+        refusal: None,
         provider_work: Some(Arc::new(ProviderWorkControl {
             failures: std::collections::BTreeMap::new(),
             organization: None,
@@ -439,6 +445,7 @@ async fn sync_state_loading_counts_toward_the_round_work_budget() {
         deadline: AtomicBool::new(false),
         sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
         submission_deadline: std::sync::Mutex::new(None),
+        refusal: None,
         provider_work: None,
     });
     let engine = Engine::new(repository, Arc::new(TestCipher), transport);
@@ -501,6 +508,7 @@ async fn saturation_is_exportable_while_the_admission_wait_is_still_pending() {
         deadline: AtomicBool::new(false),
         sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
         submission_deadline: std::sync::Mutex::new(None),
+        refusal: None,
         provider_work: None,
     });
     let engine = Engine::new(repository, Arc::new(TestCipher), transport);

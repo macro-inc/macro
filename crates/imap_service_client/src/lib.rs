@@ -350,21 +350,54 @@ async fn response<T, E: Serialize>(
     match result {
         Ok(value) => Ok(value.into_inner()),
         Err(progenitor_client::Error::ErrorResponse(value)) => {
+            let retry_after = value
+                .headers()
+                .get("retry-after")
+                .and_then(|value| value.to_str().ok())
+                .and_then(|value| value.parse::<u32>().ok());
             let body = serde_json::to_value(value.into_inner())
                 .map_err(|_| Error::ConnectionUnavailable)?;
-            Err(body
+            let code = body
                 .get("code")
                 .cloned()
                 .and_then(|code| serde_json::from_value(code).ok())
-                .unwrap_or(Error::ConnectionUnavailable))
+                .unwrap_or(Error::ConnectionUnavailable);
+            let body_delay = body
+                .get("retryAfterSeconds")
+                .and_then(|value| value.as_u64())
+                .and_then(|value| u32::try_from(value).ok());
+            Err(with_retry_delay(code, retry_after.or(body_delay)))
         }
         Err(progenitor_client::Error::UnexpectedResponse(value)) => {
+            let retry_after = value
+                .headers()
+                .get("retry-after")
+                .and_then(|value| value.to_str().ok())
+                .and_then(|value| value.parse::<u32>().ok());
             let body = value
                 .json::<generated::types::ErrorBody>()
                 .await
                 .map_err(|_| Error::ConnectionUnavailable)?;
-            Err(body.code)
+            Err(with_retry_delay(
+                body.code,
+                retry_after.or(body
+                    .retry_after_seconds
+                    .and_then(|seconds| u32::try_from(seconds).ok())),
+            ))
         }
         Err(_) => Err(Error::ConnectionUnavailable),
     }
+}
+
+// Preserve provider pacing without adding transport metadata to every port.
+// Local AccountBusy stays distinct and always uses its short local recovery.
+fn with_retry_delay(error: Error, retry_after: Option<u32>) -> Error {
+    if error == Error::Throttled
+        && let Some(seconds) = retry_after
+    {
+        return Error::RateLimited {
+            retry_after_seconds: seconds.clamp(1, 86_400),
+        };
+    }
+    error
 }

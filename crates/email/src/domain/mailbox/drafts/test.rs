@@ -22,11 +22,14 @@ struct State {
     creates: usize,
     updates: usize,
     submissions: usize,
+    submitted_bodies: usize,
     submission_error: Option<EmailApiError>,
     read_error: Option<EmailApiError>,
     additions: usize,
     /// Checkpoints after a provider update that time out on a busy mailbox.
     locked_checkpoints: u32,
+    locked_deferred_deliveries: u32,
+    release_delays: Vec<u32>,
 }
 
 fn harness(stage: Option<DraftStage>) -> Harness {
@@ -67,7 +70,9 @@ fn harness(stage: Option<DraftStage>) -> Harness {
         stage,
         stage_started_at: Utc::now(),
         submission_started: matches!(stage, DraftStage::Submitting | DraftStage::Confirming),
+        local_contention_retries: 0,
         send_rejection_reason: None,
+        send_refusal: None,
         draft: Some(remote.clone()),
         completed_files: 0,
         completed_removals: 0,
@@ -102,10 +107,13 @@ fn harness(stage: Option<DraftStage>) -> Harness {
         creates: 0,
         updates: 0,
         submissions: 0,
+        submitted_bodies: 0,
         submission_error: None,
         read_error: None,
         additions: 0,
         locked_checkpoints: 0,
+        locked_deferred_deliveries: 0,
+        release_delays: Vec::new(),
     })))
 }
 
@@ -143,7 +151,8 @@ impl DraftRepository for Harness {
         s.lease.checkpoint = Some(c.clone());
         Ok(())
     }
-    async fn release_draft(&self, _: &DraftLease, _: u32) -> Result<(), MailboxError> {
+    async fn release_draft(&self, _: &DraftLease, seconds: u32) -> Result<(), MailboxError> {
+        self.0.lock().unwrap().release_delays.push(seconds);
         Ok(())
     }
     async fn fail_draft(&self, _: &DraftLease, f: DraftFailure) -> Result<(), MailboxError> {
@@ -170,6 +179,21 @@ impl DraftRepository for Harness {
         assert_eq!(c.stage, DraftStage::Submitting);
         s.lease.checkpoint = Some(c.clone());
         Ok(DeliveryStart::Started)
+    }
+    async fn defer_unsubmitted_delivery(
+        &self,
+        _: &DraftLease,
+        checkpoint: &DraftCheckpoint,
+    ) -> Result<(), MailboxError> {
+        let mut state = self.0.lock().unwrap();
+        if state.locked_deferred_deliveries > 0 {
+            state.locked_deferred_deliveries -= 1;
+            return Err(MailboxError::database(DatabaseFailure::Sqlstate(
+                LOCK_NOT_AVAILABLE.into(),
+            )));
+        }
+        state.lease.checkpoint = Some(checkpoint.clone());
+        Ok(())
     }
     async fn confirm_sent(&self, _: &DraftLease, c: &DraftCheckpoint) -> Result<(), MailboxError> {
         assert!(!c.draft.as_ref().unwrap().is_draft);
@@ -336,6 +360,7 @@ impl DraftGateway for Harness {
         if let Some(error) = s.submission_error.take() {
             return Err(error);
         }
+        s.submitted_bodies += 1;
         Ok(SubmissionOutcome::Unknown)
     }
 }
@@ -392,9 +417,19 @@ async fn typed_pre_data_rejection_fails_once_and_retains_the_reason() {
         SendRejectionReason::ProviderRejected,
         SendRejectionReason::ConnectionUnavailable,
     ] {
+        let refusal = matches!(reason, SendRejectionReason::ProviderRejected).then_some(
+            models_email::service::message::SubmissionRefusal {
+                phase: models_email::service::message::SubmissionRefusalPhase::Recipient,
+                recipient_index: Some(1),
+                reply_class: Some(
+                    models_email::service::message::SubmissionRefusalClass::Permanent,
+                ),
+            },
+        );
         let h = harness(Some(DraftStage::Ready));
         h.0.lock().unwrap().submission_error = Some(EmailApiError::SendRejected {
             reason,
+            refusal,
             message: "Synthetic definite non-submission".into(),
         });
         let service = service(&h);
@@ -412,6 +447,16 @@ async fn typed_pre_data_rejection_fails_once_and_retains_the_reason() {
                 .unwrap()
                 .send_rejection_reason,
             Some(reason)
+        );
+        assert_eq!(
+            h.0.lock()
+                .unwrap()
+                .lease
+                .checkpoint
+                .as_ref()
+                .unwrap()
+                .send_refusal,
+            refusal
         );
         assert_eq!(h.0.lock().unwrap().submissions, 1);
         assert!(!service.execute_once().await.unwrap());
@@ -764,4 +809,117 @@ async fn revoked_access_after_submission_preserves_the_unknown_outcome_without_p
     let state = h.0.lock().unwrap();
     assert!(matches!(state.failure, Some(DraftFailure::SendUnknown)));
     assert_eq!(state.submissions, 0);
+}
+
+#[tokio::test]
+async fn a_due_send_retries_local_account_contention_promptly_without_shortening_provider_backoff()
+{
+    for (origin, expected) in [
+        (RateLimitOrigin::Local, 5),
+        (RateLimitOrigin::Provider { concurrency: false }, 60),
+    ] {
+        let h = harness(Some(DraftStage::Ready));
+        {
+            let mut state = h.0.lock().unwrap();
+            state.lease.input.send_time = Some(Utc::now() - Duration::seconds(1));
+            state.read_error = Some(EmailApiError::RateLimited {
+                retry_after: Some(std::time::Duration::from_secs(60)),
+                origin,
+            });
+        }
+        assert!(service(&h).execute_once().await.is_err());
+        assert_eq!(h.0.lock().unwrap().release_delays, [expected]);
+        assert!(service(&h).execute_once().await.unwrap());
+        assert_eq!(h.0.lock().unwrap().submissions, 1);
+    }
+}
+
+#[tokio::test]
+async fn local_contention_at_submit_returns_to_ready_and_retries_without_a_failed_send() {
+    let h = harness(Some(DraftStage::Ready));
+    h.0.lock().unwrap().submission_error = Some(EmailApiError::RateLimited {
+        retry_after: Some(std::time::Duration::from_secs(60)),
+        origin: RateLimitOrigin::Local,
+    });
+    assert!(matches!(
+        service(&h).execute_once().await,
+        Err(MailboxError::Provider(EmailApiError::RateLimited {
+            origin: RateLimitOrigin::Local,
+            ..
+        }))
+    ));
+    {
+        let state = h.0.lock().unwrap();
+        assert!(state.failure.is_none());
+        let checkpoint = state.lease.checkpoint.as_ref().unwrap();
+        assert_eq!(checkpoint.stage, DraftStage::Ready);
+        assert!(!checkpoint.submission_started);
+        assert_eq!(state.release_delays, [5]);
+        assert_eq!(state.submitted_bodies, 0);
+    }
+    assert!(service(&h).execute_once().await.unwrap());
+    assert_eq!(h.0.lock().unwrap().submitted_bodies, 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_unsent_local_retry_survives_a_momentarily_locked_reset() {
+    let h = harness(Some(DraftStage::Ready));
+    {
+        let mut state = h.0.lock().unwrap();
+        state.locked_deferred_deliveries = 2;
+        state.submission_error = Some(EmailApiError::RateLimited {
+            retry_after: Some(std::time::Duration::from_secs(5)),
+            origin: RateLimitOrigin::Local,
+        });
+    }
+    let started = tokio::time::Instant::now();
+    assert!(matches!(
+        service(&h).execute_once().await,
+        Err(MailboxError::Provider(EmailApiError::RateLimited {
+            origin: RateLimitOrigin::Local,
+            ..
+        }))
+    ));
+    assert_eq!(started.elapsed(), 2 * AFTER_PROVIDER_RETRY_DELAY);
+    {
+        let state = h.0.lock().unwrap();
+        assert_eq!(state.locked_deferred_deliveries, 0);
+        assert_eq!(
+            state.lease.checkpoint.as_ref().unwrap().stage,
+            DraftStage::Ready
+        );
+        assert!(!state.lease.checkpoint.as_ref().unwrap().submission_started);
+        assert!(state.failure.is_none());
+        assert_eq!(state.submitted_bodies, 0);
+    }
+    assert!(service(&h).execute_once().await.unwrap());
+    assert_eq!(h.0.lock().unwrap().submitted_bodies, 1);
+}
+
+#[tokio::test]
+async fn repeated_local_contention_backs_off_and_progress_clears_the_count() {
+    let h = harness(Some(DraftStage::Ready));
+    for expected in [5, 10, 20, 40, 60, 60] {
+        h.0.lock().unwrap().submission_error = Some(EmailApiError::RateLimited {
+            retry_after: Some(std::time::Duration::from_secs(5)),
+            origin: RateLimitOrigin::Local,
+        });
+        assert!(service(&h).execute_once().await.is_err());
+        let state = h.0.lock().unwrap();
+        assert_eq!(state.release_delays.last().copied(), Some(expected));
+        assert_eq!(state.submitted_bodies, 0);
+        assert!(state.failure.is_none());
+    }
+    assert!(service(&h).execute_once().await.unwrap());
+    let state = h.0.lock().unwrap();
+    assert_eq!(state.submitted_bodies, 1);
+    assert_eq!(
+        state
+            .lease
+            .checkpoint
+            .as_ref()
+            .unwrap()
+            .local_contention_retries,
+        0
+    );
 }

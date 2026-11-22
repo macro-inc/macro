@@ -26,7 +26,11 @@ pub(super) async fn operation_facts(
             m.provider_version,
             d.error_code,
             d.checkpoint->>'stage' AS stage,
-            d.checkpoint->>'send_rejection_reason' AS send_rejection_reason
+            d.checkpoint->>'send_rejection_reason' AS send_rejection_reason,
+            CASE
+                WHEN d.checkpoint->'revision' = to_jsonb(d.revision)
+                THEN d.checkpoint->'send_refusal'
+            END AS send_refusal
         FROM
             email_mailbox_drafts d
         JOIN
@@ -49,6 +53,11 @@ pub(super) async fn operation_facts(
                     revision: row.revision,
                     remote_version: row.provider_version,
                     issue: row.error_code.map(operation_enum).transpose()?,
+                    send_refusal: row.send_refusal.and_then(|value| {
+                        serde_json::from_value(value).inspect_err(|_| {
+                            tracing::warn!(message_id = %row.message_id, "Ignoring an unknown stored submission refusal");
+                        }).ok()
+                    }),
                     // New optional reason values must not hide old drafts when
                     // another binary writes a newer checkpoint vocabulary.
                     send_rejection_reason: row.send_rejection_reason.and_then(|value| {
@@ -82,6 +91,7 @@ pub(super) async fn operation_facts(
                     row.issue.unwrap_or_else(|| "move_pending".into()),
                 )?),
                 send_rejection_reason: None,
+                send_refusal: None,
             },
         );
     }
@@ -528,18 +538,21 @@ pub(super) async fn snapshot_outlook_draft(
                             'email', c.email_address,
                             'name', COALESCE(r.name, c.name)
                         )
+                        ORDER BY r.contact_id
                     ) FILTER (WHERE r.recipient_type = 'TO') AS to_addresses,
                     jsonb_agg(
                         jsonb_build_object(
                             'email', c.email_address,
                             'name', COALESCE(r.name, c.name)
                         )
+                        ORDER BY r.contact_id
                     ) FILTER (WHERE r.recipient_type = 'CC') AS cc_addresses,
                     jsonb_agg(
                         jsonb_build_object(
                             'email', c.email_address,
                             'name', COALESCE(r.name, c.name)
                         )
+                        ORDER BY r.contact_id
                     ) FILTER (WHERE r.recipient_type = 'BCC') AS bcc_addresses
                 FROM
                     email_message_recipients r
@@ -579,7 +592,9 @@ pub(super) async fn snapshot_outlook_draft(
         message_id,
         link_id,
         actor,
-    ).execute(&mut *tx).await?;
+    )
+    .execute(&mut *tx)
+    .await?;
     sqlx::query!(
         "DELETE FROM email_draft_organization_versions WHERE message_id=$1",
         message_id

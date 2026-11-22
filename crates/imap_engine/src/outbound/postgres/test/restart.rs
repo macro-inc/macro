@@ -58,6 +58,7 @@ async fn graceful_restart_releases_both_leases_before_their_expiry(pool: PgPool)
         deadline: AtomicBool::new(false),
         sent_found: std::sync::Mutex::new(Default::default()),
         submission_deadline: std::sync::Mutex::new(None),
+        refusal: None,
         provider_work: Some(Arc::new(ProviderWorkControl {
             failures: Default::default(),
             organization: None,
@@ -82,7 +83,7 @@ async fn graceful_restart_releases_both_leases_before_their_expiry(pool: PgPool)
         );
         assert!(matches!(
             repository.acquire(binding).await,
-            Err(Error::Throttled)
+            Err(Error::AccountBusy)
         ));
         cancellation.cancel();
         tokio::time::timeout(std::time::Duration::from_secs(5), actor)

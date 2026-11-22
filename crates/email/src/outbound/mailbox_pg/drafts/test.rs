@@ -16,6 +16,7 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 mod claims;
 mod delivery_status;
 mod lock_timeouts;
+mod refusal;
 mod sent_view;
 
 const ACTOR: &str = "macro|outlook-test@example.com";
@@ -377,7 +378,9 @@ fn checkpoint(lease: &DraftLease, stage: DraftStage) -> DraftCheckpoint {
         },files:Vec::new(),removals:Vec::new()},
         draft:Some(ProviderDraft {id:ProviderId::new("a").unwrap(),conversation_id:ProviderId::new("conversation").unwrap(),version:Some("v2".into()),is_draft:true,content_fingerprint:Some("unchanged-body".into()),app_revision:Some(lease.revision as u64)}),
         submission_started:matches!(stage,DraftStage::Submitting | DraftStage::Confirming),
+        local_contention_retries: 0,
         send_rejection_reason: None,
+        send_refusal: None,
         completed_files:0,completed_removals:0,transfer:None,
     }
 }

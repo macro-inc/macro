@@ -535,7 +535,7 @@ it.each(providers)(
 );
 
 it.each(providers)(
-  '%s: repeated unchanged polls cannot keep an accepted send spinning forever',
+  '%s: a queue deadline cannot infer uncertainty before a real provider outcome',
   async (provider) => {
     const { context, report } = outbox(provider);
     const notices = recordNotices(context);
@@ -552,12 +552,14 @@ it.each(providers)(
         report(accepted);
       }
       await vi.advanceTimersByTimeAsync(5_000);
-      expect(notices.log.at(-1)).toContain('alert: Delivery unconfirmed');
+      expect(notices.log.at(-1)).toContain('success: Still sending…');
       report({ state: 'pending' });
       for (let poll = 0; poll < 6; poll++) {
         await vi.advanceTimersByTimeAsync(5_000);
         report({ state: 'pending' });
       }
+      expect(notices.log.at(-1)).toContain('success: Still sending…');
+      report({ state: 'unconfirmed' });
       expect(notices.log.at(-1)).toContain('alert: Delivery unconfirmed');
       report({ state: 'sent' });
       expect(notices.log.at(-1)).toContain('success: Email sent');
@@ -622,3 +624,21 @@ it.each(providers)(
     }
   }
 );
+
+it('shows a terminal send failure once even when the send is reported again', async () => {
+  const { context, report } = outbox('IMAP');
+  const notices = recordNotices(context);
+  const reply = mountReplyComposer(context);
+  try {
+    await reply.sendEmail();
+    report({ state: 'failed' });
+    report({ state: 'failed' });
+    expect(
+      notices.log.filter((line) =>
+        line.includes('failure: Email failed to send')
+      )
+    ).toHaveLength(1);
+  } finally {
+    reply.dispose();
+  }
+});

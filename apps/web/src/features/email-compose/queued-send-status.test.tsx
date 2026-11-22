@@ -145,9 +145,7 @@ it('shows a cancellation that cannot reach the server', () => {
 
 it('explains a failure before delivery and offers cancellation for recovery', async () => {
   showStatus('FAILED');
-  expect(screen.getByRole('status').textContent).toContain(
-    'failed before delivery'
-  );
+  expect(screen.getByRole('status').textContent).toContain('Message not sent');
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
   await waitFor(() => expect(mocks.cancel).toHaveBeenCalledOnce());
   expect(mocks.restore).not.toHaveBeenCalled();

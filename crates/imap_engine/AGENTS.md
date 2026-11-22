@@ -192,3 +192,9 @@ until the owner excludes large folders. Keep the last complete index and expose
 the typed size issue with durable backoff. `enable-imap-connections` defaults off;
 resumable paging and incremental scans belong to stacked follow-up
 `mac-imap-smtp.23`, not this initial bounded-snapshot implementation.
+
+Report row-lock and command-lease contention as AccountBusy so a due send never
+inherits provider-throttle pacing. A pre-body refusal returns a typed command
+phase and recipient position, never an address or raw reply; abandon the whole
+recipient envelope before DATA. Clear the Unknown fence before returning a
+definite refusal, and never persist the new rejected response outcome.

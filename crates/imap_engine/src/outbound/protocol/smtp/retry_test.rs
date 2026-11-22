@@ -201,7 +201,16 @@ async fn failed_probes_and_pre_body_eof_reconnect_over_tls_without_changing_the_
         retired.await.unwrap();
         let (_peer, received) = fresh.await.unwrap();
         if failure == "refuse-rcpt" {
-            assert_eq!(result, Err(Error::SendRejected));
+            assert_eq!(
+                result,
+                Ok(SubmissionOutcome::Rejected {
+                    refusal: SubmissionRefusal {
+                        phase: SubmissionRefusalPhase::Recipient,
+                        recipient_index: Some(0),
+                        reply_class: Some(SubmissionRefusalClass::Permanent)
+                    }
+                })
+            );
             assert!(received.is_empty());
             assert!(transport.smtp_pool.lock().await.is_empty());
         } else {

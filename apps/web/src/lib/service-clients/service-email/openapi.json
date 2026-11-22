@@ -5166,6 +5166,17 @@
           "revision": {
             "type": "string"
           },
+          "send_refusal": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SubmissionRefusal",
+                "description": "Sanitized pre-body SMTP refusal; recipient index uses To, Cc, then Bcc order."
+              }
+            ]
+          },
           "send_rejection_reason": {
             "oneOf": [
               {
@@ -8258,6 +8269,44 @@
             "type": ["boolean", "null"]
           }
         }
+      },
+      "SubmissionRefusal": {
+        "type": "object",
+        "description": "Non-submission evidence without provider text or recipient addresses.",
+        "required": ["phase"],
+        "properties": {
+          "phase": {
+            "$ref": "#/components/schemas/SubmissionRefusalPhase",
+            "description": "Which command was refused."
+          },
+          "recipient_index": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Zero-based position in the frozen To, Cc, then Bcc envelope; recipient refusals only.",
+            "minimum": 0
+          },
+          "reply_class": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SubmissionRefusalClass",
+                "description": "Sanitized SMTP reply class; absent for a local capability/size rejection."
+              }
+            ]
+          }
+        }
+      },
+      "SubmissionRefusalClass": {
+        "type": "string",
+        "description": "Closed SMTP refusal class; neither variant authorizes automatic resubmission.",
+        "enum": ["temporary", "permanent"]
+      },
+      "SubmissionRefusalPhase": {
+        "type": "string",
+        "description": "The SMTP command refused before any message body byte was sent.",
+        "enum": ["sender", "recipient", "message"]
       },
       "SyncStatus": {
         "type": "string",

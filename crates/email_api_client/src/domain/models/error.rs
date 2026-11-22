@@ -73,6 +73,8 @@ pub enum EmailApiError {
     SendRejected {
         /// Closed non-submission evidence for recovery copy and retry policy.
         reason: SendRejectionReason,
+        /// Optional command refusal; older providers and saved rows may lack it.
+        refusal: Option<models_email::service::message::SubmissionRefusal>,
         /// A sanitized diagnostic suitable for logs.
         message: String,
     },

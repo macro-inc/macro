@@ -168,6 +168,7 @@ async fn scoped_reads_share_a_snapshot_and_cannot_mutate_or_outlive_access(pool:
         deadline: AtomicBool::new(false),
         sent_found: std::sync::Mutex::new(Default::default()),
         submission_deadline: std::sync::Mutex::new(None),
+        refusal: None,
         provider_work: Some(control.clone()),
     });
     let engine = crate::domain::service::Engine::new(

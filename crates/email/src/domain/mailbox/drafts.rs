@@ -19,6 +19,15 @@ const UNCERTAIN_WAIT: Duration = Duration::minutes(10);
 const UPLOAD_RANGE_BYTES: usize = 10 * 320 * 1024;
 const SMALL_ATTACHMENT_BYTES: u64 = 3_000_000;
 
+#[derive(strum::AsRefStr)]
+#[strum(serialize_all = "snake_case")]
+enum DraftRetryKind {
+    LocalContention,
+    ProviderThrottle,
+    Provider,
+    Persistence,
+}
+
 pub struct MailboxDraftService<R, G, M> {
     repo: R,
     provider: G,
@@ -46,6 +55,14 @@ impl<R, G, M> MailboxDraftService<R, G, M> {
 }
 
 impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftService<R, G, M> {
+    #[tracing::instrument(name = "email.mailbox.draft", skip_all, fields(
+        link_id = tracing::field::Empty,
+        draft.stage = tracing::field::Empty,
+        draft.local_contention_retries = tracing::field::Empty,
+        draft.send_due_lag_ms = tracing::field::Empty,
+        retry.seconds = tracing::field::Empty,
+        error.kind = tracing::field::Empty,
+    ), err)]
     pub async fn execute_once(&self) -> Result<bool, MailboxError> {
         let Some(lease) = self
             .repo
@@ -56,6 +73,23 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
             return Ok(false);
         };
         let link_id = lease.mailbox.link_id;
+        let span = tracing::Span::current();
+        span.record("link_id", tracing::field::display(link_id));
+        span.record(
+            "draft.stage",
+            lease
+                .checkpoint
+                .as_ref()
+                .map_or(DraftStage::Inspect, |checkpoint| checkpoint.stage)
+                .as_ref(),
+        );
+        if let Some(due) = lease.input.send_time {
+            span.record(
+                "draft.send_due_lag_ms",
+                (Utc::now() - due).num_milliseconds().max(0),
+            );
+        }
+
         async {
             let result =
                 super::maintain_lease(self.execute(&lease), || self.repo.renew_draft(&lease)).await;
@@ -75,15 +109,47 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
                 }
                 Err(error) => {
                     if !matches!(error, MailboxError::Stale) {
-                        self.repo
-                            .release_draft(
-                                &lease,
-                                match &error {
-                                    MailboxError::Provider(e) => super::retry::retry_seconds(e),
-                                    _ => 30,
-                                },
-                            )
-                            .await?;
+                        let (seconds, kind) = match &error {
+                            MailboxError::Provider(EmailApiError::RateLimited {
+                                origin: RateLimitOrigin::Local,
+                                ..
+                            }) => {
+                                tracing::Span::current().record(
+                                    "draft.local_contention_retries",
+                                    lease
+                                        .checkpoint
+                                        .as_ref()
+                                        .map_or(0, |checkpoint| checkpoint.local_contention_retries)
+                                        .saturating_add(1)
+                                        as u64,
+                                );
+                                // Account contention is not provider pacing. In
+                                // particular, the first failure retries promptly.
+                                // Persistent contention backs off across claims,
+                                // capped at the provider floor, until progress.
+                                (
+                                    5u32.saturating_mul(
+                                        1u32 << lease.checkpoint.as_ref().map_or(0, |checkpoint| {
+                                            checkpoint.local_contention_retries.min(4)
+                                        }),
+                                    )
+                                    .min(60),
+                                    DraftRetryKind::LocalContention,
+                                )
+                            }
+                            MailboxError::Provider(error @ EmailApiError::RateLimited { .. }) => (
+                                super::retry::retry_seconds(error),
+                                DraftRetryKind::ProviderThrottle,
+                            ),
+                            MailboxError::Provider(error) => {
+                                (super::retry::retry_seconds(error), DraftRetryKind::Provider)
+                            }
+                            _ => (30, DraftRetryKind::Persistence),
+                        };
+                        let span = tracing::Span::current();
+                        span.record("retry.seconds", seconds);
+                        span.record("error.kind", kind.as_ref());
+                        self.repo.release_draft(&lease, seconds).await?;
                     }
                     Err(error)
                 }
@@ -138,26 +204,44 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
                 stage: DraftStage::Inspect,
                 stage_started_at: Utc::now(),
                 submission_started: false,
+                local_contention_retries: 0,
                 send_rejection_reason: None,
+                send_refusal: None,
                 draft: None,
                 completed_files: 0,
                 completed_removals: 0,
                 transfer: None,
             },
         };
-        match checkpoint.stage {
-            DraftStage::Inspect => self.inspect(lease, &mut checkpoint).await?,
-            DraftStage::Creating => self.recover_creation(lease, &mut checkpoint).await?,
-            DraftStage::Updating => self.update(lease, &mut checkpoint).await?,
-            DraftStage::Attachments => self.attach(lease, &mut checkpoint).await?,
-            DraftStage::Ready => return self.ready(lease, &mut checkpoint).await,
-            DraftStage::Deleting => return self.delete(lease, &mut checkpoint).await,
-            DraftStage::Submitting | DraftStage::Confirming => {
-                return self.confirm(lease, &mut checkpoint).await;
+        let local_contention_retries = checkpoint.local_contention_retries;
+        checkpoint.local_contention_retries = 0;
+        let result = async {
+            match checkpoint.stage {
+                DraftStage::Inspect => self.inspect(lease, &mut checkpoint).await?,
+                DraftStage::Creating => self.recover_creation(lease, &mut checkpoint).await?,
+                DraftStage::Updating => self.update(lease, &mut checkpoint).await?,
+                DraftStage::Attachments => self.attach(lease, &mut checkpoint).await?,
+                DraftStage::Ready => return self.ready(lease, &mut checkpoint).await,
+                DraftStage::Deleting => return self.delete(lease, &mut checkpoint).await,
+                DraftStage::Submitting | DraftStage::Confirming => {
+                    return self.confirm(lease, &mut checkpoint).await;
+                }
             }
+            self.checkpoint_after_provider(lease, &checkpoint).await?;
+            self.repo.release_draft(lease, 2).await
         }
-        self.checkpoint_after_provider(lease, &checkpoint).await?;
-        self.repo.release_draft(lease, 2).await
+        .await;
+        if matches!(
+            result,
+            Err(MailboxError::Provider(EmailApiError::RateLimited {
+                origin: RateLimitOrigin::Local,
+                ..
+            }))
+        ) {
+            checkpoint.local_contention_retries = local_contention_retries.saturating_add(1);
+            self.checkpoint_after_provider(lease, &checkpoint).await?;
+        }
+        result
     }
 
     /// Records the checkpoint that follows a provider call. The provider has
@@ -548,6 +632,7 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
         checkpoint.advance(DraftStage::Submitting);
         checkpoint.submission_started = true;
         checkpoint.send_rejection_reason = None;
+        checkpoint.send_refusal = None;
         match self.repo.start_delivery(lease, checkpoint).await? {
             DeliveryStart::NotDue => {
                 checkpoint.submission_started = false;
@@ -568,12 +653,35 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
                         self.repo.release_draft(lease, 5).await
                     }
                     Err(error) => {
+                        if matches!(
+                            error,
+                            EmailApiError::RateLimited {
+                                origin: RateLimitOrigin::Local,
+                                ..
+                            }
+                        ) {
+                            // Local admission precedes the engine's durable
+                            // submission fence and all provider IO. Undo this
+                            // host claim atomically; the outer retry releases
+                            // the same draft for a short local backoff.
+                            checkpoint.submission_started = false;
+                            checkpoint.advance(DraftStage::Ready);
+                            super::record_after_provider("drafts", || {
+                                self.repo.defer_unsubmitted_delivery(lease, checkpoint)
+                            })
+                            .await?;
+                            return Err(error.into());
+                        }
                         // Definitive rejections are surfaced for a deliberate retry.
                         // A crash after recording Submitting always resumes reads.
                         if definitively_rejected(&error) {
-                            if let EmailApiError::SendRejected { reason, .. } = &error {
+                            if let EmailApiError::SendRejected {
+                                reason, refusal, ..
+                            } = &error
+                            {
                                 tracing::warn!(send.failure.reason = ?reason, "Message was not submitted");
                                 checkpoint.send_rejection_reason = Some(*reason);
+                                checkpoint.send_refusal = *refusal;
                                 // Persist the fact before terminal settlement. A crash
                                 // between these writes resumes failure, never SMTP.
                                 self.checkpoint_after_provider(lease, checkpoint).await?;

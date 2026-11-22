@@ -865,3 +865,10 @@ repository port owns no SQL or runtime configuration. Keep old writers correct
 through the provider trigger until the asynchronous FK validation completes.
 
 Follow the [validation cap and recovery contract](../../docs/runbooks/email-provider-repair.md#validation-failures-and-the-constraint-cap).
+
+Draft retry timing keeps local AccountBusy separate from provider pacing: cap
+local-contention release delays from five seconds, doubling to sixty using a
+defaulted checkpoint count that resets on progress, preserving real Retry-After
+values for provider throttling. Optional send_refusal checkpoint/status details
+are projected only with a current send_rejected issue; recipient positions use
+the frozen To, Cc, Bcc order and contain no additional personal data.

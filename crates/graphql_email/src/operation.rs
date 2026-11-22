@@ -78,6 +78,8 @@ pub struct GraphqlMessageOperation {
     issue: Option<GraphqlMessageOperationIssue>,
     /// Optional definite failure detail; old rows retain an unknown reason.
     send_rejection_reason: Option<GraphqlSendRejectionReason>,
+    /// Optional pre-body SMTP command refusal, with a recipient position rather than an address.
+    send_refusal: Option<GraphqlSubmissionRefusal>,
 }
 
 impl From<MessageOperationStatus> for GraphqlMessageOperation {
@@ -102,6 +104,7 @@ impl From<MessageOperationStatus> for GraphqlMessageOperation {
             remote_version: status.remote_version,
             issue: status.issue.map(Into::into),
             send_rejection_reason: status.send_rejection_reason.map(Into::into),
+            send_refusal: status.send_refusal.map(Into::into),
         }
     }
 }
@@ -141,6 +144,62 @@ impl From<MessageOperationIssue> for GraphqlMessageOperationIssue {
             MessageOperationIssue::MoveSourceSent => Self::MoveSourceSent,
             MessageOperationIssue::MoveReauthorization => Self::MoveReauthorization,
             MessageOperationIssue::MoveOriginalRemains => Self::MoveOriginalRemains,
+        }
+    }
+}
+
+/// SMTP command that refused the envelope before message data.
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+#[graphql(name = "EmailSubmissionRefusalPhase")]
+pub enum GraphqlSubmissionRefusalPhase {
+    /// MAIL FROM was refused.
+    Sender,
+    /// A RCPT TO was refused; the entire envelope was abandoned.
+    Recipient,
+    /// DATA or the advertised message capabilities refused the body.
+    Message,
+}
+
+/// Sanitized refusal class; automatic resubmission remains forbidden.
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+#[graphql(name = "EmailSubmissionRefusalClass")]
+pub enum GraphqlSubmissionRefusalClass {
+    /// Temporary refusal.
+    Temporary,
+    /// Permanent refusal.
+    Permanent,
+}
+
+/// Optional command detail that older clients can ignore.
+#[derive(SimpleObject)]
+#[graphql(name = "EmailSubmissionRefusal")]
+pub struct GraphqlSubmissionRefusal {
+    /// Command whose reply refused submission.
+    phase: GraphqlSubmissionRefusalPhase,
+    /// Zero-based position in the message's To, Cc, then Bcc envelope.
+    recipient_index: Option<i32>,
+    /// SMTP reply class, absent for a local capability failure.
+    reply_class: Option<GraphqlSubmissionRefusalClass>,
+}
+
+impl From<email::domain::models::mailbox_operation::SubmissionRefusal>
+    for GraphqlSubmissionRefusal
+{
+    fn from(value: email::domain::models::mailbox_operation::SubmissionRefusal) -> Self {
+        use email::domain::models::mailbox_operation::{
+            SubmissionRefusalClass as C, SubmissionRefusalPhase as P,
+        };
+        Self {
+            phase: match value.phase {
+                P::Sender => GraphqlSubmissionRefusalPhase::Sender,
+                P::Recipient => GraphqlSubmissionRefusalPhase::Recipient,
+                P::Message => GraphqlSubmissionRefusalPhase::Message,
+            },
+            recipient_index: value.recipient_index.map(i32::from),
+            reply_class: value.reply_class.map(|class| match class {
+                C::Temporary => GraphqlSubmissionRefusalClass::Temporary,
+                C::Permanent => GraphqlSubmissionRefusalClass::Permanent,
+            }),
         }
     }
 }

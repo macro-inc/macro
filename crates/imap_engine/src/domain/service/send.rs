@@ -253,6 +253,17 @@ impl Engine {
                 return Err(error);
             }
         };
+        if matches!(outcome, SubmissionOutcome::Rejected { .. }) {
+            // Rejection is returned to the caller, never persisted as a new
+            // submission vocabulary: older binaries must still read this draft.
+            // Clear the Unknown fence only after the transport proves no body
+            // was submitted, and save before allowing a deliberate new attempt.
+            if let Some(d) = a.state.drafts.get_mut(id) {
+                d.submission = None;
+            }
+            self.repository.save(a).await?;
+            return value(outcome);
+        }
         if let Some(d) = a.state.drafts.get_mut(id) {
             d.submission = Some(outcome.clone());
             if outcome == SubmissionOutcome::Accepted {

@@ -63,6 +63,62 @@ async fn only_typed_pre_data_failure_is_definite_not_a_generic_service_outage() 
     }
 }
 
+#[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
+async fn smtp_recipient_refusal_reaches_the_gateway_without_a_recipient_address(db: sqlx::PgPool) {
+    use email::domain::models::UserProvider;
+    use wiremock::{
+        Mock, MockServer, ResponseTemplate,
+        matchers::{method, path},
+    };
+    let server = MockServer::start().await;
+    let mailbox = MailboxKey {
+        link_id: Uuid::now_v7(),
+        sync_generation: 1,
+        grant_generation: 1,
+    };
+    Mock::given(method("POST"))
+        .and(path(format!(
+            "/internal/v1/accounts/{}/operations",
+            mailbox.link_id
+        )))
+        .respond_with(ResponseTemplate::new(200).set_body_json(
+            serde_json::json!({"rejected":{"refusal":{
+                "phase":"recipient", "recipient_index":1, "reply_class":"permanent"
+            }}}),
+        ))
+        .expect(1)
+        .mount(&server)
+        .await;
+    sqlx::query!(
+        r#"
+        INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider, grant_generation)
+            VALUES ($1, 'macro|imap@example.com', 'imap-owner', 'imap@example.com', 'IMAP', 1)
+        "#,
+        mailbox.link_id,
+    ).execute(&db).await.unwrap();
+    let gateway = ImapMailboxGateway {
+        client: ImapServiceClient::new(server.uri(), "synthetic-internal-key".into()).unwrap(),
+        health: email::outbound::mailbox_pg::PgMailboxSync::new(db)
+            .with_provider(UserProvider::Imap),
+    };
+    let result = gateway
+        .submit_draft(mailbox, &ProviderId::new("draft").unwrap())
+        .await;
+    assert!(matches!(
+        result,
+        Err(EmailApiError::SendRejected {
+            reason: SendRejectionReason::ProviderRejected,
+            refusal: Some(models::SubmissionRefusal {
+                phase: models::SubmissionRefusalPhase::Recipient,
+                recipient_index: Some(1),
+                reply_class: Some(models::SubmissionRefusalClass::Permanent)
+            }),
+            ..
+        })
+    ));
+    server.verify().await;
+}
+
 #[test]
 fn uploads_cannot_cross_mailbox_bindings_or_become_http_targets() {
     let mailbox = MailboxKey {
@@ -99,4 +155,49 @@ fn uploads_cannot_cross_mailbox_bindings_or_become_http_targets() {
         ),
         Err(EmailApiError::Forbidden)
     );
+}
+
+#[tokio::test]
+async fn mailbox_gateway_preserves_the_engine_retry_hint_and_the_short_local_busy_origin() {
+    use email::domain::models::UserProvider;
+    use sqlx::postgres::PgPoolOptions;
+    use wiremock::{
+        Mock, MockServer, ResponseTemplate,
+        matchers::{method, path},
+    };
+    for (code, seconds, local) in [("throttled", 7, false), ("account_busy", 5, true)] {
+        let server = MockServer::start().await;
+        let mailbox = MailboxKey {
+            link_id: Uuid::now_v7(),
+            sync_generation: 1,
+            grant_generation: 1,
+        };
+        Mock::given(method("POST"))
+            .and(path(format!(
+                "/internal/v1/accounts/{}/operations",
+                mailbox.link_id
+            )))
+            .respond_with(
+                ResponseTemplate::new(429)
+                    .insert_header("Retry-After", seconds.to_string())
+                    .set_body_json(serde_json::json!({"code":code,"retryAfterSeconds":seconds})),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+        let db = PgPoolOptions::new()
+            .connect_lazy("postgres://unused:unused@localhost/unused")
+            .unwrap();
+        db.close().await;
+        let gateway = ImapMailboxGateway {
+            client: ImapServiceClient::new(server.uri(), "synthetic-internal-key".into()).unwrap(),
+            health: email::outbound::mailbox_pg::PgMailboxSync::new(db)
+                .with_provider(UserProvider::Imap),
+        };
+        let error = gateway.folders(mailbox).await.unwrap_err();
+        assert!(
+            matches!(error, EmailApiError::RateLimited { retry_after:Some(delay), origin } if delay.as_secs() == seconds && matches!(origin, RateLimitOrigin::Local) == local)
+        );
+        server.verify().await;
+    }
 }

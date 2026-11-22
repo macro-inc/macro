@@ -27,6 +27,7 @@ async fn actual_router_rejects_missing_wrong_and_empty_keys() {
             deadline: AtomicBool::new(false),
             sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
             submission_deadline: std::sync::Mutex::new(None),
+            refusal: None,
             provider_work: None,
         });
         let engine = Arc::new(Engine::new(repository, Arc::new(TestCipher), transport));
@@ -157,4 +158,13 @@ async fn busy_admission_and_content_limits_have_distinct_http_contracts() {
     )
     .unwrap();
     assert_eq!(body["code"], "message_too_large");
+}
+
+#[test]
+fn provider_limits_keep_a_minute_floor_while_local_account_contention_retries_in_seconds() {
+    for (error, expected) in [(Error::Throttled, "60"), (Error::AccountBusy, "5")] {
+        let response = ApiError::from(error).into_response();
+        assert_eq!(response.status(), axum::http::StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(response.headers().get("retry-after").unwrap(), expected);
+    }
 }

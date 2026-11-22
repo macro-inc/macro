@@ -65,6 +65,22 @@ impl VisitMut for Documentation {
     }
 }
 
+// Explicit public re-exports are source DTOs too. Reuse them instead of
+// generating unused parallel definitions for their OpenAPI components.
+fn exported_names(tree: &syn::UseTree, names: &mut Vec<String>) {
+    match tree {
+        syn::UseTree::Path(path) => exported_names(&path.tree, names),
+        syn::UseTree::Name(name) => names.push(name.ident.to_string()),
+        syn::UseTree::Rename(rename) => names.push(rename.rename.to_string()),
+        syn::UseTree::Group(group) => {
+            for item in &group.items {
+                exported_names(item, names);
+            }
+        }
+        syn::UseTree::Glob(_) => {}
+    }
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     let arguments: Vec<_> = std::env::args().collect();
     let spec: openapiv3::OpenAPI = serde_json::from_reader(File::open(&arguments[1])?)?;
@@ -77,13 +93,20 @@ fn main() -> Result<(), Box<dyn Error>> {
     for (module, path) in [("models", model_path.to_path_buf()), ("bounce", model_path.with_file_name("bounce.rs")), ("account_settings", model_path.with_file_name("account_settings.rs")), ("server_features", model_path.with_file_name("server_features.rs"))] {
         let source = syn::parse_file(&std::fs::read_to_string(path)?)?;
         for item in source.items {
-            let name = match item {
-                syn::Item::Struct(item) if matches!(item.vis, syn::Visibility::Public(_)) => item.ident.to_string(),
-                syn::Item::Enum(item) if matches!(item.vis, syn::Visibility::Public(_)) => item.ident.to_string(),
+            let names = match item {
+                syn::Item::Struct(item) if matches!(item.vis, syn::Visibility::Public(_)) => vec![item.ident.to_string()],
+                syn::Item::Enum(item) if matches!(item.vis, syn::Visibility::Public(_)) => vec![item.ident.to_string()],
+                syn::Item::Use(item) if matches!(item.vis, syn::Visibility::Public(_)) => {
+                    let mut names = Vec::new();
+                    exported_names(&item.tree, &mut names);
+                    names
+                }
                 _ => continue,
             };
-            if spec.components.as_ref().is_some_and(|components| components.schemas.contains_key(&name)) {
-                settings.with_replacement(&name, &format!("::imap_engine::domain::{module}::{name}"), std::iter::empty());
+            for name in names {
+                if spec.components.as_ref().is_some_and(|components| components.schemas.contains_key(&name)) {
+                    settings.with_replacement(&name, &format!("::imap_engine::domain::{module}::{name}"), std::iter::empty());
+                }
             }
         }
     }
