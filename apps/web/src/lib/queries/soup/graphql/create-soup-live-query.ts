@@ -119,6 +119,28 @@ function pageNotifiedAt(
   return stamps.size ? stamps : NO_NOTIFIED_AT;
 }
 
+/** The updatedAt a NOTIFIED_AT page gives each email thread, by record key.
+ * A thread's updatedAt depends on the reading view (All Mail gives the latest
+ * eligible message time, other views the thread's update time), and its one
+ * cached record keeps whichever read wrote it last, such as the Mail backfill. */
+function pageEmailUpdatedAt(
+  page: SoupQuery | ChannelListSoupQuery
+): ReadonlyMap<string, string> {
+  const soup = page.user?.soup;
+  const times = new Map<string, string>();
+  if (!soup || !('notifiedAt' in soup)) return times;
+  for (const item of soup.items)
+    if (item.__typename === 'GraphqlSoupEmailThread')
+      times.set(soupItemKey(item), item.updatedAt);
+  return times;
+}
+
+type NetworkEmailTimes = {
+  inputKey: string;
+  /** By page index, from that page's latest network response. */
+  pages: readonly ReadonlyMap<string, string>[];
+};
+
 /** Owns network pages, live cache records, Mail cursors, and fallback selection.
  * Data is a non-suspending accessor of reactive GraphQL records, before UI mapping.
  * This is the one GraphQL Soup list source; feature code reads it through
@@ -238,6 +260,22 @@ export function createSoupLiveQuery(
     ChannelListItemFieldsFragmentDoc
   );
   const mailItemSelection = selectRecords(MailItemFieldsFragmentDoc);
+  // Captured from network responses only: a page's data, snapshot included,
+  // follows later cache writes to the records it lists.
+  const [networkEmailTimes, setNetworkEmailTimes] =
+    createSignal<NetworkEmailTimes>({ inputKey: '', pages: [] });
+  const recordNetworkEmailTimes = (
+    key: string,
+    pageIndex: number,
+    page: SoupQuery | ChannelListSoupQuery
+  ) =>
+    setNetworkEmailTimes((known) => {
+      // A first page starts the chain again; later pages arrive after it.
+      const pages =
+        known.inputKey === key && pageIndex > 0 ? [...known.pages] : [];
+      pages[pageIndex] = pageEmailUpdatedAt(page);
+      return { inputKey: key, pages };
+    });
   let localRequest = 0;
   let localEvaluationRunning = false;
   const [initialLocalEvaluation, setInitialLocalEvaluation] =
@@ -468,6 +506,7 @@ export function createSoupLiveQuery(
           forgetUnpersistedPage(page.pageIndex);
           return;
         }
+        recordNetworkEmailTimes(firstInputKey, page.pageIndex, result.data);
         if (metadata.persistence) {
           if (
             page.pageIndex === inStepPageIndex &&
@@ -1170,6 +1209,17 @@ export function createSoupLiveQuery(
     /** When the viewer was last notified about each fetched record, by key;
      * listed only by NOTIFIED_AT pages, whose sort key it is. */
     fetchedNotifiedAt: () => query.data?.notifiedAt() ?? NO_NOTIFIED_AT,
+    /** The updatedAt NOTIFIED_AT pages' own network responses gave each email
+     * thread, by key, which the shared cached record may no longer hold. A
+     * thread two loaded pages list keeps the later page's. */
+    fetchedEmailUpdatedAt: (): ReadonlyMap<string, string> => {
+      const known = networkEmailTimes();
+      const loaded = query.data?.pageParams.length ?? 0;
+      if (known.inputKey !== inputKey() || !loaded) return NO_NOTIFIED_AT;
+      const pages = known.pages.slice(0, loaded).filter(Boolean);
+      if (!pages.some((page) => page.size)) return NO_NOTIFIED_AT;
+      return new Map(pages.flatMap((page) => [...page]));
+    },
     cachedMail,
     error,
     fetchError: () => query.error ?? undefined,
