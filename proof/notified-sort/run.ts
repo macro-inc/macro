@@ -38,6 +38,7 @@ import { classify, sameInstant, type Classified } from './lib/classify.ts';
 import { closureOf } from './lib/closed.ts';
 import { compareSnapshots, entityKey, OLD_DEADLINE, refCheck, type DomRow } from './lib/compare.ts';
 import { compareHomeDom } from './lib/dom.ts';
+import { compactDom, heldApartFromShared } from './lib/dom-held.ts';
 import { generateReads, type ReadCase } from './lib/gen.ts';
 import { applyMutant, MUTANTS, revertMutant } from './lib/mutants.ts';
 import { queueNotify } from './lib/notify.ts';
@@ -631,13 +632,14 @@ async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
               if (again.every((r) => r.status === 'fulfilled')) {
                 const reloaded = again.map((r) => (r as PromiseFulfilledResult<DomRow[]>).value);
                 const sides = (await compareHomeDom(stack, user, reloaded[0], reloaded[1], `seq home touch ${domTab} reload`)).map(classify);
-                const newHeld = (await compareHomeDom(stack, user, reloaded[1], rows[1], 'held')).length === 0;
-                const oldHeld = (await compareHomeDom(stack, user, reloaded[0], rows[0], 'held')).length === 0;
-                checks.domReload = { sides: sides.map((d) => d.cls), newHeld, oldHeld };
                 // The evidence for an open difference: each side's mounted and
                 // reloaded rows, as bucket/type:id "text" in screen order.
-                const compactDom = (list: DomRow[]) => list.map((r) => (r.kind === 'entity' ? `${r.id.split('|').slice(2).map((p) => p.replace(/^s\d+:/, '')).join('/')}${r.unread ? '*' : ''} ${r.text}` : `# ${r.label}`));
-                checks.domRows = { oldMounted: compactDom(rows[0]), newMounted: compactDom(rows[1]), oldReload: compactDom(reloaded[0]), newReload: compactDom(reloaded[1]) };
+                const domRows = { oldMounted: compactDom(rows[0]), newMounted: compactDom(rows[1]), oldReload: compactDom(reloaded[0]), newReload: compactDom(reloaded[1]) };
+                checks.domRows = domRows;
+                // Held: the mounted Home already showed its reload, apart from
+                // rows both sides kept alike (lib/dom-held.ts).
+                const { newHeld, oldHeld, shared } = heldApartFromShared(domRows);
+                checks.domReload = { sides: sides.map((d) => d.cls), newHeld, oldHeld, shared };
                 if (sides.every((d) => closureOf(d.cls)) && newHeld) {
                   diffs = [...diffs.filter((d) => closureOf(d.cls)), classify({ signature: `seq home touch ${domTab} dom:old-behind-reload`, kind: 'dom', detail: open.map((d) => `${d.cls}: ${d.detail}`).join(' | ').slice(0, 600) })];
                 }
