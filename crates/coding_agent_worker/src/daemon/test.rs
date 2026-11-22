@@ -378,6 +378,7 @@ async fn a_stalled_bound_agent_refresh_keeps_the_event_stream() {
     let agents_changed = Notify::new();
     let mut position = StreamPosition::new(std::time::SystemTime::now());
     let (health, _) = watch::channel(TriggerStreamHealth::Connecting);
+    let hosting = crate::harness::Hosting::default();
     let serving = serve_once(
         &client,
         &NoWork,
@@ -385,7 +386,7 @@ async fn a_stalled_bound_agent_refresh_keeps_the_event_stream() {
         &agents_changed,
         &mut position,
         &health,
-        None,
+        &hosting,
     );
     tokio::pin!(serving);
 
@@ -447,7 +448,7 @@ async fn a_refused_credential_on_refresh_ends_the_event_stream() {
         &agents_changed,
         &mut position,
         &health,
-        None,
+        &crate::harness::Hosting::default(),
     )
     .await;
     let ServeOutcome::Ended { error, lasted } = outcome else {
@@ -482,6 +483,7 @@ async fn an_accepted_bound_agent_read_runs_agents_stopped_for_refused_credential
     let agents_changed = Notify::new();
     let mut position = StreamPosition::new(std::time::SystemTime::now());
     let (health, _) = watch::channel(TriggerStreamHealth::Connecting);
+    let hosting = crate::harness::Hosting::with(teammates.clone());
     let serving = serve_once(
         &client,
         &NoWork,
@@ -489,7 +491,7 @@ async fn an_accepted_bound_agent_read_runs_agents_stopped_for_refused_credential
         &agents_changed,
         &mut position,
         &health,
-        Some(&teammates),
+        &hosting,
     );
     tokio::pin!(serving);
 
@@ -528,6 +530,7 @@ async fn a_busy_stream_still_refreshes_the_bound_agents_every_ten_seconds() {
     let agents_changed = Notify::new();
     let mut position = StreamPosition::new(std::time::SystemTime::now());
     let (health, _) = watch::channel(TriggerStreamHealth::Connecting);
+    let hosting = crate::harness::Hosting::default();
     let serving = serve_once(
         &client,
         &NoWork,
@@ -535,7 +538,7 @@ async fn a_busy_stream_still_refreshes_the_bound_agents_every_ten_seconds() {
         &agents_changed,
         &mut position,
         &health,
-        None,
+        &hosting,
     );
     tokio::pin!(serving);
 
@@ -695,4 +698,35 @@ async fn serve_storage_with_second_refresh(
             None => held.push(socket),
         }
     }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_failed_hosting_setup_is_tried_again_until_it_succeeds() {
+    // Setting up hosting failed at start (another macrod writing the same
+    // file, say): it is tried again with backoff, and the machine hosts once
+    // it succeeds, with no restart.
+    let ((teammates, _report), _engine, _exit, _directory) =
+        crate::teammate::test::fake_hosting().await;
+    let mut teammates = Some(
+        std::sync::Arc::try_unwrap(teammates)
+            .unwrap_or_else(|_| panic!("the only reference to the teammates")),
+    );
+    let attempts = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+    let counted = std::sync::Arc::clone(&attempts);
+    let hosting = crate::harness::Hosting::default();
+
+    let retry = set_up_hosting(&hosting, move || {
+        if counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst) < 2 {
+            Err(rootcause::report!("could not write the seccomp profile"))
+        } else {
+            Ok(teammates.take())
+        }
+    });
+    assert!(retry.is_some());
+    assert!(hosting.current().is_none());
+
+    tokio::time::timeout(Duration::from_secs(60), hosting.ready())
+        .await
+        .expect("hosting is set up by a retry");
+    assert_eq!(attempts.load(std::sync::atomic::Ordering::SeqCst), 3);
 }

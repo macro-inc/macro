@@ -5,13 +5,20 @@ use tokio::net::TcpListener;
 use tokio_tungstenite::accept_async;
 
 fn start_runtime(listener: &TcpListener) -> Runtime {
-    start_runtime_hosting(listener, None)
+    start_runtime_on(listener, crate::harness::Hosting::default())
 }
 
 fn start_runtime_hosting(
     listener: &TcpListener,
     teammates: Option<Arc<crate::harness::HostTeammates>>,
 ) -> Runtime {
+    start_runtime_on(
+        listener,
+        teammates.map_or_else(Default::default, crate::harness::Hosting::with),
+    )
+}
+
+fn start_runtime_on(listener: &TcpListener, hosting: crate::harness::Hosting) -> Runtime {
     Runtime::start(
         &MacroApi {
             egress_url: None,
@@ -36,7 +43,7 @@ fn start_runtime_hosting(
         None,
         crate::harness::Handoffs::channel().0,
         None,
-        teammates,
+        hosting,
     )
 }
 
@@ -200,6 +207,67 @@ async fn a_supervisor_that_ends_after_a_refusal_holds_no_agents() {
     .await
     .expect("the agent stopped for refused credentials runs again");
     assert_eq!(engine.runs(), 1);
+}
+
+/// Accept the next dial and say what it lists.
+#[expect(
+    clippy::result_large_err,
+    reason = "the handshake callback's error type is fixed by tungstenite's Callback trait"
+)]
+async fn accept_listing(
+    listener: &TcpListener,
+) -> (
+    tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
+    String,
+) {
+    let (socket, _) = tokio::time::timeout(Duration::from_secs(5), listener.accept())
+        .await
+        .expect("the machine dials")
+        .unwrap();
+    let listed = Arc::new(std::sync::Mutex::new(String::new()));
+    let seen = Arc::clone(&listed);
+    let socket = tokio_tungstenite::accept_hdr_async(
+        socket,
+        move |request: &tungstenite::handshake::server::Request, response| {
+            if let Some(value) = request
+                .headers()
+                .get(agent_runtime_protocol::domain::schema::v0::RUNTIME_ACCEPTS_HEADER)
+            {
+                *seen.lock().unwrap() = value.to_str().unwrap().to_owned();
+            }
+            Ok(response)
+        },
+    )
+    .await
+    .unwrap();
+    let listed = listed.lock().unwrap().clone();
+    (socket, listed)
+}
+
+#[tokio::test]
+async fn hosting_set_up_after_the_dial_redials_to_list_it() {
+    // Setting up hosting failed at start and a retry succeeded while the
+    // runtime was connected: it redials, and the new dial lists teammates.
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let hosting = crate::harness::Hosting::default();
+    let _runtime = start_runtime_on(&listener, hosting.clone());
+    let (mut first, listed) = accept_listing(&listener).await;
+    assert!(!listed.contains("teammate-container"), "{listed}");
+    assert!(!listed.contains("recheck-teammate-host"), "{listed}");
+
+    let ((teammates, _report), _engine, _exit, _directory) =
+        crate::teammate::test::fake_hosting().await;
+    hosting.set(teammates);
+    // The bridge ends the first connection...
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while first.next().await.is_some() {}
+    })
+    .await
+    .expect("the first connection closes");
+    // ...and the redial lists both.
+    let (_second, listed) = accept_listing(&listener).await;
+    assert!(listed.contains("teammate-container"), "{listed}");
+    assert!(listed.contains("recheck-teammate-host"), "{listed}");
 }
 
 #[tokio::test]
@@ -381,7 +449,7 @@ async fn the_agent_starts_while_the_runtime_dials() {
         None,
         crate::harness::Handoffs::channel().0,
         None,
-        None,
+        crate::harness::Hosting::default(),
     );
     let read = tokio::task::spawn_blocking(move || std::fs::read_to_string(started));
     let line = tokio::time::timeout(Duration::from_secs(3), read)

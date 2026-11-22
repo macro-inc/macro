@@ -81,6 +81,11 @@ impl Store {
         ))
     }
 
+    /// The harness this store belongs to: its directory's name.
+    pub fn harness(&self) -> Option<&str> {
+        self.root.file_name()?.to_str()
+    }
+
     /// The install's directory.
     pub fn directory(&self, install_id: &TeammateInstallId) -> PathBuf {
         self.root.join(install_id.as_str())

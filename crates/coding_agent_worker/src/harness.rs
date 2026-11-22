@@ -56,6 +56,43 @@ pub type HostTeammates = crate::teammate::HostTeammates;
 #[cfg(not(unix))]
 pub enum HostTeammates {}
 
+/// The teammates this macrod hosts, once hosting is set up: at start, or
+/// by a later retry when setting it up failed (`daemon.rs`). Each dial reads
+/// it, and a connection made without it redials once it is set up.
+#[derive(Clone)]
+pub struct Hosting(Arc<tokio::sync::watch::Sender<Option<Arc<HostTeammates>>>>);
+
+impl Default for Hosting {
+    fn default() -> Self {
+        Self(Arc::new(tokio::sync::watch::Sender::new(None)))
+    }
+}
+
+impl Hosting {
+    /// Hosting already set up.
+    pub fn with(teammates: Arc<HostTeammates>) -> Self {
+        let hosting = Self::default();
+        hosting.set(teammates);
+        hosting
+    }
+
+    /// Hosting is set up.
+    pub fn set(&self, teammates: Arc<HostTeammates>) {
+        self.0.send_replace(Some(teammates));
+    }
+
+    /// The teammates, if hosting is set up.
+    pub fn current(&self) -> Option<Arc<HostTeammates>> {
+        self.0.borrow().clone()
+    }
+
+    /// Resolves once hosting is set up.
+    pub async fn ready(&self) {
+        let mut hosting = self.0.subscribe();
+        let _ = hosting.wait_for(Option::is_some).await;
+    }
+}
+
 /// Which call carried the harness credentials the service answered.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CredentialPath {
@@ -172,6 +209,7 @@ pub async fn bridge(
     computer: Option<Arc<Computer>>,
     agents_changed: &Notify,
     teammates: Option<TeammateHosting>,
+    hosting: &Hosting,
 ) -> Result<BridgeEnd, BridgeError> {
     let probes = HarnessModelProbes {
         process: probe_process(harness, cwd),
@@ -229,6 +267,7 @@ pub async fn bridge(
                 computer.as_ref(),
                 agents_changed,
                 &mut teammates,
+                hosting,
             )
             .await
         }
@@ -314,6 +353,7 @@ async fn relay(
     computer: Option<&Arc<Computer>>,
     agents_changed: &Notify,
     teammates: &mut Option<TeammateLink>,
+    hosting: &Hosting,
 ) -> Result<Relayed, BridgeError> {
     let to_service = to_service_slot
         .clone()
@@ -321,8 +361,19 @@ async fn relay(
     // Owned by the relay: ending it aborts every probe subprocess.
     let mut probe_tasks = JoinSet::new();
     let mut self_knowledge = SelfKnowledge::default();
+    // A redial is due (to list what this dial didn't), once no turn runs:
+    // ending the connection would end a running turn in Macro.
+    let mut redial_pending = false;
     loop {
+        if redial_pending && turns.is_idle() {
+            tracing::info!("redialing so the dial lists teammate hosting");
+            return Ok(Relayed::Closed);
+        }
         tokio::select! {
+            () = hosting.ready(), if teammates.is_none() && !redial_pending => {
+                tracing::info!("hosting teammates was set up after this dial; redialing once no turn runs");
+                redial_pending = true;
+            }
             event = agent.next_event() => match event {
               AgentEvent::Line(line) => {
                 let Some(line) = line else {
@@ -409,6 +460,7 @@ async fn relay(
                     Some(message @ (ToRuntimeMessage::RunTeammate { .. } | ToRuntimeMessage::StopTeammate { .. })) => {
                         handle_teammate_message(teammates.as_ref(), message);
                     }
+                    Some(ToRuntimeMessage::RecheckTeammateHost) => recheck_teammate_host(teammates.as_ref()),
                     Some(other) => tracing::debug!(message = ?other, "ignoring an unknown runtime message"),
                     None => return Ok(Relayed::Closed),
                 }
@@ -420,14 +472,9 @@ async fn relay(
                         return Ok(Relayed::Closed);
                     }
                 }
-                // Ending the connection would end a running turn in Macro:
-                // the link asks again at its next engine check.
-                TeammateEvent::Redial if turns.is_idle() => {
-                    tracing::info!("the container engine answers again; redialing to host teammates");
-                    return Ok(Relayed::Closed);
-                }
                 TeammateEvent::Redial => {
-                    tracing::debug!("the container engine answers again; redialing once no turn is running");
+                    tracing::info!("the container engine answers again; redialing once no turn runs");
+                    redial_pending = true;
                 }
             },
             request = handoff.next() => {
@@ -551,6 +598,17 @@ async fn next_teammate_event(teammates: &mut Option<TeammateLink>) -> TeammateEv
     #[cfg(not(unix))]
     let _ = teammates;
     std::future::pending().await
+}
+
+/// Check hosting again now, as the service asked; without teammates there
+/// is nothing to check.
+fn recheck_teammate_host(teammates: Option<&TeammateLink>) {
+    #[cfg(unix)]
+    if let Some(link) = teammates {
+        link.recheck();
+    }
+    #[cfg(not(unix))]
+    let _ = teammates;
 }
 
 /// Hand a `RunTeammate` or `StopTeammate` to the teammates. The service

@@ -14,7 +14,7 @@ use tokio_util::task::AbortOnDropHandle;
 
 use crate::computer::Computer;
 use crate::config::{Harness, HarnessCredentials, MacroApi};
-use crate::harness::{self, BridgeEnd, Handoffs, HostTeammates, LineTap};
+use crate::harness::{self, BridgeEnd, Handoffs, HostTeammates, Hosting, LineTap};
 use crate::outbound::acp_process::RunningAgent;
 use crate::outbound::link;
 use crate::retry_delay::RetryDelays;
@@ -54,7 +54,7 @@ pub struct Runtime {
 impl Runtime {
     /// Start connecting with the given credentials and keep the harness
     /// available for model discovery and agent sessions until dropped.
-    /// `teammates`, when this macrod hosts any, has its engine checked
+    /// `hosting`, once this macrod hosts teammates, has its engine checked
     /// before every dial, which decides whether the dial lists the
     /// teammate capability.
     #[expect(clippy::too_many_arguments, reason = "the supervisor's whole input")]
@@ -68,7 +68,7 @@ impl Runtime {
         adopted: Option<RunningAgent>,
         handoffs: Handoffs,
         computer: Option<Arc<Computer>>,
-        teammates: Option<Arc<HostTeammates>>,
+        hosting: Hosting,
     ) -> Self {
         let (connected_tx, connected) = watch::channel(false);
         let agents_changed = Arc::new(Notify::new());
@@ -84,7 +84,7 @@ impl Runtime {
             adopted,
             handoffs,
             computer,
-            teammates,
+            hosting,
         ));
         Self {
             connected,
@@ -143,11 +143,11 @@ async fn serve(
     mut adopted: Option<RunningAgent>,
     mut handoffs: Handoffs,
     computer: Option<Arc<Computer>>,
-    teammates: Option<Arc<HostTeammates>>,
+    hosting: Hosting,
 ) {
     // However the supervisor ends (a client error it doesn't redial, a
     // handoff, or dropped), its dial's refusal must not hold the agents.
-    let _dial_refusal = ForgetDialRefusal(teammates.clone());
+    let _dial_refusal = ForgetDialRefusal(hosting.clone());
     let mut backoff = reconnect_strategy();
     let mut refused_backoff = refused_strategy();
     // When the gateway began refusing, while it still does.
@@ -158,12 +158,17 @@ async fn serve(
         if adopted.is_none() {
             adopted = start_ahead(&harness, &cwd);
         }
-        let hosting = check_teammate_host(teammates.as_ref()).await;
-        let hosts_teammates = hosting
+        let teammates = hosting.current();
+        let checked = check_teammate_host(teammates.as_ref()).await;
+        let hosts_teammates = checked
             .as_ref()
             .is_some_and(|(_, report)| report.engine.is_some() && report.problem.is_none());
+        let accepts = link::Accepts {
+            teammate_container: hosts_teammates,
+            recheck_teammate_host: teammates.is_some(),
+        };
         let dialed = tokio::select! {
-            dialed = tokio::time::timeout(DIAL_TIMEOUT, link::dial(&gateway_url, &token, hosts_teammates)) => dialed,
+            dialed = tokio::time::timeout(DIAL_TIMEOUT, link::dial(&gateway_url, &token, accepts)) => dialed,
             request = handoffs.next() => {
                 answer_between_bridges(request, adopted.take(), &turns);
                 return;
@@ -188,7 +193,8 @@ async fn serve(
                     &mut handoffs,
                     computer.clone(),
                     &agents_changed,
-                    hosting,
+                    checked,
+                    &hosting,
                 )
                 .await
                 {
@@ -244,11 +250,14 @@ async fn serve(
 }
 
 /// Forgets the runtime dial's refusal when dropped: nothing dials then.
-struct ForgetDialRefusal(Option<Arc<HostTeammates>>);
+struct ForgetDialRefusal(Hosting);
 
 impl Drop for ForgetDialRefusal {
     fn drop(&mut self) {
-        harness::stopped_calling(self.0.as_ref(), harness::CredentialPath::RuntimeDial);
+        harness::stopped_calling(
+            self.0.current().as_ref(),
+            harness::CredentialPath::RuntimeDial,
+        );
     }
 }
 

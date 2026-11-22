@@ -365,7 +365,14 @@ impl Engine for FakeEngine {
         _image_id: &str,
         ruleset: Option<&str>,
     ) -> Result<String, super::engine::GuardError> {
-        if matches!(self.state().guard, FakeGuard::Hangs) {
+        let hangs = {
+            let state = self.state();
+            match (state.selected, &state.podman_guard) {
+                (ContainerEngineKind::Podman, Some(podman)) => matches!(podman, FakeGuard::Hangs),
+                _ => matches!(state.guard, FakeGuard::Hangs),
+            }
+        };
+        if hangs {
             return std::future::pending().await;
         }
         let mut state = self.state();
@@ -640,8 +647,20 @@ async fn the_capability_is_declared_only_when_an_engine_answers_and_nothing_is_w
 
         assert_eq!(can_host(&report), expected, "{report:?}");
         assert_eq!(
-            crate::outbound::link::accepts(can_host(&report)).contains("teammate-container"),
+            crate::outbound::link::accepts(crate::outbound::link::Accepts {
+                teammate_container: can_host(&report),
+                recheck_teammate_host: true,
+            })
+            .contains("teammate-container"),
             expected
+        );
+        // Asked to check again whether or not the engine answers.
+        assert!(
+            crate::outbound::link::accepts(crate::outbound::link::Accepts {
+                teammate_container: can_host(&report),
+                recheck_teammate_host: true,
+            })
+            .contains("recheck-teammate-host")
         );
     }
 }
@@ -1238,6 +1257,59 @@ async fn an_unreachable_engine_is_checked_again_every_thirty_seconds() {
         .await
         .expect("checked again 30 s later");
     assert!(matches!(checked, TeammateEvent::Redial), "{checked:?}");
+    // One redial asked for: no more probes on this connection.
+    assert!(
+        tokio::time::timeout(Duration::from_secs(120), link.next())
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_recheck_the_service_asks_for_reports_a_fresh_check() {
+    // "Check again" in the web: the machine checks now and reports it.
+    let fixture = fixture().await;
+    let teammates = Arc::new(fixture.teammates);
+    let report = teammates.detect().await;
+    let (to_service, _sent) = mpsc::unbounded_channel();
+    let mut link = Link::open(Arc::clone(&teammates), report, &to_service);
+    fixture.engine.state().info = Err(EngineUnavailable::Unreachable);
+
+    link.recheck();
+    let checked = tokio::time::timeout(Duration::from_secs(1), next_host_event(&mut link))
+        .await
+        .expect("checked at once");
+    let TeammateEvent::Send(
+        agent_runtime_protocol::domain::schema::v0::ToServerMessage::TeammateHost { report },
+    ) = checked
+    else {
+        panic!("expected a host report, got {checked:?}");
+    };
+    assert_eq!(report.problem, Some(TeammateHostProblem::EngineUnreachable));
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_engine_not_chosen_whose_probe_hangs_doesnt_keep_the_machine_probing() {
+    // Docker enforces the policy and is chosen; Podman is wedged. The
+    // check is conclusive: nothing is checked again on the connection.
+    let (engine, _exit) = FakeEngine::new(Ok(docker_info()));
+    engine.state().podman_guard = Some(FakeGuard::Hangs);
+    let (teammates, _directory) = restarted_on(&engine).await;
+    let report = teammates.detect().await;
+    assert_eq!(report.problem, None);
+    assert_eq!(
+        report.engine.as_ref().unwrap().kind,
+        ContainerEngineKind::Docker
+    );
+
+    let teammates = Arc::new(teammates);
+    let (to_service, _sent) = mpsc::unbounded_channel();
+    let mut link = Link::open(Arc::clone(&teammates), report, &to_service);
+    assert!(
+        tokio::time::timeout(Duration::from_secs(120), next_host_event(&mut link))
+            .await
+            .is_err()
+    );
 }
 
 #[test]
@@ -3190,8 +3262,16 @@ fn an_engine_that_cant_enforce_isolation_is_a_host_problem_before_the_sandbox() 
 
 /// An engine with a kept install's image, and macrod restarting on it.
 async fn restarted_on(engine: &FakeEngine) -> (Teammates<FakeEngine>, tempfile::TempDir) {
+    restarted_on_harness(engine, "harness-1").await
+}
+
+/// [`restarted_on`], for the harness `harness`.
+async fn restarted_on_harness(
+    engine: &FakeEngine,
+    harness: &str,
+) -> (Teammates<FakeEngine>, tempfile::TempDir) {
     let directory = tempfile::tempdir().unwrap();
-    let store = Store::new(directory.path().join("teammates/harness-1"));
+    let store = Store::new(directory.path().join("teammates").join(harness));
     let mut kept = stored(install(1));
     kept.lifecycle.policy.started(chrono::Utc::now());
     store.save(&kept, &environment().0).unwrap();
@@ -3210,6 +3290,36 @@ async fn restarted_on(engine: &FakeEngine) -> (Teammates<FakeEngine>, tempfile::
 }
 
 #[tokio::test]
+async fn macrods_sharing_an_engine_probe_under_their_own_names() {
+    // Two harnesses on one engine check it at once: each probe has its own
+    // holder and network, so neither removes the other's.
+    let (engine, _exit) = FakeEngine::new(Ok(docker_info()));
+    let (first, _first_directory) =
+        restarted_on_harness(&engine, "0b7e2c1a-9f3d-4c11-8e2a-5d6f7a8b9c0d").await;
+    let (second, _second_directory) =
+        restarted_on_harness(&engine, "7c1d9e0f-2a3b-4c5d-8e6f-0a1b2c3d4e5f").await;
+
+    let (one, other) = tokio::join!(first.detect(), second.detect());
+    assert_eq!(one.problem, None);
+    assert_eq!(other.problem, None);
+    let probes: BTreeSet<String> = engine
+        .calls()
+        .into_iter()
+        .filter_map(|call| match call {
+            Call::CreateNetwork(network) if network.contains("isolation-probe") => Some(network),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        probes,
+        BTreeSet::from([
+            "macro-teammate-isolation-probe-0b7e2c1a9f3d".to_owned(),
+            "macro-teammate-isolation-probe-7c1d9e0f2a3b".to_owned(),
+        ])
+    );
+}
+
+#[tokio::test]
 async fn an_engine_whose_isolation_probe_fails_is_reported_and_hosts_nothing() {
     let (engine, _exit) = FakeEngine::new(Ok(docker_info()));
     engine.state().guard = FakeGuard::Refuses;
@@ -3224,10 +3334,10 @@ async fn an_engine_whose_isolation_probe_fails_is_reported_and_hosts_nothing() {
     assert!(!can_host(&report));
     // The probe cleaned up after itself.
     assert!(engine.calls().contains(&Call::RemoveContainer(
-        "macro-teammate-isolation-probe-net".to_owned()
+        "macro-teammate-isolation-probe-harness1-net".to_owned()
     )));
     assert!(engine.calls().contains(&Call::RemoveNetwork(
-        "macro-teammate-isolation-probe".to_owned()
+        "macro-teammate-isolation-probe-harness1".to_owned()
     )));
 }
 

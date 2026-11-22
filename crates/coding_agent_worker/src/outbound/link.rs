@@ -2,19 +2,28 @@
 
 use agent_runtime_protocol::domain::connection::RuntimeChannel;
 use agent_runtime_protocol::domain::schema::v0::{
-    ACCEPTS_AGENTS_CHANGED, ACCEPTS_APPLY_AGENT, ACCEPTS_TEAMMATE_CONTAINER, RUNTIME_ACCEPTS_HEADER,
+    ACCEPTS_AGENTS_CHANGED, ACCEPTS_APPLY_AGENT, ACCEPTS_RECHECK_TEAMMATE_HOST,
+    ACCEPTS_TEAMMATE_CONTAINER, RUNTIME_ACCEPTS_HEADER,
 };
 use agent_runtime_protocol::outbound::websocket::connect_runtime;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 
+/// The optional teammate messages a dial lists.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Accepts {
+    /// The teammate container capability, which the engine check grants.
+    pub teammate_container: bool,
+    /// The recheck hint, which hosting set up grants (engine up or not).
+    pub recheck_teammate_host: bool,
+}
+
 /// Dial the runtime gateway, presenting the harness credential. A WebSocket
 /// upgrade is an ordinary HTTP request, so the same header every other
-/// harness call uses works here too. `hosts_teammates` lists the teammate
-/// container capability, which the engine check grants.
+/// harness call uses works here too.
 pub async fn dial(
     gateway_url: &str,
     harness_token: &str,
-    hosts_teammates: bool,
+    listed: Accepts,
 ) -> Result<RuntimeChannel, tokio_tungstenite::tungstenite::Error> {
     let mut request = gateway_url.into_client_request()?;
     let headers = request.headers_mut();
@@ -24,7 +33,7 @@ pub async fn dial(
     // because it lists them here.
     headers.insert(
         RUNTIME_ACCEPTS_HEADER,
-        accepts(hosts_teammates).parse().map_err(bad_header)?,
+        accepts(listed).parse().map_err(bad_header)?,
     );
     let (stream, _response) = tokio_tungstenite::connect_async(request).await?;
     Ok(connect_runtime(stream))
@@ -32,10 +41,13 @@ pub async fn dial(
 
 /// The optional messages this daemon handles, as the accepts header lists
 /// them.
-pub fn accepts(hosts_teammates: bool) -> String {
+pub fn accepts(listed: Accepts) -> String {
     let mut accepts = vec![ACCEPTS_AGENTS_CHANGED, ACCEPTS_APPLY_AGENT];
-    if hosts_teammates {
+    if listed.teammate_container {
         accepts.push(ACCEPTS_TEAMMATE_CONTAINER);
+    }
+    if listed.recheck_teammate_host {
+        accepts.push(ACCEPTS_RECHECK_TEAMMATE_HOST);
     }
     accepts.join(",")
 }

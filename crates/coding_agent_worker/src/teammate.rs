@@ -62,8 +62,25 @@ const ENGINE_CHECK_TIMEOUT: Duration = Duration::from_secs(10);
 /// the engine right now.
 const ENGINE_RECHECK: Duration = Duration::from_secs(30);
 
-/// The install id the isolation probe runs under.
+/// The install id the isolation probe runs under, before the harness's.
 const PROBE_INSTALL: &str = "isolation-probe";
+
+/// How much of the harness id goes into the probe's install id.
+const PROBE_HARNESS_PREFIX: usize = 12;
+
+/// The isolation probe's install id for the harness whose store this is:
+/// `isolation-probe-<the harness id's first 12 letters and digits>`, so
+/// macrods of different harnesses sharing an engine never remove each
+/// other's probe holder or network.
+fn probe_install(store: &Store) -> Option<TeammateInstallId> {
+    let harness: String = store
+        .harness()?
+        .chars()
+        .filter(char::is_ascii_alphanumeric)
+        .take(PROBE_HARNESS_PREFIX)
+        .collect();
+    TeammateInstallId::new(format!("{PROBE_INSTALL}-{harness}")).ok()
+}
 
 /// How long the user-namespace probe may take.
 const PROBE_TIMEOUT: Duration = Duration::from_secs(20);
@@ -372,7 +389,8 @@ impl<EngineImpl: Engine> Teammates<EngineImpl> {
         // Engines whose probe timed out with no finished result: unknown,
         // so reported like an engine that didn't answer.
         let mut undecided = Vec::new();
-        let mut inconclusive = false;
+        // Engines whose probe timed out, kept result or not.
+        let mut timed_out = Vec::new();
         for kind in &kinds {
             let info = tokio::time::timeout(ENGINE_CHECK_TIMEOUT, engine.select(*kind))
                 .await
@@ -387,7 +405,7 @@ impl<EngineImpl: Engine> Teammates<EngineImpl> {
                     isolation
                 }
                 Probed::TimedOut(kept) => {
-                    inconclusive = true;
+                    timed_out.push(*kind);
                     kept.unwrap_or_else(|| {
                         undecided.push(*kind);
                         EngineIsolation::NotProbed
@@ -420,9 +438,11 @@ impl<EngineImpl: Engine> Teammates<EngineImpl> {
                 .await
                 .unwrap_or(Err(EngineUnavailable::Unreachable))
         };
+        // Only the chosen engine's probe decides whether to check again: a
+        // wedged engine that wasn't chosen doesn't keep the machine probing.
         self.shared
             .inconclusive
-            .store(inconclusive, Ordering::SeqCst);
+            .store(timed_out.contains(&chosen), Ordering::SeqCst);
         (info, listed)
     }
 
@@ -447,7 +467,7 @@ impl<EngineImpl: Engine> Teammates<EngineImpl> {
             if !matches!(engine.image_id(image_id).await, Ok(Some(local)) if &local == image_id) {
                 continue;
             }
-            let Ok(probe) = TeammateInstallId::new(PROBE_INSTALL) else {
+            let Some(probe) = probe_install(&self.shared.store) else {
                 return Probed::Finished(EngineIsolation::NotProbed);
             };
             let network = network_name(&probe);
@@ -556,12 +576,12 @@ impl<EngineImpl: Engine> Teammates<EngineImpl> {
 pub struct Link {
     teammates: Arc<HostTeammates>,
     statuses: broadcast::Receiver<Status>,
-    /// The engine checks made while the engine is unreachable: their own
-    /// task, so a relay busy with other traffic can't cancel one midway.
-    rechecks: Option<(
-        mpsc::UnboundedReceiver<TeammateEvent>,
-        AbortOnDropHandle<()>,
-    )>,
+    /// Asks the connection's check task for a check now.
+    asks: mpsc::UnboundedSender<()>,
+    /// What the check task found: its own task, so a relay busy with other
+    /// traffic can't cancel a check midway.
+    checked: mpsc::UnboundedReceiver<TeammateEvent>,
+    _checks: AbortOnDropHandle<()>,
 }
 
 impl Link {
@@ -577,37 +597,39 @@ impl Link {
         // lost.
         let statuses = teammates.subscribe();
         let listed = can_host(&report);
-        let recheck = report.problem == Some(TeammateHostProblem::EngineUnreachable)
-            || teammates.shared.inconclusive.load(Ordering::SeqCst);
+        let again = check_again(&teammates, &report);
         let _ = to_service.send(ToServerMessage::TeammateHost { report });
         for status in teammates.latest() {
             let _ = to_service.send(status.into());
         }
-        let rechecks = recheck.then(|| {
-            let (events, rechecks) = mpsc::unbounded_channel();
-            let task = tokio::spawn(recheck_engine(Arc::clone(&teammates), listed, events));
-            (rechecks, AbortOnDropHandle::new(task))
-        });
+        let (asks, asked) = mpsc::unbounded_channel();
+        let (events, checked) = mpsc::unbounded_channel();
+        let checks = tokio::spawn(check_host(
+            Arc::clone(&teammates),
+            listed,
+            again,
+            asked,
+            events,
+        ));
         Self {
             teammates,
             statuses,
-            rechecks,
+            asks,
+            checked,
+            _checks: AbortOnDropHandle::new(checks),
         }
     }
 
     /// The next report to send, or a redial.
     pub async fn next(&mut self) -> TeammateEvent {
-        let recheck = async {
-            match &mut self.rechecks {
-                Some((events, _task)) => match events.recv().await {
-                    Some(event) => event,
-                    None => std::future::pending().await,
-                },
+        let checked = async {
+            match self.checked.recv().await {
+                Some(event) => event,
                 None => std::future::pending().await,
             }
         };
         tokio::select! {
-            event = recheck => event,
+            event = checked => event,
             status = next_status(&mut self.statuses) => TeammateEvent::Send(status.into()),
         }
     }
@@ -616,36 +638,60 @@ impl Link {
     pub fn handle(&self, request: TeammateRequest) {
         self.teammates.handle(request);
     }
+
+    /// The service asks to check hosting again now (a person pressed
+    /// "Check again"): the result is reported as the next event.
+    pub fn recheck(&self) {
+        let _ = self.asks.send(());
+    }
 }
 
-/// While the engine check finds the engine unreachable, or a probe timed
-/// out, check again every [`ENGINE_RECHECK`] and report each result on the
-/// live connection. Once the machine can host on a connection whose dial
-/// didn't list the teammate capability (`listed`), ask for a redial instead
-/// until the link ends; a conclusive result ends the checks.
-async fn recheck_engine(
+/// Whether `report`'s check said nothing for sure: the engine didn't
+/// answer, or the chosen engine's isolation probe timed out.
+fn check_again(teammates: &HostTeammates, report: &TeammateHostReport) -> bool {
+    report.problem == Some(TeammateHostProblem::EngineUnreachable)
+        || teammates.shared.inconclusive.load(Ordering::SeqCst)
+}
+
+/// One connection's host checks. While the last check said nothing for
+/// sure (`again`), check every [`ENGINE_RECHECK`]; also whenever the
+/// service asks. Each result is reported on the connection, except that
+/// once the machine can host on a connection whose dial didn't list the
+/// teammate capability (`listed`), one redial is asked for instead and the
+/// checks end: the new dial checks again.
+async fn check_host(
     teammates: Arc<HostTeammates>,
     listed: bool,
+    mut again: bool,
+    mut asked: mpsc::UnboundedReceiver<()>,
     events: mpsc::UnboundedSender<TeammateEvent>,
 ) {
     let mut ticks =
         tokio::time::interval_at(tokio::time::Instant::now() + ENGINE_RECHECK, ENGINE_RECHECK);
     ticks.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
-        ticks.tick().await;
+        tokio::select! {
+            _ = ticks.tick(), if again => {}
+            ask = asked.recv() => {
+                if ask.is_none() {
+                    return;
+                }
+            }
+        }
         let report = teammates.detect().await;
         if !listed && can_host(&report) {
-            if events.send(TeammateEvent::Redial).is_err() {
-                return;
-            }
-            continue;
+            let _ = events.send(TeammateEvent::Redial);
+            return;
         }
-        let again = report.problem == Some(TeammateHostProblem::EngineUnreachable)
-            || teammates.shared.inconclusive.load(Ordering::SeqCst);
-        let sent = events.send(TeammateEvent::Send(ToServerMessage::TeammateHost {
-            report,
-        }));
-        if sent.is_err() || !again {
+        again = check_again(&teammates, &report);
+        // The next periodic check is a full interval after this one.
+        ticks.reset();
+        if events
+            .send(TeammateEvent::Send(ToServerMessage::TeammateHost {
+                report,
+            }))
+            .is_err()
+        {
             return;
         }
     }

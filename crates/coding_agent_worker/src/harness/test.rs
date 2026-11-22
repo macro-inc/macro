@@ -38,6 +38,7 @@ async fn unspawnable_harness_reports_failure() {
         None,
         &tokio::sync::Notify::new(),
         None,
+        &crate::harness::Hosting::default(),
     )
     .await
     .expect_err("a harness that cannot be spawned must not look like success");
@@ -68,6 +69,7 @@ async fn harness_that_exits_immediately_disconnects() {
         None,
         &tokio::sync::Notify::new(),
         None,
+        &crate::harness::Hosting::default(),
     )
     .await;
 
@@ -95,6 +97,7 @@ async fn dropped_service_channel_does_not_panic_the_bridge() {
         None,
         &tokio::sync::Notify::new(),
         None,
+        &crate::harness::Hosting::default(),
     )
     .await
     .expect_err("announcing into a closed channel must fail");
@@ -159,6 +162,7 @@ for line in sys.stdin:
     let mut handoffs = Handoffs::channel().0;
     let turns = ActiveTurns::default();
     let agents_changed = tokio::sync::Notify::new();
+    let set_up = crate::harness::Hosting::default();
     let bridge = bridge(
         &agent,
         std::path::Path::new("/"),
@@ -170,6 +174,7 @@ for line in sys.stdin:
         None,
         &agents_changed,
         None,
+        &set_up,
     );
     let conversation = async {
         let mut next_answer = async || loop {
@@ -233,6 +238,7 @@ async fn a_run_teammate_over_the_runtime_socket_ends_in_a_running_container() {
     let mut handoffs = Handoffs::channel().0;
     let agents_changed = tokio::sync::Notify::new();
     let turns = ActiveTurns::default();
+    let set_up = crate::harness::Hosting::default();
     let bridged = bridge(
         &agent,
         std::path::Path::new("/"),
@@ -244,6 +250,7 @@ async fn a_run_teammate_over_the_runtime_socket_ends_in_a_running_container() {
         None,
         &agents_changed,
         Some(hosting),
+        &set_up,
     );
 
     let served = async {
@@ -309,6 +316,7 @@ async fn an_image_swap_leaves_the_runtime_connection_and_its_agent_alone() {
     let mut handoffs = Handoffs::channel().0;
     let agents_changed = tokio::sync::Notify::new();
     let turns = ActiveTurns::default();
+    let set_up = crate::harness::Hosting::default();
     let bridged = bridge(
         &agent,
         std::path::Path::new("/"),
@@ -320,6 +328,7 @@ async fn an_image_swap_leaves_the_runtime_connection_and_its_agent_alone() {
         None,
         &agents_changed,
         Some(hosting),
+        &set_up,
     );
 
     let first = crate::teammate::test::fake_install();
