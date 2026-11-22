@@ -131,6 +131,8 @@ pub struct AgentState {
     pub feature: ai_usage::AiFeature,
     /// How the session's replies reach their reader.
     pub delivery: ReplyDelivery,
+    /// Who the session's turns read the owner's memory as.
+    pub memory_reader: memory::domain::MemoryReader,
     /// Runs the actual turns.
     pub engine: Arc<dyn TurnEngine>,
     /// Admission for new provider-backed turns, including direct ACP requests.
@@ -1062,6 +1064,7 @@ async fn run_turn(
     let mut parts = state.engine.run_turn(TurnRequest {
         purpose: TurnPurpose::Conversation,
         delivery: state.delivery,
+        memory_reader: state.memory_reader,
         session_id: state.session_id,
         awaiting: Arc::clone(&awaiting),
         owner: state.owner.clone(),

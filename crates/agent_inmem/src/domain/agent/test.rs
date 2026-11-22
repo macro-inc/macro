@@ -179,6 +179,7 @@ async fn record<Engine: TurnEngine, Out>(
     let state = Arc::new(AgentState {
         feature: ai_usage::AiFeature::AgentSession,
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
+        memory_reader: memory::domain::MemoryReader::Person,
         session_id,
         owner: model_owner::Owner::User(
             MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
@@ -1871,6 +1872,7 @@ async fn serve_with_mcp(
     let state = Arc::new(AgentState {
         feature: ai_usage::AiFeature::AgentSession,
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
+        memory_reader: memory::domain::MemoryReader::Person,
         session_id,
         owner: model_owner::Owner::User(
             MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
@@ -1931,6 +1933,7 @@ async fn session_new_dials_the_advertised_servers_except_macros_own() {
     let state = Arc::new(AgentState {
         feature: ai_usage::AiFeature::AgentSession,
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
+        memory_reader: memory::domain::MemoryReader::Person,
         session_id,
         owner: model_owner::Owner::User(
             MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
@@ -2024,6 +2027,7 @@ async fn first_prompt_waits_for_background_mcp_connect() {
     let state = Arc::new(AgentState {
         feature: ai_usage::AiFeature::AgentSession,
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
+        memory_reader: memory::domain::MemoryReader::Person,
         session_id,
         owner: model_owner::Owner::User(
             MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
@@ -2132,6 +2136,7 @@ where
     let state = Arc::new(AgentState {
         feature: ai_usage::AiFeature::AgentSession,
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
+        memory_reader: memory::domain::MemoryReader::Person,
         session_id,
         owner: model_owner::Owner::User(
             MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
@@ -3114,6 +3119,7 @@ async fn turns_redial_a_session_whose_connect_lacks_code_mode_tools() {
     let state = Arc::new(AgentState {
         feature: ai_usage::AiFeature::AgentSession,
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
+        memory_reader: memory::domain::MemoryReader::Person,
         session_id,
         owner: model_owner::Owner::User(
             MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),

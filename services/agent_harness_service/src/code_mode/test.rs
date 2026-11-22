@@ -222,8 +222,12 @@ fn the_dry_run_scope_is_every_sdk_read_and_no_write() {
     let scope = SessionScope::DryRun;
     for (key, operation) in code_execution::domain::operations() {
         // Unfurl fetches what its caller names from Macro's servers: no
-        // scoped run reaches it (the run bootstrap refuses its host).
+        // scoped run is given its host (`run_endpoints`).
         if key.starts_with("unfurl.") {
+            continue;
+        }
+        // A GET that writes is refused to every scope.
+        if agent_correlation::scope::is_get_write(&operation.method, &concrete(&operation.path)) {
             continue;
         }
         assert_eq!(
@@ -253,8 +257,12 @@ fn the_generation_scope_matches_the_sdk_catalog() {
     ];
     let scope = SessionScope::Generation;
     for (key, operation) in code_execution::domain::operations() {
-        // Refused to scoped runs by the run bootstrap, whatever the scope.
+        // No scoped run is given unfurl's host (`run_endpoints`).
         if key.starts_with("unfurl.") {
+            continue;
+        }
+        // A GET that writes is refused to every scope.
+        if agent_correlation::scope::is_get_write(&operation.method, &concrete(&operation.path)) {
             continue;
         }
         let allowed = scope.allows(&operation.method, &concrete(&operation.path));
@@ -284,7 +292,6 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
     // Send-looking writes that reach nobody else.
     let reviewed = [
         "auth.generateEmailLink",
-        "auth.rejectInvitation",
         "auth.postProfilePictures",
         // Its route refuses a scoped session tools.
         "cognition.sendChatMessage",
@@ -410,7 +417,6 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         "agent-harness.unregisterAgentSessionWork",
         // The person's own preferences.
         "agent-harness.putAgentAutoArchivePreferences",
-        "agent-harness.putAgentCodingPreferences",
         "agent-harness.putAgentSandboxSize",
         // Rejecting a pending tool call runs nothing; running or rewriting
         // one is refused.
@@ -542,8 +548,8 @@ enum ScopeEnforcement {
     /// nothing there.
     NoMacroCredential,
     /// The service takes no credential and fetches what its caller names
-    /// from Macro's servers, so the run bootstrap refuses its host to every
-    /// scoped run.
+    /// from Macro's servers: a scoped run gets no host for it and goes
+    /// through the egress proxy (`run_endpoints`).
     RefusedToScopedRuns,
 }
 
@@ -723,6 +729,13 @@ async fn a_run_signs_its_sessions_scope_into_its_credential(pool: sqlx::PgPool) 
             name,
             "job run {scope:?}"
         );
+        // The owner's egress flag is off (no flags), yet a job, under an
+        // allowlisted scope, is proxied.
+        assert_eq!(
+            run.environment.egress,
+            code_execution::domain::Egress::Proxied,
+            "job run {scope:?}"
+        );
         let correlation = run.correlation_id;
         // Once the job stops, its credential's correlation is revoked, so
         // every service that validates attribution refuses a copy of it.
@@ -761,6 +774,10 @@ async fn a_run_signs_its_sessions_scope_into_its_credential(pool: sqlx::PgPool) 
             name,
             "session run {scope:?}"
         );
+        // No egress flags (the owner's flag is off): these scopes have no
+        // allowlist, so they follow the flag until it rolls out.
+        let proxied = code_execution::domain::Egress::Direct;
+        assert_eq!(run.environment.egress, proxied, "session run {scope:?}");
         let run = UserRunCredentials {
             egress: EgressRollout::new(None),
             signer: MacroApiTokenSigner::new(pool.clone(), "fixture", PRIVATE),
@@ -776,6 +793,7 @@ async fn a_run_signs_its_sessions_scope_into_its_credential(pool: sqlx::PgPool) 
         .await
         .unwrap();
         assert_eq!(signed(&run.token).as_deref(), name, "MCP run {scope:?}");
+        assert_eq!(run.egress, proxied, "MCP run {scope:?}");
     }
 }
 
@@ -795,6 +813,24 @@ async fn the_egress_flag_fails_closed_to_direct() {
     let flag =
         |on: bool| FlagSnapshot::new([(EGRESS_PROXY_FLAG.to_owned(), FlagValue::Boolean(on))]);
     assert_eq!(flags(Ok(flag(true))).egress(&user).await, Egress::Proxied);
+    // A default-deny scope is proxied whatever the flag; another scope and
+    // an unscoped run follow it.
+    assert_eq!(
+        flags(Ok(flag(false)))
+            .egress_for(&user, Some(SessionScope::Job))
+            .await,
+        Egress::Proxied
+    );
+    assert_eq!(
+        flags(Ok(flag(false)))
+            .egress_for(&user, Some(SessionScope::NoSend))
+            .await,
+        Egress::Direct
+    );
+    assert_eq!(
+        flags(Ok(flag(false))).egress_for(&user, None).await,
+        Egress::Direct
+    );
     assert_eq!(flags(Ok(flag(false))).egress(&user).await, Egress::Direct);
     assert_eq!(
         flags(Err("PostHog is down".into())).egress(&user).await,

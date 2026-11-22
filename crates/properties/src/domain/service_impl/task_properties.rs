@@ -148,10 +148,8 @@ where
             }
         };
         // Joining a project inherits its agents, whose work runs with the
-        // owner's full access: a background job starts no such work.
-        if agent_correlation::context::current_scope()
-            == Some(agent_correlation::scope::SessionScope::Job)
-        {
+        // owner's full access: a scoped request starts no such work.
+        if !agent_correlation::context::may_assign_agents() {
             return Err(PropertiesErr::PermissionDenied);
         }
         self.check_referenced_edit_access(
@@ -405,14 +403,15 @@ where
     }
 }
 
-/// Under a scope that may not share (a background job), assigning anyone
-/// but the acting user reaches them: it grants access, notifies them, or
-/// starts an agent's work. Refused, and recorded as a sharing refusal.
+/// Under a scope (none may share or put an agent to work), assigning
+/// anyone but the acting user reaches them: it grants access, notifies
+/// them, or starts an agent's work with the person's full access. Refused,
+/// and recorded as a sharing refusal.
 fn refuse_assigning_others<'a>(
     assignees: impl IntoIterator<Item = &'a str>,
     acting_user: Option<&str>,
 ) -> Result<(), PropertiesErr> {
-    if agent_correlation::context::may_share() {
+    if agent_correlation::context::may_share() && agent_correlation::context::may_assign_agents() {
         return Ok(());
     }
     if assignees

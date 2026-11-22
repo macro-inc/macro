@@ -3,7 +3,7 @@
 use crate::{
     context::{Attribution, SharingRefused},
     domain::{Correlation, CorrelationError, CorrelationRepository, validate},
-    scope::{SessionScope, SignedScope},
+    scope::{OwnSession, SessionScope, SignedScope},
 };
 use axum::{
     Json,
@@ -71,12 +71,9 @@ where
         let tokens = verified_api_tokens(parts, &state.jwt)?;
         other_tokens_scope(Some(&state), state.specs, &tokens.others, parts).await?;
         let token = tokens.authenticating;
-        checked_signed_scope(token.as_ref(), parts, state.specs)?;
+        let signed = checked_signed_scope(token.as_ref(), parts, state.specs)?;
         let correlation = accept_correlation(&state, token.as_ref()).await?;
-        if let Some((_, correlation)) = correlation
-            && let Some(scope) = correlation.scope
-            && !scope.allows_on(state.specs, parts.method.as_str(), parts.uri.path())
-        {
+        if !within_own_session(signed, correlation.map(|(_, c)| c), state.specs, parts) {
             return Err(CorrelationRejection(CorrelationError::OutOfScope));
         }
         let id = correlation.map(|(id, _)| id);
@@ -162,43 +159,77 @@ fn narrowest(first: Option<SessionScope>, second: Option<SessionScope>) -> Optio
     }
 }
 
+/// The scopes of the tokens beside the authenticating one: the narrowest,
+/// whether any signs a scope (a name this build doesn't know included), and
+/// whether any caps document tokens.
+#[derive(Default, Clone, Copy)]
+struct OtherScopes {
+    narrowest: Option<SessionScope>,
+    signed_scope: bool,
+    caps_document_tokens: bool,
+}
+
 /// Hold the request to the scopes the tokens beside the authenticating one
 /// sign or are stored with (`state`, when there is a database to look their
 /// correlations up in), and name the narrowest of them.
-#[derive(Default)]
-struct OtherTokenScopes {
-    scope: Option<SessionScope>,
-    signed_scope: bool,
-}
 
 async fn other_tokens_scope(
     state: Option<&CorrelationState>,
     specs: Option<&[&str]>,
     others: &[MacroApiToken],
     parts: &Parts,
-) -> Result<OtherTokenScopes, CorrelationRejection> {
-    let mut scopes = OtherTokenScopes::default();
+) -> Result<OtherScopes, CorrelationRejection> {
+    let mut scopes = OtherScopes::default();
     for token in others {
         let signed = checked_signed_scope(Some(token), parts, specs)?;
         scopes.signed_scope |= !matches!(signed, SignedScope::Unscoped);
-        scopes.scope = narrowest(scopes.scope, signed.known());
+        scopes.narrowest = narrowest(scopes.narrowest, signed.known());
+        scopes.caps_document_tokens |= caps(signed.known());
         let Some(state) = state else {
             continue;
         };
-        if let Some((_, correlation)) = accept_correlation(state, Some(token)).await?
-            && let Some(stored) = correlation.scope
-        {
-            if !stored.allows_on(specs, parts.method.as_str(), parts.uri.path()) {
-                return Err(CorrelationRejection(CorrelationError::OutOfScope));
-            }
-            scopes.scope = narrowest(scopes.scope, Some(stored));
+        let correlation = accept_correlation(state, Some(token))
+            .await?
+            .map(|(_, c)| c);
+        if !within_own_session(signed, correlation, specs, parts) {
+            return Err(CorrelationRejection(CorrelationError::OutOfScope));
+        }
+        if let Some(stored) = correlation.and_then(|correlation| correlation.scope) {
+            scopes.narrowest = narrowest(scopes.narrowest, Some(stored));
+            scopes.caps_document_tokens |= caps(Some(stored));
         }
     }
     Ok(scopes)
 }
 
+fn caps(scope: Option<SessionScope>) -> bool {
+    scope.is_some_and(SessionScope::caps_document_tokens_to_view)
+}
+
+/// Whether the request is inside both the signed and the stored scope, with
+/// a write's `{session_id}` bound to the correlation's session: a scoped
+/// program writes only into the session it runs for. Without a correlation
+/// no session is known, so a session-bound entry is refused.
+fn within_own_session(
+    signed: SignedScope,
+    correlation: Option<Correlation>,
+    specs: Option<&[&str]>,
+    parts: &Parts,
+) -> bool {
+    let own = correlation.map_or(OwnSession::Unknown, |correlation| {
+        OwnSession::Is(correlation.session_id)
+    });
+    let (method, path) = (parts.method.as_str(), parts.uri.path());
+    signed.allows_within(specs, own, method, path)
+        && correlation
+            .and_then(|correlation| correlation.scope)
+            .is_none_or(|stored| stored.allows_within(specs, own, method, path))
+}
+
 /// The scope `token` signs, or a refusal when the request is outside it. The
-/// signature is the claim's authority, so this needs no lookup.
+/// signature is the claim's authority, so this needs no lookup. A write's
+/// `{session_id}` is checked once the correlation is read
+/// ([`within_own_session`]).
 fn checked_signed_scope(
     token: Option<&MacroApiToken>,
     parts: &Parts,
@@ -343,15 +374,19 @@ async fn propagate_request(
     // A session minted with a scope makes only the requests inside it, on
     // every service that accepts its credential. The harness signs the same
     // scope, so this refuses only a credential that doesn't sign one.
-    if let Some((id, correlation)) = correlation
-        && let Some(scope) = correlation.scope
-        && !scope.allows_on(state.specs, parts.method.as_str(), parts.uri.path())
-    {
+    if !within_own_session(
+        signed,
+        correlation.map(|(_, correlation)| correlation),
+        state.specs,
+        &parts,
+    ) {
         tracing::warn!(
-            scope = scope.as_str(),
+            scope = correlation
+                .and_then(|(_, correlation)| correlation.scope)
+                .map(SessionScope::as_str),
             method = %parts.method,
-            agent_correlation_id = %id,
-            agent_session_id = %correlation.session_id,
+            agent_correlation_id = ?correlation.map(|(id, _)| id),
+            agent_session_id = ?correlation.map(|(_, correlation)| correlation.session_id),
             "refused a request outside its session's scope"
         );
         return CorrelationRejection(CorrelationError::OutOfScope).into_response();
@@ -362,7 +397,7 @@ async fn propagate_request(
     // The routine claim needs no lookup: the token's signature is its authority.
     let signed_scope = !matches!(signed, SignedScope::Unscoped)
         || others_scope.signed_scope
-        || others_scope.scope.is_some();
+        || others_scope.narrowest.is_some();
     let attribution = Attribution {
         signed_scope,
         correlation_id,
@@ -372,9 +407,12 @@ async fn propagate_request(
             correlation
                 .and_then(|(_, correlation)| correlation.scope)
                 .or(signed.known()),
-            others_scope.scope,
+            others_scope.narrowest,
         ),
         verb: correlation_id.and_then(|_| sdk_verb(&parts)),
+        caps_document_tokens: others_scope.caps_document_tokens
+            || caps(signed.known())
+            || caps(correlation.and_then(|(_, correlation)| correlation.scope)),
     };
     let handling = answer_sharing_refusals(next.run(Request::from_parts(parts, body)));
     crate::context::scope_attribution(attribution, handling)
@@ -436,8 +474,13 @@ async fn enforce_signed_scope_request(
         return rejection.into_response();
     }
     let token = tokens.authenticating;
-    if let Err(rejection) = checked_signed_scope(token.as_ref(), &parts, specs) {
-        return rejection.into_response();
+    let signed = match checked_signed_scope(token.as_ref(), &parts, specs) {
+        Ok(signed) => signed,
+        Err(rejection) => return rejection.into_response(),
+    };
+    // No correlation is read here, so no session is known.
+    if !within_own_session(signed, None, specs, &parts) {
+        return CorrelationRejection(CorrelationError::OutOfScope).into_response();
     }
     next.run(Request::from_parts(parts, body)).await
 }

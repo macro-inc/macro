@@ -81,7 +81,7 @@ impl TriggerEvents for MessageTriggerEvents {
 
 fn property_trigger(event: PropertyMacroEvent) -> DecodedTrigger {
     let envelope = event.event();
-    let (event_type, assignment, project_task) = match &envelope.event {
+    let (event_type, mut assignment, mut project_task) = match &envelope.event {
         PropertyTopicEvent::EntityPropertyUpdated(updated) => (
             "entity_property.updated",
             TaskAssignment::from_update(envelope.event_id, updated),
@@ -95,6 +95,20 @@ fn property_trigger(event: PropertyMacroEvent) -> DecodedTrigger {
         PropertyTopicEvent::EntityPropertyDeleted(_) => ("entity_property.deleted", None, None),
         PropertyTopicEvent::EntityPropertiesCleared(_) => ("entity_properties.cleared", None, None),
     };
+    // A scoped request never starts an agent's work, which runs with the
+    // person's full access. The properties service refuses such an
+    // assignment; this holds if one gets through.
+    if let Some(scope) = envelope.agent_scope.as_deref()
+        && (assignment.is_some() || project_task.is_some())
+    {
+        tracing::warn!(
+            event_id = %envelope.event_id,
+            scope,
+            "a scoped request's agent assignment starts no session"
+        );
+        assignment = None;
+        project_task = None;
+    }
     DecodedTrigger {
         event_id: envelope.event_id,
         event_type,

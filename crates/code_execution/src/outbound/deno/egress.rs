@@ -6,6 +6,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
 use axum::body::Body;
@@ -29,6 +30,18 @@ pub(crate) struct RunEgress {
     /// listener, `http://127.0.0.1:<port>/<service>`.
     pub(crate) hosts: BTreeMap<String, String>,
     task: Option<JoinHandle<()>>,
+    /// The forwarder's lifetime span (`code_execution.egress_forwarder`):
+    /// its outcome at start, and what it proxied once it stops.
+    span: tracing::Span,
+    counts: Arc<Counts>,
+}
+
+/// What a forwarder proxied, for its rollout to be observable.
+#[derive(Default)]
+struct Counts {
+    forwarded: AtomicU64,
+    refused: AtomicU64,
+    failed: AtomicU64,
 }
 
 impl RunEgress {
@@ -38,8 +51,32 @@ impl RunEgress {
         hosts: &BTreeMap<String, String>,
         trace_headers: &BTreeMap<String, String>,
     ) -> std::io::Result<Self> {
-        let listener = TcpListener::bind(("127.0.0.1", 0)).await?;
-        let port = listener.local_addr()?.port();
+        let span = tracing::info_span!(
+            "code_execution.egress_forwarder",
+            hosts = hosts.len(),
+            outcome = tracing::field::Empty,
+            forwarded = tracing::field::Empty,
+            refused = tracing::field::Empty,
+            failed = tracing::field::Empty,
+            listener = tracing::field::Empty,
+        );
+        let bound = async {
+            let listener = TcpListener::bind(("127.0.0.1", 0)).await?;
+            let port = listener.local_addr()?.port();
+            std::io::Result::Ok((listener, port))
+        }
+        .instrument(span.clone())
+        .await;
+        let (listener, port) = match bound {
+            Ok(bound) => bound,
+            Err(error) => {
+                span.record("outcome", "failed");
+                tracing::error!(parent: &span, ?error, "a run's egress forwarder could not start");
+                return Err(error);
+            }
+        };
+        span.record("outcome", "ready");
+        let counts = Arc::new(Counts::default());
         let upstreams = hosts
             .iter()
             .map(|(service, base)| (service.clone(), base.trim_end_matches('/').to_owned()))
@@ -54,13 +91,16 @@ impl RunEgress {
             client,
             upstreams,
             run,
+            counts: counts.clone(),
         });
         let app = axum::Router::new().fallback(forward).with_state(routes);
         // Owned by the run, not a tracker: it is aborted when the run ends
         // or this is dropped, so it can't outlive the run.
+        let listening = span.clone();
         let task = tokio::spawn(async move {
             if let Err(error) = axum::serve(listener, app).await {
-                tracing::warn!(?error, "a run's egress listener failed");
+                listening.record("listener", "failed");
+                tracing::error!(parent: &listening, ?error, "a run's egress listener failed");
             }
         });
         let hosts = hosts
@@ -75,12 +115,25 @@ impl RunEgress {
         Ok(Self {
             hosts,
             task: Some(task),
+            span,
+            counts,
         })
+    }
+
+    /// Record what the forwarder proxied on its span.
+    fn record_counts(&self) {
+        self.span
+            .record("forwarded", self.counts.forwarded.load(Ordering::Relaxed));
+        self.span
+            .record("refused", self.counts.refused.load(Ordering::Relaxed));
+        self.span
+            .record("failed", self.counts.failed.load(Ordering::Relaxed));
     }
 
     /// Stop listening. A request still in flight ends with its connection:
     /// the child's, which closes when its process is reaped.
     pub(crate) async fn stop(mut self) {
+        self.record_counts();
         if let Some(task) = self.task.take() {
             task.abort();
             // An aborted task's error is the abort itself.
@@ -92,6 +145,7 @@ impl RunEgress {
 impl Drop for RunEgress {
     fn drop(&mut self) {
         if let Some(task) = self.task.take() {
+            self.record_counts();
             task.abort();
         }
     }
@@ -103,6 +157,7 @@ struct Routes {
     upstreams: HashMap<String, String>,
     /// The run's trace context, each request's parent.
     run: opentelemetry::Context,
+    counts: Arc<Counts>,
 }
 
 /// The headers of `headers` that cross the forwarder: not the ones that
@@ -145,6 +200,28 @@ fn forwarded(name: &HeaderName) -> bool {
     )
 }
 
+/// `rest` under the host's `base`, or `None` when it could leave it: a dot
+/// segment, a backslash, or an encoded dot, slash or backslash, which the
+/// URL parser or a gateway would resolve to another service on the same
+/// origin (unfurl among them, which takes no credential).
+fn confined(base: &str, rest: &str) -> Option<String> {
+    let lower = rest.to_ascii_lowercase();
+    if lower.contains('\\')
+        || ["%2e", "%2f", "%5c"]
+            .iter()
+            .any(|encoded| lower.contains(encoded))
+    {
+        return None;
+    }
+    if rest
+        .split('/')
+        .any(|segment| segment == "." || segment == "..")
+    {
+        return None;
+    }
+    Some(format!("{base}/{rest}"))
+}
+
 async fn forward(State(routes): State<Arc<Routes>>, request: Request) -> Response {
     let path = request.uri().path().to_owned();
     let (service, rest) = path
@@ -166,11 +243,17 @@ async fn forward(State(routes): State<Arc<Routes>>, request: Request) -> Respons
         let _ = span.set_parent(routes.run.clone());
     }
     let Some(base) = routes.upstreams.get(&service) else {
+        routes.counts.refused.fetch_add(1, Ordering::Relaxed);
         span.record("outcome", "unknown_host");
         span.record("status", StatusCode::NOT_FOUND.as_u16());
         return (StatusCode::NOT_FOUND, "no such SDK host").into_response();
     };
-    let mut url = format!("{base}/{rest}");
+    let Some(mut url) = confined(base, rest) else {
+        routes.counts.refused.fetch_add(1, Ordering::Relaxed);
+        span.record("outcome", "outside_host");
+        span.record("status", StatusCode::BAD_REQUEST.as_u16());
+        return (StatusCode::BAD_REQUEST, "the path leaves its SDK host").into_response();
+    };
     if let Some(query) = request.uri().query() {
         url.push('?');
         url.push_str(query);
@@ -193,6 +276,7 @@ async fn forward(State(routes): State<Arc<Routes>>, request: Request) -> Respons
         span.record("upstream_ms", started.elapsed().as_millis() as u64);
         match answer {
             Ok(answer) => {
+                routes.counts.forwarded.fetch_add(1, Ordering::Relaxed);
                 span.record("outcome", "forwarded");
                 span.record("status", answer.status().as_u16());
                 let mut response = Response::builder().status(answer.status());
@@ -205,6 +289,7 @@ async fn forward(State(routes): State<Arc<Routes>>, request: Request) -> Respons
                     .unwrap_or_else(|_| StatusCode::BAD_GATEWAY.into_response())
             }
             Err(error) => {
+                routes.counts.failed.fetch_add(1, Ordering::Relaxed);
                 span.record("outcome", "upstream_error");
                 span.record("status", StatusCode::BAD_GATEWAY.as_u16());
                 // Without the URL: its query can carry what the program searched for.

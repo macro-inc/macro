@@ -335,7 +335,14 @@ impl<Credentials: RoutineCredentials> RoutineCode for SdkRoutineCode<Credentials
                 arguments,
                 dry_run: run.dry_run,
             }),
-            egress: self.egress.egress(owner).await,
+            egress: self
+                .egress
+                .egress_for(
+                    owner,
+                    run.dry_run
+                        .then_some(agent_correlation::scope::SessionScope::DryRun),
+                )
+                .await,
         };
         let (progress, mut updates) = tokio::sync::mpsc::channel(512);
         let started = Instant::now();

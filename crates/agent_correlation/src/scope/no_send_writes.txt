@@ -4,9 +4,12 @@
 # those specs must be refused by the scope, be one of its POST reads, or be
 # listed here after review: a change to the person's own items, or to items
 # already shared with them, that reaches no one else and nothing outside
-# Macro, starts no work with the person's access, and hands out no
-# credential. `the_no_send_scope_classifies_every_write_in_the_specs`
-# fails on a new write until it is classified, and on a stale line.
+# Macro, and hands out no credential. A listed write that could start work
+# with the person's access is refused in its domain instead: assigning an
+# agent or anyone else to a task, filing a task into a project, or saving a
+# template that assigns an agent (`SessionScope::may_assign_agents`).
+# `the_no_send_scope_classifies_every_write_in_the_specs` fails on a new
+# write until it is classified, and on a stale line.
 
 
 [agent-harness]
@@ -28,7 +31,6 @@ POST /agent-sessions/{session_id}/views
 POST /universal_input/classify
 POST /universal_input/extract
 PUT /agent-auto-archive-preferences
-PUT /agent-coding-preferences
 PUT /agent-sandbox-size
 PUT /agent-sessions/{session_id}/archived
 PUT /agent-sessions/{session_id}/auto-archive
@@ -39,7 +41,6 @@ PUT /agent-sessions/{session_id}/task
 PUT /agent-sessions/{session_id}/work-registration
 
 [auth]
-DELETE /team/join/{team_invite_id}
 PATCH /user/group
 PATCH /user/onboarding
 PATCH /user/tutorial
@@ -61,7 +62,6 @@ DELETE /chat/{chat_id}
 DELETE /chat/{chat_id}/permanent
 DELETE /import/entities/{id}
 PATCH /chat/{chat_id}
-PATCH /memory/explicit
 POST /ai-cost/pricing
 POST /chats
 POST /chats/{chat_id}/copy

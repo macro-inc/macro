@@ -26,17 +26,75 @@ pub enum SessionScope {
     Job,
 }
 
-/// A background job's requests, by spec, read once from its lists.
-static JOB_REQUESTS: std::sync::LazyLock<Vec<(&'static str, &'static str, &'static str)>> =
-    std::sync::LazyLock::new(|| {
-        job_list(include_str!("scope/job_reads.txt"))
-            .chain(job_list(include_str!("scope/job_writes.txt")))
-            .collect()
-    });
+/// The requests a default-deny scope may make, by spec: its `reads` and
+/// `writes` lists (`scope/<scope>_reads.txt`, `scope/<scope>_writes.txt`).
+/// Everything else is refused to it. A default-deny scope gets an entry in
+/// [`SessionScope::allowlist`].
+///
+/// A write's `{session_id}` is the credential's own session: a scoped
+/// program writes into the session it runs for, never another one its
+/// person can edit.
+pub struct Allowlist {
+    /// `(spec, method, path, session-bound)`; writes are session-bound.
+    requests: Vec<(&'static str, &'static str, &'static str, bool)>,
+}
 
-/// The `(spec, method, path)` lines of a job list: `[spec]` headers, then
+/// The placeholder a session-bound entry binds to the credential's session.
+const SESSION_PLACEHOLDER: &str = "{session_id}";
+
+/// The session a request's credential was issued for, as a scope check
+/// knows it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OwnSession {
+    /// Checked by a later step that knows the session (the signed check
+    /// before the stored correlation is read).
+    Unchecked,
+    /// The correlation's session.
+    Is(uuid::Uuid),
+    /// No session is known: a session-bound entry is refused.
+    Unknown,
+}
+
+impl Allowlist {
+    fn from_lists(reads: &'static str, writes: &'static str) -> Self {
+        Self {
+            requests: list_lines(reads)
+                .map(|(spec, method, path)| (spec, method, path, false))
+                .chain(list_lines(writes).map(|(spec, method, path)| (spec, method, path, true)))
+                .collect(),
+        }
+    }
+
+    /// Whether a list names the request on a service that serves `specs`.
+    /// An entry counts only on its spec's service, and a service that
+    /// declares no specs (`None`) is refused everything: it fails closed.
+    /// HEAD reads as GET; OPTIONS is never listed. A session-bound entry's
+    /// `{session_id}` must be `own`.
+    fn allows(&self, specs: Option<&[&str]>, own: OwnSession, method: &str, path: &str) -> bool {
+        let method = if method == "HEAD" { "GET" } else { method };
+        self.requests.iter().any(|(spec, listed, template, bound)| {
+            specs.is_some_and(|specs| specs.contains(spec))
+                && *listed == method
+                && typed_matches(
+                    path,
+                    template,
+                    if *bound { own } else { OwnSession::Unchecked },
+                )
+        })
+    }
+}
+
+/// A background job's lists.
+static JOB_ALLOWLIST: std::sync::LazyLock<Allowlist> = std::sync::LazyLock::new(|| {
+    Allowlist::from_lists(
+        include_str!("scope/job_reads.txt"),
+        include_str!("scope/job_writes.txt"),
+    )
+});
+
+/// The `(spec, method, path)` lines of an allowlist: `[spec]` headers, then
 /// `METHOD /path` lines; `#` starts a comment.
-fn job_list(
+fn list_lines(
     text: &'static str,
 ) -> impl Iterator<Item = (&'static str, &'static str, &'static str)> {
     let mut spec = "";
@@ -197,8 +255,9 @@ const SENDS: &[(&str, &str)] = &[
     ("POST", "/databases/{id}/webhooks"),
     ("POST", "/webhook/webhooks"),
     ("POST", "/webhook/webhooks/{id}/validate"),
-    // Link previews fetch what they're given from Macro's servers (the run
-    // bootstrap also refuses unfurl's host to every scoped run).
+    // Link previews fetch what they're given from Macro's servers. The
+    // unfurl service validates no attribution, so this binds only where a
+    // scope is enforced; a scoped run must also be given no unfurl host.
     ("POST", "/unfurl/bulk"),
     ("POST", "/web/fetch"),
     ("POST", "/web/search"),
@@ -344,6 +403,13 @@ const SENDS: &[(&str, &str)] = &[
     ("POST", "/passwords/teams/{id}/items/{id}/username/copy"),
     ("POST", "/passwords/teams/{id}/items/{id}/copy"),
     ("POST", "/mcp/servers"),
+    // What every later agent turn reads into its prompt (explicit memory,
+    // coding preferences): a scoped run plants nothing a full-access turn
+    // acts on later.
+    ("PATCH", "/memory/explicit"),
+    ("PUT", "/agent-coding-preferences"),
+    // Rejecting an invitation answers whoever sent it.
+    ("DELETE", "/team/join/{id}"),
 ];
 
 /// Requests that run any of a service's writes behind one path, outside
@@ -355,6 +421,40 @@ const ANY_WRITE: &[(&str, &str)] = &[
     ("POST", "/items/soup/graphql"),
     ("GET", "/items/soup/graphql/ws"),
 ];
+
+/// GETs that write: they join, verify, create or record something. Every
+/// scope is refused them, though a scope otherwise reads by method. Paths as
+/// the SDK's specs name them. Memory reads, which enroll the person in
+/// memory refresh, are refused only to allowlisted scopes (their lists):
+/// suggestion generation reads memory.
+const GET_WRITES: &[(&str, &str)] = &[
+    ("GET", "/team/join/{id}"),
+    ("GET", "/email/attachments/{id}/document_id"),
+    ("GET", "/email/fusionauth/verify/{id}"),
+    ("GET", "/email/verify/{id}"),
+    ("GET", "/merge/verify/{id}"),
+    ("GET", "/opens/{id}"),
+    ("GET", "/github/install-sync"),
+];
+
+/// Whether a GET with `path` writes ([`GET_WRITES`]), so no scope makes it.
+/// GETs that write whose `{id}` shares its place with a literal read
+/// (`/call/{channel_id}` beside `/call/meetings`), matched with typed
+/// placeholders ([`typed_matches`]) so the read stays readable.
+const TYPED_GET_WRITES: &[(&str, &str)] = &[
+    // Starts the channel's call.
+    ("GET", "/call/{id}"),
+];
+
+/// A [`GET_WRITES`] placeholder takes any segment, so a refusal never fails
+/// open on a token that doesn't look like an id.
+pub fn is_get_write(method: &str, path: &str) -> bool {
+    let method = if method == "HEAD" { "GET" } else { method };
+    listed(GET_WRITES, method, path)
+        || TYPED_GET_WRITES.iter().any(|(listed, template)| {
+            *listed == method && typed_matches(path, template, OwnSession::Unchecked)
+        })
+}
 
 /// Requests a generation session may make besides reads by method: its own
 /// tools and drafting email. Paths as the SDK sends them, `{…}` one segment.
@@ -452,20 +552,31 @@ impl SessionScope {
     /// on another service. A job is refused everything on a service that
     /// declares no specs (`None`): it fails closed.
     pub fn allows_on(self, specs: Option<&[&str]>, method: &str, path: &str) -> bool {
-        if listed(ANY_WRITE, method, path) {
+        self.allows_within(specs, OwnSession::Unchecked, method, path)
+    }
+
+    /// [`Self::allows_on`] for a credential issued for `own` session: an
+    /// allowlisted scope's writes go only into that session.
+    pub fn allows_within(
+        self,
+        specs: Option<&[&str]>,
+        own: OwnSession,
+        method: &str,
+        path: &str,
+    ) -> bool {
+        if listed(ANY_WRITE, method, path) || is_get_write(method, path) {
             return false;
         }
-        // A job reads only what its list names, like any other request. An
-        // OPTIONS request is never on them: a browser's CORS preflight carries
-        // no credential, so one carrying a job's token is not a preflight and
-        // could reach a handler mounted for any method.
-        if self == Self::Job {
-            let method = if method == "HEAD" { "GET" } else { method };
-            return JOB_REQUESTS.iter().any(|(spec, listed, template)| {
-                specs.is_some_and(|specs| specs.contains(spec))
-                    && *listed == method
-                    && job_matches(path, template)
-            });
+        if !reads_by_method(method) && !in_own_session(own, path) {
+            return false;
+        }
+        // A default-deny scope reads only what its lists name, like any
+        // other request. An OPTIONS request is never on them: a browser's
+        // CORS preflight carries no credential, so one carrying a scoped
+        // token is not a preflight and could reach a handler mounted for any
+        // method.
+        if let Some(allowlist) = self.allowlist() {
+            return allowlist.allows(specs, own, method, path);
         }
         if reads_by_method(method) {
             return true;
@@ -476,7 +587,37 @@ impl SessionScope {
             }
             Self::NoSend => !listed(SENDS, method, path),
             Self::DryRun => listed(POST_READS, method, path),
+            // Answered by its allowlist above.
             Self::Job => false,
+        }
+    }
+
+    /// Whether a request under the scope may put an agent to work: assign
+    /// an agent or bot to a task, or file a task into a project, whose
+    /// agents it inherits. None may: the agent's session runs with the
+    /// person's full access, outside the scope.
+    pub fn may_assign_agents(self) -> bool {
+        match self {
+            Self::Generation | Self::NoSend | Self::DryRun | Self::Job => false,
+        }
+    }
+
+    /// Whether a document permission token minted under the scope grants
+    /// at most view access, whatever the caller's own access: such a token
+    /// lasts an hour and edits the document past the scope's lists.
+    pub fn caps_document_tokens_to_view(self) -> bool {
+        match self {
+            Self::Job => true,
+            Self::Generation | Self::NoSend | Self::DryRun => false,
+        }
+    }
+
+    /// The lists of a default-deny scope, which makes only the requests
+    /// they name; `None` for a scope decided by method and fixed lists.
+    pub fn allowlist(self) -> Option<&'static Allowlist> {
+        match self {
+            Self::Job => Some(&JOB_ALLOWLIST),
+            Self::Generation | Self::NoSend | Self::DryRun => None,
         }
     }
 
@@ -521,10 +662,26 @@ impl SignedScope {
     /// [`Self::allows`] on a service that serves `specs`
     /// ([`SessionScope::allows_on`]).
     pub fn allows_on(self, specs: Option<&[&str]>, method: &str, path: &str) -> bool {
+        self.allows_within(specs, OwnSession::Unchecked, method, path)
+    }
+
+    /// [`Self::allows_on`] for a credential issued for `own` session
+    /// ([`SessionScope::allows_within`]).
+    pub fn allows_within(
+        self,
+        specs: Option<&[&str]>,
+        own: OwnSession,
+        method: &str,
+        path: &str,
+    ) -> bool {
         match self {
             Self::Unscoped => true,
-            Self::Known(scope) => scope.allows_on(specs, method, path),
-            Self::Unknown => reads_by_method(method) && !listed(ANY_WRITE, method, path),
+            Self::Known(scope) => scope.allows_within(specs, own, method, path),
+            Self::Unknown => {
+                reads_by_method(method)
+                    && !listed(ANY_WRITE, method, path)
+                    && !is_get_write(method, path)
+            }
         }
     }
 
@@ -534,6 +691,41 @@ impl SignedScope {
             Self::Known(scope) => Some(scope),
             Self::Unscoped | Self::Unknown => None,
         }
+    }
+}
+
+/// Whether a write to `path` stays in the credential's `own` session: under
+/// any scope, a write to `/agent-sessions/{session}/…` (a review card, a
+/// view, a command to the app, renaming, archiving, linking a task, deleting)
+/// names the session the credential was issued for, and is refused when no
+/// session is known. A literal route word in the session's place (such as
+/// `batch`) is no session.
+fn in_own_session(own: OwnSession, path: &str) -> bool {
+    let segments: Vec<std::borrow::Cow<'_, str>> = path
+        .split('/')
+        .filter(|segment| !segment.is_empty())
+        .map(|segment| urlencoding::decode(segment).unwrap_or(segment.into()))
+        .collect();
+    let Some(at) = segments
+        .iter()
+        .position(|segment| segment == "agent-sessions")
+    else {
+        return true;
+    };
+    // At most a service prefix and a version before it.
+    if at > 2 {
+        return true;
+    }
+    let Some(session) = segments
+        .get(at + 1)
+        .and_then(|segment| segment.parse::<uuid::Uuid>().ok())
+    else {
+        return true;
+    };
+    match own {
+        OwnSession::Unchecked => true,
+        OwnSession::Is(own) => own == session,
+        OwnSession::Unknown => false,
     }
 }
 
@@ -586,15 +778,21 @@ const WORD_PLACEHOLDERS: &[&str] = &[
     "{slug}",
 ];
 
-/// [`matches`] for a job's lists, with typed placeholders: an id
+/// [`matches`] for an allowlist, with typed placeholders: an id
 /// placeholder matches only a segment shaped like an id (a UUID, a user or
 /// bot id with `|` or `@`, a number, `me`, or a long opaque token with a
 /// digit), so a template never admits a route that differs from it by a
 /// literal word, such as an unannotated `/documents/{id}/duplicates` under
 /// `/documents/{id}/{version}` or a short `/documents/{id}/v2`.
-fn job_matches(path: &str, template: &str) -> bool {
+fn typed_matches(path: &str, template: &str, own: OwnSession) -> bool {
     matches_with(path, template, |placeholder, segment| {
-        if WORD_PLACEHOLDERS.contains(&placeholder) {
+        if placeholder == SESSION_PLACEHOLDER {
+            match own {
+                OwnSession::Unchecked => id_like(segment),
+                OwnSession::Is(session) => segment.parse::<uuid::Uuid>() == Ok(session),
+                OwnSession::Unknown => false,
+            }
+        } else if WORD_PLACEHOLDERS.contains(&placeholder) {
             !segment.is_empty() && !segment.contains('/')
         } else {
             id_like(segment)

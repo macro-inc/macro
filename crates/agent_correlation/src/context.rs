@@ -26,6 +26,10 @@ pub struct Attribution {
     /// Display verb the SDK sent with a validated correlation. Display only;
     /// it is dropped whenever there is no correlation.
     pub verb: Option<AgentVerb>,
+    /// Some scope the request is held to caps document tokens, though
+    /// `scope` names another: a request carrying several scoped tokens keeps
+    /// every one's cap.
+    pub caps_document_tokens: bool,
 }
 
 tokio::task_local! {
@@ -61,6 +65,19 @@ pub fn current_scope() -> Option<SessionScope> {
 /// unknown signed scopes whose read-only fallback has no `SessionScope` value.
 pub fn is_scoped() -> bool {
     attribution().signed_scope || current_scope().is_some()
+}
+
+/// Whether this request may put an agent to work
+/// ([`SessionScope::may_assign_agents`]): an unscoped one may.
+pub fn may_assign_agents() -> bool {
+    current_scope().is_none_or(SessionScope::may_assign_agents)
+}
+
+/// Whether a document or surface token minted for this request grants at
+/// most view access ([`SessionScope::caps_document_tokens_to_view`]).
+pub fn caps_document_tokens_to_view() -> bool {
+    attribution().caps_document_tokens
+        || current_scope().is_some_and(SessionScope::caps_document_tokens_to_view)
 }
 
 /// A request that changes who an item is shared with, refused to the scope

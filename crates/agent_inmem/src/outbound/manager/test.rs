@@ -185,6 +185,7 @@ fn facts(id: AgentSessionId) -> SessionFacts {
     SessionFacts {
         billing: Default::default(),
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
+        memory_reader: memory::domain::MemoryReader::Person,
         id,
         owner: Owner::User(owner()),
         model: "anthropic/claude-sonnet-5-5".to_owned(),
@@ -198,6 +199,7 @@ fn facts(id: AgentSessionId) -> SessionFacts {
 fn facts_with_instructions(id: AgentSessionId, instructions: &str) -> SessionFacts {
     SessionFacts {
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
+        memory_reader: memory::domain::MemoryReader::Person,
         instructions: Some(instructions.to_owned()),
         ..facts(id)
     }
@@ -206,6 +208,7 @@ fn facts_with_instructions(id: AgentSessionId, instructions: &str) -> SessionFac
 fn facts_with_identity(id: AgentSessionId, name: &str, handle: &str) -> SessionFacts {
     SessionFacts {
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
+        memory_reader: memory::domain::MemoryReader::Person,
         identity: Some(AgentIdentity {
             bot: BotId::TEST_A,
             name: name.to_owned(),
@@ -580,6 +583,7 @@ async fn a_restarted_manager_rebuilds_the_conversation_from_the_log() {
             .attach(
                 SessionFacts {
                     delivery: crate::domain::engine::ReplyDelivery::Streamed,
+                    memory_reader: memory::domain::MemoryReader::Person,
                     acp_session_id: row.acp_session_id.clone(),
                     ..facts(id)
                 },

@@ -536,11 +536,11 @@ fn the_no_send_scope_classifies_every_write_in_the_specs() {
 fn a_job_classifies_every_read_and_allows_only_its_lists() {
     let scope = SessionScope::Job;
     let listed: std::collections::BTreeSet<(&str, &str, &str)> =
-        job_list(include_str!("job_reads.txt"))
-            .chain(job_list(include_str!("job_writes.txt")))
+        list_lines(include_str!("job_reads.txt"))
+            .chain(list_lines(include_str!("job_writes.txt")))
             .collect();
     let refused_reads: std::collections::BTreeSet<(&str, &str, &str)> =
-        job_list(include_str!("job_refused_reads.txt")).collect();
+        list_lines(include_str!("job_refused_reads.txt")).collect();
     let mut operations = std::collections::BTreeSet::new();
     let mut mismatched = Vec::new();
     let mut unplaced = Vec::new();
@@ -761,7 +761,7 @@ async fn a_job_shares_nothing_out() {
 /// writes lands where someone else reads.
 #[test]
 fn a_job_writes_only_its_session_and_its_owners_inbox() {
-    let writes: Vec<(&str, &str, &str)> = job_list(include_str!("job_writes.txt")).collect();
+    let writes: Vec<(&str, &str, &str)> = list_lines(include_str!("job_writes.txt")).collect();
     assert_eq!(
         writes,
         [
@@ -787,7 +787,7 @@ fn a_job_writes_only_its_session_and_its_owners_inbox() {
     );
     // Its reads write nothing either: no POST read on its list changes an
     // item.
-    for (_, method, path) in job_list(include_str!("job_reads.txt")) {
+    for (_, method, path) in list_lines(include_str!("job_reads.txt")) {
         assert!(
             method == "GET" || listed(POST_READS, method, path),
             "{method} {path} is on a job's reads but is no read"
@@ -816,7 +816,7 @@ fn a_jobs_entries_count_only_on_their_own_service() {
     assert!(!SignedScope::Known(scope).allows_on(Some(&["notification"]), "GET", document));
     // Every entry is allowed on its own spec.
     for (spec, method, path) in
-        job_list(include_str!("job_reads.txt")).chain(job_list(include_str!("job_writes.txt")))
+        list_lines(include_str!("job_reads.txt")).chain(list_lines(include_str!("job_writes.txt")))
     {
         assert!(
             scope.allows_on(Some(&[spec]), method, &concrete_typed(path)),
@@ -921,5 +921,166 @@ fn a_job_cannot_mint_a_document_token_or_assign_an_agent() {
             !SessionScope::Job.allows_on(Some(ALL_SPECS), method, &path),
             "{method} {path}"
         );
+    }
+}
+
+/// A job's writes go only into its own session: a write's `{session_id}` is
+/// the credential's session, and with no session known it is refused. Its
+/// reads of a session are not bound.
+#[test]
+fn a_job_writes_only_into_its_own_session() {
+    let own = uuid::Uuid::from_u128(0xa);
+    let other = uuid::Uuid::from_u128(0xb);
+    let view = |session: uuid::Uuid| format!("/agent-harness/agent-sessions/{session}/views");
+    let job = SessionScope::Job;
+    let specs = Some(ALL_SPECS);
+    assert!(job.allows_within(specs, OwnSession::Is(own), "POST", &view(own)));
+    assert!(!job.allows_within(specs, OwnSession::Is(own), "POST", &view(other)));
+    assert!(!job.allows_within(specs, OwnSession::Unknown, "POST", &view(own)));
+    let review = format!("/agent-harness/agent-sessions/{other}/reviews");
+    assert!(!job.allows_within(specs, OwnSession::Is(own), "POST", &review));
+    // A signed-only check defers the binding to the correlation's.
+    assert!(SignedScope::Known(job).allows_within(
+        specs,
+        OwnSession::Unchecked,
+        "POST",
+        &view(other)
+    ));
+    assert!(!SignedScope::Known(job).allows_within(
+        specs,
+        OwnSession::Is(own),
+        "POST",
+        &view(other)
+    ));
+}
+
+/// A GET that writes (joining a team, turning an attachment into a
+/// document, recording an open) is refused to every scope, a newer one
+/// included, though they otherwise read by method.
+#[test]
+fn no_scope_makes_a_get_that_writes() {
+    let id = "0192f1a0-0000-7000-8000-000000000001";
+    for path in [
+        format!("/auth/team/join/{id}"),
+        format!("/email/attachments/{id}/document_id"),
+        // A token that doesn't look like an id is refused too.
+        "/email/opens/abc".to_owned(),
+    ] {
+        for scope in [
+            SessionScope::Generation,
+            SessionScope::NoSend,
+            SessionScope::DryRun,
+            SessionScope::Job,
+        ] {
+            assert!(
+                !scope.allows_on(Some(ALL_SPECS), "GET", &path),
+                "{scope:?} {path}"
+            );
+        }
+        assert!(!SignedScope::Unknown.allows("GET", &path), "{path}");
+    }
+    // Suggestion generation reads memory; only allowlisted scopes may not.
+    assert!(SessionScope::Generation.allows("GET", "/cognition/memory/explicit"));
+    assert!(!SessionScope::Job.allows_on(Some(ALL_SPECS), "GET", "/cognition/memory/explicit"));
+    assert!(SessionScope::NoSend.allows("GET", "/dss/call/meetings"));
+    assert!(!SessionScope::NoSend.allows("GET", &format!("/dss/call/{id}")));
+    assert!(SessionScope::NoSend.allows("GET", &format!("/dss/call/join/{id}")));
+}
+
+/// Under every scope, a write to an agent session goes only into the
+/// credential's own session: no review card, view, app command, rename,
+/// archive, task link or delete in another session its person can edit.
+#[test]
+fn every_scope_writes_only_into_its_own_session() {
+    let own = uuid::Uuid::from_u128(0xa);
+    let other = uuid::Uuid::from_u128(0xb);
+    for scope in [
+        SessionScope::NoSend,
+        SessionScope::Generation,
+        SessionScope::DryRun,
+        SessionScope::Job,
+    ] {
+        for (method, route) in [
+            ("POST", "reviews"),
+            ("POST", "views"),
+            ("POST", "ui-commands"),
+            ("PUT", "name"),
+            ("PUT", "archived"),
+            ("PUT", "task"),
+        ] {
+            let path = format!("/agent-harness/agent-sessions/{other}/{route}");
+            assert!(
+                !scope.allows_within(Some(ALL_SPECS), OwnSession::Is(own), method, &path),
+                "{scope:?} {method} {path}"
+            );
+            assert!(
+                !scope.allows_within(Some(ALL_SPECS), OwnSession::Unknown, method, &path),
+                "{scope:?} {method} {path} with no session"
+            );
+        }
+        let delete = format!("/agent-harness/agent-sessions/{other}");
+        assert!(!scope.allows_within(Some(ALL_SPECS), OwnSession::Is(own), "DELETE", &delete));
+    }
+    // Its own session's: a NoSend run may rename its own session.
+    let rename = format!("/agent-sessions/{own}/name");
+    assert!(SessionScope::NoSend.allows_within(None, OwnSession::Is(own), "PUT", &rename));
+    // Reads are not bound.
+    let read = format!("/agent-sessions/{other}");
+    assert!(SessionScope::NoSend.allows_within(None, OwnSession::Is(own), "GET", &read));
+}
+
+/// Every `GET_WRITES` entry refuses a GET some spec really declares, so none
+/// is a stale or misspelled entry that refuses nothing.
+#[test]
+fn every_get_write_names_a_real_route() {
+    let gets: Vec<String> = SPECS
+        .iter()
+        .flat_map(|(_, spec)| {
+            let spec: serde_json::Value = serde_json::from_str(spec).unwrap();
+            spec["paths"]
+                .as_object()
+                .unwrap()
+                .iter()
+                .filter(|(_, operations)| operations.get("get").is_some())
+                .map(|(path, _)| path.clone())
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    for (method, template) in GET_WRITES.iter().chain(TYPED_GET_WRITES) {
+        assert_eq!(*method, "GET");
+        assert!(
+            gets.iter().any(|path| {
+                let path = concrete_typed(path);
+                is_get_write("GET", &path) && matches(&path, template)
+            }),
+            "GET_WRITES names {template}, which no spec declares"
+        );
+    }
+}
+
+/// No scope edits what every later agent turn reads into its prompt, nor
+/// answers an invitation: a scoped run plants nothing a later full-access
+/// turn acts on.
+#[test]
+fn no_scope_edits_what_later_turns_read() {
+    for (method, path) in [
+        ("PATCH", "/cognition/memory/explicit"),
+        ("PUT", "/agent-harness/agent-coding-preferences"),
+        (
+            "DELETE",
+            "/auth/team/join/0192f1a0-0000-7000-8000-000000000001",
+        ),
+    ] {
+        for scope in [
+            SessionScope::NoSend,
+            SessionScope::Generation,
+            SessionScope::DryRun,
+            SessionScope::Job,
+        ] {
+            assert!(
+                !scope.allows_on(Some(ALL_SPECS), method, path),
+                "{scope:?} {method} {path}"
+            );
+        }
     }
 }
