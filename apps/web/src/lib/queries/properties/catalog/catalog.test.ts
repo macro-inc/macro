@@ -290,6 +290,19 @@ describe('catalog list results', () => {
     ]);
   });
 
+  it('does not read a failed first read as placeholder data', () => {
+    const state: { data?: string[]; error?: Error } = {
+      error: new Error('refused'),
+    };
+    const list = catalogListResult(fakeQuery(state), () => 0, EMPTY);
+    expect([
+      list.data,
+      list.isError,
+      list.isPlaceholderData,
+      list.isFetched,
+    ]).toEqual([EMPTY, true, false, true]);
+  });
+
   it('reads an offline failure over a list it has as a paused success', () => {
     onlineManager.setOnline(false);
     try {

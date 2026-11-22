@@ -19,7 +19,10 @@ export type CatalogListResult<T> = {
   /** Answered at least once, from the cache or the server, or failed. */
   readonly isFetched: boolean;
   readonly isFetching: boolean;
-  /** The list is the empty stand-in, not an answer. */
+  /**
+   * The list is the empty stand-in, not an answer, and the read has not
+   * failed: a failed read is not placeholder data, as in TanStack.
+   */
   readonly isPlaceholderData: boolean;
   /** When the list last changed from anything newer than the stored cache. */
   readonly dataUpdatedAt: number;
@@ -120,7 +123,7 @@ export function catalogListResult<T, V extends AnyVariables, Q>(
       return query.isFetching;
     },
     get isPlaceholderData() {
-      return query.data === undefined;
+      return query.data === undefined && !query.error;
     },
     get dataUpdatedAt() {
       return listedAt();
