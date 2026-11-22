@@ -1,4 +1,4 @@
-import { createRoot } from 'solid-js';
+import { createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import type { ScreenInputEvent } from '../transports/types';
 import { createScreenInput } from './screen-input';
@@ -285,5 +285,73 @@ describe('createScreenInput paste', () => {
       dispose();
     });
     vi.useRealTimers();
+  });
+});
+
+/** An input over a 1280x800 frame in a stage the test resizes. */
+function stageInput(initial: { width: number; height: number }) {
+  return createRoot((dispose) => {
+    const [container, setContainer] = createSignal(initial);
+    const input = createScreenInput({
+      frame: () => ({ width: 1280, height: 800 }),
+      container,
+      rotation: () => 0,
+      sendsInput: () => false,
+      send: () => {},
+      onHandBackHold: () => {},
+    });
+    return { input, setContainer, dispose };
+  });
+}
+
+describe('createScreenInput fillStage', () => {
+  it('fills a portrait stage and fits a landscape one as the stage resizes, until the person sets the view', () => {
+    const { input, setContainer, dispose } = stageInput({
+      width: 0,
+      height: 0,
+    });
+    input.fillStage();
+
+    // Not measured yet: nothing to fill.
+    expect(input.viewport()).toEqual({ zoom: 1, panX: 0, panY: 0 });
+
+    // A phone in portrait: the picture covers the stage, top-left in view.
+    setContainer({ width: 390, height: 600 });
+    expect(input.pictureBox()).toEqual({
+      left: 0,
+      top: 0,
+      width: 390,
+      height: 600,
+    });
+    expect(input.viewport().zoom).toBeCloseTo(600 / 800 / (390 / 1280));
+
+    // Turned to landscape: the whole picture again.
+    setContainer({ width: 600, height: 300 });
+    expect(input.viewport()).toEqual({ zoom: 1, panX: 0, panY: 0 });
+
+    // Back to portrait, a taller stage: filled for its new size.
+    setContainer({ width: 390, height: 700 });
+    expect(input.pictureBox()?.height).toBe(700);
+
+    // Once the person zooms, a resize leaves their view alone.
+    input.zoomBy(1.5);
+    const chosen = input.viewport();
+    setContainer({ width: 390, height: 650 });
+    expect(input.viewport()).toEqual(chosen);
+    dispose();
+  });
+
+  it('stops following the stage once the person picks Fit', () => {
+    const { input, setContainer, dispose } = stageInput({
+      width: 390,
+      height: 600,
+    });
+    input.fillStage();
+    expect(input.viewport().zoom).toBeGreaterThan(1);
+
+    input.fit();
+    setContainer({ width: 390, height: 700 });
+    expect(input.viewport()).toEqual({ zoom: 1, panX: 0, panY: 0 });
+    dispose();
   });
 });

@@ -11,7 +11,7 @@ import PauseIcon from '@icon/system/regular/pause.svg';
 import StopIcon from '@icon/system/regular/stop.svg';
 import { Button } from '@ui/components/Button';
 import { Tabs } from '@ui/components/Tabs';
-import { createEffect, createSignal, Match, Show, Switch } from 'solid-js';
+import { createSignal, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
 import { ControlLostBanner } from '../../components/control-lost-banner';
 import { HandBackDialog } from '../../components/hand-back-dialog';
@@ -45,15 +45,10 @@ export function MobileAgentScreen(props: { model: AgentScreenModel }) {
     return at !== undefined && at.y > 120;
   };
 
-  // In portrait the picture starts filling the view, readable, rather than
-  // as a strip with empty space around it; Fit shows all of it again.
-  let filled = false;
-  createEffect(() => {
-    const box = input.pictureBox();
-    if (filled || !box || box.width === 0) return;
-    filled = true;
-    if (window.innerHeight > window.innerWidth) input.fill();
-  });
+  // A portrait stage is filled, readable, rather than a strip with empty
+  // space around it; it follows the stage through resizes and rotation
+  // until the person zooms, pans or picks Fit.
+  input.fillStage();
 
   const modes = () => [
     {

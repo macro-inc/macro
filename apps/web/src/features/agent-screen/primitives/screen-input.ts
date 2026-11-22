@@ -188,7 +188,10 @@ export function createScreenInput(options: ScreenInputOptions) {
         }
         followPointer(effect.event);
       }
-      if (effect.type === 'viewport') setViewport(effect.viewport);
+      if (effect.type === 'viewport') {
+        setFillsStage(false);
+        setViewport(effect.viewport);
+      }
       if (effect.type === 'cancelLongPress') clearTimeout(longPressTimer);
       if (effect.type === 'armLongPress') {
         clearTimeout(longPressTimer);
@@ -288,9 +291,32 @@ export function createScreenInput(options: ScreenInputOptions) {
       options.send({ kind: 'key', keysym: KEYSYM_CONTROL, down: false });
   };
 
+  // The phone view's start: a stage taller than wide is filled, a wider one
+  // fitted, checked again each time the stage (or the frame) resizes, until
+  // the person zooms, pans or picks Fit themselves.
+  const [fillsStage, setFillsStage] = createSignal(false);
+  createEffect(
+    on(
+      () => {
+        const current = geometry();
+        if (!fillsStage() || !current) return undefined;
+        const { container, frame } = current;
+        if (container.width === 0 || container.height === 0) return undefined;
+        return [container.width, container.height, frame.width, frame.height];
+      },
+      (size) => {
+        const current = geometry();
+        if (!size || !current) return;
+        const portrait = current.container.height > current.container.width;
+        setViewport(portrait ? fillViewport(current) : FIT_VIEWPORT);
+      }
+    )
+  );
+
   const zoomBy = (factor: number) => {
     const current = geometry();
     if (!current) return;
+    setFillsStage(false);
     const center = {
       x: current.container.width / 2,
       y: current.container.height / 2,
@@ -378,12 +404,15 @@ export function createScreenInput(options: ScreenInputOptions) {
     /** The viewer point under a touch-mode finger, for the loupe. */
     loupePoint: () => touchPoint(gestures()),
     zoomBy,
-    fit: () => setViewport(FIT_VIEWPORT),
-    /** Zoom until the picture covers the viewer (`fillViewport`). */
-    fill: () => {
-      const current = geometry();
-      if (current) setViewport(fillViewport(current));
+    fit: () => {
+      setFillsStage(false);
+      setViewport(FIT_VIEWPORT);
     },
+    /**
+     * Fill a portrait stage (`fillViewport`) and fit a landscape one, again
+     * on every resize or rotation, until the person sets the view.
+     */
+    fillStage: () => setFillsStage(true),
 
     onPointerDown(event: PointerEvent) {
       const target = event.currentTarget;
