@@ -479,10 +479,7 @@ async fn a_program_can_return_code_modes_result_shape() {
             r#"return { data: { posted: 1 }, reviews: [{ kind: "email", id: "r1" }], images: [{ id: "f1" }] }"#,
             serde_json::json!({ "data": { "posted": 1 }, "reviews": [{ "kind": "email", "id": "r1" }], "images": [{ "id": "f1" }] }),
         ),
-        (
-            r#"return { data: 1 }"#,
-            serde_json::json!({ "data": 1 }),
-        ),
+        (r#"return { data: 1 }"#, serde_json::json!({ "data": 1 })),
         // Any other key means the object is the data.
         (
             r#"return { data: 1, more: 2 }"#,
