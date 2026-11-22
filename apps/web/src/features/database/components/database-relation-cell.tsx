@@ -68,9 +68,15 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
   const [showingAll, setShowingAll] = createSignal(false);
   /** Chips shown in the cell; each carries an arrow to its record. */
   const shown = () =>
-    showingAll()
+    props.expanded && showingAll()
       ? ids()
       : ids().slice(0, props.expanded ? EXPANDED_CHIP_LIMIT : CHIP_LIMIT);
+  /** Past the cap a wide panel keeps, even after a narrow one showed them all. */
+  const overflow = () =>
+    Math.max(
+      0,
+      ids().length - (props.expanded ? EXPANDED_CHIP_LIMIT : CHIP_LIMIT)
+    );
   /** Expanded chips a narrow record panel keeps behind "+N more". */
   const narrowHidden = () =>
     props.expanded && !showingAll()
@@ -257,6 +263,8 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
                         props.expanded,
                       '@max-[24rem]/record-fields:hidden':
                         narrowHidden() > 0 && index() >= PHONE_CHIP_LIMIT,
+                      '@min-[24rem]/record-fields:hidden':
+                        index() >= EXPANDED_CHIP_LIMIT,
                     }}
                     title={name(id)}
                   >
@@ -300,14 +308,15 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
                   </span>
                 )}
               </For>
-              <Show when={ids().length > shown().length}>
+              <Show when={overflow()}>
                 <span
                   class="shrink-0 text-xs text-ink-muted"
                   classList={{
-                    '@max-[24rem]/record-fields:hidden': narrowHidden() > 0,
+                    // A narrow panel counts with "+N more" or shows them all.
+                    '@max-[24rem]/record-fields:hidden': props.expanded,
                   }}
                 >
-                  +{ids().length - shown().length}
+                  +{overflow()}
                 </span>
               </Show>
               <Show when={narrowHidden()}>
