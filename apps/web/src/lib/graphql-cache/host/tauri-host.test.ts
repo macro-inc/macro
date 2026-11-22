@@ -422,6 +422,20 @@ describe('createTauriCacheHost', () => {
     await ready;
     expect(host.isReady?.()).toBe(true);
     host.dispose();
+    expect(host.isReady?.()).toBe(false);
+  });
+
+  it('settles readiness waiters when disposed before native initialization completes', async () => {
+    invokeMock.mockImplementation((command: string) =>
+      command === 'graphql_cache_init_with_schema'
+        ? new Promise(() => {})
+        : Promise.resolve(null)
+    );
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    const ready = host.whenReady?.();
+    host.dispose();
+    await ready;
+    expect(host.isReady?.()).toBe(false);
   });
 
   it('preserves the old queue and refuses writes when an OTA outpaces the native runtime', async () => {
