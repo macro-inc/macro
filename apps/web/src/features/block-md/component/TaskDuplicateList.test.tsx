@@ -7,11 +7,10 @@ import { SimilarTasksSection, taskDuplicatesArgs } from './TaskDuplicateList';
 type Entity = { id: string; name: string };
 const mocks = vi.hoisted(() => ({
   similarity: undefined as unknown as () => { data?: { taskId: string }[] },
-  soup: undefined as unknown as () => {
-    data?: { entities: Entity[] };
-    isPlaceholderData: boolean;
-  },
+  soup: undefined as unknown as () => Soup,
 }));
+/** `hasPageData`: the data answers the current ids. */
+type Soup = { data?: { entities: Entity[] }; hasPageData: boolean };
 
 vi.mock('@app/features/next-soup/soup-view/views/tasks/TaskListEntity', () => ({
   TaskListEntity: (props: { entity: Entity }) => (
@@ -39,8 +38,8 @@ vi.mock('@queries/soup/items', () => ({
     get data() {
       return mocks.soup().data;
     },
-    get isPlaceholderData() {
-      return mocks.soup().isPlaceholderData;
+    get hasPageData() {
+      return mocks.soup().hasPageData;
     },
   }),
 }));
@@ -54,17 +53,15 @@ it('reads the matched tasks over GraphQL, not the REST soup list', () => {
 it('keeps the shown matches until the next matches arrive', () => {
   const [title, setTitle] = createSignal('first draft');
   const [matches, setMatches] = createSignal(['a1', 'a2']);
-  const [soup, setSoup] = createSignal<{
-    data?: { entities: Entity[] };
-    isPlaceholderData: boolean;
-  }>({
-    data: {
-      entities: [
-        { id: 'a2', name: 'Second A' },
-        { id: 'a1', name: 'First A' },
-      ],
-    },
-    isPlaceholderData: false,
+  const pageA = {
+    entities: [
+      { id: 'a2', name: 'Second A' },
+      { id: 'a1', name: 'First A' },
+    ],
+  };
+  const [soup, setSoup] = createSignal<Soup>({
+    data: pageA,
+    hasPageData: true,
   });
   mocks.similarity = () => ({
     data: matches().map((taskId) => ({ taskId })),
@@ -87,12 +84,17 @@ it('keeps the shown matches until the next matches arrive', () => {
   // New matches: their page is loading, the previous page stands in.
   setTitle('second draft');
   setMatches(['b1']);
-  setSoup((current) => ({ ...current, isPlaceholderData: true }));
+  // The query has not seen the new ids yet.
+  expect(shown()).toEqual(['First A', 'Second A']);
+  setSoup({ data: pageA, hasPageData: false });
+  expect(shown()).toEqual(['First A', 'Second A']);
+  // Over GraphQL the previous entities can arrive again as a new object.
+  setSoup({ data: { entities: [...pageA.entities] }, hasPageData: false });
   expect(shown()).toEqual(['First A', 'Second A']);
 
   setSoup({
     data: { entities: [{ id: 'b1', name: 'Only B' }] },
-    isPlaceholderData: false,
+    hasPageData: true,
   });
   expect(shown()).toEqual(['Only B']);
 
