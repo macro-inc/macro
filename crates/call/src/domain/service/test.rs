@@ -34,6 +34,8 @@ mod meeting_participants;
 mod meeting_startup;
 mod orphan_rooms;
 mod recording;
+#[cfg(feature = "outbound")]
+mod scheduled_meeting_sessions;
 
 use crate::domain::meetings::GuestId;
 use crate::domain::models::{

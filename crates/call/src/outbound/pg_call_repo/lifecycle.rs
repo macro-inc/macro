@@ -337,3 +337,6 @@ pub(super) async fn lock_active_call(
         .await?;
     Ok(())
 }
+
+#[cfg(test)]
+mod test;
