@@ -1,0 +1,67 @@
+{
+  "proofKind": "merge-head smoke",
+  "runtimeHead": "f4bd312fc30775f76acff3a3e8dadf5ca9e84e55",
+  "finalHead": "f074002132827431a8780c488a3619f0c5eaa9d9",
+  "run": "8df01e5d7772",
+  "result": "passed-through-restart",
+  "scope": "synthetic Dovecot/Mailpit through protected private HTTPS preview",
+  "checks": {
+    "connect": {
+      "status": 200,
+      "wrongPasswordStatus": 422,
+      "retainedSettings": true
+    },
+    "firstSync": {
+      "at": "2026-11-22T20:56:02.132Z",
+      "pendingState": "SYNCING",
+      "firstRows": 0,
+      "finalRows": 1,
+      "navigations": 0,
+      "sameDocument": true,
+      "barrier": "owned ingestion worker held during authorized maintenance, then resumed"
+    },
+    "arrival": {
+      "appendAt": "2026-11-22T20:56:07.133Z",
+      "visibleAt": "2026-11-22T20:56:08.607Z",
+      "documentUnchanged": true,
+      "mainFrameNavigations": 0,
+      "idleBefore": 0,
+      "idleAfter": 1
+    },
+    "send": {
+      "smtpSubmissions": 1,
+      "sentCopyUID": "1",
+      "timings": {
+        "traceId": "756ee0ed6b6584c633444a1c16b2621d",
+        "submitAt": "2026-11-22T20:56:28.610Z",
+        "smtpAcceptAt": "2026-11-22T20:56:28.637Z",
+        "undoDeadline": "2026-11-22T20:56:27.724239+00:00",
+        "sentConfirmedAt": "2026-11-22T20:56:33.726294+00:00",
+        "mailpitCapturedAt": "2026-11-22T20:56:28.634Z",
+        "undoToSubmitMs": 886,
+        "smtpTransactionMs": 27,
+        "acceptToHostSentMs": 5089
+      }
+    },
+    "restart": {
+      "deliveredAt": "2026-11-22T20:57:06.249Z",
+      "visibleAt": "2026-11-22T20:57:11.655Z",
+      "catchUpMs": 5406,
+      "documentUnchanged": true,
+      "documentRequests": 0,
+      "existingMessageAndThreadIDsPreserved": true,
+      "existingProviderUIDsPreserved": true,
+      "noDuplicateRows": true,
+      "smtpSubmissions": 1
+    }
+  },
+  "browserTraceExports": {
+    "200": 42
+  },
+  "scopeGaps": [
+    "Real-provider flows are not recorded; mail servers, local auth, KMS and feature flags are lab stand-ins.",
+    "Large-mailbox and unreadable-saved-credential health states are not exercised in this flow."
+  ],
+  "sourceReceiptSha256": "6aa9c435507213daad5b7f3c9bddbb9e46d9bab2e839eedd6d6dd5a5ce6fb583",
+  "testOnlyFinalDelta": "apps/web/tests/email-e2e/organise-sender.spec.ts: setup click retry only; runtime unchanged"
+}

@@ -1,0 +1,268 @@
+{
+  "proofKind": "merge-head dialog checks",
+  "runtimeHead": "f4bd312fc30775f76acff3a3e8dadf5ca9e84e55",
+  "finalHead": "f074002132827431a8780c488a3619f0c5eaa9d9",
+  "run": "736aee8ca974",
+  "result": "passed-through-connect",
+  "refetches": {
+    "refetch-Home-chooser": {
+      "at": "2026-11-22T20:53:27.461Z",
+      "beganAt": "2026-11-22T20:53:23.474Z",
+      "completedAt": "2026-11-22T20:53:27.461Z",
+      "httpStatus": 200,
+      "path": "/dss/items/soup/graphql",
+      "trigger": "capture harness activates underlying list tab while modal open; actual app query and unchanged response",
+      "sameDialogNode": true,
+      "emptyStateUnmountedDuringRead": true,
+      "dialogAliveDuringRead": true,
+      "responseDelayMs": 1800,
+      "heldRealResponses": 1,
+      "responseBytesUnchanged": true,
+      "coldLoadingBranch": "real changed-tab request; deterministic loading-to-empty regression tests also cover this ownership boundary"
+    },
+    "refetch-Email-chooser": {
+      "at": "2026-11-22T20:53:41.497Z",
+      "beganAt": "2026-11-22T20:53:37.611Z",
+      "completedAt": "2026-11-22T20:53:41.497Z",
+      "httpStatus": 200,
+      "path": "/dss/items/soup/graphql",
+      "trigger": "capture harness activates underlying list tab while modal open; actual app query and unchanged response",
+      "sameDialogNode": true,
+      "emptyStateUnmountedDuringRead": true,
+      "dialogAliveDuringRead": true,
+      "responseDelayMs": 1800,
+      "heldRealResponses": 1,
+      "responseBytesUnchanged": true,
+      "coldLoadingBranch": "real changed-tab request; deterministic loading-to-empty regression tests also cover this ownership boundary"
+    },
+    "refetch-Home-typed IMAP form": {
+      "at": "2026-11-22T20:53:58.491Z",
+      "beganAt": "2026-11-22T20:53:54.573Z",
+      "completedAt": "2026-11-22T20:53:58.491Z",
+      "httpStatus": 200,
+      "path": "/dss/items/soup/graphql",
+      "trigger": "capture harness activates underlying list tab while modal open; actual app query and unchanged response",
+      "sameDialogNode": true,
+      "emptyStateUnmountedDuringRead": true,
+      "dialogAliveDuringRead": true,
+      "responseDelayMs": 1800,
+      "heldRealResponses": 1,
+      "responseBytesUnchanged": true,
+      "coldLoadingBranch": "real changed-tab request; deterministic loading-to-empty regression tests also cover this ownership boundary"
+    },
+    "refetch-Email-typed IMAP form": {
+      "at": "2026-11-22T20:54:12.546Z",
+      "beganAt": "2026-11-22T20:54:08.662Z",
+      "completedAt": "2026-11-22T20:54:12.546Z",
+      "httpStatus": 200,
+      "path": "/dss/items/soup/graphql",
+      "trigger": "capture harness activates underlying list tab while modal open; actual app query and unchanged response",
+      "sameDialogNode": true,
+      "emptyStateUnmountedDuringRead": true,
+      "dialogAliveDuringRead": true,
+      "responseDelayMs": 1800,
+      "heldRealResponses": 1,
+      "responseBytesUnchanged": true,
+      "coldLoadingBranch": "real changed-tab request; deterministic loading-to-empty regression tests also cover this ownership boundary"
+    }
+  },
+  "typedServerUsernameAndPasswordRetained": true,
+  "handoffs": [
+    {
+      "fromActionId": "736aee8ca974:1",
+      "toActionId": "736aee8ca974:2",
+      "at": "2026-11-22T20:53:29.367Z",
+      "frameSamples": 6,
+      "mutationSamples": 1,
+      "minimumBackdrops": 1,
+      "zeroBackdropObservations": 0,
+      "styles": [
+        {
+          "opacity": "1",
+          "backgroundColor": "lab(0 0 0 / 0.1)",
+          "backdropFilter": "blur(2px) saturate(1.05)"
+        }
+      ]
+    },
+    {
+      "fromActionId": "736aee8ca974:3",
+      "toActionId": "736aee8ca974:4",
+      "at": "2026-11-22T20:53:43.472Z",
+      "frameSamples": 6,
+      "mutationSamples": 1,
+      "minimumBackdrops": 1,
+      "zeroBackdropObservations": 0,
+      "styles": [
+        {
+          "opacity": "1",
+          "backgroundColor": "lab(0 0 0 / 0.1)",
+          "backdropFilter": "blur(2px) saturate(1.05)"
+        }
+      ]
+    },
+    {
+      "fromActionId": "736aee8ca974:5",
+      "toActionId": "736aee8ca974:6",
+      "at": "2026-11-22T20:53:54.166Z",
+      "frameSamples": 6,
+      "mutationSamples": 1,
+      "minimumBackdrops": 1,
+      "zeroBackdropObservations": 0,
+      "styles": [
+        {
+          "opacity": "1",
+          "backgroundColor": "lab(0 0 0 / 0.1)",
+          "backdropFilter": "blur(2px) saturate(1.05)"
+        }
+      ]
+    },
+    {
+      "fromActionId": "736aee8ca974:7",
+      "toActionId": "736aee8ca974:8",
+      "at": "2026-11-22T20:54:08.299Z",
+      "frameSamples": 6,
+      "mutationSamples": 1,
+      "minimumBackdrops": 1,
+      "zeroBackdropObservations": 0,
+      "styles": [
+        {
+          "opacity": "1",
+          "backgroundColor": "lab(0 0 0 / 0.1)",
+          "backdropFilter": "blur(2px) saturate(1.05)"
+        }
+      ]
+    },
+    {
+      "fromActionId": "736aee8ca974:9",
+      "toActionId": "736aee8ca974:10",
+      "at": "2026-11-22T20:54:20.736Z",
+      "frameSamples": 6,
+      "mutationSamples": 1,
+      "minimumBackdrops": 1,
+      "zeroBackdropObservations": 0,
+      "styles": [
+        {
+          "opacity": "1",
+          "backgroundColor": "lab(0 0 0 / 0.1)",
+          "backdropFilter": "blur(2px) saturate(1.05)"
+        }
+      ]
+    }
+  ],
+  "browserTraceExports": {
+    "200": 31
+  },
+  "actions": [
+    {
+      "run": "736aee8ca974",
+      "actionId": "736aee8ca974:1",
+      "surface": "Home",
+      "kind": "chooser",
+      "openedAt": "2026-11-22T20:53:21.671Z",
+      "closedAt": "2026-11-22T20:53:29.367Z",
+      "expectedCloseReason": "completed"
+    },
+    {
+      "run": "736aee8ca974",
+      "actionId": "736aee8ca974:2",
+      "surface": "Home",
+      "kind": "setup",
+      "openedAt": "2026-11-22T20:53:29.262Z",
+      "closedAt": "2026-11-22T20:53:33.761Z",
+      "expectedCloseReason": "dismissed"
+    },
+    {
+      "run": "736aee8ca974",
+      "actionId": "736aee8ca974:3",
+      "surface": "Email",
+      "kind": "chooser",
+      "openedAt": "2026-11-22T20:53:35.829Z",
+      "closedAt": "2026-11-22T20:53:43.472Z",
+      "expectedCloseReason": "completed"
+    },
+    {
+      "run": "736aee8ca974",
+      "actionId": "736aee8ca974:4",
+      "surface": "Email",
+      "kind": "setup",
+      "openedAt": "2026-11-22T20:53:43.298Z",
+      "closedAt": "2026-11-22T20:53:47.855Z",
+      "expectedCloseReason": "dismissed"
+    },
+    {
+      "run": "736aee8ca974",
+      "actionId": "736aee8ca974:5",
+      "surface": "Home",
+      "kind": "chooser",
+      "openedAt": "2026-11-22T20:53:50.376Z",
+      "closedAt": "2026-11-22T20:53:54.166Z",
+      "expectedCloseReason": "completed"
+    },
+    {
+      "run": "736aee8ca974",
+      "actionId": "736aee8ca974:6",
+      "surface": "Home",
+      "kind": "setup",
+      "openedAt": "2026-11-22T20:53:53.964Z",
+      "closedAt": "2026-11-22T20:54:02.537Z",
+      "expectedCloseReason": "dismissed"
+    },
+    {
+      "run": "736aee8ca974",
+      "actionId": "736aee8ca974:7",
+      "surface": "Email",
+      "kind": "chooser",
+      "openedAt": "2026-11-22T20:54:04.587Z",
+      "closedAt": "2026-11-22T20:54:08.299Z",
+      "expectedCloseReason": "completed"
+    },
+    {
+      "run": "736aee8ca974",
+      "actionId": "736aee8ca974:8",
+      "surface": "Email",
+      "kind": "setup",
+      "openedAt": "2026-11-22T20:54:08.176Z",
+      "closedAt": "2026-11-22T20:54:16.587Z",
+      "expectedCloseReason": "dismissed"
+    },
+    {
+      "run": "736aee8ca974",
+      "actionId": "736aee8ca974:9",
+      "surface": "Email final",
+      "kind": "chooser",
+      "openedAt": "2026-11-22T20:54:18.485Z",
+      "closedAt": "2026-11-22T20:54:20.736Z",
+      "expectedCloseReason": "completed"
+    },
+    {
+      "run": "736aee8ca974",
+      "actionId": "736aee8ca974:10",
+      "surface": "Email final",
+      "kind": "setup",
+      "openedAt": "2026-11-22T20:54:20.570Z",
+      "closedAt": "2026-11-22T20:54:32.136Z",
+      "expectedCloseReason": "completed",
+      "emailLinkId": "01a2050a-0398-748d-bfac-3e72d742b07a"
+    },
+    {
+      "run": "736aee8ca974",
+      "actionId": "736aee8ca974:11",
+      "surface": "Connect another",
+      "kind": "chooser",
+      "openedAt": "2026-11-22T20:54:36.419Z",
+      "closedAt": "2026-11-22T20:54:40.855Z",
+      "expectedCloseReason": "dismissed"
+    }
+  ],
+  "spanReceipt": "dialog-spans.json",
+  "assertions": "Real held list reads; unchanged response bytes; empty-state nodes disposed; same dialog nodes remain; typed values checked by the passing driver. No movie recorded.",
+  "standIns": [
+    "Synthetic local sign-in, mail server, KMS and flags",
+    "Private gate credential supplied by harness only to the exact telemetry POST"
+  ],
+  "scopeGaps": [
+    "Real-provider flows are not recorded; mail servers, local auth, KMS and feature flags are lab stand-ins.",
+    "Large-mailbox and unreadable-saved-credential health states are not exercised in this flow."
+  ],
+  "sourceReceiptSha256": "929ed0429aef7e64e9b83398c7980fb40e926f20dc4366c3e10541c5e63186c2"
+}

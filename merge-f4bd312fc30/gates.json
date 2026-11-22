@@ -1,0 +1,94 @@
+{
+  "head": "f074002132827431a8780c488a3619f0c5eaa9d9",
+  "ci": {
+    "run": 45069273618,
+    "status": "completed",
+    "conclusion": "success",
+    "checks": {
+      "success": 78,
+      "skipped": 18,
+      "failed": 0,
+      "pending": 0
+    },
+    "url": "https://github.com/macro-inc/macro/actions/runs/45069273618"
+  },
+  "browser": {
+    "run": 45069272782,
+    "status": "completed",
+    "conclusion": "success",
+    "total": 766,
+    "firstPass": 762,
+    "retried": 2,
+    "skipped": 2,
+    "failed": 0,
+    "organiseSender": {
+      "tests": 8,
+      "retries": 0
+    },
+    "retries": [
+      {
+        "file": "ways-elsewhere-create.spec.ts",
+        "title": "the Email type offers its fields, and they keep what is filled in",
+        "line": 83,
+        "status": "flaky",
+        "results": [
+          {
+            "retry": 0,
+            "status": "failed",
+            "duration": 31545
+          },
+          {
+            "retry": 1,
+            "status": "passed",
+            "duration": 11344
+          }
+        ],
+        "bead": "mac-5aul",
+        "classification": "Pre-existing on main; spec and exercised product files unchanged by this PR; non-blocking under the stopping rule."
+      },
+      {
+        "file": "ways-saved-views-phone.spec.ts",
+        "title": "Move up and Move down in a row menu of the sheet reorder the views",
+        "line": 89,
+        "status": "flaky",
+        "results": [
+          {
+            "retry": 0,
+            "status": "failed",
+            "duration": 26778
+          },
+          {
+            "retry": 1,
+            "status": "passed",
+            "duration": 5228
+          }
+        ],
+        "bead": "mac-6g1f",
+        "classification": "Pre-existing on main; spec and exercised product files unchanged by this PR; non-blocking under the stopping rule."
+      }
+    ],
+    "url": "https://github.com/macro-inc/macro/actions/runs/45069272782"
+  },
+  "backend": {
+    "run": 45065813761,
+    "head": "f4bd312fc30775f76acff3a3e8dadf5ca9e84e55",
+    "conclusion": "success",
+    "carriedReason": "Final delta changes one browser test only"
+  },
+  "stress": {
+    "head": "f678c962e5744b7783719f2f3827a764752a1fe7",
+    "passed": 20,
+    "requested": 20,
+    "retries": 0
+  },
+  "mergeHeld": true,
+  "deploy": false,
+  "humanPlayback": "pending",
+  "realProviderVerification": "pending, not tested",
+  "audit": {
+    "outcome": "PASS",
+    "reviewer": "audit coordinator",
+    "sourceHead": "f074002132827431a8780c488a3619f0c5eaa9d9",
+    "runtimeReceipts": "smoke.json and dialogs.json"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "firstSmoke": "7bdc21c6cebf: first-sync UI wait exceeded120s; not counted",
+  "diagnostic": "930d0552dfb1: visibility wake injected while inspecting; not counted as clean smoke",
+  "preRepairCleanSmoke": "355b3f9ce7e2 passed; restart10512ms",
+  "infraFinding": "Preview SQS queues were absent; projection effects reported QueueDoesNotExist after committing message rows.",
+  "repair": "28 canonical preview queues restored additively with canonical attributes; existing scenario queues and KMS process preserved.",
+  "deletionAttribution": "Unknown. Retained LocalStack log ring begins after the suspected interval; no DeleteQueue in that window. Unchanged e2e cleanup is restricted to scenario e2e-UUID prefixes and recorded own URLs.",
+  "privateTelemetryRepair": "Collector address updated after its restart; browser exports now200. No auth/filter/allowlist relaxation.",
+  "finalPostRepairSmoke": "8df01e5d7772 passed, restart5406ms; no extra visibility wake",
+  "gateDenials": "No mail-list or sync-status request blocked. Starter-database mutation remains blocked.",
+  "cleanupRecheck": {
+    "candidateScenarios": 10,
+    "retries": 0,
+    "canonicalQueuesRetained": 28,
+    "at": "2026-11-22T21:02:10.597805+00:00"
+  }
+}

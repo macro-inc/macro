@@ -1,0 +1,30 @@
+{
+  "head": "f4bd312fc30775f76acff3a3e8dadf5ca9e84e55",
+  "preMergeHead": "01ed1bb6f56dcd4134b0d975109deec0d65355b6",
+  "main": "6449317189c38fcec89394f87a090fd7737c2fc2",
+  "migration": "20261120044320_comms_cp_left_by_user_channel.sql",
+  "runner": "sqlx-cli 0.9.0 from the pinned local development environment",
+  "freshDatabaseProof": {
+    "step1": "Full pre-merge migration source",
+    "step1Exit": 0,
+    "step1Applied": 910,
+    "step2": "Full merged migration source against the same freshly migrated database",
+    "step2Exit": 0,
+    "step2Applied": 1,
+    "orderingOrChecksumError": false,
+    "indexValid": true
+  },
+  "preservedPreview": {
+    "scopedApplyExit": 0,
+    "oldLedgerRowsPreserved": 910,
+    "newLedgerRows": 1,
+    "indexValid": true,
+    "localOnlyChecksumLimitation": [
+      "20261120233251",
+      "20261120233252",
+      "20261120233253"
+    ],
+    "limitation": "These 3 files were rewritten before deployment after the owned preview had applied old copies. Their ledger checksums were deliberately left untouched. Only the new main index was applied through a scoped source. Production has not run those old PR versions."
+  },
+  "scope": "Fresh-schema ordering proof and owned preview scoped apply; not a production-scale index benchmark. No production database was accessed."
+}

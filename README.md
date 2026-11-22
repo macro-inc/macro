@@ -1,6 +1,8 @@
 # IMAP/SMTP proof for #11484
 
-Latest: [desktop and phone proof recorded at f678c962e57](f678c962e57/README.md), plus the connect clip and smoke at `76dda9df8e3`, source provenance, final-head comparison, stand-ins and scope gaps.
+Latest source `f0740021328`: [main-merge runtime checks](merge-f4bd312fc30/README.md), on `f4bd312fc30` plus one test-only commit.
+
+[Desktop and phone proof recorded at f678c962e57](f678c962e57/README.md), plus the connect clip and smoke at `76dda9df8e3`, source provenance, final-head comparison, stand-ins and scope gaps.
 
 ## Historical partial proof
 

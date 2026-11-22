@@ -1,0 +1,131 @@
+{
+  "finalHead": "f074002132827431a8780c488a3619f0c5eaa9d9",
+  "runtimeHead": "f4bd312fc30775f76acff3a3e8dadf5ca9e84e55",
+  "mainMerged": "6449317189c38fcec89394f87a090fd7737c2fc2",
+  "frontendGitSha": "f4bd312fc30",
+  "runningNativeExecutables": [
+    {
+      "service": "email_pubsub_workers",
+      "binary": "pubsub_workers",
+      "sha256": "a9b0942d566974bdd8615b196314fa8a74da61e3e3874f9cfe24db33dc51c787",
+      "matches": true
+    },
+    {
+      "service": "email_service",
+      "binary": "email_service",
+      "sha256": "da32c41f280b71cbe3f56ac0040c6a21e0526e51e6050806f457a0092242bffb",
+      "matches": true
+    },
+    {
+      "service": "notification_service",
+      "binary": "notification_service",
+      "sha256": "4eb971d0741a7c036302ea4a81821c439be748f07a0fa7853595ee2bed84fec9",
+      "matches": true
+    },
+    {
+      "service": "document_storage_service",
+      "binary": "document_storage_service",
+      "sha256": "2bd7e7aa9ba32520ed972a36da4b86622cb06f8818c7ebd67936bfd764b70a33",
+      "matches": true
+    },
+    {
+      "service": "calendar_service",
+      "binary": "calendar_service",
+      "sha256": "c395a51fdb7ed9806db5813fae5ff817e7700e4494bafada16646962c9cf6781",
+      "matches": true
+    },
+    {
+      "service": "agent_harness_service",
+      "binary": "agent_harness_service",
+      "sha256": "3bb2b7cd598adf40a338fc80d98ca43af6a4fdf9d35eedc962245afff20f6ef4",
+      "matches": true
+    },
+    {
+      "service": "outlook_emulator",
+      "binary": "outlook_emulator",
+      "sha256": "38dea4468e46f736b717c38da69b029fc00c9aaaa05ee849d231fd3014ee0f2f",
+      "matches": true
+    },
+    {
+      "service": "gmail_emulator",
+      "binary": "gmail_emulator",
+      "sha256": "65804a5315cbea28417d3688d9b6ca9430fa0794461e96036f6cda395b7964d7",
+      "matches": true
+    },
+    {
+      "service": "static_file_service",
+      "binary": "static_file_service",
+      "sha256": "daa24331cdbd4e252e028def839495d4ea2ffbfb3f7e2f28be84c514377c4ca0",
+      "matches": true
+    },
+    {
+      "service": "contacts_service",
+      "binary": "contacts_service",
+      "sha256": "352593f7866e24d0215c400fc9b8ea0e3f7f8ac69bce573b6dd16168a21eb66b",
+      "matches": true
+    },
+    {
+      "service": "authentication-service",
+      "binary": "authentication_service",
+      "sha256": "61c2993448eae79f301346667f81371ebbb60c52ef1ee22a0454235b59da4dea",
+      "matches": true
+    },
+    {
+      "service": "unfurl_service",
+      "binary": "unfurl_service",
+      "sha256": "b34bb79e23341f235221aa283343d5f995d9674488b86127a2152513d9c3c28e",
+      "matches": true
+    },
+    {
+      "service": "connection_gateway",
+      "binary": "connection_gateway_service",
+      "sha256": "53c41093c2f8fb06e3ca8db59ee90e31be6b82ad87f1b9b5c4b3cb08f828671c",
+      "matches": true
+    },
+    {
+      "service": "imap_service",
+      "binary": "imap_service",
+      "sha256": "67e6adecf5bbd114f68d7668ec9409f3eb3759a769b52b405491c5584e14b8d8",
+      "matches": true
+    },
+    {
+      "service": "image_proxy_service",
+      "binary": "image_proxy_service",
+      "sha256": "b35e74d7e6c3ad2c1f4d27625b3067fc99f916da5eeb364e600776dc71d8d58c",
+      "matches": true
+    },
+    {
+      "service": "model_emulator",
+      "binary": "model_emulator",
+      "sha256": "cfceebf2e60685447183c7009ac5deabb028b0b34348cad7f8ef812757ea450d",
+      "matches": true
+    },
+    {
+      "service": "document_upload_finalizer",
+      "binary": "document_upload_finalizer_local_worker",
+      "sha256": "e06e83ae37c2f4973d7adf7e981a096838a17e1bb6362098561c796fef500c17",
+      "matches": true
+    },
+    {
+      "service": "whatsapp_session_service",
+      "binary": "whatsapp_session_service",
+      "sha256": "4f0eb21492ecee6a4cbb681f3016e5d2de681ff1b385447f7392086db9c9edec",
+      "matches": true
+    }
+  ],
+  "nativeBuildBinaries": 20,
+  "testOnlyFinalDelta": {
+    "files": [
+      "apps/web/tests/email-e2e/organise-sender.spec.ts"
+    ],
+    "insertions": 8,
+    "deletions": 2
+  },
+  "comparison": "https://github.com/macro-inc/macro/compare/f4bd312fc30775f76acff3a3e8dadf5ca9e84e55...f074002132827431a8780c488a3619f0c5eaa9d9",
+  "mediaRetained": {
+    "desktopAndPhone": "f678c962e5744b7783719f2f3827a764752a1fe7",
+    "connectClip": "76dda9df8e3f6bf783a846aaeb6425ebe4fe8bc7"
+  },
+  "deployPerformed": false,
+  "mergeHeld": true
+}
