@@ -3677,6 +3677,36 @@ function writeOf(
   });
 }
 
+/** `network`, its page reads started while `hold` is on held until `open`;
+ * reads of one channel answer at once. */
+function gatedPages(network: Pick<ReturnType<typeof fakeNetwork>, 'client'>) {
+  let gate: Promise<void> | undefined;
+  let open = () => {};
+  return {
+    hold() {
+      gate = new Promise<void>((done) => {
+        open = () => {
+          gate = undefined;
+          done();
+        };
+      });
+    },
+    open: () => open(),
+    client: fakeClient((...args: Parameters<typeof network.client.query>) => {
+      const held = gate;
+      const { input } = args[1] as {
+        input: GraphqlSoupInput | SoupEntityInput;
+      };
+      return {
+        toPromise: async () => {
+          if (held && !isEntityInput(input)) await held;
+          return network.client.query(...args).toPromise();
+        },
+      };
+    }) as typeof network.client,
+  };
+}
+
 /** `network`, its answers held until `land` is called. */
 function heldNetwork(network: Pick<ReturnType<typeof fakeNetwork>, 'client'>) {
   let land!: () => void;
@@ -3921,6 +3951,74 @@ describe("the viewer's own channel writes", () => {
         client.getQueryState(channelKeys.directory(VIEWER).queryKey)
           ?.isInvalidated
       ).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps a write past its hold while a slow walk fails late', async () => {
+    vi.useFakeTimers();
+    try {
+      const network = fakeNetwork([channelRecord('a', { name: 'before' })], {
+        primary: [
+          channelRecord('a', { name: 'after', updatedAt: UPDATED_MID }),
+        ],
+      });
+      const gated = gatedPages(network);
+      const client = queryClient();
+      const directory = mountMemoryDirectory(gated, client);
+      await vi.waitFor(() => expect(directory.complete()).toBe(true));
+
+      gated.hold();
+      network.failPages(Number.POSITIVE_INFINITY);
+      const written = writeOf(client, gated, ['a']);
+      await vi.waitFor(() => expect(nameOf(directory, 'a')).toBe('after'));
+      // The walk is still out past the hold.
+      await vi.advanceTimersByTimeAsync(OWN_WRITE_HOLD_MS + 1_000);
+      expect(nameOf(directory, 'a')).toBe('after');
+
+      gated.open();
+      await written;
+      await vi.advanceTimersByTimeAsync(OWN_WRITE_HOLD_MS + 1_000);
+
+      expect(nameOf(directory, 'a')).toBe('after');
+      expect(ownChannelWrites(client).writes()).toEqual({});
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps a write it showed before any pages were read until a walk reads them', async () => {
+    vi.useFakeTimers();
+    try {
+      const channels = [channelRecord('a', { name: 'before' })];
+      const network = fakeNetwork(channels, {
+        primary: [
+          channelRecord('a', { name: 'after', updatedAt: UPDATED_MID }),
+        ],
+        failingPages: Number.POSITIVE_INFINITY,
+      });
+      const client = queryClient();
+      const directory = mountMemoryDirectory(network, client);
+      await vi.waitFor(() => expect(nameOf(directory, 'a')).toBe('before'));
+
+      await writeOf(client, network, ['a']);
+      expect(nameOf(directory, 'a')).toBe('after');
+      await vi.advanceTimersByTimeAsync(OWN_WRITE_HOLD_MS + 1_000);
+      expect(nameOf(directory, 'a')).toBe('after');
+      expect(directory.complete()).toBe(false);
+
+      // A walk read since the write shows it, and the store lets it go.
+      channels[0] = channelRecord('a', {
+        name: 'after',
+        updatedAt: UPDATED_MID,
+      });
+      network.failPages(0);
+      directory.retry();
+      await vi.waitFor(() => expect(directory.complete()).toBe(true));
+
+      expect(ownChannelWrites(client).writes()).toEqual({});
+      expect(nameOf(directory, 'a')).toBe('after');
     } finally {
       vi.useRealTimers();
     }

@@ -64,11 +64,25 @@ export type OwnChannelWrites = {
    * channel replaced it, all in one change: a bulk deletion lets thousands
    * go at once. */
   release: (released: readonly (readonly [string, OwnChannelWrite])[]) => void;
+  /** Keeps the writes of the read sent at `sequence` past the end of their
+   * hold until the returned retention is let go: a refresh still owes the
+   * read that would show them. A source showing a write still lets it go.
+   * The retention's signal aborts once it is let go or the store clears. */
+  retain: (sequence: number) => OwnWriteRetention;
   /** Lets every write go, drops the reads still in flight, and forgets the
    * order of every read sent so far: the storage the directories read was
    * replaced, or a new sign-in replaced the one that wrote. No read sent
    * before it is taken after it. */
   clear: () => void;
+};
+
+/** A hold kept past its end; see `OwnChannelWrites.retain`. */
+export type OwnWriteRetention = {
+  /** Ends the retention, letting its writes go if their hold already
+   * ended. Only the first call counts. */
+  release: () => void;
+  /** Aborted once the retention ends, here or by a clear. */
+  signal: AbortSignal;
 };
 
 const OWN_WRITES = new WeakMap<QueryClient, OwnChannelWrites>();
@@ -95,6 +109,13 @@ export function ownChannelWrites(client: QueryClient): OwnChannelWrites {
   // anyway (`clearedAt`).
   const latest = new Map<string, number>();
   const inFlight = new Map<number, OwnWriteRead>();
+  // Retentions by the sequence of the read whose writes they keep, and the
+  // writes whose hold ended while one was kept.
+  const retained = new Map<number, Set<AbortController>>();
+  const expired = new Map<
+    number,
+    readonly (readonly [string, OwnChannelWrite])[]
+  >();
   let sequence = 0;
   let clearedAt = 0;
   // Ends the holds whose writes all went or were replaced, and forgets the
@@ -144,7 +165,8 @@ export function ownChannelWrites(client: QueryClient): OwnChannelWrites {
     // the release passes over it.
     const hold = setTimeout(() => {
       holds.delete(hold);
-      release(taken);
+      if (retained.has(read.sequence)) expired.set(read.sequence, taken);
+      else release(taken);
     }, OWN_WRITE_HOLD_MS);
     holds.set(hold, taken);
     setWrites((previous) => {
@@ -170,9 +192,35 @@ export function ownChannelWrites(client: QueryClient): OwnChannelWrites {
       };
     },
     release,
+    retain(at) {
+      const retention = new AbortController();
+      if (at <= clearedAt) {
+        retention.abort();
+        return { release() {}, signal: retention.signal };
+      }
+      const kept = retained.get(at) ?? new Set();
+      kept.add(retention);
+      retained.set(at, kept);
+      return {
+        signal: retention.signal,
+        release() {
+          if (!kept.delete(retention)) return;
+          retention.abort();
+          if (kept.size > 0 || retained.get(at) !== kept) return;
+          retained.delete(at);
+          const ended = expired.get(at);
+          expired.delete(at);
+          if (ended) release(ended);
+        },
+      };
+    },
     clear() {
       clearedAt = sequence;
       inFlight.clear();
+      const retentions = [...retained.values()].flatMap((kept) => [...kept]);
+      retained.clear();
+      expired.clear();
+      for (const retention of retentions) retention.abort();
       for (const hold of holds.keys()) clearTimeout(hold);
       holds.clear();
       latest.clear();

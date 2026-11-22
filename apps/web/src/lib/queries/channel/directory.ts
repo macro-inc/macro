@@ -113,6 +113,7 @@ import {
   createOwnWriteTracker,
   type OwnChannelWrite,
   type OwnChannelWrites,
+  type OwnWriteRetention,
   overlayOwnWrites,
   ownChannelWrites,
 } from './own-writes';
@@ -859,15 +860,19 @@ export async function refreshChannelDirectory(
     await client.invalidateQueries(filters);
   }
   const held = await ownWrites;
-  if (held && sameQueryAccount(held.writer, account()))
+  if (!held) return;
+  if (sameQueryAccount(held.writer, account()))
     await keepOwnWritesInPages(client, held, started);
+  else held.retention.release();
 }
 
-/** A write's primary read, held in the own-write store at `sequence`. */
+/** A write's primary read, held in the own-write store at `sequence` and
+ * retained past its hold until the refresh that read it ends. */
 type HeldOwnWrites = {
   writer: QueryAccount;
   sequence: number;
   channelIds: readonly string[];
+  retention: OwnWriteRetention;
 };
 
 /**
@@ -879,6 +884,11 @@ type HeldOwnWrites = {
  * store still holds at `held.sequence` are laid in, so a later write's read
  * that landed first is never undone. The pages keep the time they were read
  * and stay invalidated: the next walk replaces them.
+ *
+ * The store keeps the writes past their hold until this ends (a slow walk
+ * that fails late finds them still there), or, when the directory has no
+ * pages to lay them in yet, until a walk started after the write reads them
+ * or the pages leave the cache.
  */
 async function keepOwnWritesInPages(
   client: QueryClient,
@@ -886,25 +896,54 @@ async function keepOwnWritesInPages(
   started: number
 ) {
   const queryKey = channelKeys.directory(held.writer.userId).queryKey;
-  const state = client.getQueryState(queryKey);
+  const query = client.getQueryCache().find({ queryKey, exact: true });
+  const state = query?.state;
+  // No in-memory directory, or pages read after the write: they show it.
+  if (!query || !state || state.dataUpdatedAt >= started) {
+    held.retention.release();
+    return;
+  }
   const pages = client.getQueryData<readonly DirectoryChannel[]>(queryKey);
-  if (!state || !pages || state.dataUpdatedAt >= started) return;
+  if (!pages) {
+    releaseOnceRead(client, query, started, held.retention);
+    return;
+  }
   const writes = untrack(ownChannelWrites(client).writes);
   const taken = new Map<string, DirectoryChannel | null>();
   for (const id of held.channelIds) {
     const write = writes[id];
     if (write?.sequence === held.sequence) taken.set(id, write.channel);
   }
+  if (taken.size > 0) {
+    const next = pages.filter(({ id }) => !taken.has(id));
+    for (const channel of taken.values())
+      if (channel?.isParticipant) insertInDirectoryOrder(next, channel);
+    client.setQueryData(queryKey, next, { updatedAt: state.dataUpdatedAt });
+  }
+  // The pages hold them now; an ended hold lets them go.
+  held.retention.release();
   if (taken.size === 0) return;
-  const next = pages.filter(({ id }) => !taken.has(id));
-  for (const channel of taken.values())
-    if (channel?.isParticipant) insertInDirectoryOrder(next, channel);
-  client.setQueryData(queryKey, next, { updatedAt: state.dataUpdatedAt });
   await client.invalidateQueries({
     queryKey,
     exact: true,
     refetchType: 'none',
   });
+}
+
+/** Ends `retention` once `query` has pages read since `started`, or leaves
+ * the cache, whichever comes first; a clear of the store ends it too. */
+function releaseOnceRead(
+  client: QueryClient,
+  query: Query,
+  started: number,
+  retention: OwnWriteRetention
+) {
+  const unsubscribe = client.getQueryCache().subscribe((event) => {
+    if (event.query !== query) return;
+    if (event.type === 'removed' || query.state.dataUpdatedAt >= started)
+      retention.release();
+  });
+  retention.signal.addEventListener('abort', unsubscribe, { once: true });
 }
 
 export type PrimaryChannelRead =
@@ -1131,10 +1170,13 @@ async function readOwnWrites(
     } finally {
       sent.settle(found);
     }
+    // Taken as the writes are held, before their hold can end: the caller
+    // lets it go once its refresh is done with them.
     return {
       writer,
       sequence: sent.sequence,
       channelIds: Object.keys(found),
+      retention: own.retain(sent.sequence),
     };
   });
 }

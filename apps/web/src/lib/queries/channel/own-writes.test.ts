@@ -351,6 +351,53 @@ describe('ownChannelWrites', () => {
     expect(own.writes()).toEqual({});
   });
 
+  it('keeps a retained write past its hold until the retention ends', () => {
+    vi.useFakeTimers();
+    const own = ownChannelWrites(new QueryClient());
+    const sent = own.send(ACCOUNT, [A]);
+    sent.settle({ [A]: written });
+    const first = own.retain(sent.sequence);
+    const second = own.retain(sent.sequence);
+
+    vi.advanceTimersByTime(OWN_WRITE_HOLD_MS * 2);
+    expect(own.writes()[A]?.channel).toBe(written);
+    first.release();
+    first.release();
+    expect(first.signal.aborted).toBe(true);
+    // Another retention still keeps it.
+    expect(own.writes()[A]?.channel).toBe(written);
+    second.release();
+    expect(own.writes()).toEqual({});
+  });
+
+  it('lets a retained write go at the end of its hold when the retention ended first', () => {
+    vi.useFakeTimers();
+    const own = ownChannelWrites(new QueryClient());
+    const sent = own.send(ACCOUNT, [A]);
+    sent.settle({ [A]: written });
+    own.retain(sent.sequence).release();
+
+    expect(own.writes()[A]?.channel).toBe(written);
+    vi.advanceTimersByTime(OWN_WRITE_HOLD_MS);
+    expect(own.writes()).toEqual({});
+  });
+
+  it('ends every retention on clear, and takes none for a read sent before it', () => {
+    vi.useFakeTimers();
+    const own = ownChannelWrites(new QueryClient());
+    const sent = own.send(ACCOUNT, [A]);
+    sent.settle({ [A]: written });
+    const retention = own.retain(sent.sequence);
+
+    own.clear();
+
+    expect(retention.signal.aborted).toBe(true);
+    expect(own.retain(sent.sequence).signal.aborted).toBe(true);
+    retention.release();
+    expect(vi.getTimerCount()).toBe(0);
+    expect(own.writes()).toEqual({});
+  });
+
   it('ends a hold early once every write it held went or was replaced', () => {
     vi.useFakeTimers();
     const own = ownChannelWrites(new QueryClient());
