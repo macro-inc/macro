@@ -77,6 +77,7 @@ type DeletePropertyOptionParams = {
 
 const updateFailed = () => toast.failure('Failed to update option');
 const deleteFailed = () => toast.failure('Failed to delete option');
+const addFailed = () => toast.failure('Failed to add option');
 
 export function useUpdatePropertyOptionMutation(
   callbacks?: CatalogMutationCallbacks<void, UpdatePropertyOptionParams>
@@ -119,17 +120,20 @@ export function useDeletePropertyOptionMutation(
   );
 }
 
-/** Adds an option; resolves with the server's option once it commits. */
+/**
+ * Adds an option; resolves with it under its final id, at once when the add
+ * queues. A queued add the server refuses later toasts then.
+ */
 export function useAddPropertyOptionMutation(
   callbacks?: CatalogMutationCallbacks<PropertyOption, AddPropertyOptionParams>
 ) {
   return createCatalogMutation(
     (vars: AddPropertyOptionParams) =>
-      addPropertyOption(vars.propertyDefinitionId, vars.body),
+      addPropertyOption(vars.propertyDefinitionId, vars.body, addFailed),
     {
       onError(error) {
         console.error('Failed to add property option', error);
-        toast.failure('Failed to add option');
+        addFailed();
       },
     },
     callbacks

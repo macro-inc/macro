@@ -1035,9 +1035,10 @@ project), which folder lists filter on locally; a batch that moves a database or
 form waits for the server. Property removal unlinks only the assignment from its parent, retaining a
 rollbackable link until the server confirms deletion.
 Property catalog option edits and deletes, and definition deletes, are predicted.
-A new option takes a client identity linked into the cached option,
-definition-with-options and tag-set lists, and its call resolves once the
-server id replaces it. Creating a definition, provisioning a tag set, and
+A new option is created under an id the client mints and sends; the server
+answers a replay of that id with the option it made, so the id is final. It
+is linked into the cached option, definition-with-options and tag-set lists,
+and a queued add resolves at once, reporting a later refusal by toast. Creating a definition, provisioning a tag set, and
 sharing or replacing a tag wait for the server, then reload the mounted catalog
 lists they can change (`lib/queries/properties/catalog`).
 
