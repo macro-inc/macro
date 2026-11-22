@@ -30,27 +30,56 @@ pub enum SessionScope {
 /// `writes` lists (`scope/<scope>_reads.txt`, `scope/<scope>_writes.txt`).
 /// Everything else is refused to it. A default-deny scope gets an entry in
 /// [`SessionScope::allowlist`].
+///
+/// A write's `{session_id}` is the credential's own session: a scoped
+/// program writes into the session it runs for, never another one its
+/// person can edit.
 pub struct Allowlist {
-    requests: Vec<(&'static str, &'static str, &'static str)>,
+    /// `(spec, method, path, session-bound)`; writes are session-bound.
+    requests: Vec<(&'static str, &'static str, &'static str, bool)>,
+}
+
+/// The placeholder a session-bound entry binds to the credential's session.
+const SESSION_PLACEHOLDER: &str = "{session_id}";
+
+/// The session a request's credential was issued for, as a scope check
+/// knows it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OwnSession {
+    /// Checked by a later step that knows the session (the signed check
+    /// before the stored correlation is read).
+    Unchecked,
+    /// The correlation's session.
+    Is(uuid::Uuid),
+    /// No session is known: a session-bound entry is refused.
+    Unknown,
 }
 
 impl Allowlist {
     fn from_lists(reads: &'static str, writes: &'static str) -> Self {
         Self {
-            requests: list_lines(reads).chain(list_lines(writes)).collect(),
+            requests: list_lines(reads)
+                .map(|(spec, method, path)| (spec, method, path, false))
+                .chain(list_lines(writes).map(|(spec, method, path)| (spec, method, path, true)))
+                .collect(),
         }
     }
 
     /// Whether a list names the request on a service that serves `specs`.
     /// An entry counts only on its spec's service, and a service that
     /// declares no specs (`None`) is refused everything: it fails closed.
-    /// HEAD reads as GET; OPTIONS is never listed.
-    fn allows(&self, specs: Option<&[&str]>, method: &str, path: &str) -> bool {
+    /// HEAD reads as GET; OPTIONS is never listed. A session-bound entry's
+    /// `{session_id}` must be `own`.
+    fn allows(&self, specs: Option<&[&str]>, own: OwnSession, method: &str, path: &str) -> bool {
         let method = if method == "HEAD" { "GET" } else { method };
-        self.requests.iter().any(|(spec, listed, template)| {
+        self.requests.iter().any(|(spec, listed, template, bound)| {
             specs.is_some_and(|specs| specs.contains(spec))
                 && *listed == method
-                && typed_matches(path, template)
+                && typed_matches(
+                    path,
+                    template,
+                    if *bound { own } else { OwnSession::Unchecked },
+                )
         })
     }
 }
@@ -482,6 +511,18 @@ impl SessionScope {
     /// on another service. A job is refused everything on a service that
     /// declares no specs (`None`): it fails closed.
     pub fn allows_on(self, specs: Option<&[&str]>, method: &str, path: &str) -> bool {
+        self.allows_within(specs, OwnSession::Unchecked, method, path)
+    }
+
+    /// [`Self::allows_on`] for a credential issued for `own` session: an
+    /// allowlisted scope's writes go only into that session.
+    pub fn allows_within(
+        self,
+        specs: Option<&[&str]>,
+        own: OwnSession,
+        method: &str,
+        path: &str,
+    ) -> bool {
         if listed(ANY_WRITE, method, path) {
             return false;
         }
@@ -491,7 +532,7 @@ impl SessionScope {
         // token is not a preflight and could reach a handler mounted for any
         // method.
         if let Some(allowlist) = self.allowlist() {
-            return allowlist.allows(specs, method, path);
+            return allowlist.allows(specs, own, method, path);
         }
         if reads_by_method(method) {
             return true;
@@ -567,9 +608,21 @@ impl SignedScope {
     /// [`Self::allows`] on a service that serves `specs`
     /// ([`SessionScope::allows_on`]).
     pub fn allows_on(self, specs: Option<&[&str]>, method: &str, path: &str) -> bool {
+        self.allows_within(specs, OwnSession::Unchecked, method, path)
+    }
+
+    /// [`Self::allows_on`] for a credential issued for `own` session
+    /// ([`SessionScope::allows_within`]).
+    pub fn allows_within(
+        self,
+        specs: Option<&[&str]>,
+        own: OwnSession,
+        method: &str,
+        path: &str,
+    ) -> bool {
         match self {
             Self::Unscoped => true,
-            Self::Known(scope) => scope.allows_on(specs, method, path),
+            Self::Known(scope) => scope.allows_within(specs, own, method, path),
             Self::Unknown => reads_by_method(method) && !listed(ANY_WRITE, method, path),
         }
     }
@@ -638,9 +691,15 @@ const WORD_PLACEHOLDERS: &[&str] = &[
 /// digit), so a template never admits a route that differs from it by a
 /// literal word, such as an unannotated `/documents/{id}/duplicates` under
 /// `/documents/{id}/{version}` or a short `/documents/{id}/v2`.
-fn typed_matches(path: &str, template: &str) -> bool {
+fn typed_matches(path: &str, template: &str, own: OwnSession) -> bool {
     matches_with(path, template, |placeholder, segment| {
-        if WORD_PLACEHOLDERS.contains(&placeholder) {
+        if placeholder == SESSION_PLACEHOLDER {
+            match own {
+                OwnSession::Unchecked => id_like(segment),
+                OwnSession::Is(session) => segment.parse::<uuid::Uuid>() == Ok(session),
+                OwnSession::Unknown => false,
+            }
+        } else if WORD_PLACEHOLDERS.contains(&placeholder) {
             !segment.is_empty() && !segment.contains('/')
         } else {
             id_like(segment)

@@ -145,6 +145,28 @@ fn forwarded(name: &HeaderName) -> bool {
     )
 }
 
+/// `rest` under the host's `base`, or `None` when it could leave it: a dot
+/// segment, a backslash, or an encoded dot, slash or backslash, which the
+/// URL parser or a gateway would resolve to another service on the same
+/// origin (unfurl among them, which takes no credential).
+fn confined(base: &str, rest: &str) -> Option<String> {
+    let lower = rest.to_ascii_lowercase();
+    if lower.contains('\\')
+        || ["%2e", "%2f", "%5c"]
+            .iter()
+            .any(|encoded| lower.contains(encoded))
+    {
+        return None;
+    }
+    if rest
+        .split('/')
+        .any(|segment| segment == "." || segment == "..")
+    {
+        return None;
+    }
+    Some(format!("{base}/{rest}"))
+}
+
 async fn forward(State(routes): State<Arc<Routes>>, request: Request) -> Response {
     let path = request.uri().path().to_owned();
     let (service, rest) = path
@@ -170,7 +192,11 @@ async fn forward(State(routes): State<Arc<Routes>>, request: Request) -> Respons
         span.record("status", StatusCode::NOT_FOUND.as_u16());
         return (StatusCode::NOT_FOUND, "no such SDK host").into_response();
     };
-    let mut url = format!("{base}/{rest}");
+    let Some(mut url) = confined(base, rest) else {
+        span.record("outcome", "outside_host");
+        span.record("status", StatusCode::BAD_REQUEST.as_u16());
+        return (StatusCode::BAD_REQUEST, "the path leaves its SDK host").into_response();
+    };
     if let Some(query) = request.uri().query() {
         url.push('?');
         url.push_str(query);

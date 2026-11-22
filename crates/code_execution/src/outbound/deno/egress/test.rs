@@ -20,3 +20,28 @@ fn only_end_to_end_headers_cross_the_forwarder() {
     let names: Vec<&str> = kept.keys().map(HeaderName::as_str).collect();
     assert_eq!(names, ["authorization", "content-type"]);
 }
+
+/// A path that could resolve outside its host's base is refused: on a shared
+/// gateway origin it would reach another service, unfurl's link fetcher
+/// among them.
+#[test]
+fn a_path_never_leaves_its_sdk_host() {
+    let base = "https://gateway.example/dss";
+    assert_eq!(
+        confined(base, "documents/1").as_deref(),
+        Some("https://gateway.example/dss/documents/1")
+    );
+    for rest in [
+        "../unfurl/proxy",
+        "documents/../../unfurl/proxy",
+        "./documents",
+        "%2e%2e/unfurl/proxy",
+        "%2E%2E/unfurl/proxy",
+        ".%2e/unfurl/proxy",
+        "documents%2f..%2f..%2funfurl",
+        "..\\unfurl/proxy",
+        "documents%5c..%5cunfurl",
+    ] {
+        assert_eq!(confined(base, rest), None, "{rest}");
+    }
+}

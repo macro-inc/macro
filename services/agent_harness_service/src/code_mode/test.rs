@@ -219,6 +219,11 @@ fn concrete(path: &str) -> String {
 fn the_dry_run_scope_is_every_sdk_read_and_no_write() {
     let scope = SessionScope::DryRun;
     for (key, operation) in code_execution::domain::operations() {
+        // Unfurl fetches what its caller names from Macro's servers: no
+        // scoped run is given its host (`run_endpoints`).
+        if key.starts_with("unfurl.") {
+            continue;
+        }
         assert_eq!(
             scope.allows(&operation.method, &concrete(&operation.path)),
             !operation.write,
@@ -246,6 +251,10 @@ fn the_generation_scope_matches_the_sdk_catalog() {
     ];
     let scope = SessionScope::Generation;
     for (key, operation) in code_execution::domain::operations() {
+        // No scoped run is given unfurl's host (`run_endpoints`).
+        if key.starts_with("unfurl.") {
+            continue;
+        }
         let allowed = scope.allows(&operation.method, &concrete(&operation.path));
         if !operation.write {
             assert!(
@@ -527,6 +536,10 @@ enum ScopeEnforcement {
     /// The service accepts no Macro API token, so the credential grants
     /// nothing there.
     NoMacroCredential,
+    /// The service takes no credential and fetches what its caller names
+    /// from Macro's servers: a scoped run gets no host for it and goes
+    /// through the egress proxy (`run_endpoints`).
+    RefusedToScopedRuns,
 }
 
 /// Decided per host when it is added.
@@ -548,12 +561,10 @@ fn enforcement(host: SdkHost) -> ScopeEnforcement {
         SdkHost::StaticFiles | SdkHost::StaticContent => ScopeEnforcement::SignedScope,
         // CloudFront serves document content only to URLs the storage service
         // signs; the editing worker accepts only document tokens the storage
-        // service mints with a POST a generation session can't make, and its
-        // routes edit documents, which a run that sends nothing may do;
-        // unfurl previews public links for any caller.
-        SdkHost::DocumentContent | SdkHost::EditingWorker | SdkHost::Unfurl => {
-            ScopeEnforcement::NoMacroCredential
-        }
+        // service mints with a POST no scoped session can make.
+        SdkHost::DocumentContent | SdkHost::EditingWorker => ScopeEnforcement::NoMacroCredential,
+        // Unfurl previews any link for any caller.
+        SdkHost::Unfurl => ScopeEnforcement::RefusedToScopedRuns,
     }
 }
 
@@ -593,7 +604,7 @@ fn every_sdk_host_holds_a_scoped_credential_to_its_scope() {
                     ),
                     "{environment} {name} ({url}) serves under a prefix the scope doesn't strip"
                 ),
-                ScopeEnforcement::NoMacroCredential => {}
+                ScopeEnforcement::NoMacroCredential | ScopeEnforcement::RefusedToScopedRuns => {}
             }
         }
     }
@@ -963,4 +974,27 @@ async fn suggestions_brief_programs_type_check() {
         );
     }
     service.shutdown().await;
+}
+
+/// A scoped run gets no unfurl host, so neither `--allow-net` nor an egress
+/// forwarder has an address for it; an unscoped run keeps it.
+#[test]
+fn a_scoped_run_gets_no_unfurl_host() {
+    let endpoints = SdkEndpoints {
+        hosts: BTreeMap::from([
+            (
+                "unfurl".to_owned(),
+                "https://gateway.example/unfurl".to_owned(),
+            ),
+            (
+                "storage".to_owned(),
+                "https://gateway.example/dss".to_owned(),
+            ),
+        ]),
+        web_app_url: "https://app.example".to_owned(),
+    };
+    let scoped = run_endpoints(&endpoints, true);
+    assert_eq!(scoped.hosts.keys().collect::<Vec<_>>(), ["storage"]);
+    let unscoped = run_endpoints(&endpoints, false);
+    assert_eq!(unscoped.hosts.len(), 2);
 }

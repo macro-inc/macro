@@ -923,3 +923,33 @@ fn a_job_cannot_mint_a_document_token_or_assign_an_agent() {
         );
     }
 }
+
+/// A job's writes go only into its own session: a write's `{session_id}` is
+/// the credential's session, and with no session known it is refused. Its
+/// reads of a session are not bound.
+#[test]
+fn a_job_writes_only_into_its_own_session() {
+    let own = uuid::Uuid::from_u128(0xa);
+    let other = uuid::Uuid::from_u128(0xb);
+    let view = |session: uuid::Uuid| format!("/agent-harness/agent-sessions/{session}/views");
+    let job = SessionScope::Job;
+    let specs = Some(ALL_SPECS);
+    assert!(job.allows_within(specs, OwnSession::Is(own), "POST", &view(own)));
+    assert!(!job.allows_within(specs, OwnSession::Is(own), "POST", &view(other)));
+    assert!(!job.allows_within(specs, OwnSession::Unknown, "POST", &view(own)));
+    let review = format!("/agent-harness/agent-sessions/{other}/reviews");
+    assert!(!job.allows_within(specs, OwnSession::Is(own), "POST", &review));
+    // A signed-only check defers the binding to the correlation's.
+    assert!(SignedScope::Known(job).allows_within(
+        specs,
+        OwnSession::Unchecked,
+        "POST",
+        &view(other)
+    ));
+    assert!(!SignedScope::Known(job).allows_within(
+        specs,
+        OwnSession::Is(own),
+        "POST",
+        &view(other)
+    ));
+}
