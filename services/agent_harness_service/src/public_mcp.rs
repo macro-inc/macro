@@ -40,7 +40,37 @@ pub struct PublicCodeMode {
     pub service: Arc<dyn agent_code_mode::domain::UserCodeMode>,
     /// The code-mode kind of an agent session's turn, for calls that carry
     /// its provenance; `None` serves every call TypeScript.
-    pub kinds: Option<Arc<dyn agent_code_mode::domain::CodeModeKinds>>,
+    pub kinds: Option<Arc<dyn tool_service::SessionCodeModeKinds>>,
+}
+
+/// A session's turn kind from code mode, with the owner read from the
+/// session itself.
+pub struct OwnerCodeModeKinds<Repo> {
+    pub sessions: Repo,
+    pub kinds: Arc<dyn agent_code_mode::domain::CodeModeKinds>,
+}
+
+#[async_trait::async_trait]
+impl<Repo> tool_service::SessionCodeModeKinds for OwnerCodeModeKinds<Repo>
+where
+    Repo: agent_session::domain::ports::AgentSessionRepo + Send + Sync + 'static,
+{
+    async fn session_kind(
+        &self,
+        session: uuid::Uuid,
+    ) -> Option<agent_code_mode::domain::CodeModeKind> {
+        let session = agent_session::domain::model::AgentSessionId::new_from_uuid(session);
+        let found = self
+            .sessions
+            .find(session)
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(?error, "could not read a session for its code-mode kind")
+            })
+            .ok()??;
+        let owner = found.owner_user().ok()?;
+        Some(self.kinds.code_mode_kind(session, owner).await)
+    }
 }
 
 /// Browser-based MCP clients Macro has vetted, whose users skip the consent

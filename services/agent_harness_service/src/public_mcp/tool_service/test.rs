@@ -460,7 +460,7 @@ mod code_mode {
 
     fn app_with_kinds(
         runs: Arc<dyn UserCodeMode>,
-        kinds: Option<Arc<dyn agent_code_mode::domain::CodeModeKinds>>,
+        kinds: Option<Arc<dyn super::SessionCodeModeKinds>>,
     ) -> axum::Router {
         let surface = Arc::new(CodeModeSurface {
             tools: Arc::new(agent_code_mode::inbound::toolset::user_toolset()),
@@ -850,13 +850,12 @@ mod code_mode {
     struct Dialect;
 
     #[async_trait::async_trait]
-    impl agent_code_mode::domain::CodeModeKinds for Dialect {
-        async fn code_mode_kind(
+    impl super::SessionCodeModeKinds for Dialect {
+        async fn session_kind(
             &self,
-            _: agent_session::domain::model::AgentSessionId,
-            _: &MacroUserIdStr<'static>,
-        ) -> agent_code_mode::domain::CodeModeKind {
-            agent_code_mode::domain::CodeModeKind::Dialect
+            _: uuid::Uuid,
+        ) -> Option<agent_code_mode::domain::CodeModeKind> {
+            Some(agent_code_mode::domain::CodeModeKind::Dialect)
         }
     }
 
@@ -879,6 +878,19 @@ mod code_mode {
                 .map(|tool| tool["name"].as_str().unwrap().to_owned())
                 .collect()
         };
+        let initialize = serde_json::json!({
+            "protocolVersion": "2025-06-18",
+            "capabilities": {},
+            "clientInfo": {"name": "test", "version": "1"},
+        });
+        let initialized = rpc_as(managed.clone(), USER, agent(), "initialize", initialize).await;
+        assert!(
+            initialized["result"]["instructions"]
+                .as_str()
+                .unwrap()
+                .contains("macro_internal.ExecuteCode"),
+            "{initialized}"
+        );
         let listed = rpc_as(
             managed.clone(),
             USER,

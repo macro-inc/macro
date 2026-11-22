@@ -90,6 +90,12 @@ async fn authenticate(session: AuthenticatedSession, mut request: Request, next:
     next.run(request).await
 }
 
+/// The code tools in the server's instructions, for a TypeScript session.
+const TYPESCRIPT_CODE_TOOLS: &str = " macro_internal.ExecuteCode, macro_internal.DescribeCodeTools and macro_internal.ReadCodeDocs are available directly, without tool search. Follow their descriptions for the type-checked TypeScript main module, SDK entity indexes and symbol references, and persistent review workflow. Reuse indexes and references already in context.";
+
+/// The same for a session whose programs the agent's permissions gate.
+const DIALECT_CODE_TOOLS: &str = " macro_internal.ExecuteCode, macro_internal.DescribeCodeTools and macro_internal.ReadCodeDocs are available directly, without tool search. Follow their descriptions for programs that reach Macro through tools.<service>.<operation>(...) calls checked against this agent's permissions, with an optional TypeScript module for computation, their guides, and the persistent review workflow. Reuse guides already in context.";
+
 #[derive(Clone)]
 pub(super) struct InternalTools {
     pub(super) service: Arc<dyn SessionPullRequests>,
@@ -150,11 +156,37 @@ impl ServerHandler for InternalTools {
             " macro_internal.PresentReview presents editable email/calendar draft stacks or questions through the shared session stream. It completes immediately as Presented to the user and never waits for approval. Later account-holder decisions deliver typed review.decided and review.settled system events. GetReview reads saved drafts and outcomes by reviewId. DecideReview uses the same claim/execute path and requires a real request from the review’s account holder in the current turn; system notifications never authorize decisions. After presenting an import plan, ask \"Should I kick it off?\"; when the review’s account holder says yes, submit it with macro_internal.DecideReview. These tools are available even when code mode is disabled.",
         );
         if self.code_mode.is_some() {
-            info.instructions.as_mut().expect("instructions are set").push_str(
-                " macro_internal.ExecuteCode, macro_internal.DescribeCodeTools and macro_internal.ReadCodeDocs are available directly, without tool search. Follow their descriptions for the type-checked TypeScript main module, SDK entity indexes and symbol references, and persistent review workflow. Reuse indexes and references already in context.",
-            );
+            info.instructions
+                .as_mut()
+                .expect("instructions are set")
+                .push_str(TYPESCRIPT_CODE_TOOLS);
         }
         info
+    }
+
+    /// The server's instructions, with the code tools described as the
+    /// session's current kind defines them.
+    async fn initialize(
+        &self,
+        request: rmcp::model::InitializeRequestParams,
+        context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> Result<rmcp::model::InitializeResult, rmcp::ErrorData> {
+        if context.peer.peer_info().is_none() {
+            context.peer.set_peer_info(request);
+        }
+        let mut info = self.get_info();
+        let grant = context
+            .extensions
+            .get::<axum::http::request::Parts>()
+            .and_then(|parts| parts.extensions.get::<AuthenticatedSession>())
+            .map(|AuthenticatedSession(grant)| grant);
+        if let Some(grant) = grant
+            && self.code_mode_kind(grant).await == Some(CodeModeKind::Dialect)
+            && let Some(instructions) = info.instructions.as_mut()
+        {
+            *instructions = instructions.replace(TYPESCRIPT_CODE_TOOLS, DIALECT_CODE_TOOLS);
+        }
+        Ok(info)
     }
 
     async fn list_tools(

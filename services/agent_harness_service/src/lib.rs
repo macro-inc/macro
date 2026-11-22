@@ -1054,7 +1054,10 @@ pub async fn run() -> anyhow::Result<()> {
         service_shutdown.clone(),
         // An agent session's public MCP code mode follows its turn's kind.
         public_code_mode.map(|public| public_mcp::PublicCodeMode {
-            kinds: Some(code_mode.clone()),
+            kinds: Some(Arc::new(public_mcp::OwnerCodeModeKinds {
+                sessions: session_repo.clone(),
+                kinds: code_mode.clone(),
+            })),
             ..public
         }),
         feature_flags

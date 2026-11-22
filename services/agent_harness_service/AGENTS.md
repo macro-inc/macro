@@ -214,8 +214,10 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   is refused. ChatGPT gets the
   direct tools: its plugin directory refuses generic executors. A call
   carrying an agent session's provenance (`ManagedAgentSession`, a sandboxed
-  runtime's `macro` server) in a dialect turn (`CodeModeSurface::kinds`, the
-  session code mode's `CodeModeKinds`) gets none of the three code tools:
+  runtime's `macro` server) in a dialect turn (`CodeModeSurface::kinds`:
+  `OwnerCodeModeKinds`, the session code mode's `CodeModeKinds` with the
+  session owner's flag, never the caller's; an unreadable session counts as
+  gated) gets none of the three code tools, and its instructions say so:
   they are left off `tools/list` and refused, pointing at
   `macro_internal.ExecuteCode`, so a session with agent permissions has no
   ungated TypeScript path. Calls without session provenance stay TypeScript.

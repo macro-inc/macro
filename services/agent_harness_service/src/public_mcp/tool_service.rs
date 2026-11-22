@@ -4,7 +4,7 @@ use crate::public_mcp::analytics::{
 use crate::public_mcp::markdown_images::MarkdownImageResolver;
 use crate::public_mcp::tool_response::tool_result_with_media;
 use agent_code_mode::{
-    domain::{CodeModeKind, CodeModeKinds, UserCodeMode},
+    domain::{CodeModeKind, UserCodeMode},
     inbound::toolset::UserCodeModeToolContext,
 };
 use agent_inmem::domain::tool_mode::ToolMode;
@@ -77,7 +77,16 @@ pub struct CodeModeSurface {
     /// session whose turn is [`CodeModeKind::Dialect`] gets none of these
     /// tools: that session's code runs through `macro_internal.ExecuteCode`,
     /// checked against its agent's permissions.
-    pub kinds: Option<Arc<dyn CodeModeKinds>>,
+    pub kinds: Option<Arc<dyn SessionCodeModeKinds>>,
+}
+
+/// The code-mode kind of an agent session's current turn, read with its
+/// owner's flag (never the caller's, who may be someone else in the turn).
+// Object-safe: the surface holds it as `Arc<dyn SessionCodeModeKinds>`.
+#[async_trait::async_trait]
+pub trait SessionCodeModeKinds: Send + Sync + 'static {
+    /// `None` when the session can't be read.
+    async fn session_kind(&self, session: uuid::Uuid) -> Option<CodeModeKind>;
 }
 
 /// MCP server handler that extracts authenticated user identity from HTTP
@@ -132,11 +141,7 @@ impl<Context> AuthenticatedToolService<Context> {
     /// Whether the request comes from an agent session whose turn is a
     /// dialect turn, read through code mode's kinds, never the flag: then
     /// TypeScript with the SDK is not this session's to run.
-    async fn dialect_session(
-        &self,
-        extensions: &rmcp::model::Extensions,
-        user: &MacroUserIdStr<'static>,
-    ) -> bool {
+    async fn dialect_session(&self, extensions: &rmcp::model::Extensions) -> bool {
         let Some(kinds) = self
             .code_mode
             .as_ref()
@@ -147,13 +152,9 @@ impl<Context> AuthenticatedToolService<Context> {
         let Some(session) = managed_session(extensions) else {
             return false;
         };
-        kinds
-            .code_mode_kind(
-                agent_session::domain::model::AgentSessionId::new_from_uuid(session),
-                user,
-            )
-            .await
-            == CodeModeKind::Dialect
+        // A session that can't be read is treated as gated: its call carries
+        // an agent session's provenance, so it gets no ungated TypeScript.
+        kinds.session_kind(session).await != Some(CodeModeKind::TypeScript)
     }
 
     /// Tools listed for a mode. Code mode lists only its own tools
@@ -358,7 +359,12 @@ where
             context.peer.set_peer_info(request);
         }
         let mut info = self.get_info();
-        if self.tool_mode(&context.extensions) == ToolMode::Code {
+        if self.tool_mode(&context.extensions) == ToolMode::Code
+            && self.dialect_session(&context.extensions).await
+        {
+            // No code tools here: nothing to teach but where they are.
+            info.instructions = Some(DIALECT_SESSION_REFUSAL.to_owned());
+        } else if self.tool_mode(&context.extensions) == ToolMode::Code {
             let base_url = self.item_base_url.trim_end_matches('/');
             info.instructions = Some(format!(
                 "{}\n\n{}",
@@ -374,10 +380,10 @@ where
         _request: Option<PaginatedRequestParams>,
         context: rmcp::service::RequestContext<rmcp::RoleServer>,
     ) -> Result<ListToolsResult, rmcp::ErrorData> {
-        let user = Self::authenticated_user_id(&context.extensions)?;
+        Self::authenticated_user_id(&context.extensions)?;
         let mode = self.tool_mode(&context.extensions);
         let mut tools = self.tool_definitions_for(mode);
-        if mode == ToolMode::Code && self.dialect_session(&context.extensions, &user).await {
+        if mode == ToolMode::Code && self.dialect_session(&context.extensions).await {
             tools.retain(|tool| !DIALECT_SESSION_HIDDEN.contains(&tool.name.as_ref()));
         }
         if caller(&context.extensions).is_ok_and(|caller| may_be_chatgpt(&caller)) {
@@ -493,7 +499,7 @@ where
                     )),
                 );
             }
-            if self.dialect_session(&context.extensions, &user_id).await {
+            if self.dialect_session(&context.extensions).await {
                 return (
                     ToolCallOutcome::InvalidRequest,
                     Err(rmcp::ErrorData::invalid_request(

@@ -523,6 +523,24 @@ async fn execute_code_offers_and_accepts_js_tools_only_with_permissions() {
                 permissions: Some(Arc::new(Unrestricted)),
             },
         );
+        // The server's instructions describe the turn's kind of code.
+        let (_, initialized) = rpc(
+            app.clone(),
+            Some("secret"),
+            "initialize",
+            serde_json::json!({
+                "protocolVersion": "2025-06-18",
+                "capabilities": {},
+                "clientInfo": {"name": "test", "version": "1"},
+            }),
+        )
+        .await;
+        let instructions = initialized["result"]["instructions"].as_str().unwrap();
+        assert_eq!(
+            instructions.contains("tools.<service>.<operation>"),
+            js_tools
+        );
+        assert_eq!(instructions.contains("TypeScript main module"), !js_tools);
         let (status, listed) = rpc(
             app.clone(),
             Some("secret"),
