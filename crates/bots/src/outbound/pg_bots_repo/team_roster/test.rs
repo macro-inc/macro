@@ -18,7 +18,7 @@ fn bot(n: u128) -> BotId {
 )]
 async fn team_bot_ids_include_soft_deleted_bots_and_exclude_other_owners(pool: PgPool) {
     let repo = PgBotsRepo::new(pool);
-    assert!(repo.delete_bot(bot(2)).await.unwrap());
+    assert!(repo.delete_bot(bot(2)).await.unwrap().is_some());
     assert!(repo.get_bot(bot(2)).await.unwrap().is_none());
 
     assert_eq!(repo.team_bot_ids(TEAM).await.unwrap(), vec![bot(1), bot(2)]);

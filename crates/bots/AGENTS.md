@@ -32,8 +32,9 @@ for bot mutations that channel bots, agent triggers, and memory build on.
 
 ## Boundaries
 
-- Depends on: `harnesses` (ports), `channels` (inbound, optional), `entity_access`, `entity_registry`,
-  `messages`, `macro_event_broker`/`macro_event_topics`, `macro_authorization`,
+- Depends on: `harnesses` (ports), `channels` (ports: the channel events it
+  raises; inbound), `entity_access`, `entity_registry`, `messages`,
+  `macro_event_broker`/`macro_event_topics`, `macro_authorization`,
   `connection_gateway_client` and `kafka_util` (`realtime`).
 - Used by: `memory`, `ai_tools`, `agent_trigger`, `complete_graph`, `agent_session`.
 
@@ -41,7 +42,9 @@ for bot mutations that channel bots, agent triggers, and memory build on.
 
 - Add a bot field or mutation: `src/domain/models.rs` → `src/domain/service.rs`
   → `src/outbound/pg_bots_repo.rs` → `src/inbound/axum_router.rs` → emit/update
-  the matching event in `src/domain/events.rs` if it changes mutable state.
+  the matching event in `src/domain/events.rs` if it changes mutable state; a
+  mutation that changes which bots are in a channel also calls
+  `announce_bot_membership` with the channels it touched, after commit.
 - Add an AI tool over bots: `src/inbound/toolset.rs` (feature `ai_tools`).
 
 ## Checks
