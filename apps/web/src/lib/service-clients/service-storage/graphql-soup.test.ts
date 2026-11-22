@@ -532,6 +532,9 @@ vi.mock('./graphql/generated/graphql', () => ({
   GroupSoupDocument: {},
   SoupDocument: {},
 }));
+vi.mock('./channel-membership', () => ({
+  channelMembershipReceiptExchange: () => ({ kind: 'membership-receipt' }),
+}));
 vi.mock('./graphql-notification-receipt', () => ({
   notificationReceiptExchange: () => ({ kind: 'notification-receipt' }),
 }));
@@ -570,6 +573,11 @@ vi.mock('@urql/core', () => ({
       expect(receiptIndex).toBeGreaterThanOrEqual(0);
       expect(receiptIndex).toBeLessThan(subscriptionIndex);
       if (cacheIndex >= 0) expect(receiptIndex).toBeGreaterThan(cacheIndex);
+      const membershipIndex = options.exchanges.findIndex(
+        ({ kind }) => kind === 'membership-receipt'
+      );
+      expect(membershipIndex).toBeGreaterThan(receiptIndex);
+      expect(membershipIndex).toBeLessThan(subscriptionIndex);
     }
     const cacheExchange = options.exchanges[cacheIndex];
     if (!cacheExchange?.host) {
