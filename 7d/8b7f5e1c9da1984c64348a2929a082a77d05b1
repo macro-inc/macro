@@ -1,0 +1,52 @@
+crates/agent_feedback/src/domain/model.rs
+  s_be0dcf8f48154b::t_9aa2f1e801655c 554-556
+  s_be0dcf8f48154b::t_0d8a58f6340f0d 68-88,114-116,178-182,192,197,203,207-208,214,222,254-260,277-298,331-332,348-349
+crates/agent_feedback/src/domain/service/test.rs
+  s_be0dcf8f48154b::t_1188b9220a6383 9,57,68,79,86-90,382-385,406-409,423-428,436,459-468,504-625
+  s_be0dcf8f48154b::t_1e481c1836d05a 626-628
+crates/agent_feedback/src/swagger.rs
+  s_be0dcf8f48154b::t_9f6fb98647d64d 19-21
+services/agent_harness_service/src/agent_feedback.rs
+  s_be0dcf8f48154b::t_913013204b7a90 6-8,18,24,73-93,111
+  s_be0dcf8f48154b::t_ff4f4d314f7bff 118
+crates/agent_feedback/src/inbound/axum_router/test.rs
+  s_be0dcf8f48154b::t_e517614815a65d 31,33-37,46-53,55,57,60,215-220,263-270,437,530-668
+crates/agent_feedback/src/domain/ports.rs
+  s_be0dcf8f48154b::t_9aa2f1e801655c 65-66,70,128-144
+crates/agent_feedback/src/outbound/pg.rs
+  s_be0dcf8f48154b::t_ae2d3d65be4d23 221,225,227-228,233-234,236-240,245,248-249,252
+crates/agent_feedback/src/inbound/axum_router.rs
+  s_be0dcf8f48154b::t_b2c4dbd9aab3fd 9,22,32,265,294,320-329,332-333,337,346-350,352,383-384,389,420-421,432-435,503,509,548,561-564,628-629,634,666-667,678-681
+  s_be0dcf8f48154b::t_9f6fb98647d64d 121-128,206-220,227,757-874
+crates/agent_feedback/src/outbound/pg/test.rs
+  s_be0dcf8f48154b::t_bdde004ca7810d 345,347
+  s_be0dcf8f48154b::t_e517614815a65d 176,179,309-344,346,348
+  s_be0dcf8f48154b::t_8d5338123bd509 349
+crates/agent_feedback/src/domain/service.rs
+  s_be0dcf8f48154b::t_0b3378dc4ee8f1 16,22-27,40,47,51-52,59,68,81,87,132-135,139,146-149,153-157,241-256,297-298,305,307,313,319,328,338,342,348,357,368,370,374,377-378,384-385,390-391,393-407,411,416,483-491,508,519-521
+  s_be0dcf8f48154b::t_babdf7ab1d400f 4
+.sqlx/query-65301733499315f96b49dfa165ec709862efcae9f41149df7d143e041e3a5539.json
+  s_be0dcf8f48154b::t_a0406d35beaf52 3,36,47
+.sqlx/query-cffd7ff52673826ffb7e5b5a9efa45203764551fe3dd513636f30710a42161a4.json
+  s_be0dcf8f48154b::t_2389c0b3bd6f5d 1-23
+crates/agent_feedback/src/test_support.rs
+  s_be0dcf8f48154b::t_86d2159106b2c7 30,174,178,185,244-257,358-365,373,385,403
+services/agent_harness_service/src/code_mode/test.rs
+  s_be0dcf8f48154b::t_88bec75760d560 404-406,409,413
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "7d8b7f5e1c9da1984c64348a2929a082a77d05b1",
+  "prompts": {},
+  "sessions": {
+    "s_be0dcf8f48154b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "84f26c56-f4ae-4114-a847-2d20de026f21",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
