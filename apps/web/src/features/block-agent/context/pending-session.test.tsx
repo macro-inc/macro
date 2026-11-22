@@ -103,6 +103,9 @@ const { createAgentSession } = await import('./create-agent-session');
 const { forgetPendingSession, pendingSession, startPendingSession } =
   await import('./pending-session');
 const { resolveSessionId } = await import('./resolve-session-id');
+const { forgetUnconfirmedSendsInMemory, unconfirmedSends } = await import(
+  '@core/agent-session/unconfirmed-sends'
+);
 
 const issue = vi.spyOn(AgentSession.prototype, 'issue');
 const stage = vi.spyOn(PromptTrace.prototype, 'stage');
@@ -155,6 +158,8 @@ const TestQueryClientProvider = (props: { children: JSX.Element }) => (
 beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
+  localStorage.clear();
+  forgetUnconfirmedSendsInMemory();
   flags.firstPromptOnCreate = true;
   fold.pushSession.mockResolvedValue([]);
   fold.readSession.mockResolvedValue({
@@ -341,7 +346,13 @@ describe('pending navigation ownership', () => {
 
   it('releases a failed prompt immediately while preserving its startup error', async () => {
     harness.control.mockResolvedValue(
-      err([{ code: 'HTTP_ERROR', message: 'Runtime is disconnected.' }])
+      err([
+        {
+          code: 'HTTP_ERROR',
+          status: 409,
+          message: 'Runtime is disconnected.',
+        },
+      ])
     );
     const id = startPendingSession({ botId: 'persona', prompt: 'Hello' });
     await settle();
@@ -380,9 +391,67 @@ describe('pending navigation ownership', () => {
     expect(pendingSession(id)?.error()).toBeUndefined();
   });
 
+  it('asks again under the same id when a create gets no clear answer, and adopts the session it made', async () => {
+    const gatewayTimeout = {
+      code: 'HTTP_ERROR',
+      status: 504,
+      message: 'Agent request failed (HTTP 504).',
+    };
+    const taken = {
+      code: 'HTTP_ERROR',
+      status: 409,
+      message: 'this id is already taken',
+    };
+    harness.create
+      .mockResolvedValueOnce(err([gatewayTimeout]))
+      .mockResolvedValueOnce(err([taken]));
+    const onFailure = vi.fn();
+    const id = startPendingSession({ prompt: 'Hello', onFailure });
+    await vi.advanceTimersByTimeAsync(2_000);
+
+    const ids = harness.create.mock.calls.map(([request]) => request.id);
+    expect(ids).toEqual([id, id]);
+    expect(onFailure).not.toHaveBeenCalled();
+    expect(pendingSession(id)?.sessionId()).toBe(id);
+    // Whether the first create started the prompt is unknown: kept, not lost.
+    expect(unconfirmedSends(id)).toEqual([
+      expect.objectContaining({
+        action: expect.objectContaining({ type: 'prompt', prompt: 'Hello' }),
+      }),
+    ]);
+  });
+
+  it('never falls back to a new id, or hands the prompt back, when creates get no clear answer', async () => {
+    harness.create.mockResolvedValue(
+      err([
+        {
+          code: 'HTTP_ERROR',
+          status: 504,
+          message: 'Agent request failed (HTTP 504).',
+        },
+      ])
+    );
+    const onFailure = vi.fn();
+    const id = startPendingSession({ prompt: 'Hello', onFailure });
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(
+      new Set(harness.create.mock.calls.map(([request]) => request.id))
+    ).toEqual(new Set([id]));
+    expect(onFailure).not.toHaveBeenCalled();
+    expect(pendingSession(id)?.error()).toContain('Hello');
+    expect(unconfirmedSends(id)).toHaveLength(1);
+  });
+
   it('forgets a failed create when its error view unmounts', async () => {
     harness.create.mockResolvedValue(
-      err([{ code: 'HTTP_ERROR', message: 'Could not create session.' }])
+      err([
+        {
+          code: 'HTTP_ERROR',
+          status: 422,
+          message: 'Could not create session.',
+        },
+      ])
     );
     const id = startPendingSession({ botId: 'persona', prompt: 'Hello' });
     await settle();

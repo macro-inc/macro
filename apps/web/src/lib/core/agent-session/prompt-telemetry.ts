@@ -52,6 +52,8 @@ export type PromptOutcome =
 export type PromptStage =
   /** A new session's create answered. */
   | 'created'
+  /** A new session's create got no clear answer and is asked again. */
+  | 'create_retry'
   /** A new session's log was loaded. */
   | 'loaded'
   /** A new session's model and effort were confirmed. */

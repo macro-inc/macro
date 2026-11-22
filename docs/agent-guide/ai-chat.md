@@ -2424,8 +2424,13 @@ must stay hidden; subsequent live messages must still appear.
   the session was let go, the send is unconfirmed: the text stays out of the box
   and a "Not confirmed" card above the input keeps it, with Copy, Dismiss, and
   Send again (which first says the agent may get it twice). The card goes away
-  when the prompt's row reaches the log. A new chat's first prompt follows the
-  same rule. Each check is one `agent.prompt.send_check` span under the prompt's
+  when the prompt's row reaches the log, also after a reload: the card is kept
+  per session in local storage, outside the session object, so a reload, a
+  session leaving memory, or one let go mid-check still shows it. A refused
+  Send again keeps the card. A new chat's first prompt follows the same rule:
+  a create with no clear answer is asked again under the same id (a 409 "id
+  taken" proves the first one made it, so it is adopted with its prompt on the
+  card), never under a fresh warm-fallback id, and never handed back. Each check is one `agent.prompt.send_check` span under the prompt's
   trace, with its outcome (sent / unknown) and each phase's duration.
 - Queued prompts render as a list between the transcript and the input, newest at the
   top — the prompt about to be sent sits at the bottom, immediately above the input.

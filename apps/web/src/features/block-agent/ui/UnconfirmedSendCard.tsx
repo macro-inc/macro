@@ -6,6 +6,7 @@
  * the prompt's row reaches the log.
  */
 
+import { t } from '@app/lib/i18n';
 import WarningCircle from '@icon/system/regular/warning-circle.svg';
 import { Button, Card, Item } from '@ui';
 import { createSignal, Show } from 'solid-js';
@@ -22,12 +23,22 @@ export interface UnconfirmedSendCardProps {
 
 export function UnconfirmedSendCard(props: UnconfirmedSendCardProps) {
   const [confirming, setConfirming] = createSignal(false);
+  let sendAnyway: HTMLButtonElement | undefined;
+  let sendAgain: HTMLButtonElement | undefined;
+  const confirm = (on: boolean) => {
+    setConfirming(on);
+    // Keep focus on the choice that replaced the button pressed.
+    queueMicrotask(() => (on ? sendAnyway : sendAgain)?.focus());
+  };
+  // Announced rather than focused: it can appear while the person types the
+  // next message, and taking focus then would lose keystrokes.
   return (
     <Card
       variant="filled"
       depth={3}
       role="region"
-      aria-label="Message not confirmed"
+      aria-label={t('agentSend.notConfirmedRegion')}
+      aria-live="polite"
       class="mb-2 overflow-hidden text-ink"
     >
       <Card.Header class="pb-2">
@@ -36,10 +47,9 @@ export function UnconfirmedSendCard(props: UnconfirmedSendCardProps) {
             <WarningCircle />
           </Item.Media>
           <Item.Content class="gap-0.5">
-            <Card.Title>Not confirmed</Card.Title>
+            <Card.Title>{t('agentSend.notConfirmed')}</Card.Title>
             <Card.Description class="leading-5">
-              We couldn't confirm this message was sent. Check the conversation
-              before sending it again.
+              {t('agentSend.notConfirmedBody')}
             </Card.Description>
             <p
               data-testid="unconfirmed-text"
@@ -49,9 +59,9 @@ export function UnconfirmedSendCard(props: UnconfirmedSendCardProps) {
             </p>
             <Show when={props.attachmentCount > 0}>
               <p class="text-xs text-ink-muted">
-                {props.attachmentCount === 1
-                  ? '1 file attached'
-                  : `${props.attachmentCount} files attached`}
+                {t('agentSend.filesAttached', {
+                  count: props.attachmentCount,
+                })}
               </p>
             </Show>
           </Item.Content>
@@ -68,7 +78,7 @@ export function UnconfirmedSendCard(props: UnconfirmedSendCardProps) {
                 size="sm"
                 onClick={props.onDismiss}
               >
-                Dismiss
+                {t('agentSend.dismiss')}
               </Button>
               <Button
                 type="button"
@@ -76,37 +86,39 @@ export function UnconfirmedSendCard(props: UnconfirmedSendCardProps) {
                 size="sm"
                 onClick={props.onCopy}
               >
-                Copy
+                {t('agentSend.copy')}
               </Button>
               <Button
                 type="button"
                 variant="secondary"
                 size="sm"
-                onClick={() => setConfirming(true)}
+                ref={sendAgain}
+                onClick={() => confirm(true)}
               >
-                Send again
+                {t('agentSend.sendAgain')}
               </Button>
             </>
           }
         >
           <span class="mr-auto text-xs text-ink-muted">
-            If the first one arrived, the agent gets it twice.
+            {t('agentSend.mayRunTwice')}
           </span>
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            onClick={() => setConfirming(false)}
+            onClick={() => confirm(false)}
           >
-            Cancel
+            {t('agentSend.cancel')}
           </Button>
           <Button
             type="button"
             variant="secondary"
             size="sm"
+            ref={sendAnyway}
             onClick={props.onSendAgain}
           >
-            Send anyway
+            {t('agentSend.sendAnyway')}
           </Button>
         </Show>
       </Card.Footer>

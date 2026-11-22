@@ -110,15 +110,15 @@ export function AgentComposer(props: {
   const [refusal, setRefusal] = createSignal<string>();
   createEffect(on(sessionId, () => setRefusal(undefined), { defer: true }));
 
-  // The fold speculates the action the moment it is issued, so success is
-  // observed there; only a refusal needs saying here. Resolves whether the
-  // harness took the action, and its reason when it refused, so a refused
-  // prompt can go back to the draft.
   // Sends with no clear answer that their session is still checking, by
   // session: the notice shows only for the session on screen.
   const [checks, setChecks] = createSignal<string[]>([]);
   const checking = () => checks().includes(sessionId() ?? '');
 
+  // The fold speculates the action the moment it is issued, so success is
+  // observed there; only a refusal needs saying here. Resolves whether the
+  // harness took the action, and its reason when it refused, so a refused
+  // prompt can go back to the draft.
   const act = async (
     action: AgentAction,
     failure: string
@@ -142,7 +142,9 @@ export function AgentComposer(props: {
             return all.filter((_, at) => at !== index);
           });
       }
-      if (!result?.isErr()) return { taken: true };
+      // No live session to send through: nothing was sent, keep the text.
+      if (result === undefined) return { taken: false };
+      if (result.isOk()) return { taken: true };
       // Possibly sent: never put it back, or a resend could run it twice.
       const unconfirmed = result.error.find(
         (error) => error.code === SEND_OUTCOME_UNKNOWN
@@ -312,16 +314,17 @@ export function AgentComposer(props: {
     if (sent.refusal && sessionId() === sentTo) setRefusal(sent.refusal);
   };
 
-  // An unconfirmed prompt sent again on purpose: a new send with a new id.
-  // Refused, its text comes back like any refused message.
+  // An unconfirmed prompt sent again on purpose, as a new send. Its card
+  // stays until the new send is taken, so a refusal keeps the text and files
+  // on it, with the reason above the input.
   const sendAgain = async (sent: UnconfirmedSend) => {
-    dropUnconfirmed(sent.actionId);
     const sentTo = sessionId();
     setRefusal(undefined);
     const outcome = await act(sent.action, 'The message could not be sent');
-    if (outcome.taken || sent.action.type !== 'prompt') return;
-    // The files went up already; only the text needs a home again.
-    persistedDraft.restore(sentTo, sent.action.prompt);
+    if (outcome.taken) {
+      dropUnconfirmed(sent.actionId);
+      return;
+    }
     if (outcome.refusal && sessionId() === sentTo) setRefusal(outcome.refusal);
   };
 

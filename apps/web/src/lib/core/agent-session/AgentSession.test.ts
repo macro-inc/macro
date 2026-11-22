@@ -180,6 +180,11 @@ import {
 import { forgetSessionCreated, markSessionCreated } from './recently-created';
 import { resetSessionTurns, sessionTurn } from './session-turn';
 import { holdMobile, MOBILE_DEVICES } from './tests/device';
+import {
+  forgetUnconfirmedSendsInMemory,
+  holdUnconfirmedSend,
+  unconfirmedSends,
+} from './unconfirmed-sends';
 
 const SESSION = '01a0abed-279f-724c-9f49-60dbedc79b6e';
 
@@ -226,6 +231,8 @@ function deferred<T>() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorage.clear();
+  forgetUnconfirmedSendsInMemory();
   resetSessionTurns();
   telemetry.spans.length = 0;
   socket.listeners.clear();
@@ -498,7 +505,9 @@ describe('AgentSession', () => {
       );
       const actionId = (speculation as { actionId: string }).actionId;
       expect(inputs().at(-1)).toEqual({ kind: 'retracted', actionId });
-      expect([...live.unconfirmed().keys()]).toEqual([actionId]);
+      expect(live.unconfirmed().map((send) => send.actionId)).toEqual([
+        actionId,
+      ]);
     } finally {
       live.release();
       vi.useRealTimers();
@@ -690,6 +699,10 @@ describe('AgentSession', () => {
           }[broken]
         );
         expect(check?.ends).toBe(1);
+        // Kept past the instance that checked it.
+        expect(unconfirmedSends(SESSION)).toEqual([
+          expect.objectContaining({ action: { type: 'prompt', prompt: 'hi' } }),
+        ]);
       } finally {
         if (broken !== 'released') live.release();
         vi.useRealTimers();
@@ -768,10 +781,76 @@ describe('AgentSession', () => {
           actionId,
           status: 'sent',
         });
-        expect(live.unconfirmed().size).toBe(0);
+        expect(live.unconfirmed()).toEqual([]);
       } finally {
         live.release();
         vi.useRealTimers();
+      }
+    });
+
+    it.each([
+      ['the session leaves memory and is opened again', false],
+      ['the page reloads', true],
+    ])('keeps an unconfirmed prompt when %s', async (_name, reload) => {
+      vi.useFakeTimers();
+      harness.control.mockResolvedValueOnce(err([gatewayTimeout]));
+      const first = AgentSession.acquire(SESSION);
+      try {
+        await first.load();
+        const issuing = first.issue({ type: 'prompt', prompt: 'hi' });
+        await vi.advanceTimersByTimeAsync(14_000);
+        await issuing;
+      } finally {
+        first.release();
+      }
+      if (reload) forgetUnconfirmedSendsInMemory();
+
+      const again = AgentSession.acquire(SESSION);
+      try {
+        await again.load();
+        expect(again.unconfirmed()).toEqual([
+          expect.objectContaining({ action: { type: 'prompt', prompt: 'hi' } }),
+        ]);
+      } finally {
+        again.release();
+        vi.useRealTimers();
+      }
+    });
+
+    it('lets a prompt kept across a reload go when its row arrives later', async () => {
+      holdUnconfirmedSend(SESSION, {
+        actionId: 'kept',
+        action: { type: 'prompt', prompt: 'hi' },
+      });
+      forgetUnconfirmedSendsInMemory();
+      const live = AgentSession.acquire(SESSION);
+      try {
+        await live.load();
+        expect(live.unconfirmed()).toHaveLength(1);
+
+        fold.pushSession.mockResolvedValueOnce([confirmed('kept')]);
+        deliver(row(3));
+        await vi.waitFor(() => expect(live.unconfirmed()).toEqual([]));
+        expect(localStorage.length).toBe(0);
+      } finally {
+        live.release();
+      }
+    });
+
+    it('lets a kept prompt go when the loaded log already has it', async () => {
+      holdUnconfirmedSend(SESSION, {
+        actionId: 'kept',
+        action: { type: 'prompt', prompt: 'hi' },
+      });
+      forgetUnconfirmedSendsInMemory();
+      fold.pushSession.mockResolvedValueOnce([confirmed('kept')]);
+      const live = AgentSession.acquire(SESSION);
+      try {
+        await live.load();
+        expect(live.unconfirmed()).toEqual([]);
+        expect(localStorage.length).toBe(0);
+      } finally {
+        live.release();
       }
     });
 
@@ -793,12 +872,12 @@ describe('AgentSession', () => {
         const issuing = live.issue({ type: 'prompt', prompt: 'hi' });
         await vi.advanceTimersByTimeAsync(14_000);
         await issuing;
-        expect(live.unconfirmed().size).toBe(1);
+        expect(live.unconfirmed()).toHaveLength(1);
 
         fold.pushSession.mockResolvedValueOnce([confirmed(actionId)]);
         deliver(row(3));
         await vi.advanceTimersByTimeAsync(0);
-        expect(live.unconfirmed().size).toBe(0);
+        expect(live.unconfirmed()).toEqual([]);
         expect(changes).toHaveBeenCalledTimes(2);
       } finally {
         live.release();

@@ -608,6 +608,7 @@ describe('a message the harness does not take', () => {
   it('keeps an unconfirmed prompt on a card and sends it again only when asked', async () => {
     const action = { type: 'prompt', prompt: 'Run the tests' };
     mocks.unconfirmed = () => [{ actionId: 'a', action }];
+    mocks.issue.mockResolvedValue(ok({ actionId: 'b', status: 'sent' }));
     render(() => <AgentComposer />);
 
     expect(screen.getByTestId('unconfirmed').textContent).toContain(
@@ -616,12 +617,38 @@ describe('a message the harness does not take', () => {
     expect(mocks.issue).not.toHaveBeenCalled();
     screen.getByRole('button', { name: 'Send anyway' }).click();
 
-    expect(mocks.dropUnconfirmed).toHaveBeenCalledWith('a');
     await vi.waitFor(() =>
       expect(mocks.issue).toHaveBeenCalledWith(action, {
         onChecking: expect.any(Function),
       })
     );
+    await vi.waitFor(() =>
+      expect(mocks.dropUnconfirmed).toHaveBeenCalledWith('a')
+    );
+  });
+
+  it('keeps the card, files and all, when sending it again is refused', async () => {
+    const action = {
+      type: 'prompt',
+      prompt: 'Run the tests',
+      attachments: [{ uri: 'https://files/1', name: 'a.png' }],
+    };
+    mocks.unconfirmed = () => [{ actionId: 'a', action }];
+    mocks.issue.mockResolvedValue(
+      err([
+        {
+          code: 'HTTP_ERROR',
+          status: 409,
+          message: 'Runtime is disconnected.',
+        },
+      ])
+    );
+    render(() => <AgentComposer />);
+    screen.getByRole('button', { name: 'Send anyway' }).click();
+
+    await vi.waitFor(() => expect(mocks.issue).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(mocks.dropUnconfirmed).not.toHaveBeenCalled();
   });
 
   it('shows the checking notice only on the session being checked', async () => {

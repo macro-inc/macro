@@ -1,25 +1,44 @@
+import { AI_USAGE_LIMIT_ERROR } from '@app/lib/service-clients/ai-usage-limit';
 import type { ResultError } from '@core/util/result';
+import { NO_RUNTIME_ACCESS_ERROR } from '@service-agent-harness/no-runtime-access';
+
+/**
+ * Codes the harness answers with when it refused an action before doing any
+ * of it.
+ */
+const REFUSAL_CODES: ReadonlySet<string> = new Set([
+  AI_USAGE_LIMIT_ERROR,
+  NO_RUNTIME_ACCESS_ERROR,
+  'UNAUTHORIZED',
+  'FORBIDDEN',
+  'NOT_FOUND',
+  'CONFLICT',
+  'GONE',
+]);
+
+/**
+ * Whether the harness definitely refused: one of its refusal codes, or a 4xx
+ * other than a request timeout (no runtime, a disconnected session, a
+ * sharing change, a bad request). Anything else, including a failure this
+ * does not recognise, is not a refusal.
+ */
+function isRefusal(error: ResultError): boolean {
+  if (REFUSAL_CODES.has(error.code)) return true;
+  if (error.code !== 'HTTP_ERROR' || error.status === undefined) return false;
+  return error.status >= 400 && error.status < 500 && error.status !== 408;
+}
 
 /**
  * Whether a failed send leaves its outcome unknown: the request may have
- * reached the harness and been applied, but no answer said so. A network
- * failure, a server error or a gateway timeout is unknown; the harness
- * refusing the action (no runtime access, the usage limit, a 4xx) is a
- * definite answer. A 503 counts as unknown even when the harness sent it
- * while draining, because a gateway in front answers 503 too; that costs
- * the wait, then the message comes back.
+ * reached the harness and been applied, but no answer said so. Only a
+ * definite refusal is known; a network failure, a server error, a gateway
+ * timeout, and any failure not recognised as a refusal are unknown. A 503
+ * counts as unknown even when the harness sent it while draining, because a
+ * gateway in front answers 503 too; such a message ends on the "Not
+ * confirmed" card unless the check finds it.
  */
 export function isUnknownOutcome(errors: ResultError[]): boolean {
-  return errors.some(
-    (error) =>
-      error.code === 'NETWORK_ERROR' ||
-      error.code === 'SERVER_ERROR' ||
-      error.code === 'INVALID_JSON' ||
-      error.code === 'UNKNOWN_ERROR' ||
-      (error.code === 'HTTP_ERROR' &&
-        error.status !== undefined &&
-        (error.status === 408 || error.status >= 500))
-  );
+  return errors.length === 0 || !errors.every(isRefusal);
 }
 
 /**

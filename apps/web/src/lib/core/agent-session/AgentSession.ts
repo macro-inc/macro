@@ -73,6 +73,13 @@ import {
 } from './send-outcome';
 import { publishSessionTurn } from './session-turn';
 import { typedInClientId } from './ui-client';
+import {
+  dropUnconfirmedSends,
+  holdUnconfirmedSend,
+  subscribeUnconfirmedSends,
+  type UnconfirmedSend,
+  unconfirmedSends,
+} from './unconfirmed-sends';
 
 export type AgentSessionListener = (events: FoldedStreamEvent[]) => void;
 
@@ -303,8 +310,6 @@ export class AgentSession {
   /** Inputs that arrived before the snapshot, in order. */
   private buffered: FoldInput[] = [];
   private readonly listeners = new Set<AgentSessionListener>();
-  private readonly unconfirmedSends = new Map<string, AgentAction>();
-  private readonly unconfirmedListeners = new Set<() => void>();
   private readonly unsubscribeSocket: () => void;
   private readonly unsubscribeUpdated: () => void;
   private readonly unsubscribeReconnected: () => void;
@@ -538,7 +543,7 @@ export class AgentSession {
         })
         .with({ outcome: 'unknown' }, () => {
           trace?.end('unconfirmed');
-          this.holdUnconfirmed(actionId, action);
+          holdUnconfirmedSend(this.id, { actionId, action });
           return err([
             {
               name: 'Error',
@@ -659,9 +664,10 @@ export class AgentSession {
         .with({ outcome: 'sent' }, ({ via }) =>
           span?.setAttr('agent.send_check.via', via)
         )
-        .with({ outcome: 'unknown' }, ({ reason }) =>
-          span?.setAttr('agent.send_check.reason', reason)
-        )
+        .with({ outcome: 'unknown' }, ({ reason }) => {
+          span?.setAttr('agent.send_check.reason', reason);
+          span?.error(new Error(`send unconfirmed: ${reason}`));
+        })
         .exhaustive();
       span?.end();
       return check;
@@ -672,6 +678,7 @@ export class AgentSession {
       reason: 'absent' | 'released' | 'queue_unreadable' | 'log_unreadable'
     ) => finish({ outcome: 'unknown', reason });
 
+    if (this.closed) return unknown('released');
     const logged = await within(arrived, UNKNOWN_OUTCOME_WAIT_MS);
     phase('log_wait');
     if (logged !== false) return sent('log', 'sent');
@@ -711,7 +718,13 @@ export class AgentSession {
     if (this.closed) return unknown('released');
     const logRead = await this.logHolds(actionId);
     phase('log_read');
-    if (seen || logRead === true) return sent('log', 'sent');
+    if (seen) return sent('log', 'sent');
+    if (logRead === true) {
+      // The follow missed its row: fold the log so the bubble is not left
+      // pending.
+      fireAndForget(this.refresh(), 'agent-session');
+      return sent('log', 'sent');
+    }
     if (this.closed) return unknown('released');
     if (logRead === undefined) return unknown('log_unreadable');
     return unknown(queueRead ? 'absent' : 'queue_unreadable');
@@ -739,36 +752,23 @@ export class AgentSession {
     }
   }
 
-  /** Keep a prompt whose send could not be confirmed until its row lands. */
-  private holdUnconfirmed(actionId: string, action: AgentAction): void {
-    this.unconfirmedSends.set(actionId, action);
-    this.notifyUnconfirmed();
-  }
-
   /**
-   * Prompts whose send could not be confirmed, by action id, oldest first.
-   * One leaves when its row reaches the log, or when {@link dropUnconfirmed}
-   * lets it go.
+   * Prompts whose send could not be confirmed, oldest first. Kept outside
+   * this instance and across reloads; one leaves when its row reaches the
+   * log, or when {@link dropUnconfirmed} lets it go.
    */
-  unconfirmed(): ReadonlyMap<string, AgentAction> {
-    return this.unconfirmedSends;
+  unconfirmed(): readonly UnconfirmedSend[] {
+    return unconfirmedSends(this.id);
   }
 
   /** Follow {@link unconfirmed}. */
   subscribeUnconfirmed(listener: () => void): () => void {
-    this.unconfirmedListeners.add(listener);
-    return () => {
-      this.unconfirmedListeners.delete(listener);
-    };
+    return subscribeUnconfirmedSends(this.id, listener);
   }
 
   /** Stop keeping an unconfirmed prompt: the person resent or dismissed it. */
   dropUnconfirmed(actionId: string): void {
-    if (this.unconfirmedSends.delete(actionId)) this.notifyUnconfirmed();
-  }
-
-  private notifyUnconfirmed(): void {
-    for (const listener of this.unconfirmedListeners) listener();
+    dropUnconfirmedSends(this.id, [actionId]);
   }
 
   /**
@@ -1265,21 +1265,23 @@ export class AgentSession {
     return this.apply(inputs);
   }
 
-  /** An unconfirmed prompt whose row the log just delivered was sent. */
+  /**
+   * An unconfirmed prompt whose row the log just delivered was sent. A
+   * snapshot passes here too, so one kept across a reload clears on load.
+   */
   private confirmArrived(events: FoldedStreamEvent[]): void {
-    let changed = false;
+    const arrived: string[] = [];
     for (const event of events) {
       for (const message of messagesOf(event)) {
         if (
           message.author.kind === 'user' &&
           !message.pending &&
-          message.requestId !== null &&
-          this.unconfirmedSends.delete(message.requestId)
+          message.requestId !== null
         )
-          changed = true;
+          arrived.push(message.requestId);
       }
     }
-    if (changed) this.notifyUnconfirmed();
+    dropUnconfirmedSends(this.id, arrived);
   }
 
   private apply(inputs: FoldInput[]): Promise<void> {
@@ -1305,7 +1307,7 @@ export class AgentSession {
       }
       const projectionStartedAt = performance.now();
       for (const listener of this.listeners) listener(events);
-      if (this.unconfirmedSends.size > 0) this.confirmArrived(events);
+      if (unconfirmedSends(this.id).length > 0) this.confirmArrived(events);
       if (snapshot) {
         this.trace.projected(
           projectionStartedAt,

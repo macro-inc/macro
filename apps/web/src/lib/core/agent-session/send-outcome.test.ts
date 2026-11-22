@@ -25,8 +25,15 @@ describe('isUnknownOutcome', () => {
     expect(isUnknownOutcome([error('HTTP_ERROR', 429)])).toBe(false);
     expect(isUnknownOutcome([error('UNAUTHORIZED', 401)])).toBe(false);
     expect(isUnknownOutcome([error('NOT_FOUND', 404)])).toBe(false);
-    // Every response the client reads carries its status; one without came
-    // from a refusal the client worded itself.
-    expect(isUnknownOutcome([error('HTTP_ERROR')])).toBe(false);
+    expect(isUnknownOutcome([error('HTTP_ERROR', 409)])).toBe(false);
+  });
+
+  it('treats anything it does not recognise as a refusal as unknown', () => {
+    expect(isUnknownOutcome([error('HTTP_ERROR')])).toBe(true);
+    expect(isUnknownOutcome([error('SOMETHING_NEW', 400)])).toBe(true);
+    expect(isUnknownOutcome([])).toBe(true);
+    expect(
+      isUnknownOutcome([error('HTTP_ERROR', 422), error('NETWORK_ERROR')])
+    ).toBe(true);
   });
 });

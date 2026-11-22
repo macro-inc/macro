@@ -20,6 +20,7 @@ import {
   isRecentlyViewed,
   retainRecentlyViewed,
 } from '@core/agent-session/recently-viewed';
+import type { UnconfirmedSend } from '@core/agent-session/unconfirmed-sends';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { AgentSessionRenamedEvent } from '@queries/agent-session/realtime-protocol';
 import {
@@ -66,7 +67,7 @@ export type IssueOptions = {
 };
 
 /** A prompt whose send could not be confirmed, kept so its text is not lost. */
-export type UnconfirmedSend = { actionId: string; action: AgentAction };
+export type { UnconfirmedSend } from '@core/agent-session/unconfirmed-sends';
 
 export type AgentSessionHandle = {
   /** Session row, absent until the load resolves. */
@@ -249,14 +250,7 @@ export function createAgentSession(
   createEffect(() => {
     const session = live();
     const read = () =>
-      setUnconfirmed(
-        session
-          ? [...session.unconfirmed()].map(([actionId, action]) => ({
-              actionId,
-              action,
-            }))
-          : []
-      );
+      setUnconfirmed(session ? [...session.unconfirmed()] : []);
     read();
     if (session) onCleanup(session.subscribeUnconfirmed(read));
   });

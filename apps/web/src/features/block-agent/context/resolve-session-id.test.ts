@@ -56,6 +56,7 @@ vi.mock('@service-agent-harness/client', () => ({
               error: [
                 {
                   code: 'HTTP_ERROR',
+                  status: 403,
                   message: 'Connect GitHub to use this repository.',
                 },
               ],
@@ -456,7 +457,13 @@ describe('an id whose create is in flight', () => {
   it('shows the first prompt failure', async () => {
     create.control.mockResolvedValue({
       isErr: () => true,
-      error: [{ code: 'HTTP_ERROR', message: 'Runtime is disconnected.' }],
+      error: [
+        {
+          code: 'HTTP_ERROR',
+          status: 409,
+          message: 'Runtime is disconnected.',
+        },
+      ],
     });
     const placeholder = startPendingSession({
       botId: 'persona',
