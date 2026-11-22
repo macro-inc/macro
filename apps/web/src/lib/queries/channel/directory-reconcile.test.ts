@@ -186,6 +186,7 @@ describe('channel directory reconciliation', () => {
   });
   afterEach(() => {
     vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   it('deletes only the cached channels the server no longer returns by id', async () => {
@@ -225,6 +226,22 @@ describe('channel directory reconciliation', () => {
         },
       },
     });
+  });
+
+  it('deletes nothing, and fails the pass, when storage refuses the second look it owes', async () => {
+    const { host } = reconcileHost(['joined', 'removed']);
+    const fetch = server([{ nextCursor: null, entityIds: ['joined'] }]);
+    const fetchPage = await fetcher(host, fetch);
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('full', 'QuotaExceededError');
+    });
+
+    await expect(fetchPage(FIRST)).rejects.toEqual(
+      new ChannelDirectoryPassUnproven('unsaved')
+    );
+
+    expect(host.deleteRecords).not.toHaveBeenCalled();
+    expect(pendingChannelRereads('viewer', 'g1')).toEqual([]);
   });
 
   it('deletes a cached id the server cannot parse without naming it in a read', async () => {
