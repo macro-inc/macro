@@ -6,6 +6,7 @@ use crate::domain::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
+use std::collections::HashSet;
 
 impl ContactsPageRepository for DbContactsRepository {
     #[tracing::instrument(name = "contacts.lookup.read", skip_all, fields(count = lookup.ids().len() as i64), err)]
@@ -56,10 +57,14 @@ impl ContactsPageRepository for DbContactsRepository {
                     .ok_or_else(|| rootcause::report!("invalid contact cursor in database"))
             })
             .transpose()?;
+        // A legacy edge may spell a contact in another case than the folded
+        // roster or own-row branches; list each canonical id once per page.
+        let mut listed = HashSet::new();
         let contacts = rows
             .into_iter()
             .filter(|row| !row.hidden)
             .filter_map(|row| ContactIdEntry::parse(row.contact))
+            .filter(|entry| listed.insert(entry.user_id.clone()))
             .collect();
         Ok(ContactIdPage {
             contacts,

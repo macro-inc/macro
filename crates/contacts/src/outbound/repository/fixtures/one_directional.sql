@@ -5,7 +5,8 @@
 --   legacy   nothing (written while list writes were off)
 --   agent    nothing; a team agent on the viewer's team
 --   teammate has the viewer in an inbox; on the viewer's team
--- The viewer's own inbox and invite also name two people with no edge at all.
+-- The viewer's own inbox and invite also name two people with no edge at all,
+-- and the inbox names the mixed-case legacy peer below in canonical case.
 -- Two more have no list rows: a teammate with no edge, whose legacy team_user
 -- id is mixed-case, and a mixed-case legacy peer whose place relative to the
 -- folded roster id differs between byte and locale order.
@@ -49,7 +50,8 @@ INSERT INTO contact_inbox_members (user_id, contact_user_id, link_id, list_key) 
 ('macro|mutual@example.com', 'macro|viewer@example.com', '00000000-0000-4000-a000-0000000000a4', 'gmail'),
 ('macro|viewer@example.com', 'macro|mutual@example.com', '00000000-0000-4000-a000-0000000000a1', 'gmail'),
 ('macro|teammate@example.com', 'macro|viewer@example.com', '00000000-0000-4000-a000-0000000000a7', 'gmail'),
-('macro|viewer@example.com', 'macro|inboxonly@example.com', '00000000-0000-4000-a000-0000000000a1', 'gmail');
+('macro|viewer@example.com', 'macro|inboxonly@example.com', '00000000-0000-4000-a000-0000000000a1', 'gmail'),
+('macro|viewer@example.com', 'macro|rz@example.com', '00000000-0000-4000-a000-0000000000a1', 'gmail');
 
 INSERT INTO contact_list_members (user_id, contact_user_id, list_key) VALUES
 ('macro|inviter@example.com', 'macro|viewer@example.com', 'invited'),

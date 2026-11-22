@@ -28,7 +28,9 @@ hidden AS MATERIALIZED (
         WHERE user_id = lower($1 COLLATE "C")
     )
 )
-SELECT neighbors.contact
+-- Folded like the other branches, so the caller's dedup sees one id per
+-- person whatever case a legacy edge stored.
+SELECT lower(neighbors.contact COLLATE "C") COLLATE "default" AS contact
 FROM (
     SELECT user1 AS contact FROM contacts_connections WHERE user2 = $1
     UNION ALL

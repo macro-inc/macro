@@ -81,8 +81,10 @@ event contract (schema, sanitization, delivery semantics).
   write (leaver ↔ the roster read before the removal, so members leaving
   together still lose each other; a failed read stops the removal), and team deletion deletes every member
   pair, through `enqueue_contact_disconnections`. A contact either side's own
-  inbox or invite names stays listed through those rows; a shared channel
-  alone does not keep it. Joins and removals send `directory_changed` both ways
+  inbox or invite names stays listed through those rows; a shared channel,
+  a DM or a private channel alone does not keep it on legacy reads (their
+  edges were the same row as the team's), until a new channel event writes it
+  again. Joins and removals send `directory_changed` both ways
   (the roster re-reads the member; the member re-reads the roster), and team
   deletion sends every member the whole roster. Teammates are computed from the
   roster, so nothing is written; a roster over 500 is sent as unknown.

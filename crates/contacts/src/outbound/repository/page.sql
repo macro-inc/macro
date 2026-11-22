@@ -64,23 +64,25 @@ page AS MATERIALIZED (
         (
             -- The viewer's own inbox and invited rows: a contact the viewer
             -- really has stays listed after a team removal deletes its edge.
-            -- The rows are C-collated and the page orders in the default
-            -- collation, so the viewer's rows after the cursor are sorted
-            -- here: a range read of the primary key, bounded by their count.
-            SELECT DISTINCT contact_user_id COLLATE "default", FALSE
+            -- The rows are C-collated; the default-collation expression
+            -- indexes (contact_inbox_members_owner_default_order_idx,
+            -- contact_list_members_invited_default_order_idx) let each branch
+            -- range-read from the cursor in the page's order and stop at the
+            -- limit. Keep the expressions as written so they match.
+            SELECT DISTINCT (contact_user_id COLLATE "default"), FALSE
             FROM contact_inbox_members
             WHERE user_id = lower($1 COLLATE "C")
-              AND contact_user_id COLLATE "default" > COALESCE($2::text, '')
+              AND (contact_user_id COLLATE "default") > COALESCE($2::text, '')
             ORDER BY 1
             LIMIT $3
         )
         UNION ALL
         (
-            SELECT contact_user_id COLLATE "default", FALSE
+            SELECT (contact_user_id COLLATE "default"), FALSE
             FROM contact_list_members
             WHERE user_id = lower($1 COLLATE "C")
               AND list_key = 'invited'
-              AND contact_user_id COLLATE "default" > COALESCE($2::text, '')
+              AND (contact_user_id COLLATE "default") > COALESCE($2::text, '')
             ORDER BY 1
             LIMIT $3
         )
