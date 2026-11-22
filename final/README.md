@@ -7,3 +7,6 @@ labelled local PostHog stand-in.
 An earlier commit on this branch called the shots in this folder "final-head screenshots". They were
 taken at `79cf378`, which was not the final head. This commit replaces them. The video and the
 restart shot for `765868da441` are in `../svtest-765868da441/`.
+
+The "Didn't run" clip and shot at the final head `4bd98749dfc` (which adds the muted wake row)
+are in `../svtest-4bd98749dfc/`.
