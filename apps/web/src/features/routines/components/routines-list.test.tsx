@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { featuredTemplates } from '../core/routine-templates';
 import type { RoutineRow } from '../core/types';
 import { TEST_CATALOG } from '../tests/catalog';
+import type { RoutineRowMenuActions } from './routine-row-menu';
 import { type RoutinesDiscover, RoutinesList } from './routines-list';
 
 vi.mock('@service-connection/websocket', () => ({
@@ -31,7 +32,16 @@ vi.stubGlobal(
   }
 );
 
-afterEach(cleanup);
+const device = vi.hoisted(() => ({ touch: false }));
+// A pointer gets the card grid; phones and tablets keep the table.
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => device.touch,
+}));
+
+afterEach(() => {
+  cleanup();
+  device.touch = false;
+});
 const rows: RoutineRow[] = [
   {
     id: 'mine',
@@ -133,7 +143,8 @@ describe('routines list', () => {
     expect(props.onToggle).not.toHaveBeenCalled();
     expect(props.onOpen).not.toHaveBeenCalled();
   });
-  it('groups routines by what starts them and shows how each last ran', () => {
+  it('groups routines by what starts them and shows how each last ran, on touch', () => {
+    device.touch = true;
     setup();
     const groups = screen
       .getAllByRole('row')
@@ -203,7 +214,7 @@ describe('routines list', () => {
 
   it('opens a blank routine without a templates section', () => {
     const props = setup();
-    fireEvent.click(screen.getByRole('button', { name: 'Create Routine' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create routine' }));
     expect(props.onCreate).toHaveBeenCalledOnce();
     expect(screen.queryByText(/templates/i)).toBeNull();
   });
@@ -237,7 +248,7 @@ describe('routines list', () => {
         screen.getByRole('region', { name: 'Suggested for you' })
       ).toBeTruthy();
       expect(screen.queryByRole('region', { name: 'Templates' })).toBeNull();
-      expect(screen.getByRole('table', { name: 'Routines' })).toBeTruthy();
+      expect(screen.getByRole('region', { name: 'Routines' })).toBeTruthy();
       // Only on All, and never over a search.
       fireEvent.click(screen.getByRole('radio', { name: /^On/ }));
       expect(
@@ -252,7 +263,7 @@ describe('routines list', () => {
         screen.getByRole('radio', { name: 'Discover', checked: true })
       ).toBeTruthy();
       expect(screen.getByText('Discover page, search “”')).toBeTruthy();
-      expect(screen.queryByRole('table', { name: 'Routines' })).toBeNull();
+      expect(screen.queryByRole('region', { name: 'Routines' })).toBeNull();
       expect(onSeen).toHaveBeenCalledOnce();
       // The list's search narrows Discover too.
       fireEvent.click(screen.getByRole('button', { name: 'Search routines' }));
@@ -262,7 +273,7 @@ describe('routines list', () => {
       expect(screen.getByText('Discover page, search “inbox”')).toBeTruthy();
       fireEvent.click(screen.getByRole('radio', { name: /^All/ }));
       expect(onSeen).toHaveBeenCalledTimes(2);
-      expect(screen.getByRole('table', { name: 'Routines' })).toBeTruthy();
+      expect(screen.getByRole('region', { name: 'Routines' })).toBeTruthy();
     });
 
     it('keeps the templates where suggestions are off', () => {
@@ -274,4 +285,118 @@ describe('routines list', () => {
       expect(screen.queryByRole('radio', { name: 'Discover' })).toBeNull();
     });
   });
+
+  describe('as cards', () => {
+    const card = (name: string) =>
+      screen.getByRole('button', { name }).closest('li') as HTMLElement;
+
+    it('lays routines out in a section per kind of trigger, each card saying how it last ran', () => {
+      setup();
+      expect(screen.queryByRole('table')).toBeNull();
+      expect(
+        screen
+          .getAllByRole('heading', { level: 2 })
+          .map((heading) => heading.textContent)
+      ).toEqual(['When something happens', 'On a schedule']);
+      expect(card('Morning briefing').textContent).toContain(
+        'Weekdays at 9:00 AM · Ran 9:00 AM'
+      );
+      // A routine with no description says what it does.
+      expect(card('Morning briefing').textContent).toContain('Sum up my day');
+      expect(card('Revenue signals').textContent).toContain(
+        'New email received · Off'
+      );
+    });
+
+    it('shows a failed run in one line, and opens the routine from its card', () => {
+      const props = setup({
+        rows: [{ ...rows[1]!, enabled: true, status: 'Active' }],
+      });
+      expect(card('Revenue signals').textContent).toContain('Failed Monday');
+      fireEvent.click(screen.getByRole('button', { name: 'Revenue signals' }));
+      expect(props.onOpen).toHaveBeenCalledWith('revenue');
+    });
+
+    it('stops a run in progress from its card', () => {
+      const onStop = vi.fn();
+      const running = { ...rows[0]!, status: 'Running' as const };
+      setup({ rows: [running], menu: menuActions({ onStop }) });
+      expect(card('Morning briefing').textContent).toContain('Running now');
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Stop the run of Morning briefing' })
+      );
+      expect(onStop).toHaveBeenCalledWith(running);
+    });
+
+    it('says it is stopping until the run ends', () => {
+      const running = { ...rows[0]!, status: 'Running' as const };
+      setup({
+        rows: [running],
+        menu: menuActions({ stopPending: () => true }),
+      });
+      expect(card('Morning briefing').textContent).toContain('Stopping…');
+      expect(
+        (
+          screen.getByRole('button', {
+            name: 'Stop the run of Morning briefing',
+          }) as HTMLButtonElement
+        ).disabled
+      ).toBe(true);
+    });
+
+    it('counts what a routine’s runs created', () => {
+      setup({ rows: [{ ...rows[0]!, children: [{ ...rows[1]! }] }] });
+      expect(card('Morning briefing').textContent).toContain('1 sub-routine');
+    });
+
+    it('starts someone with no routines from a new one or Discover', () => {
+      const openDiscover = vi.fn();
+      const discover: RoutinesDiscover = {
+        row: (open) => (
+          <button type="button" onClick={open}>
+            suggestions
+          </button>
+        ),
+        page: () => <p>Discover page</p>,
+        unseen: () => false,
+        onSeen: openDiscover,
+      };
+      const props = setup({ rows: [], discover });
+      expect(
+        screen.getByRole('heading', { name: 'Nothing is running yet' })
+      ).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'New routine' }));
+      expect(props.onCreate).toHaveBeenCalledOnce();
+      fireEvent.click(screen.getByRole('button', { name: 'Browse Discover' }));
+      expect(screen.getByText('Discover page')).toBeTruthy();
+    });
+  });
 });
+
+function menuActions(
+  overrides: Partial<RoutineRowMenuActions> = {}
+): RoutineRowMenuActions {
+  return {
+    onOpenInNewSplit: vi.fn(),
+    canOpenInNewSplit: () => true,
+    onOpenInNewTab: vi.fn(),
+    onRun: vi.fn(),
+    runPending: () => false,
+    onStop: vi.fn(),
+    stopPending: () => false,
+    onDuplicate: vi.fn(),
+    onKeep: vi.fn(),
+    onCopyLink: vi.fn(),
+    onCopyId: vi.fn(),
+    onShare: vi.fn(),
+    onDelete: vi.fn(),
+    entity: (row) => ({
+      id: row.id,
+      type: 'routine',
+      name: row.name,
+      ownerId: 'me',
+      status: { kind: 'unscheduled' },
+    }),
+    ...overrides,
+  };
+}

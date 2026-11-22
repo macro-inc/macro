@@ -231,7 +231,16 @@ function layOutRow(columns: string) {
 }
 
 /** Five suggestions in the row; the ids it counted as shown. */
-function renderRow(onOpenDiscover = vi.fn()) {
+function renderRow(
+  options: {
+    onOpenDiscover?: () => void;
+    empty?: boolean;
+    create?: () => Promise<string>;
+    routine?: { enabled: boolean; locked: boolean };
+    onToggle?: (routineId: string) => void;
+    dismiss?: (item: SuggestionItem) => Promise<void>;
+  } = {}
+) {
   vi.mocked(analytics.track).mockClear();
   const many = [
     ...items,
@@ -240,17 +249,20 @@ function renderRow(onOpenDiscover = vi.fn()) {
   render(() => {
     const actions = createSuggestionActions({
       placement: () => ({ kind: 'routines' }),
-      create: vi.fn(async () => 'routine-1'),
+      create: options.create ?? vi.fn(async () => 'routine-1'),
       customize: vi.fn(),
-      dismiss: vi.fn(async () => {}),
+      dismiss: options.dismiss ?? vi.fn(async () => {}),
       notify: vi.fn(),
     });
     return (
       <SuggestionRow
         items={many}
         actions={actions}
-        onOpenDiscover={onOpenDiscover}
+        onOpenDiscover={options.onOpenDiscover ?? vi.fn()}
         onOpenRoutine={vi.fn()}
+        empty={options.empty ?? false}
+        routine={() => options.routine}
+        onToggle={options.onToggle ?? vi.fn()}
       />
     );
   });
@@ -262,27 +274,23 @@ function renderRow(onOpenDiscover = vi.fn()) {
 }
 
 describe('the row above the routines list', () => {
-  it('shows as many of Discover’s cards as fit, counts each as shown, and says how many more Discover has', async () => {
-    layOutRow('400px 400px 400px 400px 128px');
+  it('shows one card per column of the grid, counts each as shown, and says how many more Discover has', async () => {
+    layOutRow('300px 300px 300px');
     const onOpenDiscover = vi.fn();
-    const shown = renderRow(onOpenDiscover);
+    const shown = renderRow({ onOpenDiscover });
     const more = await screen.findByRole('button', {
-      name: '1 more in Discover',
+      name: '2 more in Discover',
     });
-    expect(shown()).toEqual(['pick-1', 'template-1', 'drafted-1', 'more-0']);
-    // Discover's card: the sentence, not a one-line chain.
-    const [pick] = screen.getAllByRole('listitem');
+    expect(shown()).toEqual(['pick-1', 'template-1', 'drafted-1']);
     expect(
-      within(pick!).getByRole('button', {
-        name: 'Reply tag: Respond. Change it',
-      })
+      screen.getByRole('heading', { name: 'Suggested for you' })
     ).toBeTruthy();
     fireEvent.click(more);
     expect(onOpenDiscover).toHaveBeenCalledOnce();
   });
 
   it('shows one card where the page fits one, never counting a card it dropped as shown', async () => {
-    layOutRow('400px 128px');
+    layOutRow('300px');
     const shown = renderRow();
     expect(
       await screen.findByRole('button', { name: '4 more in Discover' })
@@ -291,7 +299,7 @@ describe('the row above the routines list', () => {
   });
 
   it('counts no columns from a grid that is not laid out', async () => {
-    layOutRow('repeat(auto-fill, minmax(0px, 400px)) 128px');
+    layOutRow('repeat(3, minmax(0px, 1fr))');
     const shown = renderRow();
     // Past the measurement, which runs as a microtask.
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -299,5 +307,62 @@ describe('the row above the routines list', () => {
       screen.getByRole('button', { name: '4 more in Discover' })
     ).toBeTruthy();
     expect(shown()).toEqual(['pick-1']);
+  });
+
+  it('is where to start when the person has no routines', async () => {
+    layOutRow('300px 300px 300px');
+    renderRow({ empty: true });
+    expect(
+      await screen.findByRole('heading', { name: 'Start with one of these' })
+    ).toBeTruthy();
+  });
+
+  it('says why a pick fits, and nothing where a suggestion has no reason', async () => {
+    layOutRow('300px 300px 300px');
+    renderRow();
+    await screen.findByRole('button', { name: '2 more in Discover' });
+    const [pick, template] = await screen.findAllByRole('listitem');
+    expect(within(pick!).getByText(items[0]!.reason!)).toBeTruthy();
+    expect(items[1]!.reason).toBeUndefined();
+    // Its last line holds only its button.
+    const button = within(template!).getAllByRole('button').at(-1)!;
+    expect(button.parentElement?.textContent).toBe(button.textContent);
+  });
+
+  it('turns a pick on in place, then shows its switch, what starts it, and Edit', async () => {
+    layOutRow('300px 300px 300px');
+    const onToggle = vi.fn();
+    const create = vi.fn(async () => 'routine-1');
+    renderRow({ create, routine: { enabled: true, locked: false }, onToggle });
+    const [pick] = await screen.findAllByRole('listitem');
+    fireEvent.click(
+      within(pick!).getByRole('button', { name: `Turn on ${items[0]!.title}` })
+    );
+    await waitFor(() => expect(create).toHaveBeenCalledOnce());
+    const toggle = await within(pick!).findByRole('switch', {
+      name: `Enabled for ${items[0]!.title}`,
+    });
+    expect(
+      within(pick!).getByText(`On · ${items[0]!.chain.trigger}`)
+    ).toBeTruthy();
+    expect(
+      within(pick!).getByRole('button', { name: `Edit ${items[0]!.title}` })
+    ).toBeTruthy();
+    fireEvent.click(toggle);
+    expect(onToggle).toHaveBeenCalledWith('routine-1');
+  });
+
+  it('dismisses a suggestion from its ×', async () => {
+    layOutRow('300px 300px 300px');
+    const dismiss = vi.fn(async () => {});
+    renderRow({ dismiss });
+    await screen.findByRole('button', { name: '2 more in Discover' });
+    const [pick] = await screen.findAllByRole('listitem');
+    fireEvent.click(
+      within(pick!).getByRole('button', {
+        name: `Not interested in ${items[0]!.title}`,
+      })
+    );
+    await waitFor(() => expect(dismiss).toHaveBeenCalledOnce());
   });
 });

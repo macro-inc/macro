@@ -33,6 +33,7 @@ import passwords from './en/passwords';
 import routineDrafts from './en/routine-drafts';
 import routineMenu from './en/routine-menu';
 import routineSuggestions from './en/routine-suggestions';
+import routinesList from './en/routines-list';
 import runtimeSharing from './en/runtime-sharing';
 import settingsBilling from './en/settings-billing';
 import settingsEmail from './en/settings-email';
@@ -89,6 +90,7 @@ export default {
   routineDrafts,
   routineMenu,
   routineSuggestions,
+  routinesList,
   settingsBilling,
   settingsEmail,
   runtimeSharing,
