@@ -566,6 +566,14 @@ async fn a_resumed_call_reads_as_live_then_as_one_call_of_two_sessions(
     assert_eq!(listed.len(), 1);
     assert!(listed[0].is_active);
     assert_eq!(listed[0].status, Some(CallStatus::Attended));
+    // It keeps the call's first start, so it doesn't move while live again.
+    let first_start = sqlx::query_scalar!(
+        "SELECT started_at FROM call_records WHERE id = $1",
+        first.id
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(listed[0].started_at, first_start);
 
     repo.archive_call(&second.id, &second.room_name).await?;
     let record = repo

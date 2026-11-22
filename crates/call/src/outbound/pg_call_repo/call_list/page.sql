@@ -75,13 +75,18 @@ granted AS (
 -- a live row in one transaction and imports get their own ids, so a call is
 -- in one table, except a resumed scheduled meeting: it is live again while its
 -- earlier sessions are archived, and the live row must win. The first row
--- found ends the lookup, so the live arm comes first.
+-- found ends the lookup, so the live arm comes first. A call that is live
+-- again keeps its first session's start, so it sorts and pages in one place.
 candidates AS (
     SELECT x.*, g.own_grant
     FROM granted g
     CROSS JOIN LATERAL (
         SELECT c.id AS call_id, c.channel_id, c.room_name, c.created_by,
-               c.created_at AS started_at, NULL::timestamptz AS ended_at,
+               COALESCE(
+                   (SELECT cr.started_at FROM call_records cr WHERE cr.id = c.id),
+                   c.created_at
+               ) AS started_at,
+               NULL::timestamptz AS ended_at,
                NULL::bigint AS duration_ms, c.egress_id,
                c.recording_key, c.preview_url, c.recording_started_at,
                c.meeting_id, NULL::text AS custom_name, NULL::text AS summary,
