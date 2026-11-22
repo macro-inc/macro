@@ -1,0 +1,59 @@
+crates/connectors/src/composition.rs
+  s_cfd7ab2660542c::t_af3d7556c1df93 21
+  s_cfd7ab2660542c::t_e26e9ea76a95a8 46-48
+crates/mcp_toolset/src/lib.rs
+  s_cfd7ab2660542c::t_e26e9ea76a95a8 9-11
+crates/ai_tools/src/build_context.rs
+  s_cfd7ab2660542c::t_53b2f0687cabb2 162-163,201-202
+  s_cfd7ab2660542c::t_a4e37fbbc3bd57 635-636,640,662,665-670,673
+crates/connectors/AGENTS.md
+  s_cfd7ab2660542c::t_b89c50683b1803 40-44
+  s_cfd7ab2660542c::t_8e968173803272 81-83,123-125
+services/agent_harness_service/src/config/test.rs
+  s_cfd7ab2660542c::t_44cbf79946ed96 81,91
+services/agent_harness_service/src/lib.rs
+  s_cfd7ab2660542c::t_23f6de2c0935a0 67,540-541,549-550,554,784,1610,1963,1987,2154-2155
+  s_cfd7ab2660542c::t_e26e9ea76a95a8 546
+  s_cfd7ab2660542c::t_11084e22b5dd4d 892-895
+services/agent_harness_service/src/cognition/api/context/test.rs
+  s_cfd7ab2660542c::t_272d981b6631d5 608,631,636,639,645
+services/agent_harness_service/AGENTS.md
+  s_cfd7ab2660542c::t_af9625211aefba 198-201,222-224,299,367
+  s_cfd7ab2660542c::t_8e968173803272 19-26
+crates/ai_tools/src/tool_context.rs
+  s_cfd7ab2660542c::t_53b2f0687cabb2 2170,2172-2173
+crates/ai_tools/src/lib.rs
+  s_cfd7ab2660542c::t_f4df15a97353ed 72,94
+  s_cfd7ab2660542c::t_53b2f0687cabb2 92
+services/agent_harness_service/src/cognition/server.rs
+  s_cfd7ab2660542c::t_af3d7556c1df93 597-598
+  s_cfd7ab2660542c::t_e26e9ea76a95a8 599
+  s_cfd7ab2660542c::t_c34baf2655e3f6 99-101
+  s_cfd7ab2660542c::t_c61f9143db938c 604,606,612-613,622-623
+  s_cfd7ab2660542c::t_712d067e838465 677,682,685-690,693,874
+services/agent_harness_service/src/cognition/api/context.rs
+  s_cfd7ab2660542c::t_388abe8ae46c85 113
+  s_cfd7ab2660542c::t_c34baf2655e3f6 116
+crates/ai_tools/src/bin/memory/context.rs
+  s_cfd7ab2660542c::t_53b2f0687cabb2 29-30
+crates/ai_tools/src/mcp_app_catalog.rs
+  s_cfd7ab2660542c::t_f4df15a97353ed 1
+crates/ai_tools/src/tool_context/test/import_link_access.rs
+  s_cfd7ab2660542c::t_89fd83fe84741d 214-216,229,349,593
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "9470af7d86cb4a8b0c1c6763793bcbb5b055dcd1",
+  "prompts": {},
+  "sessions": {
+    "s_cfd7ab2660542c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "87bbe042-970c-465d-ab64-b3aff25d263f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
