@@ -15,3 +15,9 @@ it('registers every view the rail opens', () => {
     expect(() => resolveComponent(id), id).not.toThrow();
   }
 });
+
+it('registers the native Calendar Settings destination with its own shell', () => {
+  expect(resolveComponent('calendar-settings').initialMeta).toMatchObject({
+    splitPanelLayout: 'composable',
+  });
+});

@@ -206,7 +206,7 @@ export function Header(props: {
         when={shell}
         fallback={<SplitHeaderRight>{props.children}</SplitHeaderRight>}
       >
-        <div class="ml-auto flex min-w-0 shrink-0 items-center">
+        <div class="ml-auto flex min-w-0 shrink-0 items-center gap-2">
           {props.children}
         </div>
       </Show>
@@ -305,12 +305,14 @@ export function Header(props: {
           <TouchHeaderLeft>
             <HeaderIsland class="min-w-0 shrink px-1">
               <MonthDrawer month={currentDate()} />
-              {todayButton(isTouchDevice())}
             </HeaderIsland>
           </TouchHeaderLeft>
 
           <TouchHeaderRight>
-            <ViewShell.TopBarIsland>
+            <ViewShell.TopBarIsland class="size-10 justify-center p-0">
+              {todayButton(true)}
+            </ViewShell.TopBarIsland>
+            <ViewShell.TopBarIsland class="size-10 justify-center p-0">
               <CalendarSearch />
             </ViewShell.TopBarIsland>
           </TouchHeaderRight>

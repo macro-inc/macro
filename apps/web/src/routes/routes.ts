@@ -793,9 +793,10 @@ export const bookingLinksRoute = defineRoute({
   path: 'scheduling',
   search: [bookingLinksSearch.namespace],
 });
+// Native views use the view- prefix for the split-content round trip.
 export const calendarSettingsRoute = defineRoute({
   info: OPEN_TO_AGENTS,
-  id: 'calendar-settings',
+  id: 'view-calendar-settings',
   path: 'calendar/settings',
 });
 export const calendarSplitRoute = defineRoute({

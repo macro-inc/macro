@@ -200,6 +200,8 @@ describe('calendar headers', () => {
     ).toBeNull();
     expect(screen.queryByRole('heading', { name: 'October 2026' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Search events' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Go to today' }));
+    expect(state.today).toHaveBeenCalledOnce();
     expect(
       screen.queryByRole('button', { name: 'Calendar settings' })
     ).toBeNull();

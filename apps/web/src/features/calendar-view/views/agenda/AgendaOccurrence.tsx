@@ -1,9 +1,8 @@
 import { AgendaEventRow } from '@app/features/calendar/components/agenda/event-row/AgendaEventRow';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import type { CalendarEvent } from '@app/features/calendar/types';
-import { createEffect, createSignal, on, onCleanup, Show } from 'solid-js';
+import { createEffect, createSignal, on, onCleanup } from 'solid-js';
 import { useCalendarFocus } from '../../calendar-focus-target';
-import { EventRsvpSection } from '../../components/EventRsvpSection';
 import { createAgendaOccurrenceFocus } from '../../primitives/create-agenda-occurrence-focus';
 
 /** Resolves route focus and refreshed occurrence data onto one stable agenda row. */
@@ -42,11 +41,7 @@ export function AgendaOccurrence(props: { event: CalendarEvent }) {
         timeFormat={view.displaySettings.timeFormat}
         selected={view.selectedEvent()?.id === props.event.id}
         onSelect={(row) => view.selectEvent(props.event, row, 'agenda')}
-      >
-        <Show when={props.event.viewerCan.rsvp}>
-          <EventRsvpSection event={props.event} buttonSize="sm" agenda />
-        </Show>
-      </AgendaEventRow>
+      />
     </div>
   );
 }

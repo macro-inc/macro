@@ -55,6 +55,10 @@ const CalendarRouteView = lazyNamed(
   () => import('@app/features/calendar-view/route-views'),
   'CalendarRouteView'
 );
+const CalendarSettingsRouteView = lazyNamed(
+  () => import('@app/features/calendar-view/calendar-settings-route'),
+  'CalendarSettingsRouteView'
+);
 const BookingLinksRouteView = lazyNamed(
   () => import('@app/features/scheduling/route-views'),
   'BookingLinksRouteView'
@@ -341,6 +345,11 @@ registerComponent(
 registerComponent(
   'calendar',
   () => <CalendarRouteView />,
+  () => composableLayout(true)
+);
+registerComponent(
+  'calendar-settings',
+  () => <CalendarSettingsRouteView />,
   () => composableLayout(true)
 );
 registerComponent(

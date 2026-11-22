@@ -163,10 +163,13 @@ export function MobileCalendarSidebar() {
       view.sources().filter((source) => source.emailLinkId)
     );
   return (
-    <ViewSidebar.Root
-      aria-label="Calendar navigation"
-      class="bg-menu pt-[calc(var(--safe-top,0px)+0.5rem)]"
-    >
+    <ViewSidebar.Root aria-label="Calendar navigation" class="bg-menu">
+      <ViewSidebar.Header>
+        <div class="flex min-w-0 items-center gap-1">
+          <ViewSidebar.CloseButton class="shrink-0" />
+          <ViewSidebar.Title>Calendar</ViewSidebar.Title>
+        </div>
+      </ViewSidebar.Header>
       <div class="relative flex min-h-0 flex-1 flex-col">
         <ViewSidebar.Content ref={setScroll} class="gap-5 pt-0 pb-4">
           <Show
