@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_SOUP_BACKFILL_LANES,
   runSoupBackfill,
+  runSoupBackfills,
   type SoupBackfillCheckpoint,
   type SoupBackfillParams,
 } from './backfill';
@@ -113,6 +114,16 @@ type Action =
       closeSecondAfter: number | null;
       preLock: boolean;
     }
+  | {
+      kind: 'suite';
+      /** The builds whose tabs run every lane, as a leading tab does, in the
+       * order they start; two tabs run at once. */
+      tabs: readonly Build[];
+      /** Pages each tab fetches before it closes; null runs to the end. */
+      pages: readonly [number | null, number | null];
+      /** Storage resets just after this many generation samples. */
+      resetAtSample: number | null;
+    }
   | { kind: 'update'; build: Build; lane: number; entity: number }
   | { kind: 'reset' }
   | { kind: 'reset-during-fetch'; build: Build; lane: number };
@@ -152,6 +163,21 @@ const actionArb: fc.Arbitrary<Action> = fc.oneof(
   {
     weight: 2,
     arbitrary: fc.record({
+      kind: fc.constant('suite' as const),
+      tabs: fc.constantFrom<readonly Build[]>([0], [1], [0, 1], [1, 0]),
+      pages: fc.tuple(
+        fc.option(fc.nat({ max: 24 }), { nil: null, freq: 2 }),
+        fc.option(fc.nat({ max: 24 }), { nil: null, freq: 2 })
+      ),
+      resetAtSample: fc.oneof(
+        { weight: 3, arbitrary: fc.constant(null) },
+        { weight: 1, arbitrary: fc.nat({ max: 40 }) }
+      ),
+    }),
+  },
+  {
+    weight: 2,
+    arbitrary: fc.record({
       kind: fc.constant('update' as const),
       build: buildArb,
       lane: laneArb,
@@ -171,9 +197,17 @@ const actionArb: fc.Arbitrary<Action> = fc.oneof(
 
 type Direction = 'forward' | 'back';
 
-/** Runs that resumed a cursor the other build saved, by lane and direction:
- * `forward` is the newer build resuming the older one, `back` the reverse. */
-type Resumes = Map<`${number}:${Direction}`, number>;
+/**
+ * Runs that resumed a cursor the other build saved, by lane and direction:
+ * `forward` is the newer build resuming the older one, `back` the reverse.
+ * Also counts the suite cases the property must reach: two tabs' suites both
+ * finished and checked, suites run again after a reset, and writes under a
+ * generation a reset ended just after it was sampled.
+ */
+type Resumes = Map<
+  `${number}:${Direction}` | 'suite-pair' | 'suite-after-reset' | 'late-write',
+  number
+>;
 
 /** A record's versions on the server, each with the time it was written. */
 type Versions = { at: number; version: number }[];
@@ -211,9 +245,17 @@ type WriteContext = {
   lane: SoupBackfillParams;
   request: string;
   generation: string;
+  /** Older generations a reset ended just after a tab sampled them: that tab
+   * may still write under them, and loading discards what it writes. */
+  lateGenerations: ReadonlySet<string>;
+  /** Called with the generation of each write under an older one. */
+  onLate?: (generation: string) => void;
   /** Answers the server gave, by the position a request started from. */
   served: ReadonlyMap<string, ReadonlySet<string | null>>;
 };
+
+const parseTime = (iso: string | null) =>
+  iso === null ? Number.NEGATIVE_INFINITY : Date.parse(iso);
 
 const isFreshPass = (next: Stored) =>
   next.nextCursor === null &&
@@ -274,8 +316,13 @@ function isPassStart(
     due &&
     next.pagesFetched === (restarts ? 0 : previous.pagesFetched) &&
     next.nextCursor === cursor &&
-    next.scanStartedAt !== null &&
-    next.scanStartedAt !== previous.scanStartedAt &&
+    // A pass starts after everything already saved, so a start computed
+    // before a newer save, and written late, fails here.
+    parseTime(next.scanStartedAt) >
+      Math.max(
+        parseTime(previous.scanStartedAt),
+        parseTime(previous.completedAt)
+      ) &&
     next.updatedSince === previous.updatedSince &&
     next.completedAt === previous.completedAt &&
     !next.completed
@@ -292,7 +339,13 @@ function writeError(
   next: Stored
 ): string | null {
   if (next.storageGeneration !== context.generation) {
-    return 'saved under an older storage generation';
+    if (next.storageGeneration !== null) {
+      context.onLate?.(next.storageGeneration);
+    }
+    return next.storageGeneration !== null &&
+      context.lateGenerations.has(next.storageGeneration)
+      ? null
+      : 'saved under an older storage generation';
   }
   if (
     previous === null ||
@@ -309,9 +362,6 @@ function writeError(
     ? null
     : 'neither a page nor a pass start of the saved state';
 }
-
-const parseTime = (iso: string | null) =>
-  iso === null ? Number.NEGATIVE_INFINITY : Date.parse(iso);
 
 /**
  * Two builds against one cache: an older build, either the shipped lanes or a
@@ -331,8 +381,15 @@ const parseTime = (iso: string | null) =>
  *   page the server returned for the position the previous write recorded;
  * - a finished pass moves the watermark to its own start, and a lane that
  *   catches up after its first pass does so before it completes.
- * After every step, every checkpoint in the current generation vouches only
- * for record versions the cache holds, and a run that succeeded completed.
+ * A run that stops before fetching makes no first request, but each write it
+ * made was checked. After every step, every checkpoint in the current
+ * generation vouches only for record versions the cache holds, and a run that
+ * succeeded completed. Tabs also run whole suites (`runSoupBackfills`), alone
+ * or two at once, leaving held lanes and revisiting them; when every suite of
+ * a step finished, each of their lanes is completed. Storage may reset just
+ * after any generation sample of a suite; a tab may then write under the
+ * generation it sampled, and the app runs its suite again, as it does when
+ * the cache generation changes.
  */
 async function replay(
   changes: readonly LaneChange[],
@@ -415,8 +472,11 @@ async function replay(
     const raw = localStorage.getItem(key);
     return raw === null ? null : (JSON.parse(raw) as Stored);
   };
+  /** The build that saved each key's last page. */
   const pageWriter = new Map<string, Build>();
-  const bump = (resume: `${number}:${Direction}`) =>
+  /** The build that fetched a page whose save is due, by key. */
+  const fetchedBy = new Map<string, Build>();
+  const bump = (resume: Resumes extends Map<infer K, number> ? K : never) =>
     resumes.set(resume, (resumes.get(resume) ?? 0) + 1);
 
   /** Checks a checkpoint write against the one before it (see `replay`). */
@@ -428,6 +488,10 @@ async function replay(
         lane: owner.lane,
         request: requestOf(owner.build, owner.laneIndex),
         generation: `g${generation}`,
+        lateGenerations,
+        onLate: (late) => {
+          if (lateGenerations.has(late)) bump('late-write');
+        },
         served,
       },
       previous,
@@ -445,14 +509,33 @@ async function replay(
     .mockImplementation(function (this: Storage, key: string, value: string) {
       if (lanesByKey.has(key)) {
         checkWrite(key, read(key), JSON.parse(value) as Stored);
+        const by = fetchedBy.get(key);
+        if (by !== undefined) pageWriter.set(key, by);
+        fetchedBy.delete(key);
       }
       setItem.call(this, key, value);
     });
 
+  const reset = () => {
+    generation += 1;
+    cache.set(generation, new Map());
+  };
+  /** Generation samples left before storage resets just after one. */
+  let samplesUntilReset: number | null = null;
+  const lateGenerations = new Set<string>();
   const host = {
     currentStorageGeneration: async () => {
       tick();
-      return `g${generation}`;
+      const sampled = `g${generation}`;
+      if (samplesUntilReset === 0) {
+        lateGenerations.add(sampled);
+        reset();
+      }
+      if (samplesUntilReset !== null) {
+        samplesUntilReset =
+          samplesUntilReset === 0 ? null : samplesUntilReset - 1;
+      }
+      return sampled;
     },
   };
 
@@ -498,100 +581,138 @@ async function replay(
     onFetched?: (count: number) => void;
     close?: AbortController;
   };
-  const runLane = async (
+  /** A tab's page budget and how it ends, shared by the lanes it runs. */
+  type Tab = {
+    budget: number;
+    end: End;
+    close: AbortController;
+    fetched: number;
+    ended: boolean;
+    update: { at: number; entity: number } | null;
+    resetOnFetch: boolean;
+    onFetched?: (count: number) => void;
+  };
+  const openTab = (budget: number, options: RunOptions): Tab => ({
+    budget,
+    end: options.end,
+    close: options.close ?? new AbortController(),
+    fetched: 0,
+    ended: false,
+    update: options.update ?? null,
+    resetOnFetch: options.resetOnFetch === true,
+    onFetched: options.onFetched,
+  });
+  /** Ends a tab at its budget: a failed fetch, or the tab closing mid-fetch. */
+  const endTab = (tab: Tab, signal: AbortSignal | undefined) => {
+    tab.ended = true;
+    if (tab.end === 'fail') {
+      return Promise.reject(new Error('the run ends here'));
+    }
+    tab.close.abort();
+    return new Promise<never>((_resolve, reject) => {
+      if (signal?.aborted) reject(new Error('the tab closed'));
+      signal?.addEventListener('abort', () =>
+        reject(new Error('the tab closed'))
+      );
+    });
+  };
+  /** A run's first request resumes the saved position it may, or starts a
+   * pass from the saved watermark. A tab that sampled a generation just
+   * before storage reset may still start from what it saved under it. */
+  const checkFirstRequest = (
     build: Build,
     laneIndex: number,
-    budget: number,
-    options: RunOptions
+    position: string
   ) => {
-    const lanes = builds[build];
-    const lane = lanes[laneIndex];
-    const request = requestOf(build, laneIndex);
+    const lane = builds[build][laneIndex];
     const key = soupBackfillCheckpointKey('user-1', lane);
-    const close = options.close ?? new AbortController();
-    let resetOnFetch = options.resetOnFetch === true;
-    let fetched = 0;
-    let ended = false;
-    /** A run's first request resumes the saved position it may, or starts
-     * a pass from the saved watermark. */
-    const checkFirstRequest = (position: string) => {
-      const saved = read(key);
-      const current = saved?.storageGeneration === `g${generation}`;
+    const saved = read(key);
+    const due = (current: boolean) => {
       const resumed =
-        current && !saved.completed && lane.restartOnRun !== true
+        saved !== null &&
+        current &&
+        !saved.completed &&
+        lane.restartOnRun !== true
           ? saved.nextCursor
           : null;
-      const since = current && !lane.refreshAll ? saved.updatedSince : null;
-      const expected = resumed ?? positionOf(request, since);
-      if (position !== expected) {
-        violations.push(
-          `${key} started at ${position} where ${expected} was due`
-        );
-        return;
-      }
-      const writer = pageWriter.get(key);
-      if (resumed === null || writer === undefined || writer === build) return;
-      bump(`${laneIndex}:${build === 1 ? 'forward' : 'back'}`);
+      const since =
+        saved !== null && current && !lane.refreshAll
+          ? saved.updatedSince
+          : null;
+      return {
+        resumed,
+        position: resumed ?? positionOf(requestOf(build, laneIndex), since),
+      };
     };
+    const savedGeneration = saved?.storageGeneration ?? null;
+    const late =
+      savedGeneration !== null && lateGenerations.has(savedGeneration);
+    const dues = [due(savedGeneration === `g${generation}`)];
+    if (late) dues.push(due(true));
+    const matched = dues.find((option) => option.position === position);
+    if (matched === undefined) {
+      violations.push(
+        `${key} started at ${position} where ${dues[0].position} was due`
+      );
+      return;
+    }
+    const writer = pageWriter.get(key);
+    if (
+      matched.resumed === null ||
+      late ||
+      writer === undefined ||
+      writer === build
+    ) {
+      return;
+    }
+    bump(`${laneIndex}:${build === 1 ? 'forward' : 'back'}`);
+  };
+  /** The lane's params for one run in `tab`, with the model's page fetch. */
+  const paramsOf = (
+    build: Build,
+    laneIndex: number,
+    tab: Tab
+  ): SoupBackfillParams => {
+    const lane = builds[build][laneIndex];
+    const request = requestOf(build, laneIndex);
+    const key = soupBackfillCheckpointKey('user-1', lane);
+    let first = true;
     const fetchPage: FetchPage = async (input: Input, fetchOptions) => {
       tick();
       const continuation = 'continuation' in input ? input.continuation : null;
       const since = continuation === null ? watermarkOf(input) : null;
       const position = continuation?.cursor ?? positionOf(request, since);
-      if (fetched === 0) checkFirstRequest(position);
-      if (fetched === budget) {
-        ended = true;
-        if (options.end === 'fail') throw new Error('the run ends here');
-        close.abort();
-        return new Promise((_resolve, reject) => {
-          const signal = fetchOptions?.signal;
-          if (signal?.aborted) reject(new Error('the tab closed'));
-          signal?.addEventListener('abort', () =>
-            reject(new Error('the tab closed'))
-          );
-        });
-      }
-      fetched += 1;
+      if (first) checkFirstRequest(build, laneIndex, position);
+      first = false;
+      if (tab.fetched === tab.budget) return endTab(tab, fetchOptions?.signal);
+      tab.fetched += 1;
       const nextCursor = serve(build, laneIndex, position);
-      if (options.update && options.update.at === fetched - 1) {
-        update(build, laneIndex, options.update.entity);
+      fetchedBy.set(key, build);
+      if (tab.update?.at === tab.fetched - 1) {
+        update(build, laneIndex, tab.update.entity);
       }
-      if (resetOnFetch) {
-        resetOnFetch = false;
-        generation += 1;
-        cache.set(generation, new Map());
+      if (tab.resetOnFetch) {
+        tab.resetOnFetch = false;
+        reset();
       }
-      options.onFetched?.(fetched);
+      tab.onFetched?.(tab.fetched);
       return { nextCursor };
     };
-    const params = {
-      ...lane,
-      fetchPage,
-      createFetchPage: undefined,
-      pageDelayMs: 0,
-    };
-    /** The run's own last page save; another tab may write after it. */
-    const last: { saved: SoupBackfillCheckpoint | null } = { saved: null };
-    const onCheckpoint = (checkpoint: SoupBackfillCheckpoint) => {
-      pageWriter.set(key, build);
-      last.saved = checkpoint;
-    };
-    const locks = Object.getOwnPropertyDescriptor(navigator, 'locks');
-    // A tab from before checkpoint locks runs every lane unlocked.
-    if (options.preLock) {
-      Object.defineProperty(navigator, 'locks', {
-        value: undefined,
-        configurable: true,
-      });
-    }
-    const effect = runSoupBackfill('user-1', host, params, {
-      lanes,
-      onCheckpoint,
-    });
-    if (locks) Object.defineProperty(navigator, 'locks', locks);
-    let exit: Exit.Exit<boolean, unknown> | undefined;
+    return { ...lane, fetchPage, createFetchPage: undefined, pageDelayMs: 0 };
+  };
+  /**
+   * Runs `effect` in a tab of `build` while it leads the build's coordinator,
+   * as the elected tab does, and interrupts it when the tab closes. Undefined
+   * when the tab closed before it led.
+   */
+  const asLeader = async <A>(
+    build: Build,
+    close: AbortController,
+    effect: Effect.Effect<A, unknown>
+  ) => {
+    let exit: Exit.Exit<A, unknown> | undefined;
     const leadership = soupBackfillLeadershipLock(
-      soupBackfillCoordinatorKey(lanes)
+      soupBackfillCoordinatorKey(builds[build])
     );
     try {
       await navigator.locks.request(
@@ -609,15 +730,81 @@ async function replay(
       );
     } catch (error) {
       // Closed while waiting to lead.
-      if (!close.signal.aborted) violations.push(`${key}: ${String(error)}`);
+      if (!close.signal.aborted) violations.push(`build ${build}: ${error}`);
     }
+    return exit;
+  };
+  const runLane = async (
+    build: Build,
+    laneIndex: number,
+    budget: number,
+    options: RunOptions
+  ) => {
+    const lanes = builds[build];
+    const key = soupBackfillCheckpointKey('user-1', lanes[laneIndex]);
+    const tab = openTab(budget, options);
+    /** The run's own last page save; another tab may write after it. */
+    const last: { saved: SoupBackfillCheckpoint | null } = { saved: null };
+    const locks = Object.getOwnPropertyDescriptor(navigator, 'locks');
+    // A tab from before checkpoint locks runs every lane unlocked.
+    if (options.preLock) {
+      Object.defineProperty(navigator, 'locks', {
+        value: undefined,
+        configurable: true,
+      });
+    }
+    const effect = runSoupBackfill(
+      'user-1',
+      host,
+      paramsOf(build, laneIndex, tab),
+      {
+        lanes,
+        onCheckpoint: (checkpoint) => {
+          last.saved = checkpoint;
+        },
+      }
+    );
+    if (locks) Object.defineProperty(navigator, 'locks', locks);
+    const exit = await asLeader(build, tab.close, effect);
     if (exit === undefined) return;
     if (Exit.isSuccess(exit)) {
-      if (last.saved?.completed !== true) {
+      if (
+        last.saved?.completed !== true ||
+        last.saved.storageGeneration !== `g${generation}`
+      ) {
         violations.push(`${key} succeeded without completing`);
       }
-    } else if (!ended && !close.signal.aborted) {
+    } else if (!tab.ended && !tab.close.signal.aborted) {
       violations.push(`${key} failed: ${String(exit.cause)}`);
+    }
+  };
+  /** Runs every lane of `build` as a leading tab does; true if it finished. */
+  const runSuite = async (build: Build, budget: number | null) => {
+    const tab = openTab(budget ?? Number.POSITIVE_INFINITY, { end: 'close' });
+    const lanes = builds[build].map((_lane, laneIndex) =>
+      paramsOf(build, laneIndex, tab)
+    );
+    const exit = await asLeader(
+      build,
+      tab.close,
+      runSoupBackfills('user-1', host, lanes)
+    );
+    if (exit === undefined) return false;
+    if (Exit.isFailure(exit) && !tab.ended && !tab.close.signal.aborted) {
+      violations.push(`build ${build} suite failed: ${String(exit.cause)}`);
+    }
+    return Exit.isSuccess(exit);
+  };
+  /** After suites that all finished with no reset, their lanes are done. */
+  const checkFinished = (tabs: readonly Build[]) => {
+    for (const build of tabs) {
+      for (const lane of builds[build]) {
+        const key = soupBackfillCheckpointKey('user-1', lane);
+        const saved = read(key);
+        if (saved?.storageGeneration !== `g${generation}` || !saved.completed) {
+          violations.push(`${key} is not completed after its suite finished`);
+        }
+      }
     }
   };
 
@@ -687,12 +874,33 @@ async function replay(
           ]);
         }
       )
+      .with({ kind: 'suite' }, async ({ tabs, pages, resetAtSample }) => {
+        const before = generation;
+        samplesUntilReset = resetAtSample;
+        const finished = await Promise.all(
+          tabs.map((build, index) => runSuite(build, pages[index] ?? null))
+        );
+        samplesUntilReset = null;
+        if (!finished.every(Boolean)) return;
+        if (generation === before) {
+          checkFinished(tabs);
+          if (tabs.length === 2) bump('suite-pair');
+          return;
+        }
+        // The app runs the suite again when the cache generation changes.
+        const again = await Promise.all(
+          tabs.map((build) => runSuite(build, null))
+        );
+        if (!again.every(Boolean)) return;
+        checkFinished(tabs);
+        bump('suite-after-reset');
+        if (tabs.length === 2) bump('suite-pair');
+      })
       .with({ kind: 'update' }, async ({ build, lane, entity }) => {
         update(build, lane, entity);
       })
       .with({ kind: 'reset' }, async () => {
-        generation += 1;
-        cache.set(generation, new Map());
+        reset();
       })
       .with({ kind: 'reset-during-fetch' }, ({ build, lane }) =>
         runLane(build, lane, 9, { end: 'fail', resetOnFetch: true })
@@ -806,5 +1014,12 @@ describe('soup backfill across builds', () => {
     expect(
       totalResumes(resumes, 'forward') + totalResumes(resumes, 'back')
     ).toBeGreaterThan(0);
+    for (const reached of [
+      'suite-pair',
+      'suite-after-reset',
+      'late-write',
+    ] as const) {
+      expect(resumes.get(reached) ?? 0, reached).toBeGreaterThan(0);
+    }
   }, 120_000);
 });
