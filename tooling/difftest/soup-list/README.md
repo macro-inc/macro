@@ -68,6 +68,7 @@ what it shows and how to run it at the top:
 | `boot-window.ts` | Whether a write from another device right after a reload reaches a generic Soup list, and where each side's cache engine started. |
 | `qa-rename-row.ts` | The renamed row in each side's Quick Access skills feed, closed Quick Access and a `/` menu opened after the rename, with each cache change and history read. |
 | `qa-people-settle.ts` | When Quick Access's people rows arrive, against the `isLoading` the probe settles on. |
+| `session-rename-boot.ts` | When each side's Quick Access sessions list shows a rename made right after both apps reload, and whether that side's cache engine was ready by then. |
 
 ## Pieces
 
