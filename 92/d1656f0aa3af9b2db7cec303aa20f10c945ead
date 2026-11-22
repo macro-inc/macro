@@ -1,0 +1,33 @@
+.sqlx/query-f18f0b55cdd9dd5c6f494306e3dbc08360bedb0bcac79b97e3a6ffea2ad51152.json
+  s_9671c7bc652ab5::t_8d2d5909b97bc0 1-19
+crates/connectors/src/outbound/native/memory_store.rs
+  s_e12aed0e824e9d::t_09da2b97ee1096 32,35,38-45
+crates/connectors/src/outbound/native/pg_server_repo.rs
+  s_e12aed0e824e9d::t_13f9112c66777b 75-78,87-90
+crates/connectors/src/outbound/native/pg_server_repo/test.rs
+  s_e12aed0e824e9d::t_1ddc2f0a6b19f3 285-306
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "92d1656f0aa3af9b2db7cec303aa20f10c945ead",
+  "prompts": {},
+  "sessions": {
+    "s_9671c7bc652ab5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a46e4f3c-7142-45e8-9694-084925c538ce",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_e12aed0e824e9d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7740f515-3d51-4ff1-83e5-7b0503817647",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
