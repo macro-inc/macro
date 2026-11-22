@@ -1,0 +1,19 @@
+apps/web/src/features/agents-view/components/AgentsSidebar.test.tsx
+  s_7eb83d47cc9269::t_4ae2d89c1889e9 1165-1166
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "a1df3e77d49c2a40a20bbd5605836df3789cadb2",
+  "prompts": {},
+  "sessions": {
+    "s_7eb83d47cc9269": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bf207c25-42b2-42ad-9693-c8cd82a5479a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
