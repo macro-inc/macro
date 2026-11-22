@@ -2,6 +2,7 @@ import type { TaskEntityWithProperties } from '@entity/types/entity';
 import type { GroupedSoupPaging } from '@queries/soup/graphql/create-grouped-soup-live-query';
 import type { CreateGroupedSoupQueriesArgs } from '@queries/soup/grouped/create-grouped-soup-queries';
 import { createRoot, createSignal } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import { expect, it, vi } from 'vitest';
 
 const fixture = vi.hoisted(() => ({
@@ -731,6 +732,19 @@ async function createdTaskFixture(initiallyLoading = false) {
   const [known, setKnown] = createSignal<string[] | undefined>();
   const [deleted, setDeleted] = createSignal<ReadonlySet<string>>(new Set());
   const [placeholder, setPlaceholder] = createSignal(false);
+  const [view, setView] = createStore<{
+    tab: TasksTab;
+    search: string;
+    facets: Record<string, never>;
+    groupBy: 'status' | 'assignee';
+    sort: never[];
+  }>({
+    tab: 'team-tasks',
+    search: '',
+    facets: {},
+    groupBy: 'status',
+    sort: [],
+  });
   fixture.deletedKeys = deleted;
   const onListed = vi.fn();
   fixture.query = {
@@ -761,29 +775,20 @@ async function createdTaskFixture(initiallyLoading = false) {
   let cleanup = () => {};
   const source = createRoot((dispose) => {
     cleanup = dispose;
-    return useTasksDataSource(
-      {
-        tab: 'team-tasks',
-        search: '',
-        facets: {},
-        groupBy: 'status',
-        sort: [],
-      },
-      {
-        userId: () => 'viewer',
-        tagSets: () => [],
-        tagSetsReady: () => true,
-        isGroupExpanded: () => true,
-        reference: () => ({
-          propertyDefinitionId: SYSTEM_PROPERTY_IDS.PROJECT,
-          entityId: 'project',
-        }),
-        optimisticTasks: optimistic,
-        showsPendingTasks: showsPending,
-        isOptimisticTaskKnown: (id) => known()?.includes(id) ?? true,
-        onOptimisticTasksListed: onListed,
-      }
-    );
+    return useTasksDataSource(view, {
+      userId: () => 'viewer',
+      tagSets: () => [],
+      tagSetsReady: () => true,
+      isGroupExpanded: () => true,
+      reference: () => ({
+        propertyDefinitionId: SYSTEM_PROPERTY_IDS.PROJECT,
+        entityId: 'project',
+      }),
+      optimisticTasks: optimistic,
+      showsPendingTasks: showsPending,
+      isOptimisticTaskKnown: (id) => known()?.includes(id) ?? true,
+      onOptimisticTasksListed: onListed,
+    });
   });
   const shape = () =>
     source
@@ -809,6 +814,7 @@ async function createdTaskFixture(initiallyLoading = false) {
     setKnown,
     setDeleted,
     setPlaceholder,
+    setGroupBy: (groupBy: 'status' | 'assignee') => setView('groupBy', groupBy),
   };
 }
 
@@ -1010,6 +1016,23 @@ it('keeps a created task while the list shows a previous page', async () => {
     expect(f.onListed).not.toHaveBeenCalled();
     f.setPlaceholder(false);
     expect(f.onListed).toHaveBeenCalledWith(['task']);
+  } finally {
+    f.cleanup();
+  }
+});
+
+it('leaves a created task out of groups read for the previous grouping', async () => {
+  const f = await createdTaskFixture();
+  const listed = f.inProject('listed');
+  f.setEntities([listed]);
+  f.setOptimistic([
+    { entity: { ...f.inProject('temp'), id: 'task' }, pending: false },
+  ]);
+  try {
+    // Status groups stay on screen while the Assignee page loads.
+    f.setPlaceholder(true);
+    f.setGroupBy('assignee');
+    expect(f.shape()).toEqual(['#done:1', 'listed']);
   } finally {
     f.cleanup();
   }

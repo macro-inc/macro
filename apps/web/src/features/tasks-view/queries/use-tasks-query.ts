@@ -194,7 +194,13 @@ function taskInsertFilter(
 
 type ServerTasks =
   | { kind: 'flat'; tasks: TaskEntityWithProperties[] }
-  | { kind: 'grouped'; groups: SoupGroup<TaskEntityWithProperties>[] };
+  | {
+      kind: 'grouped';
+      groups: SoupGroup<TaskEntityWithProperties>[];
+      /** The grouping these groups were read for; unknown for a page loaded
+       * for another one. */
+      groupBy: TasksDataSourceInput['groupBy'] | undefined;
+    };
 
 function hasServerTasks(server: ServerTasks): boolean {
   return server.kind === 'flat'
@@ -651,7 +657,15 @@ export function useTasksDataSource(
         taskGroups.push(taskGroup);
       }
 
-      return { kind: 'grouped', groups: taskGroups };
+      // A previous page shown while the next loads keeps the grouping it
+      // was read for.
+      const keptGroupBy =
+        previous.kind === 'grouped' ? previous.groupBy : undefined;
+      return {
+        kind: 'grouped',
+        groups: taskGroups,
+        groupBy: query.isPlaceholderData ? keptGroupBy : state.groupBy,
+      };
     },
     { kind: 'flat', tasks: [] }
   );
@@ -678,7 +692,10 @@ export function useTasksDataSource(
         sort(deduplicateSoupEntities([...listed, ...optimistic]))
       );
     }
-    if (optimistic.length === 0) return buildGroupedSoupRows(groups);
+    // Groups read for another grouping (a page kept while the new grouping
+    // loads) have no place for a created task until that page arrives.
+    const stale = server.kind === 'grouped' && server.groupBy !== state.groupBy;
+    if (optimistic.length === 0 || stale) return buildGroupedSoupRows(groups);
     return buildGroupedSoupRows(
       placeOptimisticTasks(groups, optimistic, {
         groupKeys: optimisticGroupKeys,
