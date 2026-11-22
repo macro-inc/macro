@@ -8,6 +8,7 @@ crates/agent_inmem/src/rig_engine.rs
   s_73462c0c5e52fa::t_699bc02b27b665 909
   s_73462c0c5e52fa::t_add1f163b24ebe 593
   s_73462c0c5e52fa::t_33cd78136c4c5d 910-912
+  s_cd2738b611e99b::t_46c5d8c5299cd6 913
 crates/agent_code_mode/src/inbound/toolset.rs
   s_73462c0c5e52fa::t_b34ab9ccfa8573 3,39-42,53-54,62-66
 crates/agent_code_mode/src/domain/service.rs
@@ -15,6 +16,7 @@ crates/agent_code_mode/src/domain/service.rs
 services/agent_harness_service/src/internal_mcp.rs
   s_73462c0c5e52fa::t_ca51cfd57faca4 109-122,125,127-128,184-185,189-194,196-200,314,396-398,411
   s_73462c0c5e52fa::t_75177f9f5eb1cc 313,389-395
+  s_cd2738b611e99b::t_46c5d8c5299cd6 4-7
 crates/agent_inmem/src/domain/engine.rs
   s_73462c0c5e52fa::t_add1f163b24ebe 40-42
 crates/agent_code_mode/src/domain/kinds.rs
@@ -35,12 +37,14 @@ services/agent_harness_service/src/internal_mcp/test.rs
 crates/agent_code_mode/src/domain/kinds/test.rs
   s_73462c0c5e52fa::t_a79377c666bf4f 1-35
   s_73462c0c5e52fa::t_ce1334a94bd0d0 36-38
+  s_cd2738b611e99b::t_46c5d8c5299cd6 39
 crates/agent_code_mode/src/inbound/toolset/test/js_tools.rs
   s_73462c0c5e52fa::t_e361129e5192f5 9-10
   s_73462c0c5e52fa::t_ff53a63ca54939 290-293,300,450-455
   s_73462c0c5e52fa::t_cb28c4921a5d5c 11
 crates/agent_inmem/src/outbound/rig_engine/unseen.rs
   s_73462c0c5e52fa::t_699bc02b27b665 20-23,26,30,33-38,70-72
+  s_cd2738b611e99b::t_46c5d8c5299cd6 8
 crates/agent_inmem/src/outbound/manager.rs
   s_73462c0c5e52fa::t_add1f163b24ebe 79,108,134-144,221
 services/agent_harness_service/src/lib.rs
@@ -55,12 +59,15 @@ crates/agent_code_mode/src/inbound/toolset/test.rs
   s_73462c0c5e52fa::t_ff53a63ca54939 434,437-438,459-466,618-619
   s_73462c0c5e52fa::t_091fed9f99d5e4 317-330
   s_73462c0c5e52fa::t_e844192045f2e8 620-622
+  s_cd2738b611e99b::t_46c5d8c5299cd6 428-429,431,623
 crates/agent_code_mode/AGENTS.md
   s_801d204a6cbbe1::t_731c5a6084ec94 110-122,141
 crates/agent_code_mode/src/inbound/toolset/test/without_js_tools.json
   s_73462c0c5e52fa::t_bd872ed247d826 3
 crates/agent_permissions/AGENTS.md
   s_801d204a6cbbe1::t_710fe8e110deed 68
+crates/agent_code_mode/src/domain.rs
+  s_cd2738b611e99b::t_46c5d8c5299cd6 2
 ---
 {
   "schema_version": "authorship/3.0.0",
@@ -80,6 +87,14 @@ crates/agent_permissions/AGENTS.md
       "agent_id": {
         "tool": "claude",
         "id": "53eed665-e109-41ff-bb4b-138a29669adc",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_cd2738b611e99b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "160aae60-b056-44b3-9de2-02a74d7f232d",
         "model": "claude-opus-5-5"
       },
       "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
