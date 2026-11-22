@@ -57,6 +57,8 @@ the Soup-backed thread list, and saved email views.
 The first-visit panel in `components/EmailEmptyState.tsx` uses the authenticated
 inbox suggestion and the shared picker in `@core/email-link`. IMAP opens the
 credential form directly; desktop and phone use the same field validation.
+`EmailList` owns the connect flow and passes its callback to the empty state;
+loading/refetch branch changes preserve the chooser and IMAP form.
 
 ## Gotchas
 

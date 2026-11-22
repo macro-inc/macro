@@ -1,4 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import { Telemetry } from '@macro-inc/observability';
 import { fetchEmailConnectionProviders } from '@queries/auth/outlook-link';
 import {
   Button,
@@ -185,18 +186,29 @@ export async function selectEmailProvider(
   owner: Owner | null,
   mailOnly = true
 ): Promise<EmailProvider | undefined> {
+  const lifecycle = Telemetry.span('email.providers.choose');
   let selected: EmailProvider | undefined;
-  const handle = openDialog(
-    EmailProviderSelectionDialog,
-    {
-      mailOnly,
-      onSelect: (provider) => {
-        selected = provider;
-        handle.close();
-      },
-    },
-    { owner }
-  );
-  await handle.closed;
-  return selected;
+  try {
+    const handle = lifecycle.run(() =>
+      openDialog(
+        EmailProviderSelectionDialog,
+        {
+          mailOnly,
+          onSelect: (provider) => {
+            selected = provider;
+            handle.close();
+          },
+        },
+        { owner }
+      )
+    );
+    const closed = await handle.closed;
+    lifecycle.setAttr(
+      'dialog.close_reason',
+      selected === undefined ? closed.reason : 'completed'
+    );
+    return selected;
+  } finally {
+    lifecycle.end();
+  }
 }

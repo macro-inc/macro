@@ -1,7 +1,13 @@
 /** @vitest-environment jsdom */
+import { Telemetry } from '@macro-inc/observability';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { ImperativeDialogHost } from '@ui';
+import { createRoot, getOwner } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { EmailProviderSelectionDialog } from './ProviderDialog';
+import {
+  EmailProviderSelectionDialog,
+  selectEmailProvider,
+} from './ProviderDialog';
 
 const providers = vi.hoisted(() => vi.fn());
 vi.mock('@queries/auth/outlook-link', () => ({
@@ -21,6 +27,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -113,3 +120,32 @@ it('waits for a successful retry before starting a sole Gmail provider', async (
     expect(selected).toHaveBeenCalledExactlyOnceWith('GMAIL')
   );
 });
+
+it.each([
+  { action: 'choose', reason: 'completed', selected: 'IMAP' },
+  { action: 'cancel', reason: 'dismissed', selected: undefined },
+  { action: 'dispose', reason: 'owner-disposed', selected: undefined },
+])(
+  'records why the provider chooser closes: $reason',
+  async ({ action, reason, selected }) => {
+    providers.mockResolvedValue({ gmail: true, outlook: true, imap: true });
+    const span = Telemetry.span('test.dialog-close');
+    const attribute = vi.spyOn(span, 'setAttr');
+    const ended = vi.spyOn(span, 'end');
+    vi.spyOn(Telemetry, 'span').mockReturnValue(span);
+    render(() => <ImperativeDialogHost />);
+    const owner = createRoot((dispose) => ({ owner: getOwner(), dispose }));
+    const selection = selectEmailProvider(owner.owner);
+    const imap = await screen.findByRole('button', {
+      name: 'Other email (IMAP / SMTP)',
+    });
+    if (action === 'choose') fireEvent.click(imap);
+    else if (action === 'cancel')
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    else owner.dispose();
+    expect(await selection).toBe(selected);
+    expect(attribute).toHaveBeenCalledWith('dialog.close_reason', reason);
+    expect(ended).toHaveBeenCalled();
+    owner.dispose();
+  }
+);

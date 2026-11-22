@@ -1,6 +1,6 @@
 import { DOCS_BASE } from '@app/constants/docs-links';
 import { t } from '@app/lib/i18n';
-import { useAddInboxFlow, useEmailLinksStatus } from '@core/email-link';
+import { type useAddInboxFlow, useEmailLinksStatus } from '@core/email-link';
 import { mailboxSizeGuidance } from '@core/email-link/mailbox-health';
 import { fireAndForget } from '@core/util/fireAndForget';
 import EmptyStateEmailGraphic from '@design/empty-state-email.svg';
@@ -84,7 +84,9 @@ function tabCopy(tab: EmailTab): { title: string; description: string } {
     .exhaustive();
 }
 
-export function EmailEmptyState() {
+export function EmailEmptyState(props: {
+  onConnect: ReturnType<typeof useAddInboxFlow>;
+}) {
   const { state, setInboxIds, setTab, filtersChanged, clearFilters } =
     useEmailView();
   const emailActive = useEmailLinksStatus();
@@ -111,7 +113,6 @@ export function EmailEmptyState() {
         (!state.aliasFilter || state.aliasFilter.inboxId === link.id)
     );
   };
-  const startAddInbox = useAddInboxFlow();
   const suggestion = useInboxSuggestion(() => !emailActive());
   const offer = () => {
     if (!queryReadyGate(suggestion)) return;
@@ -122,19 +123,19 @@ export function EmailEmptyState() {
   };
   const connectSuggested = () => {
     const suggested = offer();
-    if (!suggested) return startAddInbox();
+    if (!suggested) return props.onConnect();
     return match(suggested.offer)
       .with('gmail', () =>
-        startAddInbox({ provider: 'GMAIL', emailAddress: suggested.email })
+        props.onConnect({ provider: 'GMAIL', emailAddress: suggested.email })
       )
       .with('outlook', () =>
-        startAddInbox({ provider: 'OUTLOOK', emailAddress: suggested.email })
+        props.onConnect({ provider: 'OUTLOOK', emailAddress: suggested.email })
       )
       .with('imap', () =>
-        startAddInbox({ provider: 'IMAP', emailAddress: suggested.email })
+        props.onConnect({ provider: 'IMAP', emailAddress: suggested.email })
       )
-      .with('none', () => startAddInbox())
-      .exhaustive(() => startAddInbox());
+      .with('none', () => props.onConnect())
+      .exhaustive(() => props.onConnect());
   };
   // Scheduled has no search or filters; text typed on another tab stays behind.
   const searchText = () =>
@@ -163,7 +164,7 @@ export function EmailEmptyState() {
             offer()
               ? {
                   label: 'Use a different account',
-                  onClick: () => fireAndForget(startAddInbox(), 'add-inbox'),
+                  onClick: () => fireAndForget(props.onConnect(), 'add-inbox'),
                 }
               : undefined
           }

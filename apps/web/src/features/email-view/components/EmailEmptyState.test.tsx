@@ -18,7 +18,6 @@ const fixture = vi.hoisted(() => ({
 vi.mock('@queries/email/focus', () => ({ FOCUS_WINDOW_DAYS: 30 }));
 vi.mock('@core/email-link', () => ({
   useEmailLinksStatus: () => () => true,
-  useAddInboxFlow: () => vi.fn(),
 }));
 vi.mock('@queries/email/link', () => ({
   useEmailLinksQuery: () => ({
@@ -74,7 +73,7 @@ it('shows first-sync progress instead of Inbox zero and settles without remounti
       },
     },
   ];
-  render(() => <EmailEmptyState />);
+  render(() => <EmailEmptyState onConnect={vi.fn()} />);
   expect(screen.getByRole('status').textContent).toContain(
     'Syncing your inbox'
   );
@@ -99,7 +98,7 @@ it.each([
         mailbox_issue: issue,
       },
     ];
-    render(() => <EmailEmptyState />);
+    render(() => <EmailEmptyState onConnect={vi.fn()} />);
     expect(screen.getByText('Inbox zero')).toBeDefined();
   }
 );
@@ -120,7 +119,7 @@ it('does not claim an oversized selected inbox is caught up and recovers without
       },
     },
   ];
-  render(() => <EmailEmptyState />);
+  render(() => <EmailEmptyState onConnect={vi.fn()} />);
   expect(screen.queryByText('Inbox zero')).toBeNull();
   expect(
     screen.getByRole('heading', { name: 'Mailbox too large to sync yet' })
@@ -140,7 +139,7 @@ it('keeps an unreadable saved password visible as reconnect health, not Inbox ze
       mailbox_issue: 'credentials_unreadable',
     },
   ];
-  render(() => <EmailEmptyState />);
+  render(() => <EmailEmptyState onConnect={vi.fn()} />);
   expect(screen.getByRole('status').textContent).toContain(
     "Macro can't read this mailbox's saved password"
   );

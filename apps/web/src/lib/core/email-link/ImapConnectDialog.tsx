@@ -6,7 +6,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import { Collapsible } from '@kobalte/core/collapsible';
-import type { Span } from '@macro-inc/observability';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import {
   currentQueryAccount,
   isCurrentQueryAccount,
@@ -702,28 +702,42 @@ export async function openImapConnection(
   emailAddress?: string,
   linkId?: string
 ) {
+  const lifecycle = Telemetry.span('email.imap.setup.lifetime');
+  if (linkId) lifecycle.setAttr('email.link_id', linkId);
   let outcome: ConnectOutcome | undefined;
-  const interaction = beginInteraction('email.imap.setup.open', {
-    attributes: linkId ? { 'email.link_id': linkId } : undefined,
-  });
-  let closed: Promise<unknown>;
   try {
-    const dialog = openDialog(
-      ImapConnectDialog,
-      {
-        emailAddress,
-        linkId,
-        onResult(value) {
-          outcome = value;
-          dialog.close();
-        },
-      },
-      { owner }
+    const interaction = lifecycle.run(() =>
+      beginInteraction('email.imap.setup.open', {
+        attributes: linkId ? { 'email.link_id': linkId } : undefined,
+      })
     );
-    closed = dialog.closed;
+    let closed: ReturnType<typeof openDialog>['closed'];
+    try {
+      const dialog = lifecycle.run(() =>
+        openDialog(
+          ImapConnectDialog,
+          {
+            emailAddress,
+            linkId,
+            onResult(value) {
+              outcome = value;
+              dialog.close();
+            },
+          },
+          { owner }
+        )
+      );
+      closed = dialog.closed;
+    } finally {
+      interaction.end();
+    }
+    const event = await closed;
+    lifecycle.setAttr(
+      'dialog.close_reason',
+      outcome === undefined ? event.reason : 'completed'
+    );
+    return outcome;
   } finally {
-    interaction.end();
+    lifecycle.end();
   }
-  await closed;
-  return outcome;
 }

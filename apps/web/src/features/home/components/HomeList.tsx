@@ -33,6 +33,7 @@ import {
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
 import { useChannelsContext } from '@core/context/channels';
+import { useAddInboxFlow } from '@core/email-link';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
@@ -116,6 +117,8 @@ function HomeTutorial() {
 
 /** Compact notification list used by the Notifications workspace. */
 export function HomeList(props: HomeListProps) {
+  // A list reload may replace the empty state while its connect dialog is open.
+  const connectInbox = useAddInboxFlow();
   const inlinePreviewLayout = useInlinePreviewLayout();
   const channels = useChannelsContext();
   const channelName = (entity: WithNotification<EntityData>) =>
@@ -678,7 +681,7 @@ export function HomeList(props: HomeListProps) {
                   <Show when={showsTutorial()}>
                     <HomeTutorial />
                   </Show>
-                  <HomeEmptyState />
+                  <HomeEmptyState onConnect={connectInbox} />
                 </div>
               </Match>
 

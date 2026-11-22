@@ -29,6 +29,12 @@ An email snooze returns its original conversation to the inbox and adds a
 notification to that email row in Home. It has no separate reminder toast or
 detail view. See [Email reminders](reminders.md#delivery-and-undo).
 
+## Connecting an inbox
+
+After **Connect email** in Email or Home, the provider chooser and the IMAP
+credential form stay open while the list reloads, including when its capabilities are still loading. Choose a provider or
+Cancel; closing the owning view ends the dialog. Check this on desktop and phone.
+
 ## Account changes
 
 Channel and connected-inbox metadata belongs to the signed-in viewer. During a

@@ -34,6 +34,9 @@
   [web-app delivery](../../infra/stacks/web-app/README.md); its publisher tests
   are backend-free, and its Pulumi tests must not run real staging/cloud commands.
 
+Keep Home and Email connect flows owned by their stable lists, passing callbacks
+to empty states so loading/empty transitions preserve the chooser and IMAP form.
+
 ## Account-scoped source queries
 
 Treat CRM access changes as rare session transitions. Detect them from response
