@@ -84,7 +84,10 @@ async fn canonical_relationship_events_avoid_fanout_and_legacy_status_events_use
             .iter()
             .find(|patch| patch.patch.value().entity_id == related.to_string())
             .unwrap();
-        assert_eq!(target.access_source, entity(EntityType::Document, related));
+        assert_eq!(
+            target.access_source,
+            Some(entity(EntityType::Document, related))
+        );
     }
 }
 
@@ -123,7 +126,7 @@ async fn deleted_tasks_do_not_resurrect_through_cycles_and_folder_lookups_are_ba
     assert!(matches!(patches[0].patch, Patch::Deleted(_)));
     assert_eq!(
         patches[1].access_source,
-        entity(EntityType::Document, related)
+        Some(entity(EntityType::Document, related))
     );
 
     let lookup = Neighbors {

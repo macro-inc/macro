@@ -73,7 +73,14 @@ async fn consume(
         RecordingPublisher(published.clone()),
     );
 
-    let outcome = process_event(&service, &NoPullRequestSessions, &event, || {}).await;
+    let outcome = process_event(
+        &service,
+        &NoPullRequestSessions,
+        &NoNeighbors,
+        &event,
+        || {},
+    )
+    .await;
 
     assert!(matches!(outcome, EventOutcome::Notified));
     let mut sent: Sent = published
