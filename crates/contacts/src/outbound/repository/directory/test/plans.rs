@@ -164,6 +164,8 @@ async fn diagnose(pool: &PgPool, when: &str) {
     .await
     .unwrap();
     eprintln!("HORIZON {when} visibility contact_inbox_members: {}", row.0);
+    // Fail on purpose after the VACUUM so CI prints this test's output.
+    assert!(when != "after VACUUM", "diagnostic run: see HORIZON lines");
 }
 
 async fn hosted_planner(connection: &mut PgConnection) {
