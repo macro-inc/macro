@@ -17,12 +17,23 @@ const soup = vi.hoisted(() => ({
     | undefined,
   settle: (_settlement: MutationSettlement) => {},
   optimistic: vi.fn(),
+  reload: undefined as Partial<OperationResult> | undefined,
+  session: 1,
 }));
 
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: () => ({
     mutation: soup.mutation,
-    query: () => ({ toPromise: async () => ({ data: undefined }) }),
+    query: (
+      _document: unknown,
+      _variables: unknown,
+      context?: { requestPolicy?: string }
+    ) => ({
+      toPromise: async () =>
+        context?.requestPolicy === 'network-only'
+          ? (soup.reload ?? { data: undefined })
+          : { data: undefined },
+    }),
   }),
   getGraphqlSoupCacheHost: () => soup.host,
 }));
@@ -36,8 +47,17 @@ vi.mock('@graphql-cache/index', async (importOriginal) => ({
       : undefined,
 }));
 
+vi.mock('../../auth/account-scope', () => ({
+  queryAccountSession: () => soup.session,
+}));
+
 import { isCatalogErrorCode } from './errors';
-import { addPropertyOption, deletePropertyOption } from './writes';
+import {
+  addPropertyOption,
+  createPropertyDefinition,
+  deletePropertyOption,
+  ensureTagSet,
+} from './writes';
 
 const TAG = {
   type: 'select_string',
@@ -51,6 +71,8 @@ beforeEach(() => {
     toPromise: async () => soup.result,
   }));
   soup.optimistic.mockReset();
+  soup.reload = undefined;
+  soup.session = 1;
 });
 
 /** A cache host whose queue holds every write until the test settles it. */
@@ -115,6 +137,20 @@ describe('adding an option', () => {
     // The local record is the one the cache shows and links into lists.
     expect(response.addPropertyOption.id).toBe(sent);
     expect(options.uuid).toBe(sent);
+    // Linked through the definition's record, so every list holding the
+    // definition shows it, mounted or not.
+    expect(options.updates).toContainEqual(
+      expect.objectContaining({
+        recordRoot: expect.objectContaining({
+          entityKey: 'GraphqlPropertyDefinition:def-1',
+        }),
+        path: [{ field: 'options' }],
+        operation: {
+          kind: 'prependUnique',
+          entityKey: `GraphqlPropertyOption:${sent}`,
+        },
+      })
+    );
     await Promise.resolve();
     expect(resolved).toBe(false);
     settle({ transactionId: 'tx-1', status: 'committed' });
@@ -177,6 +213,24 @@ describe('a write started offline', () => {
     }
   });
 
+  it('is dropped when another login took over the page meanwhile', async () => {
+    onlineManager.setOnline(false);
+    try {
+      const created = createPropertyDefinition({
+        display_name: 'Stage',
+        scope: 'user',
+        data_type: { type: 'boolean' },
+      }).catch((error: unknown) => error);
+      await Promise.resolve();
+      soup.session = 2;
+      onlineManager.setOnline(true);
+      expect(isCatalogErrorCode(await created, 'ACCOUNT_CHANGED')).toBe(true);
+      expect(soup.mutation).not.toHaveBeenCalled();
+    } finally {
+      onlineManager.setOnline(true);
+    }
+  });
+
   it('goes to the cache queue at once when the cache predicts it', async () => {
     onlineManager.setOnline(false);
     try {
@@ -188,5 +242,37 @@ describe('a write started offline', () => {
     } finally {
       onlineManager.setOnline(true);
     }
+  });
+});
+
+describe('provisioning a tag set', () => {
+  it('fails when the list it fills cannot be reloaded', async () => {
+    queueingHost();
+    soup.result = {
+      data: {
+        ensureTagSet: {
+          scope: 'TEAM',
+          definition: {
+            __typename: 'GraphqlPropertyDefinition',
+            id: 'def-team',
+            owner: { scope: 'TEAM', principalId: 'team-1' },
+            displayName: 'Tags',
+            dataType: 'SELECT_STRING',
+            isMultiSelect: true,
+            specificEntityType: null,
+            isSystem: false,
+            isMetadata: false,
+            createdAt: new Date(0).toISOString(),
+            updatedAt: new Date(0).toISOString(),
+          },
+          options: [],
+        },
+      },
+    };
+    soup.reload = {
+      error: new CombinedError({ networkError: new Error('unavailable') }),
+    };
+    const ensured = await ensureTagSet('team').catch((error: unknown) => error);
+    expect(ensured).toBeInstanceOf(Error);
   });
 });

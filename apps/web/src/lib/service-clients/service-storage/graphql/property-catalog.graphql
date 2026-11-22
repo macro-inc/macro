@@ -38,6 +38,15 @@ fragment PropertyCatalogOptionFields on GraphqlPropertyOption {
 	updatedAt
 }
 
+# Fragment-rooted link updates: a definition's options, on its record.
+fragment PropertyCatalogDefinitionOptions on GraphqlPropertyDefinition {
+	__typename
+	id
+	options {
+		id
+	}
+}
+
 fragment PropertyCatalogTagSetFields on GraphqlTagSet {
 	scope
 	definition {
