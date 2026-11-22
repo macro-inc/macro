@@ -100,31 +100,27 @@ export function EmailEmptyState() {
   const startAddInbox = useAddInboxFlow();
   const suggestion = useInboxSuggestion(() => !emailActive());
   const offer = () => {
-    if (!queryReadyGate(suggestion) || suggestion.data.offer === 'none') return;
-    return suggestion.data;
+    if (!queryReadyGate(suggestion)) return;
+    return match(suggestion.data.offer)
+      .with('gmail', 'outlook', 'imap', () => suggestion.data)
+      .with('none', () => undefined)
+      .exhaustive(() => undefined);
   };
   const connectSuggested = () => {
     const suggested = offer();
     if (!suggested) return startAddInbox();
-    switch (suggested.offer) {
-      case 'gmail':
-        return startAddInbox({
-          provider: 'GMAIL',
-          emailAddress: suggested.email,
-        });
-      case 'outlook':
-        return startAddInbox({
-          provider: 'OUTLOOK',
-          emailAddress: suggested.email,
-        });
-      case 'imap':
-        return startAddInbox({
-          provider: 'IMAP',
-          emailAddress: suggested.email,
-        });
-      default:
-        return startAddInbox();
-    }
+    return match(suggested.offer)
+      .with('gmail', () =>
+        startAddInbox({ provider: 'GMAIL', emailAddress: suggested.email })
+      )
+      .with('outlook', () =>
+        startAddInbox({ provider: 'OUTLOOK', emailAddress: suggested.email })
+      )
+      .with('imap', () =>
+        startAddInbox({ provider: 'IMAP', emailAddress: suggested.email })
+      )
+      .with('none', () => startAddInbox())
+      .exhaustive(() => startAddInbox());
   };
   // Scheduled has no search or filters; text typed on another tab stays behind.
   const searchText = () =>

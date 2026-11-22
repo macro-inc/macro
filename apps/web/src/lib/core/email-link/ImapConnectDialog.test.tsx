@@ -584,3 +584,42 @@ it.each([
     vi.useRealTimers();
   }
 });
+
+it('can connect with an app password after discovery returns a future steer value', async () => {
+  // A running older client can receive values added by a newer server.
+  mail.discover.mockResolvedValue(
+    ok({
+      steer: 'future_provider',
+      imap: {
+        host: 'imap.example.com',
+        username: 'owner@example.com',
+        port: 993,
+        tls: 'implicit',
+      },
+      smtp: {
+        host: 'smtp.example.com',
+        username: 'owner@example.com',
+        port: 465,
+        tls: 'implicit',
+      },
+      hostConfirmationRequired: true,
+    })
+  );
+  mail.connect.mockResolvedValue(ok({ linkId: 'new-inbox' }));
+  const result = vi.fn();
+  render(() => (
+    <ImapConnectDialog
+      open
+      onOpenChange={() => {}}
+      onResult={result}
+      emailAddress="owner@example.com"
+    />
+  ));
+  const password = await screen.findByLabelText('Password or app password');
+  fireEvent.click(screen.getByRole('checkbox', { name: /I trust/ }));
+  fireEvent.input(password, { target: { value: 'synthetic-app-password' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Connect inbox' }));
+  await vi.waitFor(() => expect(result).toHaveBeenCalledWith('connected'));
+  expect(mail.connect).toHaveBeenCalledTimes(1);
+  expect(mail.providers).not.toHaveBeenCalled();
+});

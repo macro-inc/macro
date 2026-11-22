@@ -247,10 +247,13 @@ export function createAppOnboardingContext(): OnboardingContext {
     createOutlookAvailability: createAppOutlookAvailability,
     createImapSuggestion: () => {
       const suggestion = useInboxSuggestion(() => true);
-      return () =>
-        queryReadyGate(suggestion) && suggestion.data.offer === 'imap'
-          ? suggestion.data.email
-          : undefined;
+      return () => {
+        if (!queryReadyGate(suggestion)) return;
+        return match(suggestion.data.offer)
+          .with('imap', () => suggestion.data.email)
+          .with('none', 'gmail', 'outlook', () => undefined)
+          .exhaustive(() => undefined);
+      };
     },
 
     createToolCatalog: createOnboardingToolCatalog,

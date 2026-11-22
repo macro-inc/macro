@@ -53,7 +53,7 @@ function consentProvider(steer: Discovery['steer']) {
     )
     .with('none', () => undefined)
     .with(undefined, () => undefined)
-    .exhaustive();
+    .exhaustive(() => undefined);
 }
 
 function blankEndpoint(email: string, port: number): Endpoint {

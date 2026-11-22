@@ -14,9 +14,10 @@ fn custom_domains_follow_primary_mx_without_guessing_from_backup_or_ambiguous_re
         ),
         ("in1-smtp.messagingengine.com.", "Fastmail", None),
     ] {
-        let hint = classify_mx(&email.0, &[(10, exchange.into())]);
+        let (hint, outcome) = classify_mx(&email.0, &[(10, exchange.into())]);
         assert_eq!(hint.provider.as_deref(), Some(provider));
         assert_eq!(hint.steer, steer);
+        assert!(matches!(outcome, HintOutcome::Hit));
     }
     for records in [
         vec![],
@@ -31,7 +32,7 @@ fn custom_domains_follow_primary_mx_without_guessing_from_backup_or_ambiguous_re
         ],
         vec![(0, "aspmx.l.google.com".into()); MX_LIMIT + 1],
     ] {
-        assert!(classify_mx(&email.0, &records).provider.is_none());
+        assert!(classify_mx(&email.0, &records).0.provider.is_none());
     }
 }
 
