@@ -2292,7 +2292,7 @@ async fn run_server() -> anyhow::Result<()> {
             owned_entity_registrar.clone(),
         );
         let dependency_neighbors =
-            soup_realtime::outbound::task_dependency_neighbors::PgTaskDependencyNeighbors(
+            soup_realtime::outbound::task_dependency_neighbors::PropertiesTaskDependencyNeighbors(
                 properties::outbound::task_dependency_state::PgTaskDependencyStateRepository::new(
                     db.clone(),
                 ),
