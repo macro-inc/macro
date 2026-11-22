@@ -1,4 +1,6 @@
 /** Top-aligned agent messages with end-following for overflowing transcripts. */
+
+import type { FeedbackSurface } from '@app/features/agent-feedback/core/subject';
 import { ScrollToBottomOverlay } from '@channel/Channel/ScrollToBottomOverlay';
 import {
   ThreadList,
@@ -27,7 +29,11 @@ import { WorkingLine } from '../ui/WorkingLine';
 import { Message } from './AgentMessage';
 import { ReplyToSelection } from './ReplyToSelection';
 
-export function Transcript(props: { searchTarget?: AgentMessageTarget }) {
+export function Transcript(props: {
+  searchTarget?: AgentMessageTarget;
+  /** Where the host shows the session; agent replies get thumbs when set. */
+  feedbackSurface?: FeedbackSurface;
+}) {
   const {
     messages,
     metadata,
@@ -212,6 +218,7 @@ export function Transcript(props: { searchTarget?: AgentMessageTarget }) {
                   <Message
                     message={message()}
                     inFlight={isLiveTurn(message(), liveTurn())}
+                    feedbackSurface={props.feedbackSurface}
                   />
                 </div>
               )}
