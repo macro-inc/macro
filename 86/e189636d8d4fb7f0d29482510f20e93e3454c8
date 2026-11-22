@@ -1,0 +1,26 @@
+apps/web/src/features/routines/views/routine-history.tsx
+  s_5cea741b7a82ae::t_06dc9e05ea2aed 55-56,542
+apps/web/src/features/routines/views/routine-detail.tsx
+  s_5cea741b7a82ae::t_06dc9e05ea2aed 536-537,539-541
+  s_5cea741b7a82ae::t_06e7db8dfeaaf5 74,77,538
+  s_5cea741b7a82ae::t_dfb577eb684264 1-2,72-73,75-76,78-81
+apps/web/src/features/routines/components/routine-run-detail.tsx
+  s_5cea741b7a82ae::t_06dc9e05ea2aed 204-205,257
+  s_5cea741b7a82ae::t_64f422cb53f018 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "86e189636d8d4fb7f0d29482510f20e93e3454c8",
+  "prompts": {},
+  "sessions": {
+    "s_5cea741b7a82ae": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d43a0945-1df5-435d-8ea8-695ab0be7f08",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
