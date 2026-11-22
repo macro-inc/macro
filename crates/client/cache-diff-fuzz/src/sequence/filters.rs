@@ -155,9 +155,11 @@ impl Gen<'_> {
         if !self.mail_tabs.is_empty() && self.rng.chance(0.4) {
             let (_, tab) = pick(&mut self.rng, self.mail_tabs).clone();
             let mut filters = tab["filters"].clone();
-            if self.rng.chance(0.3) {
-                // The tab's tree in another shape: the same rows, or more or fewer.
-                let tree = filters["emailFilter"]["tree"].take();
+            if self.rng.chance(0.3) && !filters["emailFilter"]["tree"].is_null() {
+                // The tab's tree in another shape: the same rows, or more or fewer. A
+                // `shared` literal stays at the top, under `and` only, as the cache compiles
+                // it; any other place sends the filter to the network.
+                let (tree, shared) = split_shared(filters["emailFilter"]["tree"].take());
                 // Half the time a literal the cache compiles, so the tree keeps a cached
                 // window that has to reach rows the tab's own window skips.
                 let other = if self.rng.chance(0.5) {
@@ -173,11 +175,15 @@ impl Gen<'_> {
                     self.filter_budget = 40;
                     self.input_named("GraphqlEmailExpr", "tree", 2)
                 };
-                filters["emailFilter"]["tree"] = match self.rng.below(4) {
+                let tree = match self.rng.below(4) {
                     0 => json!({ "not": { "not": tree } }),
                     1 => json!({ "or": { "left": tree, "right": other } }),
                     2 => json!({ "or": { "left": other, "right": tree } }),
                     _ => json!({ "and": { "left": other, "right": tree } }),
+                };
+                filters["emailFilter"]["tree"] = match shared {
+                    Some(shared) => json!({ "and": { "left": tree, "right": shared } }),
+                    None => tree,
                 };
             }
             return json!({
@@ -374,5 +380,18 @@ impl Gen<'_> {
                 }
             }),
         }
+    }
+}
+
+/// Splits `and(tree, shared)` (either way round) into the tree and the `shared` literal.
+fn split_shared(tree: Value) -> (Value, Option<Value>) {
+    let is_shared = |side: &Value| side["literal"].get("shared").is_some();
+    let and = &tree["and"];
+    if is_shared(&and["right"]) {
+        (and["left"].clone(), Some(and["right"].clone()))
+    } else if is_shared(&and["left"]) {
+        (and["right"].clone(), Some(and["left"].clone()))
+    } else {
+        (tree, None)
     }
 }

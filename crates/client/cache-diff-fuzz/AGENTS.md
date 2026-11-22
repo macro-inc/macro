@@ -25,7 +25,8 @@ purpose (it says what).
   document in a query's partitions answers it as incomplete before a window runs.
   Mail filters often use the app's mail tabs (`assets/mail-tabs.json`), and some of those
   with the tab's tree reshaped: `not(not(tree))`, or joined by `or` or `and` to a random tree or,
-  half the time, to one literal the cache compiles (read, inbox visibility, thread, owner).
+  half the time, to one literal the cache compiles (read, inbox visibility, thread, owner). A
+  tab's `shared` literal stays at the top under `and`, the only place the cache compiles it.
 - `src/exec.rs` runs a case. `src/normalize.rs` replaces the ids the engine mints
   (`#1`, `#2`, …) and keeps every id that appears in the case. `src/dump.rs`
   writes the tables after a final reopen, each value tagged with its type.
@@ -105,11 +106,15 @@ purpose (it says what).
   generated; without it no extra draw is made.
 - When a change touches what happens when a storage write fails (records taken out of the hot
   tier until the write commits, say), build both sides with `STORAGE_FAULTS=1` and give both
-  `--fail-writes SHARE`: that share of ops runs with the next record write armed to fail as a
+  `--fail-writes SHARE`: that share of ops runs with the next record put armed to fail as a
   database error does (build-side.sh patches a flag into cache-turso's test fault point, after
-  the first record a write transaction puts). `--fail-reads SHARE` does the same for the next
-  `get_batch` of records from storage; a read from another thread can take it, so leave out
-  `--concurrent-reads` and `--abandon-reads` then. The ops are picked from the seed apart from
+  the first record a write transaction puts; settling an optimistic mutation writes through
+  another point and is not failed). `--fail-reads SHARE` does the same for the next
+  `get_batch` of records from storage. Another thread can take either flag (a concurrent read,
+  or one resuming work a `--start-from` file left), so leave out `--concurrent-reads` and
+  `--abandon-reads` with `--fail-reads`, and expect the odd stray write fault with them.
+  `minimize.sh` replays the case under seed 0 and shifts op indexes, so it doesn't keep the
+  fault schedule: shrink a fault finding by hand. The ops are picked from the seed apart from
   the case, so the cases don't change. A side that skips a write or read the other makes can
   fail where the other doesn't; check that before calling it a regression. Stats count
   `fault.write.armed`, `fault.write.fired` and the same for `read`.
