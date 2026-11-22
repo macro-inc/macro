@@ -99,9 +99,11 @@ with exactly the tables and indexes a fresh file has; a chain that would produce
 anything else rolls back to the version before its last step. The open then
 runs the queue checks as every reopen does. Records, queued mutations,
 optimistic layers and the storage generation stay, so nothing is refetched and
-no queued write is lost. A version with no chain, a newer version, or a failing
-step resets as before. Bumping the version without registering a step fails to
-compile; clearing `STEPS` declares that every older file resets.
+no queued write is lost. A file whose `meta` names another scope, or a cache
+format this build cannot carry forward, resets before any step runs, so it
+stays as the older build wrote it. A version with no chain, a newer version, or
+a failing step resets as before. Bumping the version without registering a step
+fails to compile; clearing `STEPS` declares that every older file resets.
 
 Native hosts upgrade the fixed file at open. Browser database names embed the
 storage version, so the browser first carries the old database forward: when
@@ -131,24 +133,27 @@ them: they go back to the older name whole (`returned`) and this build starts
 empty, so their queued writes stay with the build that wrote them. When the
 failed open cannot read their version, it fails and keeps them. A recovery
 open, which the coordinator asks for after an open fails or a worker is lost
-mid-open, decides before wiping its own files: it counts an attempt in the
-marker (which reserves its first attempts' bytes, so counting overwrites one in
-place and needs no more storage), takes the older name's lock, opens the files
-only to read their version, and hands them back if it is still the moved one;
-the marker goes only once it has acted. While it cannot decide (the lock is
-busy, the version does not read, the files do not connect, or their WAL still
-holds frames) it fails and keeps everything, and the coordinator retries it.
-After three such attempts the next recovery discards the files unopened, so
-files that never open cannot keep the cache from starting. An attempt that
-cannot be counted still decides if it can, and discards where it cannot, since
-nothing would bound the next one. A marker that does not read is counted the
-same way in a file beside it (`<name>-adopting-unread`), and the fourth such
-recovery discards the files without knowing their version. A read that returns
-fewer bytes than the file holds is an error, never a shorter marker or WAL
-header. The coordinator retries a failed recovery a few times at once, so this
-usually resolves within one page load; a recovery that meets a busy sync
-handle fails as `storage-busy`, which stops those retries, and the next page
-load goes on counting. Files at a newer version
+mid-open, decides before wiping its own files: it counts an attempt, takes the
+older name's lock, opens the files only to read their version, and hands them
+back if it is still the moved one; the marker goes only once it has acted.
+While it cannot decide (the lock is busy, the marker or the version does not
+read, the files do not connect, or their WAL still holds frames) it fails and
+keeps everything, and the coordinator retries it. After three such attempts
+the next recovery discards the files unopened, so files that never open cannot
+keep the cache from starting. Attempts are counted in a file of their own
+beside the marker (`<name>-adopting-attempts`), written with eight free slots
+before any file moves, so counting overwrites one byte in place, needs no more
+storage, and works while the marker does not read; the marker itself, which
+also records when the adoption began, is never written again. An attempt that
+cannot be counted still decides if it can, but ten minutes after the adoption
+began it discards instead, so those are bounded too. When neither the marker
+nor the count reads, nothing bounds the attempt or says how old the adoption
+is, so it keeps everything. A read that returns fewer bytes than the file holds
+is an error, never a shorter marker or WAL header. The coordinator retries a
+failed recovery a few times at once, so this usually resolves within one page
+load; a version probe that meets a busy sync handle fails as `storage-busy`,
+which stops those retries, and the next page load goes on counting. Files at a
+newer version
 were upgraded here, so the older build could not open them, and files whose
 older name holds a database again cannot go back over it; both are reset
 (`discarded`). Once the moved files have opened they are this build's own.
@@ -174,7 +179,8 @@ lose them instead, and each needs a worker lost or an open failing mid-upgrade:
   WAL that still holds frames, the older name's lock held by a tab of the older
   build through all three, or recoveries lost after counting their attempt. The
   next one discards the files unread, though the older build might still have
-  opened them;
+  opened them. Recoveries whose attempts cannot be counted do the same once ten
+  minutes passed since the adoption began;
 - the first carry-forward into storage 12 only: a tab of a build from before
   upgrades that is already at storage 12 shares this build's name but knows
   nothing of markers. If it opens that name after the adopting worker was lost

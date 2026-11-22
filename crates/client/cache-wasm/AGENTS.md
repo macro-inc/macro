@@ -76,17 +76,18 @@ wasm-bindgen shell exposing `cache-core` + `cache-turso` + `turso-opfs` as a
   older name (`hand_back`) only when the failed open left them at the version
   they moved at (`TursoStorageOpenFailure::stored_storage_version`); at a newer
   version they are discarded. A recovery open decides the same before wiping
-  (`recover_adoption`): it counts an attempt in the marker and keeps the marker
-  until it has read the version and acted on it. Whatever leaves either open
-  unsure (an unreadable adoption state or version, a split needing the busy
-  older lock, a failed connect, a WAL with frames) fails the open and keeps the
-  files for the coordinator's next recovery, which discards them unopened once
-  `RECOVERY_ATTEMPTS` (3) were counted. An attempt that cannot be counted
-  decides if it can and discards where it cannot; a marker that does not read
-  is counted with `count_unreadable_adoption` and discarded past the same
-  limit, its version unknown. A recovery that meets a busy sync handle fails
-  as `storage-busy`, which ends the coordinator's retries for that page load,
-  so the count can span page loads. The result's `outcome` is
+  (`recover_adoption`): it counts an attempt (`record_attempt`) and keeps the
+  marker until it has read the version and acted on it. Whatever leaves either
+  open unsure (an unreadable adoption state or version, a split needing the
+  busy older lock, a failed connect, a WAL with frames) fails the open and
+  keeps the files for the coordinator's next recovery, which discards them
+  unopened once `RECOVERY_ATTEMPTS` (3) were counted; when the marker does not
+  read, their version is unknown. An attempt that cannot be counted decides if
+  it can, and discards once `UNCOUNTED_RECOVERY_MS` (10 minutes) passed since
+  the adoption began; with an unreadable marker it keeps them. A version probe
+  that meets a busy sync handle fails as `storage-busy`, which ends the
+  coordinator's retries for that page load, so the count can span page loads.
+  The result's `outcome` is
   `upgraded-existing` with `fromStorageVersion`;
   `carryForward` (`moved`, `resumed`, `older-in-use`, `unsupported`,
   `unreadable`, `failed`, `returned`, `discarded`) and

@@ -48,20 +48,24 @@ under the older identity's lock (`LockNeeded` without one). `return_adoption`
 moves a self-contained database (empty WAL, which a close leaves;
 `WalNotEmpty` otherwise) back to an older identity that holds no database
 (`Occupied` otherwise), and `discard_adoption` makes the files this owner's
-own. `record_attempt` counts a caller attempt, which `Adoption::attempts`
-reports, so a caller can bound how often it retries a decision: the marker
-reserves its first eight attempts' bytes when it is written, so counting one
-overwrites a byte in place and needs no more storage. When the marker itself
-does not read, `count_unreadable_adoption` counts the attempt in a file of its
-own beside it (`<identity>-adopting-unread`), which goes wherever the marker
-goes. A read that returns fewer bytes than the file holds is an error, never a
+own. `record_attempt` counts a caller attempt and returns the count, so a
+caller can bound how often it retries a decision. The count is a file of its
+own beside the marker (`<identity>-adopting-attempts`), written whole with
+eight free slots before the marker and before any file moves, so a new
+adoption never inherits an earlier count, counting overwrites one byte in place
+and needs no more storage, and it works while the marker does not read. Once
+every slot is used the count stays at eight without writing. The marker is
+written once and never changed; it also records when the adoption began
+(`Adoption::adopted_at_ms`), so a caller can bound attempts it cannot count by
+age. A read that returns fewer bytes than the file holds is an error, never a
 shorter marker or WAL header. A failed WAL move moves the main file back.
-Wiping or resetting an identity removes its marker and that count with its
-pair. A `lock_previous` request dropped before it returns lets the lock go as
-soon as the browser grants it. `src/browser/test/adopt.rs` covers each outcome,
-the lock and a dropped request for it, Turso-invalid headers, both stops,
-splits with a matching and a changed WAL, stale and malformed markers, attempt
-and unread counts, short reads, and refused returns in a real DedicatedWorker.
+Wiping or resetting an identity removes its marker and count with its pair. A
+`lock_previous` request dropped before it returns lets the lock go as soon as
+the browser grants it. `src/browser/test/adopt.rs` covers each outcome, the
+lock and a dropped request for it, Turso-invalid headers, both stops, splits
+with a matching and a changed WAL, stale and malformed markers, attempt counts
+(fresh per adoption, in place, saturating, while the marker does not read),
+short reads, and refused returns in a real DedicatedWorker.
 
 The crate tests physical lock contention in its real DedicatedWorker. Actual
 cross-worker termination/restart orchestration remains a WP-08 coordinator
