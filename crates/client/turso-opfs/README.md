@@ -53,7 +53,9 @@ split's WAL over only while it still matches the marker (`WalLost` otherwise;
 an empty one is recreated without the lock) and, when it held frames, only
 under the older identity's lock (`LockNeeded` without one). `return_adoption`
 moves a self-contained database (empty WAL, which a close leaves;
-`WalNotEmpty` otherwise) back to an older identity that holds no database
+`WalNotEmpty` otherwise) back to the older identity its marker names, under
+that identity's lock (another lock, or no marker, is an error and moves
+nothing), when it holds no database
 (`Occupied` otherwise), first removing a marker there beside no main file (an
 adoption into it stopped before its main file moved, or a wipe stopped after
 removing it), and reports it `Returned` once the main file is back,
@@ -77,10 +79,13 @@ the marker alone, for when `read_adoption` fails on the files beside it. A read
 that returns fewer bytes than the file holds is an error, never a shorter
 marker or WAL header. A failed WAL move moves the main file back; when that
 fails too, the marker stays and the adoption reads as `Split`.
-Wiping or resetting an identity removes its pair, then its marker (and tries
-its count), so
-a stop between leaves a marker beside no main file, which the next read removes,
-never moved files without their marker. A
+Wiping, resetting or removing an identity removes its pair, then its marker
+(and tries its count), so a stop between, or a file that cannot be removed,
+leaves a marker beside what is left: beside no main file the next read removes
+it, and moved files never go on without their marker. `OpfsOwner::open`
+refuses a split (a marker beside a main file and no WAL) and creates nothing,
+since an empty WAL would make it read as whole and a reset would remove the
+main file. A
 `lock_previous` request dropped before it returns lets the lock go as soon as
 the browser grants it. `src/browser/test/adopt.rs` covers each outcome, the
 lock and a dropped request for it, Turso-invalid headers, both stops, splits
@@ -88,8 +93,9 @@ with a matching and a changed WAL, stale and malformed markers, attempt counts
 (fresh per adoption, in place, saturating, a count of the wrong length, while
 the marker does not read, left without its marker, held open through a wipe,
 a removal and a return), the adoption time while the files do not read,
-short reads, wipes stopped partway, a return onto a stale marker, and refused
-returns in a real DedicatedWorker.
+short reads, wipes stopped partway, a removal that leaves a file, an open of a
+split, a return onto a stale marker, and refused returns (including one to
+another identity than the marker names) in a real DedicatedWorker.
 
 The crate tests physical lock contention in its real DedicatedWorker. Actual
 cross-worker termination/restart orchestration remains a WP-08 coordinator

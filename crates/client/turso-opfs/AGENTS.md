@@ -59,11 +59,13 @@ contract and the multi-target verification commands.
   marker recording the older WAL until the moved files open. Keep the
   lock until the first open ends. `complete_adoption` moves a split's WAL only
   while it matches the marker, and one with frames only under the older lock;
-  `return_adoption` moves back only a self-contained database onto an identity
-  holding none, clearing a marker there beside no main file first; a wipe
-  removes the pair before the marker. The caller decides the files are still what the older build
-  wrote, and bounds its retries with `record_attempt` (which counts only beside
-a marker; a count goes only as cleanup and is never waited on), or by
+  `return_adoption` moves back only a self-contained database onto the
+  identity the marker names, holding none, clearing a marker there beside no
+  main file first; a wipe or removal removes the pair before the marker, and
+  `open` refuses a split rather than create its WAL. The caller decides the
+  files are still what the older build wrote, and bounds its retries with
+  `record_attempt` (which counts only beside a marker; a count goes only as
+  cleanup and is never waited on), or by
   `Adoption::adopted_at_ms` (`read_adoption_time` when the files beside the
   marker do not read) when an attempt cannot be counted. The marker is
   written once, before any move; never write it again. Never read or move the
