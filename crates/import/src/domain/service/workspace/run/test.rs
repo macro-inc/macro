@@ -158,6 +158,23 @@ impl NotionConnections for Connected {
     }
 }
 
+/// Notion answering with an error whose body must never reach the agent.
+struct Upstream;
+
+impl NotionConnections for Upstream {
+    type Api = Pages;
+
+    async fn for_user(
+        &self,
+        _: &MacroUserIdStr<'static>,
+    ) -> std::result::Result<Option<Pages>, NotionError> {
+        Err(NotionError::Upstream {
+            status: 400,
+            body: "provider-secret-body".into(),
+        })
+    }
+}
+
 /// Notion refusing the connection, as it does a revoked token.
 struct Revoked;
 
@@ -1063,43 +1080,14 @@ async fn a_write_that_loses_the_connection_records_why(pool: PgPool) {
     assert_eq!(runs[0].error_kind, Some(RunErrorKind::AccessLost));
 }
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn import_state_leaves_out_failures_older_than_a_week(pool: PgPool) {
-    use crate::domain::service::ImportService;
-    let owner = user("old-failures");
-    let repo = PgImportRepo::new(pool.clone());
-    for source in [ImportSource::Notion, ImportSource::Linear] {
-        repo.start_run(&owner, source, &[]).await.unwrap();
-        repo.transition_run(
-            &owner,
-            source,
-            &[RunStatus::Running],
-            RunStatus::Failed,
-            Some("failed"),
-        )
-        .await
-        .unwrap();
-    }
-    sqlx::query!(
-        "UPDATE import_run SET updated_at = NOW() - interval '8 days' WHERE user_id = $1 AND source = 'notion'",
-        owner.as_ref(),
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    let service = service(
-        &pool,
-        Writer::default(),
-        tokio_util::sync::CancellationToken::new(),
-        TaskTracker::new(),
+#[test]
+fn a_failure_reads_from_its_kind_never_the_providers_text() {
+    let text = crate::domain::service::notion_workspace::failure_text(
+        &ImportError::Notion(NotionError::Upstream {
+            status: 400,
+            body: "provider-secret-body".into(),
+        }),
+        ImportSource::Notion,
     );
-
-    let state = service.state(owner.clone()).await.unwrap();
-
-    let sources: Vec<_> = state.runs.iter().map(|run| run.source).collect();
-    assert_eq!(
-        sources,
-        vec![ImportSource::Linear],
-        "the week-old failure is gone"
-    );
+    assert_eq!(text, "Notion couldn't be reached.");
 }

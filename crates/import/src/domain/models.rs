@@ -303,84 +303,40 @@ pub enum RunStatus {
     Dismissed,
 }
 
-/// Why a run failed, as a closed set readers branch on instead of the error
-/// text. Stored in `import_run.error_kind`; `None` on runs that failed
-/// before it was recorded.
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    ToSchema,
-    JsonSchema,
-    specta::Type,
-    strum::EnumString,
-    strum::AsRefStr,
-)]
-#[serde(rename_all = "snake_case")]
-#[strum(serialize_all = "snake_case")]
-pub enum RunErrorKind {
-    /// The source said an object was missing or not shared with the
-    /// connection.
-    NotFound,
-    /// The connection may not read what the import asked for.
-    Forbidden,
-    /// The source refused the connection itself: revoked or expired.
-    AccessLost,
-    /// The connection's proxy could not use the account at all.
-    ConnectionUnavailable,
-    /// The source is not connected, or the connection is turned off.
-    NotConnected,
-    /// The source kept rate limiting the import.
-    RateLimited,
-    /// The source could not be reached or answered with an error.
-    Unreachable,
-    /// The AI work planning needs was refused (usage or billing).
-    UsageRefused,
-    /// The run stopped before it finished (its process went away too
-    /// often); starting it again picks up what is left.
-    Interrupted,
-    /// Anything else, on Macro's side.
-    Internal,
-}
+pub use agent_runtime_protocol::domain::notification::RunErrorKind;
 
-impl RunErrorKind {
-    /// Why a run failed, in a sentence for the agent, from its kind (`None`
-    /// for runs that failed before kinds were recorded). Never the raw error,
-    /// which can carry provider detail.
-    pub fn explain(kind: Option<Self>, source: ImportSource) -> String {
-        let name = source.label();
-        match kind {
-            Some(Self::NotFound) => format!(
-                "{name} said something the import needs is missing or isn't shared with Macro's connection"
-            ),
-            Some(Self::Forbidden) => {
-                format!("{name} doesn't let Macro's connection read part of the workspace")
-            }
-            Some(Self::AccessLost) => format!(
-                "{name} no longer accepts Macro's connection (it was revoked or expired), so the user needs to reconnect {name}"
-            ),
-            Some(Self::ConnectionUnavailable) => format!(
-                "Macro couldn't use the user's {name} connection, so the user needs to reconnect {name}"
-            ),
-            Some(Self::NotConnected) => {
-                format!("{name} isn't connected, so the user needs to connect it")
-            }
-            Some(Self::RateLimited) => {
-                format!("{name} kept rate limiting the import; it can be tried again later")
-            }
-            Some(Self::Unreachable) => format!("{name} couldn't be reached"),
-            Some(Self::UsageRefused) => {
-                "the AI work planning needs was refused (usage or billing)".to_string()
-            }
-            Some(Self::Interrupted) => {
-                "it stopped before it finished; starting it again picks up what is left".to_string()
-            }
-            Some(Self::Internal) | None => "something went wrong on Macro's side".to_string(),
+/// Why a run failed, in a sentence for the agent, from its kind (`None`
+/// for runs that failed before kinds were recorded). Never the raw error,
+/// which can carry provider detail.
+pub fn explain_failure(kind: Option<RunErrorKind>, source: ImportSource) -> String {
+    let name = source.label();
+    match kind {
+        Some(RunErrorKind::NotFound) => format!(
+            "{name} said something the import needs is missing or isn't shared with Macro's connection"
+        ),
+        Some(RunErrorKind::Forbidden) => {
+            format!("{name} doesn't let Macro's connection read part of the workspace")
         }
+        Some(RunErrorKind::AccessLost) => format!(
+            "{name} no longer accepts Macro's connection (it was revoked or expired), so the user needs to reconnect {name}"
+        ),
+        Some(RunErrorKind::ConnectionUnavailable) => format!(
+            "Macro couldn't use the user's {name} connection, so the user needs to reconnect {name}"
+        ),
+        Some(RunErrorKind::NotConnected) => {
+            format!("{name} isn't connected, so the user needs to connect it")
+        }
+        Some(RunErrorKind::RateLimited) => {
+            format!("{name} kept rate limiting the import; it can be tried again later")
+        }
+        Some(RunErrorKind::Unreachable) => format!("{name} couldn't be reached"),
+        Some(RunErrorKind::UsageRefused) => {
+            "the AI work planning needs was refused (usage or billing)".to_string()
+        }
+        Some(RunErrorKind::Interrupted) => {
+            "it stopped before it finished; starting it again picks up what is left".to_string()
+        }
+        Some(RunErrorKind::Internal) | None => "something went wrong on Macro's side".to_string(),
     }
 }
 
@@ -985,20 +941,6 @@ pub struct ImportRun {
     /// The agent session presenting that review.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub review_session_id: Option<Uuid>,
-}
-
-impl ImportRun {
-    /// Whether the run failed, or finished with objects it could not import:
-    /// the outcomes a user should see until they dismiss them.
-    pub fn ended_badly(&self) -> bool {
-        match self.status {
-            RunStatus::Failed => true,
-            RunStatus::Completed => self.error.is_some(),
-            RunStatus::Running | RunStatus::Ready | RunStatus::Importing | RunStatus::Dismissed => {
-                false
-            }
-        }
-    }
 }
 
 /// What a planning run has found in the source so far.

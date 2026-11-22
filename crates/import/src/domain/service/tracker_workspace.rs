@@ -268,9 +268,14 @@ where
                     .write_tracker_object(user, row, &meta, team, control)
                     .await
                 {
+                    tracing::warn!(error = ?error, "tracker object was not imported");
                     failed += 1;
                     self.repo
-                        .mark_import_failed(user, row.id, &error.to_string())
+                        .mark_import_failed(
+                            user,
+                            row.id,
+                            &super::notion_workspace::failure_text(&error, self.workspace_source),
+                        )
                         .await?;
                 }
                 self.notify(user).await;
@@ -423,9 +428,17 @@ where
                         .await?;
                 }
                 Err(error) => {
+                    tracing::warn!(error = ?error, "tracker task was not imported");
                     failed += 1;
                     self.repo
-                        .mark_import_failed(user, row.id, &error.to_string())
+                        .mark_import_failed(
+                            user,
+                            row.id,
+                            &super::notion_workspace::failure_text(
+                                &ImportError::Other(error),
+                                self.workspace_source,
+                            ),
+                        )
                         .await?;
                 }
             }

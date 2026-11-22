@@ -94,7 +94,11 @@ where
                 tracing::warn!(error = ?error, kind = item.kind.as_ref(), "notion object was not imported");
                 let _ = self
                     .repo
-                    .mark_import_failed(user, item.import_id, &failure_text(&error))
+                    .mark_import_failed(
+                        user,
+                        item.import_id,
+                        &failure_text(&error, self.workspace_source),
+                    )
                     .await;
                 Outcome::Failed
             }

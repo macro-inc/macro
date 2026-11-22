@@ -30,7 +30,7 @@ const FAILED_NEXT: &str = "Tell the user in one sentence why it failed and what 
 /// Why a workspace plan failed, for the agent, from its typed kind (never the
 /// raw error, which can carry provider detail).
 fn failure_reason(source: ImportSource, kind: Option<RunErrorKind>) -> String {
-    RunErrorKind::explain(kind, source)
+    crate::domain::models::explain_failure(kind, source)
 }
 
 mod import_from_notion;

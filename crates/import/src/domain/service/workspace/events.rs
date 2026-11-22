@@ -21,6 +21,7 @@ use super::super::ImportServiceImpl;
 use super::super::notion_workspace::{notice_import_ids, report};
 use crate::domain::models::{
     ImportSource, NotionImportReport, NotionReportItem, ReviewedRun, RunErrorKind, RunStatus,
+    explain_failure,
 };
 use crate::domain::ports::{
     CanonicalImportRepo, EntityCreator, ImportRepo, NotionPlanRepo, NotionRunRepo, Result,
@@ -63,7 +64,7 @@ where
                 error_kind,
                 |run| {
                     let review = run.review?;
-                    let settlement = settlement(source, &report, root_folder, run)?;
+                    let settlement = settlement(source, &report, root_folder, run, error_kind)?;
                     produce(ProduceNotification {
                         session_id: review.session_id,
                         subject_id: review.review_id.to_string(),
@@ -171,6 +172,7 @@ fn settlement(
     report: &NotionImportReport,
     root_folder: Option<Uuid>,
     run: &ReviewedRun,
+    error_kind: Option<RunErrorKind>,
 ) -> Option<ImportSettlement> {
     let outcome = match run.status {
         RunStatus::Completed => ImportOutcome::Completed,
@@ -181,7 +183,15 @@ fn settlement(
     Some(ImportSettlement {
         source: workspace(source)?,
         outcome,
-        error: run.error.as_deref().map(bounded),
+        // A failed write says why from its kind; a cancelled or partial one
+        // keeps Macro's own sentence. Never the importer's raw error.
+        error: match run.status {
+            RunStatus::Failed => Some(bounded(&explain_failure(error_kind, source))),
+            _ => run.error.as_deref().map(bounded),
+        },
+        error_kind: (run.status == RunStatus::Failed)
+            .then_some(error_kind)
+            .flatten(),
         imported: report.imported,
         planned: report.copy + report.tasks,
         documents: report.documents,

@@ -196,7 +196,15 @@ where
                         refusal.describe(source)
                     ))
                 }
-                error => CodeModeError::Invalid(error.to_string()),
+                // Nothing was written (the fence reopens the plan when the
+                // write cannot get going): a retry is safe, so say so with a
+                // fixed sentence and keep the detail in the trace.
+                error => {
+                    tracing::warn!(error = ?error, "the reviewed import could not start");
+                    CodeModeError::NotApprovable(
+                        "The import could not start because of a problem on Macro's side. Approve it again to retry.".into(),
+                    )
+                }
             })
     }
     async fn present(

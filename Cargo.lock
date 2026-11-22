@@ -961,6 +961,7 @@ dependencies = [
  "axum",
  "futures",
  "macro_uuid",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "specta",

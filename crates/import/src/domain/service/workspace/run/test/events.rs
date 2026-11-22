@@ -316,7 +316,62 @@ async fn a_write_given_up_on_tells_its_session_it_failed(pool: PgPool) {
     assert_eq!(produced[0].session_id, session);
     let settled = settled_import(&produced[0]);
     assert_eq!(settled.outcome, ImportOutcome::Failed);
-    assert_eq!(settled.error.as_deref(), Some(IMPORT_STOPPED));
+    assert_eq!(settled.error_kind, Some(RunErrorKind::Interrupted));
+    assert_eq!(
+        settled.error.as_deref(),
+        Some("it stopped before it finished; starting it again picks up what is left")
+    );
     assert_eq!(settled.imported, 0);
     assert_eq!(settled.not_written, 2);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_failed_write_tells_its_session_why_without_the_providers_text(pool: PgPool) {
+    let owner = user("write-upstream");
+    let (review, _, _) = presented_while_planning(&pool, &owner).await;
+    let sessions = Arc::new(Sessions::default());
+    let repo = notifying_repo(&pool, &sessions);
+    assert!(
+        repo.transition_run(
+            &owner,
+            ImportSource::Notion,
+            &[RunStatus::Running],
+            RunStatus::Ready,
+            None
+        )
+        .await
+        .unwrap()
+    );
+    let tracker = TaskTracker::new();
+    let service = ImportServiceImpl::new(
+        repo,
+        Arc::new(NoConnector),
+        Arc::new(Writer::default()),
+        Arc::new(ai_usage::NoOpUsageRecorder),
+    )
+    .with_notion_connections(Arc::new(Upstream))
+    .with_job_shutdown(tokio_util::sync::CancellationToken::new(), tracker.clone());
+
+    service
+        .start_notion_write(&owner, review, NotionWriteChoices::default())
+        .await
+        .unwrap();
+    tracker.close();
+    tracker.wait().await;
+
+    let produced = sessions.0.lock().unwrap();
+    let settled = produced
+        .iter()
+        .find(|notification| {
+            matches!(
+                notification.notification.event,
+                NotificationEvent::ReviewSettled(_)
+            )
+        })
+        .expect("the write settled");
+    let payload = serde_json::to_string(&settled.notification).unwrap();
+    assert!(!payload.contains("provider-secret-body"), "{payload}");
+    let import = settled_import(settled);
+    assert_eq!(import.error_kind, Some(RunErrorKind::Unreachable));
+    assert_eq!(import.error.as_deref(), Some("Notion couldn't be reached"));
 }

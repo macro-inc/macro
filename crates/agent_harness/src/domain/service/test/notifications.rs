@@ -751,6 +751,7 @@ async fn a_settled_import_wakes_an_idle_session_with_its_final_report() {
                         source: ImportWorkspace::Notion,
                         outcome: ImportOutcome::Completed,
                         error: None,
+                        error_kind: None,
                         imported: 3,
                         planned: 3,
                         documents: 3,

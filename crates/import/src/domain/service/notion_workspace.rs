@@ -29,6 +29,7 @@ use super::{ImportServiceImpl, NOTION_IMPORT_MODEL, NotionWorkspaceImporter};
 use crate::domain::models::{
     ImportEntity, ImportKind, ImportSource, ImportStatus, NotionDecision, NotionImportReport,
     NotionJob, NotionSharing, NotionWriteChoices, RunErrorKind, RunStatus, ScanCounts,
+    explain_failure,
 };
 use crate::domain::ports::{
     CanonicalImportRepo, EntityCreator, ImportError, ImportRepo, ImportVisibility, NotionPlanRepo,
@@ -442,7 +443,7 @@ where
                 Err(error) => {
                     let kind = failure_kind(error);
                     tracing::warn!(error = ?error, kind = kind.as_ref(), "notion import planning failed");
-                    (RunStatus::Failed, Some(failure_text(error)), Some(kind))
+                    (RunStatus::Failed, Some(failure_text(error, self.workspace_source)), Some(kind))
                 }
             };
             // A cancelled run is `dismissed` already, so this moves nothing.
@@ -616,7 +617,11 @@ where
             Err(error) => {
                 let kind = failure_kind(error);
                 tracing::warn!(error = ?error, kind = kind.as_ref(), "notion import write failed");
-                (RunStatus::Failed, Some(failure_text(error)), Some(kind))
+                (
+                    RunStatus::Failed,
+                    Some(failure_text(error, self.workspace_source)),
+                    Some(kind),
+                )
             }
         };
         // Anything still claimed (a cancel, or a failure part way) goes back
@@ -941,10 +946,14 @@ pub(super) fn failure_kind(error: &ImportError) -> RunErrorKind {
     }
 }
 
-/// A failure as the user reads it on the run or the row.
-fn failure_text(error: &ImportError) -> String {
-    match error {
-        ImportError::Other(error) => super::admission::failure_reason(error),
-        other => other.to_string(),
+/// A failure as the user and the agent read it on the run or the row,
+/// written from its kind. The raw error (which can carry a provider's
+/// response) stays on the warning the caller logs.
+pub(super) fn failure_text(error: &ImportError, source: ImportSource) -> String {
+    let sentence = explain_failure(Some(failure_kind(error)), source);
+    let mut letters = sentence.chars();
+    match letters.next() {
+        Some(first) => first.to_uppercase().chain(letters).collect::<String>() + ".",
+        None => sentence,
     }
 }

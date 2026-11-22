@@ -43,11 +43,14 @@ written only once it has started. `SETTLED` only
 says which runs a new plan may replace. A failed plan or write records its
 `RunErrorKind` (`import_run.error_kind`, from `failure_kind`; `Interrupted`
 when a run is given up on); the report and runs carry it, and the agent's
-messages (`RunErrorKind::explain`, `UnreviewableRun::describe`) and the web
-copy are written from the kind, never from `error`, which the report never
-serializes. A stored kind this build does not know reads as `Internal`.
-`/import/state` leaves out failed runs, and runs that finished with failures,
-once a week has passed since they last changed.
+messages (`explain_failure`, `UnreviewableRun::describe`) and the web
+copy are written from the kind. A run's and a row's error text is
+`failure_text` (a sentence from the kind) and the import settlement carries
+`error_kind`; the importer's raw error is only logged, and the report never
+serializes `error`. A stored kind this build does not know reads as `Internal`.
+The imports tray lists a failed run, or one that finished with failures,
+until it is dismissed or a week has passed since it last changed;
+`/import/state` itself lists every run.
 Planning stages the whole tree as soon as the inventory is read,
 each row without a `decision` yet, then writes each decision-model batch's
 verdicts onto its rows as it lands (`update_plan_rows`); the report counts

@@ -453,6 +453,7 @@ async fn stored_settlements_read_back_as_the_kind_they_were_written(pool: PgPool
             source: ImportWorkspace::Notion,
             outcome: ImportOutcome::Cancelled,
             error: Some("Cancelled".into()),
+            error_kind: None,
             imported: 1,
             planned: 4,
             documents: 4,

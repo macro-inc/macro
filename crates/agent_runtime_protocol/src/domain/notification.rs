@@ -81,6 +81,50 @@ pub enum ReviewSettlement {
     Actions(ReviewOutcome),
 }
 
+/// Why a run failed, as a closed set readers branch on instead of the error
+/// text. Stored in `import_run.error_kind`; `None` on runs that failed
+/// before it was recorded.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    schemars::JsonSchema,
+    specta::Type,
+    strum::EnumString,
+    strum::AsRefStr,
+)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum RunErrorKind {
+    /// The source said an object was missing or not shared with the
+    /// connection.
+    NotFound,
+    /// The connection may not read what the import asked for.
+    Forbidden,
+    /// The source refused the connection itself: revoked or expired.
+    AccessLost,
+    /// The connection's proxy could not use the account at all.
+    ConnectionUnavailable,
+    /// The source is not connected, or the connection is turned off.
+    NotConnected,
+    /// The source kept rate limiting the import.
+    RateLimited,
+    /// The source could not be reached or answered with an error.
+    Unreachable,
+    /// The AI work planning needs was refused (usage or billing).
+    UsageRefused,
+    /// The run stopped before it finished (its process went away too
+    /// often); starting it again picks up what is left.
+    Interrupted,
+    /// Anything else, on Macro's side.
+    Internal,
+}
+
 /// The final report of an approved workspace import, with no page content.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
@@ -90,9 +134,13 @@ pub struct ImportSettlement {
     pub source: ImportWorkspace,
     /// How the write ended.
     pub outcome: ImportOutcome,
-    /// Why it failed, or what went wrong in a completed write.
+    /// Why it failed, written from `error_kind`, or what went wrong in a
+    /// completed write. Never the importer's raw error.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// Why it failed, when it did and the kind was recorded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error_kind: Option<RunErrorKind>,
     /// Objects written into Macro.
     pub imported: u32,
     /// Objects the plan copies: as they are or as task lists from Notion,

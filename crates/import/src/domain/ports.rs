@@ -117,7 +117,7 @@ impl UnreviewableRun {
         match self {
             Self::Failed { error_kind } => format!(
                 "the import plan failed ({}); nothing can be reviewed until it is planned again",
-                RunErrorKind::explain(*error_kind, source)
+                super::models::explain_failure(*error_kind, source)
             ),
             Self::Missing
             | Self::Importing
