@@ -295,7 +295,10 @@ tools — hexagonal, heavily feature-gated.
   backfilled to the backfill, so no thread is classified twice at once; `stale_threads` reads one
   inbox through its latest-inbound and latest-outbound indexes; keep its
   `OFFSET 0` fence, or the per-thread calendar and contact checks run on every
-  thread in the window.
+  thread in the window. It reads the owner's recent contacts once, from their
+  sent mail, and checks each thread's senders against that set: through
+  `email_message_recipients.contact_id` a list address, both the sender and a
+  recipient of all its mail, costs every thread the list's whole history.
 - A Focus thread's days (`due_on` and the day of the meeting it is about) are read
   in one call when new mail is classified, only for a thread
   with `is_focus` or `awaiting_reply`, never for a thread the backfill's second pass
