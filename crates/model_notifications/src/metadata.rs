@@ -912,14 +912,24 @@ impl NotificationTitle for ChannelMessageSendMetadata {
 
 const CHANNEL_REACTION_EXCERPT_MAX_CHARS: usize = 80;
 
+/// A reaction reads as Slack words its Activity item: who reacted, then
+/// "Reacted 👍 to: “message”", then the channel it happened in. The title is
+/// only the person, so an iOS communication notification names them and not
+/// a sentence.
 impl NotificationTitle for ChannelMessageReactionMetadata {
     fn format_title(
         &self,
         sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
-        let sender = sender_id
+        sender_id
             .map(|sender| sender.email_part().local_part().to_string())
-            .ok_or_else(|| report!("Expected sender id to exist for {:?}", &self))?;
+            .ok_or_else(|| report!("Expected sender id to exist for {:?}", &self))
+    }
+
+    fn format_body(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
         let message = parse_message_plain_text(&self.message_content)?
             .split_whitespace()
             .collect::<Vec<_>>()
@@ -933,19 +943,11 @@ impl NotificationTitle for ChannelMessageReactionMetadata {
         } else {
             ""
         };
-        Ok(format!(
-            "{sender} reacted with {} to “{excerpt}{suffix}”",
-            self.emoji
-        ))
-    }
-
-    fn format_body(
-        &self,
-        _sender_id: Option<MacroUserIdStr<'_>>,
-    ) -> Result<String, rootcause::Report> {
+        let reacted = format!("Reacted {} to: “{excerpt}{suffix}”", self.emoji);
+        // A direct message needs no place; the person already says where.
         Ok(match self.common.channel_type {
-            ChannelType::DirectMessage => "Direct message".to_string(),
-            _ => format!("#{}", self.common.channel_name),
+            ChannelType::DirectMessage => reacted,
+            _ => format!("{reacted}\n#{}", self.common.channel_name),
         })
     }
 }
