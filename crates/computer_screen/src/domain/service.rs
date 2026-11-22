@@ -567,7 +567,7 @@ where
                                 .is_some_and(|first| first < dead_man_fired_before) =>
                     {
                         given_up += 1;
-                        tracing::warn!(computer.id = %owed.computer_id, "a thaw kept failing on a running computer; its own timer has thawed the agent");
+                        tracing::warn!(computer.id = %owed.computer_id, "a thaw kept failing on a running computer; assuming its own timer has thawed the agent");
                         Some(ThawSettled::DeadMan)
                     }
                     Err(ThawFailed::Failed) => {

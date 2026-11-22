@@ -65,7 +65,9 @@ agent's brain waiting while a person drives.
   unfrozen, `refreeze` freezes it again only while that drive is the live
   one; when that fails, `freeze_lost` ends the drive as `unpaused` (with the
   hand-back notice), and the driver is told. `deadMan` settles a thaw only
-  once its first failure is older than `GUEST_TIMER` and a margin. A release thaws it for that
+  after failures on a running computer whose first is older than
+  `GUEST_TIMER` and a margin; a round that finds the computer asleep starts
+  them over, since the guest's timer stops while it sleeps. A release thaws it for that
   drive, off the caller's path; the guest fences thaws by drive, so a late
   one never undoes a newer freeze.
 - Notices (`computer.screen.takeOver`/`handBack`) name the driver by name

@@ -238,7 +238,8 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   each lease renewal (the guest thaws the agent itself 3 minutes after the
   last; a keep answering `thawed`, `superseded` or `failed` is reported to
   `ScreenService::refreeze`, which freezes again only while that drive is
-  live, and otherwise ends it with `agentNotPausable` to the driver), and
+  live, and otherwise ends it with `agentNotPausable` to the driver; each
+  refreeze runs in its own task, one at a time per computer), and
   `thaw <drive>` after (the guest never freezes a thawed drive again; a few
   tries off the request path, then `ScreenService::reap`; `superseded` means
   a newer drive froze it). A computer that isn't running is never exec'd

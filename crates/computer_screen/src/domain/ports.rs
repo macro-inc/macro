@@ -152,8 +152,10 @@ pub trait ScreenRepo: Send + Sync + 'static {
         settled: ThawSettled,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// A thaw of this drive was tried and didn't settle; `failed` when the
-    /// computer ran and the guest didn't thaw.
+    /// A thaw of this drive was tried and didn't settle: `failed` when the
+    /// computer ran and the guest didn't thaw; otherwise the computer slept,
+    /// which starts the failures over (the guest's timer stops while it
+    /// sleeps, so only failures while it runs count towards it).
     fn thaw_tried(
         &self,
         row: Uuid,
