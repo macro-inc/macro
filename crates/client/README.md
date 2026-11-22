@@ -179,7 +179,9 @@ rejected readiness proof, or a lost tab or worker says nothing of what it kept.
 Giving up
 would quarantine the scope and open a different database on the next load,
 leaving the moved files and their queue behind. Instead the
-coordinator keeps the scope and the pending recovery, refuses queued requests
+coordinator keeps the scope and the open it had pending (a recovery wipe, or
+an ordinary open a navigation departure ended; both read an unfinished
+adoption first), refuses queued requests
 with `owner-lock-unavailable`, and the page runs uncached until its cache
 recovery (backoff doubling to 30 seconds with 20% jitter, so at most 36
 seconds, and on reconnect or return to the tab) registers again. After that
