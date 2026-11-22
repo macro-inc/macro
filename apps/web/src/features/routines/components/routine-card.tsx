@@ -257,7 +257,12 @@ export function RoutineCard(props: {
       <RoutineByline
         row={props.row}
         stopPending={props.stopPending}
-        onStop={props.onStop ? () => props.onStop?.(props.row) : undefined}
+        onStop={
+          // Only its owner can stop its run.
+          props.onStop && props.row.editable
+            ? () => props.onStop?.(props.row)
+            : undefined
+        }
       />
     </div>
   );

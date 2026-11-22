@@ -44,6 +44,14 @@ describe('switching a routine from its card', () => {
     expect(source.setEnabled).toHaveBeenLastCalledWith('mine', true);
   });
 
+  it('offers no Undo while a run is in progress, which it could not turn back on', () => {
+    const source = { setEnabled: vi.fn() };
+    toggleRoutine(source, { ...row, status: 'Running' }, { undo: true });
+    expect(source.setEnabled).toHaveBeenCalledWith('mine', false);
+    const [, options] = vi.mocked(toast.success).mock.calls[0]!;
+    expect((options as unknown as Notice).actions).toEqual([]);
+  });
+
   it('turns it on without a notice', () => {
     const source = { setEnabled: vi.fn() };
     toggleRoutine(source, { ...row, enabled: false }, { undo: true });

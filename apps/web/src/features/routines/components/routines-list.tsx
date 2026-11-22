@@ -134,7 +134,7 @@ export function RoutinesList(props: {
   // What the suggestions row asks of the list.
   const discoverHost: RoutinesDiscoverHost = {
     get empty() {
-      return props.rows.length === 0 && !props.loading;
+      return props.rows.length === 0 && !props.loading && !props.error;
     },
     routine(id) {
       const row = props.rows.find((other) => other.id === id);

@@ -328,6 +328,21 @@ describe('routines list', () => {
       expect(onStop).toHaveBeenCalledWith(running);
     });
 
+    it('offers Stop only to the routine’s owner', () => {
+      const running = {
+        ...rows[0]!,
+        status: 'Running' as const,
+        editable: false,
+      };
+      setup({ rows: [running], menu: menuActions() });
+      expect(card('Morning briefing').textContent).toContain('Running now');
+      expect(
+        screen.queryByRole('button', {
+          name: 'Stop the run of Morning briefing',
+        })
+      ).toBeNull();
+    });
+
     it('says it is stopping until the run ends', () => {
       const running = { ...rows[0]!, status: 'Running' as const };
       setup({
