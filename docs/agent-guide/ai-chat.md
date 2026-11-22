@@ -1755,12 +1755,12 @@ review remain independent of this development setting.
 
 An agent session (the `/app/channel/<channel>/agent/<session>` pane) can pause its turn to
 ask you something. A card titled `<bot> is asking`, with the status `Waiting for you` under
-the title, appears in the transcript, and the notice `The agent is waiting for your answer above` sits
-over the composer. The same card shows in a channel reply's live tail under the agent's
+the title, appears in the transcript, and the notice `The agent is waiting for your answer above; Skip lets it continue without one`
+sits over the composer. The same card shows in a channel reply's live tail under the agent's
 typing row. Forms have one control per field (radios for a choice, a `Type your own answer`
 row when the agent allows a custom answer, checkboxes for multi-select, text/number inputs).
-The footer has `Skip` on the left (it declines; its tooltip reads `The agent continues
-without your answer`) and `Submit` on the right. There is no Cancel: stopping the agent is the
+The footer has `Skip` on the left (it declines, and the agent continues without an
+answer) and `Submit` on the right. There is no Cancel: stopping the agent is the
 composer's `Stop`. Submit is disabled until every required question has an answer. A skipped native question reaches the agent as `skipped`. A link
 request shows the target host and URL with an `Open` button that only opens a new tab after
 you click it. An email draft under review has `Skip` under the composer. Once resolved the card

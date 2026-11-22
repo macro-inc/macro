@@ -260,11 +260,6 @@ export function QuestionActions(props: {
     <Button
       variant={props.card ? 'ghost' : 'secondary'}
       size={size()}
-      // Above, so it never covers the waiting notice under the card.
-      tooltip={{
-        content: 'The agent continues without your answer',
-        placement: 'top',
-      }}
       disabled={props.locked}
       onClick={() => respond({ action: 'decline' })}
     >
