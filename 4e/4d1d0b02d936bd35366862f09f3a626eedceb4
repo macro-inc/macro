@@ -1,0 +1,57 @@
+packages/sdk/generated/agent-harness/sdk.gen.ts
+  s_e3d42bca6fdb8e::t_8146ef06b27dcd 814-818,834-836
+packages/sdk/generated/agent-harness/index.ts
+  s_e3d42bca6fdb8e::t_8146ef06b27dcd 4
+packages/sdk/specs/agent-harness.json
+  s_e3d42bca6fdb8e::t_8146ef06b27dcd 3946,4086,5798,5815-5821,9413-9419,9601-9608,9614-9617,9620,9741,9777-9795,9846,9916-9931,9935,9973
+packages/sdk/generated/agent-harness/types.gen.ts
+  s_e3d42bca6fdb8e::t_8146ef06b27dcd 765-769,3280-3284,3438-3444,3548-3551,3571-3588,3629,3698-3699,3702-3707
+apps/web/src/lib/service-clients/service-agent-harness/generated/client.ts
+  s_e3d42bca6fdb8e::t_aa19b32eff9f79 4570-4574,4714-4716
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/agentToolPermissions.ts
+  s_e3d42bca6fdb8e::t_fecc0eca21759e 10,26-28
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/index.ts
+  s_e3d42bca6fdb8e::t_72501ec3870fbd 512,525-526
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/showPermissionsResult.ts
+  s_e3d42bca6fdb8e::t_11a418490bc9cb 10,21-23
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionAction.ts
+  s_e3d42bca6fdb8e::t_7118fa4be727b6 18-22
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionChange.ts
+  s_e3d42bca6fdb8e::t_a154bc4626b118 12-15
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionDefault.ts
+  s_e3d42bca6fdb8e::t_bd2ff2e9a9675d 1-21
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionOrigin.ts
+  s_e3d42bca6fdb8e::t_805dacfc48cb21 19
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionTarget.ts
+  s_e3d42bca6fdb8e::t_f6893d5683bb6c 8,12-13,17-18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionTargetOneOf.ts
+  s_e3d42bca6fdb8e::t_a91aece49f39ca 11-12
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionTargetOneOfFive.ts
+  s_e3d42bca6fdb8e::t_51d8cb2a528a82 1-18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionTargetOneOfFiveKind.ts
+  s_e3d42bca6fdb8e::t_82a0a28da72072 1-14
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionTargetOneOfKind.ts
+  s_e3d42bca6fdb8e::t_64a7487cceaa67 13
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionTargetOneOfThree.ts
+  s_e3d42bca6fdb8e::t_8e4bb24827af13 7,11-12,15-18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionTargetOneOfThreeKind.ts
+  s_e3d42bca6fdb8e::t_4ed03d7ed0368d 13
+apps/web/src/lib/service-clients/service-agent-harness/openapi.json
+  s_e3d42bca6fdb8e::t_7de32521538ffe 3946,4086,5798,5815-5821,9413-9419,9601-9608,9614-9617,9620,9741,9777-9795,9846,9916-9931,9935,9973
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "4e4d1d0b02d936bd35366862f09f3a626eedceb4",
+  "prompts": {},
+  "sessions": {
+    "s_e3d42bca6fdb8e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9af237d7-a678-4134-bdfa-b6234b0b3b46",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
