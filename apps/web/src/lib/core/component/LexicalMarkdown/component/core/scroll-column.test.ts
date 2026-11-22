@@ -1,32 +1,34 @@
 import { describe, expect, it } from 'vitest';
 import { scrollColumn } from './scroll-column';
 
-function box(style: string, scrollHeight: number, clientHeight: number) {
+function box(style: string) {
   const element = document.createElement('div');
   element.setAttribute('style', style);
-  Object.defineProperty(element, 'scrollHeight', { value: scrollHeight });
-  Object.defineProperty(element, 'clientHeight', { value: clientHeight });
   return element;
 }
 
 describe('scrollColumn', () => {
-  it('skips a sideways-scrolling table box and finds the column that scrolls', () => {
-    const column = box('overflow-y: auto', 2000, 600);
-    const table = box('overflow-x: auto', 120, 120);
+  it("skips a table's sideways box and the editor root, finding the column", () => {
+    const column = box('overflow-y: auto');
+    const root = box('overflow-x: auto');
+    root.setAttribute('data-lexical-editor', 'true');
+    const table = box('overflow-x: auto');
     const link = document.createElement('a');
     table.append(link);
-    column.append(table);
+    root.append(table);
+    column.append(root);
     document.body.append(column);
     expect(scrollColumn(link)).toBe(column);
     column.remove();
   });
 
-  it('finds nothing when no ancestor has more to scroll', () => {
-    const column = box('overflow-y: auto', 300, 600);
+  it('finds nothing when no ancestor scrolls', () => {
+    const root = box('');
+    root.setAttribute('data-lexical-editor', 'true');
     const link = document.createElement('a');
-    column.append(link);
-    document.body.append(column);
+    root.append(link);
+    document.body.append(root);
     expect(scrollColumn(link)).toBeUndefined();
-    column.remove();
+    root.remove();
   });
 });
