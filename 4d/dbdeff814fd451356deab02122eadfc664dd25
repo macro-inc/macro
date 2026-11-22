@@ -1,0 +1,84 @@
+.github/workspace-dep-closures.json
+  s_75ea158df87d0e::t_345f548e3a1ead 4864-4870
+tooling/xtask/crates/xtask_workflows/src/workflows/email_e2e_alert/test.rs
+  s_75ea158df87d0e::t_16ac7987d4737d 3-4,27-41,87-89,91,147
+crates/connectors_e2e/src/connector.rs
+  s_75ea158df87d0e::t_24fce1b85afc7f 1-82
+tooling/xtask/crates/xtask_workflows/src/workflows/email_e2e_alert.rs
+  s_75ea158df87d0e::t_16ac7987d4737d 2-7,175-176
+  s_75ea158df87d0e::t_dff53773de5225 12-13,18,26-47,103-105,107-111,113,130-133,146,156-157,167-174,186,189-190
+tooling/xtask/crates/xtask_workflows/src/workflows/scripts/connectors_e2e.sh
+  s_75ea158df87d0e::t_b097c547193147 1-30
+crates/connectors_e2e/src/api.rs
+  s_75ea158df87d0e::t_6fb281a584cba6 133,368
+  s_75ea158df87d0e::t_e07574bbca4e0d 1-132,134-146,154-225,233-241,249-367,370
+  s_75ea158df87d0e::t_fb0906956fdebf 147-153,226-232,242-248
+  s_75ea158df87d0e::t_11ce1f4328e6b4 369
+Cargo.toml
+  s_75ea158df87d0e::t_7d4b792dd7acc8 80
+tooling/xtask/crates/xtask_workflows/src/workflows/connectors_e2e.rs
+  s_75ea158df87d0e::t_fbb3dffe06e1b6 1-14,18-108,113-124,129-130
+  s_75ea158df87d0e::t_16ac7987d4737d 15-17,109-112,125-128
+crates/connectors_e2e/src/agent/test.rs
+  s_75ea158df87d0e::t_fb0906956fdebf 15-18,26-29
+  s_75ea158df87d0e::t_0ab7e604906d65 1-14,19-25,30-36
+crates/connectors_e2e/tests/connectors.rs
+  s_75ea158df87d0e::t_1ee0f7695982b4 1-11,14-45,50-64,70-77,83-100,105-120,129-145,150-232,238-240,245-264,274-281,286-315,321-329,335,340-355,360-372,378-382,388-406,408-412
+  s_75ea158df87d0e::t_fb0906956fdebf 12-13,46-49,65-69,78-82,101-104,121-128,146-149,233-237,241-244,265-273,282-285,316-320,330-334,336-339,356-359,373-377,383-387,407
+tooling/just/rust.just
+  s_75ea158df87d0e::t_ba8c3e5aa144ba 54-60
+crates/connectors_e2e/AGENTS.md
+  s_75ea158df87d0e::t_267bd900c07823 1-64
+.config/nextest.toml
+  s_75ea158df87d0e::t_9b126142fef0d3 3-5,7,68-87
+tooling/xtask/crates/xtask_workflows/src/workflows/vars.rs
+  s_75ea158df87d0e::t_346948af1db9ba 22-24,47-65
+  s_75ea158df87d0e::t_c9935afd12633e 66
+tooling/xtask/crates/xtask_workflows/src/workflows/steps.rs
+  s_75ea158df87d0e::t_87ce7823569b3d 576-578,580-584,587-589,591-593,612-613
+  s_75ea158df87d0e::t_2cc9316214b4dd 579,585-586,590,596,604-605
+  s_75ea158df87d0e::t_16ac7987d4737d 8-9
+crates/connectors_e2e/Cargo.toml
+  s_75ea158df87d0e::t_0ab7e604906d65 9,15
+  s_75ea158df87d0e::t_7d4b792dd7acc8 10
+  s_75ea158df87d0e::t_aa494485689de3 1-8,11-14,16-21
+crates/connectors_e2e/src/config.rs
+  s_75ea158df87d0e::t_fb0906956fdebf 56-57
+  s_75ea158df87d0e::t_b1ff578a2c2f09 1-55,58-93
+tooling/xtask/crates/xtask_workflows/src/workflows.rs
+  s_75ea158df87d0e::t_346948af1db9ba 170-173
+  s_75ea158df87d0e::t_16ac7987d4737d 50
+  s_75ea158df87d0e::t_8685730c7ccd22 174
+crates/connectors_e2e/src/agent.rs
+  s_75ea158df87d0e::t_2c51e2ce7c7323 1-94,99-161
+  s_75ea158df87d0e::t_fb0906956fdebf 95-98
+.github/workflows/connectors_e2e.yml
+  s_75ea158df87d0e::t_16ac7987d4737d 1-1390
+docs/development/ci.md
+  s_75ea158df87d0e::t_a8e4a971f5a7e9 54-62
+crates/connectors_e2e/src/lib.rs
+  s_75ea158df87d0e::t_a136c4db57a646 1-17,24-26
+  s_75ea158df87d0e::t_3125e267b587d9 18-23
+Cargo.lock
+  s_75ea158df87d0e::t_9aaa755f09156b 5333-5348
+crates/connectors_e2e/CLAUDE.md
+  s_75ea158df87d0e::t_89757e99d4502f 1
+tooling/xtask/crates/xtask_workflows/checks.lock
+  s_75ea158df87d0e::t_a34d1661e3f374 62-63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "4ddbdeff814fd451356deab02122eadfc664dd25",
+  "prompts": {},
+  "sessions": {
+    "s_75ea158df87d0e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "453bb9ea-5118-43ec-ab86-e4d3f4c8063f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
