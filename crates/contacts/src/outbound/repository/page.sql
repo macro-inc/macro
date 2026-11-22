@@ -106,7 +106,9 @@ SELECT
             OR EXISTS (
                 SELECT 1 FROM contact_list_members AS theirs
                 WHERE theirs.user_id = lower(page.contact COLLATE "C")
-                  AND theirs.contact_user_id = lower($1 COLLATE "C")
+                  -- In the invited index's own expression, so both columns are index
+                  -- conditions there (it would otherwise seek user_id and filter).
+                  AND (theirs.contact_user_id COLLATE "default") = (lower($1 COLLATE "C") COLLATE "default")
                   AND theirs.list_key = 'invited'
             )
         )
