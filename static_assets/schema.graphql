@@ -3715,7 +3715,8 @@ input GraphqlChannelLiteral @oneOf {
 	"""
 	The is participant option. Filters by whether the requesting user is an
 	active participant; its presence widens the candidate set to team channels
-	of the user's teams they have not joined.
+	of the user's teams they have not joined, and, when the filter admits only
+	channels it names by id, to public channels too.
 	"""
 	isParticipant: Boolean
 	"""
@@ -9298,6 +9299,10 @@ type GraphqlSoupChannel implements GraphqlSoupEntity {
 	"""
 	participants: [GraphqlSoupChannelParticipant!]!
 	"""
+	The bots that participate in the channel. `participants` lists users only.
+	"""
+	botParticipants: [GraphqlSoupChannelBotParticipant!]!
+	"""
 	The latest message.
 	"""
 	latestMessage: GraphqlSoupChannelMessagePreview
@@ -9351,6 +9356,32 @@ type GraphqlSoupChannelAgentDm {
 	The persona's avatar URL, when it has one.
 	"""
 	avatarUrl: String
+}
+
+"""
+A bot that participates in a soup channel.
+"""
+type GraphqlSoupChannelBotParticipant {
+	"""
+	The identifier of the channel.
+	"""
+	channelId: ID!
+	"""
+	The identifier of the bot.
+	"""
+	botId: ID!
+	"""
+	The role.
+	"""
+	role: String!
+	"""
+	The joined timestamp in RFC 3339 format.
+	"""
+	joinedAt: String!
+	"""
+	The left timestamp in RFC 3339 format.
+	"""
+	leftAt: String
 }
 
 """
@@ -11520,6 +11551,20 @@ type GraphqlUser {
 		input: ChannelChangesInput!
 	): GraphqlChannelChanges!
 	"""
+	The id of the authenticated user's direct message with `userId`, the
+	one a first message to them would reuse, while the authenticated user
+	is still in it: of several, one both are in, then one only `userId`
+	left, then the oldest, then the lowest id. Null when they are in none,
+	or when `userId` is the authenticated user. Asking never creates one.
+	"""
+	directMessageChannelId(userId: ID!): ID
+	"""
+	When the authenticated user last viewed the channel, in RFC 3339
+	format, whether or not they are still in it. Null when they never
+	viewed it. Their own activity row needs no access to the channel.
+	"""
+	channelViewedAt(channelId: ID!): String
+	"""
 	Every calendar visible across owned and delegated inboxes, primaries
 	and writables first.
 	"""
@@ -13031,6 +13076,34 @@ Opaque versioned supplement containing authoritative server-only facts.
 scalar SoupCacheProjection
 
 """
+Where a Soup page reads its channels.
+"""
+enum SoupChannelReads {
+	"""
+	The default: the channel query reads the read replica, as ordinary
+	Soup lists do.
+	"""
+	REPLICA
+	"""
+	The channel query reads the primary, where the REST channel list reads
+	it, so the page's channels, with their members and activity, reflect
+	every membership change committed before it ran. Nothing else moves:
+	other entity types and per-item lookups keep the database they read.
+	Served only for channel directory pages: a timestamp sort (not NAME,
+	PROPERTY or NOTIFIED_AT), newest first, at most 100 items, channel
+	threads excluded by a nil-id filter, no `favoritesOnly: true`, no CRM
+	association of any kind (company, contact or activity), neither as
+	`crmAssociation` nor as a `crmAssociated` literal anywhere in the
+	document filter (a CRM email scope is allowed), and either no
+	channel filter or one that admits only
+	channels it names by id: at most 100 id literals, with nothing beside
+	them but at most two isParticipant literals in the whole tree. Any
+	other page is refused.
+	"""
+	PRIMARY
+}
+
+"""
 Input for continuing a Soup query.
 """
 input SoupContinuationInput {
@@ -13053,6 +13126,11 @@ input SoupContinuationInput {
 	used or the continuation flips order mid-list.
 	"""
 	sortDirection: GraphqlSortDirection
+	"""
+	Where the page reads its channels. Defaults to REPLICA. The cursor
+	does not carry it, so re-send whatever the initial query used.
+	"""
+	channelReads: SoupChannelReads
 }
 
 """
@@ -13103,6 +13181,10 @@ input SoupInitialInput {
 	Direction to order the page in. Defaults to DESC.
 	"""
 	sortDirection: GraphqlSortDirection
+	"""
+	Where the page reads its channels. Defaults to REPLICA.
+	"""
+	channelReads: SoupChannelReads
 }
 
 """

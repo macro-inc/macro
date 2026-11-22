@@ -520,6 +520,21 @@ fn encodes_requested_ids_and_disables_unrequested_entity_branches() {
         HashSet::from([first_document, second_document])
     );
     assert_eq!(channel_ids, HashSet::from([channel]));
+    // Mentioning participation either way reads every named channel the
+    // viewer can open, as the REST channel read does, joined or not.
+    assert!(matches!(
+        ast.channel_filter.as_deref(),
+        Some(Expr::And(_, either)) if matches!(
+            either.as_ref(),
+            Expr::Or(yes, no) if matches!(
+                (yes.as_ref(), no.as_ref()),
+                (
+                    Expr::Literal(ChannelLiteral::IsParticipant(true)),
+                    Expr::Literal(ChannelLiteral::IsParticipant(false)),
+                )
+            )
+        )
+    ));
 
     let nil = Uuid::nil();
     assert_eq!(
